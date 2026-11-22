@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "binary_sha256": "c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b",
     "binary_size": 8776,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "selector": "main",
     "selector_kind": "name"
   },
@@ -37,5 +37,5 @@
       "(?s)\\bmain\\s*\\(\\s*void\\s*\\)"
     ]
   },
-  "notes": "`kuna decompile` drives the engine as a subprocess whose script is not a pushed script, so a refused option value never stopped it: the console said `Execution error: Must specify toggle value, on/off` and the run exited 0 with the DEFAULT C. `decompile-all` has always exited 1 here. fauxware is in-repo, so this runs without the dataset."
+  "notes": "`unlace decompile` drives the engine as a subprocess whose script is not a pushed script, so a refused option value never stopped it: the console said `Execution error: Must specify toggle value, on/off` and the run exited 0 with the DEFAULT C. `decompile-all` has always exited 1 here. fauxware is in-repo, so this runs without the dataset."
 }

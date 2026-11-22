@@ -18,11 +18,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/picbase_i386",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/picbase_i386",
     "binary_sha256": "54b6f374f72fd924e8134188c3307300c091f30165b7f674c9254190b00e1e0e",
     "binary_size": 9132,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/picbase_i386",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/picbase_i386",
     "selector": null,
     "selector_kind": "none"
   },

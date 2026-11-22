@@ -137,7 +137,7 @@ code is emitted as unreachable dead code.
 **Owning phase: P8 (structure).**
 
 **Root cause: `BlockGraph::orderBlocks()` is an unported STUB.**
-`decompiler/crates/kuna-decomp/src/p8_structure/blockaction.rs:3786` — `ActionFinalStructure::apply`:
+`decompiler/crates/unlace-decomp/src/p8_structure/blockaction.rs:3786` — `ActionFinalStructure::apply`:
 
 ```rust
         // STUB(W7/W8): `orderBlocks`/`scopeBreak` (the rest of the goto/break
@@ -168,7 +168,7 @@ Upstream `ActionFinalStructure::apply` (blockaction.cc:2192) opens with the call
 ```
 
 kuna already maintains the invariant this sort depends on: `BlockGraph::add_block`
-(`decompiler/crates/kuna-decomp/src/substrate/block.rs:1712`) faithfully keeps a composite's
+(`decompiler/crates/unlace-decomp/src/substrate/block.rs:1712`) faithfully keeps a composite's
 `index` at the *minimum* over its components, and `identify_internal` (block.rs:1782) removes
 the absorbed nodes and *appends* the new composite at the end of the parent's list. So kuna
 ported the producer of the ordering key and never ported its only consumer: whenever
@@ -192,7 +192,7 @@ ida 79) — decbench builds its CFG from the emitted statements and edges, and p
 top-level components barely perturbs node/edge sets. The score cannot see that the entry is
 unreachable. This is a case where the winning pane contains a correctness defect.
 
-**Prevalence (measured today, `kuna decompile-all` + a scan for "unconditional `goto`
+**Prevalence (measured today, `unlace decompile-all` + a scan for "unconditional `goto`
 immediately followed by a non-label statement at the same or deeper brace depth"):**
 
 | binary | arch | functions | affected |
@@ -237,12 +237,12 @@ move GED.
 
 Mechanism — port the two upstream pieces, ~40 lines, one mechanism across two files:
 
-1. `decompiler/crates/kuna-decomp/src/substrate/block.rs` — add
+1. `decompiler/crates/unlace-decomp/src/substrate/block.rs` — add
    `FlowBlock::compare_final_order` (entry `index == 0` first; a component whose `last_op` is
    `CPUI_RETURN` last; otherwise ascending `index`) and
    `BlockGraph::order_blocks(graph_id)` (`if list.len() != 1 { sort_by(compare_final_order) }`).
    Upstream `orderBlocks` is applied to the root graph only, not recursively — keep that.
-2. `decompiler/crates/kuna-decomp/src/p8_structure/blockaction.rs:3786` — call it at the very
+2. `decompiler/crates/unlace-decomp/src/p8_structure/blockaction.rs:3786` — call it at the very
    top of `ActionFinalStructure::apply`, before `finalize_switch_printing()`, matching
    blockaction.cc:2192 ordering (it must precede `mark_unstructured`, whose label decisions
    are order-insensitive but whose output the printer consumes positionally).

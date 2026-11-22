@@ -37,10 +37,10 @@ The script needs the release tags (the minor is read from them) and errors out
 on shallow clones; in a clone without the tags it reports the wrong minor, so
 `git fetch --tags` first.
 
-## What `kuna --version` reports
+## What `unlace --version` reports
 
-Release CI exports `KUNA_VERSION=<MAJOR.MINOR>` while building; `kuna-cli`
-bakes it in via `option_env!` and `kuna --version` prints exactly that (Cargo's
+Release CI exports `KUNA_VERSION=<MAJOR.MINOR>` while building; `unlace-cli`
+bakes it in via `option_env!` and `unlace --version` prints exactly that (Cargo's
 own package version must stay three-part semver, so it is not used for
 releases). Dev builds without the env var fall back to the workspace Cargo
 version.
@@ -80,8 +80,8 @@ and 18 tags**.
    embeds it, and it also ships as an asset (for `KUNA_SPECS`, and the
    nightly's speed baseline).
 3. **build** (matrix, after **specs**) — lays the compiled tree over the
-   checkout's `specs/`, then `cargo build --release` of `kuna-cli` (with
-   `--features kuna-cli/embed-specs`) and `kuna-ghidra` for:
+   checkout's `specs/`, then `cargo build --release` of `unlace-cli` (with
+   `--features unlace-cli/embed-specs`) and `unlace-ghidra` for:
    - Linux `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu` (native,
      on the `ubuntu-24.04-arm` runner)
    - Linux `x86_64-unknown-linux-musl` — a fully static build (no glibc
@@ -92,13 +92,13 @@ and 18 tags**.
      cross-compiled on the arm64 runner)
    - Windows `x86_64-pc-windows-msvc`
    Each archive (`kuna-v<ver>-<os-arch>.tar.gz`, `.zip` on Windows) contains
-   `kuna`, `LICENSE`, `NOTICE` — `kuna` is self-contained: the decompiler
+   `unlace`, `LICENSE`, `NOTICE` — `unlace` is self-contained: the decompiler
    console (`decomp_dbg`) and the SLEIGH compiler (`slacomp`) are built in
    as hidden subcommands, and `embed-specs` carries the compiled SLEIGH tree.
-   Two smoke tests assert `kuna --version` prints the release version and
+   Two smoke tests assert `unlace --version` prints the release version and
    that the binary, copied alone into an empty directory with no spec
    override, decompiles a fixture. (`decomp_test_dbg` is not shipped — the
-   datatest harness only makes sense inside the repo.) The `kuna_ghidra`
+   datatest harness only makes sense inside the repo.) The `unlace_ghidra`
    binaries are not in the archives: each row uploads its binary as a
    `ghidra-bin-<platform>` workflow artifact for the **ghidra-ext** job.
 4. **ghidra-ext** — packages the ready-to-install KunaDecompiler Ghidra
@@ -114,9 +114,9 @@ and 18 tags**.
    the zip and the four unix ones carry mode 0755 — Ghidra's extension
    installer re-applies exactly those bits at install time. (Gradle 9
    normalizes archive entry modes for reproducibility, which would strip the
-   exec bits; the extension's `build.gradle` pins 0755 on the `kuna_ghidra`
+   exec bits; the extension's `build.gradle` pins 0755 on the `unlace_ghidra`
    entries explicitly, so the zip is correct under both Gradle 8 and 9.)
-   The zip is fully self-contained (`kuna_ghidra` needs no `.sla` files —
+   The zip is fully self-contained (`unlace_ghidra` needs no `.sla` files —
    specs arrive over the wire), so it installs airgapped; it is version-locked
    to the pinned Ghidra release, other 12.x installs go through the
    installer's "Install Anyway" dialog. See
@@ -128,7 +128,7 @@ and 18 tags**.
 
 ## Using a released binary
 
-`kuna` is the only file a release needs. It runs its own decompiler console
+`unlace` is the only file a release needs. It runs its own decompiler console
 and SLEIGH compiler, and carries the compiled SLEIGH tree, which it unpacks
 once — on first use, under a name derived from the tree's contents — into the
 per-user cache directory (`%LOCALAPPDATA%\kuna` on Windows,
@@ -148,7 +148,7 @@ the cache directory is always safe, and the next run unpacks again.
 
 (Inside a repo checkout none of this applies — a plain `cargo build` carries no
 specs, and they are found from the repo root. `make specs` then
-`cargo build --release -p kuna-cli --features embed-specs` builds the
+`cargo build --release -p unlace-cli --features embed-specs` builds the
 self-contained binary locally.)
 
 The `kuna-v<ver>-KunaDecompiler-ghidra_<ghidra-version>.zip` asset is not an

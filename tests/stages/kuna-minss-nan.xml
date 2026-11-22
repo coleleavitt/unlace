@@ -6,7 +6,7 @@
   !(a &lt; b), which selects b for equal or unordered operands.
   Strict correctness fix, no new option. Passes 1 and 2 pin scalar MINSS
   with defaults and nanignore none; pass 3 pins the ratio's unordered
-  behavior. The compiled-C oracle is in kuna-cli/tests/sse_minss_cli.rs.
+  behavior. The compiled-C oracle is in unlace-cli/tests/sse_minss_cli.rs.
 -->
 <binaryimage arch="x86:LE:64:default:gcc">
   <bytechunk space="ram" offset="0x401000">

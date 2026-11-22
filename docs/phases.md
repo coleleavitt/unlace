@@ -39,7 +39,7 @@ per-decompiler scheduling regime, not part of the model.
 ## Source layout (the phases on disk)
 
 The decompiler source is **physically organized by phase**: every module file under
-`decompiler/crates/kuna-decomp/src/` lives in a phase-named folder (the folder name carries the phase code `pN` so it greps against this doc and the registry, plus a plain word so the tree reads to a newcomer). Module *names* stay flat (`kuna_decomp::flow`) via re-exports in
+`decompiler/crates/unlace-decomp/src/` lives in a phase-named folder (the folder name carries the phase code `pN` so it greps against this doc and the registry, plus a plain word so the tree reads to a newcomer). Module *names* stay flat (`unlace_decomp::flow`) via re-exports in
 `lib.rs`, so the layout is documentation, not an API change. The live group→phase
 registry is `phases.toml`.
 
@@ -60,7 +60,7 @@ registry is `phases.toml`.
 
 The **program-prep analyses** that sit *outside* this phase model (the loader/analyzer tier
 Ghidra runs as "Run Analysis": PLT/GOT markup, strings, DWARF, demangling, function-start
-discovery, …) live in their own crate, `kuna-analysis` (P0/P1), organized as `loader/`
+discovery, …) live in their own crate, `unlace-analysis` (P0/P1), organized as `loader/`
 (image-format markup) + `analyzers/` (one module per pass). See `docs/missing-analyses.md`.
 
 ## Sub-phases
@@ -71,7 +71,7 @@ Every sub-phase names the **assertion** that overrides it, with strength **HARD*
 inference, e.g. typelock) or **HINT** (biases it), a **re-run scope**, and a **LATENT**
 flag when the decision is hardcoded with no override today (the LATENT set is the kuna
 roadmap). The machine-readable,
-flippable subset is `docs/options.md` (`kuna catalog --json`).
+flippable subset is `docs/options.md` (`unlace catalog --json`).
 
 ## Feedback mechanisms
 
@@ -105,7 +105,7 @@ rendered C are usually destroyed in Band B, not mis-rendered at P9).
 
 In kuna this is concrete: `kassert <phase> <substage> <args> [hard|hint]` at the console
 (reports the computed minimal rewind scope), `--option NAME VALUE` / `--kassert "<args>"`
-on `kuna decompile`, and discovery via `kuna catalog`.
+on `unlace decompile`, and discovery via `unlace catalog`.
 
 ## Implementation state
 

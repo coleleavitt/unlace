@@ -11,7 +11,7 @@ chapter is anchored to the code that implements it.
 | Chapter | Covers |
 |---|---|
 | [00 — Overview & machinery](00-overview.md) | the two tiers, front-ends, IR substrate, knowledge plane, the scheduler |
-| [01 — Program preparation](01-program-prep.md) | `kuna-analysis`: loading, markup, metadata analyzers, the Listing, no-return |
+| [01 — Program preparation](01-program-prep.md) | `unlace-analysis`: loading, markup, metadata analyzers, the Listing, no-return |
 | [02 — Lift & flow recovery](02-lift-and-flow.md) | p-code lift, CFG, injection, jump tables & switch recovery |
 | [03 — SSA & simplification](03-ssa-and-simplification.md) | heritage, the rule pools, sub-variable flow |
 | [04 — Calls & prototypes](04-calls-and-prototypes.md) | prototype models, parameter recovery |
@@ -29,7 +29,7 @@ chapter is anchored to the code that implements it.
    `Anchors:` front-matter (chapters map 1:1 onto the phase folders). A pure
    move/rename updates only anchor paths. `make check-spec` enforces the basics.
 2. **Live code only.** Every claim is anchored to a kuna path plus a symbol name in
-   parentheses — `decompiler/crates/kuna-decomp/src/p2_lift/jumptable.rs
+   parentheses — `decompiler/crates/unlace-decomp/src/p2_lift/jumptable.rs
    (JumpBasic::recoverModel)`. **No line numbers** (they rot). Upstream citations
    (`coreaction.cc:5722`, angr `.py` paths) appear only as parenthetical
    provenance/history, never as the basis of a claim.

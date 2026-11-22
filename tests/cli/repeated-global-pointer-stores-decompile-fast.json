@@ -15,11 +15,11 @@
   "timeout_s": 120,
   "repeat": 3,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/globalptrstores_x86_64.o",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/globalptrstores_x86_64.o",
     "binary_sha256": "fe45ce13e3bf7486d1b892b446dfb0b553be4dce6b25ab3e49d8f56c95f82eb4",
     "binary_size": 18392,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/globalptrstores_x86_64.o",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/globalptrstores_x86_64.o",
     "selector": "big",
     "selector_kind": "name"
   },

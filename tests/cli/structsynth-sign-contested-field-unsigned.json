@@ -19,11 +19,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/signfield_zext_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/signfield_zext_x86_64",
     "binary_sha256": "ef09d82bc6923b77b0606de0229bab665d971b9eec5ffff6af386aa7a80c442a",
     "binary_size": 16128,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/signfield_zext_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/signfield_zext_x86_64",
     "selector": "f",
     "selector_kind": "name"
   },

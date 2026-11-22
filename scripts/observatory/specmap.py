@@ -1,4 +1,4 @@
-"""Map kuna-decomp src folders (and the kuna-analysis crate) to their owning
+"""Map unlace-decomp src folders (and the unlace-analysis crate) to their owning
 docs/spec chapter via each chapter's ``Anchors:`` block. Reimplements the
 ~15-line parse from tools/check_spec.py (that file runs its checks at import
 time as a CI gate, so it is deliberately not imported here); the unit test
@@ -10,8 +10,8 @@ from scripts.paths import repo_root
 
 _ANCHORS = re.compile(r"```yaml\nAnchors:\n(.*?)```", re.S)
 _ROOTS = {
-    "kuna-decomp": "decompiler/crates/kuna-decomp/src",
-    "kuna-analysis": "decompiler/crates/kuna-analysis/src",
+    "unlace-decomp": "decompiler/crates/unlace-decomp/src",
+    "unlace-analysis": "decompiler/crates/unlace-analysis/src",
 }
 
 

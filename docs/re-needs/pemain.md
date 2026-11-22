@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis, decompiler/crates/kuna-cli]
+touches: [decompiler/crates/unlace-analysis, decompiler/crates/unlace-cli]
 scope: small
 regression_of: null
 pr: null
@@ -28,7 +28,7 @@ reject_reason: null
 Find where a stripped Windows program starts.
 
 > **A stripped PE never names its user entry function** (major)
-> kuna names `main` on ELF (`elfmain`) and Mach-O (`machomain`) but not on PE. On a stripped PE `kuna functions` lists the CRT startup as the entry and the function it eventually calls (MSVC `mainCRTStartup -> __scrt_common_main_seh -> invoke_main -> main`, MinGW `__tmainCRTStartup -> main`) as one more `sub_<addr>`. On Flare-On 12 `hopeanddreams.exe` that is `sub_14020ba00` among 1511 functions, reached by hand from entry `sub_14044ca84` through `sub_14044c908`. `functions --summary` reports only the entry and has no field for `main`.
+> kuna names `main` on ELF (`elfmain`) and Mach-O (`machomain`) but not on PE. On a stripped PE `unlace functions` lists the CRT startup as the entry and the function it eventually calls (MSVC `mainCRTStartup -> __scrt_common_main_seh -> invoke_main -> main`, MinGW `__tmainCRTStartup -> main`) as one more `sub_<addr>`. On Flare-On 12 `hopeanddreams.exe` that is `sub_14020ba00` among 1511 functions, reached by hand from entry `sub_14044ca84` through `sub_14044c908`. `functions --summary` reports only the entry and has no field for `main`.
 
 ## Reproduction
 
@@ -61,11 +61,11 @@ Find where a stripped Windows program starts.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_imports_stripped.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe",
     "binary_sha256": "981f4d8e9bba6b4bb039d91253f54e6f068d7513930e1f0ab5979b5bf7fa6cad",
     "binary_size": 39424,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_imports_stripped.exe"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe"
   }
 }
 ```
@@ -107,11 +107,11 @@ Find where a stripped Windows program starts.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_imports_stripped.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe",
     "binary_sha256": "981f4d8e9bba6b4bb039d91253f54e6f068d7513930e1f0ab5979b5bf7fa6cad",
     "binary_size": 39424,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_imports_stripped.exe"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe"
   }
 }
 ```

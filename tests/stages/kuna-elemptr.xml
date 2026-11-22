@@ -21,7 +21,7 @@
     access is one element width through an index the program computes gets a
     `T *` vote in the getLocalType fold.
 
-    The fixture is decompiler/crates/kuna-analysis/tests/fixtures/elemptr_x86_64.c
+    The fixture is decompiler/crates/unlace-analysis/tests/fixtures/elemptr_x86_64.c
     built by gcc -O0 non-PIE at 0x30000000 with its data symbols dropped:
 
         w_decode: the witness - input, output buffer and global table indexed
@@ -86,7 +86,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elemptr_gcc_O0_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elemptr_gcc_O0_x86_64</com>
   <com>option elemptr off</com>
   <com>option iteexpr on</com>
   <com>option castternary on</com>
@@ -135,7 +135,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/elemptr_gcc_O0_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elemptr_gcc_O0_x86_64</com>
   <com>option libcnames off</com>
   <com>option elemptr on</com>
   <com>option iteexpr on</com>

@@ -1,0 +1,2070 @@
+//! Tests for the C-declaration parser ([`super`]).
+//!
+//! The corpus is the representative `parse line` payloads grepped from
+//! `tests/datatests/` plus the prototypes `testfuncproto.cc` /
+//! `testparamstore.cc` feed `parse_protopieces`, together with the lexer's
+//! token-level rules and the rejection (error-text) paths.
+
+use unlace_decomp::dtype::{TypeFactory, TypeFactoryImpl, type_metatype as meta};
+
+use super::{
+    CParse, DataOrg, DocType, GrammarLexer, GrammarToken, flags, parse_c_integer,
+    parse_protopieces, parse_type, tok,
+};
+use unlace_decomp::kuna_typequal::DatatypeQualExt;
+
+#[test]
+fn mapped_object_volatile_qualifiers_follow_declarator_binding() {
+    let f = factory();
+    for declaration in [
+        "typedef volatile int4 VolWord;",
+        "typedef VolWord VolAlias;",
+        "typedef int4 PlainWord;",
+        "typedef int4 WordArray[2];",
+        "typedef VolWord VolWords[2];",
+        "typedef int4 *volatile VolPointer;",
+        "typedef volatile int4 *VolPointee;",
+        "typedef VolPointer PointerArray[2];",
+        "typedef VolPointee PointeeArray[2];",
+    ] {
+        super::parse_c(declaration, &f, org(), &[], |_, _| Ok(())).unwrap();
+    }
+    for (source, expected) in [
+        ("volatile int4 word", true),
+        ("int4 volatile word", true),
+        ("volatile int4 words[2]", true),
+        ("volatile int4 *pointer", false),
+        ("int4 *volatile pointer", true),
+        ("volatile int4 *pointers[2]", false),
+        ("int4 *volatile pointers[2]", true),
+        ("int4 (*volatile pointer)[2]", true),
+        ("volatile int4 (*pointer)[2]", false),
+        ("int4 word", false),
+        ("PlainWord word", false),
+        ("VolWord word", true),
+        ("VolAlias word", true),
+        ("VolWord words[2][3]", true),
+        ("WordArray words", false),
+        ("volatile WordArray words", true),
+        ("VolWords words", true),
+        ("VolWords words[3]", true),
+        ("VolWord *pointer", false),
+        ("VolWords *pointer", false),
+        ("VolWords *volatile pointer", true),
+        ("VolPointer pointer", true),
+        ("VolPointer pointers[2]", true),
+        ("VolPointer *pointer", false),
+        ("VolPointee pointer", false),
+        ("VolPointee pointers[2]", false),
+        ("volatile VolPointee pointer", true),
+        ("PointerArray pointers", true),
+        ("PointeeArray pointers", false),
+    ] {
+        let (_, _, volatile) = super::parse_type_with_volatile(source, &f, org()).unwrap();
+        assert_eq!(volatile, expected, "{source}");
+    }
+}
+
+// -- test helpers -----------------------------------------------------------
+
+/// Build a factory wired with the alignment map, a max base size of 8, and the
+/// named core data-types the datatest / unit-test corpus references (`int4`,
+/// `char`, `void`, `float4`, ...).  These names are exactly what
+/// `findByName` resolves during `parse line`.
+fn factory() -> TypeFactoryImpl {
+    let f = TypeFactoryImpl::new();
+    f.set_default_alignment_map();
+    f.set_max_basetype_size(8);
+    // void / undefined first (cacheCoreTypes order is irrelevant for findByName).
+    f.set_core_type("void", 0, meta::TYPE_VOID, false).unwrap();
+    f.set_core_type("char", 1, meta::TYPE_INT, true).unwrap();
+    f.set_core_type("bool", 1, meta::TYPE_BOOL, false).unwrap();
+    f.set_core_type("uint1", 1, meta::TYPE_UINT, false).unwrap();
+    f.set_core_type("int1", 1, meta::TYPE_INT, false).unwrap();
+    f.set_core_type("int2", 2, meta::TYPE_INT, false).unwrap();
+    f.set_core_type("uint2", 2, meta::TYPE_UINT, false).unwrap();
+    f.set_core_type("int4", 4, meta::TYPE_INT, false).unwrap();
+    f.set_core_type("uint4", 4, meta::TYPE_UINT, false).unwrap();
+    f.set_core_type("int8", 8, meta::TYPE_INT, false).unwrap();
+    f.set_core_type("uint8", 8, meta::TYPE_UINT, false).unwrap();
+    f.set_core_type("float4", 4, meta::TYPE_FLOAT, false)
+        .unwrap();
+    f.set_core_type("float8", 8, meta::TYPE_FLOAT, false)
+        .unwrap();
+    f.cache_core_types().unwrap();
+    f
+}
+
+/// A 4-byte / word-size-1 default data space (the common little-endian 32-bit
+/// data organization).
+fn org() -> DataOrg {
+    DataOrg {
+        addr_size: 4,
+        word_size: 1,
+    }
+}
+
+/// Collect the lexer's token kinds for `input` (each kind only, value checked
+/// separately where it matters).
+fn lex_kinds(input: &str) -> Vec<u32> {
+    let mut lx = GrammarLexer::new(4096);
+    lx.push_file("t", input.as_bytes().to_vec());
+    let mut out = Vec::new();
+    loop {
+        let mut t = GrammarToken::new();
+        lx.get_next_token(&mut t).unwrap();
+        out.push(t.get_type());
+        if t.get_type() == tok::ENDOFFILE || t.get_type() == tok::BADTOKEN {
+            break;
+        }
+    }
+    out
+}
+
+// ===========================================================================
+// Lexer (GrammarLexer / GrammarToken)
+// ===========================================================================
+
+#[test]
+fn lex_punctuation_and_identifiers() {
+    let k = lex_kinds("int4 *x;");
+    assert_eq!(
+        k,
+        vec![
+            tok::IDENTIFIER,
+            tok::STAR,
+            tok::IDENTIFIER,
+            tok::SEMICOLON,
+            tok::ENDOFFILE
+        ]
+    );
+}
+
+#[test]
+fn lex_dotdotdot_and_scoperes() {
+    assert_eq!(lex_kinds("..."), vec![tok::DOTDOTDOT, tok::ENDOFFILE]);
+    assert_eq!(
+        lex_kinds("a::b"),
+        vec![
+            tok::IDENTIFIER,
+            tok::SCOPERES,
+            tok::IDENTIFIER,
+            tok::ENDOFFILE
+        ]
+    );
+}
+
+#[test]
+fn lex_single_colon_is_not_scoperes() {
+    // A lone ':' (struct bitfield separator) resolves to the ':' punctuation.
+    assert_eq!(
+        lex_kinds("a : 3"),
+        vec![tok::IDENTIFIER, b':' as u32, tok::INTEGER, tok::ENDOFFILE]
+    );
+}
+
+#[test]
+fn lex_comments_are_skipped() {
+    // `//` to end of line and `/* */` are dropped entirely.
+    assert_eq!(
+        lex_kinds("a // comment\nb"),
+        vec![tok::IDENTIFIER, tok::IDENTIFIER, tok::ENDOFFILE]
+    );
+    assert_eq!(
+        lex_kinds("a /* c */ b"),
+        vec![tok::IDENTIFIER, tok::IDENTIFIER, tok::ENDOFFILE]
+    );
+}
+
+/// Read one token from a lexer (test helper).
+fn read_tok(lx: &mut GrammarLexer) -> GrammarToken {
+    let mut t = GrammarToken::new();
+    lx.get_next_token(&mut t).unwrap();
+    t
+}
+
+#[test]
+fn lex_integer_decimal_hex_octal() {
+    let mut lx = GrammarLexer::new(4096);
+    lx.push_file("t", b"10 0x14 010 -5".to_vec());
+    let a = read_tok(&mut lx);
+    assert_eq!(a.get_type(), tok::INTEGER);
+    assert_eq!(a.get_integer(), 10);
+    let b = read_tok(&mut lx);
+    assert_eq!(b.get_integer(), 0x14);
+    let c = read_tok(&mut lx);
+    assert_eq!(c.get_integer(), 8); // octal 010
+    let d = read_tok(&mut lx);
+    assert_eq!(d.get_integer() as i64, -5);
+}
+
+#[test]
+fn lex_char_constant_token_kind() {
+    // Char constants resolve to the CHARCONSTANT token.  The *value* decode in
+    // the C++ reads `buffer[bufstart..bufend-1]` where the single-quote start
+    // state (grammar.cc:393-395) does NOT reset `bufstart` — so the decoded
+    // value depends on the prior token's start offset within the (per-line)
+    // buffer, a C++ fragility.  No `parse line` / proto payload in the corpus
+    // uses a char constant (they appear only in `enum { X = 'c' }`, which is the
+    // seam'd newEnum path), so only the token kind is pinned here; the value
+    // decode mirrors the C++ algorithm faithfully (see `set_with`).
+    let k = lex_kinds("'A'");
+    assert_eq!(k, vec![tok::CHARCONSTANT, tok::ENDOFFILE]);
+}
+
+#[test]
+fn lex_illegal_x_in_number() {
+    // `x` is only legal as the 0x hex indicator; `1x` is a lexer syntax error.
+    assert_eq!(lex_kinds("1x"), vec![tok::BADTOKEN]);
+}
+
+#[test]
+fn lex_string_constant_resolves_but_parser_rejects() {
+    // The lexer recognizes a string literal token; the parser's lex() rejects it.
+    assert_eq!(lex_kinds("\"abc\""), vec![tok::STRINGVAL, tok::ENDOFFILE]);
+}
+
+#[test]
+fn parse_c_integer_bases() {
+    assert_eq!(parse_c_integer(b"0"), 0);
+    assert_eq!(parse_c_integer(b"255"), 255);
+    assert_eq!(parse_c_integer(b"0xff"), 255);
+    assert_eq!(parse_c_integer(b"0XFF"), 255);
+    assert_eq!(parse_c_integer(b"0777"), 0o777);
+    assert_eq!(parse_c_integer(b"-1") as i64, -1);
+}
+
+#[test]
+fn parse_c_integer_prefix_edge_cases() {
+    // All values cross-checked against `g++ -std=c++11 istringstream >> intb`.
+    // Bare `0x`/`0xg`: the `0` is parsed, then the scan stops -> 0.
+    assert_eq!(parse_c_integer(b"0x"), 0);
+    assert_eq!(parse_c_integer(b"0xg"), 0);
+    // No leading digit -> stream fails, value-initialized 0.
+    assert_eq!(parse_c_integer(b"z"), 0);
+    assert_eq!(parse_c_integer(b"_"), 0);
+    assert_eq!(parse_c_integer(b"0_"), 0);
+    // Underscore / letter mid-token stops the scan.
+    assert_eq!(parse_c_integer(b"1_2_3"), 1);
+    assert_eq!(parse_c_integer(b"12_34"), 12);
+    // Sign-only -> 0.
+    assert_eq!(parse_c_integer(b"+") as i64, 0);
+    assert_eq!(parse_c_integer(b"-") as i64, 0);
+    assert_eq!(parse_c_integer(b"+5"), 5);
+    assert_eq!(parse_c_integer(b"-5z") as i64, -5);
+    assert_eq!(parse_c_integer(b"-08") as i64, 0);
+    // Positive overflow saturates to i64::MAX; negative to i64::MIN.
+    assert_eq!(parse_c_integer(b"0xffffffffffffffff") as i64, i64::MAX);
+    assert_eq!(parse_c_integer(b"99999999999999999999") as i64, i64::MAX);
+    assert_eq!(parse_c_integer(b"9223372036854775808") as i64, i64::MAX);
+    assert_eq!(parse_c_integer(b"-99999999999999999999") as i64, i64::MIN);
+    assert_eq!(parse_c_integer(b"-9223372036854775809") as i64, i64::MIN);
+    // Exact boundaries are representable, not saturated.
+    assert_eq!(parse_c_integer(b"9223372036854775807") as i64, i64::MAX);
+    assert_eq!(parse_c_integer(b"-9223372036854775808") as i64, i64::MIN);
+}
+
+// ---------------------------------------------------------------------------
+// w9-con-grammar — parse_c_integer prefix-parse parity with C++
+// `istringstream >> intb` (grammar.cc:1796-1804).  REPAIR of LOSS-124.
+//
+// The C++ `operator>>` performs a PREFIX parse: it consumes as many valid
+// digits in the auto-detected base as it can and STOPS at the first invalid
+// char, leaving the rest in the stream.  These tests previously documented a
+// divergence (the port full-string-parsed and saturated to i64::MAX); the port
+// now matches the C++ leading-prefix scan, so they assert the oracle values.
+//
+// The lexer's `number` state (grammar.cc:2094-2125 / move_state LexState::Number)
+// accepts ASCII letters and `_` as "part of the number", so tokens like `1z`,
+// `123abc`, `08`, `5_0` are single INTEGER tokens — these inputs ARE reachable.
+//
+// C++ oracle (verified with a standalone istringstream program):
+//   "1z"     -> 1
+//   "123abc" -> 123
+//   "08"     -> 0      (octal stops at non-octal digit 8)
+//   "5_0"    -> 5
+//   "007_0"  -> 7
+// ---------------------------------------------------------------------------
+
+#[test]
+fn w9_con_grammar_parse_int_letter_suffix() {
+    // C++ istringstream prefix-parses "1z" as 1.
+    assert_eq!(parse_c_integer(b"1z"), 1, "C++ prefix-parses 1z -> 1");
+}
+
+#[test]
+fn w9_con_grammar_parse_int_trailing_alpha() {
+    assert_eq!(
+        parse_c_integer(b"123abc"),
+        123,
+        "C++ prefix-parses 123abc -> 123"
+    );
+}
+
+#[test]
+fn w9_con_grammar_parse_int_bad_octal_digit() {
+    assert_eq!(
+        parse_c_integer(b"08"),
+        0,
+        "C++ reads octal 0 then stops at 8 -> 0"
+    );
+}
+
+#[test]
+fn w9_con_grammar_parse_int_underscore() {
+    assert_eq!(parse_c_integer(b"5_0"), 5, "C++ prefix-parses 5_0 -> 5");
+    assert_eq!(
+        parse_c_integer(b"007_0"),
+        7,
+        "C++ prefix-parses octal 007_0 -> 7"
+    );
+}
+
+#[test]
+fn w9_con_grammar_array_size_letter_suffix() {
+    // End-to-end: `int4 a[1z]` is a valid `int4[1]` in C++ (array size 1).  The
+    // lexer accretes `1z` into one NUMBER token; parse_c_integer prefix-parses
+    // it to 1, so ArrayModifier::isValid (`arraysize>0`) holds and the declarator
+    // is a valid `int4[1]` array.
+    let f = factory();
+    let (ty, name) =
+        parse_type("int4 a[1z]", &f, org()).expect("C++ accepts int4 a[1z] as int4[1]");
+    assert_eq!(
+        ty.get_metatype(),
+        meta::TYPE_ARRAY,
+        "expected an array type"
+    );
+    assert_eq!(ty.get_size(), 4, "int4[1] is 4 bytes (one int4 element)");
+    assert_eq!(name, "a");
+}
+
+// ===========================================================================
+// parse_protopieces — the testfuncproto / testparamstore path
+// ===========================================================================
+
+#[test]
+fn proto_simple_two_int_params() {
+    // testfuncproto funcproto_register: "void func(int4 a,int4 b);".
+    let f = factory();
+    let p = parse_protopieces("void func(int4 a,int4 b);", &f, org()).unwrap();
+    assert_eq!(p.name, "func");
+    assert_eq!(p.outtype.as_ref().unwrap().get_metatype(), meta::TYPE_VOID);
+    assert_eq!(p.intypes.len(), 2);
+    assert_eq!(p.intypes[0].get_name(), "int4");
+    assert_eq!(p.intypes[1].get_name(), "int4");
+    assert_eq!(p.innames, vec!["a".to_string(), "b".to_string()]);
+    assert_eq!(p.first_var_arg_slot, -1);
+}
+
+#[test]
+fn proto_mixed_param_types() {
+    // testfuncproto funcproto_smallregister.
+    let f = factory();
+    let p = parse_protopieces("int4 func(char a,int4 b,int2 c,int4 d);", &f, org()).unwrap();
+    assert_eq!(p.outtype.as_ref().unwrap().get_name(), "int4");
+    assert_eq!(p.intypes.len(), 4);
+    assert_eq!(p.intypes[0].get_name(), "char");
+    assert_eq!(p.intypes[1].get_name(), "int4");
+    assert_eq!(p.intypes[2].get_name(), "int2");
+    assert_eq!(p.intypes[3].get_name(), "int4");
+    assert_eq!(p.innames, vec!["a", "b", "c", "d"]);
+}
+
+#[test]
+fn proto_pointer_param() {
+    // testfuncproto funcproto_stackalign: trailing "int1 *g".
+    let f = factory();
+    let p = parse_protopieces(
+        "int4 func(int4 a,int4 b,int4 c,int4 d,int4 e,int2 f,int1 *g);",
+        &f,
+        org(),
+    )
+    .unwrap();
+    assert_eq!(p.intypes.len(), 7);
+    let g = &p.intypes[6];
+    assert_eq!(g.get_metatype(), meta::TYPE_PTR);
+    assert_eq!(g.get_ptr_to().unwrap().get_name(), "int1");
+    assert_eq!(g.get_size(), org().addr_size);
+}
+
+#[test]
+fn proto_void_params_become_empty() {
+    // "f(void)" -> the lone void parameter is dropped (FunctionModifier ctor).
+    let f = factory();
+    let p = parse_protopieces("int4 noargs(void);", &f, org()).unwrap();
+    assert_eq!(p.intypes.len(), 0);
+    assert_eq!(p.innames.len(), 0);
+    assert_eq!(p.outtype.as_ref().unwrap().get_name(), "int4");
+}
+
+#[test]
+fn proto_varargs() {
+    // datatest noforloop_alias: "extern void printf(char *,...);".
+    let f = factory();
+    let p = parse_protopieces("extern void printf(char *,...);", &f, org()).unwrap();
+    assert_eq!(p.name, "printf");
+    assert_eq!(p.intypes.len(), 1);
+    assert_eq!(p.intypes[0].get_metatype(), meta::TYPE_PTR);
+    assert_eq!(p.intypes[0].get_ptr_to().unwrap().get_name(), "char");
+    // firstVarArgSlot = number of fixed params.
+    assert_eq!(p.first_var_arg_slot, 1);
+}
+
+#[test]
+fn proto_double_pointer() {
+    // datatest deindirect2: "extern int2 deind26(int4 **ptr,char *nm);".
+    let f = factory();
+    let p = parse_protopieces("extern int2 deind26(int4 **ptr,char *nm);", &f, org()).unwrap();
+    assert_eq!(p.outtype.as_ref().unwrap().get_name(), "int2");
+    assert_eq!(p.intypes.len(), 2);
+    // int4 ** : pointer to pointer to int4.
+    let pp = &p.intypes[0];
+    assert_eq!(pp.get_metatype(), meta::TYPE_PTR);
+    let inner = pp.get_ptr_to().unwrap();
+    assert_eq!(inner.get_metatype(), meta::TYPE_PTR);
+    assert_eq!(inner.get_ptr_to().unwrap().get_name(), "int4");
+    assert_eq!(p.intypes[1].get_metatype(), meta::TYPE_PTR);
+}
+
+#[test]
+fn proto_pointer_return_type() {
+    // datatest deindirect2: "extern int4 *obtainPtr(char *nm);" — pointer return.
+    let f = factory();
+    let p = parse_protopieces("extern int4 *obtainPtr(char *nm);", &f, org()).unwrap();
+    assert_eq!(p.name, "obtainPtr");
+    let ret = p.outtype.as_ref().unwrap();
+    assert_eq!(ret.get_metatype(), meta::TYPE_PTR);
+    assert_eq!(ret.get_ptr_to().unwrap().get_name(), "int4");
+}
+
+#[test]
+fn proto_namespaced_name() {
+    // datatest namespace: "extern int4 a::b::assign_vals(int4 spam);".
+    let f = factory();
+    let p = parse_protopieces("extern int4 a::b::assign_vals(int4 spam);", &f, org()).unwrap();
+    assert_eq!(p.name, "a::b::assign_vals");
+    assert_eq!(p.intypes.len(), 1);
+    assert_eq!(p.innames, vec!["spam"]);
+}
+
+#[test]
+fn proto_many_float_int_params() {
+    // datatest mixfloatint: "extern float8 dldlll(float8 a,int4 b,float8 c,int4 d,int4 e,int4 f);".
+    let f = factory();
+    let p = parse_protopieces(
+        "extern float8 dldlll(float8 a,int4 b,float8 c,int4 d,int4 e,int4 f);",
+        &f,
+        org(),
+    )
+    .unwrap();
+    assert_eq!(p.outtype.as_ref().unwrap().get_name(), "float8");
+    assert_eq!(p.intypes.len(), 6);
+    assert_eq!(p.intypes[0].get_name(), "float8");
+    assert_eq!(p.intypes[5].get_name(), "int4");
+}
+
+#[test]
+fn proto_bool_return() {
+    // datatest condconst2: "extern bool condmove(int4 cval,char *cptr);".
+    let f = factory();
+    let p = parse_protopieces("extern bool condmove(int4 cval,char *cptr);", &f, org()).unwrap();
+    assert_eq!(p.outtype.as_ref().unwrap().get_name(), "bool");
+    assert_eq!(p.intypes.len(), 2);
+    assert_eq!(p.intypes[1].get_metatype(), meta::TYPE_PTR);
+}
+
+#[test]
+fn proto_uint1_pointer_param() {
+    // datatest ccmp: "extern void ccmp(uint1 *ptr,int4 val);".
+    let f = factory();
+    let p = parse_protopieces("extern void ccmp(uint1 *ptr,int4 val);", &f, org()).unwrap();
+    assert_eq!(p.intypes.len(), 2);
+    assert_eq!(p.intypes[0].get_metatype(), meta::TYPE_PTR);
+    assert_eq!(p.intypes[0].get_ptr_to().unwrap().get_name(), "uint1");
+}
+
+// ===========================================================================
+// parse_type — the single-type entry point
+// ===========================================================================
+
+#[test]
+fn parse_type_plain_named() {
+    let f = factory();
+    let (ty, name) = parse_type("int4 x", &f, org()).unwrap();
+    assert_eq!(ty.get_name(), "int4");
+    assert_eq!(name, "x");
+}
+
+#[test]
+fn parse_type_pointer() {
+    let f = factory();
+    let (ty, name) = parse_type("char *p", &f, org()).unwrap();
+    assert_eq!(ty.get_metatype(), meta::TYPE_PTR);
+    assert_eq!(ty.get_ptr_to().unwrap().get_name(), "char");
+    assert_eq!(name, "p");
+}
+
+#[test]
+fn parse_type_array() {
+    // direct_declarator '[' assignment_expression ']'.
+    let f = factory();
+    let (ty, name) = parse_type("int4 a[32]", &f, org()).unwrap();
+    assert_eq!(ty.get_metatype(), meta::TYPE_ARRAY);
+    assert_eq!(name, "a");
+}
+
+#[test]
+fn parse_type_pointer_to_array() {
+    // datatest offsetarray-style: `int4 (*a)[16]` — pointer to array[16] of int4.
+    let f = factory();
+    let (ty, name) = parse_type("int4 (*a)[16]", &f, org()).unwrap();
+    assert_eq!(name, "a");
+    assert_eq!(ty.get_metatype(), meta::TYPE_PTR);
+    let arr = ty.get_ptr_to().unwrap();
+    assert_eq!(arr.get_metatype(), meta::TYPE_ARRAY);
+    assert_eq!(arr.get_size(), 16 * 4); // 16 int4 elements
+}
+
+#[test]
+fn parse_type_abstract_pointer_to_array() {
+    // datatest displayformat-style: `float4 (*a)[1]` parameter (abstract or named).
+    let f = factory();
+    let (ty, _name) = parse_type("float4 (*)[1]", &f, org()).unwrap();
+    assert_eq!(ty.get_metatype(), meta::TYPE_PTR);
+    assert_eq!(ty.get_ptr_to().unwrap().get_metatype(), meta::TYPE_ARRAY);
+}
+
+/// The console parser and P9 C speller must agree on the two mirror types.  The
+/// round-11 declarator bug was printer-only; this catches either side drifting
+/// so a parsed `(*a)[N]` can never print back as `*a[N]` (or vice versa).
+#[test]
+fn pointer_array_types_round_trip_through_the_c_speller() {
+    use unlace_decomp::kuna_langc::C_SPELLER;
+    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+
+    let f = factory();
+    for (source, expected) in [
+        ("int4 (*a)[16]", ("int4 (*", ")[16]")),
+        ("int4 *a[16]", ("int4 *", "[16]")),
+    ] {
+        let (ty, name) = parse_type(source, &f, org()).expect("declarator parses");
+        assert_eq!(name, "a");
+        let (front, back) = C_SPELLER.declarator(&SpellCtx::OFF, &ty);
+        assert_eq!((front.as_str(), back.as_str()), expected, "{source}");
+        assert_eq!(format!("{front}{name}{back}"), source, "{source}");
+    }
+}
+
+/// Every pointer/array nesting up to four modifiers deep reads back as the same
+/// type, both as a declarator (`<front><name><back>`) and in the declaration form
+/// a local takes, where an array's element halves surround `<name> [count]`.
+#[test]
+fn nested_pointer_array_declarations_round_trip_through_the_c_speller() {
+    use std::rc::Rc;
+    use unlace_decomp::dtype::Datatype;
+    use unlace_decomp::kuna_langc::C_SPELLER;
+    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+
+    fn same(a: &Rc<Datatype>, b: &Rc<Datatype>) -> bool {
+        if a.get_metatype() != b.get_metatype() || a.get_size() != b.get_size() {
+            return false;
+        }
+        match a.get_metatype() {
+            meta::TYPE_PTR => same(&a.get_ptr_to().unwrap(), &b.get_ptr_to().unwrap()),
+            meta::TYPE_ARRAY => {
+                a.num_elements() == b.num_elements()
+                    && same(&a.get_array_base().unwrap(), &b.get_array_base().unwrap())
+            }
+            _ => a.get_name() == b.get_name(),
+        }
+    }
+    fn parses_back(f: &TypeFactoryImpl, decl: &str, want: &Rc<Datatype>) {
+        let (ty, name) = parse_type(decl, f, org()).unwrap_or_else(|e| panic!("{decl}: {e:?}"));
+        assert_eq!(name, "x", "{decl}");
+        assert!(same(&ty, want), "{decl} parses as a different type");
+    }
+
+    let f = factory();
+    let int4 = f.find_by_name("int4").unwrap().unwrap();
+    let mut chains: Vec<Vec<Option<i32>>> = vec![Vec::new()];
+    let mut checked = 0;
+    for _ in 0..4 {
+        chains = chains
+            .iter()
+            .flat_map(|c| {
+                [None, Some(2), Some(3)].into_iter().map(move |m| {
+                    let mut c = c.clone();
+                    c.push(m);
+                    c
+                })
+            })
+            .collect();
+        for chain in &chains {
+            let mut ty = int4.clone();
+            for m in chain {
+                ty = match m {
+                    None => f.get_type_pointer(4, ty, 1).unwrap(),
+                    Some(n) => f.get_type_array(*n, ty).unwrap(),
+                };
+            }
+            let (front, back) = C_SPELLER.declarator(&SpellCtx::OFF, &ty);
+            let sep = if front.ends_with('*') { "" } else { " " };
+            parses_back(&f, &format!("{front}{sep}x{back}"), &ty);
+            match chain.last().unwrap() {
+                None => {
+                    let (front, back) = C_SPELLER.type_name(&SpellCtx::OFF, &ty);
+                    parses_back(&f, &format!("{front}x{back}"), &ty);
+                }
+                Some(n) if chain.len() == 1 || chain[chain.len() - 2].is_none() => {
+                    let elem = ty.get_array_base().unwrap();
+                    let (front, back) = C_SPELLER.type_name(&SpellCtx::OFF, &elem);
+                    let sep = if front.ends_with('*') { "" } else { " " };
+                    parses_back(&f, &format!("{front}{sep}x [{n}]{back}"), &ty);
+                }
+                Some(_) => {}
+            }
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 3 + 9 + 27 + 81);
+}
+
+#[test]
+fn parse_type_abstract_no_name() {
+    // A bare type with no identifier (abstract declarator).
+    let f = factory();
+    let (ty, name) = parse_type("int4", &f, org()).unwrap();
+    assert_eq!(ty.get_name(), "int4");
+    assert_eq!(name, "");
+}
+
+#[test]
+fn parse_type_abstract_pointer() {
+    let f = factory();
+    let (ty, name) = parse_type("int4 *", &f, org()).unwrap();
+    assert_eq!(ty.get_metatype(), meta::TYPE_PTR);
+    assert_eq!(name, "");
+}
+
+// ===========================================================================
+// old-struct / old-union / old-enum lookups (the read-only construction half)
+// ===========================================================================
+
+#[test]
+fn old_struct_lookup_succeeds() {
+    // Register a struct named "mystruct" (via the factory's getTypeStruct stub,
+    // which is what `parse line struct {...}` interns by name), then parse
+    // "extern mystruct returnbig(int4 num);" (datatest retspecial) — the
+    // TYPE_NAME path resolves the struct by name.
+    let f = factory();
+    f.get_type_struct("mystruct").unwrap();
+    let p = parse_protopieces("extern mystruct returnbig(int4 num);", &f, org()).unwrap();
+    assert_eq!(p.outtype.as_ref().unwrap().get_name(), "mystruct");
+    assert_eq!(
+        p.outtype.as_ref().unwrap().get_metatype(),
+        meta::TYPE_STRUCT
+    );
+    assert_eq!(p.intypes.len(), 1);
+}
+
+#[test]
+fn struct_pointer_param_resolves_named_type() {
+    // datatest offsetarray: "extern void populate_mystruct(mystruct *ptr);".
+    let f = factory();
+    f.get_type_struct("mystruct").unwrap();
+    let p = parse_protopieces("extern void populate_mystruct(mystruct *ptr);", &f, org()).unwrap();
+    assert_eq!(p.intypes.len(), 1);
+    assert_eq!(p.intypes[0].get_metatype(), meta::TYPE_PTR);
+    assert_eq!(p.intypes[0].get_ptr_to().unwrap().get_name(), "mystruct");
+}
+
+// ===========================================================================
+// Tag references to an already-interned struct / union / enum
+// ===========================================================================
+
+#[test]
+fn struct_tag_return_type_resolves_interned_tag() {
+    // `struct JSValue { ... };` interns the tag, after which the lexer hands
+    // `JSValue` back as a TYPE_NAME; `struct JSValue` as a return type used to
+    // be a syntax error.
+    let f = factory();
+    f.get_type_struct("JSValue").unwrap();
+    let p = parse_protopieces("extern struct JSValue jsv(void *ctx);", &f, org()).unwrap();
+    assert_eq!(p.outtype.as_ref().unwrap().get_name(), "JSValue");
+    assert_eq!(
+        p.outtype.as_ref().unwrap().get_metatype(),
+        meta::TYPE_STRUCT
+    );
+    assert_eq!(p.intypes.len(), 1);
+}
+
+#[test]
+fn struct_tag_pointer_param_resolves_interned_tag() {
+    let f = factory();
+    f.get_type_struct("JSValue").unwrap();
+    let p = parse_protopieces("extern void take(struct JSValue *v);", &f, org()).unwrap();
+    assert_eq!(p.intypes.len(), 1);
+    assert_eq!(p.intypes[0].get_metatype(), meta::TYPE_PTR);
+    assert_eq!(p.intypes[0].get_ptr_to().unwrap().get_name(), "JSValue");
+}
+
+#[test]
+fn union_tag_return_type_resolves_interned_tag() {
+    let f = factory();
+    f.get_type_union("myunion").unwrap();
+    let p = parse_protopieces("extern union myunion pick(int4 n);", &f, org()).unwrap();
+    assert_eq!(p.outtype.as_ref().unwrap().get_name(), "myunion");
+    assert_eq!(p.outtype.as_ref().unwrap().get_metatype(), meta::TYPE_UNION);
+}
+
+#[test]
+fn enum_tag_param_type_resolves_interned_tag() {
+    let f = factory();
+    f.get_type_enum("mode").unwrap();
+    let p = parse_protopieces("extern void set(enum mode m);", &f, org()).unwrap();
+    assert_eq!(p.intypes.len(), 1);
+    assert_eq!(p.intypes[0].get_name(), "mode");
+}
+
+#[test]
+fn struct_tag_type_parses_outside_a_prototype() {
+    let f = factory();
+    f.get_type_struct("JSValue").unwrap();
+    let t = parse_type("struct JSValue *", &f, org()).unwrap();
+    assert_eq!(t.0.get_metatype(), meta::TYPE_PTR);
+    assert_eq!(t.0.get_ptr_to().unwrap().get_name(), "JSValue");
+}
+
+// ===========================================================================
+// Rejection / error-text paths
+// ===========================================================================
+
+#[test]
+fn reject_string_constant() {
+    // grammar.cc:1300-1303: "Illegal string constant".
+    let f = factory();
+    let err = parse_protopieces("extern void f(\"oops\");", &f, org()).unwrap_err();
+    assert!(
+        err.explain().contains("Illegal string constant"),
+        "got: {}",
+        err.explain()
+    );
+}
+
+#[test]
+fn reject_unknown_qualifier_is_not_a_qualifier() {
+    // A bogus declaration with no valid specifier is a syntax error.
+    let f = factory();
+    let err = parse_protopieces("notatype foo(int4 a);", &f, org()).unwrap_err();
+    // "notatype" lexes as an IDENTIFIER, which cannot begin declaration_specifiers.
+    assert!(
+        err.explain().contains("Syntax error"),
+        "got: {}",
+        err.explain()
+    );
+}
+
+#[test]
+fn reject_multiple_type_specifiers() {
+    // Two TYPE_NAMEs in one specifier list -> "Multiple type specifiers".
+    let f = factory();
+    let err = parse_protopieces("int4 char f(void);", &f, org()).unwrap_err();
+    assert!(
+        err.explain().contains("Multiple type specifiers"),
+        "got: {}",
+        err.explain()
+    );
+}
+
+#[test]
+fn unknown_struct_tag_creates_forward_declaration() {
+    let f = factory();
+    let p = parse_protopieces("extern struct Later *f(void);", &f, org()).unwrap();
+    assert!(p.outtype.unwrap().get_ptr_to().unwrap().is_incomplete());
+    assert!(f.find_by_name("Later").unwrap().is_some());
+}
+
+#[test]
+fn reject_struct_type_name_of_the_wrong_kind() {
+    // `struct int4`: int4 is a TYPE_NAME, and a type name in tag position is
+    // read as the tag, so the kind check rejects it rather than the grammar.
+    let f = factory();
+    let err = parse_protopieces("extern struct int4 f(void);", &f, org()).unwrap_err();
+    assert!(
+        err.explain()
+            .contains("Identifier does not represent a struct as required"),
+        "got: {}",
+        err.explain()
+    );
+}
+
+#[test]
+fn reject_multiple_storage_specifiers() {
+    // TypeDeclarator::isValid throws ParseError("Multiple storage specifiers")
+    // (grammar.cc:841-842) when two storage classes coexist; the entry point's
+    // `decl->isValid()` call surfaces it.
+    let f = factory();
+    let err = parse_protopieces("typedef extern int4 x;", &f, org()).unwrap_err();
+    assert!(
+        err.explain().contains("Multiple storage specifiers"),
+        "got: {}",
+        err.explain()
+    );
+}
+
+#[test]
+fn reject_incomplete_declaration() {
+    // Missing terminating ';' -> syntax error at EOF.
+    let f = factory();
+    let err = parse_protopieces("void f(int4 a)", &f, org()).unwrap_err();
+    assert!(!err.explain().is_empty());
+}
+
+#[test]
+fn struct_construction_lands_in_factory() {
+    // `parse line struct { ... }` now constructs the type and interns it into the
+    // factory (the W10 store-write un-seam): the type is findable by name with its
+    // computed size (two int4 fields => 8 bytes) and completed (no longer
+    // incomplete).
+    let f = factory();
+    super::parse_c(
+        "struct mystruct { int4 a; int4 b; };",
+        &f,
+        org(),
+        &[],
+        |_, _| panic!("a bare struct is not an extern prototype"),
+    )
+    .expect("struct construction should succeed");
+    let ct = f
+        .find_by_name("mystruct")
+        .unwrap()
+        .expect("mystruct should exist in the factory");
+    assert_eq!(ct.get_metatype(), meta::TYPE_STRUCT);
+    assert_eq!(ct.get_size(), 8);
+    assert!(
+        !ct.is_incomplete(),
+        "struct should be complete after field assignment"
+    );
+}
+
+#[test]
+fn struct_declaration_longer_than_4k_on_one_line() {
+    // One `--assert` directive is one line; a struct with 600 fields is ~5.9 KB.
+    let fields: String = (0..600).map(|i| format!("int4 f{i}; ")).collect();
+    let decl = format!("struct big {{ {fields}}};");
+    assert!(decl.len() > 4096);
+    let f = factory();
+    super::parse_c(&decl, &f, org(), &[], |_, _| {
+        panic!("not an extern prototype")
+    })
+    .expect("a long struct declaration should parse");
+    let ct = f
+        .find_by_name("big")
+        .unwrap()
+        .expect("big should exist in the factory");
+    assert_eq!(ct.get_size(), 2400);
+}
+
+#[test]
+fn enum_construction_lands_in_factory() {
+    // `parse line enum { ... }` interns a completed enum: the value->name map is
+    // installed so the type is no longer just a stub.  The enum size (and thus the
+    // value mask) comes from `setup_sizes` (C++ `enumsize = sizeOfInt`); without it
+    // the size-0 mask would collapse all values, exactly as the C++ would.
+    let f = factory();
+    f.setup_sizes(Some(4), 4, 4);
+    super::parse_c(
+        "enum mycolor { RED=1, GREEN=2, BLUE };",
+        &f,
+        org(),
+        &[],
+        |_, _| panic!("a bare enum is not an extern prototype"),
+    )
+    .expect("enum construction should succeed");
+    let ct = f
+        .find_by_name("mycolor")
+        .unwrap()
+        .expect("mycolor should exist in the factory");
+    assert!(ct.is_enum_type());
+}
+
+#[test]
+fn typedef_lands_in_factory() {
+    // `parse line typedef int4 myint;` creates a typedef interned under the new
+    // name.
+    let f = factory();
+    super::parse_c("typedef int4 myint;", &f, org(), &[], |_, _| {
+        panic!("a typedef is not an extern prototype")
+    })
+    .expect("typedef should succeed");
+    let ct = f
+        .find_by_name("myint")
+        .unwrap()
+        .expect("myint typedef should exist in the factory");
+    assert_eq!(ct.get_size(), 4);
+}
+
+// ===========================================================================
+// Direct CParse driving (the parse-document surface the console will use)
+// ===========================================================================
+
+#[test]
+fn cparse_declaration_then_eof() {
+    let f = factory();
+    let mut parser = CParse::new(&f, org(), 4096);
+    let ok = parser
+        .parse_stream(b"extern int4 f(int4 a);".to_vec(), DocType::Declaration)
+        .unwrap();
+    assert!(ok);
+    let decls = parser.get_result_declarations().unwrap();
+    assert_eq!(decls.len(), 1);
+    assert!(decls[0].has_property(flags::F_EXTERN));
+    assert_eq!(decls[0].get_identifier(), "f");
+}
+
+// ===========================================================================
+// w9-con-grammar round-2 verifier adversarial tests (parse_c_integer repair,
+// LOSS-124).  Ground truth comes from a standalone `g++ -std=c++11`
+// `istringstream >> intb` oracle that mirrors GrammarToken::set's integer
+// branch (grammar.cc:1796-1804) byte-for-byte.
+// ===========================================================================
+
+/// V1: sign applied to a HEX/octal magnitude (the C++ `num_get` applies the
+/// leading `-` AFTER base auto-detection, not just to decimal).  Oracle:
+///   "-0x1"               -> 0xffffffffffffffff (signed -1)
+///   "-0xFFFFFFFFFFFFFFFF" -> 0x8000000000000000 (i64::MIN, neg overflow)
+///   "-010"               -> -8 (octal 10 = 8, negated)
+#[test]
+fn w9_con_grammar_v1_sign_applies_to_nondecimal_base() {
+    assert_eq!(parse_c_integer(b"-0x1") as i64, -1);
+    assert_eq!(
+        parse_c_integer(b"-0xFFFFFFFFFFFFFFFF"),
+        0x8000_0000_0000_0000
+    );
+    assert_eq!(parse_c_integer(b"-010") as i64, -8);
+    // and the magnitude-only i64::MIN boundary is exactly representable.
+    assert_eq!(parse_c_integer(b"-9223372036854775808") as i64, i64::MIN);
+    // one past it saturates (does not wrap to a positive number).
+    assert_eq!(parse_c_integer(b"-9223372036854775809") as i64, i64::MIN);
+}
+
+/// V2: positive overflow saturates to i64::MAX and re-tags unsigned — it must
+/// NOT wrap (the round-1 full-string parse saturated to i64::MAX too, but the
+/// repair must reproduce the per-digit saturation point identically).  Oracle:
+///   "0xffffffffffffffff" -> 0x7fffffffffffffff (i64::MAX)
+///   "18446744073709551615" -> i64::MAX
+#[test]
+fn w9_con_grammar_v2_positive_overflow_saturates_no_wrap() {
+    assert_eq!(parse_c_integer(b"0xffffffffffffffff") as i64, i64::MAX);
+    assert_eq!(parse_c_integer(b"18446744073709551615") as i64, i64::MAX);
+    // exact i64::MAX is representable, not saturated-from-above.
+    assert_eq!(parse_c_integer(b"9223372036854775807") as i64, i64::MAX);
+    // a long hex run well past 64 bits still pins at i64::MAX.
+    assert_eq!(parse_c_integer(b"0xfffffffffffffffffff") as i64, i64::MAX);
+}
+
+/// V3: leading whitespace is skipped (the C++ `operator>>` skips leading ws);
+/// and `0x`-with-no-hex-digit yields 0 (the `0` is parsed, scan stops at `x`).
+#[test]
+fn w9_con_grammar_v3_whitespace_and_bare_prefixes() {
+    assert_eq!(parse_c_integer(b"   42"), 42);
+    assert_eq!(parse_c_integer(b"\t7z"), 7);
+    assert_eq!(parse_c_integer(b"0x"), 0);
+    assert_eq!(parse_c_integer(b"0X"), 0);
+    assert_eq!(parse_c_integer(b"0xx"), 0);
+    assert_eq!(parse_c_integer(b"0x10g5"), 16);
+}
+
+/// V4: end-to-end — an array size whose token prefix-parses to a NEGATIVE int4
+/// (via `(int4)` truncation of a >2^31 prefix) is rejected by
+/// `ArrayModifier::isValid` (`arraysize>0`), exactly as the C++ does.
+/// `4294967296` = 0x1_0000_0000; `(int4)` truncates the low 32 bits -> 0,
+/// which is NOT > 0, so the array is invalid.  Distinguishes the repaired
+/// prefix-parse path from any "saturate-to-MAX" shortcut.
+#[test]
+fn w9_con_grammar_v4_array_size_int4_truncation_zero_rejected() {
+    let f = factory();
+    // low-32-bits of 0x1_0000_0000 is 0 -> arraysize 0 -> invalid.
+    let err = parse_type("int4 a[4294967296]", &f, org())
+        .expect_err("0x1_0000_0000 truncates to int4 0 -> invalid array");
+    assert!(
+        err.explain().to_lowercase().contains("invalid"),
+        "got: {}",
+        err.explain()
+    );
+    // but 0x1_0000_0001 truncates to 1 -> a valid int4[1].
+    let (ty, _name) = parse_type("int4 b[4294967297]", &f, org())
+        .expect("0x1_0000_0001 truncates to int4 1 -> valid int4[1]");
+    assert_eq!(ty.get_metatype(), meta::TYPE_ARRAY);
+    assert_eq!(ty.get_size(), 4);
+}
+
+/// V5 (differential): the repaired `parse_c_integer` must agree with the C++
+/// `istringstream >> intb` oracle on a 4000-token random corpus drawn from the
+/// lexer's number alphabet (digits, A-Z, a-z, `_`, `x`/`X`, leading `-`).
+/// The corpus + expected values were generated by a standalone g++ program;
+/// any single mismatch fails with the offending token.
+#[test]
+fn w9_con_grammar_v5_differential_against_cpp_oracle() {
+    let corpus = include_str!("w9_oracle_corpus.txt");
+    let mut checked = 0usize;
+    for line in corpus.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        // format: "<len> b0 b1 ... b<len-1>\t<expected-u64-decimal>"
+        let (lhs, rhs) = line.split_once('\t').expect("malformed corpus line");
+        let mut it = lhs.split_whitespace();
+        let len: usize = it.next().unwrap().parse().unwrap();
+        let bytes: Vec<u8> = it.map(|t| t.parse::<u32>().unwrap() as u8).collect();
+        assert_eq!(bytes.len(), len, "corpus length header mismatch");
+        let expected: u64 = rhs.parse().unwrap();
+        let got = parse_c_integer(&bytes);
+        assert_eq!(
+            got,
+            expected,
+            "parse_c_integer divergence on token {:?} (bytes {:?}): got {} want {}",
+            String::from_utf8_lossy(&bytes),
+            bytes,
+            got,
+            expected
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 4000, "expected the full 4000-token oracle corpus");
+}
+
+/// V6: lexer index-arithmetic boundary safety (hunt list: signed `int4`
+/// `bufend-1`/`bufend-2`/`bufend-bufstart` must not underflow-then-index).
+/// A tiny buffer forces the "Line too long" path; a bare `/` at EOF and a
+/// `/*`-without-close force the EOF "Incomplete token" resolution; none may
+/// panic.
+#[test]
+fn w9_con_grammar_v6_lexer_boundary_no_panic() {
+    // "Line too long": buffersize 4, feed a 10-char identifier.
+    let mut lx = GrammarLexer::new(4);
+    lx.push_file("t", b"abcdefghij".to_vec());
+    let mut t = GrammarToken::new();
+    lx.get_next_token(&mut t).unwrap();
+    assert_eq!(t.get_type(), tok::BADTOKEN);
+    // Unterminated C comment at EOF -> "Incomplete token" (state != Start).
+    assert_eq!(lex_kinds("/* unclosed"), vec![tok::BADTOKEN]);
+    // A lone '/' at EOF: Slash state never resolves -> Incomplete token.
+    assert_eq!(lex_kinds("/"), vec![tok::BADTOKEN]);
+    // A '..' (two dots) at EOF: Dot2 state -> Incomplete token.
+    assert_eq!(lex_kinds(".."), vec![tok::BADTOKEN]);
+    // C-comment `*/` exactly at the start of the buffer (bufend==2 guard on the
+    // `buffer[bufend-2]=='*'` check): "/**/" is an empty, valid comment.
+    assert_eq!(lex_kinds("/**/a"), vec![tok::IDENTIFIER, tok::ENDOFFILE]);
+}
+
+#[test]
+fn lexer_reuse_preserves_eof_and_per_line_limits() {
+    let mut lx = GrammarLexer::new(8);
+    for (input, expected) in [
+        ("", vec![tok::ENDOFFILE]),
+        ("a", vec![tok::IDENTIFIER, tok::ENDOFFILE]),
+        ("abcdefg", vec![tok::IDENTIFIER, tok::ENDOFFILE]),
+        ("abcdefgh", vec![tok::BADTOKEN]),
+        (
+            "abcdefg\nabcdefg\n",
+            vec![tok::IDENTIFIER, tok::IDENTIFIER, tok::ENDOFFILE],
+        ),
+        ("/*", vec![tok::BADTOKEN]),
+        ("a;", vec![tok::IDENTIFIER, tok::SEMICOLON, tok::ENDOFFILE]),
+        ("", vec![tok::ENDOFFILE]),
+    ] {
+        lx.clear();
+        lx.push_file("reuse", input.as_bytes().to_vec());
+        let mut got = Vec::new();
+        for _ in 0..=input.len() + 1 {
+            let kind = read_tok(&mut lx).get_type();
+            if kind != 0 {
+                got.push(kind);
+            }
+            if kind == tok::BADTOKEN || kind == tok::ENDOFFILE {
+                break;
+            }
+        }
+        assert_eq!(got, expected, "{input:?}");
+    }
+}
+
+#[test]
+fn a_newline_can_separate_a_type_from_its_declarator() {
+    let f = factory();
+    let (ty, name) = parse_type("int4\n*value", &f, org()).unwrap();
+    assert_eq!(name, "value");
+    assert_eq!(ty.get_ptr_to().unwrap().get_name(), "int4");
+    for input in ["\"a\nb\"", "'a\nb'", "'\\\na'"] {
+        assert_eq!(lex_kinds(input), vec![tok::BADTOKEN]);
+    }
+}
+
+#[test]
+fn declarations_accept_trailing_whitespace_and_comments() {
+    let f = factory();
+    for suffix in [
+        "",
+        " ",
+        "\n",
+        "\r\n",
+        "\n\n",
+        "\t",
+        " /* done */",
+        " // done",
+        " // done\n",
+    ] {
+        let mut applied = false;
+        super::parse_c(
+            &format!("extern int4\nexample(void);{suffix}"),
+            &f,
+            org(),
+            &[],
+            |proto, _| {
+                assert_eq!(proto.name, "example");
+                applied = true;
+                Ok(())
+            },
+        )
+        .unwrap_or_else(|e| panic!("suffix {suffix:?}: {e:?}"));
+        assert!(applied);
+        assert_eq!(
+            parse_type(&format!("int4\n*value{suffix}"), &f, org())
+                .unwrap()
+                .1,
+            "value"
+        );
+    }
+    for input in ["", " ", "\n", "/* done */", "// done"] {
+        assert_eq!(lex_kinds(input), vec![tok::ENDOFFILE], "{input:?}");
+    }
+}
+
+#[test]
+fn short_lexer_inputs_terminate_without_panicking() {
+    let alphabet = b"a1/*'\"\\\n ";
+    for length in 0..=4u32 {
+        for mut value in 0..alphabet.len().pow(length) {
+            let mut input = vec![0; length as usize];
+            for byte in &mut input {
+                *byte = alphabet[value % alphabet.len()];
+                value /= alphabet.len();
+            }
+            for limit in [1, 2, 4, 8] {
+                let result = std::panic::catch_unwind(|| {
+                    let mut lx = GrammarLexer::new(limit);
+                    lx.push_file("short", input.clone());
+                    for _ in 0..input.len() + 3 {
+                        let mut token = GrammarToken::new();
+                        if lx.get_next_token(&mut token).is_err()
+                            || matches!(token.get_type(), tok::BADTOKEN | tok::ENDOFFILE)
+                        {
+                            return;
+                        }
+                    }
+                    panic!("lexer did not terminate");
+                });
+                assert!(result.is_ok(), "input {input:?}, limit {limit}");
+            }
+        }
+    }
+}
+
+/// V7: end-to-end parity for a multi-pointer + array declarator, exercising the
+/// pointer-vector reverse() order and the buildType reverse-mod walk together.
+/// `int4 **a[3]` is a `int4*[3]` ... actually `int4 (**a)[3]`-style binding is
+/// what the grammar yields; we pin the resulting top-level metatype + size and
+/// the inner pointer chain so an order regression in `pointer()`/`build_type`
+/// would surface.
+#[test]
+fn w9_con_grammar_v7_pointer_array_modifier_order() {
+    let f = factory();
+    // `int4 *a[2]`: direct_declarator binds the array tighter than the pointer,
+    // so this is an array[2] of (int4*) -> array size = 2 * ptr_size.
+    let (ty, name) = parse_type("int4 *a[2]", &f, org()).expect("int4 *a[2] parses");
+    assert_eq!(name, "a");
+    assert_eq!(ty.get_metatype(), meta::TYPE_ARRAY);
+    let elem = ty.get_array_base().expect("array element");
+    assert_eq!(elem.get_metatype(), meta::TYPE_PTR, "elements are int4*");
+    assert_eq!(elem.get_ptr_to().unwrap().get_name(), "int4");
+    assert_eq!(
+        ty.get_size(),
+        2 * org().addr_size,
+        "two pointer-sized elements"
+    );
+}
+
+// ===========================================================================
+// (kuna) Standard C scalar type specifiers
+// ===========================================================================
+
+/// The [`factory`] core types plus a declared data organization, so the scalar
+/// keywords have widths to resolve against.  `lp64` is the x86-64 SysV model
+/// (`long` 8); `llp64` is the Windows one (`long` 4), which is what makes the
+/// keyword resolution ABI-driven rather than a fixed table.
+fn factory_sized(long_size: i32) -> TypeFactoryImpl {
+    let f = factory();
+    f.set_core_type("wchar2", 2, meta::TYPE_INT, true).unwrap();
+    f.set_core_type("wchar4", 4, meta::TYPE_INT, true).unwrap();
+    f.set_core_type("float10", 10, meta::TYPE_FLOAT, false)
+        .unwrap();
+    f.cache_core_types().unwrap();
+    f.set_size_of_char(1);
+    f.set_size_of_short(2);
+    f.set_size_of_int(4);
+    f.set_size_of_long(long_size);
+    f.set_size_of_long_long(8);
+    f.set_size_of_wchar(2);
+    f.set_size_of_float(4);
+    f.set_size_of_double(8);
+    f.set_size_of_long_double(10);
+    f
+}
+
+#[test]
+fn scalar_keywords_resolve_to_core_types() {
+    let f = factory_sized(8);
+    for (decl, want) in [
+        ("int x", "int4"),
+        ("signed x", "int4"),
+        ("signed int x", "int4"),
+        ("unsigned x", "uint4"),
+        ("unsigned int x", "uint4"),
+        ("short x", "int2"),
+        ("short int x", "int2"),
+        ("unsigned short x", "uint2"),
+        ("short unsigned int x", "uint2"),
+        ("long x", "int8"),
+        ("unsigned long x", "uint8"),
+        ("long long x", "int8"),
+        ("unsigned long long x", "uint8"),
+        ("signed char x", "int1"),
+        ("unsigned char x", "uint1"),
+        ("float x", "float4"),
+        ("double x", "float8"),
+        ("long double x", "float10"),
+        ("wchar_t x", "wchar2"),
+        ("_Bool x", "bool"),
+    ] {
+        let (ty, name) = parse_type(decl, &f, org()).unwrap_or_else(|e| {
+            panic!("{decl:?} must parse: {}", e.explain());
+        });
+        assert_eq!(ty.get_name(), want, "{decl:?}");
+        assert_eq!(name, "x");
+    }
+}
+
+#[test]
+fn scalar_long_follows_the_targets_declared_width() {
+    // The whole point of reading `<data_organization>`: `long` is 8 bytes on
+    // LP64 and 4 on LLP64, and `long long` is 8 on both.
+    let lp64 = factory_sized(8);
+    assert_eq!(
+        parse_type("long x", &lp64, org()).unwrap().0.get_name(),
+        "int8"
+    );
+    let llp64 = factory_sized(4);
+    assert_eq!(
+        parse_type("long x", &llp64, org()).unwrap().0.get_name(),
+        "int4"
+    );
+    assert_eq!(
+        parse_type("long long x", &llp64, org())
+            .unwrap()
+            .0
+            .get_name(),
+        "int8"
+    );
+}
+
+#[test]
+fn plain_char_stays_the_text_type_and_signed_char_does_not() {
+    // `char` is kuna's ASCII core type; `signed char` is an ordinary 1-byte
+    // integer, which is what `getBaseNoChar` distinguishes.
+    let f = factory_sized(8);
+    let (plain, _) = parse_type("char c", &f, org()).unwrap();
+    assert_eq!(plain.get_name(), "char");
+    let (signed, _) = parse_type("signed char c", &f, org()).unwrap();
+    assert_eq!(signed.get_name(), "int1");
+    assert_ne!(plain.get_name(), signed.get_name());
+}
+
+#[test]
+fn scalar_keywords_work_in_a_prototype() {
+    // The `--assert prototype` shape: standard C in both return and parameter
+    // position, which is the form every emitted declaration is written in.
+    let f = factory_sized(8);
+    let p = parse_protopieces(
+        "extern void *VirtualAlloc(void *p,unsigned int n,unsigned long long a,long double b);",
+        &f,
+        org(),
+    )
+    .expect("standard C prototype parses");
+    assert_eq!(p.name, "VirtualAlloc");
+    assert_eq!(p.outtype.as_ref().unwrap().get_metatype(), meta::TYPE_PTR);
+    let names: Vec<&str> = p.intypes.iter().map(|t| t.get_name()).collect();
+    assert_eq!(
+        names,
+        vec!["", "uint4", "uint8", "float10"],
+        "pointer, then the scalars"
+    );
+}
+
+#[test]
+fn ghidra_type_names_still_win_for_a_single_keyword() {
+    // The 261 `parse line` corpus payloads feed `int4`/`char`/`void` through
+    // `findByName`; a one-keyword run must still resolve to exactly that type.
+    let f = factory_sized(8);
+    assert_eq!(
+        parse_type("int4 x", &f, org()).unwrap().0.get_name(),
+        "int4"
+    );
+    assert_eq!(
+        parse_type("void", &f, org()).unwrap().0.get_metatype(),
+        meta::TYPE_VOID
+    );
+    assert_eq!(
+        parse_type("char *p", &f, org())
+            .unwrap()
+            .0
+            .get_ptr_to()
+            .unwrap()
+            .get_name(),
+        "char"
+    );
+}
+
+#[test]
+fn reject_impossible_scalar_combinations() {
+    let f = factory_sized(8);
+    for decl in [
+        "short long x",
+        "long long long x",
+        "float int x",
+        "unsigned void x",
+        "unsigned float x",
+        "signed unsigned x",
+        "long char x",
+        "int int x",
+        "unsigned wchar_t x",
+    ] {
+        let err = parse_type(decl, &f, org())
+            .map(|(t, _)| t.get_name().to_string())
+            .expect_err(&format!("{decl:?} is not a C type"));
+        assert!(
+            err.explain()
+                .contains("Invalid combination of C type specifiers"),
+            "{decl:?} got: {}",
+            err.explain()
+        );
+    }
+}
+
+#[test]
+fn a_scalar_keyword_with_no_declared_width_is_a_parse_error() {
+    // A compiler spec that declares no `<long_double_size>` names no wider
+    // floating type; resolving to a zero-sized type instead would be silent.
+    let f = factory();
+    f.set_size_of_int(4);
+    let err = parse_type("unsigned short x", &f, org()).expect_err("no short width declared");
+    assert!(
+        err.explain()
+            .contains("Invalid combination of C type specifiers"),
+        "got: {}",
+        err.explain()
+    );
+    assert_eq!(
+        parse_type("unsigned int x", &f, org())
+            .unwrap()
+            .0
+            .get_name(),
+        "uint4"
+    );
+}
+
+// ===========================================================================
+// Calling conventions (`glb->hasModel` -> FUNCTION_SPECIFIER)
+// ===========================================================================
+
+/// The prototype-model names an x86 Windows compiler spec registers.
+fn win_models() -> Vec<String> {
+    ["__stdcall", "__cdecl", "__fastcall", "__thiscall"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// Parse one `extern` declaration and report the convention it named.
+fn proto_model(decl: &str, models: &[String]) -> Result<String, String> {
+    use std::cell::RefCell;
+    let f = factory();
+    let seen: RefCell<Option<String>> = RefCell::new(None);
+    super::parse_c(decl, &f, org(), models, |_, model| {
+        *seen.borrow_mut() = Some(model.to_string());
+        Ok(())
+    })
+    .map_err(|e| e.explain().to_string())?;
+    seen.into_inner()
+        .ok_or_else(|| "not a prototype".to_string())
+}
+
+#[test]
+fn convention_after_a_pointer_return_parses() {
+    // The reported spelling: a `__stdcall` on a pointer-returning Win32 import.
+    // The convention sits in DECLARATOR position, after the `*`, which the
+    // C-standard specifier run cannot reach.
+    assert_eq!(
+        proto_model(
+            "extern void * __stdcall LoadLibraryExW(uint2 *n,void *f,uint4 g);",
+            &win_models()
+        ),
+        Ok("__stdcall".to_string())
+    );
+}
+
+#[test]
+fn convention_before_the_return_type_parses() {
+    assert_eq!(
+        proto_model("extern int4 __fastcall f(int4 a);", &win_models()),
+        Ok("__fastcall".to_string())
+    );
+}
+
+#[test]
+fn a_declaration_naming_no_convention_reports_none() {
+    assert_eq!(
+        proto_model("extern int4 f(int4 a);", &win_models()),
+        Ok(String::new())
+    );
+}
+
+#[test]
+fn an_unregistered_convention_is_still_a_syntax_error() {
+    // The classification is the registry's: a spelling the loaded compiler spec
+    // does not declare stays a plain identifier and the declaration is rejected,
+    // so a typo cannot be silently dropped on the floor.
+    let err = proto_model("extern int4 __pascal f(int4 a);", &win_models()).unwrap_err();
+    assert!(!err.is_empty(), "an unknown convention must not parse");
+}
+
+#[test]
+fn a_convention_needs_a_registry_to_be_one() {
+    // With no architecture behind the parse (no models registered) the
+    // declaration is rejected exactly as it was before the registry was
+    // reachable -- this is the behaviour the fix flips.
+    let err = proto_model("extern void * __stdcall f(int4 a);", &[]).unwrap_err();
+    assert!(!err.is_empty(), "no registry means no convention");
+}
+
+#[test]
+fn two_conventions_in_one_declaration_are_rejected() {
+    let err = proto_model("extern int4 __stdcall __cdecl f(int4 a);", &win_models()).unwrap_err();
+    assert!(
+        err.contains("Multiple parameter models"),
+        "expected the duplicate-model diagnostic, got {err:?}"
+    );
+    let err = proto_model("extern int4 __stdcall * __cdecl f(int4 a);", &win_models()).unwrap_err();
+    assert!(
+        err.contains("Multiple parameter models"),
+        "expected the duplicate-model diagnostic, got {err:?}"
+    );
+}
+
+/// [`factory`] wired the way an architecture wires it after loading its
+/// compiler spec: an address-space manager, `__cdecl` as the default model, and
+/// the named models in `registered`.
+fn factory_with_models(registered: &[&str]) -> TypeFactoryImpl {
+    factory_with_model_resources(registered, false)
+}
+
+fn factory_with_model_resources(registered: &[&str], with_storage: bool) -> TypeFactoryImpl {
+    use std::rc::Rc;
+    use unlace_base::space::{
+        AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype,
+    };
+    use unlace_decomp::fspec::ProtoModel;
+    let f = factory();
+    let mut mgr = AddrSpaceManager::new();
+    mgr.insert_space(Rc::new(ConstantSpace::new())).unwrap();
+    let ram = AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "ram",
+        false,
+        8,
+        1,
+        1,
+        addrspace_flags::hasphysical,
+        1,
+        1,
+    );
+    mgr.insert_space(Rc::new(ram)).unwrap();
+    mgr.set_default_code_space(1).unwrap();
+    mgr.set_default_data_space(1).unwrap();
+    let mgr = Rc::new(mgr);
+    let model = |name: &str| {
+        let mut m = ProtoModel::new(&mgr);
+        m.set_name(name);
+        m.build_param_list("standard").unwrap();
+        if with_storage {
+            use unlace_decomp::dtype::type_class;
+            use unlace_decomp::fspec::ParamEntry;
+            let ram = mgr.get_default_data_space().unwrap();
+            let entry = |group, offset| {
+                ParamEntry::seed(
+                    group,
+                    type_class::TYPECLASS_GENERAL,
+                    Rc::clone(ram),
+                    offset,
+                    8,
+                    1,
+                    0,
+                    0,
+                    true,
+                    false,
+                    &[],
+                    &mgr,
+                )
+                .unwrap()
+            };
+            m.output_mut().push_entry(entry(0, 0x1000));
+            for i in 0..4 {
+                m.input_mut().push_entry(entry(i, 0x2000 + i as u64 * 8));
+            }
+        }
+        Rc::new(m)
+    };
+    let dflt = model("__cdecl");
+    let mut models = std::collections::BTreeMap::new();
+    models.insert("__cdecl".to_string(), Rc::clone(&dflt));
+    for name in registered {
+        models.insert(name.to_string(), model(name));
+    }
+    f.set_proto_context(Rc::clone(&mgr));
+    f.set_proto_models(Some(dflt), models);
+    f
+}
+
+/// Parse one `extern` declaration whose first parameter is a function pointer
+/// and report the convention that pointer's prototype carries.
+fn callback_model(decl: &str, registered: &[&str]) -> String {
+    use std::cell::RefCell;
+    let f = factory_with_models(registered);
+    let seen: RefCell<Option<String>> = RefCell::new(None);
+    super::parse_c(decl, &f, org(), &win_models(), |pieces, _| {
+        let code = pieces.intypes[0].get_ptr_to().expect("a pointer parameter");
+        let proto = code.get_code_prototype().expect("a prototyped code type");
+        *seen.borrow_mut() = Some(proto.get_model_name().to_string());
+        Ok(())
+    })
+    .unwrap_or_else(|e| panic!("{decl:?} must parse: {}", e.explain()));
+    seen.into_inner().expect("a prototype")
+}
+
+#[test]
+fn a_convention_on_a_function_pointer_parameter_parses_as_it_did_without_one() {
+    // `__stdcall` inside a parenthesised declarator (`int4 (__stdcall *cb)(int4)`)
+    // is the callback spelling every Win32 header uses.  It must not change how
+    // the enclosing declaration parses.
+    let with = |decl: &str| {
+        let f = factory_with_models(&["__stdcall"]);
+        let seen = std::cell::RefCell::new(None);
+        super::parse_c(decl, &f, org(), &win_models(), |pieces, model| {
+            *seen.borrow_mut() = Some((model.to_string(), pieces.intypes.len()));
+            Ok(())
+        })
+        .map_err(|e| e.explain().to_string())
+        .map(|()| seen.into_inner())
+    };
+    let named = with("extern int4 f(int4 (__stdcall *cb)(int4));");
+    assert_eq!(named, Ok(Some((String::new(), 1))));
+    assert_eq!(named, with("extern int4 f(int4 (*cb)(int4));"));
+}
+
+#[test]
+fn a_function_pointer_parameter_keeps_the_convention_it_names() {
+    // The callee behind `cb` is called under the convention its declarator
+    // names (C++ `FunctionModifier::modType`: `proto.model = decl->getModel`).
+    assert_eq!(
+        callback_model("extern int4 f(int4 (__stdcall *cb)(int4));", &["__stdcall"]),
+        "__stdcall"
+    );
+    assert_eq!(
+        callback_model("extern int4 f(int4 (*cb)(int4));", &["__stdcall"]),
+        "__cdecl"
+    );
+}
+
+#[test]
+fn an_unregistered_function_pointer_convention_falls_back_to_the_default() {
+    // C++ `TypeDeclarator::getModel` returns `glb->defaultfp` when `getModel(name)`
+    // finds nothing; the parse must not fail.
+    assert_eq!(
+        callback_model(
+            "extern int4 f(int4 (__fastcall *cb)(int4));",
+            &["__stdcall"]
+        ),
+        "__cdecl"
+    );
+}
+
+// ===========================================================================
+// (kuna) A declarator named after a type
+// ===========================================================================
+
+/// [`factory_sized`] plus `code`, the core type every compiler spec registers
+/// for a function body.  It is also an ordinary English word, so it is the
+/// name an agent reaches for when it declares an interpreter's instruction
+/// stream — and the collision is what made the declaration unparseable.
+fn factory_with_code() -> TypeFactoryImpl {
+    let f = factory_sized(8);
+    f.set_core_type("code", 1, meta::TYPE_CODE, false).unwrap();
+    f.cache_core_types().unwrap();
+    f
+}
+
+#[test]
+fn a_pointer_parameter_may_be_named_after_a_type() {
+    let f = factory_with_code();
+    let p = parse_protopieces(
+        "extern unsigned long vm(unsigned char *code,unsigned int index,void *ctx);",
+        &f,
+        org(),
+    )
+    .expect("`code` is a parameter name here, not a second type specifier");
+    assert_eq!(p.name, "vm");
+    assert_eq!(p.innames, vec!["code", "index", "ctx"]);
+    assert_eq!(p.intypes[0].get_ptr_to().unwrap().get_name(), "uint1");
+    assert_eq!(p.intypes[1].get_name(), "uint4");
+    assert_eq!(p.intypes[2].get_metatype(), meta::TYPE_PTR);
+}
+
+#[test]
+fn a_value_parameter_may_be_named_after_a_type() {
+    // Without the pointer the collision lands in `declaration_specifiers`
+    // instead of the declarator, and used to read "Multiple type specifiers".
+    let f = factory_with_code();
+    for (decl, want_type) in [
+        ("unsigned char code", "uint1"),
+        ("int4 code", "int4"),
+        ("char *code", "char"),
+    ] {
+        let (ty, name) = parse_type(decl, &f, org()).unwrap_or_else(|e| {
+            panic!("{decl:?} must parse: {}", e.explain());
+        });
+        let base = ty.get_ptr_to().unwrap_or(ty);
+        assert_eq!(base.get_name(), want_type, "{decl:?}");
+        assert_eq!(name, "code", "{decl:?}");
+    }
+}
+
+#[test]
+fn a_type_named_declarator_works_through_pointers_and_arrays() {
+    // A function-POINTER parameter named after a type needs a factory with a
+    // prototype model behind it, so that half is pinned end-to-end in
+    // `unlace-console/tests/verify_assertplane.rs` instead.
+    let f = factory_with_code();
+    for decl in [
+        "extern int4 f(unsigned char **code);",
+        "extern int4 f(unsigned char *code[4]);",
+        "extern int4 f(unsigned char *code,unsigned char code2);",
+    ] {
+        parse_protopieces(decl, &f, org()).unwrap_or_else(|e| {
+            panic!("{decl:?} must parse: {}", e.explain());
+        });
+    }
+    // ... and in a struct member, where `specifier_qualifier_list` is the
+    // greedy run rather than `declaration_specifiers`.
+    let (ty, _) = parse_type("struct s { unsigned char *code; int4 len; } v", &f, org())
+        .expect("a struct member may be named after a type");
+    assert_eq!(ty.get_metatype(), meta::TYPE_STRUCT);
+    // `org()` is a 4-byte address space, so the pointer and the int4 are 4 each.
+    assert_eq!(ty.get_size(), 8);
+}
+
+#[test]
+fn a_type_name_is_still_a_type_in_type_position() {
+    // The fix only reaches the declarator's NAME; the first specifier of a run
+    // is unchanged, so `code` still names the core type where a type belongs.
+    let f = factory_with_code();
+    let (ty, name) = parse_type("code *p", &f, org()).expect("`code *p` is a pointer to code");
+    assert_eq!(ty.get_ptr_to().unwrap().get_metatype(), meta::TYPE_CODE);
+    assert_eq!(name, "p");
+    let p = parse_protopieces("extern code *j(code c);", &f, org()).expect("code in both slots");
+    assert_eq!(p.intypes[0].get_metatype(), meta::TYPE_CODE);
+    assert_eq!(p.outtype.as_ref().unwrap().get_metatype(), meta::TYPE_PTR);
+}
+
+#[test]
+fn a_parenthesised_type_name_is_still_read_as_a_type() {
+    // `int4 (code)` is ambiguous in C and resolves to the abstract reading -- a
+    // function of one `code`, not a variable named `code`.  Only the
+    // unparenthesised name position moved, so this must not have changed.
+    //
+    // Pinned by outcome rather than by the built type: a function type needs a
+    // prototype model this bare factory has none of, so the function reading is
+    // exactly the one that reports `getTypeCode`.  `int4 (p)` is the contrast --
+    // a parenthesised declarator naming `p`, which builds fine.
+    let f = factory_with_code();
+    let took_the_function_reading = |decl: &str| match parse_type(decl, &f, org()) {
+        Ok((ty, name)) => Err(format!("{}/{name}", ty.get_name())),
+        Err(e) => Ok(e.explain().contains("getTypeCode")),
+    };
+    assert_eq!(
+        took_the_function_reading("int4 (code)"),
+        Ok(true),
+        "`int4 (code)`"
+    );
+    assert_eq!(
+        took_the_function_reading("int4 (code)"),
+        took_the_function_reading("int4 (int4)"),
+        "`int4 (code)` must read exactly like the unambiguous abstract spelling"
+    );
+    assert_eq!(
+        took_the_function_reading("int4 (p)"),
+        Err("int4/p".to_string()),
+        "an ordinary identifier in parentheses is still a declarator name"
+    );
+}
+
+#[test]
+fn a_type_name_may_head_an_enumerator() {
+    // `setup_sizes` for the same reason `enum_construction_lands_in_factory`
+    // calls it: the enum width comes from there, and a zero one masks every
+    // auto-assigned constant to the same value.
+    let f = factory_with_code();
+    f.setup_sizes(Some(4), 4, 4);
+    super::parse_c("enum e { code, other };", &f, org(), &[], |_, _| {
+        panic!("a bare enum is not an extern prototype")
+    })
+    .expect("an enum constant may be named after a type");
+    assert!(
+        f.find_by_name("e")
+            .unwrap()
+            .expect("enum e is interned")
+            .is_enum_type()
+    );
+}
+
+#[test]
+fn a_type_name_may_end_a_scoped_name() {
+    let f = factory_with_code();
+    let p = parse_protopieces("extern int4 ns::code(int4 a);", &f, org())
+        .expect("a scoped name may end in a type name");
+    assert_eq!(p.name, "ns::code");
+}
+
+#[test]
+fn recursive_record_fields_follow_completed_tag() {
+    let f = factory();
+    super::parse_c(
+        "struct Node { struct Node *next; int4 value; };",
+        &f,
+        org(),
+        &[],
+        |_, _| Ok(()),
+    )
+    .unwrap();
+    let node = f.find_by_name("Node").unwrap().unwrap();
+    assert_eq!(node.get_size(), 8);
+    let next = node.get_field(0).unwrap().field_type.get_ptr_to().unwrap();
+    assert!(!next.is_incomplete());
+    assert_eq!(next.get_size(), 8);
+    assert!(
+        node.get_field(0)
+            .unwrap()
+            .field_type
+            .is_ptrsub_matching(4, 0, 0)
+            .unwrap()
+    );
+}
+
+#[test]
+fn forward_record_completion_preserves_pointer_interning() {
+    let f = factory();
+    let parse = |s| super::parse_c(s, &f, org(), &[], |_, _| Ok(())).unwrap();
+    parse("typedef struct Node Node;");
+    let before = parse_type("struct Node *", &f, org()).unwrap().0;
+    parse("struct Node { struct Node *next; int4 value; };");
+    let node = f.find_by_name("Node").unwrap().unwrap();
+    assert_eq!(node.get_size(), 8);
+    assert!(!before.get_ptr_to().unwrap().is_incomplete());
+    let after = parse_type("struct Node *", &f, org()).unwrap().0;
+    assert!(
+        std::rc::Rc::ptr_eq(&before, &after),
+        "completion must preserve pointer interning"
+    );
+    let nested = node.get_field(0).unwrap().field_type.get_ptr_to().unwrap();
+    assert_eq!(nested.get_field(1).unwrap().name, "value");
+}
+
+#[test]
+fn mutually_recursive_structs_and_union_pointer_complete() {
+    let f = factory();
+    let parse = |s| super::parse_c(s, &f, org(), &[], |_, _| Ok(())).unwrap();
+    parse("struct A { struct B *b; int4 value; };");
+    parse("struct B { struct A *a; };");
+    parse("union U { union U *next; int4 value; };");
+    let a = f.find_by_name("A").unwrap().unwrap();
+    let b = a.get_field(0).unwrap().field_type.get_ptr_to().unwrap();
+    assert_eq!(b.get_size(), 4);
+    assert_eq!(
+        b.get_field(0)
+            .unwrap()
+            .field_type
+            .get_ptr_to()
+            .unwrap()
+            .get_size(),
+        8
+    );
+    let u = f.find_by_name("U").unwrap().unwrap();
+    assert!(
+        !u.get_field(0)
+            .unwrap()
+            .field_type
+            .get_ptr_to()
+            .unwrap()
+            .is_incomplete()
+    );
+}
+
+#[test]
+fn incomplete_value_field_rejected_without_poisoning_forward_pointer() {
+    let f = factory();
+    let parse = |s| super::parse_c(s, &f, org(), &[], |_, _| Ok(()));
+    parse("struct Node;").unwrap();
+    let before = parse_type("struct Node *", &f, org()).unwrap().0;
+    assert!(parse("struct Node { struct Node impossible; };").is_err());
+    assert!(parse("struct Node { struct Node impossible[2]; };").is_err());
+    parse("struct Node { int4 value; };").unwrap();
+    assert_eq!(before.get_ptr_to().unwrap().get_size(), 4);
+    assert!(parse("struct Node { int8 replacement; };").is_err());
+    assert_eq!(f.find_by_name("Node").unwrap().unwrap().get_size(), 4);
+    assert!(parse("union Wrong { struct Wrong *p; };").is_err());
+}
+
+#[test]
+fn recursive_record_completion_does_not_leak_owning_cycle() {
+    let node_weak = {
+        let f = factory();
+        super::parse_c(
+            "struct Node { struct Node *next; };",
+            &f,
+            org(),
+            &[],
+            |_, _| Ok(()),
+        )
+        .unwrap();
+        let node = f.find_by_name("Node").unwrap().unwrap();
+        std::rc::Rc::downgrade(&node)
+    };
+    assert!(node_weak.upgrade().is_none());
+}
+
+#[test]
+fn recursive_record_rename_and_complete_typedef_keep_targets() {
+    let f = factory();
+    super::parse_c(
+        "typedef struct Node { struct Node *next; int4 value; } Renamed;",
+        &f,
+        org(),
+        &[],
+        |_, _| Ok(()),
+    )
+    .unwrap();
+    let node = f.find_by_name("Renamed").unwrap().unwrap();
+    assert_eq!(
+        node.get_field(0)
+            .unwrap()
+            .field_type
+            .get_ptr_to()
+            .unwrap()
+            .get_size(),
+        8
+    );
+    let alias = f.get_typedef(&node, "Alias", 0, 0).unwrap();
+    let pointer = f.get_type_pointer(4, alias, 1).unwrap();
+    assert_eq!(pointer.get_ptr_to().unwrap().get_name(), "Alias");
+}
+
+#[test]
+fn forward_record_alias_completes_without_erasing_tag() {
+    let f = factory();
+    let parse = |s| super::parse_c(s, &f, org(), &[], |_, _| Ok(())).unwrap();
+    parse("typedef struct Node NodeAlias;");
+    let before = parse_type("NodeAlias *", &f, org()).unwrap().0;
+    parse("struct Node { NodeAlias *next; int4 value; };");
+    let alias = f.find_by_name("NodeAlias").unwrap().unwrap();
+    assert_eq!(alias.get_size(), 8);
+    assert_eq!(before.get_ptr_to().unwrap().get_name(), "NodeAlias");
+    assert_eq!(before.get_ptr_to().unwrap().get_size(), 8);
+    let tag = f.find_by_name("Node").unwrap().unwrap();
+    assert_eq!(tag.get_size(), 8);
+    parse("struct Container { NodeAlias value; };");
+    assert_eq!(f.find_by_name("Container").unwrap().unwrap().get_size(), 8);
+}
+
+#[test]
+fn anonymous_member_records_stay_distinct() {
+    let f = factory();
+    let parse = |s| super::parse_c(s, &f, org(), &[], |_, _| Ok(()));
+    parse("struct Outer { struct { int4 a; } first; struct { int8 b; } second; union { int4 c; } third; union { int2 d; } fourth; };")
+        .unwrap();
+    let outer = f.find_by_name("Outer").unwrap().unwrap();
+    assert_eq!(outer.get_size(), 24);
+    let sizes: Vec<_> = (0..4)
+        .map(|i| outer.get_field(i).unwrap().field_type.get_size())
+        .collect();
+    assert_eq!(sizes, [4, 8, 4, 2]);
+    assert!(parse("struct Bad { struct { struct Missing m; } inner; };").is_err());
+    parse("struct Again { struct { uint2 z; } first; };").unwrap();
+}
+
+#[test]
+fn callback_declarations_keep_their_stored_prototypes() {
+    use unlace_decomp::kuna_langc::C_SPELLER;
+    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+
+    let f = factory_with_model_resources(&[], true);
+    for (source, expected) in [
+        ("uint4 (*x)(void)", "uint4 (*x)(void)"),
+        ("int4 (*x)(int2,uint4 *)", "int4 (*x)(int2,uint4 *)"),
+        ("void (*x)(int4,...)", "void (*x)(int4,...)"),
+        ("int4 (**x)(void)", "int4 (**x)(void)"),
+        ("int4 (*x[2])(void)", "int4 (*x[2])(void)"),
+        ("int4 *(*x)(void)", "int4 *(*x)(void)"),
+        ("int4 (*(*x)(void))[3]", "int4 (*(*x)(void))[3]"),
+        ("int4 (*x)(void (*)(int4))", "int4 (*x)(void (*)(int4))"),
+        ("int4 (*(*x)(int4))(int2)", "int4 (*(*x)(int4))(int2)"),
+    ] {
+        let (ty, name) = parse_type(source, &f, org()).expect("callback declarator parses");
+        let (front, back) = C_SPELLER.declarator(&SpellCtx::OFF, &ty);
+        let sep = if front.ends_with('*') || front.ends_with('(') {
+            ""
+        } else {
+            " "
+        };
+        let printed = format!("{front}{sep}{name}{back}");
+        assert_eq!(printed, expected, "{source}");
+        let (again, _) = parse_type(&printed, &f, org()).expect("printed declaration parses");
+        assert_eq!(ty.compare(&again, 10).unwrap(), 0, "{source}");
+        let (front, back) = C_SPELLER.declarator(&SpellCtx::OFF, &again);
+        assert_eq!(format!("{front}{sep}{name}{back}"), expected);
+    }
+}
+
+#[test]
+fn unprototyped_code_keeps_its_existing_spelling() {
+    use unlace_decomp::kuna_langc::C_SPELLER;
+    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+
+    let f = factory_with_code();
+    let (ty, _) = parse_type("code *x", &f, org()).unwrap();
+    assert_eq!(
+        C_SPELLER.declarator(&SpellCtx::OFF, &ty),
+        ("code *".into(), "".into())
+    );
+}
+
+#[test]
+fn named_callback_typedef_keeps_its_declared_name() {
+    use unlace_decomp::kuna_langc::C_SPELLER;
+    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+
+    let f = factory_with_model_resources(&[], true);
+    super::parse_c(
+        "typedef uint4 (*Callback)(void);",
+        &f,
+        org(),
+        &[],
+        |_, _| Ok(()),
+    )
+    .unwrap();
+    let (ty, name) = parse_type("Callback x", &f, org()).unwrap();
+    assert_eq!(name, "x");
+    assert_eq!(
+        C_SPELLER.declarator(&SpellCtx::OFF, &ty),
+        ("Callback".into(), "".into())
+    );
+}
+
+#[test]
+fn qualified_declarations_roundtrip_without_moving_qualifiers() {
+    use std::rc::Rc;
+    use unlace_decomp::kuna_langc::C_SPELLER;
+    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+
+    let f = factory_with_model_resources(&[], true);
+    for declaration in ["typedef uint4 *Ptr;", "typedef volatile uint4 Register;"] {
+        super::parse_c(declaration, &f, org(), &[], |_, _| Ok(())).unwrap();
+    }
+    for (source, expected) in [
+        ("volatile uint4 *x", "volatile uint4 *x"),
+        ("uint4 * volatile x", "uint4 * volatile x"),
+        ("const uint4 *x", "uint4 *x"),
+        ("uint4 * restrict x", "uint4 *x"),
+        ("uint4 * volatile const x", "uint4 * volatile x"),
+        ("volatile uint4 * const *x", "volatile uint4 **x"),
+        ("volatile uint4 (*x)[3]", "volatile uint4 (*x)[3]"),
+        ("uint4 (* volatile x)[3]", "uint4 (* volatile x)[3]"),
+        ("uint4 * volatile x[3]", "uint4 * volatile x[3]"),
+        (
+            "uint4 (* volatile x)(const uint4 *)",
+            "uint4 (* volatile x)(uint4 *)",
+        ),
+        ("volatile Ptr x", "volatile Ptr x"),
+        ("Register *x", "Register *x"),
+    ] {
+        let (ty, name) = parse_type(source, &f, org()).unwrap();
+        let (front, back) = C_SPELLER.declarator(&SpellCtx::OFF, &ty);
+        let sep = if front.ends_with('*') || front.ends_with('(') {
+            ""
+        } else {
+            " "
+        };
+        let printed = format!("{front}{sep}{name}{back}");
+        assert_eq!(printed, expected, "{source}");
+        let (again, _) = parse_type(&printed, &f, org()).unwrap();
+        assert!(
+            Rc::ptr_eq(&ty, &again),
+            "qualified types must intern: {source}"
+        );
+        assert_eq!(ty.compare(&again, 10).unwrap(), 0);
+    }
+    let pointee = parse_type("volatile uint4 *", &f, org()).unwrap().0;
+    let pointer = parse_type("uint4 * volatile", &f, org()).unwrap().0;
+    assert_eq!(pointee.c_qualifiers(), 0);
+    assert_eq!(pointer.get_ptr_to().unwrap().c_qualifiers(), 0);
+    assert_ne!(pointee.compare(&pointer, 10).unwrap(), 0);
+    assert!(!Rc::ptr_eq(&pointee, &pointer));
+}
+
+#[test]
+fn prototype_return_qualifiers_and_typedefs_survive() {
+    use unlace_decomp::kuna_langc::C_SPELLER;
+    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+    let f = factory();
+    let pieces =
+        parse_protopieces("extern volatile uint4 *read(volatile uint4 *p);", &f, org()).unwrap();
+    for ty in [pieces.outtype.as_ref().unwrap(), &pieces.intypes[0]] {
+        assert_eq!(
+            C_SPELLER.declarator(&SpellCtx::OFF, ty),
+            ("volatile uint4 *".into(), "".into())
+        );
+    }
+    super::parse_c(
+        "typedef volatile uint4 Register;",
+        &f,
+        org(),
+        &[],
+        |_, _| Ok(()),
+    )
+    .unwrap();
+    let alias = f.find_by_name("Register").unwrap().unwrap();
+    assert!(unlace_decomp::kuna_typequal::is_volatile(&alias));
+    assert_eq!(
+        C_SPELLER.declarator(&SpellCtx::OFF, &alias),
+        ("Register".into(), "".into())
+    );
+}

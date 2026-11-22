@@ -308,7 +308,7 @@ every `struct_N *` as a miss, because no synthesized name can equal a program-de
 
 ## 6. Speed
 
-`kuna decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the O2 stripped binaries,
+`unlace decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the O2 stripped binaries,
 baseline and final binaries interleaved with the order alternating each round, 11 rounds, on a quiet box (load
 average about 2 on 80 cores). Driver: `final/speed.py`; raw samples: `final/speed.json`.
 
@@ -331,7 +331,7 @@ ones say why.
 
 | PR | item | default | measured effect |
 |---|---|---|---|
-| #647 | fix(cli): fail a bad `--option` value | strict fix | made every `kuna decompile` ablation trustworthy; no metric channel |
+| #647 | fix(cli): fail a bad `--option` value | strict fix | made every `unlace decompile` ablation trustworthy; no metric channel |
 | #648 | `impliedrefs` / `termdup` value options | 2 / 2 (upstream) | byte-identical at the defaults |
 | #649 | `elfmain` — name and type the ELF `main` | on | 7 `main`s better, 0 worse (18 slices); readability + caller return type |
 | #650 | `bytehonest` — `undefined1` for an uncommitted byte | on | +10 perfect, 121 improved / 0 worse (5,298 fns); most of the `bool` gain above |
@@ -598,7 +598,7 @@ exactly) — `final-c/credit93.py`:
 
 ### C.6 Speed
 
-`kuna decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the O2
+`unlace decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the O2
 stripped binaries, the three binaries interleaved with the arm order rotating every round, 11
 rounds each, load average 2.5–5.3 on 80 cores. Driver `final-c/speed3.py`, raw samples
 `final-c/speed.json` and `final-c/speed-bash2.json`.
@@ -704,7 +704,7 @@ changes only `decompile-project`.
 `tail` -O2 `dump_remainder`, round C against round D:
 
 ```
-$ kuna decompile-all <results>/O2/coreutils/stripped/tail --addr 0x6020
+$ unlace decompile-all <results>/O2/coreutils/stripped/tail --addr 0x6020
 # round C
 int * sub_6020(char a0,char *a1,unsigned int a2,void *a3)
     v3 = _DT_INIT;
@@ -771,14 +771,14 @@ and three arguments and declared two `// rdx` locals nothing wrote:
 ```
 $ F=<results>/O2/coreutils/stripped/fmt
 $ M="sed -n /^int main(/,/^}/p"
-$ kuna decompile-all $F --option argclobber off | $M | grep -E 'rdx|sub_3700'
+$ unlace decompile-all $F --option argclobber off | $M | grep -E 'rdx|sub_3700'
   unsigned long v11; // rdx
   unsigned long v9; // rdx
           v12 &= sub_3700(v6);
         v3 = sub_3700(stdin,v7);
     v12 = sub_3700(stdin,"-",v10);
 
-$ kuna decompile-all $F | $M | grep -E 'rdx|sub_3700'        # the default
+$ unlace decompile-all $F | $M | grep -E 'rdx|sub_3700'        # the default
           v9 &= sub_3700(v6,v7);
         v3 = sub_3700(stdin,v7);
     v9 = sub_3700(stdin,"-");
@@ -787,8 +787,8 @@ $ kuna decompile-all $F | $M | grep -E 'rdx|sub_3700'        # the default
 All three sites land on the callee's DWARF arity of two and both phantom locals are gone. The
 rule needs the callee's own recovered prototype, which `protoorder` parks only when the callee
 is decompiled first, so it is **inert under `--addr`, `--functions`, `--jobs N`,
-`decompile-project`, `decompile-graph`, a single-function `kuna decompile` and
-`--option protoorder off`** — measuring this function with `kuna decompile-all fmt --addr 0x26a0`
+`decompile-project`, `decompile-graph`, a single-function `unlace decompile` and
+`--option protoorder off`** — measuring this function with `unlace decompile-all fmt --addr 0x26a0`
 reproduces round C's output exactly and says nothing about the default.
 
 ### D.4 Goal 3 — the layout regression is repaired
@@ -852,7 +852,7 @@ a lever on this corpus.
 
 ### D.6 Speed
 
-`kuna decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the O2
+`unlace decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the O2
 stripped binaries, the four binaries run one arm after another with the arm order rotating every
 round, 11 rounds each, load average 3.4–7.1 on 80 cores. Driver `final-d/speed4.py`, raw samples
 `final-d/speed.json`.
@@ -1121,7 +1121,7 @@ under the pinned metric already.
 
 ### E.6 Speed
 
-`kuna decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the O2
+`unlace decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the O2
 stripped binaries: four arms (baseline, round C, round D, round E) run one after another with the
 arm order rotating every round, 11 rounds each, load average 2.8–8.6 on 80 cores. Driver
 `final-e/speed5.py` (round D's, with round B swapped for round E), raw samples `final-e/speed.json`.
@@ -1315,9 +1315,9 @@ A `slotptr` win, runnable against the unpatched tree (`shadow::faillog::print`, 
 ```
 $ F=<results>/O0/shadow/stripped/faillog
 $ V='.functions[]|select(.address_hex=="0x2be8").variables[]|"\(.name) \(.type)"'
-$ kuna decompile-all $F --json --option slotptr off | jq -r "$V"
+$ unlace decompile-all $F --json --option slotptr off | jq -r "$V"
 local_20 undefined8   local_18 undefined8   local_10 undefined8   local_8 undefined8
-$ kuna decompile-all $F --json | jq -r "$V"        # the default
+$ unlace decompile-all $F --json | jq -r "$V"        # the default
 local_20 undefined8   local_18 undefined8   local_10 passwd *     local_8 undefined8
 ```
 
@@ -1461,7 +1461,7 @@ see them (`final-f/credit93-arms.log`).
 
 ### F.6 Speed
 
-`kuna decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the O2 stripped
+`unlace decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the O2 stripped
 binaries: four arms (baseline, round C, round E, round F) run one after another with the arm order
 rotating every round. Driver `final-f/speed6.py`, raw samples `final-f/speed.json` and
 `final-f/speed-quiet.json`. The box was **not quiet** for any of it — other work kept the load
@@ -1606,9 +1606,9 @@ A `calleevote` win, runnable against the unpatched tree (`gzip::gzip_error`, GT 
 ```
 $ F=<results>/O2-noinline/gzip/stripped/gzip
 $ V='.functions[]|select(.address_hex=="0xd510")|.code'
-$ kuna decompile-all $F --json --option calleevote off | jq -r "$V" | head -2
+$ unlace decompile-all $F --json --option calleevote off | jq -r "$V" | head -2
 void sub_d510(unsigned long a0)
-$ kuna decompile-all $F --json | jq -r "$V" | head -2        # the default
+$ unlace decompile-all $F --json | jq -r "$V" | head -2        # the default
 void sub_d510(char *a0)
 ```
 
@@ -1752,7 +1752,7 @@ TP** (`final-g/credit93-arms.log`). A parameter the metric scores as a miss beca
 
 ### G.6 Speed
 
-`kuna decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the -O2 stripped
+`unlace decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the -O2 stripped
 binaries: four arms (baseline, round E, round F, round G) run one after another with the arm order
 rotating every round, min-of-11. Driver `final-g/speed7.py`, raw samples `final-g/speed.json`. The box
 was quiet for this run — load average between 2 and 6 on 80 cores — unlike round F's page, so the
@@ -1898,7 +1898,7 @@ Stage-3 figures exactly (7,085 declarations, 151 blobs; TRex 3.638 / 1.579).
 0 false positives / 0 false negatives on a 696-span hand audit) over 45 decbench binaries — coreutils
 fmt/ls/sort/du/cp/tail/wc, grep, gzip, diffutils cmp/diff/diff3/sdiff, tar, find — at -O0, -O2 and
 -O2-noinline. Every number is on the **4,815 functions every arm and IDA emit at the same address**, so the
-function set is identical across the four kuna arms and IDA. Arms are whole-binary `kuna decompile-all
+function set is identical across the four kuna arms and IDA. Arms are whole-binary `unlace decompile-all
 --json` at defaults; the round-H arm is the castbench `main-dbe854ba3` run (`final-i/cast4.json`).
 
 | arm | casts | per 1,000 lines | per 100 statements | **vs IDA (count)** |
@@ -2062,7 +2062,7 @@ Under #93 the final build would be **2,188 of 10,748 (20.4%)**.
 
 ### I.7 Speed
 
-`kuna decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the -O2 stripped
+`unlace decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation) on the -O2 stripped
 binaries: four arms (baseline, round G, round H, final) run one after another with the arm order
 rotating every round, min-of-11, on a quiet box (load average 1–5 on 80 cores). Driver
 `final-i/speed8.py`, raw samples `final-i/speed.json`.
@@ -2178,7 +2178,7 @@ Metric pin unchanged (decisions §12); `scripts/decbench/` is byte-identical bet
 
 Same instrument and function set as round I (I.1): `castbench` over 45 decbench binaries at -O0, -O2
 and -O2-noinline, every number on the **4,815 functions every arm and IDA emit at the same address**.
-Arms are whole-binary `kuna decompile-all --json` at defaults; rounds I, J and K are the castbench arms
+Arms are whole-binary `unlace decompile-all --json` at defaults; rounds I, J and K are the castbench arms
 `main-b3878d32e`, `main-c960fb18d` and `main-0096e984d`, and the final build's arm is promoted as
 `main-632437155` for the next round.
 
@@ -2302,7 +2302,7 @@ pointee types and `globalref` refused it. What IDA pays and kuna does not: `(lon
 
 The user's witness was a base64 decoder: a decoding table filled from a constant alphabet into a
 `malloc`'d global, then indexed by input bytes into a `malloc`'d buffer. Its shape is reproduced here
-only through the repo's public fixture `decompiler/crates/kuna-analysis/tests/fixtures/elemptr_x86_64.c`,
+only through the repo's public fixture `decompiler/crates/unlace-analysis/tests/fixtures/elemptr_x86_64.c`,
 whose checked-in stripped builds are decompiled whole-binary (`final-l/b64-witness.md`):
 
 | build | `w_decode` gcc -O0 / clang -O0 / gcc -O2 | `w_build` | whole fixture |
@@ -2447,7 +2447,7 @@ Under #93 the final build would be **2,262 of 10,748 (21.0%)**.
 
 ### L.6 Speed
 
-`kuna decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation). Every arm is a
+`unlace decompile-all <bin> --json --max-fn-seconds 120` (decbench's own invocation). Every arm is a
 pinned build, or the final build with options switched off; arms run one after another with the order
 rotating every round, min-of-15 unless stated. Driver `final-l/speed10.py`; raw samples, per-round load
 averages and child CPU times in `final-l/speed*.json` and `final-l/ablate*.json`. Round M's lanes
@@ -2655,7 +2655,7 @@ python3 final-f/speed6.py 11 <speed.json> fmt,ls,sort,bash   # then speed6.py 15
 ```
 
 Round G uses `final-g/` the same way, and adds per-COMMIT arms: #714 is ungated and its libc table
-cannot be isolated with an option, so each landed commit is built in its OWN directory (`kuna` resolves
+cannot be isolated with an option, so each landed commit is built in its OWN directory (`unlace` resolves
 the `decomp_dbg` beside it) and swept like the round binary, alongside the two option arms:
 
 ```bash

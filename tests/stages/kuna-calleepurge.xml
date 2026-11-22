@@ -45,14 +45,14 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/stdcallpurge_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/stdcallpurge_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401080 as split</com>
   <com>load function split</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/calleeframes_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/calleeframes_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x4011b0 as use_add2</com>
   <com>load function use_add2</com>
@@ -67,7 +67,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/calleedepth_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/calleedepth_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x4010e0 as start</com>
   <com>load function start</com>

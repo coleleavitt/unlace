@@ -1,0 +1,146 @@
+//! End-to-end coverage for automatic entry RET-call dispatch recognition.
+
+use std::path::PathBuf;
+use std::process::Command;
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
+}
+
+fn fixture() -> String {
+    repo_root()
+        .join("decompiler/crates/unlace-analysis/tests/fixtures/entry_ret_dispatch_i386")
+        .to_string_lossy()
+        .into_owned()
+}
+
+fn decompile_with(function: &str, extra: &[&str]) -> String {
+    let binary = fixture();
+    let sleigh = repo_root().join("specs").to_string_lossy().into_owned();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
+    command.args(["decompile", &binary, function]);
+    command.args(extra);
+    let out = command
+        .args(["--sleighpath", &sleigh])
+        .output()
+        .expect("spawn kuna");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    if !out.status.success() {
+        panic!("unlace decompile failed: {stderr}");
+    }
+    stdout
+}
+
+fn decompile(function: &str) -> String {
+    decompile_with(function, &[])
+}
+
+const CALLS: [&str; 3] = ["(*dat_804a000)()", "(*dat_804a004)()", "(*dat_804a008)()"];
+
+#[test]
+fn entry_dispatch_recovers_every_call_and_continuation() {
+    let code = decompile("entry_dispatch");
+    for call in CALLS {
+        assert!(
+            code.contains(call),
+            "entry dispatch stopped before {call}:\n{code}"
+        );
+    }
+    assert!(
+        !code.contains("return;"),
+        "entry dispatch stayed an empty return:\n{code}"
+    );
+}
+
+#[test]
+fn ordinary_and_immediate_returns_keep_return_semantics() {
+    let ordinary = decompile("ordinary_ret");
+    assert!(
+        ordinary.contains("return 0x1111;"),
+        "ordinary RET changed:\n{ordinary}"
+    );
+
+    let immediate = decompile("immediate_ret");
+    assert!(
+        immediate.contains("return 0x2222;"),
+        "RET-immediate changed:\n{immediate}"
+    );
+}
+
+#[test]
+fn incoming_return_address_is_not_a_dispatch_target() {
+    let code = decompile("incoming_return_ret");
+    assert!(
+        code.contains("return;"),
+        "incoming return address became a call:\n{code}"
+    );
+    assert!(
+        !code.contains("(*"),
+        "incoming return address became a call:\n{code}"
+    );
+}
+
+#[test]
+fn unrelated_computed_returns_are_not_calls() {
+    for function in [
+        "computed_ret",
+        "adjusted_fallthrough_ret",
+        "negative_displacement_ret",
+        "conditional_bypass_ret",
+        "partial_sp_ret",
+    ] {
+        let code = decompile(function);
+        assert!(
+            code.contains("return;"),
+            "{function} became a call:\n{code}"
+        );
+        assert!(
+            !code.contains("first_link("),
+            "{function} called a computed target:\n{code}"
+        );
+        for call in CALLS {
+            assert!(
+                !code.contains(call),
+                "{function} recovered unrelated {call}:\n{code}"
+            );
+        }
+    }
+
+    let code = decompile("unrelated_fallthrough_store_ret");
+    assert!(
+        code.contains("dat_804b00c = 0x8049058;"),
+        "unrelated store disappeared:\n{code}"
+    );
+    assert!(
+        !code.contains("(*"),
+        "unrelated store made the incoming return address callable:\n{code}"
+    );
+    // `constant_ret` is a one-store push-immediate/RET tail transfer, which the
+    // `pushimmediateret` rule owns; it derives none of the dispatch calls.
+    let code = decompile("constant_ret");
+    for call in CALLS {
+        assert!(
+            !code.contains(call),
+            "constant_ret recovered unrelated {call}:\n{code}"
+        );
+    }
+}
+
+#[test]
+fn explicit_return_cleanly_vetoes_the_automatic_call() {
+    let code = decompile_with("entry_dispatch", &["--assert", "flow 0x804900b return"]);
+    assert!(
+        code.contains("return;"),
+        "explicit return did not win:\n{code}"
+    );
+    for call in CALLS {
+        assert!(
+            !code.contains(call),
+            "explicit return was overridden by {call}:\n{code}"
+        );
+    }
+}

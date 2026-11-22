@@ -24,7 +24,7 @@ what a user gets today.
 
 ```
 $ export SLEIGHHOME=/home/mahaloz/github/kuna/specs
-$ ./decompiler/target/release/kuna decompile \
+$ ./decompiler/target/release/unlace decompile \
     ~/github/decbench/results/full_run/O2-noinline/iproute2/stripped/ip --addr 0x20e10
 ...
 label_21004:
@@ -227,7 +227,7 @@ not P7 (`stackguard` only changes which def the copy reads).
 
 ## Breadth
 
-`kuna decompile-all <bin> --json --mode reliable`, counting assignment statements whose LHS
+`unlace decompile-all <bin> --json --mode reliable`, counting assignment statements whose LHS
 is an address-named global that lands in a non-writable PROGBITS section
 (scanner: `/tmp/.../scratchpad/scan.py`):
 
@@ -258,7 +258,7 @@ path where the global's reaching def is not address-tied. `-O0` never produces i
 
 ## Proposed fix — one module, no option
 
-`decompiler/crates/kuna-decomp/src/p3_dataflow/subflow.rs`,
+`decompiler/crates/unlace-decomp/src/p3_dataflow/subflow.rs`,
 `SplitDatatype::test_copy_constraints` (`:3552`): decline the split when the COPY is a
 heritage return-copy.
 
@@ -322,6 +322,6 @@ phantom block is absent (single-pass: no option to toggle).
   not compile. Same family as `spacebase-unnamed-location`.
 - `tar`'s `dat_6a7d6 += v18;` is a store into `.rodata` from a *different* mechanism —
   worth its own look.
-- `kuna decompile-project <ip> --functions sub_20e10` panics in
-  `kuna-analysis/src/loadimage_object.rs:716` (`range end index 973 out of range for slice
+- `unlace decompile-project <ip> --functions sub_20e10` panics in
+  `unlace-analysis/src/loadimage_object.rs:716` (`range end index 973 out of range for slice
   of length 512`) — unrelated, found while trying to read the global's declaration.

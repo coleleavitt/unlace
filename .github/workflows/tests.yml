@@ -56,11 +56,19 @@ jobs:
       - name: Python tooling unit tests
         run: make test-tools
 
-      - name: Install Rust (stable) + wasm32-wasip1 target
+      - name: Install Rust (stable)
         run: |
-          rustup toolchain install stable --profile minimal --component clippy
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
           rustup default stable
-          rustup target add wasm32-wasip1
+
+      - name: rustfmt (edition 2024 style, decompiler/rustfmt.toml)
+        run: cd decompiler && cargo fmt --all --check
+
+      # The browser front-end (integrations/web, unlace-wasm) is opt-in: its steps run only
+      # when the repository variable UNLACE_WEB is `true`.
+      - name: Add the wasm32-wasip1 target (web)
+        if: vars.UNLACE_WEB == 'true'
+        run: rustup target add wasm32-wasip1
 
       # Same cache action and workspace the release/pages workflows use.
       - uses: Swatinem/rust-cache@v2
@@ -104,8 +112,8 @@ jobs:
       - name: make test-cli
         run: make test-cli
 
-      - name: kuna catalog --check
-        run: ./decompiler/target/release/kuna catalog --check
+      - name: unlace catalog --check
+        run: ./decompiler/target/release/unlace catalog --check
 
       # Shared-counter drift and ElementId collisions. Both are shapes that every
       # other gate passes cleanly: a stale hard-coded settable count only fails
@@ -120,16 +128,16 @@ jobs:
 
       # `catalog --check` above proves options.md documents the same option SET;
       # this proves it is the generator's exact bytes. That is the assertion in
-      # kuna-decomp/tests/options_md_fresh.rs, which lives in the workspace suite
+      # unlace-decomp/tests/options_md_fresh.rs, which lives in the workspace suite
       # -- skipped on an internal PR. Forgetting to regenerate options.md after
       # touching option metadata is a routine miss (AGENTS.md calls it out), so
       # the cheap job carries it rather than deferring it to the push to main.
       # Free: it reuses the release binary this job already built.
       - name: docs/options.md is the generator's bytes
         run: |
-          ./decompiler/target/release/kuna catalog --markdown > /tmp/options.generated.md
+          ./decompiler/target/release/unlace catalog --markdown > /tmp/options.generated.md
           if ! diff -u docs/options.md /tmp/options.generated.md; then
-            echo "::error file=docs/options.md::stale -- regenerate with 'decompiler/target/release/kuna catalog --markdown > docs/options.md'"
+            echo "::error file=docs/options.md::stale -- regenerate with 'decompiler/target/release/unlace catalog --markdown > docs/options.md'"
             exit 1
           fi
 
@@ -143,10 +151,10 @@ jobs:
       # release profile over the deps `make binaries` already built (~2 min
       # compile, seconds of runtime). `--include-ignored` picks up the heavier
       # sort/grep breadth test that the dev-profile workspace run skips.
-      - name: ghidra-sim differential harness (kuna-ghidra, release)
+      - name: ghidra-sim differential harness (unlace-ghidra, release)
         run: |
           cd decompiler
-          cargo test -p kuna-ghidra --release -- --include-ignored --nocapture
+          cargo test -p unlace-ghidra --release -- --include-ignored --nocapture
 
       # Node 22: the web suites below are written for (and only run on) a
       # current Node; the runner's default Node is not pinned. The suites that
@@ -154,12 +162,14 @@ jobs:
       # -collab-rtc) are not run in CI, which is too costly for them; run them
       # locally (integrations/web/README.md -> Tests).
       - uses: actions/setup-node@v4
+        if: vars.UNLACE_WEB == 'true'
         with:
           node-version: 22
 
       # The study view's pure modules need no build; run them before the
       # wasm build so a renderer or session regression answers in seconds.
       - name: Test the /decompile page's modules
+        if: vars.UNLACE_WEB == 'true'
         run: |
           node integrations/web/test/cdp-client-startup.mjs
           node integrations/web/test/decompile-render.mjs
@@ -177,6 +187,7 @@ jobs:
           node integrations/web/test/decompile-collab-fuzz.mjs
 
       - name: Assemble and test the browser Worker boundary
+        if: vars.UNLACE_WEB == 'true'
         run: |
           bash integrations/web/build.sh
           node integrations/web/test/worker.mjs
@@ -242,7 +253,7 @@ jobs:
       - name: make rust-test -- the full cargo workspace suite
         run: |
           df -h .
-          make rust-test
+          make rust-test WEB=${{ vars.UNLACE_WEB == 'true' && '1' || '0' }}
 
       - name: Workspace build disk usage
         if: always()

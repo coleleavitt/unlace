@@ -57,7 +57,7 @@ Per-project net (top contributors):
 ## Half the O0 deficit is recall, and it is one shape
 
 324 functions IDA scores at O0 produce no usable GED from kuna at all -- a guaranteed zero
-on every one. Probed against `kuna functions --json --mode aggressive` on today's build:
+on every one. Probed against `unlace functions --json --mode aggressive` on today's build:
 
 - **322 of 324 (99.4%) are INTERIOR to a kuna entry.** kuna discovered a function that
   starts before the true entry. Only 2 are entries kuna found and simply scores badly.
@@ -174,8 +174,8 @@ A structural proxy is not GED. The real A/B on the O0 slice is
 
 ## A driver bug found while measuring
 
-`kuna functions --mode reliable` reports **1** function on stripped `crazyflie/cf2.elf`
-where `kuna decompile-all --mode reliable` recovers **2,790** (chibios `ch.elf` 5 vs 770;
+`unlace functions --mode reliable` reports **1** function on stripped `crazyflie/cf2.elf`
+where `unlace decompile-all --mode reliable` recovers **2,790** (chibios `ch.elf` 5 vs 770;
 betaflight 1 vs 5,797; x86-64 `coreutils/ls` agrees at 588 vs 588). `list_functions` is the
 only caller passing `default_listing = false`, and that one flag gates not just the Listing
 but the non-x86-64 `funcstart_patterns` and `aif` **discovery** passes, whose entire job is

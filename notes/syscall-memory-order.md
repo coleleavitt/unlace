@@ -52,5 +52,5 @@ eight-byte buffer initialization that unfixed code loses:
 
 ```sh
 printf %s 488d44240848894424f0488d7424f0b801000000bf11000000ba080000000f05c3 | xxd -r -p > /tmp/incoming-stack.bin
-kuna decompile /tmp/incoming-stack.bin 0x1000 --raw-image --target x86:LE:64:default:gcc --base 0x1000 --option x64syscall on
+unlace decompile /tmp/incoming-stack.bin 0x1000 --raw-image --target x86:LE:64:default:gcc --base 0x1000 --option x64syscall on
 ```

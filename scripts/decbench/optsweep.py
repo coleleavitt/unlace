@@ -9,7 +9,7 @@ scoreboard by zero, and nothing else in the pipeline shows that.
 Both arms are the SAME kuna binary over the SAME slices, one invocation per
 (slice, arm) exactly as decbench's `kuna_raw` backend runs it::
 
-    kuna decompile-all <stripped> --json --max-fn-seconds 120 [--option N V ...]
+    unlace decompile-all <stripped> --json --max-fn-seconds 120 [--option N V ...]
 
 Each arm's JSON is rebuilt into a decbench artifact -- for every
 ``// Function: <name> @ <addr>`` marker of the stored run artifact, the fresh

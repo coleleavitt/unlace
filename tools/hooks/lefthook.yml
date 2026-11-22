@@ -1,0 +1,14 @@
+# lefthook config for every unlace worktree. tools/hooks/git-hooks/post-checkout links it as
+# .lefthook.yml at the worktree root; enable with: git config core.hooksPath tools/hooks/git-hooks
+pre-commit:
+  parallel: true
+  commands:
+    author-identity:
+      run: tools/hooks/check-author.sh
+    gates-fast:
+      run: tools/hooks/unlace-ci-gates.sh fast
+pre-push:
+  commands:
+    gates-parity:
+      use_stdin: true
+      run: tools/hooks/pre-push.sh

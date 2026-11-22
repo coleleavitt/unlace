@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis/src/listing/classify.rs, decompiler/crates/kuna-analysis/src/listing/xrefs.rs]
+touches: [decompiler/crates/unlace-analysis/src/listing/classify.rs, decompiler/crates/unlace-analysis/src/listing/xrefs.rs]
 scope: small
 regression_of: null
 pr: null
@@ -28,7 +28,7 @@ reject_reason: null
 Find what branches to the `ldreq` in `pick`.
 
 > **Every predicated ARM instruction files a jump to the next instruction** (minor, synthetic `xreffp_arm_le32`)
-> `kuna xrefs --to 0x10568` reports a jump from `0x10564 ldrne r0,[r0,#0x4]`, the instruction before it. No instruction branches there: `ldrne` is not a branch. Every predicated A32 instruction (`movle`, `ldrne`, `popeq {..,pc}`) and every instruction in a Thumb `it` block files such a row.
+> `unlace xrefs --to 0x10568` reports a jump from `0x10564 ldrne r0,[r0,#0x4]`, the instruction before it. No instruction branches there: `ldrne` is not a branch. Every predicated A32 instruction (`movle`, `ldrne`, `popeq {..,pc}`) and every instruction in a Thumb `it` block files such a row.
 
 Seen first on production ARM executables and a shared library, where these rows were the second-largest false positive; `xreffp_arm_le32` reproduces them from a small C source.
 
@@ -91,7 +91,7 @@ Seen first on production ARM executables and a shared library, where these rows 
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/xreffp_arm_le32",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/xreffp_arm_le32",
     "binary_sha256": "33c2504a9e043837b83c7668ab36b4e602bff2bb198728af6980a96839ff8e92",
     "binary_size": 77140,
     "binary_source": "in-repo"

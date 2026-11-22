@@ -26,7 +26,7 @@ ported, linked against a `GHIDRA` glue group (`ghidra_process.cc`, `ghidra_arch.
 `ghidra_translate.cc`, …) that kuna deliberately excluded from the port (LOSS-002,
 see `docs/history.md`).
 
-**kuna reimplements exactly that glue group**: a new **`kuna-ghidra`** crate producing a
+**kuna reimplements exactly that glue group**: a new **`unlace-ghidra`** crate producing a
 binary that speaks the full decompiler-process protocol, backed by kuna's engine. The
 stock Ghidra GUI and its entire Java side stay byte-for-byte untouched; the only
 Ghidra-side artifact is a tiny extension (`integrations/ghidra/KunaDecompiler/`, §7)
@@ -42,19 +42,19 @@ Rejected alternatives, for the record:
 - **A shim process wrapping kuna's existing CLI.** The protocol is not
   request/response: the native side issues **callback queries mid-decompile**
   (per-instruction p-code, symbols at an address, bytes, types — §4) that a
-  `kuna decompile-all` wrapper cannot answer; and the response is not C text but a
+  `unlace decompile-all` wrapper cannot answer; and the response is not C text but a
   typed dual-document (`HighFunction` + token markup with cross-referenced ids, §6)
   over live program state. There is no shim-shaped solution.
 
 ## 2. Architecture and session lifecycle
 
 ```
-Ghidra GUI (untouched)                          kuna-ghidra binary
+Ghidra GUI (untouched)                          unlace-ghidra binary
 ──────────────────────                          ─────────────────────
 DecompilerProvider/Controller/Manager           main loop: readCommand()
   → DecompInterface                               ├─ registerProgram  → ArchitectureGhidra-equiv
     → DecompileProcessFactory.get()               ├─ setOptions/setAction (replayed state)
-      → spawn kuna_ghidra  ◄──── extension        ├─ decompileAt ──┐
+      → spawn unlace_ghidra  ◄──── extension        ├─ decompileAt ──┐
         (stdin/stdout bursts)                     │   queries back ─┘ getPcode/getBytes/…
                                                   ├─ flushNative   (after every function)
                                                   └─ deregisterProgram → exit
@@ -105,7 +105,7 @@ Even codes open, odd codes close.
 
 String streams (14/15) carry either raw ASCII (command names, decimal archids, the
 `t`/`f` answers) or a **packed** binary document (kuna's bit-exact
-`kuna-base/src/marshal.rs` `PackedEncode`/`PackedDecode`) — every packed byte is
+`unlace-base/src/marshal.rs` `PackedEncode`/`PackedDecode`) — every packed byte is
 nonzero, so the closing burst's leading `0x00` terminates ingestion. The only XML on
 the wire is the four `registerProgram` spec strings.
 
@@ -189,18 +189,18 @@ shortcut is to disassemble locally and use the wire only for bytes/symbols. **Re
    resolution the protocol simply does not carry.
 
 Consequence for kuna: `Architecture.translate` is today a **concrete `Sleigh`** field
-(`kuna-decomp/src/infra/architecture.rs:836`). Phase 2 introduces a `Translate` seam on
+(`unlace-decomp/src/infra/architecture.rs:836`). Phase 2 introduces a `Translate` seam on
 `Architecture` — an **enum over `{Sleigh, GhidraTranslate}`**, not a `Box<dyn>`, to keep
 `manage()` (the space-manager accessor) concrete and the standalone path untouched. The
 lift stage is already trait-typed at the consumption point
 (`FlowEnvironment::translate() -> &dyn Translate`, called at
-`kuna-decomp/src/s2_lift/flow.rs:1321`), and the trait itself
-(`kuna-sleigh/src/translate.rs:386`) is a faithful port of the C++ virtual. The
+`unlace-decomp/src/s2_lift/flow.rs:1321`), and the trait itself
+(`unlace-sleigh/src/translate.rs:386`) is a faithful port of the C++ virtual. The
 space-manager-without-`.sla` problem is already solved: `insert_space`
-supports the sparse tspec indices (`kuna-base/src/space.rs:2545-2566`) and a unit test
+supports the sparse tspec indices (`unlace-base/src/space.rs:2545-2566`) and a unit test
 builds a manager purely from decoded `<space>` elements
-(`kuna-sleigh/src/translate.rs:1086-1124`). Phase 1 already ships the
-`GhidraTranslate::decode` equivalent — `kuna-ghidra/src/translate.rs` parses the tspec
+(`unlace-sleigh/src/translate.rs:1086-1124`). Phase 1 already ships the
+`GhidraTranslate::decode` equivalent — `unlace-ghidra/src/translate.rs` parses the tspec
 `<sleigh>` element (endianness, `uniqbase`, the `<space>`/`<space_unique>`/`<space_other>`/
 `<space_overlay>` list, `<truncate_space>`) into a real `AddrSpaceManager`, which is why
 `decompileAt` already decodes real `<addr>` parameters (`ghidra_translate.cc:161-176`).
@@ -229,9 +229,9 @@ inferior: there is nothing to enumerate. kuna needs the upstream lazy model:
   string decodings, cpool.
 
 The C++ virtuals these classes override were deliberately collapsed in the port (the
-`Scope`/`ScopeInternal` merge, `kuna-decomp/src/p0_knowledge/database.rs`), so Phase 3
+`Scope`/`ScopeInternal` merge, `unlace-decomp/src/p0_knowledge/database.rs`), so Phase 3
 relocated the lazy model to the seams the kuna pipeline actually reads
-(**shipped** — `kuna-decomp/src/infra/remote_provider.rs`):
+(**shipped** — `unlace-decomp/src/infra/remote_provider.rs`):
 
 - **`RemoteScope`** (the `ScopeGhidra` port at the GlobalQuery boundary): installed on
   `Architecture` at registerProgram and threaded into every per-function `ArchContext`
@@ -242,7 +242,7 @@ relocated the lazy model to the seams the kuna pipeline actually reads
   query-through with `<hole>` negative caching, decoded-entry positive caching,
   readonly/volatile property paints over a `lockDefaultProperties` snapshot, and
   namespace paths via getNamespacePath.  The wire is reached through the
-  `RemoteProviderFetch` trait (implemented in `kuna-ghidra/src/provider.rs` over the
+  `RemoteProviderFetch` trait (implemented in `unlace-ghidra/src/provider.rs` over the
   shared client); the standalone path installs nothing and stays byte-identical.
 - **`TypeFactoryGhidra`**: the wire `<coretypes>` decode replaces the default core
   types at registerProgram (so kuna's type ids match the host's), and
@@ -336,7 +336,7 @@ The extension (`integrations/ghidra/KunaDecompiler/`) resolves the binary in two
 first the `-Dkuna.decompiler.exe=<path>` dev override (a JVM system property, for
 pointing at a fresh `cargo build` without reinstalling the extension), then — the normal
 path — the kuna binary shipped in the extension's **own** module `os/` dir under the
-**distinct name `kuna_ghidra`**, resolved with the two-arg
+**distinct name `unlace_ghidra`**, resolved with the two-arg
 `Application.getOSFile(moduleName, filename)` (`Application.java:1000-1003`). Naming it
 `decompile` could never work, because the single-arg lookup searches the *calling*
 class's module first and `DecompileProcessFactory` lives in the Decompiler module,
@@ -350,7 +350,7 @@ release mode only (`GhidraLauncher.java:182-183`).
 
 ## 8. Version policy (decided)
 
-`kuna-ghidra` targets a **pinned Ghidra release** (the 12.2 vintage). There is no
+`unlace-ghidra` targets a **pinned Ghidra release** (the 12.2 vintage). There is no
 protocol handshake — the interface version (major=6/minor=1,
 `cpp/architecture.cc:35-36`) is exposed only through `getSignatureSettings` and only
 BSim reads it. The real skew risk is **option drift**, already live between kuna's
@@ -380,15 +380,15 @@ Already in the tree (verified):
 
 | asset | where | state |
 |---|---|---|
-| Packed marshaling, bit-exact | `kuna-base/src/marshal.rs` (`PackedDecode` :1424, `PackedEncode` :2008) | done — the payload codec is the ported one |
-| `KunaError::Java` | `kuna-base/src/error.rs:145-153` | done — the C++ `JavaError` carrier |
-| Token-markup emitter | `kuna-decomp/src/s9_emit/prettyprint.rs:719` (`EmitMarkup`, packed clang doc) | ported, **unreachable** — PrintC hardwires `EmitNoMarkup` (`printc.rs:1015`) |
-| Signature engine | `kuna-decomp/src/infra/signature.rs` + `analyzesigs.rs` | ported; the four signature commands are wire-glue, not engine work |
+| Packed marshaling, bit-exact | `unlace-base/src/marshal.rs` (`PackedDecode` :1424, `PackedEncode` :2008) | done — the payload codec is the ported one |
+| `KunaError::Java` | `unlace-base/src/error.rs:145-153` | done — the C++ `JavaError` carrier |
+| Token-markup emitter | `unlace-decomp/src/s9_emit/prettyprint.rs:719` (`EmitMarkup`, packed clang doc) | ported, **unreachable** — PrintC hardwires `EmitNoMarkup` (`printc.rs:1015`) |
+| Signature engine | `unlace-decomp/src/infra/signature.rs` + `analyzesigs.rs` | ported; the four signature commands are wire-glue, not engine work |
 | Signature element ids | `signature.rs:73-87` — 258, 259, 260, 263, 265, 266, 267, 269, upstream-numbered | done; the gaps 261/262/264/268 are ours to add |
-| tspec-driven space manager, no `.sla` | `kuna-base/src/space.rs:2545-2566`; `kuna-ghidra/src/translate.rs` (`GhidraTranslate::decode`) | **done in kuna-ghidra** — the tspec `<sleigh>` parse builds a real `AddrSpaceManager`; Phase 2 wires it into an `Architecture` |
-| `LoadImage` trait | `kuna-sleigh/src/loadimage.rs:101`, consumed as `Box<dyn>` everywhere | ready |
-| `ContextDatabase` trait | `kuna-sleigh/src/globalcontext.rs:340` | ready |
-| `Translate` trait + trait-typed lift | `kuna-sleigh/src/translate.rs:386`; `flow.rs:1321` | ready at the consumer; owner is concrete |
+| tspec-driven space manager, no `.sla` | `unlace-base/src/space.rs:2545-2566`; `unlace-ghidra/src/translate.rs` (`GhidraTranslate::decode`) | **done in unlace-ghidra** — the tspec `<sleigh>` parse builds a real `AddrSpaceManager`; Phase 2 wires it into an `Architecture` |
+| `LoadImage` trait | `unlace-sleigh/src/loadimage.rs:101`, consumed as `Box<dyn>` everywhere | ready |
+| `ContextDatabase` trait | `unlace-sleigh/src/globalcontext.rs:340` | ready |
+| `Translate` trait + trait-typed lift | `unlace-sleigh/src/translate.rs:386`; `flow.rs:1321` | ready at the consumer; owner is concrete |
 
 Protocol element ids to add (upstream numbers, wire compat — kuna's own 4000+ range is
 for kuna-invented ids only, and none of these are taken): **229** (`doc`), **239–257**
@@ -410,7 +410,7 @@ The engine-seam inventory, with honest difficulty:
 | `CommentDatabase` | **DONE (Phase 3)** — `RemoteScope::fill_comments` (getComments, printer-filtered, fill-once-per-flush) into the `Architecture.commentdb` sink | the printer renders PRE/warning + header comments; EOL/POST placement is a printer gap, not a wire gap | 3 ✔ |
 | `ParamIDAnalysis` | **DONE (Phase 4)** — `<parammeasures>` encode + the paramid-action doc shape (`infra/paramid.rs`; the justproto constructor reads the real recovered `FuncProto`) | — | 4 ✔ |
 | `StringManager` | concrete, no trait (`stringmanage.rs:83`); cleared by flushNative | one-method extraction for Java-side charset-faithful decode | deferred |
-| Inject library | **DONE** — payloads register from the wire-fed cspec, but nothing compiles them without a local `.sla`, so each injection fetches already-lifted p-code for that call site via getPcodeInject (`EngineTranslate::fetch_inject_pcode`, `kuna-ghidra/src/translate.rs`); never cached, since the answer is bound to the site | `CALLMECHANISM`/`EXECUTABLEPCODE` payloads are unreachable from the live engine and stay unwired. The call-fixup arm is wired but also unreachable: `remote_provider.rs` decodes every remote function with `func_inject_id: -1` and the remote `<prototype>` has no `<inject>` arm, so a Ghidra-side `setCallFixup` never arrives | ✔ |
+| Inject library | **DONE** — payloads register from the wire-fed cspec, but nothing compiles them without a local `.sla`, so each injection fetches already-lifted p-code for that call site via getPcodeInject (`EngineTranslate::fetch_inject_pcode`, `unlace-ghidra/src/translate.rs`); never cached, since the answer is bound to the site | `CALLMECHANISM`/`EXECUTABLEPCODE` payloads are unreachable from the live engine and stay unwired. The call-fixup arm is wired but also unreachable: `remote_provider.rs` decodes every remote function with `func_inject_id: -1` and the remote `<prototype>` has no `<inject>` arm, so a Ghidra-side `setCallFixup` never arrives | ✔ |
 | `ConstantPool` | trait ready (`infra/cpool.rs:470`) but **unwired** into `Architecture` | wiring + `CPOOLREF` path; JVM/Dalvik only | deferred |
 | ArchSeam snapshot | **DONE (Phase 3)** — the three frozen tables read through live seams when a `RemoteScope` is installed (`ArchContext::effective_global_query`/`callee_proto_pieces`; tracked sets decode from the wire pspec `<tracked_set>`) | — | 3 ✔ |
 
@@ -444,12 +444,12 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
   other end of the pipe: sends command bursts, answers queries from canned tables,
   asserts the byte-exact response framing (including the response-open-before-params
   ordering, the always-present 16/17 frame, and the self-alignment/exception paths) —
-  `kuna-ghidra/tests/protocol_e2e.rs` (canned streams) and `tests/decompile_at_e2e.rs`
+  `unlace-ghidra/tests/protocol_e2e.rs` (canned streams) and `tests/decompile_at_e2e.rs`
   (the interactive loopback, one canned RETURN function). This is the same
   differential discipline as the port — the upstream implementation
   (`DecompileProcess.java`, `ghidra_arch.cc`) is the oracle.
 - **ghidra-sim: the real-program differential harness (shipped with Phase 2).**
-  `kuna-ghidra/tests/ghidra_sim_e2e.rs` + the shared machinery in
+  `unlace-ghidra/tests/ghidra_sim_e2e.rs` + the shared machinery in
   `tests/ghidra_sim/` drive the FULL wire lifecycle in-process (registerProgram →
   setAction → decompileAt×N → flushNative → deregister) against vendored ELFs
   (`tests/bug-repro/faillog` fast; `sort`/`grep` breadth), with the mock-Java end
@@ -474,32 +474,32 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
   Decompilation" action (`DecompInterface.enableDebug`, `DebugDecompilerAction.java:38-73`)
   records every callback answer into an `<xml_savefile>` — exactly the document kuna's
   datatest corpus already consumes. Captures give us *recorded Java-side query answers*
-  to replay against `kuna-ghidra` without a live Ghidra (de-risking the sim's
+  to replay against `unlace-ghidra` without a live Ghidra (de-risking the sim's
   synthesized `<mapsym>` shapes), and `DecompileDebugXmlLoader` (Features/Base) can
   import them as Programs for the reverse direction.
 - **Live smoke** (manual, per phase): `integrations/ghidra/live-smoke/` — a
-  pyghidra rig that swaps `DecompileProcessFactory.exepath` to `kuna_ghidra` inside
+  pyghidra rig that swaps `DecompileProcessFactory.exepath` to `unlace_ghidra` inside
   a real Ghidra, decompiles the same functions with both cores, and writes a
   side-by-side report with the same scanner counts the sim pins (see its README
   for the offline-pyghidra setup). For the full extension path: build the
   extension, install into a Ghidra 12.2 release (or `-Dghidra.external.modules=`
-  in a dev checkout), enable the plugin, verify the spawned PID is `kuna_ghidra`
+  in a dev checkout), enable the plugin, verify the spawned PID is `unlace_ghidra`
   and that the C, click-to-address, and rename round-trip behave.
 - **Regression floors**: the standing gates (`make test`, `make test-stages`,
   `make rust-test`, now plus the `gates`-job ghidra-sim step) must stay green —
-  `kuna-ghidra` is additive and must not perturb the standalone engine.
+  `unlace-ghidra` is additive and must not perturb the standalone engine.
 
 ## 12. Phase breakdown
 
 **Phase 1 — wire-protocol-complete, engine-stubbed (this branch).**
-- [x] `kuna-ghidra` crate: burst framer, command registry + `doit()` lifecycle,
+- [x] `unlace-ghidra` crate: burst framer, command registry + `doit()` lifecycle,
       archlist session model, the 19 typed query clients, exception channels — engine
       calls stubbed.
 - [x] Protocol element ids 229, 239–257, 261, 262, 264, 268 (upstream numbers).
 - [x] tspec `<sleigh>` parse → real `AddrSpaceManager` (`GhidraTranslate::decode`), so
       `decompileAt` decodes real `<addr>` parameters.
 - [x] Ghidra extension (`integrations/ghidra/KunaDecompiler/`): plugin + reflection
-      exepath swap, binary shipped as `os/<platform>/kuna_ghidra`.
+      exepath swap, binary shipped as `os/<platform>/unlace_ghidra`.
 - [x] These two documents.
 
 **Phase 2 — engine bridge (first real C in the GUI). DONE** (PR #135, branch
@@ -507,14 +507,14 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
 `docs/rust-port/ghidra-phase2-plan.md` (git history). Each step landed as its own commit
 keeping `make test` at 675/675 PARITY OK. One design refinement vs the plan: the
 translator seam is a `Box<dyn EngineTranslate>` **trait**, not an enum — an enum
-variant naming `kuna-ghidra`'s `GhidraTranslate` would be a `kuna-decomp`↔`kuna-ghidra`
-dependency cycle; a trait object owned in `kuna-decomp` is not.
+variant naming `unlace-ghidra`'s `GhidraTranslate` would be a `unlace-decomp`↔`unlace-ghidra`
+dependency cycle; a trait object owned in `unlace-decomp` is not.
 - [x] `SharedClient` design (the re-entrant provider→query pattern) +
-      `GhidraLoadImage` (`load_fill` = `getBytes`) — `kuna-ghidra/src/provider.rs`.
+      `GhidraLoadImage` (`load_fill` = `getBytes`) — `unlace-ghidra/src/provider.rs`.
 - [x] `EngineTranslate` trait seam on `Architecture` (`translate: Box<dyn EngineTranslate>`,
       `infra/engine_translate.rs`) — behavior-preserving; only `Sleigh` implements it today.
 - [x] `GhidraTranslate` port (getPcode per instruction, register caches, user-op probe
-      loop) — `kuna-ghidra/src/translate.rs`. `ContextGhidra` is a `ContextInternal`
+      loop) — `unlace-ghidra/src/translate.rs`. `ContextGhidra` is a `ContextInternal`
       stub (empty tracked sets; the query-backed `getTrackedRegisters` is Phase 3).
 - [x] `Architecture::from_engine_translate` construction path: `registerProgram` builds
       a live engine from the wire specs (tspec→manager, cspec/pspec via
@@ -525,7 +525,7 @@ dependency cycle; a trait object owned in `kuna-decomp` is not.
 - [x] PrintC → `EmitMarkup` wiring (`PrintEmit` enum, `doc_function_markup`, `MarkupRef`
       population); the dual-`<function>` `decompileAt` response, driven by `decompile_func`
       (name from `getCodeLabel`, flow-discovered extent). Proven end to end
-      (`kuna-ghidra/tests/decompile_at_e2e.rs`: the response decodes to a `<function>`
+      (`unlace-ghidra/tests/decompile_at_e2e.rs`: the response decodes to a `<function>`
       + a markup `<function>` whose refs resolve against the `<ast>`).
 
 **Phase-2 scope boundary (historical):** Phase 2's `decompileAt` ran against an
@@ -537,7 +537,7 @@ pins now hold the Phase-3 level.
 **Phase 3 — lazy providers (correct symbols/types at scale). DONE** (branch
 `feat/ghidra-phase3-providers`; DIV-76/DIV-77 in `docs/history.md`).
 - [x] `ScopeGhidra`-equivalent lazy symbol cache (`RemoteScope`,
-      `kuna-decomp/src/infra/remote_provider.rs`): getMappedSymbols query-through at
+      `unlace-decomp/src/infra/remote_provider.rs`): getMappedSymbols query-through at
       the GlobalQuery + flow seams, the `<mapsym>`/`<hole>`/symbol-family decoder,
       `<hole>` negative caching, readonly/volatile property paints over the
       `lockDefaultProperties` snapshot, namespace paths via getNamespacePath, and

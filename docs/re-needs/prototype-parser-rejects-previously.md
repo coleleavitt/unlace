@@ -14,7 +14,7 @@ rounds: [8]
 first_seen_round: 8
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-console/src/grammar, decompiler/crates/kuna-cli/src/assertdecl.rs]
+touches: [decompiler/crates/unlace-console/src/grammar, decompiler/crates/unlace-cli/src/assertdecl.rs]
 scope: small
 regression_of: null
 pr: null
@@ -90,11 +90,11 @@ Use struct JSValue as a prototype return type.
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "binary_sha256": "c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b",
     "binary_size": 8776,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "selector": "main",
     "selector_kind": "name"
   },
@@ -134,4 +134,4 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 8 TRIAGE (captain): RETOUCHED to kuna-console/src/grammar/ (+ kuna-cli/src/assertdecl.rs for the directive form) -- see the sibling prototype-parser-rejects-valid. Same parser, different rule: a struct tag accepted as a declaration is refused as a return type while a typedef alias for the same structure works. Track stays tooling. Worth telling the builder that the two are one grammar and can honestly ship together.
+- round 8 TRIAGE (captain): RETOUCHED to unlace-console/src/grammar/ (+ unlace-cli/src/assertdecl.rs for the directive form) -- see the sibling prototype-parser-rejects-valid. Same parser, different rule: a struct tag accepted as a declaration is refused as a return type while a typedef alias for the same structure works. Track stays tooling. Worth telling the builder that the two are one grammar and can honestly ship together.

@@ -14,7 +14,7 @@ rounds: [9]
 first_seen_round: 9
 attempts: 0
 covered_by_option: pdatainterior
-touches: [decompiler/crates/kuna-analysis/src/analyzers/entry/kuna_pdatainterior.rs]
+touches: [decompiler/crates/unlace-analysis/src/analyzers/entry/kuna_pdatainterior.rs]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/557

@@ -14,7 +14,7 @@ rounds: [11]
 first_seen_round: 11
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis/src/analyzers/objc/methods.rs]
+touches: [decompiler/crates/unlace-analysis/src/analyzers/objc/methods.rs]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/571
@@ -28,7 +28,7 @@ reject_reason: null
 Decompile checkCode: at the exact IMP stored in Objective-C metadata.
 
 > **x86-64 Objective-C recovery rounds odd IMP addresses down** (major, `5ab77f5633c5d40ad448c29b`)
-> Resolved checkCode: to 0x100001d2a, size 1, emitting only return with error:null. kuna read at 0x1000046c0 shows its IMP is 0x100001d2b. Disassembly shows RET at the reported entry and PUSH RBP at the actual entry. Other odd-address methods suffer the same corruption, and false boundaries truncate preceding functions.
+> Resolved checkCode: to 0x100001d2a, size 1, emitting only return with error:null. unlace read at 0x1000046c0 shows its IMP is 0x100001d2b. Disassembly shows RET at the reported entry and PUSH RBP at the actual entry. Other odd-address methods suffer the same corruption, and false boundaries truncate preceding functions.
 
 ## Reproduction
 
@@ -92,11 +92,11 @@ Decompile checkCode: at the exact IMP stored in Objective-C metadata.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/macho_objc_odd_imp",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_odd_imp",
     "binary_sha256": "254ed9afc05e4c4913b325058e436fc4ecbfa15ca950777a83ff064cc87753c2",
     "binary_size": 16728,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/macho_objc_odd_imp",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_odd_imp",
     "selector": "-[Greeter greet:]",
     "selector_kind": "name"
   },
@@ -127,14 +127,14 @@ _not yet refuted_
 - filed by cluster.py from 1 observation(s)
 - round 11 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD, and the mechanism is a single named line. Symptom reproduced at the default: decompile BIN '-[CrackMeManager checkCode:]' --json returns address 0x100001d2a, size 1, body "return;". Byte-level proof from the fat image's x86_64 slice (cpu 0x01000007 at file 0x1000): the method_t at 0x1000046c0 reads name=0x1000033d5 ("checkCode:"), types=0x1000035b4, imp=0x100001d2b -- the IMP is ODD in the metadata. Bytes at 0x100001d2a are c3 55 48 89 e5: a RET ending the previous function, then PUSH RBP / MOV RBP,RSP at 0x100001d2b. So kuna is reading the IMP correctly and then corrupting it.
 
-  THE LINE: kuna-analysis/src/analyzers/objc/methods.rs:152 strip_thumb(imp) = imp & !1u64, applied UNCONDITIONALLY at both method_t decoders (line 106 large/absolute, line 137 small/relative) with no architecture test. Its own doc comment states the premise that this binary falsifies: "On AArch64 / x86 this is a no-op (those IMPs are even-aligned)". Here it is not.
+  THE LINE: unlace-analysis/src/analyzers/objc/methods.rs:152 strip_thumb(imp) = imp & !1u64, applied UNCONDITIONALLY at both method_t decoders (line 106 large/absolute, line 137 small/relative) with no architecture test. Its own doc comment states the premise that this binary falsifies: "On AArch64 / x86 this is a no-op (those IMPs are even-aligned)". Here it is not.
 
   THE FIX PRODUCES CORRECT OUTPUT, MEASURED. decompile BIN 0x100001d2b (the unstripped IMP) yields sub_100001d2b, size 289, error null, with a full well-formed body -- not the 1-byte stub. The engine has no problem with an odd function entry, so un-stripping heals both halves the tester reported: the truncated boundary AND the name binding (objc/mod.rs:187 addr: m.imp and :194 FidMatch{addr: m.imp} are both fed from the same corrupted value, which is why the real function comes out as sub_100001d2b with the ObjC name stranded at 0x100001d2a).
 
   *** WRONG-FIX TRAP: NOTHING IN THE TREE GUARDS strip_thumb, SO DELETING IT GOES GREEN. *** The function exists for a real reason -- on 32-bit ARM the IMP's LSB flags Thumb and is not part of the address -- but both objc fixtures have EVEN IMPs (mod.rs:311 x86-64 pins 0x100000640, mod.rs:378 arm64 pins 0x1000005f0) and there is no ARM32 fixture anywhere. A builder who simply removes the call passes every existing test while silently breaking every 32-bit ARM Mach-O. The fix must be ARCHITECTURE-GATED (strip only on 32-bit ARM), and the PR must carry regression evidence in BOTH directions: an odd-IMP non-ARM case that must survive, and an ARM32/Thumb odd-IMP case that must still be stripped.
 
   Acceptance checked and sound: it is a JSON equality on functions[0].address == 4294974763 (0x100001d2b), which cannot be satisfied spuriously and is exactly what the correct fix produces. No hole, unlike live-simd-string-copies and explicit-stdcall-prototypes-still this round.
-- round 11 TRIAGE (captain): touches kuna-decomp -> kuna-analysis/src/analyzers/objc/methods.rs. The refuter pinned the defect to one line there (strip_thumb applied unconditionally at both method_t decoders, no architecture test); kuna-decomp is not involved. The wrong-fix trap stands and belongs in the builder brief: nothing in the tree guards strip_thumb, so DELETING it goes fully green -- both objc fixtures have even IMPs and there is no ARM32 fixture -- so the fix must be architecture-gated and show both directions.
+- round 11 TRIAGE (captain): touches unlace-decomp -> unlace-analysis/src/analyzers/objc/methods.rs. The refuter pinned the defect to one line there (strip_thumb applied unconditionally at both method_t decoders, no architecture test); unlace-decomp is not involved. The wrong-fix trap stands and belongs in the builder brief: nothing in the tree guards strip_thumb, so DELETING it goes fully green -- both objc fixtures have even IMPs and there is no ARM32 fixture -- so the fix must be architecture-gated and show both directions.
 - implementation retargeted Acceptance to the in-repo `macho_objc_odd_imp` twin so it can be promoted into `tests/cli/`; Reproduction remains the original dataset binary and exact `0x100001d2a` bad-address clause.
 - implementation measured both targets after the fix: the dataset witness resolves `-[CrackMeManager checkCode:]` at `0x100001d2b` with a 290-byte body, and the vendored acceptance resolves `-[Greeter greet:]` at `0x100000641` with a 15-byte body returning `arg1 * 3 + 7`. `scripts.repipe.verify --need x86-64-objective-c --json` reports PASS and the acceptance is promoted verbatim to `tests/cli/x86-64-objective-c.json`.
 - closed: acceptance a-78b86f730467 now PASSES at 093debb64679

@@ -1,6 +1,6 @@
 # The kuna RE-friction loop
 
-**The task**: find out where `kuna` fails an agent that is actually trying to reverse-engineer
+**The task**: find out where `unlace` fails an agent that is actually trying to reverse-engineer
 a binary, and close those gaps — autonomously, with no human in the loop. This file is the
 runbook: an agent (interactive or headless) should be able to run the whole cycle from what is
 written here.
@@ -29,7 +29,7 @@ make binaries && make specs
 tools/repipe/run.sh --preflight        # hard-fails on anything missing
 ```
 
-Preflight requires: `git`, `gh` (authed, `repo` scope), `codex`, `python3`, a built `kuna`,
+Preflight requires: `git`, `gh` (authed, `repo` scope), `codex`, `python3`, a built `unlace`,
 compiled `.sla`, the dataset, and `REPIPE_MIN_FREE_GB` free. It also **fails if
 `bwrap` is unavailable** — see §2, containment is not optional by default.
 
@@ -186,7 +186,7 @@ and `challenges` is pure Python, so only genuinely novel observations ever cost 
 dispatch (except for `kind: absence`, where "there is no `xrefs` subcommand" has no
 interesting root cause) and the verdict is recorded either way.
 
-Before any need is dispatched it is checked against `kuna catalog --json`: if an existing
+Before any need is dispatched it is checked against `unlace catalog --json`: if an existing
 option closes it, it becomes `rejected` with `covered_by_option` — a default-flip candidate for
 the *other* pipeline, not new work here.
 
@@ -203,12 +203,12 @@ That is a standing instruction to both halves of the loop, and it is in both pro
   known this" — because the useful form of that complaint is almost always "kuna should have
   let me say so". Define a function boundary, override a jump table, declare a blob as data
   with a type, steer structuring, fix a prototype, make a rename persist. They are told to
-  check `kuna catalog --json` first: an option that already exists is a discoverability
+  check `unlace catalog --json` first: an option that already exists is a discoverability
   problem, not a missing interface, and that is worth knowing too.
-- **Builders** are told to *expose* before they invent. `kuna-console` registers ~37
+- **Builders** are told to *expose* before they invent. `unlace-console` registers ~37
   intervention-shaped commands — `map function`, `override jumptable`, `force goto`,
   `force datatype`, `parse line`, `retype`, `structure blocks` and the rest — and **none is
-  reachable from the `kuna` binary**. Three very different jobs hide behind "add an
+  reachable from the `unlace` binary**. Three very different jobs hide behind "add an
   interface": wiring something that already works (cheap, the common case), porting a
   registered stub that answers `engine integration not yet ported` (real engine work, take
   the `[PROPOSAL]` route), or adding a genuine new judgement call (that is a `phases.toml`
@@ -230,10 +230,10 @@ Getting the track wrong is the most likely way to waste a builder session.
 | | **`tooling`** (the majority) | **`quality`** | **`perf`** |
 |---|---|---|---|
 | The gap is | a missing or broken capability | kuna's emitted C is wrong | it is too slow |
-| Lives in | `kuna-cli`, `kuna-console`, `kuna-analysis` | `kuna-decomp/src/pN_*/kuna_<slug>.rs` | either |
+| Lives in | `unlace-cli`, `unlace-console`, `unlace-analysis` | `unlace-decomp/src/pN_*/kuna_<slug>.rs` | either |
 | Changes emitted C | **no** | **yes** | must not |
 | `phases.toml` option | **not required** — the rule is "a judgement call ships behind a named option", and a new subcommand is not one | **required for a judgement call** (plus all 8 ritual steps); **forbidden for a strict correctness fix**, which ships always-on with a one-pass stage test (`docs/agents.md` → *Adding features*) | only if output moves |
-| Counters | none | `kuna_phases/tests.rs` (2 asserts + the tier tuple + the count-encoding *test names*), `catalog_bytecompat.rs` (3 asserts + the `phase_catalog.json` fixture), `tests/stages/kuna-catalog.xml`, `kuna-base/src/xml.rs` | none |
+| Counters | none | `kuna_phases/tests.rs` (2 asserts + the tier tuple + the count-encoding *test names*), `catalog_bytecompat.rs` (3 asserts + the `phase_catalog.json` fixture), `tests/stages/kuna-catalog.xml`, `unlace-base/src/xml.rs` | none |
 | Tests | cargo tests + the promoted acceptance probe. **A `tests/stages/` case would be wrong** — that README scopes the corpus to stage-model issues | `tests/stages/gh{angr,dec}-<slug>.xml`: two-pass when option-gated, one pass when always-on | timing probe with a stated noise floor |
 | Speed bar | before/after on the touched path | `scripts.pipeline.timeit`, ≤5% | **3σ and ≥20%** — `returncopysplit` measured a −20%/−12% noise floor on byte-identical output |
 
@@ -257,7 +257,7 @@ git fetch origin && git rebase origin/main          # rebase FIRST
 python3 -m scripts.repipe.counters --fix            # re-derive; never arithmetic
 python3 -m scripts.repipe.mergecheck --against origin/main
 make test && make test-stages && make rust-test && make check-spec
-decompiler/target/release/kuna catalog --check
+decompiler/target/release/unlace catalog --check
 python3 -m scripts.repipe.verify --need <id> --json  # acceptance must be PASS
 tools/pipeline/open_pr.sh --merge feat/re-<slug>
 ```
@@ -308,8 +308,8 @@ agent attacks the new surface.
 
 Three layers, cheapest first:
 
-1. **Track separation.** `tooling` touches kuna-cli/console/analysis + `tests/cli/` +
-   `docs/cli.md`; `quality` touches kuna-decomp + `phases.toml` + the counters +
+1. **Track separation.** `tooling` touches unlace-cli/console/analysis + `tests/cli/` +
+   `docs/cli.md`; `quality` touches unlace-decomp + `phases.toml` + the counters +
    `docs/options.md` + `docs/history.md` + `tests/stages/`. Disjoint sets.
 2. **Named leases** with a TTL and a dead-pid reaper: `merge`, `counter:catalog`,
    `counter:stages-corpus`, `file:phases.toml`, `file:docs/options.md`,
@@ -516,7 +516,7 @@ The eight that were critical, and would each have made the loop unusable or unsa
 |---|---|
 | the loop was **inert** | `run.sh` ran only the housekeeping tick and never `captain.sh`, so 72 h of ticks would advance nothing past `T_IDLE`/`B_IDLE` |
 | every lease and slot was **dead on arrival** | the recorded pid was the ephemeral `state …` CLI process, so `merge` granted to everyone — and `reap` failed **live** workers and released their claims |
-| the probe allowlist was bypassable | basename-only matching: any file named `kuna` ran, and a tester has workspace-write |
+| the probe allowlist was bypassable | basename-only matching: any file named `unlace` ran, and a tester has workspace-write |
 | the sandbox hid one directory | a second full copy of all 250 flags sits in the sibling label repo, and `$HOME` held SSH keys, a GitHub token and 600 past prompts |
 | the gate→cluster seam passed no observation | every clustered need would have been one empty record |
 | `--merge` raced the `full-ci` registration | it could squash-merge before the workspace suite even registered, and failed *open* on a draft-query error |
@@ -641,10 +641,10 @@ types. Reviewing them, I ran the assertion by hand, saw no error, and concluded 
 made a quoting mistake. That was wrong, and the way it was wrong is the lesson.
 
 ```
-kuna decompile <bin> main --assert "prototype main int main(void)"
+unlace decompile <bin> main --assert "prototype main int main(void)"
 unsigned long main(void) { ... }          # exit 0, no error, no warning
 
-kuna decompile <bin> main --assert "prototype main int main(void)" --json
+unlace decompile <bin> main --assert "prototype main int main(void)" --json
   assertions[0].status = "rejected"       # the override was silently discarded
 ```
 

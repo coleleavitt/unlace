@@ -1,7 +1,7 @@
 # FID fixture
 
 The fingerprint fixtures for kuna's FID (Function-ID) port — a tiny, hermetic,
-**regenerable** set used by the `.fid` database + `kuna fid build` generator tests
+**regenerable** set used by the `.fid` database + `unlace fid build` generator tests
 (FID PR3). The design doc (`docs/history/fid-design.md` §7) is retired — see
 `docs/history.md` and git history.
 
@@ -12,11 +12,11 @@ The fingerprint fixtures for kuna's FID (Function-ID) port — a tiny, hermetic,
 | `lib.c` | Three distinctive, self-contained functions (`kuna_crc32`, `kuna_strlen`, `kuna_memset`), each ≥ 4 code units, **no external libc call** — so each body is fully self-contained and its FID full hash is stable across link. `kuna_crc32` is the star: a CRC-32 loop with the magic `0xEDB88320` immediate. |
 | `main.c` | Calls each `kuna_*` (so the linker retains them in the stripped `prog`). |
 | `lib.o` | **Vendored.** The compiled `lib.c` (see *Build* below). |
-| `lib.fid` | **Vendored.** The generated fingerprint DB — the committed output of `kuna fid build` over `lib.o`. |
-| `prog` | **Vendored.** The statically-linked, `-no-pie`, **stripped** x86-64 ELF (`lib.o` + `main.o`), the FID PR4 re-identification target. No symbol table; the FID e2e (`kuna-console/tests/verify_fid.rs`) renames its `sub_<addr>` placeholder back to `kuna_crc32` by full-hash match against `lib.fid`. The pinned VMA of `kuna_crc32` in `prog` is **`0x4017c0`** (`-static -no-pie` keeps it stable; recorded by the e2e as `KUNA_CRC32_VMA`). |
+| `lib.fid` | **Vendored.** The generated fingerprint DB — the committed output of `unlace fid build` over `lib.o`. |
+| `prog` | **Vendored.** The statically-linked, `-no-pie`, **stripped** x86-64 ELF (`lib.o` + `main.o`), the FID PR4 re-identification target. No symbol table; the FID e2e (`unlace-console/tests/verify_fid.rs`) renames its `sub_<addr>` placeholder back to `kuna_crc32` by full-hash match against `lib.fid`. The pinned VMA of `kuna_crc32` in `prog` is **`0x4017c0`** (`-static -no-pie` keeps it stable; recorded by the e2e as `KUNA_CRC32_VMA`). |
 
 The same `lib.o`/`lib.c`/`lib.fid` are mirrored into
-`decompiler/crates/kuna-analysis/tests/fixtures/` as `fid_lib_x86_64.{o,c,fid}`
+`decompiler/crates/unlace-analysis/tests/fixtures/` as `fid_lib_x86_64.{o,c,fid}`
 (the `cargo test` fixtures home — the consistency gate `verify_fid_build.rs` reads
 them there).
 
@@ -33,10 +33,10 @@ gcc -O2 -ffreestanding -fno-stack-protector -c lib.c -o lib.o
 #    (SLEIGHHOME must point at the repo `specs/` with the x86 .sla built:
 #     `make specs`, or `slacomp specs/.../x86-64.slaspec`)
 SLEIGHHOME="$PWD/../../../specs" \
-  kuna fid build lib.o -o lib.fid --lang x86:LE:64:default --cspec gcc
+  unlace fid build lib.o -o lib.fid --lang x86:LE:64:default --cspec gcc
 
 # 3. mirror into the cargo-test fixtures dir
-cp lib.{o,c,fid} ../../../decompiler/crates/kuna-analysis/tests/fixtures/
+cp lib.{o,c,fid} ../../../decompiler/crates/unlace-analysis/tests/fixtures/
 #   …renaming to fid_lib_x86_64.{o,c,fid}
 
 # 4. (PR4) build the stripped re-identification target `prog`.
@@ -51,7 +51,7 @@ strip --strip-all prog                        # kuna_crc32 lands at VMA 0x4017c0
 
 After `strip --strip-all`, `kuna_crc32` is at **`0x4017c0`** (verify with
 `objdump -d prog --start-address=0x4017c0` before the strip, or `nm` the un-stripped
-`prog`). The FID e2e (`kuna-console/tests/verify_fid.rs`) hardcodes that VMA — bump
+`prog`). The FID e2e (`unlace-console/tests/verify_fid.rs`) hardcodes that VMA — bump
 `KUNA_CRC32_VMA` there if a toolchain change moves it. Note step 4 overwrites the
 `-ffreestanding` `lib.o` from step 1 with a plain `-O2` one; `git checkout
 tests/fixtures/fid/lib.o` to restore the vendored (`.fid`-matching) object after
@@ -63,7 +63,7 @@ whenever the FID DB `version` bumps or the hasher/skipper changes.
 
 ## The vendored records
 
-`kuna fid build lib.o` produces (x86:LE:64:default, gcc):
+`unlace fid build lib.o` produces (x86:LE:64:default, gcc):
 
 | function | full_hash | specific_hash | code_unit_size | specific_addl |
 |---|---|---|---|---|

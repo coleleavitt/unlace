@@ -18,17 +18,17 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/fileset.macho</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/fileset.macho</com>
   <com>option kernelcache Widget</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/kernelcache.img4</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/kernelcache.img4</com>
   <com>read symbols</com>
   <com>load function widget_kernel_table</com>
   <com>decompile</com>
   <com>print C</com>
   <com>option kernelcache com.apple.kernel,Widget</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/kernelcache.img4</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/kernelcache.img4</com>
   <com>read symbols</com>
   <com>load function widget_kernel_table</com>
   <com>decompile</com>

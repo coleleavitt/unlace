@@ -2,7 +2,7 @@
 <!-- Authored scalar and packed SSE widening/subtract/add/narrow probes.
      Binary64 arithmetic must survive even when every input is binary32.
      The float-only and conversion-only controls keep their original widths.
-     Native/recompiled comparisons live in kuna-cli/tests/float_precision.rs. -->
+     Native/recompiled comparisons live in unlace-cli/tests/float_precision.rs. -->
 <binaryimage arch="x86:LE:64:default:gcc">
 <bytechunk space="ram" offset="0x100000">
 f30f5ac0f30f5ac9f30f5ad2f20f5ccaf20f58c1f20f5ac0c3f30f1006f30f10

@@ -33,7 +33,7 @@
     cut, so each lane is split off the VALUE.
 
     Bytes: hand-encoded A32, the same body as the vendored fixture
-    `kuna-analysis/tests/fixtures/neonimm_arm_le32`.  `neon_init` fills a
+    `unlace-analysis/tests/fixtures/neonimm_arm_le32`.  `neon_init` fills a
     32-byte stack buffer with two NEON immediates and passes its address to
     `sink`, stubbed `bx lr`; without that call the whole initialization is dead
     code and neither rendering reaches the output.

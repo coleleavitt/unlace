@@ -43,7 +43,7 @@ function renderTopbar(active) {
   document.body.insertAdjacentHTML(
     "afterbegin",
     `<header class="topbar"><div class="wrap">
-       <a class="brand" href="./index.html">kuna <span>observatory</span></a>
+       <a class="brand" href="./index.html">unlace <span>observatory</span></a>
        <nav>${links}</nav>
        <span class="meta">${esc(sha)} · ${esc(status.generated || "")}</span>
      </div></header>`);

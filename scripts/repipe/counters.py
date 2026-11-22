@@ -8,19 +8,19 @@ and the right answer was 87 (docs/decbench-loop.md, "Shared counters in a busy q
 The rule written down there is this file's whole design: **derive every shared counter from
 a fresh capture on the rebased tree, never by arithmetic.** There is deliberately no
 "base + mine + theirs" anywhere below -- every number is measured now, from phases.toml,
-from a live `kuna catalog --json`, and from the files on disk.
+from a live `unlace catalog --json`, and from the files on disk.
 
 The counters, how each is measured, and where each is hard-coded:
 
-    settables (127)         `[[settable]]` blocks in kuna-decomp/phases.toml
+    settables (127)         `[[settable]]` blocks in unlace-decomp/phases.toml
                             -> kuna_phases/tests.rs   2 asserts + the test fn NAME
                             -> catalog_bytecompat.rs  3 FIXTURE.matches asserts + the fn NAME
-    tiers (28/52/47)        row["tier"] tally from `kuna catalog --json`
+    tiers (28/52/47)        row["tier"] tally from `unlace catalog --json`
                             -> kuna_phases/tests.rs   the tuple assert + the test fn NAME
     catalog buckets         field/value tallies over the same catalog rows
                             -> tests/stages/kuna-catalog.xml  per-bucket stringmatch min/max
     stage corpus (222)      tests/datatests/*.xml + tests/stages/*.xml, non-recursive
-                            -> kuna-base/src/xml.rs   "corpus file count drifted"
+                            -> unlace-base/src/xml.rs   "corpus file count drifted"
     next ElementId (4132)   max `ElementId::new(_, N)` for N >= 4000, plus one. No hard-coded
                             site: the convention is "grep for the current highest"
                             (CLAUDE.md, docs/improvement-pipeline.md).
@@ -29,7 +29,7 @@ The test function NAMES are checked as sites in their own right. They encode the
 compiler or test run disagrees with a stale one, and `settable_count_is_117` guarding an
 `assert_eq!(..., 127)` is exactly the artifact a silent auto-merge leaves behind.
 
-`decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json` is NOT rewritten here. It
+`decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json` is NOT rewritten here. It
 is *captured bytes* -- guessing at them is how the byte-compat gate stops meaning anything.
 When it disagrees with the derived settable count this module reports an unfixable drift and
 prints the recapture recipe, read out of catalog_bytecompat.rs's own module header so the
@@ -62,12 +62,12 @@ ELEMENT_ID_BASE = int(os.environ.get("REPIPE_ELEMENT_ID_BASE", "4000"))
 
 CORPUS_DIRS = ("tests/datatests", "tests/stages")
 
-REL_PHASES_TOML = "decompiler/crates/kuna-decomp/phases.toml"
-REL_TESTS_RS = "decompiler/crates/kuna-decomp/src/p0_knowledge/kuna_phases/tests.rs"
-REL_BYTECOMPAT_RS = "decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs"
-REL_CATALOG_FIXTURE = "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json"
+REL_PHASES_TOML = "decompiler/crates/unlace-decomp/phases.toml"
+REL_TESTS_RS = "decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_phases/tests.rs"
+REL_BYTECOMPAT_RS = "decompiler/crates/unlace-decomp/tests/catalog_bytecompat.rs"
+REL_CATALOG_FIXTURE = "decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json"
 REL_CATALOG_XML = "tests/stages/kuna-catalog.xml"
-REL_BASE_XML_RS = "decompiler/crates/kuna-base/src/xml.rs"
+REL_BASE_XML_RS = "decompiler/crates/unlace-base/src/xml.rs"
 
 TIERS = ("core", "transform", "analysis")
 
@@ -229,31 +229,31 @@ def settables_from_phases_toml(repo=None) -> int:
 
 
 def catalog_rows(repo=None, kuna=None) -> list:
-    """The live `kuna catalog --json` rows. A capture, not a parse of the source of truth."""
+    """The live `unlace catalog --json` rows. A capture, not a parse of the source of truth."""
     exe = Path(kuna) if kuna else config.kuna_bin()
     if not exe.exists():
-        raise DeriveError("kuna binary not built at {} (cargo build --release -p kuna-cli)".format(exe))
+        raise DeriveError("kuna binary not built at {} (cargo build --release -p unlace-cli)".format(exe))
     try:
         proc = subprocess.run([str(exe), "catalog", "--json"], cwd=str(_root(repo)),
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               timeout=CATALOG_TIMEOUT)
     except subprocess.TimeoutExpired:
-        raise DeriveError("`kuna catalog --json` timed out after {}s".format(CATALOG_TIMEOUT))
+        raise DeriveError("`unlace catalog --json` timed out after {}s".format(CATALOG_TIMEOUT))
     if proc.returncode != 0:
-        raise DeriveError("`kuna catalog --json` exited {}: {}".format(
+        raise DeriveError("`unlace catalog --json` exited {}: {}".format(
             proc.returncode, proc.stderr.decode("utf-8", "replace").strip()[:400]))
     try:
         data = json.loads(proc.stdout.decode("utf-8"))
     except ValueError as exc:
-        raise DeriveError("`kuna catalog --json` emitted unparseable JSON: {}".format(exc))
+        raise DeriveError("`unlace catalog --json` emitted unparseable JSON: {}".format(exc))
     rows = data.get("settables", data) if isinstance(data, dict) else data
     if not isinstance(rows, list) or not rows:
-        raise DeriveError("`kuna catalog --json` returned no settable rows")
+        raise DeriveError("`unlace catalog --json` returned no settable rows")
     return rows
 
 
 def corpus_counts(repo=None) -> dict:
-    """Non-recursive `*.xml` per corpus dir -- exactly what kuna-base/src/xml.rs walks."""
+    """Non-recursive `*.xml` per corpus dir -- exactly what unlace-base/src/xml.rs walks."""
     out = {}
     for rel in CORPUS_DIRS:
         d = path_of(rel, repo)
@@ -465,7 +465,7 @@ def recapture_recipe(repo=None) -> str:
     idx = doc.find("## Regenerating the fixture")
     body = doc[idx:] if idx >= 0 else doc
     fences = re.findall(r"```sh\n(.*?)```", body, re.S)
-    lead = ("Recapture decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json.\n"
+    lead = ("Recapture decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json.\n"
             "It is CAPTURED BYTES, with NO PROGRAM LOADED so kunaLiveValue returns \"\" and no\n"
             "`current` field is emitted. Never hand-edit it, and never re-capture with a program\n"
             "loaded -- `current` is architecture-dependent and is not a byte contract.\n")

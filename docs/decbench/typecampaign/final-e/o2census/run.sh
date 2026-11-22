@@ -4,7 +4,7 @@ export KUNA_DECBENCH_RESULTS=/home/mahaloz/github/decbench/results/full_run_addr
 export DECBENCH_NO_CACHE=1
 export SLEIGHHOME=/home/mahaloz/kwt/o2census/specs
 export KUNA_SPECS=/home/mahaloz/kwt/o2census/specs
-export KUNA_BIN=/home/mahaloz/kwt/o2census/decompiler/target/release/kuna
+export KUNA_BIN=/home/mahaloz/kwt/o2census/decompiler/target/release/unlace
 export KUNA_TREE=/home/mahaloz/kwt/o2census
 export DECBENCH_PIN=/home/mahaloz/kwt/_final-d/db625
 cd /home/mahaloz/kwt/o2census

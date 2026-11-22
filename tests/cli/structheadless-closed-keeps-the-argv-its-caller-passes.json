@@ -20,11 +20,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/structheadless_argv_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/structheadless_argv_x86_64",
     "binary_sha256": "1f6abce1919e5fbeeabdb590cd4f57d4368efc028496866433ee5850a08403f9",
     "binary_size": 16120,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/structheadless_argv_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/structheadless_argv_x86_64",
     "selector": "obsolete_count",
     "selector_kind": "name"
   },

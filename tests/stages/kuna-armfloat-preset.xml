@@ -52,7 +52,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/armfloat_preset_hard.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armfloat_preset_hard.o</com>
   <com>read symbols</com>
   <com>mode aggressive</com>
   <com>option armfloatreturn off</com>
@@ -91,7 +91,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/armfloat_preset_hard.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armfloat_preset_hard.o</com>
   <com>read symbols</com>
   <com>mode aggressive</com>
   <com>lo fu scale</com>
@@ -128,7 +128,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/armfloat_preset_soft.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armfloat_preset_soft.o</com>
   <com>read symbols</com>
   <com>mode aggressive</com>
   <com>option armfloatreturn off</com>
@@ -146,7 +146,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/armfloat_preset_soft.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armfloat_preset_soft.o</com>
   <com>read symbols</com>
   <com>mode aggressive</com>
   <com>lo fu scale</com>
@@ -162,7 +162,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/armfloat_preset_m4f.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armfloat_preset_m4f.o</com>
   <com>read symbols</com>
   <com>mode aggressive</com>
   <com>option armfloatreturn off</com>
@@ -173,7 +173,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/armfloat_preset_m4f.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armfloat_preset_m4f.o</com>
   <com>read symbols</com>
   <com>mode aggressive</com>
   <com>parse line extern long long fixit(double a);</com>
@@ -182,7 +182,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/armfloat_preset_m7.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armfloat_preset_m7.o</com>
   <com>read symbols</com>
   <com>mode aggressive</com>
   <com>option armfloatreturn off</com>
@@ -195,7 +195,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/armfloat_preset_m7.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armfloat_preset_m7.o</com>
   <com>read symbols</com>
   <com>mode aggressive</com>
   <com>parse line extern long long __aeabi_d2lz(double v);</com>

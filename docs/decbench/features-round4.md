@@ -77,7 +77,7 @@ These change how every number in this round and the next must be read.
 
 **2.1 The scored kuna column is `aggressive`, not `reliable`. `docs/decbench-loop.md` is
 wrong about this.** **[V]** `decbench/decompilers/raw/kuna_raw.py:199-214` builds
-`kuna decompile-all <bin> --json --max-fn-seconds 120`, appends `--mode` **only** if
+`unlace decompile-all <bin> --json --max-fn-seconds 120`, appends `--mode` **only** if
 `DECBENCH_KUNA_MODE` is set, and appends `--option` only from `config.extra_options`, which
 defaults empty. There is no injected `option listing on` anywhere in the command builder. So
 the benchmark ran `--mode auto` = **aggressive for 768 of 803 binaries**. Consequences:

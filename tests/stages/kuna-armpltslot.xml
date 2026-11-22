@@ -5,7 +5,7 @@
     slot's address from are not filed as data references in the
     cross-reference index; the slot is.
 
-    Issue:      kuna-analysis-armpltslot - `kuna xrefs` to an address inside
+    Issue:      unlace-analysis-armpltslot - `unlace xrefs` to an address inside
                 a table placed between the PLT and the GOT answered the PLT
                 stubs (`add ip,ip,#N,20` adds that address as an immediate),
                 and every stub filed its PC value; the slot it jumps through
@@ -20,12 +20,12 @@
     the rule is inert in the rendered C of `main`, which calls `puts`,
     `printf` and `strlen` through the PLT stubs it concerns. The row-level
     proof (the slot as a Read and no partial sum) lives in the cargo gate
-    `decompiler/crates/kuna-console/tests/verify_xreffp.rs`, over the
+    `decompiler/crates/unlace-console/tests/verify_xreffp.rs`, over the
     `xreffp_arm_le32` fixture this case also loads.
 
     The XML wrapper only supplies the harness architecture; the pass clears it
     and loads the real linked ARM fixture (built from
-    decompiler/crates/kuna-analysis/tests/fixtures/xreffp_arm_le32.c).
+    decompiler/crates/unlace-analysis/tests/fixtures/xreffp_arm_le32.c).
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -34,7 +34,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/xreffp_arm_le32</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/xreffp_arm_le32</com>
   <com>option libcnames off</com>
   <com>read symbols</com>
   <com>load function main</com>

@@ -14,11 +14,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/passthrough_callfwd_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/passthrough_callfwd_x86_64",
     "binary_sha256": "30e1c39851d0336f1037b9338849a11b506fa66eed47e85a43554d51cdc264f2",
     "binary_size": 5304,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/passthrough_callfwd_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/passthrough_callfwd_x86_64",
     "selector": "pass_fwd_call",
     "selector_kind": "name"
   },

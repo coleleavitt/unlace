@@ -2,7 +2,7 @@
 <binaryimage arch="AARCH64:LE:64:v8A:default">
 <!--
     AArch64 compact jump tables with no range check, assembled from
-    decompiler/crates/kuna-analysis/tests/fixtures/switchextent_aarch64.s
+    decompiler/crates/unlace-analysis/tests/fixtures/switchextent_aarch64.s
     (the .text and .rodata of switchextent_aarch64).
 
     `unchecked` dispatches twice on a call's result (`bl pick`), through

@@ -2,7 +2,7 @@
 <binaryimage arch="x86:LE:64:default:gcc">
 <!--
     RE-friction round 4, need `argument-recovery-options-still` (challenge
-    69761b7a39e9c4d85c2f9fc1, ELF x86-64 `graphy`): `kuna decompile ...
+    69761b7a39e9c4d85c2f9fc1, ELF x86-64 `graphy`): `unlace decompile ...
     sub_1002c90` calls one helper fifteen times and renders eleven of them with
     five arguments and four with three, from instruction-for-instruction
     identical code:

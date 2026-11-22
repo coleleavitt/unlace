@@ -24,7 +24,7 @@ const dist = resolve(here, '../dist');
 const fx = (n) => join(here, 'fixtures', n);
 
 function fail(m) { console.error(`\x1b[31mFAIL\x1b[0m ${m}`); process.exit(1); }
-if (!existsSync(join(dist, 'kuna_wasm.wasm')) || !existsSync(join(dist, 'specs-small.json')))
+if (!existsSync(join(dist, 'unlace_wasm.wasm')) || !existsSync(join(dist, 'specs-small.json')))
   fail(`dist/ not built — run integrations/web/build.sh first`);
 
 const MIME = {
@@ -51,7 +51,7 @@ await new Promise((r) => server.listen(0, r));
 const base = `http://localhost:${server.address().port}`;
 
 try {
-  const kuna = await loadKuna({ wasmUrl: `${base}/kuna_wasm.wasm`, specRoot: `${base}/specs` });
+  const kuna = await loadKuna({ wasmUrl: `${base}/unlace_wasm.wasm`, specRoot: `${base}/specs` });
 
   // 1. ELF x86-64 — list + decompile one + decompile all (lazily fetches x86-64.sla).
   const elf = new Uint8Array(await readFile(fx('sample.elf')));

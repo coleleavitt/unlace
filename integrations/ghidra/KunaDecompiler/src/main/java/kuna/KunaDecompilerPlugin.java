@@ -16,7 +16,7 @@ import ghidra.framework.plugintool.util.PluginStatus;
  * Swaps Ghidra's native decompiler core for kuna, the Rust port of the Ghidra decompiler.
  *
  * <p>On plugin load (File → Configure → Miscellaneous → KunaDecompilerPlugin) the plugin
- * resolves the {@code kuna_ghidra} binary shipped in this extension's
+ * resolves the {@code unlace_ghidra} binary shipped in this extension's
  * {@code os/<platform>/} directory (or the {@code -Dkuna.decompiler.exe} dev override)
  * and installs it as the executable behind
  * {@code ghidra.app.decompiler.DecompileProcessFactory}, the single choke point through
@@ -44,7 +44,7 @@ import ghidra.framework.plugintool.util.PluginStatus;
 	shortDescription = "Use kuna as the native decompiler core",
 	description = "Swaps the native decompiler core for kuna, the Rust port of the " +
 		"Ghidra decompiler: points ghidra.app.decompiler.DecompileProcessFactory at the " +
-		"kuna_ghidra binary shipped with this extension, so every decompiler consumer in " +
+		"unlace_ghidra binary shipped with this extension, so every decompiler consumer in " +
 		"this Ghidra session (the Decompiler window, analyzers, scripts) spawns kuna " +
 		"instead of the stock 'decompile' process. Tools -> Kuna Decompiler -> " +
 		"'Use Kuna Core' toggles between the kuna core and the stock core; " +
@@ -74,7 +74,7 @@ public class KunaDecompilerPlugin extends Plugin {
 		useKunaAction = new ToggleActionBuilder("Use Kuna Core", getName())
 				.menuPath(ToolConstants.MENU_TOOLS, "Kuna Decompiler", "Use Kuna Core")
 				.description("Checked: future decompiler processes spawn the kuna core " +
-					"(kuna_ghidra). Unchecked: the stock 'decompile' binary. Programs " +
+					"(unlace_ghidra). Unchecked: the stock 'decompile' binary. Programs " +
 					"with an already-running decompiler process keep it until that " +
 					"process restarts (reopen the program, or the process is reset " +
 					"after an error/timeout).")

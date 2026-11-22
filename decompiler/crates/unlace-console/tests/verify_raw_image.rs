@@ -1,0 +1,664 @@
+//! Headerless raw-image bootstrap and address-translation regressions.
+
+use crate::common;
+
+use std::io::Write;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+
+use unlace_base::address::Address;
+use unlace_console::assertions::{self, Body, Directive};
+use unlace_console::engine::{ArmIsa, bootstrap_from_raw};
+use unlace_console::project::decompile_targets;
+use unlace_decomp::varnode::varnode_flags;
+
+struct RawFixture(PathBuf);
+
+impl RawFixture {
+    fn thumb_return_7() -> Self {
+        Self::new("raw-thumb", &[0x07, 0x20, 0x70, 0x47])
+    }
+
+    fn new(stem: &str, bytes: &[u8]) -> Self {
+        let path = common::scratch_file(stem, "bin");
+        std::fs::write(&path, bytes).unwrap();
+        Self(path)
+    }
+
+    fn thumb_return_7_with_spaces() -> Self {
+        let path = common::scratch_file("raw thumb image", "bin");
+        std::fs::write(&path, [0x07, 0x20, 0x70, 0x47]).unwrap();
+        Self(path)
+    }
+}
+
+impl Drop for RawFixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
+}
+
+fn specs() -> Vec<String> {
+    vec![
+        std::env::var("KUNA_SPECS")
+            .unwrap_or_else(|_| repo_root().join("specs").to_string_lossy().into_owned()),
+    ]
+}
+
+fn run_console(script: &str, isa: Option<&str>) -> std::process::Output {
+    let roots = specs();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_decomp_dbg"));
+    command
+        .args(["-sleighpath", &roots[0]])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    match isa {
+        Some(isa) => {
+            command.env(unlace_console::engine::ARM_ISA_ENV, isa);
+        }
+        None => {
+            command.env_remove(unlace_console::engine::ARM_ISA_ENV);
+        }
+    }
+    let mut child = command.spawn().expect("spawn decomp_dbg");
+    child
+        .stdin
+        .as_mut()
+        .expect("console stdin")
+        .write_all(script.as_bytes())
+        .expect("write console commands");
+    child.wait_with_output().expect("wait for decomp_dbg")
+}
+
+#[test]
+fn raw_thumb_maps_base_zero_and_nonzero() {
+    let fixture = RawFixture::thumb_return_7();
+    let path = fixture.0.to_string_lossy();
+    for (base, selected) in [(0, 0), (0x4000, 0x4001)] {
+        let mut program = bootstrap_from_raw(
+            &path,
+            "ARM:LE:32:v4t:default",
+            base,
+            &[base, selected],
+            Some(ArmIsa::Thumb),
+            &specs(),
+        )
+        .expect("bootstrap raw ARM fixture with built specs");
+        program.commit_pending_analysis().unwrap();
+        assert_eq!(program.sections(), vec![(base, 4, 4)]);
+        assert_eq!(program.num_symbols(), 1);
+        let entry = program
+            .find_entry_at(selected)
+            .expect("seeded raw entry must resolve");
+        assert_eq!(entry.addr.get_offset(), base);
+        assert!(program.entry_bytes_mapped(&entry.addr));
+
+        let results = decompile_targets(&mut program, vec![entry], true, false, false);
+        assert_eq!(results.len(), 1);
+        assert!(results[0].error.is_none(), "{:?}", results[0].error);
+        let code = results[0].code.as_deref().unwrap();
+        assert!(
+            code.contains("return 7;"),
+            "unexpected raw Thumb body:\n{code}"
+        );
+    }
+}
+
+#[test]
+fn raw_arm_data_addresses_preserve_their_low_bit() {
+    let fixture = RawFixture::thumb_return_7();
+    let path = fixture.0.to_string_lossy();
+    let mut program = bootstrap_from_raw(
+        &path,
+        "ARM:LE:32:v4t:default",
+        0x4000,
+        &[0x4001],
+        Some(ArmIsa::Thumb),
+        &specs(),
+    )
+    .expect("bootstrap raw ARM fixture with built specs");
+    program.commit_pending_analysis().unwrap();
+    assert_eq!(program.input_address_offset(0x4001).unwrap(), 0x4001);
+    assert_eq!(program.input_code_offset(0x4001).unwrap(), 0x4000);
+    program.set_assertions(vec![
+        Directive {
+            raw: "data 0x4001 char odd_data".into(),
+            body: Body::Data {
+                addr: 0x4001,
+                decl: "char odd_data".into(),
+            },
+        },
+        Directive {
+            raw: "volatile 0x4001+1".into(),
+            body: Body::Volatile {
+                addr: 0x4001,
+                size: 1,
+            },
+        },
+    ]);
+    assertions::apply_program_scoped(&mut program);
+    assert!(
+        program
+            .assertion_outcomes()
+            .iter()
+            .all(|outcome| outcome.status == "applied")
+    );
+    let (_, address, _) = program
+        .global_data_symbol_addresses()
+        .into_iter()
+        .find(|(name, _, _)| name == "odd_data")
+        .expect("odd-address data symbol");
+    assert_eq!(address.get_offset(), 0x4001);
+    let code = program.arch().manage().get_default_code_space().unwrap();
+    let odd = Address::new(std::rc::Rc::clone(code), 0x4001);
+    let even = Address::new(std::rc::Rc::clone(code), 0x4000);
+    assert_ne!(
+        program.arch().symboltab.get_property(&odd) & varnode_flags::volatil,
+        0
+    );
+    assert_eq!(
+        program.arch().symboltab.get_property(&even) & varnode_flags::volatil,
+        0
+    );
+}
+
+#[test]
+fn word_addressed_targets_scale_base_and_entries_to_byte_offsets() {
+    let fixture = RawFixture::new("raw-avr-nops", &[0, 0, 0, 0]);
+    let path = fixture.0.to_string_lossy();
+
+    let mut at_nonzero_base =
+        bootstrap_from_raw(&path, "avr8:LE:16:default", 0x100, &[0x100], None, &specs())
+            .expect("bootstrap raw AVR fixture with built specs");
+    at_nonzero_base.commit_pending_analysis().unwrap();
+    assert_eq!(at_nonzero_base.sections(), vec![(0x200, 4, 4)]);
+    let entry = at_nonzero_base
+        .find_entry_at(0x200)
+        .expect("word-addressed base must become a byte VMA");
+    assert!(at_nonzero_base.entry_bytes_mapped(&entry.addr));
+    assert_eq!(
+        at_nonzero_base.output_code_offset(entry.addr.get_offset()),
+        0x100
+    );
+    assert_eq!(at_nonzero_base.output_code_end_offset(0x201), 0x101);
+
+    let mut at_second_word =
+        bootstrap_from_raw(&path, "avr8:LE:16:default", 0, &[1], None, &specs())
+            .expect("same built AVR8 specification");
+    at_second_word.commit_pending_analysis().unwrap();
+    let entry = at_second_word
+        .find_entry_at(2)
+        .expect("entry word 1 must select file byte offset 2");
+    assert_eq!(entry.addr.get_offset(), 2);
+    assert_eq!(
+        at_second_word.output_code_offset(entry.addr.get_offset()),
+        1
+    );
+    assert!(at_second_word.entry_bytes_mapped(&entry.addr));
+}
+
+#[test]
+fn raw_console_reports_word_addresses_in_target_units() {
+    let fixture = RawFixture::new("raw-word-report", &[0, 0, 0x08, 0x95]);
+    let roots = specs();
+    assert!(
+        PathBuf::from(&roots[0])
+            .join("Ghidra/Processors/Atmel/data/languages/avr8.sla")
+            .exists(),
+        "required processor specs must be available"
+    );
+    let script = format!(
+        "load raw avr8:LE:16:default 0x100 0x101 \"{}\"\n\
+         read symbols\n\
+         functions\n\
+         load addr 0x101\n\
+         decompile\n\
+         region blocks\n\
+         region tree\n\
+         region walk\n\
+         quit\n",
+        fixture.0.display()
+    );
+    let output = run_console(&script, None);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    for expected in [
+        "0x101 sub_101",
+        "[0x101]",
+        "region head=0x101",
+        "walk 0x101",
+    ] {
+        assert!(
+            stdout.contains(expected),
+            "missing {expected:?}:\n{stdout}\n{stderr}"
+        );
+    }
+    for byte_address in [
+        "0x202 sub_101",
+        "[0x202]",
+        "region head=0x202",
+        "walk 0x202",
+    ] {
+        assert!(
+            !stdout.contains(byte_address),
+            "leaked byte address {byte_address:?}:\n{stdout}\n{stderr}"
+        );
+    }
+}
+
+#[test]
+fn raw_map_function_normalizes_an_odd_thumb_pointer() {
+    let fixture = RawFixture::thumb_return_7();
+    let roots = specs();
+    assert!(
+        PathBuf::from(&roots[0])
+            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
+            .exists(),
+        "required processor specs must be available"
+    );
+    let script = format!(
+        "load raw ARM:LE:32:v4t:default 0x4000 0x4000 \"{}\"\n\
+         map function 0x4001 mapped_thumb\n\
+         decompile\n\
+         print C\n\
+         quit\n",
+        fixture.0.display()
+    );
+    let output = run_console(&script, Some("thumb"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert!(stdout.contains("mapped_thumb"), "{stdout}\n{stderr}");
+    assert!(stdout.contains("return 7;"), "{stdout}\n{stderr}");
+}
+
+#[test]
+fn raw_map_address_preserves_an_odd_arm_data_address() {
+    let fixture = RawFixture::new(
+        "raw-thumb-odd-data",
+        &[0x01, 0x48, 0x00, 0x78, 0x70, 0x47, 0, 0, 0x01, 0x40, 0, 0],
+    );
+    let roots = specs();
+    assert!(
+        PathBuf::from(&roots[0])
+            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
+            .exists(),
+        "required processor specs must be available"
+    );
+    let script = format!(
+        "load raw ARM:LE:32:v4t:default 0x4000 0x4001 \"{}\"\n\
+         map address 0x4001 char odd_data\n\
+         readonly 0x4008 4\n\
+         option readonly on\n\
+         read symbols\n\
+         load addr 0x4001\n\
+         decompile\n\
+         print C\n\
+         quit\n",
+        fixture.0.display()
+    );
+    let output = run_console(&script, Some("thumb"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert!(stdout.contains("return odd_data;"), "{stdout}\n{stderr}");
+    assert!(!stdout.contains("return dat_4001;"), "{stdout}\n{stderr}");
+}
+
+#[test]
+fn console_load_raw_preserves_whitespace_in_final_filename() {
+    let fixture = RawFixture::thumb_return_7_with_spaces();
+    let roots = specs();
+    assert!(
+        PathBuf::from(&roots[0])
+            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
+            .exists(),
+        "required processor specs must be available"
+    );
+    let mut child = Command::new(env!("CARGO_BIN_EXE_decomp_dbg"))
+        .args(["-sleighpath", &roots[0]])
+        .env(unlace_console::engine::ARM_ISA_ENV, "thumb")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn decomp_dbg");
+    writeln!(
+        child.stdin.as_mut().expect("console stdin"),
+        "load raw ARM:LE:32:v4t:default 0x4000 0x4001 \"{}\"\nquit",
+        fixture.0.display()
+    )
+    .expect("write console commands");
+    let output = child.wait_with_output().expect("wait for decomp_dbg");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert!(stdout.contains("successfully loaded"), "{stdout}\n{stderr}");
+}
+
+/// (kuna #1288) A raw x86 real-mode image states its code segment when one
+/// segment holds it: CS 0 in the first 64 KiB, else its base paragraph. A near
+/// CALL wraps IP inside that segment and pushes IP; a larger image states none
+/// and takes the linear sum above 64 KiB.
+#[test]
+fn raw_real_mode_images_decode_near_calls_in_their_code_segment() {
+    let image = |size: usize, code: &[(usize, &[u8])]| {
+        let mut bytes = vec![0u8; size];
+        for (at, insn) in code {
+            bytes[*at..*at + insn.len()].copy_from_slice(insn);
+        }
+        bytes
+    };
+    let ret7: &[u8] = &[0xb8, 0x07, 0x00, 0xc3];
+    let cases: [(&str, u64, Vec<u8>, u64, u64); 3] = [
+        // CS 0: IP 0x0103 - 0x7000 wraps to 0x9103.
+        (
+            "raw-x86-com",
+            0x100,
+            image(0x9007, &[(0, &[0xe8, 0x00, 0x90, 0xc3]), (0x9003, ret7)]),
+            0x100,
+            0x9103,
+        ),
+        // C800:FFF0: IP 0xfff3 + 0x7000 wraps to C800:6FF3.
+        (
+            "raw-x86-rom",
+            0xc8000,
+            image(
+                0x10000,
+                &[(0xfff0, &[0xe8, 0x00, 0x70, 0xc3]), (0x6ff3, ret7)],
+            ),
+            0xd7ff0,
+            0xceff3,
+        ),
+        // 132 KiB at 0x10000 states no segment: 0x2b683 + 0x498d.
+        (
+            "raw-x86-large",
+            0x10000,
+            image(
+                0x21000,
+                &[(0x1b680, &[0xe8, 0x8d, 0x49, 0xc3]), (0x20010, ret7)],
+            ),
+            0x2b680,
+            0x30010,
+        ),
+    ];
+    for (stem, base, bytes, caller, callee) in cases {
+        let fixture = RawFixture::new(stem, &bytes);
+        let path = fixture.0.to_string_lossy();
+        let mut program = bootstrap_from_raw(
+            &path,
+            "x86:LE:16:Real Mode:default",
+            base,
+            &[caller],
+            None,
+            &specs(),
+        )
+        .expect("bootstrap raw real-mode fixture with built specs");
+        program.commit_pending_analysis().unwrap();
+        assert!(
+            program.find_entry_at(callee).is_some(),
+            "{stem}: no function at {callee:#x}"
+        );
+        let entry = program
+            .find_entry_at(caller)
+            .expect("seeded raw entry must resolve");
+        let results = decompile_targets(&mut program, vec![entry], true, false, false);
+        assert!(results[0].error.is_none(), "{stem}: {:?}", results[0].error);
+        let code = results[0].code.as_deref().unwrap();
+        assert!(
+            code.contains(&format!("sub_{callee:x}();")),
+            "{stem}:\n{code}"
+        );
+    }
+}
+
+#[test]
+fn ret_transfer_probes_do_not_change_another_functions_return_ip() {
+    use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
+    use unlace_sleigh::translate::PcodeEmit;
+
+    #[derive(Default)]
+    struct PushedIp {
+        saved: Option<(Address, u64)>,
+        pushed: Option<u64>,
+    }
+    impl PcodeEmit for PushedIp {
+        fn dump(
+            &mut self,
+            _: &Address,
+            code: OpCode,
+            out: Option<&VarnodeData>,
+            inputs: &[VarnodeData],
+        ) {
+            if code == OpCode::CPUI_COPY {
+                if let (Some(out), Some(value)) = (
+                    out,
+                    inputs
+                        .first()
+                        .filter(|v| v.get_addr().is_constant() && v.size == 2),
+                ) {
+                    self.saved = Some((out.get_addr(), value.offset));
+                }
+            }
+            if code == OpCode::CPUI_STORE {
+                if let Some(value) = inputs.get(2) {
+                    self.pushed = self
+                        .saved
+                        .as_ref()
+                        .filter(|(at, _)| *at == value.get_addr())
+                        .map(|(_, n)| *n);
+                }
+            }
+        }
+    }
+
+    let mut bytes = vec![0u8; 0x18900];
+    bytes[0x100..0x105].copy_from_slice(&[0xea, 0x00, 0x01, 0x79, 0x18]);
+    bytes[0x18890..0x18894].copy_from_slice(&[0xe8, 0x0d, 0x00, 0xc3]);
+    bytes[0x188a0] = 0xc3;
+    let fixture = RawFixture::new("raw-ret-probe-realcs", &bytes);
+    let program = bootstrap_from_raw(
+        &fixture.0.to_string_lossy(),
+        "x86:LE:16:Real Mode:default",
+        0,
+        &[0x18890],
+        None,
+        &specs(),
+    )
+    .unwrap();
+    let arch = program.arch();
+    let space = arch.manage().get_default_code_space().cloned().unwrap();
+    let probe = Address::new(space.clone(), 0x100);
+    let caller = Address::new(space, 0x18890);
+    let pushed = || {
+        let mut emit = PushedIp::default();
+        arch.translate()
+            .one_instruction(&mut emit, &caller)
+            .unwrap();
+        emit.pushed
+    };
+    assert_eq!(pushed(), Some(0x8893));
+    unlace_console::kuna_retcallchain::kuna_entry_chain_sites(arch.translate(), &probe, 8, 16);
+    assert_eq!(
+        pushed(),
+        Some(0x8893),
+        "an advisory chain walk changed the caller's IP"
+    );
+    unlace_console::kuna_retcallchain::kuna_push_immediate_ret(arch.translate(), &probe, 16);
+    assert_eq!(
+        pushed(),
+        Some(0x8893),
+        "an advisory tail walk changed the caller's IP"
+    );
+
+    // A real far transfer must still teach the decoder the destination's CS.
+    arch.translate()
+        .one_instruction(&mut PushedIp::default(), &probe)
+        .unwrap();
+    assert_eq!(pushed(), Some(0x103));
+}
+
+#[test]
+fn raw_input_rejects_missing_metadata_and_unmapped_entries() {
+    let fixture = RawFixture::thumb_return_7();
+    let path = fixture.0.to_string_lossy();
+
+    let missing_target = bootstrap_from_raw(&path, "", 0, &[0], None, &specs())
+        .err()
+        .expect("missing target must fail")
+        .explain()
+        .to_string();
+    assert!(missing_target.contains("requires --target"));
+
+    let error = match bootstrap_from_raw(
+        &path,
+        "ARM:LE:32:v4t:default",
+        0x4000,
+        &[0x4000],
+        None,
+        &specs(),
+    ) {
+        Ok(_) => panic!("raw ARM input without --isa unexpectedly loaded"),
+        Err(error) => error.explain().to_string(),
+    };
+    assert!(
+        error.contains("requires --isa"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
+fn raw_input_rejects_entry_at_end_of_mapping() {
+    let fixture = RawFixture::thumb_return_7();
+    let path = fixture.0.to_string_lossy();
+    let error = match bootstrap_from_raw(
+        &path,
+        "ARM:LE:32:v4t:default",
+        0x4000,
+        &[0x4004],
+        Some(ArmIsa::Thumb),
+        &specs(),
+    ) {
+        Ok(_) => panic!("out-of-range raw entry unexpectedly loaded"),
+        Err(error) => error.explain().to_string(),
+    };
+    assert!(
+        error.contains("outside mapped range"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
+fn word_addressed_mapping_errors_report_target_units() {
+    let fixture = RawFixture::new("raw-word-bounds", &[0, 0, 0, 0]);
+    let path = fixture.0.to_string_lossy();
+    let error =
+        match bootstrap_from_raw(&path, "avr8:LE:16:default", 0x100, &[0x103], None, &specs()) {
+            Ok(_) => panic!("out-of-range word-addressed entry unexpectedly loaded"),
+            Err(error) => error.explain().to_string(),
+        };
+    assert!(
+        error.contains("raw entry 0x103 is outside mapped range 0x100..0x102"),
+        "unexpected error: {error}"
+    );
+    assert!(
+        !error.contains("0x200..0x204"),
+        "byte bounds leaked: {error}"
+    );
+}
+
+#[test]
+fn raw_input_rejects_empty_images() {
+    let fixture = RawFixture::new("raw-empty", &[]);
+    let path = fixture.0.to_string_lossy();
+    let error = match bootstrap_from_raw(
+        &path,
+        "ARM:LE:32:v4t:default",
+        0,
+        &[0],
+        Some(ArmIsa::Thumb),
+        &specs(),
+    ) {
+        Ok(_) => panic!("empty raw image unexpectedly loaded"),
+        Err(error) => error.explain().to_string(),
+    };
+    assert!(
+        error.contains("raw image is empty"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
+fn raw_input_rejects_mapping_overflow() {
+    let fixture = RawFixture::thumb_return_7();
+    let path = fixture.0.to_string_lossy();
+    let error = match bootstrap_from_raw(
+        &path,
+        "ARM:LE:32:v4t:default",
+        u64::MAX,
+        &[u64::MAX],
+        Some(ArmIsa::Thumb),
+        &specs(),
+    ) {
+        Ok(_) => panic!("overflowing raw mapping unexpectedly loaded"),
+        Err(error) => error.explain().to_string(),
+    };
+    assert!(error.contains("overflows"), "unexpected error: {error}");
+}
+
+/// `funcstart_patterns` on a headerless image: f2 and f3 are reached only
+/// through a function-pointer table (gcc -O0, `.text` of a no-pie build at
+/// 0x401000), so the call-target walk from the one seed misses them, while their
+/// prologues follow a `ret`/`pop rbp` the x86-64 patterns accept.
+#[test]
+fn raw_image_takes_pattern_starts_when_the_option_is_on() {
+    let bytes: Vec<u8> = (0..192).step_by(2).map(|i| u8::from_str_radix(&"554889e5897dfc8b55fc89d001c001d083c0015dc3554889e5897decc745fc00000000c745f800000000eb0a8b45f80145fc8345f8018b45f83b45ec7cee8b45fc5dc3554889e5897dfc8975f88b45fc3345f85dc3554889e5b8000000005dc3"[i..i + 2], 16).unwrap()).collect();
+    let fixture = RawFixture::new("raw-fp-x86-64", &bytes);
+    let path = fixture.0.to_string_lossy();
+    let mut counts = Vec::new();
+    for on in ["off", "on"] {
+        let mut program = bootstrap_from_raw(
+            &path,
+            "x86:LE:64:default",
+            0x401000,
+            &[0x401055],
+            None,
+            &specs(),
+        )
+        .expect("bootstrap raw x86-64 fixture with built specs");
+        program
+            .arch_mut()
+            .set_kuna_option("funcstart_patterns", on)
+            .unwrap();
+        program.commit_pending_analysis().unwrap();
+        counts.push((
+            program.find_entry_at(0x401015).is_some(),
+            program.find_entry_at(0x401043).is_some(),
+        ));
+    }
+    assert_eq!(counts, vec![(false, false), (true, true)]);
+
+    // No seed at all: the pattern sweep alone finds the functions.
+    let mut program = bootstrap_from_raw(&path, "x86:LE:64:default", 0x401000, &[], None, &specs())
+        .expect("a raw image needs no --entry");
+    program
+        .arch_mut()
+        .set_kuna_option("funcstart_patterns", "on")
+        .unwrap();
+    program.commit_pending_analysis().unwrap();
+    for start in [0x401015, 0x401043, 0x401055] {
+        assert!(
+            program.find_entry_at(start).is_some(),
+            "0x{start:x} is a pattern start"
+        );
+    }
+}

@@ -28,7 +28,7 @@ move. `cf2.elf` is 491,004 B — just **under** the 500 KiB threshold — so a n
 today is `aggressive`, which is *not* what the benchmark measured:
 
 ```
-$ kuna decompile-all .../O0/crazyflie/stripped/cf2.elf --json --addr 0x800d00d <mode>
+$ unlace decompile-all .../O0/crazyflie/stripped/cf2.elf --json --addr 0x800d00d <mode>
 --mode reliable  : loc 82  ternaries 2  ifs 17    <- the benchmark's option surface
 --mode aggressive: loc 76  ternaries 5  ifs 14    <- today's product default (iteexpr on)
 ```
@@ -104,7 +104,7 @@ angr (stored, GED 0) reproduces every one of them, including the identity arms:
 ## Analysis — four distinct sub-symptoms, only one is small
 
 Owning phase for all four: **P8**,
-`decompiler/crates/kuna-decomp/src/p8_structure/kuna_iteregion.rs`
+`decompiler/crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs`
 (`match_ite_assignment` / `single_assign_arm` / `cond_cbranch`).
 
 **(B) plain diamond, 2 of 3 re-rolled — the `itecondlist` bug.** Three byte-identical

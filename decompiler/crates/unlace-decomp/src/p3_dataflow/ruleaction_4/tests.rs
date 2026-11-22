@@ -1,0 +1,1656 @@
+// Tests for the `ruleaction_4` rules (lines 4293-5526: RuleLoadVarnode ..
+// RuleCondNegate).  Included into the `mod tests` in ruleaction_4.rs.
+//
+// Each positive test hand-builds the op pattern the C++ `applyOp` matches on a
+// real `Funcdata` and asserts the exact transformation (opcode change, operand
+// rewiring, created constants/ops).  Each early-out guard has a negative test.
+//
+// Coverage spans well over a third of the 19 rules, prioritizing the intricate
+// ones: RuleSubExtComm, RuleSubCancel, RuleSubZext, RuleShiftAnd, RuleShiftSub,
+// RuleHumptyDumpty, RuleDumptyHump, RuleHumptyOr, RuleConcatZext, RuleConcatZero,
+// RuleZextCommute, RuleZextShiftZext, plus the registration shape.
+
+use super::*;
+
+use std::rc::Rc;
+
+use unlace_base::address::Address;
+use unlace_base::space::{
+    AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
+};
+
+use crate::context::{ArchContext, BlockId};
+use crate::dtype::{Datatype, type_metatype};
+
+// ---------------------------------------------------------------------------
+// Fixtures (mirroring funcdata_op/tests.rs)
+// ---------------------------------------------------------------------------
+
+fn build_manager() -> AddrSpaceManager {
+    let mut m = AddrSpaceManager::new();
+    m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
+    m.insert_space(Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "ram",
+        false,
+        8,
+        1,
+        2,
+        addrspace_flags::hasphysical,
+        1,
+        1,
+    )))
+    .unwrap();
+    m
+}
+
+fn build_fd() -> Funcdata {
+    build_fd_with(|_| {})
+}
+
+fn build_fd_with(configure: impl FnOnce(&mut ArchContext)) -> Funcdata {
+    let manage = build_manager();
+    let mut ctx = ArchContext::new(manage);
+    configure(&mut ctx);
+    let glb = Rc::new(ctx);
+    let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
+    let addr = Address::new(ram, 0x1000);
+    Funcdata::new("func", "func", glb, addr, 0x10000000, 0x40).unwrap()
+}
+
+fn ram_space(fd: &Funcdata) -> Rc<AddrSpace> {
+    Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap())
+}
+
+fn dt(size: int4) -> Rc<Datatype> {
+    Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN))
+}
+
+/// A fresh basic block under the bblocks root.
+fn mk_block(fd: &mut Funcdata) -> BlockId {
+    let root = fd.bblocks_ref().root.expect("bblocks root");
+    fd.bblocks_mut().new_block_basic(root)
+}
+
+/// Create an op with `inputs` slots and a given opcode at `off`.
+fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
+    let ram = ram_space(fd);
+    let op = fd.new_op(inputs, Address::new(ram, off));
+    set_opcode(fd, op, opc);
+    op
+}
+
+/// Create a register Varnode of size `s` at ram offset `off`, marked as a
+/// function input so it is *not* free (most rule guards require non-free leaf
+/// operands, exactly as heritaged registers are non-free in a real flow).
+fn mk_vn(fd: &mut Funcdata, s: int4, off: u64) -> VarnodeId {
+    let ram = ram_space(fd);
+    let vn = fd.vbank_mut().create(s, Address::new(ram, off), dt(s));
+    fd.vbank_mut()
+        .set_input(vn, &mut |_, _, _| Ok(()))
+        .expect("mk_vn: set_input")
+}
+
+/// Build a defined Varnode: a `defop` (with output `out`, size `s`) in block
+/// `bl`, fed `ins` on its input slots.  Returns `(defop, out)`.  The op is
+/// inserted live so later `op_insert_before` calls have a parent to anchor to.
+fn mk_def(
+    fd: &mut Funcdata,
+    bl: BlockId,
+    opc: OpCode,
+    s: int4,
+    out_off: u64,
+    ins: &[VarnodeId],
+) -> (OpId, VarnodeId) {
+    let op = mk_op(fd, ins.len() as int4, out_off, opc);
+    for (i, &v) in ins.iter().enumerate() {
+        fd.op_set_input(op, v, i as int4).unwrap();
+    }
+    fd.op_insert(op, bl, None);
+    let out = fd.new_unique_out(s, op).expect("newUniqueOut");
+    (op, out)
+}
+
+// ---------------------------------------------------------------------------
+// registration
+// ---------------------------------------------------------------------------
+
+#[test]
+fn specs_in_definition_order() {
+    let names: Vec<&str> = specs()
+        .iter()
+        .map(|s| {
+            // The ctor's debug name comes from the rule's clone group; we instead
+            // assert order via the rule's own `get_op_list` first opcode, which is
+            // distinctive enough alongside the count.
+            s.group
+        })
+        .collect();
+    assert_eq!(names.len(), 19);
+    // RuleLoadVarnode/RuleStoreVarnode (the first two, in definition order)
+    // register under "stackvars" (coreaction.cc:5939-5940); the other 17 are
+    // "analysis".
+    assert_eq!(names[0], "stackvars");
+    assert_eq!(names[1], "stackvars");
+    assert!(names[2..].iter().all(|g| *g == "analysis"));
+}
+
+#[test]
+fn op_lists_match_cpp() {
+    assert_eq!(
+        RuleLoadVarnode::new().get_op_list(),
+        vec![OpCode::CPUI_LOAD]
+    );
+    assert_eq!(
+        RuleStoreVarnode::new().get_op_list(),
+        vec![OpCode::CPUI_STORE]
+    );
+    assert_eq!(
+        RuleSubExtComm::new().get_op_list(),
+        vec![OpCode::CPUI_SUBPIECE]
+    );
+    assert_eq!(
+        RuleShiftAnd::new().get_op_list(),
+        vec![
+            OpCode::CPUI_INT_RIGHT,
+            OpCode::CPUI_INT_LEFT,
+            OpCode::CPUI_INT_MULT
+        ]
+    );
+    assert_eq!(
+        RuleConcatZext::new().get_op_list(),
+        vec![OpCode::CPUI_PIECE]
+    );
+    assert_eq!(
+        RuleZextCommute::new().get_op_list(),
+        vec![OpCode::CPUI_INT_RIGHT]
+    );
+    assert_eq!(
+        RuleSubZext::new().get_op_list(),
+        vec![OpCode::CPUI_INT_ZEXT]
+    );
+    assert_eq!(RuleHumptyOr::new().get_op_list(), vec![OpCode::CPUI_INT_OR]);
+    assert_eq!(
+        RuleSwitchSingle::new().get_op_list(),
+        vec![OpCode::CPUI_BRANCHIND]
+    );
+    assert_eq!(
+        RuleCondNegate::new().get_op_list(),
+        vec![OpCode::CPUI_CBRANCH]
+    );
+}
+
+#[test]
+fn clone_filters_on_group() {
+    let inside = ActionGroupList::from_names(["analysis"]);
+    let outside = ActionGroupList::from_names(["other"]);
+    assert!(RuleSubCancel::new().clone_rule(&inside).is_some());
+    assert!(RuleSubCancel::new().clone_rule(&outside).is_none());
+}
+
+// ---------------------------------------------------------------------------
+// RuleSubCommute
+// ---------------------------------------------------------------------------
+
+#[test]
+fn shorten_extension_keeps_high_without_recording_lanes() {
+    for high in [false, true] {
+        for collect_lanes in [false, true] {
+            let mut ctx = ArchContext::new(build_manager());
+            ctx.lanerecords = vec![crate::transform::LanedRegister::with_mask(4, 2)];
+            let ram = Rc::clone(ctx.manage().get_space_by_name("ram").unwrap());
+            let mut fd = Funcdata::new(
+                "func",
+                "func",
+                Rc::new(ctx),
+                Address::new(ram, 0x1000),
+                0x10000000,
+                0x40,
+            )
+            .unwrap();
+            let bl = mk_block(&mut fd);
+            let input = mk_vn(&mut fd, 2, 0x10);
+            let (op, original) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 8, 0x20, &[input]);
+            let address = fd.vbank().get(original).unwrap().get_addr().clone();
+            if high {
+                fd.set_high_level();
+            }
+            fd.clear_laned_access_map();
+            if !collect_lanes {
+                fd.set_laned_reg_generated();
+            }
+
+            let output = RuleSubCommute::shorten_extension(&mut fd, op, 4);
+            let vn = fd.vbank().get(output).unwrap();
+            assert_eq!(vn.get_addr(), &address);
+            assert_eq!(vn.get_size(), 4);
+            assert_eq!(vn.get_def(), Some(op));
+            assert_eq!(vn.get_high().is_some(), high);
+            assert_eq!(fd.obank().get(op).unwrap().get_out(), Some(output));
+            assert_eq!(fd.obank().get(op).unwrap().get_in(0), Some(input));
+            assert_eq!(fd.vbank().get(original).unwrap().get_def(), None);
+            assert!(fd.lane_access_snapshot().is_empty());
+        }
+    }
+}
+
+struct ByteCancellationFixture {
+    subpiece: OpId,
+    shift: OpId,
+    producer: OpId,
+    shifted: VarnodeId,
+    shifted_low: VarnodeId,
+    plain_low_op: OpId,
+    plain_low: VarnodeId,
+    mult_out: VarnodeId,
+    inner_out: VarnodeId,
+    root: OpId,
+    preserved: VarnodeId,
+}
+
+fn build_byte_cancellation(
+    fd: &mut Funcdata,
+    shift_amount: Option<u64>,
+    shift_offset: u64,
+    plain_offset: u64,
+    outsize: int4,
+    coefficient: Option<u64>,
+    permutation: u8,
+) -> ByteCancellationFixture {
+    let bl = mk_block(fd);
+    let lhs = mk_vn(fd, 4, 0x10);
+    let rhs = mk_vn(fd, 4, 0x18);
+    let (producer, source) = mk_def(fd, bl, OpCode::CPUI_INT_AND, 4, 0x20, &[lhs, rhs]);
+    let amount = shift_amount
+        .map(|value| fd.new_constant(4, value))
+        .unwrap_or_else(|| mk_vn(fd, 4, 0x28));
+    let (shift, shifted) = mk_def(fd, bl, OpCode::CPUI_INT_LEFT, 4, 0x30, &[source, amount]);
+    let byte_offset = fd.new_constant(4, shift_offset);
+    let (subpiece, shifted_low) = mk_def(
+        fd,
+        bl,
+        OpCode::CPUI_SUBPIECE,
+        outsize,
+        0x38,
+        &[shifted, byte_offset],
+    );
+    let plain_byte_offset = fd.new_constant(4, plain_offset);
+    let (plain_low_op, plain_low) = mk_def(
+        fd,
+        bl,
+        OpCode::CPUI_SUBPIECE,
+        outsize,
+        0x40,
+        &[source, plain_byte_offset],
+    );
+    let amount_for_coefficient = shift_amount.unwrap_or(1);
+    let coefficient = coefficient
+        .unwrap_or_else(|| 0u64.wrapping_sub(1u64 << amount_for_coefficient) & calc_mask(outsize));
+    let coefficient = fd.new_constant(outsize, coefficient);
+    let mult_inputs = if permutation & 1 == 0 {
+        [plain_low, coefficient]
+    } else {
+        [coefficient, plain_low]
+    };
+    let (_mult, mult_out) = mk_def(fd, bl, OpCode::CPUI_INT_MULT, outsize, 0x48, &mult_inputs);
+    let preserved = mk_vn(fd, outsize, 0x50);
+    let inner_inputs = if permutation & 2 == 0 {
+        [mult_out, preserved]
+    } else {
+        [preserved, mult_out]
+    };
+    let (_inner, inner_out) = mk_def(fd, bl, OpCode::CPUI_INT_ADD, outsize, 0x58, &inner_inputs);
+    let root_inputs = if permutation & 4 == 0 {
+        [inner_out, shifted_low]
+    } else {
+        [shifted_low, inner_out]
+    };
+    let (root, _root_out) = mk_def(fd, bl, OpCode::CPUI_INT_ADD, outsize, 0x60, &root_inputs);
+    ByteCancellationFixture {
+        subpiece,
+        shift,
+        producer,
+        shifted,
+        shifted_low,
+        plain_low_op,
+        plain_low,
+        mult_out,
+        inner_out,
+        root,
+        preserved,
+    }
+}
+
+fn attach_copy(fd: &mut Funcdata, input: VarnodeId, off: u64) {
+    let bl = fd
+        .vbank()
+        .get(input)
+        .and_then(|vn| vn.get_def())
+        .and_then(|op| fd.obank().get(op))
+        .and_then(|op| op.get_parent())
+        .unwrap();
+    let copy = mk_op(fd, 1, off, OpCode::CPUI_COPY);
+    fd.op_set_input(copy, input, 0).unwrap();
+    fd.op_insert(copy, bl, None);
+    let size = fd.vbank().get(input).unwrap().get_size();
+    let _copy_out = fd.new_unique_out(size, copy).expect("newUniqueOut");
+}
+
+fn build_extension_shift_subpiece(fd: &mut Funcdata, extension: OpCode) -> (OpId, OpId) {
+    let bl = mk_block(fd);
+    let extended = match extension {
+        OpCode::CPUI_INT_ZEXT => {
+            let input = mk_vn(fd, 1, 0x10);
+            mk_def(fd, bl, extension, 4, 0x20, &[input]).1
+        }
+        OpCode::CPUI_PIECE => {
+            let hi = mk_vn(fd, 2, 0x10);
+            let lo = mk_vn(fd, 2, 0x18);
+            mk_def(fd, bl, extension, 4, 0x20, &[hi, lo]).1
+        }
+        _ => panic!("unsupported extension fixture"),
+    };
+    let variable_amount = mk_vn(fd, 4, 0x28);
+    let (shift, shifted) = mk_def(
+        fd,
+        bl,
+        OpCode::CPUI_INT_LEFT,
+        4,
+        0x30,
+        &[extended, variable_amount],
+    );
+    let offset = fd.new_constant(4, 0);
+    let (subpiece, _) = mk_def(fd, bl, OpCode::CPUI_SUBPIECE, 1, 0x38, &[shifted, offset]);
+    (subpiece, shift)
+}
+
+fn build_divrem_subpiece(fd: &mut Funcdata, opcode: OpCode) -> (OpId, OpId, VarnodeId) {
+    let bl = mk_block(fd);
+    let lhs = mk_vn(fd, 1, 0x10);
+    let rhs = mk_vn(fd, 1, 0x18);
+    let (_zext_lhs, wide_lhs) = mk_def(fd, bl, OpCode::CPUI_INT_ZEXT, 4, 0x20, &[lhs]);
+    let (_zext_rhs, wide_rhs) = mk_def(fd, bl, OpCode::CPUI_INT_ZEXT, 4, 0x28, &[rhs]);
+    let (divrem, wide_result) = mk_def(fd, bl, opcode, 4, 0x30, &[wide_lhs, wide_rhs]);
+    let offset = fd.new_constant(4, 0);
+    let (subpiece, out) = mk_def(
+        fd,
+        bl,
+        OpCode::CPUI_SUBPIECE,
+        1,
+        0x38,
+        &[wide_result, offset],
+    );
+    (subpiece, divrem, out)
+}
+
+fn divrem_commute_fingerprint(opcode: OpCode) -> (int4, OpCode, bool, Vec<OpCode>) {
+    let mut fd = build_fd();
+    let (subpiece, divrem, out) = build_divrem_subpiece(&mut fd, opcode);
+    let changed = RuleSubCommute::new().apply_op(subpiece, &mut fd);
+    let op = fd.obank().get(divrem).unwrap();
+    let input_defs = (0..op.num_input())
+        .map(|slot| {
+            let input = op.get_in(slot).unwrap();
+            let def = fd.vbank().get(input).unwrap().get_def().unwrap();
+            fd.obank().get(def).unwrap().code()
+        })
+        .collect();
+    (changed, op.code(), op.get_out() == Some(out), input_defs)
+}
+
+#[test]
+fn cancelbytearithmetic_folds_all_shift_and_operand_permutations() {
+    for amount in 1..8 {
+        for permutation in 0..8 {
+            let mut fd = build_fd();
+            let fixture =
+                build_byte_cancellation(&mut fd, Some(amount), 0, 0, 1, None, permutation);
+            assert_eq!(RuleSubCommute::new().apply_op(fixture.subpiece, &mut fd), 1);
+            let root = fd.obank().get(fixture.root).unwrap();
+            assert_eq!(root.code(), OpCode::CPUI_COPY);
+            assert_eq!(root.num_input(), 1);
+            assert_eq!(root.get_in(0), Some(fixture.preserved));
+            let shift = fd.obank().get(fixture.shift).unwrap();
+            assert_eq!(shift.code(), OpCode::CPUI_INT_LEFT);
+            assert_eq!(shift.get_out(), Some(fixture.shifted));
+        }
+    }
+}
+
+#[test]
+fn cancelbytearithmetic_declines_shift_and_width_bounds() {
+    let cases = [
+        (Some(0), 0, 1),
+        (Some(1), 1, 1),
+        (None, 0, 1),
+        (Some(8), 0, 1),
+        (Some(1), 0, 2),
+    ];
+    for (amount, offset, width) in cases {
+        let mut fd = build_fd();
+        let fixture = build_byte_cancellation(&mut fd, amount, offset, 0, width, None, 0);
+        assert_eq!(
+            RuleSubCommute::new().apply_op(fixture.subpiece, &mut fd),
+            0,
+            "amount={amount:?}, offset={offset}, width={width}"
+        );
+    }
+}
+
+#[test]
+fn cancelbytearithmetic_declines_wrong_coefficient_source_and_plain_offset() {
+    for case in 0..3 {
+        let mut fd = build_fd();
+        let fixture = build_byte_cancellation(
+            &mut fd,
+            Some(3),
+            0,
+            if case == 2 { 1 } else { 0 },
+            1,
+            if case == 0 { Some(0xf9) } else { None },
+            0,
+        );
+        if case == 1 {
+            let other_source = mk_vn(&mut fd, 4, 0x68);
+            fd.op_set_input(fixture.plain_low_op, other_source, 0)
+                .unwrap();
+        }
+        assert_eq!(RuleSubCommute::new().apply_op(fixture.subpiece, &mut fd), 0);
+        assert_eq!(
+            fd.obank().get(fixture.root).unwrap().code(),
+            OpCode::CPUI_INT_ADD
+        );
+    }
+}
+
+#[test]
+fn cancelbytearithmetic_declines_constant_and_call_or_load_producers() {
+    for case in 0..3 {
+        let mut fd = build_fd();
+        let fixture = build_byte_cancellation(&mut fd, Some(1), 0, 0, 1, None, 0);
+        if case == 0 {
+            let mask = fd.new_constant(4, 0xff);
+            fd.op_set_input(fixture.producer, mask, 1).unwrap();
+        } else {
+            set_opcode(
+                &mut fd,
+                fixture.producer,
+                if case == 1 {
+                    OpCode::CPUI_CALL
+                } else {
+                    OpCode::CPUI_LOAD
+                },
+            );
+        }
+        assert_eq!(RuleSubCommute::new().apply_op(fixture.subpiece, &mut fd), 0);
+        assert_eq!(
+            fd.obank().get(fixture.root).unwrap().code(),
+            OpCode::CPUI_INT_ADD
+        );
+        assert!(fd.obank().get(fixture.producer).is_some());
+    }
+}
+
+#[test]
+fn cancelbytearithmetic_preserves_both_precision_guards() {
+    for high in [false, true] {
+        let mut fd = build_fd();
+        let fixture = build_byte_cancellation(&mut fd, Some(1), 0, 0, 1, None, 0);
+        if high {
+            fd.vbank_mut()
+                .get_mut(fixture.shifted_low)
+                .unwrap()
+                .set_precis_hi();
+        } else {
+            fd.vbank_mut()
+                .get_mut(fixture.shifted_low)
+                .unwrap()
+                .set_precis_lo();
+        }
+        assert_eq!(RuleSubCommute::new().apply_op(fixture.subpiece, &mut fd), 0);
+    }
+}
+
+#[test]
+fn cancelbytearithmetic_preserves_every_single_descendant_guard() {
+    for case in 0..5 {
+        let mut fd = build_fd();
+        let fixture = build_byte_cancellation(&mut fd, Some(1), 0, 0, 1, None, 0);
+        let observed = match case {
+            0 => fixture.shifted,
+            1 => fixture.shifted_low,
+            2 => fixture.plain_low,
+            3 => fixture.mult_out,
+            _ => fixture.inner_out,
+        };
+        attach_copy(&mut fd, observed, 0x70 + case as u64);
+        assert_eq!(RuleSubCommute::new().apply_op(fixture.subpiece, &mut fd), 0);
+    }
+}
+
+#[test]
+fn cancelbytearithmetic_requires_exact_modulo_256_coefficient() {
+    for amount in 1..8 {
+        let expected = 0u64.wrapping_sub(1u64 << amount) & 0xff;
+        for coefficient in [
+            expected.wrapping_sub(1) & 0xff,
+            expected.wrapping_add(1) & 0xff,
+        ] {
+            let mut fd = build_fd();
+            let fixture =
+                build_byte_cancellation(&mut fd, Some(amount), 0, 0, 1, Some(coefficient), 0);
+            assert_eq!(RuleSubCommute::new().apply_op(fixture.subpiece, &mut fd), 0);
+        }
+    }
+}
+
+#[test]
+fn cancelbytearithmetic_leaves_legacy_zext_or_piece_paths_alone() {
+    for extension in [OpCode::CPUI_INT_ZEXT, OpCode::CPUI_PIECE] {
+        let mut fd = build_fd();
+        let (subpiece, _shift) = build_extension_shift_subpiece(&mut fd, extension);
+        assert_eq!(
+            RuleSubCommute::new().apply_op(subpiece, &mut fd),
+            1,
+            "legacy {extension:?} path"
+        );
+    }
+}
+
+#[test]
+fn cancelbytearithmetic_does_not_change_unsigned_division_or_remainder_arms() {
+    for opcode in [OpCode::CPUI_INT_DIV, OpCode::CPUI_INT_REM] {
+        let on = divrem_commute_fingerprint(opcode);
+        assert_eq!(on.0, 1, "the legacy {opcode:?} commute must still apply");
+        assert_eq!(on.1, opcode);
+        assert!(on.2);
+        assert_eq!(on.3, vec![OpCode::CPUI_SUBPIECE, OpCode::CPUI_SUBPIECE]);
+    }
+}
+
+#[test]
+fn cancelbytearithmetic_reaches_a_one_step_fixed_point() {
+    let mut fd = build_fd();
+    let fixture = build_byte_cancellation(&mut fd, Some(1), 0, 0, 1, None, 0);
+    assert_eq!(RuleSubCommute::new().apply_op(fixture.subpiece, &mut fd), 1);
+    assert_eq!(RuleSubCommute::new().apply_op(fixture.subpiece, &mut fd), 0);
+    assert_eq!(
+        fd.obank().get(fixture.root).unwrap().code(),
+        OpCode::CPUI_COPY
+    );
+}
+
+// ---------------------------------------------------------------------------
+// RuleShiftAnd  (pure input rewrite; fully runnable)
+// ---------------------------------------------------------------------------
+
+// `(V & 0xff) << 0  =>  V << 0`  when the AND clears no live bits.
+//
+// A processor-space varnode's nz-mask is the full `u64::MAX` (heritage would
+// later narrow it; the W3 model seeds the conservative all-ones).  The INT_LEFT
+// branch is the one that re-masks `nzm &= calc_mask(invn->getSize())`, so with
+// invn size 1 (fullmask 0xff), mask 0xff, sa 0: `(mask & nzm) == nzm` holds and
+// the AND is bypassed.  (The INT_RIGHT branch never re-masks, so a MAX nz-mask
+// can't be covered there — that is faithful to the C++.)
+#[test]
+fn shiftand_int_left_bypasses_and() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let invn = mk_vn(&mut fd, 1, 0x10);
+    let mask = fd.new_constant(1, 0xff);
+    let (_andop, andout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_AND, 1, 0x20, &[invn, mask]);
+    // shift: (andout) << 0
+    let sa = fd.new_constant(4, 0);
+    let shop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_INT_LEFT);
+    fd.op_set_input(shop, andout, 0).unwrap();
+    fd.op_set_input(shop, sa, 1).unwrap();
+    fd.op_insert(shop, bl, None);
+
+    let res = RuleShiftAnd::new().apply_op(shop, &mut fd);
+    assert_eq!(res, 1);
+    // slot 0 of the shift now reads invn directly (AND bypassed).
+    assert_eq!(fd.obank().get(shop).unwrap().get_in(0), Some(invn));
+    assert_eq!(fd.obank().get(shop).unwrap().code(), OpCode::CPUI_INT_LEFT);
+}
+
+// Early-out: shift amount is not constant.
+#[test]
+fn shiftand_rejects_nonconstant_shift() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let invn = mk_vn(&mut fd, 1, 0x10);
+    let mask = fd.new_constant(1, 0xff);
+    let (_andop, andout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_AND, 1, 0x20, &[invn, mask]);
+    let sa = mk_vn(&mut fd, 4, 0x40); // non-constant
+    let shop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_INT_RIGHT);
+    fd.op_set_input(shop, andout, 0).unwrap();
+    fd.op_set_input(shop, sa, 1).unwrap();
+    fd.op_insert(shop, bl, None);
+    assert_eq!(RuleShiftAnd::new().apply_op(shop, &mut fd), 0);
+}
+
+// Early-out: slot-0 def is not an INT_AND.
+#[test]
+fn shiftand_rejects_non_and_def() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let a = mk_vn(&mut fd, 4, 0x10);
+    let b = mk_vn(&mut fd, 4, 0x18);
+    let (_addop, addout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ADD, 4, 0x20, &[a, b]);
+    let sa = fd.new_constant(4, 0);
+    let shop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_INT_RIGHT);
+    fd.op_set_input(shop, addout, 0).unwrap();
+    fd.op_set_input(shop, sa, 1).unwrap();
+    fd.op_insert(shop, bl, None);
+    assert_eq!(RuleShiftAnd::new().apply_op(shop, &mut fd), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RuleSubCancel  (input/opcode rewrite; fully runnable)
+// ---------------------------------------------------------------------------
+
+// `sub( V & 0xffff, 0 )  =>  sub(V)`  (the INT_AND total-cancel corner).
+#[test]
+fn subcancel_and_total_cancel() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    // outsize = 2, mask = calc_mask(2) = 0xffff.
+    let v = mk_vn(&mut fd, 4, 0x10);
+    let mask = fd.new_constant(4, 0xffff);
+    let (_andop, andout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_AND, 4, 0x20, &[v, mask]);
+    // sub(andout, 0) with output size 2.
+    let off0 = fd.new_constant(4, 0);
+    let subop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, andout, 0).unwrap();
+    fd.op_set_input(subop, off0, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(2, subop).expect("newUniqueOut");
+
+    let res = RuleSubCancel::new().apply_op(subop, &mut fd);
+    assert_eq!(res, 1);
+    // slot 0 now reads V (the AND's thruvn); opcode unchanged (still SUBPIECE).
+    assert_eq!(fd.obank().get(subop).unwrap().get_in(0), Some(v));
+    assert_eq!(fd.obank().get(subop).unwrap().code(), OpCode::CPUI_SUBPIECE);
+}
+
+// `sub( zext(V), 0 )  =>  V`  when out-size == far-in-size (total elimination).
+#[test]
+fn subcancel_zext_total_elimination_to_copy() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    // V size 4; zext to 8; sub(zext, 0) out size 4 -> outsize==farinsize -> COPY.
+    let v = mk_vn(&mut fd, 4, 0x10);
+    let (_zop, zout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 8, 0x20, &[v]);
+    let off0 = fd.new_constant(4, 0);
+    let subop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, zout, 0).unwrap();
+    fd.op_set_input(subop, off0, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut");
+
+    let res = RuleSubCancel::new().apply_op(subop, &mut fd);
+    assert_eq!(res, 1);
+    assert_eq!(fd.obank().get(subop).unwrap().code(), OpCode::CPUI_COPY);
+    assert_eq!(fd.obank().get(subop).unwrap().num_input(), 1);
+    assert_eq!(fd.obank().get(subop).unwrap().get_in(0), Some(v));
+}
+
+// `sub( zext(V), c )  =>  0 (COPY of const 0)` when c >= far-in-size.
+#[test]
+fn subcancel_zext_offset_past_input_yields_zero() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    // V size 2 (farinsize=2); zext to 8; sub(zext, 4) -> farinsize(2) <= offset(4).
+    let v = mk_vn(&mut fd, 2, 0x10);
+    let (_zop, zout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 8, 0x20, &[v]);
+    let off4 = fd.new_constant(4, 4);
+    let subop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, zout, 0).unwrap();
+    fd.op_set_input(subop, off4, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(2, subop).expect("newUniqueOut");
+
+    let res = RuleSubCancel::new().apply_op(subop, &mut fd);
+    assert_eq!(res, 1);
+    assert_eq!(fd.obank().get(subop).unwrap().code(), OpCode::CPUI_COPY);
+    assert_eq!(fd.obank().get(subop).unwrap().num_input(), 1);
+    let in0 = fd.obank().get(subop).unwrap().get_in(0).unwrap();
+    assert!(fd.vbank().get(in0).unwrap().is_constant());
+    assert_eq!(fd.vbank().get(in0).unwrap().get_offset(), 0);
+}
+
+// Early-out: slot-0 def is none of ZEXT/SEXT/AND.
+#[test]
+fn subcancel_rejects_other_def() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let a = mk_vn(&mut fd, 8, 0x10);
+    let b = mk_vn(&mut fd, 8, 0x18);
+    let (_addop, addout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ADD, 8, 0x20, &[a, b]);
+    let off0 = fd.new_constant(4, 0);
+    let subop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, addout, 0).unwrap();
+    fd.op_set_input(subop, off0, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut");
+    assert_eq!(RuleSubCancel::new().apply_op(subop, &mut fd), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RuleShiftSub  (input rewrite + new constant; fully runnable)
+// ---------------------------------------------------------------------------
+
+// `sub( V << 8, 2 )  =>  sub(V, 1)`  (c -= n/8 = 2 - 1 = 1).
+#[test]
+fn shiftsub_rewrites_offset() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 8, 0x10); // insize 8
+    let n = fd.new_constant(4, 8); // shift by 8 bits = 1 byte
+    let (_shop, shout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_LEFT, 8, 0x20, &[v, n]);
+    let c = fd.new_constant(4, 2);
+    let subop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, shout, 0).unwrap();
+    fd.op_set_input(subop, c, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut"); // outsize 4; c+out=1+4=5<=8 ok
+
+    let res = RuleShiftSub::new().apply_op(subop, &mut fd);
+    assert_eq!(res, 1);
+    assert_eq!(fd.obank().get(subop).unwrap().get_in(0), Some(v));
+    let newc = fd.obank().get(subop).unwrap().get_in(1).unwrap();
+    assert!(fd.vbank().get(newc).unwrap().is_constant());
+    assert_eq!(fd.vbank().get(newc).unwrap().get_offset(), 1);
+}
+
+// Early-out: the shift is not a multiple of 8 bits.
+#[test]
+fn shiftsub_rejects_non_byte_shift() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 8, 0x10);
+    let n = fd.new_constant(4, 4); // 4 bits, not a multiple of 8
+    let (_shop, shout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_LEFT, 8, 0x20, &[v, n]);
+    let c = fd.new_constant(4, 2);
+    let subop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, shout, 0).unwrap();
+    fd.op_set_input(subop, c, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut");
+    assert_eq!(RuleShiftSub::new().apply_op(subop, &mut fd), 0);
+}
+
+// Early-out: would not be a natural truncation (c - n/8 < 0).
+#[test]
+fn shiftsub_rejects_negative_offset() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 8, 0x10);
+    let n = fd.new_constant(4, 16); // 2 bytes
+    let (_shop, shout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_LEFT, 8, 0x20, &[v, n]);
+    let c = fd.new_constant(4, 1); // c - n/8 = 1 - 2 = -1
+    let subop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, shout, 0).unwrap();
+    fd.op_set_input(subop, c, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut");
+    assert_eq!(RuleShiftSub::new().apply_op(subop, &mut fd), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RuleHumptyDumpty  (opcode/operand rewrite; fully runnable)
+// ---------------------------------------------------------------------------
+
+// `concat( sub(V,4), sub(V,0) )  =>  V`  (whole thing pieced together).
+#[test]
+fn humptydumpty_whole_to_copy() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let root = mk_vn(&mut fd, 8, 0x10); // root size 8
+    // sub1 = sub(root, 4), size 4 (high half). pos1 = 4.
+    let p4 = fd.new_constant(4, 4);
+    let (_s1, sub1out) = mk_def(&mut fd, bl, OpCode::CPUI_SUBPIECE, 4, 0x20, &[root, p4]);
+    // sub2 = sub(root, 0), size 4 (low half). pos2 = 0.
+    let p0 = fd.new_constant(4, 0);
+    let (_s2, sub2out) = mk_def(&mut fd, bl, OpCode::CPUI_SUBPIECE, 4, 0x28, &[root, p0]);
+    // concat(sub1out, sub2out): vn1 size4 + vn2 size4 == root size8, pos2==0.
+    let cat = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_PIECE);
+    fd.op_set_input(cat, sub1out, 0).unwrap();
+    fd.op_set_input(cat, sub2out, 1).unwrap();
+    fd.op_insert(cat, bl, None);
+    let _catout = fd.new_unique_out(8, cat).expect("newUniqueOut");
+
+    let res = RuleHumptyDumpty::new().apply_op(cat, &mut fd);
+    assert_eq!(res, 1);
+    assert_eq!(fd.obank().get(cat).unwrap().code(), OpCode::CPUI_COPY);
+    assert_eq!(fd.obank().get(cat).unwrap().num_input(), 1);
+    assert_eq!(fd.obank().get(cat).unwrap().get_in(0), Some(root));
+}
+
+// `concat( sub(V,6), sub(V,2) )  =>  sub(V,2)`  (a larger part, not the whole).
+#[test]
+fn humptydumpty_partial_to_subpiece() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let root = mk_vn(&mut fd, 8, 0x10);
+    // sub1 = sub(root, 6) size 2; sub2 = sub(root, 2) size 4.  pos1=6 == pos2(2)+size2(4).
+    let p6 = fd.new_constant(4, 6);
+    let (_s1, sub1out) = mk_def(&mut fd, bl, OpCode::CPUI_SUBPIECE, 2, 0x20, &[root, p6]);
+    let p2 = fd.new_constant(4, 2);
+    let (_s2, sub2out) = mk_def(&mut fd, bl, OpCode::CPUI_SUBPIECE, 4, 0x28, &[root, p2]);
+    let cat = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_PIECE);
+    fd.op_set_input(cat, sub1out, 0).unwrap();
+    fd.op_set_input(cat, sub2out, 1).unwrap();
+    fd.op_insert(cat, bl, None);
+    let _catout = fd.new_unique_out(6, cat).expect("newUniqueOut");
+
+    let res = RuleHumptyDumpty::new().apply_op(cat, &mut fd);
+    assert_eq!(res, 1);
+    assert_eq!(fd.obank().get(cat).unwrap().code(), OpCode::CPUI_SUBPIECE);
+    assert_eq!(fd.obank().get(cat).unwrap().get_in(0), Some(root));
+    let newc = fd.obank().get(cat).unwrap().get_in(1).unwrap();
+    assert_eq!(fd.vbank().get(newc).unwrap().get_offset(), 2); // pos2
+}
+
+// Early-out: the two SUBPIECEs draw from different roots.
+#[test]
+fn humptydumpty_rejects_different_roots() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let root1 = mk_vn(&mut fd, 8, 0x10);
+    let root2 = mk_vn(&mut fd, 8, 0x18);
+    let p4 = fd.new_constant(4, 4);
+    let (_s1, sub1out) = mk_def(&mut fd, bl, OpCode::CPUI_SUBPIECE, 4, 0x20, &[root1, p4]);
+    let p0 = fd.new_constant(4, 0);
+    let (_s2, sub2out) = mk_def(&mut fd, bl, OpCode::CPUI_SUBPIECE, 4, 0x28, &[root2, p0]);
+    let cat = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_PIECE);
+    fd.op_set_input(cat, sub1out, 0).unwrap();
+    fd.op_set_input(cat, sub2out, 1).unwrap();
+    fd.op_insert(cat, bl, None);
+    let _catout = fd.new_unique_out(8, cat).expect("newUniqueOut");
+    assert_eq!(RuleHumptyDumpty::new().apply_op(cat, &mut fd), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RuleDumptyHump  (opcode/operand rewrite; fully runnable)
+// ---------------------------------------------------------------------------
+
+// `sub( concat(V,W), 0 )  =>  W`  (offset 0, draws all of vn2).
+#[test]
+fn dumptyhump_offset0_eliminates() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 4, 0x10); // vn1
+    let w = mk_vn(&mut fd, 4, 0x18); // vn2 (low)
+    let (_cat, catout) = mk_def(&mut fd, bl, OpCode::CPUI_PIECE, 8, 0x20, &[v, w]);
+    let off0 = fd.new_constant(4, 0);
+    let subop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, catout, 0).unwrap();
+    fd.op_set_input(subop, off0, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut"); // out size == vn2 size
+
+    let res = RuleDumptyHump::new().apply_op(subop, &mut fd);
+    assert_eq!(res, 1);
+    assert_eq!(fd.obank().get(subop).unwrap().code(), OpCode::CPUI_COPY);
+    assert_eq!(fd.obank().get(subop).unwrap().num_input(), 1);
+    assert_eq!(fd.obank().get(subop).unwrap().get_in(0), Some(w));
+}
+
+// `sub( concat(V,W), 4 )  =>  V`  (offset reaches into vn1, drawing all of it).
+#[test]
+fn dumptyhump_offset_into_vn1() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 4, 0x10); // vn1 (high)
+    let w = mk_vn(&mut fd, 4, 0x18); // vn2 (low) size 4
+    let (_cat, catout) = mk_def(&mut fd, bl, OpCode::CPUI_PIECE, 8, 0x20, &[v, w]);
+    let off4 = fd.new_constant(4, 4); // offset == vn2 size -> draws from vn1, rel offset 0
+    let subop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, catout, 0).unwrap();
+    fd.op_set_input(subop, off4, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut"); // out size == vn1 size -> COPY
+
+    let res = RuleDumptyHump::new().apply_op(subop, &mut fd);
+    assert_eq!(res, 1);
+    assert_eq!(fd.obank().get(subop).unwrap().code(), OpCode::CPUI_COPY);
+    assert_eq!(fd.obank().get(subop).unwrap().get_in(0), Some(v));
+}
+
+// Early-out: SUBPIECE straddles both halves of the concat.
+#[test]
+fn dumptyhump_rejects_straddle() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 4, 0x10);
+    let w = mk_vn(&mut fd, 4, 0x18); // vn2 size 4
+    let (_cat, catout) = mk_def(&mut fd, bl, OpCode::CPUI_PIECE, 8, 0x20, &[v, w]);
+    let off2 = fd.new_constant(4, 2); // offset 2 < vn2size, but out 4 -> 2+4>4 straddle
+    let subop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, catout, 0).unwrap();
+    fd.op_set_input(subop, off2, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut");
+    assert_eq!(RuleDumptyHump::new().apply_op(subop, &mut fd), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RuleHumptyOr  (constant branch; fully runnable)
+// ---------------------------------------------------------------------------
+
+// `(V & 0xff00) | (V & 0x00ff)  =>  V`  (constants cover all bits of V).
+#[test]
+fn humptyor_constants_cover_all_to_copy() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let a = mk_vn(&mut fd, 2, 0x10); // a size 2 -> calc_mask = 0xffff
+    let bconst = fd.new_constant(2, 0xff00);
+    let cconst = fd.new_constant(2, 0x00ff);
+    let (_and1, and1out) = mk_def(&mut fd, bl, OpCode::CPUI_INT_AND, 2, 0x20, &[a, bconst]);
+    let (_and2, and2out) = mk_def(&mut fd, bl, OpCode::CPUI_INT_AND, 2, 0x28, &[a, cconst]);
+    let orop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_INT_OR);
+    fd.op_set_input(orop, and1out, 0).unwrap();
+    fd.op_set_input(orop, and2out, 1).unwrap();
+    fd.op_insert(orop, bl, None);
+    let _orout = fd.new_unique_out(2, orop).expect("newUniqueOut");
+
+    let res = RuleHumptyOr::new().apply_op(orop, &mut fd);
+    assert_eq!(res, 1);
+    assert_eq!(fd.obank().get(orop).unwrap().code(), OpCode::CPUI_COPY);
+    assert_eq!(fd.obank().get(orop).unwrap().num_input(), 1);
+    assert_eq!(fd.obank().get(orop).unwrap().get_in(0), Some(a));
+}
+
+// `(V & 0x0f00) | (V & 0x00ff)  =>  V & 0x0fff`  (partial coverage -> AND).
+#[test]
+fn humptyor_partial_to_and() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let a = mk_vn(&mut fd, 2, 0x10);
+    let bconst = fd.new_constant(2, 0x0f00);
+    let cconst = fd.new_constant(2, 0x00ff);
+    let (_and1, and1out) = mk_def(&mut fd, bl, OpCode::CPUI_INT_AND, 2, 0x20, &[a, bconst]);
+    let (_and2, and2out) = mk_def(&mut fd, bl, OpCode::CPUI_INT_AND, 2, 0x28, &[a, cconst]);
+    let orop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_INT_OR);
+    fd.op_set_input(orop, and1out, 0).unwrap();
+    fd.op_set_input(orop, and2out, 1).unwrap();
+    fd.op_insert(orop, bl, None);
+    let _orout = fd.new_unique_out(2, orop).expect("newUniqueOut");
+
+    let res = RuleHumptyOr::new().apply_op(orop, &mut fd);
+    assert_eq!(res, 1);
+    assert_eq!(fd.obank().get(orop).unwrap().code(), OpCode::CPUI_INT_AND);
+    assert_eq!(fd.obank().get(orop).unwrap().get_in(0), Some(a));
+    let newc = fd.obank().get(orop).unwrap().get_in(1).unwrap();
+    assert_eq!(fd.vbank().get(newc).unwrap().get_offset(), 0x0fff);
+}
+
+// Early-out: the two ANDs share no operand.
+#[test]
+fn humptyor_rejects_no_shared_operand() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let a = mk_vn(&mut fd, 2, 0x10);
+    let x = mk_vn(&mut fd, 2, 0x14);
+    let bconst = fd.new_constant(2, 0xff00);
+    let cconst = fd.new_constant(2, 0x00ff);
+    let (_and1, and1out) = mk_def(&mut fd, bl, OpCode::CPUI_INT_AND, 2, 0x20, &[a, bconst]);
+    let (_and2, and2out) = mk_def(&mut fd, bl, OpCode::CPUI_INT_AND, 2, 0x28, &[x, cconst]);
+    let orop = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_INT_OR);
+    fd.op_set_input(orop, and1out, 0).unwrap();
+    fd.op_set_input(orop, and2out, 1).unwrap();
+    fd.op_insert(orop, bl, None);
+    let _orout = fd.new_unique_out(2, orop).expect("newUniqueOut");
+    assert_eq!(RuleHumptyOr::new().apply_op(orop, &mut fd), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RuleSubExtComm  (creates a new SUBPIECE; exercises new_unique_out)
+// ---------------------------------------------------------------------------
+
+// `sub(zext(V),0)  =>  zext(V)` when out-size == invn-size (the "doesn't hit
+// extended bits, exactly the input size" -> COPY) and the broader commute.
+//
+// Use: V size 2, zext to 8, sub(zext, 0) out size 4.  out(4)+subcut(0)=4 > invn(2),
+// so it falls to the commute path: subcut(0) < invn(2); subcut==0 so newvn=invn;
+// op becomes zext(invn) (opcode INT_ZEXT, slot0=V).
+#[test]
+fn subextcomm_commutes_to_zext() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 2, 0x10);
+    let (_zop, zout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 8, 0x20, &[v]);
+    let off0 = fd.new_constant(4, 0);
+    let subop = mk_op(&mut fd, 2, 0x40, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, zout, 0).unwrap();
+    fd.op_set_input(subop, off0, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut"); // out size 4
+
+    let res = RuleSubExtComm::new().apply_op(subop, &mut fd);
+    assert_eq!(res, 1);
+    // subcut==0 path: op opcode becomes INT_ZEXT, slot 0 = V, input 1 removed.
+    assert_eq!(fd.obank().get(subop).unwrap().code(), OpCode::CPUI_INT_ZEXT);
+    assert_eq!(fd.obank().get(subop).unwrap().num_input(), 1);
+    assert_eq!(fd.obank().get(subop).unwrap().get_in(0), Some(v));
+}
+
+// `sub(zext(V),0)  =>  COPY(V)` when out-size == invn-size: SUBPIECE misses the
+// extended bits entirely and is exactly the input size.
+#[test]
+fn subextcomm_misses_extbits_to_copy() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 4, 0x10); // invn size 4
+    let (_zop, zout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 8, 0x20, &[v]);
+    let off0 = fd.new_constant(4, 0);
+    let subop = mk_op(&mut fd, 2, 0x40, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, zout, 0).unwrap();
+    fd.op_set_input(subop, off0, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut"); // out(4)+0 <= invn(4) -> misses ext bits
+
+    let res = RuleSubExtComm::new().apply_op(subop, &mut fd);
+    assert_eq!(res, 1);
+    assert_eq!(fd.obank().get(subop).unwrap().code(), OpCode::CPUI_COPY);
+    assert_eq!(fd.obank().get(subop).unwrap().num_input(), 1);
+    assert_eq!(fd.obank().get(subop).unwrap().get_in(0), Some(v));
+}
+
+// Early-out: slot-0 def is not an extension.
+#[test]
+fn subextcomm_rejects_non_extension() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let a = mk_vn(&mut fd, 8, 0x10);
+    let b = mk_vn(&mut fd, 8, 0x18);
+    let (_addop, addout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ADD, 8, 0x20, &[a, b]);
+    let off0 = fd.new_constant(4, 0);
+    let subop = mk_op(&mut fd, 2, 0x40, OpCode::CPUI_SUBPIECE);
+    fd.op_set_input(subop, addout, 0).unwrap();
+    fd.op_set_input(subop, off0, 1).unwrap();
+    fd.op_insert(subop, bl, None);
+    let _subout = fd.new_unique_out(4, subop).expect("newUniqueOut");
+    assert_eq!(RuleSubExtComm::new().apply_op(subop, &mut fd), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RuleConcatZext  (creates an earlier PIECE; exercises new_unique_out)
+// ---------------------------------------------------------------------------
+
+// `concat( zext(V), W )  =>  zext( concat(V,W) )`.
+#[test]
+fn concatzext_commutes() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 2, 0x10); // hi inner, size 2
+    let w = mk_vn(&mut fd, 4, 0x18); // lo, size 4
+    let (_zop, zout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 4, 0x20, &[v]); // zext(V) size 4
+    let cat = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_PIECE);
+    fd.op_set_input(cat, zout, 0).unwrap();
+    fd.op_set_input(cat, w, 1).unwrap();
+    fd.op_insert(cat, bl, None);
+    let _catout = fd.new_unique_out(8, cat).expect("newUniqueOut");
+
+    let res = RuleConcatZext::new().apply_op(cat, &mut fd);
+    assert_eq!(res, 1);
+    // op is now INT_ZEXT with one input = the new PIECE's output.
+    assert_eq!(fd.obank().get(cat).unwrap().code(), OpCode::CPUI_INT_ZEXT);
+    assert_eq!(fd.obank().get(cat).unwrap().num_input(), 1);
+    let newin = fd.obank().get(cat).unwrap().get_in(0).unwrap();
+    let newpiece = fd.vbank().get(newin).unwrap().get_def().unwrap();
+    assert_eq!(fd.obank().get(newpiece).unwrap().code(), OpCode::CPUI_PIECE);
+    // new PIECE has inputs V (inner of the zext) and W, sized V+W.
+    assert_eq!(fd.obank().get(newpiece).unwrap().get_in(0), Some(v));
+    assert_eq!(fd.obank().get(newpiece).unwrap().get_in(1), Some(w));
+    assert_eq!(fd.vbank().get(newin).unwrap().get_size(), 6);
+}
+
+// Early-out: slot-0 def is not a ZEXT.
+#[test]
+fn concatzext_rejects_non_zext() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let a = mk_vn(&mut fd, 4, 0x10);
+    let b = mk_vn(&mut fd, 4, 0x18);
+    let w = mk_vn(&mut fd, 4, 0x20);
+    let (_addop, addout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ADD, 4, 0x28, &[a, b]);
+    let cat = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_PIECE);
+    fd.op_set_input(cat, addout, 0).unwrap();
+    fd.op_set_input(cat, w, 1).unwrap();
+    fd.op_insert(cat, bl, None);
+    let _catout = fd.new_unique_out(8, cat).expect("newUniqueOut");
+    assert_eq!(RuleConcatZext::new().apply_op(cat, &mut fd), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RuleConcatZero  (creates a ZEXT then becomes a shift)
+// ---------------------------------------------------------------------------
+
+// `concat(V, 0)  =>  zext(V) << (8*size0)`.
+#[test]
+fn concatzero_to_zext_shift() {
+    for high in [false, true] {
+        let mut fd = build_fd();
+        let bl = mk_block(&mut fd);
+        let v = mk_vn(&mut fd, 4, 0x10);
+        let zero = fd.new_constant(2, 0);
+        let cat = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_PIECE);
+        fd.op_set_input(cat, v, 0).unwrap();
+        fd.op_set_input(cat, zero, 1).unwrap();
+        fd.op_insert(cat, bl, None);
+        let _catout = fd.new_unique_out(6, cat).expect("newUniqueOut");
+        if high {
+            fd.set_high_level();
+        }
+
+        let res = RuleConcatZero::new().apply_op(cat, &mut fd);
+        assert_eq!(res, 1);
+        assert_eq!(fd.obank().get(cat).unwrap().code(), OpCode::CPUI_INT_LEFT);
+        let saconst = fd.obank().get(cat).unwrap().get_in(1).unwrap();
+        assert_eq!(fd.vbank().get(saconst).unwrap().get_offset(), 16);
+        let zin = fd.obank().get(cat).unwrap().get_in(0).unwrap();
+        assert_eq!(fd.vbank().get(zin).unwrap().get_high().is_some(), high);
+        let zop = fd.vbank().get(zin).unwrap().get_def().unwrap();
+        assert_eq!(fd.obank().get(zop).unwrap().code(), OpCode::CPUI_INT_ZEXT);
+        assert_eq!(fd.obank().get(zop).unwrap().get_in(0), Some(v));
+    }
+}
+
+// Early-out: the low piece is not the constant 0.
+#[test]
+fn concatzero_rejects_nonzero_const() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 4, 0x10);
+    let lo = fd.new_constant(2, 1); // not zero
+    let cat = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_PIECE);
+    fd.op_set_input(cat, v, 0).unwrap();
+    fd.op_set_input(cat, lo, 1).unwrap();
+    fd.op_insert(cat, bl, None);
+    let _catout = fd.new_unique_out(6, cat).expect("newUniqueOut");
+    assert_eq!(RuleConcatZero::new().apply_op(cat, &mut fd), 0);
+}
+
+#[test]
+fn concatzero_preserves_structured_values_for_field_recovery() {
+    for (metatype, kept) in [
+        (type_metatype::TYPE_STRUCT, true),
+        (type_metatype::TYPE_INT, false),
+    ] {
+        let mut fd = build_fd();
+        let block = mk_block(&mut fd);
+        let value = mk_vn(&mut fd, 12, 0x10);
+        let zero = fd.new_constant(4, 0);
+        let (op, output) = mk_def(&mut fd, block, OpCode::CPUI_PIECE, 16, 0x30, &[value, zero]);
+        fd.vbank_mut()
+            .get_mut(output)
+            .unwrap()
+            .update_type(Rc::new(Datatype::new(16, metatype)));
+        assert_eq!(
+            RuleConcatZero::new().apply_op(op, &mut fd),
+            i32::from(!kept),
+            "{metatype:?}"
+        );
+        let code = fd.obank().get(op).unwrap().code();
+        assert_eq!(
+            code,
+            if kept {
+                OpCode::CPUI_PIECE
+            } else {
+                OpCode::CPUI_INT_LEFT
+            }
+        );
+        if kept {
+            assert_eq!(fd.obank().get(op).unwrap().get_in(0), Some(value));
+            assert_eq!(fd.obank().get(op).unwrap().get_in(1), Some(zero));
+        }
+    }
+}
+
+#[test]
+fn every_copy_on_the_chain_to_the_return_resolves_the_whole_container() {
+    use crate::fspec::ProtoStore;
+    {
+        let mut fd = build_fd();
+        let parent = Rc::new(Datatype::new(8, type_metatype::TYPE_STRUCT));
+        let mut store = crate::fspec::ProtoStoreInternal::new(Rc::new(Datatype::new(
+            0,
+            type_metatype::TYPE_VOID,
+        )));
+        store.set_output(&crate::fspec::ParameterPieces {
+            addr: Address::new(ram_space(&fd), 0x80),
+            type_: Some(Rc::clone(&parent)),
+            flags: 0,
+        });
+        fd.get_func_proto_mut().set_store(Box::new(store));
+        fd.get_func_proto_mut().set_output_lock(true);
+        let block = mk_block(&mut fd);
+        let input = mk_vn(&mut fd, 8, 0x10);
+        fd.vbank_mut()
+            .get_mut(input)
+            .unwrap()
+            .update_type_locked(Rc::clone(&parent), true, true);
+        let (first, middle) = mk_def(&mut fd, block, OpCode::CPUI_COPY, 8, 0x20, &[input]);
+        let (second, last) = mk_def(&mut fd, block, OpCode::CPUI_COPY, 8, 0x30, &[middle]);
+        let ret = mk_op(&mut fd, 2, 0x40, OpCode::CPUI_RETURN);
+        let offset = fd.new_constant(4, 0);
+        fd.op_set_input(ret, offset, 0).unwrap();
+        fd.op_set_input(ret, last, 1).unwrap();
+        fd.op_insert(ret, block, None);
+        for (op, slot) in [(first, -1), (first, 0), (second, -1), (second, 0), (ret, 1)] {
+            assert!(
+                crate::kuna_aggregatefields::returns_whole_container(&fd, op, slot, &parent),
+                "op={op:?} slot={slot}"
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RuleZextCommute  (creates an earlier INT_RIGHT)
+// ---------------------------------------------------------------------------
+
+// `zext(V) >> c  =>  zext( V >> c )`.
+#[test]
+fn zextcommute_pushes_shift_inside() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 4, 0x10); // zextin size 4
+    let (_zop, zout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 8, 0x20, &[v]);
+    let c = fd.new_constant(4, 3);
+    let shr = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_INT_RIGHT);
+    fd.op_set_input(shr, zout, 0).unwrap();
+    fd.op_set_input(shr, c, 1).unwrap();
+    fd.op_insert(shr, bl, None);
+    let _shrout = fd.new_unique_out(8, shr).expect("newUniqueOut");
+
+    let res = RuleZextCommute::new().apply_op(shr, &mut fd);
+    assert_eq!(res, 1);
+    // op is now INT_ZEXT, single input = new INT_RIGHT output (sized like zextin).
+    assert_eq!(fd.obank().get(shr).unwrap().code(), OpCode::CPUI_INT_ZEXT);
+    assert_eq!(fd.obank().get(shr).unwrap().num_input(), 1);
+    let newin = fd.obank().get(shr).unwrap().get_in(0).unwrap();
+    assert_eq!(fd.vbank().get(newin).unwrap().get_size(), 4);
+    let newshift = fd.vbank().get(newin).unwrap().get_def().unwrap();
+    assert_eq!(
+        fd.obank().get(newshift).unwrap().code(),
+        OpCode::CPUI_INT_RIGHT
+    );
+    assert_eq!(fd.obank().get(newshift).unwrap().get_in(0), Some(v));
+    assert_eq!(fd.obank().get(newshift).unwrap().get_in(1), Some(c));
+}
+
+#[test]
+fn zextcommute_preserves_wide_shifts_unless_the_count_fits() {
+    for bytes in [1, 2, 4] {
+        for promotion in [false, true] {
+            for constant in [false, true] {
+                let bits = bytes as u64 * 8;
+                let limit = if promotion { bits.max(32) } else { bits };
+                for bound in [0, bits - 1, bits, bits * 2 - 1, 31, 32, 63, u32::MAX as u64] {
+                    let mut fd = build_fd_with(|ctx| ctx.int_promotion = promotion);
+                    let bl = mk_block(&mut fd);
+                    let value = mk_vn(&mut fd, bytes, 0x10);
+                    let (_, extended) =
+                        mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 8, 0x20, &[value]);
+                    let amount = if constant {
+                        fd.new_constant(4, bound)
+                    } else {
+                        let vn = mk_vn(&mut fd, 4, 0x18);
+                        fd.vbank_mut().get_mut(vn).unwrap().set_nz_mask(bound);
+                        vn
+                    };
+                    let (shift, _) = mk_def(
+                        &mut fd,
+                        bl,
+                        OpCode::CPUI_INT_RIGHT,
+                        8,
+                        0x30,
+                        &[extended, amount],
+                    );
+                    let applied = RuleZextCommute::new().apply_op(shift, &mut fd);
+                    assert_eq!(
+                        applied,
+                        (bound < limit) as int4,
+                        "{bytes} bytes, bound {bound}, constant {constant}, promotion {promotion}"
+                    );
+                    let op = fd.obank().get(shift).unwrap();
+                    if bound >= limit {
+                        assert_eq!(op.code(), OpCode::CPUI_INT_RIGHT);
+                        assert_eq!(op.get_in(0), Some(extended));
+                        assert_eq!(op.get_in(1), Some(amount));
+                    } else {
+                        assert_eq!(op.code(), OpCode::CPUI_INT_ZEXT);
+                        let narrow = op.get_in(0).unwrap();
+                        assert_eq!(fd.vbank().get(narrow).unwrap().get_size(), bytes);
+                        let inner = fd.vbank().get(narrow).unwrap().get_def().unwrap();
+                        let inner = fd.obank().get(inner).unwrap();
+                        assert_eq!(inner.code(), OpCode::CPUI_INT_RIGHT);
+                        assert_eq!(inner.get_in(0), Some(value));
+                        assert_eq!(inner.get_in(1), Some(amount));
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RuleSubZext  (the intricate sub-then-zext masking rule)
+// ---------------------------------------------------------------------------
+
+// `zext( sub(V,0) )  =>  V & mask`  (offset 0 -> bypass truncation, AND with mask).
+#[test]
+fn subzext_offset0_to_and_mask() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let basevn = mk_vn(&mut fd, 4, 0x10); // base size 4; out size must equal base size
+    let off0 = fd.new_constant(4, 0);
+    // sub(base, 0) size 2.
+    let (_sub, subout) = mk_def(&mut fd, bl, OpCode::CPUI_SUBPIECE, 2, 0x20, &[basevn, off0]);
+    // zext(subout) out size 4 (== base size).
+    let zop = mk_op(&mut fd, 1, 0x30, OpCode::CPUI_INT_ZEXT);
+    fd.op_set_input(zop, subout, 0).unwrap();
+    fd.op_insert(zop, bl, None);
+    let _zout = fd.new_unique_out(4, zop).expect("newUniqueOut");
+
+    let res = RuleSubZext::new().apply_op(zop, &mut fd);
+    assert_eq!(res, 1);
+    // op becomes INT_AND; slot 0 bypasses to base, slot 1 = mask = calc_mask(2).
+    assert_eq!(fd.obank().get(zop).unwrap().code(), OpCode::CPUI_INT_AND);
+    assert_eq!(fd.obank().get(zop).unwrap().get_in(0), Some(basevn));
+    let maskc = fd.obank().get(zop).unwrap().get_in(1).unwrap();
+    assert_eq!(fd.vbank().get(maskc).unwrap().get_offset(), 0xffff);
+}
+
+#[test]
+fn subzext_reassigned_output_keeps_cover() {
+    for high in [false, true] {
+        for shifted in [false, true] {
+            let mut fd = build_fd();
+            let bl = mk_block(&mut fd);
+            let basevn = mk_vn(&mut fd, 4, 0x10);
+            let offset = fd.new_constant(4, 1);
+            let (_, small) = mk_def(
+                &mut fd,
+                bl,
+                OpCode::CPUI_SUBPIECE,
+                2,
+                0x20,
+                &[basevn, offset],
+            );
+            let small = if shifted {
+                let amount = fd.new_constant(4, 1);
+                mk_def(
+                    &mut fd,
+                    bl,
+                    OpCode::CPUI_INT_RIGHT,
+                    2,
+                    0x28,
+                    &[small, amount],
+                )
+                .1
+            } else {
+                small
+            };
+            let (zop, _) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 4, 0x30, &[small]);
+            if high {
+                fd.set_high_level();
+            }
+
+            assert_eq!(RuleSubZext::new().apply_op(zop, &mut fd), 1);
+            let op = fd.obank().get(zop).unwrap();
+            assert_eq!(op.code(), OpCode::CPUI_INT_AND);
+            let output = op.get_in(0).unwrap();
+            let vn = fd.vbank().get(output).unwrap();
+            assert_eq!(vn.get_size(), 4);
+            assert_eq!(vn.get_high().is_some(), high);
+            assert_eq!(vn.cover().is_some(), high);
+            let shift = fd.obank().get(vn.get_def().unwrap()).unwrap();
+            assert_eq!(shift.code(), OpCode::CPUI_INT_RIGHT);
+            assert_eq!(shift.get_out(), Some(output));
+            assert_eq!(shift.get_in(0), Some(basevn));
+            assert_eq!(
+                fd.vbank()
+                    .get(shift.get_in(1).unwrap())
+                    .unwrap()
+                    .get_offset(),
+                if shifted { 9 } else { 8 }
+            );
+            assert_eq!(
+                fd.vbank().get(op.get_in(1).unwrap()).unwrap().get_offset(),
+                if shifted { 0x7fff } else { 0xffff }
+            );
+        }
+    }
+}
+
+// Early-out: sub base size != zext output size (not "truncate then extend to same").
+#[test]
+fn subzext_rejects_size_mismatch() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let basevn = mk_vn(&mut fd, 8, 0x10); // base size 8
+    let off0 = fd.new_constant(4, 0);
+    let (_sub, subout) = mk_def(&mut fd, bl, OpCode::CPUI_SUBPIECE, 2, 0x20, &[basevn, off0]);
+    let zop = mk_op(&mut fd, 1, 0x30, OpCode::CPUI_INT_ZEXT);
+    fd.op_set_input(zop, subout, 0).unwrap();
+    fd.op_insert(zop, bl, None);
+    let _zout = fd.new_unique_out(4, zop).expect("newUniqueOut"); // out 4 != base 8
+    assert_eq!(RuleSubZext::new().apply_op(zop, &mut fd), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RuleConcatLeftShift  (creates concat(concat(V,W),0))
+// ---------------------------------------------------------------------------
+
+// `concat(V, zext(W) << 8)  =>  concat( concat(V,W), 0 )` (sa multiple of 8,
+//  shifts to most-significant boundary).
+#[test]
+fn concatleftshift_rejoins() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 2, 0x10); // vn1
+    let w = mk_vn(&mut fd, 1, 0x18); // inner of zext, size 1
+    // zext(W) size 2 (tmpvn).  sa=8 -> sa/8=1; 1 + w(1) == tmp(2) ok.
+    let (_zop, zout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 2, 0x20, &[w]);
+    let sa = fd.new_constant(4, 8);
+    let (_shop, shout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_LEFT, 2, 0x28, &[zout, sa]);
+    let cat = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_PIECE);
+    fd.op_set_input(cat, v, 0).unwrap();
+    fd.op_set_input(cat, shout, 1).unwrap();
+    fd.op_insert(cat, bl, None);
+    let _catout = fd.new_unique_out(4, cat).expect("newUniqueOut"); // out size 4
+
+    let res = RuleConcatLeftShift::new().apply_op(cat, &mut fd);
+    assert_eq!(res, 1);
+    // op stays PIECE; slot0 = new concat(V,W) (size 3), slot1 = const 0 size 1.
+    assert_eq!(fd.obank().get(cat).unwrap().code(), OpCode::CPUI_PIECE);
+    let newin = fd.obank().get(cat).unwrap().get_in(0).unwrap();
+    assert_eq!(fd.vbank().get(newin).unwrap().get_size(), 3);
+    let inner = fd.vbank().get(newin).unwrap().get_def().unwrap();
+    assert_eq!(fd.obank().get(inner).unwrap().code(), OpCode::CPUI_PIECE);
+    assert_eq!(fd.obank().get(inner).unwrap().get_in(0), Some(v));
+    assert_eq!(fd.obank().get(inner).unwrap().get_in(1), Some(w));
+    let zc = fd.obank().get(cat).unwrap().get_in(1).unwrap();
+    assert!(fd.vbank().get(zc).unwrap().is_constant());
+    assert_eq!(fd.vbank().get(zc).unwrap().get_offset(), 0);
+    assert_eq!(fd.vbank().get(zc).unwrap().get_size(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// RuleZextShiftZext  (zext(zext(a)) collapse path)
+// ---------------------------------------------------------------------------
+
+// `zext( zext(a) )  =>  zext(a)`  (the inner-ZEXT collapse: op's slot0 -> a).
+#[test]
+fn zextshiftzext_collapses_double_zext() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let a = mk_vn(&mut fd, 2, 0x10);
+    let (_inner, innerout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ZEXT, 4, 0x20, &[a]);
+    let outer = mk_op(&mut fd, 1, 0x30, OpCode::CPUI_INT_ZEXT);
+    fd.op_set_input(outer, innerout, 0).unwrap();
+    fd.op_insert(outer, bl, None);
+    let _outerout = fd.new_unique_out(8, outer).expect("newUniqueOut");
+
+    let res = RuleZextShiftZext::new().apply_op(outer, &mut fd);
+    assert_eq!(res, 1);
+    // op stays INT_ZEXT but now reads `a` directly.
+    assert_eq!(fd.obank().get(outer).unwrap().code(), OpCode::CPUI_INT_ZEXT);
+    assert_eq!(fd.obank().get(outer).unwrap().get_in(0), Some(a));
+}
+
+// Early-out: inner of ZEXT(...) is neither ZEXT nor INT_LEFT.
+#[test]
+fn zextshiftzext_rejects_other_inner() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let a = mk_vn(&mut fd, 4, 0x10);
+    let b = mk_vn(&mut fd, 4, 0x18);
+    let (_addop, addout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_ADD, 4, 0x20, &[a, b]);
+    let outer = mk_op(&mut fd, 1, 0x30, OpCode::CPUI_INT_ZEXT);
+    fd.op_set_input(outer, addout, 0).unwrap();
+    fd.op_insert(outer, bl, None);
+    let _outerout = fd.new_unique_out(8, outer).expect("newUniqueOut");
+    assert_eq!(RuleZextShiftZext::new().apply_op(outer, &mut fd), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RuleConcatCommute  (commute PIECE with INT_OR const)
+// ---------------------------------------------------------------------------
+
+// `concat( V, W | c )  =>  concat(V,W) | c`  (i==1 path, INT_OR).
+#[test]
+fn concatcommute_or_lower() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let v = mk_vn(&mut fd, 2, 0x10); // hi
+    let w = mk_vn(&mut fd, 2, 0x18); // lo inner
+    let c = fd.new_constant(2, 0x00ff);
+    let (_orop, orout) = mk_def(&mut fd, bl, OpCode::CPUI_INT_OR, 2, 0x20, &[w, c]);
+    let cat = mk_op(&mut fd, 2, 0x30, OpCode::CPUI_PIECE);
+    fd.op_set_input(cat, v, 0).unwrap();
+    fd.op_set_input(cat, orout, 1).unwrap();
+    fd.op_insert(cat, bl, None);
+    let _catout = fd.new_unique_out(4, cat).expect("newUniqueOut");
+
+    let res = RuleConcatCommute::new().apply_op(cat, &mut fd);
+    assert_eq!(res, 1);
+    // i==0 (V) is not written so skipped; i==1 fires.  op becomes INT_OR with
+    // slot0 = new concat(V,W) and slot1 = const c (unshifted for the i==1 case).
+    assert_eq!(fd.obank().get(cat).unwrap().code(), OpCode::CPUI_INT_OR);
+    let newin = fd.obank().get(cat).unwrap().get_in(0).unwrap();
+    let inner = fd.vbank().get(newin).unwrap().get_def().unwrap();
+    assert_eq!(fd.obank().get(inner).unwrap().code(), OpCode::CPUI_PIECE);
+    assert_eq!(fd.obank().get(inner).unwrap().get_in(0), Some(v));
+    assert_eq!(fd.obank().get(inner).unwrap().get_in(1), Some(w));
+    let cc = fd.obank().get(cat).unwrap().get_in(1).unwrap();
+    assert_eq!(fd.vbank().get(cc).unwrap().get_offset(), 0x00ff);
+}
+
+#[test]
+fn loadvarnode_promotes_only_proven_disjoint_or_offsets() {
+    for (offset, mask, expected) in [
+        (0x120, 0x120, Some(0x124)),
+        (0x124, 0x124, None),
+        (0x120, u64::MAX, None),
+    ] {
+        for commuted in [false, true] {
+            let mut fd = build_fd();
+            let bl = mk_block(&mut fd);
+            // A constant pseudo-spacebase is the existing global-space form.
+            // The CLI regression exercises the same rewrite on real frame SSA.
+            let base = fd.new_constant(8, 0);
+            fd.vbank_mut().get_mut(base).unwrap().set_spacebase();
+            let displacement = fd.new_constant(8, offset);
+            let (_, address) = mk_def(
+                &mut fd,
+                bl,
+                OpCode::CPUI_INT_ADD,
+                8,
+                0x20,
+                &[base, displacement],
+            );
+            fd.vbank_mut().get_mut(address).unwrap().set_nz_mask(mask);
+            let word = fd.new_constant(8, 4);
+            let inputs = if commuted {
+                [word, address]
+            } else {
+                [address, word]
+            };
+            let (_, pointer) = mk_def(&mut fd, bl, OpCode::CPUI_INT_OR, 8, 0x30, &inputs);
+            let space = fd.new_constant(8, ram_space(&fd).get_index() as u64);
+            let (load, _) = mk_def(&mut fd, bl, OpCode::CPUI_LOAD, 4, 0x40, &[space, pointer]);
+            let changed = RuleLoadVarnode::new().apply_op(load, &mut fd);
+            if let Some(expected) = expected {
+                assert_eq!(changed, 1);
+                assert_eq!(fd.obank().get(load).unwrap().code(), OpCode::CPUI_COPY);
+                let input = fd.obank().get(load).unwrap().get_in(0).unwrap();
+                let value = fd.vbank().get(input).unwrap();
+                assert_eq!(value.get_offset(), expected);
+                assert_eq!(value.get_size(), 4);
+                assert_eq!(value.get_space().get_name(), "ram");
+            } else {
+                assert_eq!(changed, 0);
+                assert_eq!(fd.obank().get(load).unwrap().code(), OpCode::CPUI_LOAD);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Stub-affected rules: assert the documented early-out
+// ---------------------------------------------------------------------------
+
+// RuleLoadVarnode: a LOAD whose space operand (0x18) is not a valid spacebase
+// constant and whose pointer is a plain non-spacebase Varnode is not a spacebase
+// load -> `check_spacebase` returns None -> the rule is a no-op (0).  This pins
+// only the negative case; positive spacebase-recovery behavior (the marking, the
+// gather, the symbol paint, the stack-pointer-flow solve) is pinned directly by
+// the unit tests in `coreaction_stackptr` / `funcdata_spacebase`'s test modules.
+#[test]
+fn loadvarnode_stub_noop() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let ptr = mk_vn(&mut fd, 8, 0x10);
+    let spc = mk_vn(&mut fd, 8, 0x18); // space operand (annotation in real life)
+    let load = mk_op(&mut fd, 2, 0x20, OpCode::CPUI_LOAD);
+    fd.op_set_input(load, spc, 0).unwrap();
+    fd.op_set_input(load, ptr, 1).unwrap();
+    fd.op_insert(load, bl, None);
+    let _out = fd.new_unique_out(4, load).expect("newUniqueOut");
+    assert_eq!(RuleLoadVarnode::new().apply_op(load, &mut fd), 0);
+}
+
+// RuleSwitchSingle: a BRANCHIND whose block has != 1 out-edge early-outs (0).
+#[test]
+fn switchsingle_rejects_multi_out_block() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    // No out-edges added -> sizeOut() == 0 != 1.
+    let br = mk_op(&mut fd, 1, 0x20, OpCode::CPUI_BRANCHIND);
+    let v = mk_vn(&mut fd, 8, 0x10);
+    fd.op_set_input(br, v, 0).unwrap();
+    fd.op_insert(br, bl, None);
+    assert_eq!(RuleSwitchSingle::new().apply_op(br, &mut fd), 0);
+}
+
+// RuleCondNegate: a CBRANCH without the boolean_flip flag early-outs (0).
+#[test]
+fn condnegate_rejects_unflipped() {
+    let mut fd = build_fd();
+    let bl = mk_block(&mut fd);
+    let cond = mk_vn(&mut fd, 1, 0x10);
+    let target = fd.new_constant(8, 0x2000);
+    let cb = mk_op(&mut fd, 2, 0x20, OpCode::CPUI_CBRANCH);
+    fd.op_set_input(cb, target, 0).unwrap();
+    fd.op_set_input(cb, cond, 1).unwrap();
+    fd.op_insert(cb, bl, None);
+    // boolean_flip not set -> early-out.
+    assert_eq!(RuleCondNegate::new().apply_op(cb, &mut fd), 0);
+}

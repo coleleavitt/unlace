@@ -5,7 +5,7 @@ group_id: kuna::option-catalog
 status: feature-candidate
 tier: A
 margin: 0
-fresh_verdict: "`readonly` is not the exception — ALL 38 upstream-inherited ArchOptions are absent from `kuna catalog`, and at least 8 of them measurably change emitted C on today's build via `--option`."
+fresh_verdict: "`readonly` is not the exception — ALL 38 upstream-inherited ArchOptions are absent from `unlace catalog`, and at least 8 of them measurably change emitted C on today's build via `--option`."
 option_closing: null
 feature_slug: catalog-upstream-options
 scope: small
@@ -15,7 +15,7 @@ confidence: high
 ## What was filed
 
 Round 1's loose thread (`docs/decbench/features.md`): *"`readonly` is registered without a
-`settableTable` row, so it is invisible to `kuna catalog` and therefore to any agent
+`settableTable` row, so it is invisible to `unlace catalog` and therefore to any agent
 sweeping options by symptom. Check whether other Ghidra-inherited options share that gap."*
 
 They all do. `readonly` is not an oversight; it is one member of an entire uncatalogued
@@ -26,24 +26,24 @@ family.
 ### 1. The kuna-owned half is perfectly in sync — the gap is elsewhere
 
 ```
-$ kuna catalog --json | (count) -> 83
+$ unlace catalog --json | (count) -> 83
 KUNA_OPTION_NAMES                  -> 83
 in KUNA_OPTION_NAMES not in phases.toml settableTable: []
 in phases.toml settableTable not in KUNA_OPTION_NAMES: []
 ```
 
-`kuna catalog --check` (`kuna-cli/src/catalog.rs:221`) enforces **bidirectional** equality
+`unlace catalog --check` (`unlace-cli/src/catalog.rs:221`) enforces **bidirectional** equality
 between the emitted catalog and `KUNA_OPTION_NAMES`, and it is green. So the contract that
 exists is being honoured; the problem is what the contract does not cover.
 
 ### 2. All 38 upstream ArchOptions are invisible
 
-`decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs` contains 38 `impl ArchOption`
+`decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs` contains 38 `impl ArchOption`
 blocks whose names are the ported Ghidra `OptionDatabase` set. Probing each against the
 catalog:
 
 ```
-$ for o in <38 names>; do kuna catalog --option $o; done
+$ for o in <38 names>; do unlace catalog --option $o; done
 aliasblock               invisible      inplaceops               invisible
 allowcontextset          invisible      integerformat            invisible
 analyzeforloops          invisible      jumpload                 invisible
@@ -65,14 +65,14 @@ indentincrement          invisible      warning                  invisible
 inferconstptr            invisible
 ```
 
-**38 / 38 invisible.** Zero of them appear in `kuna catalog`, `kuna catalog --json`,
+**38 / 38 invisible.** Zero of them appear in `unlace catalog`, `unlace catalog --json`,
 `docs/options.md`, or the `symptoms` index an agent greps.
 
 ### 3. They are nonetheless a live `--option` surface that changes emitted C
 
-`kuna-cli/src/decompile_all.rs:455 apply_runtime_options` routes any name **not** in
+`unlace-cli/src/decompile_all.rs:455 apply_runtime_options` routes any name **not** in
 `KUNA_OPTION_NAMES` through `registry().find_element(name, 0)` into `OptionDatabase::set`.
-So `kuna decompile-all <bin> --option readonly on` works today. A/B on three stripped
+So `unlace decompile-all <bin> --option readonly on` works today. A/B on three stripped
 corpus binaries (changed lines in the full `decompile-all` output vs a no-flag run):
 
 | option | value | O0 coreutils/factor | O0 coreutils/ptx | O0 cronie/crontab | O2-noinline iproute2/ip |
@@ -98,11 +98,11 @@ changed lines on `ip`, 87 on `crontab`. Seven more upstream options change outpu
 ### 4. Three of the 38 are not even reachable
 
 ```
-$ kuna decompile-all factor --option hideextensions on
+$ unlace decompile-all factor --option hideextensions on
 error: option hideextensions: Unknown option
-$ kuna decompile-all factor --option splitdatatype off
+$ unlace decompile-all factor --option splitdatatype off
 error: option splitdatatype: Unknown data-type split option: off
-$ kuna decompile-all factor --option warning off
+$ unlace decompile-all factor --option warning off
 error: option warning: Bad action/rule specifier: off
 ```
 
@@ -119,20 +119,20 @@ control API — documents 83 of the 121 options the binary actually accepts, and
 omits include the ones that flip read-only constant propagation, constant-pointer
 inference, for-loop recovery, jump-table bounds, cast printing, and integer radix. An agent
 sweeping `use_when`/`symptoms` for "stores into .rodata that the binary never performs"
-cannot find `readonly`, because as far as `kuna catalog --json` is concerned it does not
+cannot find `readonly`, because as far as `unlace catalog --json` is concerned it does not
 exist. Round 1 hit this exact wall on `netns_add`.
 
 This is the `docs/improvement-pipeline.md` *provenance contract* being satisfied only on the
 half of the surface that was born after the contract. CLAUDE.md's rule — *"anything that can
-change emitted C ships behind a named option ... `kuna catalog --check` must stay green"* —
+change emitted C ships behind a named option ... `unlace catalog --check` must stay green"* —
 is enforced by a check that structurally cannot see the upstream family, because
 `cmd_check` compares the catalog to `KUNA_OPTION_NAMES` and the upstream options are not in
 that list by construction.
 
 **Owning phase: P0** (knowledge/configuration plane). Owning files:
-`decompiler/crates/kuna-decomp/phases.toml`,
-`decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs`,
-`decompiler/crates/kuna-cli/src/catalog.rs`.
+`decompiler/crates/unlace-decomp/phases.toml`,
+`decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs`,
+`decompiler/crates/unlace-cli/src/catalog.rs`.
 
 **Not a metric artifact, not covered by an option, not already fixed.** It has zero GED
 value and zero direct correctness value — it is a *discoverability* defect, which is exactly
@@ -199,7 +199,7 @@ into `UPSTREAM_OPTION_ELEMENTS` or deleted; that is a separate one-line judgemen
 
 ### The blocker nobody has noticed
 
-Adding a `settableTable` row alone **fails `kuna catalog --check`**: `cmd_check`
+Adding a `settableTable` row alone **fails `unlace catalog --check`**: `cmd_check`
 (`catalog.rs:233-246`) reports `catalog row "readonly" matches no registered kuna option
 (stale)`. Adding the name to `KUNA_OPTION_NAMES` instead **breaks dispatch**, because both
 `apply_runtime_options` (`decompile_all.rs:457`) and the console `IfcOption`
@@ -219,7 +219,7 @@ Two viable shapes; recommend the second.
 2. **Teach `cmd_check` the upstream class** (recommended, smaller and truthful). Leave
    `KUNA_OPTION_NAMES` alone; relax `cmd_check`'s `cat.difference(&registered)` arm to also
    accept a name that resolves in `UPSTREAM_OPTION_ELEMENTS`. ~6 lines in
-   `kuna-cli/src/catalog.rs`, no dispatch change, and the two dispatch sites keep working
+   `unlace-cli/src/catalog.rs`, no dispatch change, and the two dispatch sites keep working
    unmodified because upstream names still fall through to `OptionDatabase`. Rows omit
    `live_field`/`live_true`/`live_false` — an established pattern (18 analysis gates and
    `loweredswitch`/`stackguard`/`namestyle` already do).
@@ -236,7 +236,7 @@ files, adding 16 rows costs:
 | `tests/fixtures/phase_catalog.json` | the **byte-for-byte** catalog fixture (`assert_eq!(rust, FIXTURE)`) | regenerate |
 | `tests/stages/kuna-catalog.xml:40,44` | `#5 use_when` / `#9 change_kind` are `min="10" max="160"` | **no bump** (99 < 160) |
 | `tests/stages/kuna-catalog.xml:41,42,43` | `#6/#7/#8` exact buckets keyed on `source_decompiler: "angr"` / `change_kind: "structure-recovery"` / `"opt-in-tool"` | **no bump** if every new row uses `source_decompiler = "ghidra-upstream"` and `change_kind = "presentation-default"` or `"analysis-enablement"` |
-| `docs/options.md` | `kuna catalog --markdown >` | regenerate |
+| `docs/options.md` | `unlace catalog --markdown >` | regenerate |
 | `docs/spec/` | the P0 chapter | prose |
 
 So: ~5 hand-edited count asserts, one regenerated fixture, one regenerated doc, 16 TOML rows

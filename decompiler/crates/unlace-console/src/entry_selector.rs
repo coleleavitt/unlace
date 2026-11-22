@@ -1,0 +1,282 @@
+//! Function selectors and object-coordinate provenance shared by front-ends.
+
+use std::fmt;
+
+use unlace_base::address::Address;
+
+/// A stable coordinate in a relocatable input object.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectLocation {
+    pub section_index: usize,
+    pub section: String,
+    pub offset: u64,
+}
+
+/// Why an entry address exists in the loaded program.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryProvenance {
+    /// Code or a symbol from a normal linked/XML image.
+    Mapped,
+    /// A definition backed by a section in a relocatable object.
+    DefinedObject,
+    /// An undefined/import symbol assigned a synthetic address for call naming.
+    UndefinedExternal,
+}
+
+/// A user-facing function selector shared by the console, native CLI and WASM
+/// front-ends.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EntrySelector {
+    Name(String),
+    Numeric(u64),
+    SectionOffset { section: String, offset: u64 },
+    SectionIndexOffset { section_index: usize, offset: u64 },
+}
+
+impl EntrySelector {
+    /// Parse `.section+0xOFFSET`, `SECTION_INDEX:0xOFFSET`, a `0xVMA`, or a
+    /// function name. Bare numeric tokens are intentionally left as names here;
+    /// callers implementing an explicit `--addr` surface construct
+    /// [`EntrySelector::Numeric`] after applying that surface's number grammar.
+    pub fn parse(token: &str) -> Self {
+        if let Some((section, offset)) = token.split_once('+') {
+            if section.starts_with('.') {
+                if let Some(offset) = parse_number(offset) {
+                    return Self::SectionOffset {
+                        section: section.to_string(),
+                        offset,
+                    };
+                }
+            }
+        }
+        if let Some((section_index, offset)) = token.split_once(':') {
+            if let (Ok(section_index), Some(offset)) =
+                (section_index.parse::<usize>(), parse_number(offset))
+            {
+                return Self::SectionIndexOffset {
+                    section_index,
+                    offset,
+                };
+            }
+        }
+        if token.starts_with("0x") || token.starts_with("0X") {
+            if let Some(value) = parse_number(token) {
+                return Self::Numeric(value);
+            }
+        }
+        Self::Name(token.to_string())
+    }
+
+    pub(crate) fn display(&self) -> String {
+        match self {
+            Self::Name(name) => name.clone(),
+            Self::Numeric(vma) => format!("0x{vma:x}"),
+            Self::SectionOffset { section, offset } => format!("{section}+0x{offset:x}"),
+            Self::SectionIndexOffset {
+                section_index,
+                offset,
+            } => format!("{section_index}:0x{offset:x}"),
+        }
+    }
+}
+
+fn parse_number(token: &str) -> Option<u64> {
+    let token = token.trim();
+    let digits = token
+        .strip_prefix("0x")
+        .or_else(|| token.strip_prefix("0X"))
+        .unwrap_or(token);
+    (!digits.is_empty())
+        .then(|| u64::from_str_radix(digits, 16).ok())
+        .flatten()
+}
+
+/// A name the image does carry, offered when a by-name selector missed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NameSuggestion {
+    pub name: String,
+    pub address: u64,
+}
+
+/// A name that labels a data object rather than a function: its address and
+/// the section holding it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataName {
+    pub address: u64,
+    pub section: Option<String>,
+}
+
+/// A selector did not identify exactly one usable entry.
+#[derive(Debug, Clone)]
+pub enum EntryLookupError {
+    NotFound {
+        selector: String,
+        /// The nearest spelling the image carries, when one exists.
+        suggestion: Option<NameSuggestion>,
+        /// How many entries carry a name the image supplied rather than one the
+        /// engine minted. Zero is a stripped image, where no name can select.
+        named_entries: usize,
+        /// The data object the name labels instead, when it labels one.
+        data: Option<DataName>,
+    },
+    Unmapped {
+        selector: String,
+        relocatable: bool,
+    },
+    Ambiguous {
+        selector: String,
+        candidates: Vec<FunctionEntry>,
+        /// Was this loaded from a relocatable object? Only there do the
+        /// section coordinates a `.section+0xOFFSET` selector needs exist, and
+        /// only there is every candidate's address a synthetic load VMA.
+        relocatable: bool,
+    },
+    BodylessImport {
+        selector: String,
+        name: String,
+        address: u64,
+    },
+}
+
+impl fmt::Display for EntryLookupError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotFound {
+                selector,
+                suggestion,
+                named_entries,
+                data,
+            } => {
+                write!(f, "no function matches {selector:?}")?;
+                if let Some(data) = data {
+                    write!(f, "; it names data at 0x{:x}", data.address)?;
+                    if let Some(section) = &data.section {
+                        write!(f, " in {section}")?;
+                    }
+                    return write!(f, ", not code -- `unlace read` shows its bytes");
+                }
+                match suggestion {
+                    Some(near) => {
+                        write!(f, "; did you mean {:?} (0x{:x})?", near.name, near.address)
+                    }
+                    // Nothing is appended for a stripped image: a front-end's
+                    // own advice (`--addr`) is the only thing left to say, and
+                    // it says it.
+                    None if *named_entries > 0 => write!(
+                        f,
+                        "; this image names {named_entries} function{}, none spelled that way",
+                        if *named_entries == 1 { "" } else { "s" }
+                    ),
+                    None => Ok(()),
+                }
+            }
+            Self::Unmapped {
+                selector,
+                relocatable,
+            } => {
+                write!(f, "address {selector} is not mapped in this input")?;
+                if *relocatable {
+                    write!(
+                        f,
+                        "; relocatable objects use synthetic load VMAs—select a definition with `.section+0xOFFSET` or `SECTION_INDEX:0xOFFSET`"
+                    )?;
+                }
+                Ok(())
+            }
+            Self::Ambiguous {
+                selector,
+                candidates,
+                relocatable,
+            } => {
+                writeln!(f, "selector {selector:?} is ambiguous; candidates:")?;
+                for candidate in candidates {
+                    match &candidate.object_location {
+                        Some(location) => writeln!(
+                            f,
+                            "  {} at {}+0x{:x} (section {}, synthetic 0x{:x}, {})",
+                            candidate.name,
+                            location.section,
+                            location.offset,
+                            location.section_index,
+                            candidate.addr.get_offset(),
+                            candidate.binding.as_deref().unwrap_or("unknown binding")
+                        )?,
+                        // A linked image is mapped where it was linked for, so
+                        // only a relocatable load and an undefined external are
+                        // given an address that is not the program's own.
+                        None => writeln!(
+                            f,
+                            "  {} at {}0x{:x}",
+                            candidate.name,
+                            if *relocatable
+                                || candidate.provenance == EntryProvenance::UndefinedExternal
+                            {
+                                "synthetic "
+                            } else {
+                                ""
+                            },
+                            candidate.addr.get_offset()
+                        )?,
+                    }
+                }
+                if *relocatable {
+                    return write!(
+                        f,
+                        "use a section-qualified selector to choose one candidate"
+                    );
+                }
+                // A linked image has no section coordinates to qualify with, so
+                // the address is the only selector that separates these.
+                write!(f, "use an address selector to choose one candidate:")?;
+                for (i, candidate) in candidates.iter().enumerate() {
+                    write!(
+                        f,
+                        "{} --addr 0x{:x}",
+                        if i == 0 { "" } else { "," },
+                        candidate.addr.get_offset()
+                    )?;
+                }
+                Ok(())
+            }
+            Self::BodylessImport {
+                selector,
+                name,
+                address,
+            } => write!(
+                f,
+                "selector {selector:?} identifies import {name} at 0x{address:x}; \
+                 the IAT slot contains a loader-written pointer, not a function body"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for EntryLookupError {}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ObjectSectionLocation {
+    pub(crate) index: usize,
+    pub(crate) name: String,
+    pub(crate) vma: u64,
+    pub(crate) size: u64,
+}
+
+/// One canonical function entry for whole-program and explicit selection.
+#[derive(Debug, Clone)]
+pub struct FunctionEntry {
+    /// The most informative name at this entry.
+    pub name: String,
+    /// The entry address, Thumb-bit normalized on an ARM-family spec.
+    pub addr: Address,
+    /// Every other name this same entry carries, in preference order.
+    pub aliases: Vec<String>,
+    /// The entry's byte extent: an upper-bound clip to the next entry or the
+    /// end of its containing code section. Zero when it cannot be measured.
+    pub size: u64,
+    /// Original object-file coordinate for an `ET_REL`/relocatable definition.
+    pub object_location: Option<ObjectLocation>,
+    /// Defined/mapped versus genuinely undefined/import provenance.
+    pub provenance: EntryProvenance,
+    /// Object symbol binding (`local`, `global`, `weak`, or `unknown`).
+    pub binding: Option<String>,
+}

@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 0
 covered_by_option: libproto
-touches: [decompiler/crates/kuna-analysis]
+touches: [decompiler/crates/unlace-analysis]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/575
@@ -118,7 +118,7 @@ _none recorded_
 
 - filed by cluster.py from 1 observation(s)
 captain T_DEDUP r3: SPLIT out of the same 5-observation cluster. Not an argument-count or ABI gap: RCX still holds the destination at the call and a value stored THROUGH RCX is emitted in its place, which is a dataflow substitution.
-captain T_TRIAGE r3: track quality and touches kuna-decomp CONFIRMED: the probe is a plain `kuna decompile` of one function and the complaint is the emitted C. Touches left at the crate because the phase is not yet identified -- a null destination in a copy is plausibly p3 dataflow or p5/p6 type-and-variable work, and guessing narrower would mislead the builder. Hypothesis is inconclusive and unrefuted (single instance, credibility 0.7): reproduce before designing.
+captain T_TRIAGE r3: track quality and touches unlace-decomp CONFIRMED: the probe is a plain `unlace decompile` of one function and the complaint is the emitted C. Touches left at the crate because the phase is not yet identified -- a null destination in a copy is plausibly p3 dataflow or p5/p6 type-and-variable work, and guessing narrower would mislead the builder. Hypothesis is inconclusive and unrefuted (single instance, credibility 0.7): reproduce before designing.
 captain T_TRIAGE r3: repaired the missing probe/acceptance `target` block (binary_rel + sha256 + size, source dataset) -- without it {{BIN}} could not resolve and the need was unclosable by B_DONE and invisible to regression detection. Verified: acceptance now RUNS and FAILS on cf5234ac, which is the state a filed need must be in.
 - closed: acceptance a-045c2e212a05 now PASSES at
   `b1f0b4c1a7b4d1d36bf5def703bba27f4b538bf2`.

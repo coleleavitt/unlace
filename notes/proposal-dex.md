@@ -43,16 +43,16 @@ DEX format document (source.android.com/docs/core/runtime/dex-format); the
 engine pieces are ports of `ruleaction.cc`, `typeop.cc`, `jumptable.cc`,
 `printc.cc` and `printjava.cc`.
 
-1. **Parser** — `kuna-analysis/src/loader/dex.rs`: header, string/type/proto/
+1. **Parser** — `unlace-analysis/src/loader/dex.rs`: header, string/type/proto/
    field/method ids, class defs, `class_data_item` and `code_item`. Plain data,
    bounds-checked, no allocation per string until asked.
-2. **Load** — `kuna-console` recognises `dex\n0NN\0`, maps the whole file
+2. **Load** — `unlace-console` recognises `dex\n0NN\0`, maps the whole file
    read-only at `ram:0` (one segment, as Ghidra's `.dex` block), selects
    `Dalvik:LE:32:DEX_Android12` (all DEX files `d8` emits decode with it;
    `--target` overrides), and installs one function symbol per method with
    code at `code_off + 16`, named `pkg.Class.method` (`_<addr>` added to
    overloads, as Ghidra's uniquifier does).
-3. **DEX model on the architecture** — `kuna-decomp/src/p0_knowledge/kuna_dex.rs`
+3. **DEX model on the architecture** — `unlace-decomp/src/p0_knowledge/kuna_dex.rs`
    holds what the engine asks: per-entry register layout, method/field/type/
    string tables. It answers three upstream questions:
    * the constant pool (`ConstantPoolDex::getRecord`) — records are built on

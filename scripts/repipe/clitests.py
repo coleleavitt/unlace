@@ -38,7 +38,7 @@ def run_one(path, reps=None):
     # Refuse rather than skip: a dataset-backed probe here would pass on a developer's box
     # and fail in CI, which is worse than not having the test. The predicate is the one
     # `verify --promote` admitted the probe under, so the two can never disagree -- a probe
-    # that needs no binary at all (`kuna decompile --help`) is runnable anywhere.
+    # that needs no binary at all (`unlace decompile --help`) is runnable anywhere.
     ok, why = verify.vendorable(doc)
     if not ok:
         return name, False, {"error": "%s -- this corpus must run without the dataset" % why}

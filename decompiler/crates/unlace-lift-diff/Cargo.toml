@@ -1,0 +1,28 @@
+# unlace-lift-diff: the self-test entry point for the W5 lift differential.
+#
+# This crate is a THIN binary shim — it exists only so the declared item gate
+# `cargo run -p unlace-lift-diff -- --self-test` resolves a package by that name.
+# All logic lives in `unlace-harness::corpus` (the B2 structural differential, the
+# corpus case table, the bootstrap + extractor).  The same `run_self_test()` is
+# shared with the `cargo test -p unlace-harness --test integration lift_diff::` integration test,
+# so the bin and the test exercise identical code.
+[package]
+name = "unlace-lift-diff"
+description = "kuna Rust port: self-test driver for the B2 lift differential (delegates to unlace-harness)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "unlace-lift-diff"
+path = "src/main.rs"
+
+[dependencies]
+# Path dependency (unlace-harness is not in [workspace.dependencies]; this keeps the
+# workspace manifest untouched).
+unlace-harness = { path = "../unlace-harness" }
+
+[lints]
+workspace = true

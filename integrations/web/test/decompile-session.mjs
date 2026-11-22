@@ -358,8 +358,8 @@ assert.equal(stripComment('comment 0x10 see #3'), 'comment 0x10 see', 'the CLI c
 assert.equal(shellQuote('sample.elf'), 'sample.elf');
 assert.equal(shellQuote('my file.elf'), "'my file.elf'");
 assert.equal(shellQuote("it's"), "'it'\\''s'");
-assert.equal(cliCommand('sample.elf', 'main'), 'kuna decompile sample.elf main --assert @sample.elf.kuna');
-assert.equal(cliCommand('a b.exe', 'sub_401000'), "kuna decompile 'a b.exe' sub_401000 --assert @'a b.exe.kuna'");
+assert.equal(cliCommand('sample.elf', 'main'), 'unlace decompile sample.elf main --assert @sample.elf.kuna');
+assert.equal(cliCommand('a b.exe', 'sub_401000'), "unlace decompile 'a b.exe' sub_401000 --assert @'a b.exe.kuna'");
 {
   const s = new Session();
   s.setVar(MAIN, 'v1', { name: 'total', type: 'unsigned long' });
@@ -374,7 +374,7 @@ assert.equal(cliCommand('a b.exe', 'sub_401000'), "kuna decompile 'a b.exe' sub_
   const text = s.toFileText({ binary: 'sample.elf', hash: 'sha256:ab', time: new Date(0), target: 'main', nameOf });
   const lines = text.trim().split('\n');
   assert.equal(lines[0], '# kuna study-view session (one --assert directive per line)');
-  assert.ok(lines.includes('# replay: kuna decompile sample.elf main --assert @sample.elf.kuna'));
+  assert.ok(lines.includes('# replay: unlace decompile sample.elf main --assert @sample.elf.kuna'));
   assert.ok(lines.includes('# saved: 1970-01-01T00:00:00.000Z'));
   const body = lines.filter((l) => stripComment(l));
   assert.deepEqual(body, [

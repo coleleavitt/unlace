@@ -35,7 +35,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/sharedpush_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/sharedpush_pe_i386.exe</com>
   <com>read symbols</com>
   <com>load addr 0x401000</com>
   <com>decompile</com>

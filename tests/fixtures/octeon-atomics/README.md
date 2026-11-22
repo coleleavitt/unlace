@@ -50,5 +50,5 @@ is included.
 The tests assert memory preservation and an uncertain SC result, independently
 of any executor's reservation choices. SAA/SAAD start at Plus; LA and ZCB/ZCBT
 start at II. Generic MIPS collision controls and operand-capture checks live
-in `kuna-sleigh/tests/octeon_core.rs`. No hardware concurrency, cache, MMU,
+in `unlace-sleigh/tests/octeon_core.rs`. No hardware concurrency, cache, MMU,
 scratch/LMT or device timing claim follows from these tests.

@@ -47,9 +47,9 @@ count "emitted JSON keys \"stage\"/\"substage\"" zero -E '"(sub)?stage": ' --inc
 
 echo
 echo "== scope guards (upstream vocabulary that must NOT be renamed) =="
-count "jumptable multistage recovery fns"       nonzero -E 'recover_multistage|check_for_multistage' --include='*.rs' "$CRATES/kuna-decomp/src"
-count "option names intact (compareform)"       nonzero -F '"compareform"' "$CRATES/kuna-decomp"
-count "Action/Rule engine type names intact"    nonzero -E '\bActionDatabase\b' --include='*.rs' "$CRATES/kuna-decomp/src"
+count "jumptable multistage recovery fns"       nonzero -E 'recover_multistage|check_for_multistage' --include='*.rs' "$CRATES/unlace-decomp/src"
+count "option names intact (compareform)"       nonzero -F '"compareform"' "$CRATES/unlace-decomp"
+count "Action/Rule engine type names intact"    nonzero -E '\bActionDatabase\b' --include='*.rs' "$CRATES/unlace-decomp/src"
 
 echo
 echo "== residual triage (informational; allowlist = upstream C++ vocabulary) =="

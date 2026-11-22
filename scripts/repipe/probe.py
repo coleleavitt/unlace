@@ -577,7 +577,7 @@ def _kill_group(proc):
 # for "this is not a probe".
 
 DEFAULT_ALLOWED = (
-    "kuna", "decomp_dbg", "decomp_test_dbg", "slacomp",
+    "unlace", "decomp_dbg", "decomp_test_dbg", "slacomp",
     "objdump", "readelf", "strings", "nm", "file", "size", "xxd", "od", "cmp",
     "decompiler",          # declib/IDA, the reference leg
 )
@@ -605,7 +605,7 @@ def _allowed_realpaths():
     """The allowlist resolved to real absolute paths, once.
 
     Matching on the BASENAME alone is not a control: a tester has workspace-write in its
-    arena, so it can drop a shell script called `kuna` there and name it by path. What is
+    arena, so it can drop a shell script called `unlace` there and name it by path. What is
     allowed is a specific FILE, so every candidate is resolved (realpath, defeating symlinks)
     and compared against the resolved allowlist.
     """
@@ -998,7 +998,7 @@ REGEX_BUDGET_S = float(os.environ.get("REPIPE_REGEX_BUDGET_S", "5"))
 # re is applied to whole streams; a huge stdout multiplies any pattern's cost.
 REGEX_MAX_BYTES = int(os.environ.get("REPIPE_REGEX_MAX_BYTES", str(4 << 20)))
 
-# How much of a probe's output is kept in memory. `kuna decompile-all --json` on a large
+# How much of a probe's output is kept in memory. `unlace decompile-all --json` on a large
 # binary is already tens of MB, and an allowlisted tool pointed at the wrong thing can emit
 # far more; with repeat up to 11 and no cap, one bad probe could exhaust the box. The real
 # byte count is still measured and asserted on (`stdout_bytes`), so a truncated capture

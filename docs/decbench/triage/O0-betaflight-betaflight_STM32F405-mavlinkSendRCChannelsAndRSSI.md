@@ -108,7 +108,7 @@ int repron(void){ return sinkn((cnt>=1)?7:0, (cnt>=2)?8:0, ... (cnt>=8)?14:0); }
 ```
 
 ```
-$ kuna decompile rep8.o repron              # default-ON iteregion, plain COPY arms
+$ unlace decompile rep8.o repron              # default-ON iteregion, plain COPY arms
 void repron(void) // ternary x4
   v6 = (8 <= dat_402000) ? 0xe : 0;         <- re-rolled
   if (7 <= dat_402000) v5 = 0xd; else { v5 = 0; }
@@ -205,11 +205,11 @@ spirit (`cond_terminal_cbranch` descends a `BlockType::Condition` tree to its te
 `CBRANCH`) — it just never learned about `Ls`.
 
 Owning phase: **P8** (structured AST & goto quality), module
-`decompiler/crates/kuna-decomp/src/p8_structure/kuna_iteregion.rs`.
+`decompiler/crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs`.
 
 **Instrumentation gap found on the way**: kuna cannot dump its own P8 structured tree —
 `print tree block`, `print C xml` and `structure blocks` are all
-`Err(engine_unavailable(...))` stubs (`kuna-console/src/ifacedecomp.rs:2416, 2134, 3576`).
+`Err(engine_unavailable(...))` stubs (`unlace-console/src/ifacedecomp.rs:2416, 2134, 3576`).
 The list shape above is therefore established by elimination + the printer's own handling
 of it, not by reading the tree. **The implementer's first step should be a throwaway
 `eprintln!` of `blk.get_block(0)`'s type/size in `match_ite_assignment` to confirm `Ls(2)`

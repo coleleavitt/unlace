@@ -1,12 +1,12 @@
 # FID fixture regeneration (see README.md).
 #
 # Hermetic: the vendored lib.o + lib.fid are committed; this only rebuilds them.
-# Requires gcc and the built `kuna` binary + x86-64 .sla
+# Requires gcc and the built `unlace` binary + x86-64 .sla
 # (`make binaries specs` from the repo root).
 
-KUNA    ?= ../../../decompiler/target/release/kuna
+KUNA    ?= ../../../decompiler/target/release/unlace
 SPECS   ?= ../../../specs
-ANALYSIS_FIXTURES ?= ../../../decompiler/crates/kuna-analysis/tests/fixtures
+ANALYSIS_FIXTURES ?= ../../../decompiler/crates/unlace-analysis/tests/fixtures
 
 CFLAGS  := -O2 -ffreestanding -fno-stack-protector
 LANG    := x86:LE:64:default

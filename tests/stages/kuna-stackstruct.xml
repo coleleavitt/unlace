@@ -3,7 +3,7 @@
 <!-- An address-taken stack record read at several widths (P6 stack-frame-layout,
      option stackstruct, default off and on in the aggressive preset; P9
      pointer-notation, option partialaccess, default on).
-     Source: decompiler/crates/kuna-cli/tests/fixtures/stack_struct.c, linked with
+     Source: decompiler/crates/unlace-cli/tests/fixtures/stack_struct.c, linked with
      stack_struct_helpers.c (gcc -O1 -fno-tree-vectorize -fno-tree-loop-distribute-patterns
      -fno-builtin) as `ld -static -e parse_header -Ttext=<base>`; the record is compiled
      with `<cc> -O<n> -fno-pie -fno-stack-protector -fcf-protection=none

@@ -34,9 +34,9 @@ if ! rustup target list --installed 2>/dev/null | grep -q "^$TARGET$"; then
   rustup target add "$TARGET"
 fi
 
-echo ">> building kuna_wasm ($TARGET, $PROFILE)"
-( cd "$ENGINE" && cargo build --"$PROFILE" --target "$TARGET" -p kuna-wasm )
-WASM="$ENGINE/target/$TARGET/$PROFILE/kuna_wasm.wasm"
+echo ">> building unlace_wasm ($TARGET, $PROFILE)"
+( cd "$ENGINE" && cargo build --"$PROFILE" --target "$TARGET" -p unlace-wasm )
+WASM="$ENGINE/target/$TARGET/$PROFILE/unlace_wasm.wasm"
 [ -f "$WASM" ] || { echo "error: wasm not produced at $WASM"; exit 1; }
 
 echo ">> assembling $DIST"
@@ -76,10 +76,10 @@ echo ">> generating the public development snapshot"
 # Optionally shrink the wasm (nice-to-have; the demo works without it).
 if command -v wasm-opt >/dev/null; then
   echo ">> wasm-opt -Oz"
-  wasm-opt -Oz "$WASM" -o "$DIST/kuna_wasm.wasm"
+  wasm-opt -Oz "$WASM" -o "$DIST/unlace_wasm.wasm"
 else
   echo ">> (wasm-opt not found — shipping unoptimized wasm)"
-  cp "$WASM" "$DIST/kuna_wasm.wasm"
+  cp "$WASM" "$DIST/unlace_wasm.wasm"
 fi
 
 # Sanity: the .sla are built artifacts — fail early with a helpful message.
@@ -120,7 +120,7 @@ with open(dest, "w") as f:
 print(f"   {len(out)} small files bundled -> {os.path.relpath(dest, os.path.dirname(dest))}")
 PY
 
-WSZ=$(du -h "$DIST/kuna_wasm.wasm" | cut -f1)
+WSZ=$(du -h "$DIST/unlace_wasm.wasm" | cut -f1)
 SSZ=$(du -sh "$DIST/specs" | cut -f1)
 BSZ=$(du -h "$DIST/specs-small.json" | cut -f1)
 echo ">> done. dist/ ready (wasm $WSZ, specs $SSZ on-server, preload bundle $BSZ)."

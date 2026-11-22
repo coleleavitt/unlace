@@ -1,6 +1,6 @@
 """scripts -- Python helpers for the Rust kuna decompiler.
 
-The user-facing CLI is the Rust `kuna` binary; what remains here is the still-Python
+The user-facing CLI is the Rust `unlace` binary; what remains here is the still-Python
 feature pipeline (``scripts/pipeline/``) and the thin ``decompile`` library shim it
 depends on. Run from the repo root (``python -m scripts.pipeline.<mod>``).
 

@@ -82,7 +82,7 @@ and pushed before stopping, and **those WIP commits are ungated — treat their 
   have caught real wrong-output defects in a large fraction of PRs, including several where every
   gate was green. This is the single most valuable rule in the campaign.
 - **Gates, all of them, on the rebased tree:** `make test` (675/675 PARITY OK), `make test-stages`,
-  `make check-spec` + `python3 tools/check_spec.py --strict`, `make test-cli`, `kuna catalog --check`,
+  `make check-spec` + `python3 tools/check_spec.py --strict`, `make test-cli`, `unlace catalog --check`,
   `python3 -m scripts.repipe.counters --check`, `docs/options.md` byte-fresh, and `make rust-test`
   via `/home/mahaloz/kwt/rust-test-lane.sh` (3 flock lanes; CI skips it on internal PRs, so the
   agent is that gate).
@@ -191,8 +191,8 @@ user's rule is that a removed cast must not change the value the program compute
 
 ## 7. Traps that have cost real time
 
-- `kuna decompile` forks `decomp_dbg`, so rebuilding only `kuna-cli` ablates nothing — build
-  `-p kuna-cli -p kuna-console -p kuna-harness` or run `make binaries`.
+- `unlace decompile` forks `decomp_dbg`, so rebuilding only `unlace-cli` ablates nothing — build
+  `-p unlace-cli -p unlace-console -p unlace-harness` or run `make binaries`.
 - The console prints `int4`/`uint4`; the CLI (aggressive under 500 KiB) prints `int`/`unsigned int`.
   Never mix the two vocabularies in a string match.
 - `--save-baseline` without `SLEIGHHOME` writes an **empty** baseline.

@@ -19,7 +19,7 @@
     and aif (the drivers' default on every architecture but x86-64).
     Single pass.
 
-    Images: decompiler/crates/kuna-analysis/tests/fixtures/
+    Images: decompiler/crates/unlace-analysis/tests/fixtures/
     funcstart_shrinkwrap_el.o and funcstart_shrinkwrap_eb.o
     (funcstart_shrinkwrap.c); see funcstart_shrinkwrap.provenance.
 
@@ -31,14 +31,14 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/funcstart_shrinkwrap_el.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/funcstart_shrinkwrap_el.o</com>
   <com>option listing on</com>
   <com>option funcstart_patterns on</com>
   <com>option aif on</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/funcstart_shrinkwrap_eb.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/funcstart_shrinkwrap_eb.o</com>
   <com>option listing on</com>
   <com>option funcstart_patterns on</com>
   <com>option aif on</com>

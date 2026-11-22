@@ -7,7 +7,7 @@ from pathlib import Path
 
 from scripts.prepr import difflint
 
-FIXTURES = Path("decompiler/crates/kuna-analysis/tests/fixtures")
+FIXTURES = Path("decompiler/crates/unlace-analysis/tests/fixtures")
 LEAKED = "/" + "home/someone/bin"
 STAGE = '<stringmatch name="T #1: x" min="1" max="1">sub_100074\\(2,1\\)</stringmatch>\n'
 
@@ -95,7 +95,7 @@ class DiffLintTests(unittest.TestCase):
         self.assertEqual(self.checks(), [])
 
     def test_a_new_module_without_an_option_row_is_a_warning(self):
-        self.write("decompiler/crates/kuna-decomp/src/p4_calls/kuna_thing.rs", "fn f() {}\n")
+        self.write("decompiler/crates/unlace-decomp/src/p4_calls/kuna_thing.rs", "fn f() {}\n")
         self.commit("module")
         self.assertEqual(self.checks(), [("warning", "option-policy", "kuna_thing.rs")])
         with contextlib.redirect_stdout(io.StringIO()):

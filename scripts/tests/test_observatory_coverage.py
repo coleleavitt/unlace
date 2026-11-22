@@ -25,10 +25,10 @@ class RollupTests(unittest.TestCase):
         data = coverage.rollup(
             summary(
                 [
-                    entry("/repo/decompiler/crates/kuna-decomp/src/p3_dataflow/heritage.rs", 100, 80),
-                    entry("/repo/decompiler/crates/kuna-decomp/src/substrate/op.rs", 50, 10),
-                    entry("/repo/decompiler/crates/kuna-decomp/src/lib.rs", 10, 10),
-                    entry("/repo/decompiler/crates/kuna-cli/src/main.rs", 40, 20),
+                    entry("/repo/decompiler/crates/unlace-decomp/src/p3_dataflow/heritage.rs", 100, 80),
+                    entry("/repo/decompiler/crates/unlace-decomp/src/substrate/op.rs", 50, 10),
+                    entry("/repo/decompiler/crates/unlace-decomp/src/lib.rs", 10, 10),
+                    entry("/repo/decompiler/crates/unlace-cli/src/main.rs", 40, 20),
                     entry("/elsewhere/external.rs", 999, 999),
                 ]
             ),
@@ -39,8 +39,8 @@ class RollupTests(unittest.TestCase):
         self.assertEqual(data["totals"]["lines"], {"count": 200, "covered": 120, "percent": 60.0})
         self.assertTrue(data["meta"]["runsFailed"])
         crates = {row["name"]: row for row in data["crates"]}
-        self.assertEqual(crates["kuna-decomp"]["lines"]["count"], 160)
-        self.assertEqual(crates["kuna-cli"]["lines"]["percent"], 50.0)
+        self.assertEqual(crates["unlace-decomp"]["lines"]["count"], 160)
+        self.assertEqual(crates["unlace-cli"]["lines"]["percent"], 50.0)
         phases = {row["folder"]: row for row in data["phases"]}
         self.assertEqual(phases["P3"]["lines"]["covered"], 80)
         self.assertEqual(phases["substrate"]["lines"]["percent"], 20.0)

@@ -12,14 +12,14 @@
     path appeared to return.
 
     Stage / sub-stage: P1 program prep reads the table
-    (`kuna-analysis/src/analyzers/kernelbug`), recovering the entry layout from
+    (`unlace-analysis/src/analyzers/kernelbug`), recovering the entry layout from
     the module's `.rela__bug_table`; P2 flow classification
     (`p2_lift/kuna_kernelbug.rs`) turns the trap's CALLOTHER into `__WARN(file,
     line)` and falls through, or into `BUG()` followed by a no-return halt. The
     module's undefined `__fentry__` and `__x86_return_thunk` take the cspec
     call-fixups a defined symbol already took.
 
-    Fixture: `decompiler/crates/kuna-analysis/tests/fixtures/kernel_bugtable_x86_64.ko`,
+    Fixture: `decompiler/crates/unlace-analysis/tests/fixtures/kernel_bugtable_x86_64.ko`,
     built against a 7.3 x86-64 kernel (CONFIG_DEBUG_BUGVERBOSE, relative
     pointers, the 16-byte entry with a format field) from
 
@@ -44,7 +44,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernel_bugtable_x86_64.ko</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernel_bugtable_x86_64.ko</com>
   <com>read symbols</com>
   <com>load function kwarn_check</com>
   <com>decompile</com>

@@ -3,7 +3,7 @@
 <!--
     narrowret: a call reads the narrow value its callee returns (x86-64).
 
-    The image is decompiler/crates/kuna-analysis/tests/fixtures/narrowret.c
+    The image is decompiler/crates/unlace-analysis/tests/fixtures/narrowret.c
     (gcc -O2), its calls resolved at 0x1000.  `whole` returns `lea eax,
     [rdi+rdi*4]`: a 32-bit write, which clears the upper half of rax, and the
     caller `returns_word` reads rax whole after the call.  The listing
@@ -17,7 +17,7 @@
     Thumb build: this harness decompiles ONE function, so no callee states
     anything and both passes print the same.  The positive witnesses are
     tests/cli/narrowret-holds-a-narrow-call-result-narrow.json and its off
-    arm over the Thumb object, and decompiler/crates/kuna-cli/tests/narrow_ret.rs
+    arm over the Thumb object, and decompiler/crates/unlace-cli/tests/narrow_ret.rs
     over both objects.
 
     Stage / sub-stage: P4 "output-prototype".  Pass 1 (default on) and pass 2

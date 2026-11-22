@@ -13,6 +13,8 @@ PROFILE ?= release
 BINDIR  := $(ENGINE)/target/$(PROFILE)
 SLACOMP := $(BINDIR)/slacomp
 PYTHON  ?= python3
+# WEB=1 includes the browser front-end (unlace-wasm) in rust-test; it is opt-in.
+WEB     ?= 0
 # Where `test-ghidra` tees its output for the two false-green canaries below
 # (inside target/, which is gitignored, so a failed run leaves no repo litter).
 GHIDRA_SIM_LOG := $(ENGINE)/target/ghidra-sim.log
@@ -22,11 +24,11 @@ GHIDRA_SIM_LOG := $(ENGINE)/target/ghidra-sim.log
 all: binaries specs
 
 # Build the decompiler console binaries (decomp_dbg, decomp_test_dbg), the
-# SLEIGH compiler (slacomp), and the user-facing `kuna` CLI (kuna-cli).
+# SLEIGH compiler (slacomp), and the user-facing `unlace` CLI (unlace-cli).
 # Cargo manages parallelism + incrementality. (decomp_test_dbg lives in
-# kuna-harness; kuna-cli pulls it in as a sibling at build time.)
+# unlace-harness; unlace-cli pulls it in as a sibling at build time.)
 binaries:
-	cd $(ENGINE) && cargo build --$(PROFILE) -p kuna-console -p kuna-harness -p kuna-slacomp -p kuna-cli
+	cd $(ENGINE) && cargo build --$(PROFILE) -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
 
 rust: binaries
 
@@ -37,27 +39,27 @@ specs: $(SLACOMP)
 	$(SLACOMP) -a $(SPECS)
 
 $(SLACOMP):
-	cd $(ENGINE) && cargo build --$(PROFILE) -p kuna-slacomp
+	cd $(ENGINE) && cargo build --$(PROFILE) -p unlace-slacomp
 
 # Run the datatest harness (decomp_test_dbg) over the vendored XML regression
 # tests, with baseline parity checking. Builds binaries/specs if missing. Driven
-# by the `kuna` CLI; exit code is nonzero on any failure or baseline regression.
-test: $(BINDIR)/kuna
+# by the `unlace` CLI; exit code is nonzero on any failure or baseline regression.
+test: $(BINDIR)/unlace
 	@test -x $(BINDIR)/decomp_test_dbg || $(MAKE) binaries
 	@test -n "$$(find $(SPECS) -name '*.sla' -print -quit)" || $(MAKE) specs
-	cd $(ROOT) && $(BINDIR)/kuna test --datatests --baseline docs/baseline.json
+	cd $(ROOT) && $(BINDIR)/unlace test --datatests --baseline docs/baseline.json
 
 # Same harness over the kuna-owned stage-model issue testcases (tests/stages/).
-test-stages: $(BINDIR)/kuna
+test-stages: $(BINDIR)/unlace
 	@test -x $(BINDIR)/decomp_test_dbg || $(MAKE) binaries
 	@test -n "$$(find $(SPECS) -name '*.sla' -print -quit)" || $(MAKE) specs
-	cd $(ROOT) && $(BINDIR)/kuna test --datatests \
+	cd $(ROOT) && $(BINDIR)/unlace test --datatests \
 	  --datatests-dir tests/stages --baseline docs/baseline-stages.json
 
-$(BINDIR)/kuna:
-	cd $(ENGINE) && cargo build --$(PROFILE) -p kuna-cli
+$(BINDIR)/unlace:
+	cd $(ENGINE) && cargo build --$(PROFILE) -p unlace-cli
 
-# The ghidra-mode differential harness (kuna-ghidra's ghidra-sim tests,
+# The ghidra-mode differential harness (unlace-ghidra's ghidra-sim tests,
 # docs/ghidra-integration.md §11): drives the decompile-process wire protocol
 # in-process against real vendored ELFs and pins the GUI-path quality numbers.
 # Release profile (the dev profile costs minutes for the same answer);
@@ -68,7 +70,7 @@ $(BINDIR)/kuna:
 test-ghidra:
 	@test -n "$$(find $(SPECS) -name '*.sla' -print -quit)" || $(MAKE) specs
 	@bash -c 'set -o pipefail; cd $(ENGINE) && \
-	  cargo test --$(PROFILE) -p kuna-ghidra -- --include-ignored --nocapture \
+	  cargo test --$(PROFILE) -p unlace-ghidra -- --include-ignored --nocapture \
 	    2>&1 | tee $(GHIDRA_SIM_LOG)'
 	@grep -qE 'test (ghidra_sim_e2e::)?ghidra_sim_sort_grep_breadth \.\.\. ok' $(GHIDRA_SIM_LOG) || { \
 	  echo "ERROR: the sort/grep breadth test did not RUN (needs --include-ignored) -- false green"; \
@@ -100,9 +102,9 @@ version:
 # The local codebase observatory: self-contained pages + raw JSON under
 # observatory/ (gitignored). See docs/observatory.md.
 observatory:
-	@test -x $(BINDIR)/kuna || $(MAKE) binaries
+	@test -x $(BINDIR)/unlace || $(MAKE) binaries
 	@test -n "$$(find $(SPECS) -name '*.sla' -print -quit)" || $(MAKE) specs
-	PYTHONPATH=$(ROOT) $(PYTHON) -m scripts.observatory.generate --out $(ROOT)/observatory --kuna $(BINDIR)/kuna
+	PYTHONPATH=$(ROOT) $(PYTHON) -m scripts.observatory.generate --out $(ROOT)/observatory --kuna $(BINDIR)/unlace
 
 # Merged line coverage (workspace suite + datatests + stages + tests/cli)
 # through instrumented binaries via cargo-llvm-cov. Heavy: a full separate
@@ -115,12 +117,12 @@ coverage:
 # golden differential vectors, the SLEIGH-compiler .sla content-parity tests, ...).
 rust-test:
 	$(PYTHON) $(ROOT)/scripts/check_test_layout.py
-	cd $(ENGINE) && cargo test --workspace --no-fail-fast
+	cd $(ENGINE) && cargo test --workspace $(if $(filter 1,$(WEB)),,--exclude unlace-wasm) --no-fail-fast
 
 # One invocation: a crate an earlier `--no-deps` run checked only as a dependency
 # is fresh to a later run, which then passes without linting it.
 lint:
-	cd $(ENGINE) && cargo clippy --release -p kuna-cli -p kuna-base -p kuna-num --no-deps -- -D warnings
+	cd $(ENGINE) && cargo clippy --release -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings
 
 clean:
 	cd $(ENGINE) && cargo clean

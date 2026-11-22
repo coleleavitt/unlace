@@ -14,7 +14,7 @@ rounds: [6]
 first_seen_round: 6
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli, decompiler/crates/kuna-console/src/project.rs, docs/cli.md, docs/spec/00-overview.md, docs/history.md]
+touches: [decompiler/crates/unlace-cli, decompiler/crates/unlace-console/src/project.rs, docs/cli.md, docs/spec/00-overview.md, docs/history.md]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/592
@@ -60,11 +60,11 @@ The original EndOfWorld report is retained in the decision log as the observatio
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "binary_sha256": "c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b",
     "binary_size": 8776,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "selector": "main",
     "selector_kind": "name"
   },
@@ -128,11 +128,11 @@ The original EndOfWorld report is retained in the decision log as the observatio
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "binary_sha256": "c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b",
     "binary_size": 8776,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
     "selector": "main",
     "selector_kind": "name"
   },

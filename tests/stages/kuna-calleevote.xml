@@ -3,7 +3,7 @@
 <!--
     calleevote: the complete caller set of a function decides its parameters.
 
-    The CLI fixture decompiler/crates/kuna-analysis/tests/fixtures/calleevote_x86_64
+    The CLI fixture decompiler/crates/unlace-analysis/tests/fixtures/calleevote_x86_64
     has a one-field getter called directly:
 
         long get_cap(const struct table *t) { return t->cap; }

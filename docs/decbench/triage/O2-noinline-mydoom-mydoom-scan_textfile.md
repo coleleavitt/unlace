@@ -100,13 +100,13 @@ body that references two identifiers it never declares. Ghidra emits a stack-loc
 names to "register<->global copy-shadow merges rendering members by their own address"
 (`p9_emit/printc.rs` `push_vn_explicit_ir`). That is a different, already-landed fix —
 the mirror-`getSymbol()` global-resolution loop is present in the unnamed-location tail at
-`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs:6633-6706`. None of the 8 leaks here
+`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs:6633-6706`. None of the 8 leaks here
 are copy-shadow members; all 8 are the same `ESP` spacebase base operand, and the count
 matches the hint's "8" exactly, so the miner was counting these.
 
 **Root cause.** `PrintC::op_ptrsub_ir`'s SPACEBASE arm bails to the functional render when
 no Symbol is bound to the offset constant —
-`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs:6969-6983`:
+`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs:6969-6983`:
 
 ```rust
             // NOT the C++ `pushUnnamedLocation` `&stackNN` leaf — which would expose
@@ -173,7 +173,7 @@ if the shape is matched to upstream) in place of `PTRSUB(ESP,8)`, and no registe
 is ever pushed.
 
 **Owning files.**
-- `decompiler/crates/kuna-decomp/src/p9_emit/printc.rs` — `op_ptrsub_ir` SPACEBASE arm
+- `decompiler/crates/unlace-decomp/src/p9_emit/printc.rs` — `op_ptrsub_ir` SPACEBASE arm
   (lines ~6946-6990); reuse the unnamed-location formatter at ~6690-6700 and
   `Funcdata::resolve_spacebase_ref_addr`.
 - Docstring at `printc.rs:6714-6720` drops its `STUB(W4 spacebase symbol)` marker.

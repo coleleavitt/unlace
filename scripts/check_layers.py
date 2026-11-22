@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ratchet kuna-decomp's module layering: no new upward `crate::` edges between bands.
+"""Ratchet unlace-decomp's module layering: no new upward `crate::` edges between bands.
 
-Each top-level module of kuna-decomp (`src/<folder>/<module>.rs` plus its child files) belongs to a
+Each top-level module of unlace-decomp (`src/<folder>/<module>.rs` plus its child files) belongs to a
 band. The bands, lowest first, are a planned split of the crate:
 middle (the IR, types, options, symbols), lift (P1-P2), structure (P7-P8), bandb (P3-P6), emit (P9) and
 driver (scheduling, option dispatch, the decompile loop). A `crate::<module>` path in non-test code is
@@ -28,7 +28,7 @@ MODULE_BAND = {
     "typeop": "middle", "fspec": "middle", "variable": "middle", "cover": "middle", "varmap": "middle",
     "dynamic": "middle", "heritage": "middle", "merge": "middle", "jumptable": "middle",
 }
-SRC = "decompiler/crates/kuna-decomp/src"
+SRC = "decompiler/crates/unlace-decomp/src"
 ALLOWLIST = "scripts/layers-allowlist.txt"
 CRATE_PATH = re.compile(r"\bcrate::(?:(\w+)(?:::(\w+))?|\{)")
 TEST_MOD = re.compile(r"^(\s*)(?:pub(?:\([\w:]+\))?\s+)?mod\s+\w+\s*\{")

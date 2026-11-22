@@ -138,7 +138,7 @@ difference from IDA's pane (removing them by hand takes kuna from 34n/51e to
 plus constant 0/1 arms back into a boolean expression:
 
 - P3 `RuleConditionalMove`
-  (`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_7.rs:1882`, port of
+  (`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_7.rs:1882`, port of
   Ghidra `ruleaction.cc:9292`) is the rule that folds `MULTIEQUAL(0,1)` into
   `zext(cond)`/`BOOL_AND`/`BOOL_OR`, and it *does* fire on the simple case. It
   requires each MULTIEQUAL input block to be either the CBRANCH root itself or a
@@ -202,7 +202,7 @@ default-off until an ablation earns the flip — same judgment-call category as
 3. Printer: reuse `PrintC::emit_block_if`'s existing `kuna_iteregion` path in
    `p9_emit/printc.rs`; this is the same print-only marking, no p-code mutation.
 
-**Owning files.** `decompiler/crates/kuna-decomp/src/p8_structure/kuna_iteregion.rs`,
+**Owning files.** `decompiler/crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs`,
 `src/p9_emit/printc.rs`, `phases.toml` + `p0_knowledge/options.rs` (new settable
 row + the hard-coded catalog counts), `docs/spec/08-structuring.md` (the
 `iteregion` section) and `docs/spec/09-emission.md`, plus a two-pass

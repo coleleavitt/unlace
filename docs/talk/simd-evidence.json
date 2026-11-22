@@ -32,21 +32,21 @@
   },
   "arms": {
     "kuna_both_off": {
-      "command": "decompiler/target/release/kuna decompile /tmp/kuna-talk-evidence.pVnUBn/byte_sum byte_sum --mode reliable --option wideslice off --option devectorize off",
+      "command": "decompiler/target/release/unlace decompile /tmp/kuna-talk-evidence.pVnUBn/byte_sum byte_sum --mode reliable --option wideslice off --option devectorize off",
       "code": "int4 byte_sum(int8 a0,uint4 a1)\n{\n  unsigned int v1; // xmm2_da\n  char v2 [13]; // xmm2 | xmm2_bd | xmm2_bg | xmm2_qa\n  char v3 [13]; // register 0x128a | xmm2 | xmm2_bc | xmm2_be | xmm2_qa\n  char v4 [13]; // register 0x1286 | xmm2 | xmm2_bb | xmm2_bc | xmm2_da\n  uint8 v5; // xmm2_qa\n  int4 v6; // eax | xmm1_da\n  uint8 v7; // rax\n  uint8 v8; // rdx\n  int4 v9; // xmm1_db\n  int4 v10; // xmm0_da | xmm1_dc\n  int4 v11; // xmm0_db | xmm1_dd\n  char v12; // xmm2_bb | xmm2_bc\n  \n  if (!a1)\n    return 0;\n  if (4 <= a1) { // branch-flip\n    v8 = a1 & 0xfffffffc;\n    v7 = 0;\n    v6 = 0;\n    v9 = 0;\n    v10 = 0;\n    v11 = 0;\n    do {\n      v1 = *(unsigned int *)(a0 + v7);\n      v12 = (char)((uint4)v1 >> 8);\n      v5 = (uint8)CONCAT12(v12,(int2)v1) & 0xffffffffffff00ff;\n      v2._8_4_ = 0;\n      v2._0_8_ = v5;\n      v2[0xc] = (char)((uint4)v1 >> 0x18);\n      v3[8] = (char)((uint4)v1 >> 0x10);\n      v3._0_8_ = v5;\n      v3[9] = 0;\n      v3._10_3_ = SUB133(v2._0_13_,10);\n      v4[4] = v12;\n      v4._0_4_ = (uint4)v5;\n      v4[5] = 0;\n      v4._6_7_ = SUB137(ZEXT513(SUB135(v3._0_13_,8)) << 0x40,6);\n      v6 += (uint4)v5 & 0xffff;\n      v9 += SUB134(v4._0_13_,4);\n      v10 += SUB134(v3._0_13_,8);\n      v11 += (uint4)(undefined3)(SUB133(v2._0_13_,10) >> 0x10);\n      v7 += 4;\n    } while (v8 != v7);\n    v6 = v11 + v9 + v10 + v6;\n    if (v8 == a1)\n      return v6;\n  }\n  else {\n    v8 = 0;\n    v6 = 0;\n  }\n  do {\n    v6 += (uint4)*(uint1 *)(a0 + v8);\n    v8 += 1;\n  } while (a1 != v8);\n  return v6;\n}",
       "lines": 59,
       "artificial_13_byte_arrays": 3,
       "do_while_loops": 2
     },
     "kuna_wideslice": {
-      "command": "decompiler/target/release/kuna decompile /tmp/kuna-talk-evidence.pVnUBn/byte_sum byte_sum --mode reliable --option wideslice on --option devectorize off",
+      "command": "decompiler/target/release/unlace decompile /tmp/kuna-talk-evidence.pVnUBn/byte_sum byte_sum --mode reliable --option wideslice on --option devectorize off",
       "code": "int4 byte_sum(int8 a0,uint4 a1)\n{\n  uint4 v1; // xmm2_da\n  int4 v2; // eax | xmm1_da\n  uint8 v3; // rax\n  uint8 v4; // rdx\n  int4 v5; // xmm1_db\n  int4 v6; // xmm0_da | xmm1_dc\n  int4 v7; // xmm0_db | xmm1_dd\n  \n  if (!a1)\n    return 0;\n  if (4 <= a1) { // branch-flip\n    v4 = a1 & 0xfffffffc;\n    v3 = 0;\n    v2 = 0;\n    v5 = 0;\n    v6 = 0;\n    v7 = 0;\n    do {\n      v1 = *(uint4 *)(a0 + v3);\n      v2 += v1 & 0xff;\n      v5 += v1 >> 8 & 0xff;\n      v6 += v1 >> 0x10 & 0xff;\n      v7 += v1 >> 0x18;\n      v3 += 4;\n    } while (v4 != v3);\n    v2 = v7 + v5 + v6 + v2;\n    if (v4 == a1)\n      return v2;\n  }\n  else {\n    v4 = 0;\n    v2 = 0;\n  }\n  do {\n    v2 += (uint4)*(uint1 *)(a0 + v4);\n    v4 += 1;\n  } while (a1 != v4);\n  return v2;\n}",
       "lines": 41,
       "artificial_13_byte_arrays": 0,
       "do_while_loops": 2
     },
     "kuna_devectorize": {
-      "command": "decompiler/target/release/kuna decompile /tmp/kuna-talk-evidence.pVnUBn/byte_sum byte_sum --mode reliable --option wideslice on --option devectorize on",
+      "command": "decompiler/target/release/unlace decompile /tmp/kuna-talk-evidence.pVnUBn/byte_sum byte_sum --mode reliable --option wideslice on --option devectorize on",
       "code": "int4 byte_sum(uint1 *a0,uint4 a1)\n{\n  int4 v1; // eax\n  uint8 v2; // rdx\n  \n  if (a1) {\n    v2 = 0;\n    v1 = 0;\n    do {\n      v1 += (uint4)a0[v2];\n      v2 += 1;\n    } while (a1 != v2);\n    return v1;\n  }\n  return 0;\n}",
       "lines": 16,
       "artificial_13_byte_arrays": 0,

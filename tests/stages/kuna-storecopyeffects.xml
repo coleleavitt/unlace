@@ -2,7 +2,7 @@
 <binaryimage arch="x86:LE:64:default:gcc"/>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/storecopyeffects_clang_O0_aarch64.o</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/storecopyeffects_clang_O0_aarch64.o</com>
   <com>read symbols</com>
   <com>load function s7</com>
   <com>decompile</com>

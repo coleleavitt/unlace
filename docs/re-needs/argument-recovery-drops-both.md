@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: call-args-discarded
 pr: null
@@ -144,12 +144,12 @@ _none recorded_
 
 SYMPTOM REPRODUCED: the filed probe emits `if (watchdog()) {` at line 35. The disassembly the tester cited is exact -- 0x1146a MOV ESI,0x2 / 0x1146f MOV EDI,0x13050 / 0x11474 INC R12 / 0x11477 CALL 0x110ff.
 
-WHY THE HYPOTHESIS IS WRONG. The filed hypothesis is "inferred callee arity is not applied at this call site". Arity inference does not fail here -- it SUCCEEDS. Decompiling the callee on its own (`kuna decompile <bin> 0x110ff --addr --option linuxsyscall on`) yields:
+WHY THE HYPOTHESIS IS WRONG. The filed hypothesis is "inferred callee arity is not applied at this call site". Arity inference does not fail here -- it SUCCEEDS. Decompiling the callee on its own (`unlace decompile <bin> 0x110ff --addr --option linuxsyscall on`) yields:
     undefined16 sub_110ff(long a0,int a1,unsigned long a2,unsigned long a3)
 and the body proves the first two are real: a0 is dereferenced as the timer array (`v2 = *(long **)(a0 + v4 * 8)`) and a1 is the count (`if (a1 <= (int)v4)`). Those are precisely the two values the tester wanted. So the gap is NOT arity recovery; it is that the callee-side result never reaches the CALLER-side trial at 0x11477. A builder who takes the hypothesis literally would go tune arity inference, which already works.
 
 FIVE ABLATIONS, ALL NEGATIVE -- do not repeat them:
-1. BOTH CITED OPTIONS ARE DEFAULT-ON (`kuna catalog`: calleearity default on, varargstackargs default on), so the probe sentence "with calleearity and varargstackargs enabled" is VACUOUS. I ran the real A/B: `--option calleearity off`, `--option varargstackargs off`, and both off together -- all three emit the identical `watchdog()` at line 35. Neither option is on this path in either direction.
+1. BOTH CITED OPTIONS ARE DEFAULT-ON (`unlace catalog`: calleearity default on, varargstackargs default on), so the probe sentence "with calleearity and varargstackargs enabled" is VACUOUS. I ran the real A/B: `--option calleearity off`, `--option varargstackargs off`, and both off together -- all three emit the identical `watchdog()` at line 35. Neither option is on this path in either direction.
 2. --define-function is not implicated: without it the call still renders `sub_110ff()`, argument-less.
 3. Not the spill gate: `--option spillargtrial reload` AND `--option spillargtrial spill` both leave `watchdog()` unchanged.
 4. `--option compareform canonical` does move the output on this exact command, so --option demonstrably reaches this decompile (control for the silent-unknown-option trap).
@@ -157,7 +157,7 @@ FIVE ABLATIONS, ALL NEGATIVE -- do not repeat them:
 
 THE SAME-CALLER CONTROL IS THE STRONGEST EVIDENCE. In this very function, `printf((char *)sub_10e27(v7,v6,v3,v2));` recovers FOUR register arguments from the identical MOV-immediate-then-call shape (0x1145e MOV ESI,0x2a / MOV EDI,0x11ccc / JMP 0x11495). So caller-side trial machinery is alive and working in this function; something kills the trials at 0x11477 specifically. Emission is fine too: the workaround reproduces, `--assert "prototype 0x110ff long watchdog(long *timers,int count)" --assert-strict` gives `watchdog((long *)0x13050,2)`.
 
-WHERE TO LOOK (not proven to a line -- treat as the redirect, not as fact). The live gate is caller-side trial activation, `Funcdata::ancestor_op_use` -> `only_op_use` in decompiler/crates/kuna-decomp/src/substrate/funcdata_varnode.rs:2229 and :2405, whose own doc says a "branch/load/store/non-matching-call/persistent-output use means the Varnode is not exclusively a parameter". Note EDI is slot 0: if slot 0 goes inactive both arguments vanish, which matches the observed zero-argument call rather than a one-argument one. A builder should dump the trial state at 0x11477 before writing any code.
+WHERE TO LOOK (not proven to a line -- treat as the redirect, not as fact). The live gate is caller-side trial activation, `Funcdata::ancestor_op_use` -> `only_op_use` in decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs:2229 and :2405, whose own doc says a "branch/load/store/non-matching-call/persistent-output use means the Varnode is not exclusively a parameter". Note EDI is slot 0: if slot 0 goes inactive both arguments vanish, which matches the observed zero-argument call rather than a one-argument one. A builder should dump the trial state at 0x11477 before writing any code.
 
 ACCEPTANCE TRAP -- READ BEFORE BUILDING. The acceptance asserts stdout_absent `watchdog\(\)` AND stdout_matches `watchdog\([^\n,]+,[^\n)]+\)`, i.e. it requires TWO OR MORE arguments. A fix that recovers only slot 0 (`watchdog(0x13050)`) FAILS its own acceptance. The callee-side recovery is four parameters, so propagating the callee prototype wholesale would emit four arguments and PASS -- but note only two are justified by the body, so passing the probe is not the same as being right here.
 

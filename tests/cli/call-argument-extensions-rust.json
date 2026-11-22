@@ -56,11 +56,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/call_argument_extensions_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/call_argument_extensions_x86_64",
     "binary_sha256": "195ab36ae206b5fe8a9aa1c1dd68764f8888d70fbd7f29a46f63e95d2428ca4b",
     "binary_size": 16360,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/call_argument_extensions_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/call_argument_extensions_x86_64",
     "selector": "pass_signed",
     "selector_kind": "name"
   },
@@ -78,5 +78,5 @@
       "return\\ consume\\(value\\);"
     ]
   },
-  "notes": "Callee-first recovery retains unasserted consumer types. Complete emitted bodies are compiled and executed against independent bit-mask/sign-extension formulas and store canaries by kuna-cli/tests/call_argument_extensions.rs; the original fixture is never executed."
+  "notes": "Callee-first recovery retains unasserted consumer types. Complete emitted bodies are compiled and executed against independent bit-mask/sign-extension formulas and store canaries by unlace-cli/tests/call_argument_extensions.rs; the original fixture is never executed."
 }

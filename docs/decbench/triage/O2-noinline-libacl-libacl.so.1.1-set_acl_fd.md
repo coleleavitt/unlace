@@ -171,7 +171,7 @@ on today's default build in both `auto` and `reliable`:
 > the declaration. The same defect turns a 4-byte errno store into
 > `*(void *)__errno_location() = 0x16;`, which carries no access width at all.
 
-**Root cause — one function, P9 emit.** `decompiler/crates/kuna-decomp/src/p9_emit/printc.rs`:
+**Root cause — one function, P9 emit.** `decompiler/crates/unlace-decomp/src/p9_emit/printc.rs`:
 
 ```rust
 fn realtype_unknown_base(size: int4, under_pointer: bool, long_is_8: bool) -> Option<&'static str> {
@@ -194,7 +194,7 @@ text is relabeled; `opLoad` / `opPtradd` keep building index and cast expression
 Proof it is this line and nothing upstream of it — the same function with the gate off:
 
 ```
-$ kuna decompile <stripped> --addr 0x56c0 --option realtypes off
+$ unlace decompile <stripped> --addr 0x56c0 --option realtypes off
 int4 sub_56c0(xunknown8 a0,xunknown4 a1,xunknown4 a2,xunknown8 *a3)
    ...  if ((code *)a3[1])            // stride 8: correct, and self-consistent
 ```
@@ -203,7 +203,7 @@ The pointee really is an 8-byte residual unknown; P5 never mis-typed anything, a
 are not involved. This is purely the P9 `realtypes` presentation policy (option `realtypes`,
 default **on**, phase P9 / subphase `literal-format`).
 
-**Prevalence.** Not a one-off. Across a full `kuna decompile-all` of this 291-function
+**Prevalence.** Not a one-off. Across a full `unlace decompile-all` of this 291-function
 `libacl.so`: **68** `*(void *)(...)` load/store sites with no access width, and **24
 functions** in which a `void *`-declared name is dereferenced or indexed. Every one of those
 is uncompilable C.
@@ -230,10 +230,10 @@ element type keeps the stride the expressions were built with:
 `under_pointer` then only selects the *fallback*, not the whole answer. `declarator_parts`
 already lays out the `*` chain from the modifier walk, so no other change is needed there.
 
-**Owning files** (all P9): `decompiler/crates/kuna-decomp/src/p9_emit/printc.rs`
+**Owning files** (all P9): `decompiler/crates/unlace-decomp/src/p9_emit/printc.rs`
 — `realtype_unknown_base` (~line 8028), `realtype_relabel` (~8015), and the doc comment on
 `declarator_parts` (~7607) that currently states the `void *` rule as intended behavior.
-The `realtypes` row in `decompiler/crates/kuna-decomp/phases.toml` and the generated
+The `realtypes` row in `decompiler/crates/unlace-decomp/phases.toml` and the generated
 `docs/options.md` both spell out "pointer-to-unknown->void *" in the summary and need the
 same wording change; spec chapter for P9 emit likewise.
 

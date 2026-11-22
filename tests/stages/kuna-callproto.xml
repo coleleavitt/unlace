@@ -13,7 +13,7 @@
     `@<storage>`: the third argument is read from R8D, which holds the target.
 
     Source and build recipe:
-    decompiler/crates/kuna-analysis/tests/fixtures/callproto_x86_64.c
+    decompiler/crates/unlace-analysis/tests/fixtures/callproto_x86_64.c
 -->
 <bytechunk space="ram" offset="0x308" readonly="true">
 257320256420256400256400

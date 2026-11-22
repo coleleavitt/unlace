@@ -16,11 +16,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/globalloadguard_gcc_O0_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/globalloadguard_gcc_O0_x86_64",
     "binary_sha256": "814e74510d6d9b8b13ddd6521e7aba113ac057507ba0bff1e5a69cd3ffd44c03",
     "binary_size": 16720,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/globalloadguard_gcc_O0_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/globalloadguard_gcc_O0_x86_64",
     "selector": "main",
     "selector_kind": "name"
   },

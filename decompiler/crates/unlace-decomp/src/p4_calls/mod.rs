@@ -112,6 +112,7 @@ pub(crate) mod kuna_inputstorage;
 pub(crate) mod kuna_stackparamalign;
 pub mod kuna_swiftcall; // (kuna) Swift calls that may throw, and stale swiftself arguments
 pub mod kuna_swifterror; // (kuna) the Swift error register named after a throwing call and before a throwing return
+pub mod kuna_swiftinfer; // (kuna) the Swift convention of functions the metadata did not bind
 pub mod kuna_x87emptyreturn;
 pub mod kuna_x87free;
 

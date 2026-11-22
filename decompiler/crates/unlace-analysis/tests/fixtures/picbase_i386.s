@@ -2,7 +2,7 @@
 # the cross-reference index (unlace-analysis/src/listing/kuna_picbase.rs).
 #
 # Reduced from crackmes.one 5ab77f6333c5d40ad448ca52 (pancrackme v1.0), where
-# `kuna strings --json --filter Password` found the prompt at 0x8049127 and
+# `unlace strings --json --filter Password` found the prompt at 0x8049127 and
 # reported xrefs_count 0 with an empty functions list, as did all 23 of the
 # image's other strings: the address is formed at run time out of the GOT
 # pointer, so the literal occurs nowhere in the file.

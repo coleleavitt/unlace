@@ -15,7 +15,7 @@ const NAMES: &[&str] = &[
 
 fn records(language: &str) -> serde_json::Value {
     let binary =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let facts = common::fixture("highslice_guard.kuna");
     let result = process::required_output(Command::new(binary).args([
         "decompile-all",
@@ -161,7 +161,7 @@ fn narrow_guards_with_empty_rust_arms_preserve_enclosing_loops() {
     );
     let names = "empty_case,empty_default,empty_shared,empty_loop,loop_break_control";
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let result = process::required_output(
         Command::new(kuna)
             .args(["decompile-all", "--option", "highsliceguard", "on"])
@@ -255,7 +255,7 @@ fn narrow_guards_with_empty_rust_arms_preserve_enclosing_loops() {
 #[test]
 fn every_preset_keeps_high_slice_recovery_explicit() {
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     for mode in ["auto", "reliable", "aggressive", "fast"] {
         let mut previous = None;
         for explicit in [false, true] {

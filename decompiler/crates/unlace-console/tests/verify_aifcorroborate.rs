@@ -69,7 +69,7 @@ const V: &str = "sub_800039c";
 /// THE COUNT CONTROL: uncorroborated like `U`, but `startCount == 50`.
 const W: &str = "sub_80003a8";
 
-/// Bootstrap the fixture with the discovery set `kuna functions` / `decompile-all` inject
+/// Bootstrap the fixture with the discovery set `unlace functions` / `decompile-all` inject
 /// on non-x86-64 (`listing` + `funcstart_patterns` + `aif`), with `aif` at `strict` for
 /// the bug pass and `precise` for the fix pass, so the two differ only by the
 /// corroboration test — the live-CLI ordering, where the `option` lines precede the

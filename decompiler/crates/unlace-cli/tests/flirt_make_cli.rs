@@ -1,4 +1,4 @@
-//! `kuna flirt make` through the built CLI: patterns and a signature file from
+//! `unlace flirt make` through the built CLI: patterns and a signature file from
 //! a static library, then the names they give a stripped program linked
 //! against it (fixture `tests/fixtures/flirt/make`).
 
@@ -11,7 +11,7 @@ fn a_library_signature_names_the_functions_of_a_stripped_program() {
     let dir = common::repo_root().join("tests/fixtures/flirt/make");
     let scratch = tempfile::tempdir().unwrap();
     let (pat, sig) = (scratch.path().join("three.pat"), scratch.path().join("three.sig"));
-    let made = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let made = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["flirt", "make"])
         .arg(dir.join("libthree.a"))
         .arg("-o")
@@ -19,7 +19,7 @@ fn a_library_signature_names_the_functions_of_a_stripped_program() {
         .arg("--sig")
         .arg(&sig)
         .output()
-        .expect("run kuna flirt make");
+        .expect("run unlace flirt make");
     let stderr = String::from_utf8_lossy(&made.stderr);
     assert_eq!(made.status.code(), Some(0), "{stderr}");
     assert_eq!(std::fs::read(&pat).unwrap(), std::fs::read(dir.join("three.pat")).unwrap());
@@ -38,14 +38,14 @@ fn a_library_signature_names_the_functions_of_a_stripped_program() {
     assert_eq!(referenced, [("wrap_mix".into(), "mix_fold".into()), ("wrap_sum".into(), "sum_bytes".into())]);
 
     let functions = |flirt: &str| {
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .arg("functions")
             .arg(dir.join("prog"))
             .args(["--option", "flirt", flirt])
             .env("KUNA_FLIRT_SIGS", &sig)
             .env("SLEIGHHOME", common::repo_root().join("specs"))
             .output()
-            .expect("run kuna functions");
+            .expect("run unlace functions");
         assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
         let text = String::from_utf8(out.stdout).unwrap();
         text.lines().map(|l| l.split('\t').nth(1).unwrap_or_default().to_string()).collect::<Vec<_>>()
@@ -63,7 +63,7 @@ fn usage_errors_and_mixed_architectures_write_nothing() {
     let scratch = tempfile::tempdir().unwrap();
     let out = scratch.path().join("out.pat");
     let run = |args: &[&std::ffi::OsStr]| {
-        Command::new(env!("CARGO_BIN_EXE_kuna")).args(["flirt", "make"]).args(args).output().expect("run kuna")
+        Command::new(env!("CARGO_BIN_EXE_unlace")).args(["flirt", "make"]).args(args).output().expect("run kuna")
     };
     let no_output = run(&[dir.join("flirt/make/libthree.a").as_os_str()]);
     assert_eq!(no_output.status.code(), Some(2));

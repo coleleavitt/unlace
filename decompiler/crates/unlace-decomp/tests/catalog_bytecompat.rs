@@ -26,7 +26,7 @@
 //! C++ tree is gone and kuna is Rust-only, the Rust `emit_catalog_json` emitter is
 //! the authoritative source; kuna-native settables (e.g. `realtypes`, DIV-6) have
 //! no C++ origin. Recapture from the Rust `decomp_dbg` with the `openfile write`
-//! trick (the same one `kuna decompile` uses, so console prompts never pollute the
+//! trick (the same one `unlace decompile` uses, so console prompts never pollute the
 //! bytes), with no program loaded so `kunaLiveValue` returns `""` (no `current`):
 //!
 //! ```sh

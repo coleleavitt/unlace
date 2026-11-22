@@ -27,7 +27,7 @@
 //!   length. Emit if `visible_len >= min_len`. See [`scan_run`].
 //!
 //! The pass is always `requireNullEnd`, because the markup it commits is a
-//! `char[N]`. The read-only inventory behind `kuna strings` runs the same matcher
+//! `char[N]`. The read-only inventory behind `unlace strings` runs the same matcher
 //! under a caller-chosen [`Termination`] — see [`kuna_stringinv`].
 //!
 //! ## LOSS vs Ghidra (documented divergence)
@@ -71,7 +71,7 @@ pub(crate) fn is_string_char(b: u8) -> bool {
 ///
 /// [`StringLiteralPass`] is always [`Termination::Nul`] — the markup it commits is
 /// a `char[N]`, which only a NUL-ended run describes. The relaxed arm exists for
-/// the read-only inventory query behind `kuna strings`
+/// the read-only inventory query behind `unlace strings`
 /// ([`kuna_stringinv`](self::kuna_stringinv)), where the question is "what text is
 /// in this image", not "where can a `char[N]` be planted".
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

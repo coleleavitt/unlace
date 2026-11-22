@@ -31,7 +31,7 @@ _adjust:
 
 fn export(binary: &Path, directive: &str, strict: bool) -> std::process::Output {
     let directory = common::scratch_file("project-assertion-output", "dir");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.arg("decompile-project").arg(binary)
         .args(["--functions", "_sample", "--assert",
             "prototype _sample int __cdecl _sample(int value)", "--assert", directive])

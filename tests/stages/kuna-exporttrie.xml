@@ -4,7 +4,7 @@
     Mach-O export tries, re-exports followed (`option exporttrie on|off`,
     default on).
 
-    kuna read a Mach-O's exports from the symbol table only, and named a call
+    unlace read a Mach-O's exports from the symbol table only, and named a call
     into another dyld shared cache image after the target's own symbol. The
     export trie carries the names a stripped dylib keeps, and resolving an
     image's imports through the tries of the dylibs its two-level ordinals

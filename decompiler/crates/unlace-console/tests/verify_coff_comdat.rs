@@ -13,8 +13,8 @@
 //! means:
 //!
 //! ```text
-//!   before:  kuna functions combat.obj  →  1 function  (all 13 collide at 0x0)
-//!   after:   kuna functions combat.obj  →  13 functions at distinct VMAs
+//!   before:  unlace functions combat.obj  →  1 function  (all 13 collide at 0x0)
+//!   after:   unlace functions combat.obj  →  13 functions at distinct VMAs
 //! ```
 //!
 //! Every function but the first was unreachable: its symbol was deduped away by

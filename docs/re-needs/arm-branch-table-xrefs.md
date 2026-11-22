@@ -28,7 +28,7 @@ reject_reason: null
 Find who registers the callback `on_read`.
 
 > **ARM switch cases behind an A32 jump table have no references** (major, synthetic `branchtable_arm_le32`)
-> `kuna xrefs --to on_read` reports 0 references, although a case of `add_dispatch` and a case of `ldr_dispatch` each load it from its GOT slot and pass it to `set_timeout`. The walk follows only `b default` after `addls pc,pc,rN,lsl #2` or `ldrls pc,[pc,rN,lsl #2]`, and files a jump from the dispatch to that `b`.
+> `unlace xrefs --to on_read` reports 0 references, although a case of `add_dispatch` and a case of `ldr_dispatch` each load it from its GOT slot and pass it to `set_timeout`. The walk follows only `b default` after `addls pc,pc,rN,lsl #2` or `ldrls pc,[pc,rN,lsl #2]`, and files a jump from the dispatch to that `b`.
 
 Seen first on production ARM executables and a shared library (GCC, `-fPIC`), where the switch cases held most of the references kuna missed; `branchtable_arm_le32` reproduces both table forms from a small C source.
 

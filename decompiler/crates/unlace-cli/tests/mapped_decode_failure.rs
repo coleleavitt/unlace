@@ -13,13 +13,13 @@ fn mapped_symbol_without_bytes_is_not_an_external_symbol() {
 <symbol space="ram" offset="0x100000" name="mapped"/>
 <symbol space="ram" offset="0x200000" name="missing"/>
 </binaryimage>"#).unwrap();
-    let mapped = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let mapped = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", path.to_str().unwrap(), "mapped"])
         .output().unwrap();
     assert!(mapped.status.success(), "{}", String::from_utf8_lossy(&mapped.stderr));
     assert!(String::from_utf8_lossy(&mapped.stdout).contains("return 7;"));
     for selector in ["missing", "0x200000"] {
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile", path.to_str().unwrap(), selector])
             .output().unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -58,7 +58,7 @@ fn undefined_function_still_reports_an_external_symbol() {
     }).unwrap();
     let path = common::scratch_file("undefined-function", "o");
     std::fs::write(&path, obj.write().unwrap()).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["functions", path.to_str().unwrap()])
         .output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
@@ -68,7 +68,7 @@ fn undefined_function_still_reports_an_external_symbol() {
         .expect("undefined function in inventory");
     let address = outside_line.split_whitespace().next().unwrap();
     for (selector, json) in [("outside", false), ("outside", true), (address, false), (address, true)] {
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
         cmd.args(["decompile", path.to_str().unwrap(), selector]);
         if json { cmd.arg("--json"); }
         let output = cmd.output().unwrap();
@@ -92,7 +92,7 @@ fn mapped_decode_failure_is_not_an_external_symbol() {
     }
     std::fs::write(&path, elf).unwrap();
     for json in [false, true] {
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
         cmd.args(["decompile", path.to_str().unwrap(), "0x10000", "--addr"]);
         if json {
             cmd.arg("--json");
@@ -104,7 +104,7 @@ fn mapped_decode_failure_is_not_an_external_symbol() {
         assert!(!stdout.contains("external symbol"), "{stdout}");
         assert!(stderr.contains("Unable to load"), "{stderr}");
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", path.to_str().unwrap(), "0x10000", "--addr", "--isa", "thumb"])
         .output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));

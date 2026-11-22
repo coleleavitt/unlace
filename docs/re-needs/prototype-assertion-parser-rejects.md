@@ -121,7 +121,7 @@ _none recorded_
 - round 7 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK 2026-09-07 ~10:45Z by the captain. VERDICT: UPHELD, AND THE GAP IS AN EXPLICITLY-NAMED PORT STUB THAT MENTIONS __stdcall BY NAME. This is the cheapest need in the round-7 backlog and it is worth more than its 'major/cred 0.3' filing suggests -- see 3.
 
 REPRO (same arena binary as resource-loader-c-retains: arena/7/6442366033c5d43938912a85/target/Cube.exe):
-  kuna decompile $B sub_401ba0 --assert 'prototype 0x4050a6 void * __stdcall LoadLibraryExW(unsigned short *name,void *file,unsigned int flags)' --assert-strict
+  unlace decompile $B sub_401ba0 --assert 'prototype 0x4050a6 void * __stdcall LoadLibraryExW(unsigned short *name,void *file,unsigned int flags)' --assert-strict
   -> warning: ... rejected: Bad C syntax
 Drop the __stdcall and the SAME declaration is accepted. Reproduces at HEAD.
 

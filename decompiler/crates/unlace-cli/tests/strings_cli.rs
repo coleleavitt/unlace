@@ -1,4 +1,4 @@
-//! Integration tests for `kuna strings` against the built executable.
+//! Integration tests for `unlace strings` against the built executable.
 //! Processor specs and fixtures are required; load failures fail the tests.
 
 use serde_json::Value as Json;
@@ -29,7 +29,7 @@ fn utf8prompt() -> String {
 
 fn listing(argv: &[&str]) -> String {
     let (stdout, stderr, code) = run_kuna(&[&["strings"][..], argv].concat());
-    assert_eq!(code, 0, "kuna strings {argv:?}: {stderr}");
+    assert_eq!(code, 0, "unlace strings {argv:?}: {stderr}");
     stdout
 }
 
@@ -601,7 +601,7 @@ fn the_command_line_contract() {
 #[test]
 fn the_acceptance_probe() {
     let (stdout, stderr, code) = run_kuna(&["strings", &fauxware()]);
-    assert_eq!(code, 0, "kuna strings must exit 0, not {code}: {stderr}");
+    assert_eq!(code, 0, "unlace strings must exit 0, not {code}: {stderr}");
     assert!(
         stdout.contains("Username: "),
         "the .rodata prompts must be listed:\n{stdout}"
@@ -629,7 +629,7 @@ fn the_cli_json_is_a_document() {
 fn the_cli_exit_codes() {
     let (_, stderr, code) = run_kuna(&["strings"]);
     assert_eq!(code, 2, "no binary is a usage error");
-    assert!(stderr.contains("usage: kuna strings"), "{stderr}");
+    assert!(stderr.contains("usage: unlace strings"), "{stderr}");
 
     let (_, _, code) = run_kuna(&["strings", &fauxware(), "--encoding", "ebcdic"]);
     assert_eq!(code, 2, "an unknown encoding is a usage error");
@@ -647,7 +647,7 @@ fn the_cli_exit_codes() {
 /// The recorded defect: `strings` re-parses the image itself, and that raw parse
 /// used to skip the Mach-O fat-header peel the engine load applies — so a
 /// UNIVERSAL binary answered `could not parse <bin>: Unsupported file format`
-/// while `kuna functions` on the same file returned an inventory
+/// while `unlace functions` on the same file returned an inventory
 /// (crackmes.one 5ab77f5633c5d40ad448c29b). The scan needs no `.sla`, so this
 /// runs with `--no-xrefs` and is never a skip.
 #[test]

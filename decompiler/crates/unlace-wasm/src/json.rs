@@ -145,7 +145,7 @@ pub fn arr<I: IntoIterator<Item = String>>(items: I) -> String {
     out
 }
 
-/// The per-directive report, the fields `kuna decompile-all --json` gives it.
+/// The per-directive report, the fields `unlace decompile-all --json` gives it.
 pub fn assertions_json(outcomes: &[Outcome]) -> String {
     arr(outcomes.iter().map(|o| {
         Obj::new()

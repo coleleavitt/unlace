@@ -2,11 +2,11 @@
 //! it for the path-based loader.
 //!
 //! ```text
-//!   kuna <command> <lib.a> --member            # list the members
-//!   kuna <command> <lib.a> --member NAME ...   # run on one member
-//!   kuna <command> <lib.a>:NAME ...            # the same, as one path
-//!   kuna decompile <lib.a> <symbol>            # the member defining <symbol>
-//!   kuna functions <lib.a>                     # every member, names as member:name
+//!   unlace <command> <lib.a> --member            # list the members
+//!   unlace <command> <lib.a> --member NAME ...   # run on one member
+//!   unlace <command> <lib.a>:NAME ...            # the same, as one path
+//!   unlace decompile <lib.a> <symbol>            # the member defining <symbol>
+//!   unlace functions <lib.a>                     # every member, names as member:name
 //! ```
 //!
 //! A member is a relocatable object like any other `.o` input, so selection
@@ -310,7 +310,7 @@ fn prefixed(member: &str, line: &str) -> String {
     }
 }
 
-/// `kuna functions <lib.a>`: list every object member through its own run and
+/// `unlace functions <lib.a>`: list every object member through its own run and
 /// join the listings, each name prefixed `member:`. With `--json` the result is
 /// `{archive, members: [{member, functions: <that member's document>}]}`.
 fn functions_of_all(path: &str, members: &[Member<'_>], argv: &[String]) -> i32 {

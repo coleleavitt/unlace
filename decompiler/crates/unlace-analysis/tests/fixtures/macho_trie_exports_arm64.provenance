@@ -32,7 +32,7 @@ llvm-strip from the mstorsjo/llvm-mingw image)
   Prebuilt because CI has no Mach-O linker.
 
 What they pin
-  kuna functions lists _audit_exported_function and _audit_caller (base: sub_328
+  unlace functions lists _audit_exported_function and _audit_caller (base: sub_328
   and sub_340; the classic one: no functions at all); decompile by either
   spelling of either name succeeds, and _audit_caller reads
   `_audit_exported_function(a0) + _audit_exported_data`, as the unstripped

@@ -2,7 +2,7 @@
 <binaryimage arch="x86:LE:64:default:gcc">
 <!--
     RE-friction round 1, challenge 69a54bd70f5b9757a6a5f72f (PE x86-64
-    PolyMLP.exe): `kuna decompile ... 0x1400024a0` by address renders the same
+    PolyMLP.exe): `unlace decompile ... 0x1400024a0` by address renders the same
     allocator wrapper with two different arities thirty bytes apart,
 
         v13 = sub_140008160(0x28);          0x14000252c

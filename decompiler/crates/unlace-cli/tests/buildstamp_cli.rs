@@ -1,4 +1,4 @@
-//! The build handshake as `kuna` users see it: an engine binary from another
+//! The build handshake as `unlace` users see it: an engine binary from another
 //! build is named once on stderr, a matching or pre-handshake one is silent, and
 //! the warning never reaches stdout, where `--json` documents go.
 //!
@@ -58,7 +58,7 @@ fn decomp_dbg(tag: &str, answers_as: Option<&str>) -> PathBuf {
 }
 
 fn kuna(args: &[&str], envs: &[(&str, &Path)]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args(args)
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_TEST")

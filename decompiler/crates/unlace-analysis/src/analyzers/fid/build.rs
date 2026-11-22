@@ -6,7 +6,7 @@
 //! emits the deduplicated [`FidRecord`](crate::fid::db::FidRecord) rows the
 //! [`FidDb`](crate::fid::db::FidDb) serializes.
 //!
-//! This is the §5.2 generator the `kuna fid build` CLI subcommand drives
+//! This is the §5.2 generator the `unlace fid build` CLI subcommand drives
 //! (PR3). It is **not** wired into the decompile path — it is a build-time tool
 //! that produces the fixture `.fid`, never reached from a decompilation.
 //!

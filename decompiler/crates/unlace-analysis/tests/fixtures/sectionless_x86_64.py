@@ -4,8 +4,8 @@ whose one function forms a RIP-relative reference to a read-only string
 (RE-need `sectionless-elf-loses-string`, round-4 challenge 605443e333c5d42c3d016f59).
 
 The reported binary (`KataVM_L1`) is a 28682-byte PIE carrying `e_shoff=0` and
-thirteen intact program headers. `kuna disassemble` decodes `LEA RDI,[0x6b22]`
-and `kuna xrefs --from` recovers the CALL edges around it, but `kuna strings
+thirteen intact program headers. `unlace disassemble` decodes `LEA RDI,[0x6b22]`
+and `unlace xrefs --from` recovers the CALL edges around it, but `unlace strings
 --filter Correct` answers `xrefs_count 0, functions []`: the reference walk
 classifies data operands against the section table, which is not there.
 

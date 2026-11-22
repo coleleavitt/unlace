@@ -56,7 +56,7 @@ fn decompile(image: &Path, options: &[(&str, &str)]) -> String {
         ),
     ];
     let specs = common::repo_root().join("specs");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args([
         "decompile",
         image.to_str().unwrap(),

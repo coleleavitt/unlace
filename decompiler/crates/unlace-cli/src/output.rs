@@ -2,13 +2,13 @@
 //!
 //! Every command renders its output and hands it here instead of `println!`,
 //! which panics (exit 101) the moment a downstream reader closes the pipe --
-//! `kuna catalog --markdown | head` was a panic on every subcommand that writes
+//! `unlace catalog --markdown | head` was a panic on every subcommand that writes
 //! stdout.  A closed pipe is a normal terminal condition: no panic, no
 //! diagnostic.
 //!
 //! It suppresses the *diagnostic*, never the *verdict*.  The status a command
 //! computed says whether its work succeeded and is orthogonal to whether anyone
-//! was still reading, so it survives the broken pipe (`kuna test | head` on a
+//! was still reading, so it survives the broken pipe (`unlace test | head` on a
 //! REGRESSED baseline still exits 1 -- a gate that cannot go green by losing its
 //! audience).  Any other write failure is a real error: it is reported and
 //! forces exit 1.

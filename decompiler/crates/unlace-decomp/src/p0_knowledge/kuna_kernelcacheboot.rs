@@ -5,7 +5,7 @@
 //! the System collection) with chained fixups that are offsets from the other
 //! file's base, so the loader has to read that file. Loading happens before any
 //! per-function `option` command, so the live gate is the
-//! [`KERNELCACHE_BOOT_ENV`] environment variable, exported by the `kuna` CLI
+//! [`KERNELCACHE_BOOT_ENV`] environment variable, exported by the `unlace` CLI
 //! and bridged from the console `option` command.
 
 use std::path::PathBuf;

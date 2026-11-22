@@ -15,7 +15,7 @@ fn decompile(
         "MIPS:BE:64:octeon:default"
     };
     let return_type = if wide { "unsigned long long" } else { "void" };
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .arg("decompile")
         .arg(image)

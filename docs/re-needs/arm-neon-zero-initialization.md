@@ -111,7 +111,7 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 11 REFUTER: hypothesis **overturned** (was inconclusive). OVERTURNED. Symptom stands and is stronger than filed (no options needed: bare `kuna decompile trap _start_main` emits all three near-null reads; the tester's "enabling dynrelocs does not change this" is a red herring, nothing needs enabling). The CAUSE is misnamed and the store named in the hypothesis is provably innocent.
+- round 11 REFUTER: hypothesis **overturned** (was inconclusive). OVERTURNED. Symptom stands and is stronger than filed (no options needed: bare `unlace decompile trap _start_main` emits all three near-null reads; the tester's "enabling dynrelocs does not change this" is a red herring, nothing needs enabling). The CAUSE is misnamed and the store named in the hypothesis is provably innocent.
 
 WHAT THE HYPOTHESIS BLAMES: "vector-store expansion may treat a constant vector as a source pointer" -- i.e. the vst1.64. MEASURED: the vst1 semantics are correct. ARMneon.sinc:6026-6035 buildVst1DdList is `* mult_addr = Dreg; mult_addr = mult_addr + 8; build buildVst1DdList;` -- two clean 8-byte stores of d16 then d17, and the writeback form (6056) adds `RnAligned45 = RnAligned45 + (8 * vst1DdList)`. There is no pointer-typed read anywhere in the store path. A builder who goes looking in the vst1 lowering will find nothing wrong.
 

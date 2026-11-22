@@ -130,7 +130,7 @@ entire 4-if / GED-34 delta against IDA, Ghidra, angr, binja and phoenix (all
 five score 0).
 
 This is not specific to this function or this binary. Across all **988**
-functions of the fresh `kuna decompile-all` of `ssh-add`, the number of emitted
+functions of the fresh `unlace decompile-all` of `ssh-add`, the number of emitted
 calls with more than six arguments is **zero**. Reference counts on the same
 binary (function definitions included, so slightly inflated): ghidra 300,
 ida 338, binja 300, angr 263, dewolf 147.
@@ -144,11 +144,11 @@ __attribute__((noinline)) long caller(long x,long y){ return callee(1,2,3,4,5,6,
 ```
 
 ```
-$ kuna decompile ./t4 callee          # CALLEE side is CORRECT
+$ unlace decompile ./t4 callee          # CALLEE side is CORRECT
 int8 callee(int8 a0,int8 a1,int8 a2,int8 a3,int8 a4,int8 a5,int8 a6,int8 a7)
 { return a6 * 3 + a0 + a1 + a2 + a3 + a4 + a5 + a7 * 5; }
 
-$ kuna decompile ./t4 caller          # CALLER side DROPS the two stack args
+$ unlace decompile ./t4 caller          # CALLER side DROPS the two stack args
 void caller(void)
 { callee(1,2,3,4,5,6); return; }
 ```

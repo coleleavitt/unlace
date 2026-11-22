@@ -194,7 +194,7 @@ text is relabeled; `opLoad` / `opPtradd` keep building index and cast expression
 Proof it is this line and nothing upstream of it — the same function with the gate off:
 
 ```
-$ kuna decompile <stripped> --addr 0x56c0 --option realtypes off
+$ unlace decompile <stripped> --addr 0x56c0 --option realtypes off
 int4 sub_56c0(xunknown8 a0,xunknown4 a1,xunknown4 a2,xunknown8 *a3)
    ...  if ((code *)a3[1])            // stride 8: correct, and self-consistent
 ```
@@ -203,7 +203,7 @@ The pointee really is an 8-byte residual unknown; P5 never mis-typed anything, a
 are not involved. This is purely the P9 `realtypes` presentation policy (option `realtypes`,
 default **on**, phase P9 / subphase `literal-format`).
 
-**Prevalence.** Not a one-off. Across a full `kuna decompile-all` of this 291-function
+**Prevalence.** Not a one-off. Across a full `unlace decompile-all` of this 291-function
 `libacl.so`: **68** `*(void *)(...)` load/store sites with no access width, and **24
 functions** in which a `void *`-declared name is dereferenced or indexed. Every one of those
 is uncompilable C.

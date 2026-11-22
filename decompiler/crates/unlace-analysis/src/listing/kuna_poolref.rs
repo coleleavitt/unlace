@@ -17,8 +17,8 @@
 //! ```
 //!
 //! The walk files `0x862c -> 0x86e4 read` and stops there, because 0x86e4 is
-//! all the instruction says. Nothing references 0x661bc, so `kuna xrefs --to`
-//! that string answers zero and `kuna strings --json` reports it with
+//! all the instruction says. Nothing references 0x661bc, so `unlace xrefs --to`
+//! that string answers zero and `unlace strings --json` reports it with
 //! `xrefs_count 0` and no owning function — on a binary whose disassembly plainly
 //! shows which function prints it. This is [`super::kuna_picbase`]'s defect one
 //! indirection over: there the address is a register plus a displacement, here it

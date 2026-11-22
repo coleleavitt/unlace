@@ -1,4 +1,4 @@
-/* Embedded files for `kuna blobs` and the `blobs` option: each array is one
+/* Embedded files for `unlace blobs` and the `blobs` option: each array is one
  * whole file, except `broken`, a PNG cut before its IEND chunk.
  *
  *   clang -O2 -fcf-protection=full -c embedded_blobs_x86_64.c -o embedded_blobs_x86_64.o

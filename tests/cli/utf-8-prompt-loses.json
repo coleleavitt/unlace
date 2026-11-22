@@ -61,5 +61,5 @@
       }
     ]
   },
-  "notes": "Promoted acceptance of utf-8-prompt-loses (crackmes.one 6736b3a09b533b4c22bd2b9f no-standards: the prompt at 0x2000 was reported at 0x200c with xrefs_count 0 and no functions, though kuna xrefs --to 0x2000 already found the entry routine's LEA), re-pointed at the vendored utf8prompt_x86_64 -- CI has no dataset. Same shape: prompt at 0x101000, its ASCII suffix at 0x10100c."
+  "notes": "Promoted acceptance of utf-8-prompt-loses (crackmes.one 6736b3a09b533b4c22bd2b9f no-standards: the prompt at 0x2000 was reported at 0x200c with xrefs_count 0 and no functions, though unlace xrefs --to 0x2000 already found the entry routine's LEA), re-pointed at the vendored utf8prompt_x86_64 -- CI has no dataset. Same shape: prompt at 0x101000, its ASCII suffix at 0x10100c."
 }

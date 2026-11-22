@@ -144,12 +144,12 @@ _none recorded_
 
 SYMPTOM REPRODUCED: the filed probe emits `if (watchdog()) {` at line 35. The disassembly the tester cited is exact -- 0x1146a MOV ESI,0x2 / 0x1146f MOV EDI,0x13050 / 0x11474 INC R12 / 0x11477 CALL 0x110ff.
 
-WHY THE HYPOTHESIS IS WRONG. The filed hypothesis is "inferred callee arity is not applied at this call site". Arity inference does not fail here -- it SUCCEEDS. Decompiling the callee on its own (`kuna decompile <bin> 0x110ff --addr --option linuxsyscall on`) yields:
+WHY THE HYPOTHESIS IS WRONG. The filed hypothesis is "inferred callee arity is not applied at this call site". Arity inference does not fail here -- it SUCCEEDS. Decompiling the callee on its own (`unlace decompile <bin> 0x110ff --addr --option linuxsyscall on`) yields:
     undefined16 sub_110ff(long a0,int a1,unsigned long a2,unsigned long a3)
 and the body proves the first two are real: a0 is dereferenced as the timer array (`v2 = *(long **)(a0 + v4 * 8)`) and a1 is the count (`if (a1 <= (int)v4)`). Those are precisely the two values the tester wanted. So the gap is NOT arity recovery; it is that the callee-side result never reaches the CALLER-side trial at 0x11477. A builder who takes the hypothesis literally would go tune arity inference, which already works.
 
 FIVE ABLATIONS, ALL NEGATIVE -- do not repeat them:
-1. BOTH CITED OPTIONS ARE DEFAULT-ON (`kuna catalog`: calleearity default on, varargstackargs default on), so the probe sentence "with calleearity and varargstackargs enabled" is VACUOUS. I ran the real A/B: `--option calleearity off`, `--option varargstackargs off`, and both off together -- all three emit the identical `watchdog()` at line 35. Neither option is on this path in either direction.
+1. BOTH CITED OPTIONS ARE DEFAULT-ON (`unlace catalog`: calleearity default on, varargstackargs default on), so the probe sentence "with calleearity and varargstackargs enabled" is VACUOUS. I ran the real A/B: `--option calleearity off`, `--option varargstackargs off`, and both off together -- all three emit the identical `watchdog()` at line 35. Neither option is on this path in either direction.
 2. --define-function is not implicated: without it the call still renders `sub_110ff()`, argument-less.
 3. Not the spill gate: `--option spillargtrial reload` AND `--option spillargtrial spill` both leave `watchdog()` unchanged.
 4. `--option compareform canonical` does move the output on this exact command, so --option demonstrably reaches this decompile (control for the silent-unknown-option trap).

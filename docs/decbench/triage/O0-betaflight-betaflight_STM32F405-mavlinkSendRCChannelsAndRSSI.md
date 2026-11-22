@@ -108,7 +108,7 @@ int repron(void){ return sinkn((cnt>=1)?7:0, (cnt>=2)?8:0, ... (cnt>=8)?14:0); }
 ```
 
 ```
-$ kuna decompile rep8.o repron              # default-ON iteregion, plain COPY arms
+$ unlace decompile rep8.o repron              # default-ON iteregion, plain COPY arms
 void repron(void) // ternary x4
   v6 = (8 <= dat_402000) ? 0xe : 0;         <- re-rolled
   if (7 <= dat_402000) v5 = 0xd; else { v5 = 0; }

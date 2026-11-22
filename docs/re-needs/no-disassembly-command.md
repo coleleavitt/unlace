@@ -22,7 +22,7 @@ Filed by round-1 testers on the crackmes corpus. See `.kuna-repipe/rounds/1/gate
 
 ## Acceptance
 
-CLOSED in round 1. Shipped: `kuna disassemble <bin> <name|0xaddr|0xstart-0xend> [--addr] [--count N] [--bytes N] [--json]` -- --json carries the raw bytes so a decompilation can be checked against them
+CLOSED in round 1. Shipped: `unlace disassemble <bin> <name|0xaddr|0xstart-0xend> [--addr] [--count N] [--bytes N] [--json]` -- --json carries the raw bytes so a decompilation can be checked against them
 
 **Closed WITHOUT an acceptance flip.** Filed by hand, so this record carries no `probe_id`/`acceptance_id` and the gate never closed it -- a human did. The design says only the acceptance probe may close a need; this one did not go through that. The durable evidence that the capability works is:
 - `tests/cli/disassemble-named-function.json`

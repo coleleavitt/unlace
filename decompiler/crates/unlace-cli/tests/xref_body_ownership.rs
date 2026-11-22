@@ -18,7 +18,7 @@ fn discontiguous_callers_keep_their_calls_in_both_query_directions() {
             .unwrap()
             .success());
         for (direction, entry) in [("--from", "0x1500"), ("--to", "0x1100")] {
-            let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args([
                     "xrefs",
                     path.to_str().unwrap(),

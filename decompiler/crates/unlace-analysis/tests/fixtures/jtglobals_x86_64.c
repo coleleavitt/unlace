@@ -1,7 +1,7 @@
 /* GH-1034 fixture: `big` makes 400 calls, each between a read and a write of
    one of 400 writable globals, then switches through a jump table. Recovering
    that table heritages everything before it, every global at every call, while
-   `kuna decompile` is still following flow, before the decompile drive starts.
+   `unlace decompile` is still following flow, before the decompile drive starts.
    Rebuild:
      gcc -O2 -fno-pie -no-pie -fno-inline -o jtglobals_x86_64 jtglobals_x86_64.c */
 __attribute__((noinline)) long f(long v) { __asm__ volatile("" : "+r"(v)); return v + 1; }

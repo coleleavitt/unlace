@@ -1,7 +1,7 @@
-//! `kuna docs` as a binary of its own — `src/docs.rs` given a `main`.
+//! `unlace docs` as a binary of its own — `src/docs.rs` given a `main`.
 //!
 //! It exists to demonstrate the property the feature is *for*, independently of
-//! the `kuna` dispatch table: build it, copy the executable anywhere — an empty
+//! the `unlace` dispatch table: build it, copy the executable anywhere — an empty
 //! directory, a machine with no checkout — and every document is still there,
 //! because they are `include_str!`-ed into the executable rather than read from
 //! `docs/` at runtime.
@@ -11,7 +11,7 @@
 //! decompiler/target/release/examples/docs_standalone options | head
 //! ```
 //!
-//! It is not part of `make binaries` and is not shipped; `kuna docs` is the
+//! It is not part of `make binaries` and is not shipped; `unlace docs` is the
 //! product surface.
 
 #[path = "../src/docs.rs"]

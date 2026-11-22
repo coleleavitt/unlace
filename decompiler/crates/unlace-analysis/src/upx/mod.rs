@@ -7,7 +7,7 @@
 //! *original* image so the rest of the tier has something to analyze.
 //!
 //! It is a reimplementation, not a wrapper: `upx -d` cannot be assumed present
-//! on a machine running a release `kuna`, and shelling out to a packer to look
+//! on a machine running a release `unlace`, and shelling out to a packer to look
 //! at a hostile binary is not a thing an analyzer should do. The compressed
 //! stream is UCL NRV2B/NRV2D/NRV2E ([`nrv`]) or LZMA ([`lzma`]) under a
 //! per-block branch filter ([`filter`]); the reconstruction walks live in
@@ -372,7 +372,7 @@ mod tests {
     use super::*;
 
     /// The vendored UPX 3.96 witness (see its `.provenance` sidecar): the same
-    /// binary that made `kuna functions` report zero functions.
+    /// binary that made `unlace functions` report zero functions.
     fn fixture() -> Vec<u8> {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/upx_packed_x86_64");
@@ -517,7 +517,7 @@ mod tests {
     }
 
     /// The vendored win32/pe witness (see its `.provenance` sidecar): the
-    /// crackme on which `kuna unpack` reported "no UPX PackHeader found" of a
+    /// crackme on which `unlace unpack` reported "no UPX PackHeader found" of a
     /// file that is unambiguously UPX-packed.
     fn pe_fixture() -> Vec<u8> {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -6,7 +6,7 @@
 //! nearest superclass that declares it), at that method's first instruction.
 //! [`MethodIndex`] resolves a reference to that address, and [`calls`] lists
 //! every `invoke` of the loaded files with the method it reaches, which is the
-//! call graph `kuna xrefs` answers from for DEX and APK input.
+//! call graph `unlace xrefs` answers from for DEX and APK input.
 
 use std::collections::HashMap;
 use std::rc::Rc;

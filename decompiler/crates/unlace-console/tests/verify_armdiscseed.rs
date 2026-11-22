@@ -40,7 +40,7 @@ fn fixture() -> PathBuf {
     repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/armdiscseed_le32")
 }
 
-/// Bootstrap the fixture the way every `kuna` driver does on a non-x86-64 image
+/// Bootstrap the fixture the way every `unlace` driver does on a non-x86-64 image
 /// (DIV-20/DIV-68: the Listing plus the discovery bundle).
 fn bootstrap() -> ConsoleProgram {
     bootstrap_path(&fixture())
@@ -72,7 +72,7 @@ fn entries(prog: &ConsoleProgram) -> Vec<(String, u64, u64)> {
         .collect()
 }
 
-/// The inventory a `kuna functions` run reports: the validator is its own
+/// The inventory a `unlace functions` run reports: the validator is its own
 /// function, and `main` stops where the validator starts.
 #[test]
 fn the_inventory_lists_the_function_main_calls() {

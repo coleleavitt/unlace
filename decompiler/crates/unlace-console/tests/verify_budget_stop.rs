@@ -1,6 +1,6 @@
-//! A `kuna decompile` budget stop lands at the budget (#1034).
+//! A `unlace decompile` budget stop lands at the budget (#1034).
 //!
-//! `kuna decompile` drives the console with `load addr` (or `load function`)
+//! `unlace decompile` drives the console with `load addr` (or `load function`)
 //! and then `decompile`, which adopts the IR the load followed. Two things
 //! used to push a stop past the budget:
 //!
@@ -10,7 +10,7 @@
 //!    keep an un-decompiled function for `print C`'s failure shell.
 //!
 //! The shell is now built without that follow; `print raw` and the `region`
-//! commands (`kuna decompile --raw` / `--regions`) follow it when they run.
+//! commands (`unlace decompile --raw` / `--regions`) follow it when they run.
 //!
 //! On a 205 KB function a 120 s budget stopped after about 220 s, while the
 //! same function decompiled with no budget in 210 s. This binary sets the

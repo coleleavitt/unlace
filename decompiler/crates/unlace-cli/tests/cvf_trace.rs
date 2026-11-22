@@ -92,7 +92,7 @@ fn traced(root: &Path, image: &Image, base: &[u8], name: &str, trace: &[u8]) -> 
 }
 
 fn kuna(args: &[&std::ffi::OsStr]) -> (String, String) {
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .arg("--sleighpath")
         .arg(common::repo_root().join("specs"))

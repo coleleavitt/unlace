@@ -81,7 +81,7 @@ fn definition_wins_over_its_plt_but_real_definitions_remain_ambiguous() {
     for (definitions, named_stub) in [(1, false), (1, true), (0, false), (2, false)] {
         let path = common::scratch_file("definition-and-plt", "elf");
         std::fs::write(&path, image(definitions, named_stub)).unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile", path.to_str().unwrap(), "answer", "--mode", "reliable", "--json"])
             .output().unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -96,14 +96,14 @@ fn definition_wins_over_its_plt_but_real_definitions_remain_ambiguous() {
             if definitions == 1 {
                 assert!(stdout.contains("return 7;"), "{stdout}");
                 for selector in ["0x1000", "0x2000"] {
-                    let selected = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                    let selected = Command::new(env!("CARGO_BIN_EXE_unlace"))
                         .args(["decompile", path.to_str().unwrap(), selector, "--addr", "--mode", "reliable", "--json"])
                         .output().unwrap();
                     let text = String::from_utf8_lossy(&selected.stdout);
                     assert!(selected.status.success(), "{text}\n{}", String::from_utf8_lossy(&selected.stderr));
                     assert!(text.contains(&format!("\"address_hex\": \"{selector}\"")), "{text}");
                 }
-                let text = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                let text = Command::new(env!("CARGO_BIN_EXE_unlace"))
                     .args(["decompile", path.to_str().unwrap(), "answer", "--mode", "reliable"])
                     .output().unwrap();
                 assert!(text.status.success(), "{}", String::from_utf8_lossy(&text.stderr));

@@ -189,7 +189,7 @@ path drops it too. The same pattern with `fill(&len)` (a *register* argument) is
 perfectly, loop and all, which is the control.
 
 On i386, where *every* argument is stack-passed, the effect is total: in
-`kuna decompile-project mydoom.exe` 259 of 276 rendered calls have an empty argument list, and
+`unlace decompile-project mydoom.exe` 259 of 276 rendered calls have an empty argument list, and
 on a second, independent i386 PE (`minipig.exe`) it is 90 of 92. Ghidra recovers them even for
 unprototyped local callees (`FUN_004052b4(local_42e + 3,local_42e)`), which is why it keeps
 `local_434` alive across `ReadFile` and keeps the loop.
@@ -254,7 +254,7 @@ Mechanism, in dependency order:
    guard machinery itself looks sound; it is the escape fact that is missing.
 4. Separately (smaller, independent value): apply PE IAT import prototypes so `ReadFile`,
    `CreateFileA`, `CloseHandle` render named and typed rather than `(*dat_411350)()`. kuna
-   already *knows* these names - `kuna functions mydoom.exe --json` lists `ReadFile @ 0x411350` -
+   already *knows* these names - `unlace functions mydoom.exe --json` lists `ReadFile @ 0x411350` -
    the decompiler just does not consume them for the indirect-call target.
 
 Risks: this is upstream-faithful behavior being restored, not a judgment call, so per the

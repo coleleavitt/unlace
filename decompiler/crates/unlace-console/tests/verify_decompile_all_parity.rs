@@ -1,5 +1,5 @@
 //! End-to-end gate for **surface parity** (DIV-66): the whole-binary decompile
-//! loop behind `kuna decompile-all` / `decompile-project` / wasm must produce the
+//! loop behind `unlace decompile-all` / `decompile-project` / wasm must produce the
 //! same C as the console `decompile` command for the same binary, function and
 //! options.
 //!
@@ -102,7 +102,7 @@ fn provenance_collection_preserves_the_plain_code_bytes() {
 }
 
 /// `main` through the CONSOLE command (`load function` / `decompile` / `print C`
-/// — what `kuna decompile` drives in its `decomp_dbg` subprocess).
+/// — what `unlace decompile` drives in its `decomp_dbg` subprocess).
 fn console_main(arch: &str, formatstring_on: bool) -> String {
     let prog = load(arch, formatstring_on);
     let cmds: Vec<String> =

@@ -91,7 +91,7 @@ pub mod kuna_elfgotimports;
 // address the image defines, reported constant.
 pub mod kuna_mipsgot;
 // (kuna) The pointers an image stores in its data, as its rebase / relocation
-// metadata lists them (the data half of `kuna xrefs`).
+// metadata lists them (the data half of `unlace xrefs`).
 pub mod kuna_dataptrs;
 // (kuna) `pltlocal`: the PLT stubs the image's own relocations bind to a
 // function it defines.

@@ -82,7 +82,7 @@ fn main() { unsafe {
 
 fn decompile(binary: &Path, language: &str) -> String {
     let functions: Vec<_> = PROTOTYPES.iter().map(|(name, _)| *name).collect();
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.arg("decompile-all")
         .arg(binary)
         .args(["--functions", &functions.join(","), "--language", language, "--assert-strict"]);

@@ -20,7 +20,7 @@ How it was built (no macOS SDK; host clang + the rustup-bundled ld64.lld)
   has no Mach-O linker.
 
 What it pins
-  kuna decompile macho_datawidth_arm64 _bump names both globals at their access
+  unlace decompile macho_datawidth_arm64 _bump names both globals at their access
   width (`_counter += 1;`), and the in-place increment of origin.x, a 4-byte
   access to the 8-byte _origin, renders the store form `*(int *)&_origin += 1;`
   rather than the cast `(int)_origin += 1;`, which is not C.

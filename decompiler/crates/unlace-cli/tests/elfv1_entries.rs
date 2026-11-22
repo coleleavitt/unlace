@@ -109,7 +109,7 @@ fn descriptor_relocations_override_payloads_and_uncertain_tocs_are_not_seeded() 
         assert_eq!(shifted.entry_tocs().get(&0x11000), Some(&0x13000));
         let path = common::scratch_file("elfv1-rela-descriptor", "elf");
         std::fs::write(&path, bytes).unwrap();
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile", path.to_str().unwrap(), "answer", "--json", "--option", "readonly", "on"])
             .output().unwrap();
         let text = String::from_utf8_lossy(&out.stdout);
@@ -126,7 +126,7 @@ fn descriptor_relocations_override_payloads_and_uncertain_tocs_are_not_seeded() 
         let descriptors = Descriptors::read(&file);
         let path = common::scratch_file("elfv1-uncertain-alias", "elf");
         std::fs::write(&path, bytes).unwrap();
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile", path.to_str().unwrap(), "0x1000", "--addr", "--json", "--option", "readonly", "on"])
             .output().unwrap();
         let text = String::from_utf8_lossy(&out.stdout);
@@ -196,14 +196,14 @@ fn descriptors_select_code_and_seed_each_functions_toc() {
         assert_eq!(loader.func_symbols().len(),4);
         let path=common::scratch_file("elfv1-entries","elf");std::fs::write(&path,bytes).unwrap();
         for (selector,address,value) in [("answer","0x1000",7),("alias","0x1000",7),(".answer","0x1000",7),("second","0x1008",9),("0x1008","0x1008",9)] {
-            let out=Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let out=Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args(["decompile",path.to_str().unwrap(),selector,"--json","--option","readonly","on"]).output().unwrap();
             let text=String::from_utf8_lossy(&out.stdout);
             assert!(out.status.success(),"{text}\n{}",String::from_utf8_lossy(&out.stderr));
             assert!(text.contains(&format!("\"address_hex\": \"{address}\"")),"{text}");
             assert!(text.contains(&format!("return {value};")),"{text}");
         }
-        let out=Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out=Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile",path.to_str().unwrap(),"0x2000","--addr","--json"]).output().unwrap();
         assert!(String::from_utf8_lossy(&out.stdout).contains("\"address_hex\": \"0x2000\""));
         std::fs::remove_file(path).unwrap();
@@ -253,7 +253,7 @@ fn a_stripped_entry_descriptor_seeds_discovery_at_its_code() {
         }
         let path = common::scratch_file("elfv1-stripped-entry", "elf");
         std::fs::write(&path, &bytes).unwrap();
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["functions", path.to_str().unwrap(), "--json"]).output().unwrap();
         let text = String::from_utf8_lossy(&out.stdout);
         let found: Vec<u64> = text.split("\"address\": ").skip(1)
@@ -271,7 +271,7 @@ fn entry_reports_use_normalized_code_and_reachability() {
         let path = common::scratch_file("elfv1-entry-summary", "elf");
         // bl 0x1008; blr. The entry reaches the second function.
         std::fs::write(&path, image_with_code(abi, &[0x48,0,0,9,0x4e,0x80,0,0x20])).unwrap();
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["functions", path.to_str().unwrap(), "--summary", "--json"])
             .output().unwrap();
         let text = String::from_utf8_lossy(&out.stdout);
@@ -281,7 +281,7 @@ fn entry_reports_use_normalized_code_and_reachability() {
         assert!(["answer", "alias", ".answer"].iter()
             .any(|name| entry.contains(&format!("\"name\": \"{name}\""))), "{text}");
         assert!(text.contains("\"reachable_from_entry\": 2"), "{text}");
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile-graph", path.to_str().unwrap()])
             .output().unwrap();
         let text = String::from_utf8_lossy(&out.stdout);
@@ -316,7 +316,7 @@ fn toc_reload_switch() -> Vec<u8> {
 #[test]
 fn elfv1_toc_reload_after_a_call_keeps_the_jump_table_base() {
     let decompile = |path: &std::path::Path, option: Option<&str>| {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command.env("KUNA_SPECS", common::repo_root().join("specs"))
             .args(["decompile", path.to_str().unwrap(), ".answer"]);
         if let Some(value) = option { command.args(["--option", "callmechanisms", value]); }
@@ -383,7 +383,7 @@ fn elfv1_calls_keep_their_short_circuit_condition() {
         let path = common::scratch_file("elfv1-short-circuit", "elf");
         std::fs::write(&path, image_with_code(1, &code)).unwrap();
         let [default, on, off] = [None, Some("on"), Some("off")].map(|option| {
-            let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command.env("KUNA_SPECS", common::repo_root().join("specs"))
                 .args(["decompile", path.to_str().unwrap(), address, "--addr"]);
             if let Some(value) = option { command.args(["--option", "callmechanisms", value]); }

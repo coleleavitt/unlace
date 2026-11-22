@@ -39,7 +39,7 @@ fn run(case: &str, records: &[&str], argument: &str) -> String {
     let binary = dir.join("fixture.elf");
     std::fs::write(&binary, image()).unwrap();
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let mut cmd = Command::new(kuna);
     cmd.arg("decompile-all")
         .arg(&binary)

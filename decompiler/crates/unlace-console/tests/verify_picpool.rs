@@ -4,7 +4,7 @@
 //!
 //! Fixture: `picpool_arm_le32` (`picpool_arm_le32.py` builds it), the reduction
 //! of crackmes.one/68d40081224c0ec5dcedc2d2, where
-//! `kuna strings --json --filter "Benar!"` reported `xrefs_count: 0` and no
+//! `unlace strings --json --filter "Benar!"` reported `xrefs_count: 0` and no
 //! owning function for a string `main` plainly prints: the address is in neither
 //! instruction of `ldr r0,[0x6a0] ; add r0,pc,r0`, and the pool word holds the
 //! signed distance -0x1c1, which is not an address at all.
@@ -48,7 +48,7 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
 }
 
-/// Bootstrap the fixture and build the index `kuna xrefs` / `kuna strings` answer out of.
+/// Bootstrap the fixture and build the index `unlace xrefs` / `unlace strings` answer out of.
 fn index() -> XrefIndex {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/picpool_arm_le32");
     let specs = repo_root().join("specs");

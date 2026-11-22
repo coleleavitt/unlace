@@ -670,7 +670,7 @@ pub(crate) fn is_executable(sec: &object::Section) -> bool {
 /// A UPX image is section-less exactly like a stripped one, but its `PF_X`
 /// `PT_LOAD` is a decompressor wrapped around a compressed blob: discovering the
 /// stub's handful of routines would bury the far more actionable answer kuna
-/// already gives such an image -- "image appears UPX-packed; try `kuna unpack`",
+/// already gives such an image -- "image appears UPX-packed; try `unlace unpack`",
 /// which a run that discovers nothing is what produces. So decline the fallback
 /// and leave that image exactly as it is today.
 ///

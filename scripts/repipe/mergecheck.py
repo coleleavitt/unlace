@@ -194,7 +194,7 @@ def _footer_findings(path, rel, text, check):
                            "data_footer says {} passing, the file carries {} keys".format(
                                footer[0], len(passing)),
                            "re-RECORD it, never merge it:\n"
-                           "  kuna test --datatests --datatests-dir tests/stages "
+                           "  unlace test --datatests --datatests-dir tests/stages "
                            "--save-baseline {}".format(rel)))
     if len(footer) > 1 and footer[1] < footer[0]:
         out.append(Finding("C", check, REJECT, "impossible-footer", rel, 0,

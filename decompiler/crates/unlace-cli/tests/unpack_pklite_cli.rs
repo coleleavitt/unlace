@@ -1,4 +1,4 @@
-//! CLI end-to-end gate for `kuna unpack` on PKLITE-compressed DOS programs.
+//! CLI end-to-end gate for `unlace unpack` on PKLITE-compressed DOS programs.
 //! Inputs come from the synthetic generator the analysis tier's own tests use,
 //! so no PKWARE decompressor stub is vendored: the recovered file must be the
 //! original program byte for byte, and a stub variant nothing recognizes must
@@ -72,5 +72,5 @@ fn a_packed_dos_program_points_at_kuna_unpack() {
     let (image, _) = packed("v1.00 large");
     let input = written("pklite-hint", &image);
     let (_, stderr, _) = common::run_kuna(&["functions", &input]);
-    assert!(stderr.contains("PKLITE packed: run 'kuna unpack'"), "{stderr}");
+    assert!(stderr.contains("PKLITE packed: run 'unlace unpack'"), "{stderr}");
 }

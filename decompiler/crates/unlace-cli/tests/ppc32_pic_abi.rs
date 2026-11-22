@@ -121,7 +121,7 @@ fn ppc32_pic_option_controls_names_contracts_and_xrefs() {
         };
         for option in ["default", "off", "abi"] {
             let enabled = option == "abi";
-            let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command.args([
                 "decompile",
                 path.to_str().unwrap(),
@@ -149,7 +149,7 @@ fn ppc32_pic_option_controls_names_contracts_and_xrefs() {
             if !noreturn {
                 assert!(text.contains("return 7;"), "{text}");
             }
-            let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command.args(["xrefs", path.to_str().unwrap(), "--to", name, "--json"]);
             if option != "default" {
                 command.args(["--option", "ppc32picimports", option]);
@@ -387,7 +387,7 @@ fn ppc32_proved_tail_stub_becomes_a_separate_named_function() {
     let path = common::scratch_file("ppc32-pic-tail", "so");
     std::fs::write(&path, fixture.bytes()).unwrap();
     for option in ["off", "abi"] {
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "functions",
                 path.to_str().unwrap(),
@@ -416,7 +416,7 @@ fn ppc32_proved_tail_stub_becomes_a_separate_named_function() {
                 .any(|f| f["address"] == 0x1800 && f["name"] == "__stack_chk_fail"));
         }
     }
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             path.to_str().unwrap(),
@@ -462,7 +462,7 @@ fn ppc32_pic_code_derived_indirect_caller_blocks_global_contract() {
     assert_proof_gap_refused("indirect");
     let path = common::scratch_file("ppc32-indirect-contract", "elf");
     std::fs::write(&path, fixture::proof_gap("indirect", false)).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             path.to_str().unwrap(),
@@ -791,7 +791,7 @@ fn abi_mode_is_explicit_and_last_cli_value_wins() {
         "/tests/fixtures/ppc32-pic-driver.so"
     );
     let run = |options: &[&str]| {
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
         cmd.args(["decompile", path, "check", "--mode", "fast"]);
         for option in options {
             cmd.args(["--option", "ppc32picimports", option]);
@@ -867,7 +867,7 @@ fn counted_branches_select_the_actual_in_function_indirect_target() {
             if decrements == 4 {
                 let path = common::scratch_file("ppc32-counted-target", "so");
                 std::fs::write(&path, fixture.bytes()).unwrap();
-                let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                     .args([
                         "decompile",
                         path.to_str().unwrap(),
@@ -908,7 +908,7 @@ fn unaligned_reversed_stores_cannot_certify_a_saved_pic_base() {
             }
             let path = common::scratch_file("ppc32-reversed-save", "so");
             std::fs::write(&path, fixture.bytes()).unwrap();
-            let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args([
                     "decompile",
                     path.to_str().unwrap(),

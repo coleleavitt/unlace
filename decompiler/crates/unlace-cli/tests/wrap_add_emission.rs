@@ -3,7 +3,7 @@ use crate::common;
 use std::process::Command;
 
 fn decompile(image: &std::path::Path, option: Option<&str>) -> String {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.arg("decompile").arg(image).arg("word_wrap");
     if let Some(value) = option {
         command.args(["--option", "wrapadd", value]);

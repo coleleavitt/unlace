@@ -5,7 +5,7 @@ external image, debug information, register reuse or inferred signature is neede
 
 ```sh
 python3 -c 'from pathlib import Path; Path("/tmp/callback.bin").write_bytes(bytes.fromhex("10402de90040a0e134ff2fe1ff0000e21080bde8"))'
-kuna decompile /tmp/callback.bin --raw-image --base 0x10000 --addr 0x10000 \
+unlace decompile /tmp/callback.bin --raw-image --base 0x10000 --addr 0x10000 \
   --target ARM:LE:32:v5t:default --isa arm --mode reliable --assert-strict \
   --assert 'prototype 0x10000 unsigned char invoke(unsigned int (*callback)(void))'
 ```

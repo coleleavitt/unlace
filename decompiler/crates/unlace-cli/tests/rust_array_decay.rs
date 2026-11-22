@@ -43,7 +43,7 @@ fn complete_rust_array_decay_matches_native_pointer_consumers() {
     }
     std::fs::remove_file(&native).unwrap();
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let output = process::required_output(Command::new(kuna).args([
         "decompile-all",
         &common::fixture("array_decay_x86_64"),

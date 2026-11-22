@@ -950,7 +950,7 @@ pub fn build_and_follow_flow_with_override(
     build_and_follow_flow_with_override_and_protos(arch, name, entry, size, flow_overrides, &[])
 }
 
-/// (kuna decompile-all watchdog) [`build_and_follow_flow_with_override`] for a
+/// (unlace decompile-all watchdog) [`build_and_follow_flow_with_override`] for a
 /// follow made outside a drive (the console's `load function` / `load addr`),
 /// under the budget and memory limit a drive of `arch` would arm: a follow
 /// still running when either runs out fails with the budget error instead of
@@ -974,14 +974,14 @@ pub fn build_and_follow_flow_within_budget(
     Ok(fd)
 }
 
-/// (kuna decompile-all watchdog) Did `error` stop a drive at its budget or
+/// (unlace decompile-all watchdog) Did `error` stop a drive at its budget or
 /// memory limit ([`budget_error`])?
 pub fn is_budget_stop(error: &KunaError) -> bool {
     let text = error.explain();
     text.starts_with(BUDGET_EXCEEDED) || text.starts_with(MEMORY_EXCEEDED)
 }
 
-/// (kuna decompile-all watchdog) The un-decompiled `Funcdata` a console keeps
+/// (unlace decompile-all watchdog) The un-decompiled `Funcdata` a console keeps
 /// for printing the shell of a function whose drive [`is_budget_stop`]ped,
 /// built without following its flow again: the budget that would bound the
 /// follow is spent, and the shell prints nothing the follow adds.
@@ -1247,7 +1247,7 @@ fn run_jumptable_pipeline(
     let saved = arch.allacts.get_current_name().to_string();
     arch.allacts.set_current("jumptable")?;
     let mut ctx = ActionContext::new();
-    // (kuna decompile-all watchdog) The jumptable sub-pipeline runs inside the
+    // (unlace decompile-all watchdog) The jumptable sub-pipeline runs inside the
     // budgeted per-function drive (flow-follow), so it shares the same deadline;
     // `None` on every unbudgeted path (console/parity — structurally unchanged).
     ctx.deadline = arch.kuna_fn_deadline;
@@ -1332,7 +1332,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
                 root.reset(fd);
             }
             let mut ctx = ActionContext::new();
-            // (kuna decompile-all watchdog) thread the per-function deadline
+            // (unlace decompile-all watchdog) thread the per-function deadline
             // into the action loop (`None` = no budget, the parity default).
             ctx.deadline = deadline;
             ctx.restart_early = reflows < MAX_REFLOW;
@@ -1346,7 +1346,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
         if let Some(error) = fd.kuna_call_mechanisms.failure.as_ref() {
             return Err(KunaError::lowlevel(error.clone()));
         }
-        // (kuna decompile-all watchdog) A budgeted drive that ran past its
+        // (unlace decompile-all watchdog) A budgeted drive that ran past its
         // deadline unwound cooperatively (the action/heritage loops stop
         // scheduling work); surface it as the per-function error the batch
         // driver records, instead of printing a half-analyzed function.
@@ -1577,7 +1577,7 @@ fn eligible_callees(
 /// Recover the prototypes of the direct callees whose P4 active-input trials
 /// name preferred-split storage.
 ///
-/// `kuna decompile <binary> <addr>` runs one function; unlike `decompile-all`
+/// `unlace decompile <binary> <addr>` runs one function; unlike `decompile-all`
 /// it has no callee-first order behind it, so a call's parameter types are
 /// whatever the caller wrote into registers.  `ActionActiveParam` scores the
 /// CALL op's input trials, and a trial that is the compiler spec's
@@ -2006,8 +2006,8 @@ fn decompile_func_full_with_objects_inner(
     purpose: DrivePurpose,
 ) -> KunaResult<Funcdata> {
     crate::kuna_armfloatreturn::park_float_library_prototypes(arch);
-    // (kuna decompile-all watchdog) Arm the per-function deadline from the
-    // driver-set budget (`kuna decompile-all --max-fn-seconds N` sets
+    // (unlace decompile-all watchdog) Arm the per-function deadline from the
+    // driver-set budget (`unlace decompile-all --max-fn-seconds N` sets
     // `kuna_fn_budget`, `decomp_dbg --max-fn-seconds N` the process default;
     // every other path leaves both unset, so this is a `None` assignment and the
     // pipeline below is structurally unchanged).  The budget
@@ -2284,7 +2284,7 @@ fn decompile_func_full_with_objects_inner(
         // writes while the p-code is still as lifted; heritage splits a 128-bit
         // write into the same lanes.
         crate::p4_calls::kuna_zerofillreturn::seed(&mut fd);
-        // (kuna `protoorder` single-function drive) A `kuna decompile` of one
+        // (kuna `protoorder` single-function drive) A `unlace decompile` of one
         // function has no callee-first run behind it, so it may state the
         // prototypes of the direct callees its own call sites pass preferred-split
         // storage to.  The FACT is the call's active-input trial storage, which
@@ -2378,7 +2378,7 @@ fn decompile_func_full_with_objects_inner(
         }
         break result;
     };
-    // (kuna decompile-all watchdog) Disarm the deadline once the drive is over so
+    // (unlace decompile-all watchdog) Disarm the deadline once the drive is over so
     // no later, non-drive pipeline run (console sub-queries) consults a stale one;
     // what is left of it goes with the function to bound its rendering.
     let left = arch.kuna_fn_deadline.map(|d| d.saturating_duration_since(std::time::Instant::now()));
@@ -2719,7 +2719,7 @@ pub fn print_c_with_srcmap(
 /// (kuna) Render every user-defined data-type in the architecture's type
 /// factory as C definitions (the `PrintC::docTypeDefinitions` port,
 /// [`crate::printc::PrintC::doc_type_definitions`]) — the type-definition
-/// block of the `kuna decompile-project` `.h` artifact.  Same
+/// block of the `unlace decompile-project` `.h` artifact.  Same
 /// [`Architecture::with_print`] split borrow as [`print_c`].
 pub fn print_c_types(arch: &mut Architecture) -> String {
     arch.with_print(|printer, arch| printer.doc_type_definitions(arch))
@@ -2728,7 +2728,7 @@ pub fn print_c_types(arch: &mut Architecture) -> String {
 /// (kuna) Render ONLY the decompiled function's prototype declaration —
 /// `<ret> <name>(<params>);` — via
 /// [`crate::printc::PrintC::doc_prototype`]: the `.h`-prototype half of the
-/// `kuna decompile-project` prototype == definition-line contract (the emitted
+/// `unlace decompile-project` prototype == definition-line contract (the emitted
 /// text minus the trailing `;` appears char-for-char inside [`print_c`]'s
 /// render of the same `Funcdata`).  A function whose prototype was never
 /// recovered (no proto store) renders as `void <name>(void);`.
@@ -2736,7 +2736,7 @@ pub fn print_c_prototype(arch: &mut Architecture, fd: &Funcdata) -> String {
     arch.with_print(|printer, arch| printer.doc_prototype(fd, arch))
 }
 
-/// (kuna) The generated recompile prelude for a `kuna decompile-project` `.h`:
+/// (kuna) The generated recompile prelude for a `unlace decompile-project` `.h`:
 /// C typedefs for the architecture's interned **core** scalar types (`uint4`,
 /// `int8`, `float8`, …, spelled per standard C — 8-byte integers always use
 /// `long long` so the text is data-model independent) plus the fixed Ghidra
@@ -2828,7 +2828,7 @@ pub fn print_c_recompile_prelude(arch: &Architecture) -> String {
 }
 
 /// A recovered variable surfaced for the machine-readable batch output
-/// (`kuna decompile-all --json`) — the fields decbench's `type_match` metric
+/// (`unlace decompile-all --json`) — the fields decbench's `type_match` metric
 /// consumes from a decompiler's per-function variable list.
 #[derive(Debug, Clone)]
 pub struct VarInfo {
@@ -2874,7 +2874,7 @@ impl VarInfo {
 }
 
 /// A type definition surfaced for the machine-readable batch output
-/// (`kuna decompile-all --json`'s per-function `types`) — the layout side of a
+/// (`unlace decompile-all --json`'s per-function `types`) — the layout side of a
 /// recovered function, so a consumer reads it without parsing C out of `code`.
 ///
 /// Populated only under `option structdefs on`, whose preamble prints the same
@@ -3384,7 +3384,7 @@ pub(crate) fn signed_space_offset(space: &Rc<unlace_base::space::AddrSpace>, off
 }
 
 /// (kuna) Extract the recovered parameters + stack locals of a decompiled
-/// [`Funcdata`] as a flat `Vec<VarInfo>` for the `kuna decompile-all --json`
+/// [`Funcdata`] as a flat `Vec<VarInfo>` for the `unlace decompile-all --json`
 /// surface (→ decbench `type_match`).
 ///
 /// Mirrors how the decbench Ghidra backend reads the `HighFunction` local symbol
@@ -3653,10 +3653,10 @@ thread_local! {
 const PROBE_STRIDE: u32 = 256;
 
 /// The wall-clock budget, in seconds, of a drive whose architecture sets none
-/// (`decomp_dbg --max-fn-seconds N`, which `kuna decompile` passes); 0 arms none.
+/// (`decomp_dbg --max-fn-seconds N`, which `unlace decompile` passes); 0 arms none.
 static DEFAULT_FN_BUDGET_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// (kuna decompile-all watchdog) Give every drive of this process whose
+/// (unlace decompile-all watchdog) Give every drive of this process whose
 /// architecture sets no budget a `secs`-second one (0 removes it).
 pub fn set_default_fn_budget_secs(secs: u64) {
     DEFAULT_FN_BUDGET_SECS.store(secs, std::sync::atomic::Ordering::Relaxed);
@@ -3672,14 +3672,14 @@ fn fn_budget(arch: &Architecture) -> Option<std::time::Duration> {
     })
 }
 
-/// (kuna decompile-all watchdog) Has the running drive's per-function budget
+/// (unlace decompile-all watchdog) Has the running drive's per-function budget
 /// run out? For a long walk inside one pass, which no action or heritage loop
 /// boundary interrupts, to give up early.
 pub(crate) fn deadline_passed() -> bool {
     FN_DEADLINE.with(|d| d.get().is_some_and(budget_spent))
 }
 
-/// (kuna decompile-all watchdog) [`deadline_passed`] for a walk that recurses
+/// (unlace decompile-all watchdog) [`deadline_passed`] for a walk that recurses
 /// or loops too often to read the clock at every step: every
 /// [`PROBE_STRIDE`]th call reads it, and once one has seen the budget spent
 /// every call answers `true` at once until the drive ends. It names no site;
@@ -3709,7 +3709,7 @@ pub(crate) fn deadline_passed_in(site: &str) -> bool {
     passed
 }
 
-/// (kuna decompile-all watchdog) Name `site` as where the running drive's
+/// (unlace decompile-all watchdog) Name `site` as where the running drive's
 /// budget ran out, unless a probe already named one: the first probe to see
 /// the expiry is the innermost polled loop, which the per-function error names.
 pub(crate) fn note_budget_site(site: impl FnOnce() -> String) {
@@ -3726,7 +3726,7 @@ pub(crate) fn note_budget_site(site: impl FnOnce() -> String) {
     });
 }
 
-/// (kuna decompile-all watchdog) Marks the drive as recovering the jump table
+/// (unlace decompile-all watchdog) Marks the drive as recovering the jump table
 /// of the indirect jump at an address until dropped, for [`note_budget_site`].
 pub(crate) struct JumpTableScope(Option<u64>);
 
@@ -3742,7 +3742,7 @@ impl Drop for JumpTableScope {
     }
 }
 
-/// (kuna decompile-all watchdog) The one test every cooperative probe makes:
+/// (unlace decompile-all watchdog) The one test every cooperative probe makes:
 /// the clock passed `deadline`, or the drive went over its memory limit
 /// ([`crate::kuna_fnmemory::over`]).
 pub(crate) fn budget_spent(deadline: std::time::Instant) -> bool {
@@ -3754,7 +3754,7 @@ pub(crate) fn budget_spent(deadline: std::time::Instant) -> bool {
 /// probes that ask about memory run without a wall-clock budget.
 const MEMORY_ONLY_HORIZON: std::time::Duration = std::time::Duration::from_secs(365 * 24 * 3600);
 
-/// (kuna decompile-all watchdog) The per-function error for a budgeted drive
+/// (unlace decompile-all watchdog) The per-function error for a budgeted drive
 /// whose memory limit tripped or whose deadline has passed: whatever the
 /// cut-off pipeline left behind is never printed.
 fn budget_error(arch: &Architecture) -> Option<KunaError> {
@@ -3774,7 +3774,7 @@ fn budget_error(arch: &Architecture) -> Option<KunaError> {
 const BUDGET_EXCEEDED: &str = "per-function decompile budget exceeded";
 const MEMORY_EXCEEDED: &str = "per-function memory limit exceeded";
 
-/// (kuna decompile-all watchdog) Bounds the rendering of a function by what
+/// (unlace decompile-all watchdog) Bounds the rendering of a function by what
 /// its drive left of the per-function budget ([`Funcdata::render_budget`]):
 /// until dropped, that is the deadline the printer's probes read, counted from
 /// when rendering starts. A function decompiled with no budget renders

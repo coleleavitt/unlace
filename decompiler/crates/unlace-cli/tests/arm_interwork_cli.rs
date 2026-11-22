@@ -112,7 +112,7 @@ fn run(args: &[&str], extra: &[&str]) -> String {
 }
 
 fn kuna(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .args(["--sleighpath"])
         .arg(common::repo_root().join("specs"))
@@ -121,7 +121,7 @@ fn kuna(args: &[&str]) -> String {
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(
         output.status.success(),
-        "kuna {args:?}: {text}\n{}",
+        "unlace {args:?}: {text}\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     text

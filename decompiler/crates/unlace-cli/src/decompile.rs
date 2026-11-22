@@ -1,4 +1,4 @@
-//! `kuna decompile` — the Rust port of `kuna/decompile.py`, plus its
+//! `unlace decompile` — the Rust port of `kuna/decompile.py`, plus its
 //! machine-readable mode.
 //!
 //! The ordinary TEXT surface drives `decomp_dbg` with the same console command language
@@ -598,9 +598,9 @@ fn temp_path(prefix: &str, suffix: &str) -> Result<tempfile::TempPath, String> {
         .map_err(|error| format!("could not create temporary output file: {error}"))
 }
 
-/// One `kuna decompile` run: the rendered C, the optional `--regions` dump, and
+/// One `unlace decompile` run: the rendered C, the optional `--regions` dump, and
 /// — when the pipeline aborted for the requested function — the failure report
-/// (`kuna decompile` exits non-zero on it; see `docs/cli.md`).
+/// (`unlace decompile` exits non-zero on it; see `docs/cli.md`).
 struct DecompileOutcome {
     c: String,
     regions: Option<String>,
@@ -672,13 +672,13 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
     // start a few bytes inside a function it already knew (PPC64 ELFv2's local entry
     // point, 8 bytes past the global one), and `funcboundflow` then truncates the outer
     // function's flow at that seed — so injecting it unconditionally would turn a
-    // correct `kuna decompile __do_global_ctors_aux` body into an empty husk on every
+    // correct `unlace decompile __do_global_ctors_aux` body into an empty husk on every
     // non-x86-64 image. Measured, not assumed: a before/after sweep over every function
     // of all 33 non-x86-64 fixtures found 8 such truncations and no other difference.
     //
     // So the wider inventory is paid for only where it is the ANSWER: a by-name
-    // selection that missed. That is exactly the reported gap — `kuna functions` prints
-    // a discovery-generated name that `kuna decompile` then refuses — and nothing that
+    // selection that missed. That is exactly the reported gap — `unlace functions` prints
+    // a discovery-generated name that `unlace decompile` then refuses — and nothing that
     // already resolved changes at all.
     let full = decompile_all::driver_default_options(&binary, true, true, &args.options);
     let (base, discovery): (Vec<_>, Vec<_>) = full
@@ -881,7 +881,7 @@ fn trim_newlines(s: &str) -> String {
     s.trim_matches('\n').to_string()
 }
 
-/// The text surface of `kuna decompile`.
+/// The text surface of `unlace decompile`.
 ///
 /// Exit codes: `0` on success, `1` on a run-level error (no such function, no
 /// architecture, no C at all) **and on a per-function pipeline abort** — the
@@ -953,7 +953,7 @@ fn note_budget_flag(msg: &str) {
 
 // --- command entry point -----------------------------------------------------
 
-/// Entry point for `kuna decompile`: parse the command line, then render either
+/// Entry point for `unlace decompile`: parse the command line, then render either
 /// the text surface ([`run`], a `decomp_dbg` subprocess) or, with `--json`, the
 /// `decompile-all` record shape for the one selected function ([`run_in_process`]).
 pub fn main(argv: &[String]) -> Result<i32, String> {
@@ -1224,7 +1224,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
 
 fn usage() {
     eprintln!(
-        "usage: kuna decompile <binary> <name|0xaddr> [--addr] [--json] [--raw] [--regions] \\\n\
+        "usage: unlace decompile <binary> <name|0xaddr> [--addr] [--json] [--raw] [--regions] \\\n\
          \x20                     [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                     [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                     [--option N V].. [--kassert ARGS].. \\\n\
@@ -1252,8 +1252,8 @@ fn usage() {
          image-selection overrides and transcript-only controls.\n\
          \n\
          --option NAME VALUE (repeatable) flips one phase-model decision for this run;\n\
-         `kuna catalog` lists them and `kuna docs options` explains the tiers.\n\
-         --mode applies an option preset (`kuna modes`); omitted, `auto` picks one by\n\
+         `unlace catalog` lists them and `unlace docs options` explains the tiers.\n\
+         --mode applies an option preset (`unlace modes`); omitted, `auto` picks one by\n\
          input size.  Explicit --option values win over the preset.\n\
          --language selects the output language; omitted, it follows the binary.\n\
          --max-fn-memory MiB stops the decompile once the process doing it holds\n\
@@ -1294,9 +1294,9 @@ fn usage() {
          \n\
          --sleighpath D and --decomp-dbg P override where this run reads the compiled\n\
          SLEIGH tree and which engine binary it drives; without them both are found\n\
-         beside this executable (see `kuna docs cli`, and KUNA_SPECS/KUNA_DECOMP_DBG).\n\
+         beside this executable (see `unlace docs cli`, and KUNA_SPECS/KUNA_DECOMP_DBG).\n\
          \n\
-         Whole-binary runs are `kuna decompile-all` / `kuna functions`."
+         Whole-binary runs are `unlace decompile-all` / `unlace functions`."
     );
 }
 
@@ -1320,7 +1320,7 @@ struct SingleRequest<'a> {
     base: Option<u64>,
 }
 
-/// `kuna decompile --json`: `decompile-all`'s in-process load narrowed to the one
+/// `unlace decompile --json`: `decompile-all`'s in-process load narrowed to the one
 /// selected function, emitted through `decompile-all`'s own serializer.
 ///
 /// The selection is expressed as a `decompile-all` argument list and re-parsed by
@@ -2361,7 +2361,7 @@ Execution error: Syntax error
 
     /// The two attempts are one table split in two: what a non-x86-64 image
     /// holds back is exactly what the in-process drivers inject up front, so the
-    /// widened retry reaches the inventory `kuna functions` reports and not some
+    /// widened retry reaches the inventory `unlace functions` reports and not some
     /// third configuration.
     #[test]
     fn the_retry_widens_to_the_in_process_drivers_bundle() {

@@ -32,7 +32,7 @@ You are resuming your own earlier attempt on `feat/re-rax-preserving-stack-probe
 (head `20a55f1d`). PR **#542** is OPEN / MERGEABLE / CLEAN with every CI check green.
 The previous attempt ran all four gates locally and they passed: `make test` 675/675,
 `make test-stages` 730/730, `make rust-test`, `make check-spec`, plus `make test-cli`
-108/108 and `kuna catalog --check`. (The workspace suite shows SKIPPED in CI because this
+108/108 and `unlace catalog --check`. (The workspace suite shows SKIPPED in CI because this
 is a branch PR, which is why those local runs are the evidence.)
 
 **Why you stopped last time, and why that reason is gone.** You held the PR because the
@@ -207,7 +207,7 @@ _not yet refuted_
 - filed by cluster.py from 1 observation(s)
 - round 5 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK (captain, round 5). VERDICT: UPHELD, and the mechanism is now pinned to one line of an ALREADY-SHIPPED pass -- the builder should not re-diagnose.
 
-EVIDENCE 1 -- the premise is true. `kuna disassemble crackme_shroud.exe --addr 0x1408d0000 --count 14` is textbook MSVC __chkstk: SUB RSP,0x10 / MOV [RSP],R10 / MOV [RSP+8],R11 / XOR R11,R11 / LEA R10,[RSP+0x18] / SUB R10,RAX / CMOVC R10,R11 / MOV R11,qword ptr GS:[0x10] / CMP / JNC ... It READS RAX and never writes it, so RAX genuinely survives the call. The caller is the canonical large-frame prologue: MOV EAX,0x5e028 ; CALL 0x1408d0000 ; SUB RSP,RAX.
+EVIDENCE 1 -- the premise is true. `unlace disassemble crackme_shroud.exe --addr 0x1408d0000 --count 14` is textbook MSVC __chkstk: SUB RSP,0x10 / MOV [RSP],R10 / MOV [RSP+8],R11 / XOR R11,R11 / LEA R10,[RSP+0x18] / SUB R10,RAX / CMOVC R10,R11 / MOV R11,qword ptr GS:[0x10] / CMP / JNC ... It READS RAX and never writes it, so RAX genuinely survives the call. The caller is the canonical large-frame prologue: MOV EAX,0x5e028 ; CALL 0x1408d0000 ; SUB RSP,RAX.
 
 EVIDENCE 2 -- the emitted body, reproduced without --json:
   void sub_140001000(unsigned int a0,unsigned long long a1)

@@ -68,7 +68,7 @@ __attribute__((noinline)) uint64_t promoted_shift8(const uint8_t *p, unsigned k)
                 "{}",
                 String::from_utf8_lossy(&compiled.stderr)
             );
-            let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .arg("decompile-all")
                 .arg(&binary)
                 .args([

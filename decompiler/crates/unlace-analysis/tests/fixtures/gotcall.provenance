@@ -1,4 +1,4 @@
-gotcall_* -- the fixtures for `kuna xrefs` and `kuna decompile-graph` over a
+gotcall_* -- the fixtures for `unlace xrefs` and `unlace decompile-graph` over a
 call through an import's GOT slot (GH #1376;
 decompiler/crates/unlace-cli/tests/xrefs_got_call.rs).
 

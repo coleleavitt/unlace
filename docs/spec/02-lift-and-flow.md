@@ -56,7 +56,7 @@ flow overrides take precedence. Raw inputs and unvalidated stubs do not acquire
 these facts. The object loader validates the stubs once per image
 (`decompiler/crates/unlace-analysis/src/loader/kuna_mipsstubs.rs (MipsLinkage)`);
 for a MIPS language bootstrap installs their resolver sites, and the Listing and
-`kuna xrefs` walks follow the same sites.
+`unlace xrefs` walks follow the same sites.
 Off, the resolver call is decoded as an ordinary call that falls through into
 the next stub, as upstream decodes it, and the Listing keeps that fall-through.
 
@@ -360,7 +360,7 @@ second, since a path entering there would run one half alone. Code decoding
 as MIPS16, microMIPS or release 6 is left alone. The whole-access form of a
 left half sets the bit at the next instruction too, so a pair whose left
 half is followed by a half that pairs with nothing is dropped. Turned off
-again, the bit is cleared on the same halves. `kuna raw-pcode` paints the
+again, the bit is cleared on the same halves. `unlace raw-pcode` paints the
 same pairs before it lifts, so it shows the p-code the decompiler reads.
 The scan looks at registers only: a store between the halves of a load (or
 any access between the halves of a store) that overlaps the word is assumed
@@ -1272,7 +1272,7 @@ tail-call many functions through their slots to one redo instead of one per
 callee, each copying in the callees still to come. A refused caller is
 redone at once. That is the call-graph edge the walk misses, learned from
 the caller's own decompile. The ledger lives only for the length of a
-callee-first run. A single-function `kuna decompile`, `--jobs N`, `protoorder
+callee-first run. A single-function `unlace decompile`, `--jobs N`, `protoorder
 off` and a run narrowed past the callee file nothing and keep the copied-in
 body. `tailcalljump off` keeps the copied-in body for these jumps too.
 `tests/stages/kuna-gottailcall.xml` pins the extern arm, with
@@ -1428,7 +1428,7 @@ outside the image) is followed by its pool, not by code: armv5te `probe` ends `b
 use; bl die`, and the walk took the second call's fall-through, decoded the first
 constants as instructions and stopped at one that decodes as nothing, printing
 `die(); halt_baddata(); // warn: Bad instruction - Truncating control flow here`,
-while `kuna disassemble` listed the same words as data. Worse, a pool word that
+while `unlace disassemble` listed the same words as data. Worse, a pool word that
 decodes as a branch carried the walk into code the call never returns to (a
 `u_pool` that calls `hi` ahead of `__builtin_unreachable()` printed the other
 path's `return` after the call). The walk cannot be its own witness for where a

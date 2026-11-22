@@ -184,7 +184,7 @@ fn decompile(image: &Image, mode: &str) -> String {
         args.extend(["--entry".into(), at.clone(), "--define-function".into(), format!("{at}={}", name(proto))]);
         args.extend(["--assert".into(), format!("prototype {} {proto}", name(proto))]);
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna")).args(&args).output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace")).args(&args).output().unwrap();
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(output.status.success(), "{}: {text}\n{}", image.name, String::from_utf8_lossy(&output.stderr));
     text
@@ -424,7 +424,7 @@ fn decompile_unprototyped(image: &ZextImage, mode: &str) -> String {
         let at = format!("{:#x}", BASE + start);
         args.extend(["--entry".into(), at.clone(), "--define-function".into(), format!("{at}={name}")]);
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna")).args(&args).output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace")).args(&args).output().unwrap();
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(output.status.success(), "{}: {text}\n{}", image.name, String::from_utf8_lossy(&output.stderr));
     text

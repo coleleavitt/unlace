@@ -9,7 +9,7 @@ use object::Object;
 use serde_json::json;
 
 fn usage() {
-    eprintln!("usage: kuna fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n--json emits {{binary, database, address, status, ...}} or {{binary, database, queries, ...}} for multiple addresses; addresses are hex (0x optional); single_candidate is an unverified name");
+    eprintln!("usage: unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n--json emits {{binary, database, address, status, ...}} or {{binary, database, queries, ...}} for multiple addresses; addresses are hex (0x optional); single_candidate is an unverified name");
 }
 
 pub(super) fn run(args: &[String]) -> i32 {
@@ -20,7 +20,7 @@ pub(super) fn run(args: &[String]) -> i32 {
     let (binary, db_path, addresses) = match parse_args(args) {
         Ok(parsed) => parsed,
         Err(e) => {
-            eprintln!("kuna fid query: {e}");
+            eprintln!("unlace fid query: {e}");
             usage();
             return 2;
         }
@@ -31,7 +31,7 @@ pub(super) fn run(args: &[String]) -> i32 {
             0,
         ),
         Err(e) => {
-            eprintln!("kuna fid query: {e}");
+            eprintln!("unlace fid query: {e}");
             1
         }
     }

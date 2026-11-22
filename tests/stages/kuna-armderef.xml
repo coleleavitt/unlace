@@ -4,7 +4,7 @@
     kuna issue testcase: an ARM load or store through a register that holds a
     datum's address files a reference in the cross-reference index.
 
-    Issue:      unlace-analysis-armderef - `kuna xrefs` asked for the references to an ARM global
+    Issue:      unlace-analysis-armderef - `unlace xrefs` asked for the references to an ARM global
                 answered only the instruction that loaded its address from a
                 GOT slot or a literal-pool word, never the `ldr`/`str
                 [rN,#off]` that read and wrote it through that register.

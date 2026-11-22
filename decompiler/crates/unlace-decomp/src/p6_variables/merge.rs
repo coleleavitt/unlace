@@ -1172,13 +1172,13 @@ pub struct Merge {
     /// (kuna) The outputs of the MULTIEQUALs `kuna_tiedphitrim` trimmed, with
     /// the storage each was trimmed away from.
     tied_phis: Vec<(VarnodeId, unlace_base::address::Address)>,
-    /// (kuna decompile-all watchdog) Budget probes taken, and whether one saw
+    /// (unlace decompile-all watchdog) Budget probes taken, and whether one saw
     /// the running drive's budget spent ([`Merge::budget`]).
     probes: u32,
     spent: bool,
 }
 
-/// (kuna decompile-all watchdog) How many merge steps between budget probes.
+/// (unlace decompile-all watchdog) How many merge steps between budget probes.
 const BUDGET_STRIDE: u32 = 64;
 
 impl Merge {
@@ -1199,7 +1199,7 @@ impl Merge {
         }
     }
 
-    /// (kuna decompile-all watchdog) An error once the running drive's budget
+    /// (unlace decompile-all watchdog) An error once the running drive's budget
     /// is spent. Each merge pass is a single action, which the action loop
     /// cannot interrupt, and on a function with millions of Varnodes one pass
     /// runs for minutes; every merge step therefore probes, every

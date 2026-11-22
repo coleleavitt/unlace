@@ -1,7 +1,7 @@
-//! `kuna install-skill` — the agent skill (`skills/kuna/SKILL.md`), compiled into
+//! `unlace install-skill` — the agent skill (`skills/unlace/SKILL.md`), compiled into
 //! the binary and written to where coding agents discover skills.
 //!
-//! Like `kuna docs`, the file is `include_str!`-ed so a downloaded release binary
+//! Like `unlace docs`, the file is `include_str!`-ed so a downloaded release binary
 //! is the whole distribution: no checkout, no network.  Installing from the binary
 //! also keeps the skill's advice matched to the CLI version that runs it.
 
@@ -10,12 +10,12 @@ use std::path::{Path, PathBuf};
 
 use crate::output;
 
-pub const BODY: &str = include_str!("../../../../skills/kuna/SKILL.md");
+pub const BODY: &str = include_str!("../../../../skills/unlace/SKILL.md");
 
-const USAGE: &str = "usage: kuna install-skill [--agent claude|codex|opencode|all] [--project | --dir DIR] [--force]\n\
-                     \x20      kuna install-skill --print\n\
+const USAGE: &str = "usage: unlace install-skill [--agent claude|codex|opencode|all] [--project | --dir DIR] [--force]\n\
+                     \x20      unlace install-skill --print\n\
                      \n\
-                     Install the kuna agent skill -- a guide to driving this CLI, embedded in the\n\
+                     Install the unlace agent skill -- a guide to driving this CLI, embedded in the\n\
                      binary -- where coding agents load skills.  Nothing is downloaded.\n\
                      \n\
                      --agent A     claude:   $CLAUDE_CONFIG_DIR/skills (default ~/.claude/skills)\n\
@@ -27,7 +27,7 @@ const USAGE: &str = "usage: kuna install-skill [--agent claude|codex|opencode|al
                      --project     install into the current directory instead (.claude/skills,\n\
                      \x20             .agents/skills, .opencode/skills), to commit alongside a repo.\n\
                      --dir DIR     install into DIR/<skill-name>/ for any other agent.\n\
-                     --force       replace an installed copy that differs (another kuna version,\n\
+                     --force       replace an installed copy that differs (another unlace version,\n\
                      \x20             or local edits).  An identical copy is left alone.\n\
                      --print       write the skill to stdout and install nothing.\n\
                      \n\
@@ -178,12 +178,12 @@ pub fn run(argv: &[String]) -> Result<i32, String> {
         if wrote {
             eprintln!("agents load skills at session start; begin a new session to use `{name}`");
         }
-        if !on_path("kuna") {
+        if !on_path("unlace") {
             let exe = std::env::current_exe().map(|p| p.display().to_string());
             eprintln!(
-                "note: `kuna` is not on PATH, and the skill invokes it by that name; put this \
+                "note: `unlace` is not on PATH, and the skill invokes it by that name; put this \
                  binary ({}) on PATH",
-                exe.as_deref().unwrap_or("kuna")
+                exe.as_deref().unwrap_or("unlace")
             );
         }
     }
@@ -195,7 +195,7 @@ fn install(path: &Path, force: bool) -> Result<&'static str, String> {
     let verdict = match std::fs::read(path) {
         Ok(existing) if existing == BODY.as_bytes() => return Ok("current"),
         Ok(_) if !force => {
-            return Err("an installed copy differs (another kuna version or local edits); \
+            return Err("an installed copy differs (another unlace version or local edits); \
                         rerun with --force to replace it"
                 .into())
         }
@@ -214,14 +214,14 @@ fn install(path: &Path, force: bool) -> Result<&'static str, String> {
 pub fn skill_name() -> &'static str {
     let mut lines = BODY.lines().map(str::trim);
     if lines.next() != Some("---") {
-        return "kuna";
+        return "unlace";
     }
     lines
         .take_while(|l| *l != "---")
         .find_map(|l| l.strip_prefix("name:"))
         .map(str::trim)
         .filter(|n| !n.is_empty())
-        .unwrap_or("kuna")
+        .unwrap_or("unlace")
 }
 
 fn home_dir() -> Option<PathBuf> {
@@ -246,6 +246,6 @@ mod tests {
     #[test]
     fn the_embedded_skill_names_itself() {
         assert_eq!(BODY.lines().next().map(str::trim), Some("---"), "SKILL.md lost its frontmatter");
-        assert_eq!(skill_name(), "kuna-decompiler");
+        assert_eq!(skill_name(), "unlace-decompiler");
     }
 }

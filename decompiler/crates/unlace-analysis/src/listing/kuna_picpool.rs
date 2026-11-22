@@ -17,8 +17,8 @@
 //! ```
 //!
 //! `poolref` correctly declines 0xfffffe3f — it is not an address and lands in no
-//! section — so nothing in the program references 0x4ab, `kuna xrefs --to` it
-//! answers zero and `kuna strings --json` reports it with no owning function, on
+//! section — so nothing in the program references 0x4ab, `unlace xrefs --to` it
+//! answers zero and `unlace strings --json` reports it with no owning function, on
 //! a binary whose disassembly plainly shows which function prints it. The idiom
 //! is not one site either: the filing image forms every one of its four string
 //! references this way.

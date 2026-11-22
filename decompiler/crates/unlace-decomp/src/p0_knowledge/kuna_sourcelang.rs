@@ -20,7 +20,7 @@
 //! widening) *inside* `load file`, upstream of every per-function `option`
 //! command. An override that should reach pass selection therefore travels on
 //! the load options (`LoadOptions::sourcelang`, [`crate::kuna_loadoptions`]),
-//! read by `unlace_analysis::sourcelang::effective_compiler`; the `kuna` CLI
+//! read by `unlace_analysis::sourcelang::effective_compiler`; the `unlace` CLI
 //! carries it in [`SOURCELANG_ENV`]. The console `option sourcelang` arm still
 //! updates the engine fact for the already-loaded program (the per-function
 //! rules read the fresh value), and the console exports it so a later

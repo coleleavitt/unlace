@@ -1,4 +1,4 @@
-//! `kuna xrefs` over an address formed from the program counter below 0x1000
+//! `unlace xrefs` over an address formed from the program counter below 0x1000
 //! (GH #1364). A zero-based image maps code and constants in its first page:
 //! an arm64 Mach-O dylib's `__TEXT`, the `.rodata` ld.lld puts first in an ELF
 //! shared object or PIE, a firmware image linked at 0. A PC-relative form there
@@ -11,7 +11,7 @@
 
 use crate::common;
 
-/// Every row `kuna xrefs <binary> <direction> <target> --json` answers, as
+/// Every row `unlace xrefs <binary> <direction> <target> --json` answers, as
 /// `(kind, referencing function, referencing address, referenced address)`.
 fn rows(binary: &str, direction: &str, target: &str) -> Vec<(String, String, u64, u64)> {
     let path = common::fixture(binary);

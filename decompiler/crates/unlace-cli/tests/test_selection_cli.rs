@@ -1,4 +1,4 @@
-//! `kuna test` names a requested test that does not exist instead of scoring
+//! `unlace test` names a requested test that does not exist instead of scoring
 //! the rest as complete (issue #1375): a missing `--name`, an empty corpus or an
 //! unreadable corpus directory is reported in `selection` and exits 2.
 
@@ -48,14 +48,14 @@ fn corpus(files: &[&str]) -> PathBuf {
 }
 
 fn kuna_test(mode: &str, dir: &Path, extra: &[&str]) -> Output {
-    std::process::Command::new(env!("CARGO_BIN_EXE_kuna"))
+    std::process::Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["test", mode, "--binary"])
         .arg(harness())
         .arg("--datatests-dir")
         .arg(dir)
         .args(extra)
         .output()
-        .expect("run kuna test")
+        .expect("run unlace test")
 }
 
 fn report(out: &Output) -> Value {

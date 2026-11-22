@@ -15,7 +15,7 @@
 //! is as expensive as a path of distinct names.
 //!
 //! That makes a symbol name a **~498x input-to-RSS amplifier**. Measured on
-//! `kuna functions` over ELFs whose `.symtab` carries one function named
+//! `unlace functions` over ELFs whose `.symtab` carries one function named
 //! `("a::" * N) + "z"`:
 //!
 //! | N | file | maxRSS |

@@ -10,7 +10,7 @@ The reported binary is a 977264-byte Node SEA bundle whose `.rodata` opens with
     000b2030: 7312 5f30 7838 6563 3662 3312 5f30 7833  s._0x8ec6b3._0x3
 
 -- `\\x0c` `out.js` `\\x06` `std` `\\x04` `os` `\\x12` `_0x8ec6b3`, each tag being
-the name's length doubled. `strings -a` reads 635 of them; `kuna strings
+the name's length doubled. `strings -a` reads 635 of them; `unlace strings
 --section .rodata --filter '_0x|out.js' --min-length 4` answered `count 0`,
 because the matcher took only NUL-ended runs.
 

@@ -4,7 +4,7 @@
   `bl use; bl die` with no epilogue, and its five PC-relative literal words follow the
   second call. kuna cannot prove `die` no-return, so the walk took the call's
   fall-through, decoded the first four words as instructions and stopped at
-  `0x0002cbb2`, which decodes as nothing, while `kuna disassemble` lists the same
+  `0x0002cbb2`, which decodes as nothing, while `unlace disassemble` lists the same
   words as data.
   Stage: P2 flow classification, the funcboundflow fall-through bound
   (`p2_lift/kuna_funcboundflow.rs` kuna_should_bound_at_pool) over the pool extents

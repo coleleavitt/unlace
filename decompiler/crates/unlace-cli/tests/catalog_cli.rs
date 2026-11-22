@@ -38,10 +38,10 @@ impl Catalog {
         let dir = tempfile::tempdir().unwrap();
         let executable = dir
             .path()
-            .join(format!("kuna{}", std::env::consts::EXE_SUFFIX));
+            .join(format!("unlace{}", std::env::consts::EXE_SUFFIX));
         {
             let _setup = PROCESS_SETUP.lock().unwrap_or_else(|e| e.into_inner());
-            std::fs::copy(env!("CARGO_BIN_EXE_kuna"), &executable).unwrap();
+            std::fs::copy(env!("CARGO_BIN_EXE_unlace"), &executable).unwrap();
         }
         Self { dir, executable }
     }

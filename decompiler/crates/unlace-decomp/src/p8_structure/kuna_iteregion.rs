@@ -24,7 +24,7 @@
 //! object code is produced, and rewriting it to `?:` **diverges** from the source.
 //! There is no way to tell the two apart from the binary, so flipping it OFF per
 //! binary is legitimate (ablation-confirmed net-positive default-ON, DIV-17)
-//! and per-function agent-flippable (`kuna catalog` → `--option iteregion on`):
+//! and per-function agent-flippable (`unlace catalog` → `--option iteregion on`):
 //! turn it on for format/print/flag-heavy code (where the ternary form dominates),
 //! leave it off where explicit `if/else` is the likely source.  With the option off
 //! [`ActionIteRegion::apply`] early-returns, nothing is marked, and output is

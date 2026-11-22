@@ -24,8 +24,8 @@ complete and honest.
 - kuna python: `{{KUNA_PY}}`  (has the angr-driving pipeline deps, NO angr itself)
 - The pipeline is run from the repo root: `{{KUNA_PY}} -m scripts.pipeline.compare ...` (it
   shells out to the angr venv).
-- The Rust `kuna` CLI is `decompiler/target/release/kuna` — use it for `kuna catalog ...`
-  and `kuna test ...`.
+- The Rust `unlace` CLI is `decompiler/target/release/unlace` — use it for `unlace catalog ...`
+  and `unlace test ...`.
 - `KUNA_ROOT`, `KUNA_DECOMP_DBG`, `KUNA_DECOMP_TEST`, `KUNA_SPECS` point at THIS worktree's tree
   and binaries (specs `.sla` are reused from the main tree — do **not** run `make specs`).
 - Build with `make binaries` (cargo; the first build of the worktree is slowest, then incremental).
@@ -45,7 +45,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
    Edits to the ported core files are allowed ONLY where an anchor demands it (registering the
    action/option, a flag on the architecture struct); keep them minimal, mark each with a
    `// (kuna)` comment.
-2. **Never modify `docs/baseline.json`.** The loop must keep `kuna test --all --baseline docs/baseline.json`
+2. **Never modify `docs/baseline.json`.** The loop must keep `unlace test --all --baseline docs/baseline.json`
    at PARITY OK without re-pinning. (You DO regenerate `docs/baseline-stages.json` to add your new stage test.)
 3. **ElementId** in the 4000+ range — grep the existing `kuna_*.rs` sources and `phases.toml`
    for the highest id already used and pick the next free one.
@@ -65,7 +65,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
    `change_kind` ∈ correctness-fix|presentation-default|structure-recovery|opt-in-tool, plus `summary` (WHAT), — plus `tier` (transform if it restructures/duplicates/removes/inserts code; core if near-always-better rendering; analysis for prep passes) and `symptoms` (2–5 output-shaped phrases an LLM would grep for).
    `use_when` (the angr-vs-kuna symptom = WHEN), `example` (HOW). Register the option in
    `decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs` (so it appears in `KUNA_OPTION_NAMES`).
-5. **If an existing option already covers this gap** (check `kuna catalog --json`), do NOT
+5. **If an existing option already covers this gap** (check `unlace catalog --json`), do NOT
    duplicate it. Record that finding in `docs/features/{{SLUG}}/record.json`, set state `--status failed
    --note "covered by <option>"`, and stop without a PR.
 6. **Measure speed — speed is critical.** Before opening the PR, record the median decompile
@@ -135,7 +135,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   `option {{SLUG}} off` asserting the *bug* (current kuna rendering), pass 2 at default asserting the *fix*
   (angr-like rendering); for a fix (rule 4), one pass asserting the fixed rendering and the absence of the bug. Use a self-contained bytechunk or the testcase binary's bytes; map/name neighbour symbols.
 - `make test-stages` must pass. Regenerate the stage baseline:
-  `kuna test --datatests --datatests-dir tests/stages --save-baseline docs/baseline-stages.json`.
+  `unlace test --datatests --datatests-dir tests/stages --save-baseline docs/baseline-stages.json`.
 - **Measure speed (always — Hard rule 6).** With the feature working, time the target off vs on:
   `{{KUNA_PY}} -m scripts.pipeline.timeit --option {{SLUG}} --binary {{BINARY}} --selector {{SELECTOR}} --repeat 5`
   (add `--func-addr <addr>` if name selection is unreliable). Splice the printed JSON
@@ -144,7 +144,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   once it exists and the tool writes them for you.
 
 ### 5. ablation → default decision (gated by speed)
-- Run the full ablation: `kuna test --all --baseline docs/baseline.json`.
+- Run the full ablation: `unlace test --all --baseline docs/baseline.json`.
 - **If 0/675 upstream assertions change with the feature default-ON _and_ the speed gate passes**
   (`speed_within_budget` true, i.e. `speed_delta_pct` ≤ the budget), flip the option default to ON (set the
   flag default in the architecture reset path, `shipped` in the `settableTable` row), say "On by default"
@@ -157,10 +157,10 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   ever push a feature from default-ON to opt-in; it never touches the baseline.
 
 ### 6. gates (all must be green before committing)
-- `kuna catalog --check`  → "catalog OK"
-- `kuna test --all --baseline docs/baseline.json`  → PARITY OK
+- `unlace catalog --check`  → "catalog OK"
+- `unlace test --all --baseline docs/baseline.json`  → PARITY OK
 - `make test-stages`  → all pass
-- Regenerate `docs/options.md`: `kuna catalog --markdown > docs/options.md` (freshness-fenced by `make rust-test`)
+- Regenerate `docs/options.md`: `unlace catalog --markdown > docs/options.md` (freshness-fenced by `make rust-test`)
 
 ### 7. docs + record
 - `docs/spec/`: update the chapter owning the phase you changed (find it via its `Anchors:` block); run `make check-spec`.

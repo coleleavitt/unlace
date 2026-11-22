@@ -1,4 +1,4 @@
-//! What a `kuna test` run was asked to execute versus what the harness could run.
+//! What a `unlace test` run was asked to execute versus what the harness could run.
 //!
 //! The harness takes a datatest name only when it is the file name of an `*.xml`
 //! directly in the corpus directory and drops any other without a word, and its
@@ -122,7 +122,7 @@ impl Unit {
     }
 }
 
-/// The `selection` object of `kuna test --json`; `errors` empty <=> `complete`.
+/// The `selection` object of `unlace test --json`; `errors` empty <=> `complete`.
 pub(super) fn json(data: Option<&Data>, unit: Option<&Unit>, errors: &[String]) -> Json {
     Json::Object(vec![
         ("complete".into(), Json::Bool(errors.is_empty())),

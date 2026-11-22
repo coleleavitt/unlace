@@ -25,7 +25,7 @@
 //! - [`build`] — the `FidServiceLibraryIngest` analog ([`build::build_records`]):
 //!   disassembles every named function in a parsed object through the Listing
 //!   path, runs the [`hash::FidHasher`] over its extent, and emits the
-//!   deduplicated records. Drives the `kuna fid build` CLI subcommand.
+//!   deduplicated records. Drives the `unlace fid build` CLI subcommand.
 //!
 //! # PR4 (this module) — the gated matching pass
 //!

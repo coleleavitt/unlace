@@ -184,7 +184,7 @@ pub struct IfaceDecompData {
     /// next `decompile` can adopt that IR instead of following the same flow a
     /// second time.  See [`PristineFlow`].
     pub pristine_flow: Option<PristineFlow>,
-    /// (kuna decompile-all watchdog) The flow a `decompile` stopped at its
+    /// (unlace decompile-all watchdog) The flow a `decompile` stopped at its
     /// budget or memory limit left out of the shell in `fd`, which
     /// [`Self::follow_stopped_flow`] follows for a command that reads the IR.
     pub stopped_flow: Option<PristineFlow>,
@@ -217,7 +217,7 @@ pub struct IfaceDecompData {
 /// those console facts take effect.
 ///
 /// It is also pure waste whenever there are no such facts, which is every
-/// `kuna decompile <bin> <fn>`: the lift, the block build and the per-jump-table
+/// `unlace decompile <bin> <fn>`: the lift, the block build and the per-jump-table
 /// sub-decompilation all run twice.  This stamp is what lets `decompile` prove
 /// the waste case: it records the identity the flow was followed under, and the
 /// console command counter at that moment, so a `decompile` that runs as the
@@ -360,7 +360,7 @@ impl IfaceDecompData {
         self.printed_checks = None;
     }
 
-    /// (kuna decompile-all watchdog) Follow the flow a budget-stopped
+    /// (unlace decompile-all watchdog) Follow the flow a budget-stopped
     /// `decompile` left out of the shell in `fd`, for a command that reads the
     /// IR (`print raw`, the `region` commands), which then prints what it did
     /// when the stop followed the flow again at once.
@@ -2311,7 +2311,7 @@ decomp_command!(
         }
         if proc_started {
             status.out("Clearing old decompilation\n");
-            // C++: dcp->conf->clearAnalysis(dcp->fd).  The kuna decompile drive
+            // C++: dcp->conf->clearAnalysis(dcp->fd).  The unlace decompile drive
             // rebuilds the Funcdata from scratch below, so the prior IR is
             // discarded the same way (no per-Funcdata clearAnalysis surface yet).
         }
@@ -2320,7 +2320,7 @@ decomp_command!(
         // itself is consumed by the shared decompile step).
         let stamp_addr = entry.clone();
         // C++: allacts.getCurrent()->reset(*fd); res = perform(*fd); then the
-        // "Decompilation complete"/"Break at .." reporting.  The kuna decompile
+        // "Decompilation complete"/"Break at .." reporting.  The unlace decompile
         // drive (decompile_drive::decompile_func) installs the `decompile` root,
         // resets it, and runs the 252-pass perform loop to completion.
         //

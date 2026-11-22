@@ -42,7 +42,7 @@ fn fixture() -> PathBuf {
 }
 
 /// Bootstrap the fixture and decompile `func`, returning the captured C.  Console defaults
-/// (Listing off) — the same path `kuna decompile` drives; the render bug is independent of
+/// (Listing off) — the same path `unlace decompile` drives; the render bug is independent of
 /// the analysis tier.
 fn decompile(func: &str) -> String {
     let root = repo_root();

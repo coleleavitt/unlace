@@ -2,7 +2,7 @@
 //! metadata states them.
 //!
 //! A word in `.data` that holds `&audit_target` is a reference no instruction
-//! makes: nothing decodes it, so the instruction walk behind `kuna xrefs` never
+//! makes: nothing decodes it, so the instruction walk behind `unlace xrefs` never
 //! sees it. An image that is rebased at load time lists every such word, because
 //! the loader has to fix each one up:
 //!

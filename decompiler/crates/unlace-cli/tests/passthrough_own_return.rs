@@ -280,7 +280,7 @@ fn decompile(bytes: &[u8]) -> String {
 fn decompile_with(bytes: &[u8], options: &[&str]) -> String {
     let path = common::scratch_file("passthrough-own-return", "o");
     std::fs::write(&path, bytes).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile-all",
             path.to_str().unwrap(),

@@ -669,7 +669,7 @@ fn select_image(images: &[CacheImage], name: Option<&str>) -> Result<usize, Stri
             1 => Ok(0),
             n => Err(format!(
                 "dyld shared cache holds {n} images; choose one with --image NAME \
-                 (list them with `kuna unpack <cache> --list`)"
+                 (list them with `unlace unpack <cache> --list`)"
             )),
         };
     };

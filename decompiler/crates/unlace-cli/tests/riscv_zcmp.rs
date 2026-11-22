@@ -23,7 +23,7 @@ fn rows(stdout: &str) -> Vec<String> {
 
 fn disassemble(args: &[&str]) -> Vec<String> {
     let (stdout, stderr, code) = run_kuna(&[&["disassemble"][..], args].concat());
-    assert_eq!(code, 0, "kuna disassemble {args:?}: {stderr}");
+    assert_eq!(code, 0, "unlace disassemble {args:?}: {stderr}");
     rows(&stdout)
 }
 

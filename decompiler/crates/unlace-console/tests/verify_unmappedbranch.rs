@@ -9,7 +9,7 @@
 //!
 //! Before the fix, following that edge asked the loader for bytes at 0x0,
 //! `load_fill` raised, and the raise unwound the whole flow follow — so
-//! selecting the function produced no body at all and `kuna decompile` reported
+//! selecting the function produced no body at all and `unlace decompile` reported
 //! the entry as an external symbol in another module. Now the edge is refused
 //! the way a target outside a declared extent already was: a halt stub, a
 //! `flows into unmapped memory` warning, and the rest of the body.

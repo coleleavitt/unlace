@@ -1,4 +1,4 @@
-//! The signature set and byte scan behind `kuna crypto` — findcrypt's question
+//! The signature set and byte scan behind `unlace crypto` — findcrypt's question
 //! ("which well-known cipher and hash constants does this image carry, and
 //! where") answered over the image's own mapped bytes.
 //!

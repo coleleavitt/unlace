@@ -1,15 +1,15 @@
-//! `kuna docs` — the reference manual, compiled into the binary.
+//! `unlace docs` — the reference manual, compiled into the binary.
 //!
 //! A release binary is frequently all a driving agent has: no repo checkout, no
 //! `docs/` tree, no network.  kuna's control surface is its documentation (the
 //! option catalog *is* the product), so shipping the binary without it ships
 //! something unusable.  Every topic below is therefore pulled in with
 //! `include_str!` at compile time and answered out of the binary's own rodata —
-//! `kuna docs` opens no file and resolves no path, so it behaves identically in
+//! `unlace docs` opens no file and resolves no path, so it behaves identically in
 //! an empty directory and in the repo.
 //!
 //! Compiling the bytes in also fixes the freshness hazard the other direction:
-//! `docs/options.md` is generated (`kuna catalog --markdown > docs/options.md`)
+//! `docs/options.md` is generated (`unlace catalog --markdown > docs/options.md`)
 //! and gated by `unlace-decomp/tests/options_md_fresh.rs`, so a stale catalog
 //! cannot reach a binary that is rebuilt — and `tests/docs_cli.rs` asserts the
 //! embedded bytes still equal the on-disk file, which is what makes that true.
@@ -20,7 +20,7 @@ use crate::jsonfmt::{self, Json};
 use crate::output;
 
 /// One embedded document.  `body` is the source file verbatim, so
-/// `kuna docs <topic>` is byte-identical to `cat docs/<topic>.md`.
+/// `unlace docs <topic>` is byte-identical to `cat docs/<topic>.md`.
 pub struct Doc {
     pub topic: &'static str,
     pub title: &'static str,
@@ -36,7 +36,7 @@ pub struct Doc {
 pub const DOCS: &[Doc] = &[
     Doc {
         topic: "cli",
-        title: "The `kuna` CLI reference",
+        title: "The `unlace` CLI reference",
         summary: "Every subcommand, flag, exit code and JSON schema of the kuna binary.",
         path: "docs/cli.md",
         body: include_str!("../../../../docs/cli.md"),
@@ -71,12 +71,12 @@ pub const DOCS: &[Doc] = &[
     },
 ];
 
-const USAGE: &str = "usage: kuna docs [<topic>] [--json] [--all]\n\
+const USAGE: &str = "usage: unlace docs [<topic>] [--json] [--all]\n\
                      \n\
-                     kuna docs                list the embedded topics, one per line\n\
-                     kuna docs <topic>        print that document to stdout\n\
-                     kuna docs --json         the topic list as [{topic,title,summary,bytes}]\n\
-                     kuna docs --all          every document concatenated, for a context window";
+                     unlace docs                list the embedded topics, one per line\n\
+                     unlace docs <topic>        print that document to stdout\n\
+                     unlace docs --json         the topic list as [{topic,title,summary,bytes}]\n\
+                     unlace docs --all          every document concatenated, for a context window";
 
 pub fn run(argv: &[String]) -> i32 {
     let mut topic: Option<&str> = None;
@@ -132,7 +132,7 @@ pub fn run(argv: &[String]) -> i32 {
         },
         None => {
             let status = output::emit_with_status(&render_list(), 0);
-            eprintln!("\nread one with `kuna docs <topic>`; all of it with `kuna docs --all`");
+            eprintln!("\nread one with `unlace docs <topic>`; all of it with `unlace docs --all`");
             status
         }
     }
@@ -189,7 +189,7 @@ pub fn render_all() -> String {
     let mut out = String::new();
     let _ = writeln!(
         out,
-        "<!-- kuna docs --all: {} documents, {} total; topics: {} -->\n",
+        "<!-- unlace docs --all: {} documents, {} total; topics: {} -->\n",
         DOCS.len(),
         human_size(total),
         topic_names().join(", ")
@@ -197,7 +197,7 @@ pub fn render_all() -> String {
     for d in DOCS {
         let _ = writeln!(
             out,
-            "<!-- ===== kuna docs: {} — {} ({}) ===== -->\n",
+            "<!-- ===== unlace docs: {} — {} ({}) ===== -->\n",
             d.topic,
             d.path,
             human_size(d.body.len())

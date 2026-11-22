@@ -13,7 +13,7 @@
 //!   `LoadLibraryW(L"ntdll.dll")`, read through the `wchar_t *` parameter of the
 //!   `win32sigs` declaration the IAT call carries, also with `operand_refs` on (a
 //!   `--mode aggressive` member, and `auto` picks aggressive for anything under
-//!   500 KiB, so it is what the `kuna` binary runs by default). That pass accepts
+//!   500 KiB, so it is what the `unlace` binary runs by default). That pass accepts
 //!   a SINGLE visible character, and once read the first unit plus its high-byte
 //!   NUL as a complete `char[2]`, rendering `LoadLibraryW("n")` -- the recorded
 //!   defect. It now declines a run that opens an array of 2-byte character codes
@@ -43,7 +43,7 @@ fn decompile_entry(widestrings: bool) -> String {
 }
 
 /// The same, with the `operand_refs` scalar-markup pass forced on — the shape a
-/// default `kuna decompile` runs (`auto` -> `aggressive`).
+/// default `unlace decompile` runs (`auto` -> `aggressive`).
 fn decompile_entry_with(widestrings: bool, operand_refs: bool) -> String {
     let root = repo_root();
     let specs = root.join("specs");
@@ -108,7 +108,7 @@ fn wide_literal_is_unmarked_with_the_width_off() {
     );
 }
 
-/// The recorded defect, on the pass set a default `kuna decompile` runs: with
+/// The recorded defect, on the pass set a default `unlace decompile` runs: with
 /// `operand_refs` on and the 2-byte width off, the wide literal rendered as its
 /// own first character, `LoadLibraryW("n")`; the scalar markup now leaves it
 /// untyped. With the width on it renders whole, and `widestrings` wins the

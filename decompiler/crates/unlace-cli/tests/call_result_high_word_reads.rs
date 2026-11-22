@@ -155,7 +155,7 @@ fn i386_image() -> Vec<u8> {
 fn decompile(stem: &str, bytes: &[u8]) -> String {
     let path = common::scratch_file(stem, "o");
     std::fs::write(&path, bytes).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-all", path.to_str().unwrap()])
         .output()
         .unwrap();

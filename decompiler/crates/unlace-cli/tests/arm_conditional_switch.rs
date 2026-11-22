@@ -46,7 +46,7 @@ fn guarded_arm_branch_tables_keep_cases_and_the_shared_frame() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     for tail in ["on", "off"] {
-        let binary = env!("CARGO_BIN_EXE_kuna");
+        let binary = env!("CARGO_BIN_EXE_unlace");
         let runner = std::env::var_os("KUNA_CLI_WRAPPER").unwrap_or_else(|| binary.into());
         let mut command = Command::new(runner);
         command.env("KUNA_BINARY", binary).env("KUNA_SPECS", &specs).args([

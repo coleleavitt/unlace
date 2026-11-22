@@ -24,7 +24,7 @@
 //! ([`declared_entry_in_header`]): no scan guessed that, the image named the
 //! address the OS jumps to, and treating it as data is what left the witness for
 //! `docs/re-needs/whole-binary-decompilation-treats.md` reporting zero functions
-//! from `kuna decompile-all`.
+//! from `unlace decompile-all`.
 
 use object::pe::{ImageNtHeaders32, ImageNtHeaders64};
 use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile32, PeFile64};
@@ -73,7 +73,7 @@ pub(crate) fn header_entry(file: &object::File, bytes: &[u8]) -> Option<u64> {
 /// `docs/re-needs/whole-binary-decompilation-treats.md` declares `0x154`, the
 /// byte immediately after its two-entry table. Mapping those bytes as data left
 /// whole-binary decompilation reporting zero functions on an image whose entry
-/// `kuna decompile --addr 0x400154` renders in full.
+/// `unlace decompile --addr 0x400154` renders in full.
 ///
 /// An `AddressOfEntryPoint` of `0` is the "no entry point" encoding a
 /// resource-only DLL uses. `object` still reports that as `ImageBase`, which is

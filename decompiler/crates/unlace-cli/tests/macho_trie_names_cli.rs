@@ -20,7 +20,7 @@ fn repo_root() -> PathBuf {
 
 fn kuna(args: &[&str]) -> Output {
     let specs = repo_root().join("specs");
-    Command::new(env!("CARGO_BIN_EXE_kuna"))
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")

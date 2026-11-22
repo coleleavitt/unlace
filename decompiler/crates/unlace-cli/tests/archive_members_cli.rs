@@ -43,7 +43,7 @@ fn write_archive(path: &Path, magic: &str, members: &[(&str, &[u8])]) {
 }
 
 fn kuna(args: &[&str]) -> (String, String, i32) {
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .env("SLEIGHHOME", common::repo_root().join("specs"))
         .output()
@@ -135,7 +135,7 @@ fn an_unselected_member_is_refused_with_the_member_names() {
 #[test]
 fn a_selected_member_leaves_no_staging_files() {
     let staging = tempfile::tempdir().unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", &archive(), "sq"])
         .env("SLEIGHHOME", common::repo_root().join("specs"))
         .env("TMPDIR", staging.path())

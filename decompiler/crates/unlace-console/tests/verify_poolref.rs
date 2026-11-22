@@ -4,7 +4,7 @@
 //!
 //! Fixture: `poolref_arm_le32` (`poolref_arm_le32.py` builds it), the four-shape
 //! reduction of crackmes.one/5ab77f5733c5d40ad448c380, where
-//! `kuna strings --json --filter "FATAL: kernel too old"` reported
+//! `unlace strings --json --filter "FATAL: kernel too old"` reported
 //! `xrefs_count: 0` and no owning function for a string that
 //! `__libc_start_main` plainly loads: the address is nowhere in the
 //! instruction, only in the pool word at 0x86e4.
@@ -42,7 +42,7 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
 }
 
-/// Bootstrap the fixture and build the index `kuna xrefs` / `kuna strings` answer out of.
+/// Bootstrap the fixture and build the index `unlace xrefs` / `unlace strings` answer out of.
 fn index() -> XrefIndex {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/poolref_arm_le32");
     let specs = repo_root().join("specs");

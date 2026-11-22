@@ -270,7 +270,7 @@ fn load_fixture(rel: &str) -> ConsoleProgram {
 /// Declaring an entry keeps WHY that entry exists: an import's synthetic address
 /// is an `UndefinedExternal`, and re-registering its name as a plain mapped
 /// symbol made `resolve_entry` answer "not mapped in this input" for an address
-/// it used to select — so `kuna decompile <obj> 0xIMPORT --addr` lost its
+/// it used to select — so `unlace decompile <obj> 0xIMPORT --addr` lost its
 /// external-symbol note and exited non-zero.
 #[test]
 fn declaring_an_import_keeps_its_external_provenance() {

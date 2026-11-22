@@ -12,7 +12,7 @@
 //!
 //! `<binary>` and `<spec-root>` are paths in the (virtual) filesystem. Writes a
 //! JSON document to stdout (`list`/`decompile`: the shape of
-//! `kuna decompile-all --json` plus a per-function `"kind"`;
+//! `unlace decompile-all --json` plus a per-function `"kind"`;
 //! `inspect`/`read`/`xrefs`/`strings`: the study view's documents; `project`:
 //! the whole-binary `.c`/`.h`/`.asm`/`README.md` artifacts — named after
 //! `<display-name>`, default the binary's basename — as one document); errors go to stderr with a

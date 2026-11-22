@@ -3,7 +3,7 @@
 //!
 //! ## The gap
 //!
-//! [`crate::loader::pe_iat`] names every IAT slot, so `kuna functions` on a PE
+//! [`crate::loader::pe_iat`] names every IAT slot, so `unlace functions` on a PE
 //! lists `0x4112c4 ExitThread`. The decompiler never asks: a
 //! `call dword ptr [0x4112c4]` lifts to a `CALLIND` whose target Varnode is the
 //! *contents* of the global at the slot, and the one place that resolves such a

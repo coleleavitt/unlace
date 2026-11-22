@@ -171,23 +171,23 @@ The SIMD reproduction source is [talk/byte_sum.c](talk/byte_sum.c). On x86-64 Li
 ```sh
 clang -O3 -msse2 -mno-avx -fno-unroll-loops -no-pie \
   docs/talk/byte_sum.c -o /tmp/kuna-talk-byte-sum
-decompiler/target/release/kuna decompile /tmp/kuna-talk-byte-sum byte_sum \
+decompiler/target/release/unlace decompile /tmp/kuna-talk-byte-sum byte_sum \
   --mode reliable --option devectorize off
-decompiler/target/release/kuna decompile /tmp/kuna-talk-byte-sum byte_sum \
+decompiler/target/release/unlace decompile /tmp/kuna-talk-byte-sum byte_sum \
   --mode reliable --option devectorize on
 ```
 
 Focused SIMD regressions passed 12/12:
 
 ```sh
-decompiler/target/release/kuna test --datatests --datatests-dir tests/stages \
+decompiler/target/release/unlace test --datatests --datatests-dir tests/stages \
   --name kuna-devectorize --name kuna-devectorize-effects --name kuna-wideslice --json
 ```
 
 The lifetime replay used the checked-in fixture and assertions; changing `on` to `off` reproduces the incompatible aggregate assignment:
 
 ```sh
-decompiler/target/release/kuna decompile \
+decompiler/target/release/unlace decompile \
   decompiler/crates/unlace-analysis/tests/fixtures/lifetimes_stack_x86_64 stack_reuse \
   --mode reliable --assert-strict \
   --assert @decompiler/crates/unlace-analysis/tests/fixtures/lifetimes_stack_x86_64.kuna \
@@ -197,10 +197,10 @@ decompiler/target/release/kuna decompile \
 The byte-overlay replay reached the lifter and returned `0x2a`:
 
 ```sh
-decompiler/target/release/kuna decompile \
+decompiler/target/release/unlace decompile \
   decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64 0x401140 \
   --addr --define-function '0x401140-0x401146=decrypted_stage' \
   --assert 'bytes 0x401140 b82a000000c3' --assert-strict --json
 ```
 
-The unpacking replay used [the fixture named by #488](../decompiler/crates/unlace-analysis/tests/fixtures/upx_packed_pe_i386.exe). Run `kuna functions FILE --json` before and after `kuna unpack FILE -o OUTPUT`; the fresh counts were 2 and 168. Unpacking is static; the packed program was not executed.
+The unpacking replay used [the fixture named by #488](../decompiler/crates/unlace-analysis/tests/fixtures/upx_packed_pe_i386.exe). Run `unlace functions FILE --json` before and after `unlace unpack FILE -o OUTPUT`; the fresh counts were 2 and 168. Unpacking is static; the packed program was not executed.

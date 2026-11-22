@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate `followoverlap_x86_64` -- an x86-64 ELF whose branches land inside
-instructions another reachable path decodes, for `kuna disassemble --follow`.
+instructions another reachable path decodes, for `unlace disassemble --follow`.
 
 Each function is a shape in which two paths through the same bytes read them as
 different instructions, so a correct `--follow` listing holds both readings and

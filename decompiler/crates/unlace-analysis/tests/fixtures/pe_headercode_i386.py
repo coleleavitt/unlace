@@ -9,7 +9,7 @@ characteristics 0xc00000e0 -- CNT_CODE|INITIALIZED|UNINITIALIZED|READ|WRITE with
 MEM_EXECUTE clear -- and `AddressOfEntryPoint` 0x154, the byte immediately after
 its two-entry section table.  So the image has no executable section for a
 discovered entry to land in, and its entry is not in a section at all: the whole
-inventory was the two Import Address Table slots and `kuna decompile-all`
+inventory was the two Import Address Table slots and `unlace decompile-all`
 answered `count: 0`.  This reproduces that layout with a stub small enough to
 read.
 

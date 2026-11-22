@@ -20,7 +20,7 @@ fn fixture() -> String {
 fn decompile_with(function: &str, extra: &[&str]) -> String {
     let binary = fixture();
     let sleigh = repo_root().join("specs").to_string_lossy().into_owned();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args(["decompile", &binary, function]);
     command.args(extra);
     let out = command
@@ -30,7 +30,7 @@ fn decompile_with(function: &str, extra: &[&str]) -> String {
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if !out.status.success() {
-        panic!("kuna decompile failed: {stderr}");
+        panic!("unlace decompile failed: {stderr}");
     }
     stdout
 }

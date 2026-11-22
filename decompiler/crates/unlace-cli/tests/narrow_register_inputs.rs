@@ -18,7 +18,7 @@ fn narrow_sparc_argument_reads_preserve_all_stored_values() {
         format!("{record}\nprototype store_parts void store_parts(Record *dst,unsigned int b,unsigned int c,unsigned int d,unsigned int e,unsigned int f)\n"),
     )
     .unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             path.to_str().unwrap(),

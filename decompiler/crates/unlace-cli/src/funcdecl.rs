@@ -8,7 +8,7 @@
 //! follow.  That is the right default and it is wrong exactly where reverse
 //! engineering is hard — an obfuscated, packed or hand-written image, where a
 //! missed entry silently merges two functions and a phantom entry invents one.
-//! Until this flag the `kuna` binary could not correct either: its generated
+//! Until this flag the `unlace` binary could not correct either: its generated
 //! console script emitted a fixed vocabulary (`load file` / `option` /
 //! `read symbols` / `load function|addr` / `kassert` / `decompile` / `print`),
 //! and "function F spans `[start,end)`" was not expressible anywhere in the

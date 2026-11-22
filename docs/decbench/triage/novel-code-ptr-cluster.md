@@ -15,7 +15,7 @@ confidence: high
 ## What was actually verified
 
 Eight NOVEL rows whose `defects` column is driven by `code_ptr`, re-decompiled today
-(`decompiler/target/release/kuna`, `SLEIGHHOME=/home/mahaloz/github/kuna/specs`), each
+(`decompiler/target/release/unlace`, `SLEIGHHOME=/home/mahaloz/github/kuna/specs`), each
 against the stripped binary at the case address, plus the ghidra/ida panes and the original
 `.i` source.
 
@@ -262,7 +262,7 @@ Source is `copy_fd (int src_fd, uintmax_t n_bytes)` with `BUFSIZ`-style chunking
 Closed by an existing flag:
 
 ```
-$ kuna decompile head --addr 0x3290 --option inferfuncentry off
+$ unlace decompile head --addr 0x3290 --option inferfuncentry off
 unsigned long sub_3290(unsigned int a0,uint8 a1)
     v2 = 0x2000;
     if (a1 <= 0x2000)

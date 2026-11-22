@@ -1,4 +1,4 @@
-//! The compiled SLEIGH tree a release `kuna` carries inside itself (cargo feature
+//! The compiled SLEIGH tree a release `unlace` carries inside itself (cargo feature
 //! `embed-specs`; `build.rs` generates the table).
 //!
 //! The engine reads specs only through plain `std::fs` path reads, so the table is
@@ -67,8 +67,8 @@ fn cache_bases() -> Vec<PathBuf> {
             .or_else(|| var("HOME").map(|home| home.join(".cache")))
     };
     let user = std::env::var("USER").or_else(|_| std::env::var("USERNAME")).unwrap_or_default();
-    let temp = if user.is_empty() { "kuna".to_string() } else { format!("kuna-{user}") };
-    let mut bases: Vec<PathBuf> = user_cache.into_iter().map(|dir| dir.join("kuna")).collect();
+    let temp = if user.is_empty() { "unlace".to_string() } else { format!("unlace-{user}") };
+    let mut bases: Vec<PathBuf> = user_cache.into_iter().map(|dir| dir.join("unlace")).collect();
     bases.push(std::env::temp_dir().join(temp));
     bases
 }

@@ -531,7 +531,7 @@ pub trait Action {
             {
                 break;
             }
-            // (kuna decompile-all watchdog) Cooperative deadline: a repeatapply
+            // (unlace decompile-all watchdog) Cooperative deadline: a repeatapply
             // action that keeps finding changes must still yield once the
             // per-function budget expires (a no-op compare when no budget).
             if ctx.deadline_expired_at(|| format!("action {}", self.get_name())) {
@@ -584,8 +584,8 @@ pub struct ActionContext {
     /// `restart_pending` flag on the Funcdata is left SET in this case (the outer
     /// loop consumes it after re-flow), unlike the in-loop restart which clears it.
     pub reflow_requested: bool,
-    /// (kuna decompile-all watchdog) Optional wall-clock deadline for the
-    /// per-function decompile drive (`kuna decompile-all --max-fn-seconds N`).
+    /// (unlace decompile-all watchdog) Optional wall-clock deadline for the
+    /// per-function decompile drive (`unlace decompile-all --max-fn-seconds N`).
     /// Consulted **cooperatively** at the action boundaries ([`ActionGroup::apply`],
     /// [`ActionRestartGroup::apply`], [`Action::perform`]'s repeat gate) and every
     /// [`POOL_DEADLINE_STRIDE`] ops in the [`ActionPool`] rule loop; on expiry the
@@ -622,7 +622,7 @@ impl ActionContext {
         ActionContext::default()
     }
 
-    /// (kuna decompile-all watchdog) `true` once the cooperative per-function
+    /// (unlace decompile-all watchdog) `true` once the cooperative per-function
     /// [`deadline`](ActionContext::deadline) has passed or the drive went over
     /// its memory limit ([`budget_spent`](crate::decompile_drive::budget_spent)).
     /// `None` (no budget — every console/parity path) short-circuits without
@@ -801,7 +801,7 @@ impl Action for ActionGroup {
             self.state = 0; // Initialize the derived action (list.begin())
         }
         while self.state < self.list.len() {
-            // (kuna decompile-all watchdog) Cooperative deadline at every action
+            // (unlace decompile-all watchdog) Cooperative deadline at every action
             // boundary: stop scheduling further sub-actions once the per-function
             // budget expires and unwind with the current count (the outer driver
             // `run_pipeline` turns the expiry into a per-function `Err`).  A
@@ -921,7 +921,7 @@ impl Action for ActionRestartGroup {
             if res != 0 {
                 return res;
             }
-            // (kuna decompile-all watchdog) Never begin another restart iteration
+            // (unlace decompile-all watchdog) Never begin another restart iteration
             // past the per-function deadline — the observed non-convergence hang
             // cycles heritage/deadcode restarts forever.  Return with the current
             // state; `run_pipeline` converts the expiry into a per-function `Err`.
@@ -1665,7 +1665,7 @@ impl Action for ActionPool {
                     continue;
                 }
             }
-            // (kuna decompile-all watchdog) Cooperative deadline in the tight
+            // (unlace decompile-all watchdog) Cooperative deadline in the tight
             // rule loop, probed only every POOL_DEADLINE_STRIDE ops so the hot
             // path stays cheap.  On expiry, stop visiting ops and report
             // completion with the current count; the outer driver errors out.

@@ -20,5 +20,5 @@ How it was built
 
 What it pins
   kuna_dataptrs lists all four words with coverage dynamic-relocations, and
-  `kuna xrefs --to audit_target` reports exported_tab's first word as a pointer
+  `unlace xrefs --to audit_target` reports exported_tab's first word as a pointer
   row.

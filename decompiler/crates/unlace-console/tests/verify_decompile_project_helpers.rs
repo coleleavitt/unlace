@@ -1,5 +1,5 @@
 //! End-to-end gate for the **whole-binary export helpers** on [`ConsoleProgram`]
-//! that back `kuna decompile-project` (the `.asm`/README surface):
+//! that back `unlace decompile-project` (the `.asm`/README surface):
 //!
 //! ```text
 //!   sections()             (vma, size, flags) — the loader's section map

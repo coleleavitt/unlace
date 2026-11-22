@@ -348,7 +348,7 @@ pub fn xrefs_json(
 /// The `strings` document: `{binary, scanned, count, strings:[{address,
 /// address_hex, text, length, encoding, section, in_code, uses:[{name, address,
 /// address_hex, at, at_hex, kind, instruction, via}]}], assertions}`. The rows
-/// are `kuna strings --encoding all`'s (minimum length 5, any ending); `in_code`
+/// are `unlace strings --encoding all`'s (minimum length 5, any ending); `in_code`
 /// marks a row inside an executable section, and a use's `via` is
 /// `{name, address, address_hex}` of the data word it reads the string's address
 /// from, else null.

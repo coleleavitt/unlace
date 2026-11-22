@@ -28,7 +28,7 @@ reject_reason: null
 Locating the cipher or hash a crackme uses (the AES S-box, SHA-256's round constants, a CRC-32
 table, the TEA delta, a custom Base64 alphabet) and the function that uses it is the first triage
 hop on most crypto challenges, and kuna has no command for it. An agent falls back to hexdumping
-`.rdata` with `kuna read` and grepping for `63 7c 77 7b`, then runs `kuna xrefs --to` on each
+`.rdata` with `unlace read` and grepping for `63 7c 77 7b`, then runs `unlace xrefs --to` on each
 hit by hand, which is what findcrypt does in one step.
 
 > **No crypto-constant inventory** (major, Flare-On 12 #7 `hopeanddreams.exe`)
@@ -111,7 +111,7 @@ hit by hand, which is what findcrypt does in one step.
 **Advisory — the builder is not bound by this.**
 
 - `kind: absence`: there is no subcommand. The scan is a byte-pattern search over the mapped
-  sections; the "who uses it" half is the reference index `kuna strings` already attributes with.
+  sections; the "who uses it" half is the reference index `unlace strings` already attributes with.
 
 ## Refutation
 

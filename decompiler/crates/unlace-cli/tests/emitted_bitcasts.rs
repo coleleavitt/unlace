@@ -108,7 +108,7 @@ fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_valu
             let src = common::scratch_file("bit-transfers", "c");
             let exe = common::scratch_file("bit-transfers", "exe");
             std::fs::write(&input, obj.write().unwrap()).unwrap();
-            let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
             cmd.args([
                 "decompile-all",
                 input.to_str().unwrap(),
@@ -253,7 +253,7 @@ fn main() {{ unsafe {{
 fn floating_fields_are_reinterpreted_before_integer_truncation() {
     let input = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../unlace-analysis/tests/fixtures/ftol_i386.obj");
-    let decomp = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let decomp = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile-all",
             input.to_str().unwrap(),

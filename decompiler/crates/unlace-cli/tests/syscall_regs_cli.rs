@@ -47,7 +47,7 @@ fn image(userland: bool) -> Vec<u8> {
 fn decompile(userland: bool, option: Option<&str>) -> String {
     let path = common::scratch_file("syscall-regs", "o");
     std::fs::write(&path, image(userland)).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args(["decompile", path.to_str().unwrap(), "pair"]);
     if let Some(value) = option {
         command.args(["--option", "syscallregs", value]);

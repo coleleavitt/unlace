@@ -14,13 +14,13 @@ fn fixture(name: &str) -> std::path::PathBuf {
 
 fn kuna(args: &[String]) -> serde_json::Value {
     let runner =
-        std::env::var_os("KUNA_TEST_RUNNER").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_RUNNER").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let output = process::required_output(
         Command::new(runner)
             .env(
                 "KUNA_BINARY",
                 std::env::var_os("KUNA_BINARY")
-                    .unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into()),
+                    .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
             )
             .env("KUNA_SPECS", common::repo_root().join("specs"))
             .env("KUNA_DECODE_JOBS", "1")

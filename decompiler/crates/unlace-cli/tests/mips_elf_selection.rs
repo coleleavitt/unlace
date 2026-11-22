@@ -85,7 +85,7 @@ fn asserted(path: &Path, assertions: &[&str]) -> String {
 }
 
 fn asserted_options(path: &Path, assertions: &[&str], options: &[&str]) -> String {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .arg("decompile")
         .arg(path)
@@ -100,7 +100,7 @@ fn asserted_options(path: &Path, assertions: &[&str], options: &[&str]) -> Strin
 }
 
 fn run(path: &Path, command: &str, target: Option<&str>) -> std::process::Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args([command])
         .arg(path)
         .args(["0x1000", "--mode", "fast"]);
@@ -238,7 +238,7 @@ fn o32_wide_instructions_return_a_declared_pair_in_abi_order() {
             0x34021234, 0x0002103c, 0x34425678, 0x0002183e, 0x00021000, 0x03e00008, 0,
         ];
         std::fs::write(&path, elf(little, 0x8000_1000, &words)).unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .arg("decompile")
             .arg(&path)
             .args([
@@ -723,7 +723,7 @@ fn mips_elf32_entry_addresses_extend_to_the_selected_register_width() {
                     with_symbols(little, bytes, &[("entry_sign", entry, 12)]),
                 )
                 .unwrap();
-                let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+                let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
                 cmd.arg("decompile")
                     .arg(&path)
                     .args([
@@ -791,7 +791,7 @@ fn release6_micromips_metadata_keeps_ordinary_functions() {
         let target = format!("MIPS:{endian}:32:R6:default");
         let mut outputs = Vec::new();
         for explicit in [false, true] {
-            let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command
                 .arg("decompile")
                 .arg(&path)

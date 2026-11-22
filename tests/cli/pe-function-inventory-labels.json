@@ -34,5 +34,5 @@
       "\"name\": \"[^\"]*::vftable_[0-9]+\""
     ]
   },
-  "notes": "Promoted acceptance of pe-function-inventory-labels, re-pointed off the dataset PE onto the in-repo MSVC RTTI fixture, which reproduces it (CI has no dataset). rtti names each vftable slot's TARGET -- a function -- and used to call it `<Class>::vftable_<i>`, so `kuna functions` called executable ranges vtables. Now `vfunc_<i>`. --mode aggressive pins the rtti gate on."
+  "notes": "Promoted acceptance of pe-function-inventory-labels, re-pointed off the dataset PE onto the in-repo MSVC RTTI fixture, which reproduces it (CI has no dataset). rtti names each vftable slot's TARGET -- a function -- and used to call it `<Class>::vftable_<i>`, so `unlace functions` called executable ranges vtables. Now `vfunc_<i>`. --mode aggressive pins the rtti gate on."
 }

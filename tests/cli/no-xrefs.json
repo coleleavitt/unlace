@@ -43,5 +43,5 @@
       }
     ]
   },
-  "notes": "Desired: a cross-reference query answering 'what references this address', in the address/address_hex record idiom kuna functions --json already uses."
+  "notes": "Desired: a cross-reference query answering 'what references this address', in the address/address_hex record idiom unlace functions --json already uses."
 }

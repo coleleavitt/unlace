@@ -28,7 +28,7 @@ fn fixed_wide_shifts_execute_as_bitvectors() {
         let mut codes = Vec::new();
         let mut declarations = Vec::new();
         for (name, prototype) in functions {
-            let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command.arg("decompile").arg(&image).arg(name).args([
                 "--option",
                 "armconstshift",
@@ -115,7 +115,7 @@ fn fixed_wide_shifts_execute_as_bitvectors() {
 fn fixed_wide_shifts_keep_their_spelling_by_default() {
     let root = common::repo_root().join("tests/fixtures/wide-integer-emission");
     for file in ["x86-64.elf", "aarch64.elf", "ppc64.elf", "mips64.elf"] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command.arg("decompile").arg(root.join(file)).arg("shift63").args([
             "--assert-strict",
             "--assert",

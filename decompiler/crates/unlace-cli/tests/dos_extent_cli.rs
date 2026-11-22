@@ -57,7 +57,7 @@ fn dos_image(module: &[u8]) -> Vec<u8> {
 }
 
 fn kuna(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_kuna")).args(args).output().expect("run kuna")
+    Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().expect("run kuna")
 }
 
 fn run(args: &[&str]) -> (String, String) {

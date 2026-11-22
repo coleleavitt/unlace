@@ -303,7 +303,7 @@ fn decompile(stem: &str, image: &Image) -> String {
         .filter(|name| !["vr", "g"].contains(name))
         .collect();
     let mut cmd = Command::new(
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into()),
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
     );
     cmd.args([
         "decompile-all",

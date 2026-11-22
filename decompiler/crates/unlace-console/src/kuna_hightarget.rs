@@ -6,7 +6,7 @@
 //! Every register-resident local kuna prints (`v6 // rax`, `v2 // al`) is a
 //! HighVariable the naming pass named directly, with nothing in the scope behind
 //! it, so the one plane an agent states facts through cannot name it — while
-//! `kuna decompile --help` teaches `type v2 char[16]` on exactly such a name.
+//! `unlace decompile --help` teaches `type v2 char[16]` on exactly such a name.
 //!
 //! Native storage uses a definition-scoped Symbol. Renumbered temporaries,
 //! JOIN storage and definitions sharing one native address use the existing

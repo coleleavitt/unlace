@@ -17,7 +17,7 @@ What it is
       uncompressed leaves UPX moved out of the image;
     - a TLS directory with a callback, and an exception directory.
 
-  `kuna unpack` writes what `upx -d` (5.3.0) writes except the IAT data
+  `unlace unpack` writes what `upx -d` (5.3.0) writes except the IAT data
   directory and each import descriptor's OriginalFirstThunk, which upx -d
   zeroes. Against the linker's original, the sections, imports (as a set),
   relocations, TLS and resource leaves all match; .text padding past the virtual

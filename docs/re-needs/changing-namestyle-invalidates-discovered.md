@@ -121,22 +121,22 @@ _none recorded_
 
 SYMPTOM REPRODUCED exactly on the need's own arena binary
 (.kuna-repipe/arena/11/6927c8d12d267f28f69b8131/target/0xjam3z-evolvingsbox.zip.__x/0xJam3z-Medium):
-default `kuna decompile BIN sub_15dc` = rc 0, full body; adding `--option namestyle ghidra` = rc 1,
+default `unlace decompile BIN sub_15dc` = rc 0, full body; adding `--option namestyle ghidra` = rc 1,
 'no function "sub_15dc" ... pass an address with --addr'.
 
 MECHANISM: this is NOT a broken selector, it is a name-space swap. Under namestyle ghidra the same
-function resolves BY ITS OTHER NAME: `kuna decompile BIN func_0x000015dc --option namestyle ghidra`
+function resolves BY ITS OTHER NAME: `unlace decompile BIN func_0x000015dc --option namestyle ghidra`
 returns rc 0 and the full body. So lookup works; the synthesized name is simply regenerated in the
 upstream style (func_0x%08x, see architecture.rs and tests/verify_w4_fw_architecture.rs:79) and the
 default-style name sub_15dc is not retained as an alias. The tester's filed hypothesis is upheld.
 Do NOT guess Ghidra's own prefix: `FUN_000015dc` is rc 1 as well; kuna's upstream style is func_0x.
 
-THE TWO SURFACES DISAGREE BY CONSTRUCTION: `kuna functions --json` ignores namestyle and always
+THE TWO SURFACES DISAGREE BY CONSTRUCTION: `unlace functions --json` ignores namestyle and always
 reports {"name": "sub_15dc", "aliases": []}. That empty `aliases` field already exists in the schema
 and is the natural carrier for a fix.
 
 ACCEPTANCE VERIFIED SOUND (recipe check (v), by control rather than by simulation):
-`kuna decompile BIN 0x15dc --addr --option namestyle ghidra` gives rc 0 with "Correct!" present
+`unlace decompile BIN 0x15dc --addr --option namestyle ghidra` gives rc 0 with "Correct!" present
 once in stdout -- exactly the shape the acceptance demands. A correct fix flips it. Contrast
 live-simd-string-copies, whose acceptance cannot be flipped.
 

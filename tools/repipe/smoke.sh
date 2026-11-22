@@ -51,7 +51,7 @@ head_ "L0  aggregate performance regressions require stable evidence"
 from scripts.repipe import probe, verify
 
 doc = {
-    "schema": "re-probe/1", "kind": "timing", "cmd": ["kuna"], "timeout_s": 5,
+    "schema": "re-probe/1", "kind": "timing", "cmd": ["unlace"], "timeout_s": 5,
     "repeat": 3, "expect": {"exit_code": {"eq": 0},
                             "wall_ms": {"stat": "median", "lt": 10}},
 }
@@ -832,7 +832,7 @@ head_ "L1  sandbox actually hides the dataset"
 if command -v bwrap >/dev/null 2>&1; then
   N="$(bwrap --dev-bind / / --tmpfs "$DATASET" -- ls "$DATASET" 2>/dev/null | wc -l)"
   [ "$N" = "0" ] && { ok "dataset is empty inside the namespace"; SAW_SANDBOX=1; } || bad "dataset still visible ($N entries)"
-  bwrap --dev-bind / / --tmpfs "$DATASET" -- "$REPO/decompiler/target/release/kuna" --version >/dev/null 2>&1 \
+  bwrap --dev-bind / / --tmpfs "$DATASET" -- "$REPO/decompiler/target/release/unlace" --version >/dev/null 2>&1 \
     && ok "kuna still runs inside the namespace" || bad "kuna broken inside the namespace"
 else
   bad "bwrap missing -- containment is prompt-only and this canary must not be skipped silently"
@@ -860,7 +860,7 @@ PY
 gate_verdict() { "$PY" -m scripts.repipe.verify --observation "$GATE_OBS" --json 2>/dev/null \
                    | "$PY" -c 'import json,sys;print(json.load(sys.stdin).get("verdict"))'; }
 
-# probe PASSES (kuna --version exits 0) + acceptance FAILS (it does not exit 99)
+# probe PASSES (unlace --version exits 0) + acceptance FAILS (it does not exit 99)
 mk_obs '{"exit_code":{"eq":0}}' '{"exit_code":{"eq":99}}'
 V="$(gate_verdict)"
 [ "$V" = "admitted" ] && { ok "probe PASS + acceptance FAIL -> admitted"; SAW_REPRODUCING=1; } \
@@ -926,11 +926,11 @@ head_ "L1  a probe cannot execute arbitrary code"
 EVIL="$SMOKE_STATE/evil.json"
 rm -f /tmp/repipe-smoke-pwned
 # The last two are the bypasses a basename-only allowlist would miss: a tester has
-# workspace-write, so it can drop a file called `kuna` and name it by path.
+# workspace-write, so it can drop a file called `unlace` and name it by path.
 mkdir -p "$SMOKE_STATE/evil"
-printf '#!/bin/sh\ntouch /tmp/repipe-smoke-pwned\n' > "$SMOKE_STATE/evil/kuna"; chmod +x "$SMOKE_STATE/evil/kuna"
+printf '#!/bin/sh\ntouch /tmp/repipe-smoke-pwned\n' > "$SMOKE_STATE/evil/unlace"; chmod +x "$SMOKE_STATE/evil/unlace"
 ln -sf /bin/bash "$SMOKE_STATE/evil/objdump"
-for CMD in '["bash","-c","touch /tmp/repipe-smoke-pwned"]' '["rm","-rf","/tmp/nothing"]' '["curl","http://example.invalid"]' "[\"$SMOKE_STATE/evil/kuna\"]" "[\"$SMOKE_STATE/evil/objdump\",\"-c\",\"touch /tmp/repipe-smoke-pwned\"]"; do
+for CMD in '["bash","-c","touch /tmp/repipe-smoke-pwned"]' '["rm","-rf","/tmp/nothing"]' '["curl","http://example.invalid"]' "[\"$SMOKE_STATE/evil/unlace\"]" "[\"$SMOKE_STATE/evil/objdump\",\"-c\",\"touch /tmp/repipe-smoke-pwned\"]"; do
   "$PY" - "$FIX" "$CMD" > "$EVIL" <<'PY'
 import json, sys
 p = json.load(open(sys.argv[1] + "/probe-zero-functions.json"))
@@ -954,7 +954,7 @@ def o(title, hexid, tester, kind="silent-failure", wanted="function inventory"):
             "what_kuna_did": "count 0 exit 0", "severity": "blocker",
             "probe": p, "acceptance": a, "_hexid": hexid, "_tester": tester, "_round": 1}
 json.dump([
-    o("kuna functions returns 0 functions on a stripped PIE", "64f1f7af", "t1"),
+    o("unlace functions returns 0 functions on a stripped PIE", "64f1f7af", "t1"),
     o("functions --json is empty for a section-stripped binary", "60be2a60", "t2"),
     o("no functions found and no error reported", "6609e458", "t3"),
     o("kuna has no way to list strings", "64f1f7af", "t1", "missing-capability", "the string inventory"),

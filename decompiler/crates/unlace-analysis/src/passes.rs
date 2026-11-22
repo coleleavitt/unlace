@@ -928,9 +928,9 @@ pub fn run_listing_consumers_replaying_observed(
         // of the walk. On a stripped non-PIE ARM executable that is the whole program:
         // `main` is the only oracle that reaches the body, `_start` hands it to
         // `__libc_start_main` through a literal-pool word rather than a `bl`, and the
-        // walk therefore stopped at crt1 while `kuna xrefs` (which seeds off the
+        // walk therefore stopped at crt1 while `unlace xrefs` (which seeds off the
         // committed inventory) followed the same call graph and found 41 more
-        // functions than `kuna functions` reported.
+        // functions than `unlace functions` reported.
         seeds.extend(
             committed_entries
                 .iter()

@@ -4,7 +4,7 @@
 //! The answer has to be a function of the callee alone: a call reads its
 //! callee's pair in whatever order the callee's own RETURN joins it, and the
 //! two are decided in different decompiles, in any order, in any process
-//! (`--jobs`, a narrowed run, one `kuna decompile`, a front-end session). So
+//! (`--jobs`, a narrowed run, one `unlace decompile`, a front-end session). So
 //! the driver walks a function's raw p-code at most once per image, before any
 //! pipeline runs, and both seams read the same cached verdict ([`seed`]): the
 //! function's own and each direct callee's. A call the pipeline resolves only

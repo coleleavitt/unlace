@@ -2,7 +2,7 @@
 //!
 //! `override flow <addr> branch|call|callreturn|return` is the one structuring
 //! override whose engine path is fully ported, and it was reachable only from
-//! `decomp_dbg`: the `kuna` binary's `--assert` plane carried eleven directives
+//! `decomp_dbg`: the `unlace` binary's `--assert` plane carried eleven directives
 //! and `flow` was not among them, so an agent driving the CLI could not correct
 //! a misclassified call, branch or return at all.
 //!
@@ -168,7 +168,7 @@ fn a_flow_type_the_engine_cannot_apply_is_rejected_and_keeps_the_body() {
 }
 
 /// A directive the pipeline refused is `fatal`; one that merely did not bind is
-/// not.  The distinction is what `kuna decompile` reads to decide whether the run
+/// not.  The distinction is what `unlace decompile` reads to decide whether the run
 /// failed without `--assert-strict`: a refused `flow` means the C describes a
 /// control-flow graph other than the one asked for, and nothing in the C says so,
 /// while an unbound directive left a correct body un-annotated.

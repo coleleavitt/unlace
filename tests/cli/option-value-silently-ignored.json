@@ -37,5 +37,5 @@
       "(?s)\\bmain\\s*\\(\\s*void\\s*\\)"
     ]
   },
-  "notes": "`kuna decompile` drives the engine as a subprocess whose script is not a pushed script, so a refused option value never stopped it: the console said `Execution error: Must specify toggle value, on/off` and the run exited 0 with the DEFAULT C. `decompile-all` has always exited 1 here. fauxware is in-repo, so this runs without the dataset."
+  "notes": "`unlace decompile` drives the engine as a subprocess whose script is not a pushed script, so a refused option value never stopped it: the console said `Execution error: Must specify toggle value, on/off` and the run exited 0 with the DEFAULT C. `decompile-all` has always exited 1 here. fauxware is in-repo, so this runs without the dataset."
 }

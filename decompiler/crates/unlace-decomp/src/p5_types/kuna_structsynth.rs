@@ -78,7 +78,7 @@
 //! # Why the layout has to be offset-preserving
 //!
 //! The synthesized declaration is exported as C source
-//! (`kuna decompile-project`), so it is only worth anything if a compiler
+//! (`unlace decompile-project`), so it is only worth anything if a compiler
 //! reading it back puts `field_0xK` at offset K. Two shapes of evidence break
 //! that silently -- a field at an offset its own alignment does not divide (the
 //! compiler pads it forward) and a field minted inside the byte range a wider
@@ -160,8 +160,8 @@
 //!   with ten one-byte stores and one two-byte store and is synthesized as a
 //!   structure.
 //! * `struct_N` names are program-wide only where one process decompiles the
-//!   whole program (`kuna decompile-all`, `kuna decompile-project`);
-//!   `kuna decompile` spawns one `decomp_dbg` per function, so each function
+//!   whole program (`unlace decompile-all`, `unlace decompile-project`);
+//!   `unlace decompile` spawns one `decomp_dbg` per function, so each function
 //!   starts its numbering again.
 //! * Under `param`, a field whose value is itself a synthesis base keeps the
 //!   scalar type the accesses agree on; `nest` types it as a pointer to a

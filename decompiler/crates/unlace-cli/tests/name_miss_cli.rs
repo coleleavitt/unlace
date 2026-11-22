@@ -1,4 +1,4 @@
-//! (kuna, issue #666) What `kuna decompile <bin> <name>` answers when the name
+//! (kuna, issue #666) What `unlace decompile <bin> <name>` answers when the name
 //! is not in the image's symbol table: the C spelling of a Mach-O symbol is not
 //! a miss at all, and a miss that IS one says what the image carries instead of
 //! calling every image stripped.
@@ -24,7 +24,7 @@ fn specs() -> String {
 }
 
 fn decompile(binary: &str, selector: &str) -> (String, String, bool) {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
@@ -90,13 +90,13 @@ fn a_stripped_image_still_gets_the_addr_advice() {
 /// its bytes as code.
 #[test]
 fn a_macho_data_name_is_reported_as_data() {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
         .args(["functions", &fixture("macho_datasyms_arm64"), "--sleighpath", &specs()])
         .output()
-        .expect("run kuna functions");
+        .expect("run unlace functions");
     let listing = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "functions failed: {}", String::from_utf8_lossy(&out.stderr));
     let names: Vec<&str> = listing.lines().filter_map(|l| l.split('\t').nth(1)).collect();
@@ -112,7 +112,7 @@ fn a_macho_data_name_is_reported_as_data() {
         assert!(!stdout.contains("UndefinedInstructionException"), "{stdout}");
     }
 
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
@@ -125,7 +125,7 @@ fn a_macho_data_name_is_reported_as_data() {
             &specs(),
         ])
         .output()
-        .expect("run kuna decompile --json");
+        .expect("run unlace decompile --json");
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(!out.status.success(), "audit_message names data:\n{stdout}");
     assert!(

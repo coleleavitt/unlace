@@ -565,7 +565,7 @@ pub fn prefix_eligible(data: &Funcdata, bb: BlockId, max_stmts: int4) -> bool {
 ///   cross-leaf caps [`MAX_JOIN_LEAVES`]/[`MAX_JOIN_TOTAL_STMTS`] are expressed in it.
 fn shape_score(data: &Funcdata, bb: BlockId, max_stmts: int4) -> Option<ShapeVerdict> {
     // Decline with a reason, traced to stderr under `KUNA_CONDFOLD_DEBUG=1` (run
-    // `decomp_dbg` directly to see it; the `kuna` CLI drops the child's stderr).
+    // `decomp_dbg` directly to see it; the `unlace` CLI drops the child's stderr).
     // Declining is always correct: the fold simply does not happen and today's
     // goto+label output stands.
     macro_rules! decline {
@@ -723,7 +723,7 @@ fn trace_ops() -> bool {
 }
 
 /// Trace a Rule-B decline under `KUNA_CONDFOLD_DEBUG=1` (stderr; use `decomp_dbg`
-/// directly, the `kuna` CLI drops the child's stderr).
+/// directly, the `unlace` CLI drops the child's stderr).
 fn trace(bb: BlockId, reason: &str) {
     if std::env::var_os("KUNA_CONDFOLD_DEBUG").is_some() {
         eprintln!("[condfold] decline {bb:?}: {reason}");

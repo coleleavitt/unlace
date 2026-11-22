@@ -91,7 +91,7 @@ fn thumb_image() -> Vec<u8> {
 fn decompile_all(bytes: &[u8]) -> String {
     let path = common::scratch_file("sysreg-return-halves", "o");
     std::fs::write(&path, bytes).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-all", path.to_str().unwrap()])
         .output()
         .unwrap();

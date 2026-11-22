@@ -129,7 +129,7 @@ fn decompile(stem: &str, bytes: Vec<u8>) -> String {
 fn decompile_with(stem: &str, bytes: Vec<u8>, args: &[&str]) -> String {
     let path = common::scratch_file(stem, "o");
     std::fs::write(&path, bytes).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args(["decompile-all", path.to_str().unwrap()])
         .args(args);

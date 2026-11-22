@@ -25,7 +25,7 @@ fn check_record(members: &str, fields: &[&str]) {
     let path = common::scratch_file("global-aggregate-store", "bin");
     std::fs::write(&path, image).unwrap();
     let run = || {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command.arg("decompile").arg(&path).args([
             "0x1000",
             "--raw-image",

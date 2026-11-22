@@ -42,7 +42,7 @@ Rejected alternatives, for the record:
 - **A shim process wrapping kuna's existing CLI.** The protocol is not
   request/response: the native side issues **callback queries mid-decompile**
   (per-instruction p-code, symbols at an address, bytes, types — §4) that a
-  `kuna decompile-all` wrapper cannot answer; and the response is not C text but a
+  `unlace decompile-all` wrapper cannot answer; and the response is not C text but a
   typed dual-document (`HighFunction` + token markup with cross-referenced ids, §6)
   over live program state. There is no shim-shaped solution.
 

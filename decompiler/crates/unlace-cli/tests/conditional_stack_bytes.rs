@@ -58,7 +58,7 @@ fn conditional_byte_stores_retain_locked_layouts_and_other_bytes() {
     );
     let mut definitions = Vec::new();
     for function in ["conditional_frame_store", "boolean_frame_store"] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command
             .arg("decompile")
             .arg(&image)

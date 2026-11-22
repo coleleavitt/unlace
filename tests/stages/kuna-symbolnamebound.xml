@@ -8,7 +8,7 @@
     every `::` and creates one Scope per component, and the interning key
     includes the parent, so a repeated component name still allocates a fresh
     Scope at every level. That made ONE name a ~498x input-to-RSS amplifier:
-    `kuna functions` over an ELF whose `.symtab` carried one function named
+    `unlace functions` over an ELF whose `.symtab` carried one function named
     ("a::" * 200000) + "z", i.e. 600 KB of `.strtab`, went from 52,932 KB of RSS
     to 345,132 KB, and `decompile-all` was quadratic in depth on top of that (86 s
     at 40,000 components, unfinished at 200,000 in 300 s). A symbol name is

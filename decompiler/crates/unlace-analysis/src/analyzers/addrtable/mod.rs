@@ -64,7 +64,7 @@
 //! What it commits, with the gate on: each table typed `code *[N]` under its
 //! image name or `AddrTable<addr>` (the label `AddressTable.makeTable` writes),
 //! and a read-only range over a table in read-only data so a fixed-slot load
-//! folds to its function. The reference walk behind `kuna xrefs`
+//! folds to its function. The reference walk behind `unlace xrefs`
 //! ([`crate::listing::xrefs`]) files every slot as a `data` reference from the
 //! slot to the code it holds, the reference `makeTable` creates.
 //!

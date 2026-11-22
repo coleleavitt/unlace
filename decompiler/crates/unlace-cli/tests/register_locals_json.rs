@@ -12,7 +12,7 @@ fn run(jobs: &str) -> Value {
 }
 
 fn run_on(fixture: &str, functions: &str, jobs: &str) -> Value {
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile-all",
             &common::fixture(fixture),

@@ -37,7 +37,7 @@
 //! binaries and on six fixtures checked into this repo. Folding those to `_` is
 //! a legitimate want for someone who intends to recompile the export, but it
 //! rewrites names on nearly every real optimized binary and would change the key
-//! that `kuna decompile <name>` is passed. So the two wants are two values:
+//! that `unlace decompile <name>` is passed. So the two wants are two values:
 //!
 //! | value | behavior |
 //! |---|---|
@@ -89,12 +89,12 @@
 //! ## Mint time, not print time
 //!
 //! The sanitizer runs where the name string is MINTED — the loader's symbol
-//! walks in `unlace-analysis` — not in the printer. `kuna decompile <name>`, the
-//! console's `load function`, `kuna functions` and the DB scope path all key on
+//! walks in `unlace-analysis` — not in the printer. `unlace decompile <name>`, the
+//! console's `load function`, `unlace functions` and the DB scope path all key on
 //! the string in `prog.symbols`; if the printer sanitized, the name in the `.c`
 //! would no longer be the name you can hand back to the CLI, which for an
 //! agent-first tool trades one bug for a worse one. Sanitizing at the mint makes
-//! `prog.symbols`, `kuna functions`, `kuna decompile <name>`, the `.c`, the `.h`
+//! `prog.symbols`, `unlace functions`, `unlace decompile <name>`, the `.c`, the `.h`
 //! and the `.asm` all carry one string.
 //!
 //! ## Why an env-var bridge, not an `Architecture` flag
@@ -103,7 +103,7 @@
 //! per-function `option` command, so an `Architecture` field would be read long
 //! after the names had been minted. This is the same bridge the other
 //! load-time gates use:
-//! [`SYMBOLNAMECHARS_ENV`], set by the `kuna` CLI before `bootstrap_from_object`
+//! [`SYMBOLNAMECHARS_ENV`], set by the `unlace` CLI before `bootstrap_from_object`
 //! (and on the `decomp_dbg` subprocess). The companion
 //! `Architecture::analysis_symbolnamechars` exists only so the option is
 //! catalog-visible and `phase catalog`'s live `current` field reflects it.

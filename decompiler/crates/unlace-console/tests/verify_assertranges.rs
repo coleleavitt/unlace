@@ -2,7 +2,7 @@
 //!
 //! `readonly` and `volatile` work in the console, `global add`/`global remove`
 //! were `engine_unavailable` stubs, and none of the four was reachable from the
-//! `kuna` binary. `--option readonly on|off` is a program-wide toggle, not a
+//! `unlace` binary. `--option readonly on|off` is a program-wide toggle, not a
 //! range, so there was no way at all to say "these eight bytes never change" or
 //! "this word is a device register".
 //!
@@ -191,7 +191,7 @@ fn a_zero_length_range_is_rejected_with_a_reason() {
 }
 
 /// Each directive reports its phase-model coordinates, so a rejection can be
-/// correlated with `kuna catalog` / `docs/phases.md`.
+/// correlated with `unlace catalog` / `docs/phases.md`.
 #[test]
 fn a_range_directive_reports_the_code_data_partition_subphase() {
     let (_, report) = decompile_with("sample", vec![readonly(DATA_PAIR, 8), volatile(MMIO, 4)]);

@@ -446,8 +446,8 @@ mod tests {
     /// The header page is no section, so no section flag ever spoke for the
     /// bytes in it — but the image's own `AddressOfEntryPoint` does. Discovery
     /// found nothing at all on this shape (both sections `MEM_EXECUTE`-clear,
-    /// the entry in the header page), so `kuna decompile-all` answered
-    /// `count: 0` on an image whose entry `kuna decompile --addr` renders in
+    /// the entry in the header page), so `unlace decompile-all` answered
+    /// `count: 0` on an image whose entry `unlace decompile --addr` renders in
     /// full (`docs/re-needs/whole-binary-decompilation-treats.md`).
     #[test]
     fn a_header_page_entry_is_discovered() {

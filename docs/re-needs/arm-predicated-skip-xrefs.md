@@ -28,7 +28,7 @@ reject_reason: null
 Find what branches to the `ldreq` in `pick`.
 
 > **Every predicated ARM instruction files a jump to the next instruction** (minor, synthetic `xreffp_arm_le32`)
-> `kuna xrefs --to 0x10568` reports a jump from `0x10564 ldrne r0,[r0,#0x4]`, the instruction before it. No instruction branches there: `ldrne` is not a branch. Every predicated A32 instruction (`movle`, `ldrne`, `popeq {..,pc}`) and every instruction in a Thumb `it` block files such a row.
+> `unlace xrefs --to 0x10568` reports a jump from `0x10564 ldrne r0,[r0,#0x4]`, the instruction before it. No instruction branches there: `ldrne` is not a branch. Every predicated A32 instruction (`movle`, `ldrne`, `popeq {..,pc}`) and every instruction in a Thumb `it` block files such a row.
 
 Seen first on production ARM executables and a shared library, where these rows were the second-largest false positive; `xreffp_arm_le32` reproduces them from a small C source.
 

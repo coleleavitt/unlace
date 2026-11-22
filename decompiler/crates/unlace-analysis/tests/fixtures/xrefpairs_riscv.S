@@ -1,4 +1,4 @@
-# kuna xrefs fixture: RISC-V absolute (lui) and PC-relative (auipc) address
+# unlace xrefs fixture: RISC-V absolute (lui) and PC-relative (auipc) address
 # pairs, for RV32 and RV64 alike. Linker relaxation is off so every pair stays
 # the two instructions written here.
 	.option	norelax

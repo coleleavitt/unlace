@@ -1,7 +1,7 @@
 [package]
 autotests = false
 name = "unlace-cli"
-description = "kuna Rust port: the user-facing `kuna` CLI (decompile / test / catalog / specs)"
+description = "kuna Rust port: the user-facing `unlace` CLI (decompile / test / catalog / specs)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -38,7 +38,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 workspace = true
 
 [[bin]]
-name = "kuna"
+name = "unlace"
 path = "src/main.rs"
 
 [[test]]

@@ -8,7 +8,7 @@
 //! `String` and the export carries a C redefinition.
 //!
 //! The option sanitizes at the MINT (the loader's symbol walks), so one string
-//! serves `prog.symbols`, `kuna functions`, `kuna decompile <name>`, the DB scope
+//! serves `prog.symbols`, `unlace functions`, `unlace decompile <name>`, the DB scope
 //! path and the emitted C. That is what this file's round-trip assertion is
 //! about: every name the symbol table now reports must still be a name the
 //! symbol table can be asked for.
@@ -142,7 +142,7 @@ fn safe_leaves_gcc_clone_suffixes_alone_and_ident_folds_them() {
 }
 
 /// The risk sanitizing at the mint introduces: it changes the KEY in
-/// `prog.symbols`, which is what `kuna decompile <name>` and the console's `load
+/// `prog.symbols`, which is what `unlace decompile <name>` and the console's `load
 /// function` are passed.
 ///
 /// `IfcFuncload` reads its argument with `CommandStream::read_token`, which

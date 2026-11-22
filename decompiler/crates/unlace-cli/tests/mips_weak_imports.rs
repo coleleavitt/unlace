@@ -22,7 +22,7 @@ fn declared_weak_calls_preserve_null_guards_arguments_and_results() {
     {
         for (name, target) in images {
             let image = common::repo_root().join("tests/fixtures").join(name);
-            let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command.args([
                 "decompile",
                 image.to_str().unwrap(),

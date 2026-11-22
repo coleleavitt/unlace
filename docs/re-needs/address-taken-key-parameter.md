@@ -116,7 +116,7 @@ _not yet refuted_
 VERDICT: UPHELD, AND THE FILED SEVERITY IS TOO LOW. The hypothesis ("address-taken parameter storage may be emitted again as a local symbol") is exactly right, and I pinned it to one storage location by address. THE OUTPUT IS NOT MERELY UGLY, IT IS INVALID C: a parameter and a local with THE SAME NAME in THE SAME SCOPE and TWO DIFFERENT TYPES.
 
 REPRO, one command, no options, no assertions:
-  kuna decompile <bin> 0x401571
+  unlace decompile <bin> 0x401571
   void sub_401571(unsigned int a0,int4 a1,int4 a2)
   {
     int4 a0;                                <- redeclares the parameter, different type

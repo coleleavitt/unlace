@@ -21,10 +21,10 @@ fn specs() -> String {
     repo_root().join("specs").to_string_lossy().into_owned()
 }
 
-/// The `decomp_dbg` built into the SAME cargo profile as this test's `kuna`,
+/// The `decomp_dbg` built into the SAME cargo profile as this test's `unlace`,
 /// so the case runs under `cargo test` and `cargo test --release` alike.
 fn decomp_dbg() -> String {
-    PathBuf::from(env!("CARGO_BIN_EXE_kuna"))
+    PathBuf::from(env!("CARGO_BIN_EXE_unlace"))
         .parent()
         .expect("kuna binary lives in a profile directory")
         .join("decomp_dbg")
@@ -39,7 +39,7 @@ fn project_out_dir() -> PathBuf {
 }
 
 fn run(args: &[&str]) -> (String, String, bool) {
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
         .expect("spawn kuna");
@@ -63,7 +63,7 @@ fn functions_reports_both_duplicate_local_definitions_with_object_coordinates() 
         "--mode",
         "reliable",
     ]);
-    assert!(ok, "kuna functions failed: {stderr}");
+    assert!(ok, "unlace functions failed: {stderr}");
     assert_eq!(
         stdout.matches("\"name\": \"duplicate_local\"").count(),
         2,

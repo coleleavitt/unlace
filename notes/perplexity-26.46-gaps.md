@@ -76,7 +76,7 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
   **DeviceKit 39/57 `__stubs` entries `sub_fcXX`, RevenueCat 696/848**; in the main binary (full nlist) 0/4,676.
 - Snippet (DeviceKit `Device.BatteryState.description.getter` 0xcb94): kuna `sub_fc80(0x28); … sub_fcbc(dat_14ab0,dat_14ab8); sub_fc50(...)`,
   IDA `` `_StringGuts.grow(_:)`(41); `dispatch thunk of CustomStringConvertible.description.getter`(...); `String.append(_:)` ``.
-  `kuna read DeviceKit 0x14ad8` already labels the `__got` slot `$ss11_StringGutsV4growyySiF` (raw, undemangled), so the
+  `unlace read DeviceKit 0x14ad8` already labels the `__got` slot `$ss11_StringGutsV4growyySiF` (raw, undemangled), so the
   bind name is known to the loader; only the stub→slot→name step and the demangle are missing.
 - Suspected owner: `unlace-analysis/src/loader/macho_stubs.rs` (`resolve_macho_indirect_symbols`: indirect-symbol table only;
   `__stubs` has `reserved1/2 = 0` here) and `listing/kuna_pltstub.rs` (`PltStubs::for_file`, slot-following) — the
@@ -89,8 +89,8 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
 - Visible: main sample 273 `dat_` references into `__got` in 26/91 functions (29%); tp300 282 in 77/300; every
   `OBJC_CLASS_$_*` (`objc_alloc(dat_103f7bc20)` = `_OBJC_CLASS_$_NSMutableData`), `type metadata for …`
   (`dat_103f81be8` = `$sSSN`), witness tables, `_NSConcreteStackBlock` (`block.block.isa = dat_1e580` in AppAuthCore).
-  `kuna read` and `kuna functions` know the names (slot labeled `Swift.String.type_metadata`), the decompiler does not.
-  The flip side: `kuna functions` lists **7,865 size-0 "functions"** at `__got` slots (`Foundation.URL.host.getter`,
+  `unlace read` and `unlace functions` know the names (slot labeled `Swift.String.type_metadata`), the decompiler does not.
+  The flip side: `unlace functions` lists **7,865 size-0 "functions"** at `__got` slots (`Foundation.URL.host.getter`,
   `SwiftUI.View.onScrollPhaseChange(_:).opaque_type_descriptor`, …) — 3% of the inventory, all `udf 0x0` bytes.
 - IDA: `&OBJC_CLASS_$_NSMutableData`, `&type metadata for String`, `_NSConcreteStackBlock`.
 - Suspected owner: `importdata` path (`p0_knowledge` symbol commit of `ImportSym{kind: Data}` from `loader/format/macho.rs`
@@ -100,7 +100,7 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
   `dat_100004000` → `ext_handler()` / `ext_counter`"). Not in `all`. The size-0-function inventory half is not mentioned there.
 
 ### G4. Outlined Swift ARC helpers `swift_retain_x<N>` / `swift_release_x<N>` print with no argument
-- Visible: 74 such imports in the main binary (`swift_retain_x1…x28`, `swift_release_x1…x28`, also `_x8`); `kuna xrefs`:
+- Visible: 74 such imports in the main binary (`swift_retain_x1…x28`, `swift_release_x1…x28`, also `_x8`); `unlace xrefs`:
   `swift_release_x24` 4,954 call sites, `swift_retain_x20` 4,894. tp300: 183 bare `swift_release_xN()` in 58/300 functions.
   `kuna_objcarc.rs:66` builds the register-arg call-fixups only for `objc_retain_x{n}`/`objc_release_x{n}`.
 - Snippet (0x10163fcf8): `swift_release_x24();` / `swift_release_x8(async_context[0x16].parent);` (the x8 one works by accident: x8 was a live arg).

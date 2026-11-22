@@ -258,7 +258,7 @@ const SIZE_BUCKETS: [(&str, u64, u64); 7] = [
 /// How many functions `--summary` lists under `largest` when `--limit` is absent.
 const DEFAULT_SUMMARY_LARGEST: usize = 10;
 
-/// The triage narrowing shared by `kuna functions` and `kuna decompile-all`.
+/// The triage narrowing shared by `unlace functions` and `unlace decompile-all`.
 ///
 /// Deliberately NOT a field of [`Args`]: `Args` is a struct literal in four other
 /// command modules, and growing it would break every one of them for a selection
@@ -608,7 +608,7 @@ fn summary_text(
     out
 }
 
-/// `kuna decompile-all` entry point.
+/// `unlace decompile-all` entry point.
 pub fn run(argv: &[String]) -> i32 {
     let (args, filters) = match parse_args_with_filters(argv, "decompile-all") {
         Ok(a) => a,
@@ -1061,7 +1061,7 @@ pub(crate) fn pool_config<'a>(
 }
 
 /// Emit `text`, then report a discovery failure (stdout before stderr, as
-/// `kuna decompile` orders them) and answer with the run's verdict.
+/// `unlace decompile` orders them) and answer with the run's verdict.
 /// Report every rejected assertion on stderr, and say whether there was one.
 /// A `--types` declaration the C grammar declined is reported too but is not
 /// counted: a header is loaded as far as it parses, under `--assert-strict` too.
@@ -1147,7 +1147,7 @@ pub(crate) fn report_unstructured_goto_sites(hits: &[(&str, usize)]) {
     eprintln!(
         "note: {total} unstructured goto{plural} {scope}: no Rust form, rendered as a diverging \
          panic!(), so {subject} not a translation of the binary -- re-run with --language c for a \
-         real goto, or try a P8 structuring option (kuna catalog)"
+         real goto, or try a P8 structuring option (unlace catalog)"
     );
 }
 
@@ -1166,7 +1166,7 @@ fn finish_with_run_error(written: std::io::Result<()>, run_error: Option<&str>) 
     status
 }
 
-/// `kuna functions` entry point (enumeration only — no decompile).
+/// `unlace functions` entry point (enumeration only — no decompile).
 pub fn run_functions(argv: &[String]) -> i32 {
     let (args, filters) = match parse_args_with_filters(argv, "functions") {
         Ok(a) => a,
@@ -1247,7 +1247,7 @@ pub fn run_functions(argv: &[String]) -> i32 {
 /// `--summary`: the orientation document, on either surface.
 ///
 /// It loads through the INVENTORY driver bundle on both, so the counts a caller
-/// orients by are the same numbers `kuna functions` reports, and asking for
+/// orients by are the same numbers `unlace functions` reports, and asking for
 /// orientation never pays for a decompile it is trying to avoid.
 fn run_summary(args: &Args, filters: &Filters) -> i32 {
     let (request, rust_manifest) = match filters.rust_signature_manifest.as_deref() {
@@ -1447,7 +1447,7 @@ pub(crate) fn parse_max_fn_memory(v: &str) -> Result<u64, String> {
 }
 
 /// Arm the per-function watchdog and run the decompile loop over `targets` — the
-/// body `decompile-all` and `kuna decompile --json` share, so the two answer with
+/// body `decompile-all` and `unlace decompile --json` share, so the two answer with
 /// one policy as well as one schema.
 ///
 /// The watchdog (`--max-fn-seconds`, default 10 for an unfiltered fast batch and
@@ -1459,7 +1459,7 @@ pub(crate) fn parse_max_fn_memory(v: &str) -> Result<u64, String> {
 /// `pointer_arguments` is whether the returned batch reconciles scalar
 /// addresses with the parameter declarations printed in it.  `tail_callees`
 /// (a selection with no callee-first order behind it) has each function state
-/// its tail callees' prototypes first, as `kuna decompile` does.
+/// its tail callees' prototypes first, as `unlace decompile` does.
 pub(crate) fn decompile_entries(
     prog: &mut ConsoleProgram,
     args: &Args,
@@ -1517,7 +1517,7 @@ pub fn warn_protoorder_inert(options: &[(String, String)], surface: &str) {
     let inert = ["protoorder", "callbacktype"].into_iter().filter(|name| named(name));
     for option in inert.chain(custom.then_some("calleereginputs custom")) {
         eprintln!(
-            "warning: --option {option} has no effect on `kuna {surface}`: the callee-first \
+            "warning: --option {option} has no effect on `unlace {surface}`: the callee-first \
              order belongs to a buffered whole-program run (`decompile-all`, \
              `decompile-project`; see docs/cli.md)"
         );
@@ -1562,13 +1562,13 @@ fn list_functions(args: &Args) -> Result<(ConsoleProgram, Vec<FunctionEntry>), S
 /// in whether the Listing is built on an architecture where it discovers nothing.
 #[derive(Clone, Copy)]
 pub(crate) enum DriverDefaults {
-    /// `kuna functions` — enumeration only.
+    /// `unlace functions` — enumeration only.
     Inventory,
-    /// `kuna functions` — inventory without body-only string markup.
+    /// `unlace functions` — inventory without body-only string markup.
     Functions,
-    /// `kuna decompile-all` / `kuna decompile-project` — enumeration plus bodies.
+    /// `unlace decompile-all` / `unlace decompile-project` — enumeration plus bodies.
     Decompile,
-    /// `kuna xrefs` — a reference query that runs its OWN recursive descent, so
+    /// `unlace xrefs` — a reference query that runs its OWN recursive descent, so
     /// the Listing tier would only decode the program a second time over the
     /// same bytes. It takes the discovery bundle (`funcstart_patterns`, `aif`)
     /// but not the Listing: the seeds go straight into the reference walk
@@ -1605,10 +1605,10 @@ impl DriverDefaults {
 ///
 /// One function because the two surfaces that need them apply them differently:
 /// the in-process drivers ([`load_program`]) call `set_kuna_option`, while
-/// single-function `kuna decompile` emits `option` lines into the `decomp_dbg`
+/// single-function `unlace decompile` emits `option` lines into the `decomp_dbg`
 /// script. When only the in-process driver had them, a non-x86-64 entry that
 /// exists solely because `funcstart_patterns` found it was listed by `kuna
-/// functions` and decompiled by `kuna decompile-all`, yet `kuna decompile
+/// functions` and decompiled by `unlace decompile-all`, yet `unlace decompile
 /// <that name>` answered `no function matches` — kuna printed a name it would
 /// not then accept (RE-need `analysis-generated-function-name`).
 ///
@@ -1636,7 +1636,7 @@ impl DriverDefaults {
 ///     decbench `noreturn-propagation-stripped` family, e.g. coreutils
 ///     `xalloc_die`: 118 LOC / 2 gotos swallowed vs the true 4-instruction
 ///     body).  See DIV-15.
-///   * On a NON-x86-64 image every surface needs it, `kuna functions`
+///   * On a NON-x86-64 image every surface needs it, `unlace functions`
 ///     included, because the Listing is the master gate of the DIV-20
 ///     discovery bundle below — `funcstart_patterns` and `aif` both walk the
 ///     Listing's code units and are inert without it, and those two passes
@@ -1645,7 +1645,7 @@ impl DriverDefaults {
 ///
 /// x86-64 enumeration keeps the cheap path: the Listing is measured
 /// entry-neutral there (identical entry sets on 40 sampled stripped x86-64
-/// ELFs), so building it would only make `kuna functions` slower.  Only these
+/// ELFs), so building it would only make `unlace functions` slower.  Only these
 /// drivers change: the engine default (`analysis_listing = false`) and the
 /// interactive console / datatest harness are untouched, and a selected mode
 /// can still name Listing.
@@ -1764,7 +1764,7 @@ fn load_program_with_rust_profiles(
         .to_string_lossy()
         .into_owned();
     // Load-time loader gates are read by `bootstrap_from_object` itself, so they
-    // must be exported BEFORE it runs (the same gates `kuna decompile` threads to
+    // must be exported BEFORE it runs (the same gates `unlace decompile` threads to
     // the subprocess env). Keep the restoration guard alive through runtime
     // option recording too: the bridged options update their env again inside
     // `set_kuna_option` and must not leak into a later load.
@@ -2134,7 +2134,7 @@ fn apply_one_option(prog: &mut ConsoleProgram, name: &str, value: &str) -> Resul
 }
 
 /// The SLEIGH spec roots (an explicit `--sleighpath` wins, else `SLEIGHHOME` +
-/// the repo `specs/`), matching `kuna fid`'s resolution.
+/// the repo `specs/`), matching `unlace fid`'s resolution.
 fn spec_roots(sleighpath: Option<&str>) -> Vec<String> {
     let mut roots: Vec<String> = Vec::new();
     if let Some(p) = sleighpath.filter(|s| !s.is_empty()) {
@@ -2184,7 +2184,7 @@ pub(crate) fn zero_discovery_error(binary: &str) -> Option<String> {
         ));
     }
     if let Some(packer) = detect_packer(&bytes) {
-        detail.push(format!("image appears {packer}-packed; try `kuna unpack`"));
+        detail.push(format!("image appears {packer}-packed; try `unlace unpack`"));
     }
     Some(if detail.is_empty() {
         format!("no functions discovered in {binary}")
@@ -2195,7 +2195,7 @@ pub(crate) fn zero_discovery_error(binary: &str) -> Option<String> {
 
 /// The packer whose signature `bytes` carries.
 ///
-/// UPX is the one that matters: it is what `kuna unpack` targets, and every UPX
+/// UPX is the one that matters: it is what `unlace unpack` targets, and every UPX
 /// build stamps the `UPX!` magic into its stub and into each packed block
 /// header, so a whole-image search is both cheap (this runs only once a run has
 /// already failed) and precise enough to name in a diagnostic.
@@ -2299,7 +2299,7 @@ fn classify_code_evidence(bytes: &[u8]) -> CodeEvidence {
 
 /// Render the `--json` document for a decompile run.
 ///
-/// `kuna decompile --json` renders through here too (its `functions` array holds
+/// `unlace decompile --json` renders through here too (its `functions` array holds
 /// the one function it was asked for), so the single-function and whole-binary
 /// surfaces cannot drift into two shapes for one record.
 #[allow(clippy::too_many_arguments)]
@@ -2322,7 +2322,7 @@ pub(crate) fn render_result_json(
 /// `total` is `Some` only when a triage filter chose these functions out of a
 /// larger set, so a caller can never mistake a `--limit`-capped answer for the
 /// whole program. An unfiltered `decompile-all --json` and every
-/// `kuna decompile --json` pass `None` and are byte-identical to before — the
+/// `unlace decompile --json` pass `None` and are byte-identical to before — the
 /// decbench backend consumes the first of those.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_selected_json(
@@ -2512,7 +2512,7 @@ fn document_fields(
     fields.extend([(
         // The RUN-level error channel, set exactly when the command exits
         // non-zero (a total discovery failure, an all-failed selected batch,
-        // or the aborted function on `kuna decompile --json`). A failed
+        // or the aborted function on `unlace decompile --json`). A failed
         // function in a mixed whole-binary run is that record's own `error`,
         // not this one.
         "error".to_string(),
@@ -2670,7 +2670,7 @@ fn object_location_json(location: Option<&ObjectLocation>) -> Json {
     }
 }
 
-/// One recovered type definition (`kuna decompile-project`'s `.h` text for that
+/// One recovered type definition (`unlace decompile-project`'s `.h` text for that
 /// one type, plus its name and size) — the layout a consumer would otherwise
 /// have to parse back out of the C.
 fn type_json(t: &TypeInfo) -> Json {
@@ -2953,7 +2953,7 @@ fn mode_and_options_for_binary(
 
 /// Parse `argv` for `cmd`, discarding the triage half.
 ///
-/// The surfaces that do not narrow (`decompile-project`, `kuna decompile --json`)
+/// The surfaces that do not narrow (`decompile-project`, `unlace decompile --json`)
 /// call this so their [`Args`] shape and their parse are untouched by triage.
 pub(crate) fn parse_args(argv: &[String], cmd: &str) -> Result<Args, String> {
     Ok(parse_args_with_filters(argv, cmd)?.0)
@@ -3390,7 +3390,7 @@ fn parse_entry_selector(s: &str) -> Result<EntrySelector, String> {
 
 fn usage_decompile_all() {
     eprintln!(
-        "usage: kuna decompile-all <binary> [--json] [--functions a,b,..] [--addr 0xVMA].. \\\n\
+        "usage: unlace decompile-all <binary> [--json] [--functions a,b,..] [--addr 0xVMA].. \\\n\
          \x20                   [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                   [--max-fn-seconds N] [--max-fn-memory MiB] \\\n\
          \x20                   [--mode auto|reliable|aggressive|fast] \\\n\
@@ -3456,13 +3456,13 @@ fn usage_decompile_all() {
          that function reaches through the call graph; --sort addr|size|name orders\n\
          (size is largest first) and --limit N caps. A narrowed --json document also\n\
          carries `total`, the count before narrowing. --summary skips the decompile\n\
-         entirely and reports the orientation document (see `kuna functions -h`)."
+         entirely and reports the orientation document (see `unlace functions -h`)."
     );
 }
 
 fn usage_functions() {
     eprintln!(
-        "usage: kuna functions <binary> [--json] [--summary] \\\n\
+        "usage: unlace functions <binary> [--json] [--summary] \\\n\
          \x20               [--filter REGEX] [--min-size N] [--max-size N] \\\n\
          \x20               [--reachable-from <name|0xaddr>] [--sort addr|size|name] [--limit N] \\\n\
          \x20               [--define-function S[-E][=N]|@FILE].. [--jobs N|auto] \\\n\
@@ -3476,7 +3476,7 @@ fn usage_functions() {
          \n\
          Triage: --filter REGEX matches the name or any alias; --min-size/--max-size\n\
          bound the extent; --reachable-from <name|0xaddr> keeps only what that\n\
-         function reaches through the call graph (the `kuna xrefs` edges);\n\
+         function reaches through the call graph (the `unlace xrefs` edges);\n\
          --sort addr|size|name orders (size is largest first) and --limit N caps.\n\
          \n\
          --summary answers `where do I start` in a few hundred bytes instead of a\n\
@@ -3609,7 +3609,7 @@ mod discovery_tests {
             .expect("an executable image that yielded nothing is a failure");
         assert!(message.contains("no functions"), "{message}");
         assert!(message.contains("UPX-packed"), "{message}");
-        assert!(message.contains("kuna unpack"), "{message}");
+        assert!(message.contains("unlace unpack"), "{message}");
         std::fs::remove_file(packed).expect("remove the discovery fixture");
 
         let plain = temp_image("plain", &stripped_executable(b"\x55\x48\x89\xe5\x5d\xc3"));

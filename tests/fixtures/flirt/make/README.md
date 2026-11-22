@@ -1,4 +1,4 @@
-# `kuna flirt make` fixture
+# `unlace flirt make` fixture
 
 A static library of three objects and a stripped program linked against it
 (`unlace-cli/tests/flirt_make_cli.rs`).
@@ -9,7 +9,7 @@ A static library of three objects and a stripped program linked against it
 | `main.c` | A libc-free `_start` that calls into the library. |
 | `libthree.a` | **Vendored.** The three objects. |
 | `prog` | **Vendored.** `main.o` + `libthree.a`, stripped. |
-| `three.pat` | **Vendored.** `kuna flirt make libthree.a -o three.pat`. |
+| `three.pat` | **Vendored.** `unlace flirt make libthree.a -o three.pat`. |
 
 ## Build
 
@@ -19,5 +19,5 @@ for f in mix sum wrap main; do gcc $CF -c $f.c -o $f.o; done
 ar rcsD libthree.a mix.o sum.o wrap.o
 gcc -nostdlib -static -no-pie -Wl,--build-id=none main.o libthree.a -o prog.full
 strip --strip-all -o prog prog.full
-kuna flirt make libthree.a -o three.pat
+unlace flirt make libthree.a -o three.pat
 ```

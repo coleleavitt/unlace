@@ -334,12 +334,12 @@ binary says so -- `coreutils factor`, this file's flagship win, goes 0 to 12.
 
 ```bash
 # the two arms (kuna_raw's exact invocation; `auto` selects aggressive under 500 KiB)
-kuna decompile-all <stripped> --json --max-fn-seconds 120
-kuna decompile-all <stripped> --json --max-fn-seconds 120 --option returndup off
+unlace decompile-all <stripped> --json --max-fn-seconds 120
+unlace decompile-all <stripped> --json --max-fn-seconds 120 --option returndup off
 
 # separate the two passes that share the `return-dupe` slug
-kuna decompile-all <stripped> --option returndup on --option warnstyle banner | grep -c 'returndup:'
-kuna decompile-all <stripped> --option returndup on --option warnstyle banner | grep -c 'taildup:'
+unlace decompile-all <stripped> --option returndup on --option warnstyle banner | grep -c 'returndup:'
+unlace decompile-all <stripped> --option returndup on --option warnstyle banner | grep -c 'taildup:'
 ```
 
 Scoring reuses decbench's `GEDMetric` and the `results/full_run/ged_src/v1` source-CFG caches

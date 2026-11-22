@@ -4,7 +4,7 @@
 use std::process::{Command, Output};
 
 fn run(argv: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_kuna"))
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(argv)
         .output()
         .expect("failed to spawn the kuna binary")
@@ -22,7 +22,7 @@ fn subcommands() -> Vec<String> {
     assert!(out.stdout.is_empty(), "{}", help_text(&out));
     let text = String::from_utf8(out.stderr).expect("UTF-8 help");
     let names: Vec<String> = text.lines().next().expect("usage line")
-        .strip_prefix("usage: kuna <").expect("command list prefix")
+        .strip_prefix("usage: unlace <").expect("command list prefix")
         .strip_suffix("> ...").expect("command list suffix")
         .split('|').map(str::to_owned).collect();
     for (index, name) in names.iter().enumerate() {
@@ -41,16 +41,16 @@ fn every_subcommand_answers_help() {
             assert_eq!(
                 out.status.code(),
                 Some(0),
-                "`kuna {sub} {flag}` exited {:?}:\n{text}",
+                "`unlace {sub} {flag}` exited {:?}:\n{text}",
                 out.status.code()
             );
             assert!(
-                text.contains("usage: kuna "),
-                "`kuna {sub} {flag}` printed no usage block:\n{text}"
+                text.contains("usage: unlace "),
+                "`unlace {sub} {flag}` printed no usage block:\n{text}"
             );
             assert!(
                 !text.contains("unknown option") && !text.contains("unexpected argument"),
-                "`kuna {sub} {flag}` treated the help flag as an argument:\n{text}"
+                "`unlace {sub} {flag}` treated the help flag as an argument:\n{text}"
             );
         }
     }
@@ -62,9 +62,9 @@ fn every_subcommand_answers_help() {
 fn each_block_names_its_own_subcommand() {
     for sub in subcommands() {
         // `read` shares `disassemble`'s parser and prints the shared block.
-        let expect = if sub == "read" { "usage: kuna disassemble|read" } else { &format!("usage: kuna {sub}") };
+        let expect = if sub == "read" { "usage: unlace disassemble|read" } else { &format!("usage: unlace {sub}") };
         let text = help_text(&run(&[&sub, "--help"]));
-        assert!(text.starts_with(expect), "`kuna {sub} --help` opened with:\n{text}");
+        assert!(text.starts_with(expect), "`unlace {sub} --help` opened with:\n{text}");
     }
 }
 
@@ -73,14 +73,14 @@ fn each_block_names_its_own_subcommand() {
 #[test]
 fn help_needs_no_binary_and_no_specs() {
     for sub in ["decompile", "test", "catalog", "specs", "rust-signatures"] {
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([sub, "--help"])
             .env_remove("KUNA_SPECS")
             .env_remove("SLEIGHHOME")
             .env_remove("KUNA_DECOMP_DBG")
             .output()
             .expect("failed to spawn the kuna binary");
-        assert_eq!(out.status.code(), Some(0), "`kuna {sub} --help` needed an environment");
+        assert_eq!(out.status.code(), Some(0), "`unlace {sub} --help` needed an environment");
     }
 }
 
@@ -97,7 +97,7 @@ fn the_repaired_blocks_document_their_flags() {
     for (sub, flags) in expected {
         let text = help_text(&run(&[sub, "--help"]));
         for flag in *flags {
-            assert!(text.contains(flag), "`kuna {sub} --help` never mentions {flag}:\n{text}");
+            assert!(text.contains(flag), "`unlace {sub} --help` never mentions {flag}:\n{text}");
         }
     }
 }
@@ -135,9 +135,9 @@ fn every_json_surface_names_its_root_in_help() {
         let root = stated
             .iter()
             .find(|(name, _)| *name == sub)
-            .unwrap_or_else(|| panic!("`kuna {sub}` takes --json but this table has no root for it"))
+            .unwrap_or_else(|| panic!("`unlace {sub}` takes --json but this table has no root for it"))
             .1;
-        assert!(text.contains(root), "`kuna {sub} --help` never states its --json root {root}:\n{text}");
+        assert!(text.contains(root), "`unlace {sub} --help` never states its --json root {root}:\n{text}");
     }
     for argv in [
         &["catalog", "--json"][..],
@@ -180,10 +180,10 @@ fn catalog_tier_filters_the_json_as_it_filters_the_table() {
 fn an_unknown_option_is_still_a_usage_error() {
     for sub in ["decompile", "test", "catalog"] {
         let out = run(&[sub, "--no-such-flag"]);
-        assert_eq!(out.status.code(), Some(2), "`kuna {sub} --no-such-flag` should be exit 2");
+        assert_eq!(out.status.code(), Some(2), "`unlace {sub} --no-such-flag` should be exit 2");
         assert!(
             String::from_utf8_lossy(&out.stderr).contains("unknown option"),
-            "`kuna {sub} --no-such-flag` lost its diagnostic"
+            "`unlace {sub} --no-such-flag` lost its diagnostic"
         );
     }
 }
@@ -207,12 +207,12 @@ fn top_level_aliases_and_usage_errors_keep_their_statuses_and_streams() {
     let out = run(&[unknown]);
     assert_eq!(out.status.code(), Some(2));
     assert!(out.stdout.is_empty());
-    assert_eq!(out.stderr, format!("kuna: unknown subcommand {unknown:?}\n{}",
+    assert_eq!(out.stderr, format!("unlace: unknown subcommand {unknown:?}\n{}",
         String::from_utf8(help.stderr).unwrap()).into_bytes());
 
     let version = run(&["--version"]);
     assert_eq!(version.status.code(), Some(0));
-    assert!(version.stdout.starts_with(b"kuna "));
+    assert!(version.stdout.starts_with(b"unlace "));
     assert!(version.stderr.is_empty());
     for alias in ["-V", "version"] {
         let out = run(&[alias]);
@@ -224,7 +224,7 @@ fn top_level_aliases_and_usage_errors_keep_their_statuses_and_streams() {
 
 #[test]
 fn specs_diff_explains_independent_gates_without_running_a_compiler() {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["specs", "--diff"])
         .env("KUNA_SLACOMP", concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
         .output()

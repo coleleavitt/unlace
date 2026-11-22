@@ -11,7 +11,7 @@ fn decompile(function: &str, enabled: bool) -> String {
 fn decompile_fixture(name: &str, function: &str, enabled: bool) -> String {
     let fixture = common::fixture(name);
     let output = common::process::output_with_timeout(
-        Command::new(env!("CARGO_BIN_EXE_kuna"))
+        Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "decompile",
                 &fixture,

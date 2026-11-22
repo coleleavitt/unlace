@@ -676,7 +676,7 @@ fn dummy_rule_registers_and_dispatches_only_on_its_opcode() {
 
 #[test]
 fn repeatapply_deadline_bounds_nonconverging_action() {
-    // (kuna decompile-all watchdog) The cooperative per-function deadline must
+    // (unlace decompile-all watchdog) The cooperative per-function deadline must
     // bound a repeatapply loop whose child NEVER stops reporting changes — the
     // exact shape of the stripped-ELF `decompile-all` hang (a `mainloop` child
     // reported one change per iteration forever).  With an already-expired

@@ -1,4 +1,4 @@
-//! `kuna xrefs` over an address a fixed-width ISA forms in two instructions:
+//! `unlace xrefs` over an address a fixed-width ISA forms in two instructions:
 //! AArch64 `adrp` + `add`/`ldr`/`str` (ELF and Mach-O), RISC-V `lui`/`auipc` +
 //! `addi`/`lw`/`sw`/`ld` (RV32 and RV64). Forming an address is `data`, reading
 //! through it `read`, writing through it `write`; a pair that a join, or a call
@@ -10,7 +10,7 @@
 
 use crate::common;
 
-/// Every row `kuna xrefs <binary> <direction> <target> --json` answers, as
+/// Every row `unlace xrefs <binary> <direction> <target> --json` answers, as
 /// `(kind, referencing function, referenced address)`.
 fn rows(binary: &str, direction: &str, target: &str) -> Vec<(String, String, u64)> {
     let path = common::fixture(binary);

@@ -2,7 +2,7 @@
 """Generate `unmapped_call_x86_64` — a stripped ELF whose recursive-descent walk
 is offered a CALL target that is not in the image.
 
-This is the shape `kuna functions` reported on
+This is the shape `unlace functions` reported on
 crackmes.one/66fd63059b533b4c22bd0b91 (32-bit ELF, "Overlapping / misaligned
 instructions"), reduced to the smallest image that reproduces it and moved to
 x86-64 so the always-built `x86` `.sla` is enough to run it. No compiler emits

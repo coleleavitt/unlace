@@ -217,7 +217,7 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
 
 **Dylib (Bevy-style `unlace-decomp-dylib`, a dev-only feature):**
 - What it helps: relinking. Today each edit relinks every binary that statically contains unlace-decomp and
-  unlace-analysis. That is 5 bins (`kuna`, `decomp_dbg`, `decomp_test_dbg`, `unlace_ghidra`, `unlace_wasm`) plus 40
+  unlace-analysis. That is 5 bins (`unlace`, `decomp_dbg`, `decomp_test_dbg`, `unlace_ghidra`, `unlace_wasm`) plus 40
   integration-test targets across unlace-cli (7), unlace-console (22), unlace-harness (5), unlace-ghidra (1) and
   unlace-decomp (4). With the dylib, each edit links the `.so` once, and the bins link against it quickly.
 - It is independent of the split, so it can come first if step 0 shows that relink time matters.
@@ -284,7 +284,7 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
      `kuna_option_dispatch.rs`. The old fields keep working.
    - PRs 5b..5k migrate options one phase at a time (P9 first: it has the most single-band commits). Each PR
      deletes the `Architecture` field, the `ArchContext` mirror and the dispatch arm for its options.
-   - `kuna catalog --check` and the 675/675 parity gate prove each step changes nothing.
+   - `unlace catalog --check` and the 675/675 parity gate prove each step changes nothing.
    - Rule for open PRs: new options after 5a use the registry. This needs a one-line note in `docs/agents.md`
      and a check in step 1's script.
 6. **Funcdata typed slots (about 8 PRs, by pass family).** The same mechanism for the ~100 `kuna_*` fields.

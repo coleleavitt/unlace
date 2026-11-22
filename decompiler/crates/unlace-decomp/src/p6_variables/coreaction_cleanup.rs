@@ -1121,7 +1121,7 @@ pub struct ActionMarkImplied {
     base: ActionBase,
 }
 
-/// (kuna decompile-all watchdog) Seeds [`ActionMarkImplied`] walks between
+/// (unlace decompile-all watchdog) Seeds [`ActionMarkImplied`] walks between
 /// budget probes: one pass over a 200 KB function runs for seconds.
 const MARK_IMPLIED_PROBE_STRIDE: usize = 1024;
 

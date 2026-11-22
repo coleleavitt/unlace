@@ -1,4 +1,4 @@
-//! Gate for `kuna crypto` — the crypto-constant inventory
+//! Gate for `unlace crypto` — the crypto-constant inventory
 //! (`docs/re-needs/crypto-constant-finder.md`), driven through the built binary
 //! on the vendored `cryptoconst_x86_64` fixture: an AES S-box, SHA-256's K and a
 //! custom Base64 alphabet in `.rodata`, each read by one named function, plus
@@ -21,7 +21,7 @@ fn fixture() -> String {
 }
 
 fn run_kuna(args: &[&str]) -> (String, String, i32) {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna")).args(args).output().expect("spawn kuna");
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().expect("spawn kuna");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),

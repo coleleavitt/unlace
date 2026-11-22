@@ -19,7 +19,7 @@ const INPUTS: &[u32] = &[
 
 fn functions(fixture: &str, language: &str) -> String {
     let binary =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let result = process::required_output(Command::new(binary).args([
         "decompile-all",
         &common::fixture(fixture),
@@ -147,7 +147,7 @@ fn main() {
 #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
 fn qualified_dwarf_definitions_keep_function_values_bound_to_the_same_target() {
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let fixture = common::fixture("dwarf_function_pointer_x86_64");
     let result = process::required_output(Command::new(kuna).args([
         "decompile-all",
@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
 #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
 fn rust_raw_namespace_keeps_printable_c_definitions_and_calls() {
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let fixture = common::fixture("dwarf_raw_namespace_x86_64");
     let result = process::required_output(Command::new(kuna).args([
         "decompile-all",

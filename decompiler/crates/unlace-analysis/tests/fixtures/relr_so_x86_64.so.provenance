@@ -19,5 +19,5 @@ How it was built
   reproduces dataptrs_so_x86_64.so byte for byte without the -z flag).
 
 What it pins
-  `kuna read --json` lists both RELR slots as rebases with their targets,
+  `unlace read --json` lists both RELR slots as rebases with their targets,
   `returned` file, beside the .rela.dyn bind and absolute relocation.

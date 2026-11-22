@@ -134,16 +134,16 @@ MINIMAL REPRO (3 functions, 8 instructions, gcc -shared -fPIC -nostdlib idiom.s)
   same_reg_restore:  push %rdx; mov %rdi,%rax; add $7,%rax; pop %rdx; ret
   cross_reg_restore: push %r8;  mov %rdi,%rax; add $7,%rax; pop %rdx; ret
   dead_rdx_write:    mov %rdi,%rax; add $7,%rax; mov %rsi,%rdx; ret
-kuna decompile idiom.so <f>:
+unlace decompile idiom.so <f>:
   same_reg_restore  -> long same_reg_restore(long a0)                      CORRECT
   cross_reg_restore -> undefined16 (long,ulong,ulong,ulong,ulong), v1._8_8_ = a4   THE DEFECT, 5 instructions
   dead_rdx_write    -> undefined16 (long,ulong), v1._8_8_ = a1                     SAME DEFECT, NO STACK AT ALL
 So (a) the alignment SLOT is irrelevant -- dead_rdx_write touches no stack and shows the identical shape; (b) same-register restore is ALREADY recognised, so the gap is specifically cross-register.
 
 THE ACTUAL GATE IS retinputhalf (P4, core, default ON), NOT a missing capability:
-  kuna decompile <bin> 0x10e27 --addr --option retinputhalf off
+  unlace decompile <bin> 0x10e27 --addr --option retinputhalf off
   -> void * sub_10e27(long a0,int a1,long a2,int a3)   i.e. EXACTLY the acceptance shape and exactly the task the tester was set
-  kuna decompile <bin> 0x10e27 --addr --option returnpair single   -> same clean output
+  unlace decompile <bin> 0x10e27 --addr --option returnpair single   -> same clean output
 The uncomputed-return repair ALREADY drops a return half that traces back only to inputs. retinputhalf re-adds it because 'the function PLACED it there' -- and here the function did place R8's value into RDX, by the alignment pop. The predicate is satisfied by an accident. The tester's 'argument recovery options do not fix this' is true and irrelevant: this is a RETURN option, not an argument one.
 
 THE CIRCULARITY, which is the defect proper: RDX at the RET traces to R8 at entry, so R8 is invented as parameter a4; a4 being a parameter is then what makes the half 'an input parameter the function PLACED there' and satisfies retinputhalf. R8's ONLY read in cross_reg_restore is the PUSH itself.
@@ -156,7 +156,7 @@ DO NOT FIX IT BY FLIPPING EITHER OPTION -- BOTH ARE MEASURED TO DESTROY GENUINE 
   returnpair single:      wide_ret -> return a1;  two_ret -> 'long two_ret(long a0){return a0*3;}'  A RETURN HALF AND A WHOLE PARAMETER GONE
 undefined16 is kuna's NORMAL, CORRECT rendering of a genuine 128-bit return -- the acceptance's stdout_absent on the literal string 'undefined16' is safe only because it is pinned to this one address. Do not read the need as 'undefined16 is wrong'.
 
-REDIRECT FOR THE BUILDER, the discriminator that separates every case measured here: a pop from a stack slot whose matching push sourced a DIFFERENT register is stack maintenance, not a value placement, so it must not satisfy retinputhalf's 'the function placed it there' -- equivalently, a candidate input register whose only use is a push later popped into another register is not a parameter. That rule fixes the target and cross_reg_restore, leaves same_reg_restore untouched, and cannot reach wide_ret/two_ret (no push/pop involved). dead_rdx_write is genuinely ambiguous (indistinguishable from a struct{long,long} return) and should be left alone. Caller-side RDX liveness is NOT available as a discriminator on this binary: kuna xrefs --to 0x10e27 returns 0 callers (VM/indirect dispatch).
+REDIRECT FOR THE BUILDER, the discriminator that separates every case measured here: a pop from a stack slot whose matching push sourced a DIFFERENT register is stack maintenance, not a value placement, so it must not satisfy retinputhalf's 'the function placed it there' -- equivalently, a candidate input register whose only use is a push later popped into another register is not a parameter. That rule fixes the target and cross_reg_restore, leaves same_reg_restore untouched, and cannot reach wide_ret/two_ret (no push/pop involved). dead_rdx_write is genuinely ambiguous (indistinguishable from a struct{long,long} return) and should be left alone. Caller-side RDX liveness is NOT available as a discriminator on this binary: unlace xrefs --to 0x10e27 returns 0 callers (VM/indirect dispatch).
 
 CONTROL PROVING THIS IS NOT THE SOURCE SHAPE: the same four-arg XOR decryptor compiled by plain gcc -O2 (ctl.c xordec) decompiles CORRECTLY today as void *xordec(long,int,long,int). Only the push-R8/pop-RDX prologue idiom in the target triggers it.
 - closed: acceptance a-52c7f7e4dcd5 now PASSES at 198f2b7877da.

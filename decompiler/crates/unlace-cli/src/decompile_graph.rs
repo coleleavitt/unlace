@@ -1,9 +1,9 @@
-//! `kuna decompile-graph` — the whole program as one JSON document: every
+//! `unlace decompile-graph` — the whole program as one JSON document: every
 //! discovered function with its C, its assembly and its recovered signature,
 //! plus the call edges between them.
 //!
 //! ```text
-//!   kuna decompile-graph <binary> [-o|--output FILE] [--label TEXT]
+//!   unlace decompile-graph <binary> [-o|--output FILE] [--label TEXT]
 //!                        [--functions a,b,..] [--addr 0xVMA].. [--max-fn-seconds N]
 //!                        [--mode auto|reliable|aggressive|fast]
 //!                        [--jobs N|auto] [--jobs-chunk N] [--jobs-full-load]
@@ -19,7 +19,7 @@
 //! * what a function *is* ([`Classifier`], the per-function `kind` the browser
 //!   inventory already labels with);
 //! * what calls what ([`CallGraph`], the edge model `--reachable-from` walks and
-//!   `kuna xrefs` answers with);
+//!   `unlace xrefs` answers with);
 //! * how a body disassembles ([`crate::disassemble::function_listing`]).
 //!
 //! `address` is the only key: a name can repeat inside one document, because a
@@ -48,7 +48,7 @@ use crate::jsonfmt::{dumps_indent2, Json};
 /// meaning, so a consumer can refuse a document it does not understand.
 const SCHEMA_VERSION: u64 = 4;
 
-/// `kuna decompile-graph` entry point.
+/// `unlace decompile-graph` entry point.
 ///
 /// A wrapper parse for the two flags only this surface has, then the shared
 /// `decompile-all` parser for everything else — the same split
@@ -145,8 +145,8 @@ fn export(args: &Args, label: &str) -> Result<String, String> {
     let load_seconds = load_started.elapsed().as_secs_f64();
     if prog.arch().print().get_name() != "c-language" {
         return Err(format!(
-            "the graph document is C-only (got {}); use `kuna decompile` or \
-             `kuna decompile-all --json` for other output languages",
+            "the graph document is C-only (got {}); use `unlace decompile` or \
+             `unlace decompile-all --json` for other output languages",
             prog.arch().print().get_name()
         ));
     }
@@ -431,7 +431,7 @@ fn parameters(result: Option<&FuncResult>) -> Json {
 /// The edge list: every caller in address order, each one's callees in
 /// reference order with a contiguous zero-based `calleeOrder`.
 ///
-/// `kind` is the `kuna xrefs` vocabulary, so the document's edges and that
+/// `kind` is the `unlace xrefs` vocabulary, so the document's edges and that
 /// command's rows cannot disagree: `call` a call site, `jump` a tail call or a
 /// branch into a neighbouring entry, `data` an address handed to someone else to
 /// call (the edge that gives `main` a caller).
@@ -480,7 +480,7 @@ fn analysis_image_base(file: &object::File) -> Option<u64> {
 
 fn usage() {
     eprintln!(
-        "usage: kuna decompile-graph <binary> [-o|--output FILE] [--label TEXT] \\\n\
+        "usage: unlace decompile-graph <binary> [-o|--output FILE] [--label TEXT] \\\n\
          \x20                   [--functions a,b,..] [--addr 0xVMA].. [--max-fn-seconds N] \\\n\
          \x20                   [--max-fn-memory MiB] \\\n\
          \x20                   [--mode auto|reliable|aggressive|fast] \\\n\

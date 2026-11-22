@@ -12,7 +12,7 @@ stack ranges by calls. It uses unoptimized C with stack reuse disabled.
 ```sh
 python3 scripts/huge_function_bench.py --out /tmp/kuna-escaped \
   --shape escaped-locals --blocks 100 350 700 \
-  --kuna decompiler/target/release/kuna --seconds 10 --memory-mib 512
+  --kuna decompiler/target/release/unlace --seconds 10 --memory-mib 512
 ```
 
 From the repository root:
@@ -30,7 +30,7 @@ With built Kuna binaries and processor specs available:
 ```sh
 python3 scripts/huge_function_bench.py --out /tmp/kuna-huge \
   --blocks 100 1000 10000 \
-  --kuna decompiler/target/release/kuna --seconds 30 --memory-mib 1024
+  --kuna decompiler/target/release/unlace --seconds 30 --memory-mib 1024
 ```
 
 Measurement uses Linux `wait4` without additional utilities. Each fresh
@@ -78,7 +78,7 @@ peak RSS. Reproduce the comparison with:
 
 ```sh
 python3 scripts/huge_function_bench.py --out /tmp/kuna-region-off \
-  --blocks 1000 --kuna decompiler/target/release/kuna \
+  --blocks 1000 --kuna decompiler/target/release/unlace \
   --seconds 10 --memory-mib 512 --option regionstructure off
 ```
 

@@ -14,12 +14,12 @@
 //!
 //! Only the surfaces that enable a discovery pass were affected, which is why the
 //! defect was invisible to the existing console gates: the shipped console default
-//! runs no discovery pass, but `kuna decompile`/`decompile-all` do (`--mode auto`
+//! runs no discovery pass, but `unlace decompile`/`decompile-all` do (`--mode auto`
 //! picks `aggressive` under 500 KiB, which turns `fast_funcdisc` and
 //! `funcstart_patterns` on).
 //!
 //! The second, independent defect gated here: `load addr <vma>` jumped straight to
-//! the generic `Architecture::name_function`, so `kuna decompile <bin> --addr
+//! the generic `Architecture::name_function`, so `unlace decompile <bin> --addr
 //! <vma>` printed a `sub_<addr>` header even on an UNSTRIPPED binary whose
 //! by-name path (`load function`) printed the real name.
 //!

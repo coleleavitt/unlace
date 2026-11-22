@@ -153,7 +153,7 @@ impl fmt::Display for EntryLookupError {
                     if let Some(section) = &data.section {
                         write!(f, " in {section}")?;
                     }
-                    return write!(f, ", not code -- `kuna read` shows its bytes");
+                    return write!(f, ", not code -- `unlace read` shows its bytes");
                 }
                 match suggestion {
                     Some(near) => write!(

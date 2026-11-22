@@ -74,7 +74,7 @@ mod kuna_unmappedentry;
 pub mod kuna_unflaggedcode;
 pub mod model;
 pub mod walk;
-// (kuna) The read-only cross-reference query behind `kuna xrefs` -- a consumer of
+// (kuna) The read-only cross-reference query behind `unlace xrefs` -- a consumer of
 // the same decode this tier performs, not a pass; nothing commits its output.
 pub mod xrefs;
 

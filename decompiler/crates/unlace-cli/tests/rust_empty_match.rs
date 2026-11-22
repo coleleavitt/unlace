@@ -13,7 +13,7 @@ const NAMES: &[&str] = &[
 
 fn records() -> serde_json::Value {
     let binary =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let result = process::required_output(Command::new(binary).args([
         "decompile-all",
         &common::fixture("rust_empty_match_x86_64"),

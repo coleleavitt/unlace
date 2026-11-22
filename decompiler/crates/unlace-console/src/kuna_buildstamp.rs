@@ -1,9 +1,9 @@
-//! The build handshake between `kuna` and the engine binaries it spawns.
+//! The build handshake between `unlace` and the engine binaries it spawns.
 //!
-//! `kuna decompile` and `kuna catalog` run `decomp_dbg`, and `kuna test` runs
-//! `decomp_test_dbg`. Either can come from a different build than the `kuna`
+//! `unlace decompile` and `unlace catalog` run `decomp_dbg`, and `unlace test` runs
+//! `decomp_test_dbg`. Either can come from a different build than the `unlace`
 //! that spawned it -- `KUNA_DECOMP_DBG` pointing at another install, or a sibling
-//! left behind when only `kuna` was rebuilt -- and nothing in the render says so.
+//! left behind when only `unlace` was rebuilt -- and nothing in the render says so.
 //!
 //! The parent exports the matching [`identity`] as [`PARENT_ENV`]. The child compares it
 //! with its own at startup ([`answer_parent`]) and, only when they differ, writes
@@ -16,7 +16,7 @@
 //! The variable name and the reply prefix are read by builds that differ by
 //! definition, so neither may change.
 //!
-//! An identity is the version `kuna --version` prints plus a fingerprint of the
+//! An identity is the version `unlace --version` prints plus a fingerprint of the
 //! selected child's production source graph (`build.rs`). `decomp_dbg` uses the
 //! engine graph; `decomp_test_dbg` adds `unlace-harness` to that graph.
 

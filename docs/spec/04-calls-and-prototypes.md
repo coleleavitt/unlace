@@ -1228,7 +1228,7 @@ because it hands a register on to a partner is answered by the callee-body walk
 below, which follows the partner's body and proves nothing about a cycle it
 re-enters. "Nothing parked" and "cannot tell" are
 therefore the same answer and both decline, which also makes the rule inert
-wherever no callee was decompiled first: a single-function `kuna decompile`
+wherever no callee was decompiled first: a single-function `unlace decompile`
 except for the direct callees its split-trial bootstrap states (above), a
 `decompile-all` narrowed by `--addr` or `--functions`, a `--jobs N` run, and
 `--option protoorder off`.
@@ -2125,7 +2125,7 @@ classified:
   output, are the same as the walk over every path. On the CPython function,
   13 passes now take 15 s in all.
 
-  *(kuna decompile-all watchdog)* Every `ancestor_op_use` step and every step
+  *(unlace decompile-all watchdog)* Every `ancestor_op_use` step and every step
   of an `only_op_use` walk also probes the drive's budget through
   `decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (budget_probe)`;
   once it is spent the walks answer *not a parameter* at once, and
@@ -3027,7 +3027,7 @@ With `evidence` (and `callers`)
 (`decompiler/crates/unlace-decomp/src/p4_calls/kuna_bejoin/evidence.rs (seed, proven)`)
 the order is a fact about one function that its own RETURN and every call to
 it must agree on, in any order and in any run: a whole `decompile-all`, a run
-narrowed by `--functions` or `--addr`, `--jobs N`, a single `kuna decompile`,
+narrowed by `--functions` or `--addr`, `--jobs N`, a single `unlace decompile`,
 a Ghidra or web session. So it is decided from that function's instructions
 alone. Before any pipeline runs, the driver walks the raw p-code of the
 function and of every function it calls directly. Each function is walked
@@ -3456,7 +3456,7 @@ callers in a row
 (`decompiler/crates/unlace-decomp/src/p4_calls/kuna_bejoin/evidence.rs
 (by_callers)`). Each fact it reads is a function of the image alone, cached
 per image, and only the function asked about keeps its verdict, so a whole
-`decompile-all`, `--functions`, `--jobs N`, a single `kuna decompile` and a
+`decompile-all`, `--functions`, `--jobs N`, a single `unlace decompile` and a
 project export print every function the same way.
 
 Against `evidence`, every function the callers newly prove over 2,241
@@ -4678,7 +4678,7 @@ holds without loss. The redo pass may reprint 5% of the lines the first pass
 printed (a function of at most 32 lines is always redone), and a redo that
 fails or moves the arity keeps the first body and drops the statement. The
 callers are not decompiled again. Under `on` the body rule alone runs; any other
-architecture, a relocatable object, and the single-function `kuna decompile`
+architecture, a relocatable object, and the single-function `unlace decompile`
 are unaffected. Tests: `tests/cli/arm-parameter-every-caller-extends-is-narrow.json`
 and its `narrowargs on` twin, on the fixture `callerargs_thumb`.
 
@@ -5632,7 +5632,7 @@ and by the compiled round trip over the `piecehi_*` fixtures in
 `unsigned long long full_or(unsigned a) { return full(a) | 0xff00000000ULL; }`
 is, on 32-bit ARM, `bl full; orr r1,r1,#255; pop {r11,lr}; bx lr`: `r0` comes
 back from `full` as it is and only `r1` is written. It printed as `void
-full_or(int a0) { full(a0); }`, in `kuna decompile` and in `decompile-all` alike,
+full_or(int a0) { full(a0); }`, in `unlace decompile` and in `decompile-all` alike,
 and so did a soft-float `double` negated (`eor r1,r1,#0x80000000`), an `int`
 call result sign-extended (`bl g; asr r1,r0,#31`) and `((u64)7 << 32) | g(a)`.
 At the RETURN `r0` is the call's INDIRECT creation, which upstream's
@@ -6261,7 +6261,7 @@ files it callee-first in `voidret`'s ledger (`kuna_callee_returns`,
 whose storage, or a piece of whose join, holds that register; a callee recovered
 `void` or returning only its first register declines. Every surface without
 the callee-first pass has no such recovery and relies on the decode alone:
-`kuna decompile`, `decompile-all --jobs N`, a run narrowed by `--filter`,
+`unlace decompile`, `decompile-all --jobs N`, a run narrowed by `--filter`,
 `--functions`, `--addr` or `--limit`, `--option protoorder off`,
 `decompile-project --stream` and `decompile-graph`. There a get-PC thunk's `EDX`
 or an `idiv` remainder read after the call still takes the pair: `decompile-all
@@ -6384,10 +6384,10 @@ shape of `fmt -O2`: the callee at `0x3700` renders
 `int fmt (FILE *fp, char const *file)`, and the `char *` its own callees already
 proved never arrives.
 
-The option closes that gap without adding a pass. `kuna decompile-all` already
+The option closes that gap without adding a pass. `unlace decompile-all` already
 loads and analyzes once and then loops over the entries; with the option on it
 orders that loop by the program's call graph — the `unlace_analysis::listing::xrefs`
-edges `kuna xrefs` answers with, not a second graph — so each callee is
+edges `unlace xrefs` answers with, not a second graph — so each callee is
 decompiled before its callers, and after each function completes what its own
 recovery found is recorded for the callers still ahead of it
 (`decompiler/crates/unlace-decomp/src/p4_calls/kuna_protoorder.rs`). Results are
@@ -6947,7 +6947,7 @@ the DWARF name, and a caller's local can take it. `types` carries no names.
 Two consequences are worth stating plainly. What is stated is a **caller-side
 fact only**: the locked-input branch of `ActionPrototypeTypes` is stubbed, and
 the callee has already been decompiled when its types are recorded, so nothing
-re-reads it about itself. And `kuna decompile` — which forks one `decomp_dbg` per
+re-reads it about itself. And `unlace decompile` — which forks one `decomp_dbg` per
 function — cannot see what another function's decompile stated, so the two
 surfaces may disagree about a call's argument types; the whole-binary surface is
 the one that has the callee. `decompile-project` takes the same order, because
@@ -6971,7 +6971,7 @@ not refused; it states nothing and says so on stderr, since its call-argument
 types can then differ from the serial run's, and `--option protoorder off` on
 both makes them byte-identical.
 
-A single-function `kuna decompile` does state two kinds of callee before its own
+A single-function `unlace decompile` does state two kinds of callee before its own
 pipeline finishes. The callees its call sites pass preferred-split storage to are
 described with `option protoorder`'s use guidance. The other kind is the callees
 it tail-calls. For a thunk that is all tail call (`xor esi,esi; jmp target`)
@@ -6994,13 +6994,13 @@ already-stated callees are skipped. `protoorder off` decompiles the function
 from its own body alone.
 
 A `decompile-all` that selects part of the binary (`--addr`, `--functions`,
-`--limit` and the triage filters) and `kuna decompile --json` have no
+`--limit` and the triage filters) and `unlace decompile --json` have no
 callee-first order behind them either: `callee_first_decision` takes that order
 only for a whole-program run, and only a callee inside the batch can state
 anything. Their batch drive ran without this bootstrap, so a tail call to a
 callee with no declaration lost every argument it forwards: for an AArch64
 forwarder `ldr x8,[x3]; cbz x8,L; b target` the selected function printed
-`target(); // tail-call` while `kuna decompile` printed
+`target(); // tail-call` while `unlace decompile` printed
 `target(a0,a1,a2,a3,a4); // tail-call`. Such a batch now runs the same
 bootstrap for each of its functions (`Architecture::kuna_tail_callee_batch`,
 set around the loop by `decompile_entries`), under the same two bounds, and a
@@ -7204,7 +7204,7 @@ parameter untouched in `rsi` and printed `treenext(*v4)` beside
 read and the record's.
 
 The record is taken only while `passthrough` is on, so `--option passthrough
-off` leaves every list as before; a single-function `kuna decompile` states no
+off` leaves every list as before; a single-function `unlace decompile` states no
 callee and sees only the self-call (over grep -O2, two of 449 functions change,
 both recursive). Over fourteen binaries (x86-64 gcc -O2 and -O0, clang,
 Cortex-M firmware, an ARM library) this adds 222 call arguments; of the 167
@@ -7598,7 +7598,7 @@ such a call. `voidret` files a caller's read of the call result against the
 stub as well as the definition, so the stub's own decompile keeps the return
 its callers read.
 
-Single-function `kuna decompile` builds the call at the definition too, which
+Single-function `unlace decompile` builds the call at the definition too, which
 is what lets a prototype declared there reach the call (the
 `tests/stages/kuna-pltlocal.xml` passes); without one, a forwarded register is
 still recovered only from a callee-first run, exactly as for a direct call.
@@ -7722,7 +7722,7 @@ returned `xmm0`. With the option off `keep` returns that `xmm0` still, the only
 value upstream accepts there, and with it on it returns `eax`.
 
 Nothing changes where `passthrough` is inert (no callee decompiled first,
-`--option passthrough off`), so a single-function `kuna decompile` of `keep`
+`--option passthrough off`), so a single-function `unlace decompile` of `keep`
 still prints `void`, and a declared callee's locked output is not taken, as for
 the tail claim. Over 54 decbench x86-64 binaries (O2, O2-noinline and O0;
 39,323 functions), 10 ARM firmware images of the same corpus (17,332) and 813
@@ -8231,13 +8231,13 @@ Because the escape question is answered by a cross-reference walk that reads one
 instruction at a time, an architecture whose code builds an address from two
 (AArch64 `adrp`+`add`, MIPS `lui`+`addiu`, ARM `movw`+`movt`, i386 PIC) has no
 answer and nothing is parked. Everything is inert where there is no callee-first
-pass: `kuna decompile`, a run narrowed by `--addr` or `--functions`,
+pass: `unlace decompile`, a run narrowed by `--addr` or `--functions`,
 `decompile-project --stream`, `--option protoorder off` and `--jobs N`. A
 `--jobs N` run that does not name the option parks nothing, and its stderr note
 says the run lacks the callee-first order this option rides; naming it
 (`--jobs N --option callbacktype on`) is refused, the way `--option protoorder`
 is. Of the other inert surfaces, two say so on stderr (`warn_protoorder_inert`,
-shared with `protoorder`): `decompile-project --stream` and `decompile-graph`. `kuna decompile` does not,
+shared with `protoorder`): `decompile-project --stream` and `decompile-graph`. `unlace decompile` does not,
 and neither does `protoorder` there — it forks one `decomp_dbg` per function,
 which is a surface neither option has ever reached.
 `KUNA_CALLBACKTYPE_TRACE=1` prints every decision and its reason on stderr.
@@ -8473,7 +8473,7 @@ record, that vote is refused, and a caller local that held the callee's old
 declared as a pointer-width integer and may merge with another integer local
 of its size (dash `sub_eb30`).
 
-Everything is inert where there is no callee-first pass: `kuna decompile`
+Everything is inert where there is no callee-first pass: `unlace decompile`
 (one `decomp_dbg` per function), a run narrowed by `--addr`, `--functions` or a
 triage filter, `--jobs N`, `decompile-project --stream`, a raw image and
 `--option protoorder off`. The
@@ -8841,7 +8841,7 @@ recovers as `void` whose callers read the result (a wrapper ending in
 sub_e7fc(0,a0,a1); }`): a `void` callee states nothing, and recovering such a
 return is the callee's own prototype question, not this vote's.
 
-Everything is inert where there is no callee-first pass: `kuna decompile`, a run
+Everything is inert where there is no callee-first pass: `unlace decompile`, a run
 narrowed by `--addr`, `--functions` or a triage filter, `--jobs N`, a raw image
 and `--option protoorder off`. A single-function decompile therefore still
 prints the conversion that the whole-binary listing leaves out, the same
@@ -8971,7 +8971,7 @@ a locked output already), a sign-extended return (`ldrsb`; the trim of a
 sign-extended value drops nonzero bits), a signed or untyped return, or a
 return any trim narrowed through bits not proven zero. A call to a function the
 run has not decompiled yet (a recursive component's members) is left as it is.
-Everything is inert without a callee-first pass: `kuna decompile`, `--addr`,
+Everything is inert without a callee-first pass: `unlace decompile`, `--addr`,
 `--functions`, `--jobs N` and `--option protoorder off` narrow a function's own
 return exactly as with the option off and leave its calls register-wide.
 
@@ -9171,7 +9171,7 @@ x86 and AArch64 take at load, and the `<math.h>` table chapter 01 describes, on
 the names the image imports. They are parked before the first function's
 `Funcdata` is built, since each `Funcdata` takes its snapshot of the parked
 callee prototypes when it is created: parked any later, the first function
-decompiled (the only one, for `kuna decompile`) reads none of them. A function
+decompiled (the only one, for `unlace decompile`) reads none of them. A function
 that already carries a prototype from another source keeps it. Without them a PLT stub such as `log` or `strtod` was
 recovered `void`, its first reader decompiled reading `d0` after the call, and
 the return-recovery redo then decompiled the stub and every reader again
@@ -9713,7 +9713,7 @@ otherwise print `a1 == z32m(a0)`, which C compares at 64 bits after
 sign-extending `a1`. A convention that extends a narrow return
 by its type's sign (PowerPC64's `inttype`) is left alone: there a caller may read
 the whole register of an `unsigned int`, which `kuna_zextreturn` already types.
-The single-function `kuna decompile` has no callers to ask and keeps the trim.
+The single-function `unlace decompile` has no callers to ask and keeps the trim.
 Over 30 decbench x86-64 binaries and 190 AArch64 objects built from their
 sources, 19 functions move toward their source types, and 84 more print a
 truncating cast at a comparison of a narrow result of a callee recovered
@@ -9733,10 +9733,10 @@ return 64-bit values (a `char *` for bash).
 
 ### Raw caller reads prove a return outside callee-first settling (`kuna_callerreads.rs`)
 
-`kuna decompile` decompiles one function, so no caller of it is decompiled
+`unlace decompile` decompiles one function, so no caller of it is decompiled
 beside it and the ledger above has nothing to settle: `int f(int a) { gi = a *
 3; return gi; }`, compiled to `lea (%rdi,%rdi,2),%eax; mov %eax,gi(%rip); ret`,
-printed `void f(int a0)` while `kuna decompile` of its `main` printed
+printed `void f(int a0)` while `unlace decompile` of its `main` printed
 `printf("%d\n",f(2))`. The function alone cannot tell the two readings apart,
 because `void f(int a) { gi = a * 3; }` compiles to the same three
 instructions. Its callers can, and the machine code after each call says what

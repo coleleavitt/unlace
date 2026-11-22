@@ -1,4 +1,4 @@
-//! `kuna read --json` over load-time fixup slots (GH #1379). The listed bytes
+//! `unlace read --json` over load-time fixup slots (GH #1379). The listed bytes
 //! stay the load image's, which is what every other surface reads; each fixup
 //! slot they overlap is reported in `fixups` with its kind, the symbol a bind
 //! names, the file's own bytes and whether the listed bytes there are the

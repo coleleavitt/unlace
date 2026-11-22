@@ -121,16 +121,16 @@ _not yet refuted_
 WHAT THE FUNCTION ACTUALLY IS (the tester did not say, and it changes how you read the output). sub_401746 is a SELF-DECRYPTING STUB: it stores 0x40190e to dat_4018ff, sets v2 = 0x401906, and XORs 0x30a bytes in place (`*v2 = *v2 ^ dat_406008; *v2 = *v2 ^ v4; v2 = &v2[1]; v3 -= 4`) before transferring control. The bytes at 0x40190e are CIPHERTEXT at load time, so nothing kuna decodes there is the code that runs. It reaches them via `PUSH 0x40190e / POP EBX / JMP EBX`, which kuna resolves correctly to the single constant target -- hence the degenerate `switch(0x40190e) { case 0x40190e: return; }`. The switch is not the defect; the `return;` is.
 
 ISOLATED REPRO WITHOUT THE SWITCH (2 commands, both on the arena binary):
-  kuna decompile Defender.exe 0x40190e --addr --define-function 0x40190e-0x401920
+  unlace decompile Defender.exe 0x40190e --addr --define-function 0x40190e-0x401920
     -> void sub_40190e(void) { return; }          <- NO warning, no comment, error null
-  kuna decompile Defender.exe 0x40190e --addr --define-function 0x40190e-0x401913
+  unlace decompile Defender.exe 0x40190e --addr --define-function 0x40190e-0x401913
     -> void sub_40190e(void) // warn: Function flows out of bounds
        { return; // warn: Function flow out of bounds: r0x00401912 flows to r0x00401913 }
 Same address, same bare `return;`, and the ONLY difference is whether flow ends at the range boundary or at the undecodable byte.
 
 THE FINDING, AND IT IS THE USEFUL PART: THE DIAGNOSTIC CHANNEL ALREADY EXISTS AND IS SIMPLY NOT WIRED TO THIS TERMINATOR. kuna already carries a per-function `// warn:` on the signature and a per-statement `// warn:` on the synthesized return for out-of-bounds flow. The undecodable-instruction path produces the identical synthesized return and attaches nothing. So the need is NOT "invent an incompleteness diagnostic" (which is how the filed hypothesis reads and how a builder would scope it) -- it is "route the bad-instruction terminator through the warn channel that out-of-bounds flow already uses". Much smaller.
 
-CONTEXT FOR THE DECODE: `kuna disassemble --addr 0x40190e --count 6` gives SCASB / CLI / SBB EBP,[EDI+0x69] / .byte 0xc6 at 0x401913. Three instructions DO decode; all three are dead-coded away (their flag/EDI/EBP results are never read), which is why the body renders empty rather than showing them. The terminator is the 0xc6 at 0x401913. Note 0x40190e is also mid-instruction relative to the linear decode (0x401909 OR EAX,0xae2a684f spans through 0x40190e) -- overlapping code, expected in a packer.
+CONTEXT FOR THE DECODE: `unlace disassemble --addr 0x40190e --count 6` gives SCASB / CLI / SBB EBP,[EDI+0x69] / .byte 0xc6 at 0x401913. Three instructions DO decode; all three are dead-coded away (their flag/EDI/EBP results are never read), which is why the body renders empty rather than showing them. The terminator is the 0xc6 at 0x401913. Note 0x40190e is also mid-instruction relative to the linear decode (0x401909 OR EAX,0xae2a684f spans through 0x40190e) -- overlapping code, expected in a packer.
 
 THE TRAP THAT WILL COST THE BUILDER THE ROUND: the acceptance is stdout_matches `while\s*\(` AND stdout_absent `case 0x[0-9a-f]+:\s*return;`. The `while` half ALREADY PASSES today (the decrypt loop emits `while (4 <= v3)`). So adding a `// warn:` comment to the existing `return;` DOES NOT FLIP ACCEPTANCE -- the regex matches `case 0x40190e:` followed by whitespace and `return;` regardless of a trailing comment on the same line only if the comment follows `return;`... it does, so the literal `return;` survives and the probe still matches. To close this need the synthesized RETURN itself must go: the block must terminate as an explicit incomplete/halt (a warning statement with no `return;`), not as a return decorated with a comment. Decide that first, then build.
 

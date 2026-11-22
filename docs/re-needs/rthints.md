@@ -25,7 +25,7 @@ reject_reason: null
 
 ## Symptom
 
-`kuna functions --summary --json` is the first call on an unknown binary, and it says nothing
+`unlace functions --summary --json` is the first call on an unknown binary, and it says nothing
 when native decompilation is the wrong tool. A PyInstaller bundle (Flare-On 12 `chat_client`,
 `DrillBabyDrill.exe`) orients as 182 / 958 ordinary C functions of the bootloader; the Python
 program, and the version needed to decompile its bytecode, sit in the CArchive cookie at the end of
@@ -116,7 +116,7 @@ decompiling the wrapper before it realises which tool it needed.
 
 ## Refutation
 
-_upheld: the summary document has no field for it, and no option in `kuna catalog --json` adds one._
+_upheld: the summary document has no field for it, and no option in `unlace catalog --json` adds one._
 
 ## Reference
 

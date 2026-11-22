@@ -152,8 +152,8 @@ fn unrepairable_image_keeps_its_original_bytes() {
 /// `read_image` is the view every surface that parses an image itself reads
 /// through, so it must peel a fat / universal Mach-O the way the engine dispatch
 /// does. Before it did, `object::File::parse` answered "Unsupported file format"
-/// for the whole file and `kuna strings` / `functions --summary` / `xrefs` died
-/// on an image `kuna functions` loaded fine.
+/// for the whole file and `unlace strings` / `functions --summary` / `xrefs` died
+/// on an image `unlace functions` loaded fine.
 #[test]
 fn read_image_peels_a_universal_macho_to_one_slice() {
     use crate::loader::macho_fat::SlicePref;

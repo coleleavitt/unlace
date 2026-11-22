@@ -1,6 +1,6 @@
 //! Per-function `kind` classification (`"func"` | `"plt"` | `"thunk"`) — the
 //! annotation the browser inventory folds import stubs and trampolines out of,
-//! and the one `kuna decompile-graph` labels its function rows with.
+//! and the one `unlace decompile-graph` labels its function rows with.
 //!
 //! Shared here (rather than in either front-end) for the same reason
 //! [`crate::project`] is: two surfaces answer "what kind of function is this"

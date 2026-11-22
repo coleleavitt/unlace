@@ -1,7 +1,7 @@
 //! (kuna) The load-time fixups a byte view overlaps, and where its bytes came
 //! from (GH #1379).
 //!
-//! `kuna read` shows the load image, the bytes every other surface reads: a
+//! `unlace read` shows the load image, the bytes every other surface reads: a
 //! Mach-O chained-fixup rebase or an ELF `RELATIVE` slot holds the pointer the
 //! loader stores, not the chain word or zero the file holds, and a bind holds a
 //! zero where the loader writes another image's address

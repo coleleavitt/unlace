@@ -1460,14 +1460,14 @@ pub struct Architecture {
     /// (kuna GH-558) Restore canonicalized comparisons to LESSEQUAL form for
     /// presentation (C++ `present_lessequal`).
     pub present_lessequal: bool,
-    /// (kuna decompile-all watchdog) Optional wall-clock budget for ONE
-    /// function's decompile drive (`kuna decompile-all --max-fn-seconds N`).
+    /// (unlace decompile-all watchdog) Optional wall-clock budget for ONE
+    /// function's decompile drive (`unlace decompile-all --max-fn-seconds N`).
     /// `None` (the default) means no budget: the console/`decomp_dbg` parity
     /// path never sets it, so the datatest pipeline is structurally unaffected.
     /// Driver policy, NOT a stage-model settable: it changes zero output for a
     /// function that converges — it only bounds a non-converging one.
     pub kuna_fn_budget: Option<std::time::Duration>,
-    /// (kuna decompile-all watchdog) The live deadline for the CURRENT
+    /// (unlace decompile-all watchdog) The live deadline for the CURRENT
     /// function's drive, computed from [`kuna_fn_budget`](Self::kuna_fn_budget)
     /// at the top of `decompile_func_full_with_override_dyn` and consulted
     /// cooperatively at the action/rule-pool/heritage loop boundaries
@@ -1532,7 +1532,7 @@ pub struct Architecture {
         std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
     >,
     /// (kuna `protoorder`) A batch drive with no callee-first order behind it
-    /// (a narrowed `decompile-all`, `kuna decompile --json`) states its tail
+    /// (a narrowed `decompile-all`, `unlace decompile --json`) states its tail
     /// callees first as a single-function drive does.  Driver state, not an
     /// option: the front-end sets it around such a batch.
     pub kuna_tail_callee_batch: bool,
@@ -3258,7 +3258,7 @@ impl Architecture {
 
         self.callee_ret_purge = true;
         self.stack_exit_anchor = true;
-        self.fde_flow_bound = true; // (kuna) default-on: fall-through stops at the end of the function's own FDE // (kuna) default-on: the stack solver ties each return's stack pointer to the entry one // (kuna) default-on: `kuna decompile` of a tail-calling thunk sees its callee's recovered prototype, as decompile-all does // (kuna) default-on: a direct callee's `ret imm16` is its extrapop, so an i386 struct-returning callee's `ret $4` no longer shifts the caller's frame
+        self.fde_flow_bound = true; // (kuna) default-on: fall-through stops at the end of the function's own FDE // (kuna) default-on: the stack solver ties each return's stack pointer to the entry one // (kuna) default-on: `unlace decompile` of a tail-calling thunk sees its callee's recovered prototype, as decompile-all does // (kuna) default-on: a direct callee's `ret imm16` is its extrapop, so an i386 struct-returning callee's `ret $4` no longer shifts the caller's frame
         self.x87_depth = true;
         self.trap_after_call = true;
         self.retpoline_thunk = true;

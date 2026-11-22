@@ -132,14 +132,14 @@ separate directory so the upstream baseline (`docs/baseline.json`) is never touc
 ```bash
 make test-stages
 # or, directly:
-decompiler/target/release/kuna test --datatests --datatests-dir tests/stages \
+decompiler/target/release/unlace test --datatests --datatests-dir tests/stages \
     --baseline docs/baseline-stages.json
 ```
 
 After adding a testcase, re-record the stages baseline (never `docs/baseline.json`):
 
 ```bash
-decompiler/target/release/kuna test --datatests --datatests-dir tests/stages \
+decompiler/target/release/unlace test --datatests --datatests-dir tests/stages \
     --save-baseline docs/baseline-stages.json
 ```
 

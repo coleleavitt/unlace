@@ -30,7 +30,7 @@ const INPUTS: &[u32] = &[
 
 fn records(mode: &str, language: &str) -> serde_json::Value {
     let binary =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let facts = common::fixture("rust_probestack.kuna");
     let selector = POSITIVE
         .iter()
@@ -156,7 +156,7 @@ fn complete_emitted_bodies_preserve_values_and_probe_stack_writes() {
 #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
 fn helper_spill_does_not_truncate_the_callers_reused_page() {
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let facts = common::fixture("rust_probestack_buffer.kuna");
     let result = process::required_output(Command::new(kuna).args([
         "decompile",
@@ -229,7 +229,7 @@ fn helper_spill_does_not_truncate_the_callers_reused_page() {
 #[test]
 fn optional_stack_memory_policies_retain_the_probe_and_whole_page() {
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let facts = common::fixture("rust_probestack_buffer.kuna");
     for policy in ["stackviews", "stackalias"] {
         let mut previous = None;
@@ -265,7 +265,7 @@ fn optional_stack_memory_policies_retain_the_probe_and_whole_page() {
 #[test]
 fn defaults_and_presets_keep_the_summary_explicit() {
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     for mode in ["auto", "reliable", "aggressive", "fast"] {
         let output = process::required_output(Command::new(&kuna).args([
             "decompile",

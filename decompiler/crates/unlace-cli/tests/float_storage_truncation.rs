@@ -28,7 +28,7 @@ fn emitted_float_bit_truncation_matches_sparc_shifts() {
         ] {
             let full_name = format!("{name}_{policy}");
             let signature = signature.replace(name, &full_name);
-            let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command
                 .args([
                     "decompile",
@@ -132,7 +132,7 @@ fn logical_integer_views_preserve_escaped_storage_and_call_effects() {
     for (kind, address, _) in samples {
         for policy in ["off", "on"] {
             let name = format!("transport_{kind}_{policy}");
-            let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args([
                     "decompile",
                     path.to_str().unwrap(),
@@ -281,7 +281,7 @@ fn mixed_phi_slot_orders_preserve_bits_before_alias_clobber() {
     let mut names = Vec::new();
     for (index, (address, _)) in bodies.into_iter().enumerate() {
         let name = format!("phi_{index}");
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "decompile",
                 path.to_str().unwrap(),
@@ -389,7 +389,7 @@ fn an_integer_register_argument_reads_the_logical_integer() {
     let path = common::scratch_file("integer-register-argument", "bin");
     std::fs::write(&path, image).unwrap();
     let mut source = String::from("#include <stdint.h>\n#include <string.h>\nvoid sinki(int);\n");
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             path.to_str().unwrap(),

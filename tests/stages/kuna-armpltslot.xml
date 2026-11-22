@@ -5,7 +5,7 @@
     slot's address from are not filed as data references in the
     cross-reference index; the slot is.
 
-    Issue:      unlace-analysis-armpltslot - `kuna xrefs` to an address inside
+    Issue:      unlace-analysis-armpltslot - `unlace xrefs` to an address inside
                 a table placed between the PLT and the GOT answered the PLT
                 stubs (`add ip,ip,#N,20` adds that address as an immediate),
                 and every stub filed its PC value; the slot it jumps through

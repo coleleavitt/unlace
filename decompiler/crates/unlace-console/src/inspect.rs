@@ -220,7 +220,7 @@ pub struct FunctionXrefs {
     pub data_refs: Vec<XrefRow>,
 }
 
-/// The references of the function at `entry`, from the `kuna xrefs` walk
+/// The references of the function at `entry`, from the `unlace xrefs` walk
 /// (`unlace_analysis::listing::xrefs`) seeded with the program's inventory and
 /// focused on `entry`. Callers are named by the function holding the call
 /// site; targets by the function or global data symbol at them (a jump that

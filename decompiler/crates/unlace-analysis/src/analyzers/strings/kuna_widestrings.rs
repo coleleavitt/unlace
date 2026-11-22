@@ -28,7 +28,7 @@
 //!
 //! Scope: UTF-16**LE** whose code units are all in the 1-byte recognizer's
 //! charset — the Windows-API case. A big-endian or non-Latin UTF-16 literal is
-//! not recovered, exactly as `kuna strings --encoding utf16` does not recover it.
+//! not recovered, exactly as `unlace strings --encoding utf16` does not recover it.
 
 use object::read::{Object, ObjectSection};
 

@@ -821,7 +821,7 @@ mod w10_input_prototype_declarator {
 }
 
 // ===========================================================================
-// (kuna decompile-project) `doc_type_definitions` pure renderers —
+// (unlace decompile-project) `doc_type_definitions` pure renderers —
 // `compose_type_body` / `compose_enum_body` / `render_type_definitions` /
 // `sanitize_type_name` over hand-built Datatypes + `RealTypeCtx::OFF` (the
 // same pattern as `w10_input_prototype_declarator` above).

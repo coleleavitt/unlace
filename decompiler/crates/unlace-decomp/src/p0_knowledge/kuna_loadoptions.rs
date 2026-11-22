@@ -9,7 +9,7 @@
 //! values. Nothing on that path reads or writes the process environment, so two
 //! images can load at once with different settings.
 //!
-//! The environment is the CLI's channel: the `kuna` CLI exports each
+//! The environment is the CLI's channel: the `unlace` CLI exports each
 //! `--option` gate onto the `decomp_dbg` subprocess, and the console's
 //! `load file` turns it back into options with [`LoadOptions::from_env`]. A
 //! gate read outside any scope falls back to its environment variable.

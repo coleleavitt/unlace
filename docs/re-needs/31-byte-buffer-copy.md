@@ -127,7 +127,7 @@ Faithful C for the buffer copy before the second transform.
 Builder b-r12-31-byte-buffer-c, round 12. The symptom stands; both the filed
 hypothesis and the round-11 triage note are overturned.
 
-- The loss is NOT assertion-driven. `kuna decompile <bin> sub_15dc` with no
+- The loss is NOT assertion-driven. `unlace decompile <bin> sub_15dc` with no
   `--assert` and no options emits `v7 = v6;` and `v10 = v9;` and nothing else,
   so two of the four stores are already gone at the default. The `char[31]`
   assertions only change how the two SURVIVING stores are spelled.

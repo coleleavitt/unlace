@@ -394,7 +394,7 @@ impl Action for ActionHeritage {
         // phi-nodes placed at dominance frontiers).  The action always reports 0
         // changes (the C++ does too — heritage registers no change count, which
         // is why `break action heritage` never fires; see kuna/goldens.py B3).
-        // (kuna decompile-all watchdog) thread the per-function deadline into
+        // (unlace decompile-all watchdog) thread the per-function deadline into
         // the heritage per-space loop; `None` everywhere but a budgeted drive.
         if let Err(error) = data.op_heritage_with_deadline(ctx.deadline) {
             ctx.error = Some(error);

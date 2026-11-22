@@ -24,7 +24,7 @@ fn arm_aliases_select_the_definition_instead_of_its_import() {
                 }
                 let path = common::scratch_file("arm-aliases", "elf");
                 std::fs::write(&path, bytes).unwrap();
-                let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                     .args(["functions", path.to_str().unwrap(), "--json"])
                     .output()
                     .unwrap();
@@ -70,7 +70,7 @@ fn arm_aliases_select_the_definition_instead_of_its_import() {
                     "__answer_from_arm".into(),
                     format!("0x{definition:x}"),
                 ] {
-                    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+                    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
                     command.args([
                         "decompile",
                         path.to_str().unwrap(),

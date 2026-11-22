@@ -1,5 +1,5 @@
-//! CLI end-to-end gate for `kuna decompile-all` / `kuna functions` — drives the
-//! built `kuna` binary over the real vendored `fauxware` ELF and asserts the
+//! CLI end-to-end gate for `unlace decompile-all` / `unlace functions` — drives the
+//! built `unlace` binary over the real vendored `fauxware` ELF and asserts the
 //! machine-readable JSON surface decbench and an LLM driver consume.
 //!
 //! Integration tests require the built processor specs under `specs/`.
@@ -97,7 +97,7 @@ fn inventory_and_decompile_all_include_nested_dialog_callbacks() {
     let sp = specs();
     let (inventory, stderr, ok) =
         run_kuna(&["functions", &bin, "--json", "--sleighpath", &sp]);
-    assert!(ok, "kuna functions failed: {stderr}");
+    assert!(ok, "unlace functions failed: {stderr}");
     assert!(
         inventory.contains("\"address_hex\": \"0x401000\"")
             && inventory.contains("\"address_hex\": \"0x401410\""),
@@ -122,7 +122,7 @@ fn inventory_and_decompile_all_include_nested_dialog_callbacks() {
         "fast_funcdisc",
         "off",
     ]);
-    assert!(ok, "kuna functions with fast_funcdisc off failed: {stderr}");
+    assert!(ok, "unlace functions with fast_funcdisc off failed: {stderr}");
     assert!(
         !without.contains("\"address_hex\": \"0x401000\"")
             && !without.contains("\"address_hex\": \"0x401410\""),
@@ -131,7 +131,7 @@ fn inventory_and_decompile_all_include_nested_dialog_callbacks() {
 
     let (whole, stderr, ok) =
         run_kuna(&["decompile-all", &bin, "--json", "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for (address, body) in [("0x401000", "sub_401000"), ("0x401410", "sub_401410")] {
         assert!(
             whole.contains(&format!("\"address_hex\": \"{address}\""))
@@ -225,13 +225,13 @@ fn json_helpers_reject_malformed_documents() {
     }
 }
 
-/// Run `kuna <cmd> <bin> --mode reliable --json` and return its entry addresses.
+/// Run `unlace <cmd> <bin> --mode reliable --json` and return its entry addresses.
 fn run_json_addrs(cmd: &str, bin: &str, sp: &str, extra: &[&str]) -> Vec<u64> {
     let mut args = vec![cmd, bin, "--json", "--sleighpath", sp, "--mode", "reliable"];
     args.extend_from_slice(extra);
     let (stdout, stderr, ok) = run_kuna(&args);
     if !ok {
-        panic!("kuna {cmd} failed on {bin}: {stderr}");
+        panic!("unlace {cmd} failed on {bin}: {stderr}");
     }
     json_addresses(&stdout)
 }
@@ -260,9 +260,9 @@ const DECODE_ENV: [&str; 6] = [
     "KUNA_DECODE_FAULT",
 ];
 
-/// A `kuna` invocation with this suite's environment hygiene, plus `env`.
+/// A `unlace` invocation with this suite's environment hygiene, plus `env`.
 fn kuna_command(env: &[(&str, &str)]) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.env_remove("KUNA_DECOMP_DBG").env_remove("KUNA_DECOMP_TEST").env_remove("KUNA_SLACOMP");
     // A lane fault reports itself in one line; `RUST_BACKTRACE` deliberately
     // turns the runtime's panic block back on, so it must not reach a child
@@ -280,12 +280,12 @@ fn kuna_command(env: &[(&str, &str)]) -> Command {
     cmd
 }
 
-/// Run the built `kuna` binary, returning `(stdout, stderr, success)`.
+/// Run the built `unlace` binary, returning `(stdout, stderr, success)`.
 fn run_kuna(args: &[&str]) -> (String, String, bool) {
     run_kuna_env(args, &[])
 }
 
-/// Run the built `kuna` binary with a hard outer wall-clock `cap`, returning
+/// Run the built `unlace` binary with a hard outer wall-clock `cap`, returning
 /// `Some((stdout, stderr, success))` if it exited in time, `None` if it had to
 /// be killed.  The outer cap is the regression guard for the watchdog itself:
 /// without `--max-fn-seconds` the hang-repro invocation would spin forever.
@@ -414,7 +414,7 @@ fn decompile_all_emits_json_for_main() {
         &specs(),
     ]);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     // Shape assertions (no JSON dep): two functions, both with non-null code.
     assert!(stdout.trim_start().starts_with('{'), "output is not a JSON object:\n{stdout}");
@@ -467,7 +467,7 @@ fn fast_mode_matches_explicit_options_and_user_override_wins() {
         args.extend_from_slice(extra);
         let (stdout, stderr, ok) = run_kuna(&args);
         if !ok {
-            panic!("kuna decompile-all failed on the ARM fixture: {stderr}");
+            panic!("unlace decompile-all failed on the ARM fixture: {stderr}");
         }
         stdout
     };
@@ -529,7 +529,7 @@ fn fast_mode_matches_explicit_options_and_user_override_wins() {
 #[test]
 fn modes_command_lists_auto_policy_and_fast_preset() {
     let (stdout, stderr, ok) = run_kuna(&["modes", "--json"]);
-    assert!(ok, "kuna modes failed: {stderr}");
+    assert!(ok, "unlace modes failed: {stderr}");
     let auto = stdout
         .split("\"name\": \"auto\"")
         .nth(1)
@@ -567,7 +567,7 @@ fn omitted_and_explicit_auto_match_aggressive_on_a_small_binary() {
         }
         let (stdout, stderr, ok) = run_kuna(&args);
         if !ok {
-            panic!("kuna functions failed for mode {mode:?}: {stderr}");
+            panic!("unlace functions failed for mode {mode:?}: {stderr}");
         }
         stdout
     };
@@ -610,7 +610,7 @@ fn arm_decompile_all_defaults_funcstart_patterns_on() {
         args.extend_from_slice(extra);
         let (stdout, stderr, ok) = run_kuna(&args);
         if !ok {
-            panic!("kuna decompile-all failed on the ARM fixture: {stderr}");
+            panic!("unlace decompile-all failed on the ARM fixture: {stderr}");
         }
         json_count(&stdout).expect("count in json")
     };
@@ -652,7 +652,7 @@ fn arm_decompile_all_defaults_aif_on() {
         args.extend_from_slice(extra);
         let (stdout, stderr, ok) = run_kuna(&args);
         if !ok {
-            panic!("kuna decompile-all failed on the ARM fixture: {stderr}");
+            panic!("unlace decompile-all failed on the ARM fixture: {stderr}");
         }
         json_count(&stdout).expect("count in json")
     };
@@ -702,7 +702,7 @@ fn arm_decompile_all_raw_thumb_prologue_seed_non_destructive() {
         args.extend_from_slice(extra);
         let (stdout, stderr, ok) = run_kuna(&args);
         if !ok {
-            panic!("kuna decompile-all failed on the ARM fixture: {stderr}");
+            panic!("unlace decompile-all failed on the ARM fixture: {stderr}");
         }
         json_count(&stdout).expect("count in json")
     };
@@ -718,7 +718,7 @@ fn arm_decompile_all_raw_thumb_prologue_seed_non_destructive() {
     );
 }
 
-/// DIV-68: `kuna functions` takes the same discovery defaults as `kuna decompile-all`,
+/// DIV-68: `unlace functions` takes the same discovery defaults as `unlace decompile-all`,
 /// so the inventory can never omit an entry the whole-binary run decompiles.
 ///
 /// `decompile-all` reports the CODE-backed SUBSET of the canonical inventory
@@ -741,7 +741,7 @@ fn arm_functions_inventory_covers_every_decompile_all_entry() {
         decompiled.iter().copied().filter(|a| !inventory.contains(a)).collect();
     assert!(
         missing.is_empty(),
-        "`kuna functions` must list every entry `decompile-all` decompiles; missing {:x?} \
+        "`unlace functions` must list every entry `decompile-all` decompiles; missing {:x?} \
          (inventory={}, decompiled={})",
         missing,
         inventory.len(),
@@ -773,7 +773,7 @@ fn arm_functions_inventory_covers_every_decompile_all_entry() {
 /// DIV-68, the other side: x86-64 enumeration is untouched.
 ///
 /// The discovery bundle is non-x86-64-only and the Listing is measured entry-neutral
-/// on x86-64, so `kuna functions` there must still inject nothing — same inventory as
+/// on x86-64, so `unlace functions` there must still inject nothing — same inventory as
 /// an explicit `listing off`, and still a superset of what `decompile-all` decompiles.
 #[test]
 fn x86_64_functions_inventory_is_unchanged_and_covers_decompile_all() {
@@ -784,7 +784,7 @@ fn x86_64_functions_inventory_is_unchanged_and_covers_decompile_all() {
         run_json_addrs("functions", &bin, &sp, &["--option", "listing", "off"]);
     assert_eq!(
         inventory, no_listing,
-        "x86-64 `kuna functions` must not build the Listing — the DIV-15 default is the \
+        "x86-64 `unlace functions` must not build the Listing — the DIV-15 default is the \
          decompiling surfaces'"
     );
     let decompiled =
@@ -793,7 +793,7 @@ fn x86_64_functions_inventory_is_unchanged_and_covers_decompile_all() {
         decompiled.iter().copied().filter(|a| !inventory.contains(a)).collect();
     assert!(
         missing.is_empty(),
-        "`kuna functions` must list every entry `decompile-all` decompiles; missing {missing:x?}"
+        "`unlace functions` must list every entry `decompile-all` decompiles; missing {missing:x?}"
     );
 }
 
@@ -819,7 +819,7 @@ fn decompile_all_reports_each_entry_once() {
     let (stdout, stderr, ok) =
         run_kuna(&["decompile-all", bin.as_str(), "--json", "--sleighpath", sp.as_str()]);
     if !ok {
-        panic!("kuna decompile-all failed on the ARM fixture: {stderr}");
+        panic!("unlace decompile-all failed on the ARM fixture: {stderr}");
     }
     assert_eq!(
         json_count(&stdout),
@@ -865,7 +865,7 @@ fn decompile_all_functions_filter_resolves_an_alias() {
         "sub_100b8",
     ]);
     if !ok {
-        panic!("kuna decompile-all failed on the ARM fixture: {stderr}");
+        panic!("unlace decompile-all failed on the ARM fixture: {stderr}");
     }
     assert_eq!(
         json_count(&stdout),
@@ -895,7 +895,7 @@ fn decompile_all_addr_tolerates_the_arm_thumb_bit() {
         "decompile-all", arm.as_str(), "--json", "--sleighpath", sp.as_str(), "--addr", "0x100b9",
     ]);
     if !ok {
-        panic!("kuna decompile-all failed on the ARM fixture: {stderr}");
+        panic!("unlace decompile-all failed on the ARM fixture: {stderr}");
     }
     assert!(
         stdout.contains("\"address_hex\": \"0x100b8\"") && stdout.contains("\"name\": \"compute\""),
@@ -916,7 +916,7 @@ fn decompile_all_addr_tolerates_the_arm_thumb_bit() {
         "decompile-all", x86.as_str(), "--json", "--sleighpath", sp.as_str(), "--addr", "0x1357",
     ]);
     if !ok {
-        panic!("kuna decompile-all failed on the x86-64 fixture: {stderr}");
+        panic!("unlace decompile-all failed on the x86-64 fixture: {stderr}");
     }
     assert!(
         stdout.contains("\"address_hex\": \"0x1357\""),
@@ -938,7 +938,7 @@ fn arm_thumb_pe_functions_and_address_decompile() {
         &sp,
     ]);
     if !ok {
-        panic!("kuna functions failed on synthetic ARM PE: {stderr}");
+        panic!("unlace functions failed on synthetic ARM PE: {stderr}");
     }
     assert!(
         stdout.contains("\"address_hex\": \"0x401000\""),
@@ -1294,7 +1294,7 @@ fn watchdog_stops_region_structuring_and_the_batch_continues() {
 /// `--max-fn-memory` stops `big` in `tests/hang-repro/escaped_locals` once its
 /// process passes the limit, records that as `big`'s error, and the batch goes
 /// on to decompile `after`: in process, through a worker pool, and on the
-/// `kuna decompile` text surface, whose engine runs in `decomp_dbg`.
+/// `unlace decompile` text surface, whose engine runs in `decomp_dbg`.
 #[test]
 fn memory_limit_stops_one_function_and_the_batch_continues() {
     let bin = repo_root().join("tests/hang-repro/escaped_locals");
@@ -1359,7 +1359,7 @@ fn ordinary_functions_never_trip_the_memory_limit() {
 }
 
 /// Without `--max-fn-memory`, a run under a capped cgroup takes the cgroup
-/// default, the serial run, every `--jobs` worker and `kuna decompile` alike:
+/// default, the serial run, every `--jobs` worker and `unlace decompile` alike:
 /// with a margin of max(512 MiB, 10%) of the cap, a function that has grown by
 /// the margin is stopped once the cgroup holds more than its cap less it, which
 /// is 512 MiB of a faked 1 GiB cap that is already full. The same cap with room left stops nothing (`big` then runs
@@ -1445,13 +1445,13 @@ fn decompile_all_converges_on_past_pathological_function() {
     let (stdout, stderr, ok) = match res {
         Some(t) => t,
         None => panic!(
-            "kuna decompile-all did not terminate within the 300s outer bound — \
+            "unlace decompile-all did not terminate within the 300s outer bound — \
              the 0x1bd04 convergence fix has regressed AND the default \
              --max-fn-seconds watchdog is not firing"
         ),
     };
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     // Shape assertions (no JSON dep): a well-formed single-function document
     // whose one record decompiled cleanly (non-null code, null error).
@@ -1490,10 +1490,10 @@ fn decompile_all_watchdog_quiet_on_healthy_function() {
     );
     let (stdout, stderr, ok) = match res {
         Some(t) => t,
-        None => panic!("kuna decompile-all on a healthy function did not terminate in 300s"),
+        None => panic!("unlace decompile-all on a healthy function did not terminate in 300s"),
     };
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     assert!(stdout.contains("\"count\": 1"), "expected count 1:\n{stdout}");
     assert!(stdout.contains("\"error\": null"), "healthy function must have null error:\n{stdout}");
@@ -1558,7 +1558,7 @@ fn decompile_all_listing_default_collapses_noreturn_wrapper() {
     // Pass 1: reliable has no listing override, so the driver fallback fires.
     let (on_out, stderr, ok) = run_kuna(&base);
     if !ok {
-        panic!("kuna decompile-all (default) failed: {stderr}");
+        panic!("unlace decompile-all (default) failed: {stderr}");
     }
     let on_code = code_field(&on_out).to_string();
     assert!(
@@ -1571,7 +1571,7 @@ fn decompile_all_listing_default_collapses_noreturn_wrapper() {
     let mut off_args = base.to_vec();
     off_args.extend_from_slice(&["--option", "listing", "off"]);
     let (off_out, stderr, ok) = run_kuna(&off_args);
-    assert!(ok, "kuna decompile-all --option listing off failed: {stderr}");
+    assert!(ok, "unlace decompile-all --option listing off failed: {stderr}");
     let off_code = code_field(&off_out).to_string();
     assert!(
         !off_code.contains("// no-return"),
@@ -1595,7 +1595,7 @@ fn decompile_all_listing_default_collapses_noreturn_wrapper() {
     let mut expl_args = base.to_vec();
     expl_args.extend_from_slice(&["--option", "listing", "on"]);
     let (expl_out, stderr, ok) = run_kuna(&expl_args);
-    assert!(ok, "kuna decompile-all --option listing on failed: {stderr}");
+    assert!(ok, "unlace decompile-all --option listing on failed: {stderr}");
     assert_eq!(
         code_field(&expl_out),
         on_code,
@@ -1608,7 +1608,7 @@ fn functions_lists_main() {
     let bin = fauxware();
     let (stdout, stderr, ok) = run_kuna(&["functions", &bin, "--json", "--sleighpath", &specs()]);
     if !ok {
-        panic!("kuna functions failed: {stderr}");
+        panic!("unlace functions failed: {stderr}");
     }
     assert!(stdout.contains("\"name\": \"main\""), "enumeration missing `main`:\n{stdout}");
     assert!(stdout.contains("\"address\""), "enumeration missing addresses:\n{stdout}");
@@ -1661,7 +1661,7 @@ fn decompile_all_error_nonzero_does_not_absorb_next_function() {
     );
 }
 
-/// (kuna, Ghidra-gap) The SINGLE-function `kuna decompile` path must also prune the
+/// (kuna, Ghidra-gap) The SINGLE-function `unlace decompile` path must also prune the
 /// `error(nonzero)` fall-through — not just `decompile-all`. It now builds the Listing by
 /// default (like decompile-all) and `IfcDecompile` applies the CALL_RETURN overrides, so
 /// `err_fatal` @ 0x4011c0 does not overrun into the following `compute`/`compute_warn`.
@@ -1674,7 +1674,7 @@ fn kuna_decompile_single_error_nonzero_does_not_absorb_next_function() {
         let mut a: Vec<&str> = vec!["decompile", &bin, "0x4011c0", "--addr", "--sleighpath", &sp];
         a.extend_from_slice(extra);
         let (stdout, stderr, ok) = run_kuna(&a);
-        assert!(ok, "kuna decompile failed: {stderr}");
+        assert!(ok, "unlace decompile failed: {stderr}");
         stdout
     };
     // `err_warn` belongs to `compute_warn`, a DIFFERENT function — it appears in err_fatal's
@@ -1689,7 +1689,7 @@ fn kuna_decompile_single_error_nonzero_does_not_absorb_next_function() {
     );
     assert!(
         !on.contains("err_warn"),
-        "the single-function `kuna decompile` path must prune the error(2) fall-through:\n{on}"
+        "the single-function `unlace decompile` path must prune the error(2) fall-through:\n{on}"
     );
 }
 
@@ -1714,7 +1714,7 @@ fn dwarf_source_line_comments_stay_opt_in_under_every_mode() {
         a.extend_from_slice(extra);
         let (stdout, stderr, ok) = run_kuna(&a);
         if !ok {
-            panic!("kuna decompile failed for {extra:?}: {stderr}");
+            panic!("unlace decompile failed for {extra:?}: {stderr}");
         }
         stdout
     };
@@ -2214,7 +2214,7 @@ fn functions_json_carries_a_ranking_extent() {
     let (stdout, stderr, ok) =
         run_kuna(&["functions", &bin, "--json", "--sleighpath", &specs()]);
     if !ok {
-        panic!("kuna functions failed: {stderr}");
+        panic!("unlace functions failed: {stderr}");
     }
     let sizes = json_sizes(&stdout);
     let count = json_count(&stdout).expect("the inventory must report a count");
@@ -2266,12 +2266,12 @@ fn functions_and_decompile_all_agree_on_size() {
     let (inventory, stderr, ok) =
         run_kuna(&["functions", &bin, "--json", "--sleighpath", &sp]);
     if !ok {
-        panic!("kuna functions failed: {stderr}");
+        panic!("unlace functions failed: {stderr}");
     }
     let (decompiled, stderr, ok) =
         run_kuna(&["decompile-all", &bin, "--json", "--sleighpath", &sp]);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     // Both documents are address-ordered over the same entry set, so the size
     // columns line up positionally. The inventory also lists the `.got` slot of
@@ -2300,7 +2300,7 @@ fn instruction_budget_overrun_truncates_instead_of_failing() {
                   "--option", "maxinstruction", "5"];
     let (truncated, stderr, ok) = run_kuna(&budget);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     assert!(
         truncated.contains("Exceeded the 5 instruction budget"),
@@ -2401,7 +2401,7 @@ fn fast_discovery_finds_the_pointer_only_target() {
     let args = ["functions", &bin, "--json", "--sleighpath", &sp, "--mode", "fast"];
     let (stdout, stderr, ok) = run_kuna(&args);
     if !ok {
-        panic!("kuna functions failed: {stderr}");
+        panic!("unlace functions failed: {stderr}");
     }
     let fast = json_addresses(&stdout);
     assert!(
@@ -2413,7 +2413,7 @@ fn fast_discovery_finds_the_pointer_only_target() {
     let mut off = args.to_vec();
     off.extend_from_slice(&["--option", "fast_funcdisc", "off"]);
     let (stdout, stderr, ok) = run_kuna(&off);
-    assert!(ok, "kuna functions failed: {stderr}");
+    assert!(ok, "unlace functions failed: {stderr}");
     assert!(
         !json_addresses(&stdout).contains(&0x13ae),
         "0x13ae must come from the fast walk alone:\n{stdout}"
@@ -2449,7 +2449,7 @@ fn jobs_output_is_byte_identical_to_serial() {
             "--option", "protoorder", "off"];
         let (want, stderr, ok) = run_kuna(&base);
         if !ok {
-            panic!("kuna decompile-all failed: {stderr}");
+            panic!("unlace decompile-all failed: {stderr}");
         }
         assert!(want.contains("\"code\""), "the serial run decompiled nothing:\n{want}");
 
@@ -2460,7 +2460,7 @@ fn jobs_output_is_byte_identical_to_serial() {
                 args.extend_from_slice(&["--jobs-chunk", chunk]);
             }
             let (got, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all --jobs {jobs} failed: {stderr}");
+            assert!(ok, "unlace decompile-all --jobs {jobs} failed: {stderr}");
             assert_eq!(got, want, "--jobs {jobs} (chunk {chunk:?}) moved the document of {bin}");
             // A run that can take an hour has to say where it is, and it has to say
             // it on stderr — stdout is the document, byte-compared just above.
@@ -2488,14 +2488,14 @@ fn jobs_notes_that_the_default_callee_first_order_is_serial_only() {
     let base = ["decompile-all", &bin, "--max-fn-seconds", "0", "--sleighpath", &sp];
     let (serial, stderr, ok) = run_kuna(&base);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     assert!(!stderr.contains("callee-first"), "a serial run printed the pool note:\n{stderr}");
     assert!(serial.contains("caller(unsigned char *a0,int a1)"), "{serial}");
     let mut pooled = base.to_vec();
     pooled.extend_from_slice(&["--jobs", "2"]);
     let (got, stderr, ok) = run_kuna(&pooled);
-    assert!(ok, "kuna decompile-all --jobs 2 failed: {stderr}");
+    assert!(ok, "unlace decompile-all --jobs 2 failed: {stderr}");
     assert!(
         stderr.contains("--jobs decompiles without the callee-first order"),
         "the pool did not say its output can differ:\n{stderr}"
@@ -2513,7 +2513,7 @@ fn a_narrowed_run_orders_callees_first_only_when_asked() {
     let base = ["decompile-all", &bin, "--functions", "caller,callee", "--sleighpath", &sp];
     let (plain, stderr, ok) = run_kuna(&base);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     assert!(!stderr.contains("protoorder"), "a default narrowed run printed a note:\n{stderr}");
     assert!(plain.contains("caller(unsigned long a0,int a1)"), "{plain}");
@@ -2551,7 +2551,7 @@ fn recursive_callees_state_their_types_under_cycles() {
                 "calleevote", "off",
             ]);
         if !ok {
-            panic!("kuna decompile-all --option protoorder {value} failed: {stderr}");
+            panic!("unlace decompile-all --option protoorder {value} failed: {stderr}");
         }
         for f in ["wrap", "wrap2"] {
             assert!(got.contains(&format!(" {f}{param}")), "{value}: {f}{param} missing:\n{got}");
@@ -2578,7 +2578,7 @@ fn a_frame_records_char_pointer_pointer_is_not_its_type() {
         let (got, stderr, ok) =
             run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "calleevote", value]);
         if !ok {
-            panic!("kuna decompile-all --option calleevote {value} failed: {stderr}");
+            panic!("unlace decompile-all --option calleevote {value} failed: {stderr}");
         }
         assert!(got.contains("p[1] = 0x506070801020304;"), "{value}: the node's word store split:\n{got}");
         assert!(!got.contains("] = '\\x"), "{value}: a character store:\n{got}");
@@ -2616,7 +2616,7 @@ fn a_parameter_every_caller_passes_a_pointer_is_one() {
             let (got, stderr, ok) =
                 run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "callerptr", value]);
             if !ok {
-                panic!("kuna decompile-all {stem} --option callerptr {value} failed: {stderr}");
+                panic!("unlace decompile-all {stem} --option callerptr {value} failed: {stderr}");
             }
             assert!(got.contains(push), "{stem} {value}: `{push}` missing:\n{got}");
             assert!(got.contains(remember), "{stem} {value}: `{remember}` missing:\n{got}");
@@ -2655,7 +2655,7 @@ fn a_redone_recursive_function_reads_no_statement_of_its_own() {
         let (got, stderr, ok) =
             run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "protoorder", value]);
         if !ok {
-            panic!("kuna decompile-all --option protoorder {value} failed: {stderr}");
+            panic!("unlace decompile-all --option protoorder {value} failed: {stderr}");
         }
         let chunk = |name: &str| -> String {
             got.split("// Function: ")
@@ -2740,7 +2740,7 @@ fn a_float_in_a_general_register_keeps_its_integer_uses_round_trip() {
     let sp = specs();
     let (stdout, stderr, ok) =
         run_kuna(&["decompile-all", &bin, "--option", "structdefs", "on", "--option", "typevote", "off", "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in [
         "return (int)h(a0,v1) + v1 + 3;",
         "(unsigned int)(v1 < 0x3fc00000)",
@@ -2906,7 +2906,7 @@ fn a_float_register_return_and_a_read_void_result_round_trip() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatret_x86_64").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in [
         "float nanf(void)",
         "float sub_1150(void)",
@@ -2970,7 +2970,7 @@ fn a_wrapper_returns_its_callees_result_round_trip() {
     let fixture = |name: &str| repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name).to_str().unwrap().to_string();
     let bin = fixture("floatret_wrap_gcc_O0");
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in ["int set_tz(char *a0)", "int restore_cwd(int a0,char *a1)", "unsigned int gi_as_f(void)", "void set_gi_bits(unsigned int a0)"] {
         assert!(stdout.contains(want), "missing `{want}`:\n{stdout}");
     }
@@ -2987,7 +2987,7 @@ fn a_wrapper_returns_its_callees_result_round_trip() {
 
     let bin = fixture("floatret_wrap_clang_O0");
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in [
         "unsigned int wrapneg(unsigned int a0)",
         "unsigned int wrapabs(unsigned int a0)",
@@ -3028,7 +3028,7 @@ fn a_wrapper_returns_its_callees_result_round_trip() {
     // are returned as they are, not converted.
     let bin = fixture("floatret_wrap_gcc_O2");
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in ["unsigned long wrapneg(void)", "return negf(); // tail-call", "unsigned long wrapnegd(void)", "return negd(); // tail-call"] {
         assert!(stdout.contains(want), "missing `{want}`:\n{stdout}");
     }
@@ -3053,7 +3053,7 @@ fn a_reader_of_a_redone_wrapper_round_trips() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatret_stale_gcc_O0").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--option", "structdefs", "on", "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in ["long * find(unsigned int a0)", "long * slot(unsigned int a0)"] {
         assert!(stdout.contains(want), "missing `{want}`:\n{stdout}");
     }
@@ -3092,7 +3092,7 @@ fn a_nan_returned_in_s0_round_trips() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatret_cm4.o").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in [
         "float qnanf_(void)",
         "return NAN;",
@@ -3171,7 +3171,7 @@ fn a_float_crossing_an_integer_call_round_trips() {
     let fixture = |name: &str| repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name).to_str().unwrap().to_string();
     let bin = fixture("floatret_calls_clang_O0");
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let printed = printed_functions(&stdout, &["f2u ", "signbit_ ", "pass ", "fetch ", "mk ", "first_of ", "use "]);
     let src = format!(
         "#include <stdio.h>\n#include <string.h>\n{BITS}\
@@ -3188,7 +3188,7 @@ fn a_float_crossing_an_integer_call_round_trips() {
 
     let bin = fixture("floatret_calls_gcc_O0");
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let body = printed_functions(&stdout, &["call_f2u "]);
     for line in body.lines() {
         let Some(var) = line.trim().strip_prefix("return ").and_then(|r| r.strip_suffix(';')) else { continue };
@@ -3257,7 +3257,7 @@ fn a_float_register_parameter_round_trips() {
         ("clang-O2", "floatparam_x86_64.o"),
     ] {
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &fixture(name), "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         for want in [
             "void fs(double a0,unsigned int *a1,double *a2)",
             "void ff(float a0,unsigned int *a1,float *a2)",
@@ -3275,7 +3275,7 @@ fn a_float_register_parameter_round_trips() {
 
     for (tag, name) in [("a64", "floatparam_a64.o"), ("x86-clang-O0", "floatparam_x86_64_clang_O0.o")] {
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &fixture(name), "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         for want in ["void sink(float a0,float a1,float *a2)", "void use(float a0,unsigned int *a1,float *a2)"] {
             assert!(stdout.contains(want), "{tag}: missing `{want}`:\n{stdout}");
         }
@@ -3299,7 +3299,7 @@ fn a_float_register_parameter_round_trips() {
     }
 
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &fixture("floatparam_a64.o"), "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     assert!(!stdout.contains("(float)trunc16("), "trunc16's bits are converted:\n{stdout}");
     let printed = printed_functions(&stdout, &["trunc16 ", "twicetrunc "]);
     let src = format!(
@@ -3336,7 +3336,7 @@ fn a_global_only_moved_through_float_registers_round_trips() {
         ("armhf-O2", "floatglobal_armhf_O2", false, "void ff(float a0,unsigned int *a1)"),
     ] {
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &fixture(name), "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         let mut want = vec!["void ff(float a0,unsigned int *a1)", "sinkf(gf2)", "void set_gpun(unsigned int a0)", setz];
         if doubles {
             want.extend(["void fy(double a0,unsigned int *a1)", "void fw(double a0,unsigned int a1)", "sink(gd2)"]);
@@ -3373,7 +3373,7 @@ fn an_integer_access_through_an_index_from_a_float_global_refuses_the_float() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatglobal_index_x86_64_gcc_O2").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for w in [
         "void ixa(unsigned long a0,int a1)",
         "void lv0(unsigned long a0,int a1)",
@@ -3397,7 +3397,7 @@ fn a_return_stated_in_another_register_is_not_reinterpreted() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatparam_retreg_clang_O2").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     assert!(stdout.contains("unsigned long sub_11c0("), "sub_11c0 no longer returns rax; re-pick the case:\n{stdout}");
     assert!(!stdout.contains(".from = sub_11c0("), "a return in rax reinterpreted as xmm0's float:\n{stdout}");
 }
@@ -3425,7 +3425,7 @@ fn a_float_bit_helper_round_trips() {
     );
     for (tag, name) in [("armhf", "floatbitshelper_armhf.o"), ("a64-O0", "floatbitshelper_a64_O0.o")] {
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &fixture(name), "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         for want in [
             "float fb_fabsf(float a0)",
             "float fb_negf(float a0)",
@@ -3474,7 +3474,7 @@ fn a_float_bit_helper_round_trips() {
     }
 
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &fixture("floatbitshelper_x86_64_gcc_O2"), "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in [
         "float sub_12f0(float a0)",
         "float sub_1310(float a0)",
@@ -3514,12 +3514,12 @@ fn a_withdrawn_float_bit_helper_is_called_with_its_final_prototype() {
     let fixture = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatbitswithdraw_armhf.o").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &fixture, "--option", "armfloatreturn", "off", "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     assert!(stdout.contains("unsigned int fbabs(unsigned int a0)"), "fbabs is no longer withdrawn; re-pick the case:\n{stdout}");
     assert!(stdout.contains("  fbabs(a0); // tail-call"), "from_bits does not call fbabs with its integer:\n{stdout}");
     assert!(!stdout.contains("float to; }){ .from = a0 }).to)"), "a float is handed to fbabs's integer parameter:\n{stdout}");
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &fixture, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     assert!(stdout.contains("float fbabs(float a0)"), "the preset withdrew fbabs's float:\n{stdout}");
     assert!(
         stdout.contains("return ((union { float from; unsigned int to; }){ .from = fbabs("),
@@ -3539,7 +3539,7 @@ fn a_float_handed_on_to_an_integer_parameter_round_trips() {
     for (tag, name) in [("cm4", "floatret_put_cm4.o"), ("a64", "floatret_put_a64.o")] {
         let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name).to_str().unwrap().to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         let printed = printed_functions(&stdout, &["put3 ", "putf2 "]);
         let src = format!(
             "#include <stdio.h>\n#include <string.h>\n{printed}\n\
@@ -3568,7 +3568,7 @@ fn a_float_pair_held_as_an_integer_round_trips() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatret_pair_gcc_O2").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in ["unsigned long sub_11d0(void)", "unsigned long sub_11f0(void)", "unsigned long sub_1210(void)"] {
         assert!(stdout.contains(want), "missing `{want}`:\n{stdout}");
     }
@@ -3615,7 +3615,7 @@ fn a_float_handed_on_through_wrappers_to_an_integer_round_trips() {
     let fixture = |name: &str| repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name).to_str().unwrap().to_string();
     let bin = fixture("floatret_chain_gcc_O1");
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let names = ["sub_1149 ", "sub_1156 ", "sub_1160 ", "sub_1181 ", "sub_118e ", "sub_1198 ", "sub_11ba ", "sub_11ff "];
     let printed = printed_functions(&stdout, &names);
     for want in ["unsigned long sub_1156(long a0,int a1)", "unsigned long sub_1160(long a0,int a1)", "unsigned long sub_118e(long a0,int a1)"] {
@@ -3643,7 +3643,7 @@ fn a_float_handed_on_through_wrappers_to_an_integer_round_trips() {
     }
     let mips = fixture("floatret_chain_mips_O0");
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &mips, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let printed = printed_functions(&stdout, &["sub_40085c ", "sub_400898 ", "sub_400b78 "]);
     for want in ["unsigned int sub_40085c(int a0,int a1)", "unsigned int sub_400898(int a0,int a1)"] {
         assert!(printed.contains(want), "missing `{want}`:\n{printed}");
@@ -3677,7 +3677,7 @@ fn a_pair_return_handed_on_stays_whole_round_trips() {
     for name in ["floatret_pair32_i386_O2.o", "floatret_pair32_arm_O0.o"] {
         let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name).to_str().unwrap().to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         assert!(!stdout.contains("unsigned int wrap("), "{name}: wrap returns half of a 64-bit value:\n{stdout}");
         let printed = printed_functions(&stdout, &["zsum ", "hi "]);
         assert!(printed.contains("unsigned long long hi(int a0,int a1)"), "{name}:\n{printed}");
@@ -3700,7 +3700,7 @@ fn a_float_return_beside_a_global_read_stays_an_integer() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatret_beside_gcc_O2").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let printed = printed_functions(&stdout, &["sub_1180 "]);
     for want in ["unsigned int sub_1180(int a0)", "return 0;", "return dat_4017;"] {
         assert!(printed.contains(want), "missing `{want}`:\n{printed}");
@@ -3725,7 +3725,7 @@ fn a_return_refused_after_a_restart_leaves_the_function_void() {
     let sp = specs();
     let decompile = |bin: &str| {
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", bin, "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         for chunk in stdout.split("// Function: ") {
             let mut lines = chunk.lines().skip(1);
             let Some(sig) = lines.next() else { continue };
@@ -3765,7 +3765,7 @@ fn a_pointer_handed_on_past_an_int_call_round_trips() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatret_handon_gcc_O1").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--option", "structdefs", "on", "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let printed = printed_functions(&stdout, &["type_name ", "key_type_plain ", "key_ssh_name "]);
     let src = format!(
         "#include <stdio.h>\n#include <string.h>\n#include <sys/mman.h>\n{BITS}unsigned long keytypes[8];\n{printed}\n\
@@ -3792,7 +3792,7 @@ fn a_return_merged_in_pieces_stays_void() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatret_twopath_gcc_O1").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let printed = printed_functions(&stdout, &["wrap "]);
     assert!(printed.contains("void wrap("), "`wrap` returns a value assembled from separately merged pieces:\n{printed}");
     for bad in ["dat_4 =", "CONCAT44(dat_4,"] {
@@ -3811,7 +3811,7 @@ fn a_known_float_import_preserves_its_floating_return() {
     for name in ["floatret_parse_gcc_O1.o", "floatret_parse_armel.o"] {
         let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name).to_str().unwrap().to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all failed on {name}: {stderr}");
+        assert!(ok, "unlace decompile-all failed on {name}: {stderr}");
         let printed = printed_functions(&stdout, &["parse ", "parse2 ", "parsef "]);
         let wants: &[&str] = if name == "floatret_parse_gcc_O1.o" {
             &["double parse(char *", "double parse2(char *", "float parsef(char *", "return strtod(", "return strtof("]
@@ -3839,7 +3839,7 @@ fn soft_float_imports_keep_their_core_register_values() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatret_softfp_armv7").to_str().unwrap().to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in ["pow(a2,a3,a0,a1);", "= strtod(a0,0);", "= strtof(a0,0);", "= ceil("] {
         assert!(stdout.contains(want), "missing `{want}`:\n{stdout}");
     }
@@ -3864,7 +3864,7 @@ fn arm_images_get_no_double_libc_rows() {
     for name in ["floatret_armrows_soft", "floatret_armrows_hard"] {
         let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name).to_str().unwrap().to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--option", "armfloatreturn", "off", "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all failed on {name}: {stderr}");
+        assert!(ok, "unlace decompile-all failed on {name}: {stderr}");
         for bad in ["double", "SUB84("] {
             assert!(!stdout.contains(bad), "{name}: `{bad}` from a libc row ARM does not return whole:\n{stdout}");
         }
@@ -3875,7 +3875,7 @@ fn arm_images_get_no_double_libc_rows() {
             );
         }
         let (preset, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all failed on {name}: {stderr}");
+        assert!(ok, "unlace decompile-all failed on {name}: {stderr}");
         if name.ends_with("soft") {
             assert_eq!(preset, stdout, "{name}: the hard-float contract changed a soft-float image");
         } else {
@@ -3887,7 +3887,7 @@ fn arm_images_get_no_double_libc_rows() {
     }
 }
 
-/// `kuna decompile armfloat_libm_hard mant` builds one function: the held-back
+/// `unlace decompile armfloat_libm_hard mant` builds one function: the held-back
 /// `frexp` and `sin` rows must be parked before that first `Funcdata` takes its
 /// callee-prototype snapshot, or `mant` reads `frexp()` with no arguments.
 #[test]
@@ -3896,11 +3896,11 @@ fn arm_library_float_rows_reach_a_single_decompile() {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/armfloat_libm_hard").to_str().unwrap().to_string();
     for (func, want) in [("mant", "double mant(double a0,int *a1)"), ("mant", "v1 = frexp(a0,a1);"), ("wave", "v1 = sin(a0);")] {
         let (stdout, stderr, ok) = run_kuna(&["decompile", &bin, func, "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile {func} failed: {stderr}");
+        assert!(ok, "unlace decompile {func} failed: {stderr}");
         assert!(stdout.contains(want), "{func}: missing `{want}`:\n{stdout}");
     }
     let (off, stderr, ok) = run_kuna(&["decompile", &bin, "mant", "--option", "armfloatreturn", "off", "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile mant failed: {stderr}");
+    assert!(ok, "unlace decompile mant failed: {stderr}");
     assert!(!off.contains("frexp(a0,a1)"), "armfloatreturn off still parked frexp:\n{off}");
 }
 
@@ -3926,7 +3926,7 @@ fn a_float_pointee_keeps_the_callers_integer_stores_round_trip() {
             args.extend_from_slice(&["--option", "protoorder", "off"]);
         }
         let (stdout, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         let names = ["u1 ", "u2 ", "s3 ", "cp1 ", "cp3 ", "cp5 "];
         let chunks: Vec<&str> =
             stdout.split("// Function: ").filter(|c| names.iter().any(|n| c.starts_with(n))).collect();
@@ -4028,7 +4028,7 @@ fn a_byte_pointee_vote_keeps_the_callers_wide_stores() {
             args.extend_from_slice(&["--option", "ptrfromuse", "off"]);
         }
         let (stdout, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         let fill = stdout.split("// Function: ").find(|c| c.starts_with("fill ")).expect("fill is printed");
         assert!(fill.contains("= 0x2020726174737575;"), "the eight-byte store was split (off={off}):\n{fill}");
         assert!(!fill.contains("unsigned char *a0"), "the byte-pointer vote was taken (off={off}):\n{fill}");
@@ -4049,11 +4049,11 @@ fn callee_first_runs_the_structsynth_convergence_sweep() {
     let sp = specs();
     let base = ["decompile-all", bin.as_str(), "--sleighpath", sp.as_str(), "--option", "structsynth", "param"];
     let (default, stderr, ok) = run_kuna(&base);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let mut off_args = base.to_vec();
     off_args.extend_from_slice(&["--option", "protoorder", "off"]);
     let (off, stderr, ok) = run_kuna(&off_args);
-    assert!(ok, "kuna decompile-all --option protoorder off failed: {stderr}");
+    assert!(ok, "unlace decompile-all --option protoorder off failed: {stderr}");
     let proto = |name: &str| {
         default.lines().find(|l| l.starts_with(&format!("long {name}("))).map(str::to_string).unwrap_or_default()
     };
@@ -4080,7 +4080,7 @@ fn a_byte_pointee_vote_keeps_word_fills_and_long_callers_whole() {
             args.extend_from_slice(&["--option", "ptrfromuse", "off"]);
         }
         let (stdout, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         for (name, store) in [("fill_words", "= 0x102030405060708;"), ("fill_many", "= 0x2020726174737575;")] {
             let body = stdout
                 .split("// Function: ")
@@ -4106,7 +4106,7 @@ fn a_byte_cursor_refuses_a_word_vote_unless_it_walks_whole_words() {
         .to_string();
     let sp = specs();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", bin.as_str(), "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let body = |name: &str| {
         stdout
             .split("// Function: ")
@@ -4137,12 +4137,12 @@ fn jobs_full_load_agrees_with_the_inventory_handoff() {
             .collect();
     let (want, stderr, ok) = run_kuna(&base);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     let mut args = base.clone();
     args.extend_from_slice(&["--jobs", "3", "--jobs-full-load"]);
     let (got, stderr, ok) = run_kuna(&args);
-    assert!(ok, "kuna decompile-all --jobs-full-load failed: {stderr}");
+    assert!(ok, "unlace decompile-all --jobs-full-load failed: {stderr}");
     assert_eq!(got, want, "--jobs-full-load moved the document");
 }
 
@@ -4163,7 +4163,7 @@ fn jobs_preserves_namespaced_cpp_callee_names() {
         ["decompile-all", bin.as_str(), "--max-fn-seconds", "0", "--sleighpath", sp.as_str()];
     let (want, stderr, ok) = run_kuna(&base);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     assert!(
         want.contains("foo::Bar::baz("),
@@ -4174,7 +4174,7 @@ fn jobs_preserves_namespaced_cpp_callee_names() {
         let mut args = base.to_vec();
         args.extend_from_slice(&["--jobs", "6", "--jobs-chunk", chunk]);
         let (got, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all --jobs 6 --jobs-chunk {chunk} failed: {stderr}");
+        assert!(ok, "unlace decompile-all --jobs 6 --jobs-chunk {chunk} failed: {stderr}");
         assert_eq!(got, want, "--jobs-chunk {chunk} moved a namespaced callee name");
     }
 }
@@ -4194,7 +4194,7 @@ fn jobs_auto_and_the_plain_c_surface_match_serial() {
         .collect();
     let (want, stderr, ok) = run_kuna(&base);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     assert!(want.matches("// Function:").count() > 1, "the fixture must hold several functions");
 
@@ -4202,7 +4202,7 @@ fn jobs_auto_and_the_plain_c_surface_match_serial() {
         let mut args = base.to_vec();
         args.extend_from_slice(&extra);
         let (got, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all {extra:?} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {extra:?} failed: {stderr}");
         // Agreeing with the serial document is also what a silent fall back to
         // the serial path would do, so the pool has to be seen coming up.
         assert!(stderr.contains("worker process(es)"), "{extra:?} ran no pool:\n{stderr}");
@@ -4299,7 +4299,7 @@ fn jobs_names_synthesized_structs_as_the_serial_run_does() {
             }
             let (want, stderr, ok) = run_kuna(&base);
             if !ok {
-                panic!("kuna decompile-all {fixture} failed: {stderr}");
+                panic!("unlace decompile-all {fixture} failed: {stderr}");
             }
             assert!(want.contains(pinned), "{fixture} stopped synthesizing {pinned:?}");
             assert!(want.contains("struct_0"), "{fixture} stopped synthesizing");
@@ -4385,7 +4385,7 @@ fn jobs_falls_back_when_a_worker_cannot_install_the_replayed_structures() {
         "--option", "protoorder", "off"];
     let (want, stderr, ok) = run_kuna(&base);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     assert!(want.contains("struct_4 *"), "the fixture stopped synthesizing");
     let (got, stderr, ok) = run_kuna_env(
@@ -4417,7 +4417,7 @@ fn jobs_falls_back_when_a_structure_holds_a_type_other_workers_lack() {
         "--option", "protoorder", "off"];
     let (want, stderr, ok) = run_kuna(&base);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     assert!(want.contains("void store_a(struct_0 *a0"), "the fixture stopped synthesizing:\n{want}");
     assert!(!want.contains("error"), "{want}");
@@ -4455,7 +4455,7 @@ fn jobs_structsynth_off_is_the_serial_structsynth_off_document() {
     ];
     let (want, stderr, ok) = run_kuna(&off);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     assert!(!want.contains("struct_0"), "structsynth off still synthesized");
     let (got, stderr, ok) = run_kuna(&[&off[..], &["--jobs", "2", "--jobs-chunk", "1"]].concat());
@@ -4511,7 +4511,7 @@ fn jobs_refuses_what_a_pool_cannot_carry() {
 #[test]
 fn jobs_leaves_no_scratch_directory_behind() {
     let bin = fauxware();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
@@ -4557,7 +4557,7 @@ fn jobs_preserves_live_scratch_owners_and_reaps_released_locks() {
     owner.try_lock().unwrap();
     let run = || {
         process::required_output(
-            Command::new(env!("CARGO_BIN_EXE_kuna"))
+            Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .env("TMPDIR", base.path())
                 .env("TMP", base.path())
                 .env("TEMP", base.path())
@@ -4615,7 +4615,7 @@ fn killing_the_parent_takes_the_workers_and_the_scratch_dir_with_it() {
     }
 
     let bin = hang_repro();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
@@ -4708,7 +4708,7 @@ fn fauxware_serial_json() -> String {
         .collect();
     let (want, stderr, ok) = run_kuna(&args);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     want
 }
@@ -5115,7 +5115,7 @@ fn jobs_a_worker_that_dies_in_its_load_loses_nothing() {
 
 // --- `--jobs N`: the decode lanes --------------------------------------------
 
-/// Run `kuna` with extra environment, for the decode-lane knobs.
+/// Run `unlace` with extra environment, for the decode-lane knobs.
 fn run_kuna_env(args: &[&str], env: &[(&str, &str)]) -> (String, String, bool) {
     let out = kuna_command(env).args(args).output().expect("failed to spawn the kuna binary");
     (
@@ -5170,7 +5170,7 @@ fn jobs_decode_lanes_are_byte_identical_to_serial() {
     let lanes_on = [("KUNA_DECODE_MIN_BYTES", "0"), ("KUNA_DECODE_STATS", "1")];
     let (want, want_err, ok) = run_kuna(&["functions", &bin, "--json", "--sleighpath", &sp]);
     if !ok {
-        panic!("kuna functions failed: {want_err}");
+        panic!("unlace functions failed: {want_err}");
     }
     assert!(want.contains("\"name\""), "the serial run enumerated nothing:\n{want}");
     assert!(
@@ -5181,7 +5181,7 @@ fn jobs_decode_lanes_are_byte_identical_to_serial() {
     for jobs in ["1", "2", "3", "4", "8", "auto"] {
         let args = ["functions", &bin, "--json", "--sleighpath", &sp, "--jobs", jobs];
         let (got, stderr, ok) = run_kuna_env(&args, &lanes_on);
-        assert!(ok, "kuna functions --jobs {jobs} failed: {stderr}");
+        assert!(ok, "unlace functions --jobs {jobs} failed: {stderr}");
         assert_eq!(got, want, "--jobs {jobs} moved the inventory");
         assert_eq!(
             without_the_plan_line(&stderr),
@@ -5206,7 +5206,7 @@ fn jobs_decode_lanes_are_byte_identical_to_serial() {
     // produces the same document.
     let (got, stderr, ok) =
         run_kuna(&["functions", &bin, "--json", "--sleighpath", &sp, "--jobs", "8"]);
-    assert!(ok, "kuna functions --jobs 8 failed: {stderr}");
+    assert!(ok, "unlace functions --jobs 8 failed: {stderr}");
     assert_eq!(got, want, "the refused path moved the inventory");
     assert!(
         stderr.contains("[kuna --jobs] decode: serial (executable image too small)"),
@@ -5224,12 +5224,12 @@ fn jobs_decode_lanes_decline_on_a_context_committing_language() {
     let args = ["functions", &bin, "--json", "--sleighpath", &sp];
     let (want, stderr, ok) = run_kuna(&args);
     if !ok {
-        panic!("kuna functions failed: {stderr}");
+        panic!("unlace functions failed: {stderr}");
     }
     let mut with_jobs = args.to_vec();
     with_jobs.extend_from_slice(&["--jobs", "8"]);
     let (got, stderr, ok) = run_kuna_env(&with_jobs, &[("KUNA_DECODE_MIN_BYTES", "0")]);
-    assert!(ok, "kuna functions --jobs 8 failed on ARM: {stderr}");
+    assert!(ok, "unlace functions --jobs 8 failed on ARM: {stderr}");
     assert_eq!(got, want, "the ARM decline moved the inventory");
     assert!(
         stderr.contains("[kuna --jobs] decode: serial (language commits context)"),
@@ -5250,7 +5250,7 @@ fn a_dead_lane_falls_back_to_the_serial_walk() {
     let args = ["functions", &bin, "--json", "--sleighpath", &sp];
     let (want, stderr, ok) = run_kuna(&args);
     if !ok {
-        panic!("kuna functions failed: {stderr}");
+        panic!("unlace functions failed: {stderr}");
     }
     let mut with_jobs = args.to_vec();
     with_jobs.extend_from_slice(&["--jobs", "4"]);
@@ -5287,13 +5287,13 @@ fn jobs_decode_lanes_agree_with_serial_on_decompile_all() {
         .collect();
     let (want, stderr, ok) = run_kuna(&base);
     if !ok {
-        panic!("kuna decompile-all failed: {stderr}");
+        panic!("unlace decompile-all failed: {stderr}");
     }
     let mut args = base.clone();
     args.extend_from_slice(&["--jobs", "4"]);
     let (got, stderr, ok) =
         run_kuna_env(&args, &[("KUNA_DECODE_MIN_BYTES", "0"), ("KUNA_DECODE_STATS", "1")]);
-    assert!(ok, "kuna decompile-all --jobs 4 failed: {stderr}");
+    assert!(ok, "unlace decompile-all --jobs 4 failed: {stderr}");
     assert_eq!(got, want, "--jobs 4 moved the document");
     assert!(
         stderr.contains("[kuna --jobs] decode:") && stderr.contains(" lanes, "),
@@ -5314,7 +5314,7 @@ fn a_refused_lane_spawn_falls_back_to_the_serial_walk() {
     let args = ["functions", &bin, "--json", "--sleighpath", &sp];
     let (want, stderr, ok) = run_kuna(&args);
     if !ok {
-        panic!("kuna functions failed: {stderr}");
+        panic!("unlace functions failed: {stderr}");
     }
     let mut with_jobs = args.to_vec();
     with_jobs.extend_from_slice(&["--jobs", "4"]);
@@ -5340,7 +5340,7 @@ fn a_refused_lane_spawn_falls_back_to_the_serial_walk() {
     }
 }
 
-/// `--raw-image` and `--assert` are worker-POOL policy: `kuna functions` never
+/// `--raw-image` and `--assert` are worker-POOL policy: `unlace functions` never
 /// spawns one, so `--jobs` there is only the decode lanes and neither
 /// combination may be refused. A raw image's discovery (`rawdiscover`) is a
 /// serial sweep and descent with no lanes to hand work to, so `--jobs` is
@@ -5451,7 +5451,7 @@ fn a_sign_contested_synthesized_field_round_trips_through_the_printed_c() {
     let (stdout, stderr, ok) = run_kuna(&[
         "decompile-all", &bin, "--functions", "f", "--option", "structdefs", "on", "--sleighpath", &sp,
     ]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     assert!(stdout.contains("unsigned short field_0xc;"), "{stdout}");
     assert!(stdout.contains("sink(a0->field_0xc);"), "{stdout}");
 
@@ -5503,7 +5503,7 @@ fn a_float_and_integer_union_field_round_trips_through_the_printed_c() {
     let (stdout, stderr, ok) = run_kuna(&[
         "decompile-all", &bin, "--functions", "vread", "--option", "structdefs", "on", "--sleighpath", &sp,
     ]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     assert!(stdout.contains("char field_0x8[8];"), "{stdout}");
     assert!(stdout.contains("return *(double *)a0->field_0x8;"), "{stdout}");
 
@@ -5568,7 +5568,7 @@ fn a_zero_extended_narrow_load_round_trips_through_the_printed_c() {
         let mut args = vec!["decompile-all", bin.as_str(), "--functions", "f", "--sleighpath", sp.as_str()];
         args.extend_from_slice(extra);
         let (stdout, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         assert!(stdout.contains(call), "{stdout}");
 
         if process::optional_output(Command::new("cc").arg("--version")).is_none() {
@@ -5673,7 +5673,7 @@ int main(void) {
                 "--option", "castimplied", opt, "--option", "castwiden", "off",
             ];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all failed: {stderr}");
+            assert!(ok, "unlace decompile-all failed: {stderr}");
             for want in kept {
                 assert!(stdout.contains(want), "{fixture} option {opt} lost `{want}`:\n{stdout}");
             }
@@ -5829,14 +5829,14 @@ int main(void) {
                 "--option", "structdefs", "on", "--option", "fieldtype", opt,
             ];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all failed: {stderr}");
+            assert!(ok, "unlace decompile-all failed: {stderr}");
             if fixture == "fieldtype_gcc_O0_x86_64" {
                 let args = [
                     "decompile-all", bin.as_str(), "--functions", "buf_shift,ent_release,ops_run,range_walk",
                     "--sleighpath", sp.as_str(), "--option", "structdefs", "on", "--option", "fieldtype", opt,
                 ];
                 let (all, stderr, ok) = run_kuna(&args);
-                assert!(ok, "kuna decompile-all failed: {stderr}");
+                assert!(ok, "unlace decompile-all failed: {stderr}");
                 for (off, on) in changed {
                     let want = if opt == "on" { on } else { off };
                     assert!(all.contains(want), "{fixture} option {opt} does not print `{want}`:\n{all}");
@@ -6014,7 +6014,7 @@ int main(void) {
                 "--option", "castternary", opt, "--option", "castwiden", "off", "--option", "elemptr", elem,
             ];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all failed: {stderr}");
+            assert!(ok, "unlace decompile-all failed: {stderr}");
             let changed: Vec<(&str, &str)> =
                 both.iter().chain(if gcc { gcc_only.iter() } else { [].iter() }).copied().collect();
             if elem == "off" {
@@ -6269,7 +6269,7 @@ int main(void) {
                 "--option", "castwiden", opt, "--option", "structdefs", "on",
             ];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all failed: {stderr}");
+            assert!(ok, "unlace decompile-all failed: {stderr}");
             for &(func, off, on, literal) in pins {
                 let want = [off, on, literal][arm];
                 let text = castsign_function(&stdout, func);
@@ -6587,7 +6587,7 @@ int main(void) {
                 "--option", "castsign", opt, "--option", "castwiden", "off",
             ];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all failed: {stderr}");
+            assert!(ok, "unlace decompile-all failed: {stderr}");
             let semantic = without_variable_sources(&stdout);
             for (off, on) in lines {
                 let want = if opt == "on" { on } else { off };
@@ -6651,7 +6651,7 @@ int main(void) {
                 "--language", "rust", "--option", "castsign", opt,
             ];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all --language rust failed: {stderr}");
+            assert!(ok, "unlace decompile-all --language rust failed: {stderr}");
             stdout
         })
         .collect();
@@ -6798,7 +6798,7 @@ int main(void) {
                 "--option", "castobject", opt,
             ];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all failed: {stderr}");
+            assert!(ok, "unlace decompile-all failed: {stderr}");
             let semantic = without_variable_sources(&stdout);
             for (off, on) in lines {
                 let line = if opt == "on" { on } else { off };
@@ -6880,7 +6880,7 @@ fn castsign_leaves_a_locked_declaration_alone() {
         let bin = fixture(name);
         let (stdout, stderr, ok) =
             run_kuna(&["decompile", &bin, func, "--sleighpath", &sp, "--option", "castsign", "on"]);
-        assert!(ok, "kuna decompile failed: {stderr}");
+        assert!(ok, "unlace decompile failed: {stderr}");
         let semantic = without_variable_sources(&stdout);
         for want in unlocked {
             assert!(semantic.contains(&without_variable_sources(want)), "{name} {func} unlocked does not print `{want}`:\n{stdout}");
@@ -6891,7 +6891,7 @@ fn castsign_leaves_a_locked_declaration_alone() {
                 "--option", "castsign", opt,
             ];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile --assert failed: {stderr}");
+            assert!(ok, "unlace decompile --assert failed: {stderr}");
             let semantic = without_variable_sources(&stdout);
             for want in locked {
                 assert!(
@@ -6909,7 +6909,7 @@ fn castsign_leaves_a_locked_declaration_alone() {
             "--option", "castsign", opt,
         ];
         let (stdout, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         let semantic = without_variable_sources(&stdout);
         for want in locked {
             assert!(semantic.contains(&without_variable_sources(want)), "the DWARF local, option {opt}, does not print `{want}`:\n{stdout}");
@@ -6927,7 +6927,7 @@ fn castsign_leaves_a_locked_declaration_alone() {
             sp.as_str(), "--option", "castsign", "on",
         ];
         let (stdout, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all (debug info stripped) failed: {stderr}");
+        assert!(ok, "unlace decompile-all (debug info stripped) failed: {stderr}");
         let semantic = without_variable_sources(&stdout);
         for want in signed_stack {
             assert!(semantic.contains(&without_variable_sources(want)), "stripped, the slot does not print `{want}`:\n{stdout}");
@@ -6983,7 +6983,7 @@ fn a_pointer_plus_whole_elements_round_trips_through_the_printed_c() {
                 "--option", "structdefs", "on", "--option", "castarith", arm,
             ];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all failed: {stderr}");
+            assert!(ok, "unlace decompile-all failed: {stderr}");
             let mut body = String::new();
             let mut seen = 0;
             for part in stdout.split("// Function: ").skip(1) {
@@ -7111,7 +7111,7 @@ fn a_variable_index_and_a_byte_pointer_difference_round_trip_through_the_printed
                 "castwiden", "off", "--option", "elemptr", elem,
             ];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all failed: {stderr}");
+            assert!(ok, "unlace decompile-all failed: {stderr}");
             let mut body = String::new();
             let mut seen = 0;
             for part in stdout.split("// Function: ").skip(1) {
@@ -7225,7 +7225,7 @@ fn an_enum_element_keeps_the_integer_form_and_round_trips() {
             "--option", "structdefs", "on", "--option", "castarith", arm,
         ];
         let (stdout, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         stdout
     };
     let cxx = fx.join("castarith_enumclass_gpp_O2_x86_64");
@@ -7397,7 +7397,7 @@ fn check_globalref_round_trip(run_native: bool) {
             "globalref",
             arm,
         ]);
-        assert!(ok, "kuna decompile-project failed: {stderr}");
+        assert!(ok, "unlace decompile-project failed: {stderr}");
         let header = std::fs::read_to_string(out.join("globalref_x86_64.h")).unwrap();
         let code = std::fs::read_to_string(out.join("globalref_x86_64.c")).unwrap();
         for w in want {
@@ -7546,7 +7546,7 @@ fn a_call_in_a_short_circuit_operand_round_trips_through_the_printed_c() {
             .to_string();
         let (stdout, stderr, ok) =
             run_kuna(&["decompile-all", bin.as_str(), "--functions", "w1f,w4f", "--sleighpath", sp.as_str()]);
-        assert!(ok, "kuna decompile-all failed on {name}: {stderr}");
+        assert!(ok, "unlace decompile-all failed on {name}: {stderr}");
         for w in want {
             assert!(stdout.contains(w), "{name}: missing `{w}`:\n{stdout}");
         }
@@ -7609,7 +7609,7 @@ fn a_load_is_not_printed_after_a_store_into_its_bytes() {
         "--sleighpath",
         sp.as_str(),
     ]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let body = |name: &str| -> String {
         let at = stdout.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("no {name}:\n{stdout}"));
         let rest = &stdout[at + 1..];
@@ -7704,7 +7704,7 @@ fn a_split_load_is_not_moved_past_a_store_or_a_call() {
         "--sleighpath",
         sp.as_str(),
     ]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let body = |name: &str| -> String {
         let at = stdout.find(&format!("// Function: {name} @")).unwrap_or_else(|| panic!("no {name}:\n{stdout}"));
         let rest = &stdout[at + 1..];
@@ -7836,7 +7836,7 @@ fn a_calls_own_return_address_push_is_part_of_the_call() {
         // through stack arithmetic, which is what the strings below match.
         let args = ["decompile-all", bin.to_str().unwrap(), "--sleighpath", sp.as_str(), "--option", "alloca", "off"];
         let (stdout, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all failed: {stderr}");
+        assert!(ok, "unlace decompile-all failed: {stderr}");
         let mut body = String::new();
         for part in stdout.split("// Function: ").skip(1) {
             if tested.contains(&part.split(' ').next().unwrap_or("")) {
@@ -8095,7 +8095,7 @@ int main(void) {
         for opt in ["off", "on"] {
             let args = ["decompile-all", bin.as_str(), "--sleighpath", sp.as_str(), "--option", "callrettype", opt];
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all failed: {stderr}");
+            assert!(ok, "unlace decompile-all failed: {stderr}");
             for (off, on) in lines {
                 let want = if opt == "on" { on } else { off };
                 assert!(stdout.contains(want), "{fixture} option {opt} does not print `{want}`:\n{stdout}");
@@ -8282,7 +8282,7 @@ fn check_elemptr_round_trip(run_native: bool) {
                 "elemptr",
                 arm,
             ]);
-            assert!(ok, "kuna decompile-project failed: {stderr}");
+            assert!(ok, "unlace decompile-project failed: {stderr}");
             let header = std::fs::read_to_string(out.join(format!("{stem}.h"))).unwrap();
             let code = std::fs::read_to_string(out.join(format!("{stem}.c"))).unwrap();
             for w in if arm == "on" { on } else { off } {
@@ -8505,7 +8505,7 @@ fn check_narrowload_round_trip(
                 "elemptr",
                 elem,
             ]);
-            assert!(ok, "kuna decompile-project failed: {stderr}");
+            assert!(ok, "unlace decompile-project failed: {stderr}");
             let code = std::fs::read_to_string(out.join(format!("{stem}.c"))).unwrap();
             let mut bodies = String::new();
             for w in &tested {
@@ -8584,11 +8584,11 @@ fn element_pointers_under_jobs_match_the_serial_run() {
     let off = ["--sleighpath", sp.as_str(), "--option", "protoorder", "off"];
     let serial: Vec<&str> = ["decompile-all", bin.as_str()].iter().chain(off.iter()).copied().collect();
     let (want, stderr, ok) = run_kuna(&serial);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let mut pooled = serial.clone();
     pooled.extend_from_slice(&["--jobs", "4", "--jobs-chunk", "1"]);
     let (got, stderr, ok) = run_kuna(&pooled);
-    assert!(ok, "kuna decompile-all --jobs 4 failed: {stderr}");
+    assert!(ok, "unlace decompile-all --jobs 4 failed: {stderr}");
     assert_eq!(got, want, "--jobs 4 moved the elemptr fixture's document");
     assert!(got.contains("dat_300053e8 += 4;"), "the byte step on gp:\n{got}");
     assert!(!got.contains("dat_300053e8["), "gp is indexed as an array without a batch:\n{got}");
@@ -8605,7 +8605,7 @@ fn element_pointers_under_jobs_match_the_serial_run() {
         args.extend_from_slice(&off);
         args.extend_from_slice(&["--jobs", jobs, "--jobs-chunk", "1"]);
         let (_, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-project --jobs {jobs} failed: {stderr}");
+        assert!(ok, "unlace decompile-project --jobs {jobs} failed: {stderr}");
         let read = |ext: &str| std::fs::read_to_string(out.join(format!("elemptr_gcc_O0_x86_64.{ext}"))).unwrap();
         exports.push((read("c"), read("h")));
     }
@@ -8759,7 +8759,7 @@ int main(void) {
             .to_string();
         let (stdout, stderr, ok) =
             run_kuna(&["decompile-all", bin.as_str(), "--functions", FUNCS, "--sleighpath", sp.as_str()]);
-        assert!(ok, "kuna decompile-all failed on {fixture}: {stderr}");
+        assert!(ok, "unlace decompile-all failed on {fixture}: {stderr}");
         for (name, arity) in ARITY {
             let decl = stdout
                 .lines()
@@ -8870,7 +8870,7 @@ fn a_value_read_by_a_sign_sensitive_op_is_not_re_read_from_a_global() {
         let funcs = format!("{FUNCS}{extra}");
         let (stdout, stderr, ok) =
             run_kuna(&["decompile-all", bin.as_str(), "--functions", funcs.as_str(), "--sleighpath", sp.as_str()]);
-        assert!(ok, "kuna decompile-all failed on {fixture}: {stderr}");
+        assert!(ok, "unlace decompile-all failed on {fixture}: {stderr}");
         assert!(
             !stdout.contains("v1 = sink >> 4")
                 && !stdout.contains("v1 = usink >> 4")
@@ -8946,7 +8946,7 @@ fn a_big_endian_register_pair_round_trips_through_the_printed_c() {
             .unwrap()
             .to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", "on"]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, funcs);
         let decls: String = printed
             .split("// Function: ")
@@ -9059,7 +9059,7 @@ fn an_argument_carried_across_a_call_into_the_low_word_is_returned() {
             .unwrap()
             .to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", "on"]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &["carry_b", "carry_if", "carry_low"]);
         let sigs: Vec<&str> = printed.split("// Function: ").skip(1).filter_map(|part| part.lines().nth(1)).collect();
         assert_eq!(sigs.len(), 3, "{fixture}: all three functions print:\n{stdout}");
@@ -9126,7 +9126,7 @@ fn an_avr_register_pair_joins_high_byte_first_as_a_value() {
         "bejoin",
         "on",
     ]);
-    assert!(ok, "kuna decompile-all bejoin_avr.bin failed: {stderr}");
+    assert!(ok, "unlace decompile-all bejoin_avr.bin failed: {stderr}");
     let printed = callrettype_functions(&stdout, &["sub_0", "sub_4"]);
     let sigs: Vec<&str> = printed.split("// Function: ").skip(1).filter_map(|part| part.lines().nth(1)).collect();
     assert_eq!(sigs.len(), 2, "both functions print:\n{stdout}");
@@ -9209,7 +9209,7 @@ fn a_big_endian_function_returning_one_register_keeps_it() {
             .unwrap()
             .to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", "on"]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, funcs);
         let sigs: Vec<&str> = printed.split("// Function: ").skip(1).filter_map(|part| part.lines().nth(1)).collect();
         assert_eq!(sigs.len(), funcs.len(), "{fixture}: every function prints:\n{stdout}");
@@ -9287,7 +9287,7 @@ fn a_low_word_a_sparc_function_returns_on_purpose_is_part_of_the_value() {
             .unwrap()
             .to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", "on"]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &names);
         let sigs: Vec<&str> = printed
             .split("// Function: ")
@@ -9344,7 +9344,7 @@ fn a_64_bit_comparison_keeps_its_int_result_in_the_first_register() {
             .unwrap()
             .to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", "on"]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &FUNCS);
         let sigs: Vec<&str> = printed.split("// Function: ").skip(1).filter_map(|part| part.lines().nth(1)).collect();
         assert_eq!(sigs.len(), FUNCS.len(), "{fixture}: every function prints:\n{stdout}");
@@ -9419,7 +9419,7 @@ fn bejoin_reads_an_ints_stale_low_half_as_the_long_long_it_matches() {
                 args.extend(["--option", "bejoin", mode]);
             }
             let (stdout, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all {fixture} (bejoin {mode}) failed: {stderr}");
+            assert!(ok, "unlace decompile-all {fixture} (bejoin {mode}) failed: {stderr}");
             let printed = callrettype_functions(&stdout, funcs);
             let sigs: Vec<&str> = printed.split("// Function: ").skip(1).filter_map(|part| part.lines().nth(1)).collect();
             assert_eq!(sigs.len(), funcs.len(), "{fixture}: every function prints:\n{stdout}");
@@ -9508,7 +9508,7 @@ fn a_branch_chosen_flag_or_an_int_truncation_keeps_its_int_in_the_first_register
     ] {
         let bin = fixtures.join(fixture).to_str().unwrap().to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", "on"]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, funcs);
         let sigs: Vec<&str> = printed.split("// Function: ").skip(1).filter_map(|part| part.lines().nth(1)).collect();
         assert_eq!(sigs.len(), funcs.len(), "{fixture}: every function prints:\n{stdout}");
@@ -9605,7 +9605,7 @@ fn a_range_check_returning_any_literal_or_flag_keeps_its_int_in_the_first_regist
         let funcs: Vec<&str> = names.iter().copied().filter(|f| !skip.contains(f)).collect();
         let bin = fixtures.join(fixture).to_str().unwrap().to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", "on"]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &funcs);
         let sigs: Vec<&str> = printed
             .split("// Function: ")
@@ -9670,7 +9670,7 @@ fn a_division_by_a_constant_keeps_its_quotient_in_the_first_register() {
     for fixture in ["bejoin_div_arm32_be_O0.o", "bejoin_div_arm32_be_v6_Os.o", "bejoin_div_arm32_be_v7_O2.o"] {
         let bin = fixtures.join(fixture).to_str().unwrap().to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", "on"]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &ALL);
         let sigs: Vec<&str> = printed.split("// Function: ").skip(1).filter_map(|part| part.lines().nth(1)).collect();
         assert_eq!(sigs.len(), ALL.len(), "{fixture}: every function prints:\n{stdout}");
@@ -9743,7 +9743,7 @@ fn a_shift_that_carries_into_the_first_register_keeps_the_int() {
     for fixture in ["bejoin_shr_arm32_be_O0.o", "bejoin_shr_arm32_be_v6_Os.o", "bejoin_shr_arm32_be_v7_O2.o"] {
         let bin = fixtures.join(fixture).to_str().unwrap().to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", "on"]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &ALL);
         let sigs: Vec<&str> = printed.split("// Function: ").skip(1).filter_map(|part| part.lines().nth(1)).collect();
         assert_eq!(sigs.len(), ALL.len(), "{fixture}: every function prints:\n{stdout}");
@@ -9818,7 +9818,7 @@ fn an_unrecovered_switch_keeps_a_pointers_register() {
         let mut args = vec!["decompile-all", bin.as_str(), "--sleighpath", sp.as_str()];
         args.extend(["--option", "bejoin", if on { "on" } else { "off" }]);
         let (stdout, stderr, ok) = run_kuna(&args);
-        assert!(ok, "kuna decompile-all bejoin_jump_mips32_O2.o (bejoin {on}) failed: {stderr}");
+        assert!(ok, "unlace decompile-all bejoin_jump_mips32_O2.o (bejoin {on}) failed: {stderr}");
         listings.push(stdout);
     }
     let (on, off) = (&listings[0], &listings[1]);
@@ -9870,15 +9870,15 @@ fn bejoin_evidence_reads_a_callee_pair_alike_in_every_run() {
     for (fixture, callers) in cases {
         let bin = fixtures.join(fixture).to_str().unwrap().to_string();
         let (full, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let (jobs, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--jobs", "2"]);
-        assert!(ok, "kuna decompile-all {fixture} --jobs 2 failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} --jobs 2 failed: {stderr}");
         for &caller in callers {
             let callee = if caller == "D_mix" { "widen" } else { "self" };
             let (narrowed, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--functions", caller]);
-            assert!(ok, "kuna decompile-all {fixture} --functions {caller} failed: {stderr}");
+            assert!(ok, "unlace decompile-all {fixture} --functions {caller} failed: {stderr}");
             let (single, stderr, ok) = run_kuna(&["decompile", &bin, caller, "--sleighpath", &sp]);
-            assert!(ok, "kuna decompile {fixture} {caller} failed: {stderr}");
+            assert!(ok, "unlace decompile {fixture} {caller} failed: {stderr}");
             let runs = [
                 ("all", callrettype_functions(&full, &[caller])),
                 ("functions", callrettype_functions(&narrowed, &[caller])),
@@ -9926,7 +9926,7 @@ fn bejoin_evidence_reads_a_callee_pair_alike_in_every_run() {
 /// `umul_hi`, and gcc keeps `c_keep`'s `b` in `r1` across `bl keep`, which
 /// never writes it. The verdict comes from the image's own call sites and
 /// symbols, so every function prints the same in a whole `decompile-all`, one
-/// narrowed by `--functions`, `--jobs 2` and a single `kuna decompile` (with
+/// narrowed by `--functions`, `--jobs 2` and a single `unlace decompile` (with
 /// `protoorder` off: its callee-first prototypes reach only the whole serial
 /// run, on main too), and every caller reads its callee's pair in one order in
 /// the default runs. `add64`, `umul64` and `pass` are compiled beside the
@@ -9944,14 +9944,14 @@ fn bejoin_callers_read_a_pair_alike_in_every_run() {
             let mut args = vec!["decompile-all", bin.as_str(), "--sleighpath", sp.as_str()];
             args.extend_from_slice(extra);
             let (out, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all {fixture} {extra:?} failed: {stderr}");
+            assert!(ok, "unlace decompile-all {fixture} {extra:?} failed: {stderr}");
             out
         };
         let single = |f: &str, extra: &[&str]| {
             let mut args = vec!["decompile", bin.as_str(), f, "--sleighpath", sp.as_str()];
             args.extend_from_slice(extra);
             let (out, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile {fixture} {f} failed: {stderr}");
+            assert!(ok, "unlace decompile {fixture} {f} failed: {stderr}");
             out.trim().to_string()
         };
         let body = |listing: &str, f: &str| {
@@ -10031,7 +10031,7 @@ fn bejoin_callers_read_a_pair_alike_in_every_run() {
 /// went with them; the sizes the symbols state keep the walk out of both.
 /// `c_hi` reads only the first register of each, so every function prints as
 /// with `bejoin evidence`, in a whole `decompile-all` and a single
-/// `kuna decompile`.
+/// `unlace decompile`.
 #[test]
 fn bejoin_callers_ignore_code_a_call_does_not_return_to() {
     const HIDDEN: &[&str] = &["hi_p", "hi_t", "hi_c", "u_ptr", "u_tl", "u_cold", "c_hi"];
@@ -10055,7 +10055,7 @@ fn bejoin_callers_ignore_code_a_call_does_not_return_to() {
             let mut args = vec!["decompile-all", bin.as_str(), "--sleighpath", sp.as_str()];
             args.extend_from_slice(extra);
             let (out, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile-all {fixture} {extra:?} failed: {stderr}");
+            assert!(ok, "unlace decompile-all {fixture} {extra:?} failed: {stderr}");
             out
         };
         let body = |listing: &str, f: &str| {
@@ -10066,7 +10066,7 @@ fn bejoin_callers_ignore_code_a_call_does_not_return_to() {
             let mut args = vec!["decompile", bin.as_str(), f, "--sleighpath", sp.as_str()];
             args.extend_from_slice(extra);
             let (out, stderr, ok) = run_kuna(&args);
-            assert!(ok, "kuna decompile {fixture} {f} failed: {stderr}");
+            assert!(ok, "unlace decompile {fixture} {f} failed: {stderr}");
             out.trim().to_string()
         };
         let evidence = ["--option", "bejoin", "evidence"];
@@ -10104,7 +10104,7 @@ fn a_value_only_a_no_return_path_reads_proves_nothing() {
     let run = |mode: &str| {
         let (stdout, stderr, ok) =
             run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--functions", "chk,chk2,zk", "--option", "bejoin", mode]);
-        assert!(ok, "kuna decompile-all bejoin_noreturn_mips32_Os ({mode}) failed: {stderr}");
+        assert!(ok, "unlace decompile-all bejoin_noreturn_mips32_Os ({mode}) failed: {stderr}");
         stdout
     };
     let (evidence, off) = (run("evidence"), run("off"));
@@ -10161,7 +10161,7 @@ fn an_int_kept_in_a_stack_slot_proves_no_loaded_pair() {
         .to_string();
     let run = |mode: &str| {
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", mode]);
-        assert!(ok, "kuna decompile-all bejoin_reload_arm32_be_O0.o ({mode}) failed: {stderr}");
+        assert!(ok, "unlace decompile-all bejoin_reload_arm32_be_O0.o ({mode}) failed: {stderr}");
         stdout
     };
     let (evidence, off) = (run("evidence"), run("off"));
@@ -10238,7 +10238,7 @@ fn an_int_worked_out_from_the_high_half_of_a_temporary_keeps_it() {
     ] {
         let bin = fixtures_dir.join(fixture).to_str().unwrap().to_string();
         let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp, "--option", "bejoin", "on"]);
-        assert!(ok, "kuna decompile-all {fixture} failed: {stderr}");
+        assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let checked: Vec<(&str, &str)> = SHAPES.iter().copied().filter(|(f, _)| !skip.contains(f)).collect();
         let names: Vec<&str> = checked.iter().map(|&(f, _)| f).collect();
         let printed = callrettype_functions(&stdout, &names);
@@ -10306,7 +10306,7 @@ fn an_aarch64_double_return_leaves_out_the_zero_fill() {
     let fixture = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/zerofillreturn_a64.o");
     let fixture = fixture.to_str().unwrap();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", fixture, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in ["double scale(int a0,double *a1)", "double recip(int a0)", "double tail(int a0,double *a1)", "return 0.0;"] {
         assert!(stdout.contains(want), "missing `{want}`:\n{stdout}");
     }
@@ -10323,7 +10323,7 @@ fn an_aarch64_double_return_leaves_out_the_zero_fill() {
     }
     let fwd = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/zerofillfwd_a64.o");
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", fwd.to_str().unwrap(), "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     let fa = printed_functions(&stdout, &["fa "]);
     let mk = printed_functions(&stdout, &["mk "]);
     assert!(mk.contains("// d1:d0") && mk.contains("*(double *)&v1[8] = a0 * a0;"), "mk's reloaded pair is not joined:\n{mk}");
@@ -10344,7 +10344,7 @@ fn a_tail_call_wrapper_keeps_the_float_its_readers_read() {
     let fixture = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/voidret_complexpick_a64.o");
     let fixture = fixture.to_str().unwrap();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", fixture, "--sleighpath", sp.as_str()]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in ["double pick(double a0)", "return cpart(a0); // tail-call", "v1 = pick(a0);"] {
         assert!(stdout.contains(want), "missing `{want}`:\n{stdout}");
     }
@@ -10364,7 +10364,7 @@ fn a_float_result_held_as_bits_round_trips() {
     let fixture = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/floatbits_a64.o");
     let fixture = fixture.to_str().unwrap();
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", fixture, "--sleighpath", &sp]);
-    assert!(ok, "kuna decompile-all failed: {stderr}");
+    assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in ["double getd(int a0,double *a1)", "float getf(int a0,float *a1)"] {
         assert!(stdout.contains(want), "missing `{want}`:\n{stdout}");
     }

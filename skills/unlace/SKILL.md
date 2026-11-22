@@ -1,13 +1,13 @@
 ---
-name: kuna-decompiler
-description: Use the Kuna CLI to recover searchable C and assembly, trace program logic, and validate findings in CTF solving, vulnerability hunting, malware identification, and program repair. Covers using Kuna, not developing the decompiler.
+name: unlace-decompiler
+description: Use the unlace CLI to recover searchable C and assembly, trace program logic, and validate findings in CTF solving, vulnerability hunting, malware identification, and program repair. Covers using unlace, not developing the decompiler.
 ---
 
-# Kuna for reversing binaries
+# unlace for reversing binaries
 
-Kuna provides fast, flexible, source-like decompilation through a CLI on PATH, not an
+unlace provides fast, flexible, source-like decompilation through a CLI on PATH, not an
 MCP server. It needs no connection and saves no analysis state between invocations.
-In a checkout, the built CLI is `decompiler/target/release/kuna`.
+In a checkout, the built CLI is `decompiler/target/release/unlace`.
 
 Decompile once for the chosen scope, then reuse the output with `rg`, file reads, and
 byte offsets. These examples focus on CTF reversing.
@@ -17,7 +17,7 @@ byte offsets. These examples focus on CTF reversing.
 Default to exporting the entire binary to disk:
 
 ```bash
-kuna decompile-project ./challenge --stream --jobs auto -o ./challenge.kuna
+unlace decompile-project ./challenge --stream --jobs auto -o ./challenge.unlace
 ```
 
 After initial loading, `--stream` makes completed functions readable while the export
@@ -28,13 +28,13 @@ their callees when discovered, but parallel completion can interleave other func
 explicit count when resources are known, or `--jobs 1` for small workloads where
 worker startup outweighs the benefit. A sub-1 MB file is only a rough size guide.
 
-When scale is unknown, `kuna functions ./challenge --summary --json` reports counts,
+When scale is unknown, `unlace functions ./challenge --summary --json` reports counts,
 entry point, reachability, and code bytes. It still loads and analyzes the image, so
 skip this extra call if scope is clear. Its `summary.runtime` array names a PyInstaller
 or Nuitka bundle, a .NET assembly, a UPX stub, AutoIt, VB6 or twinBASIC with the tool to
 use instead; other subcommands print the same hint as a `note:` line on stderr.
 
-For a few dozen short functions, `kuna decompile-all ./challenge` is manageable to
+For a few dozen short functions, `unlace decompile-all ./challenge` is manageable to
 read directly; use a project when assembly or repeated navigation is needed.
 
 Select known targets before decompiling: project export accepts `--functions name1,name2`
@@ -44,8 +44,8 @@ for `functions` and `decompile-all`. Static reachability can miss runtime dispat
 Use `decompile` for a function needed immediately, a failed function, or an option comparison:
 
 ```bash
-kuna decompile ./challenge main
-kuna decompile ./challenge 0x401230 --addr --json
+unlace decompile ./challenge main
+unlace decompile ./challenge 0x401230 --addr --json
 ```
 
 Batch multiple functions instead of looping over `decompile`. Use `decompile-all --json`
@@ -77,10 +77,10 @@ large C or assembly regions.
 
 ## Use the embedded documentation
 
-`kuna docs` lists topics and sizes. Read or search only the relevant topic: `cli` for
+`unlace docs` lists topics and sizes. Read or search only the relevant topic: `cli` for
 syntax, supported combinations, exit codes, and JSON schemas; `modes` for presets and
-size thresholds; `options` when tuning as below. Use `kuna --help` or
-`kuna <subcommand> --help` for quick syntax checks. Avoid loading `kuna docs --all`
+size thresholds; `options` when tuning as below. Use `unlace --help` or
+`unlace <subcommand> --help` for quick syntax checks. Avoid loading `unlace docs --all`
 or the full option catalog into context for routine analysis.
 
 ## Explore options only when the task warrants it
@@ -90,13 +90,13 @@ solution, or the requested operating mode calls for exploration. Skip cosmetic
 issues; even a small error matters if it changes the checker's comparison.
 
 1. Identify the concrete discrepancy using assembly, bytes, or observed execution.
-2. Search `kuna docs options` by symptom, or `kuna catalog --json` for structured
-   discovery. Read `kuna docs phases` only if phase context is needed.
+2. Search `unlace docs options` by symptom, or `unlace catalog --json` for structured
+   discovery. Read `unlace docs phases` only if phase context is needed.
 3. Change one relevant option for the affected function, keeping other settings fixed.
    Compare against the original result and evidence; stop once the uncertainty is resolved.
 
 Supply known prototypes/types with `--assert`, or function entries with
-`--define-function`; consult `kuna docs cli` for syntax. Save reusable assertions in
+`--define-function`; consult `unlace docs cli` for syntax. Save reusable assertions in
 an `@file` and check acceptance. `--assert` requires decompilation without `--stream`
 and without a worker pool (`--jobs 1`).
 
@@ -106,15 +106,15 @@ Search the export for input handling, prompts, and success/failure paths. If nee
 query string owners and references:
 
 ```bash
-kuna strings ./challenge --filter '(?i)password|flag|correct|wrong' --json
-kuna crypto ./challenge --json          # AES/SHA/MD5/CRC/TEA/Base64 constants + the functions using them
-kuna blobs ./challenge --json           # embedded PNG/JPEG/GIF/BMP/ICO/zip/gzip/xz/zstd files, exact lengths (--extract DIR)
-kuna xrefs ./challenge --from main --json
+unlace strings ./challenge --filter '(?i)password|flag|correct|wrong' --json
+unlace crypto ./challenge --json          # AES/SHA/MD5/CRC/TEA/Base64 constants + the functions using them
+unlace blobs ./challenge --json           # embedded PNG/JPEG/GIF/BMP/ICO/zip/gzip/xz/zstd files, exact lengths (--extract DIR)
+unlace xrefs ./challenge --from main --json
 ```
 
 Treat generated C as an estimate. Verify answer-critical branches, widths, signedness,
-and indirect calls against assembly or observed execution. Use `kuna disassemble` for
-targeted instructions and `kuna read` for encoded data and lookup-table bytes.
+and indirect calls against assembly or observed execution. Use `unlace disassemble` for
+targeted instructions and `unlace read` for encoded data and lookup-table bytes.
 
 ## Recover from command failures
 
@@ -122,7 +122,7 @@ Read the actual error and apply a relevant suggested correction before retrying.
 
 | Error or input | Next step |
 |---|---|
-| Packed image (UPX or NEOLite) | Run `kuna unpack ./challenge -o ./challenge.unpacked`, then analyze the output. |
+| Packed image (UPX or NEOLite) | Run `unlace unpack ./challenge -o ./challenge.unpacked`, then analyze the output. |
 | Entry section not flagged executable | If the bytes are code, retry with `--define-function 0xADDR` using the reported address. Unpack packed images first. |
 | Known headerless image | Use `--raw-image` with the correct target, base, and entry, as below. Do not infer these from a damaged header alone. |
 | Archive (`.tgz`, `.zip`) | Extract it and analyze the executable inside. |
@@ -130,7 +130,7 @@ Read the actual error and apply a relevant suggested correction before retrying.
 For a DOS `.COM` loaded at offset `0x100`:
 
 ```bash
-kuna decompile-all ./challenge.com --raw-image \
+unlace decompile-all ./challenge.com --raw-image \
   --target 'x86:LE:16:Real Mode' --base 0x100 --entry 0x100 --jobs 1
 ```
 
@@ -145,7 +145,7 @@ object metadata.
 
 If corrections fail, record the command and error, then use another decompiler or
 dynamic analysis when available. Suggest an issue report after the original task;
-if fixing Kuna is in scope, consult the [repository](https://github.com/Noelo-Lab/kuna).
+if fixing unlace is in scope, consult the [repository](https://github.com/coleleavitt/unlace).
 
 ## Share files when delegating
 

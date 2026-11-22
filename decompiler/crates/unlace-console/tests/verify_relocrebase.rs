@@ -10,11 +10,11 @@
 //! so the two spaces mixed in one inventory:
 //!
 //! ```text
-//!   before:  kuna functions      ptx.o  →  95 entries (26 real, 27 phantoms at
+//!   before:  unlace functions      ptx.o  →  95 entries (26 real, 27 phantoms at
 //!                                          0x0/0x20/0x34/…, 42 externs)
-//!            kuna decompile-all  ptx.o  →  26 functions
-//!   after:   kuna functions      ptx.o  →  68 entries, none below RELOC_BASE
-//!            kuna decompile-all  ptx.o  →  26 functions   (the two agree)
+//!            unlace decompile-all  ptx.o  →  26 functions
+//!   after:   unlace functions      ptx.o  →  68 entries, none below RELOC_BASE
+//!            unlace decompile-all  ptx.o  →  26 functions   (the two agree)
 //! ```
 //!
 //! The phantoms were the `.eh_frame` FDE oracle reading `initial_location` fields

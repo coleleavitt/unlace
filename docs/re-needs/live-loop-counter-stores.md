@@ -114,11 +114,11 @@ _not yet refuted_
 - round 5 REFUTER: hypothesis **inconclusive**. REFUTED IN-TICK (captain, round 5). VERDICT: INCONCLUSIVE -- a refuter ran, the SYMPTOM IS CONFIRMED REAL AND SEVERE, and the single most plausible prior cause was RULED OUT by A/B. No hypothesis was on file to uphold, and I could not close the last step from the C text alone.
 
 THE SYMPTOM IS REAL AND IT IS AN INFINITE LOOP, NOT A COSMETIC RENAME. Reproduced verbatim:
-  kuna decompile ObfuscationFiesta.exe sub_140002530
+  unlace decompile ObfuscationFiesta.exe sub_140002530
   -> for (v55 = 0; v55 <= 4; v7 = v55 + 1) { v46 = (v46 ^ v55 * 0x17) + 0x11; }
 The induction variable v55 is never updated; the increment lands on v7. As written the loop does not terminate, so this is invalid C, not a naming nit.
 
-THE BINARY SAYS THE COUNTER IS A STACK SLOT AND THE STORE IS REALLY THERE. `kuna disassemble --addr 0x1400035f0 --count 10`:
+THE BINARY SAYS THE COUNTER IS A STACK SLOT AND THE STORE IS REALLY THERE. `unlace disassemble --addr 0x1400035f0 --count 10`:
   0x1400035f4  JMP 0x140003606                     <- test-first entry
   0x1400035f6  MOV EAX,dword ptr [RSP + 0x84]
   0x1400035fd  INC EAX

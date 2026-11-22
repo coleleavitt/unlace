@@ -1,4 +1,4 @@
-//! `kuna xrefs` on an Objective-C image: a message send whose receiver's class
+//! `unlace xrefs` on an Objective-C image: a message send whose receiver's class
 //! the decompiler resolves is an edge to the method (`objcresolve`), which the
 //! p-code walk alone reports as a call to the runtime entry point.
 
@@ -18,12 +18,12 @@ fn fixture(name: &str) -> String {
 }
 
 fn xrefs(args: &[&str]) -> String {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .arg("xrefs")
         .args(args)
         .output()
         .expect("failed to spawn the kuna binary");
-    assert!(out.status.success(), "kuna xrefs {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(out.status.success(), "unlace xrefs {args:?}: {}", String::from_utf8_lossy(&out.stderr));
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 

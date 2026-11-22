@@ -1,7 +1,7 @@
 # kuna hang repro — infinite loop on fully-stripped x86-64 ELF binaries
 
 **Status:** **FIXED** (convergence bug root-caused and fixed); **watchdog shipped**
-and kept as a defensive bound. Without a watchdog, `kuna decompile-all` hung
+and kept as a defensive bound. Without a watchdog, `unlace decompile-all` hung
 **indefinitely** (100% CPU, never returns) on certain fully-stripped x86-64 ELF
 binaries. Discovered 2026-07-02 while running kuna as a backend in the `decbench`
 decompiler benchmark. `decompile-all` carries a per-function watchdog
@@ -24,7 +24,7 @@ heritage (`Heritage::heritage` → `LocationMap::add`) and dead-code elimination
 (`ActionDeadCode::apply`) under `ActionRestartGroup::apply`. Single-function repro:
 
 ```bash
-timeout 90 decompiler/target/release/kuna decompile-all \
+timeout 90 decompiler/target/release/unlace decompile-all \
     tests/hang-repro/ssh-sk-helper --addr 0x1bd04 --json --max-fn-seconds 0
 # BEFORE the fix: exit 124 (hang) with the watchdog disabled; with the default
 # watchdog it returned in ~120s with the per-function budget error.
@@ -33,7 +33,7 @@ timeout 90 decompiler/target/release/kuna decompile-all \
 
 ## Symptom
 
-`kuna decompile-all <binary> --json` (pre-watchdog, or with `--max-fn-seconds 0`)
+`unlace decompile-all <binary> --json` (pre-watchdog, or with `--max-fn-seconds 0`)
 never terminates and never emits output. It pins one core at 100% CPU. In the
 benchmark, when the parent harness killed its worker after a 300s budget, the kuna
 process **orphaned and kept spinning** — we observed **9 orphaned kuna processes each
@@ -53,8 +53,8 @@ stripped: no `.symtab`, no DWARF; x86-64 PIE; from openssh-portable built at `-O
 | `ssh-pkcs11-helper` | 498312 | `b18d309908860eea…` |
 
 ```bash
-# from the kuna repo root, after `make` (binary at decompiler/target/release/kuna)
-timeout 120 decompiler/target/release/kuna decompile-all \
+# from the kuna repo root, after `make` (binary at decompiler/target/release/unlace)
+timeout 120 decompiler/target/release/unlace decompile-all \
     tests/hang-repro/ssh-sk-helper --json
 # BEFORE the fix (bug): timed out at 120s (exit 124), no JSON, 100% CPU throughout.
 # AFTER the fix: whole-binary JSON in seconds.
@@ -116,7 +116,7 @@ fixture for `--max-fn-memory`: `big` stops at the limit and `after` still
 decompiles.
 
 ```bash
-kuna decompile-all tests/hang-repro/escaped_locals --functions big --json --max-fn-seconds 1
+unlace decompile-all tests/hang-repro/escaped_locals --functions big --json --max-fn-seconds 1
 ```
 
 For adjustable public fixtures and memory-scaling measurements, see

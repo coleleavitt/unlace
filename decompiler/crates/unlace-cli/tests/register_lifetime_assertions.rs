@@ -33,7 +33,7 @@ fn run_fixture_options(
     let specs = std::env::var_os("SLEIGHHOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| root.join("specs"));
-    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args([
             "decompile",
@@ -221,7 +221,7 @@ fn console(script: &str, fixture: &str) -> String {
     let engine = std::env::var_os("KUNA_DECOMP_DBG")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
-            std::path::Path::new(env!("CARGO_BIN_EXE_kuna"))
+            std::path::Path::new(env!("CARGO_BIN_EXE_unlace"))
                 .parent()
                 .unwrap()
                 .join("decomp_dbg")

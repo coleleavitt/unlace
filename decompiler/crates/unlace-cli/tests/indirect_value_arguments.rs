@@ -68,7 +68,7 @@ fn aggregate_calls_and_function_pointers_compile_and_execute() {
         "0x1700-0x1734=stack_cursor",
         "0x1740-0x1770=collision_cursor",
     ];
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args([
         "decompile-all",
         image.to_str().unwrap(),

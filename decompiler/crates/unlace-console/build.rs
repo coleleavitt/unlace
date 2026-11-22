@@ -1,4 +1,4 @@
-//! The source fingerprints behind the `kuna` <-> engine-binary build handshake
+//! The source fingerprints behind the `unlace` <-> engine-binary build handshake
 //! (`src/kuna_buildstamp.rs`).
 //!
 //! The engine fingerprint covers `unlace-console` and its production workspace

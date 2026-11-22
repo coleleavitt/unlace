@@ -1,4 +1,4 @@
-upx_packed_pe_x86_64.exe -- the win64/pe (PE32+) fixture for `kuna unpack` /
+upx_packed_pe_x86_64.exe -- the win64/pe (PE32+) fixture for `unlace unpack` /
 `unlace_analysis::upx::pe`, and the witness of issue #1294.
 
 What it is
@@ -9,12 +9,12 @@ What it is
   One compressed block, 0x11d bytes in, 0x41ac out. No imports, no relocations
   (none are needed), an exception directory (.pdata).
 
-  Before the fix `kuna unpack` answered it with "corrupt UPX image: PackHeader
+  Before the fix `unlace unpack` answered it with "corrupt UPX image: PackHeader
   declares an overlay outside the file": the PE header parser rejected PE32+, and
   the tail-scan fallback then decoded the PE PackHeader as if it had the overlay
   field only non-PE targets carry.
 
-  `upx -d` (5.2.1 and 5.3.0) writes the same 3,072 bytes `kuna unpack` does. Both
+  `upx -d` (5.2.1 and 5.3.0) writes the same 3,072 bytes `unlace unpack` does. Both
   differ from the linker's original only in the .text padding past the section's
   virtual size (0x7b), which UPX never compresses and so writes back as zeros.
 

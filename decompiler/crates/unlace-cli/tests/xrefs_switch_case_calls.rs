@@ -1,5 +1,5 @@
 //! A function called only from a jump-table case body has its caller in
-//! `kuna xrefs`, at every optimization level gcc and Clang lower the switch
+//! `unlace xrefs`, at every optimization level gcc and Clang lower the switch
 //! through a table.
 
 #![cfg(all(target_arch = "x86_64", target_os = "linux"))]
@@ -28,7 +28,7 @@ void dispatch(int c, const char *s) {
 int main(int argc, char **argv) { dispatch(argv[0][0], argv[0]); return 0; }
 "#;
 
-/// The callers `kuna xrefs` lists for `callee`, by function name.
+/// The callers `unlace xrefs` lists for `callee`, by function name.
 fn callers(binary: &std::path::Path, callee: &str, extra: &[&str]) -> Vec<String> {
     let mut args = vec!["xrefs", binary.to_str().unwrap(), "--to", callee, "--json"];
     args.extend_from_slice(extra);

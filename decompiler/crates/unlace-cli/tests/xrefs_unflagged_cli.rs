@@ -1,4 +1,4 @@
-//! `kuna xrefs` over code linked into a section not marked as code (GH #1406).
+//! `unlace xrefs` over code linked into a section not marked as code (GH #1406).
 //! An Apple toolchain links a function placed in `__TEXT,__const` with no
 //! instruction attribute, although `__TEXT` is executable; `--from` it answered
 //! `count: 0` exactly as it answers a function with no references. An explicit

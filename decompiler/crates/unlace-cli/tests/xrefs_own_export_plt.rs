@@ -1,4 +1,4 @@
-//! `kuna xrefs --to <name>` on a shared library that calls its own export through
+//! `unlace xrefs --to <name>` on a shared library that calls its own export through
 //! `name@plt` (issue #1031): the name answers for the export, so the calls that
 //! reach it through the stub and its GOT slot are its callers.
 

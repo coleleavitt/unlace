@@ -7,7 +7,7 @@
 //! shape rather than its own defect — three functions that each `ldr` a word out
 //! of a pool inside `.text` and compute with it. It reproduces the filing witness
 //! exactly: a statically linked ARM crackme whose `main` ended `ldr r3,[0x8458]`
-//! with `0x8458 39050000 .word 0x00000539` in the same listing `kuna disassemble`
+//! with `0x8458 39050000 .word 0x00000539` in the same listing `unlace disassemble`
 //! prints, while the emitted C said `v3 = dat_8458;`.
 //!
 //! ## The two passes

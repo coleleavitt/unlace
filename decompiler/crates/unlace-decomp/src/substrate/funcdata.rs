@@ -292,10 +292,10 @@ pub struct Funcdata {
     /// (kuna `deadcascade`) Does dead-op removal in the running pool pass take
     /// the dead chain behind the removed op out with it?
     dead_cascade_now: bool,
-    /// (kuna decompile-all watchdog) What was left of the per-function budget
+    /// (unlace decompile-all watchdog) What was left of the per-function budget
     /// when the drive handed this function back; rendering it may use no more.
     render_budget: Option<std::time::Duration>,
-    /// (kuna decompile-all watchdog) How long following this function's flow
+    /// (unlace decompile-all watchdog) How long following this function's flow
     /// took outside a drive (the console's `load`); a drive that adopts it
     /// charges that to its budget.
     flow_spent: std::time::Duration,
@@ -2748,23 +2748,23 @@ impl Funcdata {
         log.1.extend(vns);
     }
 
-    /// (kuna decompile-all watchdog) What the drive left of the budget for rendering.
+    /// (unlace decompile-all watchdog) What the drive left of the budget for rendering.
     pub fn render_budget(&self) -> Option<std::time::Duration> {
         self.render_budget
     }
 
-    /// (kuna decompile-all watchdog) How long this function's flow follow took
+    /// (unlace decompile-all watchdog) How long this function's flow follow took
     /// before a drive adopted it.
     pub fn flow_spent(&self) -> std::time::Duration {
         self.flow_spent
     }
 
-    /// (kuna decompile-all watchdog) Record how long the flow follow took.
+    /// (unlace decompile-all watchdog) Record how long the flow follow took.
     pub fn set_flow_spent(&mut self, spent: std::time::Duration) {
         self.flow_spent = spent;
     }
 
-    /// (kuna decompile-all watchdog) Record what the drive left of the budget.
+    /// (unlace decompile-all watchdog) Record what the drive left of the budget.
     pub fn set_render_budget(&mut self, left: Option<std::time::Duration>) {
         self.render_budget = left;
     }

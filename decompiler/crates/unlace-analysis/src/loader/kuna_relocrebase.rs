@@ -10,7 +10,7 @@
 //! its own `object::File` and therefore computes **pre-link, section-relative**
 //! addresses. The two spaces then mix in one inventory:
 //!
-//! - `kuna functions ptx.o` reported 26 real functions at `0x400000+` beside 27
+//! - `unlace functions ptx.o` reported 26 real functions at `0x400000+` beside 27
 //!   phantoms at `0x0`, `0x20`, `0x34`, … — the `.eh_frame` FDE oracle's
 //!   *unrelocated* `initial_location` fields (a PC-relative field in a `.o` reads
 //!   back as its own section offset) plus one DWARF `DW_AT_low_pc` that reads 0

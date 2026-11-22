@@ -49,7 +49,7 @@ use crate::kuna_regiongraph::{
     KunaNodeId, KunaNodeKey, KunaNodePool, KunaNodeSet, KunaRegionGraph, NodeKind, RegionPayloadId,
 };
 
-/// (kuna decompile-all watchdog) An error once the running drive's budget is
+/// (unlace decompile-all watchdog) An error once the running drive's budget is
 /// spent. One region identification over a big function's CFG runs for
 /// minutes inside a single structuring action, so every region attempt asks.
 fn budget() -> KunaResult<()> {

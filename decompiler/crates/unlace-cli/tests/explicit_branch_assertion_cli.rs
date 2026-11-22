@@ -54,7 +54,7 @@ fn decompile_at(entry: &str, extra: &[&str]) -> Run {
         "--json",
     ];
     args.extend_from_slice(extra);
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
         .expect("spawn kuna");
@@ -73,7 +73,7 @@ fn decompile_at(entry: &str, extra: &[&str]) -> Run {
 
 fn decompile(extra: &[&str]) -> (String, String) {
     let run = decompile_at("0x40d120", extra);
-    assert!(run.success, "kuna decompile failed:\n{}", run.doc);
+    assert!(run.success, "unlace decompile failed:\n{}", run.doc);
     (run.doc, run.code)
 }
 
@@ -124,14 +124,14 @@ fn no_assertion_control_stays_a_full_body() {
 #[test]
 fn applied_branch_at_another_instruction_keeps_tail_call_recovery() {
     let control = decompile_at(NEAR_MISS_ENTRY, &[]);
-    assert!(control.success, "kuna decompile failed:\n{}", control.doc);
+    assert!(control.success, "unlace decompile failed:\n{}", control.doc);
     assert!(
         control.code.contains(NEAR_MISS_TAIL_CALL),
         "the control no longer recovers the tail call at 0x401148:\n{}",
         control.code
     );
     let run = decompile_at(NEAR_MISS_ENTRY, &["--assert", "flow 0x40109a branch"]);
-    assert!(run.success, "kuna decompile failed:\n{}", run.doc);
+    assert!(run.success, "unlace decompile failed:\n{}", run.doc);
     assert!(
         run.doc.contains("\"status\": \"applied\""),
         "assertion was not applied:\n{}",

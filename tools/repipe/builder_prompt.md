@@ -99,7 +99,7 @@ intervention-shaped commands — `map function`, `map address`, `map param`, `ma
 `force datatype`, `force varnode`, `name varnode`, `rename`, `retype`, `type varnode`,
 `parse line`, `parse file`, `comment instruction`, `structure blocks`, `analyze range`,
 `global add`, `graph controlflow`, `callgraph build`, `dump` — and **none of them are
-reachable from the `kuna` binary**. `kuna decompile`'s generated script
+reachable from the `unlace` binary**. `unlace decompile`'s generated script
 (`decompile.rs`) only ever emits `option` and `kassert` lines.
 
 So there are three very different jobs hiding behind "add an interface", and they cost
@@ -151,7 +151,7 @@ hypothesis.
 
 ## Before you write any code
 
-Check the need is not already covered: sweep `kuna catalog --json` for an option whose
+Check the need is not already covered: sweep `unlace catalog --json` for an option whose
 `use_when`/`symptoms` match and re-run the probe with it on. If an existing option closes it,
 that is a **default-flip candidate, not a new feature** — record it, set
 `{{KUNA_PY}} -m scripts.pipeline.state update --worker {{WORKER_ID}} --status failed --note
@@ -208,7 +208,7 @@ make test            # PARITY OK 675/675 — NEVER re-pin docs/baseline.json
 make test-stages     # PARITY OK
 make rust-test       # the long pole; on an internal-branch PR CI SKIPS it, so you are the gate
 make check-spec
-decompiler/target/release/kuna catalog --check    # catalog OK
+decompiler/target/release/unlace catalog --check    # catalog OK
 {{KUNA_PY}} -m scripts.repipe.verify --need {{SLUG}} --json   # acceptance must be PASS
 ```
 

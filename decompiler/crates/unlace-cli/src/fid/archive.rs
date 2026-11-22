@@ -38,7 +38,7 @@ pub(super) fn records_for_archive(
             }
             Err(e) => {
                 refused += usize::from(matches!(e, ObjectRefusal::Language(_)));
-                eprintln!("kuna fid build: {archive_path}({name}): skipped: {e}");
+                eprintln!("unlace fid build: {archive_path}({name}): skipped: {e}");
             }
         }
     }

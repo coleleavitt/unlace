@@ -8,7 +8,7 @@ fn decompile(function: &str) -> String {
     let fixture = common::fixture("lifetimes_stack_x86_64");
     let assertions = format!("@{fixture}.kuna");
     let specs = common::repo_root().join("specs");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args([
             "decompile",

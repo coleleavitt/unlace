@@ -16,7 +16,7 @@ fn required(command: &mut Command) {
 }
 
 fn decompile(image: &Path, stackalias: bool) -> serde_json::Value {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args([
             "decompile-all",

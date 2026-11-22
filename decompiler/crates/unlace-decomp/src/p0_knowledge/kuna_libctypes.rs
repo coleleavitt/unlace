@@ -15,11 +15,11 @@
 //!
 //! The named shells are interned into the type factory by the analysis pass at
 //! `load file`, which runs **upstream of every `option` command** and, in
-//! `kuna decompile-all`, upstream of `apply_runtime_options`: an
+//! `unlace decompile-all`, upstream of `apply_runtime_options`: an
 //! `Architecture` bool read inside the pass would see the constructor default
 //! whatever the user asked for. So the gate is a process environment variable
 //! ([`LIBCTYPES_ENV`]), consulted by the pass and by the declared-name lookup,
-//! exported by the `kuna decompile`/`decompile-all` CLI before the load and set
+//! exported by the `unlace decompile`/`decompile-all` CLI before the load and set
 //! by the console's `option libctypes …` arm, exactly as the other load-time
 //! gates do. The companion
 //! `Architecture::analysis_libctypes` bool keeps the option catalog-visible and

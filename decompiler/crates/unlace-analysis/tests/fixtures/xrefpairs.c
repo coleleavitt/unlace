@@ -1,4 +1,4 @@
-/* kuna xrefs fixture: an address a fixed-width ISA forms across two
+/* unlace xrefs fixture: an address a fixed-width ISA forms across two
  * instructions (AArch64 adrp + add/ldr, RISC-V lui/auipc + addi/lw/sw).
  * Return, read, index and pass a static label's address; load and store a
  * global. audit_pad keeps the label off a page boundary, so the page an

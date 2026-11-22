@@ -1,4 +1,4 @@
-upx_packed_pe_i386.exe -- the UPX-packed win32/pe fixture for `kuna unpack` /
+upx_packed_pe_i386.exe -- the UPX-packed win32/pe fixture for `unlace unpack` /
 `unlace_analysis::upx::pe`.
 
 What it is
@@ -30,7 +30,7 @@ Where it came from
   the kuna-re-dataset crackme corpus ("end_of_the_world by ultrasound",
   https://crackmes.one/crackme/5ab77f5433c5d40ad448c1cd), `bin/EndOfWorld.zip.__x/
   EndOfWorld.exe`, byte-identical. That is the binary on which a tester found
-  `kuna unpack` exiting 1 with "no UPX PackHeader found" and filed
+  `unlace unpack` exiting 1 with "no UPX PackHeader found" and filed
   docs/re-needs/unpack-proceed-without-upx.md.
 
   sha256(packed)   see `sha256sum upx_packed_pe_i386.exe`

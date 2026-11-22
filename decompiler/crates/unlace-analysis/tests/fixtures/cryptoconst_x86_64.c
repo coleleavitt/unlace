@@ -1,5 +1,5 @@
 /*
- * `kuna crypto` fixture (x86-64 ELF, not stripped): one of each evidence shape
+ * `unlace crypto` fixture (x86-64 ELF, not stripped): one of each evidence shape
  * the crypto-constant scan recognizes, each used by a named function.
  *
  * Build: gcc -O1 -no-pie -fno-pic -fcf-protection=none -fno-stack-protector \

@@ -11,7 +11,7 @@ const OBJECTS: [&str; 2] = ["switch_self_loop_gcc_x86_64.o", "switch_self_loop_c
 
 fn kuna() -> Command {
     Command::new(
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into()),
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
     )
 }
 

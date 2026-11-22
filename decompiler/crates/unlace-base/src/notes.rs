@@ -3,7 +3,7 @@
 //! (kuna) The loader's tolerance notes — a section table it recovered from, a
 //! data directory it clamped, an ET_REL layout it reports — are facts about the
 //! *image*, not about a load. A surface that loads the same image twice in one
-//! process (`kuna disassemble` answers a caller-bounded window without the
+//! process (`unlace disassemble` answers a caller-bounded window without the
 //! discovery walk and reloads with it when only the walk can answer) would
 //! otherwise announce each of them twice, which reads as two different findings.
 //!

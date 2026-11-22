@@ -1,4 +1,4 @@
-//! END-TO-END verification for the `kuna decompile-project` engine emitters
+//! END-TO-END verification for the `unlace decompile-project` engine emitters
 //! (`doc_prototype` / `doc_type_definitions` / the recompile prelude):
 //!
 //!   1. **The `.h`/`.c` identity contract**: for real decompiled corpus

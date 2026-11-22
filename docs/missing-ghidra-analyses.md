@@ -40,7 +40,7 @@ the object and produces a flat, deduplicated `AnalysisOutput` of *facts*
 (symbols, entries, no-return names, read-only ranges), never panicking and never
 failing — it only ever contributes more knowledge. Each pass's `id()` registers
 in `phases.toml` as a settable option (and in `KUNA_OPTION_NAMES`), so it appears
-in `kuna catalog --json` and is **flippable per-decompilation via `--option <id>
+in `unlace catalog --json` and is **flippable per-decompilation via `--option <id>
 on|off`** — implemented as of the analysis-port "option-gating" Increment. The
 passes are **default-on** (faithful to Ghidra's default-on analyzers), except
 `addrtable`, which ships **off** (Ghidra `AddressTableAnalyzer` parity).

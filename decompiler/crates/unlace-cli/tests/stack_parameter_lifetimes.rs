@@ -16,7 +16,7 @@ fn query(enabled: bool, directives: &[String]) -> Value {
 
 fn query_for(fixture_name: &str, function: &str, enabled: bool, directives: &[String]) -> Value {
     let fixture = common::fixture(fixture_name);
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args([
             "decompile",
@@ -570,7 +570,7 @@ fn wider_stores_keep_their_width_in_narrow_parameter_slots() {
                 common::process::required_output(&mut Command::new(&native));
 
                 for views in ["off", "on"] {
-                    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+                    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
                     command
                         .arg("decompile")
                         .arg(&image)
@@ -692,7 +692,7 @@ fn check_conditional_parameter_escape(stackviews: bool) {
     ];
     let mut code = String::new();
     for function in ["conditional_parameter_escape", "unknown_parameter_escape"] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command
             .arg("decompile")
             .arg(&image)

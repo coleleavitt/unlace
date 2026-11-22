@@ -39,7 +39,7 @@ fn decompile(options: &[&str]) -> String {
     for pair in options.chunks(2) {
         args.extend(["--option", pair[0], pair[1]]);
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna")).args(&args).output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace")).args(&args).output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     String::from_utf8(output.stdout).unwrap()
 }

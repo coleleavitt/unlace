@@ -275,11 +275,11 @@ pub fn detect(bytes: &[u8], toolchain: bool) -> Vec<RuntimeHint> {
     });
     let upx_magic = bytes[..bytes.len().min(0x1000)].windows(4).any(|w| w == b"UPX!");
     if upx_sections || upx_magic || unlace_analysis::upx::detect(bytes).is_some() {
-        out.push(hint("upx", None, "UPX packed: run 'kuna unpack'".into(), true));
+        out.push(hint("upx", None, "UPX packed: run 'unlace unpack'".into(), true));
     } else if pe.is_some() && unlace_analysis::neolite::detect(bytes) {
-        out.push(hint("neolite", None, "NEOLite packed: run 'kuna unpack'".into(), true));
+        out.push(hint("neolite", None, "NEOLite packed: run 'unlace unpack'".into(), true));
     } else if unlace_analysis::pklite::detect(bytes) {
-        out.push(hint("pklite", None, "PKLITE packed: run 'kuna unpack'".into(), true));
+        out.push(hint("pklite", None, "PKLITE packed: run 'unlace unpack'".into(), true));
     }
     if windows_only(Marker::TwinBasic) {
         out.push(hint(
@@ -376,7 +376,7 @@ const NOTED_SUBCOMMANDS: &[&str] = &[
     "strings",
 ];
 
-/// The stderr note for one `kuna <sub> <rest..>` invocation, before dispatch.
+/// The stderr note for one `unlace <sub> <rest..>` invocation, before dispatch.
 ///
 /// Silent for help, for a `--jobs` worker (its parent already spoke) and for
 /// `--summary`, which carries the hints in its own document.

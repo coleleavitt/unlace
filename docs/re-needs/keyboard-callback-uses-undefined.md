@@ -139,7 +139,7 @@ _none recorded_
   in it was MEASURED this tick at `57ebfd2b` on `.kuna-repipe/probebin/8ea3c454dfcea5d5/lugosiii`,
   not inherited from an earlier wave.
 - round 2 B_PLAN wave 58 (captain): briefing.
-  (a) THE DEFECT REPRODUCES EXACTLY AND IS SMALL NOW. `kuna decompile <bin> 0x6500 --addr` -> rc 0,
+  (a) THE DEFECT REPRODUCES EXACTLY AND IS SMALL NOW. `unlace decompile <bin> 0x6500 --addr` -> rc 0,
   427 lines, opening `void sub_6500(long a0)` with `int v7; // r8d` and `int v8; // r9d` declared
   and then READ before any definition (`if (v8 != 1 || !*(long *)(a0 + 0x68))`,
   `xkb_state_key_get_one_sym(..., v7 + 8)`). The acceptance fails on exactly three clauses:

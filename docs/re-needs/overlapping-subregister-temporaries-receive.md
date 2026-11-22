@@ -132,7 +132,7 @@ says: it is not valid C at all.
 
 REPRODUCED on the dataset copy of the need's binary (challenges/603a9d7833c5d42c3d016c55/bin/Anti
 CrackMe V2.exe, identical to the arena copy), current main:
-`kuna decompile BIN 0x402820 --addr` -> rc 0, 100 declarations, and EIGHT names (v2..v9) are each
+`unlace decompile BIN 0x402820 --addr` -> rc 0, 100 declarations, and EIGHT names (v2..v9) are each
 declared THREE times -- 24 declarations for 8 identifiers. The probe regex hits 8 times.
 
 THE EXACT SHAPE, which pins the mechanism in three lines (v2, lines 14-16 of the output):

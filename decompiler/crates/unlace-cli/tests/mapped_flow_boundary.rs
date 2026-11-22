@@ -18,7 +18,7 @@ fn named_fixture(kind: &str, bits: u8) -> std::path::PathBuf {
 }
 
 fn decompile(path: &std::path::Path, extra: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_kuna"))
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", path.to_str().unwrap(), "0x10000", "--addr"])
         .args(extra)
         .output()
@@ -210,7 +210,7 @@ fn effective_return_and_callreturn_overrides_precede_boundary_recovery() {
 fn shared_whole_image_and_project_paths_retain_the_recovered_body() {
     let path = fixture(32);
     let single = decompile(&path, &["--json"]);
-    let all = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let all = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-all", path.to_str().unwrap(), "--json"])
         .output()
         .unwrap();
@@ -221,7 +221,7 @@ fn shared_whole_image_and_project_paths_retain_the_recovered_body() {
     );
     assert_eq!(single.stdout, all.stdout);
     let dir = common::scratch_file("mapped-flow-project", "export");
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile-project",
             path.to_str().unwrap(),

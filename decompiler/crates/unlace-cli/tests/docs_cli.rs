@@ -17,25 +17,25 @@ static PROCESS_SETUP: Mutex<()> = Mutex::new(());
 
 fn spawn_docs(args: &[&str]) -> Child {
     let _setup = PROCESS_SETUP.lock().unwrap();
-    Command::new(env!("CARGO_BIN_EXE_kuna"))
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
         .arg("docs")
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("spawn kuna docs")
+        .expect("spawn unlace docs")
 }
 
 fn run_docs(args: &[&str]) -> Output {
-    spawn_docs(args).wait_with_output().expect("wait for kuna docs")
+    spawn_docs(args).wait_with_output().expect("wait for unlace docs")
 }
 
 fn docs(args: &[&str]) -> String {
     let output = run_docs(args);
     assert!(
         output.status.success(),
-        "kuna docs {args:?}: {}",
+        "unlace docs {args:?}: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8(output.stdout).expect("UTF-8 document")
@@ -153,10 +153,10 @@ fn an_unknown_topic_is_a_usage_error_that_names_the_real_ones() {
 fn the_binary_carries_its_docs_out_of_the_repo() {
     let sandbox = std::env::temp_dir().join(format!("kuna_docs_norepo_{}", std::process::id()));
     std::fs::create_dir(&sandbox).expect("create sandbox");
-    let exe = sandbox.join("kuna");
+    let exe = sandbox.join("unlace");
     let child = {
         let _setup = PROCESS_SETUP.lock().unwrap();
-        std::fs::copy(env!("CARGO_BIN_EXE_kuna"), &exe).expect("copy kuna");
+        std::fs::copy(env!("CARGO_BIN_EXE_unlace"), &exe).expect("copy kuna");
         make_executable(&exe);
         Command::new(&exe)
             .current_dir(&sandbox)

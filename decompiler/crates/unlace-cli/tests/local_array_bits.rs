@@ -60,7 +60,7 @@ fn check_target(target: &str, width: usize) {
         "type convert_packet::v1 Packet".to_owned(),
     ];
     let project = root.join("project");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .arg("decompile-project")
         .arg(&binary)

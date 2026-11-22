@@ -6,7 +6,7 @@ fn fixture() -> PathBuf {
 }
 
 fn kuna(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_kuna"))
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
         .arg(args[0])
         .arg(fixture())
         .args(&args[1..])

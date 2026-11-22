@@ -5,8 +5,8 @@ pointer slots (RE-need `function-inventory-silently-lists`, round-12 challenge
 5ab77f5433c5d40ad448c1c1).
 
 The reported image is the same NEOLite-packed crackme as
-`pe_datasection_entry_i386.exe`, but seen through `kuna functions` rather than
-`kuna decompile-all`: its six sections all carry characteristics 0xc0000040
+`pe_datasection_entry_i386.exe`, but seen through `unlace functions` rather than
+`unlace decompile-all`: its six sections all carry characteristics 0xc0000040
 (INITIALIZED_DATA|READ|WRITE) so nothing is discovered in them, while its
 import directory still names six Win32 entry points.  The inventory was
 therefore SIX entries and no bodies -- non-empty, so the zero-discovery
@@ -16,7 +16,7 @@ diagnostic `decompile-all` prints for the same file never fired.
     00402001  entry    push ebp ; mov ebp,esp ; call helper ; pop ebp ; ret
     00403000  IAT      GetProcAddress, GetModuleHandleA, LoadLibraryA
 
-`kuna functions` must keep all three import names -- they are how a call to an
+`unlace functions` must keep all three import names -- they are how a call to an
 import renders -- and still report the run-level discovery failure, because not
 one of them is a body.
 

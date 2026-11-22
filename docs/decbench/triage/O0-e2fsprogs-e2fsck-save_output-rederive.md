@@ -184,7 +184,7 @@ is faithful; hoisting is a deliberate DIV, so it needs an option.
 
 ## Breadth
 
-`kuna decompile-all --json` over four O0 binaries, counting **top-level** (brace depth 1)
+`unlace decompile-all --json` over four O0 binaries, counting **top-level** (brace depth 1)
 `vN = aM;` statements that appear after the first top-level control-flow statement --
 i.e. copy-shadows of an unmodified incoming parameter emitted outside the entry block:
 

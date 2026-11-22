@@ -222,7 +222,7 @@ exist). `kind` is effectively `absence`, which is the case `REPIPE_REFUTE_MODE=a
   asked a builder to confirm, both confirmed by measurement rather than by reading:
     * the CLI's one-shot decompile DOES re-seed the override the way the console's
       `load function` -> `override flow` -> `decompile` sequence does, and by a different
-      route than the console's: `kuna decompile --json` is the IN-PROCESS load
+      route than the console's: `unlace decompile --json` is the IN-PROCESS load
       (`decompile_json` -> `decompile_all::load_program`), not the forked script, so the
       console's `pending_flow_overrides` stash is never consulted there. The directive is
       seeded into the same `DecompileSeed::flow_overrides` slot the analysis's `call

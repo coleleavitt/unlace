@@ -130,7 +130,7 @@ WORKAROUND -- THE NEED'S 'existing flow override' IS `callreturn`, NOT `return`.
 
 TWO THINGS THAT WILL COST A BUILDER A DAY IF NOT SAID HERE.
 
-(1) SECTION FLAGS ARE NOT THE DISCRIMINATOR. `kuna disassemble` at 0x4f7036 already prints '0x4f7036 is in a non-executable data section, so these are bytes, not instructions'. That is TRUE OF THE CALL ITSELF as much as of the string -- the whole packer stub lives in one non-executable-flagged section -- so any fix keyed on executability refuses the real code along with the data. The discriminator has to be the callee's stack effect, not the section bit.
+(1) SECTION FLAGS ARE NOT THE DISCRIMINATOR. `unlace disassemble` at 0x4f7036 already prints '0x4f7036 is in a non-executable data section, so these are bytes, not instructions'. That is TRUE OF THE CALL ITSELF as much as of the string -- the whole packer stub lives in one non-executable-flagged section -- so any fix keyed on executability refuses the real code along with the data. The discriminator has to be the callee's stack effect, not the section bit.
 
 (2) THE ACCEPTANCE IS SATISFIED BY A FIX THAT STILL LOSES THE ANSWER. It demands only stdout_absent `\bin\(`, and the callreturn output above -- `void sub_4f7036(void)` -- passes it while returning nothing. The tester's actual task line was 'Recover the string pointer returned by the helper at 0x4f7036'. A complete fix models EAX = 0x4f703c and emits a pointer to 'kernel32.dll'; a fix that merely stops the fall-through decode passes the probe and does not answer the question. Aim past the acceptance.
 

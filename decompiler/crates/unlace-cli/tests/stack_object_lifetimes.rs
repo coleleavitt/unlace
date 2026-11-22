@@ -59,7 +59,7 @@ fn tree_range_members_use_the_pointer_type_of_each_native_access() {
         format!("prototype 0x{:x} void consume_range(Tree *tree,const Range *range)", address("consume_range")),
     ];
     for enabled in [false, true] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command
             .arg("decompile")
             .arg(&image)
@@ -232,7 +232,7 @@ uint4 consume(const struct RGB *rgb) {
 
     let color_references = regex::Regex::new(r"\bdat_([0-9a-fA-F]+)\b").unwrap();
     for enabled in [false, true] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command
             .arg("decompile-all")
             .arg(&image)
@@ -410,7 +410,7 @@ fn decompile_surface(
             "lifetimes_stack_x86_64"
         },
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args([
             "decompile",
@@ -763,7 +763,7 @@ struct LifetimeHandle *volatile volatile_handle;
         assert!(code.contains("view_LifetimeHandle"), "{code}");
         execute_with_context(function, &[(arguments, 67)], context, &code, helpers);
         let output = common::process::required_output(
-            Command::new(env!("CARGO_BIN_EXE_kuna"))
+            Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args([
                     "decompile",
                     &fixture,

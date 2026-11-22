@@ -1,4 +1,4 @@
-//! The instruction walker behind `kuna disassemble` and the in-browser study
+//! The instruction walker behind `unlace disassemble` and the in-browser study
 //! view: a straight-line (or, with follow, a flow-anchored) decode of a window
 //! of the image into rows, with undecodable bytes spelled as `.byte`, proved
 //! literal-pool words folded into `.word` rows ([`crate::litpool`]), and the
@@ -78,7 +78,7 @@ pub struct Row {
 
 impl Row {
     /// `MNEMONIC operands` with ONE space — the same instruction spelling
-    /// `kuna xrefs` puts in its `instruction` field, so the two surfaces are
+    /// `unlace xrefs` puts in its `instruction` field, so the two surfaces are
     /// greppable with one pattern (`CALL 0x140002490`). The console's own
     /// listing pads the mnemonic to a fixed column instead; that padding is a
     /// display choice, not part of the instruction.
@@ -112,7 +112,7 @@ pub fn hex(bytes: &[u8]) -> String {
 /// the start address is the only thing that path checks, and a listing that asks
 /// for more bytes than the run holds gets the rest of them invented: `kuna
 /// disassemble 0x80d190b` on an unmapped address correctly refuses, while
-/// `kuna disassemble 0x80d18b0 --count 30` on the same image walked 23 bytes
+/// `unlace disassemble 0x80d18b0 --count 30` on the same image walked 23 bytes
 /// past the same segment's end and reported eight `ADD byte ptr [EAX],AL` rows
 /// that are not in the file. The bound has to be carried here instead: the start
 /// is checked against the image, and the length is clipped to the run holding

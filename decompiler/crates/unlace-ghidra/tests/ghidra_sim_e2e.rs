@@ -23,7 +23,7 @@
 //!     getMappedSymbols traffic (0 in Phase 2; the real query-through count
 //!     since Phase 3), flushNative cache-clearing via a label override;
 //!   * the differential-C gap: the markup C vs the SAME function through the
-//!     in-process CLI path (`kuna decompile`'s drive) as a normalized,
+//!     in-process CLI path (`unlace decompile`'s drive) as a normalized,
 //!     style-normalized line-diff ratio — the number the GUI user experiences.
 //!
 //! ## Pin discipline

@@ -57,5 +57,5 @@
       "no UPX PackHeader found"
     ]
   },
-  "notes": "Desired: a NEOLite-packed PE yields an analyzable image, not 'no UPX PackHeader found'. Witness: crackmes.one 5ab77f5433c5d40ad448c1c1 CryptoME.exe, where the tester ran the stub under Unicorn to get the sections; kuna functions there goes 0 -> 387. Retargeted onto neolite_packed_pe_i386.exe, built by its .py sidecar. The size, entry and import clauses separate a decode from an empty exit 0."
+  "notes": "Desired: a NEOLite-packed PE yields an analyzable image, not 'no UPX PackHeader found'. Witness: crackmes.one 5ab77f5433c5d40ad448c1c1 CryptoME.exe, where the tester ran the stub under Unicorn to get the sections; unlace functions there goes 0 -> 387. Retargeted onto neolite_packed_pe_i386.exe, built by its .py sidecar. The size, entry and import clauses separate a decode from an empty exit 0."
 }

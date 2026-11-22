@@ -1,5 +1,5 @@
 unflagged_* -- code the image maps executable in a section not marked as code,
-for `kuna xrefs` (GH #1406; decompiler/crates/unlace-cli/tests/xrefs_unflagged_cli.rs,
+for `unlace xrefs` (GH #1406; decompiler/crates/unlace-cli/tests/xrefs_unflagged_cli.rs,
 tests/cli/xrefs-unflagged-*.json).
 
 What they are
@@ -62,7 +62,7 @@ How they were built (no macOS SDK; host clang + the rustup-bundled LLD)
   Never executed.
 
 What they pin
-  `kuna functions` lists none of _middle, _quiet, _orphan (GH #1339). `xrefs
+  `unlace functions` lists none of _middle, _quiet, _orphan (GH #1339). `xrefs
   --from _middle` decodes it (_main calls it) and answers its call to _goal;
   _quiet decodes to no references; _orphan (an untyped Mach-O symbol nothing
   calls), _greeting, _data, the ELF `table` object and the unnamed bytes are not

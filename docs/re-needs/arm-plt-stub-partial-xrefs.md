@@ -28,7 +28,7 @@ reject_reason: null
 Find what references 0x12000, an address inside `table`.
 
 > **ARM PLT stubs file their partial addresses as data references** (minor, synthetic `xreffp_arm_le32`)
-> `kuna xrefs --to 0x12000` reports 7 data references, one from each PLT stub's `add r12,r12,#0x12000`, and `kuna xrefs --from printf` reports `adr r12,0x10318` and that add instead of the GOT slot `0x2300c` the stub jumps through. Neither value is an address the stub uses.
+> `unlace xrefs --to 0x12000` reports 7 data references, one from each PLT stub's `add r12,r12,#0x12000`, and `unlace xrefs --from printf` reports `adr r12,0x10318` and that add instead of the GOT slot `0x2300c` the stub jumps through. Neither value is an address the stub uses.
 
 Seen first on production ARM executables and a shared library (GNU ld, `-fPIC`), where these rows outnumbered every other false positive; `xreffp_arm_le32` reproduces the stub from a small C source.
 

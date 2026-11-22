@@ -1,5 +1,5 @@
 //! The child half of the build handshake on the real `decomp_test_dbg`, whose
-//! stderr also carries the unit-test grammar `kuna test` parses.
+//! stderr also carries the unit-test grammar `unlace test` parses.
 
 use std::process::Command;
 

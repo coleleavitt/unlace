@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate `pe_switchdelta_x86_64.exe` - a minimal PE32+ carrying the jump
-table shape GH-456 reports as missing from `kuna decompile-graph`'s callee
+table shape GH-456 reports as missing from `unlace decompile-graph`'s callee
 lists: the MSVC x64 delta table.  The dispatch materializes the IMAGE BASE in
 one instruction and indexes a table of 4-byte RVAs in another, so the table base
 is in no operand and the entries are not pointers:

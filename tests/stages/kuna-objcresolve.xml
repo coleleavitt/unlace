@@ -21,7 +21,7 @@
     callee name of a send whose receiver's class is known is the method it
     reaches, looked up along the superclass chain, and a second decompile
     sends the CALL to that IMP (`FlowInfo::setup_call_specs` retarget), so
-    the call carries the method's prototype and `kuna xrefs` its edge
+    the call carries the method's prototype and `unlace xrefs` its edge
     (`objcresolve`).
 
     Pass 1 (both off): `objc_object *v1`, `objc_msgSend(v1,sel_setInner_,...)`,

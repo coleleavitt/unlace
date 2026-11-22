@@ -39,7 +39,7 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
 }
 
-/// Bootstrap the fixture the way every `kuna` driver does on a non-x86-64 image
+/// Bootstrap the fixture the way every `unlace` driver does on a non-x86-64 image
 /// (DIV-20/DIV-68: the Listing plus the discovery bundle).
 fn bootstrap() -> ConsoleProgram {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le");

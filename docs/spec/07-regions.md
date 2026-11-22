@@ -251,7 +251,7 @@ and the chapter-08 structurer treats a failed identification as non-fatal (it
 structures the `sblocks` topology without region guidance, and the
 loop-refinement data is simply absent).
 
-*(kuna decompile-all watchdog)* One identification runs inside a single
+*(unlace decompile-all watchdog)* One identification runs inside a single
 structuring action, which the action loop cannot interrupt, and on a big
 function's CFG it can still run long (before the step-2 ordering above,
 CPython 3.11's `_PyEval_EvalFrameDefault`, 62 KB, spent about 440 s in the
@@ -660,7 +660,7 @@ drives the `kuna_regionid.rs (KunaRegionVisitor)` callback trait, which
 brackets nested regions and fires once per leaf). In `phases.toml` the three
 surfaces are registered at P7/`loop-refinement` — the observable half of that
 subphase's LATENT region-shaping assertions. The CLI mirror is
-`kuna decompile <bin> <fn> --regions`, which captures `region blocks` +
+`unlace decompile <bin> <fn> --regions`, which captures `region blocks` +
 `region tree` through a second `openfile write` so the region text never
 mixes with the C.
 

@@ -5,7 +5,7 @@
 //! `CALL qword ptr [0x140005038]` — the shape MSVC emits for every Win32 call.
 //! SLEIGH lifts it to `$U = COPY (ram,0x140005038,8); ...; CALLIND $U`, so the
 //! slot is not the flow op's own operand and the walk used to file it as a plain
-//! read of a pointer: `kuna decompile-graph` reported one edge for the whole
+//! read of a pointer: `unlace decompile-graph` reported one edge for the whole
 //! program and every import as called by nothing (GH-456).
 //!
 //! The forwarding veneer at `0x140001070` is the control. Its `JMP qword ptr
@@ -33,7 +33,7 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
 }
 
-/// Bootstrap the fixture and build the index `kuna xrefs` answers out of.
+/// Bootstrap the fixture and build the index `unlace xrefs` answers out of.
 fn index() -> XrefIndex {
     let bin =
         repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(FIXTURE);
@@ -71,7 +71,7 @@ fn a_call_through_an_iat_slot_is_a_call_edge_to_the_import() {
     }
 }
 
-/// `kuna xrefs --to` the import answers over the whole alias class, so both call
+/// `unlace xrefs --to` the import answers over the whole alias class, so both call
 /// sites are there under either address and neither is a read.
 #[test]
 fn both_ends_of_the_import_answer_with_two_call_sites() {

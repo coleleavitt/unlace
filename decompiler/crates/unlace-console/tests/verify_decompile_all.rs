@@ -1,5 +1,5 @@
 //! End-to-end gate for the **whole-binary** in-process decompile path that backs
-//! `kuna decompile-all` / `kuna functions` (the decbench + LLM-CLI surface).
+//! `unlace decompile-all` / `unlace functions` (the decbench + LLM-CLI surface).
 //!
 //! Drives the exact load-once shape the CLI uses against the real vendored
 //! `fauxware` ELF (x86-64, dynamically linked, non-stripped):
@@ -45,7 +45,7 @@ fn decompile_all_enumerates_and_decompiles_every_function() {
 
     // (1) Enumeration: the loader + analysis function set must include the real
     // defined function `main` and the resolved PLT imports — the same set the
-    // `kuna functions` command lists.
+    // `unlace functions` command lists.
     let names: Vec<String> = prog.function_entries().map(|(n, _)| n.to_string()).collect();
     assert!(!names.is_empty(), "function_entries returned no functions");
     assert!(names.iter().any(|n| n == "main"), "enumeration missing `main`: {names:?}");

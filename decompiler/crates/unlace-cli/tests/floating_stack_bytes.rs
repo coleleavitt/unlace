@@ -64,7 +64,7 @@ fn floating_loads_survive_full_and_partial_stack_byte_writes() {
         "read_float_low",
         "read_float_high",
     ] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command
             .arg("decompile")
             .arg(&image)

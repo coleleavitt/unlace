@@ -1,5 +1,5 @@
 readprov_* -- images whose segments declare memory the file does not hold, or
-no access at all, for `kuna read --json`'s `provenance` (GH #1401;
+no access at all, for `unlace read --json`'s `provenance` (GH #1401;
 decompiler/crates/unlace-cli/tests/read_provenance_cli.rs).
 
 What they are

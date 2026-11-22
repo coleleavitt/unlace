@@ -2480,7 +2480,7 @@ impl Database {
 
     /// (kuna) The `(name, type, addr, category)` specs for every whole-symbol entry
     /// mapped into a scope's space, for an out-of-pipeline JSON/benchmark consumer
-    /// (the `kuna decompile-all --json` variable extractor).  Like
+    /// (the `unlace decompile-all --json` variable extractor).  Like
     /// [`Self::scope_space_symbol_specs`] but surfaces the symbol *category* (see
     /// [`symbol_category`]) so the caller can keep recovered locals
     /// (`NO_CATEGORY`) and drop formal parameters (`FUNCTION_PARAMETER`, already

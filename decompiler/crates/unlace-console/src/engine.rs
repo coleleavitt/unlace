@@ -1240,7 +1240,7 @@ impl ConsoleProgram {
     /// agent reaches for `--define-function`: a packer that marks its whole
     /// image data (every section `INITIALIZED_DATA|READ|WRITE`, none
     /// `MEM_EXECUTE`) leaves this list empty, so a declared function was
-    /// enumerated by `kuna functions`, decompiled fine by `kuna decompile`, and
+    /// enumerated by `unlace functions`, decompiled fine by `unlace decompile`, and
     /// then silently dropped from the whole-binary run.
     pub fn function_entries_executable(&self) -> Vec<FunctionEntry> {
         let sections = self.sections();
@@ -1257,7 +1257,7 @@ impl ConsoleProgram {
     /// The emptiness question every whole-binary surface has to ask, answered
     /// over the inventory the caller already holds rather than by rebuilding it:
     /// the section table is walked once, and the canonical enumeration not at
-    /// all. `kuna functions` needs it because an image can enumerate six import
+    /// all. `unlace functions` needs it because an image can enumerate six import
     /// names and no bodies, which is a total discovery failure that a plain
     /// `is_empty()` reads as a healthy listing.
     pub fn any_executable_entry(&self, entries: &[FunctionEntry]) -> bool {
@@ -1304,7 +1304,7 @@ impl ConsoleProgram {
     /// (kuna, issue #197) Resolve a canonical entry by ANY of its names — the
     /// reported `name` or any of its `aliases`.
     ///
-    /// The name-keyed lookup behind `kuna decompile-all --functions <name>` (and
+    /// The name-keyed lookup behind `unlace decompile-all --functions <name>` (and
     /// the wasm `decompile <name>` command).  Collapsing the enumeration must not
     /// make a name that used to select a function stop working, so the filter
     /// searches the alias set too — this is what preserves the decbench
@@ -1408,7 +1408,7 @@ impl ConsoleProgram {
     /// (kuna, issue #197) Resolve the canonical entry AT `vma`, tolerating an
     /// ARM/Thumb `entry|1` address.
     ///
-    /// Backs `kuna decompile-all --addr 0xVMA` (and the wasm `decompile 0xADDR`
+    /// Backs `unlace decompile-all --addr 0xVMA` (and the wasm `decompile 0xADDR`
     /// command).  An ARM caller legitimately holds odd addresses — an ELF symbol
     /// value, a DWARF entry PC, or a benchmark case address all carry the Thumb
     /// mode bit — and decompiling literally there lands mid-instruction and
@@ -1752,7 +1752,7 @@ impl ConsoleProgram {
     /// through it readable, and a slot with no stub twin (`__DATA,__got`,
     /// `__DATA,__nl_symbol_ptr`) is the only place its name appears at all — so
     /// neither can be dropped from the inventory. On a Mach-O they collide by
-    /// name, and `kuna decompile <image> strcmp` answered `selector "strcmp" is
+    /// name, and `unlace decompile <image> strcmp` answered `selector "strcmp" is
     /// ambiguous` for all nine imports of a 26-entry inventory, with only a raw
     /// `--addr` left to the caller. ELF already behaves the way this makes
     /// Mach-O behave, by naming only the PLT stub.
@@ -1796,11 +1796,11 @@ impl ConsoleProgram {
     ///
     /// kuna calls a function no symbol covers `sub_<addr>`, and the attribution
     /// surfaces mint one for an entry the canonical inventory does not hold at
-    /// all: `kuna strings` names a literal's owner from the xref walk's own flow
+    /// all: `unlace strings` names a literal's owner from the xref walk's own flow
     /// attribution (`strings.rs (owning_function)`), which reaches starts
     /// discovery never recorded. The printed name was then unusable as a
-    /// selector — `kuna strings graphy` reported `sub_100a3be` as the owner of
-    /// `"No error information"` while `kuna decompile graphy sub_100a3be`
+    /// selector — `unlace strings graphy` reported `sub_100a3be` as the owner of
+    /// `"No error information"` while `unlace decompile graphy sub_100a3be`
     /// answered `no function matches` and only `--addr 0x100a3be` worked. A
     /// placeholder carries no information beyond the address, so reading it back
     /// as one loses nothing and closes that round trip.
@@ -1814,8 +1814,8 @@ impl ConsoleProgram {
     /// not just the active one: `option namestyle` decides how a name is
     /// PRINTED, and a placeholder holds nothing but the address whichever
     /// vocabulary spelled it. Matching only the active style made the styles
-    /// disjoint name spaces — `kuna functions` reports `sub_15dc` and ignores
-    /// namestyle, so `kuna decompile BIN sub_15dc --option namestyle ghidra`
+    /// disjoint name spaces — `unlace functions` reports `sub_15dc` and ignores
+    /// namestyle, so `unlace decompile BIN sub_15dc --option namestyle ghidra`
     /// answered `no function matches` for a function the same run decompiles
     /// under `func_0x000015dc`.
     fn placeholder_name_address(&self, name: &str) -> Option<u64> {
@@ -4786,7 +4786,7 @@ pub(crate) fn bootstrap_mz_bytes(
         .map_err(|error| KunaError::lowlevel(format!("{}; {MZ_RAW_IMAGE_HINT}", error.explain())))?;
     if let Some(packer) = image.packer {
         let unpack = match packer {
-            "PKLITE" => "run `kuna unpack`",
+            "PKLITE" => "run `unlace unpack`",
             _ => "for example with `deark -m lzexe`",
         };
         unlace_base::notes::say_once(

@@ -34,13 +34,13 @@ found the defect while ablating the discovery bundle, explicitly declined to clo
 need of its own. Captain reproduced it on a **repo-vendored** fixture at merged main `6d315ffe`:
 
 ```
-$ kuna decompile decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le __do_global_ctors_aux
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le __do_global_ctors_aux
 void __do_global_ctors_aux(void)
 { // warn: funcboundflow: fall-through reached the next function entry; truncating flow here
 }
 ```
 
-The body is not lost, it is misfiled. `kuna functions --json` on the same image:
+The body is not lost, it is misfiled. `unlace functions --json` on the same image:
 
 ```
 {"name": "__do_global_ctors_aux", "address_hex": "0x940", "size": 8}
@@ -53,7 +53,7 @@ and `frame_dummy`/`sub_8b8` -- i.e. every ELFv2 function in the image that has a
 mechanism together. The builder measured **8 such truncations over 33 non-x86-64 fixtures**, so this is
 not one fixture's accident.
 
-This is live TODAY on default `kuna decompile` / `kuna functions` / `kuna decompile-all` for PPC64 --
+This is live TODAY on default `unlace decompile` / `unlace functions` / `unlace decompile-all` for PPC64 --
 no option, no mode and no bundle injection is needed to see it. PR #377 only dodged it by making the
 discovery bundle a retry-on-miss rather than an up-front injection.
 
@@ -167,7 +167,7 @@ overturned while the symptom stood in all 8.
   entry" it stops at is 8 bytes into the function being decompiled.
 - The narrow fix is to fold a local-entry address back into its global entry at discovery time, so
   0x948 is never an entry; the alternative (teach `funcboundflow` to ignore an entry that is its own
-  function's local entry) leaves the bogus row in `kuna functions`.
+  function's local entry) leaves the bogus row in `unlace functions`.
 - Not verified by the captain: whether the +8 entries come from call targets, from a prologue matcher, or
   from the ELF reader. Ablating `funcstart_patterns`, `aif` and `listing` individually does **not** remove
   them, so it is none of those three alone -- and note `--option listing off` did not drop the symbol names

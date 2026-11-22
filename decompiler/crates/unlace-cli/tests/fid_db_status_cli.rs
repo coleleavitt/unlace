@@ -29,7 +29,7 @@ fn relabeled(lang: &str, cspec: &str) -> PathBuf {
 }
 
 fn kuna(db: Option<&Path>, args: &[&str]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args(args).env("SLEIGHHOME", common::repo_root().join("specs")).env_remove("kuna_fid_db");
     if let Some(db) = db {
         command.env("kuna_fid_db", db);
@@ -178,7 +178,7 @@ fn build_refuses_a_language_that_does_not_describe_the_object() {
     let object = common::fixture("fid_audit_x86_64.o");
     let out = common::scratch_file("fid-build", "fid");
     let build = |lang: &str| {
-        Command::new(env!("CARGO_BIN_EXE_kuna"))
+        Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["fid", "build", &object, "-o"])
             .arg(&out)
             .args(["--lang", lang, "--cspec", "gcc"])

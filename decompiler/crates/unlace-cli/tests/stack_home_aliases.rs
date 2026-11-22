@@ -9,7 +9,7 @@ const FIXTURE: &str = "stackhome_alias_x86_64";
 
 fn decompile() -> String {
     let fixture = common::fixture(FIXTURE);
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args(["decompile", &fixture, "reuse", "--json"])
         .args([

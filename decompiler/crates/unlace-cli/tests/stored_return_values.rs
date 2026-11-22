@@ -1,5 +1,5 @@
 //! A function whose result a caller reads returns it in `decompile-all` and in
-//! a single-function `kuna decompile` when it also stores the value, tests it,
+//! a single-function `unlace decompile` when it also stores the value, tests it,
 //! or hands a value made from it back in another register, and in
 //! `decompile-all` a function whose epilogue zeroes every other return register
 //! (`-fzero-call-used-regs`) returns the one its callers read. The fixture
@@ -102,7 +102,7 @@ fn round_trip(asm: &std::path::Path, cases: &[&(&str, &str, &str)], code: impl F
 }
 
 fn kuna() -> std::ffi::OsString {
-    std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into())
+    std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into())
 }
 
 fn decompile_all(elf: &std::path::Path) -> Vec<(String, String)> {
@@ -141,7 +141,7 @@ fn a_read_result_is_returned_when_it_is_also_stored_or_tested() {
     round_trip(&asm, &RETURNING.iter().collect::<Vec<_>>(), code);
 }
 
-/// `kuna decompile` of one function reads its callers' code after each call
+/// `unlace decompile` of one function reads its callers' code after each call
 /// (`callerreads`). `put`'s zeroing epilogue is left out: alone, it still
 /// returns the `xmm0` its epilogue zeroes.
 #[test]

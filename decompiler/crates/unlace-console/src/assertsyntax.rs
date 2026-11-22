@@ -1,6 +1,6 @@
 //! The text syntax of the `--assert` override plane: one directive per line,
 //! `@FILE` for a file of them, and the `--define-function` boundary spelling
-//! the `function` directive shares. Shared by the `kuna` CLI and the in-browser
+//! the `function` directive shares. Shared by the `unlace` CLI and the in-browser
 //! front-end; the vocabulary and where each directive lands live in
 //! [`crate::assertions`].
 

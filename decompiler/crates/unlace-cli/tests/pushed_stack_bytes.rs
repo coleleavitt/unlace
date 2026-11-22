@@ -91,7 +91,7 @@ fn fixture() -> (std::path::PathBuf, std::path::PathBuf) {
 
 fn decompile(mode: &str) -> Vec<(String, String)> {
     let (image, assertions) = fixture();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .arg("decompile-all")
         .arg(&image)

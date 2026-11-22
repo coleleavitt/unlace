@@ -64,7 +64,7 @@ fn image_from_words(words: &[u32], functions: &[(&str, u64, u64)], abi: Option<u
 fn decompile(bytes: &[u8], option: &str) -> String {
     let path = common::scratch_file("arm-float-inputs", "o");
     std::fs::write(&path, bytes).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile-all",
             path.to_str().unwrap(),
@@ -102,7 +102,7 @@ fn decompile_with(bytes: &[u8], options: &[&str]) -> String {
     for pair in options.chunks(2) {
         args.extend(["--option", pair[0], pair[1]]);
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(&args)
         .output()
         .unwrap();
@@ -773,7 +773,7 @@ fn absent_soft_and_ambiguous_abis_are_unchanged() {
 fn declared_cross_bank_order_outranks_recovery() {
     let path = common::scratch_file("arm-float-declared", "o");
     std::fs::write(&path, image(Some(1))).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile-all",
             path.to_str().unwrap(),
@@ -850,7 +850,7 @@ fn recovered_scalar_contracts_compile_and_compute_the_expected_values() {
 fn mixed_input_banks_and_variadic_base_storage_agree() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../unlace-analysis/tests/fixtures/fmtlf_armhf");
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile-all",
             fixture.to_str().unwrap(),
@@ -922,7 +922,7 @@ fn compiled_arm_and_thumb_sources_preserve_mixed_values_and_declared_order_contr
                 "{}",
                 String::from_utf8_lossy(&compile.stderr)
             );
-            let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args([
                     "decompile-all",
                     image.to_str().unwrap(),

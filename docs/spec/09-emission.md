@@ -2145,7 +2145,7 @@ plain emitter, and `printc.rs (PrintC::set_markup)` keeps it when it restores
 plain text after a markup render. The markup back-end is never wrapped, and
 only C output is: Go ends a statement at a line break, and Rust and Go print
 unbroken (`printc.rs (PrintC::set_name)` re-selects the emitter when the
-language changes). Only the console's `print C` (and so plain `kuna decompile` text) is
+language changes). Only the console's `print C` (and so plain `unlace decompile` text) is
 broken: the batch render behind `--json`, `decompile-all` and the browser front-end
 returns records that address its code line by line (warning lines, line
 mappings, the call-argument positions later casts are written at), so
@@ -3526,7 +3526,7 @@ treats success as "there is code here" is not wrong.
 Both channels count occurrences of `UNSTRUCTURED_GOTO_MARKER` in the *rendered
 text*, exported from `p9_emit/kuna_langrust.rs` beside the printer that builds
 the marker from it. Counting the text rather than the emitter is what makes one
-mechanism serve every surface: `kuna decompile` drives `decomp_dbg` as a
+mechanism serve every surface: `unlace decompile` drives `decomp_dbg` as a
 subprocess and would never see an in-engine counter, a `--jobs` worker ships
 framed records across a pipe, and the WASM front-end holds only the document —
 but all of them hold `code`. The matched text includes the marker's unescaped
@@ -3585,7 +3585,7 @@ change local partial-field assignments, which use a separate emission path.
 Two surfaces refuse the language rather than half-honouring it. `unlace-ghidra`
 pins its Clang token-markup document to C (`process.rs`), because that document
 is consumed by Ghidra's C token model and Rust text in C token slots is a GUI
-regression. `kuna decompile-project` errors, because its `.c`/`.h`/`.asm` export
+regression. `unlace decompile-project` errors, because its `.c`/`.h`/`.asm` export
 is C-shaped end to end.
 
 **Verified Go pairs.** `p9_emit/kuna_gopairreturns.rs` renders the pair-result
@@ -3921,9 +3921,9 @@ object (`kuna_cpoolprint.rs (op_new_ir)`, upstream `opNewOp`); the constructor
 call follows as its own statement, as in upstream's output, unless Java's
 `javanew` folds the two.
 
-## 9.7 Whole-program document renders (`kuna decompile-project`, `kuna decompile-graph`)
+## 9.7 Whole-program document renders (`unlace decompile-project`, `unlace decompile-graph`)
 
-**(kuna) Three additive render surfaces** back the `kuna decompile-project`
+**(kuna) Three additive render surfaces** back the `unlace decompile-project`
 project export (the CLI driver is
 `decompiler/crates/unlace-cli/src/decompile_project.rs`; usage in
 `CLAUDE.md`). All three are pure *readers* of finished state — they run
@@ -4038,7 +4038,7 @@ console engine, `decompiler/crates/unlace-console/src/engine.rs
 (ConsoleProgram::sections, disassemble_at, read_bytes, global_data_symbols)`,
 not in this folder.
 
-**The streamed layout.** `kuna decompile-project --stream` (chapter
+**The streamed layout.** `unlace decompile-project --stream` (chapter
 [00](00-overview.md)) drives these same renders one result at a time and
 adds three pieces of its own, none of which a non-stream export can see.
 The linear disassembly walk becomes **resumable**
@@ -4069,7 +4069,7 @@ its running README inventories those, adds the feed form of `index.jsonl` and
 `.streaming`, and says the `.c`/`.h`/`.asm` do not exist until the export
 completes; the completed export writes the `Standard` README itself.
 
-**The graph document.** `kuna decompile-graph`
+**The graph document.** `unlace decompile-graph`
 (`decompiler/crates/unlace-cli/src/decompile_graph.rs`) is another additive reader
 of completed program state: one JSON document holding every discovered function
 with its recovered signature, parameters, C body and assembly, plus the call
@@ -4099,7 +4099,7 @@ document, so a consumer counting functions is not silently counting a subset.
 Assembly comes from the listing walk
 (`decompiler/crates/unlace-cli/src/disassemble.rs (function_listing)`), so an
 undecodable byte inside a body is a `.byte` row and not the loss of the whole
-listing. Edges come from the reference index `kuna xrefs` answers with, through
+listing. Edges come from the reference index `unlace xrefs` answers with, through
 the same call-graph model `--reachable-from` walks
 (`decompiler/crates/unlace-cli/src/callgraph.rs (CallGraph::callees_of)`).
 
@@ -4117,7 +4117,7 @@ middle of a body resolves to the body, and one that lands in no discovered
 function at all — a `CALL 0x0` off a nulled relocation, a branch into a gap
 between entries — is not a call-graph edge and is not emitted, because a
 consumer that has to model containment itself to use the edge list has been given
-the wrong list. An edge's kind is the `kuna xrefs` kind, so the document and that
+the wrong list. An edge's kind is the `unlace xrefs` kind, so the document and that
 command cannot describe one program differently: `call`, `jump` for a tail call or
 a branch into a neighbouring entry, and `data` for a function whose address is
 materialized. The third is not optional decoration — it is how `main` has a
@@ -4207,7 +4207,7 @@ forward-declaration block first, then bodies, an incomplete struct printing as
 `typedef struct FILE FILE; /* opaque */`, a padding gap as `undefined1
 _pad<hexoff>[N];`. It is emitted as whole lines rather than tokens, before
 `begin_function`, because a type definition has no `PcodeOp` or `Varnode` for
-the markup back-end to bind to. A `kuna decompile-project` export therefore
+the markup back-end to bind to. A `unlace decompile-project` export therefore
 *suppresses* the preamble in its bodies
 (`decompiler/crates/unlace-console/src/project.rs (decompile_pulled)`): those
 bodies include a header that already carries every definition, and printing them
@@ -4216,7 +4216,7 @@ option that says exactly that — *this caller renders a header that defines the
 types* (`DecompileOptions::header_carries_types`, set by the export surfaces and
 by a `--jobs` worker serving one, which is the worker the export asks for the
 `.h` type block with `--jobs-types`). It is deliberately **not** keyed on
-`want_proto`: `kuna decompile-graph` asks for prototypes too, and its document
+`want_proto`: `unlace decompile-graph` asks for prototypes too, and its document
 is per-function C with no header artifact, so it keeps the preamble inside
 `codeC` exactly as `decompile-all` keeps it in `code`. The preamble is
 documentation rather than a translation unit — a `undefined1` padding member
@@ -4248,7 +4248,7 @@ definition renderer the language plane is that plane's work, not this option's.
 
 **The machine-readable half.** `decompile_drive.rs
 (extract_type_definitions)` reports the same set as the `types` array of a
-`kuna decompile-all --json` function record: one object per type carrying its
+`unlace decompile-all --json` function record: one object per type carrying its
 name, its definition text (`kuna_structdefs.rs (definition_text)` — the body for
 a complete composite, the enum block, the typedef line, or the opaque forward
 declaration) and its size, so a consumer reads a recovered layout without

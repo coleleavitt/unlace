@@ -8,7 +8,7 @@ use std::process::Command;
 fn decompile(path: &Path, frames: &str, pools: &str) -> Value {
     // `aifdataveto` also refuses the literal as code; the uncorrected pass
     // turns it off with the pool check so the phantom entry is reproduced.
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-all", path.to_str().unwrap(), "--json", "--jobs", "1",
                "--mode", "reliable", "--option", "armframes", frames,
                "--option", "aifpoolslide", pools, "--option", "aifdataveto", pools])

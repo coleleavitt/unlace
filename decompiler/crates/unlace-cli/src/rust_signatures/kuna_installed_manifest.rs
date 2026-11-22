@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use super::{load, Corpus};
 
-const USAGE: &str = "usage: kuna rust-signatures check [--manifest PATH] [--json]\n";
+const USAGE: &str = "usage: unlace rust-signatures check [--manifest PATH] [--json]\n";
 const INSTALLED_MANIFEST: &str = "kuna/rust-signatures/x86_64/linux/manifest.json";
 
 #[derive(Serialize)]

@@ -2,7 +2,7 @@
 //!
 //! ## The defect
 //!
-//! `function_entries_executable` — what `kuna decompile-all`, `decompile-project`
+//! `function_entries_executable` — what `unlace decompile-all`, `decompile-project`
 //! and the browser inventory loop over — kept only entries inside a section
 //! flagged executable. That is a guess about where code lives, and a packer
 //! defeats it for free by not setting the bit: the reported NEOLite-packed PE
@@ -10,9 +10,9 @@
 //! `INITIALIZED_DATA|READ|WRITE`, `.text` included. So
 //!
 //! ```text
-//!   kuna functions BIN --define-function 0x4f7001-0x4f700c=entry   ->  entry, 11 bytes
-//!   kuna decompile BIN entry --define-function ...                 ->  void entry(void) { ... }
-//!   kuna decompile-all BIN --json --define-function ...            ->  count 0, error null
+//!   unlace functions BIN --define-function 0x4f7001-0x4f700c=entry   ->  entry, 11 bytes
+//!   unlace decompile BIN entry --define-function ...                 ->  void entry(void) { ... }
+//!   unlace decompile-all BIN --json --define-function ...            ->  count 0, error null
 //! ```
 //!
 //! The declaration is an assertion, not a guess, so it outranks the flag test —
@@ -123,7 +123,7 @@ fn an_undeclared_data_address_is_still_dropped() {
 
 /// The inventory question the same layout raises on the OTHER surface.
 ///
-/// `kuna functions` reports the canonical inventory, which keeps import pointer
+/// `unlace functions` reports the canonical inventory, which keeps import pointer
 /// slots so a call to an import renders its name. Add an import table to the
 /// all-data PE and that inventory is three entries and no bodies — non-empty,
 /// so a surface asking "did discovery find anything?" with `is_empty()` gets the

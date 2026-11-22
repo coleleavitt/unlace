@@ -30,7 +30,7 @@ Every named CLI flag is rejected with `error: unknown option`, verified on the r
 
 Asserts the DESIRED behaviour: an agent states two RANGE facts kuna cannot derive
 -- eight bytes of `.data` that nothing ever writes, and a device word outside every
-loaded section -- on one `kuna decompile --json`, and both land in the emitted C
+loaded section -- on one `unlace decompile --json`, and both land in the emitted C
 while the run reports each one's fate machine-readably at its own phase
 coordinates. FAILS at `ed353fb2`: exit 2, `unknown directive "readonly"` (Stage A
 shipped `--assert` with nine directives, none of them a range).
@@ -129,7 +129,7 @@ Refutation below.
       }
     ]
   },
-  "notes": "Desired: two range facts an agent knows and kuna cannot derive, on one `kuna decompile --json`. scale/bias are .data (writable, so never loader-readonly) and nothing writes them: asserted readonly they fold to `* 7` / `+ 100`. 0x50000000 is device memory, so kuna CSEs its two reads into one; asserted volatile keeps both. FAILS at ed353fb2: exit 2, unknown directive. In-repo fixture.",
+  "notes": "Desired: two range facts an agent knows and kuna cannot derive, on one `unlace decompile --json`. scale/bias are .data (writable, so never loader-readonly) and nothing writes them: asserted readonly they fold to `* 7` / `+ 100`. 0x50000000 is device memory, so kuna CSEs its two reads into one; asserted volatile keeps both. FAILS at ed353fb2: exit 2, unknown directive. In-repo fixture.",
   "probe_id": "a-567d3207ce62"
 }
 ```

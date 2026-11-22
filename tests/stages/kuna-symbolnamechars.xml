@@ -21,7 +21,7 @@
              which call went where).
 
     `symbolnamechars` (off|safe|ident, default safe) sanitizes at the MINT,
-    which is the loader's symbol walk, not the printer: `kuna decompile NAME`
+    which is the loader's symbol walk, not the printer: `unlace decompile NAME`
     and the console's `load function` key on the string in the symbol
     table, so a printer-side fix would make the name in the .c one you
     can no longer hand back to the CLI. Under `safe` each offending byte

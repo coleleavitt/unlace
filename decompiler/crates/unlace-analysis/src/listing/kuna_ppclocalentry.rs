@@ -10,7 +10,7 @@
 //! module — branches instead. The distance between the two lives in the symbol's
 //! `st_other` field (`readelf -sW` prints it as `[<localentry>: 8]`).
 //!
-//! Nothing in kuna read that field, so the recursive-descent walk saw an
+//! Nothing in unlace read that field, so the recursive-descent walk saw an
 //! intra-module `bl` land eight bytes past a function symbol and did what it does
 //! for every other CALL target: it minted a function there. On an ordinary
 //! `gcc`-built ppc64le image that splits **every locally-called function into
@@ -24,7 +24,7 @@
 //!
 //! The husk is what an agent actually gets back. `p2_lift`'s `funcboundflow`
 //! then truncates the flow at the first *known function entry* it falls through
-//! into — which is the split it was handed — so `kuna decompile
+//! into — which is the split it was handed — so `unlace decompile
 //! __do_global_ctors_aux` emits an empty body with a `funcboundflow:
 //! fall-through reached the next function entry` warning, and the constructor
 //! loop is nowhere in the output under the name it belongs to.

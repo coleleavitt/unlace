@@ -1,5 +1,5 @@
 /* Fixture for the `structsynth` layout ledger's convergence sweep under
- * `kuna decompile-all` (PR: share one layout across functions by subsumption).
+ * `unlace decompile-all` (PR: share one layout across functions by subsumption).
  *
  * Three readers of one record, in address order:
  *

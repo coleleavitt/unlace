@@ -3,7 +3,7 @@
 //! Compiles one `.slaspec` or, with `-a`, a directory tree. An omitted output
 //! path selects the input's sibling `.sla` file.
 //!
-//! [`main`] is the whole program, so the `slacomp` binary and `kuna`'s own
+//! [`main`] is the whole program, so the `slacomp` binary and `unlace`'s own
 //! `slacomp` subcommand run the identical compiler.
 
 use std::collections::BTreeMap;

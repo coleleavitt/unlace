@@ -64,7 +64,7 @@ void sub_4041e2(int4 a0)
 50 LOC, 4 `if`s and **1 loop that does not exist in this function**.
 
 **The proof that this is an overrun, not a discovery difference**: kuna's *own*
-function list contains an entry at `0x40424c`, and `kuna decompile-all` emits it
+function list contains an entry at `0x40424c`, and `unlace decompile-all` emits it
 separately as `sub_40424c` — whose body is the trailing `while` loop above,
 statement for statement. kuna emits the same code twice.
 
@@ -106,7 +106,7 @@ function's entire body.
 
 ### Root cause (instrumented, not read)
 
-kuna's PE loader **does** resolve the import table. `kuna functions mydoom.exe --json`
+kuna's PE loader **does** resolve the import table. `unlace functions mydoom.exe --json`
 lists 149 named symbols, including exactly the right one:
 
 ```
@@ -186,7 +186,7 @@ Not an artifact. Source CFG 5 nodes / 6 edges, `degenerate_source: false`,
 
 ### Breadth
 
-`kuna decompile-all --json` on the two PE projects in the corpus:
+`unlace decompile-all --json` on the two PE projects in the corpus:
 
 | binary | fns emitted | `(*dat_…)()` IAT-slot calls | fns overrunning a Win32 exit |
 |---|---|---|---|

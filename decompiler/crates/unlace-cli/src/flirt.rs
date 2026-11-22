@@ -1,8 +1,8 @@
-//! `kuna flirt make`: write FLIRT `.pat` and `.sig` files from the functions
+//! `unlace flirt make`: write FLIRT `.pat` and `.sig` files from the functions
 //! of object files or static libraries.
 //!
 //! ```text
-//!   kuna flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]
+//!   unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]
 //! ```
 //!
 //! The patterns come from `unlace_analysis::flirt::kuna_flirtpat` and the `.sig`
@@ -26,13 +26,13 @@ struct Library {
     short: usize,
 }
 
-/// Dispatch `kuna flirt <subcommand>`.
+/// Dispatch `unlace flirt <subcommand>`.
 pub fn run(argv: &[String]) -> i32 {
     match argv.first().map(String::as_str) {
         Some("make") => match make(&argv[1..]) {
             Ok(()) => 0,
             Err((status, e)) => {
-                eprintln!("kuna flirt make: {e}");
+                eprintln!("unlace flirt make: {e}");
                 if status == 2 {
                     usage();
                 }
@@ -45,8 +45,8 @@ pub fn run(argv: &[String]) -> i32 {
         }
         other => {
             match other {
-                Some(other) => eprintln!("kuna flirt: unknown subcommand {other:?}"),
-                None => eprintln!("kuna flirt: missing subcommand (try `kuna flirt make ...`)"),
+                Some(other) => eprintln!("unlace flirt: unknown subcommand {other:?}"),
+                None => eprintln!("unlace flirt: missing subcommand (try `unlace flirt make ...`)"),
             }
             usage();
             2
@@ -56,7 +56,7 @@ pub fn run(argv: &[String]) -> i32 {
 
 fn usage() {
     eprintln!(
-        "usage: kuna flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
+        "usage: unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
          \n\
          Write FLIRT patterns for the functions of object files or static libraries.\n\
          -o is the `.pat` text: one line per function with a global name, bytes a\n\
@@ -94,26 +94,26 @@ fn make(argv: &[String]) -> Result<(), (i32, String)> {
     for input in &inputs {
         let before = lib.patterns.len();
         add_input(&mut lib, input).map_err(|e| (1, format!("{input}: {e}")))?;
-        eprintln!("kuna flirt make: {input}: {} pattern(s)", lib.patterns.len() - before);
+        eprintln!("unlace flirt make: {input}: {} pattern(s)", lib.patterns.len() - before);
     }
     lib.patterns.sort();
     lib.patterns.dedup();
     if lib.short > 0 {
-        eprintln!("kuna flirt make: {} function(s) with too few fixed bytes left out", lib.short);
+        eprintln!("unlace flirt make: {} function(s) with too few fixed bytes left out", lib.short);
     }
     let target = lib.target.filter(|_| !lib.patterns.is_empty());
     let target = target.ok_or_else(|| (1, "the inputs define no function with a global name".to_string()))?;
     std::fs::write(&out, write_pat(&lib.patterns)).map_err(|e| (1, format!("cannot write {out}: {e}")))?;
-    eprintln!("kuna flirt make: wrote {out} ({} pattern(s))", lib.patterns.len());
+    eprintln!("unlace flirt make: wrote {out} ({} pattern(s))", lib.patterns.len());
 
     let Some(sig) = sig else { return Ok(()) };
     let built = build_sig(&lib.patterns, &lib.data_names, target, &libname).map_err(|e| (1, e))?;
     for c in &built.collisions {
-        eprintln!("kuna flirt make: collision: {} are not told apart; left out of {sig}", c.names.join(", "));
+        eprintln!("unlace flirt make: collision: {} are not told apart; left out of {sig}", c.names.join(", "));
     }
     std::fs::write(&sig, &built.bytes).map_err(|e| (1, format!("cannot write {sig}: {e}")))?;
     eprintln!(
-        "kuna flirt make: wrote {sig} ({} module(s), {} unresolved collision(s))",
+        "unlace flirt make: wrote {sig} ({} module(s), {} unresolved collision(s))",
         built.modules,
         built.collisions.len()
     );

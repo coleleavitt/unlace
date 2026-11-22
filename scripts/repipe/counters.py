@@ -8,14 +8,14 @@ and the right answer was 87 (docs/decbench-loop.md, "Shared counters in a busy q
 The rule written down there is this file's whole design: **derive every shared counter from
 a fresh capture on the rebased tree, never by arithmetic.** There is deliberately no
 "base + mine + theirs" anywhere below -- every number is measured now, from phases.toml,
-from a live `kuna catalog --json`, and from the files on disk.
+from a live `unlace catalog --json`, and from the files on disk.
 
 The counters, how each is measured, and where each is hard-coded:
 
     settables (127)         `[[settable]]` blocks in unlace-decomp/phases.toml
                             -> kuna_phases/tests.rs   2 asserts + the test fn NAME
                             -> catalog_bytecompat.rs  3 FIXTURE.matches asserts + the fn NAME
-    tiers (28/52/47)        row["tier"] tally from `kuna catalog --json`
+    tiers (28/52/47)        row["tier"] tally from `unlace catalog --json`
                             -> kuna_phases/tests.rs   the tuple assert + the test fn NAME
     catalog buckets         field/value tallies over the same catalog rows
                             -> tests/stages/kuna-catalog.xml  per-bucket stringmatch min/max
@@ -229,7 +229,7 @@ def settables_from_phases_toml(repo=None) -> int:
 
 
 def catalog_rows(repo=None, kuna=None) -> list:
-    """The live `kuna catalog --json` rows. A capture, not a parse of the source of truth."""
+    """The live `unlace catalog --json` rows. A capture, not a parse of the source of truth."""
     exe = Path(kuna) if kuna else config.kuna_bin()
     if not exe.exists():
         raise DeriveError("kuna binary not built at {} (cargo build --release -p unlace-cli)".format(exe))
@@ -238,17 +238,17 @@ def catalog_rows(repo=None, kuna=None) -> list:
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               timeout=CATALOG_TIMEOUT)
     except subprocess.TimeoutExpired:
-        raise DeriveError("`kuna catalog --json` timed out after {}s".format(CATALOG_TIMEOUT))
+        raise DeriveError("`unlace catalog --json` timed out after {}s".format(CATALOG_TIMEOUT))
     if proc.returncode != 0:
-        raise DeriveError("`kuna catalog --json` exited {}: {}".format(
+        raise DeriveError("`unlace catalog --json` exited {}: {}".format(
             proc.returncode, proc.stderr.decode("utf-8", "replace").strip()[:400]))
     try:
         data = json.loads(proc.stdout.decode("utf-8"))
     except ValueError as exc:
-        raise DeriveError("`kuna catalog --json` emitted unparseable JSON: {}".format(exc))
+        raise DeriveError("`unlace catalog --json` emitted unparseable JSON: {}".format(exc))
     rows = data.get("settables", data) if isinstance(data, dict) else data
     if not isinstance(rows, list) or not rows:
-        raise DeriveError("`kuna catalog --json` returned no settable rows")
+        raise DeriveError("`unlace catalog --json` returned no settable rows")
     return rows
 
 

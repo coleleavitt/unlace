@@ -6,7 +6,7 @@ mod fixture;
 fn decompile(bytes: &[u8], entry: &str, enabled: bool) -> String {
     let path = common::scratch_file("ppc32-call-contract", "elf");
     std::fs::write(&path, bytes).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", path.to_str().unwrap(), entry, "--mode", "fast", "--option", "voidtailreturn", "off", "--option", "ppc32picimports", if enabled { "on" } else { "off" }])
         .output().unwrap();
     std::fs::remove_file(path).unwrap();
@@ -155,7 +155,7 @@ fn call_names_and_xrefs_agree_without_renaming_functions() {
     let (returning, terminal) = fixture::cache_pair();
     let path = common::scratch_file("ppc32-scoped-xrefs", "elf");
     let run = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna")).args(args).output().unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().unwrap();
         assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
         String::from_utf8(out.stdout).unwrap()
     };
@@ -194,7 +194,7 @@ fn shared_tail_calls_have_the_same_import_in_decompilation_and_xrefs() {
         let path = common::scratch_file("ppc32-shared-tail-xrefs", "elf");
         std::fs::write(&path, bytes).unwrap();
         let query = |direction: &str, target: &str, enabled: bool| {
-            let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args(["xrefs", path.to_str().unwrap(), direction, target, "--json", "--kind", "call",
                     "--mode", "fast", "--option", "ppc32picimports", if enabled { "on" } else { "off" }])
                 .output().unwrap();
@@ -210,7 +210,7 @@ fn shared_tail_calls_have_the_same_import_in_decompilation_and_xrefs() {
         assert_eq!(query("--to", "0x3000", true), incoming);
         assert!(query("--from", "check", true).iter().any(|r| r["from_address"] == 0x100c && r["to_address"] == 0x3000));
         assert!(!query("--from", "check2", true).iter().any(|r| r["to_address"] == 0x3000));
-        let text = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let text = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["xrefs", path.to_str().unwrap(), "--to", "__stack_chk_fail", "--option", "ppc32picimports", "on"])
             .output().unwrap();
         assert!(text.status.success());
@@ -220,7 +220,7 @@ fn shared_tail_calls_have_the_same_import_in_decompilation_and_xrefs() {
         let shared = query("--to", "__stack_chk_fail", true);
         assert_eq!(shared.len(), 1);
         assert!(shared[0]["from_function"].is_null(), "{shared:?}");
-        let text = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let text = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["xrefs", path.to_str().unwrap(), "--to", "__stack_chk_fail", "--option", "ppc32picimports", "on"])
             .output().unwrap();
         let text = String::from_utf8(text.stdout).unwrap();
@@ -296,7 +296,7 @@ fn indirect_xrefs_include_decoded_instructions() {
             std::fs::write(&path, f.bytes()).unwrap();
             for (direction, target) in [("--from", "check"), ("--to", "__stack_chk_fail")] {
                 for json in [false, true] {
-                    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+                    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
                     cmd.args(["xrefs", path.to_str().unwrap(), direction, target, "--kind", "call",
                         "--mode", "fast", "--option", "ppc32picimports", "on"]);
                     if json { cmd.arg("--json"); }
@@ -409,7 +409,7 @@ fn xrefs_prove_only_the_entries_a_query_can_report() {
         let path = common::scratch_file("ppc32-scoped-xref-selection", "elf");
         std::fs::write(&path, f.bytes()).unwrap();
         let query = |args: &[&str]| {
-            let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
             cmd.arg("xrefs").arg(&path).args(args)
                 .args(["--json", "--mode", "fast", "--option", "ppc32picimports", "on"]);
             let out = cmd.output().unwrap();

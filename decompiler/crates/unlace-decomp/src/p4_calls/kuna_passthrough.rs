@@ -77,7 +77,7 @@
 //! callee recovered as `rdi` but reads as `edi` becomes the caller's `int`.
 //!
 //! Nothing is added for a callee that stated nothing: a single-function
-//! `kuna decompile`, a narrowed or sharded `decompile-all`, an import,
+//! `unlace decompile`, a narrowed or sharded `decompile-all`, an import,
 //! `--option protoorder off`, and under `--option protoorder types` a callee
 //! inside a recursive component, all leave every call as it was. Under the
 //! default `cycles` a recursive callee states its list like any other, and what

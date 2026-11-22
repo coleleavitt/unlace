@@ -116,7 +116,7 @@ Review PRs in the fork (github.com/coleleavitt/kuna):
 | #6 | apple/arm64e-pac | apple/objc-selrefs | 7: `ptrauthtrap`, `authptrcall`, bind addends |
 | #7 | apple/compact-unwind | main | 9: `__unwind_info` function starts (option `unwindstarts`, off) |
 | #8 | apple/cfstring | main | 6: `__cfstring` literals (option `cfstrings`) |
-| #9 | apple/dyld-cache | main | 5: dyld shared cache (options `dyldimage`, `dyldcrossrefs`; `kuna unpack`) |
+| #9 | apple/dyld-cache | main | 5: dyld shared cache (options `dyldimage`, `dyldcrossrefs`; `unlace unpack`) |
 | #10 | apple/macho-loader | main | 6: data reads through import slots (option `importdata`) |
 | #11 | apple/objc-sdk-signatures | apple/objc-metadata | follow-up: ObjC signatures from SDK headers (option `objcsdk`, runtime input only) |
 | #12 | apple/elf-gotdata | apple/macho-loader | follow-up: ELF `GLOB_DAT` GOT data imports |

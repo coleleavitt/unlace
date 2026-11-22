@@ -39,7 +39,7 @@ pub fn fixture(name: &str) -> String {
 }
 
 pub fn run_kuna(args: &[&str]) -> (String, String, i32) {
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
         .expect("spawn kuna");

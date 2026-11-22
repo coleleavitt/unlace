@@ -544,7 +544,7 @@ fn option_anchor(st: &KunaSettable) -> String {
 }
 
 /// Render the whole settable catalog as the tier-grouped Markdown document
-/// committed at `docs/options.md` (regenerate: `kuna catalog --markdown >
+/// committed at `docs/options.md` (regenerate: `unlace catalog --markdown >
 /// docs/options.md`; freshness fenced by `tests/options_md_fresh.rs`).
 ///
 /// Built straight from [`SETTABLE_TABLE`] (no live values -- the document
@@ -555,13 +555,13 @@ pub fn emit_catalog_markdown() -> String {
     let mut out = String::new();
     out.push_str("# kuna option catalog\n\n");
     out.push_str(
-        "**Generated** by `kuna catalog --markdown` from `settableTable` in \
+        "**Generated** by `unlace catalog --markdown` from `settableTable` in \
          `decompiler/crates/unlace-decomp/phases.toml` -- do not edit by hand; \
          edit the registry row and regenerate.\n\n",
     );
     out.push_str(
-        "Set any option per run: `kuna decompile <bin> <fn> --option <name> <value>` \
-         (repeatable), `kuna decompile-all <bin> --option <name> <value>`, or the \
+        "Set any option per run: `unlace decompile <bin> <fn> --option <name> <value>` \
+         (repeatable), `unlace decompile-all <bin> --option <name> <value>`, or the \
          console `option <name> <value>`. Defaults are the shipped values; what a \
          default does is described in its row below. The algorithms behind these \
          options are described in `docs/spec/`.\n\n",
@@ -654,7 +654,7 @@ pub fn emit_catalog_markdown() -> String {
         }
     }
     out.push_str(
-        "## Programmatic use\n\n```bash\n# discover (machine-readable; includes tier + symptoms):\nkuna catalog --json\n\n# transforms only:\nkuna catalog --tier transform\n\n# decompile with an option flipped (repeatable):\nkuna decompile ./a.out main --option gotoreduce off\nkuna decompile ./sparc.elf main --option returnpair single\n```\n",
+        "## Programmatic use\n\n```bash\n# discover (machine-readable; includes tier + symptoms):\nunlace catalog --json\n\n# transforms only:\nunlace catalog --tier transform\n\n# decompile with an option flipped (repeatable):\nunlace decompile ./a.out main --option gotoreduce off\nunlace decompile ./sparc.elf main --option returnpair single\n```\n",
     )
 ;
     out

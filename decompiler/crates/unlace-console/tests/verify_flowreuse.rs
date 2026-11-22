@@ -1,4 +1,4 @@
-//! End-to-end gate for the **adopted flow follow**: `kuna decompile` drives the
+//! End-to-end gate for the **adopted flow follow**: `unlace decompile` drives the
 //! console with `load function <fn>` and then `decompile`, and each of those used
 //! to follow the same function's flow from scratch — lift, block build, and the
 //! per-jump-table sub-decompilation, all twice.
@@ -11,7 +11,7 @@
 //! `parse line` prototype, `map param` storage locks, `override prototype` facts —
 //! are consumed AT FLOW TIME and `load function` applies none of them. So the
 //! rebuild is required exactly when one of those is present, and pure waste when
-//! none is, which is every plain `kuna decompile <bin> <fn>`.
+//! none is, which is every plain `unlace decompile <bin> <fn>`.
 //!
 //! `IfcDecompile` now adopts the loaded IR when it can prove the rebuild would
 //! repeat the same follow (`unlace_console::ifacedecomp::PristineFlow`). The

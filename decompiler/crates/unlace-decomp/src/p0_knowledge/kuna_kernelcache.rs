@@ -3,7 +3,7 @@
 //! `MH_FILESET` kernel collection it loads.
 //!
 //! Loading happens before any per-function `option` command, so the live gate is
-//! the [`KERNELCACHE_ENV`] environment variable, exported by the `kuna` CLI and
+//! the [`KERNELCACHE_ENV`] environment variable, exported by the `unlace` CLI and
 //! bridged from the console `option` command.
 
 use unlace_base::error::{KunaError, KunaResult};

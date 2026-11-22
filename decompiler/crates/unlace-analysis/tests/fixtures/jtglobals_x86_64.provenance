@@ -6,7 +6,7 @@ What it is
   `big` makes 400 calls, each between a read and a write of one of 400 writable
   globals, and ends in a 16-case switch compiled to a jump table. Recovering the
   table runs the jump-table sub-pipeline over everything before it, which
-  guards every global at every call, while `kuna decompile`'s `load addr`
+  guards every global at every call, while `unlace decompile`'s `load addr`
   follows flow and before the decompile drive starts.
 
 Why it is vendored

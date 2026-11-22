@@ -1,4 +1,4 @@
-adrnext_* -- the fixtures for `kuna xrefs` over an address that is the
+adrnext_* -- the fixtures for `unlace xrefs` over an address that is the
 instruction right after the one forming it (GH #1360), and over the return
 address every kind of link leaves, which is never a reference
 (decompiler/crates/unlace-cli/tests/xrefs_cli.rs).

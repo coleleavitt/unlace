@@ -8,7 +8,7 @@
 //!
 //! `funcextent` clips each entry against the loader's CODE sections, and a
 //! sectionless image publishes none, so every entry took the "outside every
-//! CODE section" sentinel and the whole binary reported `0`. `kuna functions
+//! CODE section" sentinel and the whole binary reported `0`. `unlace functions
 //! --min-size 1` then discarded all of it (`docs/re-needs/`
 //! `zero-function-sizes-make.md`: count 0 of total 12, no error). The fallback
 //! clips against the executable load segments instead, which is where these

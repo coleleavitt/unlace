@@ -64,12 +64,12 @@ fn relocated_tables_preserve_values_after_independent_relayout() {
     ];
     let names = prototypes.map(|(name, _)| name).join(",");
     let runner =
-        std::env::var_os("KUNA_TEST_RUNNER").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_RUNNER").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let mut command = Command::new(runner);
     command
         .env(
             "KUNA_BINARY",
-            std::env::var_os("KUNA_BINARY").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into()),
+            std::env::var_os("KUNA_BINARY").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
         )
         .env("KUNA_SPECS", common::repo_root().join("specs"))
         .args(["decompile-all"])

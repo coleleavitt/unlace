@@ -166,7 +166,7 @@ fn console(budget: Option<Duration>, cmds: &[&str]) -> String {
     status.optr
 }
 
-/// `load addr` follows flow before any drive (`kuna decompile`'s script), so
+/// `load addr` follows flow before any drive (`unlace decompile`'s script), so
 /// it is held to the same budget and fails rather than spin in table recovery.
 #[test]
 fn console_load_follows_flow_under_the_budget() {

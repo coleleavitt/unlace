@@ -343,7 +343,7 @@ fn dynamic_entry_mechanisms_without_a_body_do_not_fail_the_function() {
     ] {
         let image = common::scratch_file("dynamic-entry-mechanism", "bin");
         std::fs::write(&image, bytes).unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .env("KUNA_SPECS", common::repo_root().join("specs"))
             .args([
                 "decompile",
@@ -370,7 +370,7 @@ fn dynamic_entry_mechanisms_without_a_body_do_not_fail_the_function() {
 fn default_keeps_a_local_in_the_elfv1_toc_slot_of_an_elfv2_frame() {
     let binary = common::fixture("callmech_tocslot_ppc64le.o");
     let returned = |value: Option<&str>| {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command
             .env("KUNA_SPECS", common::repo_root().join("specs"))
             .args(["decompile", &binary, "two_calls"]);

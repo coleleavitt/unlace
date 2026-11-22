@@ -1,4 +1,4 @@
-upx_packed_x86_64 -- the UPX-packed fixture for `kuna unpack` / `unlace_analysis::upx`.
+upx_packed_x86_64 -- the UPX-packed fixture for `unlace unpack` / `unlace_analysis::upx`.
 
 What it is
   An x86-64 PIE ncurses "snake" game packed with UPX 3.96 (the banner string is
@@ -20,7 +20,7 @@ Why it is vendored rather than built
 Where it came from
   The RE-friction loop's round-20 witness: challenge 64f1f7afd931496abf909525 in
   the kuna-re-dataset crackme corpus, `bin/snake`, byte-identical. That is the
-  binary on which a tester found `kuna functions` returning zero functions and
+  binary on which a tester found `unlace functions` returning zero functions and
   filed docs/re-needs/unpack-upx-packed-executable.md.
 
   sha256(packed)   see `sha256sum upx_packed_x86_64`

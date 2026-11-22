@@ -1,4 +1,4 @@
-//! Gate for `kuna blobs`, the embedded-file inventory, driven through the built
+//! Gate for `unlace blobs`, the embedded-file inventory, driven through the built
 //! binary on the `embedded_blobs_x86_64.so` fixture: a PNG, a GIF, a JPEG, a zip
 //! and a gzip in `.rodata`, each returned by one function, and a PNG cut before
 //! its `IEND` chunk.
@@ -21,7 +21,7 @@ fn fixture() -> String {
 }
 
 fn run_kuna(args: &[&str]) -> (String, String, i32) {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna")).args(args).output().expect("spawn kuna");
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().expect("spawn kuna");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),

@@ -239,7 +239,7 @@ pub struct HostLocalVar {
 }
 
 impl SimOracle {
-    /// Bootstrap the oracle over a vendored ELF, exactly as `kuna decompile`
+    /// Bootstrap the oracle over a vendored ELF, exactly as `unlace decompile`
     /// does in-process: `load file` → the CLI's default options (`listing on` +
     /// the size-resolved mode preset) → `read symbols`.
     ///
@@ -1441,7 +1441,7 @@ pub fn generate_tspec(manager: &AddrSpaceManager, big_endian: bool, unique_base:
     .into_bytes()
 }
 
-/// Apply the options `kuna decompile` would inject for this binary size:
+/// Apply the options `unlace decompile` would inject for this binary size:
 /// `listing on` plus the `auto`-resolved mode preset (aggressive under
 /// 500 KiB) — the CLI-default ground truth the differential pins against.
 pub fn apply_cli_default_options(prog: &mut ConsoleProgram, size_bytes: u64) {

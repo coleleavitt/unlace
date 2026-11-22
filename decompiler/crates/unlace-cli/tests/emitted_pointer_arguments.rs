@@ -52,7 +52,7 @@ fn object(funcs: &[Func]) -> PathBuf {
 }
 
 fn decompile(input: &PathBuf, extra: &[&str]) -> String {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-all", input.to_str().unwrap()])
         .args(extra)
         .output()
@@ -162,7 +162,7 @@ int main(void) {
         }
         for jobs in ["1", "2"] {
             let dir = common::scratch_file("pointer-project", "dir");
-            let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args(["decompile-project", input.to_str().unwrap(), "-o", dir.to_str().unwrap(),
                     "--functions", "change,sink", "--option", "protoorder", "off", "--jobs", jobs,
                     "--jobs-chunk", "1"])
@@ -200,7 +200,7 @@ fn every_buffered_document_prints_the_same_call() {
     let all = decompile(&input, &["--option", "protoorder", "off"]);
     assert!(all.contains("sink((unsigned char *)&"), "{all}");
     for jobs in ["1", "2"] {
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile-graph", input.to_str().unwrap(), "--jobs", jobs, "--jobs-chunk", "1"])
             .output()
             .unwrap();
@@ -209,7 +209,7 @@ fn every_buffered_document_prints_the_same_call() {
         assert!(graph.contains("sink((unsigned char *)&"), "--jobs {jobs}: {graph}");
     }
     let dir = common::scratch_file("pointer-stream", "dir");
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-project", input.to_str().unwrap(), "-o", dir.to_str().unwrap(), "--stream"])
         .output()
         .unwrap();

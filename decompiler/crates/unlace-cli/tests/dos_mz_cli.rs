@@ -164,7 +164,7 @@ fn unrelocated_dos_image() -> Vec<u8> {
 }
 
 fn kuna(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_kuna")).args(args).output().expect("run kuna")
+    Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().expect("run kuna")
 }
 
 fn written(stem: &str, bytes: &[u8]) -> std::path::PathBuf {
@@ -204,7 +204,7 @@ fn a_pklite_stub_is_named_on_load() {
     let out = kuna(&["functions", path.to_str().unwrap()]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("PKLITE-compressed") && stderr.contains("run `kuna unpack`"), "{stderr}");
+    assert!(stderr.contains("PKLITE-compressed") && stderr.contains("run `unlace unpack`"), "{stderr}");
     std::fs::remove_file(&path).unwrap();
 }
 

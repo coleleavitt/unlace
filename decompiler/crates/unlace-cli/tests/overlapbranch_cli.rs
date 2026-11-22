@@ -39,11 +39,11 @@ fn decompile(extra: &[&str]) -> String {
     let mut args: Vec<&str> =
         vec!["decompile", &binary, "0x804881c", "--addr", "--sleighpath", &sleigh];
     args.extend_from_slice(extra);
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna")).args(&args).output().expect("spawn kuna");
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(&args).output().expect("spawn kuna");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if !out.status.success() {
-        panic!("kuna decompile failed: {stderr}");
+        panic!("unlace decompile failed: {stderr}");
     }
     stdout
 }

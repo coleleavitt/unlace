@@ -128,7 +128,7 @@ fn aarch64_image() -> Vec<u8> {
 fn decompile(bytes: &[u8], passthrough: bool) -> String {
     let path = common::scratch_file("tail-call-returns", "o");
     std::fs::write(&path, bytes).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args(["decompile-all", path.to_str().unwrap(), "--mode", "aggressive"]);
     if !passthrough {
         command.args(["--option", "passthrough", "off"]);

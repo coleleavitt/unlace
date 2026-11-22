@@ -101,7 +101,7 @@ fn check_target_cpu(target: &str, cpu: &str, width: usize, capacity: usize) {
         "type wrap_float::v1 Packet".to_owned(),
     ];
     let project = root.join("project");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .arg("decompile-project")
         .arg(&binary)

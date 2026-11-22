@@ -35,7 +35,7 @@ fn archive_members_keep_the_vendored_database_and_leave_no_staging_files() {
     let input = scratch.path().join("library.a");
     let output = scratch.path().join("library.fid");
     std::fs::write(&input, archive).unwrap();
-    let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["fid", "build"])
         .arg(&input)
         .arg("-o")
@@ -46,7 +46,7 @@ fn archive_members_keep_the_vendored_database_and_leave_no_staging_files() {
         .env("TMP", &staging)
         .env("TEMP", &staging)
         .output()
-        .expect("run kuna fid build");
+        .expect("run unlace fid build");
     assert_eq!(
         result.status.code(),
         Some(0),
@@ -56,7 +56,7 @@ fn archive_members_keep_the_vendored_database_and_leave_no_staging_files() {
     assert!(result.stdout.is_empty());
     assert!(String::from_utf8_lossy(&result.stderr).contains("6 record(s)"));
     assert_eq!(std::fs::read(&output).unwrap(), expected);
-    let query = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let query = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["fid", "query"]).arg(common::repo_root().join("tests/fixtures/fid/prog"))
         .arg("--db").arg(&output).args(["--addr", "0x401810", "--json"])
         .env("SLEIGHHOME", common::repo_root().join("specs")).output().unwrap();
@@ -80,7 +80,7 @@ fn an_archive_no_member_of_which_the_language_describes_is_refused() {
     let input = scratch.path().join("library.a");
     let output = scratch.path().join("library.fid");
     std::fs::write(&input, archive).unwrap();
-    let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["fid", "build"])
         .arg(&input)
         .arg("-o")
@@ -104,7 +104,7 @@ fn query_reports_candidates_collisions_and_invalid_databases() {
     let fixture = root.join("tests/fixtures/fid/lib.fid");
     let scratch = tempfile::tempdir().unwrap();
     let invoke = |db: &std::path::Path| {
-        Command::new(env!("CARGO_BIN_EXE_kuna"))
+        Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["fid", "query"]).arg(&binary).arg("--db").arg(db)
             .args(["--addr", "0x4017c0", "--json"])
             .env("SLEIGHHOME", root.join("specs"))
@@ -122,7 +122,7 @@ fn query_reports_candidates_collisions_and_invalid_databases() {
     assert_eq!(value["candidates"][0]["specific_hash_matches"], false);
     assert_eq!(value["specific_hash_evidence"], "no_candidate_matches");
     assert_eq!(value["candidates"][0]["code_unit_size_matches"], true);
-    let batch = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let batch = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["fid", "query"]).arg(&binary).arg("--db").arg(&fixture)
         .args(["--addr", "0x4017c0", "--addr", "0x0", "--addr", "0x4017c0", "--json"])
         .env("SLEIGHHOME", root.join("specs")).output().unwrap();
@@ -131,14 +131,14 @@ fn query_reports_candidates_collisions_and_invalid_databases() {
     assert_eq!(batch["queries"][0], value);
     assert_eq!(batch["queries"][2], value);
     let addresses = ["0x4017c0", "0x401810", "0x401840", "0x401870", "0x4017c1"];
-    let mut multi = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut multi = Command::new(env!("CARGO_BIN_EXE_unlace"));
     multi.args(["fid", "query"]).arg(&binary).arg("--db").arg(&fixture);
     for address in addresses { multi.args(["--addr", address]); }
     let output = multi.arg("--json").env("SLEIGHHOME", root.join("specs")).output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     for (index, address) in addresses.iter().enumerate() {
-        let single = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let single = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["fid", "query"]).arg(&binary).arg("--db").arg(&fixture)
             .args(["--addr", address, "--json"]).env("SLEIGHHOME", root.join("specs"))
             .output().unwrap();
@@ -204,7 +204,7 @@ fn thumb_pointers_use_the_discovered_mode_and_isolate_batch_context() {
     std::fs::write(&binary, bytes).unwrap();
     let db = scratch.path().join("arm.fid");
     let object = common::fixture("fid_thumb_probe.o");
-    let build = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let build = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["fid", "build"]).arg(&object).arg("-o").arg(&db)
         .args(["--lang", "ARM:LE:32:v8", "--cspec", "default"])
         .env("SLEIGHHOME", root.join("specs")).output().unwrap();
@@ -212,7 +212,7 @@ fn thumb_pointers_use_the_discovered_mode_and_isolate_batch_context() {
     let parsed = FidDb::load(&std::fs::read(&db).unwrap()).unwrap();
     assert!(parsed.records().iter().any(|record| record.name == "thumb_probe"));
     let call = |addresses: &[&str]| {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command.args(["fid", "query"]).arg(&binary).arg("--db").arg(&db);
         for address in addresses { command.args(["--addr", address]); }
         let output = command.arg("--json").env("SLEIGHHOME", root.join("specs")).output().unwrap();
@@ -249,7 +249,7 @@ fn query_keeps_the_cli_contract_for_addresses_usage_errors_and_closed_pipes() {
     let binary = root.join("tests/fixtures/fid/prog");
     let db = root.join("tests/fixtures/fid/lib.fid");
     let kuna = |args: &[&str]| {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command.args(["fid", "query"]).arg(&binary).args(args).env("SLEIGHHOME", root.join("specs"));
         command
     };
@@ -270,7 +270,7 @@ fn query_keeps_the_cli_contract_for_addresses_usage_errors_and_closed_pipes() {
     ] {
         let out = kuna(args).output().unwrap();
         assert_eq!(out.status.code(), Some(2), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
-        assert!(String::from_utf8_lossy(&out.stderr).contains("usage: kuna fid query"));
+        assert!(String::from_utf8_lossy(&out.stderr).contains("usage: unlace fid query"));
     }
 
     let mut child = kuna(&["--db", db.to_str().unwrap(), "--addr", "0x4017c0", "--addr", "0x401810", "--json"])

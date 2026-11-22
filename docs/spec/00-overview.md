@@ -264,7 +264,7 @@ Four front-ends drive one engine assembly:
   (`decompiler/crates/unlace-harness/src/bin/decomp_test_dbg.rs`), which drives the
   same bootstrap over the XML corpus. This is the parity surface: it never arms
   the watchdog and (on the XML path) never runs tier one.
-- (kuna) **`kuna decompile`** (`decompiler/crates/unlace-cli/src/decompile/script.rs
+- (kuna) **`unlace decompile`** (`decompiler/crates/unlace-cli/src/decompile/script.rs
   (build_script_for_input)`) — subprocess-per-function: it scripts a fresh `decomp_dbg` for
   each request, so every invocation re-parses the SLEIGH spec and re-runs the
   whole-binary analysis. It injects `option listing on` by default (unless the
@@ -295,7 +295,7 @@ Four front-ends drive one engine assembly:
   in-process surfaces' message and exit code rather than the C. A refused
   `option` line is read the same way and reported ahead of it (`option_failure`,
   below).
-- (kuna) **`kuna decompile-all` / `kuna functions`**
+- (kuna) **`unlace decompile-all` / `unlace functions`**
   (`decompiler/crates/unlace-cli/src/decompile_all.rs (run, decompile_all)`) — the
   whole-binary, machine-readable surface: load and analyze **once** in-process
   (`bootstrap_from_object` → options → `commit_pending_analysis`, i.e. the
@@ -305,7 +305,7 @@ Four front-ends drive one engine assembly:
   function. A failed function degrades to a per-function `error` record — the
   pipeline drive catches un-ported-seam panics, and the render/variable
   extraction is wrapped in its own `catch_unwind` so a printer invariant cannot
-  discard the functions already decompiled. `kuna functions` is enumeration
+  discard the functions already decompiled. `unlace functions` is enumeration
   only, but it enumerates what `decompile-all` would decompile: both surfaces
   take the same driver discovery defaults, so on a stripped non-x86-64 binary
   the inventory is built with `funcstart_patterns`, `aif`, and the Listing that
@@ -316,7 +316,7 @@ Four front-ends drive one engine assembly:
   entry set. An explicit `--option`, and any preset that names one of these
   options, still wins on either surface.
 
-  The `--json` record is one shape for `decompile-all` and `kuna decompile`,
+  The `--json` record is one shape for `decompile-all` and `unlace decompile`,
   which renders its one function through the same serializer
   (`decompiler/crates/unlace-cli/src/decompile_all.rs (result_json)`). A caller can
   narrow it with `--omit` (`decompiler/crates/unlace-cli/src/decompile_all/omit.rs`):
@@ -368,7 +368,7 @@ Four front-ends drive one engine assembly:
   it. All three rather than only the ACTIVE one because `option namestyle`
   decides how a placeholder is PRINTED and a placeholder holds nothing but the
   address whichever vocabulary spelled it; matching one style made the styles
-  disjoint name spaces, so a name taken from `kuna functions` — which reports the
+  disjoint name spaces, so a name taken from `unlace functions` — which reports the
   default style and takes no naming option — stopped selecting its function the
   moment a run asked for the other style, and the same binary answered
   `no function matches "sub_15dc"` while decompiling `func_0x000015dc` in full.
@@ -389,7 +389,7 @@ Four front-ends drive one engine assembly:
   (kuna, issue #666) A second miss retry covers the ABI decoration the container
   applies to a C identifier. Mach-O stores `int main(void)` as `_main`, so the
   spelling a caller reads in the source is not a name the image carries at all,
-  and `kuna decompile <macho> main` missed on an image whose symbol table held
+  and `unlace decompile <macho> main` missed on an image whose symbol table held
   every name it needed. The decoration is a one-bit property of the container,
   read off its magic at bootstrap
   (`decompiler/crates/unlace-console/src/engine.rs (bootstrap_from_object_with_isa)`
@@ -425,7 +425,7 @@ Four front-ends drive one engine assembly:
   so `--addr` on an odd ARM address reaches the function rather than decoding
   mid-instruction. Both folds are gated to ARM, where an odd symbol address is
   never an instruction boundary; elsewhere an odd address is genuine and is left
-  alone. `kuna functions` and wasm `list` report this complete canonical
+  alone. `unlace functions` and wasm `list` report this complete canonical
   inventory, including callable import pointer slots. Unfiltered
   `decompile-all`, `decompile-project`, and wasm whole-binary runs derive their
   default target set through
@@ -444,7 +444,7 @@ Four front-ends drive one engine assembly:
   reached from both name lookups). A dynamically linked image spells an import's
   name on both the forwarding veneer a direct call targets and the IAT/GOT slot
   that veneer reads, so the name matches two entries and every by-name surface
-  refused it: `kuna decompile <macho> strcmp` answered `selector "strcmp" is
+  refused it: `unlace decompile <macho> strcmp` answered `selector "strcmp" is
   ambiguous` for all nine imports of a 26-entry inventory, while `disassemble`
   and `read`, which fall through to the raw symbol table when
   `find_entry_by_name` declines, answered at the pointer word instead — 78 names
@@ -479,7 +479,7 @@ Four front-ends drive one engine assembly:
   The `CODE` test is a guess about where code lives, and a packer defeats it for
   free by not setting the bit: a NEOLite-packed PE flags all six of its sections
   `INITIALIZED_DATA|READ|WRITE`, `.text` included, so `--define-function
-  0x4f7001-0x4f700c=entry` enumerated an 11-byte function that `kuna decompile`
+  0x4f7001-0x4f700c=entry` enumerated an 11-byte function that `unlace decompile`
   emitted a body for and that unfiltered `decompile-all` then dropped, answering
   `count: 0` with a null error. A declaration is an assertion rather than a
   candidate, so it outranks the filter; nothing undeclared is lifted with it, and
@@ -492,7 +492,7 @@ Four front-ends drive one engine assembly:
   *no body*, because the canonical inventory retains import pointer slots for
   call naming and an image can consist of nothing else. The reported NEOLite PE
   enumerates six imported Win32 names at its Import Address Table and no body at
-  all, so `decompile-all` named the cause while `kuna functions` and `kuna
+  all, so `decompile-all` named the cause while `unlace functions` and `kuna
   functions --summary` answered `count: 6` with a null error and exit 0 — the
   packed-image diagnosis the caller can act on, withheld from the two surfaces an
   agent orients with first. All three now ask
@@ -544,11 +544,11 @@ Four front-ends drive one engine assembly:
   do: loader names are demangled (`CellClass::Cell_Coord`) and symbol-table names
   are not. That classifier sits beside the shared decompile-project core rather
   than in either front-end because two surfaces answer "what kind of function is
-  this" — the browser inventory and the `kuna decompile-graph` document (§9.7) —
+  this" — the browser inventory and the `unlace decompile-graph` document (§9.7) —
   and they must not answer it differently.
 
   (kuna) **The listing surfaces read the same section flags to choose a view.**
-  `kuna disassemble` and its `kuna read` spelling
+  `unlace disassemble` and its `unlace read` spelling
   (`decompiler/crates/unlace-cli/src/disassemble.rs (render)`) are one command with
   two renderings of one walk: decoded instructions, or the bytes as a hexdump
   with an ASCII gutter and, under `--json`, the span as one contiguous hex
@@ -967,17 +967,17 @@ Four front-ends drive one engine assembly:
   typelock) and the host's declared types and names get re-derived instead of
   applied.
 
-(kuna) **Locating the engine and the specs.** `kuna` is the whole toolchain
+(kuna) **Locating the engine and the specs.** `unlace` is the whole toolchain
 (`decompiler/crates/unlace-cli/src/paths.rs (decomp_dbg, slacomp, specs_dir)`). The
 decompiler console and the SLEIGH compiler are library entry points
 (`decompiler/crates/unlace-console/src/consolemain.rs (main)`,
 `decompiler/crates/unlace-slacomp/src/slacompmain.rs (main)`) that the `decomp_dbg`
-and `slacomp` binaries and `kuna`'s own hidden `decomp_dbg` and `slacomp`
-subcommands all call, so `kuna decompile`, `kuna catalog` and `kuna specs` launch
-the running `kuna` again rather than look for siblings — a separate binary is used
+and `slacomp` binaries and `unlace`'s own hidden `decomp_dbg` and `slacomp`
+subcommands all call, so `unlace decompile`, `unlace catalog` and `unlace specs` launch
+the running `unlace` again rather than look for siblings — a separate binary is used
 only when `KUNA_DECOMP_DBG` or `KUNA_SLACOMP` names one. The child is still a
 separate process, which keeps the per-run memory limit and crash isolation the
-console had as its own binary. A release `kuna` also carries the compiled SLEIGH
+console had as its own binary. A release `unlace` also carries the compiled SLEIGH
 tree (cargo feature `embed-specs`, an `include_bytes!` table that
 `decompiler/crates/unlace-cli/build.rs` generates from every file under `specs/`
 except the SLEIGH sources). The engine reads specs only through plain `std::fs`
@@ -1001,11 +1001,11 @@ reuses the finished tree without acquiring the lock.
 The spec root resolves in this order: `KUNA_SPECS`, then `KUNA_ROOT`'s `specs/`,
 then the built-in tree, then the first directory that holds a
 `Ghidra/Processors` tree among the checkout's `specs/`, a `specs/` inside or next
-to the directory holding `kuna`, and the current directory's. A checkout build is
+to the directory holding `unlace`, and the current directory's. A checkout build is
 recognised by its path, `<root>/decompiler/target/[<triple>/]<profile>/kuna`; any
 other directory has no repo root, and popping three parents off it lands on a path
 that exists nowhere, so the pop is refused rather than reported. `decomp_test_dbg`
-is not built in: it is probed for beside `kuna` and in the checkout's
+is not built in: it is probed for beside `unlace` and in the checkout's
 `decompiler/target/<profile>/`, under its bare name and then the platform's
 executable suffix, because `Path::exists` applies no suffix of its own. The
 environment overrides (`KUNA_ROOT`, `KUNA_SPECS`, `KUNA_DECOMP_DBG`,
@@ -1015,7 +1015,7 @@ directories it looked in and why a built-in tree could not be unpacked: a missin
 SLEIGH tree is reported where it is resolved rather than as the engine's
 downstream `No sleigh specification` — which reads as a problem with the binary.
 
-`kuna specs --diff` is informational: it writes verification guidance without
+`unlace specs --diff` is informational: it writes verification guidance without
 starting a compiler (`decompiler/crates/unlace-cli/src/specs.rs (run)`). It identifies
 pinned Ghidra compiler element-stream comparisons separately from decompiler
 behavioral assertions; neither substitutes for the other.
@@ -1336,15 +1336,15 @@ adjustment. It does not copy the entire definition first. The expansion table
 contains only completed definitions; an invalid macro index still rejects the
 expansion.
 
-(kuna) **Mixed builds.** The engine binary `kuna` runs can come from a different
-build than `kuna` itself (an override naming another install, or a sibling left
-behind when only `kuna` was rebuilt), and nothing in the output shows it. So every
+(kuna) **Mixed builds.** The engine binary `unlace` runs can come from a different
+build than `unlace` itself (an override naming another install, or a sibling left
+behind when only `unlace` was rebuilt), and nothing in the output shows it. So every
 spawn of `decomp_dbg` or `decomp_test_dbg` exports the parent's identity as
 `KUNA_PARENT_BUILD`
 (`decompiler/crates/unlace-console/src/kuna_buildstamp.rs (identity, answer_parent, report)`).
 The child compares it with its own before reading its arguments and, only when the
-two differ, writes one `kuna-build-mismatch: <identity>` line to stderr. `kuna`
-removes that line from the captured stderr before anything reads it (`kuna test`
+two differ, writes one `kuna-build-mismatch: <identity>` line to stderr. `unlace`
+removes that line from the captured stderr before anything reads it (`unlace test`
 parses the unit-test grammar from the same stream) and prints one warning per
 process naming both paths, both identities, and the flag or variable that chose the
 child. Stdout is not involved, so no transcript, datatest result or `--json`
@@ -1352,7 +1352,7 @@ document can be disturbed, and a child older than the handshake simply ignores t
 variable. The variable name and the reply prefix are read by builds that differ by
 definition, so they stay fixed.
 
-An identity is the version `kuna --version` prints plus a hash of the selected
+An identity is the version `unlace --version` prints plus a hash of the selected
 child's production source graph, the workspace `Cargo.toml` and `Cargo.lock`
 (`decompiler/crates/unlace-console/build.rs`). `decomp_dbg` is rooted at
 `unlace-console`; `decomp_test_dbg` is rooted at `unlace-harness`, so runner-only
@@ -1360,7 +1360,7 @@ changes cannot masquerade as a matching test binary. `tests`, `benches` and
 `examples` are excluded and CR bytes are skipped. The version alone cannot tell
 two source builds apart, since both report the workspace Cargo version. A git
 commit would miss uncommitted edits and needs a `.git` that a source tarball
-lacks, and a per-build nonce would make a checkout's debug `kuna` disagree with
+lacks, and a per-build nonce would make a checkout's debug `unlace` disagree with
 its release child. A content hash has none of these problems. Every included
 input is a Cargo rerun trigger and an unreadable input fails the build rather than
 silently weakening the identity. `unlace-cli`'s own sources are outside both hashes:
@@ -1384,7 +1384,7 @@ one step, while a read that reaches the chunk's end stays on the byte cursor,
 which is where end-of-stream is detected (`marshal.rs
 (PackedDecode::read_integer)`).
 
-(kuna) **The option-name contract.** Every `kuna` surface that takes
+(kuna) **The option-name contract.** Every `unlace` surface that takes
 `--option NAME VALUE` checks the NAME in its own parser, before a binary is
 opened or a `decomp_dbg` spawned
 (`decompiler/crates/unlace-cli/src/optname.rs (check)`), against the two tables the
@@ -1448,7 +1448,7 @@ must make the failure observable:
   (Funcdata::set_kuna_pipeline_failure)`) so the emitted comment names the
   abort instead of blaming structuring (chapter
   [09](09-emission.md) §9.2).
-- `kuna decompile` recognizes that notice in the subprocess transcript
+- `unlace decompile` recognizes that notice in the subprocess transcript
   (`decompiler/crates/unlace-cli/src/decompile.rs (find_pipeline_failure)`) and
   reports it: the reason plus the forwarded `decomp_dbg` stderr on its own
   stderr, and **exit 1** — the shell still goes to stdout. Without this the
@@ -1467,15 +1467,15 @@ status and says nothing, any other write error is reported and forces 1.
 Keeping the status is the load-bearing half. The write failed because nobody was
 reading, which is orthogonal to whether the work succeeded, and stderr is still
 open — so collapsing it to 0 would convert a false red into a false green:
-`kuna test | head` would report a REGRESSED parity run as passing, and the DIV-45
-contract above would hold only while someone was listening. `kuna specs` is the
+`unlace test | head` would report a REGRESSED parity run as passing, and the DIV-45
+contract above would hold only while someone was listening. `unlace specs` is the
 one command whose stdout is a child's (`slacomp`): it streams that pipe through
 the same boundary and leaves stderr inherited, because slacomp's diagnostics are
 on stderr while the `Compiling <spec>:` line that attributes them is on stdout,
 and capturing both would print every warning of a run ahead of every progress
 line (DIV-89).
 
-(kuna) **The parity command's selection.** `kuna test` cannot learn from
+(kuna) **The parity command's selection.** `unlace test` cannot learn from
 `decomp_test_dbg` which datatest *files* it ran. The harness keeps a requested
 name only when it is the file name of an `*.xml` directly in the corpus
 directory, drops every other name silently, and reports the tests *inside*
@@ -1500,7 +1500,7 @@ in that driver. The script module owns command ordering and path quoting. Raw
 and object-image loads retain their distinct spellings, explicit options follow
 injected defaults, and each assertion keeps its existing application slot.
 
-(kuna) **The console's filename grammar.** `kuna decompile` is the one front-end
+(kuna) **The console's filename grammar.** `unlace decompile` is the one front-end
 that reaches the engine through a console *script* rather than an in-process
 call: it writes `load file <path>` / `openfile write <path>` into `decomp_dbg`'s
 stdin (`decompiler/crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`), where the
@@ -1588,7 +1588,7 @@ unnamed exit wrapper swallows every following function into its caller), and
 (DIV-20 — the prologue-pattern pass and the aggressive gap-walk are the primary
 discovery sources where the x86-64 scan oracle does not apply).
 
-The discovery bundle belongs to every surface, `kuna functions` included
+The discovery bundle belongs to every surface, `unlace functions` included
 (DIV-68). Discovery passes exist to add entries, so an inventory command that
 declined them reported an entry set the whole-binary command contradicted —
 `decompile-all` decompiled functions `functions` did not list. Because both
@@ -1600,7 +1600,7 @@ Every injection yields to an explicit caller option — the driver skips it when
 the caller (or the resolved preset) names that option at all — and none of them
 touches the engine default or the console/datatest surfaces.
 
-Single-function `kuna decompile` reads the same table, and that is why the table
+Single-function `unlace decompile` reads the same table, and that is why the table
 is shared rather than duplicated: it builds a `decomp_dbg` script instead of
 loading in-process, so it applies the pairs as `option` lines ahead of
 `read symbols` (`decompiler/crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`).
@@ -1608,9 +1608,9 @@ What it does differently is *when*. It injects the Listing up front and holds th
 discovery half back for a **second attempt**, made only when the console answers
 a by-name selection with `no function matches`.
 
-The gap that forced this: on a non-x86-64 image `kuna functions` listed, and
-`kuna decompile-all` decompiled, entries that exist only because
-`funcstart_patterns` found them, while `kuna decompile <that generated name>`
+The gap that forced this: on a non-x86-64 image `unlace functions` listed, and
+`unlace decompile-all` decompiled, entries that exist only because
+`funcstart_patterns` found them, while `unlace decompile <that generated name>`
 answered that no such function exists. kuna printed a name it would not then
 accept, which is worse than not finding the function at all — an agent cannot
 tell a name it mistyped from a name the tool minted. It hid behind the mode
@@ -1708,12 +1708,12 @@ any drive, which the next `decompile` adopts, is held to the same budget and
 memory limit (`decompile_drive.rs (build_and_follow_flow_within_budget)`): a
 follow still running when either runs out fails the load with that one's
 error, whose site is `flow following` unless a probe inside the follow (a
-jump-table step) named one, which `kuna decompile` reports as the function's failure, so a
+jump-table step) named one, which `unlace decompile` reports as the function's failure, so a
 truncated IR is never adopted, and the drive that adopts a completed one arms
 its own, measuring from where the follow left the resident set. Its clock is
 charged for the follow: the IR carries how long the follow took
 (`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::flow_spent)`)
-and the adopting drive's deadline is that much nearer, so `kuna decompile`'s
+and the adopting drive's deadline is that much nearer, so `unlace decompile`'s
 budget bounds the follow and the analysis together, as a `decompile-all`
 drive's does. A `decompile` that rebuilds the flow instead (a console fact
 between the two commands, `formatstring full`) follows it again inside its
@@ -1723,7 +1723,7 @@ the console keeps for `print C`'s failure shell a function it builds without
 following the flow again (`decompile_drive.rs (budget_stop_shell)`): that
 follow, every jump-table recovery included, would run past the limit that
 stopped the drive, and the shell prints nothing it adds. A later command that
-reads the IR — `print raw` and the `region` commands, which `kuna decompile
+reads the IR — `print raw` and the `region` commands, which `unlace decompile
 --raw` / `--regions` run — follows it then, unbudgeted, so it prints the raw
 p-code and regions it printed when the stop followed again at once
 (`decompiler/crates/unlace-console/src/ifacedecomp.rs
@@ -1823,7 +1823,7 @@ basic block and every 256 Varnodes of its local declarations
 printing once it has passed; the batch probes again after the C text and
 after the variable extraction. A render past the budget never reaches the
 output: the function's `error` (or the console command's error, which
-`kuna decompile` reports as `decompilation failed for <fn> in <binary>:`
+`unlace decompile` reports as `decompilation failed for <fn> in <binary>:`
 followed by it) is the budget message naming `rendering C` or `extracting
 variables`. A function
 whose drive and rendering complete before expiry is byte-identical with or
@@ -1902,7 +1902,7 @@ wall clock, and the engine is structurally single-threaded: a `Funcdata` holds
 `Rc<ArchContext>` and the flow environment a raw `*const Architecture`, so nothing
 in the pipeline is `Send`. `--jobs N` on `decompile-all`, `decompile-project` and
 `decompile-graph` therefore fans the loop out over **processes**, re-executing the
-`kuna` binary itself (`decompiler/crates/unlace-cli/src/jobs.rs`) in a hidden worker
+`unlace` binary itself (`decompiler/crates/unlace-cli/src/jobs.rs`) in a hidden worker
 mode. `--jobs 1` is the default and is the in-process loop above, unchanged; the
 console and parity paths never see a pool.
 
@@ -2245,7 +2245,7 @@ remove — so each finished function reports the entries it reaches
 (`decompiler/crates/unlace-console/src/project.rs (FuncResult::callee_hints)`) and
 the scheduler intersects them with the resolved target set. Those hints are a
 **scheduling hint and not an edge model**: they are never serialized into any
-artifact, they are not what `kuna decompile-graph` or `--reachable-from`
+artifact, they are not what `unlace decompile-graph` or `--reachable-from`
 traverse — that is `decompiler/crates/unlace-cli/src/callgraph.rs
 (CallGraph::callees_of)`, built from the reference index — and intersecting
 rather than unioning is what keeps an `--addr`/`--functions` export from growing
@@ -2422,7 +2422,7 @@ agent can state; the assertion plane is the rest of them. Everything the engine
 knows about a program it derived, and the console has long carried the commands
 that correct each derivation — `rename`, `retype`, `map param`, `map return`,
 `map address`, `comment instruction`, `parse line` — while none of them was
-reachable from the `kuna` binary, whose generated script emitted a fixed
+reachable from the `unlace` binary, whose generated script emitted a fixed
 vocabulary (`option`, `read symbols`, `load`, `kassert`, `function bounds`,
 `decompile`).
 
@@ -2554,7 +2554,7 @@ Symbol over their storage.** `name`/`type` resolve their target through
 stack slots and the parameters. Every register-resident local kuna prints
 (`v6 // rax`) is a HighVariable the naming pass named directly, with nothing in
 the scope behind it, so the plane could not name the majority of a function's
-variables — while `kuna decompile --help` taught `type v2 char[16]` on exactly
+variables — while `unlace decompile --help` taught `type v2 char[16]` on exactly
 such a name. When the scope answers nothing,
 `decompiler/crates/unlace-console/src/kuna_hightarget.rs` looks the printed
 identifier up among the HighVariables, takes the name representative's storage
@@ -2770,7 +2770,7 @@ The same resolution serves the cross-function `param <func>::<i>` /
 it.** `load addr <vma>` builds the `Funcdata` and follows flow from an address
 without installing a `FunctionSymbol` there (the symbol-table `addFunction` is a
 later boundary), which is fine for printing C and fatal for the assertion plane:
-the resolution above reads the symbol table, so `kuna decompile <bin> 0x401571
+the resolution above reads the symbol table, so `unlace decompile <bin> 0x401571
 --assert 'prototype 0x401571 …'` emitted the function in full and answered
 `rejected: no function starts at 0x401571` — the address it had just decompiled —
 while the identical directive bound the moment the same run selected the function
@@ -2819,7 +2819,7 @@ not ask: it keeps only executable inventory entries, so it never decompiles an
 interior target. Each prints
 one `note:` per record on stderr naming the containing function and the offset,
 and the JSON record of such a target carries it as `interior_to`. The key exists only
-there, so `kuna decompile --json` of an entry stays byte-identical to its
+there, so `unlace decompile --json` of an entry stays byte-identical to its
 `decompile-all` record, and the exit status and the C are unchanged. A
 `--define-function` at the address registers an entry there before the
 question is asked, which is how a caller says the fragment is meant.
@@ -3611,7 +3611,7 @@ and an agent writes:
   `symbolnamechars` (off|safe|ident, default safe;
   `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_symbolnamechars.rs`) is the
   character half of the same problem, and it sanitizes at the mint rather than at
-  the printer for a reason that is about the control surface: `kuna decompile
+  the printer for a reason that is about the control surface: `unlace decompile
   <name>`, the console's `load function` and the DB scope path all key on the
   string the symbol table holds, so a printer-side rewrite would put a name in
   the `.c` that cannot be handed back. Chapter 01 §1.1 states the byte-level
@@ -3688,7 +3688,7 @@ and an agent writes:
   (set_kuna_option)`, which writes the live flag the consuming pass reads.
   The handler declaration generates both the dispatch and its name allowlist;
   adding a handler cannot leave those two out of sync. Catalog metadata remains
-  independent, so `kuna catalog --check` compares the documented options against
+  independent, so `unlace catalog --check` compares the documented options against
   the implemented handlers. The machine-readable
   catalog rows — values, defaults, tier, symptoms, flip guidance — are generated
   into `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_phases.rs
@@ -3749,7 +3749,7 @@ and an agent writes:
   The interactive console accepts concrete `mode <name>` presets but cannot
   apply unresolved `auto`, because an Architecture has no input-file metadata.
   Overrides are applied *before* the user's `--option` (last-write, so an
-  explicit `--option` still wins). Discover with `kuna modes`; full membership
+  explicit `--option` still wins). Discover with `unlace modes`; full membership
   and exact byte boundaries are in [docs/modes.md](../modes.md).
 - **The restart log** (kuna)
   (`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_restartlog.rs (RestartLog)`):
@@ -4054,7 +4054,7 @@ because a function that silently decompiles twice is otherwise invisible.
 
 ## 0.8 One flow follow per decompile
 
-The console has two commands that build IR for a function, and a `kuna decompile
+The console has two commands that build IR for a function, and a `unlace decompile
 <bin> <fn>` runs both: `load function <fn>` (or `load addr`), then `decompile`.
 Upstream follows the flow once — C++ `IfcFuncload` follows it, and `IfcDecompile`
 re-runs the action pipeline on *that* `Funcdata` after
@@ -4077,7 +4077,7 @@ so re-seeding them onto an already-followed IR would be too late:
   condition that is cheap to prove and impossible to get subtly wrong.
 
 So the rebuild is *required* when a flow-time fact exists, and pure waste when no
-fact exists at all — which is every plain `kuna decompile`. The waste is not
+fact exists at all — which is every plain `unlace decompile`. The waste is not
 small: the second follow repeats the whole lift, the block build, and the
 jump-table sub-decompilation (§0.7), which on a large switch-heavy function is the
 single most expensive thing the run does.
@@ -4197,11 +4197,11 @@ cost rather than which rendered uses belong to a variable.
 
 ### Raw p-code query
 
-`kuna raw-pcode` (`decompiler/crates/unlace-cli/src/disassemble/raw_pcode.rs`) lifts
+`unlace raw-pcode` (`decompiler/crates/unlace-cli/src/disassemble/raw_pcode.rs`) lifts
 each instruction with `Translate::one_instruction` before the decompiler
 pipeline and reports the opcode and ordered varnode tuples beside the exact
 loaded bytes the translator consumed. It resolves its operand, its window and
-its program load through `kuna disassemble`'s path, so a caller-bounded window
+its program load through `unlace disassemble`'s path, so a caller-bounded window
 takes the same windowed load. The straight-line walk never guesses: it stops at
 the first instruction that does not lift or that would cross the window or the
 end of mapped memory, and returns the lifted prefix, its exclusive end, the

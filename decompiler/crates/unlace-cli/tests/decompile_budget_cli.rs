@@ -1,4 +1,4 @@
-//! `kuna decompile` honours a per-function wall-clock budget (#1157): the
+//! `unlace decompile` honours a per-function wall-clock budget (#1157): the
 //! text surface hands it to `decomp_dbg`, whose drive stops at the deadline
 //! and names the pass it was in, instead of running unbounded.
 
@@ -40,7 +40,7 @@ fn engine_budget(extra: &[&str]) -> Option<String> {
     let fauxware = common::fixture("fauxware");
     let mut args = vec!["decompile", fauxware.as_str(), "main", "--decomp-dbg", stub.to_str().unwrap()];
     args.extend_from_slice(extra);
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna")).args(&args).output().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(&args).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let argv = std::fs::read_to_string(&log).unwrap();
     let _ = std::fs::remove_file(&stub);
@@ -58,7 +58,7 @@ fn decompile_hands_its_budget_to_the_engine() {
 
 #[test]
 fn decompile_refuses_a_malformed_budget() {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", &common::fixture("fauxware"), "main", "--max-fn-seconds", "soon"])
         .output()
         .unwrap();
@@ -73,7 +73,7 @@ fn decompile_stops_at_its_budget_and_names_the_pass() {
     let bin = common::repo_root().join("tests/hang-repro/escaped_locals");
     let start = Instant::now();
     let out = common::process::output_with_timeout(
-        Command::new(env!("CARGO_BIN_EXE_kuna")).args([
+        Command::new(env!("CARGO_BIN_EXE_unlace")).args([
             "decompile",
             bin.to_str().unwrap(),
             "big",
@@ -87,7 +87,7 @@ fn decompile_stops_at_its_budget_and_names_the_pass() {
         Duration::from_secs(120),
         Duration::from_millis(50),
     )
-    .expect("kuna decompile did not stop within the 120 s outer bound");
+    .expect("unlace decompile did not stop within the 120 s outer bound");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     assert!(
@@ -106,7 +106,7 @@ fn decompile_stops_at_its_budget_and_names_the_pass() {
 #[test]
 fn decompile_stops_flow_following_at_its_memory_limit() {
     let out = common::process::output_with_timeout(
-        Command::new(env!("CARGO_BIN_EXE_kuna")).args([
+        Command::new(env!("CARGO_BIN_EXE_unlace")).args([
             "decompile",
             &common::fixture("jtglobals_x86_64"),
             "big",
@@ -120,7 +120,7 @@ fn decompile_stops_flow_following_at_its_memory_limit() {
         Duration::from_secs(120),
         Duration::from_millis(50),
     )
-    .expect("kuna decompile did not stop within the 120 s outer bound");
+    .expect("unlace decompile did not stop within the 120 s outer bound");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains("decompilation failed for big in "), "{stderr}");

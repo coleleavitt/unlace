@@ -3,7 +3,7 @@
 //!
 //! On a stripped Mach-O executable every function comes out `sub_<addr>`, and
 //! the one an agent needs first — the program's entry — is indistinguishable
-//! from the rest of the inventory: `kuna functions` lists 24 `sub_*` and no
+//! from the rest of the inventory: `unlace functions` lists 24 `sub_*` and no
 //! `main`, so finding where the program starts means reading bodies. The image
 //! already says which one it is. `LC_MAIN` is a load command whose `entryoff`
 //! field is documented as the file offset of `main()`; `ld64` emits it for every
@@ -63,7 +63,7 @@ use super::{executable_sections, existing_function_addrs, in_executable_section}
 /// The name the load command licenses. `LC_MAIN`'s `entryoff` is documented as
 /// the offset of `main()`, so this is a restatement of the container, not a
 /// guess — and it is spelled without the Mach-O `_` prefix on purpose: the
-/// prefix is the assembler's C-symbol decoration, and `kuna functions` is asked
+/// prefix is the assembler's C-symbol decoration, and `unlace functions` is asked
 /// for the C name.
 const MAIN: &str = "main";
 

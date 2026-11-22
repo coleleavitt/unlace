@@ -1,4 +1,4 @@
-//! (kuna decompile-all memory) What this process and its machine hold in
+//! (unlace decompile-all memory) What this process and its machine hold in
 //! memory, per platform: the process's resident set and its peak, and what a
 //! new process could still take ([`available`]). Linux reads `/proc` and the
 //! cgroup v2 tree, Windows asks `kernel32`, macOS asks `sysctl`/`getrusage`;

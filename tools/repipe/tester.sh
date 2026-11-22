@@ -44,12 +44,12 @@ ARENA="$STATE_DIR/arena/$ROUND/$HEXID"
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
 export KUNA_PIPELINE_STATE_DIR="$STATE_DIR"
 
-# The arena's bin/ MUST be first on the tester's PATH: `kuna` and `ida-decompile` there are
+# The arena's bin/ MUST be first on the tester's PATH: `unlace` and `ida-decompile` there are
 # the metering shims. Without this the shims are dead code -- no toolcalls.jsonl, no
 # per-call latency signal (kuna emits none of its own), and IDA writes its .i64 databases
 # wherever it likes instead of inside the arena.
 export PATH="$ARENA/bin:$PATH"
-export REPIPE_REAL_KUNA="${REPIPE_REAL_KUNA:-$REPO/decompiler/target/release/kuna}"
+export REPIPE_REAL_KUNA="${REPIPE_REAL_KUNA:-$REPO/decompiler/target/release/unlace}"
 export REPIPE_ARENA="$ARENA"
 
 RUN_DIR="$STATE_DIR/runs/$RUN_ID"

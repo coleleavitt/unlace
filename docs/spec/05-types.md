@@ -1983,7 +1983,7 @@ renders as a cast of the field (`(uint4)w->b`); a field narrower than an access
 loses the field name altogether (`*(uint1 **)w`).
 
 The layout is then **pruned to one a C compiler reproduces byte for byte**. The
-declaration is exported as source by `kuna decompile-project`, so it is only
+declaration is exported as source by `unlace decompile-project`, so it is only
 worth anything if the compiler reading it back puts `field_0xK` at offset K, and
 three shapes of access break that without changing a character of the body,
 which goes on naming its fields as though the header agreed: an access whose
@@ -2531,7 +2531,7 @@ through to the reader's own claims, exactly as `off` mints them
 
 `tests/stages/structmerge-siblings.xml` is the
 two-arm witness. Like the rest of the ledger the merge needs one process holding
-the whole program: `kuna decompile` numbers each function's records from
+the whole program: `unlace decompile` numbers each function's records from
 `struct_0` again, and a `--jobs N` worker answers through the shard replay, which
 records the layout each request measured and so has nothing to replay for a mint
 of a union neither side asked for -- both behave as `off`. The sweep is one pass,
@@ -2556,8 +2556,8 @@ printed prototype never changes. The change is signalled by bumping the action's
 `count`, the only signal `Action::perform` reads.
 
 Because the ledger lives in the program's `TypeFactory`, `struct_N` is
-program-wide under `kuna decompile-all` and `kuna decompile-project`, which load
-once; `kuna decompile` spawns one engine per function, so there each function
+program-wide under `unlace decompile-all` and `unlace decompile-project`, which load
+once; `unlace decompile` spawns one engine per function, so there each function
 numbers from `struct_0` again, and so would each worker process of a `--jobs N`
 run if it were left to itself. It is not. The decision a lookup takes reads only
 data -- the measured layout, its members, the bytes it accessed without claiming,
@@ -3278,7 +3278,7 @@ then scans the program once and decompiles that function again; every later
 function of the run reads the answer from its `ArchContext`. An integer program
 rarely asks at all (gzip, grep, ls, bash and od never do), and when one does the
 scan costs about one percent of a whole-program decompile. A run that decompiles
-one function (`kuna decompile`, the console's `decompile`) does not scan an
+one function (`unlace decompile`, the console's `decompile`) does not scan an
 image with more than 256 KiB of code (`SINGLE_FUNCTION_SCAN_BYTES`, about 0.17
 s): it refuses the global as before, and a whole-program run
 (`project::decompile_pulled`, more than one target) always scans. A front-end

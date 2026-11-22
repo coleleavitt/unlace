@@ -13,8 +13,8 @@
 //!
 //! Such an entry is not a discovery that turned out empty; it is one the walk
 //! had already decided it could never decode. Nothing downstream can recover
-//! from it: the address is outside every executable section, so `kuna decompile`
-//! reports no body, `kuna functions` prints `size: 0`, and the inventory an agent
+//! from it: the address is outside every executable section, so `unlace decompile`
+//! reports no body, `unlace functions` prints `size: 0`, and the inventory an agent
 //! is supposed to trust carries a function the image does not contain.
 //!
 //! ## Where the phantom targets come from
@@ -40,7 +40,7 @@
 //! ## What the gate does NOT do
 //!
 //! The Call **reference** is still filed in both directions. The instruction
-//! genuinely encodes a call to that address and `kuna xrefs` should say so; what
+//! genuinely encodes a call to that address and `unlace xrefs` should say so; what
 //! changes is only that the target stops being claimed as a *function*. Nor does
 //! this touch a call into a mapped-but-undecodable region: if the address is
 //! inside an executable section the entry is created exactly as before, even when

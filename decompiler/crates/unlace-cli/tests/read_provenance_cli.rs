@@ -1,4 +1,4 @@
-//! `kuna read --json`'s `provenance` (GH #1401): the listed span cut where its
+//! `unlace read --json`'s `provenance` (GH #1401): the listed span cut where its
 //! bytes stop being the file's and become the loader's zero fill, each range
 //! naming the segment that holds it and the permissions that segment declares,
 //! and every other segment that declares the same addresses (GH #1426). The

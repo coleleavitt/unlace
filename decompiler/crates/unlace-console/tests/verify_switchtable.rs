@@ -3,7 +3,7 @@
 //!
 //! Fixtures: `switchtable_i386` and `switchtable_x86_64`, the reduction of
 //! crackmes.one/60be2ad433c5d410b8842c95, where
-//! `kuna strings --json --filter "Product Already Registered"` reported
+//! `unlace strings --json --filter "Product Already Registered"` reported
 //! `xrefs_count: 0` and no owning function for a literal the window procedure
 //! plainly pushes — the descent has no successor for `JMP dword ptr [EAX*0x4 +
 //! 0x4017c4]`, so every case body of the message switch was undecoded.
@@ -106,7 +106,7 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
 }
 
-/// Bootstrap the named fixture and build the index `kuna xrefs` / `kuna strings` answer out
+/// Bootstrap the named fixture and build the index `unlace xrefs` / `unlace strings` answer out
 /// of.
 fn index_of(name: &str) -> XrefIndex {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name);
@@ -150,7 +150,7 @@ fn a_literal_in_a_switch_case_body_is_owned_by_the_dispatching_function() {
     }
 }
 
-/// Each table entry is a jump edge from the dispatch, so `kuna xrefs --to` a
+/// Each table entry is a jump edge from the dispatch, so `unlace xrefs --to` a
 /// case body names the switch that reaches it.
 #[test]
 fn the_dispatch_files_a_jump_edge_to_every_case_body() {
@@ -238,7 +238,7 @@ fn a_delta_table_dispatches_to_every_case_body() {
 }
 
 /// A case body is the dispatcher's own code, so what it reaches is attributed
-/// there — the callee list `kuna decompile-graph` answers with.
+/// there — the callee list `unlace decompile-graph` answers with.
 #[test]
 fn what_a_delta_case_body_reaches_belongs_to_the_dispatcher() {
     for fx in [PIC_X86_64, PE_MSVC] {

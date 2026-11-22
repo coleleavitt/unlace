@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn entries(path: &PathBuf, extra: &[&str]) -> Vec<u64> {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["functions", path.to_str().unwrap(), "--json", "--jobs", "1", "--mode", "reliable"])
         .args(extra)
         .output()

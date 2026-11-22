@@ -1,4 +1,4 @@
-//! `kuna unpack <cache> --list | --image NAME`: the dyld shared cache arm.
+//! `unlace unpack <cache> --list | --image NAME`: the dyld shared cache arm.
 //!
 //! A cache is not packed, but it is the same kind of first step: no other
 //! surface can read a system library until it is taken out of the cache.

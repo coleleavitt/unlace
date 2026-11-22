@@ -7,13 +7,13 @@
 //! writes JSON/C to stdout — exactly the contract a browser WASI shim provides.
 //! The decompile loop and the project-export artifact builders are the shared
 //! decompile-project core (`unlace_console::project`, also behind `kuna
-//! decompile-all` / `kuna decompile-project`); this crate keeps only the
+//! decompile-all` / `unlace decompile-project`); this crate keeps only the
 //! wasm-safe wrapper (`unlace-cli`'s subprocess/CLI machinery cannot compile for
 //! `wasm32-wasip1`). The Node-WASI parity test in `integrations/web/test/`
 //! pins native-vs-wasm output equality; the `--json` shape is the
-//! `kuna decompile-all --json` fields plus a `"kind"`
+//! `unlace decompile-all --json` fields plus a `"kind"`
 //! (`"func"` | `"plt"` | `"thunk"` — [`unlace_console::classify`], shared with
-//! `kuna decompile-graph`) on every function entry.
+//! `unlace decompile-graph`) on every function entry.
 //!
 //! Every command takes repeatable `--assert <directive>` — the CLI's override
 //! plane ([`unlace_console::assertsyntax`] / [`unlace_console::assertions`]), applied
@@ -42,7 +42,7 @@ use unlace_console::project::{
     FuncResult, FAST_WHOLE_BINARY_FN_BUDGET_SECONDS,
 };
 use unlace_decomp::decompile_drive::{print_c_recompile_prelude, print_c_types};
-// The per-function `kind` annotation, shared with `kuna decompile-graph`.
+// The per-function `kind` annotation, shared with `unlace decompile-graph`.
 use unlace_console::classify::Classifier;
 
 use json::{
@@ -428,7 +428,7 @@ fn resolve_mode(
     })
 }
 
-/// The `project` command: the `kuna decompile-project` flow
+/// The `project` command: the `unlace decompile-project` flow
 /// (`decompile_project.rs::decompile_project`) with the folder write replaced
 /// by one JSON document of the four artifacts. Whole binary only; the display
 /// name (default: the binary's basename) names the artifacts. No
@@ -530,7 +530,7 @@ fn resolve_language(
 /// EVERY command but `read` gets the injections, `list` included: in the
 /// browser the inventory is a *product surface* (the sidebar is the only way to
 /// reach a function), so an inventory that disagrees with the `project` export
-/// is a missing-function bug, not a saved analysis. `kuna functions` makes the
+/// is a missing-function bug, not a saved analysis. `unlace functions` makes the
 /// opposite trade — cheap enumeration — because a native caller can always ask
 /// `decompile-all` for the full set (DIV-53, `docs/web-integration.md` §2).
 /// `read` (`discovery` false) needs no inventory at all, so it turns the
@@ -991,7 +991,7 @@ mod tests {
 
     /// The browser sidebar is built from `list`, so anything `project` exports
     /// but `list` omits is unreachable in the UI. `list` used to skip the
-    /// discovery injections (`kuna functions`' cheap-enumeration trade), which
+    /// discovery injections (`unlace functions`' cheap-enumeration trade), which
     /// on a non-x86-64 target hid every prologue-scan/AIF-found function: a
     /// 1.1 MiB i386 PE listed 308 entries while its own project export carried
     /// 3015 functions.

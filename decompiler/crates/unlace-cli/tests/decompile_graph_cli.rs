@@ -1,4 +1,4 @@
-//! CLI contract checks for `kuna decompile-graph`.
+//! CLI contract checks for `unlace decompile-graph`.
 //!
 //! The ones that carry weight: an address in a PE's import table must not be
 //! handed a decompiled body even when it is named explicitly, an address-taken
@@ -39,10 +39,10 @@ fn run(args: &[&str]) -> (String, String) {
     let mut argv = vec!["decompile-graph"];
     argv.extend_from_slice(args);
     argv.extend_from_slice(&["--sleighpath", &specs]);
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(&argv)
         .output()
-        .expect("spawn kuna decompile-graph");
+        .expect("spawn unlace decompile-graph");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "decompile-graph failed: {stderr}");
     (String::from_utf8_lossy(&output.stdout).into_owned(), stderr.into_owned())
@@ -84,7 +84,7 @@ fn the_document_carries_the_schema_and_both_arrays() {
 #[test]
 fn a_file_export_writes_nothing_to_stdout() {
     let path = std::env::temp_dir().join(format!("kuna-decompile-graph-{}.json", std::process::id()));
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile-graph",
             &fixture("fauxware"),
@@ -94,7 +94,7 @@ fn a_file_export_writes_nothing_to_stdout() {
             &specs(),
         ])
         .output()
-        .expect("spawn kuna decompile-graph");
+        .expect("spawn unlace decompile-graph");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "decompile-graph failed: {stderr}");
     assert!(output.stdout.is_empty(), "file output must not mix JSON into stdout");
@@ -296,10 +296,10 @@ fn a_non_c_output_language_is_refused() {
         let mut argv = vec!["decompile-graph", binary.as_str(), "--functions", "main"];
         argv.extend_from_slice(flag);
         argv.extend_from_slice(&["--sleighpath", specs.as_str()]);
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(&argv)
             .output()
-            .expect("spawn kuna decompile-graph");
+            .expect("spawn unlace decompile-graph");
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(!output.status.success(), "{flag:?} was accepted: {stderr}");
         assert!(stderr.contains("C-only"), "{flag:?} failed for another reason: {stderr}");

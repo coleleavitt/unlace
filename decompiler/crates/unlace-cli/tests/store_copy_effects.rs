@@ -109,7 +109,7 @@ fn an_uncovered_global_store_is_not_removed_when_its_pointer_resolves() {
     for count in [2, 23] {
         let image = root.path().join(format!("store-{count}.o"));
         std::fs::write(&image, global_store_image(count)).unwrap();
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command.args(["decompile", image.to_str().unwrap(), "sum_publish", "--json",
             "--assert", "prototype sum_publish void sum_publish(int value,int enabled,int unused,unsigned int *shadow)",
             "--assert", "prototype observe void observe(int value)",

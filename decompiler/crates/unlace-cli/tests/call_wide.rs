@@ -93,7 +93,7 @@ impl Case {
         callwide: Option<&str>,
         bejoin: &str,
     ) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command
             .arg(verb)
             .arg(image)

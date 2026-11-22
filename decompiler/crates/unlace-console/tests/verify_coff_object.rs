@@ -126,7 +126,7 @@ fn coff_object_decompiles_named_function() {
          (no IAT in a pre-link object, design §3.6)"
     );
 
-    // `kuna decompile coff_obj.obj compute` (by name) → the real body `x*3+1`.
+    // `unlace decompile coff_obj.obj compute` (by name) → the real body `x*3+1`.
     let out = decompile_func(prog, "load function compute");
 
     // The function is named `compute` (COFF-symtab name resolved), not `FUN_*`.

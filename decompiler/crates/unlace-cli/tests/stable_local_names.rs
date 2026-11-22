@@ -187,7 +187,7 @@ fn console(script: &str) -> String {
     use std::io::Write;
     use std::process::{Command, Stdio};
     let engine = std::env::var_os("KUNA_DECOMP_DBG").map(std::path::PathBuf::from).unwrap_or_else(|| {
-        std::path::Path::new(env!("CARGO_BIN_EXE_kuna")).parent().unwrap().join("decomp_dbg")
+        std::path::Path::new(env!("CARGO_BIN_EXE_unlace")).parent().unwrap().join("decomp_dbg")
     });
     let specs = std::env::var_os("SLEIGHHOME")
         .map(std::path::PathBuf::from)

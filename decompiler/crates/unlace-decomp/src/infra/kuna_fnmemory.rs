@@ -1,4 +1,4 @@
-//! (kuna decompile-all memory limit) The per-function resident-memory limit.
+//! (unlace decompile-all memory limit) The per-function resident-memory limit.
 //!
 //! `--max-fn-memory N` is driver policy beside `--max-fn-seconds`: a driver
 //! sets one process-wide limit, every decompile drive arms it ([`Armed`]), and

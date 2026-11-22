@@ -18,7 +18,7 @@ an instruction rather than on one:
 and the same at 0x10024 and 0x10037. From 0x10007 on, the listing spells bytes
 the program never executes that way: it prints a CALL and a JMP to an address
 outside the image, neither of which is in the bytes. Decoding from the branch
-targets instead (`kuna disassemble --follow`) recovers LODSB / STOSB and the
+targets instead (`unlace disassemble --follow`) recovers LODSB / STOSB and the
 `LOOP 0x10008` back edge that closes the loop.
 
 No toolchain is needed; the ELF is assembled here byte by byte. Regenerate with:

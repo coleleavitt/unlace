@@ -1,4 +1,4 @@
-//! (GH #1333) `kuna xrefs` answers a pointer the image stores in its data as a
+//! (GH #1333) `unlace xrefs` answers a pointer the image stores in its data as a
 //! separate `pointer` row, from the image's own fixup metadata, and says which
 //! metadata it read, so an empty answer is never ambiguous. (GH #1502) It also
 //! says when it read only part of that metadata, or none of a kind it does not
@@ -19,12 +19,12 @@ fn fixture(name: &str) -> String {
 }
 
 fn xrefs(args: &[&str]) -> String {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .arg("xrefs")
         .args(args)
         .output()
-        .expect("run kuna xrefs");
-    assert!(out.status.success(), "kuna xrefs {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        .expect("run unlace xrefs");
+    assert!(out.status.success(), "unlace xrefs {args:?}: {}", String::from_utf8_lossy(&out.stderr));
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 

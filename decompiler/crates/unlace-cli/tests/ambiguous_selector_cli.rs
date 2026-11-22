@@ -28,7 +28,7 @@ fn decompile(binary: &str, args: &[&str]) -> (String, String, bool) {
     let mut argv = vec!["decompile", bin.as_str()];
     argv.extend_from_slice(args);
     argv.extend_from_slice(&["--sleighpath", sp.as_str()]);
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")

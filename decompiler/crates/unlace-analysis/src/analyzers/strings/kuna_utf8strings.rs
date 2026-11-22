@@ -9,7 +9,7 @@
 //! `_φ( °-°)/ so what was the magical keycombination? ` at 0x2000 is reported as
 //! `)/ so what was the magical keycombination? ` at 0x200c. That address is not
 //! an address anything in the image refers to, so the row also arrives with zero
-//! references and no owning function while `kuna xrefs --to 0x2000` answers one —
+//! references and no owning function while `unlace xrefs --to 0x2000` answers one —
 //! the reference machinery already knows the literal's true start, and only the
 //! reported address is wrong.
 //!

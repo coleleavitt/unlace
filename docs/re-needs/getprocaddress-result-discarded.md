@@ -225,7 +225,7 @@ WHAT IT LACKS, and why it is NOT approved work:
 - **no evidence it fixes anything.** Nobody has shown this flips `a-f2df446f39d5`, or run any gate on
   it. It is a hypothesis with code attached, not a verified fix.
 - no `phases.toml` `settableTable` row -- so the option name is in `options.rs` with no catalog row
-  and **`kuna catalog --check` is red as it stands**; none of the hard-coded catalog counts are bumped
+  and **`unlace catalog --check` is red as it stands**; none of the hard-coded catalog counts are bumped
   either.
 - no `tests/stages/` two-pass testcase, no `docs/spec/` prose, no `docs/features/` record.
 - it is based on `e5ac9c77` (wave 1). Main has moved 22 commits since; `architecture.rs`,

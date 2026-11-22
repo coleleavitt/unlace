@@ -22,7 +22,7 @@ Filed by round-1 testers on the crackmes corpus. See `.kuna-repipe/rounds/1/gate
 
 ## Acceptance
 
-CLOSED in round 1. Shipped: `kuna functions --summary --filter RE --reachable-from F --min-size N --sort size --limit N` -- on a 211 KB PE the summary is 2.8 KB against 174 KB unfiltered
+CLOSED in round 1. Shipped: `unlace functions --summary --filter RE --reachable-from F --min-size N --sort size --limit N` -- on a 211 KB PE the summary is 2.8 KB against 174 KB unfiltered
 
 **Closed WITHOUT an acceptance flip.** Filed by hand, so this record carries no `probe_id`/`acceptance_id` and the gate never closed it -- a human did. The design says only the acceptance probe may close a need; this one did not go through that. The durable evidence that the capability works is:
 - `tests/cli/functions-summary-is-triageable.json`

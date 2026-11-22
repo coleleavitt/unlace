@@ -24,7 +24,7 @@ fn regenerated_x87_integer_conversions_match_native_rounding_and_flags() {
         .arg(&source).arg("-o").arg(&binary));
 
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let mut decompile = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut decompile = Command::new(env!("CARGO_BIN_EXE_unlace"));
     decompile.arg("decompile-project").arg(&binary)
         .arg("--sleighpath").arg(root.join("specs"))
         .args(["--assert-strict", "--option", "nanignore", "none"])
@@ -82,7 +82,7 @@ fn truncating_control_words_become_c_conversions() {
         .arg(&source).arg("-o").arg(&binary));
 
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let mut decompile = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut decompile = Command::new(env!("CARGO_BIN_EXE_unlace"));
     decompile.arg("decompile-project").arg(&binary)
         .arg("--sleighpath").arg(root.join("specs"))
         .arg("--assert-strict")
@@ -154,7 +154,7 @@ fn integer_conversion_results_keep_their_bits_in_float_storage() {
     process::required_output(Command::new("clang").args(["-shared", "-fPIC", "-nostdlib", "-Wl,-Bsymbolic"])
         .arg(&source).arg("-o").arg(&binary));
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    process::required_output(Command::new(env!("CARGO_BIN_EXE_kuna"))
+    process::required_output(Command::new(env!("CARGO_BIN_EXE_unlace"))
         .arg("decompile-project").arg(&binary)
         .arg("--sleighpath").arg(root.join("specs"))
         .args(["--assert-strict", "--assert", "prototype sample32 float sample32(float *input,unsigned short control)",

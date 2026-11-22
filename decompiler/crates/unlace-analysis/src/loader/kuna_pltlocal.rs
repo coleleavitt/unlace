@@ -13,7 +13,7 @@
 //! jumps through carries a symbol-bearing dynamic relocation, and that symbol is
 //! a defined `STT_FUNC` (an `STT_GNU_IFUNC`'s value is its resolver, not the
 //! function). This is the same binding
-//! [`crate::listing::xrefs::XrefIndex::export_alias_class`] reads for `kuna xrefs`.
+//! [`crate::listing::xrefs::XrefIndex::export_alias_class`] reads for `unlace xrefs`.
 
 use std::collections::HashMap;
 

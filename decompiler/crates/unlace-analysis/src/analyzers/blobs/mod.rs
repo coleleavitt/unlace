@@ -27,7 +27,7 @@
 //!
 //! [`BlobPass`] runs the scan over the image at load; the commit plants each
 //! blob as `<kind>_<addr>`, an `unsigned char[len]`, unless `--option blobs off`.
-//! `kuna blobs` is the same scan as an inventory.
+//! `unlace blobs` is the same scan as an inventory.
 
 mod archives;
 mod images;

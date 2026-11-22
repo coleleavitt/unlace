@@ -1,4 +1,4 @@
-//! `kuna xrefs` and `kuna decompile-graph` over a call through an import's GOT
+//! `unlace xrefs` and `unlace decompile-graph` over a call through an import's GOT
 //! slot (GH #1376). `adrp x16,_malloc@GOTPAGE; ldr x16,[x16,..]; blr x16`
 //! reads the slot and calls through the pointer it loaded, as x86-64's `call
 //! *slot(%rip)` does in one instruction and `mov slot(%rip),%rax; call *%rax`
@@ -10,7 +10,7 @@
 
 use crate::common;
 
-/// Every row `kuna xrefs <binary> <direction> <target> --json` answers, as
+/// Every row `unlace xrefs <binary> <direction> <target> --json` answers, as
 /// `(kind, referencing function, referencing address, referenced address)`.
 fn rows(binary: &str, direction: &str, target: &str) -> Vec<(String, String, u64, u64)> {
     let path = common::fixture(binary);

@@ -3,7 +3,7 @@
 //! The field answers one question a reference index otherwise cannot: a
 //! computed call files no Call edge, so "this function calls nothing" and "this
 //! function's callee is decided at run time" look identical from
-//! `refs_from_function`. `kuna decompile-graph` reports it per function for
+//! `refs_from_function`. `unlace decompile-graph` reports it per function for
 //! exactly that reason.
 //!
 //! The claim is narrow — `CALLIND`, not any indirection — and the third test is
@@ -33,7 +33,7 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap()
 }
 
-/// The index `kuna xrefs` answers out of.
+/// The index `unlace xrefs` answers out of.
 fn index() -> XrefIndex {
     let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/fauxware");
     let specs = repo_root().join("specs");

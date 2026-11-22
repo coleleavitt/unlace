@@ -4,10 +4,10 @@
 //!
 //! Everything kuna knows about a program it *derived*. That is the right default
 //! and it is wrong exactly where reverse engineering is hard, and until this
-//! module the `kuna` binary had almost no lever to correct it: `rename`,
+//! module the `unlace` binary had almost no lever to correct it: `rename`,
 //! `retype`, `map param`, `map return`, `map address`, `comment instruction` and
 //! `parse line extern` all work in the console and none of them was reachable
-//! from `kuna` (`docs/re-needs/no-cli-rename-or-prototype-override.md`).  A
+//! from `unlace` (`docs/re-needs/no-cli-rename-or-prototype-override.md`).  A
 //! rename that does not survive the process that made it is not an interface.
 //!
 //! # The directive
@@ -66,7 +66,7 @@
 //!   time.  `flow` is the sharpest of them: it reclassifies the flow out of one
 //!   instruction (`branch`, `call`, `callreturn`, `return`), which is how a
 //!   caller corrects a function whose body the flow-follower walked out of — an
-//!   indirect `call *%rdx` that never returns, a tail call kuna read as a call,
+//!   indirect `call *%rdx` that never returns, a tail call unlace read as a call,
 //!   a jump into a neighbour.  `callee` states where one indirect call goes,
 //!   so the flow builds it as a direct call to that function
 //!   ([`crate::kuna_calleeoverride`]).  `callproto` states the arguments and
@@ -82,7 +82,7 @@
 //!   shape the console's `decompile` / `rename` / `decompile` sequence has.
 //!
 //! A directive that names no function binds to the function being decompiled.
-//! That is unambiguous for `kuna decompile`, which selects exactly one; on a
+//! That is unambiguous for `unlace decompile`, which selects exactly one; on a
 //! whole-binary run it would silently mean "every function that happens to have a
 //! `v2`", so it is REJECTED there with a detail telling the caller to qualify it
 //! `<func>::<symbol>`.  Rejecting is the point: a directive that is accepted and
@@ -182,7 +182,7 @@ pub struct Outcome {
 impl Body {
     /// `(kind, phase, sub-phase)` — the phase-model coordinates a directive
     /// writes at, reported so an agent can correlate a rejection with
-    /// `kuna catalog` / `docs/phases.md`.
+    /// `unlace catalog` / `docs/phases.md`.
     pub fn coords(&self) -> (&'static str, &'static str, &'static str) {
         match self {
             Body::Function { .. } => ("function", "P1", "function-boundary"),

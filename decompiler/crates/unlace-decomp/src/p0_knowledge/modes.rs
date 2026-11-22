@@ -508,7 +508,7 @@ mod tests {
         ///
         /// `protoorder` is a whole-binary RUN ORDER, not a pass, and its own
         /// default (`cycles`) already turns it on where it means anything: a
-        /// serial `kuna decompile-all`. The other surfaces cannot act on it, so
+        /// serial `unlace decompile-all`. The other surfaces cannot act on it, so
         /// preset membership would change nothing.
         ///
         /// `bejoin on` joins a big-endian or AVR two-register value high word

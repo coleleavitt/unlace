@@ -1,6 +1,6 @@
 //! Name-normalization and match tests for [`super`].
 //!
-//! Every mangled string below is a verbatim `kuna functions --json` name from a
+//! Every mangled string below is a verbatim `unlace functions --json` name from a
 //! real `rustc 1.90` binary (`private/FakeCrypt`), so the escaped forms the
 //! matcher has to survive are the ones it actually meets.
 

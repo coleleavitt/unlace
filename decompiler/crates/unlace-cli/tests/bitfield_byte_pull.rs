@@ -15,7 +15,7 @@ fn fixture(debug: bool) -> PathBuf {
 
 fn decompile(name: &str, signature: &str, debug: bool) -> String {
     let image = fixture(debug);
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args([
         "decompile",
         image.to_str().unwrap(),
@@ -189,7 +189,7 @@ fn whole_field_arguments_have_a_defined_value() {
 
 fn decompile_shapes() -> std::collections::HashMap<String, String> {
     let image = common::repo_root().join("tests/fixtures/bitfield-byte-pull/shapes-no-debug.o");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args(["decompile-all", image.to_str().unwrap(), "--json", "--max-fn-seconds", "5"]);
     command.args(["--option", "ctypes", "on", "--assert-strict"]);
     for assertion in [
@@ -240,7 +240,7 @@ fn whole_byte_fields_keep_their_type_sign_value_and_single_read() {
 #[test]
 fn field_read_from_a_read_modify_write_word_prints_before_both_stores() {
     let image = common::repo_root().join("tests/fixtures/bitfield-byte-pull/rmw-mipsbe.o");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args(["decompile-all", image.to_str().unwrap(), "--json", "--max-fn-seconds", "5"]);
     let output = common::process::required_output(&mut command);
     let document: Value = serde_json::from_slice(&output.stdout).unwrap();

@@ -1518,7 +1518,7 @@ impl IfaceCommandAction for IfcKunaFunctionSymbol {
 
 /// `function containing <selector>`: name the inventory entry whose extent
 /// holds the function `selector` resolves to, when that is not itself an
-/// entry, so `kuna decompile` can say it is decompiling from inside another
+/// entry, so `unlace decompile` can say it is decompiling from inside another
 /// function, or (kuna #1288) the function whose flow ended before it
 /// (`ConsoleProgram::flow_ended_before`). Silent otherwise: a selector that
 /// does not resolve is the `load` command's to report.
@@ -1649,7 +1649,7 @@ pub fn register_kuna_commands(status: &mut IfaceStatus) {
     status.register_com(Box::new(IfcKunaRegionTree), &["region", "tree"]);
     status.register_com(Box::new(IfcKunaRegionBlocks), &["region", "blocks"]);
     status.register_com(Box::new(IfcKunaRegionWalk), &["region", "walk"]);
-    // (kuna) Not a C++ command: the function-boundary override the `kuna` binary
+    // (kuna) Not a C++ command: the function-boundary override the `unlace` binary
     // exposes as `--define-function`.
     status.register_com(Box::new(IfcKunaFunctionBounds), &["function", "bounds"]);
     status.register_com(Box::new(IfcKunaFunctionSymbol), &["function", "symbol"]);

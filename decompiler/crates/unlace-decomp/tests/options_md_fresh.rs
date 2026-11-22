@@ -1,10 +1,10 @@
 //! Freshness fence for the generated option catalog: `docs/options.md` must be
-//! byte-identical to what `kuna catalog --markdown` (which renders in-process
+//! byte-identical to what `unlace catalog --markdown` (which renders in-process
 //! via `emit_catalog_markdown`) would emit. Regenerate after ANY settableTable
 //! change:
 //!
 //! ```sh
-//! decompiler/target/release/kuna catalog --markdown > docs/options.md
+//! decompiler/target/release/unlace catalog --markdown > docs/options.md
 //! ```
 
 use unlace_decomp::kuna_phases::emit_catalog_markdown;
@@ -17,7 +17,7 @@ fn options_md_matches_the_generator_byte_for_byte() {
     assert!(
         generated == COMMITTED,
         "docs/options.md is stale -- regenerate with \
-         `decompiler/target/release/kuna catalog --markdown > docs/options.md` \
+         `decompiler/target/release/unlace catalog --markdown > docs/options.md` \
          (generated {} bytes, committed {} bytes)",
         generated.len(),
         COMMITTED.len()

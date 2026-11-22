@@ -12,6 +12,6 @@ for c in 69a947074 eaa19ebbb; do
   CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_BUILD_JOBS=16 make binaries > /home/mahaloz/kwt/_final-e/bisect-$c.build.log 2>&1
   echo "BUILD $c rc=$?"
   mkdir -p /home/mahaloz/kwt/_final-e/bis-$c
-  cp decompiler/target/release/kuna decompiler/target/release/decomp_dbg /home/mahaloz/kwt/_final-e/bis-$c/
+  cp decompiler/target/release/unlace decompiler/target/release/decomp_dbg /home/mahaloz/kwt/_final-e/bis-$c/
 done
 echo BISECT_BUILDS_DONE

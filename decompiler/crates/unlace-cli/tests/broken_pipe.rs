@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 fn run_with_closed_stdout(args: &[&str]) -> std::process::Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -28,7 +28,7 @@ fn run_with_closed_stdout(args: &[&str]) -> std::process::Output {
 /// Close the read end before the child writes anything, so the very first write
 /// takes the EPIPE — no dependence on the payload outgrowing the pipe buffer.
 fn run_with_stdout_closed_immediately(args: &[&str]) -> std::process::Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -92,7 +92,7 @@ fn functions_json_tolerates_a_closed_reader() {
     assert_quiet_success(&output);
 }
 
-/// A closed pipe must not turn a red gate green.  `kuna test` scores the stages
+/// A closed pipe must not turn a red gate green.  `unlace test` scores the stages
 /// corpus against the *main* corpus baseline: the two record disjoint passkeys by
 /// construction, so every baseline entry reads as REGRESSED and the run is a
 /// guaranteed exit 1 — which has to survive nobody reading the report.

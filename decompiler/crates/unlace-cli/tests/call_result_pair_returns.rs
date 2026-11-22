@@ -158,7 +158,7 @@ fn i386_image() -> Vec<u8> {
 fn decompile(stem: &str, bytes: &[u8]) -> String {
     let path = common::scratch_file(stem, "o");
     std::fs::write(&path, bytes).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-all", path.to_str().unwrap()])
         .output()
         .unwrap();
@@ -316,7 +316,7 @@ fn a_byte_moved_through_dl_after_the_call_is_not_a_high_word() {
     let narrow = |decl: &str| decl.starts_with("int ") || decl.starts_with("void ");
     for name in ["b4", "b3", "newp", "f2", "f4"] {
         assert!(narrow(declaration("i386", &text, name)), "decompile-all: {name} returns %edx:\n{text}");
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile", path.to_str().unwrap(), name])
             .output()
             .unwrap();
@@ -337,7 +337,7 @@ fn a_pushed_argument_caller_returns_the_whole_pair_in_both_modes() {
             declaration("i386", &text, name).starts_with("unsigned long long "),
             "decompile-all: {name} does not return the pair:\n{text}"
         );
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile", path.to_str().unwrap(), name])
             .output()
             .unwrap();

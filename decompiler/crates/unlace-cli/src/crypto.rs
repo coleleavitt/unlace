@@ -1,15 +1,15 @@
-//! `kuna crypto` — the crypto-constant inventory (findcrypt's question).
+//! `unlace crypto` — the crypto-constant inventory (findcrypt's question).
 //!
 //! ```text
-//!   kuna crypto <binary> [--json] [--algorithm SUBSTR] [--section NAME] [--no-xrefs]
+//!   unlace crypto <binary> [--json] [--algorithm SUBSTR] [--section NAME] [--no-xrefs]
 //!                        [--mode MODE] [--option N V].. [--isa auto|arm|thumb] [--slice ARCH]
 //!                        [--target T] [--sleighpath D]
 //! ```
 //!
 //! Scans the image's loaded, initialized sections for the well-known cipher and
 //! hash constants in [`crate::cryptosig`] and reports each with its algorithm,
-//! address, section, and — through the same reference index `kuna strings` and
-//! `kuna xrefs` use — the functions that reference a table, or the function an
+//! address, section, and — through the same reference index `unlace strings` and
+//! `unlace xrefs` use — the functions that reference a table, or the function an
 //! immediate sits in. Read-only: nothing is committed, so no emitted C changes.
 
 use std::collections::BTreeMap;
@@ -43,7 +43,7 @@ struct Row {
     functions: Vec<(u64, String)>,
 }
 
-/// `kuna crypto` entry point.
+/// `unlace crypto` entry point.
 pub fn run(argv: &[String]) -> i32 {
     let args = match parse_args(argv) {
         Ok(a) => a,
@@ -371,7 +371,7 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<CryptoArgs, String> {
 
 fn usage() {
     eprintln!(
-        "usage: kuna crypto <binary> [--json] [--algorithm SUBSTR] [--section NAME] [--no-xrefs] \\\n\
+        "usage: unlace crypto <binary> [--json] [--algorithm SUBSTR] [--section NAME] [--no-xrefs] \\\n\
          \x20                   [--mode auto|reliable|aggressive|fast] [--option N V].. \\\n\
          \x20                   [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D] \\\n\
          \x20                   [--raw-image --target T --base VMA --entry VMA]\n\

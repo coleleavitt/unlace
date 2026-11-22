@@ -104,7 +104,7 @@ fn decompile_both(name: &str, words: &[u32]) -> Vec<(Endianness, String, String)
     let mut results = Vec::new();
     for endian in [Endianness::Big, Endianness::Little] {
         std::fs::write(&path, image(endian, words)).unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile", path.to_str().unwrap(), "select"])
             .output()
             .unwrap();

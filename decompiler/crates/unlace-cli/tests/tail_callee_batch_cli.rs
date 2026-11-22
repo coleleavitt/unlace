@@ -1,5 +1,5 @@
-//! A narrowed `decompile-all` and `kuna decompile --json` state the prototypes
-//! of the callees their functions tail-call, as `kuna decompile` does (option
+//! A narrowed `decompile-all` and `unlace decompile --json` state the prototypes
+//! of the callees their functions tail-call, as `unlace decompile` does (option
 //! `protoorder`). Neither has a callee-first order behind it, so the AArch64
 //! forwarder `ldr x8,[x3]; cbz x8,L; b target` printed `target(); // tail-call`.
 //!

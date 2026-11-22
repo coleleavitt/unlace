@@ -16,7 +16,7 @@
 //!   that one symbol aborted the commit mid-way — every later arm (library and
 //!   DWARF prototypes, context paints, tracked registers, call-fixups, DWARF
 //!   locals and line comments) was abandoned, and the stash is `mem::take`n so a
-//!   second `read symbols` cannot retry. `kuna functions` exited 1 with nothing.
+//!   second `read symbols` cannot retry. `unlace functions` exited 1 with nothing.
 //! * **Low 32 bits with the sign bit set** (`0xffff_fff0`, fixture
 //!   `hostile_size_neg_x86_64`): truncates to a NEGATIVE `int4`, which the type
 //!   factory's cache lookups indexed unchecked — a process abort, not an error:
@@ -67,7 +67,7 @@ struct Loaded {
 
 /// Bootstrap `name`, commit the analysis facts, and decompile `main`.
 ///
-/// `commit_pending_analysis` is the exact call `kuna functions` /
+/// `commit_pending_analysis` is the exact call `unlace functions` /
 /// `decompile-all` / `decompile-project` make, and it is where every failure
 /// mode above surfaced — a panic here fails the test as loudly as an `Err`.
 fn load(name: &str) -> Loaded {

@@ -28,7 +28,7 @@ reject_reason: null
 Find who registers the timer callback `on_expire`.
 
 > **ARM -fPIC callback read through the GOT has no reference** (major, synthetic `gotxref_arm_le32`)
-> `kuna xrefs --to on_expire` reports 0 references, although `arm_timers` loads it from its GOT slot and passes it to `set_timeout`. The string literals of the same function also have no xref, and the raw pool words are filed as data references into `.text`.
+> `unlace xrefs --to on_expire` reports 0 references, although `arm_timers` loads it from its GOT slot and passes it to `set_timeout`. The string literals of the same function also have no xref, and the raw pool words are filed as data references into `.text`.
 
 Seen first on a production ARM executable (GCC, `-fPIC`, linked non-PIE at 0x10000); `gotxref_arm_le32` reproduces it from a small C source.
 

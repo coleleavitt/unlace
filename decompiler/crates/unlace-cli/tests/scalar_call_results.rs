@@ -11,7 +11,7 @@ fn recovered_scalar_call_results_preserve_low_bytes_and_signedness() {
     }
     let have_go = process::optional_output(Command::new("go").arg("version")).is_some();
     let kuna = std::env::var_os("KUNA_TEST_BIN")
-        .unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let declarations = [
         ("narrow_u8", "uint1"), ("narrow_i8", "int1"),
         ("narrow_u16", "uint2"), ("narrow_i16", "int2"),

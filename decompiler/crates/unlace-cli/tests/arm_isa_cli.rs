@@ -15,7 +15,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn run(command: &str, binary: &str, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_kuna"))
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([command, binary])
         .args(args)
         .args(["--mode", "fast", "--sleighpath"])

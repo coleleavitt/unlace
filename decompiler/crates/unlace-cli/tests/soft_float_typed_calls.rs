@@ -311,7 +311,7 @@ fn decompile_args(bytes: &[u8], args: &[&str], asserts: &[String]) -> String {
         .map(PathBuf::from)
         .unwrap_or_else(|| common::repo_root().join("specs"));
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let mut command = Command::new(kuna);
     command
         .arg("decompile-all")

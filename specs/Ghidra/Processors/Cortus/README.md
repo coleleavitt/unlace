@@ -52,7 +52,7 @@ difference between 24 poisoned functions and none.
 The core has no object format of its own, so images arrive headerless:
 
 ```sh
-kuna functions fw.bin --raw-image --target Cortus:LE:32:APS3:default \
+unlace functions fw.bin --raw-image --target Cortus:LE:32:APS3:default \
     --base 0x80000000 --entry 0x8000010c --json
 ```
 

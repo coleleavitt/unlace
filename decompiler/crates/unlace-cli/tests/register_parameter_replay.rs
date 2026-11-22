@@ -24,7 +24,7 @@ fn independent_byte_hash_and_pointer_values_do_not_share_a_register_local() {
     ] {
         for stack_views in ["off", "on"] {
             let output = common::process::required_output(
-                Command::new(env!("CARGO_BIN_EXE_kuna"))
+                Command::new(env!("CARGO_BIN_EXE_unlace"))
                     .args([
                         "decompile",
                         &fixture,
@@ -122,7 +122,7 @@ fn renaming_the_dispatch_key_keeps_the_incoming_property() {
                 "name register_parameter_reuse::property_00 cleared_property",
             ],
         ] {
-            let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command.args([
                 "decompile",
                 &fixture,

@@ -2,7 +2,7 @@
 """Generate `unmapped_branch_x86_64` — a stripped ELF whose only function tail-
 jumps to an address the image does not map.
 
-The shape `kuna decompile` lost on crackmes.one/5e51836e33c5d4439bb2dc24: a
+The shape `unlace decompile` lost on crackmes.one/5e51836e33c5d4439bb2dc24: a
 function with 160 mapped bytes that disassembles cleanly, whose `jmp` displacement
 resolves to 0x0. Reduced here to the smallest image that reproduces it.
 Regenerate with:
@@ -20,7 +20,7 @@ Layout — `.text` @ 0x401000, stripped (no `.symtab`), `e_entry` = 0x401000:
 
 Address 0 is in no segment of this image, so following the `jmp` asks the loader
 for bytes it does not have. Before the fix that raised out of the whole flow
-follow and `kuna decompile` reported the entry as an external symbol; now the
+follow and `unlace decompile` reported the entry as an external symbol; now the
 edge ends in a halt and the body renders with a `flows into unmapped memory`
 warning.
 """

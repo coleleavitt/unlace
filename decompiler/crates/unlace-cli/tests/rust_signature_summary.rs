@@ -852,7 +852,7 @@ fn installed_corpus_check_validates_the_default_and_explicit_paths() {
     let installed = install_base.join("kuna/rust-signatures/x86_64/linux/manifest.json");
     let specs = common::repo_root().join("specs");
     let run = |args: &[&str], code| {
-        let result = std::process::Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let result = std::process::Command::new(env!("CARGO_BIN_EXE_unlace"))
             .env("HOME", &data)
             .env("LOCALAPPDATA", &data)
             .env("XDG_DATA_HOME", &data)

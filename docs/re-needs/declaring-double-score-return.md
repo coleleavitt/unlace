@@ -131,7 +131,7 @@ _not yet refuted_
 VERDICT: OVERTURNED. The hypothesis blames the enclosing floating return ("locking the enclosing floating return may change XMM heritage partitioning and break nested call-output recovery"). I KILLED IT BY EXPERIMENT, and the real trigger is something nobody suspected: A PROTOTYPE ASSERTION ON A THIRD, UNRELATED CALLEE.
 
 THE MINIMAL BROKEN PAIR — two commands, one assertion apart, and this is the whole need:
-  GOOD  kuna decompile <bin> 0x140003150 --addr \
+  GOOD  unlace decompile <bin> 0x140003150 --addr \
           --assert "prototype 0x14000904f double log(double x)"
         ->  v3 = v5 + log(v3 + v6);            <- accumulator INTACT, correct
   BAD   ... the same, plus one assertion on an unrelated function:

@@ -82,7 +82,7 @@ API float send_slot(int index){Descriptor d;d.character.length=4;d.character.dat
     };
     let data = if pointer { "float *" } else { word };
     let output = root.join("out");
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.arg("decompile-project")
         .arg(&binary)
         .args(["--addr", &format!("0x{entry:x}"), "-o"])
@@ -212,7 +212,7 @@ API float send_heap(__UINTPTR_TYPE__ heap){Descriptor d;d.character.length=4;d.c
     let name = if wide { "send_heap" } else { "_send_heap" };
     let word = if wide { "unsigned long long" } else { "unsigned int" };
     let output = root.join("out");
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.arg("decompile-project")
         .arg(&binary)
         .args(["--addr", &format!("0x{entry:x}"), "-o"])

@@ -14,7 +14,7 @@ section with neither content flag set, the shape the original packer section
                            three xchg-decodes / popfd / pop ecx / pop eax /
                            the decoded tail, `into`, and `ret 8`
 
-`kuna decompile <exe> 0x41cd08 --addr` on the unpatched tree exits 1 with
+`unlace decompile <exe> 0x41cd08 --addr` on the unpatched tree exits 1 with
 `index out of bounds` out of `substrate/block.rs`: the stack-pointer solve
 rewrites one of the block's MULTIEQUALs into an `INT_ADD` in place, and the
 unreachable-block sweep then stops resyncing phi arity at that op.

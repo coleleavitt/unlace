@@ -1,7 +1,7 @@
 """Thin library shim: ``decompile(binary, target, ...)`` for the pipeline.
 
-The **user-facing CLI** that used to live here was ported to the Rust ``kuna``
-binary (``kuna decompile <binary> <func> ...``); see ``decompiler/crates/unlace-cli``.
+The **user-facing CLI** that used to live here was ported to the Rust ``unlace``
+binary (``unlace decompile <binary> <func> ...``); see ``decompiler/crates/unlace-cli``.
 The Rust binary is the one project paradigm now.
 
 What remains here is **only the library function** the still-Python feature
@@ -165,7 +165,7 @@ def decompile(
 
 # Options whose effect is baked during `load file`, upstream of every `option`
 # command, so the console line below cannot reach them: the engine reads them from
-# the process environment instead (the same bridge `kuna decompile` puts on the
+# the process environment instead (the same bridge `unlace decompile` puts on the
 # decomp_dbg subprocess). Keyed option name -> env var. Empty since the DWARF
 # import options were folded into `dwarf`; the seam stays for the next such option.
 _LOADTIME_GATE_ENV = {}
@@ -221,7 +221,7 @@ def _build_script(binary, target, by_address, bfd_target, raw, out_path,
     else:
         lines.append("load file %s" % image)
 
-    # `option` lines MUST precede `read symbols` (match the Rust `kuna decompile`
+    # `option` lines MUST precede `read symbols` (match the Rust `unlace decompile`
     # CLI, unlace-cli/src/decompile.rs): the unlace_analysis passes are committed —
     # gated by the per-pass `--option <id> on|off` flags — inside `read symbols`
     # (IfcReadSymbols -> commit_pending_analysis). An analysis-tier option set

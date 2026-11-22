@@ -41,5 +41,5 @@
       }
     ]
   },
-  "notes": "0x140005038 is the IAT slot for KERNEL32!ExitProcess, and both rows are a CALL qword ptr [0x140005038] -- the shape MSVC emits for every Win32 call. Before the fix both came back as `read`, which is not a call-graph edge, so `kuna decompile-graph` reported the imports as called by nothing (GH-456)."
+  "notes": "0x140005038 is the IAT slot for KERNEL32!ExitProcess, and both rows are a CALL qword ptr [0x140005038] -- the shape MSVC emits for every Win32 call. Before the fix both came back as `read`, which is not a call-graph edge, so `unlace decompile-graph` reported the imports as called by nothing (GH-456)."
 }

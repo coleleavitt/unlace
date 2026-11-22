@@ -1,5 +1,5 @@
 //! The **streaming** half of the project export: the pieces
-//! `kuna decompile-project --stream` needs that the one-shot builders in
+//! `unlace decompile-project --stream` needs that the one-shot builders in
 //! [`crate::project`] do not expose.
 //!
 //! A streamed export writes its artifacts while it runs, so the two artifacts a
@@ -124,7 +124,7 @@ impl AsmSweep {
         let done = code_secs.is_empty();
         Self {
             header: format!(
-                "; kuna decompile-project — {file_name}\n; arch: {}\n",
+                "; unlace decompile-project — {file_name}\n; arch: {}\n",
                 prog.description()
             ),
             labels: map,

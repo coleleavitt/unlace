@@ -1,6 +1,6 @@
 //! Shared **per-function decompile step** -- the one place a function is turned
 //! into a `Funcdata`, used by both console `decompile` (`IfcDecompile`) and the
-//! whole-binary loop (`project::decompile_targets`, behind `kuna decompile-all`
+//! whole-binary loop (`project::decompile_targets`, behind `unlace decompile-all`
 //! / `decompile-project` / the WASM front-end).
 //!
 //! Before this module the two surfaces each called

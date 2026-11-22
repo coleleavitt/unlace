@@ -206,7 +206,7 @@ fn decompile(stem: &str, image: &Image) -> String {
     let path = common::scratch_file(stem, "o");
     std::fs::write(&path, object(image)).unwrap();
     let names: Vec<&str> = image.functions.iter().map(|f| f.0).collect();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-all", path.to_str().unwrap(), "--mode", "aggressive", "--functions"])
         .arg(names.join(","))
         .output()

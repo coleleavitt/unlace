@@ -323,7 +323,7 @@ fn a_generated_placeholder_name_resolves_to_the_address_it_spells() {
 ///
 /// `option namestyle` decides how a synthesized name is PRINTED; a selector must
 /// not depend on that choice, or the styles become disjoint name spaces. The
-/// tester hit it the other way round: `kuna functions` reports `sub_15dc` and
+/// tester hit it the other way round: `unlace functions` reports `sub_15dc` and
 /// ignores namestyle, so feeding that name back with `--option namestyle ghidra`
 /// answered `no function matches` for a function the same run decompiles under
 /// `func_0x000015dc`.

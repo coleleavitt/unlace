@@ -22,7 +22,7 @@ fn fixture(name: &str) -> String {
 
 fn run_kuna(args: &[&str]) -> (String, String, i32) {
     let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../specs");
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .env("SLEIGHHOME", specs)
         .output()

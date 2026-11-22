@@ -1,4 +1,4 @@
-xrefpairs_aarch64 -- the AArch64 ELF fixture for `kuna xrefs` over an address a
+xrefpairs_aarch64 -- the AArch64 ELF fixture for `unlace xrefs` over an address a
 register pair forms (decompiler/crates/unlace-cli/tests/xrefs_address_pairs.rs).
 
 What it is

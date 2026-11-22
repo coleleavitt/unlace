@@ -33,5 +33,5 @@
       "\"name\"\\s*:\\s*\"main\""
     ]
   },
-  "notes": "CI twin of the dataset witness (crackmes.one 5edb0b8533c5d449d91ae73b bin/armageddon), whose `kuna functions` listed 17 entries and omitted the 41 validators main calls. Retargeted onto the vendored armdiscseed_le32: the same shape hand-assembled, main reachable only through the non-PIE ARM crt1 pool word and 0x10190 only by main's bl."
+  "notes": "CI twin of the dataset witness (crackmes.one 5edb0b8533c5d449d91ae73b bin/armageddon), whose `unlace functions` listed 17 entries and omitted the 41 validators main calls. Retargeted onto the vendored armdiscseed_le32: the same shape hand-assembled, main reachable only through the non-PIE ARM crt1 pool word and 0x10190 only by main's bl."
 }

@@ -71,7 +71,7 @@ fn ppc32_no_return_contract_stops_flow_at_the_import() {
                     fixture.import = import;
                     let path = common::scratch_file("ppc32-import", "so");
                     std::fs::write(&path, fixture.bytes()).unwrap();
-                    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                         .args([
                             "decompile",
                             path.to_str().unwrap(),
@@ -103,7 +103,7 @@ fn ppc32_no_return_contract_stops_flow_at_the_import() {
                     if import == "returning_import" {
                         assert!(text.contains("return 9;"), "{text}");
                     }
-                    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                         .args(["xrefs", path.to_str().unwrap(), "--to", import, "--json"])
                         .output()
                         .unwrap();
@@ -278,7 +278,7 @@ fn ppc32_missing_got2_does_not_truncate_returning_calls() {
             fixture.symbolized = symbolized;
             let path = common::scratch_file("ppc32-pic-collision", "so");
             std::fs::write(&path, fixture.bytes()).unwrap();
-            let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args([
                     "decompile",
                     path.to_str().unwrap(),
@@ -367,7 +367,7 @@ int check(void) { extra(); return 7; }
             }
             assert_eq!(file.dynamic_relocations().unwrap().count(), 4);
             for option in ["off", "on", "abi"] {
-                let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                     .args([
                         "decompile",
                         path.to_str().unwrap(),

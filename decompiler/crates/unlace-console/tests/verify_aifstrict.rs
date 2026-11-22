@@ -61,7 +61,7 @@ const PHANTOM2: &str = "sub_800015e";
 /// function shares, so AIF must accept it in NEITHER pass.
 const D: &str = "sub_8000160";
 
-/// Bootstrap the fixture with the discovery set `kuna functions` / `decompile-all` inject
+/// Bootstrap the fixture with the discovery set `unlace functions` / `decompile-all` inject
 /// on non-x86-64 (`listing` + `funcstart_patterns` + `aif on`), setting `aif strict` for
 /// the fix pass — the live-CLI ordering, where the `option` lines precede the deferred
 /// `read symbols` commit.

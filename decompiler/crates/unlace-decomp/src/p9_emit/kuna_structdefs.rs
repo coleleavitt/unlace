@@ -1,11 +1,11 @@
 //! (kuna) The per-function type-definition preamble — no upstream Ghidra
 //! equivalent, and the one half of `docTypeDefinitions` that never had a caller
-//! outside `kuna decompile-project`.
+//! outside `unlace decompile-project`.
 //!
 //! A decompiled body that reads `*(int *)(a0 + 8)` and one that reads
 //! `f->_flags` are the same recovery; only the second one tells the reader what
 //! the argument IS.  kuna already knows: the type factory holds the composite,
-//! and `kuna decompile-project` writes every one of them into the export's
+//! and `unlace decompile-project` writes every one of them into the export's
 //! `.h`.  A single function printed to a terminal got none of it — the struct
 //! name appeared in the signature (`int get_prefix(FILE *f)`) and nothing said
 //! what a `FILE` was, so the layout the decompiler recovered stayed invisible to
@@ -40,7 +40,7 @@
 //! ## One rendering, two surfaces
 //!
 //! The text is `printc::render_type_definitions`, the same renderer
-//! that builds `kuna decompile-project`'s `.h` type block, over the subset:
+//! that builds `unlace decompile-project`'s `.h` type block, over the subset:
 //! the forward-declaration block, then bodies, with an incomplete struct
 //! printing as `typedef struct FILE FILE; /* opaque */`.  So a preamble line and
 //! the header line for the same type are the same line, and a project export's
@@ -213,7 +213,7 @@ pub fn dedup_by_name(types: &[Rc<Datatype>]) -> Vec<Rc<Datatype>> {
 /// `typedef <base> <name>;` line, and the forward declaration alone for an
 /// incomplete (opaque) composite.
 ///
-/// The machine-readable half of the preamble (`kuna decompile-all --json`'s
+/// The machine-readable half of the preamble (`unlace decompile-all --json`'s
 /// per-function `types` array), so a consumer reads the recovered layout
 /// without parsing C out of the body.  Returns `""` for a type the preamble does
 /// not define.

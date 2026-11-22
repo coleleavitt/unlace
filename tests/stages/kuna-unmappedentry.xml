@@ -4,7 +4,7 @@
     kuna issue testcase: the Listing walk's unmapped-CALL-target entry
     suppression.
 
-    Issue:      unlace-analysis-unmappedentry - `kuna functions` on
+    Issue:      unlace-analysis-unmappedentry - `unlace functions` on
                 crackmes.one/66fd63059b533b4c22bd0b91 (32-bit ELF,
                 "Overlapping / misaligned instructions") reported
                 sub_fe6dca9f at 0xfe6dca9f, size 0, in a 25 KB image whose

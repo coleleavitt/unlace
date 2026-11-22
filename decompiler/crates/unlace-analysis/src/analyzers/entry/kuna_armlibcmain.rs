@@ -2,14 +2,14 @@
 //! `_start` hands it to `__libc_start_main` through a PC-relative literal pool
 //! word rather than through a relocated GOT slot (P1 program prep).
 //!
-//! A stripped, non-PIE ARM32 executable answers `kuna functions` with the PLT
+//! A stripped, non-PIE ARM32 executable answers `unlace functions` with the PLT
 //! imports, the `DT_INIT`/`INIT_ARRAY` entries, and `_start` — and nothing that
 //! covers the program's own body. The consequence is not a short inventory but a
 //! blind spot: the gap between the last discovered entry and the end of `.text`
 //! is attributed to whichever entry precedes it, so the walk that follows that
 //! entry's control flow stops at its real epilogue and never decodes another
 //! instruction. Every literal the missing code loads therefore has no reader.
-//! On the witness (a stripped ARM crackme) `kuna strings` reported the program's
+//! On the witness (a stripped ARM crackme) `unlace strings` reported the program's
 //! own input prompt with `xrefs_count 0` and an empty `functions` list although
 //! `main` loads it from a pool word four instructions before its `printf` call.
 //!

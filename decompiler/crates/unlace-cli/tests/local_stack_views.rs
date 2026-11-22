@@ -40,7 +40,7 @@ fn decompile_with_views(
     contracts: &[String],
     full_views: bool,
 ) -> String {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .arg("decompile")
         .arg(image)

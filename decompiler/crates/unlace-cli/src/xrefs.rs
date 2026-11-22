@@ -1,8 +1,8 @@
-//! `kuna xrefs` — the cross-reference query.
+//! `unlace xrefs` — the cross-reference query.
 //!
 //! ```text
-//!   kuna xrefs <binary> --to <name|0xaddr>   [--json] [--kind k,k..] [--mode MODE]
-//!   kuna xrefs <binary> --from <name|0xaddr> [--json] [--kind k,k..] [--mode MODE]
+//!   unlace xrefs <binary> --to <name|0xaddr>   [--json] [--kind k,k..] [--mode MODE]
+//!   unlace xrefs <binary> --from <name|0xaddr> [--json] [--kind k,k..] [--mode MODE]
 //!              [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]
 //!              [--raw-image --target T --base VMA --entry VMA]
 //! ```
@@ -200,7 +200,7 @@ fn canonical_member(index: &XrefIndex, candidates: &[u64]) -> u64 {
     sorted.iter().copied().find(|c| index.veneer_slot(*c).is_some()).unwrap_or(sorted[0])
 }
 
-/// `kuna xrefs` entry point.
+/// `unlace xrefs` entry point.
 pub fn run(argv: &[String]) -> i32 {
     let args = match parse_args(argv) {
         Ok(a) => a,
@@ -597,14 +597,14 @@ fn source_note(
                 "{at} is in {}, which the image maps executable but does not mark as code: a decoded \
                  direct call or branch targets it, but no symbol names it, so it was not decoded (a \
                  call there is as often an instruction decoded in the wrong mode pointing into \
-                 data); `kuna disassemble --as code` reads its bytes as instructions",
+                 data); `unlace disassemble --as code` reads its bytes as instructions",
                 s.name
             ),
             None => format!(
                 "{at} is in {}, which the image maps executable but does not mark as code, and \
                  nothing says {at} is code (no decoded direct call or branch targets it, and no \
                  symbol declares a function there): it was not decoded, so no instruction \
-                 references are listed; `kuna disassemble --as code` reads its bytes as \
+                 references are listed; `unlace disassemble --as code` reads its bytes as \
                  instructions",
                 s.name
             ),
@@ -651,14 +651,14 @@ fn unwalked_note(
         format!(
             "{} is the target of a decoded call or branch but was not walked: its section is \
              mapped executable but not marked as code. References made from it are not in this \
-             answer; `kuna xrefs --from 0x{first:x}` decodes it",
+             answer; `unlace xrefs --from 0x{first:x}` decodes it",
             listed[0]
         )
     } else {
         format!(
             "{} targets of decoded calls or branches were not walked, because their sections are \
              mapped executable but not marked as code: {}. References made from them are not in \
-             this answer; `kuna xrefs --from <address>` decodes one",
+             this answer; `unlace xrefs --from <address>` decodes one",
             unwalked.len(),
             listed.join(", ")
         )
@@ -1243,7 +1243,7 @@ fn site_label(vma: u64, owner: Option<(u64, String)>) -> String {
 
 // --- DEX and APK input --------------------------------------------------------
 
-/// `kuna xrefs` over a DEX file or an APK: the `invoke` call graph, every
+/// `unlace xrefs` over a DEX file or an APK: the `invoke` call graph, every
 /// method reference resolved across the APK's DEX files
 /// (`kuna_dex::links`). Calls are the only kind a DEX image has.
 fn dex_query(args: &XrefArgs, bytes: Vec<u8>) -> Result<String, String> {
@@ -1457,7 +1457,7 @@ fn parse_kind(k: &str) -> Result<XrefKind, String> {
 
 fn usage() {
     eprintln!(
-        "usage: kuna xrefs <binary> (--to <name|0xaddr> | --from <name|0xaddr>) [--json] \\\n\
+        "usage: unlace xrefs <binary> (--to <name|0xaddr> | --from <name|0xaddr>) [--json] \\\n\
          \x20                  [--kind call,jump,data,read,write,vcall,pointer] [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                  [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D] \\\n\
          \x20                  [--raw-image --target T --base VMA --entry VMA]\n\
@@ -1471,7 +1471,7 @@ fn usage() {
          \n\
          `pointer` rows are words the image stores in its data that hold the target's\n\
          address (--to) or that lie in the target (--from), as its rebase/relocation\n\
-         metadata lists them. data_refs_coverage names that metadata when kuna read\n\
+         metadata lists them. data_refs_coverage names that metadata when unlace read\n\
          all of it (chained-fixups, rebase-opcodes, dynamic-relocations,\n\
          base-relocations); otherwise it is `partial` (some of it could not be read;\n\
          the rows are the rest), `unsupported` (metadata kuna does not read, such as a\n\

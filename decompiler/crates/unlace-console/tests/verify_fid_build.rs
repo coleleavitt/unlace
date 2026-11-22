@@ -12,7 +12,7 @@
 //! 2. **DB serialization consistency:** the records, written to a `.fid` and
 //!    reloaded, are byte-for-byte the same (`find_by_full_hash` recovers each),
 //!    and they match the **vendored** `fid_lib_x86_64.fid` (the committed output
-//!    of `kuna fid build` over the same `.o`) record-for-record. This ties the
+//!    of `unlace fid build` over the same `.o`) record-for-record. This ties the
 //!    in-process generator to the vendored artifact: if the hash drifts, the
 //!    vendored `.fid` and a fresh generate diverge and the test fails.
 //!
@@ -131,7 +131,7 @@ fn generator_records_round_trip_through_the_db() {
 fn fresh_generate_matches_the_vendored_fid() {
     let records = records_for_fixture();
 
-    // The vendored `.fid` is the committed output of `kuna fid build` over the
+    // The vendored `.fid` is the committed output of `unlace fid build` over the
     // same `.o`. A fresh in-process generate must reproduce the SAME records —
     // this ties the engine to the artifact (a hash drift fails here).
     let vendored_bytes = std::fs::read(fixture_fid()).expect("read vendored .fid");
@@ -151,7 +151,7 @@ fn fresh_generate_matches_the_vendored_fid() {
                 && v.specific_addl == r.specific_addl
                 && v.name == r.name),
             "{}: fresh generate diverges from the vendored .fid (regenerate it with \
-             `kuna fid build`)",
+             `unlace fid build`)",
             r.name
         );
     }

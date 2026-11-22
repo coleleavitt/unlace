@@ -600,7 +600,7 @@ fn edge_rank(kind: XrefKind) -> u8 {
 ///
 /// A name is looked up FIRST and a bare-hex reading is only the fallback, so a
 /// function genuinely called `abc` is not silently read as `0xabc` — the same
-/// order `kuna xrefs` resolves its `--to`/`--from` operand in. An address is
+/// order `unlace xrefs` resolves its `--to`/`--from` operand in. An address is
 /// resolved THROUGH the inventory when it names a known entry, which is what
 /// folds the ARM Thumb mode bit out of an odd `--reachable-from 0x3dd`.
 fn resolve_function_spec(prog: &ConsoleProgram, spec: &str) -> Result<u64, String> {

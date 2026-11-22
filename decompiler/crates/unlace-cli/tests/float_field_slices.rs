@@ -12,7 +12,7 @@ fn wide_call_store_preserves_float_field_bits() {
     image[0x200] = 0xc3;
     let path = common::scratch_file("float-field-slices", "bin");
     std::fs::write(&path, image).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .arg("decompile")
         .arg(&path)
         .args([

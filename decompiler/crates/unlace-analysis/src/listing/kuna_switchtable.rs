@@ -16,7 +16,7 @@
 //! ```
 //!
 //! the whole case-body region between the dispatch and the epilogue is
-//! undecoded, every reference it forms is missing, and `kuna strings` reports a
+//! undecoded, every reference it forms is missing, and `unlace strings` reports a
 //! literal the disassembly plainly pushes with `xrefs_count 0` and no owning
 //! function. The engine's own switch recovery (`p2_lift/jumptable.rs`) does
 //! reach that body, but it runs over a decompiled function; this tier has only
@@ -68,7 +68,7 @@
 //!
 //! So the dispatching instruction materializes no constant at all and the walk
 //! files no `Data` reference for it, which is why a whole switch's worth of
-//! direct callees is missing from `kuna decompile-graph` on a stock MSVC binary.
+//! direct callees is missing from `unlace decompile-graph` on a stock MSVC binary.
 //!
 //! [`register_targets`] reads that shape by asking what the branch register
 //! holds, rather than by searching for a constant that might be a table. From

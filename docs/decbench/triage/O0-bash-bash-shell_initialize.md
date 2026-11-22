@@ -95,7 +95,7 @@ CFG blocks and 4 extra edges each against both the source and IDA.
 
 ### Reduction: a 3-line reproducer
 
-`gcc -O0 -shared -fPIC`, decompiled with today's `kuna decompile`:
+`gcc -O0 -shared -fPIC`, decompiled with today's `unlace decompile`:
 
 ```c
 int a,b,c,d;
@@ -203,7 +203,7 @@ Two honest caveats, both worth re-deriving at fix time rather than trusting:
 
 ### Breadth
 
-`kuna decompile-all --json` over four O0 corpus binaries (2,444 emitted functions),
+`unlace decompile-all --json` over four O0 corpus binaries (2,444 emitted functions),
 counting residual `if (c) V = A; else { V = B; }` diamonds:
 
 | binary | fns | residual 0/1 diamonds | in fns | residual any-arm diamonds | in fns | `iteboolean` successes |

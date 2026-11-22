@@ -6,7 +6,7 @@
 //! decoded the pool words as instructions and stopped at the first that
 //! decodes as nothing (`halt_baddata(); // warn: Bad instruction - Truncating
 //! control flow here`), or ran on into code the call never returns to, while
-//! `kuna disassemble` lists the same words as data.
+//! `unlace disassemble` lists the same words as data.
 //!
 //! Fixtures: `poolfallthru_arm_{le,be}32` (source `poolfallthru.c`),
 //! `poolguards_arm_{le,be}32` (source `poolguards.s`), whose functions each

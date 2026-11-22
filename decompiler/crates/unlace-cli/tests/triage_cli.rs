@@ -1,5 +1,5 @@
-//! CLI end-to-end gate for the **triage** surface of `kuna functions` /
-//! `kuna decompile-all`: `--filter`, `--min-size`/`--max-size`,
+//! CLI end-to-end gate for the **triage** surface of `unlace functions` /
+//! `unlace decompile-all`: `--filter`, `--min-size`/`--max-size`,
 //! `--reachable-from`, `--sort`/`--limit`, and `--summary`.
 //!
 //! The load-bearing property is the one the RE loop recorded as a blocker
@@ -36,7 +36,7 @@ fn specs() -> String {
 }
 
 fn run_kuna(args: &[&str]) -> (String, String, i32) {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .env("SLEIGHHOME", specs())
         .output()
@@ -48,7 +48,7 @@ fn run_kuna(args: &[&str]) -> (String, String, i32) {
     )
 }
 
-/// Every `0x…\t<name>` row of a plain `kuna functions` listing, as `(addr, name)`.
+/// Every `0x…\t<name>` row of a plain `unlace functions` listing, as `(addr, name)`.
 fn listing_rows(stdout: &str) -> Vec<(u64, String)> {
     stdout
         .lines()
@@ -294,7 +294,7 @@ fn decompile_all_narrows_the_run_not_the_output() {
         whole.len()
     );
     // An UNNARROWED run is untouched, `total` included: the decbench backend and
-    // `kuna decompile --json` read that document.
+    // `unlace decompile --json` read that document.
     assert!(!whole.contains("\"total\":"), "unfiltered documents keep their schema");
 
     let (filtered, _, code) =
@@ -441,7 +441,7 @@ fn a_narrowed_run_on_a_packed_image_still_fails_loudly() {
     let (out, err, code) = run_kuna(&["functions", &packed, "--filter", "main", "--json"]);
     assert_eq!(code, 1, "{err}");
     assert!(out.contains("UPX-packed"), "{out}");
-    assert!(err.contains("kuna unpack"), "{err}");
+    assert!(err.contains("unlace unpack"), "{err}");
 
     let (summary, _, code) = run_kuna(&["functions", &packed, "--summary", "--json"]);
     assert_eq!(code, 1, "a summary of nothing is still a failed run");

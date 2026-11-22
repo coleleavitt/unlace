@@ -123,7 +123,7 @@ fn main() -> ExitCode {
             // via KUNA_VERSION; dev builds report the workspace Cargo version.
             output::emit_with_status(
                 &format!(
-                    "kuna {}\n",
+                    "unlace {}\n",
                     option_env!("KUNA_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
                 ),
                 0,
@@ -137,7 +137,7 @@ fn main() -> ExitCode {
             if let Some((_, run)) = COMMANDS.iter().find(|(name, _)| *name == other) {
                 run(rest)
             } else {
-                eprintln!("kuna: unknown subcommand {other:?}");
+                eprintln!("unlace: unknown subcommand {other:?}");
                 usage();
                 2
             }
@@ -149,37 +149,37 @@ fn main() -> ExitCode {
 fn usage() {
     let names = COMMANDS.iter().map(|(name, _)| *name).collect::<Vec<_>>().join("|");
     eprintln!(
-        "usage: kuna <{names}> ...\n\
+        "usage: unlace <{names}> ...\n\
          \n\
-         LLM agents: run `kuna install-skill` once.  It installs the kuna skill -- how to drive\n\
+         LLM agents: run `unlace install-skill` once.  It installs the kuna skill -- how to drive\n\
          this CLI well, embedded in the binary, no network -- for Claude Code, Codex and OpenCode\n\
-         (`--dir DIR` for other agents).  `kuna install-skill --print` shows it without installing.\n\
+         (`--dir DIR` for other agents).  `unlace install-skill --print` shows it without installing.\n\
          \n\
-         kuna decompile <binary> [--isa auto|arm|thumb] <func> [--addr] [--json] [--no-vars] [--omit aliases,line_mappings,variables,types] [--slice ARCH] [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] [--option NAME VALUE]... [--kassert ARGS]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--max-fn-seconds N] [--max-fn-memory MiB] [--raw-image --target T --base VMA]\n\
-         kuna decompile-all <binary> [--isa auto|arm|thumb] [--json] [--functions a,b,..] [--addr 0xVMA]... [--no-vars] [--omit aliases,line_mappings,variables,types] [--language auto|c|rust|java|go] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
-         kuna decompile-project <binary> [--isa auto|arm|thumb] [-o DIR] [--functions a,b,..] [--addr 0xVMA]... [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
-         kuna decompile-graph <binary> [--isa auto|arm|thumb] [-o FILE] [--label TEXT] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]...\n\
-         kuna functions <binary> [--isa auto|arm|thumb] [--json] [--jobs N|auto] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
-         kuna xrefs <binary> [--isa auto|arm|thumb] (--to <name|0xaddr> | --from <name|0xaddr>) [--json] [--kind call,jump,data,read,write,vcall] [--mode auto|reliable|aggressive|fast]\n\
-         kuna crypto <binary> [--isa auto|arm|thumb] [--json] [--algorithm SUBSTR] [--section NAME] [--no-xrefs]\n\
-         kuna blobs <binary> [--isa auto|arm|thumb] [--json] [--extract DIR] [--kind png,jpeg,gif,bmp,ico,zip,gzip,xz,zstd] [--section NAME] [--no-xrefs]\n\
-         kuna unpack <binary> [-o OUT] [--json]\n\
-         kuna unpack <dyld_shared_cache> (--list | --image NAME [-o OUT]) [--json]\n\
-         kuna strings <binary> [--isa auto|arm|thumb] [--json] [--min-length N] [--filter REGEX] [--encoding ascii|utf16|all] [--section NAME] [--no-xrefs]\n\
-         kuna raw-pcode <binary> [--isa auto|arm|thumb] <name|0xaddr|0xstart-0xend> [--addr] [--count N] [--bytes N] [--follow] [--json] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--slice ARCH] [--target T] [--sleighpath D]\n\
-         kuna disassemble <binary> [--isa auto|arm|thumb] <name|0xaddr|0xstart-0xend> [--addr] [--as code|data|auto] [--count N] [--bytes N] [--json] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--slice ARCH] [--target T] [--sleighpath D]\n\
-         kuna read <binary> [--isa auto|arm|thumb] <name|0xaddr|0xstart-0xend> [--addr] [--bytes N] [--count N] [--json]   # the hexdump view of the same target\n\
-         kuna docs [<topic>] [--json] [--all]\n\
-         kuna install-skill [--agent claude|codex|opencode|all] [--project | --dir DIR] [--force] [--print]\n\
-         kuna test [--all|--unittests|--datatests] [--name N]... [--baseline F] [--save-baseline F] [--json]\n\
-         kuna catalog [--json|--markdown|--check] [--option NAME] [--tier transform|analysis|core]\n\
-         kuna modes [--json]\n\
-         kuna specs [-a <dir>] [<slaspec>...] [--diff]\n\
-         kuna fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>\n\
-         kuna fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
-         kuna flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
-         kuna rust-signatures check [--manifest PATH] [--json]\n\
-         kuna --version\n\
+         unlace decompile <binary> [--isa auto|arm|thumb] <func> [--addr] [--json] [--no-vars] [--omit aliases,line_mappings,variables,types] [--slice ARCH] [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] [--option NAME VALUE]... [--kassert ARGS]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--max-fn-seconds N] [--max-fn-memory MiB] [--raw-image --target T --base VMA]\n\
+         unlace decompile-all <binary> [--isa auto|arm|thumb] [--json] [--functions a,b,..] [--addr 0xVMA]... [--no-vars] [--omit aliases,line_mappings,variables,types] [--language auto|c|rust|java|go] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
+         unlace decompile-project <binary> [--isa auto|arm|thumb] [-o DIR] [--functions a,b,..] [--addr 0xVMA]... [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
+         unlace decompile-graph <binary> [--isa auto|arm|thumb] [-o FILE] [--label TEXT] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]...\n\
+         unlace functions <binary> [--isa auto|arm|thumb] [--json] [--jobs N|auto] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
+         unlace xrefs <binary> [--isa auto|arm|thumb] (--to <name|0xaddr> | --from <name|0xaddr>) [--json] [--kind call,jump,data,read,write,vcall] [--mode auto|reliable|aggressive|fast]\n\
+         unlace crypto <binary> [--isa auto|arm|thumb] [--json] [--algorithm SUBSTR] [--section NAME] [--no-xrefs]\n\
+         unlace blobs <binary> [--isa auto|arm|thumb] [--json] [--extract DIR] [--kind png,jpeg,gif,bmp,ico,zip,gzip,xz,zstd] [--section NAME] [--no-xrefs]\n\
+         unlace unpack <binary> [-o OUT] [--json]\n\
+         unlace unpack <dyld_shared_cache> (--list | --image NAME [-o OUT]) [--json]\n\
+         unlace strings <binary> [--isa auto|arm|thumb] [--json] [--min-length N] [--filter REGEX] [--encoding ascii|utf16|all] [--section NAME] [--no-xrefs]\n\
+         unlace raw-pcode <binary> [--isa auto|arm|thumb] <name|0xaddr|0xstart-0xend> [--addr] [--count N] [--bytes N] [--follow] [--json] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--slice ARCH] [--target T] [--sleighpath D]\n\
+         unlace disassemble <binary> [--isa auto|arm|thumb] <name|0xaddr|0xstart-0xend> [--addr] [--as code|data|auto] [--count N] [--bytes N] [--json] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--slice ARCH] [--target T] [--sleighpath D]\n\
+         unlace read <binary> [--isa auto|arm|thumb] <name|0xaddr|0xstart-0xend> [--addr] [--bytes N] [--count N] [--json]   # the hexdump view of the same target\n\
+         unlace docs [<topic>] [--json] [--all]\n\
+         unlace install-skill [--agent claude|codex|opencode|all] [--project | --dir DIR] [--force] [--print]\n\
+         unlace test [--all|--unittests|--datatests] [--name N]... [--baseline F] [--save-baseline F] [--json]\n\
+         unlace catalog [--json|--markdown|--check] [--option NAME] [--tier transform|analysis|core]\n\
+         unlace modes [--json]\n\
+         unlace specs [-a <dir>] [<slaspec>...] [--diff]\n\
+         unlace fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>\n\
+         unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
+         unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
+         unlace rust-signatures check [--manifest PATH] [--json]\n\
+         unlace --version\n\
          \n\
          --image NAME[+NAME...] (any subcommand): load those images of a dyld shared cache\n\
          --follow-images N (decompile, disassemble, xrefs): also load up to N images holding\n\
@@ -268,7 +268,7 @@ fn cmd_test(argv: &[String]) -> Result<i32, String> {
 
 fn usage_test() {
     eprintln!(
-        "usage: kuna test [--all|--unittests|--datatests] [--name N].. [--json] \\\n\
+        "usage: unlace test [--all|--unittests|--datatests] [--name N].. [--json] \\\n\
          \x20                [--datatests-dir D] [--baseline F] [--save-baseline F] \\\n\
          \x20                [--binary B] [--sleighpath D]\n\
          \n\
@@ -358,7 +358,7 @@ fn cmd_catalog(argv: &[String]) -> Result<i32, String> {
 
 fn usage_catalog() {
     eprintln!(
-        "usage: kuna catalog [--json|--markdown|--check] [--option NAME] \\\n\
+        "usage: unlace catalog [--json|--markdown|--check] [--option NAME] \\\n\
          \x20                   [--tier transform|analysis|core] [--decomp-dbg P] \\\n\
          \x20                   [--sleighpath D] [--engine cpp|rust]\n\
          \n\
@@ -374,7 +374,7 @@ fn usage_catalog() {
          --json is the machine-readable form an agent selects options from: an\n\
          ARRAY, one object per option, [{{option,values,default,phase,subphase,tier,\n\
          summary,use_when,symptoms,..}}] (one element with --option NAME).  It and\n\
-         `kuna docs --json` are the two array-rooted documents; every other --json\n\
+         `unlace docs --json` are the two array-rooted documents; every other --json\n\
          is an object.\n\
          --markdown regenerates docs/options.md (tier-grouped, symptom-indexed).\n\
          --check cross-checks the selected catalog against this binary's registered\n\
@@ -384,14 +384,14 @@ fn usage_catalog() {
          \n\
          Upstream OptionDatabase names (maxinstruction, errortoomanyinstructions, ..)\n\
          are reachable through --option but are NOT catalog rows, so they do not\n\
-         appear here.  Mode presets are `kuna modes`."
+         appear here.  Mode presets are `unlace modes`."
     );
 }
 
 // --- modes -------------------------------------------------------------------
 
-/// `kuna modes [--json]` — list the decompiler mode policies and presets.
-/// Modes are *not* settable catalog rows (`kuna catalog` covers those);
+/// `unlace modes [--json]` — list the decompiler mode policies and presets.
+/// Modes are *not* settable catalog rows (`unlace catalog` covers those);
 /// concrete modes are option presets, while `auto` selects one using input
 /// file size.
 fn cmd_modes(argv: &[String]) -> i32 {
@@ -401,7 +401,7 @@ fn cmd_modes(argv: &[String]) -> i32 {
             "--json" => json = true,
             "-h" | "--help" => {
                 eprintln!(
-                    "usage: kuna modes [--json]\n\n\
+                    "usage: unlace modes [--json]\n\n\
                      --json emits {{modes:[{{name,summary,automatic,overrides}}]}}."
                 );
                 return 0;

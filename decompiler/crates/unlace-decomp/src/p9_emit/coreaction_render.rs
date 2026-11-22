@@ -2534,7 +2534,7 @@ const SWEEP_DEADLINE_STRIDE: usize = 256;
 
 /// C++ `ActionDeadCode::apply` (coreaction.cc:4146).
 ///
-/// (kuna decompile-all watchdog) The sweep gives up once the per-function
+/// (unlace decompile-all watchdog) The sweep gives up once the per-function
 /// budget is spent: destroying an operation unlinks it from the reader list of
 /// each input, which is linear in that list, so a function whose dead
 /// operations all read one Varnode sweeps in quadratic time.

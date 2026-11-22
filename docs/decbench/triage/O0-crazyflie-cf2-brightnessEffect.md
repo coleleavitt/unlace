@@ -28,7 +28,7 @@ move. `cf2.elf` is 491,004 B — just **under** the 500 KiB threshold — so a n
 today is `aggressive`, which is *not* what the benchmark measured:
 
 ```
-$ kuna decompile-all .../O0/crazyflie/stripped/cf2.elf --json --addr 0x800d00d <mode>
+$ unlace decompile-all .../O0/crazyflie/stripped/cf2.elf --json --addr 0x800d00d <mode>
 --mode reliable  : loc 82  ternaries 2  ifs 17    <- the benchmark's option surface
 --mode aggressive: loc 76  ternaries 5  ifs 14    <- today's product default (iteexpr on)
 ```

@@ -122,7 +122,7 @@ fn msvc_coff_demangles_and_decompiles() {
         "MSVC: raw mangled `?freefunc...` must be demangled, not registered raw"
     );
 
-    // `kuna decompile msvc_mangled.obj freefunc` (by demangled name) → `x + 42`.
+    // `unlace decompile msvc_mangled.obj freefunc` (by demangled name) → `x + 42`.
     let out = decompile_func(prog, "load function freefunc");
 
     assert!(

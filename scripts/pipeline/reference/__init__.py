@@ -11,7 +11,7 @@ from .kuna_adapter import KunaReference
 
 #: Registry of available reference decompilers by name.
 #:
-#: ``kuna`` makes the kuna engine itself a reference, so the same compare machinery
+#: ``unlace`` makes the kuna engine itself a reference, so the same compare machinery
 #: can run kuna against another reference (or be the reference for a future tool) --
 #: not just angr-vs-kuna.
 REGISTRY = {

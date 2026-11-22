@@ -28,7 +28,7 @@ reject_reason: null
 Find where a stripped Windows program starts.
 
 > **A stripped PE never names its user entry function** (major)
-> kuna names `main` on ELF (`elfmain`) and Mach-O (`machomain`) but not on PE. On a stripped PE `kuna functions` lists the CRT startup as the entry and the function it eventually calls (MSVC `mainCRTStartup -> __scrt_common_main_seh -> invoke_main -> main`, MinGW `__tmainCRTStartup -> main`) as one more `sub_<addr>`. On Flare-On 12 `hopeanddreams.exe` that is `sub_14020ba00` among 1511 functions, reached by hand from entry `sub_14044ca84` through `sub_14044c908`. `functions --summary` reports only the entry and has no field for `main`.
+> kuna names `main` on ELF (`elfmain`) and Mach-O (`machomain`) but not on PE. On a stripped PE `unlace functions` lists the CRT startup as the entry and the function it eventually calls (MSVC `mainCRTStartup -> __scrt_common_main_seh -> invoke_main -> main`, MinGW `__tmainCRTStartup -> main`) as one more `sub_<addr>`. On Flare-On 12 `hopeanddreams.exe` that is `sub_14020ba00` among 1511 functions, reached by hand from entry `sub_14044ca84` through `sub_14044c908`. `functions --summary` reports only the entry and has no field for `main`.
 
 ## Reproduction
 

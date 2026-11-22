@@ -1,4 +1,4 @@
-//! `kuna fid build` — generate a kuna-native `.fid` fingerprint database from a
+//! `unlace fid build` — generate a kuna-native `.fid` fingerprint database from a
 //! static library (`.a`) or object file(s) (`.o`).
 //!
 //! This is the §5.2 `FidServiceLibraryIngest` analog (FID PR3): for each input
@@ -9,7 +9,7 @@
 //! writes the deduplicated records to a `.fid` file.
 //!
 //! ```text
-//!   kuna fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>
+//!   unlace fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>
 //! ```
 //!
 //! `--lang` / `--cspec` are written verbatim into the `.fid` header. The
@@ -37,7 +37,7 @@ use unlace_console::engine::bootstrap_from_object;
 use crate::args::take_value;
 use crate::paths;
 
-/// Parsed `kuna fid build` arguments.
+/// Parsed `unlace fid build` arguments.
 struct BuildArgs {
     inputs: Vec<String>,
     out: Option<String>,
@@ -45,10 +45,10 @@ struct BuildArgs {
     cspec: Option<String>,
 }
 
-/// Dispatch `kuna fid <subcommand>`: `build` or `query`.
+/// Dispatch `unlace fid <subcommand>`: `build` or `query`.
 pub fn run(argv: &[String]) -> i32 {
     let Some(sub) = argv.first() else {
-        eprintln!("kuna fid: missing subcommand (try `kuna fid build ...`)");
+        eprintln!("unlace fid: missing subcommand (try `unlace fid build ...`)");
         usage();
         return 2;
     };
@@ -60,7 +60,7 @@ pub fn run(argv: &[String]) -> i32 {
             0
         }
         other => {
-            eprintln!("kuna fid: unknown subcommand {other:?}");
+            eprintln!("unlace fid: unknown subcommand {other:?}");
             usage();
             2
         }
@@ -69,8 +69,8 @@ pub fn run(argv: &[String]) -> i32 {
 
 fn usage() {
     eprintln!(
-        "usage: kuna fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>\n\
-         kuna fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
+        "usage: unlace fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>\n\
+         unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
          \n\
          Generate a kuna `.fid` fingerprint database from a static library or\n\
          object files. --lang is the SLEIGH language id (e.g. x86:LE:64:default),\n\
@@ -91,7 +91,7 @@ fn cmd_build(argv: &[String]) -> i32 {
     let args = match parse_build_args(argv) {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("kuna fid build: {e}");
+            eprintln!("unlace fid build: {e}");
             usage();
             return 2;
         }
@@ -100,7 +100,7 @@ fn cmd_build(argv: &[String]) -> i32 {
     let out = match &args.out {
         Some(o) => o.clone(),
         None => {
-            eprintln!("kuna fid build: -o <out.fid> is required");
+            eprintln!("unlace fid build: -o <out.fid> is required");
             usage();
             return 2;
         }
@@ -108,14 +108,14 @@ fn cmd_build(argv: &[String]) -> i32 {
     let lang = match &args.lang {
         Some(l) => l.clone(),
         None => {
-            eprintln!("kuna fid build: --lang <id> is required");
+            eprintln!("unlace fid build: --lang <id> is required");
             usage();
             return 2;
         }
     };
     let cspec = args.cspec.clone().unwrap_or_default();
     if args.inputs.is_empty() {
-        eprintln!("kuna fid build: at least one input object/archive is required");
+        eprintln!("unlace fid build: at least one input object/archive is required");
         usage();
         return 2;
     }
@@ -128,11 +128,11 @@ fn cmd_build(argv: &[String]) -> i32 {
     for input in &args.inputs {
         match records_for_input(input, &spec_roots, &lang) {
             Ok(mut recs) => {
-                eprintln!("kuna fid build: {input}: {} record(s)", recs.len());
+                eprintln!("unlace fid build: {input}: {} record(s)", recs.len());
                 all.append(&mut recs);
             }
             Err(e) => {
-                eprintln!("kuna fid build: {input}: {e}");
+                eprintln!("unlace fid build: {input}: {e}");
                 return 1;
             }
         }
@@ -143,11 +143,11 @@ fn cmd_build(argv: &[String]) -> i32 {
     let db = FidDb::from_records(lang, cspec, all);
     let bytes = db.serialize();
     if let Err(e) = std::fs::write(&out, &bytes) {
-        eprintln!("kuna fid build: cannot write {out}: {e}");
+        eprintln!("unlace fid build: cannot write {out}: {e}");
         return 1;
     }
     eprintln!(
-        "kuna fid build: wrote {out} ({} record(s), {} bytes)",
+        "unlace fid build: wrote {out} ({} record(s), {} bytes)",
         db.records().len(),
         bytes.len()
     );

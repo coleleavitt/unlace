@@ -29,7 +29,7 @@ Read a PE that imports the BSTR/VARIANT API or WinSock by ordinal and see API na
 
 > **PE imports by ordinal render as `<DLL>_Ordinal_<n>`** (major)
 > Flare-On 12 challenge 4 (`UnholyDragon-150.exe`, first byte patched back to `M`) imports 45
-> OLEAUT32 functions by ordinal only. Every call, `kuna functions` entry and `kuna xrefs` target
+> OLEAUT32 functions by ordinal only. Every call, `unlace functions` entry and `unlace xrefs` target
 > reads `OLEAUT32_Ordinal_2`, `OLEAUT32_Ordinal_6`, `OLEAUT32_Ordinal_150`, ... and none of them
 > gets a Win32 prototype, because the signature tables are keyed by name.
 
@@ -152,5 +152,5 @@ _not yet refuted_
 - closed: acceptance `a-f99c3e5c2e57` passes with option `peordinal` (default on); the reproduction
   still passes on the unpatched tree and under `--option peordinal off`. Manually validated on
   `UnholyDragon-150.exe`: all 45 OLEAUT32 ordinal imports resolve (`SysAllocStringByteLen`,
-  `SysFreeString`, `VariantClear`, `SafeArrayAccessData`, ...), `kuna xrefs --to SysFreeString`
+  `SysFreeString`, `VariantClear`, `SafeArrayAccessData`, ...), `unlace xrefs --to SysFreeString`
   lists 602 references.

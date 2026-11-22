@@ -335,7 +335,7 @@ fn render(script: &str) {
     let engine = std::env::var_os("KUNA_DECOMP_DBG")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
-            std::path::Path::new(env!("CARGO_BIN_EXE_kuna"))
+            std::path::Path::new(env!("CARGO_BIN_EXE_unlace"))
                 .parent()
                 .unwrap()
                 .join("decomp_dbg")

@@ -1,4 +1,4 @@
-xrefpairs_macho_arm64 -- the arm64 Mach-O fixture for `kuna xrefs` over an
+xrefpairs_macho_arm64 -- the arm64 Mach-O fixture for `unlace xrefs` over an
 adrp pair (decompiler/crates/unlace-cli/tests/xrefs_address_pairs.rs).
 
 What it is

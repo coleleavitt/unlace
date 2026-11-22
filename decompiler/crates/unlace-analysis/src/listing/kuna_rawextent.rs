@@ -7,7 +7,7 @@
 //! table: the loader publishes the whole load module as one CODE range, its
 //! DGROUP and far data segments included, so a function that data follows ran
 //! on to the next entry. On the unpacked DAZZLE.EXE of issue #1288 a 28-byte
-//! function in front of DGROUP measured 12,174 bytes, and `kuna disassemble`
+//! function in front of DGROUP measured 12,174 bytes, and `unlace disassemble`
 //! listed DGROUP as its instructions.
 //!
 //! [`measure`] ends each entry where its flow does, over the descent the raw

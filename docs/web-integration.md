@@ -17,7 +17,7 @@ Worker keeps synchronous `wasi.start()` calls off the UI thread.
 The engine touches the outside world through an unusually thin surface:
 
 - **no threads, no `rayon`** anywhere in the pipeline;
-- the only subprocess calls are in the *CLI* layer (`kuna` spawning `decomp_dbg`) or are
+- the only subprocess calls are in the *CLI* layer (`unlace` spawning `decomp_dbg`) or are
   **test-only** (the hermetic `go build` in `unlace-analysis`'s no-return test) — none in
   the engine;
 - engine wall-clock (`Instant::now()`) is reached only when a per-function
@@ -66,7 +66,7 @@ fixed crate list that does not include it, and
 is `make rust-test` (`cargo test --workspace`), which compiles it natively and
 runs its frontend tests.
 
-`unlace_wasm` runs `kuna decompile-all`'s core loop via the **shared decompile-project
+`unlace_wasm` runs `unlace decompile-all`'s core loop via the **shared decompile-project
 core** — `unlace_console::project` (`decompile_targets` + the `.c`/`.h`/`.asm`/`README.md`
 artifact builders, moved there from `unlace-cli` so wasm32-wasip1 can reach them without
 `unlace-cli`'s subprocess/CLI machinery, which cannot compile for wasm). It reuses the
@@ -77,10 +77,10 @@ metadata(binary).len() → resolve_overrides_for_size(...) // <500 KiB aggressiv
   → bootstrap_from_object(binary, "", [spec_root])   // load image + resolve arch + build translator
   → apply resolved overrides + command-scoped discovery policy + non-conflicting driver injections
   → commit_pending_analysis()                                   // the `read symbols` seam
-  → unlace_console::project::decompile_targets(...)  // the same loop kuna decompile-all runs
+  → unlace_console::project::decompile_targets(...)  // the same loop unlace decompile-all runs
 ```
 
-Its `--json` is `kuna decompile-all --json`'s fields (`name`, `address`, `address_hex`,
+Its `--json` is `unlace decompile-all --json`'s fields (`name`, `address`, `address_hex`,
 `aliases`, `size`, `code`, `error`, `unstructured_gotos`,
 `variables[{name,type,kind,arg_index,stack_offset,size}]`)
 — including the one-record-per-entry contract and the `aliases` array documented in
@@ -130,7 +130,7 @@ selecting one function does not silently export its discovered call closure.
 The output adds one per-function field the native `decompile-all --json` does not
 carry: `"kind"` —
 `"func"` | `"plt"` | `"thunk"`
-(`unlace-console/src/classify.rs`, shared with `kuna decompile-graph`: an `object`-crate
+(`unlace-console/src/classify.rs`, shared with `unlace decompile-graph`: an `object`-crate
 re-parse marks entries inside import-stub
 sections — the `.plt` family, Mach-O symbol stubs — or named as imports as `"plt"`, and
 lone-jump entries (`ConsoleProgram::lone_jump_target`, direct-to-another-function or
@@ -142,7 +142,7 @@ unlace_wasm <binary> <spec-root> decompile [name|0xADDR] [--mode MODE]
 unlace_wasm <binary> <spec-root> project [<display-name>] [--mode MODE]
 ```
 
-`project` is the `kuna decompile-project` flow with the folder write replaced by one JSON
+`project` is the `unlace decompile-project` flow with the folder write replaced by one JSON
 document — `{binary, name, count, ok, failed, files:{"<name>.c", "<name>.h", "<name>.asm",
 "README.md"}}` (artifacts named after `<display-name>`, default the binary's basename;
 whole binary only). Omitted mode and explicit `--mode auto` use the shared
@@ -158,7 +158,7 @@ Worker (`integrations/web/zip.js`, a dependency-free STORE zip writer). Only the
 `ArrayBuffer` is transferred to the main thread. Two things differ from the CLI export.
 The README's `Path` row shows the display name instead of a canonicalized host path
 (there is none in the virtual FS). And the decompile order is address order: the
-callee-first schedule a serial `kuna decompile-project` takes lives in the `unlace-cli`
+callee-first schedule a serial `unlace decompile-project` takes lives in the `unlace-cli`
 driver (`--option protoorder`, `docs/cli.md`), while this command calls the shared eager
 batch directly, so the browser's call-argument types and `struct_N` numbering are the
 ones `--option protoorder off` produces.
@@ -181,7 +181,7 @@ unlace_wasm <binary> <spec-root> uses <0xADDR> <LEN> [--mode M] [--assert D]...
 ```
 
 Because every request is a fresh process, the page's edit session IS its directive list: it
-resends the list on every call, and the same list replays natively as `kuna decompile
+resends the list on every call, and the same list replays natively as `unlace decompile
 <bin> <fn> --assert @file`. What becomes of each directive is an `assertions` row —
 `{directive, kind, phase, subphase, status, detail, fatal}`, the `decompile-all --json`
 report — on every document (`list`, `decompile`, `inspect`, `read`, `project`). A directive
@@ -197,7 +197,7 @@ retype and rename through `prototype 0xENTRY <C declaration>`; a global is `data
 
 `inspect` is one load and one function — the same batch `decompile <selector>` runs (with
 its structure-naming convergence) with `structdefs on`, so its `code` is `decompile`'s byte
-for byte below the definitions of the types the function names (the `kuna decompile
+for byte below the definitions of the types the function names (the `unlace decompile
 --option structdefs on` preamble, then a blank line; `types` lists the same set). Like
 `decompile`, a name keeps the discovery walk on and an address skips `fast_funcdisc`.
 `decompile` itself keeps the CLI's default and prints no preamble.
@@ -242,7 +242,7 @@ mapped whole in the default data space with a type that is not code, or a global
 decompiler names by its address (`dat_4040`). `globals` lists the globals the code names:
 the decompiler's own (`dat_4040`, with the declaration the project header gives it) and
 then the named ones, each declared with the type the global scope gives it (an untyped
-symbol has the C spelling of its size, `char primes[32]`). `instructions` is the `kuna disassemble
+symbol has the C spelling of its size, `char primes[32]`). `instructions` is the `unlace disassemble
 --follow` walk over the function's extent (`unlace_console::disasm`, the CLI's own walker:
 branch targets start rows, literal pools fold to `.word`, undecodable bytes are `.byte`, and
 two reachable readings of the same bytes are both listed, so rows can overlap),
@@ -286,7 +286,7 @@ stack_pointer:{register:"rsp", offset:-88}, base:"frame_pointer"}`.
 `read <0xADDR> <LEN>` returns `{binary, address, address_hex, size, bytes, file_offset,
 assertions}`: up to 64 KiB, stopping where the mapped run holding the address ends (the
 loader would zero-fill past it; an unmapped start is `size: 0`, not an error), overlays
-applied, loaded with the discovery walk off. `xrefs <name|0xADDR>` answers from `kuna xrefs`' reference walk
+applied, loaded with the discovery walk off. `xrefs <name|0xADDR>` answers from `unlace xrefs`' reference walk
 (`unlace_analysis::listing::xrefs`, seeded with the inventory and focused on the function):
 `{binary, function:{name, address, address_hex}, callers:[{name, address, address_hex,
 from, from_hex, kind, instruction}], callees:[{name, address, address_hex, at, at_hex,
@@ -294,7 +294,7 @@ kind, instruction}], data_refs:[…as callees…], assertions}` — a caller's `
 calling function's entry and `from` the calling instruction; callees are calls and jumps
 that leave the function (`kind` `call`/`jump`), data refs are `data` (address taken),
 `read` and `write`; all three lists are in instruction order. `strings` lists the rows
-`kuna strings --encoding all` finds (minimum length 5, any ending) with who uses each:
+`unlace strings --encoding all` finds (minimum length 5, any ending) with who uses each:
 `{binary, scanned, count, strings:[{address, address_hex, text, length, encoding,
 section, in_code, uses:[{name, address, address_hex, at, at_hex, kind, instruction,
 via}]}], assertions}`. A use is a `data`, `read` or `write` reference into the literal
@@ -348,7 +348,7 @@ PE section's virtual size can exceed; `writable` follows the segment that maps t
 section) and `known_types:[{name, size, kind}]` (the
 factory's named non-core types: `struct`, `union`, `enum`, `typedef`, `scalar`), and
 `decompile` adds the top-level `language` and the per-function `line_mappings`, `types`
-and per-variable `line_numbers`/`addresses` of `kuna decompile-all --json`. The line
+and per-variable `line_numbers`/`addresses` of `unlace decompile-all --json`. The line
 evidence costs a second render per function, so only a one-function `decompile` pays for
 it; the whole-binary `decompile` carries the fields empty (`inspect` always has them).
 
@@ -414,7 +414,7 @@ worker that cannot answer.
 **Robust, format-agnostic specs (whatever the CLI supports).** The demo carries
 **no per-format or per-arch logic** — the *engine* detects the format
 (ELF/PE/Mach-O/COFF) and resolves the SLEIGH language for any binary, exactly as
-`kuna decompile-all` does. Two facts make a lightweight lazy scheme possible:
+`unlace decompile-all` does. Two facts make a lightweight lazy scheme possible:
 
 - The decompiler reads only the **runtime** spec files — `.ldefs` + `.pspec` +
   `.cspec` + `.dwarf` (not the `.sinc`/`.slaspec` SLEIGH *source*). Those total
@@ -827,7 +827,7 @@ dialog. The Explain panel reads the parameters from the Rust signature.
 
 **Export and persistence.** *Export changes* (the ⋯ under *Your changes*) downloads
 `<binary>.kuna`: a `#` header (binary,
-hash, time, and the replay command `kuna decompile <binary> <function> --assert
+hash, time, and the replay command `unlace decompile <binary> <function> --assert
 @<binary>.kuna`) then one directive per line, which the native CLI replays verbatim.
 Import reads the same format; an unqualified function-scoped line binds to the open
 function, and a directive the page does not model is kept verbatim. The session is also
@@ -890,7 +890,7 @@ Code view puts their definitions above the function under the heading *Types thi
 uses*, on a shaded block that starts folded. The heading opens and folds the block, and a
 student's own choice holds for the rest of the visit. Folded, the keyboard starts at
 the signature. It is the engine's own text, so
-line numbers match `kuna decompile --option structdefs on`; it is highlighted but not
+line numbers match `unlace decompile --option structdefs on`; it is highlighted but not
 clickable (a field name is not a variable to rename), and selecting one of its lines says
 which type it defines, that a `/* opaque */` one is a library type whose fields are not
 known, and for a `struct_N` what `field_0x8` means (`render-c.js` `preambleLength`, the
@@ -1320,9 +1320,9 @@ skips it as too costly):
    outcome of a record they did not change, and that a page out of any session neither
    saves into the shared slot nor orders by a session's births.
    **`test/decompile-replay.mjs`** exports sessions (made alone, and shared with the
-   birth order) and replays each file through the native CLI (`kuna decompile … --assert
+   birth order) and replays each file through the native CLI (`unlace decompile … --assert
    @file`): a type used by a later type, two prototypes of one function (the later
-   wins) and a rename chain all apply; it skips without `decompiler/target/release/kuna`.
+   wins) and a rename chain all apply; it skips without `decompiler/target/release/unlace`.
 5. **`test/decompile-browser.mjs`** — the real page in headless Chrome over the DevTools
    protocol (Node's built-in `WebSocket`, no `puppeteer`; skips when there is no Chrome or
    the Node has no `WebSocket`): it checks the welcome screen (its two lines of text, the

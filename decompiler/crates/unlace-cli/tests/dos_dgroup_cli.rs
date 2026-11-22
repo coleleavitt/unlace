@@ -81,7 +81,7 @@ const TWO_SEGMENTS: [u8; 21] = [
 ];
 
 fn kuna(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_kuna")).args(args).output().expect("run kuna")
+    Command::new(env!("CARGO_BIN_EXE_unlace")).args(args).output().expect("run kuna")
 }
 
 fn decompiled(stem: &str, image: &[u8], name: &str, extra: &[&str]) -> String {

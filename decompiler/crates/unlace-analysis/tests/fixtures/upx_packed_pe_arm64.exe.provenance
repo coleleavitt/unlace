@@ -1,4 +1,4 @@
-upx_packed_pe_arm64.exe -- a win64/arm64 UPX image, the target `kuna unpack`
+upx_packed_pe_arm64.exe -- a win64/arm64 UPX image, the target `unlace unpack`
 names as unsupported rather than rebuilding.
 
 What it is

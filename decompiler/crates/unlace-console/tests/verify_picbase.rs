@@ -4,7 +4,7 @@
 //!
 //! Fixture: `picbase_i386` (`picbase_i386.s` carries the source and the build
 //! line), reduced from crackmes.one/5ab77f6333c5d40ad448ca52 where
-//! `kuna strings --json --filter Password` reported `xrefs_count: 0` and an
+//! `unlace strings --json --filter Password` reported `xrefs_count: 0` and an
 //! empty `functions` list for the prompt at 0x8049127 — as it did for all 23 of
 //! that image's strings, because in position-independent i386 code the address
 //! is the sum of a GOT pointer the program materialises at run time and a
@@ -51,7 +51,7 @@ fn fixture() -> PathBuf {
     repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/picbase_i386")
 }
 
-/// Bootstrap the fixture and build the index `kuna xrefs` / `kuna strings`
+/// Bootstrap the fixture and build the index `unlace xrefs` / `unlace strings`
 /// answer out of.
 fn index() -> (ConsoleProgram, Vec<u8>, XrefIndex) {
     let bin = fixture();
@@ -69,7 +69,7 @@ fn index() -> (ConsoleProgram, Vec<u8>, XrefIndex) {
     (prog, bytes, idx)
 }
 
-/// The names of the functions that reference `vma`, as `kuna strings` reports
+/// The names of the functions that reference `vma`, as `unlace strings` reports
 /// them: the walk's own attribution first, then the engine's inventory.
 fn owners(prog: &ConsoleProgram, idx: &XrefIndex, vma: u64) -> Vec<String> {
     let mut out: Vec<String> = idx

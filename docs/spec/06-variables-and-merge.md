@@ -391,7 +391,7 @@ forbids a forced merge, the machinery edits the data flow until it doesn't:
    boundary and keeps the partially merged state — the failure mode is a
    residual un-fused marker op, not a dead function.
 
-*(kuna decompile-all watchdog)* Each merge pass is one action, and the action
+*(unlace decompile-all watchdog)* Each merge pass is one action, and the action
 loop probes a budgeted drive's deadline only between actions; on a function
 with millions of Varnodes one merge pass runs for minutes (`ActionMergeRequired`
 took 470 s of the 804 s serde-hkx's 174 KB deserializer at `0x1406491d0` needed,
@@ -1303,7 +1303,7 @@ directive: it reports `applied`, with a note saying what it was printed as. A
 local not declared at all, or declared with another type than the directive
 gave, reports each directive that touched it refused, with the reason
 (`verify_printed` on the in-process path; the console prints `Rejected
-<command>: <reason>` at the next `print C`), and `kuna decompile` says the C was
+<command>: <reason>` at the next `print C`), and `unlace decompile` says the C was
 produced without it. The check also showed the console dropping every rename
 of a DWARF local: `unlace-console/src/ifacedecomp.rs (IfcDecompile)` re-seeded the
 function's DWARF locals after the Symbols it carried, at the same storage, and

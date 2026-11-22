@@ -28,13 +28,13 @@ fn specs() -> String {
 }
 
 fn run(args: &[&str]) -> Output {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
         .expect("spawn kuna");
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
-        panic!("kuna {:?} failed: {stderr}", args);
+        panic!("unlace {:?} failed: {stderr}", args);
     }
     out
 }

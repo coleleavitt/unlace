@@ -9,7 +9,7 @@ use std::process::Stdio;
 use crate::paths;
 
 const DIFF_NOTE: &str = "\
-kuna specs --diff is informational; it does not run a comparison.
+unlace specs --diff is informational; it does not run a comparison.
 
 From the repository root, check compiled .sla contents (after decompression)
 against pinned Ghidra outputs:
@@ -97,7 +97,7 @@ pub fn run(args: &[String]) -> i32 {
 
 fn usage() {
     eprintln!(
-        "usage: kuna specs [-a <dir>] [<file.slaspec>..] [--diff]\n\
+        "usage: unlace specs [-a <dir>] [<file.slaspec>..] [--diff]\n\
          \n\
          Compile SLEIGH processor specifications with the Rust SLEIGH compiler\n\
          (`slacomp`), which this command is a thin alias for -- every other flag is\n\

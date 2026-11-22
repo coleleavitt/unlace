@@ -1,4 +1,4 @@
-//! `kuna install-skill` — the agent skill shipped inside the binary.
+//! `unlace install-skill` — the agent skill shipped inside the binary.
 //!
 //! Every run isolates agent configuration in a scratch directory, so nothing
 //! here touches the real agent configuration.
@@ -8,10 +8,10 @@ use crate::common;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-const SKILL_DIR: &str = "kuna-decompiler";
+const SKILL_DIR: &str = "unlace-decompiler";
 
 fn repo_skill() -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../skills/kuna/SKILL.md");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../skills/unlace/SKILL.md");
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
@@ -22,7 +22,7 @@ fn scratch_home() -> PathBuf {
 }
 
 fn command_in(home: &Path, argv: &[&str]) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.arg("install-skill")
         .args(argv)
         .current_dir(home)
@@ -55,7 +55,7 @@ fn installed(skills: &Path) -> PathBuf {
 fn print_is_the_repo_skill_verbatim() {
     let out = run_in(&scratch_home(), &["--print"]);
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    assert!(stdout(&out) == repo_skill(), "the binary embeds a stale skills/kuna/SKILL.md; rebuild unlace-cli");
+    assert!(stdout(&out) == repo_skill(), "the binary embeds a stale skills/unlace/SKILL.md; rebuild unlace-cli");
 }
 
 #[test]
@@ -224,6 +224,6 @@ fn conflicting_flags_are_usage_errors() {
 
 #[test]
 fn top_level_help_points_agents_at_the_skill() {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna")).arg("--help").output().unwrap();
-    assert!(stderr(&out).contains("LLM agents: run `kuna install-skill`"), "{}", stderr(&out));
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace")).arg("--help").output().unwrap();
+    assert!(stderr(&out).contains("LLM agents: run `unlace install-skill`"), "{}", stderr(&out));
 }

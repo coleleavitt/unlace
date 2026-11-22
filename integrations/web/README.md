@@ -42,7 +42,7 @@ itself: click a line to see its instructions, press `Space` for the assembly or 
 side by side, double-click a name to rename it, and `?` for help; add `?student=true` to
 the address for the hints and hover cards. ⋯ → **Download C code (.zip)** exports the
 whole binary as a recompile-oriented project — `<name>.c` / `<name>.h` / `<name>.asm` /
-`README.md`, the `kuna decompile-project` artifacts — built into a ZIP inside the Worker;
+`README.md`, the `unlace decompile-project` artifacts — built into a ZIP inside the Worker;
 only the final ZIP buffer crosses back to the page. It supports whatever the CLI supports
 — every format and architecture kuna has a `.sla` for — with no per-format configuration
 (the engine resolves each binary; the Worker fetches only the one `.sla` it needs). See
@@ -175,7 +175,7 @@ node integrations/web/test/decompile-collab-cases.mjs
 node integrations/web/test/decompile-collab-sync.mjs
 node integrations/web/test/decompile-collab-fuzz.mjs [--runs 2000] [--seed 1]
 
-# G2. Exported sessions replayed by the native CLI (skips without decompiler/target/release/kuna).
+# G2. Exported sessions replayed by the native CLI (skips without decompiler/target/release/unlace).
 node integrations/web/test/decompile-replay.mjs
 
 # H. The decompiler page's commands through the real Worker (inspect, read, xrefs, strings, --assert).

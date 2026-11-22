@@ -4,7 +4,7 @@
 //! `Database::find_create_scope_from_symbol_name` splits a loader symbol name on
 //! every `::` and nests one `Scope` per component with no bound. A `Scope` is
 //! ~1.5 KB resident and the interning key includes the parent, so a repeated
-//! component name still allocates a fresh one at every level: `kuna functions`
+//! component name still allocates a fresh one at every level: `unlace functions`
 //! over an ELF whose `.symtab` carries `("a::" * 200000) + "z"` went from 52,932
 //! KB of RSS to 345,132 KB — 291,724 KB for 600,001 bytes of `.strtab`, a ~498x
 //! amplifier on data no header check validates.

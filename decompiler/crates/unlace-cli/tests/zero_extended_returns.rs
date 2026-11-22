@@ -355,7 +355,7 @@ fn object(image: &Image) -> Vec<u8> {
 fn decompile_all(image: &Image) -> String {
     let path = common::scratch_file(&format!("zextreturn-{}", image.name), "o");
     std::fs::write(&path, object(image)).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna")).args(["decompile-all", path.to_str().unwrap()]).output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace")).args(["decompile-all", path.to_str().unwrap()]).output().unwrap();
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(output.status.success(), "{}: {text}\n{}", image.name, String::from_utf8_lossy(&output.stderr));
     text

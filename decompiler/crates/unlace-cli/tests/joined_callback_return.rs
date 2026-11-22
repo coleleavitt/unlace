@@ -4,7 +4,7 @@ use std::process::Command;
 
 fn records() -> serde_json::Value {
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let output = process::required_output(Command::new(kuna).args([
         "decompile-all",
         &common::fixture("joined_callback_return_x86_64"),

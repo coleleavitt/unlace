@@ -30,7 +30,7 @@ fn an_address_only_scalar_has_the_type_of_its_saved_pointer() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some()).collect();
     assert!(!compilers.is_empty(), "the round trip requires a C compiler");
     for opt in ["off", "on"] {
-        let decomp = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let decomp = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(["decompile", input.to_str().unwrap(), "read_escaped", "--option", "castobject", opt,
                    "--assert", "prototype write_word int write_word(int, int *, int)",
                    "--assert", "prototype read_escaped int read_escaped(int)", "--assert-strict"])

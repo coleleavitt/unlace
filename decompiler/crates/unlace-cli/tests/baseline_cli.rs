@@ -15,7 +15,7 @@ fn run(document: &str, save_first: bool) -> Output {
     )
     .unwrap();
     std::fs::set_permissions(&harness, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args(["test", "--datatests", "--binary"])
         .arg(&harness)
         .arg("--baseline")

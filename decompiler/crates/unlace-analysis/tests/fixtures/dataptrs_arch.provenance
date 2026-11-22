@@ -76,7 +76,7 @@ What they pin
   kuna_dataptrs lists every relocated word whose relocation stores a word with
   coverage dynamic-relocations: RISC-V's absolute GOT words and JUMP_SLOT,
   PowerPC's RELATIVE/ADDR words and its PLT slot only where it is a word
-  (secure PLT, ELFv2), and its unaligned UADDR words. `kuna xrefs` reports them
+  (secure PLT, ELFv2), and its unaligned UADDR words. `unlace xrefs` reports them
   as pointer rows. The SHT_RELR slots of relr_so_x86_64.so, and the
   SHT_ANDROID_RELR slot of the Android one, are listed the same way. Corrupted copies (a
   .rela.dyn sh_link, a PE base-relocation directory RVA) are made at test time

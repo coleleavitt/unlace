@@ -28,7 +28,7 @@ reject_reason: null
 Decompile checkCode: at the exact IMP stored in Objective-C metadata.
 
 > **x86-64 Objective-C recovery rounds odd IMP addresses down** (major, `5ab77f5633c5d40ad448c29b`)
-> Resolved checkCode: to 0x100001d2a, size 1, emitting only return with error:null. kuna read at 0x1000046c0 shows its IMP is 0x100001d2b. Disassembly shows RET at the reported entry and PUSH RBP at the actual entry. Other odd-address methods suffer the same corruption, and false boundaries truncate preceding functions.
+> Resolved checkCode: to 0x100001d2a, size 1, emitting only return with error:null. unlace read at 0x1000046c0 shows its IMP is 0x100001d2b. Disassembly shows RET at the reported entry and PUSH RBP at the actual entry. Other odd-address methods suffer the same corruption, and false boundaries truncate preceding functions.
 
 ## Reproduction
 

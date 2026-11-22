@@ -19,7 +19,7 @@
 //! `option readonly` (`Architecture::readonlypropagate`), which is off by default
 //! because it folds every `.rodata` read in the program. So the default output is
 //! `v3 = dat_8458;` and the number the program actually returns is not in the C
-//! at all. `kuna disassemble` names the same word `.word 0x00000539` in the same
+//! at all. `unlace disassemble` names the same word `.word 0x00000539` in the same
 //! listing, which is what makes this a gap rather than a limit.
 //!
 //! # The rule

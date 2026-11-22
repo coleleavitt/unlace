@@ -21,7 +21,7 @@
 //! with it -- a stripped `PackHeader`, a private packer, a blob addressed by
 //! hand -- has no `u_len`, so [`decompress_exhaustive`] runs the same decoder to
 //! the end of the *input* instead, capping the output rather than the length it
-//! was told to expect. `kuna unpack --raw-lzma` is that caller.
+//! was told to expect. `unlace unpack --raw-lzma` is that caller.
 
 use std::fmt;
 
@@ -647,7 +647,7 @@ mod tests {
     }
 
     /// A declared length still judges the same stream the old way in both
-    /// directions -- this is the path every `kuna unpack` of a real UPX image
+    /// directions -- this is the path every `unlace unpack` of a real UPX image
     /// takes, and the cap that now serves the length-less mode must not have
     /// loosened it.
     #[test]

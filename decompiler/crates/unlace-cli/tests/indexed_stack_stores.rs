@@ -96,7 +96,7 @@ fn indexed_stack_writes_preserve_the_dependent_call() {
             if full && !matches!(case, Case::Byte | Case::SecondByte | Case::WordRead) {
                 continue;
             }
-            let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
             let param = "unsigned char";
             cmd.args([
                 "decompile",
@@ -186,7 +186,7 @@ fn the_broad_guard_and_off_levels_remain_available() {
     let input = common::scratch_file("stack-store-options", "o");
     std::fs::write(&input, image(Case::Byte)).unwrap();
     for (level, call) in [("load", true), ("off", false), ("full", true)] {
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "decompile",
                 input.to_str().unwrap(),
@@ -244,7 +244,7 @@ fn byte_reads_after_indexed_stores_keep_their_offsets_on_mips() {
         };
         let input = common::scratch_file("indexed-stack-bytes", "bin");
         std::fs::write(&input, bytes).unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "decompile",
                 input.to_str().unwrap(),
@@ -340,9 +340,9 @@ fn x86_64_object<'a>(
     input
 }
 
-/// The C `kuna decompile` prints for `binary_<name>` with `options`.
+/// The C `unlace decompile` prints for `binary_<name>` with `options`.
 fn decompile(input: &std::path::Path, name: &str, options: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             input.to_str().unwrap(),

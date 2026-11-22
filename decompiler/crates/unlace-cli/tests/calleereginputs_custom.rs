@@ -13,7 +13,7 @@ use common::process;
 use std::process::Command;
 
 fn kuna() -> std::ffi::OsString {
-    std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into())
+    std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into())
 }
 
 fn run(args: &[&str]) -> (String, String, bool) {

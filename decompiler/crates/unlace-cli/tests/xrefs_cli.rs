@@ -1,10 +1,10 @@
-//! CLI end-to-end gate for `kuna xrefs` — drives the built `kuna` binary over the
+//! CLI end-to-end gate for `unlace xrefs` — drives the built `unlace` binary over the
 //! real vendored fixtures and asserts the cross-reference surface an RE agent
 //! consumes: both directions, every `kind`, and the JSON shape.
 //!
 //! Two promoted acceptance probes are load-bearing here. [`the_acceptance_probe`]
 //! is `--to 0x1030` on the stripped PIE `aif_gap_x86_64`, whose `.plt.got` thunk
-//! `_FINI_0` both guards on and calls — before `kuna xrefs` existed there was no
+//! `_FINI_0` both guards on and calls — before `unlace xrefs` existed there was no
 //! way to ask that question at all. [`a_pe_import_answers_the_same_at_its_veneer_and_at_its_slot`]
 //! is the `xrefs-unify-pe-import` need: an import has two addresses under one
 //! name, and asking either must answer the same.
@@ -57,9 +57,9 @@ fn pe_imports() -> String {
     fixture("pe_imports.exe")
 }
 
-/// Run the built `kuna` binary, returning `(stdout, stderr, exit code)`.
+/// Run the built `unlace` binary, returning `(stdout, stderr, exit code)`.
 fn run_kuna(args: &[&str]) -> (String, String, i32) {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
         .expect("failed to spawn the kuna binary");
@@ -70,13 +70,13 @@ fn run_kuna(args: &[&str]) -> (String, String, i32) {
     )
 }
 
-/// Run `kuna xrefs ...` and return its stdout.
+/// Run `unlace xrefs ...` and return its stdout.
 fn xrefs(args: &[&str]) -> String {
     let mut argv = vec!["xrefs"];
     argv.extend_from_slice(args);
     let (stdout, stderr, code) = run_kuna(&argv);
     if code != 0 {
-        panic!("kuna xrefs {args:?} failed ({code}): {stderr}");
+        panic!("unlace xrefs {args:?} failed ({code}): {stderr}");
     }
     stdout
 }
@@ -212,7 +212,7 @@ fn an_aarch64_call_site_is_not_a_reference_to_itself() {
     }
 }
 
-/// Each `(from, to, kind)` row of a `kuna xrefs ... --json` document.
+/// Each `(from, to, kind)` row of a `unlace xrefs ... --json` document.
 fn edges(doc: &str) -> Vec<(String, String, String)> {
     let document: serde_json::Value = serde_json::from_str(doc).expect("valid xref JSON");
     let field = |row: &serde_json::Value, key: &str| {
@@ -362,7 +362,7 @@ fn the_human_surface_is_a_header_plus_tab_separated_rows() {
 ///
 /// A MinGW PE reaches an import through two addresses that both carry its name —
 /// the `FF 25` veneer at `0x1400079b0` and the IAT slot at `0x14000d234` — and
-/// `kuna functions --filter VirtualProtect` shows an agent both. Asking the
+/// `unlace functions --filter VirtualProtect` shows an agent both. Asking the
 /// veneer used to answer `count: 0` although the program plainly calls
 /// `VirtualProtect`, because every call site references the slot instead. Both
 /// addresses must now answer with the same two real call sites.
@@ -514,7 +514,7 @@ fn usage_errors_exit_two() {
     ] {
         let (_, stderr, code) = run_kuna(&args);
         assert_eq!(code, 2, "{args:?} should be a usage error, got {code}: {stderr}");
-        assert!(stderr.contains("usage: kuna xrefs"), "{args:?}: {stderr}");
+        assert!(stderr.contains("usage: unlace xrefs"), "{args:?}: {stderr}");
     }
 }
 

@@ -1,5 +1,5 @@
 //! (kuna, issues #1410, #1497) `--omit` narrows the `--json` record to what a
-//! caller asked for, on `kuna decompile` and `kuna decompile-all` alike, and says
+//! caller asked for, on `unlace decompile` and `unlace decompile-all` alike, and says
 //! what it left out so an omitted collection is never read as an empty one.
 
 use crate::common;
@@ -20,7 +20,7 @@ fn json_text(args: &[&str]) -> (serde_json::Value, String, i32) {
     argv.extend_from_slice(&["--sleighpath", specs.to_str().unwrap()]);
     let (stdout, stderr, code) = common::run_kuna(&argv);
     let doc = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("kuna {args:?} printed no JSON ({e}):\n{stdout}\n{stderr}"));
+        .unwrap_or_else(|e| panic!("unlace {args:?} printed no JSON ({e}):\n{stdout}\n{stderr}"));
     (doc, stdout, code)
 }
 

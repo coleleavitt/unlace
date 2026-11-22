@@ -60,7 +60,7 @@ API unsigned run_span(const unsigned char *input,unsigned n) {
     let root_type = "type _run_span::v2 Span".to_owned();
     let tail_type = "type _run_span::v4 unsigned char[4]".to_owned();
     let build_command = |label: &str, assertions: &[&str]| {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command
             .arg("decompile-project")
             .arg(&binary)

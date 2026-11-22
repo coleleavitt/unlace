@@ -1,6 +1,6 @@
 //! (kuna `callrettype`) A call returns the type its callee declares.
 //!
-//! `kuna decompile-all` decompiles callees before callers
+//! `unlace decompile-all` decompiles callees before callers
 //! ([`crate::p4_calls::kuna_protoorder`]).  That channel carries a callee's
 //! recovered PARAMETER types to its call sites; this one carries the RETURN.
 //! Without it a call to a function the same listing declares

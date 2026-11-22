@@ -32,9 +32,9 @@ catalogued option.
 > **Giant state machine gives no warning** (major, Flare-On 12 challenge 5 `ntfsm.exe`)
 > `main` at 0x14000c0b0 is a 16.6 MB extent of about 2.5M instructions that dispatches
 > through a 90,781-entry image-base-relative table at 0x14000ca5a (`cmp idx,0x1629c`).
-> `kuna functions --summary --json` lists it only as the largest function; nothing says
+> `unlace functions --summary --json` lists it only as the largest function; nothing says
 > the switch is over the 1024-entry cap or that the body is over `maxinstruction`, and
-> `kuna catalog` has no jump-table option (the analysis tier's own table read was a
+> `unlace catalog` has no jump-table option (the analysis tier's own table read was a
 > hard-coded 1024 that no option reached).
 
 ## Reproduction

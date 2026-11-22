@@ -147,7 +147,7 @@
 //! a register on to a partner is answered by the forwarding walk below, which
 //! follows the partner's body and proves nothing about a cycle it re-enters. A
 //! callee that was never decompiled in this run states nothing either, so a
-//! single-function `kuna decompile`, a narrowed `decompile-all`, a `--jobs N`
+//! single-function `unlace decompile`, a narrowed `decompile-all`, a `--jobs N`
 //! run and `--option protoorder off` all leave every call site alone.
 //!
 //! It is NOT true that `protoorder` declines a variadic callee, and this rule

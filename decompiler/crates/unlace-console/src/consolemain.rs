@@ -16,7 +16,7 @@
 //! write`/`print C`/`closefile`/`quit` over stdin and reads the captured C file)
 //! drive when `KUNA_ENGINE=rust`.
 //!
-//! [`main`] is the whole program, so the `decomp_dbg` binary and `kuna`'s own
+//! [`main`] is the whole program, so the `decomp_dbg` binary and `unlace`'s own
 //! `decomp_dbg` subcommand run the identical console.
 
 use std::io::{Read, Write};
@@ -52,7 +52,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
                 spec_roots.push(args[i].clone());
             }
         } else if flag == "--max-fn-memory" {
-            // (kuna) `kuna decompile`'s per-function memory limit: MiB, or
+            // (kuna) `unlace decompile`'s per-function memory limit: MiB, or
             // `cgroup` for the cgroup default.
             i += 1;
             match args.get(i).map(|v| v.trim()) {
@@ -67,7 +67,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
                 None => {}
             }
         } else if flag == "--max-fn-seconds" {
-            // (kuna) `kuna decompile`'s per-function wall-clock budget; 0 disables.
+            // (kuna) `unlace decompile`'s per-function wall-clock budget; 0 disables.
             i += 1;
             if let Some(secs) = args.get(i).and_then(|v| v.trim().parse::<u64>().ok()) {
                 unlace_decomp::decompile_drive::set_default_fn_budget_secs(secs);

@@ -43,7 +43,7 @@ fn complete_go_integer_stores_match_native_source_and_call_counts() {
     std::fs::remove_file(source).unwrap();
     std::fs::remove_file(executable).unwrap();
     let kuna = std::env::var_os("KUNA_TEST_BIN")
-        .unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let output = process::required_output(Command::new(kuna).args([
         "decompile-all",
         &common::fixture("go_store_value_x86_64"),

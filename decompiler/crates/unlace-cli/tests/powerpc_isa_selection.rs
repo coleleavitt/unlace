@@ -65,7 +65,7 @@ fn image(endian: Endianness, abi: u32, vector_abi: bool) -> Vec<u8> {
 }
 
 fn decompile(path: &Path, function: &str, options: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             path.to_str().unwrap(),

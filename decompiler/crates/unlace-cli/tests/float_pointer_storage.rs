@@ -180,7 +180,7 @@ fn pointer_bits_in_a_byte_array_keep_both_scalar_views() {
         .expect("storage symbol");
     for stackviews in ["on", "off"] {
         let project = root.join(format!("project-{stackviews}"));
-        checked(Command::new(env!("CARGO_BIN_EXE_kuna"))
+        checked(Command::new(env!("CARGO_BIN_EXE_unlace"))
             .arg("decompile-project").arg(&image)
             .arg("--sleighpath").arg(common::repo_root().join("specs"))
             .args(["--option", "stackviews", stackviews, "--assert-strict",

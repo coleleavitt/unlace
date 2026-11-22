@@ -50,7 +50,7 @@ fn entries(prog: &ConsoleProgram) -> Vec<u64> {
     out
 }
 
-/// Every entry's emitted C, decompiled the way `kuna decompile <image> <addr>` does.
+/// Every entry's emitted C, decompiled the way `unlace decompile <image> <addr>` does.
 fn bodies(image: &str, lazy: bool, inventory: &[u64]) -> Vec<(String, String)> {
     let mut prog = load(image, lazy);
     let mut out = Vec::new();

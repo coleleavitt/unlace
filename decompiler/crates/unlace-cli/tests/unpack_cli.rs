@@ -1,4 +1,4 @@
-//! CLI end-to-end gate for `kuna unpack` -- drives the built `kuna` binary over
+//! CLI end-to-end gate for `unlace unpack` -- drives the built `unlace` binary over
 //! the vendored UPX-packed ELF and asserts both halves of the feature: that the
 //! recovered file is a real, analyzable ELF, and that an image this build cannot
 //! unpack is refused by name instead of half-written.
@@ -64,7 +64,7 @@ fn specs() -> String {
 }
 
 fn run_kuna(args: &[&str]) -> (String, String, bool) {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
         .expect("failed to spawn the kuna binary");
@@ -99,7 +99,7 @@ impl Drop for Scratch {
 }
 
 /// The acceptance probe of `docs/re-needs/unpack-upx-packed-executable.md`:
-/// `kuna unpack <packed>` exits 0. Everything else here is the real bar behind
+/// `unlace unpack <packed>` exits 0. Everything else here is the real bar behind
 /// that -- that what it wrote is the original program.
 #[test]
 fn unpack_recovers_the_original_elf() {
@@ -107,7 +107,7 @@ fn unpack_recovers_the_original_elf() {
     let out = scratch.path("snake.unpacked");
     let (stdout, stderr, ok) = run_kuna(&["unpack", &packed_fixture(), "-o", &out]);
     if !ok {
-        panic!("kuna unpack failed: {stderr}");
+        panic!("unlace unpack failed: {stderr}");
     }
 
     assert!(stdout.contains("NRV2B_LE32"), "report names no method:\n{stdout}");
@@ -130,13 +130,13 @@ fn the_unpacked_output_is_analyzable() {
     let out = scratch.path("snake.unpacked");
     let (_, stderr, ok) = run_kuna(&["unpack", &packed_fixture(), "-o", &out]);
     if !ok {
-        panic!("kuna unpack failed: {stderr}");
+        panic!("unlace unpack failed: {stderr}");
     }
 
     let (stdout, stderr, ok) =
         run_kuna(&["functions", &out, "--json", "--sleighpath", &specs()]);
     if !ok {
-        panic!("kuna functions failed on the unpacked output: {stderr}");
+        panic!("unlace functions failed on the unpacked output: {stderr}");
     }
     let count = json_count(&stdout).expect("functions --json has a count");
     assert!(count >= 50, "expected the recovered program's functions, got {count}:\n{stdout}");
@@ -151,7 +151,7 @@ fn unpack_json_reports_the_pack_header() {
     let out = scratch.path("snake.unpacked");
     let (stdout, stderr, ok) = run_kuna(&["unpack", &packed_fixture(), "-o", &out, "--json"]);
     if !ok {
-        panic!("kuna unpack --json failed: {stderr}");
+        panic!("unlace unpack --json failed: {stderr}");
     }
     assert!(stdout.trim_start().starts_with('{'), "output is not a JSON object:\n{stdout}");
     for field in [
@@ -232,7 +232,7 @@ fn unpack_recovers_an_lzma_packed_elf() {
     let out = scratch.path("snake.lzma.unpacked");
     let (stdout, stderr, ok) = run_kuna(&["unpack", &lzma_fixture(), "-o", &out, "--json"]);
     if !ok {
-        panic!("kuna unpack failed on an LZMA image: {stderr}");
+        panic!("unlace unpack failed on an LZMA image: {stderr}");
     }
     assert!(!stderr.contains("unsupported UPX image"), "still refused:\n{stderr}");
     for field in ["\"method\": 14", "\"method_name\": \"LZMA\"", "\"unpacked_size\": 31640"] {
@@ -283,7 +283,7 @@ fn raw_lzma_recovers_a_stream_no_pack_header_describes() {
         "--json",
     ]);
     if !ok {
-        panic!("kuna unpack --raw-lzma failed: {stderr}");
+        panic!("unlace unpack --raw-lzma failed: {stderr}");
     }
 
     assert!(!stderr.contains("no UPX PackHeader found"), "discovery ran anyway:\n{stderr}");
@@ -332,7 +332,7 @@ fn raw_lzma_accepts_file_offsets_and_explicit_properties() {
         "2,0,3",
         "--json",
     ]);
-    assert!(ok, "kuna unpack --raw-offsets failed: {stderr}");
+    assert!(ok, "unlace unpack --raw-offsets failed: {stderr}");
     assert!(stdout.contains(r#""range_kind": "file-offset""#), "{stdout}");
     let bytes = std::fs::read(&out).expect("payload was written");
     assert_eq!(bytes.len(), HEADERLESS_SIZE);
@@ -403,7 +403,7 @@ fn unpack_rebuilds_the_reported_win64_pe() {
     let out = scratch.path("fixture-unpacked.exe");
     let (stdout, stderr, ok) = run_kuna(&["unpack", &win64_fixture(), "-o", &out]);
     if !ok {
-        panic!("kuna unpack failed: {stderr}");
+        panic!("unlace unpack failed: {stderr}");
     }
     assert!(stdout.contains("win64/pe"), "report names no format:\n{stdout}");
 
@@ -415,7 +415,7 @@ fn unpack_rebuilds_the_reported_win64_pe() {
 
     let (stdout, stderr, ok) = run_kuna(&["functions", &out, "--json", "--sleighpath", &specs()]);
     if !ok {
-        panic!("kuna functions failed on the unpacked output: {stderr}");
+        panic!("unlace functions failed on the unpacked output: {stderr}");
     }
     assert_eq!(json_count(&stdout), Some(3), "{stdout}");
     for addr in ["0x140001000", "0x140001020", "0x140001060"] {
@@ -424,7 +424,7 @@ fn unpack_rebuilds_the_reported_win64_pe() {
     let (stdout, stderr, ok) =
         run_kuna(&["decompile", &out, "0x140001020", "--addr", "--sleighpath", &specs()]);
     if !ok {
-        panic!("kuna decompile failed on the unpacked output: {stderr}");
+        panic!("unlace decompile failed on the unpacked output: {stderr}");
     }
     assert!(stdout.contains("sub_140001000(a0)"), "the call to `increment` is lost:\n{stdout}");
 }

@@ -1,4 +1,4 @@
-lowpage_* -- the fixtures for `kuna xrefs` over an address formed from the
+lowpage_* -- the fixtures for `unlace xrefs` over an address formed from the
 program counter below 0x1000, in images that map code or constants in their
 first page (GH #1364; decompiler/crates/unlace-cli/tests/xrefs_low_page.rs).
 

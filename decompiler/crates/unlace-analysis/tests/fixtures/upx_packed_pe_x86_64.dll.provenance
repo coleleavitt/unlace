@@ -11,7 +11,7 @@ What it is
   NONAME ordinal (lib_ord_only @2), another named one (lib_unused @3), and a
   forwarder (lib_fwd = KERNEL32.GetTickCount @4).
 
-  `kuna unpack` writes what `upx -d` (5.3.0) writes except the IAT data directory
+  `unlace unpack` writes what `upx -d` (5.3.0) writes except the IAT data directory
   and each import descriptor's OriginalFirstThunk; the export table, relocations
   and imports (as a set) equal the linker's original.
 

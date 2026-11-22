@@ -159,7 +159,7 @@ fn descriptor_definition_wins_over_its_import_stub() {
             let path = common::scratch_file("elfv1-definition-and-import", "elf");
             std::fs::write(&path, bytes).unwrap();
             for (selector, address) in [("get_byte", "0x1000"), ("0x1000", "0x1000"), ("0x1100", "0x1100")] {
-                let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                     .args(["decompile", path.to_str().unwrap(), selector, "--json", "--mode", "reliable"])
                     .output().unwrap();
                 let text = String::from_utf8_lossy(&out.stdout);
@@ -238,7 +238,7 @@ fn descriptor_import_names_and_noreturn_require_unambiguous_targets() {
         let path=common::scratch_file("elfv1-import","elf");std::fs::write(&path,&bytes).unwrap();
         let hidden=alias_toc==Some(AliasToc::HiddenLocalDescriptor);
         let selector=if hidden {"0x1060"} else if conflicts {"get_alias"} else {"get_byte"};
-        let mut command=Command::new(env!("CARGO_BIN_EXE_kuna"));
+        let mut command=Command::new(env!("CARGO_BIN_EXE_unlace"));
         command.args(["decompile",path.to_str().unwrap(),selector,"--json"]);
         if hidden {command.arg("--addr");}
         let out=command.output().unwrap();
@@ -290,7 +290,7 @@ fn a_valueless_failure_branch_recovers_its_return() {
     let at=bytes.windows(tail.len()).position(|w|w==tail).expect("caller tail");
     bytes[at+4..at+8].copy_from_slice(&0x60000000u32.to_be_bytes());
     let path=common::scratch_file("elfv1-import-void","elf");std::fs::write(&path,&bytes).unwrap();
-    let out=Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out=Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile",path.to_str().unwrap(),"get_byte","--json"]).output().unwrap();
     let text=String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(),"{text}\n{}",String::from_utf8_lossy(&out.stderr));

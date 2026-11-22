@@ -157,7 +157,7 @@ fn object_file(case: &Case) -> Vec<u8> {
 }
 
 fn decompile(case: &Case, input: &std::path::Path, functions: &[&str], language: &str) -> String {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args(["decompile-all", input.to_str().unwrap(), "--functions"])
         .arg(functions.join(","))
         .args(["--language", language]);

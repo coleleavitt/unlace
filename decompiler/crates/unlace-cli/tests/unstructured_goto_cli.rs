@@ -30,7 +30,7 @@ fn fixture() -> String {
 }
 
 fn run_kuna(args: &[&str]) -> (String, String, Option<i32>) {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env("SLEIGHHOME", repo_root().join("specs"))
         .args(args)
         .output()

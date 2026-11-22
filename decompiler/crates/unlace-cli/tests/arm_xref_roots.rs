@@ -54,7 +54,7 @@ fn query_language(
     language: &str,
     extra: &[&str],
 ) -> Value {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "xrefs",
             path.to_str().unwrap(),
@@ -123,7 +123,7 @@ fn arm_frame_recovery_is_explicitly_opt_in() {
         "--target", "ARM:LE:32:v4t", "--isa", "arm", "--option", "aif", "off",
     ];
     for extra in [&[][..], &["--option", "armframes", "off"][..]] {
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna")).args(base).args(extra).output().unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace")).args(base).args(extra).output().unwrap();
         assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
         let doc: Value = serde_json::from_slice(&out.stdout).unwrap();
         assert!(!calls(&doc).contains(&(0x1508, 0x1100, 0x1500)), "{doc}");
@@ -834,7 +834,7 @@ fn inventory_discards_callees_invalidated_by_gap_interworking() {
             false,
             &["staleisa", "stalegap"],
         );
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "functions",
                 path.to_str().unwrap(),
@@ -893,7 +893,7 @@ fn inventory_checks_gap_entries_before_rewalking_aif_candidates() {
         .unwrap()
         .success());
     for (pool, pointers) in [("on", "off"), ("off", "on"), ("on", "on")] {
-        let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "functions",
                 path.to_str().unwrap(),
@@ -997,7 +997,7 @@ fn stale_aif_modes_do_not_restart_inventory_forever() {
         let path = fixture_variant("stale-aif-mode", "arm", endian, false, &["staleaif"]);
         for patterns in ["off", "on"] {
             let out = common::process::output_with_timeout(
-                Command::new(env!("CARGO_BIN_EXE_kuna")).args([
+                Command::new(env!("CARGO_BIN_EXE_unlace")).args([
                     "functions", path.to_str().unwrap(), "--json", "--target", language,
                     "--mode", "reliable", "--option", "listing", "on", "--option", "aif", "on",
                     "--option", "funcstart_patterns", patterns, "--option", "armframes", "on",
@@ -1025,7 +1025,7 @@ fn recovered_xrefs_preserve_established_modes_for_callee_first_decompilation() {
             &["focusmode", "rootmode", "splitframe", "focusblocks", "xrefpublish"]);
         for protoorder in ["off", "types"] {
             for patterns in ["off", "on"] {
-                let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                     .args(["decompile-all", path.to_str().unwrap(), "--json", "--addr", "0x1500", "--addr", "0x1100",
                         "--target", language, "--mode", "reliable", "--option", "listing", "off",
                         "--option", "aif", "off", "--option", "protoorder", protoorder,
@@ -1069,7 +1069,7 @@ fn recovered_modes_do_not_escape_into_unclaimed_decompilation() {
             &["focusmode", "rootmode", "splitframe", "unclaimedmode"]);
         for aif in ["off", "on"] {
             for patterns in ["off", "on"] {
-                let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                     .args(["decompile", path.to_str().unwrap(), "0x1750", "--addr",
                         "--target", language, "--mode", "reliable", "--option", "listing", "on",
                         "--option", "funcstart_patterns", patterns, "--option", "aif", aif])
@@ -1169,7 +1169,7 @@ fn inventory_restores_pending_frame_modes_after_backward_interworking() {
             let path = fixture_variant("inventory-backward-mode", "arm", endian, false, variants);
             for aif in ["off", "on"] {
                 for listing in ["off", "on"] {
-                    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
                         .args(["xrefs", path.to_str().unwrap(), "--from", "0x1500",
                             "--kind", "call", "--json", "--target", language, "--mode", "reliable",
                             "--option", "aif", aif, "--option", "listing", listing])

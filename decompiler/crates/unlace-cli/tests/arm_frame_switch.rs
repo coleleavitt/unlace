@@ -20,7 +20,7 @@ fn fixture(tag: &str) -> PathBuf {
 }
 
 fn decompile_all(path: &Path, extra: &[&str]) -> Vec<u8> {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-all", path.to_str().unwrap(), "--json"])
         .args(extra)
         .output()

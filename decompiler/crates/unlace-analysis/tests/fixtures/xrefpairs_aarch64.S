@@ -1,4 +1,4 @@
-// kuna xrefs fixture: AArch64 adrp pairs the compiler schedules apart, and the
+// unlace xrefs fixture: AArch64 adrp pairs the compiler schedules apart, and the
 // shapes that must NOT compose (a join, a call clobbering a scratch register).
 	.text
 	.p2align 2

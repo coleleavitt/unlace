@@ -1,7 +1,7 @@
 use std::process::Command;
 
 fn rejects_missing_value(prefix: &[&str], flag: &str) {
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(prefix)
         .arg(flag)
         .env(
@@ -92,7 +92,7 @@ fn skill_installer_stops_at_a_missing_flag_value() {
 #[test]
 fn help_remains_a_successful_command() {
     for command in ["catalog", "test", "decompile", "install-skill"] {
-        let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([command, "--help"])
             .output()
             .expect("run kuna");

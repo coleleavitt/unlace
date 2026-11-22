@@ -16,8 +16,8 @@ that decompiled to a body dereferencing an uninitialized pointer.
                                the slots at 0x401004 / 0x401000
     00401040  import directory descriptors, INT, hint/name blobs, DLL name
 
-`kuna decompile-all` must report the entry and NOT the three slots, while
-`kuna functions` keeps all four and the two calls still render their import
+`unlace decompile-all` must report the entry and NOT the three slots, while
+`unlace functions` keeps all four and the two calls still render their import
 names.
 
     python3 pe_iatincode_i386.py

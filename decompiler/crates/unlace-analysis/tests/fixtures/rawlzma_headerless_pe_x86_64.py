@@ -2,7 +2,7 @@
 """Build rawlzma_headerless_pe_x86_64.exe -- a PE64 carrying a UPX LZMA1 stream
 with no PackHeader anywhere in the file.
 
-This is the shape `kuna unpack --raw-lzma` exists for: the payload is perfectly
+This is the shape `unlace unpack --raw-lzma` exists for: the payload is perfectly
 decodable and the metadata that would find it is simply not there, so nothing
 short of an analyst-supplied range recovers it.
 

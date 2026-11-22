@@ -4,7 +4,7 @@
  * arm-linux-gnueabihf-gcc -O2 -fno-builtin -fno-stack-protector \
  *     -Wl,--build-id=none armfloat_libm.c -o armfloat_libm_hard -lm
  *
- * `kuna decompile armfloat_libm_hard mant` decompiles one function and no
+ * `unlace decompile armfloat_libm_hard mant` decompiles one function and no
  * other: frexp's declared prototype must reach that first decompile. */
 #include <math.h>
 double mant(double x, int *e) { return frexp(x, e) * 2.0; }

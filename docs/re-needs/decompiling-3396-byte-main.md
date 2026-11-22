@@ -102,7 +102,7 @@ Interactive decompilation of the program's main function, sub_140023350, fast en
 ## Refutation
 
 **Hypothesis partly refuted (round 2 builder, PR for `feat/re-decompiling-3396-byte-main`).**
-The symptom stands — 71.5 s median reproduced for `kuna decompile <bin> sub_140023350`.
+The symptom stands — 71.5 s median reproduced for `unlace decompile <bin> sub_140023350`.
 The diagnosis does not: it is not an analysis pass and not "opaque arithmetic and
 indirect calls". gdb-sampled profiling put 53% of wall time in a single leaf frame,
 `FlowInfo::xref_control_flow`, i.e. the **lifter**, before any analysis runs. The dead
@@ -118,7 +118,7 @@ arm (`> 30 s`) no longer holds. **The acceptance (`< 10 s`) is still not met** a
 need should stay open: after the fix the profile is flat (p6 merge 27.6%, p3 heritage
 26.3%, rule pool 19.8%, jump-table sub-decompilation 17.4%, p9 emit 13.7%), so the
 remaining 48% is a campaign, not a fix. The two ranked leads —
-`kuna decompile` following flow twice (~18%), and the per-table jump-table partial clone
+`unlace decompile` following flow twice (~18%), and the per-table jump-table partial clone
 (~20%, implemented then reverted because `option unrolledguard` depends on it) — are
 recorded with evidence in `docs/features/decompiling-3396-byte-main/record.json`.
 
@@ -140,7 +140,7 @@ Two things attempt 3 should inherit rather than rediscover:
   pool 10.4%, heritage 10.1%, symbol-container lookups ~11%, infertypes 6.0%,
   dead code 5.8%. One attempt-1 lead does NOT survive re-measurement: `bb_ops` is
   ~2.2% self spread over five callers, not ~10%.
-- **Measuring this need is harder than fixing it.** `kuna decompile` (without
+- **Measuring this need is harder than fixing it.** `unlace decompile` (without
   `--json`) forks `decomp_dbg` and pipes both its streams, so a stderr marker is
   invisible and gdb does not follow the child — profile the in-process `--json`
   path and instrument to a file. And this box runs sibling builders at load
@@ -222,7 +222,7 @@ Attempt 5 should inherit three things and re-derive none of them:
   11.8 s run to 13.3 s.
 
 **Attempt 5 (round 2 wave 18, branch `feat/re-decompiling-3396-byte-main`). THE ACCEPTANCE
-PASSES.** `kuna decompile nikos_crack_me.exe sub_140023350` measures **9,112 ms** against the
+PASSES.** `unlace decompile nikos_crack_me.exe sub_140023350` measures **9,112 ms** against the
 `< 10,000 ms` bar (exit 0), for the first time in five attempts and without the bar ever being
 moved: 71.5 -> 19.4 -> 14.4 -> 11.8 -> 10.8 -> **9.1 s**. Attempt 5 implemented exactly the one
 mechanism the wave-17 brief named -- **share the jump-table partial sub-decompilation across the
@@ -233,7 +233,7 @@ pipeline behind `if (!partial.isJumptableRecoveryOn())`; kuna ran it once per ta
 document's rule says a fix moving kuna back onto upstream's default earns no DIV.
 
 Interleaved paired A/B with the option as the lever (same binary in both arms, so the
-`kuna decompile` -> `decomp_dbg` fork cannot time a different engine), 8 pairs:
+`unlace decompile` -> `decomp_dbg` fork cannot time a different engine), 8 pairs:
 **10,869 ms -> 9,138 ms median, -15.92%** (paired mean -15.96% +/- 2.03, 8/8 pairs a win,
 ~7.8 sigma), stdout byte-identical on the witness.
 
@@ -260,7 +260,7 @@ Two findings worth keeping beyond this need:
 regression is REFUTED by the code A/B it asked for, and the acceptance passes again.** The
 brief's first job was: build `fba4ebd8` and `96224463` in two worktrees and interleave at
 reps >= 7 on the same box. Done, 8 interleaved pairs, each arm pinned with `KUNA_DECOMP_DBG`
-so the `kuna decompile` -> `decomp_dbg` fork cannot time the other arm's engine:
+so the `unlace decompile` -> `decomp_dbg` fork cannot time the other arm's engine:
 
     pre  #406 (fba4ebd8)  median 9,619 ms   min 9,146   max 10,903
     post #406 (96224463)  median 9,742 ms   min 9,111   max 11,740
@@ -294,7 +294,7 @@ unset. The current profile of this witness, for whoever is dispatched next:
     decompile/mergerequired 618 ms   7.0%    1 call
     jumptable/*           1,387 ms  15.7%          (the shared partial, post-#397)
     (8,854 ms of action time in a 10.2 s profiled run; ~1.7 s of the run is outside
-     the tree -- 0.95 s of it is load + function discovery, measured with `kuna functions`)
+     the tree -- 0.95 s of it is load + function discovery, measured with `unlace functions`)
 
 **A seventh attempt should be dispatched only with a mechanism in hand.** The residue is flat in
 four ~12% blocks, this loop's perf bar is 3 sigma and >=20%, and the box's noise floor on this
@@ -334,7 +334,7 @@ _none recorded_
   sub-decompilation, p9 dead-code/emit; `bb_ops` did NOT survive re-measurement and is not a lead.
   Read `docs/features/decompiling-3396-byte-main/record.json` first — it carries both attempts'
   profiles. Two harness facts that cost attempt 2 the most to learn and that attempt 3 must not
-  rediscover: `kuna decompile` FORKS `decomp_dbg` and eats its stderr (profile `--json` and
+  rediscover: `unlace decompile` FORKS `decomp_dbg` and eats its stderr (profile `--json` and
   instrument to a file), and only an **interleaved paired A/B** survives this box's load — a
   sequential timeit here has reported +42% on byte-identical output. **This need may legitimately
   not close on this attempt**; a merged, measured, output-identical cut that still misses 10 s is a
@@ -365,7 +365,7 @@ _none recorded_
   **10,816 ms** against the `< 10,000 ms` bar. Four merged, measured, output-identical attempts
   have taken this witness 71.5 -> 19.4 -> 14.4 -> 11.8 -> 10.8 s. The bar is still not moved.
   **The pre/post delta this wave's harness printed (-0.04 s) is VOID -- do not cite it.** It copied
-  the pre-merge `kuna` to /tmp and timed it against the rebuilt one, but `kuna decompile` forks
+  the pre-merge `kuna` to /tmp and timed it against the rebuilt one, but `unlace decompile` forks
   `decomp_dbg`, and `unlace-cli/src/paths.rs` resolves that sibling by `exe_dir()` then falls back to
   `repo_root()/decompiler/target/release`; off /tmp the parent walk fails, `repo_root()` falls back
   to the CWD, and the "pre" binary executed the FRESHLY REBUILT engine (proven: the /tmp copy's
@@ -405,7 +405,7 @@ _none recorded_
      option default-OFF and say so — a measured, output-identical, merged cut that misses the
      10 s bar is still a success by this loop's rules, and **the bar is not moved to meet it**
      (four captains have now declined to re-cut it).
-  5. Measurement, inherited: `kuna decompile` FORKS `decomp_dbg`, so an A/B that copies only
+  5. Measurement, inherited: `unlace decompile` FORKS `decomp_dbg`, so an A/B that copies only
      `kuna` aside silently times the freshly built engine — pin the engine with
      `KUNA_DECOMP_DBG`. Interleaved paired A/B only; a sequential timeit on this box has
      reported +42% on byte-identical output. `perf` is blocked (`perf_event_paranoid = 4`);
@@ -414,7 +414,7 @@ _none recorded_
 - round 2 B_DONE (captain): closed on PR **#397** (`46c373ac`, option `jtsharepartial`, default on),
   attempt **5** — not #396, which was attempt 4 and is what the stale index row said. All six gates
   green on main at 46c373ac (`make test` 675/675, `test-stages`, `rust-test`, `check-spec`,
-  `kuna catalog --check`, `make test-cli` 24/24) and CI run 33939142906 success on both jobs.
+  `unlace catalog --check`, `make test-cli` 24/24) and CI run 33939142906 success on both jobs.
   Acceptance a-53d616afcb6a passed on 7 independent samples: suite 8774 ms, plus a quiet
   re-measure of 9221/9204/9158/9167/9766 (median 9204 ms) against the `< 10,000 ms` bar. The bar
   was never moved across five attempts: 71.5 -> 19.4 -> 14.4 -> 11.8 -> 10.8 -> 9.2 s.
@@ -472,7 +472,7 @@ _none recorded_
   round of this loop merges another default-ON pass into `universal_sched`, and this need is the
   canary for it. `simdshufflelane` is registered unconditionally in the `analysis` rule group
   (`infra/universalaction.rs:425`); the question is what it costs on a 3396-byte function where it
-  never fires. See [[kuna-lifter-quadratic]] for the profiling lever (`kuna decompile` forks
+  never fires. See [[kuna-lifter-quadratic]] for the profiling lever (`unlace decompile` forks
   `decomp_dbg` and eats its stderr -- profile `--json`).
 - round 2 wave 40 BUILDER (b-r2-decompiling-3396), **attempt 6: the wave-39 `regressed` flip is a
   measurement artifact and the code A/B says so.** Interleaved 8-pair A/B of `fba4ebd8` vs

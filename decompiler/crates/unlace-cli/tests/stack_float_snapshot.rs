@@ -55,7 +55,7 @@ fn decompile_all(image: &Path, stackviews: bool) -> serde_json::Value {
     let specs = std::env::var_os("SLEIGHHOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join("specs"));
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args([
             "decompile-all",

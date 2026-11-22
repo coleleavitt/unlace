@@ -1,4 +1,4 @@
-//! `kuna xrefs` and the other surfaces that read the image themselves, over a
+//! `unlace xrefs` and the other surfaces that read the image themselves, over a
 //! non-default `MH_FILESET` entry chosen with `--option kernelcache` (GH #1551):
 //! they read the entry the engine loads, and an address another entry holds
 //! says so instead of answering a silent zero.

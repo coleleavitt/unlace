@@ -192,7 +192,7 @@ ida 79) — decbench builds its CFG from the emitted statements and edges, and p
 top-level components barely perturbs node/edge sets. The score cannot see that the entry is
 unreachable. This is a case where the winning pane contains a correctness defect.
 
-**Prevalence (measured today, `kuna decompile-all` + a scan for "unconditional `goto`
+**Prevalence (measured today, `unlace decompile-all` + a scan for "unconditional `goto`
 immediately followed by a non-label statement at the same or deeper brace depth"):**
 
 | binary | arch | functions | affected |

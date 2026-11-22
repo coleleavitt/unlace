@@ -2705,7 +2705,7 @@ impl PrintC {
     /// emit a C definition for every user-defined data-type in the factory, in
     /// [`TypeFactoryImpl::dependent_order`](crate::dtype::TypeFactoryImpl::dependent_order)
     /// (definition-before-use), skipping core types — the `.h` artifact of
-    /// `kuna decompile-project`.
+    /// `unlace decompile-project`.
     ///
     /// Documented `(kuna)` divergences from the upstream emission (which prints
     /// one `typedef struct {…} name;` per type through the emitter):
@@ -3081,7 +3081,7 @@ impl PrintC {
     ///
     /// Off by default, and a no-op for a function that names none.  The text is
     /// [`render_type_definitions`] over the referenced subset — the SAME
-    /// renderer `kuna decompile-project` builds its `.h` type block with, so a
+    /// renderer `unlace decompile-project` builds its `.h` type block with, so a
     /// preamble line and a header line for one type are one line.  A project
     /// export's bodies therefore suppress it (they include that header);
     /// see [`crate::kuna_structdefs`].
@@ -3095,7 +3095,7 @@ impl PrintC {
         }
         // (kuna outlang) The renderer is C by contract -- it builds a `.h` --
         // and a `struct X { … };` block in a Rust document is neither valid
-        // Rust nor readable C. `kuna decompile-project` refuses a non-C output
+        // Rust nor readable C. `unlace decompile-project` refuses a non-C output
         // language for the same reason rather than half-honouring it; here the
         // preamble declines and the body is emitted as it would be anyway.
         // Teaching the definition renderer the language plane belongs to that
@@ -3129,7 +3129,7 @@ impl PrintC {
     /// [`emit_function_document`](PrintC::emit_function_document) (byte-identical
     /// there) so [`doc_prototype`](PrintC::doc_prototype) can emit the IDENTICAL
     /// token sequence standalone — the `.h`-prototype == `.c`-definition-line
-    /// contract of `kuna decompile-project`.
+    /// contract of `unlace decompile-project`.
     fn emit_prototype_declaration(
         &mut self,
         fd: &Funcdata,
@@ -13473,7 +13473,7 @@ pub(crate) fn declarator_parts(
 /// in C; `i32`, `*mut u8`, `u64`, `[i32; 16]` in Rust.
 ///
 /// A public wrapper over [`declarator_parts`] for out-of-crate consumers (the
-/// `kuna decompile-all --json` variable extractor → decbench's `type_match`
+/// `unlace decompile-all --json` variable extractor → decbench's `type_match`
 /// metric).  It resolves the live `realtypes` context off the architecture so the
 /// spelling matches `print_c`'s body, and concatenates the declarator
 /// `front`/`back` around an empty identifier (`<front><back>`).

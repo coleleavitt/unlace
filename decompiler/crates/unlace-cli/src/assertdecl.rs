@@ -4,7 +4,7 @@
 //!
 //! `rename`, `retype`, `map param`, `map return`, `map address`,
 //! `comment instruction` and `parse line extern` are all functional in the
-//! console, and until this flag not one of them was reachable from the `kuna`
+//! console, and until this flag not one of them was reachable from the `unlace`
 //! binary: the generated console script emitted only `option`, `kassert`,
 //! `function bounds` and `decompile`.  For an agent that is the difference
 //! between reading a decompilation once and actually working through one — a
@@ -40,7 +40,7 @@
 //!
 //! # Console lowering
 //!
-//! `kuna decompile`'s text surface drives `decomp_dbg`, so each directive also
+//! `unlace decompile`'s text surface drives `decomp_dbg`, so each directive also
 //! has to be expressible as console lines ([`ConsoleForm`]).  The two surfaces
 //! emit the same facts in the same order; they differ only in whether the engine
 //! is reached in-process or through a script.

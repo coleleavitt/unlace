@@ -21,7 +21,7 @@
 //!
 //! The third test is the property that keeps this from deleting real code: only
 //! the FUNCTION claim is withheld. The instruction genuinely encodes a call to
-//! that address, so the Call cross-reference is filed either way and `kuna xrefs
+//! that address, so the Call cross-reference is filed either way and `unlace xrefs
 //! --to 0x349688c1` still reports the call site.
 
 use std::path::PathBuf;

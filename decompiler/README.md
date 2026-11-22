@@ -20,7 +20,7 @@ the full ADRs are in git history. Working conventions: `../CLAUDE.md`.
 | `crates/unlace-decomp` | The decompiler core (phase-foldered `src/`: `p0_knowledge/`…`p9_emit/`, `substrate/`, `infra/`) + the phase model/option surface. |
 | `crates/unlace-analysis` | The program-prep loader/analyzer tier (ELF markup, strings, DWARF, function discovery). |
 | `crates/unlace-console` | Console front-end; bins `decomp_dbg` and `decomp_test_dbg`; the in-process engine + project-export modules. |
-| `crates/unlace-cli` | The user-facing `kuna` binary (`../docs/cli.md`). |
+| `crates/unlace-cli` | The user-facing `unlace` binary (`../docs/cli.md`). |
 | `crates/unlace-ghidra` | The `unlace_ghidra` binary — kuna as stock Ghidra's decompiler core (`../docs/ghidra-integration.md`). |
 | `crates/unlace-wasm` | The `unlace_wasm` binary (wasm32-wasip1) — the in-browser decompiler (`../docs/web-integration.md`). |
 | `crates/unlace-harness`, `crates/unlace-lift-diff` | Dev-only test-harness + differential helpers. |

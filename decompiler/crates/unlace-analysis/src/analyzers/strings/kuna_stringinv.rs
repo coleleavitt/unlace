@@ -1,4 +1,4 @@
-//! (kuna) The string **inventory** query behind `kuna strings` — the reporting
+//! (kuna) The string **inventory** query behind `unlace strings` — the reporting
 //! face of the [`StringLiteralPass`](super::StringLiteralPass) that already runs
 //! at load.
 //!

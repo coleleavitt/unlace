@@ -1,6 +1,6 @@
 //! `--option NAME` name validation, over every subcommand that accepts one.
 //!
-//! A misspelled option name used to be accepted by `kuna decompile` with exit 0,
+//! A misspelled option name used to be accepted by `unlace decompile` with exit 0,
 //! an empty stderr and output byte-identical to the run with no `--option` at
 //! all (`docs/re-needs/unknown-option-name-silently.md`), so
 //! "flipping X did not change anything" was not evidence that X is innocent.
@@ -29,7 +29,7 @@ const SURFACES: &[&[&str]] = &[
 ];
 
 fn run(argv: &[String]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_kuna"))
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(argv)
         .output()
         .expect("failed to spawn the kuna binary")
@@ -57,17 +57,17 @@ fn an_unrecognized_option_name_is_rejected_everywhere() {
         assert_eq!(
             out.status.code(),
             Some(2),
-            "kuna {} accepted a misspelled option\nstderr: {err}",
+            "unlace {} accepted a misspelled option\nstderr: {err}",
             surface[0]
         );
         assert!(
             err.contains("zzzznotanoption") && err.contains("Unknown option"),
-            "kuna {} must name the rejected spelling, got: {err}",
+            "unlace {} must name the rejected spelling, got: {err}",
             surface[0]
         );
         assert!(
             out.stdout.is_empty(),
-            "kuna {} produced output for a rejected run",
+            "unlace {} produced output for a rejected run",
             surface[0]
         );
     }
@@ -96,7 +96,7 @@ fn a_catalogued_name_still_gets_past_the_parser() {
             let err = stderr_of(&out);
             assert!(
                 !err.contains("Unknown option"),
-                "kuna {} rejected the catalogued name {name}: {err}",
+                "unlace {} rejected the catalogued name {name}: {err}",
                 surface[0]
             );
         }
@@ -110,7 +110,7 @@ fn a_bad_name_is_answered_without_specs() {
     let mut argv = with_option(SURFACES[0], "zzzznotanoption");
     argv.push("--sleighpath".into());
     argv.push("/nonexistent/specs".into());
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(&argv)
         .env_remove("SLEIGHHOME")
         .env_remove("KUNA_SPECS")

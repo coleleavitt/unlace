@@ -1,7 +1,7 @@
-//! `kuna raw-pcode` — each instruction's SLEIGH p-code, before the decompiler
+//! `unlace raw-pcode` — each instruction's SLEIGH p-code, before the decompiler
 //! changes any of it.
 //!
-//! The operand, the program load and the window are `kuna disassemble`'s
+//! The operand, the program load and the window are `unlace disassemble`'s
 //! ([`load_target`], [`resolve_region`]), including the windowed load that
 //! answers a caller-bounded window without the whole-image discovery walk. Each
 //! row is one `Translate::one_instruction` lift ([`ConsoleProgram::raw_pcode_at`])
@@ -27,7 +27,7 @@ struct Output {
     error: Option<String>,
 }
 
-/// `kuna raw-pcode` entry point.
+/// `unlace raw-pcode` entry point.
 pub fn run(argv: &[String]) -> i32 {
     if argv.iter().any(|arg| arg == "--help" || arg == "-h") {
         usage();
@@ -119,7 +119,7 @@ fn data_notes(prog: &ConsoleProgram, region: &Region) -> Vec<String> {
     }
     vec![format!(
         "0x{:x} is in a non-executable data section; its bytes are lifted as \
-         instructions anyway -- `kuna read` shows them as bytes",
+         instructions anyway -- `unlace read` shows them as bytes",
         region.start
     )]
 }
@@ -358,14 +358,14 @@ fn render(args: &DisArgs) -> Result<Output, String> {
 
 fn usage() {
     eprintln!(
-        "usage: kuna raw-pcode <binary> <name|0xaddr|0xstart-0xend> [--addr] \\\n\
+        "usage: unlace raw-pcode <binary> <name|0xaddr|0xstart-0xend> [--addr] \\\n\
          \x20                [--count N] [--bytes N] [--follow] [--json] \\\n\
          \x20                [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                [--define-function S[-E][=N]|@FILE].. \\\n\
          \x20                [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]\n\
          \n\
          Each instruction's SLEIGH p-code with its bytes, before any decompiler pass.\n\
-         The target and its extent are `kuna disassemble`'s. The walk stops at the\n\
+         The target and its extent are `unlace disassemble`'s. The walk stops at the\n\
          first instruction that does not lift and exits 1, keeping what it lifted.\n\
          An odd ARM32 address lifts as Thumb at the even address.\n\
          \n\

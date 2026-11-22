@@ -1,24 +1,24 @@
 //! Locate the engine programs and the compiled SLEIGH tree — the Rust port of
 //! `kuna/paths.py`.
 //!
-//! `kuna` is the whole toolchain: its hidden `decomp_dbg` and `slacomp`
+//! `unlace` is the whole toolchain: its hidden `decomp_dbg` and `slacomp`
 //! subcommands run the decompiler console and the SLEIGH compiler, so `kuna
-//! decompile` and `kuna specs` re-enter the running binary rather than look for
+//! decompile` and `unlace specs` re-enter the running binary rather than look for
 //! siblings. A release build also carries the SLEIGH tree inside itself
 //! ([`crate::embedded_specs`]), which makes the one file a complete install.
 //!
 //! A build without the embedded tree finds one in either of two layouts:
 //!
-//! * **a repo checkout** — `kuna` is built to
+//! * **a repo checkout** — `unlace` is built to
 //!   `<root>/decompiler/target/[<triple>/]<profile>/kuna`, so the repo root is the
 //!   directory above the `decompiler`/`target` pair and `specs/` sits under it;
 //! * **an extracted directory** — a `specs/` tree beside or inside the directory
-//!   holding `kuna`. There is no repo root there, so nothing may be derived from
+//!   holding `unlace`. There is no repo root there, so nothing may be derived from
 //!   one: popping three parents off it lands on a path that exists nowhere.
 //!
 //! The environment overrides (`KUNA_ROOT`, `KUNA_SPECS`, `KUNA_DECOMP_DBG`,
 //! `KUNA_DECOMP_TEST`, `KUNA_SLACOMP`, `KUNA_RUST_PROFILE` — all documented in
-//! `docs/cli.md`) win over all of this. `decomp_test_dbg` lives outside `kuna`
+//! `docs/cli.md`) win over all of this. `decomp_test_dbg` lives outside `unlace`
 //! and is still probed for under its bare and executable-suffixed names.
 
 use std::env;
@@ -31,7 +31,7 @@ fn env_path(var: &str) -> Option<PathBuf> {
     env::var_os(var).filter(|v| !v.is_empty()).map(PathBuf::from)
 }
 
-/// The directory the running `kuna` binary lives in (its built-binary siblings).
+/// The directory the running `unlace` binary lives in (its built-binary siblings).
 fn exe_dir() -> Option<PathBuf> {
     let exe = env::current_exe().ok()?;
     exe.parent().map(|p| p.to_path_buf())
@@ -248,7 +248,7 @@ pub fn pinned_by(env_var: &'static str) -> Option<&'static str> {
     env_path(env_var).map(|_| env_var)
 }
 
-/// A program `kuna` runs: a separate binary, or this `kuna` re-entered through
+/// A program `unlace` runs: a separate binary, or this `unlace` re-entered through
 /// one of its hidden subcommands.
 pub struct Program {
     pub path: PathBuf,
@@ -266,13 +266,13 @@ impl Program {
     }
 }
 
-/// The hidden subcommand that makes `kuna` the decompiler console.
+/// The hidden subcommand that makes `unlace` the decompiler console.
 pub const DECOMP_DBG_SUBCOMMAND: &str = "decomp_dbg";
 
-/// The hidden subcommand that makes `kuna` the SLEIGH compiler.
+/// The hidden subcommand that makes `unlace` the SLEIGH compiler.
 pub const SLACOMP_SUBCOMMAND: &str = "slacomp";
 
-/// `env_var`'s binary when it is set, otherwise this `kuna` running `subcommand`.
+/// `env_var`'s binary when it is set, otherwise this `unlace` running `subcommand`.
 fn builtin(env_var: &str, subcommand: &'static str) -> Result<Program, String> {
     if let Some(path) = env_path(env_var) {
         if !path.exists() {
@@ -287,7 +287,7 @@ fn builtin(env_var: &str, subcommand: &'static str) -> Result<Program, String> {
     Ok(Program { path, subcommand: Some(subcommand) })
 }
 
-/// The decompiler console `kuna decompile` and `kuna catalog` drive.
+/// The decompiler console `unlace decompile` and `unlace catalog` drive.
 pub fn decomp_dbg() -> Result<Program, String> {
     builtin("KUNA_DECOMP_DBG", DECOMP_DBG_SUBCOMMAND)
 }
@@ -296,7 +296,7 @@ pub fn decomp_test_dbg() -> PathBuf {
     binary("decomp_test_dbg", "KUNA_DECOMP_TEST")
 }
 
-/// The SLEIGH compiler `kuna specs` runs.
+/// The SLEIGH compiler `unlace specs` runs.
 pub fn slacomp() -> Result<Program, String> {
     builtin("KUNA_SLACOMP", SLACOMP_SUBCOMMAND)
 }

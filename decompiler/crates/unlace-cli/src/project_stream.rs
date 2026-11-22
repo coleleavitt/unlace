@@ -1,7 +1,7 @@
-//! `kuna decompile-project --stream` — the **streamed** project export.
+//! `unlace decompile-project --stream` — the **streamed** project export.
 //!
 //! ```text
-//!   kuna decompile-project <binary> --stream [--jobs N] [-o DIR]
+//!   unlace decompile-project <binary> --stream [--jobs N] [-o DIR]
 //! ```
 //!
 //! A non-stream export writes nothing until the last function is decompiled, so
@@ -811,7 +811,7 @@ fn index_line(seq: usize, r: &FuncResult, span: Option<(u64, usize)>) -> String 
 
 // --- the export --------------------------------------------------------------
 
-/// `kuna decompile-project --stream`: the whole timeline.
+/// `unlace decompile-project --stream`: the whole timeline.
 pub(crate) fn run(
     args: &Args,
     output: Option<&str>,
@@ -868,8 +868,8 @@ fn export(
     crate::decompile_all::arm_fn_budgets(&mut prog, args);
     if prog.arch().print().get_name() != "c-language" {
         return Err(format!(
-            "project export is C-only in this release (got {}); use `kuna decompile` or \
-             `kuna decompile-all --json` for other output languages",
+            "project export is C-only in this release (got {}); use `unlace decompile` or \
+             `unlace decompile-all --json` for other output languages",
             prog.arch().print().get_name()
         ));
     }

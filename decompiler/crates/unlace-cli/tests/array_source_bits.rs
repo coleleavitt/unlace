@@ -70,7 +70,7 @@ fn check_case(target: &str, width: usize, direct: bool) {
         format!("prototype 0x{read:x} unsigned int __cdecl read_word(Packet *packet)"),
         format!("prototype 0x{mix:x} unsigned int __cdecl mix_words({scalar} *values)"),"type mix_words::v2 Packet".to_owned()];
     let project = root.join("project");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .arg("decompile-project")
         .arg(&binary)

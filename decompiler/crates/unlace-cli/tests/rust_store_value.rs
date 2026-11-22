@@ -28,7 +28,7 @@ fn complete_rust_integer_stores_match_native_bytes_and_calls() {
     }
     std::fs::remove_file(&native).unwrap();
     let kuna = std::env::var_os("KUNA_TEST_BIN")
-        .unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let output = process::required_output(Command::new(kuna).args([
         "decompile-all", &common::fixture("go_store_value_x86_64"),
         "--json", "--functions", &names.join(","), "--language", "rust",

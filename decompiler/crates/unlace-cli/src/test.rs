@@ -1,4 +1,4 @@
-//! `kuna test` — the Rust port of `kuna/run_tests.py`.
+//! `unlace test` — the Rust port of `kuna/run_tests.py`.
 //!
 //! Wraps the `decomp_test_dbg` harness: unit-test results arrive on **stderr**,
 //! datatest results on **stdout**; the two streams are parsed separately.  Does

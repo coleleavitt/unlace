@@ -5,8 +5,8 @@ Scope: research only, no kuna code changes. Companion to `notes/ida-apple-mechan
 area is repeated here. Every IDA mechanism is described in our own words; addresses are offsets inside the IDA 9.5
 Linux modules, read from the idb-rs SQLite exports in `~/SiteResearch/ida-pro/sqlite/<category>__<module>.sqlite`
 (pseudocode, strings, xrefs) and from `~/.local/share/ida/9.5/cfg/*.cfg`. kuna side: branch `all`, catalog of
-308 options (`decompiler/target/debug/kuna catalog --json`), `unlace-analysis/src/analyzers/`, phase folders of
-`unlace-decomp`. "Live kuna" means a run of the debug `kuna decompile` on a small clang/gcc test written for this
+308 options (`decompiler/target/debug/unlace catalog --json`), `unlace-analysis/src/analyzers/`, phase folders of
+`unlace-decomp`. "Live kuna" means a run of the debug `unlace decompile` on a small clang/gcc test written for this
 survey (sources in the research session's scratchpad, not in the repo).
 
 ## 1. Dumps and exports made for this survey
@@ -168,7 +168,7 @@ for debug builds), 12 (merged variables) and 13 (names).
 | Installed interfaces | `Install*ProtocolInterface` and `InstallPpi`: types the installed structure and marks the functions it points to as implementations. Synthesizes a structure when the GUID is unknown. Adds cross-module references from protocol calls to the implementations. | its log/UI strings  | **NONE** |
 | PEI and SMM | PPI descriptor lists, notify descriptors, `EFI_MM_SYSTEM_TABLE`, the getter for the PEI services pointer. | strings | **PARTIAL**: only the getter and `PEI SERV` |
 | Inline-string constness, DebugPrint/DebugAssert prototypes | Applied. | `UEFI_CONST_STRINGS`; prototype strings | NONE (minor) |
-| Whole firmware volume in one database | Each module is relocated (`Relocated from`) and typed by kind: PEIM, DxeMain, StandaloneMm, ModuleEntryPoint. Capsule formats: UEFI, AMI, Toshiba; Intel flash descriptor. | `uefi_fv.so` strings | **PARTIAL**: `firmware/uefifv.rs` plus `kuna unpack` extract the modules, but each is decompiled alone, with no PEIM or MM entry prototype and no cross-module links |
+| Whole firmware volume in one database | Each module is relocated (`Relocated from`) and typed by kind: PEIM, DxeMain, StandaloneMm, ModuleEntryPoint. Capsule formats: UEFI, AMI, Toshiba; Intel flash descriptor. | `uefi_fv.so` strings | **PARTIAL**: `firmware/uefifv.rs` plus `unlace unpack` extract the modules, but each is decompiled alone, with no PEIM or MM entry prototype and no cross-module links |
 
 #### loaders/elf, coff, dex (lower priority, mostly covered)
 | feature | evidence | kuna |

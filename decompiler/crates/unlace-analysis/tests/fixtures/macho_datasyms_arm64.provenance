@@ -21,5 +21,5 @@ How it was built (no macOS SDK; host clang + the rustup-bundled ld64.lld)
   has no Mach-O linker.
 
 What it pins
-  kuna functions lists _audit_read and _main only; decompile of audit_global /
+  unlace functions lists _audit_read and _main only; decompile of audit_global /
   _audit_global answers that the name labels data at 0x100004000.

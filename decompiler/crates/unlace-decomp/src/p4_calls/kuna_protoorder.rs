@@ -1,6 +1,6 @@
 //! (kuna `protoorder`) What a callee's own recovery found, stated for its callers.
 //!
-//! `kuna decompile-all` decompiles callees before callers (the ordering lives in
+//! `unlace decompile-all` decompiles callees before callers (the ordering lives in
 //! `unlace-cli/src/decompile_all.rs`); after each function this module decides what
 //! may be said about it, and at each later call site what a caller may take.
 //!

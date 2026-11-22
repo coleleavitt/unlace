@@ -1,7 +1,7 @@
-//! `kuna blobs` — the embedded-file inventory.
+//! `unlace blobs` — the embedded-file inventory.
 //!
 //! ```text
-//!   kuna blobs <binary> [--json] [--extract DIR] [--kind LIST] [--section NAME] [--no-xrefs]
+//!   unlace blobs <binary> [--json] [--extract DIR] [--kind LIST] [--section NAME] [--no-xrefs]
 //!                       [--mode MODE] [--option N V].. [--isa auto|arm|thumb] [--slice ARCH]
 //!                       [--target T] [--sleighpath D]
 //! ```
@@ -9,7 +9,7 @@
 //! Scans the image's mapped sections with [`unlace_analysis::blobs`] for whole
 //! PNG, JPEG, GIF, BMP, ICO, zip, gzip, xz and zstd files and reports each with
 //! its address, exact length, section, and the functions that reference any of
-//! its bytes (the reference index `kuna strings` and `kuna xrefs` use).
+//! its bytes (the reference index `unlace strings` and `unlace xrefs` use).
 //! `--extract DIR` also writes each file out. Read-only on the image.
 
 use std::collections::BTreeMap;
@@ -47,7 +47,7 @@ struct Row<'d> {
     file: Option<String>,
 }
 
-/// `kuna blobs` entry point.
+/// `unlace blobs` entry point.
 pub fn run(argv: &[String]) -> i32 {
     let args = match parse_args(argv) {
         Ok(a) => a,
@@ -312,7 +312,7 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<BlobArgs, String> {
 
 fn usage() {
     eprintln!(
-        "usage: kuna blobs <binary> [--json] [--extract DIR] [--kind LIST] [--section NAME] [--no-xrefs] \\\n\
+        "usage: unlace blobs <binary> [--json] [--extract DIR] [--kind LIST] [--section NAME] [--no-xrefs] \\\n\
          \x20                  [--mode auto|reliable|aggressive|fast] [--option N V].. \\\n\
          \x20                  [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]\n\
          \n\

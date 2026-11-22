@@ -24,6 +24,6 @@ How it was built (host clang + the rustup-bundled lld-link)
   has no PE linker.
 
 What it pins
-  `kuna xrefs --to 0x401013` lists _text_table[1] and _data_table[1] as pointer
+  `unlace xrefs --to 0x401013` lists _text_table[1] and _data_table[1] as pointer
   rows, not the mov's operand; `--to 0x40104e` lists _text_table[0] and
   _data_table[0], not the push's operand.

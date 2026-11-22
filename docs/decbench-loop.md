@@ -71,7 +71,7 @@ Decisions baked in:
 2. **Mode presets did not exist when the benchmark ran — and the scored column is
    `aggressive`, not `reliable`.** This file said the opposite until round 4 checked the
    backend: `decbench/decompilers/raw/kuna_raw.py`'s `_build_command` builds
-   `kuna decompile-all <bin> --json --max-fn-seconds 120`, appends `--mode` **only** when
+   `unlace decompile-all <bin> --json --max-fn-seconds 120`, appends `--mode` **only** when
    `DECBENCH_KUNA_MODE` is set (it is not), and appends `--option` only from
    `config.extra_options`, which is empty. There is no injected `option listing on`
    anywhere in it. So the benchmark ran `--mode auto`, which picks from the input's byte
@@ -211,7 +211,7 @@ The rules that fall out, and that #255 then executed cleanly:
 - **Derive every shared counter from a fresh capture and a green run on the rebased tree,
   never by arithmetic.** "Base + mine + theirs" is how you get `86` when the answer is
   `87`. Re-capture `phase_catalog.json`, re-record `docs/baseline-stages.json`
-  (`kuna test --datatests --datatests-dir tests/stages --save-baseline …`), re-count the
+  (`unlace test --datatests --datatests-dir tests/stages --save-baseline …`), re-count the
   corpus files, regenerate `docs/options.md`. #255 verified even the byte-identical
   outcomes rather than assuming them.
 - **Diff every keep-both resolution against `main` and assert you removed nothing *and*
@@ -463,7 +463,7 @@ per-option acceptance numbers are in `docs/features/{cortexmvectors,ptrentry,tai
 2. Gap gone on fresh kuna? → `status: already-fixed` (name the PR; rescore to confirm).
    Say whether `--mode reliable` also closes it (a code fix) or only the no-flag run
    does (the aggressive default closed it).
-3. Sweep relevant default-OFF options (`kuna catalog --json`, `use_when` match;
+3. Sweep relevant default-OFF options (`unlace catalog --json`, `use_when` match;
    `triage --case <id> --option <name> on`). One closes it? → `status: covered-by-option`
    (a default-flip candidate, not a new feature). `--mode aggressive` already carries 26
    of the 33 on/off default-off options; `guardarm`, `loopcondhoist`, `paramcopyhoist`,
@@ -656,12 +656,12 @@ byte_match anyway — with two of three optimisation levels under-counted on emb
 
 The mined pools store a PE function's address as an **RVA** where kuna uses the **VA**, and
 `scripts.decbench.rescore` passes `case["address_hex"]` straight to
-`kuna decompile-all --addr`. Every PE case therefore fails out of the box:
+`unlace decompile-all --addr`. Every PE case therefore fails out of the box:
 
 ```
-$ kuna decompile ...O0/mydoom/stripped/mydoom.exe --addr 0x41e2     # the pool's address
+$ unlace decompile ...O0/mydoom/stripped/mydoom.exe --addr 0x41e2     # the pool's address
 error: no C output for "0x41e2"
-$ kuna decompile ...O0/mydoom/stripped/mydoom.exe --addr 0x4041e2   # ImageBase + RVA
+$ unlace decompile ...O0/mydoom/stripped/mydoom.exe --addr 0x4041e2   # ImageBase + RVA
 void sub_4041e2(int4 a0) { ...
 ```
 

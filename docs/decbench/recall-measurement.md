@@ -11,7 +11,7 @@ ida / phoenix / r2dec) has `decompiled: true` in the run's `function_results.jso
 if kuna does not. Matching is by **address**, Thumb-bit tolerant — never by name, because
 decbench relabels each function's own `sub_<addr>` placeholder to its DWARF name post-hoc.
 
-`kuna decompile-all --json --mode reliable --max-fn-seconds 120` over **191 binaries** (all 126
+`unlace decompile-all --json --mode reliable --max-fn-seconds 120` over **191 binaries** (all 126
 carrying a recorded miss, plus 65 controls). Every run exited 0; the longest was 116 s.
 
 Two methodological points that changed the answer:

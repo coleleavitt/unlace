@@ -38,7 +38,7 @@ fn unused_multiple_load_destinations_keep_their_volatile_reads() {
                 let path = common::scratch_file("arm-volatile-reads", "bin");
                 std::fs::write(&path, image(count, scalar, last)).unwrap();
                 for marked in [0, 1, 2] {
-                    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+                    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
                     cmd.args([
                         "decompile",
                         path.to_str().unwrap(),
@@ -103,7 +103,7 @@ fn decompile_raw(hex: &str, target: &str, volatile: Option<&str>) -> String {
         .collect();
     let path = common::scratch_file("volatile-reads", "bin");
     std::fs::write(&path, image).unwrap();
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args([
         "decompile",
         path.to_str().unwrap(),

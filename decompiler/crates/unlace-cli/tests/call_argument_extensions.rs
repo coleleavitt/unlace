@@ -9,7 +9,7 @@ fn recovered_integer_call_arguments_match_complete_callee_contracts() {
     if process::optional_output(Command::new("cc").arg("--version")).is_none() { return; }
     let have_go = process::optional_output(Command::new("go").arg("version")).is_some();
     let kuna = std::env::var_os("KUNA_TEST_BIN")
-        .unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let declarations = [
         ("pass_u8", "uint8", "uint8 value"), ("pass_u16", "uint8", "uint8 value"),
         ("pass_u32", "uint8", "uint8 value"), ("same_width", "uint8", "uint8 value"),

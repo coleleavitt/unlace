@@ -1,6 +1,6 @@
 //! CLI end-to-end gate for the two agent-facing report contracts:
 //!
-//!  * `kuna decompile --json` answers in `decompile-all --json`'s record shape —
+//!  * `unlace decompile --json` answers in `decompile-all --json`'s record shape —
 //!    the SAME shape, one element — so a caller parses one document whichever
 //!    command it reached for. The byte-identity assertion below is what keeps
 //!    that true: two emitters would drift, one cannot.
@@ -35,9 +35,9 @@ fn specs() -> String {
     repo_root().join("specs").to_str().unwrap().to_string()
 }
 
-/// Run the built `kuna` binary, returning `(stdout, stderr, exit code)`.
+/// Run the built `unlace` binary, returning `(stdout, stderr, exit code)`.
 fn run_kuna(args: &[&str]) -> (String, String, Option<i32>) {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
         .expect("failed to spawn the kuna binary");
@@ -132,7 +132,7 @@ fn data_only_object() -> Vec<u8> {
     out
 }
 
-// --- `kuna decompile --json` -------------------------------------------------
+// --- `unlace decompile --json` -------------------------------------------------
 
 /// The acceptance probe of the `decompile-no-json` need, verbatim: the
 /// single-function call answers exit 0 with the `decompile-all` record shape.
@@ -141,7 +141,7 @@ fn decompile_json_emits_the_record_shape_for_one_function() {
     let (stdout, stderr, code) =
         run_kuna(&["decompile", &fixture(), "_DT_INIT", "--json", "--sleighpath", &specs()]);
     if code != Some(0) {
-        panic!("kuna decompile --json failed: {stderr}");
+        panic!("unlace decompile --json failed: {stderr}");
     }
     assert!(stdout.trim_start().starts_with('{'), "not a JSON object:\n{stdout}");
     assert!(stdout.contains("\"functions\": ["), "{stdout}");
@@ -175,14 +175,14 @@ fn decompile_json_is_byte_identical_to_decompile_all_for_one_function() {
         one_args.extend_from_slice(options);
         let (one, stderr, code) = run_kuna(&one_args);
         if code != Some(0) {
-            panic!("kuna decompile --json failed: {stderr}");
+            panic!("unlace decompile --json failed: {stderr}");
         }
         let mut all_args = vec![
             "decompile-all", &bin, "--functions", "_DT_INIT", "--json", "--sleighpath", &sp,
         ];
         all_args.extend_from_slice(options);
         let (all, stderr, code) = run_kuna(&all_args);
-        assert_eq!(code, Some(0), "kuna decompile-all --json failed: {stderr}");
+        assert_eq!(code, Some(0), "unlace decompile-all --json failed: {stderr}");
         assert_eq!(one, all, "the two surfaces must emit one document: {options:?}");
     }
 }
@@ -195,12 +195,12 @@ fn decompile_json_selects_by_address_too() {
     let sp = specs();
     let (auto, stderr, code) = run_kuna(&["decompile", &bin, "0x1000", "--json", "--sleighpath", &sp]);
     if code != Some(0) {
-        panic!("kuna decompile 0x1000 --json failed: {stderr}");
+        panic!("unlace decompile 0x1000 --json failed: {stderr}");
     }
     assert!(auto.contains("\"address_hex\": \"0x1000\""), "{auto}");
     let (explicit, stderr, code) =
         run_kuna(&["decompile", &bin, "1000", "--addr", "--json", "--sleighpath", &sp]);
-    assert_eq!(code, Some(0), "kuna decompile --addr --json failed: {stderr}");
+    assert_eq!(code, Some(0), "unlace decompile --addr --json failed: {stderr}");
     assert_eq!(auto, explicit, "the two ways of naming an address must agree");
 }
 
@@ -285,9 +285,9 @@ fn a_packed_image_is_named_as_packed() {
     let _ = std::fs::remove_file(&image);
     assert_ne!(code, Some(0), "{stderr}");
     assert!(stderr.contains("UPX-packed"), "the packer must be named: {stderr}");
-    assert!(stderr.contains("kuna unpack"), "the recovery must be named: {stderr}");
+    assert!(stderr.contains("unlace unpack"), "the recovery must be named: {stderr}");
     let error = json_field(&stdout, "error").expect("the document carries it too");
-    assert!(error.contains("UPX-packed") && error.contains("kuna unpack"), "{error}");
+    assert!(error.contains("UPX-packed") && error.contains("unlace unpack"), "{error}");
 }
 
 /// The legitimate empty case, which the loud failure must NOT break: an image
@@ -311,7 +311,7 @@ fn an_image_with_no_code_keeps_its_empty_success() {
 fn a_run_that_finds_functions_still_exits_zero() {
     let (stdout, stderr, code) = run_kuna(&["functions", &fixture(), "--json", "--sleighpath", &specs()]);
     if code != Some(0) {
-        panic!("kuna functions failed: {stderr}");
+        panic!("unlace functions failed: {stderr}");
     }
     assert!(!stdout.contains("\"count\": 0"), "the fixture has functions:\n{stdout}");
     assert!(stdout.contains("\"error\": null"), "{stdout}");

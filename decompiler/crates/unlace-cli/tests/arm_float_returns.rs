@@ -105,7 +105,7 @@ fn image(vfp: Option<u8>) -> Vec<u8> {
 fn vfp_results_keep_the_whole_double_and_its_call_contract() {
     let path = common::scratch_file("arm-vfp-returns", "o");
     std::fs::write(&path, image(Some(1))).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args([
         "decompile-all",
         path.to_str().unwrap(),
@@ -153,7 +153,7 @@ fn absent_soft_or_ambiguous_abi_evidence_preserves_option_off_output() {
         std::fs::write(&path, image(value)).unwrap();
         let mut results = Vec::new();
         for option in ["off", "on"] {
-            let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args([
                     "decompile-all",
                     path.to_str().unwrap(),
@@ -185,7 +185,7 @@ fn explicit_integer_storage_and_void_contracts_win_over_inference() {
     ] {
         let mut results = Vec::new();
         for option in ["off", "on"] {
-            let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args([
                     "decompile-all",
                     path.to_str().unwrap(),
@@ -259,7 +259,7 @@ fn narrowing_returns_the_final_float_without_stale_double_bytes() {
     let path = common::scratch_file("arm-vfp-conversions", "o");
     std::fs::write(&path, conversions()).unwrap();
     for option in ["off", "on"] {
-        let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "decompile-all",
                 path.to_str().unwrap(),
@@ -304,7 +304,7 @@ fn explicit_narrowing_output_contracts_remain_authoritative() {
     std::fs::write(&path, conversions()).unwrap();
     for result_type in ["float", "double", "void"] {
         let prototype = format!("prototype narrow {result_type} narrow(double)");
-        let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "decompile",
                 path.to_str().unwrap(),
@@ -376,7 +376,7 @@ fn mixed_paths_preserve_float_constants_loads_and_copied_inputs() {
     let path = common::scratch_file("arm-vfp-mixed-returns", "o");
     std::fs::write(&path, mixed_returns()).unwrap();
     for option in ["off", "on"] {
-        let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "decompile-all",
                 path.to_str().unwrap(),
@@ -430,7 +430,7 @@ fn explicit_mixed_path_output_contracts_remain_authoritative() {
                 _ => "double",
             };
             let prototype = format!("prototype {name} {result_type} {name}({args})");
-            let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .args([
                     "decompile",
                     path.to_str().unwrap(),
@@ -509,7 +509,7 @@ fn partial_returns_keep_four_bytes_without_float_arithmetic() {
     let path = common::scratch_file("arm-vfp-partial-returns", "o");
     std::fs::write(&path, constant_returns()).unwrap();
     for option in ["off", "on"] {
-        let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "decompile-all",
                 path.to_str().unwrap(),
@@ -565,7 +565,7 @@ fn declared_double_with_a_partial_word_edit_keeps_all_eight_bytes() {
     let path = common::scratch_file("arm-vfp-double-word-edit", "o");
     std::fs::write(&path, constant_returns()).unwrap();
     for option in ["off", "on"] {
-        let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([
                 "decompile",
                 path.to_str().unwrap(),

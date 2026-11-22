@@ -1,15 +1,15 @@
-//! `kuna disassemble` — the instruction listing.
+//! `unlace disassemble` — the instruction listing.
 //!
 //! ```text
-//!   kuna disassemble <binary> <name|0xaddr|0xstart-0xend> [--addr] [--as VIEW]
+//!   unlace disassemble <binary> <name|0xaddr|0xstart-0xend> [--addr] [--as VIEW]
 //!                    [--count N] [--bytes N] [--json] [--mode MODE]
 //!                    [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]
-//!   kuna read <binary> <name|0xaddr|0xstart-0xend> ...   # the same, --as data
+//!   unlace read <binary> <name|0xaddr|0xstart-0xend> ...   # the same, --as data
 //! ```
 //!
 //! The floor an RE agent falls back to when the ceiling gives way. Three
 //! independent testers in the RE loop (`docs/re-pipeline.md`) reached for
-//! `kuna disassemble` **after** decompilation had already failed them — a
+//! `unlace disassemble` **after** decompilation had already failed them — a
 //! function with no recovered body, a `switch(0)` dispatcher, an indirect call
 //! through a decrypted stack buffer — and got `unknown subcommand`. Every one of
 //! them then left kuna for `objdump -d`, which is also why the bundled
@@ -32,14 +32,14 @@
 //! instructions; its two-address form needs both ends spelled out, and the CLI
 //! never reached it at all. This command resolves the extent instead: a name (or
 //! a discovered entry address) lists that function's inventory extent
-//! (`ConsoleProgram::function_extent_at`, the same clip `kuna functions` reports
+//! (`ConsoleProgram::function_extent_at`, the same clip `unlace functions` reports
 //! as `size`), and a raw address that no function owns lists a fixed window —
 //! which is the case that matters for a data blob or a region decompilation
 //! refused to enter.
 //!
 //! ## Not an engine change
 //!
-//! Like `kuna xrefs`, this is a **query**: it loads the binary once through the
+//! Like `unlace xrefs`, this is a **query**: it loads the binary once through the
 //! in-process seam `decompile-all` uses ([`crate::decompile_all::load_program`],
 //! i.e. `bootstrap_from_object` → `commit_pending_analysis`) with the inventory
 //! driver defaults, decodes, and prints. Nothing is committed into the engine,
@@ -154,7 +154,7 @@ pub(crate) struct DisArgs {
     /// `--addr`: read `spec` as an address even when it is bare hex.
     pub(crate) by_address: bool,
     /// `--as code|data|auto`. `None` is the command's own default — `Auto` for
-    /// `kuna disassemble`, `Data` for `kuna read`.
+    /// `unlace disassemble`, `Data` for `unlace read`.
     pub(crate) view: Option<ViewRequest>,
     /// `--count N`: stop after N instructions.
     pub(crate) count: Option<usize>,
@@ -252,12 +252,12 @@ pub(crate) struct Listing {
     pub(crate) notes: Vec<String>,
 }
 
-/// `kuna disassemble` entry point.
+/// `unlace disassemble` entry point.
 pub fn run(argv: &[String]) -> i32 {
     run_as(argv, ViewRequest::Auto)
 }
 
-/// `kuna read` entry point — the same query with the byte view as its default,
+/// `unlace read` entry point — the same query with the byte view as its default,
 /// so an agent that wants the bytes of a data address does not have to know that
 /// the command for it is spelled `disassemble`. An explicit `--as code` still
 /// wins, because the two spellings are one command.
@@ -425,7 +425,7 @@ fn require_mapped(args: &DisArgs, prog: &ConsoleProgram, region: &Region) -> Res
     }
     Err(format!(
         "no bytes mapped at 0x{:x} in {}: no loaded segment covers it \
-         (a packed image maps none of its original addresses -- `kuna unpack` first)",
+         (a packed image maps none of its original addresses -- `unlace unpack` first)",
         region.start, args.binary
     ))
 }
@@ -482,7 +482,7 @@ fn windowed_options(
 /// the walk might have found there. Everything else — a name only discovery
 /// invents, a bare address in a data section — falls back and pays for the walk,
 /// which is why the fallback is what keeps this from being the variant swap that
-/// loses `kuna disassemble <generated name>` on a stripped image.
+/// loses `unlace disassemble <generated name>` on a stripped image.
 fn windowed_answer_is_final(region: &Region, section: Option<u32>, want: ViewRequest) -> bool {
     region.name.is_some()
         && (region.from_entry
@@ -669,7 +669,7 @@ fn resolve_region(prog: &ConsoleProgram, args: &DisArgs) -> Result<Region, Strin
     } else {
         return Err(format!(
             "no symbol named {spec:?} in {} (and it is not an address; pass --addr \
-             for a bare hex address, or `kuna unpack` if the image is packed)",
+             for a bare hex address, or `unlace unpack` if the image is packed)",
             args.binary
         ));
     };
@@ -829,7 +829,7 @@ fn result_json(
     Json::Object(doc)
 }
 
-/// Build the `--as data` (`kuna read`) document: the same envelope, then the
+/// Build the `--as data` (`unlace read`) document: the same envelope, then the
 /// span's bytes as one contiguous hex string plus the hexdump rows.
 ///
 /// `hex` is the whole span in one piece on purpose — an agent comparing kuna's
@@ -999,7 +999,7 @@ fn render_data_text(region: &Region, rows: &[DataRow], truncated: bool) -> Strin
 }
 
 /// The instruction listing for one function body, `<vma>  <MNEMONIC operands>`
-/// per line — the compact spelling `kuna decompile-graph` carries per function,
+/// per line — the compact spelling `unlace decompile-graph` carries per function,
 /// with no header and no byte column.
 ///
 /// Walked by [`unlace_console::disasm::walk`], so it is the same decode this command lists and an
@@ -1262,7 +1262,7 @@ fn parse_positive(value: &str, flag: &str) -> Result<u64, String> {
 
 fn usage() {
     eprintln!(
-        "usage: kuna disassemble|read <binary> <name|0xaddr|0xstart-0xend> [--addr] \\\n\
+        "usage: unlace disassemble|read <binary> <name|0xaddr|0xstart-0xend> [--addr] \\\n\
          \x20                    [--as code|data|auto] [--count N] [--bytes N] [--follow] [--json] \\\n\
          \x20                    [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                    [--define-function S[-E][=N]|@FILE].. \\\n\
@@ -1275,7 +1275,7 @@ fn usage() {
          \n\
          --as picks the view. `code` decodes instructions, `data` prints a hexdump,\n\
          and `auto` (the default for `disassemble`) reads bytes when the address is\n\
-         in a non-executable data section. `kuna read` is the same command with\n\
+         in a non-executable data section. `unlace read` is the same command with\n\
          `--as data` as its default.\n\
          \n\
          --define-function <start[-end][=name] | @file> (repeatable) declares a\n\

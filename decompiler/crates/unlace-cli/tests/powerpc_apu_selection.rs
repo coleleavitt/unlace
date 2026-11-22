@@ -89,7 +89,7 @@ fn shared_apu_requirements_preserve_altivec_and_hard_float() {
     for little in [false, true] {
         for apu in [false, true] {
             std::fs::write(&path, powerpc_hard_float_image(little, apu)).unwrap();
-            let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .arg("decompile")
                 .arg(&path)
                 .args(["add", "--mode", "fast"])
@@ -100,7 +100,7 @@ fn shared_apu_requirements_preserve_altivec_and_hard_float() {
             assert!(text.contains("double add(double"), "{text}");
             assert!(text.contains("return a0 + a1;"), "{text}");
             check_emitted_c(&text, "add(1.25, 2.5) != 3.75 || add(-8.5, 0.25) != -8.25");
-            let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+            let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
                 .arg("decompile")
                 .arg(&path)
                 .args(["vector", "--mode", "fast"])
@@ -113,7 +113,7 @@ fn shared_apu_requirements_preserve_altivec_and_hard_float() {
             if apu {
                 let endian = if little { "LE" } else { "BE" };
                 let target = format!("PowerPC:{endian}:32:e500mc:default");
-                let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
                     .arg("decompile")
                     .arg(&path)
                     .args(["choose", "--mode", "fast", "--target", &target])
@@ -122,7 +122,7 @@ fn shared_apu_requirements_preserve_altivec_and_hard_float() {
                 assert!(output.status.success(), "{output:?}");
                 let text = String::from_utf8(output.stdout).unwrap();
                 assert!(!text.contains("halt_baddata"), "{text}");
-                let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+                let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
                     .arg("decompile")
                     .arg(&path)
                     .args(["add", "--mode", "fast", "--target", &target])
@@ -180,7 +180,7 @@ fn spe_arguments_image(little: bool, words: &[u32]) -> Vec<u8> {
 }
 
 fn spe_declared(path: &std::path::Path, assertions: &[&str], target: Option<&str>) -> String {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .arg("decompile")
         .arg(path)
@@ -319,7 +319,7 @@ fn spe_caller_image(little: bool, apus: &[u32]) -> Vec<u8> {
 }
 
 fn decompile(path: &std::path::Path, function: &str, args: &[&str]) -> (String, String) {
-    let output = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .arg("decompile")
         .arg(path)
         .args([function, "--mode", "fast"])

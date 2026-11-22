@@ -1,4 +1,4 @@
-//! CLI end-to-end gate for `kuna decompile`'s **failure contract**: a function
+//! CLI end-to-end gate for `unlace decompile`'s **failure contract**: a function
 //! whose pipeline aborted must be observable — the reason on stderr and a
 //! non-zero exit — instead of the silent `exit 0` + un-decompiled shell that
 //! used to hide it (the `LOSS-131` swallow).
@@ -12,7 +12,7 @@
 //!
 //! The exceptions drive the real engine over a checked-in fixture. A stub cannot
 //! notice that the console reordered its own prints — the reorder that would
-//! silently return `kuna decompile` to the generic wording — and it cannot
+//! silently return `unlace decompile` to the generic wording — and it cannot
 //! notice that the console's own grammar split a path on a space, because the
 //! stub is not the parser under test.
 
@@ -80,7 +80,7 @@ fn stub_decomp_dbg(tag: &str, c_body: &str, transcript: &str, stderr_text: &str)
 }
 
 fn run_decompile(stub: &Path, target: &str) -> (String, String, Option<i32>) {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", &fauxware(), target, "--decomp-dbg", stub.to_str().unwrap()])
         .output()
         .expect("failed to spawn the kuna binary");
@@ -154,7 +154,7 @@ fn arm_isa_override_reaches_single_function_engine() {
         "[decomp]> decompile\nDecompiling main\nDecompilation complete\n[decomp]> print C",
         "",
     );
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env("KUNA_EXPECT_ARM_ISA", "thumb")
         .args([
             "decompile",
@@ -166,7 +166,7 @@ fn arm_isa_override_reaches_single_function_engine() {
             stub.to_str().unwrap(),
         ])
         .output()
-        .expect("run kuna decompile with --isa thumb");
+        .expect("run unlace decompile with --isa thumb");
     let _ = std::fs::remove_file(&stub);
     assert!(out.status.success(), "--isa did not reach decomp_dbg");
 }
@@ -185,7 +185,7 @@ fn raw_image_flags_reach_single_function_engine_with_quoted_path() {
         "load raw ARM:LE:32:v4t:default 0x4000 0x4001 \"{}\"",
         raw.canonicalize().unwrap().display()
     );
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env("KUNA_EXPECT_ARM_ISA", "thumb")
         .env("KUNA_EXPECT_LOAD_LINE", expected)
         .args([
@@ -203,7 +203,7 @@ fn raw_image_flags_reach_single_function_engine_with_quoted_path() {
             stub.to_str().unwrap(),
         ])
         .output()
-        .expect("run kuna decompile over raw input");
+        .expect("run unlace decompile over raw input");
     let _ = std::fs::remove_file(&stub);
     let _ = std::fs::remove_file(&raw);
     assert!(
@@ -220,7 +220,7 @@ fn raw_image_flags_reach_single_function_engine_with_quoted_path() {
 fn raw_image_target_with_a_space_reaches_the_engine() {
     let raw = common::scratch_file("raw real mode", "bin");
     std::fs::write(&raw, [0xb8, 0x07, 0x00, 0xc3]).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             raw.to_str().unwrap(),
@@ -232,7 +232,7 @@ fn raw_image_target_with_a_space_reaches_the_engine() {
             "0",
         ])
         .output()
-        .expect("run kuna decompile over a real-mode raw image");
+        .expect("run unlace decompile over a real-mode raw image");
     let _ = std::fs::remove_file(&raw);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "{stdout}\n{}", String::from_utf8_lossy(&out.stderr));
@@ -279,7 +279,7 @@ fn a_print_refused_at_the_budget_reports_the_budget() {
 
 /// GH-339's silent half, through the whole CLI: the console reported that the
 /// analysis commit failed and then rendered C anyway, from a program whose debug
-/// facts were only partially applied.  `kuna decompile` used to print that C and
+/// facts were only partially applied.  `unlace decompile` used to print that C and
 /// exit 0, which is indistinguishable from a binary that simply has no symbols.
 ///
 /// The stub is what makes this durable: the engine-side clamp that stops
@@ -390,12 +390,12 @@ fn pe_fixture(name: &str) -> String {
 
 fn run_pe_decompile(binary: &str, target: &str, extra: &[&str]) -> std::process::Output {
     let specs = specs();
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args(["decompile", binary, target, "--sleighpath", specs.as_str()]);
     cmd.args(extra);
     cmd
         .output()
-        .expect("run kuna decompile on PE fixture")
+        .expect("run unlace decompile on PE fixture")
 }
 
 /// An IAT word is a call-binding address, not a body, regardless of section
@@ -536,7 +536,7 @@ fn hostile_scope() -> String {
 }
 
 /// GH-337: all four surfaces must answer one binary-load failure with one
-/// string.  `kuna decompile` drives `decomp_dbg` as a subprocess, so it has to
+/// string.  `unlace decompile` drives `decomp_dbg` as a subprocess, so it has to
 /// recover the reason from the transcript; the other three hold the
 /// `LowlevelError` itself.  This is the test that would catch a console-side
 /// print reorder — the recorded-transcript unit tests would not.  The failure
@@ -569,7 +569,7 @@ fn every_surface_reports_the_same_load_failure() {
     let mut reports: Vec<(&str, String)> = Vec::new();
     for (name, mut argv) in surfaces {
         argv.extend_from_slice(&["--sleighpath", sp.as_str()]);
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(&argv)
             .output()
             .expect("failed to spawn the kuna binary");
@@ -623,7 +623,7 @@ fn spaced_dir(tag: &str) -> PathBuf {
 /// BFD target and the tail as the filename, and the load failed with
 /// `Unable to recognize imagefile <tail>`.
 ///
-/// `kuna decompile` is the only surface that can regress here — it is the one
+/// `unlace decompile` is the only surface that can regress here — it is the one
 /// that drives `decomp_dbg` through a text script; the in-process surfaces pass
 /// the path as a string.
 #[test]
@@ -632,7 +632,7 @@ fn a_binary_under_a_spaced_directory_decompiles() {
     let bin = dir.join("a.out");
     std::fs::copy(fauxware(), &bin).expect("copy the fixture into the spaced dir");
 
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", bin.to_str().unwrap(), "main", "--sleighpath", specs().as_str()])
         .output()
         .expect("failed to spawn the kuna binary");
@@ -657,7 +657,7 @@ fn a_binary_under_a_spaced_directory_decompiles() {
 #[test]
 fn a_spaced_temp_dir_still_yields_c() {
     let dir = spaced_dir("tmp");
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", fauxware().as_str(), "main", "--sleighpath", specs().as_str()])
         .env("TMPDIR", &dir)
         .output()
@@ -722,12 +722,12 @@ fn a_call_that_finalizes_before_its_witness_recovers_its_argument() {
             specs(),
         ];
         argv.extend(extra.iter().map(|s| s.to_string()));
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(&argv)
             .output()
             .expect("failed to spawn the kuna binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        assert_eq!(out.status.code(), Some(0), "kuna decompile failed: {stderr}");
+        assert_eq!(out.status.code(), Some(0), "unlace decompile failed: {stderr}");
         Some(String::from_utf8_lossy(&out.stdout).into_owned())
     };
 
@@ -758,8 +758,8 @@ fn entrymain_arm() -> String {
 /// RE-need `analysis-generated-function-name`: every name kuna PRINTS must be a
 /// name kuna ACCEPTS.
 ///
-/// `kuna functions` applies the DIV-20/DIV-68 discovery bundle on a non-x86-64
-/// binary and single-function `kuna decompile` did not, so the inventory listed
+/// `unlace functions` applies the DIV-20/DIV-68 discovery bundle on a non-x86-64
+/// binary and single-function `unlace decompile` did not, so the inventory listed
 /// entries the by-name selector then rejected with `no function matches` —
 /// exactly the wall two testers hit, on two formats and in two modes. The two
 /// surfaces are asserted together because either one alone is self-consistent:
@@ -774,7 +774,7 @@ fn a_generated_name_the_inventory_prints_is_selectable_by_decompile() {
     let bin = entrymain_arm();
     let sp = specs();
 
-    let listed = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let listed = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "functions",
             bin.as_str(),
@@ -794,7 +794,7 @@ fn a_generated_name_the_inventory_prints_is_selectable_by_decompile() {
         "the inventory must still report the generated name, got:\n{inventory}"
     );
 
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             bin.as_str(),
@@ -822,7 +822,7 @@ fn a_generated_name_the_inventory_prints_is_selectable_by_decompile() {
 /// This is not hypothetical caution. The discovery bundle seeds a function start
 /// at PPC64 ELFv2's local entry point, 8 bytes past the global one, and
 /// `funcboundflow` then truncates the outer function's flow there — so injecting
-/// it up front would answer `kuna decompile __do_global_ctors_aux` with an empty
+/// it up front would answer `unlace decompile __do_global_ctors_aux` with an empty
 /// husk instead of the loop it really is. Asserting the body, not just exit 0:
 /// the husk exits 0 too.
 #[test]
@@ -832,7 +832,7 @@ fn a_name_that_already_resolved_is_not_re_decompiled_wider() {
         .to_str()
         .unwrap()
         .to_string();
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             bin.as_str(),
@@ -883,12 +883,12 @@ fn a_prototype_declared_under_another_name_binds_on_both_surfaces() {
             specs(),
         ];
         argv.extend(extra.iter().map(|s| s.to_string()));
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(&argv)
             .output()
             .expect("failed to spawn the kuna binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        assert_eq!(out.status.code(), Some(0), "kuna decompile failed: {stderr}");
+        assert_eq!(out.status.code(), Some(0), "unlace decompile failed: {stderr}");
         assert!(!stderr.contains("rejected"), "the directive was rejected: {stderr}");
         Some(String::from_utf8_lossy(&out.stdout).into_owned())
     };
@@ -940,12 +940,12 @@ fn a_prototype_at_an_entry_address_binds_on_both_surfaces() {
             specs(),
         ];
         argv.extend(extra.iter().map(|s| s.to_string()));
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(&argv)
             .output()
             .expect("failed to spawn the kuna binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        assert_eq!(out.status.code(), Some(0), "kuna decompile failed: {stderr}");
+        assert_eq!(out.status.code(), Some(0), "unlace decompile failed: {stderr}");
         assert!(!stderr.contains("rejected"), "the directive was rejected: {stderr}");
         Some(String::from_utf8_lossy(&out.stdout).into_owned())
     };
@@ -978,7 +978,7 @@ fn a_prototype_at_an_entry_address_binds_on_both_surfaces() {
 #[test]
 fn a_prototype_address_that_starts_no_function_is_rejected() {
     let bin = fauxware();
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             bin.as_str(),
@@ -1019,7 +1019,7 @@ fn an_address_inside_a_function_is_decompiled_with_a_note_naming_it() {
         repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures").join(name).to_str().unwrap().to_string()
     };
     let run = |extra: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+        let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(extra)
             .args(["--sleighpath", sp.as_str()])
             .output()
@@ -1095,7 +1095,7 @@ fn unavailable_output_directory_fails_before_the_console_starts() {
     std::fs::write(&stub, "#!/bin/sh\nprintf started > \"$KUNA_STUB_MARKER\"\n").unwrap();
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o700)).unwrap();
     let missing = scratch.path().join("missing");
-    let result = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", &fauxware(), "main", "--decomp-dbg"])
         .arg(&stub)
         .arg("--sleighpath").arg(repo_root().join("specs"))
@@ -1139,7 +1139,7 @@ printf '%s\n' "$KUNA_STUB_TRANSCRIPT"
             ("1", "Decompiling main\nSkipping main: test pipeline failure", 1,
              "decompilation failed for main"),
         ] {
-            let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+            let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command.args(["decompile", &fauxware(), "main", "--decomp-dbg"])
                 .arg(&stub)
                 .arg("--sleighpath").arg(repo_root().join("specs"))
@@ -1169,7 +1169,7 @@ printf '%s\n' "$KUNA_STUB_TRANSCRIPT"
 /// RE-need `prototype-assertion-rejects-explicit`: a directive may name the
 /// address this run was pointed at.
 ///
-/// `kuna decompile <bin> 0xADDR` emitted the function in full and answered
+/// `unlace decompile <bin> 0xADDR` emitted the function in full and answered
 /// `prototype 0xADDR …` with `rejected: no function starts at 0xADDR` — the
 /// address it had just decompiled. `load addr` follows flow from an address
 /// without installing a `FunctionSymbol`, so nothing in the by-address path
@@ -1181,7 +1181,7 @@ printf '%s\n' "$KUNA_STUB_TRANSCRIPT"
 #[test]
 fn a_prototype_binds_to_the_address_the_run_selected() {
     let bin = fauxware();
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             bin.as_str(),
@@ -1214,7 +1214,7 @@ fn a_prototype_binds_to_the_address_the_run_selected() {
 #[test]
 fn an_unselected_address_that_starts_no_function_is_still_rejected() {
     let bin = fauxware();
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile",
             bin.as_str(),

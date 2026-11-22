@@ -24,7 +24,7 @@ arm-linux-gnueabi-ld -Ttext=0x80000000 -e f0 \
   -o ../tmp/aif-repro/gap.elf ../tmp/aif-repro/gap.o
 for listing in on off; do
   /usr/bin/time -f 'elapsed=%e maxrss=%M KiB' \
-    decompiler/target/release/kuna decompile ../tmp/aif-repro/gap.elf f0 \
+    decompiler/target/release/unlace decompile ../tmp/aif-repro/gap.elf f0 \
     --mode aggressive --option fast_funcdisc off --option listing "$listing"
 done
 ```

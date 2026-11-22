@@ -71,7 +71,7 @@ Every sub-phase names the **assertion** that overrides it, with strength **HARD*
 inference, e.g. typelock) or **HINT** (biases it), a **re-run scope**, and a **LATENT**
 flag when the decision is hardcoded with no override today (the LATENT set is the kuna
 roadmap). The machine-readable,
-flippable subset is `docs/options.md` (`kuna catalog --json`).
+flippable subset is `docs/options.md` (`unlace catalog --json`).
 
 ## Feedback mechanisms
 
@@ -105,7 +105,7 @@ rendered C are usually destroyed in Band B, not mis-rendered at P9).
 
 In kuna this is concrete: `kassert <phase> <substage> <args> [hard|hint]` at the console
 (reports the computed minimal rewind scope), `--option NAME VALUE` / `--kassert "<args>"`
-on `kuna decompile`, and discovery via `kuna catalog`.
+on `unlace decompile`, and discovery via `unlace catalog`.
 
 ## Implementation state
 

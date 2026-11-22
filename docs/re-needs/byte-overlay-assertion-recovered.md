@@ -133,7 +133,7 @@ WHY THIS WAS REFUTED AT ALL, given it is effectively an absence need: for a miss
 
 MEASURED ON b9029a8f, release binaries:
 
-1. The directive vocabulary is closed and does not contain bytes. From kuna decompile --help:
+1. The directive vocabulary is closed and does not contain bytes. From unlace decompile --help:
        function, typedef, prototype, data, param, return,
        name, type, comment, flow, readonly, volatile
    The rejection is a real closed-set rejection, emitted at
@@ -142,7 +142,7 @@ MEASURED ON b9029a8f, release binaries:
 
 2. NO ADJACENT MECHANISM SUPPLIES BYTE CONTENT. I searched the whole 176-option catalog for overlay / patch / selfmod / self-mod / smc / byte content. It returned 15 apparent hits and ALL FIFTEEN ARE FALSE POSITIVES -- every one is the substring "patch" inside DISPATCH in jump-table prose (V850 jmp reg, lowered-switch cascade, CMOV dispatch, image-base-relative tables, the MSVC Duff's-device tables). There is no overlay option. DO NOT RE-RUN THAT GREP; it is answered.
 
-3. kuna docs, the whole embedded manual, has ZERO matches for patch, overlay, self-modif or --bytes.
+3. unlace docs, the whole embedded manual, has ZERO matches for patch, overlay, self-modif or --bytes.
 
 4. The nearest neighbours are not substitutes. --assert data declares a TYPE at an address, not content. --raw-image sets a load base for a headerless image; it does not overlay bytes into an already-mapped PE. The tester's recorded workaround -- Python plus a copied executable -- is exactly the evidence that no in-tool route exists.
 

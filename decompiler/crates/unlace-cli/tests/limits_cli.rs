@@ -1,4 +1,4 @@
-//! CLI end-to-end gate for the `limits` report of `kuna functions --summary`
+//! CLI end-to-end gate for the `limits` report of `unlace functions --summary`
 //! (and `functions --reachable-from --json`): which functions a decompile would
 //! hit the `maxinstruction` / `jumptablemax` budgets on, measured without
 //! decompiling.
@@ -32,7 +32,7 @@ fn fixture() -> String {
 }
 
 fn kuna(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_kuna"))
+    Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .env("SLEIGHHOME", repo_root().join("specs"))
         .output()
@@ -44,7 +44,7 @@ fn run_kuna(args: &[&str]) -> String {
     let out = kuna(args);
     let stderr = String::from_utf8_lossy(&out.stderr);
     let code = out.status.code().unwrap_or(-1);
-    assert_eq!(code, 0, "kuna {args:?} failed: {stderr}");
+    assert_eq!(code, 0, "unlace {args:?} failed: {stderr}");
     String::from_utf8_lossy(&out.stdout).chars().filter(|c| !c.is_whitespace()).collect()
 }
 
@@ -148,7 +148,7 @@ fn a_function_is_measured_on_its_own_descent_whatever_the_walk_reached_first() {
 
 #[test]
 fn jumptablemax_is_catalogued_and_refuses_anything_but_a_positive_count() {
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["catalog", "--json"])
         .output()
         .expect("failed to spawn the kuna binary");

@@ -37,10 +37,10 @@ The script needs the release tags (the minor is read from them) and errors out
 on shallow clones; in a clone without the tags it reports the wrong minor, so
 `git fetch --tags` first.
 
-## What `kuna --version` reports
+## What `unlace --version` reports
 
 Release CI exports `KUNA_VERSION=<MAJOR.MINOR>` while building; `unlace-cli`
-bakes it in via `option_env!` and `kuna --version` prints exactly that (Cargo's
+bakes it in via `option_env!` and `unlace --version` prints exactly that (Cargo's
 own package version must stay three-part semver, so it is not used for
 releases). Dev builds without the env var fall back to the workspace Cargo
 version.
@@ -92,10 +92,10 @@ and 18 tags**.
      cross-compiled on the arm64 runner)
    - Windows `x86_64-pc-windows-msvc`
    Each archive (`kuna-v<ver>-<os-arch>.tar.gz`, `.zip` on Windows) contains
-   `kuna`, `LICENSE`, `NOTICE` — `kuna` is self-contained: the decompiler
+   `unlace`, `LICENSE`, `NOTICE` — `unlace` is self-contained: the decompiler
    console (`decomp_dbg`) and the SLEIGH compiler (`slacomp`) are built in
    as hidden subcommands, and `embed-specs` carries the compiled SLEIGH tree.
-   Two smoke tests assert `kuna --version` prints the release version and
+   Two smoke tests assert `unlace --version` prints the release version and
    that the binary, copied alone into an empty directory with no spec
    override, decompiles a fixture. (`decomp_test_dbg` is not shipped — the
    datatest harness only makes sense inside the repo.) The `unlace_ghidra`
@@ -128,7 +128,7 @@ and 18 tags**.
 
 ## Using a released binary
 
-`kuna` is the only file a release needs. It runs its own decompiler console
+`unlace` is the only file a release needs. It runs its own decompiler console
 and SLEIGH compiler, and carries the compiled SLEIGH tree, which it unpacks
 once — on first use, under a name derived from the tree's contents — into the
 per-user cache directory (`%LOCALAPPDATA%\kuna` on Windows,

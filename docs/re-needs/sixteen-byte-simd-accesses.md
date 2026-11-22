@@ -113,7 +113,7 @@ _none recorded_
 - filed by cluster.py from 1 observation(s)
 - round 11 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD, and the fix is a KNOWN, ALREADY-PINNED one-line inversion -- the builder must flip an existing test, not write a new diagnosis.
 
-REPRODUCED on main (d6105e3d): `kuna decompile <68b94ba3>/bin/crackme1.exe sub_1400012f0` rc 0, 647 lines, 7 occurrences of `*(char *[16])` (lines 191/214/264/333/389/549/606). v63 is declared `char v63 [16];` at line 82, so the intended type is pointer-to-`char[16]` and the correct C spelling is `char (*)[16]`.
+REPRODUCED on main (d6105e3d): `unlace decompile <68b94ba3>/bin/crackme1.exe sub_1400012f0` rc 0, 647 lines, 7 occurrences of `*(char *[16])` (lines 191/214/264/333/389/549/606). v63 is declared `char v63 [16];` at line 82, so the intended type is pointer-to-`char[16]` and the correct C spelling is `char (*)[16]`.
 
 HYPOTHESIS ("pointer-to-array declarator parentheses are misplaced during cast emission") IS EXACTLY RIGHT, and narrower than it reads. The cast path is innocent: printc.rs push_cast_type already does the right thing (declarator_parts -> front+back concatenated, which yields `char (*` + `)[16]` for a correct declarator). The defect is one loop in CSpeller::declarator, kuna_langc.rs:113: it walks the modifier stack BASE->OUTERMOST (`stack.iter().rev().skip(1)`), but the pending_ptr paren rule at :125 only wraps when an ARRAY sees a PRECEDING pointer -- which is the array-of-pointer ordering. C declarator binding is outermost-type-first, so the two nestings come out SWAPPED.
 

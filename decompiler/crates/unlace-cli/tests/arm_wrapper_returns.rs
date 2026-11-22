@@ -118,7 +118,7 @@ fn run(kind: &str, passthrough: bool, assertion: Option<&str>) -> String {
 fn decompile(bytes: &[u8], ext: &str, passthrough: bool, assertion: Option<&str>) -> String {
     let path = common::scratch_file("arm-wrapper-returns", ext);
     std::fs::write(&path, bytes).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args([
         "decompile-all",
         path.to_str().unwrap(),

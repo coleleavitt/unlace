@@ -109,7 +109,7 @@ fn decompile(bytes: &[u8]) -> String {
         .map(PathBuf::from)
         .unwrap_or_else(|| common::repo_root().join("specs"));
     let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
+        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let output = Command::new(kuna)
         .arg("decompile-all")
         .arg(&path)

@@ -44,7 +44,7 @@ stack-frame comments), where consumers read it as a variable *name*.
 
 ```
 $ export SLEIGHHOME=/home/mahaloz/github/kuna/specs
-$ kuna decompile-all ~/github/decbench/results/full_run/O2-noinline/iproute2/stripped/ip --json
+$ unlace decompile-all ~/github/decbench/results/full_run/O2-noinline/iproute2/stripped/ip --json
   -> 1912 functions, 95 occurrences of `$$undef[0-9a-f]{8}` across 33 functions
 ```
 
@@ -55,7 +55,7 @@ sampled subset). Unchanged by the `rodata-phantom-store` work, as filed.
 surface**. Mode makes no difference:
 
 ```
-$ kuna decompile <ip> --addr 0x2b420 --mode reliable   # and aggressive, and fast
+$ unlace decompile <ip> --addr 0x2b420 --mode reliable   # and aggressive, and fast
 unsigned long sub_2b420(unsigned long a0,unsigned int a1) // return-dupe x2
 {
   char $$undef00000001 [16]; // stack - 0x38
@@ -153,7 +153,7 @@ That rules out the "two distinct Symbols at one address" hypothesis (a
 
 ### Instrumented proof of mechanism (B)
 
-`kuna decompile-all --json` exposes `extract_variables`
+`unlace decompile-all --json` exposes `extract_variables`
 (`infra/decompile_drive.rs:1193-1211`), which reads the ScopeLocal **Symbol table**
 directly. For `ip sub_2b420` that table itself carries the placeholder:
 
@@ -165,7 +165,7 @@ directly. For `ip sub_2b420` that table itself carries the placeholder:
 — whereas for `sub_10290` (mechanism A) the table is clean (`v7` only) even though the C
 prints `$$undef00000001`. That split is the discriminator used for the corpus counts below.
 
-Same leak in the project export (`kuna decompile-project`):
+Same leak in the project export (`unlace decompile-project`):
 
 ```
 lcd-serial.elf.c:2327:  unsigned int $$undef00000002; // stack - 0x30
@@ -204,7 +204,7 @@ unambiguous in the binary.
 
 ## Breadth (corpus-wide, measured)
 
-Fresh `kuna decompile-all --json` over a stratified sample: **101 stripped binaries**
+Fresh `unlace decompile-all --json` over a stratified sample: **101 stripped binaries**
 (one per project × {O0, O2, O2-noinline}), **78,787 functions**, today's build, no flags:
 
 | measure | value |

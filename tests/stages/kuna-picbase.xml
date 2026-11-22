@@ -4,7 +4,7 @@
     kuna issue testcase: the i386 PIC base register folded into the
     cross-reference index.
 
-    Issue:      unlace-analysis-picbase - `kuna strings` (JSON, filtered to Password)
+    Issue:      unlace-analysis-picbase - `unlace strings` (JSON, filtered to Password)
                 on crackmes.one/5ab77f6333c5d40ad448ca52 (pancrackme v1.0,
                 32-bit i386 PIC ELF, stripped) found the prompt at 0x8049127
                 and reported xrefs_count 0 with an empty functions list, as did

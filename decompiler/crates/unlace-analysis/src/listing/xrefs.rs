@@ -1,4 +1,4 @@
-//! (kuna) The cross-reference query behind `kuna xrefs` — "what references this?"
+//! (kuna) The cross-reference query behind `unlace xrefs` — "what references this?"
 //! and "what does this reference?", answered over the decoded instruction stream.
 //!
 //! This is a **read-only query**, not an [`AnalysisPass`](crate::pass::AnalysisPass):
@@ -51,7 +51,7 @@
 //! indirection carry the import's name. A PE has the **IAT slot** the loader
 //! fills in and a MinGW **`FF 25` veneer** (`jmp qword ptr [slot]`) that a direct
 //! `call` can target; `pe_iat` registers the import name on both, so
-//! `kuna functions --filter VirtualProtect` answers with two entries. An ELF PLT
+//! `unlace functions --filter VirtualProtect` answers with two entries. An ELF PLT
 //! is the same shape with the GOT slot playing the IAT's role.
 //!
 //! Which of the two a given call site references is a compiler decision the agent
@@ -697,7 +697,7 @@ impl AssemblyEmit for AsmCapture {
 /// function inventory, plus the `<patternpairs>` prologue starts on the
 /// architectures the drivers route through the Listing tier (DIV-20/DIV-68).
 ///
-/// `kuna xrefs` does its own recursive descent ([`build`] follows every direct
+/// `unlace xrefs` does its own recursive descent ([`build`] follows every direct
 /// CALL out of its seeds), so the only thing the analysis-tier Listing walk
 /// contributed to a reference query was a richer seed set — and building that
 /// Listing means decoding the whole program a second time. Handing the same

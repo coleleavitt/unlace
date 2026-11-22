@@ -26,7 +26,7 @@ fn pe_fixture() -> String {
 
 fn decompile_binary(binary: String, function: &str, extra: &[&str]) -> String {
     let sleigh = repo_root().join("specs").to_string_lossy().into_owned();
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile", &binary, function])
         .args(extra)
         .args(["--sleighpath", &sleigh])
@@ -35,7 +35,7 @@ fn decompile_binary(binary: String, function: &str, extra: &[&str]) -> String {
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if !out.status.success() {
-        panic!("kuna decompile failed: {stderr}");
+        panic!("unlace decompile failed: {stderr}");
     }
     stdout
 }

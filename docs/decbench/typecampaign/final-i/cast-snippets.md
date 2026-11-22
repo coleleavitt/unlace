@@ -1,4 +1,4 @@
-# Three real functions, round G → final (castbench text, `kuna decompile-all --json`), with IDA's text for reference
+# Three real functions, round G → final (castbench text, `unlace decompile-all --json`), with IDA's text for reference
 
 ## tail::record_open_fd -O0 (castarith)
 

@@ -26,7 +26,7 @@ emits `(char)(a1 >> 0x38)` on 13.
 
 ```
 $ export SLEIGHHOME=/home/mahaloz/github/kuna/specs
-$ ./decompiler/target/release/kuna decompile \
+$ ./decompiler/target/release/unlace decompile \
     ~/github/decbench/results/full_run/O2-noinline/openssh-portable/stripped/ssh \
     --addr 0x4cd60 --mode reliable
 
@@ -171,7 +171,7 @@ counts as one of each):
 
 Ratio on SUBPIECE: **329x**. On CONCAT: **1.13x**.
 
-Stored-pane sweep validated against fresh `kuna decompile-all` on four binaries — the
+Stored-pane sweep validated against fresh `unlace decompile-all` on four binaries — the
 metric is stable across the DIV-34..39 print wave, so the corpus number is trustworthy:
 
 | binary (matched fns) | kuna fresh | kuna stored | ghidra | ida |
@@ -229,17 +229,17 @@ them. So `subright` and `rodata-phantom-store` are disjoint fixes, and `subright
 ## Option / mode sweep (all negative)
 
 ```
-$ for m in auto reliable aggressive fast; do kuna decompile ssh --addr 0x4cd60 --mode $m | grep -c SUB81; done
+$ for m in auto reliable aggressive fast; do unlace decompile ssh --addr 0x4cd60 --mode $m | grep -c SUB81; done
 7
 7
 7
 7
-$ kuna decompile ssh --addr 0x4cd60 --option condfold on | grep -c SUB81
+$ unlace decompile ssh --addr 0x4cd60 --option condfold on | grep -c SUB81
 7
 ```
 
 None of the 83 catalog rows controls SUBPIECE truncation lowering (grepped
-`kuna catalog --json` for subpiece/truncat/piece — hits are `returnpair`,
+`unlace catalog --json` for subpiece/truncat/piece — hits are `returnpair`,
 `switchmultipred`, `unrolledguard`, `callsitestackargs`, `iteregion`, `iteexpr`,
 `noreturn_*`, none relevant). `option_closing: null`.
 

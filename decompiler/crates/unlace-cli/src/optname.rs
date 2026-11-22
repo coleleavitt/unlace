@@ -4,7 +4,7 @@
 //! name is an evidence bug, not a papercut: an agent that writes
 //! `--option LOWEREDSWITCH off` and sees no change concludes the decision point
 //! is not the cause, when in fact it never flipped.  Until this module existed
-//! `kuna decompile` accepted any name at all — it lowers each pair into an
+//! `unlace decompile` accepted any name at all — it lowers each pair into an
 //! `option NAME VALUE` line for `decomp_dbg`, and the console reports an
 //! unrecognized name as an `Execution error:` on **stdout** with exit status 0,
 //! which the driver has no reason to read (an unrelated console diagnostic must
@@ -42,7 +42,7 @@ pub(crate) fn check(name: &str) -> Result<(), String> {
     if let Some(near) = nearest(name) {
         msg.push_str(&format!(" (did you mean {near:?}?)"));
     }
-    msg.push_str("; `kuna catalog` lists every settable name");
+    msg.push_str("; `unlace catalog` lists every settable name");
     Err(msg)
 }
 

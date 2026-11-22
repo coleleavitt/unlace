@@ -85,7 +85,7 @@ const F: &str = "sub_8000170";
 /// Listing never decoded `F`'s first word.
 const F_PLUS_4: &str = "sub_8000174";
 
-/// Bootstrap the fixture with the discovery set `decompile-all` / `kuna functions` inject
+/// Bootstrap the fixture with the discovery set `decompile-all` / `unlace functions` inject
 /// on non-x86-64 plus `aif` (the pass `poolentry` reads), optionally flipping `poolentry`
 /// on before the deferred commit — the live-CLI ordering.
 fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {

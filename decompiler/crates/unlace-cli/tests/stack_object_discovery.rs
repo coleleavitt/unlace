@@ -11,7 +11,7 @@ fn query(enabled: bool, directives: &[String], no_vars: bool) -> Value {
 
 fn query_functions(enabled: bool, directives: &[String], no_vars: bool, functions: &str) -> Value {
     let fixture = common::fixture("lifetimes_objects_x86_64");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args([
             "decompile-all",
@@ -57,7 +57,7 @@ fn worker_query(jobs: &str, enabled: bool, no_vars: bool) -> Value {
 
 fn dwarf_query(jobs: &str, enabled: bool, no_vars: bool, directives: &[String]) -> Value {
     let fixture = common::fixture("dwarfstructs_x86_64");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kuna"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args([
             "decompile-all",

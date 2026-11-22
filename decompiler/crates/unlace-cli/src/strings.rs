@@ -1,7 +1,7 @@
-//! `kuna strings` — the string inventory.
+//! `unlace strings` — the string inventory.
 //!
 //! ```text
-//!   kuna strings <binary> [--json] [--min-length N] [--filter REGEX]
+//!   unlace strings <binary> [--json] [--min-length N] [--filter REGEX]
 //!                         [--encoding ascii|utf8|utf16|all] [--termination nul|any]
 //!                         [--section NAME] [--no-xrefs]
 //!                         [--mode MODE] [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T]
@@ -11,14 +11,14 @@
 //! This is the CLI face of the analyzer tier's **existing** string detection: the
 //! rows come from [`unlace_analysis::strings::kuna_stringinv`], whose ASCII half is
 //! the very `StringLiteralPass` scan the engine already runs at load to plant the
-//! `char[N]` literals `kuna decompile` prints. Nothing is re-detected here and
+//! `char[N]` literals `unlace decompile` prints. Nothing is re-detected here and
 //! nothing is committed, so no emitted C changes.
 //!
 //! What makes it worth running instead of `strings(1)` is the last two columns.
 //! `strings(1)` answers "what text is in this file"; the question an analyst
 //! actually has is "**which function uses this string**", and kuna can answer it
 //! because it already has the reference edges — the same
-//! [`unlace_analysis::listing::xrefs`] index behind `kuna xrefs`. Every row carries
+//! [`unlace_analysis::listing::xrefs`] index behind `unlace xrefs`. Every row carries
 //! how many references land anywhere in the literal's extent and the functions
 //! they come from, so the triage hop (find the prompt → open its checker) is one
 //! command instead of `strings | xxd | grep`.
@@ -33,7 +33,7 @@
 //! with a non-ASCII character is reported starting after its last multi-byte
 //! sequence — a `_φ( °-°)/ so what was the magical keycombination? ` prompt at
 //! 0x2000 came back as `)/ so what was the magical keycombination? ` at 0x200c,
-//! with zero references and no owning function, while `kuna xrefs --to 0x2000`
+//! with zero references and no owning function, while `unlace xrefs --to 0x2000`
 //! answered one. Only the reported address was wrong; decoding the sequences puts
 //! the row back on the address the image refers to and the existing reference
 //! walk fills the last two columns. It is a superset of the ASCII reading rather
@@ -92,7 +92,7 @@ struct Row {
     functions: Vec<(u64, String)>,
 }
 
-/// `kuna strings` entry point. Wire as `"strings" => strings::run(rest)`.
+/// `unlace strings` entry point. Wire as `"strings" => strings::run(rest)`.
 pub fn run(argv: &[String]) -> i32 {
     let args = match parse_args(argv) {
         Ok(a) => a,
@@ -513,7 +513,7 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
 
 fn usage() {
     eprintln!(
-        "usage: kuna strings <binary> [--json] [--min-length N] [--filter REGEX] \\\n\
+        "usage: unlace strings <binary> [--json] [--min-length N] [--filter REGEX] \\\n\
          \x20                    [--encoding ascii|utf8|utf16|all] [--termination nul|any] \\\n\
          \x20                    [--section NAME] [--no-xrefs] \\\n\
          \x20                    [--mode auto|reliable|aggressive|fast] [--option N V].. \\\n\

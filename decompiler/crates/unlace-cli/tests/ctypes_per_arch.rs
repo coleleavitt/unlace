@@ -39,17 +39,17 @@ const GHIDRA_TYPE_NAMES: &[&str] = &[
     "float10", "float16", "xunknown1", "xunknown2", "xunknown4", "xunknown8", "wchar2", "wchar4",
 ];
 
-/// Run `kuna decompile-all <fixture> --option ctypes <on|off>`.
+/// Run `unlace decompile-all <fixture> --option ctypes <on|off>`.
 fn decompile_all(fixture_name: &str, ctypes: &str) -> String {
     let sp = specs();
     let bin = fixture(fixture_name);
-    let out = Command::new(env!("CARGO_BIN_EXE_kuna"))
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-all", &bin, "--sleighpath", &sp, "--option", "ctypes", ctypes])
         .output()
         .expect("failed to spawn the kuna binary");
     let stderr = String::from_utf8_lossy(&out.stderr);
     if !out.status.success() {
-        panic!("kuna decompile-all failed on {fixture_name}: {stderr}");
+        panic!("unlace decompile-all failed on {fixture_name}: {stderr}");
     }
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
@@ -145,14 +145,14 @@ fn the_two_vocabularies_no_longer_coexist() {
     assert_eq!(word_count(&on, "uint4"), 0);
 }
 
-/// Run `kuna decompile-all <path> <args>` with no `--option ctypes`, so the
+/// Run `unlace decompile-all <path> <args>` with no `--option ctypes`, so the
 /// spelling is whatever the mode policy gives.
 fn decompile_all_with(path: &str, args: &[&str]) -> String {
     let sp = specs();
     let mut argv = vec!["decompile-all", path, "--sleighpath", sp.as_str()];
     argv.extend_from_slice(args);
     let (stdout, stderr, code) = common::run_kuna(&argv);
-    assert_eq!(code, 0, "kuna decompile-all {args:?} failed on {path}: {stderr}");
+    assert_eq!(code, 0, "unlace decompile-all {args:?} failed on {path}: {stderr}");
     stdout
 }
 

@@ -3,7 +3,7 @@
 <!--
     kuna issue testcase: the PE CRT entry-function prototype.
 
-    Issue:      unlace-analysis-entrymainproto - `kuna decompile` on
+    Issue:      unlace-analysis-entrymainproto - `unlace decompile` on
                 crackmes.one/65acadf3eef082e477ff5ede (ObfuscationFiesta.exe,
                 PE32+ x86-64, stripped) renders `void sub_140002530(void)`
                 while kuna's own decompilation of sub_14000518c renders

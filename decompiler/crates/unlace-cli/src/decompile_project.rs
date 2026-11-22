@@ -1,7 +1,7 @@
-//! `kuna decompile-project` — whole-binary **project export**.
+//! `unlace decompile-project` — whole-binary **project export**.
 //!
 //! ```text
-//!   kuna decompile-project <binary> [-o|--output DIR] [--functions a,b,..]
+//!   unlace decompile-project <binary> [-o|--output DIR] [--functions a,b,..]
 //!                          [--addr 0xVMA].. [--max-fn-seconds N]
 //!                          [--stream | --progress]
 //!                          [--mode auto|reliable|aggressive|fast] [--option N V]..
@@ -67,7 +67,7 @@ use crate::decompile_all::{
 use crate::jobs::PoolWatch;
 use crate::project_stream::StreamMode;
 
-/// `kuna decompile-project` entry point.
+/// `unlace decompile-project` entry point.
 pub fn run(argv: &[String]) -> i32 {
     // Wrapper parse: extract `-o/--output`, intercept help, reject the
     // decompile-all-only flags, and hand the remainder to the shared parser.
@@ -165,7 +165,7 @@ pub(crate) fn emit_completion(completion: ProjectCompletion) -> i32 {
 
 fn usage() {
     eprintln!(
-        "usage: kuna decompile-project <binary> [-o|--output DIR] [--functions a,b,..] \\\n\
+        "usage: unlace decompile-project <binary> [-o|--output DIR] [--functions a,b,..] \\\n\
          \x20                   [--addr 0xVMA].. [--max-fn-seconds N] [--max-fn-memory MiB] \\\n\
          \x20                   [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                   [--jobs N|auto] [--jobs-chunk N] [--jobs-full-load] \\\n\
@@ -272,8 +272,8 @@ pub(crate) fn decompile_project(
     // carry the other languages.
     if prog.arch().print().get_name() != "c-language" {
         return Err(format!(
-            "project export is C-only in this release (got {}); use `kuna decompile` or \
-             `kuna decompile-all --json` for other output languages",
+            "project export is C-only in this release (got {}); use `unlace decompile` or \
+             `unlace decompile-all --json` for other output languages",
             prog.arch().print().get_name()
         ));
     }

@@ -1,18 +1,18 @@
-//! `kuna unpack` -- statically unpack a UPX-, NEOLite- or PKLITE-packed
+//! `unlace unpack` -- statically unpack a UPX-, NEOLite- or PKLITE-packed
 //! executable so the rest of the CLI has a real program to analyze.
 //!
 //! ```text
-//!   kuna unpack <binary> [-o OUT] [--json]
-//!   kuna unpack <dyld_shared_cache> (--list | --image NAME [-o OUT]) [--json]
-//!   kuna unpack <uefi-firmware.fd> [--list] [-o DIR] [--json]
-//!   kuna unpack <binary> --raw-lzma START:END [--lzma-props P] [--raw-offsets]
+//!   unlace unpack <binary> [-o OUT] [--json]
+//!   unlace unpack <dyld_shared_cache> (--list | --image NAME [-o OUT]) [--json]
+//!   unlace unpack <uefi-firmware.fd> [--list] [-o DIR] [--json]
+//!   unlace unpack <binary> --raw-lzma START:END [--lzma-props P] [--raw-offsets]
 //! ```
 //!
 //! A packed binary is the one input on which every other kuna surface is
-//! honestly useless: `kuna functions` finds nothing because there is nothing
+//! honestly useless: `unlace functions` finds nothing because there is nothing
 //! there yet -- the file holds a loader stub and a compressed blob. This
 //! subcommand is the missing first step, and it runs entirely in-process
-//! (`unlace_analysis::upx`): a release `kuna` cannot assume `upx -d` is installed,
+//! (`unlace_analysis::upx`): a release `unlace` cannot assume `upx -d` is installed,
 //! and handing a hostile binary to a packer to look at it is not an option.
 //!
 //! Default output path is `<binary>.unpacked`, overwritten if it exists: the
@@ -35,7 +35,7 @@
 //!
 //! `--raw-lzma START:END` is that way: it skips discovery entirely and decodes
 //! the given range as one raw LZMA1 stream. The range is virtual addresses --
-//! what a reader copies out of `kuna disassemble` or `kuna xrefs` -- unless
+//! what a reader copies out of `unlace disassemble` or `unlace xrefs` -- unless
 //! `--raw-offsets` says they are file offsets, which is also the only reading
 //! available for an image no object parser recognises. Nothing declares the
 //! uncompressed size in this situation, so the decode runs to the end of the
@@ -149,7 +149,7 @@ pub fn run(argv: &[String]) -> i32 {
             eprintln!("error: {}: {e}", args.binary);
             if matches!(e, UpxError::NotPacked) {
                 eprintln!(
-                    "note: kuna unpack handles UPX-, NEOLite- and PKLITE-packed executables; \
+                    "note: unlace unpack handles UPX-, NEOLite- and PKLITE-packed executables; \
                      this file is none of them"
                 );
             }
@@ -873,11 +873,11 @@ fn parse_props(spec: &str) -> Result<(u8, u8, u8), String> {
 }
 
 fn usage() {
-    eprintln!("usage: kuna unpack <binary> [-o OUT] [--json]");
-    eprintln!("       kuna unpack <dyld_shared_cache> (--list | --image NAME [-o OUT]) [--json]");
-    eprintln!("       kuna unpack <uefi-firmware.fd> [--list] [-o DIR] [--json]");
+    eprintln!("usage: unlace unpack <binary> [-o OUT] [--json]");
+    eprintln!("       unlace unpack <dyld_shared_cache> (--list | --image NAME [-o OUT]) [--json]");
+    eprintln!("       unlace unpack <uefi-firmware.fd> [--list] [-o DIR] [--json]");
     eprintln!(
-        "       kuna unpack <binary> --raw-lzma START:END [--lzma-props pb,lp,lc] \\\n                                    [--raw-offsets] [--raw-max-size N] [-o OUT] [--json]"
+        "       unlace unpack <binary> --raw-lzma START:END [--lzma-props pb,lp,lc] \\\n                                    [--raw-offsets] [--raw-max-size N] [-o OUT] [--json]"
     );
     eprintln!();
     eprintln!("  --raw-lzma START:END   decode that range as one raw LZMA1 stream instead of");

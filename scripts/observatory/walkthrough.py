@@ -30,7 +30,7 @@ def _kuna_bin(root: Path) -> Path:
     if override:
         return Path(override)
     profile = os.environ.get("KUNA_RUST_PROFILE", "release")
-    return root / "decompiler" / "target" / profile / "kuna"
+    return root / "decompiler" / "target" / profile / "unlace"
 
 
 def _run(cmd: list, env: dict, cwd: Path, stdin: str | None = None) -> str:
@@ -81,8 +81,8 @@ def generate(root: Path | None = None, out: Path | None = None) -> dict:
             texts[stage] = path.read_text(encoding="utf-8")
 
     produced = {
-        "bytes": f"kuna read {FIXTURE} {FUNCTION}",
-        "disasm": f"kuna disassemble {FIXTURE} {FUNCTION}",
+        "bytes": f"unlace read {FIXTURE} {FUNCTION}",
+        "disasm": f"unlace disassemble {FIXTURE} {FUNCTION}",
         "rawpcode": "decomp_dbg: load function + print raw (before any action runs)",
         "finalir": "decomp_dbg: decompile + print raw",
         "regions": "decomp_dbg: region tree + region blocks",

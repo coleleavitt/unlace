@@ -1,4 +1,4 @@
-upx_packed_lzma_x86_64 -- the LZMA arm of the `kuna unpack` / `unlace_analysis::upx`
+upx_packed_lzma_x86_64 -- the LZMA arm of the `unlace unpack` / `unlace_analysis::upx`
 fixture pair.
 
 What it is

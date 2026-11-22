@@ -23,5 +23,5 @@ How it was built (no macOS SDK; host clang + the rustup-bundled ld64.lld)
   has no Mach-O linker.
 
 What it pins
-  kuna functions lists _audit_caller at 0x248 (base: sub_248), and
+  unlace functions lists _audit_caller at 0x248 (base: sub_248), and
   _audit_export_b is an alias of _audit_export_a at 0x240 that selects it.

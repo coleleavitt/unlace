@@ -1,4 +1,4 @@
-//! Integration tests for `kuna disassemble` against the built executable.
+//! Integration tests for `unlace disassemble` against the built executable.
 //! Processor specs and fixtures are required; load failures fail the tests.
 
 use serde_json::{Map, Value as Json};
@@ -30,7 +30,7 @@ fn listing(argv: &[&str]) -> String {
 
 fn rendered(argv: &[&str]) -> (String, Vec<String>) {
     let (stdout, stderr, code) = run_kuna(&[&["disassemble"][..], argv].concat());
-    assert_eq!(code, 0, "kuna disassemble {argv:?}: {stderr}");
+    assert_eq!(code, 0, "unlace disassemble {argv:?}: {stderr}");
     let notes = stderr
         .lines()
         .map(|line| {
@@ -114,7 +114,7 @@ fn instructions(doc: &str) -> Vec<Map<String, Json>> {
 
 // --- the acceptance probes ---------------------------------------------------
 
-/// **The acceptance probe**: `kuna disassemble <bin> main` lists real
+/// **The acceptance probe**: `unlace disassemble <bin> main` lists real
 /// instructions. Before this command there was no way to see one at all — three
 /// testers hit `unknown subcommand "disassemble"` after decompilation had
 /// already failed them.
@@ -460,7 +460,7 @@ fn bytes_bounds_the_listing_and_works_on_data() {
 }
 
 /// A named function lists its whole extent by default — the same clip
-/// `kuna functions` reports as `size` — and stops before the next entry.
+/// `unlace functions` reports as `size` — and stops before the next entry.
 #[test]
 fn a_named_function_defaults_to_its_extent() {
     let doc = listing(&[&fauxware(), "main", "--json"]);
@@ -762,7 +762,7 @@ fn an_unmapped_address_fails_with_a_reason() {
     let (_, error, code) = run_kuna(&["disassemble", &fauxware(), "0xdeadbeef000", "--addr"]);
     assert_eq!(code, 1, "{error}");
     assert!(error.contains("no bytes mapped"), "{error}");
-    assert!(error.contains("kuna unpack"), "{error}");
+    assert!(error.contains("unlace unpack"), "{error}");
 }
 
 /// A name nothing carries is the same kind of failure, and points at `--addr`.
@@ -812,7 +812,7 @@ fn the_cli_exits_zero_and_prints_instructions() {
     assert!(stdout.contains("CALL 0x400510"), "{stdout}");
 }
 
-/// `kuna read` is the same command with the byte view as its default, so an
+/// `unlace read` is the same command with the byte view as its default, so an
 /// agent that wants the bytes at an address does not have to know they are
 /// spelled `disassemble`. Through the binary, because the alias IS the dispatch.
 #[test]
@@ -870,7 +870,7 @@ fn the_cli_reports_usage_errors_as_exit_two() {
             "{args:?} should be a usage error, got {code}: {stderr}"
         );
         assert!(
-            stderr.contains("usage: kuna disassemble"),
+            stderr.contains("usage: unlace disassemble"),
             "{args:?}: {stderr}"
         );
     }
@@ -899,7 +899,7 @@ fn the_cli_reports_a_missing_binary_as_exit_one() {
 // and the fast half agrees with the walk it skipped.
 
 /// The stripped x86-64 fixture whose `sub_1190` exists ONLY because the Listing
-/// tier's discovery walk found it: `kuna functions` lists 20 entries with the
+/// tier's discovery walk found it: `unlace functions` lists 20 entries with the
 /// walk on and 19 with it off, and `sub_1190` is the difference.
 fn stripped_dynamic() -> String {
     fixture("stripped_dynamic_x86_64")
@@ -908,8 +908,8 @@ fn stripped_dynamic() -> String {
 /// The name the discovery walk invents still resolves, by either spelling.
 ///
 /// This is the regression the windowed load could have shipped: skip the walk
-/// for a bounded window and `kuna disassemble sub_1190 --count 4` answers "no
-/// symbol named" for a name `kuna functions` prints (RE-need
+/// for a bounded window and `unlace disassemble sub_1190 --count 4` answers "no
+/// symbol named" for a name `unlace functions` prints (RE-need
 /// `analysis-generated-function-name`).
 #[test]
 fn a_name_only_the_discovery_walk_invents_still_resolves() {
@@ -1486,7 +1486,7 @@ fn raw_pcode_help_and_data_targets_say_what_they_are() {
     let (stdout, stderr, code) = run_kuna(&["raw-pcode", "--help"]);
     assert_eq!(code, 0);
     assert!(stdout.is_empty(), "help belongs on stderr like every other block: {stdout}");
-    assert!(stderr.starts_with("usage: kuna raw-pcode"), "{stderr}");
+    assert!(stderr.starts_with("usage: unlace raw-pcode"), "{stderr}");
     let (_, stderr, code) = run_kuna(&["raw-pcode"]);
     assert_eq!(code, 2);
     assert!(stderr.contains("error: raw-pcode requires <binary>"), "{stderr}");

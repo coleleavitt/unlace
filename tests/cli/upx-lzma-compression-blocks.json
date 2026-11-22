@@ -42,5 +42,5 @@
       "unsupported UPX image"
     ]
   },
-  "notes": "Desired: a UPX image compressed with LZMA (method 14) unpacks instead of being refused. Witness: crackmes.one 68ae3bfc8fac2855fe6fb8ee bin/keygenme, where `kuna unpack` exited 1 with \"unsupported UPX image: compression method 14 (LZMA)\". Retargeted onto the vendored upx_packed_lzma_x86_64: the NRV witness's own program repacked with `upx --lzma`, so unpacked_size pins it against the NRV arm."
+  "notes": "Desired: a UPX image compressed with LZMA (method 14) unpacks instead of being refused. Witness: crackmes.one 68ae3bfc8fac2855fe6fb8ee bin/keygenme, where `unlace unpack` exited 1 with \"unsupported UPX image: compression method 14 (LZMA)\". Retargeted onto the vendored upx_packed_lzma_x86_64: the NRV witness's own program repacked with `upx --lzma`, so unpacked_size pins it against the NRV arm."
 }

@@ -6,7 +6,7 @@
 //! `onlyOpUse` refuses a return value the function also stores, so the function
 //! alone reads as `void`. `decompile-all` settles it from the callers it
 //! decompiles (`kuna_voidret`); a single-function decompile had no caller, and
-//! `kuna decompile ./rv f` printed `void f(int a0)` while `kuna decompile ./rv
+//! `unlace decompile ./rv f` printed `void f(int a0)` while `unlace decompile ./rv
 //! main` printed `printf("%d\n",f(2))`.
 //!
 //! The Listing files where each direct call returns to

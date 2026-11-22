@@ -2,8 +2,8 @@
 //!
 //! `rename`, `retype`, `map param`, `map return`, `map address`, `comment
 //! instruction` and `parse line extern` all work in the console, and none of
-//! them was reachable from the `kuna` binary. This drives the in-process path
-//! `kuna decompile --json` / `decompile-all` take, and asserts for every
+//! them was reachable from the `unlace` binary. This drives the in-process path
+//! `unlace decompile --json` / `decompile-all` take, and asserts for every
 //! directive that **the emitted C changed** — not that the command returned Ok.
 //!
 //! That distinction is the whole point. `override prototype` has printed

@@ -56,11 +56,16 @@ jobs:
       - name: Python tooling unit tests
         run: make test-tools
 
-      - name: Install Rust (stable) + wasm32-wasip1 target
+      - name: Install Rust (stable)
         run: |
           rustup toolchain install stable --profile minimal --component clippy
           rustup default stable
-          rustup target add wasm32-wasip1
+
+      # The browser front-end (integrations/web, unlace-wasm) is opt-in: its steps run only
+      # when the repository variable UNLACE_WEB is `true`.
+      - name: Add the wasm32-wasip1 target (web)
+        if: vars.UNLACE_WEB == 'true'
+        run: rustup target add wasm32-wasip1
 
       # Same cache action and workspace the release/pages workflows use.
       - uses: Swatinem/rust-cache@v2
@@ -154,12 +159,14 @@ jobs:
       # -collab-rtc) are not run in CI, which is too costly for them; run them
       # locally (integrations/web/README.md -> Tests).
       - uses: actions/setup-node@v4
+        if: vars.UNLACE_WEB == 'true'
         with:
           node-version: 22
 
       # The study view's pure modules need no build; run them before the
       # wasm build so a renderer or session regression answers in seconds.
       - name: Test the /decompile page's modules
+        if: vars.UNLACE_WEB == 'true'
         run: |
           node integrations/web/test/cdp-client-startup.mjs
           node integrations/web/test/decompile-render.mjs
@@ -177,6 +184,7 @@ jobs:
           node integrations/web/test/decompile-collab-fuzz.mjs
 
       - name: Assemble and test the browser Worker boundary
+        if: vars.UNLACE_WEB == 'true'
         run: |
           bash integrations/web/build.sh
           node integrations/web/test/worker.mjs
@@ -242,7 +250,7 @@ jobs:
       - name: make rust-test -- the full cargo workspace suite
         run: |
           df -h .
-          make rust-test
+          make rust-test WEB=${{ vars.UNLACE_WEB == 'true' && '1' || '0' }}
 
       - name: Workspace build disk usage
         if: always()

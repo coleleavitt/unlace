@@ -13,6 +13,8 @@ PROFILE ?= release
 BINDIR  := $(ENGINE)/target/$(PROFILE)
 SLACOMP := $(BINDIR)/slacomp
 PYTHON  ?= python3
+# WEB=1 includes the browser front-end (unlace-wasm) in rust-test; it is opt-in.
+WEB     ?= 0
 # Where `test-ghidra` tees its output for the two false-green canaries below
 # (inside target/, which is gitignored, so a failed run leaves no repo litter).
 GHIDRA_SIM_LOG := $(ENGINE)/target/ghidra-sim.log
@@ -114,7 +116,7 @@ coverage:
 # golden differential vectors, the SLEIGH-compiler .sla content-parity tests, ...).
 rust-test:
 	$(PYTHON) $(ROOT)/scripts/check_test_layout.py
-	cd $(ENGINE) && cargo test --workspace --no-fail-fast
+	cd $(ENGINE) && cargo test --workspace $(if $(filter 1,$(WEB)),,--exclude unlace-wasm) --no-fail-fast
 
 # One invocation: a crate an earlier `--no-deps` run checked only as a dependency
 # is fresh to a later run, which then passes without linting it.

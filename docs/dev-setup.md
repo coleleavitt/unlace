@@ -58,10 +58,13 @@ tools/hooks/unlace-ci-gates.sh [fast|parity|full]   # default parity
 - `parity` adds: `make test-tools`, build, specs, lint (clippy `-D warnings` on
   unlace-cli/base/num), `make test` (PARITY OK 675/675), `make test-stages` (PARITY OK),
   `make check-spec`, the CLI tests, `unlace catalog --check`, the repipe counters,
-  `docs/options.md` freshness, unlace-ghidra and the web tests. A full pass records the
+  `docs/options.md` freshness and unlace-ghidra. A full pass records the
   tree hash in `$CARGO_TARGET_DIR/.ci-gates-pass`.
 - `full` adds `make rust-test` (slow; CI runs it on every push to main).
-- Skip named steps with `UNLACE_GATES_SKIP="web ghidra"`.
+- Skip named steps with `UNLACE_GATES_SKIP="lint ghidra"`.
+- The browser front-end (`integrations/web`, the `unlace-wasm` crate) is opt-in:
+  `UNLACE_GATES_WEB=1` adds its tests to the gates, `make rust-test WEB=1` adds the crate to the
+  workspace suite, and CI runs both only when the repository variable `UNLACE_WEB` is `true`.
 
 Individually, on dev binaries: `make test BINDIR=$CARGO_TARGET_DIR/debug`,
 `make test-stages BINDIR=$CARGO_TARGET_DIR/debug`, `make check-spec`,

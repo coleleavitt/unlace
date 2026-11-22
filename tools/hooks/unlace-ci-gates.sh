@@ -4,7 +4,8 @@
 #   tools/hooks/unlace-ci-gates.sh [fast|parity|full]        (default: parity)
 # Env: CARGO_TARGET_DIR (default: where decompiler/target points when it is a symlink, else
 #      ../unlace-target/<checkout name minus unlace-wt->),
-#      UNLACE_GATES_SKIP="lint web ghidra ..." to skip named steps.
+#      UNLACE_GATES_SKIP="lint ghidra ..." to skip named steps,
+#      UNLACE_GATES_WEB=1 to also run the opt-in browser front-end tests (integrations/web).
 # Differences from CI, on purpose: dev profile (opt-level 1) instead of --release,
 # rustc-rdr-main instead of stable (so clippy's unfulfilled-lint-expectations,
 # which fire on this toolchain only, are allowed), and the wasm worker build
@@ -90,7 +91,7 @@ web() {
 }
 rusttest() {
   # The workspace suite reads <repo>/specs; worktree specs are built above.
-  make rust-test
+  make rust-test WEB="${UNLACE_GATES_WEB:-0}"
 }
 
 step forbidden-words forbidden_words
@@ -110,7 +111,7 @@ if [ "$LEVEL" != fast ]; then
   step counters counters
   step options-md options_md
   step ghidra ghidra
-  step web web
+  [ "${UNLACE_GATES_WEB:-0}" = 1 ] && step web web
 fi
 [ "$LEVEL" = full ] && step rust-test rusttest
 

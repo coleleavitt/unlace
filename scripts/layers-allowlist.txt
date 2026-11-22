@@ -219,6 +219,7 @@ funcdata -> kuna_stackreadscope
 funcdata -> kuna_stackstruct
 funcdata -> kuna_stackviews
 funcdata -> kuna_storereach
+funcdata -> kuna_switchextent
 funcdata -> kuna_varsources
 funcdata -> kuna_voidret
 funcdata -> unionresolve

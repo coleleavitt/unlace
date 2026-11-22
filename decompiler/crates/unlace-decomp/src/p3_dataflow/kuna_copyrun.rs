@@ -39,9 +39,12 @@
 //! # The rewrite
 //!
 //! The builtin is placed at the group's last store, the stores and loads (and
-//! the copies between them) are destroyed, and an INDIRECT that heritage hung
-//! on one of the stores (an address-taken local the destination may alias) is
-//! moved onto the builtin.
+//! the copies between them) are destroyed. The INDIRECTs heritage hung on the
+//! stores (an address-taken local or a global the destination may alias) form
+//! one chain per location, a link per store; each chain is folded to one
+//! INDIRECT on the builtin reading the chain's first input, since several
+//! INDIRECTs of one location on one op cannot merge and print as
+//! self-assignments. A run whose chain has another reader is left alone.
 //!
 //! The run copies element by element in program order, which `memcpy` does not
 //! promise when the two ranges overlap through different pointers; the rewrite
@@ -248,6 +251,39 @@ fn indirects_on(data: &Funcdata, ops: &[OpId], store: OpId) -> Vec<OpId> {
         .collect()
 }
 
+/// The INDIRECTs hung on the run's stores, one chain per storage location in
+/// program order: a location the stores may alias carries one INDIRECT per
+/// store, each reading the one before. `None` when a chain is broken or an
+/// intermediate value is read by anything but the next INDIRECT, so the chain
+/// cannot be folded onto the one builtin.
+fn indirect_chains(data: &Funcdata, ops: &[OpId], pairs: &[Pair]) -> Option<Vec<Vec<OpId>>> {
+    let mut stores: Vec<&Pair> = pairs.iter().collect();
+    stores.sort_by_key(|p| p.at);
+    let mut chains: BTreeMap<(i32, u64, i32), Vec<OpId>> = BTreeMap::new();
+    for p in stores {
+        for ind in indirects_on(data, ops, p.store) {
+            let out = data.vbank().get(op(data, ind)?.get_out()?)?;
+            let key = (
+                out.get_space().get_index(),
+                out.get_offset(),
+                out.get_size(),
+            );
+            chains.entry(key).or_default().push(ind);
+        }
+    }
+    for chain in chains.values() {
+        for w in chain.windows(2) {
+            let prev = op(data, w[0])?.get_out()?;
+            if op(data, w[1])?.get_in(0) != Some(prev)
+                || data.vbank().get(prev)?.descend_iter().count() != 1
+            {
+                return None;
+            }
+        }
+    }
+    Some(chains.into_values().collect())
+}
+
 fn runs(data: &Funcdata, block: BlockId) -> Vec<Run> {
     let ops = data.bb_ops(block);
     let index: BTreeMap<OpId, usize> = ops.iter().enumerate().map(|(i, &o)| (o, i)).collect();
@@ -332,7 +368,7 @@ fn runs(data: &Funcdata, block: BlockId) -> Vec<Run> {
         let clean = ops[begin..=last]
             .iter()
             .all(|o| mine.contains(o) || op(data, *o).is_some_and(|p| !touches_memory(p.code())));
-        if clean {
+        if clean && indirect_chains(data, &ops, &pairs).is_some() {
             out.push(Run {
                 dst,
                 src,
@@ -389,16 +425,28 @@ fn rewrite(data: &mut Funcdata, run: &Run) -> KunaResult<()> {
     data.op_insert_before(call, last);
     let block = op(data, call).and_then(|p| p.get_parent());
     let ops = block.map(|b| data.bb_ops(b)).unwrap_or_default();
+    let chains = indirect_chains(data, &ops, &run.pairs)
+        .ok_or_else(|| unlace_base::error::KunaError::lowlevel("copyrun: broken INDIRECT chain"))?;
+    for chain in chains {
+        let (Some(&first), Some(&ind)) = (chain.first(), chain.last()) else {
+            continue;
+        };
+        if first != ind {
+            let head = op(data, first).and_then(|p| p.get_in(0)).ok_or_else(|| {
+                unlace_base::error::KunaError::lowlevel("copyrun: INDIRECT without input")
+            })?;
+            data.op_set_input(ind, head, 0)?;
+            for &dead in chain[..chain.len() - 1].iter().rev() {
+                data.op_destroy(dead);
+            }
+        }
+        let iop = data.new_varnode_iop(call);
+        data.op_set_input(ind, iop, 1)?;
+        data.op_uninsert(ind);
+        data.op_insert_before(ind, call);
+    }
     let mut pairs: Vec<&Pair> = run.pairs.iter().collect();
     pairs.sort_by_key(|p| p.at);
-    for p in &pairs {
-        for ind in indirects_on(data, &ops, p.store) {
-            let iop = data.new_varnode_iop(call);
-            data.op_set_input(ind, iop, 1)?;
-            data.op_uninsert(ind);
-            data.op_insert_before(ind, call);
-        }
-    }
     for p in pairs {
         data.op_destroy(p.store);
         for &c in &p.copies {

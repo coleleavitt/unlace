@@ -3741,9 +3741,17 @@ assignment keeps its two statements, nothing between its first and last op
 reads or writes memory or calls, the ranges do not overlap when both bases are
 the same pointer, and the destination is not in the function's own frame (the
 reason `repstring` gives). `builtin_memcpy(base + lo, base' + lo', n)` is
-placed at the last store, the stores, loads and copies are destroyed, and an
-`INDIRECT` heritage hung on one of the stores is moved, in order, onto the
-builtin. The run copies element by element in program order, which `memcpy`
+placed at the last store and the stores, loads and copies are destroyed. The
+`INDIRECT`s heritage hung on the stores (an address-taken local or a global the
+destination may alias) form one chain per storage location, one link per
+store, each reading the one before; each chain is folded to a single
+`INDIRECT` on the builtin that reads the chain's first input, and the other
+links are destroyed. Moving every link onto the one builtin instead would hang
+several `INDIRECT`s of one location on one op with overlapping values, which
+the merge cannot join, so the location printed a self-assignment per link
+(`dat_x = dat_x;` around every guarded `swift_once` of a Swift accessor). A
+run whose chain is broken, or whose intermediate value has a reader other
+than the next link, is not rewritten. The run copies element by element in program order, which `memcpy`
 does not promise for buffers that overlap through different pointers; the
 rewrite cannot see that, which is what the option is for.
 

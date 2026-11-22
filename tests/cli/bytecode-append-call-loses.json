@@ -10,11 +10,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/exclusivearguse_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/exclusivearguse_x86_64",
     "binary_sha256": "9bfe6a77f68f77a5132731cd3cdce46cb6ab26421929e227fd82171731d4248d",
     "binary_size": 8904,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/exclusivearguse_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/exclusivearguse_x86_64",
     "selector": "append",
     "selector_kind": "name"
   },

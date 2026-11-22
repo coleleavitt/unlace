@@ -89,7 +89,7 @@ function build() {
 
 function groupKey(file, scope) {
   if (scope === "decompiler") {
-    if (file.crate === "kuna-decomp") return `kuna-decomp / ${file.phase || "(crate root)"}`;
+    if (file.crate === "unlace-decomp") return `unlace-decomp / ${file.phase || "(crate root)"}`;
     return file.crate || "(workspace files)";
   }
   const parts = file.path.split("/");

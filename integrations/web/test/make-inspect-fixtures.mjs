@@ -3,12 +3,12 @@
 // sample.elf, inspect-make_item.json from structs.elf, and the Data tab's
 // data-globals*.json and inspect-globals-stripped.json from globals.elf and
 // its stripped twin) from the
-// NATIVE kuna_wasm build, so the page's pure
+// NATIVE unlace_wasm build, so the page's pure
 // renderers are tested against exactly what the engine emits, without a wasm
 // build. The `binary` path is rewritten to the file name so the fixtures do
 // not depend on where the repo lives.
 //
-// Usage:  (cd decompiler && cargo build --release -p kuna-wasm)
+// Usage:  (cd decompiler && cargo build --release -p unlace-wasm)
 //         node integrations/web/test/make-inspect-fixtures.mjs
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../../..');
-const native = process.env.NATIVE || join(repo, 'decompiler/target/release/kuna_wasm');
+const native = process.env.NATIVE || join(repo, 'decompiler/target/release/unlace_wasm');
 const specs = process.env.SPECS || join(repo, 'specs');
 
 const runOn = (name, ...args) => {

@@ -1,0 +1,1912 @@
+//! `--assert` — the one override plane an agent states facts through.
+//!
+//! # Why this exists
+//!
+//! Everything kuna knows about a program it *derived*. That is the right default
+//! and it is wrong exactly where reverse engineering is hard, and until this
+//! module the `unlace` binary had almost no lever to correct it: `rename`,
+//! `retype`, `map param`, `map return`, `map address`, `comment instruction` and
+//! `parse line extern` all work in the console and none of them was reachable
+//! from `unlace` (`docs/re-needs/no-cli-rename-or-prototype-override.md`).  A
+//! rename that does not survive the process that made it is not an interface.
+//!
+//! # The directive
+//!
+//! One line-oriented vocabulary, keyed by INTENT rather than by phase — an agent
+//! should not have to know that renaming is P9 to rename something:
+//!
+//! ```text
+//!   prototype <func> <C declaration>       parse line extern    P4 prototype-source
+//!   param [<func>::]<i> <storage> <decl>   map param            P4 prototype-source
+//!   return [<func>::]<storage> <decl>      map return           P4 prototype-source
+//!   name [<func>::]<symbol> <newname>      rename               P9 naming-policy
+//!   type [<func>::]<symbol> <C type>       retype               P5 type-propagation
+//!   format [<func>::]<addr> <fmt> [<val>]  force constant       P9 literal-format
+//!   isolate [<func>::]<symbol>             isolate              P6 merge-aggressiveness
+//!   typedef <C declaration>                parse line           P5
+//!   data <addr> <C typedeclaration>        map address          P5 const-pointer
+//!   comment [<func>::]<addr> <text>        comment instruction  P9
+//!   flow [<func>::]<addr> <flowkind>       override flow        P2 flow-classification
+//!   callee [<func>::]<addr> <name|addr>    override indirect    P2 flow-classification
+//!   callproto [<func>::]<callsite> <decl>  override prototype   P4 prototype-source
+//!   function <start>[-<end>][=<name>]      function bounds      P1  (= --define-function)
+//!   readonly <addr>+<size>                 readonly             P1 code-data-partition
+//!   volatile <addr>+<size>                 volatile             P1 code-data-partition
+//!   bytes <addr> <hex|@file>               override bytes       P1 code-data-partition
+//! ```
+//!
+//! [`Directive`] is the parsed form; the CLI's `assertdecl` module owns the text
+//! syntax and the `@FILE` contract, exactly as `funcdecl` does for
+//! `--define-function`.  Every directive produces exactly one [`Outcome`], so a
+//! caller can report each one's fate machine-readably instead of scraping a
+//! console transcript.
+//!
+//! # Where a directive lands
+//!
+//! The ordering is not cosmetic; it is what makes the plane work at all.
+//!
+//! * **Image-scoped** (`bytes`, `readonly`, `volatile`) states what memory holds
+//!   before anything reads it.  `bytes` overlays the caller's own bytes onto the
+//!   loaded image and so must land before the analysis commit — the plaintext a
+//!   packer writes over itself is the input to every later decode, and a lifter
+//!   that has already read the ciphertext will not read it again.  `readonly`
+//!   and `volatile` paint a boolean property over a memory range, which has to
+//!   be stated BEFORE the symbols over it are mapped, because `Scope::addMap`
+//!   folds the property into each `SymbolEntry` as it maps it
+//!   (`database.cc:1156-1158`) and never looks at the range again; the generated
+//!   console script therefore emits these before `read symbols`, and the
+//!   in-process surface — where the loader's symbols are
+//!   already mapped by the time a caller can say anything — re-applies the
+//!   property to the symbols the range covers.
+//! * **Program-scoped** (`function`, `typedef`, `prototype`, `data`) is applied
+//!   by [`apply_program_scoped`] right after the analysis commit, so a declared
+//!   fact outranks whatever discovery decided.
+//! * **Function-scoped** (`param`, `return`, `comment`, `flow`, `callee`, `callproto`) is turned into
+//!   decompile SEEDS by [`function_seed`] — the facts the drive consumes at flow
+//!   time.  `flow` is the sharpest of them: it reclassifies the flow out of one
+//!   instruction (`branch`, `call`, `callreturn`, `return`), which is how a
+//!   caller corrects a function whose body the flow-follower walked out of — an
+//!   indirect `call *%rdx` that never returns, a tail call unlace read as a call,
+//!   a jump into a neighbour.  `callee` states where one indirect call goes,
+//!   so the flow builds it as a direct call to that function
+//!   ([`crate::kuna_calleeoverride`]).  `callproto` states the arguments and
+//!   return of ONE call instruction ([`crate::kuna_callproto`]), which is what
+//!   a call through a pointer or a variadic callback needs: no callee symbol
+//!   carries its signature.  An address no call is at is rejected.
+//! * **Symbol-scoped** (`name`, `type`, `format`, `isolate`) can only be applied AFTER a decompile:
+//!   a local like `v2` does not exist until one has run (`rename v2 buf` before
+//!   the first decompile answers `No symbol named: v2`, which is precisely the
+//!   bug that makes today's `--kassert p9 naming-policy` inert).  So
+//!   [`apply_symbol_scoped`] runs on the first pass's `Funcdata` and the caller
+//!   decompiles a second time with the mutated scope carried across — the same
+//!   shape the console's `decompile` / `rename` / `decompile` sequence has.
+//!
+//! A directive that names no function binds to the function being decompiled.
+//! That is unambiguous for `unlace decompile`, which selects exactly one; on a
+//! whole-binary run it would silently mean "every function that happens to have a
+//! `v2`", so it is REJECTED there with a detail telling the caller to qualify it
+//! `<func>::<symbol>`.  Rejecting is the point: a directive that is accepted and
+//! does nothing is worse than an error.
+
+use std::rc::Rc;
+
+use unlace_base::address::Address;
+use unlace_base::types::{int4, uint4};
+use unlace_decomp::dtype::Datatype;
+use unlace_decomp::fspec::{ParameterPieces, ProtoModel, PrototypePieces};
+use unlace_decomp::funcdata::Funcdata;
+
+use crate::engine::{ConsoleProgram, EntryLookupError, EntrySelector};
+use crate::grammar::DataOrg;
+
+/// One parsed assertion.  `raw` is the caller's own text, echoed back in the
+/// [`Outcome`] so a report row is greppable against the command line that made
+/// it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Directive {
+    pub raw: String,
+    pub body: Body,
+}
+
+/// The directive vocabulary (see the module docs for the text syntax).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Body {
+    /// `function <start>[-<end>][=<name>]` — the `--define-function` alias.
+    Function {
+        start: u64,
+        end: Option<u64>,
+        name: Option<String>,
+    },
+    /// `typedef <C declaration>` — intern a type so later directives can name it.
+    Typedef { decl: String },
+    /// `prototype <func> <C declaration>` — the function's signature.
+    Prototype { func: String, decl: String },
+    /// `data <addr> <C typedeclaration>` — a named, typed global.
+    Data { addr: u64, decl: String },
+    /// `param [<func>::]<i> <storage> <C typedeclaration>` — a locked input.
+    Param {
+        func: Option<String>,
+        index: int4,
+        storage: String,
+        decl: String,
+    },
+    /// `return [<func>::]<storage> <C typedeclaration>` — a locked return.
+    Return {
+        func: Option<String>,
+        storage: String,
+        decl: String,
+    },
+    /// `comment [<func>::]<addr> <text>` — a comment at an instruction.
+    Comment {
+        func: Option<String>,
+        addr: u64,
+        text: String,
+    },
+    /// `flow [<func>::]<addr> branch|call|callreturn|return` — the flow out of
+    /// this instruction is not what kuna decided it was.
+    Flow {
+        func: Option<String>,
+        addr: u64,
+        kind: String,
+    },
+    /// `callee [<func>::]<callsite> <name|address>` — the indirect call at this
+    /// instruction goes to this function.
+    Callee {
+        func: Option<String>,
+        addr: u64,
+        callee: String,
+    },
+    /// `callproto [<func>::]<callsite> <C declaration>` — the prototype of the
+    /// one call made by the instruction at this address.
+    CallProto {
+        func: Option<String>,
+        addr: u64,
+        decl: String,
+    },
+    /// `name [<func>::]<symbol> <newname>` — rename a local.
+    Name {
+        func: Option<String>,
+        symbol: String,
+        newname: String,
+    },
+    /// `type [<func>::]<symbol> <C type>` — retype a local.
+    Type {
+        func: Option<String>,
+        symbol: String,
+        decl: String,
+    },
+    /// `format [<func>::]<addr> hex|dec|oct|bin|char [<value>]` — the constant
+    /// the instruction at `addr` reads is printed in this form.
+    Format {
+        func: Option<String>,
+        addr: u64,
+        format: String,
+        value: Option<u64>,
+    },
+    /// `isolate [<func>::]<symbol>` — this local is not merged with others.
+    Isolate {
+        func: Option<String>,
+        symbol: String,
+    },
+    /// `readonly <addr>+<size>` — the bytes in this range never change at run
+    /// time, so a load from it is its initialiser.
+    Readonly { addr: u64, size: int4 },
+    /// `volatile <addr>+<size>` — device memory: every access is a real access
+    /// and two reads of one address are two reads.
+    Volatile { addr: u64, size: int4 },
+    /// `bytes <addr> <hex|@file>` — the bytes mapped at this address are these,
+    /// whatever the file holds.  The plaintext a packer writes over itself.
+    Bytes { addr: u64, data: Vec<u8> },
+    /// `register <name> <value> [<addr>+<size>]` -- the register holds this
+    /// value on entry to any function in the range (everywhere without one):
+    /// a tracked register, as a processor spec's `tracked_set` states.
+    Register {
+        name: String,
+        value: u64,
+        range: Option<(u64, int4)>,
+    },
+}
+
+/// What became of one directive.  `status` is `applied` or `rejected`; a
+/// rejection always carries a `detail` naming the reason.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Outcome {
+    pub directive: String,
+    pub kind: &'static str,
+    pub phase: &'static str,
+    pub subphase: &'static str,
+    pub status: &'static str,
+    pub detail: Option<String>,
+    /// The pipeline ACCEPTED this directive, seeded it, and then refused it while
+    /// applying it: a `flow` override the flow-follower could not apply
+    /// (`Funcdata::kuna_rejected_flow_overrides`), or a `name`/`type` whose local
+    /// the replayed C does not declare as asked ([`verify_printed`]).
+    ///
+    /// Such a rejection is fatal without `--assert-strict`, unlike one that never
+    /// bound: the C that came back describes a program the directive was never
+    /// applied to, and nothing in it says so.
+    pub fatal: bool,
+}
+
+impl Body {
+    /// `(kind, phase, sub-phase)` — the phase-model coordinates a directive
+    /// writes at, reported so an agent can correlate a rejection with
+    /// `unlace catalog` / `docs/phases.md`.
+    pub fn coords(&self) -> (&'static str, &'static str, &'static str) {
+        match self {
+            Body::Function { .. } => ("function", "P1", "function-boundary"),
+            Body::Typedef { .. } => ("typedef", "P5", "type-propagation"),
+            Body::Prototype { .. } => ("prototype", "P4", "prototype-source"),
+            Body::Data { .. } => ("data", "P5", "const-pointer"),
+            Body::Param { .. } => ("param", "P4", "prototype-source"),
+            Body::Return { .. } => ("return", "P4", "prototype-source"),
+            Body::Comment { .. } => ("comment", "P9", "external-refinement"),
+            Body::Flow { .. } => ("flow", "P2", "flow-classification"),
+            Body::Callee { .. } => ("callee", "P2", "flow-classification"),
+            Body::CallProto { .. } => ("callproto", "P4", "prototype-source"),
+            Body::Name { .. } => ("name", "P9", "naming-policy"),
+            Body::Type { .. } => ("type", "P5", "type-propagation"),
+            Body::Format { .. } => ("format", "P9", "literal-format"),
+            Body::Isolate { .. } => ("isolate", "P6", "merge-aggressiveness"),
+            Body::Readonly { .. } => ("readonly", "P1", "code-data-partition"),
+            Body::Volatile { .. } => ("volatile", "P1", "code-data-partition"),
+            Body::Bytes { .. } => ("bytes", "P1", "code-data-partition"),
+            Body::Register { .. } => ("register", "P0", "external-refinement"),
+        }
+    }
+
+    /// The function this directive names, when it names one.
+    fn qualifier(&self) -> Option<&str> {
+        match self {
+            Body::Prototype { func, .. } => Some(func.as_str()),
+            Body::Param { func, .. }
+            | Body::Return { func, .. }
+            | Body::Comment { func, .. }
+            | Body::Flow { func, .. }
+            | Body::Callee { func, .. }
+            | Body::CallProto { func, .. }
+            | Body::Name { func, .. }
+            | Body::Type { func, .. }
+            | Body::Format { func, .. }
+            | Body::Isolate { func, .. } => func.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Is this directive applied per-function (rather than once per program)?
+    fn is_function_scoped(&self) -> bool {
+        matches!(
+            self,
+            Body::Param { .. }
+                | Body::Return { .. }
+                | Body::Comment { .. }
+                | Body::Flow { .. }
+                | Body::Callee { .. }
+                | Body::CallProto { .. }
+                | Body::Name { .. }
+                | Body::Type { .. }
+                | Body::Format { .. }
+                | Body::Isolate { .. }
+        )
+    }
+
+    /// The function a `param`/`return` directive names, when it names one.
+    ///
+    /// These two are the only function-scoped directives that mean something for
+    /// a function this run does not decompile: they describe a signature, and a
+    /// CALLER needs its callee's signature.  `comment`, `flow`, `name` and `type`
+    /// describe the inside of one function body and have no cross-function
+    /// reading at all, and neither does `callee`.
+    pub(crate) fn cross_function_prototype(&self) -> Option<String> {
+        match self {
+            Body::Param { func, .. } | Body::Return { func, .. } => func.clone(),
+            _ => None,
+        }
+    }
+
+    /// Is this directive one that can only be applied to an already-decompiled
+    /// function (because the symbol it names does not exist before)?
+    fn is_symbol_scoped(&self) -> bool {
+        matches!(
+            self,
+            Body::Name { .. } | Body::Type { .. } | Body::Format { .. } | Body::Isolate { .. }
+        )
+    }
+}
+
+impl Directive {
+    fn applied(&self) -> Outcome {
+        let (kind, phase, subphase) = self.body.coords();
+        Outcome {
+            directive: self.raw.clone(),
+            kind,
+            phase,
+            subphase,
+            status: "applied",
+            detail: None,
+            fatal: false,
+        }
+    }
+
+    fn rejected(&self, detail: impl Into<String>) -> Outcome {
+        let (kind, phase, subphase) = self.body.coords();
+        Outcome {
+            directive: self.raw.clone(),
+            kind,
+            phase,
+            subphase,
+            status: "rejected",
+            detail: Some(detail.into()),
+            fatal: false,
+        }
+    }
+
+    /// The outcome of a directive the pipeline took and then refused
+    /// (see [`Outcome::fatal`]).
+    fn refused(&self, detail: impl Into<String>) -> Outcome {
+        Outcome {
+            fatal: true,
+            ..self.rejected(detail)
+        }
+    }
+}
+
+/// Does this directive bind to the function named `name`?
+///
+/// A qualified directive binds only to the function it names.  An unqualified
+/// one binds to the single function under decompile, which is why `single` (the
+/// run selected exactly one function) is required for it: see the module docs.
+fn binds_to(body: &Body, name: &str, single: bool) -> bool {
+    match body.qualifier() {
+        Some(func) => func == name,
+        None => single,
+    }
+}
+
+/// The console-side data organisation of the loaded program.
+fn data_org(prog: &ConsoleProgram) -> DataOrg {
+    let (addr_size, word_size) = prog.arch().data_org();
+    DataOrg {
+        addr_size,
+        word_size,
+    }
+}
+
+/// Convert a user-facing address and build it in the default code space.
+fn code_addr(prog: &ConsoleProgram, vma: u64) -> Result<Address, String> {
+    let vma = prog
+        .input_code_offset(vma)
+        .map_err(|e| e.explain().to_string())?;
+    let space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .cloned()
+        .ok_or_else(|| "the loaded program has no default code space".to_string())?;
+    Ok(Address::new(space, vma))
+}
+
+/// Scale a user address without treating its low bit as a function state bit.
+fn data_addr(prog: &ConsoleProgram, vma: u64) -> Result<Address, String> {
+    let vma = prog
+        .input_address_offset(vma)
+        .map_err(|e| e.explain().to_string())?;
+    let space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .cloned()
+        .ok_or_else(|| "the loaded program has no default code space".to_string())?;
+    Ok(Address::new(space, vma))
+}
+
+/// Parse a storage token (`%RDI`, `[stack,-0x18,8]`, `s0x10`) through the
+/// console's own machine-address grammar, so `--assert` and the console spell
+/// storage the same way.
+fn parse_storage(prog: &ConsoleProgram, tok: &str) -> Result<Address, String> {
+    let mut s = crate::interface::CommandStream::new(tok);
+    crate::ifacedecomp::parse_machaddr(prog, &mut s, false).map(|(addr, _size)| addr)
+}
+
+/// Parse a `bytes` directive's payload: one unbroken, even-length run of hex
+/// digits, optionally `0x`-prefixed.
+///
+/// One grammar for both surfaces — the `--assert` flag and the console's
+/// `override bytes` — so a directive means the same thing however it arrives.
+pub fn parse_hex_bytes(tok: &str) -> Result<Vec<u8>, String> {
+    let digits = tok
+        .strip_prefix("0x")
+        .or_else(|| tok.strip_prefix("0X"))
+        .unwrap_or(tok);
+    if digits.is_empty() {
+        return Err("bytes needs at least one byte of hex".into());
+    }
+    if !digits.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("{tok:?} is not hex"));
+    }
+    if digits.len() % 2 != 0 {
+        return Err(format!("{tok:?} has an odd number of hex digits"));
+    }
+    (0..digits.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&digits[i..i + 2], 16).map_err(|e| e.to_string()))
+        .collect()
+}
+
+/// Apply the image-scoped directives (today only `bytes`) and record an
+/// [`Outcome`] for each.
+///
+/// Called BEFORE the analysis commit, which is the only ordering that can work:
+/// the bytes a caller states are the input to every later read of that address,
+/// and nothing re-reads an address it has already decoded.  The
+/// `readonly`/`volatile` precedent is the same constraint inverted — a range
+/// property stated after the symbols over it are mapped is silently inert.
+pub fn apply_image_scoped(prog: &mut ConsoleProgram) {
+    let _load = prog.arch().load_scope();
+    let directives = prog.assertions().to_vec();
+    for (i, directive) in directives.iter().enumerate() {
+        let Body::Bytes { addr, data } = &directive.body else {
+            continue;
+        };
+        let outcome = match overlay_bytes(prog, *addr, data) {
+            Ok(()) => directive.applied(),
+            Err(detail) => directive.rejected(detail),
+        };
+        prog.set_assertion_outcome(i, outcome);
+    }
+}
+
+/// `bytes` — the in-process twin of the console's `override bytes`: hand the
+/// caller's plaintext to the loader, which serves it to every later read of
+/// those addresses.
+///
+/// Nothing is written to the file on disk.  The statement is about what is in
+/// RAM at that address once the program has run itself far enough to put it
+/// there, which is exactly the fact a static loader cannot derive.
+fn overlay_bytes(prog: &mut ConsoleProgram, vma: u64, data: &[u8]) -> Result<(), String> {
+    let addr = data_addr(prog, vma)?;
+    let loader_rc = prog.arch().translate().loader_rc();
+    let mut loader = loader_rc
+        .try_borrow_mut()
+        .map_err(|_| "the load image is already borrowed".to_string())?;
+    loader
+        .kuna_overlay_bytes(&addr, data)
+        .map_err(|e| e.explain().to_string())?;
+    drop(loader);
+    prog.note_materialized_bytes(&addr, data.len());
+    Ok(())
+}
+
+/// Apply the program-scoped directives (`function`, `typedef`, `prototype`,
+/// `data`) and record an [`Outcome`] for each.
+///
+/// Called right after the analysis commit — a caller-declared fact outranks
+/// discovery — and before any function is selected.  The function- and
+/// symbol-scoped directives are left for the decompile loop and are given a
+/// placeholder outcome that the loop overwrites; one that is never reached keeps
+/// it, which is how "you asked about a function this run did not decompile"
+/// becomes a report row instead of silence.
+pub fn apply_program_scoped(prog: &mut ConsoleProgram) {
+    let _load = prog.arch().load_scope();
+    let directives = prog.assertions().to_vec();
+    for (i, directive) in directives.iter().enumerate() {
+        // A QUALIFIED `param`/`return` is a statement about the named function's
+        // prototype and holds whether or not this run decompiles it, so it is
+        // applied here rather than waiting for a selection that may never name
+        // it (`docs/re-needs/qualified-parameter-assertions-modify.md`).
+        if let Some(func) = directive.body.cross_function_prototype() {
+            let outcome = match apply_cross_function(prog, &func, &directive.body) {
+                Ok(()) => directive.applied(),
+                Err(detail) => directive.rejected(detail),
+            };
+            prog.set_assertion_outcome(i, outcome);
+            continue;
+        }
+        // Image-scoped: already applied (and reported) by `apply_image_scoped`,
+        // which had to run before the commit this function follows.
+        if matches!(directive.body, Body::Bytes { .. }) {
+            continue;
+        }
+        if directive.body.is_function_scoped() {
+            let outcome = directive.rejected(
+                "no decompiled function matched this directive (name it as \
+                 <func>::<operand>, or select the function)",
+            );
+            prog.set_assertion_outcome(i, outcome);
+            continue;
+        }
+        let outcome = match apply_one_program_scoped(prog, &directive.body) {
+            Ok(()) => directive.applied(),
+            Err(detail) => directive.rejected(detail),
+        };
+        prog.set_assertion_outcome(i, outcome);
+    }
+}
+
+fn apply_one_program_scoped(prog: &mut ConsoleProgram, body: &Body) -> Result<(), String> {
+    match body {
+        Body::Function { start, end, name } => {
+            let addr = code_addr(prog, *start)?;
+            let size = match end {
+                None => 0,
+                Some(end) => {
+                    let end = prog
+                        .input_code_offset(*end)
+                        .map_err(|e| e.explain().to_string())?;
+                    let size = end
+                        .checked_sub(addr.get_offset())
+                        .filter(|size| *size > 0)
+                        .ok_or_else(|| {
+                            "function end must be above start after target address conversion"
+                                .to_string()
+                        })?;
+                    int4::try_from(size).map_err(|_| {
+                        "function byte extent exceeds the supported range".to_string()
+                    })?
+                }
+            };
+            prog.declare_function(addr, name.as_deref(), size)
+                .map(|_| ())
+                .map_err(|e| e.explain().to_string())
+        }
+        Body::Typedef { decl } => {
+            let org = data_org(prog);
+            let text = with_semicolon(decl);
+            let models = model_names(prog);
+            crate::grammar::parse_c(&text, prog.arch().types(), org, &models, |_, _| Ok(()))
+                .map_err(|e| e.explain().to_string())
+        }
+        Body::Prototype { func, decl } => apply_prototype(prog, func, decl),
+        Body::Data { addr, decl } => apply_data(prog, *addr, decl),
+        Body::Readonly { addr, size } => paint_property(
+            prog,
+            *addr,
+            *size,
+            unlace_decomp::varnode::varnode_flags::readonly,
+        ),
+        Body::Volatile { addr, size } => paint_property(
+            prog,
+            *addr,
+            *size,
+            unlace_decomp::varnode::varnode_flags::volatil,
+        ),
+        Body::Register { name, value, range } => apply_register(prog, name, *value, *range),
+        // Handled by the decompile loop.
+        _ => Err("internal: not a program-scoped directive".into()),
+    }
+}
+
+/// `register` -- the in-process twin of the console's `set track`.
+fn apply_register(
+    prog: &mut ConsoleProgram,
+    name: &str,
+    value: u64,
+    range: Option<(u64, int4)>,
+) -> Result<(), String> {
+    let loc = prog
+        .arch()
+        .get_register_varnode(name.as_bytes())
+        .map_err(|e| e.explain().to_string())?;
+    let tracked = unlace_sleigh::globalcontext::TrackedContext { loc, val: value };
+    match range {
+        None => prog
+            .arch()
+            .with_context_db_mut(|db| db.get_tracked_default().push(tracked)),
+        Some((addr, size)) => {
+            if size <= 0 {
+                return Err("a range needs a size of at least one byte".into());
+            }
+            let first = code_addr(prog, addr)?;
+            let space = first
+                .get_space()
+                .cloned()
+                .ok_or("the loaded program has no default code space")?;
+            let last = Address::new(space, first.get_offset() + size as u64);
+            prog.arch().with_context_db_mut(|db| {
+                let def = db.get_tracked_default().clone();
+                let track = db.create_set(&first, &last);
+                *track = def;
+                track.push(tracked);
+            });
+        }
+    }
+    prog.callwide_unavailable("tracked register assertions require a new complete image proof");
+    Ok(())
+}
+
+/// `readonly` / `volatile` — the in-process twin of the console's `readonly` and
+/// `volatile` commands (`IfcReadonly`/`IfcVolatile`): OR one boolean Varnode
+/// property over `[addr, addr+size)`.
+///
+/// The paint alone is not enough here.  `Scope::addMap` copies the range
+/// property into a `SymbolEntry` as it maps it (`database.cc:1156-1158`) and the
+/// per-function global snapshot then reads the SYMBOL's flags, so a property
+/// stated after the loader's symbols are mapped — which is every in-process run,
+/// since `bootstrap_from_object` reads them — is invisible at exactly the
+/// addresses a caller is most likely to name.  Re-applying it to the symbols the
+/// range covers is what makes `--assert 'readonly 0x404028+8'` and the console's
+/// pre-`read symbols` ordering mean the same thing.
+fn paint_property(
+    prog: &mut ConsoleProgram,
+    vma: u64,
+    size: int4,
+    flag: uint4,
+) -> Result<(), String> {
+    if size <= 0 {
+        return Err("a range needs a size of at least one byte".into());
+    }
+    let first = data_addr(prog, vma)?;
+    let space = first
+        .get_space()
+        .cloned()
+        .ok_or_else(|| "the loaded program has no default code space".to_string())?;
+    let end = first
+        .get_offset()
+        .checked_add(size as u64)
+        .ok_or_else(|| "the range wraps past the end of the address space".to_string())?;
+    let last_open = Address::new(Rc::clone(&space), end);
+    prog.arch_mut()
+        .symboltab
+        .set_property_range(flag, &first, &last_open);
+    repaint_covered_symbols(prog, &space, first.get_offset(), end, flag);
+    Ok(())
+}
+
+/// OR `flag` onto every global symbol whose storage overlaps `[first, end)`.
+///
+/// Walks the global scope's map by repeatedly asking for the next overlapping
+/// entry and stepping past it, so the cost is one lookup per covered symbol
+/// rather than one per byte.
+fn repaint_covered_symbols(
+    prog: &mut ConsoleProgram,
+    space: &Rc<unlace_base::space::AddrSpace>,
+    first: u64,
+    end: u64,
+    flag: uint4,
+) {
+    let Some(scope) = prog.arch().symboltab.get_global_scope() else {
+        return;
+    };
+    let mut at = first;
+    while at < end {
+        let addr = Address::new(Rc::clone(space), at);
+        let remaining = (end - at).min(int4::MAX as u64) as int4;
+        let Some(eref) = prog.arch().symboltab.find_overlap(scope, &addr, remaining) else {
+            break;
+        };
+        let (sym, past) = {
+            let entry = prog.arch().symboltab.entry(scope, eref);
+            (entry.symbol, entry.get_last().wrapping_add(1))
+        };
+        prog.arch_mut().symboltab.set_attribute(sym, flag);
+        // A zero-width or backwards entry would spin; always make progress.
+        at = past.max(at.wrapping_add(1));
+    }
+}
+
+/// C declarations are parsed as a statement; accept the caller's text with or
+/// without the terminating `;`.
+fn with_semicolon(decl: &str) -> String {
+    let decl = decl.trim();
+    if decl.ends_with(';') {
+        decl.to_string()
+    } else {
+        format!("{decl};")
+    }
+}
+
+/// Which function a directive's `<func>` operand names, once the loaded program
+/// has been consulted.
+///
+/// `<func>` is a NAME first — that is what every existing directive meant — and
+/// an ENTRY ADDRESS second.  A name which already resolves is canonicalized to
+/// its entry address before parking.  That is observable on an imported PE
+/// function: the IAT slot and the executable thunk carry the same name, but a
+/// direct call reaches only the thunk.  The shared entry resolver chooses that
+/// lone executable candidate and rejects genuinely ambiguous executable
+/// definitions.  A name which does not resolve stays pending by name, preserving
+/// the console's ability to state a prototype before symbols are loaded.
+///
+/// An agent working on a stripped or import-heavy binary has an address long
+/// before it has a name it trusts, and the address form used to be accepted and
+/// then discarded: nothing is called `0x140003ddf`, so the by-name park landed
+/// on no symbol at all and the call site kept its recovered signature
+/// (`docs/re-needs/accepted-sqrt-prototype-still.md`).
+///
+/// Address is also the key the READ side already uses
+/// (`ArchContext::callee_proto_pieces` looks a call spec's entry address up),
+/// which is why the address form reaches a callee the name form cannot: a
+/// PE import thunk and the IAT slot it jumps to are two FunctionSymbols with
+/// the SAME name, and the by-name query answers with the slot while every call
+/// in the program goes to the thunk.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ProtoTarget {
+    /// Bind by name.  An unresolved name is still legal — it parks in the
+    /// pending store, which is what lets `map prototype main …` precede the
+    /// symbols it talks about.
+    Named(String),
+    /// Bind by entry address: the address to park at, and the resolved
+    /// function's own display name (the pending store and the printer are both
+    /// keyed by name, so the directive must not rename the function to its VMA).
+    At(Address, String),
+}
+
+impl ProtoTarget {
+    /// The name this prototype describes — the operand itself for the name
+    /// form, the resolved function's display name for the address form.
+    pub(crate) fn name(&self) -> &str {
+        match self {
+            ProtoTarget::Named(n) => n,
+            ProtoTarget::At(_, n) => n,
+        }
+    }
+}
+
+/// Resolve a `<func>` operand against the loaded program (see [`ProtoTarget`]).
+///
+/// An explicitly `0x`-prefixed operand that no function starts at is an ERROR
+/// rather than a silent park: `0x…` is not a C identifier, so such a directive
+/// is provably inert and the caller deserves to hear it.  A bare hex token
+/// (`140003ddf`) is ambiguous with a real identifier (`abc` is both), so it
+/// takes the address path only when it resolves and no function of that name
+/// exists, and never errors.
+pub(crate) fn resolve_proto_target(
+    prog: &ConsoleProgram,
+    func: &str,
+) -> Result<ProtoTarget, String> {
+    // An explicit address operand that no symbol is spelled as cannot match by
+    // name; skip the whole-image name lookup and its unused spelling suggestion.
+    let address_only =
+        (func.starts_with("0x") || func.starts_with("0X")) && !prog.has_symbol_spelled(func);
+    if !address_only {
+        match prog.resolve_entry(&EntrySelector::Name(func.to_string())) {
+            Ok(entry) => return Ok(ProtoTarget::At(entry.addr, entry.name)),
+            // An unresolved name is deliberately legal: it parks in the pending
+            // store for a symbol that may be loaded later. Keep going because a
+            // hexadecimal operand can still be the address form below.
+            Err(EntryLookupError::NotFound { .. }) => {}
+            // In particular, do not turn two executable definitions with the same
+            // name into an arbitrary global-scope choice. The public selector
+            // reports every candidate, which lets an agent retry with an address.
+            Err(err) => return Err(err.to_string()),
+        }
+    }
+    let hex = func.strip_prefix("0x").or_else(|| func.strip_prefix("0X"));
+    let explicit = hex.is_some();
+    let digits = hex.unwrap_or(func);
+    let vma = if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_hexdigit()) {
+        u64::from_str_radix(digits, 16).ok()
+    } else {
+        None
+    };
+    if let Some(vma) = vma {
+        let addr = code_addr(prog, vma)?;
+        if let Some(name) = prog
+            .arch()
+            .symboltab
+            .function_display_name_across_scopes(&addr)
+        {
+            return Ok(ProtoTarget::At(addr, name));
+        }
+        if explicit {
+            return Err(format!("no function starts at {func}"));
+        }
+    }
+    Ok(ProtoTarget::Named(func.to_string()))
+}
+
+/// Park `pieces` on the target's `FunctionSymbol`, which is where a CALLER's
+/// `ActionDefaultParams` reads a declared callee signature back from
+/// (`ArchContext::callee_proto_pieces`).
+///
+/// `pieces.name` is set to the target's name first, so a directive that
+/// renames — `prototype sub_1400055e0 void *sha256(…)` — still describes
+/// `sub_1400055e0`, and an address form describes the function that lives
+/// there rather than a function called `0x140003ddf`.
+pub(crate) fn park_proto_pieces(
+    prog: &mut ConsoleProgram,
+    target: &ProtoTarget,
+    pieces: &mut PrototypePieces,
+) {
+    pieces.name = target.name().to_string();
+    match target {
+        ProtoTarget::Named(name) => prog
+            .arch_mut()
+            .set_function_prototype_pieces(name, pieces.clone()),
+        ProtoTarget::At(addr, _) => prog
+            .arch_mut()
+            .set_function_prototype_pieces_at(addr, pieces.clone()),
+    }
+}
+
+/// The three things a full `prototype` directive does: park the pieces for the
+/// callers, record the calling convention it named, and lock the signature onto
+/// the symbol itself.
+pub(crate) fn park_prototype(
+    prog: &mut ConsoleProgram,
+    target: &ProtoTarget,
+    pieces: &mut PrototypePieces,
+    model: Option<&Rc<ProtoModel>>,
+) {
+    park_proto_pieces(prog, target, pieces);
+    park_proto_model(prog, target, model);
+    lock_prototype_on_symbol(prog, target, pieces, model);
+}
+
+/// `prototype <func> <C declaration>` — the in-process twin of `parse line
+/// extern <decl>` (`IfcParseLine`'s `setPrototype` branch).
+///
+/// The parsed pieces are parked in two places, because two different consumers
+/// read them: on the function's own `FunctionSymbol` (where a CALLER's
+/// `ActionDefaultParams` finds them, so a call to this function renders typed),
+/// and in the program's pending-prototype store (where the function's OWN
+/// decompile finds them, since the drive rebuilds the `Funcdata` and the
+/// symbol-table link does not survive that).
+///
+/// The `<func>` operand is authoritative over the name inside the declaration:
+/// it says *which* function this signature describes, so `prototype sub_1400
+/// int handler(char *)` binds to `sub_1400`.  It may be a name or an entry
+/// address ([`resolve_proto_target`]).
+fn apply_prototype(prog: &mut ConsoleProgram, func: &str, decl: &str) -> Result<(), String> {
+    use std::cell::RefCell;
+    let org = data_org(prog);
+    let text = format!("extern {}", with_semicolon(decl));
+    let captured: RefCell<Option<(PrototypePieces, String)>> = RefCell::new(None);
+    let models = model_names(prog);
+    crate::grammar::parse_c(&text, prog.arch().types(), org, &models, |pieces, model| {
+        *captured.borrow_mut() = Some((pieces, model.to_string()));
+        Ok(())
+    })
+    .map_err(|e| e.explain().to_string())?;
+    let (mut pieces, model) = captured
+        .into_inner()
+        .ok_or_else(|| "not a function declaration".to_string())?;
+    let target = resolve_proto_target(prog, func)?;
+    let model = declared_model(prog, &model);
+    park_prototype(prog, &target, &mut pieces, model.as_ref());
+    crate::kuna_callwide::target_declaration(
+        prog,
+        &target,
+        &pieces,
+        model,
+        unlace_decomp::kuna_callwide::DeclarationSource::Assertion,
+    );
+    prog.set_pending_prototype(target.name(), pieces);
+    Ok(())
+}
+
+/// The prototype-model names the loaded program's architecture has registered,
+/// as the C declaration parser needs them (`glb->hasModel`).
+pub(crate) fn model_names(prog: &ConsoleProgram) -> Vec<String> {
+    prog.arch()
+        .proto_model_names()
+        .map(str::to_string)
+        .collect()
+}
+
+/// The calling convention a declaration named, resolved against the loaded
+/// compiler spec's model registry.  `None` when the declaration named none; a
+/// name the registry does not carry cannot reach here, because the parser only
+/// classified it as a convention *because* the registry named it.
+pub(crate) fn declared_model(prog: &ConsoleProgram, model: &str) -> Option<Rc<ProtoModel>> {
+    if model.is_empty() {
+        return None;
+    }
+    prog.arch().get_model(model).cloned()
+}
+
+/// Record the calling convention a `prototype` directive named, so the
+/// function's own decompile is seeded under it rather than under the
+/// architecture default.
+///
+/// Keyed by the target's NAME, which is the key the arch handle joins against
+/// the parked pieces — those carry `pieces.name == target.name()`
+/// ([`park_proto_pieces`]).
+pub(crate) fn park_proto_model(
+    prog: &mut ConsoleProgram,
+    target: &ProtoTarget,
+    model: Option<&Rc<ProtoModel>>,
+) {
+    let Some(m) = model else { return };
+    let name = target.name().to_string();
+    prog.arch_mut()
+        .set_function_prototype_model(&name, Rc::clone(m));
+}
+
+/// Lock the parsed prototype onto the target's `FunctionSymbol` by retyping it
+/// to the prototype-bearing `TypeCode` (C++ `Architecture::setPrototype`).  A
+/// missing symbol is a no-op: the pending store above still carries the fact for
+/// the function's own decompile.
+pub(crate) fn lock_prototype_on_symbol(
+    prog: &mut ConsoleProgram,
+    target: &ProtoTarget,
+    pieces: &PrototypePieces,
+    model: Option<&Rc<ProtoModel>>,
+) {
+    let arch = prog.arch_mut();
+    let sid = match target {
+        ProtoTarget::Named(name) => {
+            let Some(scope) = arch.symboltab.get_global_scope() else {
+                return;
+            };
+            match arch.symboltab.query_function_by_name(scope, name) {
+                Some(sid) => sid,
+                None => return,
+            }
+        }
+        ProtoTarget::At(addr, _) => match arch.symboltab.find_function_across_scopes(addr) {
+            Some((sid, _)) => sid,
+            None => return,
+        },
+    };
+    // The prototype-bearing `TypeCode` is what a CALLER reads a declared callee's
+    // signature back from (`ArchContext::query_callee_proto`), so the declared
+    // convention has to be baked in here: the storage the caller sees for each
+    // argument is assigned when this `FuncProto` is built.  One that names none
+    // follows the image's float convention.
+    let model = model
+        .cloned()
+        .or_else(|| unlace_decomp::kuna_typedcallabi::undeclared_model_for(arch, pieces));
+    let tc = match model {
+        Some(m) => arch.types_impl().get_type_code_proto_model(pieces, m),
+        None => arch.types().get_type_code_proto(pieces),
+    };
+    if let Ok(tc) = tc {
+        let _ = arch.symboltab.retype_symbol(sid, tc);
+    }
+}
+
+/// Apply a `param <func>::<i> <storage> <decl>` / `return <func>::<storage>
+/// <decl>` to the prototype of the function it NAMES — the in-process twin of
+/// the cross-function arm of the console's `map param` / `map return`.
+///
+/// The parked [`PrototypePieces`] is the one channel a callee's signature
+/// reaches a CALLER through (`ActionDefaultParams` rebuilds each call site's
+/// prototype from the pieces on the callee's `FunctionSymbol`), and it describes
+/// types only — so the explicit storage rides in `input_storage` /
+/// `output_storage`, which the model-driven assignment in
+/// `FuncProto::set_pieces` honors.  Parking it also covers the case where the named
+/// function IS the one under decompile: `function_seed` seeds `pending_proto`
+/// from the same store.
+fn apply_cross_function(prog: &mut ConsoleProgram, func: &str, body: &Body) -> Result<(), String> {
+    use unlace_decomp::fspec::parameter_pieces_flags;
+    let org = data_org(prog);
+    let target = resolve_proto_target(prog, func)?;
+    let mut pieces = prog
+        .pending_prototype(target.name())
+        .cloned()
+        .unwrap_or(PrototypePieces {
+            name: target.name().to_string(),
+            first_var_arg_slot: -1,
+            ..Default::default()
+        });
+    match body {
+        Body::Param {
+            index,
+            storage,
+            decl,
+            ..
+        } => {
+            if *index < 0 {
+                return Err("a parameter index must not be negative".into());
+            }
+            let addr = parse_storage(prog, storage)?;
+            let (ct, pname) = crate::grammar::parse_type(decl, prog.arch().types(), org)
+                .map_err(|e| e.explain().to_string())?;
+            // A slot no directive has named yet is `undefined<addr_size>` — what
+            // the decompiler says about a value it was told nothing about — so
+            // slots may be declared in any order.
+            let (addr_size, _) = prog.arch().data_org();
+            let filler = prog
+                .arch()
+                .types()
+                .get_base(addr_size, unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN)
+                .map_err(|e| e.explain().to_string())?;
+            let slot = *index as usize;
+            while pieces.intypes.len() <= slot {
+                pieces.intypes.push(Rc::clone(&filler));
+            }
+            while pieces.innames.len() <= slot {
+                pieces.innames.push(String::new());
+            }
+            pieces.intypes[slot] = ct.clone();
+            pieces.innames[slot] = pname;
+            let piece = ParameterPieces {
+                addr,
+                type_: Some(ct),
+                flags: parameter_pieces_flags::TYPELOCK | parameter_pieces_flags::NAMELOCK,
+            };
+            pieces.input_storage.retain(|(i, _)| *i != *index);
+            pieces.input_storage.push((*index, piece));
+        }
+        Body::Return { storage, decl, .. } => {
+            let addr = parse_storage(prog, storage)?;
+            let (ct, _) = crate::grammar::parse_type(decl, prog.arch().types(), org)
+                .map_err(|e| e.explain().to_string())?;
+            pieces.output_storage = Some(ParameterPieces {
+                addr,
+                type_: Some(ct),
+                flags: parameter_pieces_flags::TYPELOCK,
+            });
+        }
+        _ => return Err("internal: not a cross-function prototype directive".into()),
+    }
+    park_proto_pieces(prog, &target, &mut pieces);
+    // The symbol retype (what lets a by-value struct argument be split) needs a
+    // return type; `param` alone never declares one, and the storage assignment
+    // behind `getTypeCode` dereferences `outtype` unconditionally.
+    if pieces.outtype.is_some() {
+        let model = prog.arch().function_prototype_model(target.name()).cloned();
+        lock_prototype_on_symbol(prog, &target, &pieces, model.as_ref());
+    }
+    prog.callwide_unavailable("partial storage assertions are not complete declaration provenance");
+    prog.set_pending_prototype(target.name(), pieces);
+    Ok(())
+}
+
+/// `data <addr> <C typedeclaration>` — the in-process twin of the global branch
+/// of `map address` (`IfcMapaddress`): a named, typed, name+type-locked global
+/// mapped at `addr`, so a load through that address renders by name.
+fn apply_data(prog: &mut ConsoleProgram, vma: u64, decl: &str) -> Result<(), String> {
+    use unlace_decomp::varnode::varnode_flags;
+    let org = data_org(prog);
+    let addr = data_addr(prog, vma)?;
+    let (ct, name, volatile) =
+        crate::grammar::parse_type_with_volatile(decl, prog.arch().types(), org)
+            .map_err(|e| e.explain().to_string())?;
+    if name.is_empty() {
+        return Err("a data declaration must name the symbol".into());
+    }
+    let size = ct.get_size();
+    let inherit = prog.arch().symboltab.get_property(&addr);
+    let flags = varnode_flags::namelock
+        | varnode_flags::typelock
+        | inherit
+        | if volatile { varnode_flags::volatil } else { 0 };
+    let num_spaces = prog.arch().manage().num_spaces() as int4;
+    let arch = prog.arch_mut();
+    let (scope, basename) = arch
+        .symboltab
+        .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)
+        .map_err(|e| e.explain().to_string())?;
+    let invalid = Address::new_invalid();
+    let (sym, _) = arch
+        .symboltab
+        .upsert_data_mapped(scope, &basename, ct, &addr, &invalid)
+        .map_err(|e| e.explain().to_string())?;
+    arch.symboltab.set_attribute(sym, flags);
+    if volatile && size > 0 {
+        paint_property(prog, vma, size, varnode_flags::volatil)?;
+    }
+    Ok(())
+}
+
+/// The function-scoped facts a decompile of `name` must be seeded with.
+///
+/// `param` and `return` are consumed at flow time (they are the prototype the
+/// function is decompiled against), so they cannot be applied afterwards;
+/// `flow` is consumed at flow time too, and even earlier — the follower reads it
+/// while it is still deciding which bytes belong to the function; `comment` is
+/// program state and is written here too, since it is keyed by the owning
+/// function's entry.
+#[derive(Default)]
+pub struct FunctionSeed {
+    /// `map param` storage locks, in the drive's `mapped_params` shape.
+    pub mapped_params: Vec<(int4, String, ParameterPieces)>,
+    /// The prototype this function is decompiled against (`prototype`, plus the
+    /// output storage a `return` directive locks).
+    pub pending_proto: Option<PrototypePieces>,
+    /// `override flow` facts, in the drive's `flow_overrides` shape: the flow
+    /// type forced at each named instruction.
+    pub flow_overrides: Vec<(Address, uint4)>,
+    /// `override prototype` facts, in the drive's `proto_overrides` shape: the
+    /// prototype forced onto the call at each named instruction.
+    pub proto_overrides: Vec<(Address, PrototypePieces)>,
+}
+
+/// Build the [`FunctionSeed`] for the function `name` entered at `entry`, and
+/// record an outcome for every directive that bound to it.
+///
+/// `single` says the run selected exactly one function, which is what lets an
+/// unqualified directive bind (see the module docs).
+pub fn function_seed(
+    prog: &mut ConsoleProgram,
+    name: &str,
+    entry: &Address,
+    single: bool,
+) -> FunctionSeed {
+    let directives = prog.assertions().to_vec();
+    let mut seed = FunctionSeed {
+        pending_proto: prog.pending_prototype(name).cloned(),
+        ..Default::default()
+    };
+    for (i, directive) in directives.iter().enumerate() {
+        if directive.body.is_symbol_scoped() || !directive.body.is_function_scoped() {
+            continue;
+        }
+        // Already applied program-scoped, onto the prototype of the function it
+        // names; `pending_proto` above picks it back up when that function is the
+        // one being decompiled.
+        if directive.body.cross_function_prototype().is_some() {
+            continue;
+        }
+        if !binds_to(&directive.body, name, single) {
+            continue;
+        }
+        let outcome = match seed_one(prog, &directive.body, name, entry, &mut seed) {
+            Ok(()) => directive.applied(),
+            Err(detail) => directive.rejected(detail),
+        };
+        prog.set_assertion_outcome(i, outcome);
+    }
+    if directives
+        .iter()
+        .any(|d| matches!(d.body, Body::CallProto { .. }))
+    {
+        let outcomes = prog.assertion_outcomes();
+        let applied = |i: usize| outcomes.get(i).is_some_and(|o| o.status == "applied");
+        for i in restated_call_prototypes(&directives, applied, |d| binds_to(&d.body, name, single))
+        {
+            prog.set_assertion_outcome(i, restated(&directives[i]));
+        }
+    }
+    seed
+}
+
+/// The `callproto` directives a later one replaces: of those `binds` and
+/// `applied` accept, every one a later one names the same call site after.  A
+/// call keeps the newest prototype stated for it, as the console's `override
+/// prototype` does.
+pub fn restated_call_prototypes(
+    directives: &[Directive],
+    applied: impl Fn(usize) -> bool,
+    binds: impl Fn(&Directive) -> bool,
+) -> Vec<usize> {
+    let sites: Vec<Option<u64>> = directives
+        .iter()
+        .enumerate()
+        .map(|(i, d)| match d.body {
+            Body::CallProto { addr, .. } if applied(i) && binds(d) => Some(addr),
+            _ => None,
+        })
+        .collect();
+    (0..sites.len())
+        .filter(|&i| sites[i].is_some() && sites[i + 1..].contains(&sites[i]))
+        .collect()
+}
+
+/// The outcome of a `callproto` a later one for the same call replaced.
+pub fn restated(directive: &Directive) -> Outcome {
+    directive.rejected("a later callproto states this call again, and that one is applied")
+}
+
+/// Downgrade the outcome of every `flow` directive bound to `name` that the flow
+/// follower REFUSED, from the `applied` [`function_seed`] recorded when it merely
+/// seeded it, to a fatal rejection carrying the engine's own reason.
+///
+/// The seed is collected before the pipeline runs, so `function_seed` can only
+/// say the directive was *taken*; whether `Funcdata::override_flow` could apply
+/// it is not known until flow has followed.  Without this the ledger reported
+/// `applied` for an override the engine had just refused, which is the one thing
+/// an agent reads to decide whether its assertion took effect.
+pub fn record_rejected_flow_overrides(
+    prog: &mut ConsoleProgram,
+    name: &str,
+    single: bool,
+    fd: &Funcdata,
+) {
+    let refused = fd.kuna_rejected_flow_overrides();
+    if refused.is_empty() {
+        return;
+    }
+    let directives = prog.assertions().to_vec();
+    for (i, directive) in directives.iter().enumerate() {
+        let Body::Flow { addr, kind, .. } = &directive.body else {
+            continue;
+        };
+        if !binds_to(&directive.body, name, single) {
+            continue;
+        }
+        let type_ = unlace_decomp::overrides::Override::string_to_type(kind.as_bytes());
+        let Ok(at) = code_addr(prog, *addr) else {
+            continue;
+        };
+        let Some((_, _, reason)) = refused.iter().find(|(a, t, _)| a == &at && *t == type_) else {
+            continue;
+        };
+        let outcome = directive.refused(reason.clone());
+        prog.set_assertion_outcome(i, outcome);
+    }
+}
+
+/// Downgrade the outcome of every applied `callee` directive bound to `name`
+/// that a later one for the same call site replaced ([`restated_callees`]), or
+/// whose call site the followed flow did not turn into a direct call, as
+/// [`record_rejected_flow_overrides`] does for `flow`.
+pub fn record_rejected_callee_overrides(
+    prog: &mut ConsoleProgram,
+    name: &str,
+    single: bool,
+    fd: &Funcdata,
+) {
+    if !prog
+        .assertions()
+        .iter()
+        .any(|d| matches!(d.body, Body::Callee { .. }))
+    {
+        return;
+    }
+    let directives = prog.assertions().to_vec();
+    let outcomes = prog.assertion_outcomes();
+    let applied = |i: usize| outcomes.get(i).is_some_and(|o| o.status == "applied");
+    let binds = |d: &Directive| binds_to(&d.body, name, single);
+    let restated = restated_callees(&directives, applied, binds);
+    let refused = fd.kuna_rejected_callee_overrides();
+    for (i, directive) in directives.iter().enumerate() {
+        let Body::Callee { addr, .. } = &directive.body else {
+            continue;
+        };
+        if !applied(i) || !binds(directive) {
+            continue;
+        }
+        let outcome = if restated.contains(&i) {
+            restated_callee(directive)
+        } else {
+            let Ok(at) = code_addr(prog, *addr) else {
+                continue;
+            };
+            let Some((_, _, reason)) = refused.iter().find(|(site, _, _)| site == &at) else {
+                continue;
+            };
+            directive.refused(reason.clone())
+        };
+        prog.set_assertion_outcome(i, outcome);
+    }
+}
+
+/// The `callee` directives a later one replaces: of those `binds` and `applied`
+/// accept, every one a later one names the same call site after. The call keeps
+/// the destination stated last, as the console's `override indirect` does.
+pub fn restated_callees(
+    directives: &[Directive],
+    applied: impl Fn(usize) -> bool,
+    binds: impl Fn(&Directive) -> bool,
+) -> Vec<usize> {
+    let sites: Vec<Option<u64>> = directives
+        .iter()
+        .enumerate()
+        .map(|(i, d)| match d.body {
+            Body::Callee { addr, .. } if applied(i) && binds(d) => Some(addr),
+            _ => None,
+        })
+        .collect();
+    (0..sites.len())
+        .filter(|&i| sites[i].is_some() && sites[i + 1..].contains(&sites[i]))
+        .collect()
+}
+
+/// The outcome of a `callee` a later one for the same call site replaced.
+pub fn restated_callee(directive: &Directive) -> Outcome {
+    directive.rejected("a later callee states this call site again, and that one is applied")
+}
+
+/// Reject every `callproto` directive bound to `name` whose address no call of
+/// the decompiled function is at.  [`function_seed`] recorded `applied` when it
+/// seeded it; which instructions call is known only once flow has followed.
+pub fn record_unbound_call_prototypes(
+    prog: &mut ConsoleProgram,
+    name: &str,
+    single: bool,
+    fd: &Funcdata,
+) {
+    if !prog
+        .assertions()
+        .iter()
+        .any(|d| matches!(d.body, Body::CallProto { .. }))
+    {
+        return;
+    }
+    let directives = prog.assertions().to_vec();
+    for (i, directive) in directives.iter().enumerate() {
+        let Body::CallProto { addr, .. } = &directive.body else {
+            continue;
+        };
+        if !binds_to(&directive.body, name, single)
+            || prog
+                .assertion_outcomes()
+                .get(i)
+                .is_none_or(|o| o.status != "applied")
+        {
+            continue;
+        }
+        let Ok(at) = code_addr(prog, *addr) else {
+            continue;
+        };
+        if !crate::kuna_callproto::has_call_at(fd, &at) {
+            let outcome = directive.rejected(crate::kuna_callproto::NO_CALL);
+            prog.set_assertion_outcome(i, outcome);
+        }
+    }
+}
+
+fn seed_one(
+    prog: &mut ConsoleProgram,
+    body: &Body,
+    name: &str,
+    entry: &Address,
+    seed: &mut FunctionSeed,
+) -> Result<(), String> {
+    use unlace_decomp::fspec::parameter_pieces_flags;
+    let org = data_org(prog);
+    match body {
+        Body::Param {
+            index,
+            storage,
+            decl,
+            ..
+        } => {
+            let addr = parse_storage(prog, storage)?;
+            let (ct, pname) = crate::grammar::parse_type(decl, prog.arch().types(), org)
+                .map_err(|e| e.explain().to_string())?;
+            let piece = ParameterPieces {
+                addr,
+                type_: Some(ct),
+                flags: parameter_pieces_flags::TYPELOCK | parameter_pieces_flags::NAMELOCK,
+            };
+            seed.mapped_params.push((*index, pname, piece));
+            Ok(())
+        }
+        Body::Return { storage, decl, .. } => {
+            let addr = parse_storage(prog, storage)?;
+            let (ct, _) = crate::grammar::parse_type(decl, prog.arch().types(), org)
+                .map_err(|e| e.explain().to_string())?;
+            let piece = ParameterPieces {
+                addr,
+                type_: Some(ct),
+                flags: parameter_pieces_flags::TYPELOCK,
+            };
+            // The output-only pieces `map return` parks: explicit storage, and
+            // the declared type as the return type (without which the model's
+            // `assignMap` has no output to work with — see
+            // `FuncProto::seed_locked_from_pieces`).
+            let proto = seed.pending_proto.get_or_insert_with(|| PrototypePieces {
+                name: name.to_string(),
+                first_var_arg_slot: -1,
+                ..Default::default()
+            });
+            proto.outtype = piece.type_.clone();
+            proto.output_storage = Some(piece);
+            Ok(())
+        }
+        Body::Comment { addr, text, .. } => {
+            let at = code_addr(prog, *addr)?;
+            let arch = prog.arch_mut();
+            let ctype = arch.print().instruction_comment_flags();
+            arch.commentdb.add_comment(ctype, entry, &at, text);
+            Ok(())
+        }
+        Body::Flow { addr, kind, .. } => {
+            let type_ = unlace_decomp::overrides::Override::string_to_type(kind.as_bytes());
+            if type_ == unlace_decomp::overrides::flow_type::NONE {
+                return Err(format!(
+                    "Bad override type: {kind} (want branch, call, callreturn or return)"
+                ));
+            }
+            let at = code_addr(prog, *addr)?;
+            seed.flow_overrides.push((at.clone(), type_));
+            // (kuna) The same chain extension the `override flow` console
+            // command performs, for the in-process drive (`decompile-all`,
+            // `decompile-project`, the WASM front-end), which never runs it.
+            if type_ == unlace_decomp::overrides::flow_type::CALL
+                || type_ == unlace_decomp::overrides::flow_type::CALL_RETURN
+            {
+                for site in crate::kuna_retcallchain::kuna_chain_sites(
+                    prog.arch().translate(),
+                    entry,
+                    &at,
+                    crate::kuna_retcallchain::CHAIN_MAX_SITES,
+                    crate::kuna_retcallchain::CHAIN_MAX_INSNS,
+                ) {
+                    seed.flow_overrides.push((site, type_));
+                }
+            }
+            Ok(())
+        }
+        Body::Callee { addr, callee, .. } => {
+            let at = code_addr(prog, *addr)?;
+            crate::kuna_calleeoverride::plant(prog, entry, &at, callee)
+        }
+        Body::CallProto { addr, decl, .. } => {
+            let at = code_addr(prog, *addr)?;
+            let pieces = crate::kuna_callproto::parse(prog, decl)?;
+            seed.proto_overrides.retain(|(site, _)| site != &at);
+            seed.proto_overrides.push((at, pieces));
+            Ok(())
+        }
+        _ => Err("internal: not a function-scoped directive".into()),
+    }
+}
+
+/// Are there symbol-scoped directives bound to `name`?  The second decompile
+/// pass exists only for these, so every run without one keeps its current cost.
+pub fn has_symbol_scoped(prog: &ConsoleProgram, name: &str, single: bool) -> bool {
+    prog.assertions()
+        .iter()
+        .any(|d| d.body.is_symbol_scoped() && binds_to(&d.body, name, single))
+}
+
+/// Apply the symbol-scoped directives (`name`, `type`) to the first pass's
+/// `Funcdata`, and return whether any of them took.
+///
+/// The caller re-decompiles when this returns `true`, carrying the mutated local
+/// scope across as `mapped_symbols` — the console's `decompile` / `rename` /
+/// `decompile` sequence, which is the only order in which these can work: the
+/// local a directive names does not exist until a decompile has produced it.
+///
+/// Every directive's identifier is read against the first pass's output, so
+/// directives on different locals do not depend on their order, and
+/// `name v2 credbuf` then `type v2 char[16]` retypes `credbuf`.  An identifier
+/// that output does not contain may name what an earlier directive renamed a
+/// local to (`crate::kuna_hightarget` has both rules).
+pub fn apply_symbol_scoped(
+    prog: &mut ConsoleProgram,
+    fd: &mut Funcdata,
+    name: &str,
+    single: bool,
+) -> Option<Vec<Expected>> {
+    let _load = prog.arch().load_scope();
+    let directives = prog.assertions().to_vec();
+    let mut applied_any = false;
+    let mut touched: Vec<(
+        usize,
+        unlace_decomp::database::SymbolId,
+        Option<Rc<Datatype>>,
+    )> = Vec::new();
+    for (i, directive) in directives.iter().enumerate() {
+        if !directive.body.is_symbol_scoped() || !binds_to(&directive.body, name, single) {
+            continue;
+        }
+        let outcome = match apply_one_symbol_scoped(prog, fd, &directive.body) {
+            Ok((symbol, retype)) => {
+                applied_any = true;
+                touched.extend(symbol.map(|symbol| (i, symbol, retype)));
+                directive.applied()
+            }
+            Err(detail) => directive.rejected(detail),
+        };
+        prog.set_assertion_outcome(i, outcome);
+    }
+    applied_any.then(|| expected_locals(fd, &touched))
+}
+
+fn apply_one_symbol_scoped(
+    prog: &ConsoleProgram,
+    fd: &mut Funcdata,
+    body: &Body,
+) -> Result<
+    (
+        Option<unlace_decomp::database::SymbolId>,
+        Option<Rc<Datatype>>,
+    ),
+    String,
+> {
+    let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
+    match body {
+        Body::Name {
+            symbol, newname, ..
+        } => Ok((
+            crate::kuna_hightarget::apply_local(
+                fd,
+                symbol,
+                newname,
+                None,
+                maxduplicates,
+                Some(prog.arch()),
+            )?,
+            None,
+        )),
+        Body::Type { symbol, decl, .. } => {
+            let (ct, newname) =
+                crate::grammar::parse_type(decl, prog.arch().types(), data_org(prog))
+                    .map_err(|e| e.explain().to_string())?;
+            let applied = crate::kuna_hightarget::apply_local(
+                fd,
+                symbol,
+                &newname,
+                Some(ct.clone()),
+                maxduplicates,
+                Some(prog.arch()),
+            )?;
+            Ok((applied, Some(ct)))
+        }
+        Body::Format {
+            addr,
+            format,
+            value,
+            ..
+        } => {
+            let at = code_addr(prog, *addr)?;
+            crate::kuna_constformat::apply(fd, prog.arch(), &at, format, *value, maxduplicates)?;
+            Ok((None, None))
+        }
+        Body::Isolate { symbol, .. } => {
+            crate::kuna_hightarget::isolate_local(fd, symbol, maxduplicates, Some(prog.arch()))?;
+            Ok((None, None))
+        }
+        _ => Err("internal: not a symbol-scoped directive".into()),
+    }
+}
+
+/// What a batch of `name`/`type` directives must leave in the next decompile:
+/// each touched local declared under its final name, with the last type a
+/// directive gave it, and the directives that answer for it.
+pub struct Expected {
+    directives: Vec<usize>,
+    printed: String,
+    name: String,
+    retype: Option<Rc<Datatype>>,
+    parameter: bool,
+}
+
+/// The [`Expected`] of each local the `touched` directives (index, Symbol,
+/// retype) left on `fd`'s scope.
+pub fn expected_locals(
+    fd: &Funcdata,
+    touched: &[(
+        usize,
+        unlace_decomp::database::SymbolId,
+        Option<Rc<Datatype>>,
+    )],
+) -> Vec<Expected> {
+    let Some(lm) = fd.get_scope_local() else {
+        return Vec::new();
+    };
+    let mut out: Vec<(unlace_decomp::database::SymbolId, Expected)> = Vec::new();
+    for (index, symbol, retype) in touched {
+        let Some(directive) = fd
+            .kuna_directive_symbols()
+            .iter()
+            .find(|d| d.symbol == *symbol)
+        else {
+            continue;
+        };
+        let Some(record) = lm.database().try_symbol(*symbol) else {
+            continue;
+        };
+        let name = if record.is_name_undefined() || record.name.is_empty() {
+            directive.printed.clone()
+        } else {
+            record.name.clone()
+        };
+        match out.iter_mut().find(|(sym, _)| sym == symbol) {
+            Some((_, expected)) => {
+                expected.directives.push(*index);
+                expected.name = name;
+                if retype.is_some() {
+                    expected.retype = retype.clone();
+                }
+            }
+            None => out.push((
+                *symbol,
+                Expected {
+                    directives: vec![*index],
+                    printed: directive.printed.clone(),
+                    name,
+                    retype: retype.clone(),
+                    parameter: lm.symbol_category(*symbol)
+                        == unlace_decomp::database::symbol_category::FUNCTION_PARAMETER,
+                },
+            )),
+        }
+    }
+    out.into_iter().map(|(_, expected)| expected).collect()
+}
+
+/// What the printed C shows for one directive: it did not reach the output, or
+/// it did under a suffixed name.
+pub enum Shown {
+    Refused(String),
+    AppliedAs(String),
+}
+
+/// Check the C a replayed batch printed against what it must show
+/// ([`Expected`]): a directive whose local is not declared, or not with its
+/// type, did not reach the output and is reported refused rather than
+/// applied; one declared under a suffixed name is applied, and says so.
+pub fn verify_printed(prog: &mut ConsoleProgram, fd: &Funcdata, code: &str, expected: &[Expected]) {
+    let directives = prog.assertions().to_vec();
+    for (i, shown) in check_printed(prog.arch(), fd, code, expected) {
+        let Some(directive) = directives.get(i) else {
+            continue;
+        };
+        let outcome = match shown {
+            Shown::Refused(reason) => directive.refused(reason),
+            Shown::AppliedAs(note) => Outcome {
+                detail: Some(note),
+                ..directive.applied()
+            },
+        };
+        prog.set_assertion_outcome(i, outcome);
+    }
+}
+
+/// Refuse each `format` directive bound to `name` that was applied and whose
+/// constant the replayed decompile `fd` does not hold in that form: the
+/// replay finds the constant again by its dataflow hash, and one it cannot
+/// find prints as before.
+pub fn verify_formats(prog: &mut ConsoleProgram, fd: &Funcdata, name: &str, single: bool) {
+    let directives = prog.assertions().to_vec();
+    for (i, directive) in directives.iter().enumerate() {
+        let Body::Format {
+            addr,
+            format,
+            value,
+            ..
+        } = &directive.body
+        else {
+            continue;
+        };
+        if !binds_to(&directive.body, name, single)
+            || prog
+                .assertion_outcomes()
+                .get(i)
+                .is_none_or(|o| o.status != "applied")
+        {
+            continue;
+        }
+        let Ok(at) = code_addr(prog, *addr) else {
+            continue;
+        };
+        if !crate::kuna_constformat::holds(fd, &at, format, *value) {
+            let outcome = directive.refused(crate::kuna_constformat::NOT_REPLAYED);
+            prog.set_assertion_outcome(i, outcome);
+        }
+    }
+}
+
+/// The directives (by the index [`expected_locals`] was given) whose local
+/// the decompile `fd` printed as `code` does not show as expected. A local is
+/// found by the declaration the printer emitted for it
+/// (`PrintC::declared_locals`): the HighVariable the replay gave the directive
+/// to (`Funcdata::kuna_directive_targets`), else a declaration the naming pass
+/// gave the expected name; the printer may have suffixed that name where it
+/// collided with another identifier. A parameter is read from the signature.
+/// Only C is read; another output language reports nothing.
+pub fn check_printed(
+    arch: &unlace_decomp::architecture::Architecture,
+    fd: &Funcdata,
+    code: &str,
+    expected: &[Expected],
+) -> Vec<(usize, Shown)> {
+    if arch.print().out_lang() != unlace_decomp::kuna_lang::OutLang::C {
+        return Vec::new();
+    }
+    let print = arch.print();
+    let declared = print.declared_locals();
+    let mut taken: std::collections::HashSet<unlace_decomp::context::HighVariableId> =
+        std::collections::HashSet::new();
+    let mut found: Vec<Option<(String, String)>> = vec![None; expected.len()];
+    // A local printed under its library name (`unlace_decomp::kuna_libcnames`)
+    // is declared under that name and answers to its number too.
+    let declares = |base: &str, name: &str| {
+        base == name
+            || fd
+                .kuna_library_aliases()
+                .iter()
+                .any(|a| a.shown && a.number == name && a.alias == base)
+    };
+    for (slot, local) in expected
+        .iter()
+        .enumerate()
+        .filter(|(_, local)| !local.parameter)
+    {
+        let target = fd
+            .kuna_directive_targets()
+            .get(&local.printed)
+            .and_then(|&high| print.declared_local(high));
+        if let Some(decl) =
+            target.filter(|decl| declares(&decl.base, &local.name) && taken.insert(decl.high))
+        {
+            found[slot] = Some((decl.name.clone(), decl.decl.clone()));
+        }
+    }
+    for (slot, local) in expected.iter().enumerate() {
+        if found[slot].is_some() {
+            continue;
+        }
+        found[slot] = if local.parameter {
+            signature_declaration(code, &local.name).map(|decl| (local.name.clone(), decl))
+        } else {
+            declared
+                .iter()
+                .find(|decl| declares(&decl.base, &local.name) && !taken.contains(&decl.high))
+                .map(|decl| {
+                    taken.insert(decl.high);
+                    (decl.name.clone(), decl.decl.clone())
+                })
+        };
+    }
+    let mut out = Vec::new();
+    for (local, found) in expected.iter().zip(found) {
+        let shown = match found {
+            None => Some(Shown::Refused(format!(
+                "nothing is declared as `{}` after it",
+                local.name
+            ))),
+            Some((name, decl)) => {
+                let spelled = local
+                    .retype
+                    .as_ref()
+                    .map(|ct| unlace_decomp::printc::type_to_c_string(arch, ct));
+                match spelled.filter(|spelled| squeeze(spelled) != squeeze(&decl)) {
+                    Some(spelled) => Some(Shown::Refused(format!(
+                        "`{name}` is declared as `{}`, not `{}`",
+                        decl.trim(),
+                        spelled.trim()
+                    ))),
+                    None => (name != local.name && !declares(&name, &local.name)).then(|| {
+                        Shown::AppliedAs(format!(
+                            "applied as `{name}`: `{}` is already another identifier here",
+                            local.name
+                        ))
+                    }),
+                }
+            }
+        };
+        if let Some(shown) = shown {
+            for &i in &local.directives {
+                out.push((
+                    i,
+                    match &shown {
+                        Shown::Refused(reason) => Shown::Refused(reason.clone()),
+                        Shown::AppliedAs(note) => Shown::AppliedAs(note.clone()),
+                    },
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// The type the signature printed in `code` declares the parameter `name`
+/// with, the name taken out (`char *` for `char *a0`).
+fn signature_declaration(code: &str, name: &str) -> Option<String> {
+    let lines: Vec<&str> = code.lines().collect();
+    let open = lines.iter().position(|line| line.trim_end() == "{")?;
+    let declares = |text: &str| -> Option<String> {
+        let text = text.trim();
+        let pointer = format!("(*{name})");
+        if text.contains(&pointer) {
+            return Some(text.replacen(&pointer, "(*)", 1));
+        }
+        let end = text.find(|c: char| c == '[').unwrap_or(text.len());
+        let (head, tail) = text.split_at(end);
+        let head = head.trim_end();
+        let before = head.strip_suffix(name)?;
+        if before
+            .chars()
+            .last()
+            .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
+            || before.trim().is_empty()
+        {
+            return None;
+        }
+        Some(format!("{}{tail}", before))
+    };
+    let signature = open.checked_sub(1).map_or("", |line| lines[line]);
+    let signature = signature.split("//").next().unwrap_or(signature);
+    let stop = signature.rfind(')')?;
+    let mut depth = 0;
+    let start = signature[..stop]
+        .char_indices()
+        .rev()
+        .find_map(|(i, c)| match c {
+            ')' => {
+                depth += 1;
+                None
+            }
+            '(' if depth == 0 => Some(i),
+            '(' => {
+                depth -= 1;
+                None
+            }
+            _ => None,
+        })?;
+    let mut depth = 0;
+    let mut piece = String::new();
+    for c in signature[start + 1..stop].chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                if let Some(found) = declares(&piece) {
+                    return Some(found);
+                }
+                piece.clear();
+                continue;
+            }
+            _ => {}
+        }
+        piece.push(c);
+    }
+    declares(&piece)
+}
+
+fn squeeze(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+/// Does any directive assert a read-only range?
+///
+/// Painting a range read-only does nothing on its own: folding a read-only load
+/// into its value is gated by the program-wide `readonly` option, which is
+/// default-off.  So a `readonly` directive turns that option on for the run --
+/// otherwise this plane's own failure mode (a directive that is accepted and
+/// changes nothing) is exactly what it would ship.  Every surface applies it
+/// BEFORE the caller's own options, so an explicit `--option readonly off` still
+/// wins; asserting the range is a statement about the range, not an override of
+/// a switch the caller set by hand.
+pub fn implies_readonly_propagation(directives: &[Directive]) -> bool {
+    directives
+        .iter()
+        .any(|d| matches!(d.body, Body::Readonly { .. }))
+}
+
+/// The outcome of a directive nothing claimed -- the load never reached the
+/// surface that applies it.  Reported rather than dropped, because a silently
+/// ignored assertion is the failure mode this plane exists to end.
+pub fn unclaimed(directive: &Directive) -> Outcome {
+    directive.rejected("not reached by this run")
+}
+
+/// The mutated local scope of the first pass, in the shape the second decompile
+/// re-seeds it from (`IfcDecompile` carries the same specs across its own IR
+/// rebuild).
+pub fn carried_symbols(fd: &Funcdata) -> Vec<(String, Rc<Datatype>, Address, uint4)> {
+    let renamed = name_only_renames(fd);
+    let mut specs = crate::kuna_paramasserts::exclude_from_locals(fd, fd.mapped_symbol_specs());
+    specs.retain(|(name, ..)| !renamed.contains(name));
+    specs
+}
+
+/// The usepoint-scoped half of the same carry: the register-storage Symbols a
+/// `name`/`type` directive on a printed local maps
+/// (`crate::kuna_hightarget::bind_printed_local`).  `carried_symbols` walks the
+/// stack space and the addr-tied globals, so without this a retyped register
+/// temporary is simply dropped on the second pass and the directive reports
+/// `applied` over unchanged output.
+pub fn carried_usepoint_symbols(
+    fd: &Funcdata,
+) -> Vec<(String, Rc<Datatype>, Address, uint4, Address, bool)> {
+    let renamed = name_only_renames(fd);
+    let mut specs =
+        crate::kuna_paramasserts::exclude_from_usepoints(fd, fd.usepoint_symbol_specs());
+    specs.retain(|(name, ..)| !renamed.contains(name));
+    specs
+}
+
+/// The dynamic-storage half of the same carry (`fd.dynamic_symbol_specs`),
+/// likewise without the name-only renames.
+pub fn carried_dynamic_symbols(fd: &Funcdata) -> Vec<unlace_decomp::database::DynamicSymbolSpec> {
+    let renamed = name_only_renames(fd);
+    let mut specs = fd.dynamic_symbol_specs();
+    specs.retain(|spec| !renamed.contains(&spec.name));
+    specs
+}
+
+/// The Symbols of the directives carried as names (`kuna_stablenames::
+/// is_carried_as_name`): a `name` that states no type, and a `type` that keeps
+/// the printed variable's width and kind. They travel to the next decompile as
+/// names and types (`kuna_stablenames::carry`), not as Symbols: a Symbol mapped
+/// over one definition of a merged variable split it on the next decompile, and
+/// a type lock retyped what it did not cover.
+fn name_only_renames(fd: &Funcdata) -> Vec<String> {
+    let Some(lm) = fd.get_scope_local() else {
+        return Vec::new();
+    };
+    fd.kuna_directive_symbols()
+        .iter()
+        .filter(|d| unlace_decomp::kuna_stablenames::is_carried_as_name(fd, d.symbol))
+        .map(|d| lm.database().symbol(d.symbol).name.clone())
+        .collect()
+}

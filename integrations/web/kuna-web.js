@@ -7,7 +7,7 @@
 // bytes), `xrefs` and `strings`. Every command takes the edit session as repeated
 // `--assert <directive>` arguments.
 //
-// It loads the `kuna_wasm` WebAssembly module (the engine's in-process decompile
+// It loads the `unlace_wasm` WebAssembly module (the engine's in-process decompile
 // path, compiled to wasm32-wasip1) and drives it through
 // @bjorn3/browser_wasi_shim — a pure-JS WASI preview1 implementation. The SLEIGH
 // specs and the user's binary live in an in-memory virtual filesystem (WASI
@@ -47,7 +47,7 @@ export function formatName(bytes) {
 }
 
 /**
- * Build one kuna_wasm command, delegating the byte-size policy to Rust.
+ * Build one unlace_wasm command, delegating the byte-size policy to Rust.
  *
  * `arg` is one positional or an array of them (`read 0xADDR LEN`). `language`
  * is the output language: 'auto' (the default) follows the binary, so a Rust
@@ -131,7 +131,7 @@ function parseLdefs(text, dir, map) {
  * bytes)` hears of each `.sla` fetched.
  *
  * @param {object} opts
- * @param {string} opts.wasmUrl        URL of kuna_wasm.wasm
+ * @param {string} opts.wasmUrl        URL of unlace_wasm.wasm
  * @param {string} opts.specRoot       base URL the spec tree lives under
  * @param {string} [opts.smallBundleUrl]  URL of specs-small.json (default:
  *                                         `${specRoot}-small.json`)
@@ -206,7 +206,7 @@ export async function loadKuna({ wasmUrl, specRoot, smallBundleUrl, engine = nul
       new PreopenDirectory('/specs', tree),
       new PreopenDirectory('/work', new Map([['input.bin', new File(new Uint8Array(binaryBytes))]])),
     ];
-    const wasi = new WASI(['kuna_wasm', ...argv], [], fds, { debug: false });
+    const wasi = new WASI(['unlace_wasm', ...argv], [], fds, { debug: false });
     const instance = await WebAssembly.instantiate(wasmModule, { wasi_snapshot_preview1: wasi.wasiImport });
     let exitCode = 0;
     try {

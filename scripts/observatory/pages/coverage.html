@@ -61,7 +61,7 @@ function build() {
     </div>`);
   const phases = [...coverage.phases].sort((a, b) => a.folder.localeCompare(b.folder));
   const crates = [...coverage.crates].sort((a, b) => b.lines.count - a.lines.count);
-  main.insertAdjacentHTML("beforeend", section("kuna-decomp by phase folder", phases, "folder"));
+  main.insertAdjacentHTML("beforeend", section("unlace-decomp by phase folder", phases, "folder"));
   main.insertAdjacentHTML("beforeend", section("By crate", crates, "crate"));
   main.insertAdjacentHTML("beforeend", `
     <h2>Least-covered files</h2>

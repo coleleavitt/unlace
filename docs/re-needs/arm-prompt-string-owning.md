@@ -14,7 +14,7 @@ rounds: [6]
 first_seen_round: 6
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis]
+touches: [decompiler/crates/unlace-analysis]
 scope: small
 regression_of: arm-literal-pool-string
 pr: null
@@ -133,7 +133,7 @@ _none recorded_
 VERDICT: UPHELD. 'Incomplete function discovery' IS the cause. But three refinements below change which file the builder opens, and one of them says the need's own front matter is wrong.
 
 1. THE SURFACE CHECK LIES -- DO NOT CONCLUDE 'DISCOVERY IS FINE' FROM 'functions' COVERING THE LOAD.
-'kuna functions' reports 13 functions incl. _INIT_0 @0x83e8 size 3368, i.e. a declared extent 0x83e8..0x9110 that NOMINALLY CONTAINS the load site 0x8d20. A builder who checks 'is 0x8d20 covered?' gets YES and will wrongly clear discovery. That extent is GAP-FILL, not a CFG extent. Measured: 'xrefs --from 0x83e8' returns only 4 edges, ALL inside 0x83e8..0x840c -- the walk stops at the unconditional 'b 0x8350' at 0x8404, 36 bytes into a 3368-byte declared extent. Everything past 0x8404, including 0x8d20, is never walked.
+'unlace functions' reports 13 functions incl. _INIT_0 @0x83e8 size 3368, i.e. a declared extent 0x83e8..0x9110 that NOMINALLY CONTAINS the load site 0x8d20. A builder who checks 'is 0x8d20 covered?' gets YES and will wrongly clear discovery. That extent is GAP-FILL, not a CFG extent. Measured: 'xrefs --from 0x83e8' returns only 4 edges, ALL inside 0x83e8..0x840c -- the walk stops at the unconditional 'b 0x8350' at 0x8404, 36 bytes into a 3368-byte declared extent. Everything past 0x8404, including 0x8d20, is never walked.
 
 2. THE MISSING FUNCTION IS main @0x8cf8, AND ITS PROLOGUE IS TEXTBOOK.
 0x8cf4 'ldmia sp,{r11,sp,pc}' (previous epilogue), then 0x8cf8 'mov r12,sp' / 0x8cfc 'stmdb sp!,{r11,r12,lr,pc}' / 0x8d00 'sub r11,r12,#0x4' / 0x8d04 'sub sp,sp,#0xa8'. Discovery never files it. 0x8d20 'ldr r0,[0x9024]' then 0x8d24 'bl 0x835c' is exactly the printf call the tester described. The fix shape is an ARM prologue-signature scan over undiscovered gaps; it is NOT an xref change.
@@ -146,4 +146,4 @@ Acceptance asserts only strings[0].functions len_gt 0. Discovering main @0x8cf8 
 
 Pool word confirmed by hand: 0x9024 holds bytes 24 91 00 00 = 0x9124 = the string, and kuna currently renders that data word as 'andeq r9,r0,r4, lsr #0x2'.
 - round 6 T_TRIAGE: ACCEPTANCE REWRITTEN (a-bb4686077f58 -> a-7837f5c28063), and it was verified two-sided before the swap: it FAILS on the need's own arena binary at 9c4c4508 (`probe check --bin` rc=1) and PASSES when simulated against plausible correct renderings. It `strings[0].functions len_gt 0` alone is satisfiable by attributing the string to the bogus gap-fill `_INIT_0` extent that already nominally covers the load site (see the refuter note). Now also requires `strings[0].xrefs_count > 0` (today it is 0), which cannot be produced without actually disassembling the literal-pool load at 0x8d20 -- i.e. without the discovery fix.
-- round 6 T_TRIAGE: TRIAGE: touches kuna-decomp -> kuna-analysis: the refuter placed the gap in function discovery (the real missing function is main @0x8cf8; _INIT_0's 3368-byte extent is gap-fill whose walk stops at the `b 0x8350` at 0x8404).
+- round 6 T_TRIAGE: TRIAGE: touches unlace-decomp -> unlace-analysis: the refuter placed the gap in function discovery (the real missing function is main @0x8cf8; _INIT_0's 3368-byte extent is gap-fill whose walk stops at the `b 0x8350` at 0x8404).

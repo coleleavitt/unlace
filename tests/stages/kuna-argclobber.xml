@@ -37,8 +37,8 @@
     nothing is parked, `target` has stated nothing about itself, and a rule that
     deletes an argument may not read silence as permission.  The parking flag
     itself says so: `park_recovered_proto` is written true only in
-    decompiler/crates/kuna-cli/src/decompile_all.rs, and the console paths this
-    harness runs through (kuna-console/src/project.rs, project_stream.rs) pass
+    decompiler/crates/unlace-cli/src/decompile_all.rs, and the console paths this
+    harness runs through (unlace-console/src/project.rs, project_stream.rs) pass
     false, so no stage test can put a parked prototype in front of the rule,
     whatever it asserts.  The two-pass coverage lives in tests/cli instead,
     named below, over the whole binary-to-decompile path and run by `make
@@ -52,7 +52,7 @@
     The POSITIVE witness, the same construct as a real program so that
     `decompile-all` decompiles `target` first, is
     tests/cli/argclobber-drops-a-trailing-clobbered-argument.json over
-    decompiler/crates/kuna-analysis/tests/fixtures/argclobber_x86_64, where the
+    decompiler/crates/unlace-analysis/tests/fixtures/argclobber_x86_64, where the
     call renders `sub_401031(a0,5)` and both the phantom `// rdx` local and the
     dead remainder are gone.  tests/cli/argclobber-off-keeps-the-clobbered-
     argument.json is its option-off arm.

@@ -64,7 +64,7 @@ void sub_4041e2(int4 a0)
 50 LOC, 4 `if`s and **1 loop that does not exist in this function**.
 
 **The proof that this is an overrun, not a discovery difference**: kuna's *own*
-function list contains an entry at `0x40424c`, and `kuna decompile-all` emits it
+function list contains an entry at `0x40424c`, and `unlace decompile-all` emits it
 separately as `sub_40424c` — whose body is the trailing `while` loop above,
 statement for statement. kuna emits the same code twice.
 
@@ -106,7 +106,7 @@ function's entire body.
 
 ### Root cause (instrumented, not read)
 
-kuna's PE loader **does** resolve the import table. `kuna functions mydoom.exe --json`
+kuna's PE loader **does** resolve the import table. `unlace functions mydoom.exe --json`
 lists 149 named symbols, including exactly the right one:
 
 ```
@@ -119,7 +119,7 @@ lists 149 named symbols, including exactly the right one:
 
 So the name is in the symbol table at the slot VA. The decompiler never asks for it.
 `ArchFlowEnv::query_call` / `query_call_no_return`
-(`decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs:92`) are keyed on a
+(`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs:92`) are keyed on a
 **direct** call's entry address. The post-decompile IR for this call site
 (`decomp_dbg` → `print raw`) is:
 
@@ -132,7 +132,7 @@ unmodified read of the IAT slot, carried as an input Varnode). There is no entry
 address to query, so no name, no prototype, and no no-return flow effect. The call
 keeps its fall-through and flow walks into the next function.
 
-`p2_lift`'s module doc for the PE import path (`kuna-analysis/src/loader/pe_iat.rs`)
+`p2_lift`'s module doc for the PE import path (`unlace-analysis/src/loader/pe_iat.rs`)
 says the slot-VA naming works because "the decompiler constant-folds the `[slot]`
 load (the IAT lives in a read-only `.idata` page)". On this corpus **that primary path
 is inert**: `--option readonly on` changes nothing, and folding would be wrong anyway
@@ -157,7 +157,7 @@ the slot-called imports get `(*dat_XXXXXX)()`. kuna is internally inconsistent, 
 is the same shape of evidence that carried `jumptable-callother-inject` in round 1.
 
 **Second, subordinate gap**: even once the call is bound,
-`decompiler/crates/kuna-analysis/data/PeMacFunctionsThatDoNotReturn` lists only
+`decompiler/crates/unlace-analysis/data/PeMacFunctionsThatDoNotReturn` lists only
 `exit / quick_exit / abort / fastfail / invoke_watson /
 invalid_parameter_noinfo_noreturn / terminate / abort_handler4`. Ghidra additionally
 ships the Win32 API names (`ExitProcess`, `ExitThread`, …). Both halves are needed;
@@ -166,10 +166,10 @@ counterfactual above).
 
 ### Owning phase
 
-**P2** — Flow & Op-Graph Recovery (`decompiler/crates/kuna-decomp/src/p2_lift/`).
+**P2** — Flow & Op-Graph Recovery (`decompiler/crates/unlace-decomp/src/p2_lift/`).
 The flow decision "does this call fall through" is made there, at the same seam
 `kuna_tailcalljump` / `kuna_noreturn_externmatch` already hook. The no-return name
-list is a P1 (`kuna-analysis`) data file.
+list is a P1 (`unlace-analysis`) data file.
 
 ### Correctness value, beyond GED
 
@@ -186,7 +186,7 @@ Not an artifact. Source CFG 5 nodes / 6 edges, `degenerate_source: false`,
 
 ### Breadth
 
-`kuna decompile-all --json` on the two PE projects in the corpus:
+`unlace decompile-all --json` on the two PE projects in the corpus:
 
 | binary | fns emitted | `(*dat_…)()` IAT-slot calls | fns overrunning a Win32 exit |
 |---|---|---|---|
@@ -221,7 +221,7 @@ functions listed above.
 ## Proposed fix
 
 **Slug `peimportcall`, P2, one module** — a new
-`decompiler/crates/kuna-decomp/src/p2_lift/kuna_peimportcall.rs`, built on the
+`decompiler/crates/unlace-decomp/src/p2_lift/kuna_peimportcall.rs`, built on the
 `kuna_tailcalljump` template (which already rewrites one flow-level call shape into
 another at this seam).
 
@@ -241,7 +241,7 @@ Owning files:
 - `p2_lift/flow.rs`: one hook at the CALLIND classification point.
 - `p0_knowledge/options.rs` + `phases.toml`: the `peimportcall on|off` row
   (plus the hard-coded catalog counts listed in `kuna-adding-option-count-tests`).
-- `kuna-analysis/data/PeMacFunctionsThatDoNotReturn`: add the Win32 no-return names
+- `unlace-analysis/data/PeMacFunctionsThatDoNotReturn`: add the Win32 no-return names
   Ghidra ships (`ExitProcess`, `ExitThread`, `TerminateProcess`, `FatalExit`, …).
   Data-only; no code change.
 

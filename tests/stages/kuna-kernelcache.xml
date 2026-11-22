@@ -23,14 +23,14 @@
 <script>
   <com>option kernelcache off</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/fileset.macho</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/fileset.macho</com>
   <com>read symbols</com>
   <com>load addr 0xfffffff007007800</com>
   <com>decompile</com>
   <com>print C</com>
   <com>option kernelcache Widget</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/kernelcache.img4</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/kernelcache.img4</com>
   <com>read symbols</com>
   <com>load function widget_start</com>
   <com>decompile</com>
@@ -40,7 +40,7 @@
   <com>print C</com>
   <com>option kernelcache auto</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/kernelcache/kernelcache.lzss.im4p</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/kernelcache.lzss.im4p</com>
   <com>read symbols</com>
   <com>load function kernel_add</com>
   <com>decompile</com>

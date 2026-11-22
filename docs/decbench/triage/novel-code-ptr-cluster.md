@@ -15,7 +15,7 @@ confidence: high
 ## What was actually verified
 
 Eight NOVEL rows whose `defects` column is driven by `code_ptr`, re-decompiled today
-(`decompiler/target/release/kuna`, `SLEIGHHOME=/home/mahaloz/github/kuna/specs`), each
+(`decompiler/target/release/unlace`, `SLEIGHHOME=/home/mahaloz/github/kuna/specs`), each
 against the stripped binary at the case address, plus the ghidra/ida panes and the original
 `.i` source.
 
@@ -115,7 +115,7 @@ The AND (op `15d`, an original lifted op) is the sole producer of the CALLIND ta
 `(cast)` inserted before every LOAD in the same dump).
 
 **Step 2 — the rule that is supposed to erase it exists and is fully ported.**
-`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_8.rs`, `RuleFuncPtrEncoding`
+`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_8.rs`, `RuleFuncPtrEncoding`
 (registered as `funcptrencoding` at `infra/universalaction.rs:515`) transcribes upstream
 `ruleaction.cc:9929` line for line: match `CALLIND`, require `in(0)` written by
 `CPUI_INT_AND` with a constant mask, accept when `testmask & (!0 << align) == val`,
@@ -201,7 +201,7 @@ all four cases re-run here):
 
 **P3 — definition web** (`p3_dataflow/`, rule pool). One module, one function body:
 
-- `decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_8.rs` — replace the
+- `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_8.rs` — replace the
   `funcptr_align(_data) -> 0` stub with the live read (`data.get_arch().funcptr_align`,
   the same accessor `p2_lift/jumptable.rs:3661` already uses), delete the two `STUB(W4)`
   comment blocks at `:71-72`, `:251-257` and the `// -- STUB(W4): funcptr_align defaults to 0`
@@ -231,9 +231,9 @@ corpus is untouched except for its ARM/MIPS/AARCH64 members.
    Corpus has no such target, so measure separately before claiming coverage.
 
 **Stage testcase.** `tests/stages/ghdec-funcptralign.xml` is straightforward on the ARM
-Thumb fixture #231 already vendored (`kuna-analysis/tests/fixtures/arm_thumb_switch_le32`)
+Thumb fixture #231 already vendored (`unlace-analysis/tests/fixtures/arm_thumb_switch_le32`)
 or a 3-instruction `ldr r3,[r0,#4]; blx r3` chunk: two-pass, mask present vs absent.
-Note the corpus-file-count bump in `kuna-base/src/xml.rs` + stages baseline re-record.
+Note the corpus-file-count bump in `unlace-base/src/xml.rs` + stages baseline re-record.
 
 ---
 
@@ -262,7 +262,7 @@ Source is `copy_fd (int src_fd, uintmax_t n_bytes)` with `BUFSIZ`-style chunking
 Closed by an existing flag:
 
 ```
-$ kuna decompile head --addr 0x3290 --option inferfuncentry off
+$ unlace decompile head --addr 0x3290 --option inferfuncentry off
 unsigned long sub_3290(unsigned int a0,uint8 a1)
     v2 = 0x2000;
     if (a1 <= 0x2000)

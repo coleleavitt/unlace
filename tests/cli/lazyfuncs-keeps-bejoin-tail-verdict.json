@@ -19,11 +19,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/lazyfuncs_tail_mips32_be",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/lazyfuncs_tail_mips32_be",
     "binary_sha256": "07bd736e461c385ae582de5404e4a611ec4425129e6fb5cb2c2f15f54810e658",
     "binary_size": 1120,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/lazyfuncs_tail_mips32_be",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/lazyfuncs_tail_mips32_be",
     "selector": "0x400110",
     "selector_kind": "addr"
   },

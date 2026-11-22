@@ -20,7 +20,7 @@ length-carried strings).
 
 | Area | What exists | Where | Gap |
 |---|---|---|---|
-| Detection | `detect_compiler` → `Compiler{Gcc,Clang,Rustc,Go,Unknown}` | `kuna-analysis/src/analyzers/sourcelang/mod.rs` | Recomputed at **7 call sites**; reaches the engine as only two bools (`Architecture::source_is_rust/source_is_go`, set at `kuna-console/src/engine.rs:4343`); no Swift variant |
+| Detection | `detect_compiler` → `Compiler{Gcc,Clang,Rustc,Go,Unknown}` | `unlace-analysis/src/analyzers/sourcelang/mod.rs` | Recomputed at **7 call sites**; reaches the engine as only two bools (`Architecture::source_is_rust/source_is_go`, set at `unlace-console/src/engine.rs:4343`); no Swift variant |
 | ABI | `rustabi` option (ScalarPair returns); vendored **golang cspecs** for x86-64/x86-32/AArch64 (`abi-internal`, `abi0`, `gcwrite_*`, `duffzero/duffcopy`) | `p4_calls/kuna_rustabi.rs`; `specs/.../x86-64-golang.cspec` etc. | The golang cspec loads only via an explicit `--target …:golang`; detection never selects it; no Swift models anywhere; no way to bind a prototype *model* to a symbol without a full signature |
 | CFG idioms | Rust panic/drop handling: `cleanupcode`, `securitycheck`; plus the stripper family (`stackguard`, `msvcstackguard`, `devectorize`, `msvcstrappend`, `strlenscan`, `outline`) | `p2_lift/kuna_cleanupcode.rs`, `p7_regions/kuna_securitycheck.rs`, … | All hand-coded; **no generic subgraph matcher**; nothing for Go (`morestack`, write barriers, `panicIndex`) or Swift (ARC, exclusivity) |
 | Types | Rust DWARF enum layouts parsed into `VariantLayout` side table | `analyzers/dwarf/kuna_dwarfvariants.rs`, `p0_knowledge/kuna_dwarfvariants.rs` | **Nothing reads the table yet**; no notion of slices/fat pointers/interfaces/tuples; zero-sized fields dropped; sizes are `int4` so unsized types unrepresentable |
@@ -33,7 +33,7 @@ Two structural facts shape the whole design:
 1. **Detection runs inside `load file`, before any `option` line** (the
    stash→flags→commit protocol, `docs/spec/00-overview.md` §0.1). A user
    override of the detected language therefore has to be a *loadtime-tier*
-   option (env binding via `kuna-cli/src/loadtime.rs`), like `goabi`.
+   option (env binding via `unlace-cli/src/loadtime.rs`), like `goabi`.
 2. **`type_metatype` is effectively closed** (~3.7k references across 380
    files, mostly non-exhaustive matches; `kuna_dwarfvariants.rs` already
    examined and rejected adding a variant). Language type semantics must ride
@@ -312,7 +312,7 @@ panic no-return lists, securitycheck, DWARF variants):
 - Prereqs the others don't need: a Swift demangler (**done**: the pure-Rust
   `analyzers/demangle/kuna_swift.rs`, verified against
   `swift-demangle`; every crate alternative builds Apple's C++ demangler, which
-  `kuna-wasm` cannot carry), `__swift5_*` metadata walker (**done**:
+  `unlace-wasm` cannot carry), `__swift5_*` metadata walker (**done**:
   `analyzers/swift`, option `swiftmetadata` names accessors, vtable slots,
   witnesses and descriptors; its `swifttypes` arm lays out each fixed-layout
   struct and class whose static metadata it locates through the type's

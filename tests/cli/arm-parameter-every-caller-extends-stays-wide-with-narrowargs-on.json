@@ -17,11 +17,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/callerargs_thumb",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/callerargs_thumb",
     "binary_sha256": "4bfbbf7f826e991f457b7f0bc5a711d1ef3e49b24994f90b4c5e69bd34b77bc0",
     "binary_size": 1340,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/callerargs_thumb",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/callerargs_thumb",
     "selector": "scale",
     "selector_kind": "name"
   },

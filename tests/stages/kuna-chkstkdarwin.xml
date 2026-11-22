@@ -48,7 +48,7 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/chkstkdarwin_macho_arm64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/chkstkdarwin_macho_arm64</com>
   <com>option alloca off</com>
   <com>option chkstkdarwin off</com>
   <com>read symbols</com>
@@ -65,7 +65,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/chkstkdarwin_macho_arm64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/chkstkdarwin_macho_arm64</com>
   <com>option alloca off</com>
   <com>read symbols</com>
   <com>load function _big_frame</com>
@@ -81,7 +81,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/chkstkdarwin_macho_arm64e</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/chkstkdarwin_macho_arm64e</com>
   <com>option alloca off</com>
   <com>read symbols</com>
   <com>load function _big_e</com>
@@ -91,7 +91,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/chkstkdarwin_elf_aarch64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/chkstkdarwin_elf_aarch64</com>
   <com>option alloca off</com>
   <com>read symbols</com>
   <com>load function caller</com>

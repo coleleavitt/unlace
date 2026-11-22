@@ -79,7 +79,7 @@ def kuna_bin() -> Path:
     env = os.environ.get("REPIPE_KUNA")
     if env:
         return Path(env)
-    return repo_root() / "decompiler" / "target" / "release" / "kuna"
+    return repo_root() / "decompiler" / "target" / "release" / "unlace"
 
 
 def specs_dir() -> Path:

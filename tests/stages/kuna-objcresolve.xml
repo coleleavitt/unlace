@@ -21,7 +21,7 @@
     callee name of a send whose receiver's class is known is the method it
     reaches, looked up along the superclass chain, and a second decompile
     sends the CALL to that IMP (`FlowInfo::setup_call_specs` retarget), so
-    the call carries the method's prototype and `kuna xrefs` its edge
+    the call carries the method's prototype and `unlace xrefs` its edge
     (`objcresolve`).
 
     Pass 1 (both off): `objc_object *v1`, `objc_msgSend(v1,sel_setInner_,...)`,
@@ -36,7 +36,7 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_objc_arc_arm64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_arc_arm64</com>
   <com>option objc on</com>
   <com>option objcrettype off</com>
   <com>option objcresolve off</com>
@@ -45,7 +45,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_objc_types_arm64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_types_arm64</com>
   <com>option objc on</com>
   <com>option objcrettype off</com>
   <com>option objcresolve off</com>
@@ -54,14 +54,14 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_objc_arc_arm64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_arc_arm64</com>
   <com>option objc on</com>
   <com>read symbols</com>
   <com>load addr 0x100000798</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_objc_types_arm64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_types_arm64</com>
   <com>option objc on</com>
   <com>read symbols</com>
   <com>load addr 0x100000740</com>

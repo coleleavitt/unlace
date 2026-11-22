@@ -11,7 +11,7 @@
     implementation, and every protocol witness.
 
     Stage / sub-stage: P1 external-refinement, the Swift metadata pass
-    (`kuna-analysis/src/analyzers/swift/`), beside the ObjC metadata pass.
+    (`unlace-analysis/src/analyzers/swift/`), beside the ObjC metadata pass.
 
     P0 assertion: `option swiftmetadata on|off` (default off).
 
@@ -35,7 +35,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_metadata_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_metadata_elf</com>
   <com>option swiftmetadata off</com>
   <com>read symbols</com>
   <com>load addr 0x30b0</com>
@@ -48,7 +48,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_metadata_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_metadata_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x30b0</com>

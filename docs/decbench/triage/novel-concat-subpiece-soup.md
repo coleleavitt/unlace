@@ -26,7 +26,7 @@ emits `(char)(a1 >> 0x38)` on 13.
 
 ```
 $ export SLEIGHHOME=/home/mahaloz/github/kuna/specs
-$ ./decompiler/target/release/kuna decompile \
+$ ./decompiler/target/release/unlace decompile \
     ~/github/decbench/results/full_run/O2-noinline/openssh-portable/stripped/ssh \
     --addr 0x4cd60 --mode reliable
 
@@ -128,7 +128,7 @@ The SUBPIECEs survive to the final IR with their nonzero constant offsets, and t
 input `RSI` is a distinct register from the outputs `DL`/`BL` (so upstream's
 `outvn->overlap(*a) == c` bail cannot fire).
 
-`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_6.rs:912-947` —
+`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs:912-947` —
 `RuleSubRight::apply_op` — is a **stub**:
 
 ```rust
@@ -171,7 +171,7 @@ counts as one of each):
 
 Ratio on SUBPIECE: **329x**. On CONCAT: **1.13x**.
 
-Stored-pane sweep validated against fresh `kuna decompile-all` on four binaries — the
+Stored-pane sweep validated against fresh `unlace decompile-all` on four binaries — the
 metric is stable across the DIV-34..39 print wave, so the corpus number is trustworthy:
 
 | binary (matched fns) | kuna fresh | kuna stored | ghidra | ida |
@@ -229,17 +229,17 @@ them. So `subright` and `rodata-phantom-store` are disjoint fixes, and `subright
 ## Option / mode sweep (all negative)
 
 ```
-$ for m in auto reliable aggressive fast; do kuna decompile ssh --addr 0x4cd60 --mode $m | grep -c SUB81; done
+$ for m in auto reliable aggressive fast; do unlace decompile ssh --addr 0x4cd60 --mode $m | grep -c SUB81; done
 7
 7
 7
 7
-$ kuna decompile ssh --addr 0x4cd60 --option condfold on | grep -c SUB81
+$ unlace decompile ssh --addr 0x4cd60 --option condfold on | grep -c SUB81
 7
 ```
 
 None of the 83 catalog rows controls SUBPIECE truncation lowering (grepped
-`kuna catalog --json` for subpiece/truncat/piece — hits are `returnpair`,
+`unlace catalog --json` for subpiece/truncat/piece — hits are `returnpair`,
 `switchmultipred`, `unrolledguard`, `callsitestackargs`, `iteregion`, `iteexpr`,
 `noreturn_*`, none relevant). `option_closing: null`.
 
@@ -248,7 +248,7 @@ None of the 83 catalog rows controls SUBPIECE truncation lowering (grepped
 - **Owning phase: P3** (Definition Web — the simplification rule pools). The symptom is
   visible at P9 but the decision is a P3 rule, per `docs/phases.md`'s own caveat.
 - **One module, one function**: complete the port of
-  `decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_6.rs`
+  `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs`
   `RuleSubRight::apply_op` — the ~45-line tail after the existing `is_piece_structured`
   early return. Every primitive it needs already exists in kuna:
   `Varnode::is_addr_tied` / `Varnode::overlap` (`substrate/varnode.rs:813,1345`),
@@ -265,7 +265,7 @@ None of the 83 catalog rows controls SUBPIECE truncation lowering (grepped
 - **Stage test**: `tests/stages/ghdec-subright.xml` (no angr analog) — two-pass, an
   8-byte big-endian store loop; option off = `SUB81(x,7)`, default = `(char)(x >> 0x38)`.
 - **Correctness value**: `SUB81` / `SUB84` are undeclared identifiers — kuna emits no
-  helper header for them (grepped `kuna-cli`/`kuna-console`), so 5,919 call sites across
+  helper header for them (grepped `unlace-cli`/`unlace-console`), so 5,919 call sites across
   2,394 functions make the exported `.c` non-compilable. Same tier as round 1's
   `spacebase-unnamed-location` and `realtypes-pointee-size`.
 - **GED value: 0.** No basic-block count changes. Rank this by correctness, not metric.

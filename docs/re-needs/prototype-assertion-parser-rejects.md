@@ -14,7 +14,7 @@ rounds: [7]
 first_seen_round: 7
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli]
+touches: [decompiler/crates/unlace-cli]
 scope: small
 regression_of: null
 pr: null
@@ -121,11 +121,11 @@ _none recorded_
 - round 7 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK 2026-09-07 ~10:45Z by the captain. VERDICT: UPHELD, AND THE GAP IS AN EXPLICITLY-NAMED PORT STUB THAT MENTIONS __stdcall BY NAME. This is the cheapest need in the round-7 backlog and it is worth more than its 'major/cred 0.3' filing suggests -- see 3.
 
 REPRO (same arena binary as resource-loader-c-retains: arena/7/6442366033c5d43938912a85/target/Cube.exe):
-  kuna decompile $B sub_401ba0 --assert 'prototype 0x4050a6 void * __stdcall LoadLibraryExW(unsigned short *name,void *file,unsigned int flags)' --assert-strict
+  unlace decompile $B sub_401ba0 --assert 'prototype 0x4050a6 void * __stdcall LoadLibraryExW(unsigned short *name,void *file,unsigned int flags)' --assert-strict
   -> warning: ... rejected: Bad C syntax
 Drop the __stdcall and the SAME declaration is accepted. Reproduces at HEAD.
 
-1. FILE AND LINE. decompiler/crates/kuna-console/src/grammar.rs:1362-1366, CParse::lookup_identifier:
+1. FILE AND LINE. decompiler/crates/unlace-console/src/grammar.rs:1362-1366, CParse::lookup_identifier:
     // glb->hasModel(nm) -> FUNCTION_SPECIFIER. The kuna Architecture has no
     // model registry, so this never fires (it would classify e.g.
     // "__stdcall" as a function specifier).  // STUB(w6-fspec-2)

@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/stripped_dynamic_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/stripped_dynamic_x86_64",
     "binary_sha256": "f899ab7509c55cc0c5e4e2f7b2e7f781ac1fb1aac6c4f7a2e27b4dba256e1c0a",
     "binary_size": 14480,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/stripped_dynamic_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/stripped_dynamic_x86_64",
     "selector": "sub_1249",
     "selector_kind": "name"
   },
@@ -38,5 +38,5 @@
       "no function"
     ]
   },
-  "notes": "Desired: a name `kuna functions` reports still selects its function when the run changes how names are PRINTED. Dataset witness: crackmes.one 6927c8d12d267f28f69b8131 (0xJam3z-Medium @0x15dc), where `sub_15dc --option namestyle ghidra` answered `no function matches`. `param_1` pins that the style applied; the type is `FILE *` because libctypes is on by default and the body is fread/fclose on it."
+  "notes": "Desired: a name `unlace functions` reports still selects its function when the run changes how names are PRINTED. Dataset witness: crackmes.one 6927c8d12d267f28f69b8131 (0xJam3z-Medium @0x15dc), where `sub_15dc --option namestyle ghidra` answered `no function matches`. `param_1` pins that the style applied; the type is `FILE *` because libctypes is on by default and the body is fread/fclose on it."
 }

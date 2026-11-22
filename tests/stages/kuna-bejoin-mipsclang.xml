@@ -19,7 +19,7 @@
     Stage: P4 calls and prototypes (output-prototype), option bejoin.
     Pass 1 is the default (callers), pass 2 option bejoin evidence.
 
-    Image: decompiler/crates/kuna-analysis/tests/fixtures/bejoin_mipsclang_O2.so
+    Image: decompiler/crates/unlace-analysis/tests/fixtures/bejoin_mipsclang_O2.so
     (bejoin_mipsclang.c); see bejoin_mipsclang.provenance.
 
     Assert #1: the default returns add64's sum high word first; evidence,
@@ -43,7 +43,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/bejoin_mipsclang_O2.so</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_mipsclang_O2.so</com>
   <com>read symbols</com>
   <com>lo fu add64</com>
   <com>decompile</com>
@@ -65,7 +65,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/bejoin_mipsentry.elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_mipsentry.elf</com>
   <com>read symbols</com>
   <com>option bejoin callers</com>
   <com>lo fu sum_both</com>

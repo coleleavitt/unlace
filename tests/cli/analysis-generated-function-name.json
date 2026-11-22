@@ -17,11 +17,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/entrymain_arm",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/entrymain_arm",
     "binary_sha256": "be4dc366af6654e549df97a4033409ba80e883e0a424429ecd87c2700f7ed2ed",
     "binary_size": 5528,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/entrymain_arm",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/entrymain_arm",
     "selector": "sub_410",
     "selector_kind": "name"
   },

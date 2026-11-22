@@ -127,7 +127,7 @@ exactly once and never store into the literal.
 1. `strings` (analysis tier, default ON) plants a typelocked `char[N]` at `ram:0x822f0`.
 2. That array type makes P3's `RuleSplitCopy` / `SplitDatatype::split_copy` fire on the
    16-byte rodata->stack COPY. `SplitDatatype::build_in_subpieces`
-   (`decompiler/crates/kuna-decomp/src/p3_dataflow/subflow.rs:3684`) builds the input
+   (`decompiler/crates/unlace-decomp/src/p3_dataflow/subflow.rs:3684`) builds the input
    pieces as SUBPIECE ops whose **output varnodes are addressed in ram at the source
    global's own sub-addresses** -- i.e. it synthesises *definitions of read-only memory*:
 
@@ -206,7 +206,7 @@ a heritage refinement pass.
 Ranked, both small:
 
 1. **Narrow (preferred).** In `SplitDatatype::build_in_subpieces`
-   (`decompiler/crates/kuna-decomp/src/p3_dataflow/subflow.rs:3684`), extend the existing
+   (`decompiler/crates/unlace-decomp/src/p3_dataflow/subflow.rs:3684`), extend the existing
    `generate_constants` short-circuit: when the root varnode is address-tied into a
    **read-only** range (the fact is already available -- `Varnode::is_read_only`, used by
    `p2_lift/jumptable.rs:1700,2155`, and `SymbolTable::is_read_only`, used by

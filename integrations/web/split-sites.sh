@@ -13,14 +13,14 @@ RUN="$HERE/dist-run"
 SITE_URL="https://decompile.run/"
 HOME_URL="https://kuna.noelo.org/"
 
-[ -f "$DIST/decompile/index.html" ] && [ -f "$DIST/kuna_wasm.wasm" ] \
+[ -f "$DIST/decompile/index.html" ] && [ -f "$DIST/unlace_wasm.wasm" ] \
   || { echo "error: $DIST is not a fresh build.sh bundle; run build.sh first"; exit 1; }
 
 echo ">> assembling $RUN"
 rm -rf "$RUN"
 mkdir -p "$RUN"
 for f in kuna-web.js kuna-worker.js kuna-worker-client.js zip.js sha256.js \
-         kuna_wasm.wasm specs-small.json specs vendor decompile; do
+         unlace_wasm.wasm specs-small.json specs vendor decompile; do
   mv "$DIST/$f" "$RUN/"
 done
 cp -r "$DIST/assets" "$RUN/assets"

@@ -4,7 +4,7 @@
 //   1. The wasm decompiler RUNS client-side (under Node's WASI preview1, the
 //      same ABI the browser WASI shim implements), reading the specs + binary
 //      from a virtual filesystem.
-//   2. Its output is byte-identical to the NATIVE `kuna_wasm` build — i.e. the
+//   2. Its output is byte-identical to the NATIVE `unlace_wasm` build — i.e. the
 //      wasm port is a faithful decompiler, not a degraded one.
 //
 // It runs `list` + several `decompile` cases + a whole-binary `project` export
@@ -28,13 +28,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../../..'); // integrations/web/test -> repo root
 
 const WASM = process.env.WASM ||
-  join(repo, 'decompiler/target/wasm32-wasip1/release/kuna_wasm.wasm');
+  join(repo, 'decompiler/target/wasm32-wasip1/release/unlace_wasm.wasm');
 const NATIVE = process.env.NATIVE ||
-  join(repo, 'decompiler/target/release/kuna_wasm');
+  join(repo, 'decompiler/target/release/unlace_wasm');
 const SPECS = process.env.SPECS || join(repo, 'specs');
 const RUN_WASM = join(here, 'run-wasm.mjs');
 
-// { fixture, arch, cases } — cases are argv tails for kuna_wasm.
+// { fixture, arch, cases } — cases are argv tails for unlace_wasm.
 const FIXTURES = [
   {
     fixture: join(here, 'fixtures/sample.elf'),
@@ -129,7 +129,7 @@ for (const { fixture, arch, cases } of FIXTURES) {
   }
 }
 
-const boundaryDir = mkdtempSync(join(tmpdir(), 'kuna-wasm-auto-mode-'));
+const boundaryDir = mkdtempSync(join(tmpdir(), 'unlace-wasm-auto-mode-'));
 const source = readFileSync(FIXTURES[0].fixture);
 const boundaries = [
   [500 * 1024 - 1, 'aggressive'],

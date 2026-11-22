@@ -17,11 +17,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/bejoinpass_mips32_O2",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/bejoinpass_mips32_O2",
     "binary_sha256": "8f0dea400c794e972b17160b99d97c25b0e9fcaea458d78b6fe9158a4efcb0cb",
     "binary_size": 1964,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/bejoinpass_mips32_O2",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/bejoinpass_mips32_O2",
     "selector": "hi",
     "selector_kind": "name"
   },

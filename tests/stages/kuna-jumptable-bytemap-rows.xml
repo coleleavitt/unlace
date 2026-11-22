@@ -4,7 +4,7 @@
     A two-stage jump table whose byte map directly follows its table of
     4-byte offsets, in memory that is not read-only (Noelo-Lab/kuna#1669).
 
-    Source: decompiler/crates/kuna-decomp/tests/fixtures/selector_domain.S,
+    Source: decompiler/crates/unlace-decomp/tests/fixtures/selector_domain.S,
     `gcc -c -DINPUT_COUNT=300`, `.text` loaded writable at 0x401000. The
     guarded index (300 values) reads a byte from the map, and the byte picks
     one of three rows. The map's values cannot be proven because it is

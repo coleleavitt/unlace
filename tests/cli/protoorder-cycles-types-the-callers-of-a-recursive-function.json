@@ -15,11 +15,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/protoorder_cycles_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/protoorder_cycles_x86_64",
     "binary_sha256": "6a45512de067c0fb7e56097c5cd3c0dbd7c605e113c4ff3a4d23b5d5767570ff",
     "binary_size": 9168,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/protoorder_cycles_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/protoorder_cycles_x86_64",
     "selector": "wrap",
     "selector_kind": "name"
   },

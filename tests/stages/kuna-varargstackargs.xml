@@ -2,7 +2,7 @@
 <binaryimage arch="AARCH64:LE:64:v8A:default">
 <!--
     RE-friction round 1, challenge 68149b8a8f555589f353117c (Mach-O arm64
-    `practice_2_rengr`): `kuna decompile ... _main` rendered
+    `practice_2_rengr`): `unlace decompile ... _main` rendered
     `v2 = scanf("%d");` with the destination pointer dropped, then compared a
     local that nothing ever wrote, plus three `printf("... %s\n")` calls with no
     argument for the %s.

@@ -29,7 +29,7 @@
     (off), pass 2 the fix (on). The decompile-all witnesses (a callee that reads
     its parameter only by handing it to fcntl, through a forwarder and through a
     value the caller also compares) are
-    decompiler/crates/kuna-analysis/tests/fixtures/passthrough_bodyreads_x86_64
+    decompiler/crates/unlace-analysis/tests/fixtures/passthrough_bodyreads_x86_64
     under tests/cli/passthrough-keeps-an-argument-the-callee-body-takes.json.
 -->
 <bytechunk space="ram" offset="0x4011b0">

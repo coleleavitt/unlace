@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/declaredlibcproto_i386",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/declaredlibcproto_i386",
     "binary_sha256": "0378df5e9972f99f5a6433bfbf2bcacb1695d7da15dd3033209e2ab59712f57e",
     "binary_size": 8384,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/declaredlibcproto_i386",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/declaredlibcproto_i386",
     "selector": "0x8049000",
     "selector_kind": "addr"
   },

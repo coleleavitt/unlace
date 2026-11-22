@@ -14,7 +14,7 @@ rounds: [7]
 first_seen_round: 7
 attempts: 0
 covered_by_option: x64syscall
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/552
@@ -140,7 +140,7 @@ _not yet refuted_
 - round 7 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK 2026-09-07 10:2xZ by the captain (no refuter role exists; see the refute-tick memory). VERDICT: UPHELD, and the mechanism is now pinned to a single line of vendored SLEIGH -- but the FIX SHAPE THE HYPOTHESIS IMPLIES IS NOT linuxsyscall's, and a builder that copies linuxsyscall CANNOT flip this probe. Read this before designing.
 
 REPRO on the need's own arena binary (.kuna-repipe/arena/7/652e6f896e7e520ff1c3db3c/target/crackme.tar.gz.__x/crackme.tar.__x/crackme/crackme, ELF64 PIE, static, NO SECTION HEADER):
-  kuna decompile $B 0x78 --addr --option linuxsyscall on --option calleearity on --option varargstackargs on --assert 'prototype 0x78 long kernel_call(long number, long address, long length)'
+  unlace decompile $B 0x78 --addr --option linuxsyscall on --option calleearity on --option varargstackargs on --assert 'prototype 0x78 long kernel_call(long number, long address, long length)'
   -> long sub_78(long number,long address,long length) { syscall(); return number; }
 Reproduces exactly as filed. NOTE the --assert IS honored (the three parameters are named and typed as asserted), so the prototype/argument-assertion path is NOT at fault -- do not spend a builder there.
 

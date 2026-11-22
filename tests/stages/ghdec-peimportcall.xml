@@ -12,7 +12,7 @@
     no no-return flow effect: a function ending in `ExitProcess`/`ExitThread`
     ran straight on and absorbed the next function's whole body.
 
-    Stage / sub-stage: P1 external-refinement (`kuna-analysis`
+    Stage / sub-stage: P1 external-refinement (`unlace-analysis`
     `loader/kuna_peimportcall.rs` paints the slot ranges) feeding the P4/P9
     deindirect seam (`Architecture::query_function` carries the callee's
     no-return flag onto the prototype `ActionDeindirect` merges).
@@ -42,7 +42,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/pe_noreturn_import.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/pe_noreturn_import.exe</com>
   <com>read symbols</com>
   <com>load function entry</com>
   <com>decompile</com>
@@ -51,7 +51,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/macho_import_slots</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_import_slots</com>
   <com>read symbols</com>
   <com>load function _call_slots</com>
   <com>decompile</com>

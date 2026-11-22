@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/codescalar_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/codescalar_x86_64",
     "binary_sha256": "147d82253e9611f26e14077b1fbc4485eb43db3aed85bc8ed62bb415db46fd8f",
     "binary_size": 5080,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/codescalar_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/codescalar_x86_64",
     "selector": "codebyte",
     "selector_kind": "name"
   },

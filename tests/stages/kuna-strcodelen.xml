@@ -21,7 +21,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/strcodelen/strs_x86_64.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/strcodelen/strs_x86_64.elf</com>
   <com>option strcodelen off</com>
   <com>read symbols</com>
   <com>load function greet</com>
@@ -31,7 +31,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-cli/tests/fixtures/strcodelen/strs_x86_64.elf</com>
+  <com>load file decompiler/crates/unlace-cli/tests/fixtures/strcodelen/strs_x86_64.elf</com>
   <com>option strcodelen on</com>
   <com>read symbols</com>
   <com>load function greet</com>

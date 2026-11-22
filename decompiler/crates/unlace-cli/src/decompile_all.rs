@@ -1,0 +1,4643 @@
+//! Whole-binary decompilation and function inventory commands.
+//!
+//! Both commands load and analyze an image once, then apply triage filters before
+//! producing results. Call-graph queries and callee ordering live in `callgraph`.
+//! Callee-first execution and feedback rounds live in `callee_first`.
+//! The shared loader, target selection and result rendering also serve the
+//! single-function and project-export commands. Individual decompile errors stay
+//! with their records; an empty executable discovery or a batch with no successful
+//! bodies is a run-level failure.
+
+mod callee_first;
+mod custom_reg_callers;
+mod functions_serialize;
+mod omit;
+mod result_store;
+
+pub(crate) use callee_first::decompile_callee_first;
+use callee_first::decompile_entries_callee_first;
+pub(crate) use omit::Omit;
+
+use std::collections::BTreeSet;
+use std::fmt::Write as _;
+
+use unlace_analysis::loader::macho_fat::SlicePref;
+use unlace_base::address::Address;
+use unlace_console::engine::{
+    ArmIsa, ConsoleProgram, EntryLookupError, EntrySelector, FunctionEntry, ObjectLocation,
+    bootstrap_from_image_with_isa, bootstrap_from_raw,
+};
+// The decompile loop + result shape live in the shared decompile-project core
+// (`unlace_console::project` — also reused by the `unlace_wasm` front-end).
+use unlace_console::project::{
+    BatchOutcome, DecompileOptions, FuncResult, converge_synthesized_structs, decompile_pulled,
+    default_fn_budget_seconds, render_c,
+};
+// `File::architecture()` (the ARM-discovery default, decbench) plus the
+// section/segment walks the zero-discovery diagnosis reads.
+use object::{Object, ObjectSection, ObjectSegment};
+use unlace_decomp::decompile_drive::{LineMapping, TypeInfo, VarInfo, print_c_types};
+use unlace_decomp::kuna_structsynth::shard::{self, ShardHook};
+use unlace_decomp::options::{KUNA_OPTION_NAMES, OptionDatabase};
+
+use regex::Regex;
+
+use crate::args::take_value as take;
+use crate::callgraph::CallGraph;
+use crate::jobs;
+use crate::jsonfmt::{Json, dumps_indent2};
+#[cfg(test)]
+use crate::loadtime::last_option_value;
+use crate::loadtime::{apply_to_process as apply_loadtime_env, is_loadtime_gate};
+use crate::paths;
+
+/// Parsed `decompile-all` / `functions` arguments (the two share a loader;
+/// `decompile-project` reuses the same parse via its own wrapper).
+pub(crate) struct Args {
+    pub(crate) binary: String,
+    /// Explicitly trusted, hashed Rust banks; consumed once before target selection.
+    pub(crate) apply_rust_signatures: Option<String>,
+    pub(crate) json: bool,
+    /// `--functions a,b,c`: restrict to these names (None ⇒ CODE-backed entries).
+    pub(crate) names: Option<Vec<String>>,
+    /// `--addr 0xVMA|.section+0xOFFSET|SECTION_INDEX:0xOFFSET` (repeatable).
+    /// Combined with `--functions` if both are given.
+    pub(crate) addrs: Vec<EntrySelector>,
+    /// `--entry 0xVMA` (repeatable, `--raw-image` only): where the image's code
+    /// starts. Both forms seed a raw load, but only `--addr` *selects*. With
+    /// `rawdiscover` on there is a discovered inventory beyond the seeds, and a
+    /// seed that also filtered would hide all of it. Empty on every
+    /// object-format input, where `--entry` is refused outright.
+    pub(crate) entry_seeds: Vec<EntrySelector>,
+    /// `--no-vars`: skip the per-function variable extraction (faster; drops the
+    /// `variables` array used by decbench's `type_match`).
+    pub(crate) no_vars: bool,
+    /// `--omit KEY[,KEY]...` (`decompile-all --json`, `decompile --json`): the
+    /// record collections left out of the document. Omitting `variables` also
+    /// sets `no_vars`, so the extraction is skipped too.
+    pub(crate) omit: Omit,
+    /// `--max-fn-seconds N` (decompile-all / decompile-project): per-function
+    /// decompile watchdog budget in seconds; `0` disables.  A function that
+    /// exceeds it is recorded as that function's `error` (the batch continues)
+    /// instead of hanging the whole run — the defensive cap for the known
+    /// stripped-ELF non-convergence hang (`tests/hang-repro/`). Defaults to 10
+    /// for an unfiltered fast whole-binary run and 120 otherwise.
+    pub(crate) max_fn_seconds: u64,
+    /// `--max-fn-memory N` (the decompiling surfaces): stop a function once the
+    /// process decompiling it holds more than N MiB resident and the function
+    /// itself added at least 64 MiB, recording that function's `error`; `0`
+    /// disables. `None` (omitted) is the cgroup default. See [`arm_fn_budgets`].
+    pub(crate) max_fn_memory: Option<u64>,
+    pub(crate) options: Vec<(String, String)>,
+    /// `--define-function <start[-end][=name] | @file>` (repeatable): the
+    /// caller-declared function boundaries, applied by [`load_program`] right
+    /// after the analysis commit so they outrank discovery. Every surface that
+    /// loads through this struct honors them; only the surfaces that parse the
+    /// flag can be non-empty.
+    pub(crate) func_decls: Vec<crate::funcdecl::FuncDecl>,
+    /// `--assert <directive> | @FILE` (repeatable): the caller-supplied
+    /// assertions, installed by [`load_program`] before the analysis commit for
+    /// the image-scoped `bytes` and right after it for the program-scoped rest,
+    /// then dispatched by the decompile loop (`unlace_console::assertions`). Empty
+    /// for every invocation that passed none.
+    pub(crate) assertions: Vec<unlace_console::assertions::Directive>,
+    /// `--assert-strict`: a rejected directive makes the run exit non-zero
+    /// instead of being reported and continuing.
+    pub(crate) assert_strict: bool,
+    pub(crate) slice: Option<String>,
+    pub(crate) target: Option<String>,
+    pub(crate) sleighpath: Option<String>,
+    pub(crate) isa: Option<ArmIsa>,
+    /// Treat the input as one headerless, contiguous code image.
+    pub(crate) raw_image: bool,
+    /// Address assigned to raw file offset zero.
+    pub(crate) base: Option<u64>,
+    /// The concrete mode `auto` resolved to — passed verbatim to a `--jobs`
+    /// worker so a shard cannot re-resolve a different preset.
+    pub(crate) mode: &'static str,
+    /// `--jobs N|auto`: worker processes for the per-function loop (1 = the
+    /// serial in-process path, and every gate's path).
+    pub(crate) jobs: usize,
+    /// `--jobs auto` rather than an explicit count: the pool may then lower the
+    /// number to what the machine's free memory holds.
+    pub(crate) jobs_auto: bool,
+    /// `--jobs-chunk N`: functions handed to one worker invocation.
+    pub(crate) jobs_chunk: Option<usize>,
+    /// `--jobs-full-load`: give workers the parent's exact (discovery-running)
+    /// load instead of the cheap `--addr`-style one plus the inventory hand-off.
+    pub(crate) jobs_full_load: bool,
+    /// Internal: this process IS a `--jobs` worker serving the pool scratch
+    /// directory this names — chunk specs in, framed results out, and the
+    /// parent's function inventory replayed from it so a discovery-free worker
+    /// load still resolves every call the serial run did.
+    pub(crate) jobs_worker: Option<String>,
+    /// Internal: what the worker's caller needs beyond the C — prototypes
+    /// (`decompile-project` / `decompile-graph`), markup provenance
+    /// (`decompile-all --json`), and the rendered type definitions the `.h`
+    /// block is built from.
+    pub(crate) jobs_proto: bool,
+    pub(crate) jobs_provenance: bool,
+    pub(crate) jobs_types: bool,
+    /// Report each function's callee hints — the `--stream` scheduler's
+    /// frontier, asked for by `--jobs-callees`.
+    pub(crate) jobs_callees: bool,
+    /// Record pointer-argument facts for the parent to reconcile, asked for by
+    /// `--jobs-pointerargs`.
+    pub(crate) jobs_pointerargs: bool,
+    /// Internal: what this worker does with the synthesized-structure ledger
+    /// (`--jobs-synth record|force|serial`, see [`jobs::SynthWorker`]).
+    pub(crate) jobs_synth: Option<jobs::SynthWorker>,
+    /// Internal (kuna `elemptr`): the pool decompiles one function, which
+    /// types globals and tables as a serial batch of one does
+    /// (`--jobs-objects`); a worker of a larger pool types neither.
+    pub(crate) jobs_objects: bool,
+}
+
+impl Args {
+    /// A serial run in no worker role: what every surface but the three
+    /// whole-binary ones takes, and what `--jobs 1` (the default) is.  It exists
+    /// so a loader surface that never decompiles (`disassemble`, `strings`,
+    /// `xrefs`) can fill the `--jobs` plane in with one `..Args::serial()` rather
+    /// than restating fields it has no opinion about.
+    pub(crate) fn serial() -> Self {
+        Self {
+            binary: String::new(),
+            apply_rust_signatures: None,
+            json: false,
+            names: None,
+            addrs: Vec::new(),
+            entry_seeds: Vec::new(),
+            no_vars: false,
+            omit: Omit::default(),
+            max_fn_seconds: 0,
+            max_fn_memory: Some(0),
+            options: Vec::new(),
+            func_decls: Vec::new(),
+            assertions: Vec::new(),
+            assert_strict: false,
+            slice: None,
+            target: None,
+            sleighpath: None,
+            isa: None,
+            raw_image: false,
+            base: None,
+            mode: "auto",
+            jobs: 1,
+            jobs_auto: false,
+            jobs_chunk: None,
+            jobs_full_load: false,
+            jobs_worker: None,
+            jobs_proto: false,
+            jobs_provenance: false,
+            jobs_types: false,
+            jobs_callees: false,
+            jobs_pointerargs: false,
+            jobs_synth: None,
+            jobs_objects: false,
+        }
+    }
+
+    /// The Mach-O fat-slice preference this run's `--slice` / `--target` names.
+    pub(crate) fn slice_pref(&self) -> SlicePref {
+        unlace_analysis::loader::macho_fat::slice_pref(
+            self.slice.as_deref(),
+            self.target.as_deref(),
+        )
+    }
+
+    /// Whether the decompile runs the markup render: the `--json` line mappings
+    /// and the variables' `line_numbers`/`addresses` both come from it.
+    pub(crate) fn wants_provenance(&self) -> bool {
+        self.json && !(self.omit.line_mappings && self.no_vars)
+    }
+}
+
+// --- triage: narrowing a whole-binary run before it runs ---------------------
+
+/// How a narrowed inventory is ordered (`--sort`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub(crate) enum SortKey {
+    /// Entry address, ascending — discovery order, and the historical default of
+    /// both surfaces.
+    #[default]
+    Addr,
+    /// Byte extent, DESCENDING. The triage question is "what is big here", so
+    /// the answer leads with the biggest rather than making the caller reverse
+    /// a list it may have already truncated with `--limit`.
+    Size,
+    /// Name, ascending.
+    Name,
+}
+
+impl SortKey {
+    fn parse(value: &str) -> Result<SortKey, String> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "addr" | "address" => Ok(SortKey::Addr),
+            "size" => Ok(SortKey::Size),
+            "name" => Ok(SortKey::Name),
+            other => Err(format!(
+                "unknown --sort key {other:?} (expected addr, size, or name)"
+            )),
+        }
+    }
+}
+
+/// The size histogram `--summary` reports, as `(label, min, max)` inclusive.
+///
+/// Log-ish rather than uniform because a real inventory is: the zero-extent
+/// import slots, a mass of thunks and tiny wrappers, and a short tail of large
+/// functions — and the tail is what a triaging agent is looking for.
+const SIZE_BUCKETS: [(&str, u64, u64); 7] = [
+    ("0", 0, 0),
+    ("1-15", 1, 15),
+    ("16-63", 16, 63),
+    ("64-255", 64, 255),
+    ("256-1023", 256, 1023),
+    ("1024-4095", 1024, 4095),
+    ("4096+", 4096, u64::MAX),
+];
+
+/// How many functions `--summary` lists under `largest` when `--limit` is absent.
+const DEFAULT_SUMMARY_LARGEST: usize = 10;
+
+/// The triage narrowing shared by `unlace functions` and `unlace decompile-all`.
+///
+/// Deliberately NOT a field of [`Args`]: `Args` is a struct literal in four other
+/// command modules, and growing it would break every one of them for a selection
+/// none of them make. [`parse_args_with_filters`] returns the pair; the plain
+/// [`parse_args`] every other surface calls drops this half.
+#[derive(Default)]
+pub(crate) struct Filters {
+    /// `--filter REGEX`, matched against the canonical name and every alias.
+    name: Option<Regex>,
+    /// `--min-size N` / `--max-size N`, inclusive, over the inventory `size`.
+    min_size: Option<u64>,
+    max_size: Option<u64>,
+    /// `--reachable-from <name|0xaddr>`, resolved against the loaded program.
+    reachable_from: Option<String>,
+    /// `--limit N`, applied AFTER `--sort`.
+    limit: Option<usize>,
+    sort: SortKey,
+    /// `--summary`: report the orientation document instead of the inventory.
+    pub(crate) summary: bool,
+    rust_signature_manifest: Option<String>,
+}
+
+impl Filters {
+    /// Does this selection narrow the run at all?  An unnarrowed run keeps every
+    /// pre-existing behaviour, byte for byte — including the zero-discovery
+    /// verdict, which must stay attached to DISCOVERY and never fire because a
+    /// filter matched nothing.
+    pub(crate) fn narrows(&self) -> bool {
+        self.name.is_some()
+            || self.min_size.is_some()
+            || self.max_size.is_some()
+            || self.reachable_from.is_some()
+            || self.limit.is_some()
+            || self.sort != SortKey::Addr
+    }
+
+    /// Narrow, order and cap `entries`, returning the call graph if one had to be
+    /// built (the summary reuses it rather than walking the image twice).
+    ///
+    /// The graph is built only when `--reachable-from` or `--summary` needs it,
+    /// so `--filter`/`--min-size`/`--max-size`/`--limit` stay pure inventory
+    /// arithmetic with no extra decode. `measured` keeps what [`crate::limits`]
+    /// reads off it ([`CallGraph::load`]).
+    pub(crate) fn select(
+        &self,
+        prog: &ConsoleProgram,
+        binary: &str,
+        pref: SlicePref,
+        entries: Vec<FunctionEntry>,
+        measured: bool,
+    ) -> Result<(Vec<FunctionEntry>, Option<CallGraph>), String> {
+        let graph = (self.reachable_from.is_some() || self.summary)
+            .then(|| CallGraph::load(prog, binary, pref, measured))
+            .transpose()?;
+        let reachable = match (&self.reachable_from, &graph) {
+            (Some(spec), Some(graph)) => Some(graph.reachable_from(prog, spec)?),
+            _ => None,
+        };
+        let mut kept: Vec<FunctionEntry> = entries
+            .into_iter()
+            .filter(|e| self.keeps(e, reachable.as_ref()))
+            .collect();
+        self.order(&mut kept);
+        if let Some(limit) = self.limit {
+            kept.truncate(limit);
+        }
+        Ok((kept, graph))
+    }
+
+    fn keeps(&self, e: &FunctionEntry, reachable: Option<&BTreeSet<u64>>) -> bool {
+        if let Some(re) = &self.name
+            && !re.is_match(&e.name)
+            && !e.aliases.iter().any(|a| re.is_match(a))
+        {
+            return false;
+        }
+        if self.min_size.is_some_and(|min| e.size < min) {
+            return false;
+        }
+        if self.max_size.is_some_and(|max| e.size > max) {
+            return false;
+        }
+        if reachable.is_some_and(|set| !set.contains(&e.addr.get_offset())) {
+            return false;
+        }
+        true
+    }
+
+    /// Order in place. Every key breaks ties on the entry address, so a narrowed
+    /// run is reproducible rather than dependent on the discovery order.
+    fn order(&self, entries: &mut [FunctionEntry]) {
+        match self.sort {
+            SortKey::Addr => entries.sort_by_key(|e| e.addr.get_offset()),
+            SortKey::Size => entries.sort_by(|a, b| {
+                b.size
+                    .cmp(&a.size)
+                    .then(a.addr.get_offset().cmp(&b.addr.get_offset()))
+            }),
+            SortKey::Name => entries.sort_by(|a, b| {
+                a.name
+                    .cmp(&b.name)
+                    .then(a.addr.get_offset().cmp(&b.addr.get_offset()))
+            }),
+        }
+    }
+
+    /// How many functions `--summary` lists under `largest`.
+    fn largest_wanted(&self) -> usize {
+        self.limit.unwrap_or(DEFAULT_SUMMARY_LARGEST)
+    }
+}
+
+// --- the `--summary` orientation document ------------------------------------
+
+/// The answer to "where do I start", measured without decompiling anything.
+struct Summary {
+    /// Functions discovered, before any triage filter.
+    total: usize,
+    /// The image entry point as `(address, name)`, `None` when the format
+    /// declares none.
+    entry: Option<(u64, String)>,
+    /// The program's own entry function (`main`, `wmain`, `WinMain`,
+    /// `wWinMain`) as `(address, name)`, `None` when the inventory names none.
+    main: Option<(u64, String)>,
+    /// How many DISCOVERED functions the entry point reaches.
+    reachable_from_entry: Option<usize>,
+    /// How many SELECTED functions no call site reaches.
+    no_callers: usize,
+    /// Total byte extent of the selected functions.
+    code_bytes: u64,
+    /// `(label, count)` per [`SIZE_BUCKETS`] row, over the selected functions.
+    buckets: Vec<(&'static str, usize)>,
+    /// The largest selected functions, biggest first.
+    largest: Vec<FunctionEntry>,
+    /// Recognized runtimes and packers, with what to do about each.
+    runtime: Vec<crate::runtime_hints::RuntimeHint>,
+    /// The selected functions a decompile would hit an engine budget on.
+    limits: crate::limits::Limits,
+    rust_fields: Vec<(String, Json)>,
+}
+
+/// Measure the orientation document over `all` (the discovered inventory) and
+/// `selected` (what the triage filters kept — the same list when there are none).
+fn summarize(
+    binary: &str,
+    prog: &ConsoleProgram,
+    filters: &Filters,
+    graph: &CallGraph,
+    all: &[FunctionEntry],
+    selected: &[FunctionEntry],
+) -> Summary {
+    let entry = image_entry(prog);
+    let reachable_from_entry = entry.as_ref().and_then(|(vma, _)| {
+        let reached = graph.reachable_from(prog, &format!("0x{vma:x}")).ok()?;
+        Some(
+            all.iter()
+                .filter(|e| reached.contains(&e.addr.get_offset()))
+                .count(),
+        )
+    });
+
+    let mut buckets: Vec<(&'static str, usize)> = SIZE_BUCKETS
+        .iter()
+        .map(|(label, _, _)| (*label, 0))
+        .collect();
+    for e in selected {
+        if let Some(i) = SIZE_BUCKETS
+            .iter()
+            .position(|(_, lo, hi)| e.size >= *lo && e.size <= *hi)
+        {
+            buckets[i].1 += 1;
+        }
+    }
+
+    let mut largest = selected.to_vec();
+    largest.sort_by(|a, b| {
+        b.size
+            .cmp(&a.size)
+            .then(a.addr.get_offset().cmp(&b.addr.get_offset()))
+    });
+    largest.truncate(filters.largest_wanted());
+
+    Summary {
+        total: all.len(),
+        entry,
+        main: user_main(all),
+        reachable_from_entry,
+        no_callers: selected
+            .iter()
+            .filter(|e| !graph.has_caller(e.addr.get_offset()))
+            .count(),
+        code_bytes: selected.iter().map(|e| e.size).sum(),
+        buckets,
+        largest,
+        runtime: crate::image::inspect(binary, |bytes| {
+            Some(crate::runtime_hints::detect(bytes, true))
+        })
+        .unwrap_or_default(),
+        limits: crate::limits::measure(prog, graph, selected),
+        rust_fields: Vec::new(),
+    }
+}
+
+/// The image's declared entry point, named with kuna's best name for it.
+///
+/// This is the FORMAT's entry (a PE `AddressOfEntryPoint` is the CRT startup,
+/// not `main`) — the one address every image agrees on, and the honest root for
+/// "what does this program actually reach". The loaded image metadata already
+/// accounts for Mach-O file offsets and ELFv1 function descriptors.
+fn image_entry(prog: &ConsoleProgram) -> Option<(u64, String)> {
+    let vma = prog.image_metadata()?.entry?;
+    // Reported THROUGH the inventory, so an ARM `e_entry` carrying the Thumb mode
+    // bit is answered at the even entry the rest of the document uses.
+    match prog.find_entry_at(vma) {
+        Some(entry) => Some((entry.addr.get_offset(), entry.name)),
+        None => Some((
+            vma,
+            prog.function_named_at(vma)
+                .unwrap_or_else(|| format!("0x{vma:x}")),
+        )),
+    }
+}
+
+/// The user entry function by name, in the order a C runtime would call them.
+fn user_main(all: &[FunctionEntry]) -> Option<(u64, String)> {
+    ["main", "wmain", "WinMain", "wWinMain"]
+        .iter()
+        .find_map(|want| {
+            all.iter()
+                .find(|e| e.name == *want || e.aliases.iter().any(|a| a == want))
+                .map(|e| (e.addr.get_offset(), (*want).to_string()))
+        })
+}
+
+fn summary_json(
+    binary: &str,
+    summary: &Summary,
+    selected: usize,
+    error: Option<&str>,
+    warnings: &[String],
+    display_address: &dyn Fn(u64) -> u64,
+    declared: &crate::funcdecl::Declared,
+) -> String {
+    let named = |f: &Option<(u64, String)>| match f {
+        Some((vma, name)) => {
+            let address = display_address(*vma);
+            Json::Object(vec![
+                ("name".into(), Json::Str(name.clone())),
+                ("address".into(), Json::Number(address.to_string())),
+                ("address_hex".into(), Json::Str(format!("0x{address:x}"))),
+            ])
+        }
+        None => Json::Null,
+    };
+    let entry = named(&summary.entry);
+    let main = named(&summary.main);
+    let buckets = Json::Array(
+        summary
+            .buckets
+            .iter()
+            .zip(SIZE_BUCKETS.iter())
+            .map(|((label, count), (_, lo, hi))| {
+                Json::Object(vec![
+                    ("bucket".into(), Json::Str((*label).to_string())),
+                    ("min_size".into(), Json::Number(lo.to_string())),
+                    (
+                        "max_size".into(),
+                        if *hi == u64::MAX {
+                            Json::Null
+                        } else {
+                            Json::Number(hi.to_string())
+                        },
+                    ),
+                    ("count".into(), Json::Number(count.to_string())),
+                ])
+            })
+            .collect(),
+    );
+    let mut doc = vec![
+        ("binary".into(), Json::Str(binary.to_string())),
+        ("count".into(), Json::Number(selected.to_string())),
+        ("total".into(), Json::Number(summary.total.to_string())),
+        ("error".into(), error_json(error)),
+        (
+            "warnings".into(),
+            Json::Array(warnings.iter().map(|w| Json::Str(w.clone())).collect()),
+        ),
+    ];
+    doc.extend(declared.fid_databases_field());
+    doc.extend(summary.rust_fields.iter().cloned());
+    doc.push((
+        "summary".into(),
+        Json::Object(vec![
+            ("entry".into(), entry),
+            ("main".into(), main),
+            (
+                "reachable_from_entry".into(),
+                summary
+                    .reachable_from_entry
+                    .map(|n| Json::Number(n.to_string()))
+                    .unwrap_or(Json::Null),
+            ),
+            (
+                "no_callers".into(),
+                Json::Number(summary.no_callers.to_string()),
+            ),
+            (
+                "code_bytes".into(),
+                Json::Number(summary.code_bytes.to_string()),
+            ),
+            ("size_buckets".into(), buckets),
+            (
+                "largest".into(),
+                entries_json(&summary.largest, display_address, declared),
+            ),
+            (
+                "runtime".into(),
+                crate::runtime_hints::to_json(&summary.runtime),
+            ),
+            (
+                "limits".into(),
+                crate::limits::to_json(&summary.limits, display_address),
+            ),
+        ]),
+    ));
+    format!("{}\n", dumps_indent2(&Json::Object(doc)))
+}
+
+fn summary_text(
+    binary: &str,
+    summary: &Summary,
+    selected: usize,
+    warnings: &[String],
+    display_address: &dyn Fn(u64) -> u64,
+    declared: &crate::funcdecl::Declared,
+) -> String {
+    let mut out = String::new();
+    let _ = writeln!(out, "binary\t{binary}");
+    for warning in warnings {
+        let _ = writeln!(out, "warning\t{warning}");
+    }
+    for line in crate::fid::report::text_lines(declared.fid_databases()) {
+        let _ = writeln!(out, "{line}");
+    }
+    let _ = writeln!(
+        out,
+        "functions\t{selected} selected / {} discovered",
+        summary.total
+    );
+    match &summary.entry {
+        Some((vma, name)) => {
+            let address = display_address(*vma);
+            let _ = writeln!(out, "entry\t0x{address:x}\t{name}");
+        }
+        None => {
+            let _ = writeln!(out, "entry\t(none declared)");
+        }
+    }
+    match &summary.main {
+        Some((vma, name)) => {
+            let address = display_address(*vma);
+            let _ = writeln!(out, "main\t0x{address:x}\t{name}");
+        }
+        None => {
+            let _ = writeln!(out, "main\t(none named)");
+        }
+    }
+    if let Some(n) = summary.reachable_from_entry {
+        let _ = writeln!(out, "reachable from entry\t{n}");
+    }
+    let _ = writeln!(out, "no callers\t{}", summary.no_callers);
+    let _ = writeln!(out, "code bytes\t{}", summary.code_bytes);
+    let _ = writeln!(out, "size buckets:");
+    for (label, count) in &summary.buckets {
+        let _ = writeln!(out, "  {label:<12}\t{count}");
+    }
+    let _ = writeln!(out, "largest:");
+    for e in &summary.largest {
+        let address = display_address(e.addr.get_offset());
+        let _ = writeln!(out, "  0x{address:x}\t{}\t{}", e.size, e.name);
+    }
+    for h in &summary.runtime {
+        let _ = writeln!(out, "runtime\t{}\t{}", h.id, h.hint);
+        for (name, version) in h.crates.iter().flatten() {
+            let _ = writeln!(out, "crate\t{name}\t{version}");
+        }
+    }
+    crate::limits::write_text(&mut out, &summary.limits, display_address);
+    out
+}
+
+/// `unlace decompile-all` entry point.
+pub fn run(argv: &[String]) -> i32 {
+    let (args, filters) = match parse_args_with_filters(argv, "decompile-all") {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("error: {e}");
+            usage_decompile_all();
+            return 2;
+        }
+    };
+    // A `--jobs` worker writes framed results into the pool's scratch directory
+    // and prints only its chunk acknowledgements: the parent renders the document.
+    if args.jobs_worker.is_some() {
+        return match run_jobs_worker(&args) {
+            Ok(()) => 0,
+            Err(e) => {
+                eprintln!("error: {e}");
+                1
+            }
+        };
+    }
+    // `--summary` is an inventory question, so it never enters the decompile
+    // loop: the whole point of asking it is to find out what is worth decompiling.
+    if filters.summary {
+        return run_summary(&args, &filters);
+    }
+    match decompile_all(&args, &filters) {
+        Ok(run) => {
+            // An UNFILTERED run that DISCOVERED nothing is a failed run wearing a
+            // successful one's clothes. A run narrowed by `--functions`/`--addr`
+            // that matched nothing is a different condition (already warned
+            // about, per target) and keeps its status — as is a triage filter
+            // that matched nothing, which is an answer, not a failure. So the
+            // verdict is read off the pre-filter target set.
+            let unfiltered = args.names.is_none() && args.addrs.is_empty();
+            let discovery_error = (run.discovered == 0 && unfiltered)
+                .then(|| zero_discovery_error(&args.binary))
+                .flatten();
+            let run_error = discovery_error
+                .or_else(|| BatchOutcome::of(&run.funcs).all_failed_error(&args.binary));
+            let text = (!args.json).then(|| render_c(&run.funcs));
+            report_unstructured_gotos(&run.funcs);
+            // A rejected assertion is reported and the run continues (an agent
+            // batching forty renames against a re-decompiled binary must not lose
+            // all forty to one stale name); `--assert-strict` makes it fatal.
+            let rejected = report_rejected_assertions(&run.assertions);
+            let refused = any_refused_assertion(&run.assertions);
+            let written = match &text {
+                Some(text) => crate::output::emit(text),
+                None => crate::output::emit_streamed(|out| {
+                    write_selected_json(
+                        out,
+                        &args.binary,
+                        &run.funcs,
+                        &args.options,
+                        run_error.as_deref(),
+                        filters.narrows().then_some(run.discovered),
+                        &run.assertions,
+                        &run.interior,
+                        &run.declared,
+                        args.omit,
+                    )
+                }),
+            };
+            let status = finish_with_run_error(written, run_error.as_deref());
+            if status == 0 && (refused || (args.assert_strict && rejected)) {
+                return 1;
+            }
+            status
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            1
+        }
+    }
+}
+
+/// The `--jobs` worker body: load exactly what the parent told us to load, then
+/// serve chunk after chunk off the assignment pipe until the parent says `quit`
+/// or goes away.  Loading once and serving many chunks is the point — the load
+/// is the expensive half of a worker.
+///
+/// Within a chunk, one framed record is flushed per function as it lands, so a
+/// worker killed mid-chunk still delivers its prefix.  Targets come from the
+/// chunk spec rather than [`resolve_targets`], so the name, aliases, extent and
+/// object coordinates a function is decompiled under are the parent's, bit for
+/// bit.
+fn run_jobs_worker(args: &Args) -> Result<(), String> {
+    let scratch = args.jobs_worker.as_deref().expect("worker mode");
+    let assignments = jobs::listen_for_assignments(scratch);
+
+    let dir = std::path::Path::new(scratch);
+    let faults = jobs::Faults::from_env();
+    let mut prog = load_program(args, DriverDefaults::Decompile)?;
+    if !args.jobs_objects {
+        unlace_decomp::kuna_elemptr::without_objects(prog.arch_mut());
+    }
+    let inventory = dir.join(jobs::INVENTORY_FILE);
+    if !args.jobs_full_load && inventory.is_file() {
+        seed_worker_inventory(&mut prog, &inventory.to_string_lossy())?;
+    } else if !args.jobs_full_load {
+        prog.callwide_unavailable("worker did not receive a complete function inventory");
+    }
+    unlace_console::kuna_callwide::prepare(&mut prog);
+    faults.after_load(dir);
+    arm_fn_budgets(&mut prog, args);
+    // (kuna `structsynth`) A recording worker reports every ledger lookup and
+    // its own answer; a forcing one first mints the parent's replayed
+    // structures, in the serial run's order, and then answers each lookup with
+    // the name the chunk spec gives it. A serial one keeps its own ledger and
+    // converges each chunk.
+    let at_load = std::rc::Rc::new(match args.jobs_synth {
+        Some(jobs::SynthWorker::Record | jobs::SynthWorker::Force) => {
+            shard::AtLoad::of(prog.arch().types_impl())
+        }
+        _ => shard::AtLoad::default(),
+    });
+    let mut synth_hook = match args.jobs_synth {
+        Some(jobs::SynthWorker::Record) => Some(ShardHook::recording(at_load.clone())),
+        Some(jobs::SynthWorker::Force) => Some(take_synth_table(&mut prog, scratch, &at_load)?),
+        _ => None,
+    };
+    prog.arch_mut().struct_synth_shard = synth_hook.clone();
+    let converge = args.jobs_synth == Some(jobs::SynthWorker::Serial);
+
+    while let Ok(assignment) = assignments.recv() {
+        // The type block is rendered ONCE, when the parent retires this worker:
+        // the factory accumulates over every chunk served, so only its final
+        // state speaks for all of them.
+        let idx = match assignment {
+            jobs::Assignment::Chunk(idx) => idx,
+            jobs::Assignment::Force => {
+                synth_hook = Some(take_synth_table(&mut prog, scratch, &at_load)?);
+                continue;
+            }
+            jobs::Assignment::Quit(token) => {
+                if args.jobs_types {
+                    jobs::write_type_block(scratch, token, false, &print_c_types(prog.arch_mut()))?;
+                    // Whether this worker's structures are the document's is the
+                    // parent's to know, so it also gets the block without them.
+                    if synth_hook.is_some() {
+                        shard::forget_minted(prog.arch().types_impl(), at_load.held())?;
+                        jobs::write_type_block(
+                            scratch,
+                            token,
+                            true,
+                            &print_c_types(prog.arch_mut()),
+                        )?;
+                    }
+                }
+                break;
+            }
+        };
+        let targets = jobs::read_spec(&dir.join(jobs::spec_name(idx)).to_string_lossy())?;
+        let answers: Vec<Vec<Option<String>>> = targets
+            .iter()
+            .map(|t| t.synth.clone().unwrap_or_default())
+            .collect();
+        let entries = rehydrate_entries(&prog, targets)?;
+        let replay = if converge {
+            entries.clone()
+        } else {
+            Vec::new()
+        };
+        {
+            let out = std::cell::RefCell::new(jobs::ResultWriter::create(
+                &dir.join(jobs::result_name(idx)).to_string_lossy(),
+            )?);
+            // One pulled batch for the whole chunk, not one call per function:
+            // the callee-hint context is built once per call, and rebuilding the
+            // program's entry set per function is unaffordable on a large image.
+            // `single_target` is false because a worker never carries assertions
+            // (`--assert` and `--jobs` are exclusive), so nothing binds to it.
+            let opts = DecompileOptions {
+                no_vars: args.no_vars,
+                want_proto: args.jobs_proto,
+                want_provenance: args.jobs_provenance,
+                want_callee_hints: args.jobs_callees,
+                // `--jobs-types` is what a project export asks its workers for:
+                // the `.h` type block. A worker serving that surface therefore
+                // leaves the `structdefs` preamble out of the bodies, exactly as
+                // the serial export does; a `decompile-all`/`decompile-graph`
+                // worker does not set it and keeps the preamble.
+                header_carries_types: args.jobs_types,
+                park_recovered_proto: false,
+                single_target: false,
+                want_tokens: false,
+                want_pointer_arguments: args.jobs_pointerargs,
+            };
+            let mut pending = entries.into_iter();
+            let mut pulled = 0usize;
+            // The serial worker holds its chunk back until the sweep has run.
+            let mut held: Vec<FuncResult> = Vec::new();
+            // A result file this worker cannot write is the whole chunk lost, so
+            // the pull stops at the current function rather than decompiling the
+            // rest of it into a dead file.
+            let write_error: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(None);
+            let write = |frame: Result<(), String>| {
+                let mut slot = write_error.borrow_mut();
+                if let (None, Err(e)) = (&*slot, frame) {
+                    *slot = Some(e);
+                }
+            };
+            let mut begin = |position: usize| {
+                if converge {
+                    write(out.borrow_mut().begin(position));
+                }
+            };
+            decompile_pulled(
+                &mut prog,
+                &opts,
+                &mut || {
+                    if write_error.borrow().is_some() {
+                        return None;
+                    }
+                    let entry = pending.next()?;
+                    if let Some(hook) = &synth_hook {
+                        hook.borrow_mut().begin(&answers[pulled]);
+                    }
+                    begin(pulled);
+                    pulled += 1;
+                    faults.before_target(dir, entry.addr.get_offset());
+                    Some(entry)
+                },
+                &mut |mut r| {
+                    if let Some(hook) = &synth_hook {
+                        r.synth = Some(hook.borrow_mut().take());
+                    }
+                    if converge {
+                        held.push(r);
+                        return;
+                    }
+                    write(out.borrow_mut().push(&r));
+                },
+            );
+            if converge && write_error.borrow().is_none() {
+                converge_synthesized_structs(&mut prog, &opts, &replay, &mut held, &mut begin);
+            }
+            if let Some(e) = write_error.into_inner() {
+                return Err(e);
+            }
+            let mut out = out.into_inner();
+            for r in &held {
+                out.push(r)?;
+            }
+        }
+        jobs::ack_chunk(idx);
+    }
+    Ok(())
+}
+
+/// (kuna `structsynth`) Make this worker a forcing one: forget the structures
+/// it minted itself, mint the parent's replayed table in its order, and answer
+/// every later ledger lookup from the chunk specs.
+fn take_synth_table(
+    prog: &mut ConsoleProgram,
+    scratch: &str,
+    at_load: &std::rc::Rc<shard::AtLoad>,
+) -> Result<shard::ShardHandle, String> {
+    if jobs::Faults::from_env().refuses_synth_install() {
+        return Err(format!(
+            "cannot install the synthesized structures: {} refused",
+            jobs::JOBS_FAULT_ENV
+        ));
+    }
+    let table = jobs::read_synth_table(scratch)?;
+    shard::forget_minted(prog.arch().types_impl(), at_load.held())
+        .and_then(|()| shard::install_table(prog.arch().types(), &table))
+        .map_err(|e| format!("cannot install the synthesized structures: {e}"))?;
+    let hook = ShardHook::forcing(at_load.clone());
+    prog.arch_mut().struct_synth_shard = Some(hook.clone());
+    Ok(hook)
+}
+
+/// Rebuild the parent's [`FunctionEntry`] list from a chunk spec.
+fn rehydrate_entries(
+    prog: &ConsoleProgram,
+    targets: Vec<jobs::TargetSpec>,
+) -> Result<Vec<FunctionEntry>, String> {
+    let manage = prog.arch().manage();
+    targets
+        .into_iter()
+        .map(|t| {
+            let space = manage
+                .get_space_by_name(&t.space)
+                .or_else(|| manage.get_default_code_space())
+                .ok_or("no default code space")?;
+            Ok(FunctionEntry {
+                name: t.name,
+                addr: Address::new(std::rc::Rc::clone(space), t.addr),
+                aliases: t.aliases,
+                size: t.size,
+                object_location: t.object_location,
+                provenance: t.provenance,
+                binding: t.binding,
+            })
+        })
+        .collect()
+}
+
+/// Replay the parent's discovered function inventory into a worker that ran the
+/// cheap, discovery-free load, through the very seam the loader's own symbols
+/// arrive on — so `FlowInfo::queryCall` resolves exactly what the serial run
+/// resolved, which is what decides whether a direct call to another function
+/// renders as its name or as a raw address constant.
+fn seed_worker_inventory(prog: &mut ConsoleProgram, path: &str) -> Result<(), String> {
+    let code_space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .map(std::rc::Rc::clone)
+        .ok_or("no default code space")?;
+    let manage = prog.arch().manage();
+    let inventory = jobs::read_spec(path)?;
+    let callwide_inventory = prog.arch().call_wide.then(|| {
+        inventory
+            .iter()
+            .map(|entry| unlace_console::kuna_callwide::InventoryEntry {
+                address: entry.addr,
+                size: entry.size,
+                name: entry.name.clone(),
+                aliases: entry.aliases.clone(),
+            })
+            .collect()
+    });
+    let entries: Vec<(String, Address)> = inventory
+        .into_iter()
+        .map(|t| {
+            let space = manage
+                .get_space_by_name(&t.space)
+                .cloned()
+                .unwrap_or_else(|| std::rc::Rc::clone(&code_space));
+            (t.name, Address::new(space, t.addr))
+        })
+        .collect();
+    prog.seed_function_inventory(&entries).map_err(|e| {
+        format!(
+            "seeding the worker function inventory failed: {}",
+            e.explain()
+        )
+    })?;
+    if let Some(inventory) = callwide_inventory {
+        unlace_console::kuna_callwide::replay_inventory(prog, inventory);
+    }
+    Ok(())
+}
+
+/// The parent side of `--jobs N`: flatten the resolved targets (an `Address`
+/// holds an `Rc`, so it cannot cross a thread) and run them through the
+/// subprocess pool, which returns one result per target in target order.
+///
+/// `load_seconds` is how long the caller's own `load_program` took; the pool's
+/// stall watchdog needs it to know when a worker could plausibly have finished
+/// loading.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn decompile_targets_pooled(
+    args: &Args,
+    targets: &[FunctionEntry],
+    inventory: &[FunctionEntry],
+    want_proto: bool,
+    want_provenance: bool,
+    want_types: bool,
+    load_seconds: f64,
+    synth_base: Option<shard::Replay>,
+    serial_callee_first: bool,
+    arm_frames: Option<String>,
+    watch: Option<&dyn jobs::PoolWatch>,
+) -> Result<jobs::PoolOutput, String> {
+    let specs = flatten_targets(targets);
+    let inventory = flatten_targets(inventory);
+    let mut cfg = pool_config(
+        args,
+        want_proto,
+        want_provenance,
+        want_types,
+        /* want_callee_hints= */ false,
+        load_seconds,
+    );
+    cfg.synth_base = synth_base;
+    cfg.serial_callee_first = serial_callee_first;
+    cfg.arm_frames = arm_frames;
+    cfg.watch = watch;
+    cfg.elem_objects = targets.len() <= 1;
+    cfg.want_pointer_arguments = true;
+    let mut pooled = jobs::run_pool(&cfg, &specs, &inventory)?;
+    unlace_console::project::reconcile_pointer_arguments(&mut pooled.results);
+    Ok(pooled)
+}
+
+/// (kuna `armframes`) The parent's frame-recovery record, encoded for the pool.
+pub(crate) fn worker_arm_frames(prog: &ConsoleProgram) -> Option<String> {
+    prog.arm_frames().map(|record| record.encode())
+}
+
+/// (kuna `armframes`) Replay the parent's frame recovery in a worker that skips
+/// discovery, so its Listing is the parent's without the search.
+fn replay_worker_arm_frames(prog: &mut ConsoleProgram, args: &Args) -> Result<(), String> {
+    let Some(scratch) = args.jobs_worker.as_deref().filter(|_| !args.jobs_full_load) else {
+        return Ok(());
+    };
+    let path = std::path::Path::new(scratch).join(jobs::ARM_FRAMES_FILE);
+    if !path.is_file() {
+        return Ok(());
+    }
+    let text = std::fs::read_to_string(&path).map_err(|e| {
+        format!(
+            "cannot read the worker frame record {}: {e}",
+            path.display()
+        )
+    })?;
+    let record = unlace_analysis::aif::kuna_framereplay::ArmFrameReplay::decode(&text)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    prog.replay_arm_frames(record);
+    Ok(())
+}
+
+/// (kuna `structsynth`) The ledger a sharded run replays its workers' lookups
+/// from, read off the parent's program before any decompile: `None` when this
+/// run does not synthesize structures.
+pub(crate) fn synth_base(prog: &ConsoleProgram) -> Option<shard::Replay> {
+    prog.arch()
+        .struct_synth
+        .fires()
+        .then(|| shard::Replay::probe(prog.arch().types()))
+}
+
+/// Flatten resolved entries into the thread- and process-crossing form
+/// (a [`FunctionEntry`]'s `Address` holds an `Rc`).
+pub(crate) fn flatten_targets(entries: &[FunctionEntry]) -> Vec<jobs::TargetSpec> {
+    entries
+        .iter()
+        .map(|e| jobs::TargetSpec {
+            addr: e.addr.get_offset(),
+            space: e
+                .addr
+                .get_space()
+                .map(|s| s.get_name().to_string())
+                .unwrap_or_default(),
+            name: e.name.clone(),
+            aliases: e.aliases.clone(),
+            size: e.size,
+            object_location: e.object_location.clone(),
+            provenance: e.provenance,
+            binding: e.binding.clone(),
+            synth: None,
+        })
+        .collect()
+}
+
+/// The worker command line this run implies, resolved once so every pool —
+/// the static `--jobs` one and the `--stream` one — spawns identical workers.
+pub(crate) fn pool_config<'a>(
+    args: &'a Args,
+    want_proto: bool,
+    want_provenance: bool,
+    want_types: bool,
+    want_callee_hints: bool,
+    load_seconds: f64,
+) -> jobs::PoolConfig<'a> {
+    jobs::PoolConfig {
+        jobs: args.jobs,
+        jobs_auto: args.jobs_auto,
+        chunk: args.jobs_chunk,
+        binary: &args.binary,
+        mode: args.mode,
+        options: &args.options,
+        func_decls: args
+            .func_decls
+            .iter()
+            .map(crate::funcdecl::FuncDecl::flag_value)
+            .collect(),
+        no_vars: args.no_vars,
+        want_proto,
+        want_provenance,
+        want_types,
+        want_callee_hints,
+        want_pointer_arguments: false,
+        max_fn_seconds: args.max_fn_seconds,
+        max_fn_memory: args.max_fn_memory,
+        full_load: args.jobs_full_load,
+        load_seconds,
+        isa: args.isa.map(ArmIsa::as_str),
+        slice: args.slice.as_deref(),
+        target: args.target.as_deref(),
+        sleighpath: args.sleighpath.as_deref(),
+        synth_base: None,
+        serial_callee_first: false,
+        elem_objects: false,
+        arm_frames: None,
+        watch: None,
+    }
+}
+
+/// Emit `text`, then report a discovery failure (stdout before stderr, as
+/// `unlace decompile` orders them) and answer with the run's verdict.
+/// Report every rejected assertion on stderr, and say whether there was one.
+/// A `--types` declaration the C grammar declined is reported too but is not
+/// counted: a header is loaded as far as it parses, under `--assert-strict` too.
+///
+/// The human surface has no `assertions[]` to read, and a directive that was
+/// silently dropped is the failure mode this plane exists to end -- so a
+/// rejection is always spoken, on both surfaces.
+pub(crate) fn report_rejected_assertions(outcomes: &[unlace_console::assertions::Outcome]) -> bool {
+    let mut any = false;
+    for outcome in outcomes.iter().filter(|o| o.status == "rejected") {
+        let reason = outcome.detail.as_deref().unwrap_or("no reason given");
+        let reason = reason.lines().next().unwrap_or(reason);
+        if let Some(declaration) = unlace_console::kuna_cheader::origin(&outcome.directive) {
+            eprintln!("warning: --types {declaration}: rejected: {reason}");
+            continue;
+        }
+        any = true;
+        let reason = outcome.detail.as_deref().unwrap_or("no reason given");
+        if outcome.fatal {
+            eprintln!(
+                "error: --assert {:?} refused by the pipeline: {reason} \
+                 (the C below does not show it)",
+                outcome.directive
+            );
+        } else {
+            eprintln!(
+                "warning: --assert {:?} rejected: {reason}",
+                outcome.directive
+            );
+        }
+    }
+    any
+}
+
+/// Did the pipeline REFUSE a directive it had already accepted
+/// (`unlace_console::assertions::Outcome::fatal`)?
+///
+/// That is the verdict of the run whether or not `--assert-strict` was passed:
+/// unlike a directive that never bound, the C came back looking healthy while
+/// describing a program the directive was never applied to.
+pub(crate) fn any_refused_assertion(outcomes: &[unlace_console::assertions::Outcome]) -> bool {
+    outcomes.iter().any(|o| o.fatal)
+}
+
+/// (kuna outlang) Report the Rust back-end's unrepresentable gotos on stderr.
+///
+/// A `panic!` where the binary jumps is a FIDELITY warning, not a failed run:
+/// the rest of the body is a translation, the marker says where it stops being
+/// one, and every caller that already treats a zero exit as "usable output"
+/// stays correct. So this speaks and the verdict does not move -- what was
+/// missing was any channel at all, not a harsher one.
+pub(crate) fn report_unstructured_gotos(funcs: &[FuncResult]) {
+    let hits: Vec<(&str, usize)> = funcs
+        .iter()
+        .map(|f| (f.name.as_str(), f.unstructured_gotos()))
+        .filter(|(_, count)| *count > 0)
+        .collect();
+    report_unstructured_goto_sites(&hits);
+}
+
+/// [`report_unstructured_gotos`] for a surface that holds rendered text rather
+/// than records -- the forked `decomp_dbg` path.
+pub(crate) fn report_unstructured_goto_sites(hits: &[(&str, usize)]) {
+    let total: usize = hits.iter().map(|(_, count)| *count).sum();
+    if total == 0 {
+        return;
+    }
+    let scope = if hits.len() == 1 {
+        format!("in {}", hits[0].0)
+    } else {
+        let named: Vec<&str> = hits.iter().take(3).map(|(name, _)| *name).collect();
+        let more = if hits.len() > 3 {
+            format!(", and {} more", hits.len() - 3)
+        } else {
+            String::new()
+        };
+        format!("in {} functions ({}{more})", hits.len(), named.join(", "))
+    };
+    let (plural, subject) = if total == 1 {
+        ("", "that path is")
+    } else {
+        ("s", "those paths are")
+    };
+    eprintln!(
+        "note: {total} unstructured goto{plural} {scope}: no Rust form, rendered as a diverging \
+         panic!(), so {subject} not a translation of the binary -- re-run with --language c for a \
+         real goto, or try a P8 structuring option (unlace catalog)"
+    );
+}
+
+fn emit_with_run_error(text: &str, run_error: Option<&str>) -> i32 {
+    finish_with_run_error(crate::output::emit(text), run_error)
+}
+
+/// The exit status of a run whose stdout write ended in `written`, reporting
+/// its run-level error.
+fn finish_with_run_error(written: std::io::Result<()>, run_error: Option<&str>) -> i32 {
+    let status = i32::from(run_error.is_some());
+    let status = written.map_or_else(|e| crate::output::status_after(e, status), |()| status);
+    if let Some(message) = run_error {
+        eprintln!("error: {message}");
+    }
+    status
+}
+
+/// `unlace functions` entry point (enumeration only — no decompile).
+pub fn run_functions(argv: &[String]) -> i32 {
+    let (args, filters) = match parse_args_with_filters(argv, "functions") {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("error: {e}");
+            usage_functions();
+            return 2;
+        }
+    };
+    if filters.summary {
+        return run_summary(&args, &filters);
+    }
+    match list_functions(&args) {
+        Ok((prog, all)) => {
+            // DISCOVERY, not selection, decides the verdict: an inventory with
+            // no BODY in it is a total discovery failure, while a triage filter
+            // that matched nothing is an answer. The emptiness test is the one
+            // `decompile-all` reads its own verdict off
+            // (`function_entries_executable`), because the canonical inventory
+            // also carries import pointer slots for call naming: a NEOLite-packed
+            // image whose sections are none of them flagged executable enumerated
+            // its six imported names and not one body, and `is_empty()` reported
+            // that as a healthy listing while `decompile-all` on the same file
+            // named the cause.
+            let discovery_error = (!prog.any_executable_entry(&all))
+                .then(|| zero_discovery_error(&args.binary))
+                .flatten();
+            let total = all.len();
+            let (entries, graph) =
+                match filters.select(&prog, &args.binary, args.slice_pref(), all, args.json) {
+                    Ok(pair) => pair,
+                    Err(e) => {
+                        eprintln!("error: {e}");
+                        return 1;
+                    }
+                };
+            let written = if args.json {
+                let limits = graph
+                    .as_ref()
+                    .map(|g| crate::limits::measure(&prog, g, &entries));
+                let limits = limits.as_ref().map(|limits| {
+                    crate::limits::to_json(limits, &|address| prog.output_code_offset(address))
+                });
+                crate::output::emit_streamed(|out| {
+                    functions_serialize::write(
+                        out,
+                        &args.binary,
+                        &entries,
+                        total,
+                        discovery_error.as_deref(),
+                        limits.as_ref(),
+                        &|address| prog.output_code_offset(address),
+                        &crate::funcdecl::Declared::of(&prog),
+                    )
+                })
+            } else {
+                let mut text = String::new();
+                for e in &entries {
+                    // Alias names follow the canonical one on the same line, so
+                    // the plain listing stays one line per function.
+                    let extra = if e.aliases.is_empty() {
+                        String::new()
+                    } else {
+                        format!("\t({})", e.aliases.join(", "))
+                    };
+                    let address = prog.output_code_offset(e.addr.get_offset());
+                    let _ = writeln!(text, "0x{address:x}\t{}{extra}", e.name);
+                }
+                crate::output::emit(&text)
+            };
+            finish_with_run_error(written, discovery_error.as_deref())
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            1
+        }
+    }
+}
+
+/// `--summary`: the orientation document, on either surface.
+///
+/// It loads through the INVENTORY driver bundle on both, so the counts a caller
+/// orients by are the same numbers `unlace functions` reports, and asking for
+/// orientation never pays for a decompile it is trying to avoid.
+fn run_summary(args: &Args, filters: &Filters) -> i32 {
+    let (request, rust_manifest) = match filters.rust_signature_manifest.as_deref() {
+        Some(path) => match crate::rust_signatures::load(std::path::Path::new(path)) {
+            Ok((request, manifest)) => (Some(request), Some(manifest)),
+            Err(error) => {
+                eprintln!("error: {error}");
+                return 1;
+            }
+        },
+        None => (None, None),
+    };
+    let loaded = match request {
+        Some(request) => {
+            load_program_with_rust_profiles(args, DriverDefaults::Functions, Some(request)).map(
+                |prog| {
+                    let all = prog.function_entries_canonical();
+                    (prog, all)
+                },
+            )
+        }
+        None => list_functions(args),
+    };
+    let (prog, all) = match loaded {
+        Ok(loaded) => loaded,
+        Err(e) => {
+            crate::runtime_hints::note_to_stderr(&args.binary);
+            eprintln!("error: {e}");
+            return 1;
+        }
+    };
+    // The same verdict `run_functions` reads, over the same inventory: an
+    // orientation document made only of import names oriented nobody.
+    let discovery_error = (!prog.any_executable_entry(&all))
+        .then(|| zero_discovery_error(&args.binary))
+        .flatten();
+    let (selected, graph) =
+        match filters.select(&prog, &args.binary, args.slice_pref(), all.clone(), true) {
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return 1;
+            }
+        };
+    let Some(graph) = graph else {
+        eprintln!("error: --summary could not build the program call graph");
+        return 1;
+    };
+    let mut summary = summarize(&args.binary, &prog, filters, &graph, &all, &selected);
+    if let Some(manifest) = &rust_manifest {
+        summary.rust_fields = crate::rust_signatures::fields(manifest, prog.rust_profile_report());
+    }
+    let declared = crate::funcdecl::Declared::of(&prog);
+    let warnings: Vec<String> = prog
+        .load_notes()
+        .iter()
+        .chain(declared.notes())
+        .cloned()
+        .chain(crate::fid::report::warnings(declared.fid_databases()))
+        .collect();
+    let text = if args.json {
+        summary_json(
+            &args.binary,
+            &summary,
+            selected.len(),
+            discovery_error.as_deref(),
+            &warnings,
+            &|address| prog.output_code_offset(address),
+            &declared,
+        )
+    } else {
+        summary_text(
+            &args.binary,
+            &summary,
+            selected.len(),
+            &warnings,
+            &|address| prog.output_code_offset(address),
+            &declared,
+        )
+    };
+    emit_with_run_error(&text, discovery_error.as_deref())
+}
+
+/// One `decompile-all` run: what it decompiled, and how many entries the
+/// selection started from.
+///
+/// The two are different numbers once a triage filter narrows the run, and the
+/// zero-discovery verdict has to be read off the second one.
+struct AllRun {
+    funcs: Vec<FuncResult>,
+    discovered: usize,
+    /// One row per `--assert` directive: what became of it.
+    assertions: Vec<unlace_console::assertions::Outcome>,
+    /// The `--addr` targets that land inside another function.
+    interior: crate::interior::Interiors,
+    /// The caller's declarations, as the document reports them.
+    declared: crate::funcdecl::Declared,
+}
+
+/// Load + analyze the binary once, narrow the target list, then decompile what
+/// survived.
+///
+/// The filters run BEFORE the decompile loop on purpose: narrowing the output
+/// would still pay for 1,150 decompiles.
+fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
+    let load_started = std::time::Instant::now();
+    let mut prog = load_program(args, DriverDefaults::Decompile)?;
+    let load_seconds = load_started.elapsed().as_secs_f64();
+    let targets = resolve_targets(&prog, args)?;
+    let discovered = targets.len();
+    let targets = if filters.narrows() {
+        filters
+            .select(&prog, &args.binary, args.slice_pref(), targets, false)?
+            .0
+    } else {
+        targets
+    };
+    let interior = crate::interior::selections(&prog, args, &targets);
+    let declared = crate::funcdecl::Declared::of(&prog);
+    let whole = targets.len() == discovered && args.addrs.is_empty() && args.names.is_none();
+    let (callee_first, explicit) = callee_first_decision(&prog, args, targets.len(), whole);
+    // `--jobs N`: hand the targets to the worker pool and release the parent's
+    // program (2.0 GB on an 18 MB PE) before the workers start — nothing below
+    // needs it on this surface, and it is the parent's RSS that decides how many
+    // workers the machine can hold.
+    if args.jobs > 1 {
+        if callee_first {
+            eprintln!(
+                "note: --jobs decompiles without the callee-first order (option protoorder, on by \
+                 default), so call-argument types, and which globals and tables are arrays, can \
+                 differ from a serial run; add --option protoorder off to make the two \
+                 byte-identical"
+            );
+        }
+        let inventory = prog.function_entries_canonical();
+        let assertions = prog.assertion_outcomes();
+        let synth = synth_base(&prog);
+        let arm_frames = worker_arm_frames(&prog);
+        drop(prog);
+        let pooled = decompile_targets_pooled(
+            args,
+            &targets,
+            &inventory,
+            /* want_proto= */ false,
+            /* want_provenance= */ args.wants_provenance(),
+            /* want_types= */ false,
+            load_seconds,
+            synth,
+            callee_first,
+            arm_frames,
+            None,
+        )?;
+        return Ok(AllRun {
+            funcs: pooled.results,
+            discovered,
+            assertions,
+            interior,
+            declared,
+        });
+    }
+    if explicit && prog.arch().protoorder.is_on() && !whole {
+        eprintln!(
+            "note: --option protoorder: {} of this binary's entries selected; a callee \
+             outside the selection is not decompiled, so it states nothing",
+            targets.len()
+        );
+    }
+    let funcs = if callee_first {
+        decompile_entries_callee_first(&mut prog, args, targets, explicit)
+    } else {
+        note_custom_inert(&prog, targets.len());
+        decompile_entries(
+            &mut prog, args, targets, /* pointer_arguments= */ true, !whole,
+        )
+    };
+    Ok(AllRun {
+        funcs,
+        discovered,
+        assertions: prog.assertion_outcomes(),
+        interior,
+        declared,
+    })
+}
+
+/// Arm the per-function budgets `args` asks for: the wall-clock watchdog on the
+/// architecture, and the memory limit process-wide, since what it measures is
+/// the process's resident set. With no `--max-fn-memory` the process takes the
+/// cgroup default ([`unlace_decomp::kuna_fnmemory::use_cgroup_default`]), the
+/// serial run and every `--jobs` worker alike.
+pub(crate) fn arm_fn_budgets(prog: &mut ConsoleProgram, args: &Args) {
+    if args.max_fn_seconds > 0 {
+        prog.arch_mut().kuna_fn_budget = Some(std::time::Duration::from_secs(args.max_fn_seconds));
+    }
+    match args.max_fn_memory {
+        Some(mib) => unlace_decomp::kuna_fnmemory::set_limit_mib(mib),
+        None => {
+            unlace_decomp::kuna_fnmemory::use_cgroup_default();
+        }
+    }
+}
+
+/// Parse a `--max-fn-memory` value: MiB, `0` to disable. Refused where the
+/// process's resident set cannot be read, since the limit could never fire.
+pub(crate) fn parse_max_fn_memory(v: &str) -> Result<u64, String> {
+    let mib = v
+        .trim()
+        .parse::<u64>()
+        .map_err(|_| format!("invalid --max-fn-memory value {v:?} (MiB)"))?;
+    if mib > 0 && !unlace_decomp::kuna_fnmemory::supported() {
+        return Err(
+            "--max-fn-memory needs the resident set, which this platform does not report".into(),
+        );
+    }
+    Ok(mib)
+}
+
+/// Arm the per-function watchdog and run the decompile loop over `targets` — the
+/// body `decompile-all` and `unlace decompile --json` share, so the two answer with
+/// one policy as well as one schema.
+///
+/// The watchdog (`--max-fn-seconds`, default 10 for an unfiltered fast batch and
+/// 120 otherwise, 0 disables) is driver policy, not a stage-model option: the
+/// decompile drive arms a cooperative deadline from this budget for EACH
+/// function, so one pathological function becomes a per-function `error` record
+/// instead of hanging the whole batch.
+///
+/// `pointer_arguments` is whether the returned batch reconciles scalar
+/// addresses with the parameter declarations printed in it.  `tail_callees`
+/// (a selection with no callee-first order behind it) has each function state
+/// its tail callees' prototypes first, as `unlace decompile` does.
+pub(crate) fn decompile_entries(
+    prog: &mut ConsoleProgram,
+    args: &Args,
+    targets: Vec<FunctionEntry>,
+    pointer_arguments: bool,
+    tail_callees: bool,
+) -> Vec<FuncResult> {
+    arm_fn_budgets(prog, args);
+    let opts = DecompileOptions {
+        no_vars: args.no_vars,
+        want_provenance: args.wants_provenance(),
+        single_target: targets.len() == 1,
+        want_pointer_arguments: pointer_arguments,
+        ..DecompileOptions::default()
+    };
+    prog.arch_mut().kuna_tail_callee_batch = tail_callees;
+    let funcs = unlace_console::project::decompile_targets_with(prog, targets, &opts);
+    prog.arch_mut().kuna_tail_callee_batch = false;
+    funcs
+}
+
+/// (kuna `protoorder`) Whether this run takes the callee-first order, and
+/// whether the option was named on the command line.
+///
+/// A narrowed run, or a raw image, skips the order unless the option is named.  Every whole-program driver asks here, so the
+/// two that keep a ledger -- `decompile-all` and `decompile-project` -- visit
+/// the program in the same order and a `struct_N` means one record on both.
+pub(crate) fn callee_first_decision(
+    prog: &ConsoleProgram,
+    args: &Args,
+    selected: usize,
+    whole: bool,
+) -> (bool, bool) {
+    let explicit = args.options.iter().any(|(name, _)| name == "protoorder");
+    let on =
+        prog.arch().protoorder.is_on() && selected > 1 && (explicit || (whole && !args.raw_image));
+    (on, explicit)
+}
+
+/// (kuna `protoorder`, `callbacktype`) Say so on a surface the option does not
+/// reach.
+///
+/// The callee-first order and the park live in a whole-program driver's own
+/// loop.  A streamed export writes its `.c` in decompile order as functions
+/// finish, and `decompile-graph` decompiles one function per row, so neither
+/// parks anything: with `protoorder on` they produce exactly the output they
+/// produce with it off. That is a legitimate choice, but it must not be a
+/// silent one -- an option accepted with `rc=0` and no effect reads as "it did
+/// not help". `callbacktype` and `calleereginputs custom` ride the same driver
+/// loop and are inert in exactly the same places.
+pub fn warn_protoorder_inert(options: &[(String, String)], surface: &str) {
+    let named = |name: &str| options.iter().any(|(n, value)| n == name && value != "off");
+    let custom = options
+        .iter()
+        .any(|(n, value)| n == "calleereginputs" && is_custom(value));
+    let inert = ["protoorder", "callbacktype"]
+        .into_iter()
+        .filter(|name| named(name));
+    for option in inert.chain(custom.then_some("calleereginputs custom")) {
+        eprintln!(
+            "warning: --option {option} has no effect on `unlace {surface}`: the callee-first \
+             order belongs to a buffered whole-program run (`decompile-all`, \
+             `decompile-project`; see docs/cli.md)"
+        );
+    }
+}
+
+/// (kuna `calleereginputs custom`) Does `value` name the whole-image `custom`
+/// extension?
+fn is_custom(value: &str) -> bool {
+    value.trim().eq_ignore_ascii_case("custom")
+}
+
+/// (kuna `calleereginputs custom`) Say so when the run names `custom` but is not
+/// the whole-binary callee-first run that decides it.
+pub(crate) fn note_custom_inert(prog: &ConsoleProgram, selected: usize) {
+    if unlace_decomp::kuna_calleereginputs::custom_applies(prog.arch()) {
+        eprintln!(
+            "note: --option calleereginputs custom acts only on a whole-binary callee-first \
+             run; this run decompiles {selected} selected entries without that order, so no \
+             callee-saved register is an argument"
+        );
+    }
+}
+
+/// Enumerate the program's full callable-symbol inventory, one
+/// [`FunctionEntry`] per entry address (the `functions` command).
+///
+/// The loaded program is handed back with it: the triage filters and `--summary`
+/// both ask further questions of the same load rather than paying for a second.
+fn list_functions(args: &Args) -> Result<(ConsoleProgram, Vec<FunctionEntry>), String> {
+    let prog = load_program(args, DriverDefaults::Functions)?;
+    // One record per entry address, address-ordered, alias names carried as data
+    // (issue #197 — this used to dedup by (address, name), so a function the
+    // loader and an analysis pass both named was listed twice).
+    let entries = prog.function_entries_canonical();
+    Ok((prog, entries))
+}
+
+/// Which bundle of driver defaults a surface takes in [`load_program`].
+///
+/// Both variants take the same DISCOVERY policy (DIV-20/DIV-68); they differ only
+/// in whether the Listing is built on an architecture where it discovers nothing.
+#[derive(Clone, Copy)]
+pub(crate) enum DriverDefaults {
+    /// `unlace functions` — enumeration only.
+    Inventory,
+    /// `unlace functions` — inventory without body-only string markup.
+    Functions,
+    /// `unlace decompile-all` / `unlace decompile-project` — enumeration plus bodies.
+    Decompile,
+    /// `unlace xrefs` — a reference query that runs its OWN recursive descent, so
+    /// the Listing tier would only decode the program a second time over the
+    /// same bytes. It takes the discovery bundle (`funcstart_patterns`, `aif`)
+    /// but not the Listing: the seeds go straight into the reference walk
+    /// (`listing::xrefs::discovery_seeds`) and the gap-walk runs over the
+    /// partition that walk leaves behind.
+    Query,
+}
+
+impl DriverDefaults {
+    /// Does this surface decompile the entries it discovers (so the Listing's
+    /// no-return facts change its output, not just its inventory)?
+    fn decompiles(&self) -> bool {
+        matches!(self, DriverDefaults::Decompile)
+    }
+
+    /// Does this surface want the program-wide Listing built for it (DIV-15)?
+    ///
+    /// `Query` does not: it walks the program itself, so the Listing would be a
+    /// second decode of the same bytes. The DIV-20/DIV-68 discovery flags it
+    /// still takes — the reference walk consumes both of them directly.
+    fn wants_listing(&self) -> bool {
+        !matches!(self, DriverDefaults::Query)
+    }
+
+    fn functions_inventory(&self) -> bool {
+        matches!(self, DriverDefaults::Functions)
+    }
+}
+
+/// The driver-default analysis options a surface injects before the option pass
+/// — the shared source of the DIV-15 Listing default and the DIV-20/DIV-68
+/// non-x86-64 discovery bundle, returned as `(name, value)` pairs in the order
+/// they must be applied.
+///
+/// One function because the two surfaces that need them apply them differently:
+/// the in-process drivers ([`load_program`]) call `set_kuna_option`, while
+/// single-function `unlace decompile` emits `option` lines into the `decomp_dbg`
+/// script. When only the in-process driver had them, a non-x86-64 entry that
+/// exists solely because `funcstart_patterns` found it was listed by `kuna
+/// functions` and decompiled by `unlace decompile-all`, yet `unlace decompile
+/// <that name>` answered `no function matches` — kuna printed a name it would
+/// not then accept (RE-need `analysis-generated-function-name`).
+///
+/// `decompiles` says whether the surface renders bodies, which is the one axis
+/// the bundles differ on (the Listing is entry-neutral on x86-64, so
+/// enumeration there does not pay for it). `binary` is read to classify the
+/// architecture; anything `object` cannot parse — the corpus `<binaryimage>`
+/// XML included — is treated as x86-64 and takes no discovery injection, so
+/// those scripts stay byte-identical.
+///
+/// Every injection yields to the caller: naming the option at all (directly or
+/// through a resolved `--mode` preset) skips it.
+///
+/// (kuna, decbench F1) The program-wide Listing is ON unless the caller set it
+/// explicitly (`--option listing on|off` still wins — the injection is skipped
+/// whenever the caller names `listing` at all).  Two independent reasons, one
+/// per surface:
+///
+///   * A DECOMPILING surface needs it on every architecture.  The Listing
+///     feeds the default-on `noreturn_propagate` consumer (the angr-style
+///     call-graph no-return fixpoint, DIV-14): without it the pass is a
+///     structural no-op, so a call to an unnamed internal exit/fatal wrapper
+///     in a STRIPPED binary is treated as returning and the decompiler runs
+///     past it, swallowing every following function into the caller (the
+///     decbench `noreturn-propagation-stripped` family, e.g. coreutils
+///     `xalloc_die`: 118 LOC / 2 gotos swallowed vs the true 4-instruction
+///     body).  See DIV-15.
+///   * On a NON-x86-64 image every surface needs it, `unlace functions`
+///     included, because the Listing is the master gate of the DIV-20
+///     discovery bundle below — `funcstart_patterns` and `aif` both walk the
+///     Listing's code units and are inert without it, and those two passes
+///     ARE the discovery on a stripped ARM/AArch64/MIPS/PPC/RISC-V binary.
+///     See DIV-68.
+///
+/// x86-64 enumeration keeps the cheap path: the Listing is measured
+/// entry-neutral there (identical entry sets on 40 sampled stripped x86-64
+/// ELFs), so building it would only make `unlace functions` slower.  Only these
+/// drivers change: the engine default (`analysis_listing = false`) and the
+/// interactive console / datatest harness are untouched, and a selected mode
+/// can still name Listing.
+///
+/// (kuna, decbench ARM) Oracle 5 — the always-on prologue-pattern scan folded into
+/// function discovery — is x86-64-only, so on a STRIPPED **non-x86-64** binary the ELF
+/// entry point is the ONLY discovered function (ARM Cortex-M `betaflight`: 1 of ~469;
+/// it has no recursive-descent Listing sweep at the analyzer tier).  The
+/// `funcstart_patterns` pass IS the primary discovery source there — it applies the
+/// full ARM/AArch64/MIPS/PPC/RISC-V `<patternpairs>` (pre/post) prologue matcher over
+/// the code — so it is ON for non-x86-64 on every driver surface, the `functions`
+/// inventory included (DIV-68), unless the caller named it explicitly.  x86-64 keeps
+/// it OFF (oracle 5 + the entry oracles suffice, and the aggressive scan can
+/// over-produce there).  See DIV-20 (`docs/divergences.md`).
+///
+/// (kuna, decbench ARM) `funcstart_patterns` only seeds a candidate when a matching
+/// EPILOGUE prepattern (Ghidra `<patternpairs>`) sits immediately before it, so ~70% of a
+/// stripped Cortex-M firmware's functions — those preceded by literal pools / data /
+/// padding and living in call-graph components reachable only through indirect calls /
+/// function-pointer tables — are never seeded, and the recursive-descent walk (direct
+/// CALL/BL only) structurally cannot reach them (crazyflie: 87% of the missed functions
+/// have NO direct-call edge from what kuna found).  The ported Aggressive Instruction
+/// Finder (`aif`, Ghidra `ArmAggressiveInstructionFinderAnalyzer`) gap-walks the UNDEFINED
+/// regions the walk left uncovered, gating each candidate on a prologue-fingerprint
+/// histogram learned from the already-discovered functions + `check_valid_subroutine`, so
+/// it bridges those disconnected components.  It rides alongside `funcstart_patterns`
+/// (crazyflie cf2.elf 1430 -> 2700 functions, 45% -> 82% of angr's discovered set),
+/// unless the caller named it.  Extra non-ground-truth functions are harmless to the GED
+/// benchmark (it scores per ground-truth function, matched by name).  See DIV-20.
+pub(crate) fn driver_default_options(
+    binary: &str,
+    decompiles: bool,
+    wants_listing: bool,
+    options: &[(String, String)],
+) -> Vec<(&'static str, &'static str)> {
+    // The discovery bundle needs the object view the deferred consumers re-parse;
+    // a raw or TE input has none, so it takes no discovery default at all rather
+    // than an inert one. (`image_bytes` is deliberately not used here: a TE is
+    // an ordinary "no object view" answer, not an error, on this path.)
+    let non_x86_64 = crate::image::inspect(binary, |bytes| {
+        if unlace_analysis::loadimage_te::is_te_image(bytes) {
+            return None;
+        }
+        unlace_analysis::loadimage_object::parse_object(bytes)
+            .ok()
+            .map(|file| file.architecture() != object::Architecture::X86_64)
+    })
+    .unwrap_or(false);
+
+    // A headerless image (no object view, not a TE): IDA's own default case for
+    // pattern discovery. The raw path sweeps its bytes with the target's
+    // language patterns, so it takes the pattern default too.
+    let raw = unlace_analysis::loader::elf_shdr::read_image(binary)
+        .ok()
+        .is_some_and(|bytes| {
+            !unlace_analysis::loadimage_te::is_te_image(&bytes)
+                && unlace_analysis::loadimage_object::parse_object(&bytes).is_err()
+        });
+
+    driver_default_options_for_arch(non_x86_64, raw, decompiles, wants_listing, options)
+}
+
+fn driver_default_options_for_arch(
+    non_x86_64: bool,
+    raw: bool,
+    decompiles: bool,
+    wants_listing: bool,
+    options: &[(String, String)],
+) -> Vec<(&'static str, &'static str)> {
+    let named = |name: &str| options.iter().any(|(option, _)| option == name);
+
+    let mut injected = Vec::new();
+    // (kuna DIV-120) A function past the instruction budget reports the body kuna
+    // DID decode, not nothing.  Upstream's default makes the overrun fatal, so a
+    // function larger than `maxinstruction` decompiled to `code: null` and an
+    // error naming no remedy; clearing the flag truncates the flow at the budget
+    // instead and P3-P9 run on what was decoded, under a warning header that
+    // names the knob.  Only the decompiling surfaces take it -- an inventory or
+    // query load never follows flow -- and naming the option explicitly (or
+    // `--option maxinstruction N` plus it) still restores the hard failure.
+    if decompiles && !named("errortoomanyinstructions") {
+        injected.push(("errortoomanyinstructions", "off"));
+    }
+    if wants_listing && (decompiles || non_x86_64) && !named("listing") {
+        injected.push(("listing", "on"));
+    }
+    if (non_x86_64 || raw) && !named("funcstart_patterns") {
+        injected.push(("funcstart_patterns", "on"));
+    }
+    if non_x86_64 && !named("aif") {
+        injected.push(("aif", "on"));
+    }
+    injected
+}
+
+/// Bootstrap the architecture from the binary and run the analysis commit (the
+/// in-process `load file` + `read symbols`), applying load-time env gates and
+/// `--option`s in the correct order.  `defaults` selects the driver-default
+/// bundle (DIV-15/DIV-20/DIV-68): the discovery passes are shared by every
+/// surface, the Listing-for-no-return default is the decompiling surfaces'.
+pub(crate) fn load_program(
+    args: &Args,
+    defaults: DriverDefaults,
+) -> Result<ConsoleProgram, String> {
+    let request = args
+        .apply_rust_signatures
+        .as_deref()
+        .map(|path| {
+            crate::rust_signatures::validate_application(args)?;
+            crate::rust_signatures::load(std::path::Path::new(path)).map(|(request, _)| request)
+        })
+        .transpose()?;
+    load_program_with_rust_profiles(args, defaults, request)
+}
+
+fn load_program_with_rust_profiles(
+    args: &Args,
+    defaults: DriverDefaults,
+    request: Option<unlace_analysis::flirt::kuna_rustprofiles::Request>,
+) -> Result<ConsoleProgram, String> {
+    let binary = std::fs::canonicalize(&args.binary)
+        .map_err(|_| format!("binary not found: {}", args.binary))?
+        .to_string_lossy()
+        .into_owned();
+    // Load-time loader gates are read by `bootstrap_from_object` itself, so they
+    // must be exported BEFORE it runs (the same gates `unlace decompile` threads to
+    // the subprocess env). Keep the restoration guard alive through runtime
+    // option recording too: the bridged options update their env again inside
+    // `set_kuna_option` and must not leak into a later load.
+    let _loadtime_env = apply_loadtime_env(
+        &args.options,
+        args.slice.as_deref(),
+        jobs::decode_lanes(args),
+        defaults.functions_inventory() && args.apply_rust_signatures.is_none(),
+    );
+
+    let spec_roots = spec_roots(args.sleighpath.as_deref());
+    let target = args.target.as_deref().unwrap_or("");
+    let mut prog = if args.raw_image {
+        // (kuna `--jobs`) A raw image's discovery (`rawdiscover`) is a serial
+        // sweep and descent, not the lane-parallel object walk, so the decode
+        // lanes have nothing to run. Say so, rather than accept the flag and do
+        // nothing with it -- every other surface prints one line saying which
+        // walk it took.
+        if jobs::decode_lanes(args) > 1 {
+            eprintln!("[kuna --jobs] decode: serial (a raw image's discovery walk has no lanes)");
+        }
+        // Both forms seed the load: `--entry` says where the image starts and
+        // `--addr` names a function to decompile, and a raw image must be able
+        // to decode from either.
+        let entries: Vec<u64> = args
+            .entry_seeds
+            .iter()
+            .chain(args.addrs.iter())
+            .filter_map(|selector| match selector {
+                EntrySelector::Numeric(entry) => Some(*entry),
+                _ => None,
+            })
+            .collect();
+        bootstrap_from_raw(
+            &binary,
+            target,
+            args.base.expect("raw parser requires --base"),
+            &entries,
+            args.isa,
+            &spec_roots,
+        )
+    } else {
+        bootstrap_from_image_with_isa(&binary, target, &spec_roots, args.isa)
+    }
+    .map_err(|e| {
+        let detail = e.explain();
+        let msg = format!("could not build an architecture for {binary}: {detail}");
+        if detail.contains("No sleigh specification") {
+            return format!("{msg}\nnote: {}", paths::SPECS_HINT);
+        }
+        let raw_hint = if !args.raw_image
+            && (detail.contains("not in recognized object file format")
+                || detail.contains("Unsupported file format"))
+        {
+            "; for a headerless image use --raw-image --target <SLEIGH-language-id> --base <address> and at least one --entry/--addr <address>"
+        } else {
+            ""
+        };
+        format!("{msg}{raw_hint}")
+    })?;
+
+    let non_x86_64 = !prog.arch().archid.starts_with("x86:LE:64:");
+    for (name, value) in driver_default_options_for_arch(
+        non_x86_64,
+        args.raw_image,
+        defaults.decompiles() || args.apply_rust_signatures.is_some(),
+        defaults.wants_listing(),
+        &args.options,
+    ) {
+        // Through the same dispatch the caller's `--option`s take: a driver
+        // default may name an upstream option (`errortoomanyinstructions`) as
+        // well as a kuna one, and `set_kuna_option` only knows the kuna table.
+        apply_one_option(&mut prog, name, value)?;
+    }
+
+    // (kuna `--assert`) A `readonly` range is inert unless read-only propagation
+    // is on, and that option is default-off; asserting the range turns it on.
+    // Set BEFORE the caller's own `--option`s so an explicit `--option readonly
+    // off` still wins -- the same order the script surface emits it in.
+    if unlace_console::assertions::implies_readonly_propagation(&args.assertions) {
+        prog.arch_mut().readonlypropagate = true;
+    }
+    // Analysis-/printer-tier `--option`s must be applied to the architecture
+    // BEFORE the gated analysis commit (the `option` < `read symbols` ordering
+    // the script path enforces), so a per-pass gate takes effect.
+    apply_runtime_options(&mut prog, &args.options)?;
+    // (kuna `--assert bytes`) The IMAGE-scoped directives, before the commit and
+    // before any read of the addresses they name: a byte overlay states what the
+    // running program put there, and every later decode has to see it. The
+    // console script surface emits `override bytes` in the same slot, ahead of
+    // `read symbols`.
+    if !args.assertions.is_empty() {
+        prog.set_assertions(args.assertions.clone());
+        unlace_console::assertions::apply_image_scoped(&mut prog);
+    }
+    replay_worker_arm_frames(&mut prog, args)?;
+    if let Some(request) = request {
+        if args.apply_rust_signatures.is_some() {
+            prog.request_rust_signature_names(request);
+        } else {
+            prog.request_rust_profiles(request);
+        }
+    }
+    prog.commit_pending_analysis()
+        .map_err(|e| format!("read symbols (analysis commit) failed: {}", e.explain()))?;
+    // AFTER the commit: a caller-declared boundary is an assertion that outranks
+    // whatever discovery decided about the same address.
+    crate::funcdecl::apply(&mut prog, &args.func_decls)?;
+    // The `--assert` plane, same slot and for the same reason: a caller-declared
+    // fact outranks whatever discovery decided about it. The program-scoped
+    // directives take effect here; the function- and symbol-scoped ones are
+    // dispatched by the decompile loop (`unlace_console::assertions`).
+    if !args.assertions.is_empty() {
+        unlace_console::assertions::apply_program_scoped(&mut prog);
+    }
+    if args.jobs_worker.is_none() {
+        crate::funcdecl::warn_unmapped(&prog, &binary);
+        crate::fid::report::warn(&prog, &binary);
+    }
+    crate::kuna_allocrelease::after_analysis();
+    if args.jobs_worker.is_none() {
+        unlace_console::kuna_callwide::prepare(&mut prog);
+    }
+    Ok(prog)
+}
+
+/// What a name miss says beyond the miss itself: the `; `-separated tail of
+/// [`EntryLookupError::NotFound`] (a near spelling, the count of names the
+/// image does carry, or the data object the name labels). `None` for a bare
+/// miss, which is what a stripped image answers.
+pub(crate) fn name_miss_hint(error: &EntryLookupError) -> Option<String> {
+    let EntryLookupError::NotFound { .. } = error else {
+        return None;
+    };
+    let text = error.to_string();
+    let (_, hint) = text.split_once("\"; ")?;
+    (!hint.trim().is_empty()).then(|| hint.trim().to_string())
+}
+
+/// Build the target [`FunctionEntry`] list from the filters: `--addr` entries
+/// (the canonical record at that address, else a record named via the symbol
+/// table / `name_function`), `--functions` names or aliases, or — with no filter
+/// — every CODE-backed entry, each exactly once. Among several selectors, one
+/// naming a bodyless import slot is reported on stderr and skipped; a lone one,
+/// or a run left with nothing to decompile after the skips, is an error.
+pub(crate) fn resolve_targets(
+    prog: &ConsoleProgram,
+    args: &Args,
+) -> Result<Vec<FunctionEntry>, String> {
+    resolve_targets_with_policy(prog, args, true)
+}
+
+/// Resolve graph selections while retaining bodyless import rows. The graph
+/// labels these addresses and omits their code; it never passes them to the
+/// lifter. Decompilation surfaces use [`resolve_targets`] and refuse them.
+pub(crate) fn resolve_targets_allow_bodyless(
+    prog: &ConsoleProgram,
+    args: &Args,
+) -> Result<Vec<FunctionEntry>, String> {
+    resolve_targets_with_policy(prog, args, false)
+}
+
+fn resolve_targets_with_policy(
+    prog: &ConsoleProgram,
+    args: &Args,
+    require_body: bool,
+) -> Result<Vec<FunctionEntry>, String> {
+    let mut targets: Vec<FunctionEntry> = Vec::new();
+    let selectors = args.addrs.len() + args.names.as_ref().map_or(0, Vec::len);
+    let mut skipped = 0usize;
+    let mut skip_import = |error: &EntryLookupError| -> bool {
+        if selectors < 2 || !matches!(error, EntryLookupError::BodylessImport { .. }) {
+            return false;
+        }
+        eprintln!("warning: {error}; skipped");
+        skipped += 1;
+        true
+    };
+
+    // Resolve every address form through the program's shared selector model.
+    // `args.entry_seeds` is deliberately not here: a raw image's `--entry`
+    // loaded the image, and selecting on it would hide everything discovery
+    // found from it.
+    for selector in &args.addrs {
+        let selector = match (args.raw_image, selector) {
+            (true, EntrySelector::Numeric(entry)) => EntrySelector::Numeric(
+                prog.input_code_offset(*entry)
+                    .map_err(|error| error.explain().to_string())?,
+            ),
+            (true, _) => unreachable!("raw parser requires numeric entries"),
+            (false, selector) => selector.clone(),
+        };
+        let entry = if require_body {
+            prog.resolve_body_entry(&selector)
+        } else {
+            prog.resolve_entry(&selector)
+        };
+        match entry {
+            Ok(entry) => targets.push(entry),
+            Err(error) if skip_import(&error) => {}
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+
+    // `--functions a,b,c`: intersect names with the enumerated set.  An ALIAS
+    // resolves too — collapsing the enumeration must not make a name that used
+    // to select a function stop working (the decbench name-narrowing looks up
+    // generated `sub_<addr>` names).
+    if let Some(names) = &args.names {
+        for want in names {
+            let selector = EntrySelector::Name(want.clone());
+            let entry = if require_body {
+                prog.resolve_body_entry(&selector)
+            } else {
+                prog.resolve_entry(&selector)
+            };
+            match entry {
+                Ok(entry) => targets.push(entry),
+                Err(error @ EntryLookupError::NotFound { .. }) => {
+                    let tail = match &error {
+                        EntryLookupError::NotFound { data: Some(_), .. } => name_miss_hint(&error),
+                        _ => None,
+                    };
+                    match tail {
+                        Some(tail) => eprintln!(
+                            "warning: no function named {want:?} in {}; {tail}",
+                            args.binary
+                        ),
+                        None => eprintln!("warning: no function named {want:?} in {}", args.binary),
+                    }
+                }
+                Err(error) if skip_import(&error) => {}
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+    }
+    if targets.is_empty() && skipped > 0 {
+        return Err(if skipped == selectors {
+            "every selector names an import slot; nothing to decompile"
+        } else {
+            "no selector names a function body; nothing to decompile"
+        }
+        .to_string());
+    }
+
+    // Dedup the explicitly-selected targets by entry offset: `--addr 0xX` and
+    // `--functions f` can resolve to the same function, and decompiling it twice
+    // just wastes work + duplicates the JSON entry.
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Membership only; retain keeps explicit targets in input order."
+    )]
+    let mut seen = std::collections::HashSet::new();
+    targets.retain(|e| seen.insert(e.addr.get_offset()));
+
+    // No filter at all ⇒ every executable function, exactly once.
+    if args.addrs.is_empty() && args.names.is_none() {
+        targets = prog.function_entries_executable();
+    }
+    Ok(targets)
+}
+
+// --- option / env-gate handling ---------------------------------------------
+
+/// (kuna outlang) The output language to use when the caller named none.
+///
+/// A Rust binary rendered as C is strictly worse than the same binary rendered
+/// as Rust: the types are wrong in a way a reader has to undo by hand. kuna
+/// already knows which it is -- `sourcelang::detect_compiler` is the port of
+/// Ghidra's `SourceLanguageAnalyzer`, and it reports `Rustc` from the `.comment`
+/// `rustc version` record, a `.rodata` signature, or a Rust-mangled symbol -- so
+/// the default follows the binary rather than making every user of a Rust binary
+/// remember a flag.
+///
+/// Detection is high-precision, not heuristic, and `--language c` always wins.
+/// Returns `None` when the file is not a Rust binary or cannot be parsed, which
+/// leaves the C default in place: this can only ever ADD a language, never take
+/// one away.
+pub fn detected_output_language(
+    binary: &str,
+    options: &[(String, String)],
+) -> Option<&'static str> {
+    // (kuna `dexmodel`) Dalvik bytecode is Java's: `PrintJava`, as upstream
+    // selects for the language.
+    let head = std::fs::File::open(binary).and_then(|mut file| {
+        let mut head = [0u8; 0x70];
+        std::io::Read::read_exact(&mut file, &mut head).map(|()| head)
+    });
+    if head.as_ref().is_ok_and(|head| {
+        unlace_analysis::loadimage_dex::is_dex(head)
+            || unlace_analysis::loadimage_dex::is_odex(head)
+            || unlace_analysis::loadimage_dex::is_vdex(head)
+            || (head.starts_with(b"\x7fELF")
+                && std::fs::read(binary)
+                    .is_ok_and(|bytes| unlace_analysis::loadimage_dex::is_oat(&bytes)))
+            || (head.starts_with(b"PK\x03\x04")
+                && std::fs::read(binary)
+                    .is_ok_and(|bytes| unlace_analysis::loadimage_dex::is_apk(&bytes)))
+    }) {
+        return Some("java-language");
+    }
+    // A per-run `--option sourcelang` force wins over the image: this policy
+    // runs in the parent process, before the loadtime environment is bound
+    // onto the engine (sub)process, so the options list is consulted directly.
+    let compiler = match crate::loadtime::last_option_value(options, "sourcelang")
+        .and_then(unlace_decomp::kuna_sourcelang::SourceLang::parse_forced)
+    {
+        Some(lang) => unlace_analysis::sourcelang::Compiler::from_forced_lang(lang),
+        None => crate::image::inspect(binary, |bytes| {
+            let file = unlace_analysis::loadimage_object::parse_object(bytes).ok()?;
+            Some(unlace_analysis::sourcelang::effective_compiler(
+                &file, bytes,
+            ))
+        })?,
+    };
+    match compiler {
+        unlace_analysis::sourcelang::Compiler::Rustc => Some("rust-language"),
+        _ => None,
+    }
+}
+
+/// Resolve a `--language` value, or `None` for the auto policy.
+///
+/// `auto` is the default and the only value that is not a language name.
+pub fn parse_language_flag(v: &str) -> Result<Option<&'static str>, String> {
+    if v.eq_ignore_ascii_case("auto") {
+        return Ok(None);
+    }
+    unlace_decomp::kuna_lang::OutLang::from_print_name(v)
+        .map(|l| Some(l.print_name()))
+        .ok_or_else(|| {
+            format!(
+                "unknown output language {v:?} (expected auto, or one of: {})",
+                unlace_decomp::kuna_lang::OutLang::names().join(", ")
+            )
+        })
+}
+
+/// Apply each `--option NAME VALUE` to the live architecture, mirroring the
+/// console `option` command (`IfcOption`): kuna stage-model options route to
+/// `set_kuna_option`, upstream options to the `OptionDatabase`.  Load-time gates
+/// are still applied here (so they are recorded) after their env export above.
+fn apply_runtime_options(
+    prog: &mut ConsoleProgram,
+    options: &[(String, String)],
+) -> Result<(), String> {
+    for (name, value) in options {
+        apply_one_option(prog, name, value)?;
+    }
+    Ok(())
+}
+
+/// Apply one `NAME VALUE` pair to the live architecture: the kuna stage-model
+/// table first, then the upstream `OptionDatabase`, then the load-time gates the
+/// env bridge already handled.
+fn apply_one_option(prog: &mut ConsoleProgram, name: &str, value: &str) -> Result<(), String> {
+    if KUNA_OPTION_NAMES.contains(&name) {
+        return prog
+            .arch_mut()
+            .set_kuna_option(name, value)
+            .map(|_| ())
+            .map_err(|e| format!("option {name}: {}", e.explain()));
+    }
+    let id = prog.registry().find_element(name, 0);
+    if id == 0 {
+        // A load-time gate may not be a registered upstream option but is a
+        // valid kuna gate already handled via env; don't fail on it.
+        if is_loadtime_gate(name) {
+            return Ok(());
+        }
+        return Err(format!("unknown option: {name}"));
+    }
+    let db = OptionDatabase::new();
+    db.set(prog.arch_mut(), id, value, "", "")
+        .map(|_| ())
+        .map_err(|e| format!("option {name}: {}", e.explain()))
+}
+
+/// The SLEIGH spec roots (an explicit `--sleighpath` wins, else `SLEIGHHOME` +
+/// the repo `specs/`), matching `unlace fid`'s resolution.
+fn spec_roots(sleighpath: Option<&str>) -> Vec<String> {
+    let mut roots: Vec<String> = Vec::new();
+    if let Some(p) = sleighpath.filter(|s| !s.is_empty()) {
+        roots.push(p.to_string());
+        return roots;
+    }
+    if let Ok(home) = std::env::var("SLEIGHHOME")
+        && !home.is_empty()
+    {
+        roots.push(home);
+    }
+    let specs = paths::specs_dir().to_string_lossy().into_owned();
+    if !roots.contains(&specs) {
+        roots.push(specs);
+    }
+    roots
+}
+
+// --- discovery-failure diagnosis --------------------------------------------
+
+/// Why a run that discovered ZERO functions failed, or `None` when an empty
+/// inventory is the honest answer for this image.
+///
+/// A total discovery failure used to be reported in a successful run's voice —
+/// `count: 0`, exit 0, silent stderr — which an agent cannot tell apart from
+/// "this file genuinely has no functions". The distinction this makes is
+/// EXECUTABLE CONTENT: a data-only relocatable object or a resource-only PE has
+/// no functions to find, and failing those would turn a correct answer into an
+/// error. An image that does carry code and yielded nothing is a failed run, and
+/// the message names the cause it can prove, because a packed image is the one
+/// an agent can act on.
+pub(crate) fn zero_discovery_error(binary: &str) -> Option<String> {
+    let bytes = unlace_analysis::loader::elf_shdr::read_image(binary).unwrap_or_default();
+    let evidence = if bytes.is_empty() {
+        CodeEvidence::Flagged
+    } else {
+        classify_code_evidence(&bytes)
+    };
+    let mut detail: Vec<String> = Vec::new();
+    if let CodeEvidence::None = evidence {
+        return None;
+    }
+    if let CodeEvidence::EntryPointOnly { entry, section } = &evidence {
+        detail.push(format!(
+            "its entry point {entry:#x} lies in {section}, which the image does not flag \
+             executable -- pass `--define-function {entry:#x}` to decompile there anyway"
+        ));
+    }
+    if let Some(packer) = detect_packer(&bytes) {
+        detail.push(format!(
+            "image appears {packer}-packed; try `unlace unpack`"
+        ));
+    }
+    Some(if detail.is_empty() {
+        format!("no functions discovered in {binary}")
+    } else {
+        format!("no functions discovered in {binary}: {}", detail.join("; "))
+    })
+}
+
+/// The packer whose signature `bytes` carries.
+///
+/// UPX is the one that matters: it is what `unlace unpack` targets, and every UPX
+/// build stamps the `UPX!` magic into its stub and into each packed block
+/// header, so a whole-image search is both cheap (this runs only once a run has
+/// already failed) and precise enough to name in a diagnostic.
+fn detect_packer(bytes: &[u8]) -> Option<&'static str> {
+    bytes.windows(4).any(|w| w == b"UPX!").then_some("UPX")
+}
+
+/// What an image claims about carrying executable content.
+enum CodeEvidence {
+    /// A section or segment is flagged executable — an ordinary image.
+    Flagged,
+    /// NOTHING is flagged executable, yet the image declares an entry point
+    /// inside one of its sections.
+    EntryPointOnly { entry: u64, section: String },
+    /// Nothing in the image claims to be code.
+    None,
+}
+
+/// Does this image carry executable content at all, and on what evidence?
+///
+/// Section flags first (the per-format executable test `unlace-analysis`'s entry
+/// analyzers use), then the segments no section describes — a
+/// section-header-stripped PIE has no section table at all, and a bare
+/// `MH_FILESET` (`kernelcache off`) no sections, so the ELF program header and
+/// the Mach-O segment's `initprot` are what the loader obeys.
+/// An image `object` cannot parse (a raw blob, a `<binaryimage>` document)
+/// answers [`CodeEvidence::Flagged`]: nothing there clears the run, so it stays
+/// a failure.
+///
+/// The entry-point arm is what a packer looks like. Setting the executable bit
+/// is the packer's choice, and NEOLite (and friends) simply do not: the reported
+/// image flags all six of its sections `INITIALIZED_DATA|READ|WRITE`, `.text`
+/// included, and points `AddressOfEntryPoint` into the stub section. An image
+/// that declares where execution starts is not a data blob, whatever its flags
+/// say, so a run that found nothing in it is a failure that should say so.
+fn classify_code_evidence(bytes: &[u8]) -> CodeEvidence {
+    // ELF section header flag SHF_EXECINSTR; the Mach-O instruction attributes.
+    const SHF_EXECINSTR: u64 = 0x4;
+    const S_ATTR_PURE_INSTRUCTIONS: u32 = 0x8000_0000;
+    const S_ATTR_SOME_INSTRUCTIONS: u32 = 0x0000_0400;
+    // ELF program header flag PF_X.
+    const PF_X: u32 = 0x1;
+
+    let Ok(file) = unlace_analysis::loadimage_object::parse_object(bytes) else {
+        return CodeEvidence::Flagged;
+    };
+    let executable_section = file.sections().any(|sec| {
+        sec.size() != 0
+            && match sec.flags() {
+                object::SectionFlags::Elf { sh_flags } => sh_flags & SHF_EXECINSTR != 0,
+                object::SectionFlags::Coff { characteristics } => {
+                    characteristics & object::pe::IMAGE_SCN_MEM_EXECUTE != 0
+                }
+                object::SectionFlags::MachO { flags } => {
+                    flags & (S_ATTR_PURE_INSTRUCTIONS | S_ATTR_SOME_INSTRUCTIONS) != 0
+                        || sec.kind() == object::SectionKind::Text
+                }
+                _ => sec.kind() == object::SectionKind::Text,
+            }
+    });
+    let executable_segment = file.segments().any(|seg| {
+        seg.size() != 0
+            && match seg.flags() {
+                object::SegmentFlags::Elf { p_flags } => p_flags & PF_X != 0,
+                object::SegmentFlags::MachO { initprot, .. } => {
+                    let span = seg.address()..seg.address().saturating_add(seg.size());
+                    initprot & object::macho::VM_PROT_EXECUTE != 0
+                        && !file.sections().any(|sec| span.contains(&sec.address()))
+                }
+                _ => false,
+            }
+    });
+    if executable_section || executable_segment {
+        return CodeEvidence::Flagged;
+    }
+
+    // A resource-only PE and a data-only relocatable object both reach here and
+    // must stay the honest empty case, so the entry has to land INSIDE a
+    // section: `object` reports a PE with no `AddressOfEntryPoint` as entering
+    // at its bare image base, which no section covers.
+    let entry = file.entry();
+    let landed = (entry != 0).then(|| {
+        file.sections().find(|sec| {
+            sec.size() != 0 && entry >= sec.address() && entry - sec.address() < sec.size()
+        })
+    });
+    match landed.flatten() {
+        Some(sec) => CodeEvidence::EntryPointOnly {
+            entry,
+            section: match sec.name() {
+                Ok(name) => format!("section {name}"),
+                Err(_) => "a section".to_string(),
+            },
+        },
+        None => CodeEvidence::None,
+    }
+}
+
+// --- output rendering --------------------------------------------------------
+
+/// Render the `--json` document for a decompile run.
+///
+/// `unlace decompile --json` renders through here too (its `functions` array holds
+/// the one function it was asked for), so the single-function and whole-binary
+/// surfaces cannot drift into two shapes for one record.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_result_json(
+    binary: &str,
+    funcs: &[FuncResult],
+    options: &[(String, String)],
+    error: Option<&str>,
+    assertions: &[unlace_console::assertions::Outcome],
+    interior: &crate::interior::Interiors,
+    declared: &crate::funcdecl::Declared,
+    omit: Omit,
+) -> String {
+    render_selected_json(
+        binary, funcs, options, error, None, assertions, interior, declared, omit,
+    )
+}
+
+/// [`render_result_json`] plus the inventory `total` a NARROWED whole-binary run
+/// answers with.
+///
+/// `total` is `Some` only when a triage filter chose these functions out of a
+/// larger set, so a caller can never mistake a `--limit`-capped answer for the
+/// whole program. An unfiltered `decompile-all --json` and every
+/// `unlace decompile --json` pass `None` and are byte-identical to before — the
+/// decbench backend consumes the first of those.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_selected_json(
+    binary: &str,
+    funcs: &[FuncResult],
+    options: &[(String, String)],
+    error: Option<&str>,
+    total: Option<usize>,
+    assertions: &[unlace_console::assertions::Outcome],
+    interior: &crate::interior::Interiors,
+    declared: &crate::funcdecl::Declared,
+    omit: Omit,
+) -> String {
+    let mut out = Vec::new();
+    write_selected_json(
+        &mut out, binary, funcs, options, error, total, assertions, interior, declared, omit,
+    )
+    .expect("rendering the document into memory");
+    String::from_utf8(out).expect("the document is ASCII")
+}
+
+/// [`render_selected_json`] written to `out` a record at a time: a large
+/// binary's document is never held whole beside the results it is made of.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn write_selected_json(
+    out: &mut dyn std::io::Write,
+    binary: &str,
+    funcs: &[FuncResult],
+    options: &[(String, String)],
+    error: Option<&str>,
+    total: Option<usize>,
+    assertions: &[unlace_console::assertions::Outcome],
+    interior: &crate::interior::Interiors,
+    declared: &crate::funcdecl::Declared,
+    omit: Omit,
+) -> std::io::Result<()> {
+    let language = crate::loadtime::explicit_output_language(options)
+        .and_then(unlace_decomp::kuna_lang::OutLang::from_print_name)
+        .map(|lang| lang.print_name())
+        .unwrap_or("c-language");
+    let (head, tail) = document_fields(
+        binary,
+        funcs.len(),
+        language,
+        error,
+        total,
+        assertions,
+        declared,
+        omit,
+    );
+    let records = funcs
+        .iter()
+        .map(|f| function_json(f, interior, declared, omit));
+    crate::jsonfmt::write_indent2_streamed(out, &head, "functions", records, &tail)?;
+    out.write_all(b"\n")
+}
+
+/// The `functions --json` document.
+///
+/// `count` is what the `functions` array holds and `total` what discovery found,
+/// so a triage-narrowed listing says what it was narrowed from. They are equal on
+/// an unfiltered run. `limits` is present only when the selection already walked
+/// the image (`--reachable-from`): the plain listing never pays for that walk.
+#[cfg(test)]
+fn functions_json(
+    binary: &str,
+    entries: &[FunctionEntry],
+    total: usize,
+    error: Option<&str>,
+    limits: Option<&Json>,
+    display_address: &dyn Fn(u64) -> u64,
+    declared: &crate::funcdecl::Declared,
+) -> String {
+    let mut doc = vec![
+        ("binary".into(), Json::Str(binary.to_string())),
+        ("count".into(), Json::Number(entries.len().to_string())),
+        ("total".into(), Json::Number(total.to_string())),
+        ("error".into(), error_json(error)),
+    ];
+    doc.extend(declared.notes_field());
+    doc.extend(declared.fid_databases_field());
+    doc.push((
+        "functions".into(),
+        entries_json(entries, display_address, declared),
+    ));
+    if let Some(limits) = limits {
+        doc.push(("limits".into(), limits.clone()));
+    }
+    format!("{}\n", dumps_indent2(&Json::Object(doc)))
+}
+
+/// The inventory-record array shared by the `functions` listing and the
+/// `--summary` document's `largest`. A declared entry's record also carries
+/// `declared`.
+fn entries_json(
+    entries: &[FunctionEntry],
+    display_address: &dyn Fn(u64) -> u64,
+    declared: &crate::funcdecl::Declared,
+) -> Json {
+    Json::Array(
+        entries
+            .iter()
+            .map(|e| {
+                let a = display_address(e.addr.get_offset());
+                let mut record = vec![
+                    ("name".into(), Json::Str(e.name.clone())),
+                    ("address".into(), Json::Number(a.to_string())),
+                    ("address_hex".into(), Json::Str(format!("0x{a:x}"))),
+                    ("aliases".into(), aliases_json(&e.aliases)),
+                    (
+                        "object_location".into(),
+                        object_location_json(e.object_location.as_ref()),
+                    ),
+                    ("size".into(), Json::Number(e.size.to_string())),
+                ];
+                record.extend(declared.marker(e.addr.get_offset()));
+                Json::Object(record)
+            })
+            .collect(),
+    )
+}
+
+/// The run-level `error` field. Always present (`null` on a healthy run) so a
+/// consumer can read it unconditionally, exactly as [`aliases_json`] is.
+fn error_json(error: Option<&str>) -> Json {
+    error
+        .map(|e| Json::Str(e.to_string()))
+        .unwrap_or(Json::Null)
+}
+
+fn stack_object_json(object: &unlace_decomp::kuna_stackobjectinfo::StackObjectInfo) -> Json {
+    Json::Object(vec![
+        ("id".into(), Json::Str(object.id.clone())),
+        ("name".into(), Json::Str(object.name.clone())),
+        (
+            "stack_offset".into(),
+            Json::Number(object.stack_offset.to_string()),
+        ),
+        ("size".into(), Json::Number(object.size.to_string())),
+        ("defined".into(), Json::Bool(object.defined)),
+        (
+            "uses".into(),
+            Json::Array(
+                object
+                    .uses
+                    .iter()
+                    .map(|use_| {
+                        Json::Object(vec![
+                            ("address".into(), Json::Number(use_.address.to_string())),
+                            ("slot".into(), Json::Number(use_.slot.to_string())),
+                            ("type".into(), Json::Str(use_.type_name.clone())),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+    ])
+}
+
+/// The `decompile-all --json` document, whole, as [`write_selected_json`]
+/// writes it.
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+fn result_json(
+    binary: &str,
+    funcs: &[FuncResult],
+    language: &str,
+    error: Option<&str>,
+    total: Option<usize>,
+    assertions: &[unlace_console::assertions::Outcome],
+    interior: &crate::interior::Interiors,
+    omit: Omit,
+) -> Json {
+    let declared = crate::funcdecl::Declared::default();
+    let (mut fields, tail) = document_fields(
+        binary,
+        funcs.len(),
+        language,
+        error,
+        total,
+        assertions,
+        &declared,
+        omit,
+    );
+    let functions = funcs
+        .iter()
+        .map(|f| function_json(f, interior, &declared, omit))
+        .collect();
+    fields.push(("functions".to_string(), Json::Array(functions)));
+    fields.extend(tail);
+    Json::Object(fields)
+}
+
+/// An object's fields, in order.
+type Fields = Vec<(String, Json)>;
+
+/// The `decompile-all --json` document's fields before its `functions` array,
+/// and after it. A collection `omit` names is left out of every record and
+/// listed in the top-level `omitted`; `notes` is present only when a
+/// declaration is not wholly mapped.
+#[allow(clippy::too_many_arguments)]
+fn document_fields(
+    binary: &str,
+    count: usize,
+    language: &str,
+    error: Option<&str>,
+    total: Option<usize>,
+    assertions: &[unlace_console::assertions::Outcome],
+    declared: &crate::funcdecl::Declared,
+    omit: Omit,
+) -> (Fields, Fields) {
+    let mut fields = vec![
+        ("binary".to_string(), Json::Str(binary.to_string())),
+        // (kuna outlang) The auto language policy resolves inside the engine, so
+        // the document has to say which language `code` is in -- otherwise a
+        // consumer cannot tell a Rust body from a C one without guessing.
+        ("language".to_string(), Json::Str(language.to_string())),
+    ];
+    if let Some(omitted) = omit.json() {
+        fields.push(("omitted".to_string(), omitted));
+    }
+    fields.push(("count".to_string(), Json::Number(count.to_string())));
+    if let Some(total) = total {
+        fields.push(("total".to_string(), Json::Number(total.to_string())));
+    }
+    fields.extend([(
+        // The RUN-level error channel, set exactly when the command exits
+        // non-zero (a total discovery failure, an all-failed selected batch,
+        // or the aborted function on `unlace decompile --json`). A failed
+        // function in a mixed whole-binary run is that record's own `error`,
+        // not this one.
+        "error".to_string(),
+        error_json(error),
+    )]);
+    fields.extend(declared.notes_field());
+    fields.extend(declared.fid_databases_field());
+    // (kuna `--assert`) One row per caller-supplied assertion, in the order the
+    // caller gave them: what it was, where in the phase model it wrote, and
+    // whether it landed. Always present (`[]` when none were passed) so an agent
+    // can read it unconditionally — an assertion whose fate is unreported is an
+    // assertion an agent has to verify by eye, which is the whole problem.
+    let tail = vec![("assertions".to_string(), assertions_json(assertions))];
+    (fields, tail)
+}
+
+/// One record of the document's `functions` array.
+fn function_json(
+    f: &FuncResult,
+    interior: &crate::interior::Interiors,
+    declared: &crate::funcdecl::Declared,
+    omit: Omit,
+) -> Json {
+    let mut record = vec![
+        ("name".into(), Json::Str(f.name.clone())),
+        ("address".into(), Json::Number(f.address.to_string())),
+        (
+            "address_hex".into(),
+            Json::Str(format!("0x{:x}", f.address)),
+        ),
+    ];
+    if !omit.aliases {
+        record.push(("aliases".into(), aliases_json(&f.aliases)));
+    }
+    record.extend([
+        (
+            "object_location".into(),
+            object_location_json(f.object_location.as_ref()),
+        ),
+        ("size".into(), Json::Number(f.size.to_string())),
+        (
+            "code".into(),
+            f.code.clone().map(Json::Str).unwrap_or(Json::Null),
+        ),
+        (
+            "error".into(),
+            f.error.clone().map(Json::Str).unwrap_or(Json::Null),
+        ),
+        // (kuna outlang) The fidelity counter for Rust output: how
+        // many jumps in `code` are a diverging `panic!` instead of a
+        // translation. Always present, `0` on every C render, so a
+        // consumer can filter or re-run without inspecting the text.
+        (
+            "unstructured_gotos".into(),
+            Json::Number(f.unstructured_gotos().to_string()),
+        ),
+        (
+            "warnings".into(),
+            Json::Array(f.warnings.iter().map(warning_json).collect()),
+        ),
+    ]);
+    if !omit.line_mappings {
+        record.push((
+            "line_mappings".into(),
+            Json::Array(f.line_mappings.iter().map(line_mapping_json).collect()),
+        ));
+    }
+    if !omit.variables {
+        record.push((
+            "variables".into(),
+            Json::Array(f.variables.iter().map(var_json).collect()),
+        ));
+    }
+    // (kuna `structdefs`) The layout side: the definitions of the
+    // composites this function's C names, as records. Present unless
+    // omitted, `[]` unless the option is on.
+    if !omit.types {
+        record.push((
+            "types".into(),
+            Json::Array(f.types.iter().map(type_json).collect()),
+        ));
+    }
+    if !omit.variables && !f.stack_objects.is_empty() {
+        record.push((
+            "stack_objects".into(),
+            Json::Array(f.stack_objects.iter().map(stack_object_json).collect()),
+        ));
+    }
+    record.extend(declared.marker(f.byte_address));
+    if let Some(inside) = interior.get(&f.byte_address) {
+        record.push(("interior_to".into(), crate::interior::json(inside)));
+    }
+    Json::Object(record)
+}
+
+/// The per-directive report (`unlace_console::assertions::Outcome`).
+fn assertions_json(outcomes: &[unlace_console::assertions::Outcome]) -> Json {
+    Json::Array(
+        outcomes
+            .iter()
+            .map(|o| {
+                Json::Object(vec![
+                    ("directive".into(), Json::Str(o.directive.clone())),
+                    ("kind".into(), Json::Str(o.kind.to_string())),
+                    ("phase".into(), Json::Str(o.phase.to_string())),
+                    ("subphase".into(), Json::Str(o.subphase.to_string())),
+                    ("status".into(), Json::Str(o.status.to_string())),
+                    (
+                        "detail".into(),
+                        o.detail.clone().map(Json::Str).unwrap_or(Json::Null),
+                    ),
+                    ("fatal".into(), Json::Bool(o.fatal)),
+                ])
+            })
+            .collect(),
+    )
+}
+
+fn warning_json(warning: &unlace_decomp::kuna_functionwarnings::Warning) -> Json {
+    Json::Object(vec![
+        ("kind".into(), Json::Str(warning.kind())),
+        ("message".into(), Json::Str(warning.message())),
+        ("line".into(), Json::Number(warning.line.to_string())),
+        (
+            "address".into(),
+            warning
+                .address
+                .map_or(Json::Null, |a| Json::Number(a.to_string())),
+        ),
+    ])
+}
+
+fn line_mapping_json(mapping: &LineMapping) -> Json {
+    Json::Object(vec![
+        (
+            "line_number".into(),
+            Json::Number(mapping.line_number.to_string()),
+        ),
+        (
+            "addresses".into(),
+            Json::Array(
+                mapping
+                    .addresses
+                    .iter()
+                    .map(|address| Json::Number(address.to_string()))
+                    .collect(),
+            ),
+        ),
+    ])
+}
+
+/// (kuna, issue #197) The `aliases` array: every OTHER name the reported entry
+/// carries.  Always present (`[]` when the entry has exactly one name) so a
+/// consumer can read the field unconditionally.  Additive — no existing field
+/// changes shape, and the names that used to appear as extra top-level records
+/// are all still here, one level down.
+fn aliases_json(aliases: &[String]) -> Json {
+    Json::Array(aliases.iter().map(|a| Json::Str(a.clone())).collect())
+}
+
+fn object_location_json(location: Option<&ObjectLocation>) -> Json {
+    match location {
+        Some(location) => Json::Object(vec![
+            (
+                "section_index".into(),
+                Json::Number(location.section_index.to_string()),
+            ),
+            ("section".into(), Json::Str(location.section.clone())),
+            ("offset".into(), Json::Number(location.offset.to_string())),
+            (
+                "offset_hex".into(),
+                Json::Str(format!("0x{:x}", location.offset)),
+            ),
+        ]),
+        None => Json::Null,
+    }
+}
+
+/// One recovered type definition (`unlace decompile-project`'s `.h` text for that
+/// one type, plus its name and size) — the layout a consumer would otherwise
+/// have to parse back out of the C.
+fn type_json(t: &TypeInfo) -> Json {
+    Json::Object(vec![
+        ("name".into(), Json::Str(t.name.clone())),
+        ("definition".into(), Json::Str(t.definition.clone())),
+        ("size".into(), Json::Number(t.size.to_string())),
+    ])
+}
+
+/// One `VariableInfo`-shaped JSON object (the fields decbench's `type_match`
+/// consumes).
+fn var_json(v: &VarInfo) -> Json {
+    Json::Object(vec![
+        ("name".into(), Json::Str(v.name.clone())),
+        ("type".into(), Json::Str(v.type_name.clone())),
+        ("kind".into(), Json::Str(v.kind().into())),
+        (
+            "arg_index".into(),
+            v.arg_index
+                .map(|i| Json::Number(i.to_string()))
+                .unwrap_or(Json::Null),
+        ),
+        (
+            "stack_offset".into(),
+            v.stack_offset
+                .map(|o| Json::Number(o.to_string()))
+                .unwrap_or(Json::Null),
+        ),
+        ("size".into(), Json::Number(v.size.to_string())),
+        (
+            "line_numbers".into(),
+            Json::Array(
+                v.line_numbers
+                    .iter()
+                    .map(|line| Json::Number(line.to_string()))
+                    .collect(),
+            ),
+        ),
+        (
+            "addresses".into(),
+            Json::Array(
+                v.addresses
+                    .iter()
+                    .map(|address| Json::Number(address.to_string()))
+                    .collect(),
+            ),
+        ),
+    ])
+}
+
+#[cfg(test)]
+mod provenance_json_tests {
+    use super::*;
+
+    fn function() -> FuncResult {
+        FuncResult {
+            name: "f".into(),
+            address: 0x401000,
+            byte_address: 0x401000,
+            size: 12,
+            code: Some("int f(int x)\n{\n  return x;\n}".into()),
+            error: None,
+            proto: None,
+            emitted_c_name: None,
+            call_declarations: Vec::new(),
+            callwide_prototypes: Vec::new(),
+            variables: vec![VarInfo {
+                name: "x".into(),
+                type_name: "int".into(),
+                stack_offset: None,
+                size: 4,
+                is_param: true,
+                arg_index: Some(0),
+                line_numbers: vec![3],
+                addresses: vec![0x401004],
+                split_piece: false,
+            }],
+            types: vec![TypeInfo {
+                name: "mystruct".into(),
+                definition: "struct mystruct {\n    int a;\n};\n".into(),
+                size: 4,
+            }],
+            stack_objects: Vec::new(),
+            globals: Vec::new(),
+            field_calls: Vec::new(),
+            line_mappings: vec![LineMapping {
+                line_number: 3,
+                addresses: vec![0x401004, 0x401008],
+            }],
+            aliases: Vec::new(),
+            object_location: None,
+            callee_hints: Vec::new(),
+            synth: None,
+            pointerargs: None,
+            warnings: Vec::new(),
+            detail: None,
+        }
+    }
+
+    fn render(omit: Omit) -> serde_json::Value {
+        let text = dumps_indent2(&result_json(
+            "fixture",
+            &[function()],
+            "c-language",
+            None,
+            None,
+            &[],
+            &Default::default(),
+            omit,
+        ));
+        serde_json::from_str(&text).unwrap()
+    }
+
+    #[test]
+    fn result_schema_adds_line_and_variable_provenance() {
+        let rendered = dumps_indent2(&result_json(
+            "fixture",
+            &[function()],
+            "c-language",
+            None,
+            None,
+            &[],
+            &Default::default(),
+            Default::default(),
+        ));
+        assert!(!rendered.contains("\"omitted\""));
+        assert!(rendered.contains("\"address\": 4198400"));
+        assert!(rendered.contains("\"code\": \"int f(int x)\\n{\\n  return x;\\n}\""));
+        assert!(rendered.contains("\"line_mappings\": ["));
+        assert!(rendered.contains("\"line_number\": 3"));
+        assert!(rendered.contains("\"line_numbers\": [\n            3"));
+        assert!(rendered.contains("\"addresses\": [\n            4198404"));
+        // (kuna `structdefs`) The layout side of the record, additive to every
+        // key above it.
+        assert!(rendered.contains("\"types\": ["));
+        assert!(rendered.contains("\"definition\": \"struct mystruct {"));
+    }
+
+    #[test]
+    fn the_written_document_is_the_whole_one() {
+        let mut omit = Omit::default();
+        omit.add("types").unwrap();
+        let funcs = [
+            function(),
+            FuncResult {
+                code: None,
+                error: Some("boom".into()),
+                ..function()
+            },
+        ];
+        for (funcs, error, total, omit) in [
+            (&funcs[..], None, None, Omit::default()),
+            (&funcs[..1], Some("x"), Some(9), omit),
+            (&[][..], None, None, omit),
+        ] {
+            let whole = dumps_indent2(&result_json(
+                "fixture",
+                funcs,
+                "c-language",
+                error,
+                total,
+                &[],
+                &Default::default(),
+                omit,
+            ));
+            assert_eq!(
+                render_selected_json(
+                    "fixture",
+                    funcs,
+                    &[],
+                    error,
+                    total,
+                    &[],
+                    &Default::default(),
+                    &Default::default(),
+                    omit,
+                ),
+                whole + "\n"
+            );
+        }
+    }
+
+    #[test]
+    fn omitted_collections_leave_every_record_and_are_named() {
+        let mut omit = Omit::default();
+        omit.add("line_mappings,types").unwrap();
+        let doc = render(omit);
+        assert_eq!(
+            doc["omitted"],
+            serde_json::json!(["line_mappings", "types"])
+        );
+        let record = doc["functions"][0].as_object().unwrap();
+        assert!(!record.contains_key("line_mappings") && !record.contains_key("types"));
+        assert_eq!(
+            record["variables"][0]["line_numbers"],
+            serde_json::json!([3])
+        );
+        for key in [
+            "name",
+            "address",
+            "code",
+            "error",
+            "unstructured_gotos",
+            "warnings",
+        ] {
+            assert!(record.contains_key(key), "{key} must survive --omit");
+        }
+        assert_eq!(doc["language"], "c-language");
+
+        omit.add("variables").unwrap();
+        let doc = render(omit);
+        assert_eq!(
+            doc["omitted"],
+            serde_json::json!(["line_mappings", "variables", "types", "stack_objects"])
+        );
+        assert!(
+            !doc["functions"][0]
+                .as_object()
+                .unwrap()
+                .contains_key("variables")
+        );
+    }
+
+    #[test]
+    fn a_record_lists_its_warnings_and_a_failed_one_none() {
+        use unlace_decomp::kuna_functionwarnings::Warning;
+        let warned = FuncResult {
+            warnings: vec![
+                Warning {
+                    address: Some(0x401000),
+                    text: "WARNING: Subroutine does not return".into(),
+                    line: 1,
+                },
+                Warning {
+                    address: Some(0x401010),
+                    text: "WARNING: Function flows out of bounds".into(),
+                    line: 4,
+                },
+                Warning {
+                    address: None,
+                    text: "WARNING: structured blocks unavailable".into(),
+                    line: 5,
+                },
+            ],
+            ..function()
+        };
+        let failed = FuncResult {
+            code: None,
+            error: Some("boom".into()),
+            ..function()
+        };
+        let text = dumps_indent2(&result_json(
+            "fixture",
+            &[warned, failed],
+            "c-language",
+            None,
+            None,
+            &[],
+            &Default::default(),
+            Omit::default(),
+        ));
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            doc["functions"][0]["warnings"],
+            serde_json::json!([
+                {"kind": "no-return", "message": "Subroutine does not return", "line": 1, "address": 0x401000},
+                {"kind": "out-of-bounds", "message": "Function flows out of bounds", "line": 4, "address": 0x401010},
+                {"kind": "structuring-declined", "message": "structured blocks unavailable", "line": 5, "address": null},
+            ])
+        );
+        assert_eq!(doc["functions"][1]["warnings"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn omitted_aliases_leave_the_record_and_keep_its_identity() {
+        let aliased = FuncResult {
+            aliases: vec!["sub_401000".into()],
+            ..function()
+        };
+        let mut omit = Omit::default();
+        omit.add("aliases").unwrap();
+        let text = dumps_indent2(&result_json(
+            "fixture",
+            &[aliased],
+            "c-language",
+            None,
+            None,
+            &[],
+            &Default::default(),
+            omit,
+        ));
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(doc["omitted"], serde_json::json!(["aliases"]));
+        let record = doc["functions"][0].as_object().unwrap();
+        let keys: Vec<&str> = record.keys().map(String::as_str).take(4).collect();
+        assert_eq!(keys, ["name", "address", "address_hex", "object_location"]);
+        assert!(record.contains_key("line_mappings") && record.contains_key("variables"));
+    }
+}
+
+// --- argument parsing --------------------------------------------------------
+
+/// Expand a concrete decompiler mode into its owned `(option, value)`
+/// overrides, without `auto`'s own.
+#[cfg(test)]
+fn mode_override_pairs(mode: &str) -> Result<Vec<(String, String)>, String> {
+    if unlace_decomp::modes::mode_is_automatic(mode) {
+        return Err("mode `auto` requires input binary size".into());
+    }
+    match unlace_decomp::modes::mode_overrides(mode) {
+        Some(ovr) => Ok(ovr
+            .iter()
+            .map(|(o, v)| ((*o).to_string(), (*v).to_string()))
+            .collect()),
+        None => {
+            let known: Vec<&str> = unlace_decomp::modes::mode_names().collect();
+            Err(format!(
+                "unknown mode {mode:?} (known: {})",
+                known.join(", ")
+            ))
+        }
+    }
+}
+
+/// Resolve an omitted or explicit `auto` mode from `binary_size` to its
+/// concrete preset and owned overrides (`auto`'s own first); explicit concrete
+/// modes ignore the size. Callers PREPEND the overrides before the user's
+/// `--option` pairs so an explicit `--option` still wins (last-write, matching
+/// the console's `mode` then `option` ordering).
+fn resolved_mode(mode: Option<&str>, binary_size: u64) -> Result<ResolvedMode, String> {
+    let (name, overrides) = unlace_decomp::modes::resolve_overrides_for_size(mode, binary_size)
+        .ok_or_else(|| {
+            let requested = mode.unwrap_or("auto");
+            let known: Vec<&str> = unlace_decomp::modes::mode_names().collect();
+            format!("unknown mode {requested:?} (known: {})", known.join(", "))
+        })?;
+    let options = overrides
+        .iter()
+        .map(|(o, v)| ((*o).to_string(), (*v).to_string()))
+        .collect();
+    Ok(ResolvedMode { name, options })
+}
+
+/// Resolve the frontend mode policy and prepend its overrides to the user's
+/// explicit options. Omission is `auto`; file metadata is only read for an
+/// omitted or explicitly automatic mode.
+pub(crate) fn mode_options_for_binary(
+    mode: Option<&str>,
+    binary: &str,
+    explicit: Vec<(String, String)>,
+) -> Result<Vec<(String, String)>, String> {
+    Ok(mode_and_options_for_binary(mode, binary, explicit)?.options)
+}
+
+struct ResolvedMode {
+    name: &'static str,
+    options: Vec<(String, String)>,
+}
+
+fn mode_and_options_for_binary(
+    mode: Option<&str>,
+    binary: &str,
+    explicit: Vec<(String, String)>,
+) -> Result<ResolvedMode, String> {
+    let requested = mode.unwrap_or("auto");
+    let size = if unlace_decomp::modes::mode_is_automatic(requested) {
+        let image = match crate::loadtime::last_option_value(&explicit, "dyldimage") {
+            Some(value) => unlace_decomp::kuna_dyldcache::image_name(value).map(str::to_string),
+            None => unlace_decomp::kuna_dyldcache::selected_image(),
+        };
+        match unlace_analysis::loader::kuna_dyldcache::image_size(
+            std::path::Path::new(binary),
+            image.as_deref(),
+        )
+        .and_then(Result::ok)
+        {
+            Some(size) => size,
+            None => std::fs::metadata(binary)
+                .map_err(|e| {
+                    format!("cannot read input binary metadata for mode auto: {binary}: {e}")
+                })?
+                .len(),
+        }
+    } else {
+        0
+    };
+    let mut resolved = resolved_mode(Some(requested), size)?;
+    resolved.options.extend(explicit);
+    Ok(resolved)
+}
+
+/// Parse `argv` for `cmd`, discarding the triage half.
+///
+/// The surfaces that do not narrow (`decompile-project`, `unlace decompile --json`)
+/// call this so their [`Args`] shape and their parse are untouched by triage.
+pub(crate) fn parse_args(argv: &[String], cmd: &str) -> Result<Args, String> {
+    Ok(parse_args_with_filters(argv, cmd)?.0)
+}
+
+/// The full parse: the load/decompile arguments plus the triage selection.
+///
+/// The triage flags are accepted only on the two surfaces that act on them, so a
+/// `decompile-project` run cannot silently swallow a `--filter` it would ignore.
+pub(crate) fn parse_args_with_filters(
+    argv: &[String],
+    cmd: &str,
+) -> Result<(Args, Filters), String> {
+    let triageable = cmd == "decompile-all" || cmd == "functions";
+    let mut filters = Filters::default();
+    let mut binary: Option<String> = None;
+    let mut apply_rust_signatures: Option<String> = None;
+    let mut json = false;
+    let mut names: Option<Vec<String>> = None;
+    let mut addrs: Vec<EntrySelector> = Vec::new();
+    let mut entry_seeds: Vec<EntrySelector> = Vec::new();
+    let mut no_vars = false;
+    let mut omit = Omit::default();
+    let mut max_fn_seconds: Option<u64> = None;
+    let mut max_fn_memory: Option<u64> = None;
+    let mut options: Vec<(String, String)> = Vec::new();
+    let mut func_decls: Vec<crate::funcdecl::FuncDecl> = Vec::new();
+    let mut assertions: Vec<unlace_console::assertions::Directive> = Vec::new();
+    let mut assert_strict = false;
+    let mut types: Vec<String> = Vec::new();
+    let mut types_cpp: Option<String> = None;
+    let mut mode: Option<String> = None;
+    let mut slice: Option<String> = None;
+    let mut target: Option<String> = None;
+    let mut sleighpath: Option<String> = None;
+    let mut isa: Option<ArmIsa> = None;
+    let mut raw_image = false;
+    let mut base: Option<u64> = None;
+    let mut saw_entry = false;
+    let mut saw_language = false;
+    let mut jobs: usize = 1;
+    let mut jobs_auto = false;
+    let mut jobs_chunk: Option<usize> = None;
+    let mut jobs_full_load = false;
+    let mut jobs_worker: Option<String> = None;
+    let mut jobs_proto = false;
+    let mut jobs_provenance = false;
+    let mut jobs_types = false;
+    let mut jobs_callees = false;
+    let mut jobs_pointerargs = false;
+    let mut jobs_objects = false;
+    let mut jobs_synth: Option<jobs::SynthWorker> = None;
+    // The three whole-binary surfaces the worker POOL serves; `functions`
+    // enumerates and never decompiles, so there is nothing for a pool to do
+    // there. `--jobs` reaches further than the pool does: it also sizes the
+    // discovery walk's decode lanes, which `functions` very much does run, so
+    // that one flag is accepted there too while `--jobs-chunk` /
+    // `--jobs-full-load` / `--jobs-worker` stay pool-only.
+    let batch = matches!(
+        cmd,
+        "decompile-all" | "decompile-project" | "decompile-graph"
+    );
+    let jobs_flag = batch || cmd == "functions";
+
+    let mut i = 0;
+    while i < argv.len() {
+        let a = argv[i].as_str();
+        match a {
+            "--json" => json = true,
+            "--apply-rust-signatures" if matches!(cmd, "functions" | "decompile") => {
+                let value = take(argv, &mut i, "--apply-rust-signatures")?;
+                if apply_rust_signatures.replace(value).is_some() {
+                    return Err("duplicate --apply-rust-signatures".into());
+                }
+            }
+            "--no-vars" => no_vars = true,
+            "--omit" if matches!(cmd, "decompile-all" | "decompile") => {
+                omit.add(&take(argv, &mut i, "--omit")?)?
+            }
+            "--functions" => {
+                let v = take(argv, &mut i, "--functions")?;
+                names = Some(
+                    v.split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect(),
+                );
+            }
+            "--addr" | "--entry" => {
+                let flag = a;
+                let v = take(argv, &mut i, flag)?;
+                let selector = parse_entry_selector(&v)?;
+                if flag == "--entry" {
+                    saw_entry = true;
+                    entry_seeds.push(selector);
+                } else {
+                    addrs.push(selector);
+                }
+            }
+            "--define-function" => {
+                let v = take(argv, &mut i, "--define-function")?;
+                func_decls.extend(crate::funcdecl::parse_flag(&v)?);
+            }
+            "--assert" => {
+                let v = take(argv, &mut i, "--assert")?;
+                assertions.extend(crate::assertdecl::parse_flag(&v)?);
+            }
+            "--assert-strict" => assert_strict = true,
+            "--types" => types.push(take(argv, &mut i, "--types")?),
+            "--types-cpp" => types_cpp = Some(take(argv, &mut i, "--types-cpp")?),
+            "--jobs" if jobs_flag => {
+                let v = take(argv, &mut i, "--jobs")?;
+                (jobs, jobs_auto) = jobs::parse_jobs(&v)?;
+            }
+            "--jobs-chunk" if batch => {
+                let v = take(argv, &mut i, "--jobs-chunk")?;
+                jobs_chunk = Some(
+                    v.trim()
+                        .parse::<usize>()
+                        .ok()
+                        .filter(|&n| n >= 1)
+                        .ok_or_else(|| format!("invalid --jobs-chunk value {v:?}"))?,
+                );
+            }
+            "--jobs-full-load" if batch => jobs_full_load = true,
+            "--jobs-worker" if cmd == "decompile-all" => {
+                jobs_worker = Some(take(argv, &mut i, "--jobs-worker")?);
+            }
+            "--jobs-proto" if cmd == "decompile-all" => jobs_proto = true,
+            "--jobs-provenance" if cmd == "decompile-all" => jobs_provenance = true,
+            "--jobs-types" if cmd == "decompile-all" => jobs_types = true,
+            "--jobs-callees" if cmd == "decompile-all" => jobs_callees = true,
+            "--jobs-pointerargs" if cmd == "decompile-all" => jobs_pointerargs = true,
+            "--jobs-objects" if cmd == "decompile-all" => jobs_objects = true,
+            "--jobs-synth" if cmd == "decompile-all" => {
+                jobs_synth = Some(jobs::SynthWorker::parse(&take(
+                    argv,
+                    &mut i,
+                    "--jobs-synth",
+                )?)?);
+            }
+            "--max-fn-seconds"
+                if matches!(
+                    cmd,
+                    "decompile" | "decompile-all" | "decompile-project" | "decompile-graph"
+                ) =>
+            {
+                let v = take(argv, &mut i, "--max-fn-seconds")?;
+                max_fn_seconds = Some(
+                    v.trim()
+                        .parse::<u64>()
+                        .map_err(|_| format!("invalid --max-fn-seconds value {v:?}"))?,
+                );
+            }
+            "--max-fn-memory"
+                if matches!(
+                    cmd,
+                    "decompile" | "decompile-all" | "decompile-project" | "decompile-graph"
+                ) =>
+            {
+                max_fn_memory = Some(parse_max_fn_memory(&take(
+                    argv,
+                    &mut i,
+                    "--max-fn-memory",
+                )?)?);
+            }
+            "--filter" if triageable => {
+                let v = take(argv, &mut i, "--filter")?;
+                filters.name =
+                    Some(Regex::new(&v).map_err(|e| format!("invalid --filter regex {v:?}: {e}"))?);
+            }
+            "--min-size" if triageable => {
+                let v = take(argv, &mut i, "--min-size")?;
+                filters.min_size = Some(parse_count(&v, "--min-size")?);
+            }
+            "--max-size" if triageable => {
+                let v = take(argv, &mut i, "--max-size")?;
+                filters.max_size = Some(parse_count(&v, "--max-size")?);
+            }
+            "--reachable-from" if triageable => {
+                filters.reachable_from = Some(take(argv, &mut i, "--reachable-from")?);
+            }
+            "--limit" if triageable => {
+                let v = take(argv, &mut i, "--limit")?;
+                filters.limit = Some(parse_count(&v, "--limit")? as usize);
+            }
+            "--sort" if triageable => {
+                let v = take(argv, &mut i, "--sort")?;
+                filters.sort = SortKey::parse(&v)?;
+            }
+            "--summary" if triageable => filters.summary = true,
+            "--rust-signature-manifest" if cmd == "functions" => {
+                let value = take(argv, &mut i, "--rust-signature-manifest")?;
+                if filters.rust_signature_manifest.replace(value).is_some() {
+                    return Err("duplicate --rust-signature-manifest".into());
+                }
+            }
+            "--option" => options.push(crate::args::take_option(argv, &mut i)?),
+            // (kuna outlang) `--language` is the first-class surface for the
+            // output language; it lowers to the upstream `setlanguage` option, so
+            // it reaches every downstream consumer (the console script here, the
+            // in-process option applier in decompile-all) with no new plumbing.
+            // Pushed in argv order, so a later `--option setlanguage` still wins.
+            "--language" => {
+                let v = take(argv, &mut i, "--language")?;
+                if let Some(lang) = parse_language_flag(&v)? {
+                    options.push(("setlanguage".into(), lang.into()));
+                }
+                saw_language = true;
+            }
+            "--mode" => mode = Some(take(argv, &mut i, "--mode")?),
+            "--slice" => slice = Some(take(argv, &mut i, "--slice")?),
+            "--isa" => isa = ArmIsa::parse(&take(argv, &mut i, "--isa")?)?,
+            "--raw-image" => raw_image = true,
+            "--base" => base = Some(parse_hex(&take(argv, &mut i, "--base")?)?),
+            "--target" => target = Some(take(argv, &mut i, "--target")?),
+            "--sleighpath" => sleighpath = Some(take(argv, &mut i, "--sleighpath")?),
+            "-h" | "--help" => {
+                if cmd == "functions" {
+                    usage_functions();
+                } else {
+                    usage_decompile_all();
+                }
+                std::process::exit(0);
+            }
+            s if s.starts_with("--") => return Err(format!("unknown option {s}")),
+            _ => {
+                if binary.is_none() {
+                    binary = Some(a.to_string());
+                } else {
+                    return Err(format!("unexpected argument {a:?}"));
+                }
+            }
+        }
+        i += 1;
+    }
+
+    let binary = binary.ok_or_else(|| format!("{cmd} requires <binary>"))?;
+    let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), assertions)?;
+    if filters.rust_signature_manifest.is_some() {
+        if apply_rust_signatures.is_some() {
+            return Err(
+                "--rust-signature-manifest and --apply-rust-signatures are exclusive".into(),
+            );
+        }
+        if !filters.summary || !json {
+            return Err("--rust-signature-manifest requires functions --summary --json".into());
+        }
+        if raw_image
+            || slice.is_some()
+            || target.is_some()
+            || isa.is_some()
+            || !assertions.is_empty()
+            || !func_decls.is_empty()
+            || options
+                .iter()
+                .any(|(name, _)| matches!(name.as_str(), "dyldimage" | "kernelcache"))
+        {
+            return Err("--rust-signature-manifest requires an unmodified object image without raw, slice, target, ISA, image-selection, assertion, or function-definition overrides".into());
+        }
+    }
+    if !omit.is_empty() {
+        if !json {
+            return Err("--omit selects --json record keys; add --json".into());
+        }
+        no_vars |= omit.variables;
+    }
+
+    if raw_image {
+        if target
+            .as_deref()
+            .is_none_or(|value| value.trim().is_empty())
+        {
+            return Err("--raw-image requires --target <SLEIGH-language-id>".into());
+        }
+        if base.is_none() {
+            return Err("--raw-image requires --base <address>".into());
+        }
+        if names.is_some() {
+            return Err("--raw-image uses explicit --entry/--addr seeds, not --functions".into());
+        }
+        let patterns_off = options
+            .iter()
+            .any(|(name, value)| name == "funcstart_patterns" && value == "off");
+        if addrs.is_empty() && entry_seeds.is_empty() && patterns_off {
+            return Err(
+                "--raw-image with funcstart_patterns off requires at least one --entry or --addr"
+                    .into(),
+            );
+        }
+        if addrs
+            .iter()
+            .chain(entry_seeds.iter())
+            .any(|selector| !matches!(selector, EntrySelector::Numeric(_)))
+        {
+            return Err("raw image entries must be numeric addresses".into());
+        }
+        if slice.is_some() {
+            return Err("--slice does not apply to --raw-image input".into());
+        }
+    } else {
+        if base.is_some() {
+            return Err("--base requires --raw-image".into());
+        }
+        if saw_entry {
+            return Err("--entry requires --raw-image".into());
+        }
+    }
+
+    // (kuna outlang, DIV-80) The auto policy: with no `--language` and no
+    // explicit `--option setlanguage`, follow the binary. `decompile-project` and
+    // `decompile-graph` are excluded -- a `.c`/`.h`/`.asm` export and a `codeC`
+    // field are C-shaped by construction and refuse any other language, so
+    // auto-selecting one there would turn a working export into an error.
+    // A `--jobs` worker takes the parent's resolved options verbatim, including
+    // whatever language the parent settled on. Re-running the auto policy here
+    // would let a `decompile-project` shard emit Rust into a C-only `.h`.
+    if !saw_language
+        && jobs_worker.is_none()
+        && cmd != "decompile-project"
+        && cmd != "decompile-graph"
+        && crate::loadtime::explicit_output_language(&options).is_none()
+        && let Some(lang) = detected_output_language(&binary, &options)
+    {
+        options.push(("setlanguage".into(), lang.into()));
+    }
+
+    let explicit_fast_funcdisc = options.iter().any(|(name, _)| name == "fast_funcdisc");
+    // Omitted mode is the size-driven `auto` policy. Mode overrides are
+    // PREPENDED so an explicit `--option` still wins (last-write). Every
+    // downstream consumer (`apply_loadtime_env`, the listing/funcstart
+    // auto-inject skips, `apply_runtime_options`) reads `args.options`, so this
+    // is the single wire point for decompile-all, decompile-project, and
+    // functions.
+    let ResolvedMode {
+        name: concrete_mode,
+        options: merged,
+    } = mode_and_options_for_binary(mode.as_deref(), &binary, options)?;
+    options = merged;
+    if names.is_none()
+        && !addrs.is_empty()
+        && !explicit_fast_funcdisc
+        && apply_rust_signatures.is_none()
+    {
+        options.push(("fast_funcdisc".into(), "off".into()));
+    }
+    let whole_binary = batch && names.is_none() && addrs.is_empty();
+    let max_fn_seconds =
+        max_fn_seconds.unwrap_or_else(|| default_fn_budget_seconds(concrete_mode, whole_binary));
+    let decompiles = matches!(
+        cmd,
+        "decompile" | "decompile-all" | "decompile-project" | "decompile-graph"
+    );
+    let max_fn_memory = if decompiles { max_fn_memory } else { Some(0) };
+    // The pool re-execs this binary, so a policy it cannot express is one the
+    // shards would silently drop rather than honour. Pool-only: on `functions`
+    // the same flag buys decode lanes and no process is re-exec'd, so a raw
+    // image (which the lane gate declines on its own) and an `--assert` overlay
+    // (which the lanes read through the parent's own patched bytes) are both
+    // fine there.
+    if batch && jobs > 1 {
+        if raw_image {
+            return Err(
+                "--jobs does not apply to --raw-image input (the entry seeds are the load)".into(),
+            );
+        }
+        if !assertions.is_empty() {
+            return Err(
+                "--assert and --jobs are exclusive: assertion outcomes are per-load state the \
+                 worker pool cannot merge. Re-run with --jobs 1."
+                    .into(),
+            );
+        }
+        // (kuna `protoorder`) A statement does not cross a worker process.
+        if options
+            .iter()
+            .any(|(name, value)| name == "protoorder" && value != "off")
+        {
+            return Err(
+                "--option protoorder and --jobs are exclusive: what a callee states about its \
+                 own types is per-load state that does not cross a worker process. Re-run with \
+                 --jobs 1 (a run that does not ask for the option is not refused: it simply \
+                 states nothing)."
+                    .into(),
+            );
+        }
+        // (kuna `callbacktype`) Neither does a parked declaration: it is read
+        // back by a later decompile of the same load.
+        if options
+            .iter()
+            .any(|(name, value)| name == "callbacktype" && value != "off")
+        {
+            return Err(
+                "--option callbacktype and --jobs are exclusive: the prototype a callback slot \
+                 declares is parked on the load a later decompile reads it back from, which does \
+                 not cross a worker process. Re-run with --jobs 1 (a run that does not ask for \
+                 the option is not refused: it simply parks nothing)."
+                    .into(),
+            );
+        }
+        // (kuna `calleereginputs custom`) Nor does the whole-image decision.
+        if options
+            .iter()
+            .any(|(name, value)| name == "calleereginputs" && is_custom(value))
+        {
+            return Err(
+                "--option calleereginputs custom and --jobs are exclusive: whether a callee-saved \
+                 register is an argument is decided over every caller and callee of the load, \
+                 which does not cross a worker process. Re-run with --jobs 1."
+                    .into(),
+            );
+        }
+    }
+
+    if let (Some(min), Some(max)) = (filters.min_size, filters.max_size)
+        && min > max
+    {
+        return Err(format!("--min-size {min} is greater than --max-size {max}"));
+    }
+
+    let args = Args {
+        binary,
+        apply_rust_signatures,
+        json,
+        names,
+        addrs,
+        entry_seeds,
+        no_vars,
+        omit,
+        max_fn_seconds,
+        max_fn_memory,
+        options,
+        func_decls,
+        assertions,
+        assert_strict,
+        slice,
+        target,
+        sleighpath,
+        isa,
+        raw_image,
+        base,
+        mode: concrete_mode,
+        jobs,
+        jobs_auto,
+        jobs_chunk,
+        jobs_full_load,
+        jobs_worker,
+        jobs_proto,
+        jobs_provenance,
+        jobs_types,
+        jobs_callees,
+        jobs_pointerargs,
+        jobs_synth,
+        jobs_objects,
+    };
+    if args.apply_rust_signatures.is_some() {
+        crate::rust_signatures::validate_application(&args)?;
+    }
+    Ok((args, filters))
+}
+
+fn parse_count(v: &str, flag: &str) -> Result<u64, String> {
+    v.trim()
+        .parse::<u64>()
+        .map_err(|_| format!("invalid {flag} value {v:?} (expected a non-negative integer)"))
+}
+
+fn parse_hex(s: &str) -> Result<u64, String> {
+    let t = s.trim();
+    let body = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
+    u64::from_str_radix(body, 16).map_err(|_| format!("invalid address {s:?}"))
+}
+
+fn parse_entry_selector(s: &str) -> Result<EntrySelector, String> {
+    match EntrySelector::parse(s) {
+        selector @ (EntrySelector::Numeric(_)
+        | EntrySelector::SectionOffset { .. }
+        | EntrySelector::SectionIndexOffset { .. }) => Ok(selector),
+        EntrySelector::Name(_) => parse_hex(s).map(EntrySelector::Numeric),
+    }
+}
+
+fn usage_decompile_all() {
+    eprintln!(
+        "usage: unlace decompile-all <binary> [--json] [--functions a,b,..] [--addr 0xVMA].. \\\n\
+         \x20                   [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
+         \x20                   [--max-fn-seconds N] [--max-fn-memory MiB] \\\n\
+         \x20                   [--mode auto|reliable|aggressive|fast] \\\n\
+         \x20                   [--jobs N|auto] [--jobs-chunk N] [--jobs-full-load] \\\n\
+         \x20                   [--filter REGEX] [--min-size N] [--max-size N] \\\n\
+         \x20                   [--reachable-from <name|0xaddr>] [--sort addr|size|name] [--limit N] \\\n\
+         \x20                   [--summary] [--define-function S[-E][=N]|@FILE].. \\\n\
+         \x20                   [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]\n\
+         \x20                   [--raw-image --target T --base VMA (--entry|--addr VMA)..]\n\
+         \n\
+         Decompile every CODE-backed function in one in-process load (load-once,\n\
+         decompile-many).  --json emits {{binary,count,functions:[{{name,address,code,error,warnings,variables,..}}]}};\n\
+         without it, concatenated C with `// Function:` headers.  A record's\n\
+         `warnings` lists the engine warnings its code carries as comments, as\n\
+         {{kind,message,line,address}}, each at the address it was recorded\n\
+         at (a header warning at the entry); `error` is set only for a failed\n\
+         function.\n\
+         --omit KEY[,KEY].. (with --json) leaves those record collections out of\n\
+         every record -- aliases, line_mappings, variables (with stack_objects),\n\
+         types -- and lists them in a top-level `omitted` array, so an omitted\n\
+         collection is never mistaken for an empty one.\n\
+         --no-vars skips the variable extraction and leaves `variables` empty.\n\
+         --max-fn-seconds N caps ONE function's decompile at N seconds (default 10\n\
+         for unfiltered fast runs, 120 otherwise; 0 disables); a function over\n\
+         budget becomes its own `error` record and the batch continues.\n\
+         --max-fn-memory MiB stops a function once the process decompiling it\n\
+         holds more than MiB resident and the function added 64 MiB or more;\n\
+         that function becomes its own `error` record the same way. Omitted,\n\
+         under a cgroup memory cap, with a margin of max(512 MiB, 10%), a\n\
+         function that grew by the margin is stopped once the cgroup holds more\n\
+         than the cap less it, serial or --jobs alike; outside one there is\n\
+         none; 0 disables.\n\
+         --jobs N spreads the per-function loop over N worker processes (auto =\n\
+         this machine's parallelism, capped at 16; 1, the default, is the serial\n\
+         in-process path). Output is merged in target order and is identical to\n\
+         --jobs 1, synthesized struct_N names included: a function that\n\
+         synthesized a structure keeps its text with the serial numbers when its\n\
+         structures have the serial ones' members, and is decompiled a second\n\
+         time with the serial names otherwise. A worker cannot see another\n\
+         worker's callees, so the pool does not type call arguments\n\
+         callee-first, and no global or table is an array without the whole\n\
+         batch (option elemptr): on this surface it matches --jobs 1 with\n\
+         --option protoorder off on both. Progress goes to stderr. Every worker loads\n\
+         the binary itself, so peak memory is roughly N times one worker's RSS.\n\
+         --jobs-chunk N sets the functions per worker invocation (bigger =\n\
+         less load overhead, more peak RSS); --jobs-full-load makes each\n\
+         worker re-run whole-binary\n\
+         function discovery instead of taking the parent's inventory.\n\
+         Omitted --mode uses auto: aggressive below 500 KiB, reliable below\n\
+         2 MiB, and fast at 2 MiB or larger, with ctypes on at every size\n\
+         (an explicit --mode reliable keeps the int4/uint8 names). Explicit\n\
+         --option values win.\n\
+         An unfiltered run that discovers no function at all exits 1 with the\n\
+         reason on stderr and in the document's run-level `error` field.\n\
+         \n\
+         --define-function <start[-end][=name] | @file> (repeatable) declares where a\n\
+         function starts and ends: start names an entry discovery missed, the\n\
+         exclusive end bounds its flow so it stops swallowing its neighbours.\n\
+         \n\
+         Triage (narrows the run BEFORE decompiling, so it is also what makes it\n\
+         cheap): --filter REGEX matches the name or any alias; --min-size/--max-size\n\
+         bound the inventory extent; --reachable-from <name|0xaddr> keeps only what\n\
+         that function reaches through the call graph; --sort addr|size|name orders\n\
+         (size is largest first) and --limit N caps. A narrowed --json document also\n\
+         carries `total`, the count before narrowing. --summary skips the decompile\n\
+         entirely and reports the orientation document (see `unlace functions -h`)."
+    );
+}
+
+fn usage_functions() {
+    eprintln!(
+        "usage: unlace functions <binary> [--json] [--summary] \\\n\
+         \x20               [--filter REGEX] [--min-size N] [--max-size N] \\\n\
+         \x20               [--reachable-from <name|0xaddr>] [--sort addr|size|name] [--limit N] \\\n\
+         \x20               [--define-function S[-E][=N]|@FILE].. [--jobs N|auto] \\\n\
+         \x20               [--mode auto|reliable|aggressive|fast] [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]\n\
+         \x20               [--raw-image --target T --base VMA (--entry|--addr VMA)..]\n\
+         \x20               [--rust-signature-manifest PATH (requires --summary --json)]\n\
+         \x20               [--apply-rust-signatures PATH (trusted manifest; --jobs 1)]\n\
+         \n\
+         List every function kuna discovers in a binary as `<addr>\\t<name>` (or\n\
+         --json: {{binary,count,total,functions:[{{name,address,address_hex,aliases,size}}]}}).\n\
+         \n\
+         Triage: --filter REGEX matches the name or any alias; --min-size/--max-size\n\
+         bound the extent; --reachable-from <name|0xaddr> keeps only what that\n\
+         function reaches through the call graph (the `unlace xrefs` edges);\n\
+         --sort addr|size|name orders (size is largest first) and --limit N caps.\n\
+         \n\
+         --summary answers `where do I start` in a few hundred bytes instead of a\n\
+         function list: the image entry point, how many functions it reaches, how\n\
+         many have no call site, the size histogram, and the --limit largest\n\
+         functions (10 by default). Its `warnings` array repeats the loader's\n\
+         header repairs (a dropped ELF section table, a repaired PE DOS magic, a\n\
+         clamped data-directory count) that the run also printed on stderr.\n\
+         --rust-signature-manifest reads verified external Rust signature banks\n\
+         once for the summary. It reports compiler metadata separately from\n\
+         signature-profile scores; it downloads nothing and installs no names.\n\
+         Shares decompile-all's discovery policy, so the inventory always contains\n\
+         every function a whole-binary run would decompile; on a non-x86-64 binary\n\
+         that means a full prologue-pattern + gap-walk discovery pass.\n\
+         --define-function <start[-end][=name] | @file> (repeatable) declares an entry\n\
+         discovery missed and its exclusive extent; it enumerates like any other.\n\
+         --jobs N|auto runs the discovery walk on N decode lanes inside this process\n\
+         (`auto` = this machine's parallelism, capped at 32). The inventory is the\n\
+         serial one byte for byte; one stderr line says how many lanes ran, or why\n\
+         it declined. There is no worker pool here -- nothing is decompiled.\n\
+         --option NAME VALUE (repeatable) flips one option for this run, as in\n\
+         decompile-all: the analysis passes that name or add functions (`objc`,\n\
+         `swiftmetadata`, `kernelcache`, ...) change the inventory. Explicit\n\
+         values win over the --mode preset.\n\
+         Discovering no function at all exits 1 with the reason on stderr and in\n\
+         the document's `error` field (a packed image is named as such)."
+    );
+}
+
+#[cfg(test)]
+mod discovery_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEMP_ID: AtomicU64 = AtomicU64::new(0);
+
+    /// A minimal ELF64 executable: one `PF_X` `PT_LOAD` and NO section table —
+    /// the section-header-stripped PIE shape of the witness binary, where the
+    /// program header is the only evidence the image holds code.
+    fn stripped_executable(payload: &[u8]) -> Vec<u8> {
+        const EHDR: usize = 64;
+        const PHDR: usize = 56;
+        let mut out = vec![0u8; EHDR + PHDR + payload.len()];
+        out[..4].copy_from_slice(b"\x7fELF");
+        out[4] = 2; // ELFCLASS64
+        out[5] = 1; // ELFDATA2LSB
+        out[6] = 1; // EV_CURRENT
+        out[16..18].copy_from_slice(&2u16.to_le_bytes()); // e_type = ET_EXEC
+        out[18..20].copy_from_slice(&62u16.to_le_bytes()); // e_machine = EM_X86_64
+        out[20..24].copy_from_slice(&1u32.to_le_bytes()); // e_version
+        out[32..40].copy_from_slice(&(EHDR as u64).to_le_bytes()); // e_phoff
+        out[52..54].copy_from_slice(&(EHDR as u16).to_le_bytes()); // e_ehsize
+        out[54..56].copy_from_slice(&(PHDR as u16).to_le_bytes()); // e_phentsize
+        out[56..58].copy_from_slice(&1u16.to_le_bytes()); // e_phnum
+        let total = (EHDR + PHDR + payload.len()) as u64;
+        let p = EHDR;
+        out[p..p + 4].copy_from_slice(&1u32.to_le_bytes()); // p_type = PT_LOAD
+        out[p + 4..p + 8].copy_from_slice(&5u32.to_le_bytes()); // p_flags = PF_R|PF_X
+        out[p + 16..p + 24].copy_from_slice(&0x40_0000u64.to_le_bytes()); // p_vaddr
+        out[p + 32..p + 40].copy_from_slice(&total.to_le_bytes()); // p_filesz
+        out[p + 40..p + 48].copy_from_slice(&total.to_le_bytes()); // p_memsz
+        out[p + 48..p + 56].copy_from_slice(&0x1000u64.to_le_bytes()); // p_align
+        out[EHDR + PHDR..].copy_from_slice(payload);
+        out
+    }
+
+    /// A minimal ET_REL ELF64 whose only allocated section is `.data` — an
+    /// object file that legitimately holds no functions at all.
+    fn data_only_object() -> Vec<u8> {
+        const EHDR: usize = 64;
+        const SHDR: usize = 64;
+        let names: &[u8] = b"\0.data\0.shstrtab\0";
+        let shoff = EHDR;
+        let names_off = shoff + 3 * SHDR;
+        let data_off = names_off + names.len();
+        let mut out = vec![0u8; data_off + 4];
+        out[..4].copy_from_slice(b"\x7fELF");
+        out[4] = 2;
+        out[5] = 1;
+        out[6] = 1;
+        out[16..18].copy_from_slice(&1u16.to_le_bytes()); // e_type = ET_REL
+        out[18..20].copy_from_slice(&62u16.to_le_bytes());
+        out[20..24].copy_from_slice(&1u32.to_le_bytes());
+        out[40..48].copy_from_slice(&(shoff as u64).to_le_bytes()); // e_shoff
+        out[52..54].copy_from_slice(&(EHDR as u16).to_le_bytes());
+        out[58..60].copy_from_slice(&(SHDR as u16).to_le_bytes()); // e_shentsize
+        out[60..62].copy_from_slice(&3u16.to_le_bytes()); // e_shnum
+        out[62..64].copy_from_slice(&2u16.to_le_bytes()); // e_shstrndx
+        out[names_off..data_off].copy_from_slice(names);
+
+        fn shdr(out: &mut [u8], at: usize, name: u32, kind: u32, flags: u64, off: u64, size: u64) {
+            out[at..at + 4].copy_from_slice(&name.to_le_bytes());
+            out[at + 4..at + 8].copy_from_slice(&kind.to_le_bytes());
+            out[at + 8..at + 16].copy_from_slice(&flags.to_le_bytes());
+            out[at + 24..at + 32].copy_from_slice(&off.to_le_bytes());
+            out[at + 32..at + 40].copy_from_slice(&size.to_le_bytes());
+        }
+        // `.data`: SHT_PROGBITS, SHF_ALLOC|SHF_WRITE — allocated, never executed.
+        shdr(&mut out, shoff + SHDR, 1, 1, 0x3, data_off as u64, 4);
+        shdr(
+            &mut out,
+            shoff + 2 * SHDR,
+            7,
+            3,
+            0,
+            names_off as u64,
+            names.len() as u64,
+        );
+        out
+    }
+
+    fn temp_image(tag: &str, bytes: &[u8]) -> std::path::PathBuf {
+        let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "kuna-discovery-{tag}-{}-{id}.bin",
+            std::process::id()
+        ));
+        std::fs::write(&path, bytes).expect("write the discovery fixture");
+        path
+    }
+
+    #[test]
+    fn the_upx_magic_is_recognized_and_nothing_else_is() {
+        assert_eq!(detect_packer(b"....UPX!....."), Some("UPX"));
+        assert_eq!(detect_packer(b"UPX!"), Some("UPX"));
+        assert_eq!(detect_packer(b"a plain unpacked image, UPX-free"), None);
+        assert_eq!(detect_packer(b"UPX"), None, "the magic is four bytes");
+        assert_eq!(detect_packer(b""), None);
+    }
+
+    /// A section-header-stripped executable still shows its code through the
+    /// program headers, so zero functions there is a failure — and a packed one
+    /// is named, because that is the cause the caller can act on.
+    #[test]
+    fn a_packed_image_names_the_packer_in_the_failure() {
+        let packed = temp_image("packed", &stripped_executable(b"UPX!\x00\x00\x00\x00"));
+        let message = zero_discovery_error(packed.to_str().unwrap())
+            .expect("an executable image that yielded nothing is a failure");
+        assert!(message.contains("no functions"), "{message}");
+        assert!(message.contains("UPX-packed"), "{message}");
+        assert!(message.contains("unlace unpack"), "{message}");
+        std::fs::remove_file(packed).expect("remove the discovery fixture");
+
+        let plain = temp_image("plain", &stripped_executable(b"\x55\x48\x89\xe5\x5d\xc3"));
+        let message = zero_discovery_error(plain.to_str().unwrap())
+            .expect("an executable image that yielded nothing is a failure");
+        assert!(message.contains("no functions"), "{message}");
+        assert!(
+            !message.contains("packed"),
+            "no packer, no packer claim: {message}"
+        );
+        std::fs::remove_file(plain).expect("remove the discovery fixture");
+    }
+
+    /// The legitimate empty case: an image with no executable content has no
+    /// functions to find, so the empty inventory stays a success.
+    #[test]
+    fn an_image_with_no_code_keeps_its_honest_empty_answer() {
+        let bytes = data_only_object();
+        assert!(matches!(classify_code_evidence(&bytes), CodeEvidence::None));
+        let path = temp_image("dataonly", &bytes);
+        assert_eq!(zero_discovery_error(path.to_str().unwrap()), None);
+        std::fs::remove_file(path).expect("remove the discovery fixture");
+    }
+
+    /// Anything `object` cannot parse is not evidence of innocence: a run that
+    /// found nothing in it still failed.
+    #[test]
+    fn an_unparseable_image_is_still_a_failure() {
+        assert!(matches!(
+            classify_code_evidence(b"not an object file at all"),
+            CodeEvidence::Flagged
+        ));
+        assert!(matches!(classify_code_evidence(&[]), CodeEvidence::Flagged));
+    }
+
+    /// The packer shape: nothing flagged executable anywhere, and the entry
+    /// point in one of those data sections. Reporting `count: 0` in a
+    /// successful run's voice there is the thing this must not do — the image
+    /// says where execution starts, so the run failed.
+    #[test]
+    fn an_entry_point_in_a_data_section_is_still_executable_content() {
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../unlace-analysis/tests/fixtures/pe_datasection_entry_i386.exe");
+        let bytes = std::fs::read(&fixture).expect("the fixture is checked in");
+        let CodeEvidence::EntryPointOnly { entry, section } = classify_code_evidence(&bytes) else {
+            panic!("an all-data PE with an entry point is not the honest empty case");
+        };
+        assert_eq!(entry, 0x402001);
+        assert_eq!(section, "section .stub");
+
+        let message = zero_discovery_error(fixture.to_str().unwrap())
+            .expect("an image that declares an entry point and yielded nothing is a failure");
+        assert!(message.contains("no functions"), "{message}");
+        assert!(message.contains("0x402001"), "{message}");
+        assert!(message.contains("--define-function"), "{message}");
+    }
+
+    /// The checked-in x86-64 fixture the acceptance probes use: real code, real
+    /// sections — the shape that must fail loudly if discovery ever returns
+    /// nothing for it.
+    #[test]
+    fn a_real_fixture_carries_executable_content() {
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../unlace-analysis/tests/fixtures/aif_gap_x86_64");
+        let bytes = std::fs::read(fixture).expect("the fixture is checked in");
+        assert!(matches!(
+            classify_code_evidence(&bytes),
+            CodeEvidence::Flagged
+        ));
+        assert_eq!(detect_packer(&bytes), None);
+    }
+
+    /// The run-level `error` field is present on every document, so a consumer
+    /// reads it unconditionally rather than inferring failure from `count`.
+    #[test]
+    fn the_run_level_error_field_is_always_present() {
+        let healthy = functions_json(
+            "fixture",
+            &[],
+            0,
+            None,
+            None,
+            &|address| address,
+            &Default::default(),
+        );
+        assert!(healthy.contains("\"error\": null"), "{healthy}");
+        let failed = functions_json(
+            "fixture",
+            &[],
+            0,
+            Some("no functions discovered in fixture"),
+            None,
+            &|address| address,
+            &Default::default(),
+        );
+        assert!(
+            failed.contains("\"error\": \"no functions discovered in fixture\""),
+            "{failed}"
+        );
+        let decompiled = render_result_json(
+            "fixture",
+            &[],
+            &[],
+            Some("boom"),
+            &[],
+            &Default::default(),
+            &Default::default(),
+            Default::default(),
+        );
+        assert!(decompiled.contains("\"error\": \"boom\""), "{decompiled}");
+        assert!(
+            render_result_json(
+                "fixture",
+                &[],
+                &[],
+                None,
+                &[],
+                &Default::default(),
+                &Default::default(),
+                Default::default()
+            )
+            .contains("\"error\": null")
+        );
+    }
+
+    /// `--language` reaches the document through the same last-write-wins lookup
+    /// every other option uses.
+    #[test]
+    fn the_document_reports_the_selected_language() {
+        let options = vec![
+            ("setlanguage".into(), "rust-language".into()),
+            ("setlanguage".into(), "c-language".into()),
+        ];
+        assert!(
+            render_result_json(
+                "f",
+                &[],
+                &options,
+                None,
+                &[],
+                &Default::default(),
+                &Default::default(),
+                Default::default()
+            )
+            .contains("\"c-language\"")
+        );
+        assert!(
+            render_result_json(
+                "f",
+                &[],
+                &[],
+                None,
+                &[],
+                &Default::default(),
+                &Default::default(),
+                Default::default()
+            )
+            .contains("\"c-language\"")
+        );
+        let mut aliases = options.clone();
+        aliases.push(("outlang".into(), "go".into()));
+        assert!(
+            render_result_json(
+                "f",
+                &[],
+                &aliases,
+                None,
+                &[],
+                &Default::default(),
+                &Default::default(),
+                Default::default()
+            )
+            .contains("\"go-language\"")
+        );
+        aliases.push(("setlanguage".into(), "rust-language".into()));
+        assert!(
+            render_result_json(
+                "f",
+                &[],
+                &aliases,
+                None,
+                &[],
+                &Default::default(),
+                &Default::default(),
+                Default::default()
+            )
+            .contains("\"rust-language\"")
+        );
+    }
+}
+
+#[cfg(test)]
+mod mode_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEMP_ID: AtomicU64 = AtomicU64::new(0);
+
+    fn sparse_binary(size: u64) -> std::path::PathBuf {
+        let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
+        let path =
+            std::env::temp_dir().join(format!("kuna-auto-mode-{}-{id}.bin", std::process::id()));
+        let file = std::fs::File::create(&path).expect("create auto-mode fixture");
+        file.set_len(size).expect("size auto-mode fixture");
+        path
+    }
+
+    #[test]
+    fn omitted_and_explicit_auto_select_the_same_concrete_presets() {
+        for (size, concrete) in [
+            (0, "aggressive"),
+            (unlace_decomp::modes::AUTO_RELIABLE_MIN_BYTES, "reliable"),
+            (unlace_decomp::modes::AUTO_FAST_MIN_BYTES, "fast"),
+        ] {
+            let mut expected = vec![("ctypes".to_string(), "on".to_string())];
+            expected.extend(mode_override_pairs(concrete).unwrap());
+            for requested in [None, Some("auto")] {
+                let resolved = resolved_mode(requested, size).unwrap();
+                assert_eq!(resolved.name, concrete);
+                assert_eq!(resolved.options, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn explicit_concrete_mode_ignores_binary_metadata() {
+        let missing =
+            std::env::temp_dir().join(format!("kuna-auto-mode-missing-{}.bin", std::process::id()));
+        let options =
+            mode_options_for_binary(Some("fast"), missing.to_str().unwrap(), Vec::new()).unwrap();
+        assert_eq!(options, mode_override_pairs("fast").unwrap());
+    }
+
+    #[test]
+    fn shared_parsers_default_to_auto_and_keep_user_options_last() {
+        let path = sparse_binary(unlace_decomp::modes::AUTO_FAST_MIN_BYTES);
+        let binary = path.to_string_lossy().into_owned();
+        for cmd in ["decompile-all", "decompile-project", "functions"] {
+            let argv = vec![
+                binary.clone(),
+                "--option".into(),
+                "listing".into(),
+                "on".into(),
+            ];
+            let args = parse_args(&argv, cmd).unwrap();
+            let listing: Vec<&str> = args
+                .options
+                .iter()
+                .filter(|(name, _)| name == "listing")
+                .map(|(_, value)| value.as_str())
+                .collect();
+            assert_eq!(listing, vec!["off", "on"], "{cmd} precedence");
+        }
+        std::fs::remove_file(path).expect("remove auto-mode fixture");
+    }
+
+    #[test]
+    fn shared_surfaces_parse_arm_isa_override() {
+        let path = sparse_binary(1);
+        let binary = path.to_string_lossy().into_owned();
+        for cmd in [
+            "decompile-all",
+            "decompile-project",
+            "decompile-graph",
+            "functions",
+        ] {
+            let args = parse_args(&[binary.clone(), "--isa".into(), "thumb".into()], cmd).unwrap();
+            assert_eq!(args.isa, Some(ArmIsa::Thumb), "{cmd}");
+        }
+        let error = parse_args(&[binary, "--isa".into(), "mixed".into()], "functions")
+            .err()
+            .expect("invalid ISA must fail");
+        assert!(error.contains("expected auto, arm, or thumb"));
+        std::fs::remove_file(path).expect("remove auto-mode fixture");
+    }
+
+    #[test]
+    fn unfiltered_fast_batches_default_to_ten_seconds_per_function() {
+        let path = sparse_binary(unlace_decomp::modes::AUTO_FAST_MIN_BYTES);
+        let binary = path.to_string_lossy().into_owned();
+        for cmd in ["decompile-all", "decompile-project"] {
+            let args = parse_args(std::slice::from_ref(&binary), cmd).unwrap();
+            assert_eq!(
+                args.max_fn_seconds,
+                unlace_console::project::FAST_WHOLE_BINARY_FN_BUDGET_SECONDS,
+                "{cmd}"
+            );
+
+            let selected = parse_args(
+                &[
+                    binary.clone(),
+                    "--addr".into(),
+                    "0x1234".into(),
+                    "--mode".into(),
+                    "fast".into(),
+                ],
+                cmd,
+            )
+            .unwrap();
+            assert_eq!(
+                selected.max_fn_seconds,
+                unlace_console::project::DEFAULT_FN_BUDGET_SECONDS,
+                "{cmd} selected"
+            );
+            let named = parse_args(
+                &[
+                    binary.clone(),
+                    "--functions".into(),
+                    "sub_1234".into(),
+                    "--mode".into(),
+                    "fast".into(),
+                ],
+                cmd,
+            )
+            .unwrap();
+            assert_eq!(
+                named.max_fn_seconds,
+                unlace_console::project::DEFAULT_FN_BUDGET_SECONDS,
+                "{cmd} named"
+            );
+
+            let disabled = parse_args(
+                &[
+                    binary.clone(),
+                    "--mode".into(),
+                    "fast".into(),
+                    "--max-fn-seconds".into(),
+                    "0".into(),
+                ],
+                cmd,
+            )
+            .unwrap();
+            assert_eq!(disabled.max_fn_seconds, 0, "{cmd} explicit override");
+            let explicit = parse_args(
+                &[
+                    binary.clone(),
+                    "--mode".into(),
+                    "fast".into(),
+                    "--max-fn-seconds".into(),
+                    "17".into(),
+                ],
+                cmd,
+            )
+            .unwrap();
+            assert_eq!(explicit.max_fn_seconds, 17, "{cmd} explicit budget");
+        }
+
+        for mode in ["reliable", "aggressive"] {
+            let args = parse_args(
+                &[binary.clone(), "--mode".into(), mode.into()],
+                "decompile-all",
+            )
+            .unwrap();
+            assert_eq!(
+                args.max_fn_seconds,
+                unlace_console::project::DEFAULT_FN_BUDGET_SECONDS,
+                "{mode}"
+            );
+        }
+        let functions = parse_args(&[binary], "functions").unwrap();
+        assert_eq!(
+            functions.max_fn_seconds,
+            unlace_console::project::DEFAULT_FN_BUDGET_SECONDS
+        );
+        std::fs::remove_file(path).expect("remove auto-mode fixture");
+    }
+
+    #[test]
+    fn address_selection_skips_preset_discovery_but_names_do_not() {
+        let path = sparse_binary(unlace_decomp::modes::AUTO_FAST_MIN_BYTES);
+        let binary = path.to_string_lossy().into_owned();
+        let address_args = parse_args(
+            &[
+                binary.clone(),
+                "--addr".into(),
+                "0x1234".into(),
+                "--mode".into(),
+                "fast".into(),
+            ],
+            "decompile-project",
+        )
+        .unwrap();
+        assert_eq!(
+            last_option_value(&address_args.options, "fast_funcdisc"),
+            Some("off")
+        );
+
+        let explicit_args = parse_args(
+            &[
+                binary.clone(),
+                "--addr".into(),
+                "0x1234".into(),
+                "--mode".into(),
+                "fast".into(),
+                "--option".into(),
+                "fast_funcdisc".into(),
+                "on".into(),
+            ],
+            "decompile-project",
+        )
+        .unwrap();
+        assert_eq!(
+            last_option_value(&explicit_args.options, "fast_funcdisc"),
+            Some("on")
+        );
+
+        let named_args = parse_args(
+            &[
+                binary,
+                "--functions".into(),
+                "sub_1234".into(),
+                "--mode".into(),
+                "fast".into(),
+            ],
+            "decompile-project",
+        )
+        .unwrap();
+        assert_eq!(
+            last_option_value(&named_args.options, "fast_funcdisc"),
+            Some("on")
+        );
+        std::fs::remove_file(path).expect("remove auto-mode fixture");
+    }
+
+    #[test]
+    fn loadtime_gates_use_the_last_named_option() {
+        let options = vec![
+            ("ppcapu".into(), "on".into()),
+            ("ifuncfpret".into(), "on".into()),
+            ("macho-arm64e".into(), "on".into()),
+            ("ppcapu".into(), "off".into()),
+            ("ifuncfpret".into(), "off".into()),
+            ("macho-arm64e".into(), "off".into()),
+        ];
+        assert_eq!(last_option_value(&options, "ppcapu"), Some("off"));
+        assert_eq!(last_option_value(&options, "ifuncfpret"), Some("off"));
+        assert_eq!(last_option_value(&options, "macho-arm64e"), Some("off"));
+    }
+}
+
+#[cfg(test)]
+mod triage_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEMP_ID: AtomicU64 = AtomicU64::new(0);
+
+    /// `parse_args` reads the file's size to resolve the `auto` mode, so the
+    /// triage parse needs a real path — the bytes are never looked at.
+    fn sparse_binary() -> std::path::PathBuf {
+        let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
+        let path =
+            std::env::temp_dir().join(format!("kuna-triage-{}-{id}.bin", std::process::id()));
+        std::fs::File::create(&path)
+            .expect("create triage fixture")
+            .set_len(1024)
+            .expect("size triage fixture");
+        path
+    }
+
+    fn parse(cmd: &str, extra: &[&str]) -> Result<(Args, Filters), String> {
+        let path = sparse_binary();
+        let mut argv = vec![path.to_string_lossy().into_owned()];
+        argv.extend(extra.iter().map(|s| (*s).to_string()));
+        let parsed = parse_args_with_filters(&argv, cmd);
+        std::fs::remove_file(path).expect("remove triage fixture");
+        parsed
+    }
+
+    /// `Args`/`Filters` are not `Debug`, so a rejected parse is unwrapped here.
+    fn err(parsed: Result<(Args, Filters), String>) -> String {
+        match parsed {
+            Ok(_) => panic!("expected the parse to be rejected"),
+            Err(e) => e,
+        }
+    }
+
+    #[test]
+    fn sort_keys_are_the_three_documented_ones() {
+        assert_eq!(SortKey::parse("addr").unwrap(), SortKey::Addr);
+        assert_eq!(SortKey::parse("ADDRESS").unwrap(), SortKey::Addr);
+        assert_eq!(SortKey::parse(" size ").unwrap(), SortKey::Size);
+        assert_eq!(SortKey::parse("name").unwrap(), SortKey::Name);
+        assert!(SortKey::parse("entropy").is_err());
+        assert_eq!(SortKey::default(), SortKey::Addr);
+    }
+
+    #[test]
+    fn rust_signature_application_keeps_discovery_independent_of_selection() {
+        let common = [
+            "--mode",
+            "reliable",
+            "--apply-rust-signatures",
+            "trusted.json",
+        ];
+        let (inventory, _) = parse("functions", &common).unwrap();
+        let flags: Vec<_> = common.into_iter().chain(["--addr", "0x1000"]).collect();
+        let (addressed, _) = parse("decompile", &flags).unwrap();
+        assert_eq!(inventory.options, addressed.options);
+        assert_eq!(
+            addressed.apply_rust_signatures.as_deref(),
+            Some("trusted.json")
+        );
+        for extra in [
+            vec!["--jobs", "2"],
+            vec!["--jobs", "auto"],
+            vec!["--apply-rust-signatures", "second.json"],
+            vec![
+                "--summary",
+                "--json",
+                "--rust-signature-manifest",
+                "report.json",
+            ],
+            vec!["--assert", "bytes 0x1000 90"],
+        ] {
+            let flags: Vec<_> = common.into_iter().chain(extra).collect();
+            assert!(parse("functions", &flags).is_err(), "{flags:?}");
+        }
+        for command in ["decompile-all", "decompile-project", "decompile-graph"] {
+            assert!(parse(command, &common).is_err(), "{command}");
+        }
+    }
+
+    #[test]
+    fn rust_signature_manifest_requires_the_unmodified_json_summary_surface() {
+        let valid = [
+            "--summary",
+            "--json",
+            "--rust-signature-manifest",
+            "manifest.json",
+        ];
+        let (_, filters) = parse("functions", &valid).unwrap();
+        assert_eq!(
+            filters.rust_signature_manifest.as_deref(),
+            Some("manifest.json")
+        );
+        for cmd in [
+            "decompile-all",
+            "decompile-project",
+            "decompile-graph",
+            "decompile",
+        ] {
+            assert!(parse(cmd, &valid).is_err(), "{cmd}");
+        }
+        for flags in [
+            vec!["--rust-signature-manifest", "manifest.json"],
+            vec!["--summary", "--rust-signature-manifest", "manifest.json"],
+            vec!["--json", "--rust-signature-manifest", "manifest.json"],
+        ] {
+            assert!(
+                err(parse("functions", &flags)).contains("requires functions --summary --json")
+            );
+        }
+        for extra in [
+            vec!["--rust-signature-manifest", "second.json"],
+            vec!["--raw-image"],
+            vec!["--slice", "x86_64"],
+            vec!["--target", "x86:LE:64:default"],
+            vec!["--isa", "arm"],
+            vec!["--define-function", "0x1000=probe"],
+            vec!["--option", "dyldimage", "probe"],
+        ] {
+            let flags: Vec<_> = valid.iter().copied().chain(extra).collect();
+            assert!(parse("functions", &flags).is_err(), "{flags:?}");
+        }
+    }
+
+    /// An unnarrowed run must keep every pre-existing behaviour, so `narrows()`
+    /// is what gates the whole feature and has to be false by default.
+    #[test]
+    fn a_bare_run_narrows_nothing() {
+        let (_, filters) = parse("functions", &[]).unwrap();
+        assert!(!filters.narrows());
+        assert!(!filters.summary);
+        for flag in [
+            vec!["--filter", "main"],
+            vec!["--min-size", "1"],
+            vec!["--max-size", "1"],
+            vec!["--reachable-from", "main"],
+            vec!["--limit", "1"],
+            vec!["--sort", "size"],
+        ] {
+            let (_, filters) = parse("functions", &flag).unwrap();
+            assert!(filters.narrows(), "{flag:?}");
+        }
+    }
+
+    #[test]
+    fn the_triage_flags_parse_on_both_whole_binary_surfaces() {
+        for cmd in ["functions", "decompile-all"] {
+            let (_, filters) = parse(
+                cmd,
+                &[
+                    "--filter",
+                    "^auth",
+                    "--min-size",
+                    "16",
+                    "--max-size",
+                    "256",
+                    "--reachable-from",
+                    "0x1000",
+                    "--sort",
+                    "size",
+                    "--limit",
+                    "4",
+                    "--summary",
+                ],
+            )
+            .unwrap_or_else(|e| panic!("{cmd}: {e}"));
+            assert!(
+                filters.name.as_ref().unwrap().is_match("authenticate"),
+                "{cmd}"
+            );
+            assert!(!filters.name.as_ref().unwrap().is_match("deauth"), "{cmd}");
+            assert_eq!(filters.min_size, Some(16), "{cmd}");
+            assert_eq!(filters.max_size, Some(256), "{cmd}");
+            assert_eq!(filters.reachable_from.as_deref(), Some("0x1000"), "{cmd}");
+            assert_eq!(filters.sort, SortKey::Size, "{cmd}");
+            assert_eq!(filters.limit, Some(4), "{cmd}");
+            assert!(filters.summary, "{cmd}");
+            assert_eq!(filters.largest_wanted(), 4, "{cmd}");
+        }
+    }
+
+    /// `decompile-project` does not act on a narrowing, so it must reject one
+    /// rather than silently discard it.
+    #[test]
+    fn decompile_project_rejects_the_triage_flags() {
+        let e = err(parse("decompile-project", &["--filter", "main"]));
+        assert!(e.contains("unknown option --filter"), "{e}");
+        assert!(parse("decompile-project", &["--summary"]).is_err());
+    }
+
+    #[test]
+    fn bad_triage_values_are_rejected_at_parse_time() {
+        assert!(parse("functions", &["--filter", "("]).is_err());
+        assert!(parse("functions", &["--limit", "-1"]).is_err());
+        assert!(parse("functions", &["--min-size", "big"]).is_err());
+        let e = err(parse("functions", &["--min-size", "10", "--max-size", "9"]));
+        assert!(e.contains("greater than --max-size"), "{e}");
+        assert!(parse("functions", &["--min-size", "9", "--max-size", "9"]).is_ok());
+    }
+
+    /// The histogram has to partition the whole size domain: a function that
+    /// falls in no bucket would silently vanish from the summary.
+    #[test]
+    fn the_size_buckets_partition_every_extent() {
+        for size in [
+            0u64,
+            1,
+            15,
+            16,
+            63,
+            64,
+            255,
+            256,
+            1023,
+            1024,
+            4095,
+            4096,
+            u64::MAX,
+        ] {
+            let hits = SIZE_BUCKETS
+                .iter()
+                .filter(|(_, lo, hi)| size >= *lo && size <= *hi)
+                .count();
+            assert_eq!(hits, 1, "size {size} lands in {hits} buckets");
+        }
+        assert_eq!(DEFAULT_SUMMARY_LARGEST, 10);
+    }
+}

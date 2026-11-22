@@ -21,7 +21,7 @@
     and `LoadLibraryW` lost its argument.
 
     The fixtures are
-    decompiler/crates/kuna-analysis/tests/fixtures/libcnames_win32_{i386,x86_64}.exe
+    decompiler/crates/unlace-analysis/tests/fixtures/libcnames_win32_{i386,x86_64}.exe
     (clang 14 -O2 for i686-pc-windows-msvc and x86_64-pc-windows-msvc,
     lld-link; source and recipe in libcnames_win32.c).
 
@@ -40,7 +40,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/libcnames_win32_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/libcnames_win32_i386.exe</com>
   <com>read symbols</com>
   <com>option libcnames off</com>
   <com>lo fu sub_4010e0</com>
@@ -59,7 +59,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/libcnames_win32_x86_64.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/libcnames_win32_x86_64.exe</com>
   <com>read symbols</com>
   <com>lo fu sub_140001150</com>
   <com>decompile</com>

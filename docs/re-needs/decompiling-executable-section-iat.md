@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis, decompiler/crates/kuna-console, decompiler/crates/kuna-cli, decompiler/crates/kuna-wasm]
+touches: [decompiler/crates/unlace-analysis, decompiler/crates/unlace-console, decompiler/crates/unlace-cli, decompiler/crates/unlace-wasm]
 scope: small
 regression_of: null
 pr: "588"
@@ -67,11 +67,11 @@ Inspect GetDlgItemTextA as an import without decoding its four-byte pointer slot
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_iatincode_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe",
     "binary_sha256": "fc9a367d8615741a122c5b0dbd3d3042f408cbce93451a796bcc45f7710c719b",
     "binary_size": 4608,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_iatincode_i386.exe"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe"
   },
   "timeout_s": 60,
   "cmd": [
@@ -123,9 +123,9 @@ _not yet refuted_
 
 MEASURED ON b9029a8f (release binaries rebuilt 05:39).
 
-THE CONTROL THAT OVERTURNS IT. decompiler/crates/kuna-analysis/tests/fixtures/pe_imports.exe puts its IAT in .idata at 0x14000d000, flags CONTENTS ALLOC LOAD DATA -- WRITABLE and NOT EXECUTABLE, the exact opposite of the filed condition. kuna registers 50 functions inside that .idata range (DeleteCriticalSection 0x14000d1dc, EnterCriticalSection 0x14000d1e4, GetLastError 0x14000d1ec, ...), and kuna decompile <fixture> 0x14000d1ec --addr emits the SAME class of invented arithmetic body: "v2 = *v8; *(unsigned int *)CONCAT71(v3,v2) = *(int *)CONCAT71(v3,v2) << (v4 & 0x1f) | ...; *(char *)CONCAT71(v3,v2) = *(char *)CONCAT71(v3,v2) + v2;". Pointer arithmetic and a memory write off decoded import-pointer bytes, in a non-executable data section. Section permission is NOT the discriminator. A builder who adds an is-executable guard changes nothing on either binary.
+THE CONTROL THAT OVERTURNS IT. decompiler/crates/unlace-analysis/tests/fixtures/pe_imports.exe puts its IAT in .idata at 0x14000d000, flags CONTENTS ALLOC LOAD DATA -- WRITABLE and NOT EXECUTABLE, the exact opposite of the filed condition. kuna registers 50 functions inside that .idata range (DeleteCriticalSection 0x14000d1dc, EnterCriticalSection 0x14000d1e4, GetLastError 0x14000d1ec, ...), and unlace decompile <fixture> 0x14000d1ec --addr emits the SAME class of invented arithmetic body: "v2 = *v8; *(unsigned int *)CONCAT71(v3,v2) = *(int *)CONCAT71(v3,v2) << (v4 & 0x1f) | ...; *(char *)CONCAT71(v3,v2) = *(char *)CONCAT71(v3,v2) + v2;". Pointer arithmetic and a memory write off decoded import-pointer bytes, in a non-executable data section. Section permission is NOT the discriminator. A builder who adds an is-executable guard changes nothing on either binary.
 
-BOTH SHIPPED OPTIONS ARE PROVEN INNOCENT on the reported command. kuna decompile crypto4.exe GetDlgItemTextA emits the identical CARRY1 body under --option litpoolconst off AND under --option peimportcall off. So this is NOT the constant-fold defect its sibling turned out to be (see pe-import-calls-become, UPHELD, cause litpoolconst) -- the two needs do not share a root cause, only a binary.
+BOTH SHIPPED OPTIONS ARE PROVEN INNOCENT on the reported command. unlace decompile crypto4.exe GetDlgItemTextA emits the identical CARRY1 body under --option litpoolconst off AND under --option peimportcall off. So this is NOT the constant-fold defect its sibling turned out to be (see pe-import-calls-become, UPHELD, cause litpoolconst) -- the two needs do not share a root cause, only a binary.
 
 WHAT IS ACTUALLY HAPPENING, and why the other clause is misframed. It is not that "function-body selection does not exclude known IAT slots". kuna's PE loader POSITIVELY ASSERTS that each IAT slot is a function: loader/pe_iat.rs registers a FunctionSymbol at every slot VA, and kuna_peimportcall.rs:28-31 says so in as many words -- "ActionDeindirect resolves it through the FunctionSymbol pe_iat already registered at the slot VA... kuna's query_function keys on the Varnode's own address rather than upstream's ExternRefSymbol::refaddr indirection, so the slot-VA registration lines up without a second symbol." THE SLOT-VA FUNCTION REGISTRATION IS LOAD-BEARING FOR DIV-57. Deleting it, or teaching body selection to skip IAT slots wholesale, breaks peimportcall's import binding on every PE. That is the trap in the filed wording and it is why this reads overturned rather than upheld-with-detail.
 
@@ -133,7 +133,7 @@ The real gap is narrower: an import is modelled as a function whose ENTRY is its
 
 REDIRECT, not a proven line: make the refusal at the decompile entry point, on the fact that the target is a known import slot (loader/pe_iat.rs:93 resolve_pe_import_slots already returns exactly those ranges), and keep the symbol. An import has no body in this image by definition, so declining with the import's identity -- name, ordinal, DLL -- is strictly more useful to an agent than four bytes of decoded pointer.
 
-A SECOND OBSERVATION THE CONTROL SURFACED, not this need but adjacent: on the control fixture, kuna decompile <fixture> GetLastError errors with "selector is ambiguous; candidates: GetLastError at synthetic 0x1400079f8, GetLastError at synthetic 0x14000d1ec" -- the thunk veneer and the IAT slot both carry the name -- AND EXITS 0. A name-selector error path returning success is its own hazard for a scripted agent.
+A SECOND OBSERVATION THE CONTROL SURFACED, not this need but adjacent: on the control fixture, unlace decompile <fixture> GetLastError errors with "selector is ambiguous; candidates: GetLastError at synthetic 0x1400079f8, GetLastError at synthetic 0x14000d1ec" -- the thunk veneer and the IAT slot both carry the name -- AND EXITS 0. A name-selector error path returning success is its own hazard for a scripted agent.
 
 ACCEPTANCE IS PERMISSIVE, READ IT BEFORE BUILDING. It has no exit_code clause and no positive clause: only stdout_absent of the pointer-arithmetic shape and of CARRY1. Any refusal, any error, or empty stdout passes it. That matches this need's stated intent (the T_DEDUP note calls this half "a CLI refusal"), so it is not wrong -- but it cannot distinguish a good refusal from a suppressed one, and a builder must not satisfy it by making the emitter quieter in general. Pair it with the sibling's acceptance, which is strict.
 
@@ -143,7 +143,7 @@ DISPATCH CONSEQUENCE: the T_DEDUP note's stated shared root condition, "IAT data
   context supplies no bin" -- clauses `[]`, repeat 0 -- and two consecutive `B_PLAN` ticks had to
   skip it because an acceptance that cannot run can never flip, however good the fix. The binary is
   identified from the filing tester's own `toolcalls.jsonl`, by an argv that matches the probe cmd
-  exactly, not by guessing from the arena: `kuna decompile target/GiTS_2010_Crypto_Crackmes.zip.__x/crypto4.exe GetDlgItemTextA`. Bound to
+  exactly, not by guessing from the arena: `unlace decompile target/GiTS_2010_Crypto_Crackmes.zip.__x/crypto4.exe GetDlgItemTextA`. Bound to
   `bin/GiTS_2010_Crypto_Crackmes.zip.__x/crypto4.exe` (sha256 `f88284c9bfe6e8581261ee224395c83d79507b26a64f81614631d78498cf63b9`, 123904 bytes,
   source `dataset`, resolved as `challenges/5ab77f6433c5d40ad448cae1/<rel>`). `target` is not part of
   `probe_id`/`acceptance_id` (they hash `cmd`+`expect` only), so both ids are unchanged and no
@@ -168,7 +168,7 @@ DISPATCH CONSEQUENCE: the T_DEDUP note's stated shared root condition, "IAT data
   name/address paths also pass. Closure metadata is durable only when PR #588
   merges.
 - final review: corrected `touches` to the four crates changed by the implementation:
-  `kuna-analysis`, `kuna-console`, `kuna-cli`, and `kuna-wasm`; `kuna-decomp` is
+  `unlace-analysis`, `unlace-console`, `unlace-cli`, and `unlace-wasm`; `unlace-decomp` is
   not changed. Scope remains `small` because it classifies implementation
   complexity: the body-eligibility policy is narrow and centralized, while the
   CLI and WASM changes are surface adapters for that same policy.

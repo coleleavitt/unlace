@@ -4,7 +4,7 @@
     kuna issue testcase: the Listing walk's unmapped-CALL-target entry
     suppression.
 
-    Issue:      kuna-analysis-unmappedentry - `kuna functions` on
+    Issue:      unlace-analysis-unmappedentry - `unlace functions` on
                 crackmes.one/66fd63059b533b4c22bd0b91 (32-bit ELF,
                 "Overlapping / misaligned instructions") reported
                 sub_fe6dca9f at 0xfe6dca9f, size 0, in a 25 KB image whose
@@ -21,7 +21,7 @@
 
     The end-to-end proof (no phantom entry) needs a real object and lives in
     the cargo gate
-    `decompiler/crates/kuna-console/tests/verify_unmappedentry.rs`, over the
+    `decompiler/crates/unlace-console/tests/verify_unmappedentry.rs`, over the
     `unmapped_call_x86_64` fixture: the same overlapping-call shape reduced to
     22 bytes of .text.
 

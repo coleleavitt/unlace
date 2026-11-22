@@ -7,7 +7,7 @@
     address.  Its STORE pointers pass a chain of MULTIEQUALs and additions;
     the stackstoreguard walk back along a pointer's definitions
     (kuna_storereach.rs pointer_pieces) visited every path, which never
-    finished, and kuna decompile-all hung on the binary even with
+    finished, and unlace decompile-all hung on the binary even with
     max-fn-seconds set.  The walk now remembers what each Varnode at each
     depth gave, so it visits each value once.  Stage: P3 heritage
     (stackstoreguard store windows) and P6 layout.  The assertion only

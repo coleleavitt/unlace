@@ -31,7 +31,7 @@
     NOT storage the prototype model would pass an argument in. RSI is; the local
     frame slot a callee-saved restore reads is not, so the phantom this rule
     exists to kill stays killed (pinned by
-    kuna-console/tests/verify_return_uncomputed.rs).
+    unlace-console/tests/verify_return_uncomputed.rs).
 -->
 <bytechunk space="ram" offset="0x10f9" readonly="true">
 4889f2488d4701c3488d4701488d547607c3

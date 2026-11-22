@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/checker_stack_aggregate_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/checker_stack_aggregate_x86_64",
     "binary_sha256": "92968f535eaaa3dbf064699e5fcbe1e65ddd6456aa7c46495b26e1d63b9a9160",
     "binary_size": 10808,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/checker_stack_aggregate_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/checker_stack_aggregate_x86_64",
     "selector": "stack_aggregate",
     "selector_kind": "name"
   },

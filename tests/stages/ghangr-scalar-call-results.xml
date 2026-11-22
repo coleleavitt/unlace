@@ -3,7 +3,7 @@
      off/on passes therefore remain negative controls, and an explicit callee
      prototype keeps the existing cast path. The positive recovered-callee
      witnesses are tests/cli/scalar-call-results-{go,rust}.json and the native
-     kuna-cli scalar_call_results integration test, using this same authored ELF.
+     unlace-cli scalar_call_results integration test, using this same authored ELF.
      Neither the callee nor its prototype is replaced in those native checks. -->
 <decompilertest>
 <binaryimage arch="x86:LE:64:default:gcc">
@@ -12,7 +12,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/scalar_call_results_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/scalar_call_results_x86_64</com>
   <com>read symbols</com>
   <com>map prototype narrow_bool bool narrow_bool(bool skip,uint8 value);</com>
   <com>option outlang rust</com>

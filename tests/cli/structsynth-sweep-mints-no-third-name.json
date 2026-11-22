@@ -17,11 +17,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/structsynthchain_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/structsynthchain_x86_64",
     "binary_sha256": "6dd4ba2be931f9ee31ba0d636613aad25cf7e40646c2e2df0ade0dbb740501c7",
     "binary_size": 15792,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/structsynthchain_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/structsynthchain_x86_64",
     "selector": "fa",
     "selector_kind": "name"
   },

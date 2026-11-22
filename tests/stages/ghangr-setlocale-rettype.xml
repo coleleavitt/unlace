@@ -12,7 +12,7 @@
     against an undefined.  Root cause: a missing libc prototype.
 
     The fix curates `char *setlocale(int, const char *)` into the built-in libc
-    prototype table (kuna-analysis `s1_protos`, the `ApplyDataArchiveAnalyzer`
+    prototype table (unlace-analysis `s1_protos`, the `ApplyDataArchiveAnalyzer`
     analog).  A binary that imports `setlocale` then gets the call typed: its
     NULL `locale` argument renders as a typed `(char *)0x0` and the result is a
     `char *`.  See docs/features/setlocale-rettype/analysis.md.

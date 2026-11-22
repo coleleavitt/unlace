@@ -3,7 +3,7 @@
 <!--
     narrowret: a call reads the narrow value its callee returns (Thumb-2).
 
-    The image is decompiler/crates/kuna-analysis/tests/fixtures/narrowret.c
+    The image is decompiler/crates/unlace-analysis/tests/fixtures/narrowret.c
     (clang for thumbv7em-none-eabi, cortex-m4, -O2), its calls
     resolved at 0x10000.  `next_byte` returns `uxtb r0, r0` and `above` a
     comparison, both zero-extended into r0 as AAPCS requires; `larger_byte`
@@ -16,7 +16,7 @@
     THIS FIXTURE IS THE NEGATIVE CONTROL.  A callee states its return only
     after its own decompile in a whole-binary `decompile-all`
     (`kuna_narrowret::record`, called where `park_recovered_proto` is true,
-    which only decompiler/crates/kuna-cli/src/decompile_all.rs sets).  This
+    which only decompiler/crates/unlace-cli/src/decompile_all.rs sets).  This
     harness decompiles ONE function from a byte image, so nothing is stated:
     each callee still narrows its own return exactly as before (#1, #2), each
     call output stays the whole register (#3, #4, #5), and the sign-extended
@@ -26,7 +26,7 @@
     The POSITIVE witnesses run the same objects through `decompile-all`:
     tests/cli/narrowret-holds-a-narrow-call-result-narrow.json (on) and
     tests/cli/narrowret-off-keeps-the-register-wide-call-result.json (off),
-    and decompiler/crates/kuna-cli/tests/narrow_ret.rs, which also compiles the
+    and decompiler/crates/unlace-cli/tests/narrow_ret.rs, which also compiles the
     printed C of both arms and checks it computes what the binary computes.
 
     Stage / sub-stage: P4 "output-prototype".  Pass 1 (default on) and pass 2

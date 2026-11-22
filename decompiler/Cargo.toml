@@ -1,12 +1,12 @@
 # Workspace for the decompiler, SLEIGH toolchain, and frontends.
 
 [workspace]
-resolver = "2"
+resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 rust-version = "1.90"
 license = "Apache-2.0"
 publish = false
@@ -29,13 +29,13 @@ undname = "2.1"
 gimli = { version = "0.33", default-features = false, features = ["read", "std"] }
 pdb = "0.8"
 flirt-sig = { version = "=0.2.1", default-features = false }
-kuna-base = { path = "crates/kuna-base" }
-kuna-num = { path = "crates/kuna-num" }
-kuna-sleigh = { path = "crates/kuna-sleigh" }
-kuna-decomp = { path = "crates/kuna-decomp" }
-kuna-analysis = { path = "crates/kuna-analysis" }
-kuna-console = { path = "crates/kuna-console" }
-kuna-slacomp = { path = "crates/kuna-slacomp" }
+unlace-base = { path = "crates/unlace-base" }
+unlace-num = { path = "crates/unlace-num" }
+unlace-sleigh = { path = "crates/unlace-sleigh" }
+unlace-decomp = { path = "crates/unlace-decomp" }
+unlace-analysis = { path = "crates/unlace-analysis" }
+unlace-console = { path = "crates/unlace-console" }
+unlace-slacomp = { path = "crates/unlace-slacomp" }
 
 [workspace.lints.clippy]
 # Ordered collections keep output decisions deterministic; see clippy.toml.

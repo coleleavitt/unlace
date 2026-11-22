@@ -37,7 +37,7 @@ Mode sweep (bash O2-noinline stripped is 1.31 MB, so `auto` -> `reliable` = exac
 benchmark's option surface):
 
 ```
-$ kuna decompile-all .../O2-noinline/bash/stripped/bash --json --addr 0x34460 [<mode>]
+$ unlace decompile-all .../O2-noinline/bash/stripped/bash --json --addr 0x34460 [<mode>]
 []                 loc 37  ifs 4  gotos 0
 [--mode reliable]  loc 37  ifs 4  gotos 0
 [--mode aggressive]loc 37  ifs 4  gotos 0
@@ -124,7 +124,7 @@ diamonds into a boolean assignment"), default-ON and mode-independent. Ghidra st
 re-rolled only *one* of the three identical diamonds, and it still does today —
 
 ```
-$ kuna decompile-all .../O0/bash/stripped/bash --json --addr 0x34684
+$ unlace decompile-all .../O0/bash/stripped/bash --json --addr 0x34684
   ... if (chain) v4 = 1; else { v4 = 0; }        <- missed
   ... v2 = (chain);                              <- re-rolled
   ... if (chain) v2 = 1; else { v2 = 0; }        <- missed

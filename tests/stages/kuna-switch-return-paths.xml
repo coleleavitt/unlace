@@ -11,7 +11,7 @@
     Both P8 structurers and returndup on/off must preserve case 3 (#1).
     The CLI native round trip additionally checks all three byte writes,
     duplicate return entries, separate RETs, signed guards and a post-switch
-    write. Bytes assembled from kuna-cli/tests/fixtures/switch_return_paths.S.
+    write. Bytes assembled from unlace-cli/tests/fixtures/switch_return_paths.S.
 -->
 <binaryimage arch="x86:LE:64:default:gcc">
 <bytechunk space="ram" offset="0x401000" readonly="true">

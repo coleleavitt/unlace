@@ -41,8 +41,8 @@ echo "== coverage 1/4: cargo workspace suite =="
 cargo test --workspace --no-fail-fast || fail=1
 
 echo "== coverage 2/4..3/4: datatest + stages corpora =="
-cargo build --release -p kuna-cli -p kuna-harness -p kuna-console
-KUNA="$TARGET/release/kuna"
+cargo build --release -p unlace-cli -p unlace-harness -p unlace-console
+KUNA="$TARGET/release/unlace"
 export KUNA_DECOMP_TEST="$TARGET/release/decomp_test_dbg"
 (cd "$ROOT" && "$KUNA" test --datatests --baseline docs/baseline.json) || fail=1
 (cd "$ROOT" && "$KUNA" test --datatests --datatests-dir tests/stages \

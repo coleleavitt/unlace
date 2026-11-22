@@ -28,14 +28,14 @@
     function from a byte image: no callee was decompiled first, `target` has
     stated nothing about itself, and a rule that adds an argument may not read
     silence as evidence.  `park_recovered_proto` is written true only in
-    decompiler/crates/kuna-cli/src/decompile_all.rs; the console paths this
-    harness runs through (kuna-console/src/project.rs, project_stream.rs) pass
+    decompiler/crates/unlace-cli/src/decompile_all.rs; the console paths this
+    harness runs through (unlace-console/src/project.rs, project_stream.rs) pass
     false, so no stage test can put a parked prototype in front of the rule.
     Both passes therefore render the forwarding functions without the
     parameter.
 
     The POSITIVE witness is the same code as a real program,
-    decompiler/crates/kuna-analysis/tests/fixtures/passthrough_x86_64 (source
+    decompiler/crates/unlace-analysis/tests/fixtures/passthrough_x86_64 (source
     beside it), under `make test-cli`:
     tests/cli/passthrough-gives-a-forwarding-function-its-parameter.json
     renders `char * sub_401019(char *a0) { return sub_401000(a0); }` and
@@ -89,7 +89,7 @@ b83c000000bf010000000f05f4
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/go_live_forward_amd64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/go_live_forward_amd64</com>
   <com>read symbols</com>
   <com>lo fu forward_word</com>
   <com>decompile</com>

@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli]
+touches: [decompiler/crates/unlace-cli]
 scope: small
 regression_of: null
 pr: 734
@@ -25,7 +25,7 @@ reject_reason: null
 
 ## Symptom
 
-`kuna functions --summary --json` is the first call on an unknown binary, and it says nothing
+`unlace functions --summary --json` is the first call on an unknown binary, and it says nothing
 when native decompilation is the wrong tool. A PyInstaller bundle (Flare-On 12 `chat_client`,
 `DrillBabyDrill.exe`) orients as 182 / 958 ordinary C functions of the bootloader; the Python
 program, and the version needed to decompile its bytecode, sit in the CArchive cookie at the end of
@@ -40,11 +40,11 @@ decompiling the wrapper before it realises which tool it needed.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pyinstaller_cookie_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64",
     "binary_sha256": "aecc729c1f63c2f66fc8a2c3b9563e4db09aff86f4ba803d14bb5cc1f060ce92",
     "binary_size": 5128,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pyinstaller_cookie_x86_64"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64"
   },
   "timeout_s": 60,
   "cmd": [
@@ -74,11 +74,11 @@ decompiling the wrapper before it realises which tool it needed.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pyinstaller_cookie_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64",
     "binary_sha256": "aecc729c1f63c2f66fc8a2c3b9563e4db09aff86f4ba803d14bb5cc1f060ce92",
     "binary_size": 5128,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pyinstaller_cookie_x86_64"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64"
   },
   "timeout_s": 60,
   "cmd": [
@@ -103,7 +103,7 @@ decompiling the wrapper before it realises which tool it needed.
       "note:"
     ]
   },
-  "notes": "The fixture is arraycoverwidth_x86_64 with the 88-byte PyInstaller CArchive cookie appended (generator: kuna-analysis/tests/fixtures/pyinstaller_cookie_x86_64.py). Dataset witnesses: Flare-On 12 chat_client (PyInstaller 3.12 ELF) and DrillBabyDrill.exe (PyInstaller 3.13 PE); both report the bundle once this passes."
+  "notes": "The fixture is arraycoverwidth_x86_64 with the 88-byte PyInstaller CArchive cookie appended (generator: unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64.py). Dataset witnesses: Flare-On 12 chat_client (PyInstaller 3.12 ELF) and DrillBabyDrill.exe (PyInstaller 3.13 PE); both report the bundle once this passes."
 }
 ```
 
@@ -116,7 +116,7 @@ decompiling the wrapper before it realises which tool it needed.
 
 ## Refutation
 
-_upheld: the summary document has no field for it, and no option in `kuna catalog --json` adds one._
+_upheld: the summary document has no field for it, and no option in `unlace catalog --json` adds one._
 
 ## Reference
 

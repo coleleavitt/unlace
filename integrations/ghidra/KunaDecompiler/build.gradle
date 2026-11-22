@@ -45,12 +45,12 @@ println "KunaDecompiler: building against Ghidra install " + ghidraInstallDir
 
 // Gradle 9 builds reproducible archives by default, normalizing every zip entry to
 // 0644 -- which strips the exec bit Ghidra's extension installer re-applies at
-// install time, shipping kuna_ghidra binaries that cannot spawn. Pin 0755 on them
+// install time, shipping unlace_ghidra binaries that cannot spawn. Pin 0755 on them
 // regardless of Gradle version or staged file modes (the API exists since 8.3;
 // Gradle 8 preserved source modes anyway).
 tasks.named('buildExtension') {
 	eachFile { f ->
-		if (f.name == 'kuna_ghidra') {
+		if (f.name == 'unlace_ghidra') {
 			f.permissions { unix('rwxr-xr-x') }
 		}
 	}

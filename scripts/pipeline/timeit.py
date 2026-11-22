@@ -4,7 +4,7 @@ Every shipped feature must record what its option costs at decompile time. We ti
 feature's target function decompiled with the option OFF vs ON, ``repeat`` times each, and
 report the **median** of each plus ``delta_pct = (on - off) / off * 100``.
 
-Why the delta is the honest number: each ``kuna decompile`` is a fresh ``decomp_dbg``
+Why the delta is the honest number: each ``unlace decompile`` is a fresh ``decomp_dbg``
 subprocess whose wall-clock includes process spawn + ``load file`` + ``read symbols`` +
 SLEIGH spec mmap, which dwarf the decompile step. But OFF and ON share that exact fixed
 cost, so subtracting them cancels load and isolates the option's marginal cost -- with no

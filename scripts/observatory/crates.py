@@ -1,12 +1,12 @@
 """Workspace crate inventory (cargo metadata --no-deps) plus line counts for
-tracked Rust sources, per crate and per kuna-decomp phase folder/module."""
+tracked Rust sources, per crate and per unlace-decomp phase folder/module."""
 import json
 import subprocess
 from pathlib import Path
 
 from scripts.paths import repo_root
 
-DECOMP = "kuna-decomp"
+DECOMP = "unlace-decomp"
 
 
 def _tracked_rs(root: Path) -> list:

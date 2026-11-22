@@ -14,7 +14,7 @@ rounds: [9]
 first_seen_round: 9
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-decomp]
+touches: [decompiler/crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: null
@@ -132,7 +132,7 @@ _not yet refuted_
 - captain T_DEDUP r9: MERGED BY HAND from 3 observations on 3 challenges/3 testers (5e51836e `0x400f30`, 6a095817 `sub_140001740` memcpy loses its 3rd argument, 6a148dd6 `sub_140007540` init_state loses key/length/seed). All three run `--option calleearity on --option varargstackargs on` and still get a truncated argument run at the call site; the witness is the ELF one because its probe needs no `--define-function` and no `funcboundflow off`. Two things for T_REFUTE: (a) the two non-witness halves lose their own acceptance clauses and will close for free, and the witness is a TOTAL loss (zero args) while the others are PARTIAL (last argument dropped) -- that may be two root causes; (b) the round-4 need `argument-recovery-options-still` (closed, 3 instances) is the same family, so if this reproduces on ITS binary it is a genuine regression and should be linked -- I did not set `regression_of` without that evidence. The 6a095817 member arrived carrying `regression_of: call-args-discarded` (closed); witness selection dropped it, which is deliberate -- verify before restoring it.
 - round 9 REFUTER: hypothesis **overturned** (was inconclusive). captain T_REFUTE r9 (in-tick, no refuter role in the launcher). SYMPTOM STANDS, FILED CAUSE IS WRONG, AND THE MECHANISM IS NOW PINNED TO ONE LINE.
 
-REPRODUCED. On 8df2a52e, `kuna decompile <arena>/cr4ckm3_0x 0x400f30` emits `sub_417f80();` at line 47 and RDI really is live: 0x400f58 `LEA RDI,[RBP-0x30]` and nothing redefines RDI before `CALL 0x417f80` at 0x401007. `--assert 'prototype sub_417f80 long sub_417f80(char *s)'` restores `sub_417f80((char *)v2);`, so the caller-side dataflow is intact and the loss is entirely in unlocked call-site recovery.
+REPRODUCED. On 8df2a52e, `unlace decompile <arena>/cr4ckm3_0x 0x400f30` emits `sub_417f80();` at line 47 and RDI really is live: 0x400f58 `LEA RDI,[RBP-0x30]` and nothing redefines RDI before `CALL 0x417f80` at 0x401007. `--assert 'prototype sub_417f80 long sub_417f80(char *s)'` restores `sub_417f80((char *)v2);`, so the caller-side dataflow is intact and the loss is entirely in unlocked call-site recovery.
 
 THE TESTER'S ABLATIONS ARE ALL VACUOUS AND I RE-RAN THEM. calleearity, calleearityfwd, calleearitylive, calleearitybody, calleearitycut, varargstackargs and calleedeadarg are EVERY ONE default ON, so 'I enabled it and nothing changed' proves nothing. I ran the real A/B (each OFF, plus spillargtrial reload/spill): all seven leave line 47 byte-identical. Do not re-derive this.
 
@@ -149,7 +149,7 @@ ACCEPTANCE TRAPS. (1) The acceptance is stdout_absent `(?m)^  [A-Za-z_]\w*\(\);`
 THE DEDUP CAUTION IS CONFIRMED: THIS IS TWO ROOT CAUSES. calleearitybody/cut are eligible ONLY for 'a call that recovered nothing at all' -- a site with a self-consistent partial list is calleearitylive's and is left alone. The witness is a TOTAL loss and goes through the path above; the other two instances (6a095817 memcpy keeps 2 of 3, 6a148dd6 init_state keeps 1 of 4) are PARTIAL and therefore cannot be this rule. Fixing the witness will close the need (the non-witness halves carry no clause of their own) WITHOUT necessarily fixing them; expect them back in a later round and do not read that as a regression.
 
 NOT A REGRESSION OF THE ROUND-4 NEED. The family named there (argument-recovery-options-still) is the same symptom class, but the operative rule here shipped after it, so I left regression_of null.
-- round 9 TRIAGE: acceptance rewritten. The refuter's own trap note ("assert the argument, not the absence") applied now rather than at promotion: added stdout_matches `sub_417f80\([^)]` alongside the absence clause, so `v1 = sub_417f80();` -- a change that assigns the return value while still losing the argument -- no longer passes. The proved fixed shape (NOP'd-ESI control) is `sub_417f80(v2);`, which matches. track/touches/scope confirmed unchanged (quality, kuna-decomp, small).
+- round 9 TRIAGE: acceptance rewritten. The refuter's own trap note ("assert the argument, not the absence") applied now rather than at promotion: added stdout_matches `sub_417f80\([^)]` alongside the absence clause, so `v1 = sub_417f80();` -- a change that assigns the return value while still losing the argument -- no longer passes. The proved fixed shape (NOP'd-ESI control) is `sub_417f80(v2);`, which matches. track/touches/scope confirmed unchanged (quality, unlace-decomp, small).
 
 ### 2026-09-08T05:51Z — captain, round 9 B_PLAN: acceptance target bound
 

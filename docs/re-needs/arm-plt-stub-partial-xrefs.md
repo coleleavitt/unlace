@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-analysis/src/listing/xrefs.rs, decompiler/crates/kuna-analysis/src/listing/kuna_pltstub.rs]
+touches: [decompiler/crates/unlace-analysis/src/listing/xrefs.rs, decompiler/crates/unlace-analysis/src/listing/kuna_pltstub.rs]
 scope: small
 regression_of: null
 pr: null
@@ -28,7 +28,7 @@ reject_reason: null
 Find what references 0x12000, an address inside `table`.
 
 > **ARM PLT stubs file their partial addresses as data references** (minor, synthetic `xreffp_arm_le32`)
-> `kuna xrefs --to 0x12000` reports 7 data references, one from each PLT stub's `add r12,r12,#0x12000`, and `kuna xrefs --from printf` reports `adr r12,0x10318` and that add instead of the GOT slot `0x2300c` the stub jumps through. Neither value is an address the stub uses.
+> `unlace xrefs --to 0x12000` reports 7 data references, one from each PLT stub's `add r12,r12,#0x12000`, and `unlace xrefs --from printf` reports `adr r12,0x10318` and that add instead of the GOT slot `0x2300c` the stub jumps through. Neither value is an address the stub uses.
 
 Seen first on production ARM executables and a shared library (GNU ld, `-fPIC`), where these rows outnumbered every other false positive; `xreffp_arm_le32` reproduces the stub from a small C source.
 
@@ -106,7 +106,7 @@ Seen first on production ARM executables and a shared library (GNU ld, `-fPIC`),
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/xreffp_arm_le32",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/xreffp_arm_le32",
     "binary_sha256": "33c2504a9e043837b83c7668ab36b4e602bff2bb198728af6980a96839ff8e92",
     "binary_size": 77140,
     "binary_source": "in-repo"

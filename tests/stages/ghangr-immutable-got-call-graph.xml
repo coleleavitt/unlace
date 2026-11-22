@@ -3,7 +3,7 @@
 <!--
   Immutable relative GOT calls contribute their actual callee to the public
   xref/call graph. The console does not expose that read-only index; the
-  end-to-end assertions live in kuna-cli/tests/xrefs_immutable_got.rs. This
+  end-to-end assertions live in unlace-cli/tests/xrefs_immutable_got.rs. This
   companion checks that existing C emission stays unchanged. The fixture is
   repository-authored and contains both immutable and writable callback slots.
   This strict correctness fix has no option and does not execute the fixture.
@@ -13,7 +13,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/immutable_got_calls_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/immutable_got_calls_x86_64</com>
   <com>read symbols</com>
   <com>parse line extern long callback(long value);</com>
   <com>parse line extern long through_got(long value);</com>

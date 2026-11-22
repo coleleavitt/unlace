@@ -9,7 +9,7 @@
     `0xe600000000000000` beside `0x6c616d696e61`.
 
     Stage / sub-stage: P5 const-pointer, `RuleSwiftString`
-    (`kuna-decomp/src/p5_types/kuna_swiftstr.rs`), beside `fatstr`.
+    (`unlace-decomp/src/p5_types/kuna_swiftstr.rs`), beside `fatstr`.
 
     P0 assertion: `option swiftstr off|auto|always` (default auto: act on a
     Swift image).
@@ -27,7 +27,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_types_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_types_elf</com>
   <com>option swiftmetadata on</com>
   <com>option swiftstr off</com>
   <com>read symbols</com>
@@ -38,7 +38,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/swift_types_elf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_types_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x2ce0</com>

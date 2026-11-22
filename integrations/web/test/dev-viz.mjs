@@ -32,7 +32,7 @@ const arch = data.architecture;
 assert.deepEqual(Object.keys(arch.phases), data.phases.map((p) => p.id));
 assert.ok(Object.values(arch.phases).every((p) => p.loc > 0 && p.kunaLoc <= p.loc && /^docs\/spec\/.+\.md$/.test(p.spec)));
 assert.ok(arch.shared.some((f) => f.folder === 'substrate') && arch.shared.some((f) => f.folder === 'infra'));
-assert.ok(arch.crates.some((c) => c.name === 'kuna-decomp'));
+assert.ok(arch.crates.some((c) => c.name === 'unlace-decomp'));
 assert.ok(arch.schedule.passes.length > 200, 'the default schedule was not exported');
 assert.ok(arch.schedule.passes.every((p) => p.phase in arch.phases), 'a scheduled pass has no phase');
 assert.ok(arch.schedule.loops.some((l) => l.name === 'mainloop' && l.end > l.start));

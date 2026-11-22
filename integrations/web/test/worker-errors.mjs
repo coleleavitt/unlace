@@ -4,7 +4,7 @@ import { KunaWorkerClient } from '../kuna-worker-client.js';
 
 const options = (workerFactory) => ({
   workerUrl: 'https://worker.test/kuna-worker.js',
-  wasmUrl: 'https://worker.test/kuna_wasm.wasm',
+  wasmUrl: 'https://worker.test/unlace_wasm.wasm',
   specRoot: 'https://worker.test/specs',
   workerFactory,
 });

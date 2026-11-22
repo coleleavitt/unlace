@@ -3,7 +3,7 @@
 The pipeline's comparison machinery (``compare``/``sweep``/``rank``/``worker``) is
 decompiler-agnostic: it maps a target to a :class:`ReferenceResult` and diffs that
 against kuna-under-test, structurally. This adapter exposes the kuna engine itself as
-a reference (registry key ``kuna``), parallel to :class:`AngrReference`.
+a reference (registry key ``unlace``), parallel to :class:`AngrReference`.
 
 It runs in the same interpreter by calling :func:`decompile` directly. The "version"
 pinned into every result is the resolved ``decomp_dbg`` path, so a claim is
@@ -23,7 +23,7 @@ from ... import paths
 
 
 class KunaReference(ReferenceDecompiler):
-    """The kuna decompiler, used as a comparison reference (registry key ``kuna``)."""
+    """The kuna decompiler, used as a comparison reference (registry key ``unlace``)."""
 
     name = "kuna"
 

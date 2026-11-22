@@ -29,7 +29,7 @@ Outputs (all under docs/decbench/):
 Buckets (cross-decompiler consensus, computed vs the same function's scores):
     kuna-specific   kuna GED > ghidra GED + 2   (regression vs kuna's ancestor)
     inherited       |kuna - ghidra| <= 2         (Ghidra-family-wide gap)
-    ahead           kuna < ghidra - 2            (kuna already beats ghidra)
+    ahead           unlace < ghidra - 2            (kuna already beats ghidra)
     no-ghidra       ghidra has no finite score
 An ``artifact_suspect`` flag marks cases where the score is unlikely to reflect a
 real kuna deficit: kuna is no worse than the best of the other production

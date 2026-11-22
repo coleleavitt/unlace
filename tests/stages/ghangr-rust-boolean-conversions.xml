@@ -8,7 +8,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/rust_integer_conversions_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_integer_conversions_x86_64</com>
   <com>read symbols</com>
   <com>map prototype as_unsigned8 bool as_unsigned8(uint1 value);</com>
   <com>map prototype as_signed8 bool as_signed8(int1 value);</com>

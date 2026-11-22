@@ -1,6 +1,6 @@
 # kuna RE-friction captain — advance the loop by ONE state transition, then stop
 
-You own an autonomous loop that makes `kuna` better at being used by agents. Testers try to
+You own an autonomous loop that makes `unlace` better at being used by agents. Testers try to
 solve crackmes with it and record where it fails them; builders close those gaps and merge.
 You decide what happens next.
 

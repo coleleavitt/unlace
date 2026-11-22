@@ -2,7 +2,7 @@
 
 Every decompiler has the same broad pipeline. The big design decision is the middle: one IR
 rewritten in place until nothing changes (Ghidra, and so this engine), or a ladder of IRs, each its
-own layer (Binary Ninja, Hex-Rays, angr). That choice is why `kuna_decomp` is one big cycle today.
+own layer (Binary Ninja, Hex-Rays, angr). That choice is why `unlace_decomp` is one big cycle today.
 The plan that follows from it is in `notes/crate-architecture.md`.
 
 ## The common pipeline
@@ -24,7 +24,7 @@ Sources: [Ghidra decompiler docs](https://grant-h.github.io/docs/ghidra/decompil
 [SLEIGH](https://ghidra.re/ghidra_docs/languages/html/sleigh.html).
 
 ```
-loader (kuna-analysis here; Ghidra's Java side)
+loader (unlace-analysis here; Ghidra's Java side)
 └─ SLEIGH spec (.slaspec → .sla) ─ per-architecture, data not code
    └─ raw p-code                  one IR for everything
       └─ Funcdata                 the same objects mutated until done
@@ -117,7 +117,7 @@ It reuses a compiler's IR and pass manager.
 
 ```
 today (Ghidra-style, one crate, one cycle)
-└─ kuna_decomp 479k
+└─ unlace_decomp 479k
    ├─ substrate (IR) ⇄ p4 calls ⇄ p5 types ⇄ p6 vars ⇄ p3 dataflow   ← one fixpoint
    ├─ infra (scheduler) ⇄ every phase
    └─ p9 emit, p8 structure, p2 lift (mostly downstream, with some back-edges)

@@ -1,0 +1,218 @@
+//! (kuna `rawdiscover`) Function discovery for a headerless raw image.
+//!
+//! `--raw-image` loads a file that carries no object header, so the whole
+//! discovery tier declines: [`crate::passes::run_listing_consumers`] opens with
+//! `parse_object(bytes)` and every seed oracle under it reads an `object::File`
+//! — a symbol table, an exception table, a section list. A raw image has none
+//! of them, and the inventory is therefore exactly the `--entry` addresses the
+//! caller typed. On a 147 KiB firmware image with one entry that is a single
+//! "function" spanning the whole file.
+//!
+//! Neither of the two things that actually find functions needs that metadata:
+//!
+//! 1. the recursive descent ([`crate::listing::walk`]) follows direct call
+//!    targets from the seeds and promotes each to an entry;
+//! 2. a **linear call-target sweep** over the executable bytes, which decodes
+//!    straight through the image and collects the target of every direct call
+//!    it sees, then hands those to the descent as additional roots.
+//!
+//! The descent alone recovers only the seeds' direct-call closure. On firmware
+//! that dispatches through pointer tables and interrupt vectors that is a small
+//! fraction of the image — on the 147 KiB ATWINC1500 image this was written
+//! against, one entry reaches 21 of about 555 functions. The sweep is what
+//! reaches the rest, and a call target is a strong claim: it is an address some
+//! instruction names as a subroutine, not a byte pattern that resembles one.
+//!
+//! The sweep decodes bytes that may be data, and data decodes as *something*,
+//! so a junk "call" can mint a junk entry. Three things bound that: a target
+//! must land inside the executable ranges, the sweep resynchronizes on the
+//! instruction alignment after a failed decode rather than cascading, and every
+//! surviving root is then re-walked by the descent, which decodes it for real.
+//! An MS-DOS executable, whose load module is mostly data, also hands the
+//! sweep its relocations ([`super::kuna_mzsweep`]). `--define-function`
+//! remains the way to assert a boundary neither oracle found.
+
+use std::collections::BTreeMap;
+use std::rc::Rc;
+
+use unlace_base::space::AddrSpace;
+use unlace_decomp::architecture::Architecture;
+use unlace_sleigh::translate::Translate;
+
+use crate::listing::classify::classify;
+use crate::listing::decode::decode_one;
+use crate::listing::kuna_dosexit::{self, DosExits};
+use crate::listing::kuna_mzsweep::{self, MzEvidence, SweepRun};
+use crate::listing::kuna_rawextent;
+use crate::listing::{Listing, ListingDetail};
+
+/// What [`discover`] finds in a raw image.
+pub struct RawDiscovery {
+    /// Every function entry, sorted.
+    pub entries: Vec<u64>,
+    /// The DOS exits of the code the descent decoded ([`kuna_dosexit`]).
+    pub dos_exits: DosExits,
+    /// Where each entry's flow ends ([`kuna_rawextent`]), on x86 real mode.
+    pub flow_ends: Option<BTreeMap<u64, u64>>,
+}
+
+/// Every function entry a raw image yields: the seeds, the targets of every
+/// direct call in the executable bytes, and the direct-call closure of both,
+/// with the DOS exits of the code the descent decoded and, on x86 real mode,
+/// where each entry's flow ends.
+///
+/// A seed is never dropped, so the inventory can only grow; an image whose
+/// seeds reach no call and whose gaps hold no code returns exactly what the
+/// caller passed.
+///
+/// `exec_ranges` bounds every decode. An address outside it is not decoded and
+/// contributes no successor, so a call into unmapped space is dropped rather
+/// than walked into the void. `mz`, an MS-DOS executable's evidence, holds the
+/// sweep to the calls [`super::kuna_mzsweep`] keeps and the targets that open
+/// with code.
+pub fn discover(
+    arch: &Architecture,
+    translate: &dyn Translate,
+    code_space: &Rc<AddrSpace>,
+    exec_ranges: &[(u64, u64)],
+    seeds: &[u64],
+    mz: Option<&MzEvidence>,
+) -> RawDiscovery {
+    if seeds.is_empty() || exec_ranges.is_empty() {
+        return RawDiscovery {
+            entries: seeds.to_vec(),
+            dos_exits: DosExits::default(),
+            flow_ends: None,
+        };
+    }
+    let mut roots: Vec<u64> = seeds.to_vec();
+    roots.extend(crate::loader::kuna_realmodecs::without_commits(
+        arch,
+        translate,
+        || {
+            let swept = sweep_call_targets(translate, code_space, exec_ranges, mz);
+            match mz {
+                Some(mz) => swept
+                    .into_iter()
+                    .filter(|&target| {
+                        seeds.contains(&target)
+                            || kuna_mzsweep::opens_as_code(
+                                translate,
+                                code_space,
+                                exec_ranges,
+                                mz,
+                                target,
+                            )
+                    })
+                    .collect(),
+                None => swept,
+            }
+        },
+    ));
+    roots.sort_unstable();
+    roots.dedup();
+
+    // One descent over the union of the seeds and the swept roots. Only the
+    // function partition is read back, so the disassembly text and the
+    // reference model are not built.
+    let listing = Listing::build_raw(
+        arch,
+        translate,
+        code_space,
+        exec_ranges,
+        &roots,
+        ListingDetail::PARTITION_ONLY,
+    );
+
+    let mut out: Vec<u64> = seeds.to_vec();
+    out.extend(listing.functions().map(|(&vma, _)| vma));
+    out.sort_unstable();
+    out.dedup();
+    let dos_exits = kuna_dosexit::analyze(arch, translate, code_space, &listing);
+    let flow_ends =
+        kuna_rawextent::measure(arch, translate, code_space, &listing, &out, &dos_exits);
+    RawDiscovery {
+        entries: out,
+        dos_exits,
+        flow_ends,
+    }
+}
+
+/// Decode `exec_ranges` end to end and return the target of every direct call.
+///
+/// This is a linear sweep, not a flow walk: it starts at each range's low
+/// address and steps by the decoded instruction length, so it reads code and
+/// data alike. A byte that does not decode, or decodes to nothing, advances the
+/// cursor to the next instruction-alignment boundary instead of stopping, which
+/// is what lets the sweep resynchronize after a run of data rather than
+/// abandoning the rest of the range - and, on a language that aligns its
+/// instructions, keeps a misaligned address from decoding to a phantom call.
+///
+/// Only *statically* derivable targets count: an indirect call through a
+/// register contributes nothing, because there is no address to contribute.
+/// Targets outside `exec_ranges` are dropped.
+///
+/// [`discover`] runs it with x86 real-mode segment commits masked off
+/// ([`crate::loader::kuna_realmodecs::without_commits`]): a branch decoded from
+/// data must not move the segment the code after its target decodes in.
+fn sweep_call_targets(
+    translate: &dyn Translate,
+    code_space: &Rc<AddrSpace>,
+    exec_ranges: &[(u64, u64)],
+    mz: Option<&MzEvidence>,
+) -> Vec<u64> {
+    // An instruction can never start off the language's alignment, so that is
+    // both the smallest honest resynchronization step and the one that keeps a
+    // misaligned probe from inventing a call. `1` on a language with no
+    // requirement, which is what `get_alignment` documents.
+    let step = translate.translate_base().get_alignment().max(1) as u64;
+    let mut out: Vec<u64> = Vec::new();
+    for &(lo, hi) in exec_ranges {
+        let mut vma = lo;
+        let mut run = SweepRun::default();
+        while vma < hi {
+            let Ok(decoded) = decode_one(translate, vma, code_space, false, false) else {
+                run.undecodable();
+                vma = next_aligned(vma, step);
+                continue;
+            };
+            if decoded.len == 0 {
+                run.undecodable();
+                vma = next_aligned(vma, step);
+                continue;
+            }
+            let c = classify(&decoded.ops, vma, decoded.len);
+            let counts = match mz {
+                Some(mz) => run.step(mz, vma, decoded.len, &c.flow),
+                None => c.flow.is_call,
+            };
+            if counts {
+                out.extend(
+                    c.flows
+                        .iter()
+                        .copied()
+                        .filter(|t| in_ranges(exec_ranges, *t)),
+                );
+            }
+            vma = vma.saturating_add(u64::from(decoded.len));
+        }
+    }
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+/// The next address strictly after `vma` that is a multiple of `step`.
+///
+/// A decode that fails part-way into an instruction leaves the cursor off the
+/// alignment, so advancing by `step` alone would keep it off for the rest of
+/// the range.
+fn next_aligned(vma: u64, step: u64) -> u64 {
+    let next = vma.saturating_add(step);
+    next - (next % step)
+}
+
+/// Whether `vma` lies in any half-open executable range.
+fn in_ranges(ranges: &[(u64, u64)], vma: u64) -> bool {
+    ranges.iter().any(|&(lo, hi)| vma >= lo && vma < hi)
+}

@@ -17,11 +17,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/noshdr_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/noshdr_x86_64",
     "binary_sha256": "f960c89e9a1308857a344bec32dd3a9b89535c235a428d5cde56ad0657921d65",
     "binary_size": 304,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/noshdr_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/noshdr_x86_64",
     "selector": null,
     "selector_kind": "none"
   },

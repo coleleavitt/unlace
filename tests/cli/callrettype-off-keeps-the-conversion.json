@@ -18,11 +18,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/callrettype_gcc_O0_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/callrettype_gcc_O0_x86_64",
     "binary_sha256": "9a2c3a6082b1745368ef778c20969f560ea6f956cb9b2d3798729e306f16bb89",
     "binary_size": 17432,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/callrettype_gcc_O0_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/callrettype_gcc_O0_x86_64",
     "selector": "upper_of_rest",
     "selector_kind": "name"
   },

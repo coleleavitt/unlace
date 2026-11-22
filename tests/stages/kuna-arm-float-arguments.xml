@@ -6,7 +6,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/fmtlf_armhf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
   <com>option armfloatreturn on</com>
   <com>option armfloatargs off</com>
   <com>option formatstring full</com>
@@ -15,7 +15,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/fmtlf_armhf</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
   <com>option armfloatreturn on</com>
   <com>option armfloatargs on</com>
   <com>option formatstring full</com>

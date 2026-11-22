@@ -23,11 +23,11 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/i386_pie_nl",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/i386_pie_nl",
     "binary_sha256": "2cc72cbd21561b5907af240cc9b5396f20821e7cbc5fabd2588319cf01c6d30b",
     "binary_size": 48024,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/i386_pie_nl",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/i386_pie_nl",
     "selector": "main",
     "selector_kind": "name"
   },

@@ -11,7 +11,7 @@ instances: 1
 rounds: [2]
 first_seen_round: 2
 attempts: 1
-touches: [decompiler/crates/kuna-cli/src, decompiler/crates/kuna-console/src/ifacedecomp.rs]
+touches: [decompiler/crates/unlace-cli/src, decompiler/crates/unlace-console/src/ifacedecomp.rs]
 scope: large
 pr: "391"
 closed_in_round: 2
@@ -30,7 +30,7 @@ Every named CLI flag is rejected with `error: unknown option`, verified on the r
 
 Asserts the DESIRED behaviour: an agent states two RANGE facts kuna cannot derive
 -- eight bytes of `.data` that nothing ever writes, and a device word outside every
-loaded section -- on one `kuna decompile --json`, and both land in the emitted C
+loaded section -- on one `unlace decompile --json`, and both land in the emitted C
 while the run reports each one's fate machine-readably at its own phase
 coordinates. FAILS at `ed353fb2`: exit 2, `unknown directive "readonly"` (Stage A
 shipped `--assert` with nine directives, none of them a range).
@@ -63,11 +63,11 @@ Refutation below.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/assertranges_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
     "binary_sha256": "1c9ad3b67437c7e85ac53d0755609c5b5e015225796a98c0287de5f2cb3d382e",
     "binary_size": 15800,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/assertranges_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
     "selector": "sample",
     "selector_kind": "name"
   },
@@ -129,7 +129,7 @@ Refutation below.
       }
     ]
   },
-  "notes": "Desired: two range facts an agent knows and kuna cannot derive, on one `kuna decompile --json`. scale/bias are .data (writable, so never loader-readonly) and nothing writes them: asserted readonly they fold to `* 7` / `+ 100`. 0x50000000 is device memory, so kuna CSEs its two reads into one; asserted volatile keeps both. FAILS at ed353fb2: exit 2, unknown directive. In-repo fixture.",
+  "notes": "Desired: two range facts an agent knows and kuna cannot derive, on one `unlace decompile --json`. scale/bias are .data (writable, so never loader-readonly) and nothing writes them: asserted readonly they fold to `* 7` / `+ 100`. 0x50000000 is device memory, so kuna CSEs its two reads into one; asserted volatile keeps both. FAILS at ed353fb2: exit 2, unknown directive. In-repo fixture.",
   "probe_id": "a-567d3207ce62"
 }
 ```
@@ -175,7 +175,7 @@ OVERTURNED on both halves, measured at `ed353fb2` and again on the Stage B branc
 ## Decision log
 
 - seeded for round 2 from a source survey of the override surface, after round 1 showed testers hitting obfuscated images with no lever to correct kuna with. Not tester-filed: round 2 should confirm the demand.
-- round 2 T_TRIAGE (captain): track tooling / touches [kuna-cli/src, kuna-console/src/ifacedecomp.rs] / scope large CONFIRMED. Its touches are IDENTICAL to no-cli-function-boundary-override's, so the two are not co-schedulable no matter what select's lease algebra says (both are bare cluster: keys); it waits on that need's proposal to define the delivery vehicle. Round 2 did produce the independent tester demand it was missing: a three-sighting 'kuna will not tell me about data' family (653d8860 x2 + 69a3822f), recorded at T_DEDUP.
+- round 2 T_TRIAGE (captain): track tooling / touches [unlace-cli/src, unlace-console/src/ifacedecomp.rs] / scope large CONFIRMED. Its touches are IDENTICAL to no-cli-function-boundary-override's, so the two are not co-schedulable no matter what select's lease algebra says (both are bare cluster: keys); it waits on that need's proposal to define the delivery vehicle. Round 2 did produce the independent tester demand it was missing: a three-sighting 'kuna will not tell me about data' family (653d8860 x2 + 69a3822f), recorded at T_DEDUP.
 - round 2 BUILD (b-r2-no-cli-data-code, Stage B of the `--assert` proposal): SHIPPED. `readonly <addr>+<size>` and `volatile <addr>+<size>` on the `--assert` plane at P1 code-data-partition, and `global add`/`global remove` wired onto `Database::add_range`/`remove_range` (both stubs' engine entries had been ported all along). Acceptance `a-567d3207ce62` FILED -- it did not exist, so this need was unclosable -- and promoted to `tests/cli/`. Every named command in the Symptom is now reachable or accounted for: `map address` and `parse line` shipped as Stage A's `data`/`typedef`, `readonly`/`volatile` ship here, `type varnode`'s local form is Stage A's `type`, and the `global` pair is wired but deliberately NOT given a directive (measurement, see the Refutation). The Symptom's "marking a gap as code" is `--define-function` (#374), not `global add`. Residue: the storage-keyed `type varnode [space,offset,size]` spelling, `global spaces`/`global registers` (genuine ports), and phases.toml's exposure prose (lease held elsewhere this wave).
 - closed: acceptance a-567d3207ce62 now PASSES at c40e02fa7931
 - round 2 B_DONE (captain): CLOSED, mechanically. Same suite/sha as its Stage-A sibling

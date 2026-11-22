@@ -2,20 +2,20 @@
 
 A **mode** is a named preset over kuna's runtime option surface: an ordered list
 of `(option, value)` overrides layered on top of the shipped defaults. Modes are
-**not** catalog options (`kuna catalog` covers the per-option settable surface);
+**not** catalog options (`unlace catalog` covers the per-option settable surface);
 they reference existing option names and live in one table,
-`decompiler/crates/kuna-decomp/src/p0_knowledge/modes.rs` (`MODE_TABLE`), applied
+`decompiler/crates/unlace-decomp/src/p0_knowledge/modes.rs` (`MODE_TABLE`), applied
 by `Architecture::apply_mode` (a fan-out over `set_kuna_option`).
 
-Select a mode with `--mode <name>` on `kuna decompile`, `kuna decompile-all`,
-`kuna decompile-project`, or `kuna functions`. If the flag is omitted, these
+Select a mode with `--mode <name>` on `unlace decompile`, `unlace decompile-all`,
+`unlace decompile-project`, or `unlace functions`. If the flag is omitted, these
 file-based front-ends use `auto`. The console `mode <name>` command accepts the
 three concrete presets; `auto` must be resolved by a front-end that knows the
 input file size. A mode's overrides are applied **before** the user's
 `--option`/`option` lines, so an explicit `--option` always wins (last-write).
 Modes are override batches, not resets: applying a second mode in one console
 session changes only the options that second mode names. Discover them with
-`kuna modes` (or `kuna modes --json`).
+`unlace modes` (or `unlace modes --json`).
 
 | Mode | What it does |
 |---|---|
@@ -50,7 +50,7 @@ depth for latency; how the emitted C spells a type is not part of that trade,
 and `ctypes` costs nothing. Without it a binary of 500 KiB or more printed
 `int4`, `uint8` and `float8` where a smaller one printed `int`,
 `unsigned long` and `double`. An 8-byte element cast such as `((int8 *)a0)[4]`
-reads like a byte offset of 4 when the offset is 0x20 (GH-1063). `kuna modes`
+reads like a byte offset of 4 when the offset is 0x20 (GH-1063). `unlace modes`
 lists the override under `auto`. An explicit `--mode reliable` does not get
 it: that preset stays the catalog defaults, which is also what the datatest
 corpus runs. The same kind of choice for a partial access, `partialaccess`
@@ -171,7 +171,7 @@ are inert off their target). These are not, and the invariant test's
   `psktool`) and **+43.7%** (`gzip`) — an order of magnitude over the 5% speed
   budget, which standing requirement 4 answers with a per-run opt-in. Until DIV-66
   the preset entry was *also* inert on every whole-binary surface, so it was
-  charging `kuna decompile` for a feature `decompile-all` never delivered; now
+  charging `unlace decompile` for a feature `decompile-all` never delivered; now
   both surfaces honour `--option formatstring on` identically, and neither pays
   for it unless asked (DIV-66).
 
@@ -235,7 +235,7 @@ entry options from that list.
 `aggressive` is slower (the Listing build, `funcstart_patterns` discovery) and can
 over-recover: `aif` is a speculative gap-walk ("may create bad code") and
 `addrtable` over-accepts pointer tables. It no longer carries `formatstring`'s
-re-decompile loop: that loop used to run only on `kuna decompile`, where it cost
+re-decompile loop: that loop used to run only on `unlace decompile`, where it cost
 up to +77% and on the whole-binary surfaces delivered nothing at all — DIV-66
 made both surfaces honour the option and, at that measured price, made it an
 opt-in on both.
@@ -310,7 +310,7 @@ pointer-table target, with real C bodies in both cases.
 
 Explicit `--addr` commands already have their target set, so the file
 front-ends suppress preset-provided `fast_funcdisc` work for those commands.
-Text-surface `kuna decompile <name>` suppresses it on its first attempt as
+Text-surface `unlace decompile <name>` suppresses it on its first attempt as
 well and restores it only when the name misses; a generated placeholder name
 (`sub_<addr>`) keeps discovery enabled, because that entry may exist only
 because discovery registered it. Callers can opt back in explicitly with
@@ -320,8 +320,8 @@ An explicit option selectively restores analysis while keeping the rest of the
 preset:
 
 ```bash
-kuna decompile-project ./a.out --mode fast --option listing on
-kuna decompile-project ./a.out --mode fast --option fast_funcdisc off
+unlace decompile-project ./a.out --mode fast --option listing on
+unlace decompile-project ./a.out --mode fast --option fast_funcdisc off
 ```
 
 Because explicit options are applied after the mode, the first command restores
@@ -332,7 +332,7 @@ especially tight latency budget.
 ## Measuring with modes
 
 `aggressive` and `fast` are first-class measurement levers. Run the decbench GED
-benchmark with a `kuna-aggressive` backend (or `kuna decompile-all --mode
+benchmark with a `kuna-aggressive` backend (or `unlace decompile-all --mode
 aggressive`) and compare against an explicit `--mode reliable` baseline to find
 options that net-help, which then become candidate default-on flips. The omitted-mode
 `auto` policy intentionally changes

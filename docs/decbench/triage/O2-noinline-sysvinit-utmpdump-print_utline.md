@@ -70,7 +70,7 @@ both undeclared; the body is not C.
 
 ```
 $ SLEIGHHOME=/home/mahaloz/github/kuna/specs \
-  ./decompiler/target/release/kuna decompile \
+  ./decompiler/target/release/unlace decompile \
       ~/github/decbench/results/full_run/O2-noinline/sysvinit/stripped/utmpdump --addr 0x1a00
 ```
 ```c
@@ -126,7 +126,7 @@ below), so this is a **code fix**, not a mode-preset effect.
 25:  sub_1940(&Stack0000000000000030,4);
 ```
 
-`kuna catalog --json` (83 options) has **no** option whose `use_when`/`symptoms` mention
+`unlace catalog --json` (83 options) has **no** option whose `use_when`/`symptoms` mention
 registers, spacebases, stack locations or undeclared identifiers — nothing to sweep, and
 nothing to flip. The change was unflagged, as a strict output-correctness fix should be.
 
@@ -273,7 +273,7 @@ Confirmed with a real compiler on a whole-project export (which is the artifact 
 *supposed* to compile):
 
 ```
-$ kuna decompile-project .../O2-noinline/sysvinit/stripped/utmpdump -o /tmp/proj
+$ unlace decompile-project .../O2-noinline/sysvinit/stripped/utmpdump -o /tmp/proj
 $ gcc -fsyntax-only -w /tmp/proj/utmpdump.c
 error: 'dat_3fe8' undeclared (first use in this function)
 error: 'Stack0000000000000054' undeclared (first use in this function)

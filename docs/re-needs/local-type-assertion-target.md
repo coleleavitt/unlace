@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/kuna-cli]
+touches: [decompiler/crates/unlace-cli]
 scope: small
 regression_of: null
 pr: null
@@ -146,7 +146,7 @@ _none recorded_
 - split by captain at T_DEDUP from round 12's `missing-capability|decompile|exit_code,json,stderr_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). round 12 REFUTER (captain, tick 05:3xZ) -- VERDICT UPHELD, and the control run pins the namespace boundary exactly. Refuted jointly with vm-temporary-declared-as (same challenge, same function sub_1005350, one shared measurement); read that need's log for the type half.
 
-THE CONTROL, on aa18e56d, seven single-assert runs of kuna decompile <graphy> sub_1005350 --assert "<D>" --json, all exit 0:
+THE CONTROL, on aa18e56d, seven single-assert runs of unlace decompile <graphy> sub_1005350 --assert "<D>" --json, all exit 0:
   type v6  unsigned long *  -> REJECTED, "No symbol named: v6"    (register temp, // rax)
   name v6  vmtop            -> REJECTED, "No symbol named: v6"    (so it is not a type-directive quirk)
   type v2  char[16]         -> REJECTED, "No symbol named: v2"    (register temp)
@@ -156,7 +156,7 @@ THE CONTROL, on aa18e56d, seven single-assert runs of kuna decompile <graphy> su
   type local_30 unsigned long * -> REJECTED, "No symbol named: local_30"
 That is the whole boundary in one table. Everything the local scope backs with a Symbol resolves; every register temporary the emitter prints does not. The hypothesis as filed -- the resolver only sees backed symbols while emission invents names for register temporaries -- is exactly what the table says. UPHELD, and unusually cleanly for this round: the discriminator is a pair of runs differing only in whether the target lives in a stack slot.
 
-THE DOCUMENTATION ALREADY PROMISES THE CAPABILITY, which raises this above a missing-feature ask. kuna decompile --help gives as its worked examples of the assert vocabulary, verbatim: "type v2 char[16]" and "name v2 credbuf". In this function v2 is a register temporary and BOTH of those exact forms are rejected. The help text teaches the failing form. Whoever takes this should treat the help text as the specification the code must meet, not as prose to be edited down to match the code.
+THE DOCUMENTATION ALREADY PROMISES THE CAPABILITY, which raises this above a missing-feature ask. unlace decompile --help gives as its worked examples of the assert vocabulary, verbatim: "type v2 char[16]" and "name v2 credbuf". In this function v2 is a register temporary and BOTH of those exact forms are rejected. The help text teaches the failing form. Whoever takes this should treat the help text as the specification the code must meet, not as prose to be edited down to match the code.
 
 TWO CORRECTIONS TO THE FILED SYMPTOM, both measured, neither fatal to it:
 1. "The emitted temporary v6 is absent from the variables inventory" is TRUE and is stronger than filed: the --json variables array for this function holds 12 entries -- 3 args and 9 stack slots -- and contains ZERO register variables. v1 through v9 and v11, every register temporary the C body declares, are all absent. So this is not v6 specifically; kuna exports no handle for any register-resident local in any function.

@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/branchtable_arm_le32",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/branchtable_arm_le32",
     "binary_sha256": "93b3aa37fc16c266959a8e8d4f47a117e96fcdae82aeff124b185f7f84bb5126",
     "binary_size": 72920,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/branchtable_arm_le32",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/branchtable_arm_le32",
     "selector": null,
     "selector_kind": "none"
   },

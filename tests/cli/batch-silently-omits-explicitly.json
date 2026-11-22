@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/pe_datasection_entry_i386.exe",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_datasection_entry_i386.exe",
     "binary_sha256": "1c7aeca2665b5b0645a4930dec027b464051dacf2bc158d966dc9f8871c0492f",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_datasection_entry_i386.exe",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_datasection_entry_i386.exe",
     "selector": "0x402001",
     "selector_kind": "addr"
   },
@@ -59,5 +59,5 @@
       }
     ]
   },
-  "notes": "Desired: a --define-function declaration reaches the whole-binary target list, which otherwise keeps only entries in a section flagged executable. Witness: crackmes.one 5ab77f5433c5d40ad448c1c1 (NEOLite-packed CryptoME.exe), all six sections 0xc0000040 with no MEM_EXECUTE, so decompile-all answered count 0 for the entry `kuna decompile` emitted. Fixture source: pe_datasection_entry_i386.py."
+  "notes": "Desired: a --define-function declaration reaches the whole-binary target list, which otherwise keeps only entries in a section flagged executable. Witness: crackmes.one 5ab77f5433c5d40ad448c1c1 (NEOLite-packed CryptoME.exe), all six sections 0xc0000040 with no MEM_EXECUTE, so decompile-all answered count 0 for the entry `unlace decompile` emitted. Fixture source: pe_datasection_entry_i386.py."
 }

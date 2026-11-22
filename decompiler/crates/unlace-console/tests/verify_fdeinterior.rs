@@ -1,0 +1,124 @@
+//! End-to-end gate for `fdeinterior` — never start a function inside
+//! another function's `.eh_frame` FDE (P1 code/data partition, DIV-61).
+//!
+//! Fixture: `eh_lsda_x86_64`, the vendored C++ try/catch ELF stripped of
+//! `.symtab` (shared with `verify_eh_frame_full`). `guarded()` occupies the FDE
+//! `[0x4012d6, 0x40137a)` and its `.gcc_except_table` LSDA call-site table names
+//! the catch-dispatch landing pad `0x4012e2` — 12 bytes into that same body.
+//!
+//! ## The two passes
+//!
+//! * **option OFF (the bug):** with `eh_frame_full` on, `0x4012e2` is committed as
+//!   a top-level function `sub_4012e2`. It is a block the unwinder jumps to
+//!   mid-frame, so it inherits `guarded`'s live frame pointer: decompiled on its
+//!   own it opens on an undefined `rbp` and every local is a garbage dereference.
+//! * **default (the fix):** the pad is strictly inside a single-function FDE, so
+//!   the commit rejects it and `sub_4012e2` is absent — IDA Pro's model, where
+//!   `get_func(landing_pad).start_ea` is the enclosing function taken from the FDE.
+//!   The FDE's own start `sub_4012d6` is untouched and still decompiles.
+//!
+//! The third test is the property that keeps this from deleting real code: the
+//! linker gives the whole PLT ONE FDE, so `fdeinterior` must never touch an import
+//! stub. Every named function the default run registers is still registered.
+
+use std::path::PathBuf;
+
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
+use unlace_console::ifaceterm::ConsoleCommands;
+
+/// The catch-dispatch landing pad, 12 bytes into `guarded`'s FDE body.
+const PAD: &str = "sub_4012e2";
+/// `guarded`'s entry — the FDE `pcBegin` that covers the pad.
+const OWNER: &str = "sub_4012d6";
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap()
+}
+
+/// Bootstrap the stripped C++ try/catch fixture with the LSDA landing-pad oracle on,
+/// then commit the (deferred) analysis facts.
+fn bootstrap() -> ConsoleProgram {
+    let bin = repo_root().join("decompiler/crates/unlace-analysis/tests/fixtures/eh_lsda_x86_64");
+    let specs = repo_root().join("specs");
+    let spec_roots = vec![specs.to_str().unwrap().to_string()];
+    let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
+        .expect("bootstrap fixture with built processor specs");
+    prog.arch_mut()
+        .set_kuna_option("eh_frame_full", "on")
+        .expect("eh_frame_full flips on");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    prog
+}
+
+fn decompile(prog: ConsoleProgram, name: &str) -> String {
+    let cmds: Vec<String> = [
+        format!("load function {name}"),
+        "decompile".into(),
+        "print C".into(),
+    ]
+    .into_iter()
+    .collect();
+    let count = cmds.len();
+    let mut status = ConsoleCommands::into_status(cmds);
+    register_decomp_commands(&mut status);
+    {
+        let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();
+        let dcp = data.as_any_mut().downcast_mut::<IfaceDecompData>().unwrap();
+        dcp.conf = Some(prog);
+    }
+    for _ in 0..count {
+        execute(&mut status);
+    }
+    status.optr.clone()
+}
+
+/// The pad is strictly inside `guarded`'s FDE, so it is not a function — while
+/// the FDE's own start still is.
+#[test]
+fn landing_pad_is_rejected_and_its_owner_survives() {
+    let prog = bootstrap();
+    assert!(
+        prog.lookup_symbol(PAD).is_none(),
+        "0x4012e2 is 12 bytes into the FDE [0x4012d6,0x40137a) — by default it must \
+         NOT be promoted to a top-level function"
+    );
+    assert!(
+        prog.lookup_symbol(OWNER).is_some(),
+        "the FDE start {OWNER} is a function and must survive the interior filter"
+    );
+    let body = decompile(prog, OWNER);
+    assert!(
+        body.contains(OWNER),
+        "expected a decompiled body for {OWNER}, got:\n{body}"
+    );
+}
+
+/// The PLT property: the linker emits ONE FDE for the whole PLT, and every stub
+/// inside it is a real function. No named function may be lost.
+#[test]
+fn no_named_function_is_lost() {
+    let prog = bootstrap();
+    let named: Vec<String> = prog
+        .function_entries_canonical()
+        .into_iter()
+        .filter(|e| !e.name.starts_with("sub_"))
+        .map(|e| e.name)
+        .collect();
+    assert!(
+        !named.is_empty(),
+        "the fixture must carry named (PLT/import) functions"
+    );
+    for name in &named {
+        assert!(
+            prog.lookup_symbol(name).is_some(),
+            "{name} must keep its symbol"
+        );
+    }
+}

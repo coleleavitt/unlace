@@ -11,7 +11,7 @@ not a request: a prompt-level "please do not look" would be worthless because co
       target/<primary>             meta.json -> detected.primary.path, chmod 0755
       target/<other binaries>      the rest of files.binaries[], chmod 0755
       extras/<surviving files>     whatever redact.classify said "copy" to
-      bin/kuna  bin/ida-decompile  logging shims; the launcher prepends bin/ to PATH
+      bin/unlace  bin/ida-decompile  logging shims; the launcher prepends bin/ to PATH
       bin/_shimlog.py              the shims' JSON-line appender
       TASK.md  AGENTS.md           the statement and the tool protocol; no ground truth
       notes/toolcalls.jsonl        written by the shims, one line per tool call
@@ -295,9 +295,9 @@ fi
 
 def _shim_kuna(real: str) -> str:
     head = _SHIM_HEAD.format(
-        title="Shim for kuna. Logs every call to notes/toolcalls.jsonl -- kuna emits no timing\n# of its own, so this file is the pipeline's only per-call latency signal.",
+        title="Shim for unlace. Logs every call to notes/toolcalls.jsonl -- unlace emits no timing\n# of its own, so this file is the pipeline's only per-call latency signal.",
         real_var="REPIPE_REAL_KUNA", real_default=real)
-    tail = _SHIM_TAIL.format(tool="kuna", invoke='"$REAL" "$@"')
+    tail = _SHIM_TAIL.format(tool="unlace", invoke='"$REAL" "$@"')
     return head + tail
 
 
@@ -396,40 +396,40 @@ def _task_md(meta: dict, primary_t: str, others: list, extras: list) -> str:
 _AGENTS_MD_HEAD = """# Tool protocol for this arena
 
 `bin/` is on your PATH and holds the only two tools you should reach for. Call them by bare
-name (`kuna`, `ida-decompile`) -- never by an absolute path to the real binary, because the
+name (`unlace`, `ida-decompile`) -- never by an absolute path to the real binary, because the
 bare name is the shim and the shim is what records the run.
 
-## kuna -- your primary tool
+## unlace -- your primary tool
 
-`kuna --help` lists its {n} subcommands: {subcommands}. `kuna docs` is the embedded manual and
-`kuna catalog --json` the full option surface; the repo's `docs/cli.md` and `docs/options.md`
+`unlace --help` lists its {n} subcommands: {subcommands}. `unlace docs` is the embedded manual and
+`unlace catalog --json` the full option surface; the repo's `docs/cli.md` and `docs/options.md`
 document both.
 
 That list is read out of the binary in this arena at build time, so it is the surface you
 actually have. Do NOT assume a subcommand is absent because a previous round said so -- this
 pipeline ships CLI capability every round, and a brief that froze the surface is how a tester
-re-files a gap that was closed two rounds ago. Check `kuna <subcommand> --help` before
+re-files a gap that was closed two rounds ago. Check `unlace <subcommand> --help` before
 concluding something cannot be done.
 
 What is structurally true of every invocation, and worth not rediscovering:
 
 - There is no server mode and no persistence between invocations. Every call is a cold load of
   the whole binary, so ten calls pay the load ten times; prefer one `decompile-all` over a loop.
-- kuna reports no timing of its own. If a call felt slow, the number lives in
+- unlace reports no timing of its own. If a call felt slow, the number lives in
   `notes/toolcalls.jsonl` and nowhere else.
 - An empty or successful-looking result is not proof: subcommands can exit 0 with
-  `{{"count": 0}}` on a binary whose functions kuna simply failed to find. Cross-check anything
+  `{{"count": 0}}` on a binary whose functions unlace simply failed to find. Cross-check anything
   surprising against `ida-decompile` before you believe it -- a wrong answer delivered
   confidently is the single most valuable thing you can find here.
 """
 
 _AGENTS_MD_TAIL = """## ida-decompile -- the reference, and a last resort
 
-`ida-decompile` is the declib CLI over IDA Pro. It can do things kuna cannot, and it keeps its
+`ida-decompile` is the declib CLI over IDA Pro. It can do things unlace cannot, and it keeps its
 servers and databases inside this arena.
 
-**Try kuna first, every time.** Every `ida-decompile` call is logged and automatically drafts an
-observation against kuna, because "how often did kuna push a tester to the reference tool" is a
+**Try unlace first, every time.** Every `ida-decompile` call is logged and automatically drafts an
+observation against unlace, because "how often did unlace push a tester to the reference tool" is a
 headline number for this pipeline. Reaching for it is allowed and sometimes correct -- reaching
 for it *silently*, or *first*, defeats the measurement.
 
@@ -437,13 +437,13 @@ for it *silently*, or *first*, defeats the measurement.
 
 Both shims append one line per call to `notes/toolcalls.jsonl`:
 `{"t","tool","argv","cwd","exit","seconds","stdout_bytes","stderr_bytes","stdout_sha1"}`.
-kuna reports no timing of its own, so this file is the only latency evidence that exists. Two
+unlace reports no timing of its own, so this file is the only latency evidence that exists. Two
 consequences: do not edit or truncate it, and prefer one deliberate invocation over a shell loop
 that fires forty, because each line is a datum.
 
 ## The point of the exercise
 
-Solving the challenge is the vehicle. The deliverable is **every place kuna was missing, wrong,
+Solving the challenge is the vehicle. The deliverable is **every place unlace was missing, wrong,
 slow, or more expensive than it should have been**, each with a command someone else can re-run
 to see the same thing. An observation without a replayable command cannot enter the backlog.
 
@@ -468,7 +468,7 @@ def _agents_md(kuna_bin) -> str:
         r = subprocess.run([str(kuna_bin), "--help"], capture_output=True, text=True,
                            timeout=60)
         for line in (r.stdout + r.stderr).splitlines():
-            if line.startswith("usage: kuna <") and ">" in line:
+            if line.startswith("usage: unlace <") and ">" in line:
                 names = line[line.index("<") + 1:line.index(">")].split("|")
                 break
     except (OSError, subprocess.SubprocessError):
@@ -549,7 +549,7 @@ def build(hexid: str, round_n: int = 0, out=None, force: bool = False) -> Path:
             kept_extras.append(erel)
 
     _write(staging / "bin" / "_shimlog.py", _SHIMLOG_PY, 0o644)
-    _write(staging / "bin" / "kuna", _shim_kuna(str(config.kuna_bin())), SHIM_MODE)
+    _write(staging / "bin" / "unlace", _shim_kuna(str(config.kuna_bin())), SHIM_MODE)
     _write(staging / "bin" / "ida-decompile", _shim_ida(str(config.decompiler_cli())), SHIM_MODE)
 
     (staging / "notes").mkdir(exist_ok=True)
@@ -636,13 +636,13 @@ def sanity_check(arena, meta=None) -> list:
         except (OSError, ValueError) as exc:
             bad.append("cannot load meta for %s: %s" % (record["hexid"], exc))
 
-    for rel in ("TASK.md", "AGENTS.md", "bin/kuna", "bin/ida-decompile", "bin/_shimlog.py"):
+    for rel in ("TASK.md", "AGENTS.md", "bin/unlace", "bin/ida-decompile", "bin/_shimlog.py"):
         if not (arena / rel).is_file():
             bad.append("missing: %s" % rel)
     for rel in ("target", "notes"):
         if not (arena / rel).is_dir():
             bad.append("missing directory: %s" % rel)
-    for rel in ("bin/kuna", "bin/ida-decompile"):
+    for rel in ("bin/unlace", "bin/ida-decompile"):
         p = arena / rel
         if p.is_file() and not (p.stat().st_mode & stat.S_IXUSR):
             bad.append("shim not executable: %s" % rel)

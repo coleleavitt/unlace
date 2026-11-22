@@ -16,11 +16,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/aif_gap_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "binary_sha256": "1a592a85f424cc2db8953d5a38c86676bcee5e37b242b6fb6244a2c9fccfeeef",
     "binary_size": 14408,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/aif_gap_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "selector": null,
     "selector_kind": "none"
   },

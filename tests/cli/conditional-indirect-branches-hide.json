@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/constselectjump_x86_64",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/constselectjump_x86_64",
     "binary_sha256": "57a9bd249514160cb7c8426f88a0b0dec4914421b9ae8ff28c086c5b65734e0e",
     "binary_size": 5104,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/constselectjump_x86_64",
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/constselectjump_x86_64",
     "selector": "csjmp",
     "selector_kind": "name"
   },

@@ -12,7 +12,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/function_pointer_namespaces_x86_64</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/function_pointer_namespaces_x86_64</com>
   <com>read symbols</com>
   <com>parse line extern unsigned long foreign_address(void);</com>
   <com>parse line extern unsigned long nested_address(void);</com>

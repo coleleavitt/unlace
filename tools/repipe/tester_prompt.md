@@ -1,7 +1,7 @@
 # kuna RE tester — solve this crackme with kuna, and record every way kuna failed you
 
 You are an autonomous reverse engineer working in `{{ARENA}}`. There is a binary in
-`target/`. Your surface job is to solve it. **Your real job is to find every way `kuna` is
+`target/`. Your surface job is to solve it. **Your real job is to find every way `unlace` is
 bad at this**, because you are the measuring instrument for a decompiler that is trying to
 become good enough for agents like you to use.
 
@@ -9,14 +9,14 @@ Round {{ROUND}} · challenge `{{HEXID}}` · time budget **{{TIME_BUDGET}} minute
 
 ## Your tools
 
-- **`kuna` is your primary static-analysis tool.** It is on your PATH as `kuna` (a wrapper —
+- **`unlace` is your primary static-analysis tool.** It is on your PATH as `unlace` (a wrapper —
   use it, not any other path, so your work is measured). Start with:
   ```
-  kuna functions ./target/{{TARGET}} --json
-  kuna decompile-all ./target/{{TARGET}} --json
-  kuna decompile ./target/{{TARGET}} <name-or-0xaddr> [--addr]
-  kuna catalog --json          # every decision you can flip
-  kuna decompile ./target/{{TARGET}} <fn> --option NAME VALUE
+  unlace functions ./target/{{TARGET}} --json
+  unlace decompile-all ./target/{{TARGET}} --json
+  unlace decompile ./target/{{TARGET}} <name-or-0xaddr> [--addr]
+  unlace catalog --json          # every decision you can flip
+  unlace decompile ./target/{{TARGET}} <fn> --option NAME VALUE
   ```
   Its full reference is `{{REPO}}/docs/cli.md` and the option catalog with symptom-indexed
   guidance is `{{REPO}}/docs/options.md`. Read them; they are the contract.
@@ -108,7 +108,7 @@ do:
 
 | you would have written | write instead |
 |---|---|
-| `sh -c 'kuna decompile B f \| grep -c switch'` | `"cmd": ["{{KUNA}}","decompile","{{BIN}}","f"]` + `"stdout_matches": ["switch"]` |
+| `sh -c 'unlace decompile B f \| grep -c switch'` | `"cmd": ["{{KUNA}}","decompile","{{BIN}}","f"]` + `"stdout_matches": ["switch"]` |
 | `sh -c '... \| grep -v swi(0x80)'` | `"stdout_absent": ["swi\\(0x80\\)"]` |
 | `sh -c '... \| jq .count'` | `"json": [{"path":"count","op":"eq","value":0}]` |
 | `timeout 60 kuna ...` | `"timeout_s": 60` — the field already exists |
@@ -123,7 +123,7 @@ A worked example of the shape:
 ```json
 {
   "kind": "silent-failure",
-  "title": "kuna functions reports 0 functions and exits 0 on a stripped PIE",
+  "title": "unlace functions reports 0 functions and exits 0 on a stripped PIE",
   "what_i_wanted": "the function inventory of target/snake",
   "what_kuna_did": "{\"count\": 0, \"functions\": []}, exit 0, no error field, 0.14s",
   "probe": {
@@ -198,8 +198,8 @@ Concretely, when you find yourself thinking any of these, file it as a missing *
   you want **renames that persist**
 
 kuna's design already anticipates this: its phase model exposes decision points as durable
-typed assertions (`--option NAME VALUE`, `--kassert`), and `kuna docs phases` explains the
-model. **Read `kuna catalog --json` before filing** — if an option already does what you want,
+typed assertions (`--option NAME VALUE`, `--kassert`), and `unlace docs phases` explains the
+model. **Read `unlace catalog --json` before filing** — if an option already does what you want,
 that is not a missing interface, it is a discoverability problem, and saying so is still
 useful. Prefer asking for a *knob on an existing decision* over asking for a new heuristic:
 a knob you can drive beats a guess that is right more often.

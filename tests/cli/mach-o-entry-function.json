@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/kuna-analysis/tests/fixtures/macho_stripped_main",
+    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/macho_stripped_main",
     "binary_sha256": "9102bb6a99b0f2c833a354e22d8936a28f56e02a454c483b3870ac6234170a34",
     "binary_size": 16688,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/kuna-analysis/tests/fixtures/macho_stripped_main"
+    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/macho_stripped_main"
   },
   "expect": {
     "exit_code": {

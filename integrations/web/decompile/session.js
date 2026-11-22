@@ -4,7 +4,7 @@
 // so a rename and a retype of one local merge into one pinned `type`
 // directive, and writing a byte back to its original value removes the patch.
 // The same records export as a `.kuna` file the native CLI replays verbatim:
-//   kuna decompile <binary> <function> --assert @<binary>.kuna
+//   unlace decompile <binary> <function> --assert @<binary>.kuna
 // Directives go out grouped by kind, each kind in the order its records were
 // first made (a later edit keeps a record's place), since some depend on
 // earlier ones: a type definition on another, the later of two raw
@@ -70,7 +70,7 @@ export function shellQuote(s) {
 
 /** The native command that replays a session file against one function. */
 export function cliCommand(fileName, target, sessionFile = `${fileName}.kuna`) {
-  return `kuna decompile ${shellQuote(fileName)} ${shellQuote(target)} --assert @${shellQuote(sessionFile)}`;
+  return `unlace decompile ${shellQuote(fileName)} ${shellQuote(target)} --assert @${shellQuote(sessionFile)}`;
 }
 
 const hex = (big) => '0x' + big.toString(16);
@@ -497,7 +497,7 @@ export class Session {
       hash ? `# hash: ${hash}` : null,
       `# saved: ${time.toISOString()}`,
       `# replay: ${cliCommand(binary, target, file)}`,
-      `#     or: kuna decompile-all ${shellQuote(binary)} --assert @${shellQuote(file)}`,
+      `#     or: unlace decompile-all ${shellQuote(binary)} --assert @${shellQuote(file)}`,
     ].filter(Boolean);
     const refused = this.entries(nameOf).filter((e) => e.status === 'refused')
       .map((e) => `# refused by the engine, not replayed: ${e.text}`);

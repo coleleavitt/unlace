@@ -11,7 +11,7 @@
 5. TRex taken piecewise (rounding order → signedness; Fig.6 metric → structscore; colocation/aggregate declines →
    structsynth); the StructuralType substrate is a separate XL [PROPOSAL] the user may request later.
 6. Goal 2 = correctness (phantom args via protoorder) + readability measured by varcensus; kuna is already leanest.
-7. `kuna decompile` and `decompile-all` may disagree on a callee's types once protoorder parks recovered protos.
+7. `unlace decompile` and `decompile-all` may disagree on a callee's types once protoorder parks recovered protos.
 8. Never write into /home/mahaloz/github/decbench/results (a dewolf run is live); baselines are kuna-side.
 9. 2026-09-17 user decision: GO on all open proposal PRs under the normal rules — no large speed hit (+5% budget)
    and accuracy relatively the same or better (444-slice typesweep). Applied as: signedness lands with default
@@ -44,7 +44,7 @@
    by a synthesized NAME has to prove the two ledgers agree before the number means anything.
 15. 2026-09-20 `argclobber` is default `on` (#689) on the strength of the callee's own recovered
    prototype, not a caller-side heuristic. It is inert wherever protoorder parks nothing — a
-   single-function `kuna decompile`, `--addr`/`--functions`, `--jobs N`, `decompile-project`,
+   single-function `unlace decompile`, `--addr`/`--functions`, `--jobs N`, `decompile-project`,
    `decompile-graph` — so a serial `decompile-all` and a sharded one legitimately differ by exactly
    these dropped arguments, and any ablation of it MUST use a whole-binary serial run.
 16. 2026-09-20 decbench#94 (the missing `DW_TAG_restrict_type` arm) is not a campaign lever. The
@@ -103,8 +103,8 @@
 27. 2026-09-23 attribute a round by BUILDING each landed commit, not only by ablating options. #714 is
    ungated and its libc table cannot be isolated with `--option libcsigs off` (that arm drops the whole
    28-name base table too), so round G swept `9e07ab931` and `1c57f06b6` as their own binaries. Each
-   build needs its own directory: `kuna` resolves the `decomp_dbg` BESIDE IT, and an old `kuna` sharing a
-   directory with a newer `decomp_dbg` printed the NEWER build's option defaults from `kuna catalog` —
+   build needs its own directory: `unlace` resolves the `decomp_dbg` BESIDE IT, and an old `unlace` sharing a
+   directory with a newer `decomp_dbg` printed the NEWER build's option defaults from `unlace catalog` —
    caught before any arm was swept, and every arm here ran from its own directory with its own pair.
 28. 2026-09-24 `structmerge siblings` (#715) lands default off although its option arm raises layout
    precision and recall (.8713 → .8730, .0932 → .0960) and moves nothing else. Agreement between two

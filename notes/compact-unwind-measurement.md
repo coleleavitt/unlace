@@ -46,7 +46,7 @@ the function-starts table, never finer.
 | iOS system daemon 5 | arm64e | 1,247 | 997 | 0 | 105 |
 
 Three more iOS system binaries (16 KB extracts with 1–2 starts each) also show 0.
-On app A, `kuna functions` finds 314,038 functions with the option off and the
+On app A, `unlace functions` finds 314,038 functions with the option off and the
 same 314,038 with it on.
 
 The compact encodings add nothing for kuna either. App A has 123,580

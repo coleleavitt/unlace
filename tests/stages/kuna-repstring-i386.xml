@@ -10,7 +10,7 @@
     `option repstring on|off` decides whether the proved loop becomes
     `builtin_memcpy`, `builtin_memset`, `builtin_memset32` or `builtin_memcmp`.
 
-    The bytes are .rodata and .text of decompiler/crates/kuna-analysis/tests/
+    The bytes are .rodata and .text of decompiler/crates/unlace-analysis/tests/
     fixtures/repstring_i386, built from repstring.c by gcc 15.3
     (-m32 -Os -minline-all-stringops -fno-pic): fill32 (`rep stosd` of a word
     whose bytes differ), zero32 (of zero), fill8 (`rep stosb`), copy32 and

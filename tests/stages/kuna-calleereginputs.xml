@@ -69,7 +69,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/thiscall_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/thiscall_pe_i386.exe</com>
   <com>option calleereginputs off</com>
   <com>read symbols</com>
   <com>function bounds 0x401040 as use</com>
@@ -77,14 +77,14 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/thiscall_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/thiscall_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401040 as use</com>
   <com>load function use</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/calleereginputs_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/calleereginputs_pe_i386.exe</com>
   <com>option calleereginputs off</com>
   <com>read symbols</com>
   <com>function bounds 0x401050 as forward</com>
@@ -112,7 +112,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/calleereginputs_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/calleereginputs_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401050 as forward</com>
   <com>load function forward</com>
@@ -139,7 +139,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/vcall_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/vcall_pe_i386.exe</com>
   <com>option calleereginputs off</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as vcall</com>
@@ -203,7 +203,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/kuna-analysis/tests/fixtures/vcall_pe_i386.exe</com>
+  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/vcall_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as vcall</com>
   <com>load function vcall</com>

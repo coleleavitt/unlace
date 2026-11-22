@@ -8,7 +8,7 @@ change move to a PERFECT type recovery, and which did it move off?
 Both arms are the SAME kuna binary over the SAME slices, one invocation per
 (slice, arm) exactly as decbench's ``kuna_raw`` backend runs it::
 
-    kuna decompile-all <stripped> --json --max-fn-seconds 120 [--option N V ...]
+    unlace decompile-all <stripped> --json --max-fn-seconds 120 [--option N V ...]
 
 Each arm's JSON is rebuilt into a ``DecompilationResult`` whose function set and
 names come from the tree's own checkpoint for kuna (the addresses decbench

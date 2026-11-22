@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# unlace-wt-rm <name> [--dry-run] [--force]
+# unlace-wt-rm --sweep [--days N] [--dry-run]
+#
+# Remove one agent worktree ../unlace-wt-<name> and its build dir its build dir (where its decompiler/target symlink points, else ../unlace-target/<name>), the way Claude Code's
+# worktree cleanup works: refuse what would lose work, say why, and only then delete.
+#   - uncommitted changes to tracked files, or untracked files that are not ignored: refused
+#   - commits that no remote branch contains (nothing pushed): refused
+#   - a git lock on the worktree (`git worktree lock`): refused
+#   - a live process working inside it (Linux /proc): refused
+#   - --force overrides the unpushed-commit check only (never the others)
+#
+# --sweep goes over every ../unlace-wt-* worktree and removes the ones that pass all checks and whose directory
+# has not changed for N days (default 7), like Claude Code's stale-worktree sweep. With --dry-run it only says
+# what it would do. Logs every decision on stdout. The main worktree (unlace-wt-main) and the primary
+# checkout are never removed.
+set -uo pipefail
+name="" dry=0 force=0 sweep=0 days=7
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) dry=1 ;;
+    --force) force=1 ;;
+    --sweep) sweep=1 ;;
+    --days) shift; days="${1:-}"; [[ "$days" =~ ^[0-9]+$ ]] || { echo "unlace-wt-rm: --days takes a whole number" >&2; exit 2; } ;;
+    -*) echo "unlace-wt-rm: unknown option $1" >&2; exit 2 ;;
+    *) name="$1" ;;
+  esac
+  shift
+done
+main="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
+forks="$(dirname "$main")"
+
+# The pids (other than this script's own) whose working directory is inside $1; empty when none. Prints
+# "unknown" when /proc cannot be read, which callers treat as in use.
+pids_inside() {
+  local root real pid cwd found=""
+  root="$(cd -P -- "$1" 2>/dev/null && pwd)" || { echo unknown; return; }
+  [ -d /proc/self ] || { echo unknown; return; }
+  for d in /proc/[0-9]*; do
+    pid="${d#/proc/}"
+    [ "$pid" = "$$" ] && continue
+    cwd="$(readlink "$d/cwd" 2>/dev/null)" || continue
+    case "$cwd/" in "$root"/*) found="$found $pid" ;; esac
+  done
+  echo "${found# }"
+}
+
+# Check one worktree. Prints the refusal and returns 1, or returns 0 when it may go.
+check() {
+  local root="$1" lock unpushed inside
+  git -C "$main" worktree list --porcelain | grep -qx "worktree $root" \
+    || { echo "unlace-wt-rm: REFUSED $root: not a worktree of $main"; return 1; }
+  lock="$(git -C "$main" worktree list --porcelain | awk -v r="worktree $root" '$0==r{f=1;next} /^worktree /{f=0} f&&/^locked/{sub(/^locked ?/,""); print "locked:" $0}')"
+  if [ -n "$lock" ]; then
+    echo "unlace-wt-rm: REFUSED $root: it is locked (${lock#locked:}); unlock it with git worktree unlock first"; return 1
+  fi
+  if [ -n "$(git -C "$root" status --porcelain --untracked-files=normal | grep -v '^??' || true)" ]; then
+    echo "unlace-wt-rm: REFUSED $root: uncommitted changes to tracked files"
+    git -C "$root" status --short | grep -v '^??' | head -20; return 1
+  fi
+  if [ -n "$(git -C "$root" ls-files --others --exclude-standard | head -1)" ]; then
+    echo "unlace-wt-rm: REFUSED $root: untracked files that are not ignored"
+    git -C "$root" ls-files --others --exclude-standard | head -20; return 1
+  fi
+  inside="$(pids_inside "$root")"
+  if [ -n "$inside" ]; then
+    echo "unlace-wt-rm: REFUSED $root: a live process works inside it (pid $inside)"; return 1
+  fi
+  unpushed="$(git -C "$root" rev-list HEAD --not --remotes 2>/dev/null | wc -l)"
+  if [ "$unpushed" -gt 0 ] && [ "$force" -eq 0 ]; then
+    echo "unlace-wt-rm: REFUSED $root: $unpushed commit(s) not on any remote branch (push them, or pass --force)"; return 1
+  fi
+  [ "$unpushed" -gt 0 ] && echo "unlace-wt-rm: $unpushed unpushed commit(s) in $root, removing anyway (--force)"
+  return 0
+}
+
+remove_one() {
+  local n="$1" root="$forks/unlace-wt-$1" target="$forks/unlace-target/$1"
+  [ "$n" = main ] && { echo "unlace-wt-rm: REFUSED $root: the main worktree is never removed"; return 1; }
+  [ -L "$root/decompiler/target" ] && target="$(readlink -f "$root/decompiler/target")"
+  check "$root" || return 1
+  if [ "$dry" -eq 1 ]; then echo "unlace-wt-rm: would remove $root and $target (dry run)"; return 0; fi
+  git -C "$main" worktree remove "$root" && echo "unlace-wt-rm: removed worktree $root" || return 1
+  if [ -d "$target" ]; then rm -rf -- "$target" && echo "unlace-wt-rm: removed build dir $target"; fi
+}
+
+if [ "$sweep" -eq 1 ]; then
+  [ -z "$name" ] || { echo "unlace-wt-rm: --sweep takes no name" >&2; exit 2; }
+  removed=0
+  now="$(date +%s)"
+  for root in "$forks"/unlace-wt-*; do
+    [ -d "$root" ] || continue
+    n="${root##*/unlace-wt-}"
+    age_days=$(( (now - $(stat -c %Y "$root")) / 86400 ))
+    if [ "$age_days" -lt "$days" ]; then
+      echo "unlace-wt-rm: kept $root: changed $age_days day(s) ago (cutoff $days)"; continue
+    fi
+    if remove_one "$n"; then removed=$((removed + 1)); fi
+  done
+  echo "unlace-wt-rm: sweep done, $removed worktree(s) $([ "$dry" -eq 1 ] && echo 'would be ')removed"
+  exit 0
+fi
+
+[ -n "$name" ] || { echo "usage: unlace-wt-rm <name> [--dry-run] [--force] | unlace-wt-rm --sweep [--days N] [--dry-run]" >&2; exit 2; }
+case "$name" in */*|.|..|"") echo "unlace-wt-rm: a worktree name, not a path: $name" >&2; exit 2 ;; esac
+[ -d "$forks/unlace-wt-$name" ] || { echo "unlace-wt-rm: no worktree at $forks/unlace-wt-$name"; exit 0; }
+remove_one "$name" || exit 1

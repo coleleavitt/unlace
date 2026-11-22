@@ -19,7 +19,7 @@ use std::rc::Rc;
 use super::{DyldCache, u32_at, u64_at};
 
 const MH_MAGIC: u32 = 0xfeed_face;
-const MH_MAGIC_64: u32 = 0xfeed_facf;
+pub(super) const MH_MAGIC_64: u32 = 0xfeed_facf;
 const CPU_TYPE_ARM64: u32 = 0x0100_000c;
 const CPU_TYPE_ARM64_32: u32 = 0x0200_000c;
 const CPU_TYPE_X86_64: u32 = 0x0100_0007;

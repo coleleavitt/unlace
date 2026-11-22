@@ -1383,6 +1383,8 @@ pub fn run_listing_consumers_replaying_observed(
             }
         }
     }
+    let mut thumb_roots = std::collections::BTreeSet::new();
+    let mut thumb_memo = None;
     if arch.analysis_listing && arch.analysis_funcstart_patterns && !frames_recovered {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let raw = crate::aif::raw_thumb_prologue_seeds(
@@ -1392,23 +1394,31 @@ pub fn run_listing_consumers_replaying_observed(
                 std::rc::Rc::clone(code_space),
                 listing.exec_ranges(),
             );
-            if !raw.is_empty() {
-                let before = seeds.len();
-                seeds.extend(raw);
+            seeds.sort_unstable();
+            seeds.dedup();
+            let added: Vec<u64> = raw
+                .into_iter()
+                .filter(|root| seeds.binary_search(root).is_err())
+                .collect();
+            if !added.is_empty() {
+                thumb_roots.extend(&added);
+                seeds.extend(added);
                 seeds.sort_unstable();
-                seeds.dedup();
-                if seeds.len() != before {
-                    listing = crate::listing::Listing::build_with_meta_planned_without_image(
-                        &file,
-                        arch,
-                        translate,
-                        &seeds,
-                        &funcsym_seeds,
-                        &seed_names,
-                        detail,
-                        plan,
-                    );
-                }
+                let memo = thumb_memo.insert(crate::listing::kuna_decodememo::DecodeMemo::new(
+                    listing.exec_ranges(),
+                ));
+                listing = crate::listing::Listing::build_tracking_frames_without_image(
+                    &file,
+                    arch,
+                    translate,
+                    &seeds,
+                    &funcsym_seeds,
+                    &seed_names,
+                    detail,
+                    plan,
+                    None,
+                    Some(memo),
+                );
             }
         }
     }
@@ -1455,6 +1465,39 @@ pub fn run_listing_consumers_replaying_observed(
                     );
                 }
             }
+        }
+    }
+    // A start only the raw Thumb prologue scan found, which the Listing enters by
+    // straight-line flow from a function it already has, is that function's
+    // shrink-wrapped prologue: the routine tested and returned before saving LR.
+    if !thumb_roots.is_empty() {
+        for root in committed_entries {
+            thumb_roots.remove(root);
+        }
+        let entered: std::collections::BTreeSet<u64> =
+            crate::aif::kuna_frameflow::entered(&listing, &thumb_roots)
+                .into_iter()
+                .filter(|&root| {
+                    listing
+                        .refs_to(root)
+                        .iter()
+                        .all(|r| r.kind != crate::listing::RefKind::Call)
+                })
+                .collect();
+        if !entered.is_empty() {
+            seeds.retain(|root| !entered.contains(root));
+            listing = crate::listing::Listing::build_tracking_frames_without_image(
+                &file,
+                arch,
+                translate,
+                &seeds,
+                &funcsym_seeds,
+                &seed_names,
+                detail,
+                plan,
+                None,
+                thumb_memo.as_ref(),
+            );
         }
     }
     // (kuna, ARM discovery Stage 3b) `ptrentry` — pointer-referenced entries. Stage

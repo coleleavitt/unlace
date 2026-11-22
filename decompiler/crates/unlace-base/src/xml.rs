@@ -2307,7 +2307,7 @@ mod tests {
         // and kuna-loweredswitchbits / a switch lowered to bit tests re-rolls
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
         // and kuna-typelib / the prebuilt type library declares the libc imports no table does
-        assert_eq!(count, 963, "corpus file count drifted");
+        assert_eq!(count, 966, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

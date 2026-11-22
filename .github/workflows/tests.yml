@@ -104,8 +104,8 @@ jobs:
       - name: make test-cli
         run: make test-cli
 
-      - name: kuna catalog --check
-        run: ./decompiler/target/release/kuna catalog --check
+      - name: unlace catalog --check
+        run: ./decompiler/target/release/unlace catalog --check
 
       # Shared-counter drift and ElementId collisions. Both are shapes that every
       # other gate passes cleanly: a stale hard-coded settable count only fails
@@ -127,9 +127,9 @@ jobs:
       # Free: it reuses the release binary this job already built.
       - name: docs/options.md is the generator's bytes
         run: |
-          ./decompiler/target/release/kuna catalog --markdown > /tmp/options.generated.md
+          ./decompiler/target/release/unlace catalog --markdown > /tmp/options.generated.md
           if ! diff -u docs/options.md /tmp/options.generated.md; then
-            echo "::error file=docs/options.md::stale -- regenerate with 'decompiler/target/release/kuna catalog --markdown > docs/options.md'"
+            echo "::error file=docs/options.md::stale -- regenerate with 'decompiler/target/release/unlace catalog --markdown > docs/options.md'"
             exit 1
           fi
 

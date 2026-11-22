@@ -716,6 +716,9 @@ pub struct Architecture {
     /// (kuna) `loweredswitch tree|all`: a binary-search compare tree re-rolls
     /// from 2 to 64 cases instead of 3 to 16.
     pub lowered_switch_tree: bool,
+    /// (kuna `loweredswitchbits`) A switch lowered to bit tests re-rolls.  See
+    /// [`crate::p2_lift::kuna_loweredswitchbits`].
+    pub lowered_switch_bits: bool,
     /// (kuna `funcboundflow`) Bound fall-through at a known function entry: when a
     /// fall-through reaches the entry of another known function (the callee just
     /// executed being an unnamed static no-return the analysis could not prove
@@ -2813,6 +2816,7 @@ impl Architecture {
             switch_selector_guard: false, // (kuna) option switchselector; reset_defaults sets the shipped default
             lowered_switch_linear: false, // (kuna) option loweredswitch linear|all
             lowered_switch_tree: false,   // (kuna) option loweredswitch tree|all
+            lowered_switch_bits: false, // (kuna) option loweredswitchbits; reset_defaults sets the shipped default
             sparc_struct_return: false,
 
             mba: false,
@@ -3323,6 +3327,7 @@ impl Architecture {
         self.recover_lowered_switch = true; // (kuna) default-on (angr port)
         self.lowered_switch_linear = false; // (kuna) `loweredswitch linear` is opt-in: a linear chain also reads as a hand-written if/else-if
         self.lowered_switch_tree = false; // (kuna) `loweredswitch tree` is opt-in: the 16-case cap is the structurer's fail-safe
+        self.lowered_switch_bits = true; // (kuna) option loweredswitchbits default-on: a switch lowered to bit tests re-rolls
         self.cast_object = true; // (kuna) option castobject default-on: a stack local whose address only fills declared int * parameters, whose readers agree, is declared int; evidence in docs/features/castobject/default-on-evaluation.md
         self.end_ptr_bound = true; // (kuna) DIV-177 default-on: a pointer walk's end bound renders on its own buffer (0/675 ablation)
         self.jump_assist = true; // (kuna) option jumpassist default-on: only the Dalvik and JVM specs declare a <jumpassist>, and no datatest uses either
@@ -4412,6 +4417,7 @@ impl Architecture {
         ctx.switch_selector_guard = self.switch_selector_guard; // switchselector
         ctx.lowered_switch_linear = self.lowered_switch_linear; // loweredswitch linear|all
         ctx.lowered_switch_tree = self.lowered_switch_tree; // loweredswitch tree|all
+        ctx.lowered_switch_bits = self.lowered_switch_bits; // loweredswitchbits
         ctx.cond_fold = self.cond_fold; // condfold
         ctx.cond_stmts = self.cond_stmts; // condstmts
         ctx.goto_reduce = self.goto_reduce; // gotoreduce

@@ -2297,10 +2297,11 @@ mod tests {
         // and kuna-swifthelpers / Swift instantiation helpers and lazy witness table accessors (option swifthelpers)
         // and kuna-rh850-instructions, kuna-rh850-sysregs / RH850 (V850E3v5) instructions and system registers decode
         // and kuna-guardedloop / a guarded do-while prints as a while loop
+        // and kuna-loweredswitchbits / a switch lowered to bit tests re-rolls
         // Merge of upstream/main into all (2026-11-22): upstream's stage tests plus the
         // fork-only ones, less the six of the options upstream superseded; then the
         // nine above from the 2026-11-22 upstream merge into unlace.
-        assert_eq!(count, 955, "corpus file count drifted");
+        assert_eq!(count, 956, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

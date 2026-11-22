@@ -743,8 +743,21 @@ impl Action for ActionDefaultParams {
                                 data.get_call_specs(i).get_op(),
                             )
                         })
+                        .or_else(|| {
+                            crate::kuna_swiftinfer::async_callee_model(
+                                data,
+                                i,
+                                bound_model.as_ref(),
+                            )
+                        })
                         .or(bound_model)
                         .or_else(|| crate::kuna_swiftinfer::callee_model(data, i))
+                        .or_else(|| {
+                            crate::kuna_swiftinfer::async_tail_call(
+                                data,
+                                data.get_call_specs(i).get_op(),
+                            )
+                        })
                         .or_else(|| {
                             crate::kuna_swiftcall::indirect_call(
                                 data,

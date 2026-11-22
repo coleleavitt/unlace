@@ -105,6 +105,7 @@ pub(crate) mod kuna_pltlocal;
 pub mod firmware;
 pub mod format;
 pub mod kuna_msvcfpconst;
+pub(crate) mod kuna_nanomips;
 // (kuna) PE/Mach-O/ELF import-slot call binding (`peimportcall`): `externref` over
 // typed import-pointer slots + upstream's strictly PE-only no-return API names.
 pub mod kuna_authptrcall;

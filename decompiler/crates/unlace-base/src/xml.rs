@@ -2308,9 +2308,10 @@ mod tests {
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
         // and kuna-swiftstrcmp / a Swift literal compared for equality prints in the inline test
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
-        assert_eq!(count, 967, "corpus file count drifted");
+        assert_eq!(count, 968, "corpus file count drifted");
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
-        assert_eq!(count, 967, "corpus file count drifted");
+        // and kuna-relswitch-a64 / an arm64e hardened jump table is a switch; its inline table is no function start
+        assert_eq!(count, 968, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

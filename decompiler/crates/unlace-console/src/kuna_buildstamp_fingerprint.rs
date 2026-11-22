@@ -66,7 +66,7 @@ fn linked_crates(workspace: &Path, crates: &Path, root: &str) -> io::Result<BTre
             path.parent().unwrap_or(crates),
             &workspace_dependencies,
         )? {
-            if package.starts_with("kuna-") {
+            if package.starts_with("unlace-") {
                 let dependency = crates.join(&package).join("Cargo.toml");
                 if !dependency.is_file() {
                     return Err(io::Error::new(
@@ -208,7 +208,7 @@ fn insert_dependency(
     workspace_dependencies: &BTreeMap<String, String>,
 ) {
     if let Some(package) = package.or_else(|| workspace_dependencies.get(alias).cloned()) {
-        if package.starts_with("kuna-") {
+        if package.starts_with("unlace-") {
             result.insert(package);
         }
     }
@@ -428,32 +428,32 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("crates/unlace-console/src")).unwrap();
-        fs::create_dir_all(root.join("crates/kuna-core/src")).unwrap();
+        fs::create_dir_all(root.join("crates/unlace-core/src")).unwrap();
         fs::create_dir_all(root.join("crates/unlace-harness/src")).unwrap();
         fs::write(
             root.join("Cargo.toml"),
             "[workspace]\nmembers = [\"crates/*\"]\n\
              [workspace.dependencies]\n\
-             kuna-core = { path = \"crates/kuna-core\" }\n\
+             unlace-core = { path = \"crates/unlace-core\" }\n\
              unlace-console = { path = \"crates/unlace-console\" }\n",
         )
         .unwrap();
         fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
         fs::write(
             root.join("crates/unlace-console/Cargo.toml"),
-            "[package]\nname = \"unlace-console\"\n[dependencies]\nkuna-core.workspace = true\n",
+            "[package]\nname = \"unlace-console\"\n[dependencies]\nunlace-core.workspace = true\n",
         )
         .unwrap();
         fs::write(root.join("crates/unlace-console/src/lib.rs"), "console\n").unwrap();
         fs::write(
-            root.join("crates/kuna-core/Cargo.toml"),
-            "[package]\nname = \"kuna-core\"\n",
+            root.join("crates/unlace-core/Cargo.toml"),
+            "[package]\nname = \"unlace-core\"\n",
         )
         .unwrap();
-        fs::write(root.join("crates/kuna-core/src/lib.rs"), "core\n").unwrap();
+        fs::write(root.join("crates/unlace-core/src/lib.rs"), "core\n").unwrap();
         fs::write(
             root.join("crates/unlace-harness/Cargo.toml"),
-            "[package]\nname = \"unlace-harness\"\n[dependencies]\nkuna-console.workspace = true\n",
+            "[package]\nname = \"unlace-harness\"\n[dependencies]\nunlace-console.workspace = true\n",
         )
         .unwrap();
         fs::write(root.join("crates/unlace-harness/src/lib.rs"), "harness\n").unwrap();
@@ -486,7 +486,7 @@ mod tests {
         assert_ne!(calculate(&root, "unlace-harness").unwrap().value, harness);
 
         let harness = calculate(&root, "unlace-harness").unwrap().value;
-        fs::write(root.join("crates/kuna-core/src/lib.rs"), "changed core\n").unwrap();
+        fs::write(root.join("crates/unlace-core/src/lib.rs"), "changed core\n").unwrap();
         assert_ne!(calculate(&root, "unlace-console").unwrap().value, engine);
         assert_ne!(calculate(&root, "unlace-harness").unwrap().value, harness);
 
@@ -522,22 +522,22 @@ mod tests {
         let forms = [
             (
                 "quoted",
-                "[dependencies]\n\"kuna-core\" = { path = \"../kuna-core\" }\n",
+                "[dependencies]\n\"unlace-core\" = { path = \"../unlace-core\" }\n",
                 None,
             ),
             (
                 "renamed",
-                "[dependencies]\nengine = { package = \"kuna-core\", path = \"../kuna-core\" }\n",
+                "[dependencies]\nengine = { package = \"unlace-core\", path = \"../unlace-core\" }\n",
                 None,
             ),
             (
                 "table",
-                "[dependencies.engine]\npackage = \"kuna-core\"\npath = \"../kuna-core\"\n",
+                "[dependencies.engine]\npackage = \"unlace-core\"\npath = \"../unlace-core\"\n",
                 None,
             ),
             (
                 "quoted_table",
-                "[dependencies.\"kuna-core\"]\npath = \"../kuna-core\"\n",
+                "[dependencies.\"unlace-core\"]\npath = \"../unlace-core\"\n",
                 None,
             ),
             (
@@ -546,7 +546,7 @@ mod tests {
                 Some(
                     "[workspace]\nmembers = [\"crates/*\"]\n\
                      [workspace.dependencies]\n\
-                     engine = { package = \"kuna-core\", path = \"crates/kuna-core\" }\n",
+                     engine = { package = \"unlace-core\", path = \"crates/unlace-core\" }\n",
                 ),
             ),
         ];
@@ -561,11 +561,11 @@ mod tests {
             )
             .unwrap();
             let before = calculate(&root, "unlace-console").unwrap().value;
-            fs::write(root.join("crates/kuna-core/src/lib.rs"), "changed core\n").unwrap();
+            fs::write(root.join("crates/unlace-core/src/lib.rs"), "changed core\n").unwrap();
             assert_ne!(
                 calculate(&root, "unlace-console").unwrap().value,
                 before,
-                "dependency form {tag} omitted kuna-core",
+                "dependency form {tag} omitted unlace-core",
             );
             let _ = fs::remove_dir_all(root);
         }
@@ -577,7 +577,7 @@ mod tests {
         fs::write(
             root.join("crates/unlace-console/Cargo.toml"),
             "[package]\nname = \"unlace-console\"\n\
-             [dependencies.kuna-shim]\n\
+             [dependencies.unlace-shim]\n\
              package = \"serde\"\n\
              version = \"1\"\n",
         )
@@ -587,7 +587,7 @@ mod tests {
         fs::write(
             root.join("Cargo.toml"),
             "[workspace]\nmembers = [\"crates/*\"]\n\
-             [workspace.dependencies.kuna-shim]\n\
+             [workspace.dependencies.unlace-shim]\n\
              package = \"serde\"\n\
              version = \"1\"\n",
         )
@@ -596,7 +596,7 @@ mod tests {
             root.join("crates/unlace-console/Cargo.toml"),
             "[package]\nname = \"unlace-console\"\n\
              [dependencies]\n\
-             kuna-shim.workspace = true\n",
+             unlace-shim.workspace = true\n",
         )
         .unwrap();
         calculate(&root, "unlace-console").unwrap();
@@ -606,7 +606,7 @@ mod tests {
     #[test]
     fn crlf_and_lf_sources_have_the_same_fingerprint() {
         let root = workspace("newlines");
-        let path = root.join("crates/kuna-core/src/lib.rs");
+        let path = root.join("crates/unlace-core/src/lib.rs");
         fs::write(&path, "one\ntwo\n").unwrap();
         let lf = calculate(&root, "unlace-console").unwrap().value;
         fs::write(&path, "one\r\ntwo\r\n").unwrap();

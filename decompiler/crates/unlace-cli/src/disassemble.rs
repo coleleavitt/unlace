@@ -1027,8 +1027,9 @@ fn render_text(region: &Region, rows: &[Row], truncated: bool) -> String {
             i += n;
             continue;
         }
+        // An instruction of 11 or more bytes fills the hex column: keep a space.
         let line = format!(
-            "{:<13} {:<22}{}",
+            "{:<13} {:<21} {}",
             format!("0x{:x}", r.addr),
             r.hex(),
             r.text()

@@ -1721,6 +1721,9 @@ pub struct Architecture {
     pub analysis_dwarfscopes: bool,
     /// (kuna) Gate the UEFI module markup pass (`uefi`); default on.
     pub analysis_uefi: bool,
+    /// (kuna) Gate the Cortex-M System Control Space globals (`cortexmscs`);
+    /// default on. Inert unless the image is a Cortex-M one.
+    pub analysis_cortexmscs: bool,
     /// (kuna) Gate the string-literal pass (`strings`); default on.
     pub analysis_strings: bool,
     /// (kuna) Gate the 2-byte (UTF-16LE) width of the string-literal pass
@@ -3051,6 +3054,7 @@ impl Architecture {
             analysis_dwarfglobaltypes: false,
             analysis_dwarfscopes: true,
             analysis_uefi: false,
+            analysis_cortexmscs: false,
             analysis_x86listingswitch: false,
             analysis_addrtakenentry: false,
             analysis_flowmode: false,
@@ -3498,6 +3502,7 @@ impl Architecture {
         self.analysis_dwarfglobaltypes = false;
         self.storetype = crate::kuna_storetype::StoreTypeMode::Uefi;
         self.analysis_uefi = true;
+        self.analysis_cortexmscs = true; // Cortex-M System Control Space globals (Cortex-M images only)
         // (kuna) DIV-139 declared-name libc prototype lookup -- default-ON.
         self.analysis_strings = true;
         self.analysis_widestrings32 = false;

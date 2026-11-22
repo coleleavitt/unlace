@@ -797,6 +797,10 @@ pub struct AnalysisOutput {
     /// (kuna `libctypes`) Data symbols the analysis tier types outright — the
     /// stdio stream slots. See [`TypedDataFact`].
     pub typed_data: Vec<TypedDataFact>,
+    /// (kuna `cortexmscs`) The System Control Space layout of a Cortex-M image.
+    /// The commit builds its types and globals, so a run with the option off
+    /// creates neither.
+    pub cortexm_scs: Option<&'static [crate::cortexmscs::Block]>,
     /// (kuna `gotypeglobals`) A Go image's `_type` descriptors as named, typed
     /// data globals (`type:main.Point` of shell `go.typedesc`). Held APART from
     /// [`Self::typed_data`] because the producing pass runs at load, upstream of
@@ -1095,6 +1099,7 @@ impl AnalysisOutput {
         self.dwarf_reg_locals.extend(other.dwarf_reg_locals);
         self.dwarf_param_regs.extend(other.dwarf_param_regs);
         self.typed_data.extend(other.typed_data);
+        self.cortexm_scs = self.cortexm_scs.or(other.cortexm_scs);
         self.go_type_globals.extend(other.go_type_globals);
         self.go_itabs.extend(other.go_itabs);
         self.swift_enum_cases.extend(other.swift_enum_cases);

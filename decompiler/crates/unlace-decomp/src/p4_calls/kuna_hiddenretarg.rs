@@ -290,6 +290,9 @@ fn not_a_result_buffer(
 /// call branched through? It holds the callee's own address (`ldr x8, [x16];
 /// blraa x8, x17`), which no callee returns through.
 fn branches_through(data: &Funcdata, call: &FuncCallSpecs, addr: &Address, size: int4) -> bool {
+    if data.get_arch().vcall_targets.is_empty() {
+        return false;
+    }
     let Some(site) = data
         .obank()
         .get(call.get_op())

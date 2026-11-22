@@ -7513,6 +7513,14 @@ fn commit_analysis_output(
             &end,
         );
     }
+    // (kuna `guarddispatch`) The PE load configuration's guard dispatch slots,
+    // which the flow reads to print a call through one as the call it guards.
+    let space_index = code_space.get_index();
+    let dispatch = out
+        .guard_dispatch_slots
+        .iter()
+        .map(|&addr| (space_index, addr));
+    prog.arch_mut().guard_dispatch_slots.extend(dispatch);
 
     // 2. Discovered entry points (stripped targets): name + add_function +
     //    register_symbol (the `map function` recipe).

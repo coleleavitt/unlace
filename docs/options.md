@@ -209,6 +209,8 @@ Three tiers:
 | two object views of one frame address become unrelated local variables | [`stackviews`](#stackviews----on--off-default-off) |
 | spurious uninitialized local (xStack_N) returned after storing through a pointer to a local | [`stackalias`](#stackalias----on--off-default-off-destructive-opt-in) |
 | store through a take-address-of-local pointer dropped as dead so the later read is garbage | [`stackalias`](#stackalias----on--off-default-off-destructive-opt-in) |
+| every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...) | [`guarddispatch`](#guarddispatch----on--off-default-on) |
+| indirect call target dropped and the dispatch slot called instead | [`guarddispatch`](#guarddispatch----on--off-default-on) |
 | bogus (*pcVar1)() indirect call after calling a struct-returning function on sparc | [`sparcstructret`](#sparcstructret----on--off-default-on) |
 | function tail dropped after a sparc call followed by unimp | [`sparcstructret`](#sparcstructret----on--off-default-on) |
 | switch rendered as nested if/else-if compare tree over one variable | [`loweredswitch`](#loweredswitch----on--off--linear--tree--all-default-on) |
@@ -1715,6 +1717,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Set on PER FUNCTION when a take-address-of-local + store-through-pointer returns a spurious uninitialized local (xStack_*); DESTRUCTIVE as a global default (conservatively pins stack stores live, suppressing legitimate dead-store removal).
 - **Where / provenance:** P6/alias-facets · ghidra-upstream · opt-in-tool · GH-8500
 - **Example:** `option stackalias on`
+
+### `guarddispatch` -- on | off, default `on`
+
+- **Symptoms:** every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...); indirect call target dropped and the dispatch slot called instead.
+- **What it does:** Print a call through a Control Flow Guard dispatch slot as the indirect call it guards.
+- **When to flip:** On by default: an image built with Control Flow Guard calls a function pointer as `mov rax, target; call [__guard_dispatch_icall_fptr]`, and the dispatch routine validates `rax` and jumps to it. On, a CALLIND whose target its instruction loads from a dispatch slot the PE load configuration names (`__guard_dispatch_icall_fptr`, `__guard_xfg_dispatch_icall_fptr`) calls the target register `rax` instead (x86-64 only), so `(*__guard_dispatch_icall_fptr)(a, b)` becomes `(*f)(a, b)`. The guard check itself is not shown. Only a PE with a load configuration fills the slot set, so it is inert everywhere else (0/675). Flip off to see the call through the dispatch slot as the instructions state it.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · kuna-pe-loadconfig
+- **Example:** `option guarddispatch off`
 
 ### `sparcstructret` -- on | off, default `on`
 

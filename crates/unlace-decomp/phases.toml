@@ -1020,6 +1020,12 @@ subphase = "flow-classification"
 note = "(kuna) a conditional branch whose target lies strictly inside its own fall-through instruction: end the fall-through in a halt instead of letting the overlapping decode swallow the target (anti-disassembly junk lead byte)"
 
 [[surface]]
+surface = "option guarddispatch"
+phase = "P2"
+subphase = "flow-classification"
+note = "(kuna) a call through a PE load configuration's Control Flow Guard dispatch slot calls the target register the dispatch routine jumps to"
+
+[[surface]]
 surface = "option sparcstructret"
 phase = "P2"
 subphase = "flow-classification"
@@ -3138,6 +3144,28 @@ change_kind = "structure-recovery"
 tier = "core"
 symptoms = "loop walks an array with a raw offset accumulator (iVar += 0x414) instead of an index|strided induction offset never re-expressed as counter*stride array indexing"
 live_field = "recover_array_stride"
+live_true = "on"
+live_false = "off"
+
+[[settable]]
+option = "guarddispatch"
+values = "on|off"
+default = "on"
+destructive = false
+phase = "P2"
+subphase = "flow-classification"
+strength = "HARD"
+rewind = "P2"
+issue = "kuna-pe-loadconfig"
+summary = "Print a call through a Control Flow Guard dispatch slot as the indirect call it guards."
+use_when = "On by default: an image built with Control Flow Guard calls a function pointer as `mov rax, target; call [__guard_dispatch_icall_fptr]`, and the dispatch routine validates `rax` and jumps to it. On, a CALLIND whose target its instruction loads from a dispatch slot the PE load configuration names (`__guard_dispatch_icall_fptr`, `__guard_xfg_dispatch_icall_fptr`) calls the target register `rax` instead (x86-64 only), so `(*__guard_dispatch_icall_fptr)(a, b)` becomes `(*f)(a, b)`. The guard check itself is not shown. Only a PE with a load configuration fills the slot set, so it is inert everywhere else (0/675). Flip off to see the call through the dispatch slot as the instructions state it."
+example = "option guarddispatch off"
+source_decompiler = "kuna"
+inspiration = "Ghidra's x86-64-win.cspec `_guard_dispatch_icall` call-fixup, which covers a direct call of the dispatch routine but not the call through its slot"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...)|indirect call target dropped and the dispatch slot called instead"
+live_field = "guard_dispatch"
 live_true = "on"
 live_false = "off"
 

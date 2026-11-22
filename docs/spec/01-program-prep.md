@@ -1315,6 +1315,21 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   away from this path — a read-only section in a `.o` holds *pre*-relocation
   bytes, but a `__real@` COMDAT carries no relocation, and a disagreement between
   the bytes and the name drops the range with a warning rather than folding it.
+- **Mach-O read-only sections** — a Mach-O section carries no write bit of its
+  own, so `decompiler/crates/unlace-analysis/src/loader/format/macho.rs (section_bits)`
+  derives READONLY from the neutral section kind `object` assigns, which knows
+  `__TEXT,__cstring` by name and nothing else. Every other literal section
+  (`__TEXT,__oslogstring`, the kernel's `__TEXT,__os_log`, `__objc_methname`)
+  read as unknown, so it was not read-only and a reference to one of its strings
+  printed as the string's symbol (`_os_log_impl(...,s_10006c0cf,...)`) even
+  though `kuna strings` found the text. Two facts the image states settle it. A
+  section of type `S_CSTRING_LITERALS` is a pool of coalesced literals and is
+  `DATA | READONLY` like `__cstring`. And a loaded section lying wholly inside a
+  segment whose initial protection is readable but not writable (`__TEXT`, never
+  `__DATA_CONST`, which dyld writes before protecting it) is READONLY
+  (`macho.rs (readonly_segments)`, `macho.rs (in_readonly_segment)`, applied by the
+  object load image to every non-NOLOAD section); this covers the kernel's
+  `__os_log`, an `S_REGULAR` section. Strings in either now print as literals.
 - **Mach-O fat/arm64e** — a universal binary is peeled to one slice's bytes
   before anything else parses it, because `object::File::parse` has no fat arm
   and rejects the whole file with "Unsupported file format"
@@ -6616,6 +6631,35 @@ every other binary's pass list is byte-identical to before the pass existed):
     argument its format does not have. An import-less definition of the same
     name (libobjc itself) keeps what its body says.
 
+    One stub serves every receiver of its selector, so its prototype is a claim
+    about all of them, and a wrong return register is the costly error: a
+    protocol of the image declaring `- (double)length` typed
+    `objc_msgSend$length` as returning in `d0` for every sender, so after
+    `[name length]` on a string `x0` read as dead and the next call lost all its
+    arguments (`objc_msgSend$length(arg3); if (sub_103434eb4())`). The stub
+    therefore takes the image's agreed spelling
+    (`decompiler/crates/unlace-analysis/src/analyzers/objc/kuna_objcrefs.rs (stub_encoding)`)
+    only when, if the SDK headers of `objcsdk` spell the selector, they place
+    its return and every argument in the same register class: integer, pointer,
+    object and selector all `x`, floating-point `d`, a by-value struct its own
+    layout (`Q` and `q` agree, `d` and `Q` do not). A selector only a protocol
+    of the image declares, with no class or category of the image implementing
+    it, is promised to conformers the image need not hold, so when its return
+    is floating-point or a struct it also needs the headers to spell it alike:
+    that is the return that hides `x0` from a framework class answering the
+    same selector there. A protocol-only `x` or `void` return keeps typing the
+    stub. Headers that cannot spell a selector neither confirm nor refute it.
+    One the image declares nowhere still takes the headers' spelling. Anything
+    else keeps the untyped call-site inference, which recovers the return from
+    its use: `v4 = objc_msgSend$length(arg1); if (sub_103434eb4(v4,arg6,1,…))`.
+    Without headers an implemented declaration is the only evidence and still
+    types the stub, so a framework class answering the same selector
+    differently stays mistyped until `objcsdk` names the SDK. An untyped stub
+    takes only the arguments the call site shows, so a receiver the caller
+    never moved (its own incoming `x0`) is not listed:
+    `v1 = objc_msgSend$length();`. A strict fix, no option;
+    `tests/stages/kuna-objcstubagree.xml` pins it.
+
   The rebase slots of the three ref sections are also reported constant
   (`AnalysisOutput::const_ranges`). dyld fills them once before any code runs
   and nothing rewrites them — Ghidra's `ObjectiveC2_ClassAnalyzer` marks the same
@@ -6798,7 +6842,8 @@ every other binary's pass list is byte-identical to before the pass existed):
     `NSString *`-backed typed enum resolve — and spells each declaration as the
     type encoding the runtime metadata would carry (`v@:d` for
     `setAlpha:(CGFloat)`), so it rides the one selector → prototype path; the
-    image's own declarations always win. A class-pointer argument keeps its
+    image's own declarations win unless the headers place a selector's return
+    or arguments in different registers (the stub rule above). A class-pointer argument keeps its
     class (`@"UIView"`), a block is `@?`, an `id<P>` is `@`; a type the reader
     cannot encode (an unknown struct, a function pointer) makes the selector
     unusable rather than guessed, and a selector declared two ways across
@@ -7367,12 +7412,18 @@ both
   references, enum tags, array bulk operations, class/struct/enum metadata
   initialization and the task allocator. The runtime is C under the platform
   convention, so these are plain prototypes; the `swiftcc` entry points
-  whose arguments ride in the Swift registers (`swift_task_switch`, the
-  key-path accessors) are left to recovery. An object reference is a
+  whose arguments ride in the Swift registers (the key-path accessors) are
+  left to recovery. An object reference is a
   `void *`: its type is the metadata's, which the call site knows, and a
   `swift.HeapObject *` would hide the first stored property behind
   `obj[1].isa`. The stage test `tests/stages/kuna-swiftruntime.xml` runs the
   stripped `swift_types_elf` off and on.
+  The concurrency runtime's entry points come from a second, generated table
+  (`kuna_swiftconcurrency.rs`, from the Swift project's
+  `swift/Runtime/Concurrency.h` by `tools/gen_swift_concurrency.py`, 64-bit
+  images only): the plain ones join these prototypes, and the `swiftasync`
+  ones, which take the caller's context in the `swiftasync` register, are
+  carried as facts the `swiftcall` commit binds (§4, *Swift*).
 - **Core Foundation constant strings** (`cfstrings`, Mach-O-only, default-on;
   `decompiler/crates/unlace-analysis/src/analyzers/cfstring/mod.rs`): a `CFSTR("x")`
   compiles to a four-word `CFString` struct in `__cfstring` (`isa`, `flags`, a
@@ -10893,7 +10944,14 @@ gives **the AIF data veto** (`aifdataveto`, default-on;
 a discovered entry (not a symbol, and not the target of a decoded call or
 branch) whose first instruction the code reads or writes as data is dropped from
 the entry stream, and an AIF gap entry likewise, IDA's roll-back of a
-speculative run with a `dr_R`/`dr_W` xref. On a Thumb literal-pool image an
+speculative run with a `dr_R`/`dr_W` xref. A register a constant was put in
+stays known for the next eight straight-line instructions, until something else
+writes it or a branch, call or user op ends the run, and two known addends sum,
+so an AArch64 `adrp x17, P; add x17, x17, #o; ldrsw x16, [x17, x16, lsl #2]`
+reads its jump table at `P + o`. Apple's linker lists such an inline `__text`
+table in `LC_FUNCTION_STARTS`, where it decodes as a `sub_` entry the dispatch
+then indexes (`sub_4060[a0 * 4]`), and the veto removes it
+(`tests/stages/kuna-relswitch-a64.xml`). On a Thumb literal-pool image an
 AIF-only entry whose first word a literal load reads is dropped too (the
 `poolentry` fixture's `F`, the split shape its corpus measurement disclosed). On the stripped
 Lua (x86-64, AArch64), ld.so, llvm-nm and llvm-objdump images it removes

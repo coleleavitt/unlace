@@ -476,6 +476,10 @@ pub struct Architecture {
     /// fixed ARM LSL (`on`), or also every architecture's fixed 64-bit left
     /// shift (`all`), so the emitted C shift is defined.
     pub arm_constant_shift: crate::p9_emit::kuna_armconstantshift::ConstShiftMode,
+    /// (kuna `armshiftguard`) Print `count < 32u ? x << count : 0` around a
+    /// variable ARM LSL whose count is not proven below 32 (on), or the plain
+    /// shift (off).
+    pub arm_shift_guard: bool,
     /// (kuna `wrapadd`) Print a four-byte addition that a wider sign extension
     /// observes through unsigned C, so it wraps as the machine word does.
     pub wrap_add: bool,
@@ -646,6 +650,8 @@ pub struct Architecture {
     /// (kuna `objcresolve`) Render a message send whose receiver's class is
     /// known as the method it reaches (`-[Foo bar:]`). Default on.
     pub objc_resolve: bool,
+    /// (kuna `oslog`) Print decoded os_log buffer arguments at the call.
+    pub os_log_args: bool,
     /// (kuna) The image's Objective-C classes, methods and selector strings,
     /// handed over by the ObjC analysis commit; empty on every other image.
     pub kuna_objc_classes: Rc<crate::kuna_objcrettype::ObjcClassTable>,
@@ -1560,6 +1566,8 @@ pub struct Architecture {
     /// before writing it, other than to save it
     /// ([`crate::kuna_swiftinfer::seed`]).
     pub kuna_swift_self_reads: std::collections::BTreeMap<(int4, uintb), bool>,
+    /// (kuna `swiftcall`) The same for `swiftasync`.
+    pub kuna_swift_async_reads: std::collections::BTreeMap<(int4, uintb), bool>,
     /// (kuna `argclobber`) Per-image cache of the forwarding resolution
     /// ([`crate::kuna_calleedeadarg::resolve_forward_transfer`]) — what a value
     /// the caller leaves in a register can reach once the callee at `(space
@@ -2018,6 +2026,9 @@ pub struct Architecture {
     /// `None` (the XML `<binaryimage>` bootstrap) falls back to the language id.
     /// See [`crate::kuna_formatstring::target_vararg_abi`].
     pub format_vararg_abi: Option<crate::kuna_formatstring::VarargAbi>,
+    /// (kuna `varargstackargs`) Per-run cache of the callee `va_start` probe,
+    /// keyed by the callee's `(space index, entry offset)`.
+    pub kuna_darwin_variadic_cache: std::collections::HashMap<(int4, uintb), bool>,
     /// (kuna) Gate the Listing/xref disassembly tier (`listing`); default
     /// **off**. When on (real-ELF path only), a program-wide recursive-descent
     /// disassembly Listing/xref model is built once at load and shared read-only
@@ -2769,6 +2780,7 @@ impl Architecture {
             eh_table: Rc::new(crate::kuna_itaniumeh::EhTable::default()),
             bool_byte: true, // (kuna) option boolbyte; reset_defaults sets the shipped default
             arm_constant_shift: crate::p9_emit::kuna_armconstantshift::ConstShiftMode::Off,
+            arm_shift_guard: true,
             wrap_add: false,
             rust_array_zero: false,
             char_byte: true, // (kuna) option charbyte; reset_defaults sets the shipped default
@@ -2814,6 +2826,7 @@ impl Architecture {
             objc_arc: false,      // (kuna) option objcarc; reset_defaults sets the shipped default
             objc_rettype: false, // (kuna) option objcrettype; reset_defaults sets the shipped default
             objc_resolve: false, // (kuna) option objcresolve; reset_defaults sets the shipped default
+            os_log_args: false,  // (kuna) option oslog; reset_defaults sets the shipped default
             kuna_objc_classes: Rc::new(Default::default()),
             kuna_objc_retargets: Default::default(),
             kuna_objc_site_pieces: Default::default(),
@@ -3017,6 +3030,7 @@ impl Architecture {
             kuna_callee_memory_cache: std::collections::HashMap::new(),
             kuna_swift_self_first_cache: std::collections::HashMap::new(),
             kuna_swift_self_reads: std::collections::BTreeMap::new(),
+            kuna_swift_async_reads: std::collections::BTreeMap::new(),
             kuna_callee_forward_cache: std::collections::HashMap::new(),
             kuna_protoorder_types: std::collections::HashMap::new(),
             kuna_tail_callee_batch: false,
@@ -3116,6 +3130,7 @@ impl Architecture {
             format_override_callpoints: std::collections::BTreeSet::new(),
             kuna_callee_overrides: std::collections::BTreeMap::new(),
             format_vararg_abi: None, // (kuna) a load-time fact; set by the console's `load file`
+            kuna_darwin_variadic_cache: std::collections::HashMap::new(),
             analysis_listing: false,
             analysis_fast_funcdisc: false,
             analysis_lazyfuncs: false,
@@ -3281,6 +3296,7 @@ impl Architecture {
         self.objc_rettype = true; // (kuna) default-on: inert unless the ObjC analysis handed over a class table (0/675 datatests)
         self.objc_resolve = true; // (kuna) default-on: inert unless the ObjC analysis handed over a class table (0/675 datatests)
         self.type_vote = true; // (kuna) default-on: presentation only, types variables that would print undefinedN; signatures unchanged; 0/675 datatests
+        self.os_log_args = true; // (kuna) default-on: inert unless a call reaches an os_log entry point (0/675 datatests)
         self.tail_call_jumps = true; // (kuna) DIV-13 default-on (angr tail-call recovery; per-test opt-out on Long double #1/#2)
         self.tail_call_tables = true; // (kuna) GH-781 default `tailcalljump on`: a veneer whose one destination is another function's entry is a tail call when the destination is outside a declared extent, or the callee's prototype is stated and its return value (if any) reaches a stated output. 0/675 byte-identical on the datatest corpus; `option tailcalljump direct` restores the flow into the destination
         self.tail_call_frame = true; // (kuna) DIV-109 default-on: REMOVES CODE. A direct jmp preceded by a teardown of exactly the entry block's frame is a tail call even when the callee was never discovered. Byte-identical (0/675) on the datatest corpus; restore the flow-into-the-callee decode with `option tailcallframe off`
@@ -3448,6 +3464,7 @@ impl Architecture {
         self.ptrdepthcap = false; // (kuna) DIV-108: default-OFF in the catalog because it changes INFERRED types and the datatest corpus pins the upstream spellings; ON in the `aggressive` preset, which `auto` selects under 500 KiB, so the cap is the default rendering for every real binary
         self.bool_byte = true; // (kuna) option boolbyte default-on: measured 0/675 datatest assertions moved, stages PARITY OK, decbench type_match improved with none worse, speed within budget; docs/features/boolbyte/record.json carries the evidence
         self.arm_constant_shift = crate::p9_emit::kuna_armconstantshift::ConstShiftMode::Off;
+        self.arm_shift_guard = true;
         self.wrap_add = false; // (kuna) option wrapadd: default off, the casts cost readability on every widened int sum
         self.rust_array_zero = false;
         self.arm_float_args = true; // (kuna) option armfloatargs: default-ON with armfloatreturn; inert unless the ELF states the VFP procedure-call standard
@@ -7804,7 +7821,7 @@ impl Architecture {
         // function is decompiled.  The merged tree previously deferred the
         // `setCurrent` to the decompile drive, leaving `getCurrentName()` empty
         // at rest; that broke the `phase status`/`pipeline list (current)`
-        // readers (kuna_console).  Set it here so the at-rest current name is
+        // readers (unlace_console).  Set it here so the at-rest current name is
         // "decompile", matching upstream `resetDefaults`.
         let _ = self.allacts.set_current("decompile");
     }

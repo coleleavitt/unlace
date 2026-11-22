@@ -29,6 +29,7 @@
 
 pub mod descriptors;
 pub mod kuna_swiftcall;
+pub mod kuna_swiftconcurrency;
 pub mod kuna_swifthelpers;
 pub mod kuna_swiftobjcthunk;
 pub mod kuna_swiftoutlined;
@@ -213,6 +214,8 @@ impl AnalysisPass for SwiftMetadataPass {
                         .filter_map(|s| Some((s.address(), s.name().ok()?.to_string())))
                         .collect();
                     kuna_swiftcall::bind(&types, regs, &symbols, &import_calls, &mut out);
+                    out.swift_types.async_imports =
+                        kuna_swiftcall::async_imports(imports.values().map(String::as_str));
                 }
                 if let Some(w) = &witnesses {
                     kuna_swiftwitness::type_tables(w, &types, &mut out);

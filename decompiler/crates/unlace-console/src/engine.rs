@@ -6370,6 +6370,8 @@ fn commit_analysis_output(
             out.swift_types.no_self = swift.no_self;
             out.swift_types.regs = swift.regs;
             out.swift_types.declared = swift.declared;
+            out.swift_types.runtime_context = swift.runtime_context;
+            out.swift_types.async_imports = swift.async_imports;
         }
     } else {
         out.swift_types = Default::default();
@@ -7962,6 +7964,36 @@ fn commit_analysis_output(
         use unlace_decomp::kuna_swiftcall::{
             SWIFTASYNCCALL, SWIFTASYNCCALL_THROWS, SWIFTCALL, SWIFTCALL_THROWS,
         };
+        // (kuna `swiftcall`) The runtime's `swiftasync` entry points, by
+        // name: the caller's context pinned to the `swiftasync` register.
+        if let Some((_, _, async_reg)) = out.swift_types.regs {
+            let loc = prog.arch().get_register_varnode(async_reg.as_bytes()).ok();
+            let model = prog.arch().get_model(SWIFTASYNCCALL).cloned();
+            if let (Some(loc), Some(model)) = (loc, model) {
+                for fact in &out.swift_types.runtime_context {
+                    let Some(space) = loc.space.clone() else {
+                        break;
+                    };
+                    let mut pieces = fact.pieces.clone();
+                    let Some(ty) = pieces.intypes.get(fact.context_slot as usize).cloned() else {
+                        continue;
+                    };
+                    pieces.input_storage.push((
+                        fact.context_slot,
+                        unlace_decomp::fspec::ParameterPieces {
+                            addr: Address::new(space, loc.offset),
+                            type_: Some(ty),
+                            flags: unlace_decomp::fspec::parameter_pieces_flags::TYPELOCK
+                                | unlace_decomp::fspec::parameter_pieces_flags::NAMELOCK,
+                        },
+                    ));
+                    let name = pieces.name.clone();
+                    prog.arch_mut()
+                        .set_function_prototype_model(&name, Rc::clone(&model));
+                    prog.arch_mut().set_function_prototype_pieces(&name, pieces);
+                }
+            }
+        }
         let model = |name: &str| prog.arch().get_model(name).cloned();
         let reg = |name: &str| {
             let loc = prog.arch().get_register_varnode(name.as_bytes()).ok()?;
@@ -8002,6 +8034,16 @@ fn commit_analysis_output(
                         self_reg,
                         error_reg,
                         async_reg,
+                        async_names: out
+                            .swift_types
+                            .async_imports
+                            .iter()
+                            .flat_map(|(n, throws)| {
+                                let bare = n.strip_prefix('_').filter(|b| b.starts_with('$'));
+                                std::iter::once((n.clone(), *throws))
+                                    .chain(bare.map(|b| (b.to_string(), *throws)))
+                            })
+                            .collect(),
                         async_context: prog
                             .arch()
                             .types()

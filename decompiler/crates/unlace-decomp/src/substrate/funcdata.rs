@@ -542,6 +542,10 @@ pub struct Funcdata {
     /// ([`crate::kuna_bejoin::seed_wide_returns`]).
     kuna_wide: Option<crate::kuna_bejoin::WideView>,
     kuna_callwide: Option<Rc<crate::p4_calls::kuna_callwide::Ledger>>,
+    /// (kuna `varargstackargs`) The direct-call callees whose body runs Apple's
+    /// `va_start`, by `(space index, entry offset)`; `None` when the target does
+    /// not pass variadic arguments the Apple way.
+    kuna_darwin_variadic: Option<std::collections::BTreeSet<(int4, unlace_base::types::uintb)>>,
     /// (kuna `calleedeadarg`) Per direct-call-target evidence about the registers
     /// the callee is *proven* never to read before writing, keyed by
     /// `(space index, entry offset)`.  Seeded by the driver after the flow build
@@ -703,6 +707,8 @@ pub struct Funcdata {
     kuna_input_hints: Option<std::rc::Rc<Vec<crate::kuna_inputhints::InputHint>>>,
     /// (kuna `swiftcall`) The direct callees whose body reads `swiftself`.
     kuna_swift_self_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
+    /// (kuna `swiftcall`) The direct callees whose body reads `swiftasync`.
+    kuna_swift_async_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
     /// (kuna `calleevote fields`) Every caller of this function is a known direct call.
     kuna_calleevote_closed: bool,
     /// (kuna `elemptr`) The globals this function must not type as element
@@ -935,6 +941,7 @@ impl Funcdata {
             kuna_wide: None,
             kuna_callwide: None,
             kuna_callee_entry_dead: std::collections::HashMap::new(),
+            kuna_darwin_variadic: None,
             kuna_swift_self_unread: std::collections::HashSet::new(),
             kuna_hiddenret_vetoed: std::collections::HashSet::new(),
             kuna_own_entry_dead: None,
@@ -978,6 +985,7 @@ impl Funcdata {
             go_string_input: None,
             kuna_input_hints: None,
             kuna_swift_self_callees: std::collections::BTreeSet::new(),
+            kuna_swift_async_callees: std::collections::BTreeSet::new(),
             kuna_calleevote_closed: false,
             kuna_elemptr_blocked: None,
             kuna_elemptr_adopt: None,
@@ -1360,6 +1368,22 @@ impl Funcdata {
         self.kuna_callee_ret_writes
             .get(&(sp.get_index(), entry.get_offset()))
             .map(|r| r.as_ref())
+    }
+
+    /// (kuna `varargstackargs`) Record the callees seen running Apple's `va_start`.
+    pub fn kuna_set_darwin_variadic(
+        &mut self,
+        found: Option<std::collections::BTreeSet<(int4, unlace_base::types::uintb)>>,
+    ) {
+        self.kuna_darwin_variadic = found;
+    }
+
+    /// (kuna `varargstackargs`) The callees seen running Apple's `va_start`, or
+    /// `None` when the rule does not apply to this function's target.
+    pub fn kuna_darwin_variadic(
+        &self,
+    ) -> Option<&std::collections::BTreeSet<(int4, unlace_base::types::uintb)>> {
+        self.kuna_darwin_variadic.as_ref()
     }
 
     /// (kuna `calleedeadarg`) Record what a probe of `entry`'s body proved about
@@ -1903,6 +1927,21 @@ impl Funcdata {
         &self,
     ) -> &std::collections::BTreeSet<(int4, unlace_base::types::uintb)> {
         &self.kuna_swift_self_callees
+    }
+
+    /// (kuna `swiftcall`) Seed the direct callees whose body reads `swiftasync`.
+    pub fn kuna_set_swift_async_callees(
+        &mut self,
+        s: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
+    ) {
+        self.kuna_swift_async_callees = s;
+    }
+
+    /// (kuna `swiftcall`) The direct callees whose body reads `swiftasync`.
+    pub fn kuna_swift_async_callees(
+        &self,
+    ) -> &std::collections::BTreeSet<(int4, unlace_base::types::uintb)> {
+        &self.kuna_swift_async_callees
     }
 
     /// (kuna `swiftcall`) The input hints of this function.

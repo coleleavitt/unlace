@@ -1667,7 +1667,7 @@ before each region attempt of region identification (chapter
 07), before each call-argument trial `ActionActiveParam` scores and every 256
 steps of the trial's use walks (chapter 04), and again after the final layout checks: the drive
 publishes its deadline to
-`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (deadline_passed)`,
+`decompiler/crates/unlace-decomp/src/substrate/kuna_budget.rs (deadline_passed)`,
 so a walk inside one pass gives up rather than run past it. Flow-time
 jump-table recovery probes it too, before and after each table's attempt and
 after its basic and default-path models (`decompiler/crates/unlace-decomp/src/p2_lift/flow.rs
@@ -1684,7 +1684,7 @@ containers stop scheduling work and unwind; the driver converts that into the
 function's `error` record (a pass panic after the deadline passed reports the
 same budget error) and the batch continues. The record names where the budget
 ran out: the first probe to see the expiry records its site
-(`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (note_budget_site)`)
+(`decompiler/crates/unlace-decomp/src/substrate/kuna_budget.rs (note_budget_site)`)
 and later ones leave it, so the site is the innermost polled loop that was
 running when the deadline passed — an action (a rule pool adds the rule that
 applied most since the function's reset, `decompiler/crates/unlace-decomp/src/infra/action.rs
@@ -1693,10 +1693,10 @@ region structuring, `action activeparam`'s trial scoring, a
 store-reachability walk or a jump-table step (`jump-table value walk` for
 the loop over a table's values). A walk that recurses too often
 to read the clock at each step probes through
-`decompile_drive.rs (budget_probe)`, which reads it every 256th call and,
+`kuna_budget.rs (budget_probe)`, which reads it every 256th call and,
 once it has seen the budget spent, answers at once for the rest of the drive;
 it names no site, so the loop driving the walk names it. While a flow-time table is being recovered
-(`decompile_drive.rs (JumpTableScope)`) a site from inside that recovery — an
+(`kuna_budget.rs (JumpTableScope)`) a site from inside that recovery — an
 action of the reduced `jumptable` pipeline, say — is suffixed with the indirect
 jump's address. Each drive starts with no site and restores the enclosing
 drive's on exit. A memory-limit trip keeps its unsuffixed message. `kuna
@@ -1733,12 +1733,12 @@ everything flow has reached, so in a huge function the follow is where the
 memory goes.
 `--max-fn-memory MiB` arms the
 same probes with a memory limit
-(`decompiler/crates/unlace-decomp/src/infra/kuna_fnmemory.rs`): the driver sets
+(`decompiler/crates/unlace-decomp/src/substrate/kuna_fnmemory.rs`): the driver sets
 it process-wide, each drive reads the resident set it starts from (first
 releasing free heap pages with glibc `malloc_trim` and reading again when the
 process holds 16 MiB more than the last release left,
 `kuna_fnmemory.rs (settle)`), and
-`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (budget_spent)` —
+`decompiler/crates/unlace-decomp/src/substrate/kuna_budget.rs (budget_spent)` —
 the one test every probe makes — also asks, reading the resident set at most
 every 50 ms, whether the process is over the limit and the drive itself has
 added at least 64 MiB (`kuna_fnmemory.rs (trips)`), so what the batch built
@@ -1792,7 +1792,7 @@ worker (the parent passes a value only when one was given) and `decomp_dbg`
 a margin of max(512 MiB, 10% of the cap), a drive trips once some capped
 cgroup on the path to the root holds more than its cap less the margin,
 counting `memory.current` without the file-backed LRU pages reclaim can drop
-(`decompiler/crates/unlace-decomp/src/infra/kuna_hostmem.rs
+(`decompiler/crates/unlace-decomp/src/substrate/kuna_hostmem.rs
 (unreclaimable_bytes)`), AND the drive has itself grown by that cgroup's
 floor: the margin, or half the room the cap left the process when the drive
 started if that is less, and never under 64 MiB (`kuna_fnmemory.rs
@@ -2111,7 +2111,7 @@ parent knows what a load costs (`decompiler/crates/unlace-cli/src/jobs.rs
 resident set, less what its decode lanes added (256 MiB at least; the whole
 peak under `--jobs-full-load`), and the pool may take two thirds of the memory a
 new process could still take
-(`decompiler/crates/unlace-decomp/src/infra/kuna_hostmem.rs (available)`). On
+(`decompiler/crates/unlace-decomp/src/substrate/kuna_hostmem.rs (available)`). On
 Linux that is `MemAvailable`, or the headroom of the cgroup v2 hierarchy the
 process runs in when that is smaller: each cgroup on the path to the root with
 a finite `memory.max` leaves that cap less its `memory.current` without the

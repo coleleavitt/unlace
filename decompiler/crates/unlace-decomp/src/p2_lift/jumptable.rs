@@ -970,10 +970,10 @@ fn matching_constants(fd: &Funcdata, vn1: VarnodeId, vn2: VarnodeId) -> bool {
 /// budget is spent, so a model with a long range ends with its drive: every
 /// recovery loop advances through [`JumpValues::next`].
 fn walk_within_budget() -> KunaResult<()> {
-    if !crate::decompile_drive::budget_probe() {
+    if !crate::kuna_budget::budget_probe() {
         return Ok(());
     }
-    crate::decompile_drive::note_budget_site(|| "jump-table value walk".to_string());
+    crate::kuna_budget::note_budget_site(|| "jump-table value walk".to_string());
     Err(KunaError::lowlevel(
         "Jumptable value walk ran past the per-function budget",
     ))
@@ -6822,7 +6822,7 @@ impl JumpTable {
             self.addresstable.len() as uint4,
             max_table_size,
         )?;
-        if crate::decompile_drive::deadline_passed_in("jump-table basic model") {
+        if crate::kuna_budget::deadline_passed_in("jump-table basic model") {
             self.jmodel = None;
             return Ok(());
         }
@@ -6846,7 +6846,7 @@ impl JumpTable {
             self.addresstable.len() as uint4,
             max_table_size,
         )?;
-        if crate::decompile_drive::deadline_passed_in("jump-table default-path model") {
+        if crate::kuna_budget::deadline_passed_in("jump-table default-path model") {
             self.jmodel = None;
             return Ok(());
         }
@@ -6953,7 +6953,7 @@ impl JumpTable {
             self.addresstable = addresstable;
             self.loadpoints = loadpoints;
             r?;
-            crate::decompile_drive::deadline_passed_in("jump-table address emulation");
+            crate::kuna_budget::deadline_passed_in("jump-table address emulation");
             let reached = self.loadpoints.clone();
             let bounded = self.flow_bounded_values(fd);
             self.sanity_check(fd, Some(&loadcounts))?;
@@ -6975,7 +6975,7 @@ impl JumpTable {
             );
             self.addresstable = addresstable;
             r?;
-            crate::decompile_drive::deadline_passed_in("jump-table address emulation");
+            crate::kuna_budget::deadline_passed_in("jump-table address emulation");
             let bounded = self.flow_bounded_values(fd);
             let trim = self
                 .jmodel

@@ -2127,7 +2127,7 @@ classified:
 
   *(unlace decompile-all watchdog)* Every `ancestor_op_use` step and every step
   of an `only_op_use` walk also probes the drive's budget through
-  `decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (budget_probe)`;
+  `decompiler/crates/unlace-decomp/src/substrate/kuna_budget.rs (budget_probe)`;
   once it is spent the walks answer *not a parameter* at once, and
   `check_input_trial_use` asks the clock before each trial, so it stops at the
   next one and names `action activeparam` as the budget's site. The drive then

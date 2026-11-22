@@ -1236,7 +1236,7 @@ impl Merge {
         if !self.spent {
             self.probes = self.probes.wrapping_add(1);
             self.spent = self.probes % BUDGET_STRIDE == 0
-                && crate::decompile_drive::deadline_passed_in("variable merging");
+                && crate::kuna_budget::deadline_passed_in("variable merging");
         }
         if self.spent {
             return Err(KunaError::lowlevel(

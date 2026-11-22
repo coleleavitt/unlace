@@ -54,7 +54,7 @@ use crate::kuna_regiongraph::{
 /// spent. One region identification over a big function's CFG runs for
 /// minutes inside a single structuring action, so every region attempt asks.
 fn budget() -> KunaResult<()> {
-    if crate::decompile_drive::deadline_passed_in("region identification") {
+    if crate::kuna_budget::deadline_passed_in("region identification") {
         return Err(KunaError::lowlevel(
             "kuna regionid: stopped at the function's budget",
         ));

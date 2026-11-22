@@ -1,6 +1,5 @@
+# Upward crate:: edges between unlace-decomp's layering bands (scripts/check_layers.py). Only delete lines.
 action -> actionprof
-action -> actionprof
-action -> decompile_drive
 addtreestate -> coreaction_infertypes
 addtreestate -> funcdata_facing
 addtreestate -> funcdata_union
@@ -160,14 +159,12 @@ coreaction_cleanup -> kuna_naming
 coreaction_cleanup -> printlanguage
 coreaction_infertypes -> cpool
 coreaction_infertypes -> kuna_avxintrin
-coreaction_render -> decompile_drive
 database -> remote_provider
 dtype -> bitfield
 dtype -> kuna_typequal
 dtype -> prettyprint
 expression -> kuna_swifterror
 expression -> kuna_syscallregs
-flow -> decompile_drive
 flow -> kuna_armfloatreturn
 flow -> kuna_calleearitybody
 flow -> kuna_calleeprotostack
@@ -245,7 +242,6 @@ funcdata_block -> kuna_retsplitglobal
 funcdata_block -> kuna_retsplitlimit
 funcdata_block -> kuna_rettriangle
 funcdata_block -> kuna_syscallregs
-funcdata_callsite -> decompile_drive
 funcdata_op -> kuna_indirectanchor
 funcdata_op -> kuna_syscallregs
 funcdata_resolveflow -> funcdata_facing
@@ -253,7 +249,6 @@ funcdata_resolveflow -> funcdata_union
 funcdata_resolveflow -> kuna_aggregatefields
 funcdata_resolveflow -> unionresolve
 funcdata_resolveflow -> unionresolve_run
-funcdata_varnode -> decompile_drive
 funcdata_varnode -> funcdata_spacebase
 funcdata_varnode -> kuna_calleereginputs
 funcdata_varnode -> kuna_calltransport
@@ -270,7 +265,6 @@ funcdata_varnode -> kuna_syscallregs
 funcdata_varnode -> kuna_voidret
 funcdata_varnode -> kuna_zeroidiomuse
 funcdata_varnode -> userop
-heritage -> decompile_drive
 heritage -> funcdata_spacebase
 heritage -> kuna_armfloatargs
 heritage -> kuna_armfloatreturn
@@ -309,7 +303,6 @@ heritage -> kuna_voidret
 heritage -> kuna_wrapsplit
 heritage -> prefersplit
 heritage -> rangeutil
-jumptable -> decompile_drive
 jumptable -> kuna_constselectjump
 jumptable -> kuna_emulatefunction
 jumptable -> kuna_highslice_guard
@@ -349,7 +342,6 @@ kuna_loadoptions -> kuna_calltargettype
 kuna_loadoptions -> kuna_goreg
 kuna_looprotate -> kuna_strlenscan
 kuna_narrowret -> kuna_truncarg
-kuna_regionid -> decompile_drive
 kuna_reglocals -> decompile_drive
 kuna_reglocals -> kuna_varsources
 kuna_reglocals -> printc
@@ -360,12 +352,10 @@ kuna_srcmap -> decompile_drive
 kuna_stackguard -> funcdata_spacebase
 kuna_stackobjectinfo -> decompile_drive
 kuna_stackstruct -> kuna_partialaccess
-kuna_storereach -> decompile_drive
 kuna_switchguardmerge -> kuna_strlenscan
 kuna_switchguardrange -> rangeutil
 kuna_varargfloat -> kuna_bitcast
 kuna_zextreturn -> kuna_truncarg
-merge -> decompile_drive
 merge -> kuna_fputruncviews
 merge -> kuna_globalorder
 merge -> kuna_globalvalue
@@ -376,9 +366,7 @@ options -> flow
 options -> kuna_lang
 options -> kuna_option_dispatch
 printc -> cpool
-printc -> decompile_drive
 raw_arch -> capability
-region_structurer -> decompile_drive
 ruleaction_3 -> cpool
 subflow -> kuna_truncarg
 varmap -> kuna_arrayextent

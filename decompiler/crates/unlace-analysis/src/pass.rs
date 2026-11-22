@@ -305,6 +305,11 @@ pub struct SwiftTypeFacts {
     pub no_self: Vec<u64>,
     /// The `swiftself` and `swifterror` registers, once a convention is bound.
     pub regs: Option<(&'static str, &'static str, &'static str)>,
+    /// (kuna `swiftcall`) The imports whose names say `async`, with whether
+    /// they throw.
+    pub async_imports: Vec<(String, bool)>,
+    /// (kuna `swiftcall`) The runtime's `swiftasync` entry points, by name.
+    pub runtime_context: Vec<crate::analyzers::swift::kuna_swiftruntime::ContextProto>,
 }
 
 /// (kuna `swifthelpers`) The facts the Swift helper arm produces, kept apart
@@ -1121,6 +1126,12 @@ impl AnalysisOutput {
             .extend(other.swift_types.input_hints);
         self.swift_types.declared.extend(other.swift_types.declared);
         self.swift_types.no_self.extend(other.swift_types.no_self);
+        self.swift_types
+            .runtime_context
+            .extend(other.swift_types.runtime_context);
+        self.swift_types
+            .async_imports
+            .extend(other.swift_types.async_imports);
         self.swift_types.regs = self.swift_types.regs.or(other.swift_types.regs);
         self.swift_positional_names
             .extend(other.swift_positional_names);

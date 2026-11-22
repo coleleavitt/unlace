@@ -2305,6 +2305,9 @@ mod tests {
         // and kuna-sdkprotos / an imported C function takes its prototype from the SDK headers (option objcsdk)
         // and kuna-swiftstrcsel / a Swift literal's two words are paired along one branch arm
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
+        // and kuna-swiftconcurrency / the Swift concurrency runtime's prototypes and an async context read from the body
+        // and kuna-swiftasyncextent / a flow that runs on into an async body does not make the function async
+        assert_eq!(count, 974, "corpus file count drifted");
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
         // and kuna-darwinvarargs / an undeclared variadic callee on Apple arm64 keeps its stack-passed arguments
         // and kuna-oslog / an os_log call prints its decoded arguments; __oslogstring literals print as strings
@@ -2312,9 +2315,7 @@ mod tests {
         // and kuna-swiftstrcmp / a Swift literal compared for equality prints in the inline test
         // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
         // and kuna-typelib / the prebuilt type library declares the libc imports no table does
-        // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
         // and kuna-relswitch-a64 / an arm64e hardened jump table is a switch; its inline table is no function start
-        assert_eq!(count, 972, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

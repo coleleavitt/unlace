@@ -7496,12 +7496,18 @@ both
   references, enum tags, array bulk operations, class/struct/enum metadata
   initialization and the task allocator. The runtime is C under the platform
   convention, so these are plain prototypes; the `swiftcc` entry points
-  whose arguments ride in the Swift registers (`swift_task_switch`, the
-  key-path accessors) are left to recovery. An object reference is a
+  whose arguments ride in the Swift registers (the key-path accessors) are
+  left to recovery. An object reference is a
   `void *`: its type is the metadata's, which the call site knows, and a
   `swift.HeapObject *` would hide the first stored property behind
   `obj[1].isa`. The stage test `tests/stages/kuna-swiftruntime.xml` runs the
   stripped `swift_types_elf` off and on.
+  The concurrency runtime's entry points come from a second, generated table
+  (`kuna_swiftconcurrency.rs`, from the Swift project's
+  `swift/Runtime/Concurrency.h` by `tools/gen_swift_concurrency.py`, 64-bit
+  images only): the plain ones join these prototypes, and the `swiftasync`
+  ones, which take the caller's context in the `swiftasync` register, are
+  carried as facts the `swiftcall` commit binds (§4, *Swift*).
 - **Core Foundation constant strings** (`cfstrings`, Mach-O-only, default-on;
   `decompiler/crates/unlace-analysis/src/analyzers/cfstring/mod.rs`): a `CFSTR("x")`
   compiles to a four-word `CFString` struct in `__cfstring` (`isa`, `flags`, a

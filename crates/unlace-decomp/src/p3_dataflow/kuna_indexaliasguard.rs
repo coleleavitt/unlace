@@ -654,13 +654,6 @@ mod tests {
     }
 
     #[test]
-    fn option_is_registered() {
-        assert!(
-            crate::kuna_option_dispatch::KUNA_OPTION_NAMES.contains(&OptionIndexAliasGuard::NAME)
-        );
-    }
-
-    #[test]
     fn levels_parse_and_reject() {
         let o = OptionIndexAliasGuard;
         assert_eq!(o.apply("off").unwrap().0, LEVEL_OFF);

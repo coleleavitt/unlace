@@ -17,7 +17,6 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{ArchContext, BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_option_dispatch::KUNA_OPTION_NAMES;
 use crate::op::pcodeop_flags;
 use crate::varnode::varnode_flags;
 
@@ -289,17 +288,4 @@ fn a_rejected_walk_preserves_existing_marks_and_all_flags() {
             assert_eq!(fx.fd.vbank().get(vn).unwrap().get_flags(), flags);
         }
     }
-}
-
-#[test]
-fn option_name_is_registered_and_parses() {
-    assert_eq!(OptionIndirectOnly::NAME, "indirectonly");
-    assert!(KUNA_OPTION_NAMES.contains(&OptionIndirectOnly::NAME));
-    let (v, msg) = OptionIndirectOnly.apply("on").unwrap();
-    assert!(v);
-    assert!(msg.contains("on"));
-    let (v, msg) = OptionIndirectOnly.apply("off").unwrap();
-    assert!(!v);
-    assert!(msg.contains("off"));
-    assert!(OptionIndirectOnly.apply("maybe").is_err());
 }

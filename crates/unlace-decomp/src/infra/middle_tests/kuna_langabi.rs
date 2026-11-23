@@ -1,4 +1,7 @@
-//! Tests for the ABI seam.
+//! Tests moved out of `kuna_langabi` because they read higher-band modules. They live in the
+//! driver so the middle band can become its own crate (unlace-middle).
+
+#![allow(unused_imports, dead_code)]
 
 use crate::kuna_lang::OutLang;
 use crate::kuna_lang::OutLangExt;

@@ -577,55 +577,6 @@ fn a_disjoint_aligned_layout_is_left_alone() {
     );
 }
 
-/// The plateau flag `structsynth` gates on has to latch on a pass that changed
-/// nothing even when it is the FIRST pass: a lattice that never needed to move
-/// is still a decided one, and gating on "at least one pass changed something"
-/// would decline such a function forever.
-#[test]
-fn the_plateau_latches_when_the_first_pass_changes_nothing() {
-    use std::rc::Rc;
-    use unlace_base::address::Address;
-    use unlace_base::space::{
-        AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
-    };
-
-    use crate::action::ActionContext;
-    use crate::context::ArchContext;
-    use crate::coreaction_render::ActionInferTypes;
-
-    let mut manage = AddrSpaceManager::new();
-    manage.insert_space(Rc::new(ConstantSpace::new())).unwrap();
-    manage
-        .insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
-        .unwrap();
-    manage
-        .insert_space(Rc::new(AddrSpace::new(
-            spacetype::IPTR_PROCESSOR,
-            "ram",
-            false,
-            8,
-            1,
-            2,
-            addrspace_flags::hasphysical,
-            1,
-            1,
-        )))
-        .unwrap();
-    let glb = Rc::new(ArchContext::new(manage));
-    let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
-    let entry = Address::new(ram, 0x1000);
-    let mut fd = Funcdata::new("settled", "settled", glb, entry, 0x1000_0000, 0x40).unwrap();
-    fd.set_type_recovery(true);
-    assert!(fd.start_type_recovery());
-    assert!(!fd.kuna_infertypes_settled());
-
-    // A function with nothing to propagate: the first pass changes nothing.
-    let mut infer = ActionInferTypes::boxed("typerecovery");
-    let mut ctx = ActionContext::new();
-    infer.apply(&mut fd, &mut ctx);
-    assert!(fd.kuna_infertypes_settled());
-}
-
 /// The structure ends at its last surviving field, not at the furthest byte any
 /// access touched.  One misaligned far access used to carry the size with it:
 /// `*(int *)(p + 0x10001)` alongside two 8-byte fields declared a 64 KB type for

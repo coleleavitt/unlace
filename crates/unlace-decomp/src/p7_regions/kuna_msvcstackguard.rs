@@ -133,13 +133,16 @@ use crate::funcdata::Funcdata;
 use crate::kuna_stackguard::{collect_value_slots, release_canary_slots};
 
 /// How far the structural derivation recurses before giving up.
-const WALK_DEPTH: int4 = 32;
+#[doc(hidden)]
+pub const WALK_DEPTH: int4 = 32;
 /// Maximum varnode visits for one call's cookie proofs, including affine walks.
-const MAX_MATCH_STEPS: usize = 1024;
+#[doc(hidden)]
+pub const MAX_MATCH_STEPS: usize = 1024;
 
 /// The storage of the stack space's base register (`getStackSpace()->
 /// getSpacebase(0)`), or `None` when the architecture has no stack space.
-fn stack_pointer_storage(data: &Funcdata) -> Option<(Rc<AddrSpace>, uintb, int4)> {
+#[doc(hidden)]
+pub fn stack_pointer_storage(data: &Funcdata) -> Option<(Rc<AddrSpace>, uintb, int4)> {
     let stackspc = data.get_arch().manage().get_stack_space().map(Rc::clone)?;
     let point = stackspc.get_spacebase(0).ok()?;
     let space = point.space.clone()?;
@@ -175,7 +178,8 @@ fn peel(mut vn: VarnodeId, data: &Funcdata, budget: &mut usize) -> Option<Varnod
 /// with a constant, `PTRADD` with a constant index).  Anything else — a
 /// `MULTIEQUAL` the normalization could not resolve, an unrelated register —
 /// answers `None`, and the caller declines.
-fn stack_pointer_offset(
+#[doc(hidden)]
+pub fn stack_pointer_offset(
     vn: VarnodeId,
     depth: int4,
     data: &Funcdata,
@@ -349,7 +353,8 @@ fn cookie_scramble(
 /// equality is the whole recognizer, because it is what makes the two XORs
 /// cancel.  Returns the entry-side scramble ops so their storage can be
 /// released.
-fn cookie_cancel(
+#[doc(hidden)]
+pub fn cookie_cancel(
     vn: VarnodeId,
     data: &Funcdata,
     sp: &(Rc<AddrSpace>, uintb, int4),

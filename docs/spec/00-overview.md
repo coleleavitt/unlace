@@ -3700,6 +3700,13 @@ and an agent writes:
   allowlisted name set routed to
   `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_option_dispatch.rs
   (set_kuna_option)`, which writes the live flag the consuming pass reads.
+  A migrated option is a type in its pass's module that implements `KunaOption`
+  (`decompiler/crates/unlace-decomp/src/substrate/kuna_optionset.rs (KunaOption, OptionSet)`):
+  its value lives in the engine's `kuna_options` set, indexed by a dense id the type
+  takes on first use, and every per-function `ArchContext` carries a copy, so neither
+  structure names the pass. A set built for the engine reads each option's shipped
+  value (`KunaOption::shipped`) until the dispatch sets it; a bare `ArchContext`
+  reads `KunaOption::unset`, the value its field initialiser held.
   The handler declaration generates both the dispatch and its name allowlist;
   adding a handler cannot leave those two out of sync. Catalog metadata remains
   independent, so `unlace catalog --check` compares the documented options against

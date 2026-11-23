@@ -2231,7 +2231,8 @@ pub struct JumpBasicModel {
     /// Set of PcodeOps and Varnodes producing the final target addresses.
     path_meld: PathMeld,
     /// Any guards associated with the model (C++ `selectguards`).
-    selectguards: Vec<GuardRecord>,
+    #[doc(hidden)]
+    pub selectguards: Vec<GuardRecord>,
     /// (kuna `switchrunon`) The sanity check cut rows that ran on into other
     /// functions, so no cut row is dispatched.
     run_on: bool,
@@ -2298,7 +2299,8 @@ impl JumpBasicModel {
 
     /// Calculate the range of values in `vn` that direct control-flow to the
     /// switch (C++ `JumpBasic::calcRange`, `jumptable.cc:1136`).
-    fn calc_range(&self, fd: &Funcdata, vn: VarnodeId, rng: &mut CircleRange) {
+    #[doc(hidden)]
+    pub fn calc_range(&self, fd: &Funcdata, vn: VarnodeId, rng: &mut CircleRange) {
         let stride;
         (*rng, stride) = Self::width_range(fd, vn);
 
@@ -5999,11 +6001,13 @@ pub struct JumpTable {
     /// Maximum extensions to normalize (C++ `JumpTable::maxext`).
     pub maxext: uint4,
     /// Current model of how the jump table is implemented in code.
-    jmodel: Option<Box<dyn JumpModel>>,
+    #[doc(hidden)]
+    pub jmodel: Option<Box<dyn JumpModel>>,
     /// Initial jump table model, which may be incomplete (C++ `origmodel`).
     origmodel: Option<Box<dyn JumpModel>>,
     /// Raw addresses in the jump-table (C++ `addresstable`).
-    addresstable: Vec<Address>,
+    #[doc(hidden)]
+    pub addresstable: Vec<Address>,
     /// Map from basic-blocks to address table index (C++ `block2addr`).
     block2addr: Vec<IndexPair>,
     /// The case label for each explicit target (C++ `label`).

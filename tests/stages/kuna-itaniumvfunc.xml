@@ -20,7 +20,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/itaniumrtti_x86_64.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/itaniumrtti_x86_64.so</com>
   <com>option protoorder off</com>
   <com>option itaniumeh off</com>
   <com>option itaniumrtti off</com>
@@ -33,7 +33,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/itaniumrtti_x86_64.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/itaniumrtti_x86_64.so</com>
   <com>option protoorder off</com>
   <com>option itaniumeh off</com>
   <com>option itaniumrtti on</com>

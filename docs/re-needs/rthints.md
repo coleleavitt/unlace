@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli]
+touches: [crates/unlace-cli]
 scope: small
 regression_of: null
 pr: 734
@@ -40,11 +40,11 @@ decompiling the wrapper before it realises which tool it needed.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64",
     "binary_sha256": "aecc729c1f63c2f66fc8a2c3b9563e4db09aff86f4ba803d14bb5cc1f060ce92",
     "binary_size": 5128,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64"
   },
   "timeout_s": 60,
   "cmd": [
@@ -74,11 +74,11 @@ decompiling the wrapper before it realises which tool it needed.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64",
     "binary_sha256": "aecc729c1f63c2f66fc8a2c3b9563e4db09aff86f4ba803d14bb5cc1f060ce92",
     "binary_size": 5128,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pyinstaller_cookie_x86_64"
   },
   "timeout_s": 60,
   "cmd": [

@@ -16,11 +16,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/widestrings_x86_64.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/widestrings_x86_64.exe",
     "binary_sha256": "1b925b93ffee06dd19ff433b0e7313ac183b8e700d96e1bde1ec4a4794d0ee95",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/widestrings_x86_64.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/widestrings_x86_64.exe",
     "selector": "0x140001000",
     "selector_kind": "addr"
   },

@@ -29,8 +29,9 @@ There are no binary releases yet. With a Rust toolchain:
 
 ```bash
 git clone https://github.com/coleleavitt/unlace && cd unlace
-make                                   # builds the binaries and compiles the SLEIGH specs
-export PATH="$PWD/decompiler/target/release:$PATH"
+cargo build --release -p unlace-cli -p unlace-slacomp   # the CLI and the SLEIGH compiler
+target/release/slacomp -a specs                          # compile the SLEIGH specs
+export PATH="$PWD/target/release:$PATH"
 ```
 
 ## Usage
@@ -48,6 +49,30 @@ Unlace can also replace Ghidra's own decompiler, in the GUI or headless; see the
 [Ghidra extension README](integrations/ghidra/KunaDecompiler/README.md). The full CLI reference is
 [docs/cli.md](docs/cli.md).
 
+## Layout
+
+The repository root is the Cargo workspace (`Cargo.toml`, `crates/`). The engine began as a
+line-faithful port of Ghidra's C++ decompiler and SLEIGH compiler (the C++ tree has been
+removed; see [docs/history.md](docs/history.md)) and has since grown its own analysis tier, CLI
+and front-ends.
+
+| Crate | What |
+|---|---|
+| `crates/unlace-base` | Foundation: types, errors, XML + marshaling, spaces/addresses, raw p-code, context db, compression, translate/loadimage traits. |
+| `crates/unlace-num` | Multiprecision, IEEE float emulation, CircleRange. |
+| `crates/unlace-sleigh` | `.sla` reader + instruction decode runtime + the compile-side pattern machinery. |
+| `crates/unlace-slacomp` | The SLEIGH compiler (binary `slacomp`, same CLI as upstream `sleigh_opt`). |
+| `crates/unlace-decomp` | The decompiler core (phase-foldered `src/`: `p0_knowledge/`…`p9_emit/`, `substrate/`, `infra/`) + the phase model/option surface. |
+| `crates/unlace-analysis` | The program-prep loader/analyzer tier (ELF/PE/Mach-O, DWARF, strings, function discovery, ...). |
+| `crates/unlace-console` | Console front-end (`decomp_dbg`); the in-process engine + project-export modules. |
+| `crates/unlace-cli` | The user-facing `unlace` binary ([docs/cli.md](docs/cli.md)). |
+| `crates/unlace-ghidra` | The `unlace_ghidra` binary: unlace as stock Ghidra's decompiler core ([docs/ghidra-integration.md](docs/ghidra-integration.md)). |
+| `crates/unlace-wasm` | The `unlace_wasm` binary (wasm32-wasip1): the in-browser decompiler ([docs/web-integration.md](docs/web-integration.md)). |
+| `crates/unlace-harness`, `crates/unlace-lift-diff`, `crates/unlace-bench` | Dev-only: the datatest harness (`decomp_test_dbg`), differential helpers, benchmarks. |
+
+`tests/` holds the datatest and stage corpora and shared fixtures, `specs/` the vendored SLEIGH
+specs, `docs/spec/` the normative description of every pass.
+
 ## History
 
 Unlace began on 2026-04-29 as a from-scratch decompiler with its own IR, structuring, 40+
@@ -61,7 +86,8 @@ compares the two designs.
 
 [docs/dev-setup.md](docs/dev-setup.md) has the build recipe, the local gates and the git hooks;
 [CLAUDE.md](CLAUDE.md) has the rules agents follow in this repo. Before a commit:
-`make test`, `make test-stages`, `make check-spec` and `cd decompiler && cargo fmt --all --check`.
+`cargo fmt --all --check`, `cargo test -p unlace-cli --test parity` (the datatest and stage
+corpora against their baselines) and `python3 tools/check_spec.py`.
 
 ## License
 

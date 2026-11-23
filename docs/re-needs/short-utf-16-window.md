@@ -14,7 +14,7 @@ rounds: [10, 12]
 first_seen_round: 10
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-console, decompiler/crates/unlace-decomp]
+touches: [crates/unlace-console, crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: 593
@@ -95,11 +95,11 @@ including after declaring the data type and API prototype.
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/short_utf16_window_pe_x86_64.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/short_utf16_window_pe_x86_64.exe",
     "binary_sha256": "4d2b992f86052a3f28b7a1d3d4aa52c2ad4076136d4251a0aece1a2954e5bacc",
     "binary_size": 5038,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/short_utf16_window_pe_x86_64.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/short_utf16_window_pe_x86_64.exe",
     "selector": "0x401000",
     "selector_kind": "addr"
   },

@@ -11,7 +11,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
-ENGINE="$REPO/decompiler"
+ENGINE="$REPO"
 DIST="$HERE/dist"
 PROFILE="release"
 TARGET="wasm32-wasip1"
@@ -85,7 +85,7 @@ fi
 # Sanity: the .sla are built artifacts — fail early with a helpful message.
 if [ -z "$(find "$REPO/specs" -name '*.sla' -print -quit)" ]; then
   echo "error: no .sla found under $REPO/specs"
-  echo "       run 'make specs' at the repo root first (the .sla are built artifacts)."
+  echo "       run 'target/release/slacomp -a specs' at the repo root first (the .sla are built artifacts)."
   exit 1
 fi
 

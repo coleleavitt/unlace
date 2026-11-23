@@ -44,8 +44,6 @@ jobs:
       # Drop it (or swap for actions/cache) if you prefer zero third-party actions.
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: decompiler
 
       # Optional but worth it: wasm-opt -Oz shrinks the wasm ~7 MB -> ~1.7 MB.
       # build.sh applies it only if present; the demo works without it.
@@ -54,11 +52,11 @@ jobs:
 
       # build.sh ships the full runtime SLEIGH tree (the demo lazily fetches
       # whichever .sla a binary resolves to), so compile every .slaspec -> .sla.
-      # The .sla are gitignored build artifacts; `make specs` builds slacomp then
+      # The .sla are gitignored build artifacts; this builds slacomp then
       # runs it over the whole tree (~a couple minutes). This supersedes the older
       # per-arch slaspec compile (the demo is no longer arch-scoped).
       - name: Build all SLEIGH specs
-        run: make specs
+        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
 
       # Builds unlace_wasm for wasm32-wasip1 and assembles integrations/web/dist/.
       - name: Assemble the static demo (dist/)

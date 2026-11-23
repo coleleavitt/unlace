@@ -5,7 +5,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_fmt_literals_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/rust_fmt_literals_x86_64</com>
   <com>read symbols</com>
   <com>option setlanguage rust-language</com>
   <com>option rustfmt off</com>
@@ -24,7 +24,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_fmt_literal_scopes_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/rust_fmt_literal_scopes_x86_64</com>
   <com>read symbols</com>
   <com>option setlanguage rust-language</com>
   <com>option rustfmt off</com>

@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/poolref_arm_le32",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/poolref_arm_le32",
     "binary_sha256": "78bd433a2407dc59e7219c20a1b27a389ca63d46f722f65f2dea130043283235",
     "binary_size": 735,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/poolref_arm_le32",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/poolref_arm_le32",
     "selector": null,
     "selector_kind": "none"
   },

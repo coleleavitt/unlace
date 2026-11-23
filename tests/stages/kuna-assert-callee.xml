@@ -5,16 +5,16 @@
   indirect-call redirect, consumed by FlowInfo::setup_callind_specs).
   P0 assertion: `override indirect <callsite> <name|address>` (the console
   spelling of `unlace decompile ... &#45;&#45;assert 'callee <callsite> <name|address>'`).
-  Fixture: decompiler/crates/unlace-cli/tests/fixtures/assert_callee.c.
+  Fixture: crates/unlace-cli/tests/fixtures/assert_callee.c.
   #1-#2 are the output without the statement; #3-#5 are the stated calls;
   #6-#7 are the stated tail call once its callee is marked no-return.
   The refusals (a direct call, a non-call, a non-function) end a console
-  script, so decompiler/crates/unlace-cli/tests/assert_callee.rs pins them.
+  script, so crates/unlace-cli/tests/assert_callee.rs pins them.
 -->
 <binaryimage arch="x86:LE:64:default:gcc"/>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/assert_callee_x86_64.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/assert_callee_x86_64.elf</com>
   <com>read symbols</com>
   <com>option protoorder off</com>
   <com>load function twice</com>

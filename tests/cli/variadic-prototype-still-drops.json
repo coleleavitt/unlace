@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/gscookie_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/gscookie_x86_64",
     "binary_sha256": "e5c11b8b06a5423f4a61baff9373f389248eb709457651c5fd90130f6987c671",
     "binary_size": 9064,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/gscookie_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/gscookie_x86_64",
     "selector": "report",
     "selector_kind": "name"
   },

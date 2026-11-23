@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/paramrefdecl_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/paramrefdecl_i386",
     "binary_sha256": "8b15e655828fb6d867c79d88e0e3b0a7731223aee67aee1874deee9218e10da8",
     "binary_size": 4532,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/paramrefdecl_i386",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/paramrefdecl_i386",
     "selector": "derive_key",
     "selector_kind": "name"
   },

@@ -85,11 +85,11 @@ Reliable timestamp-dependent state updates in helper 0x140011280 and main.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/rdtsc_zero_extend_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/rdtsc_zero_extend_x86_64",
     "binary_sha256": "f7f1219e46801562b2ec5871cbcb29c9ec64294b3d80849ea989e96c3776774d",
     "binary_size": 4664,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/rdtsc_zero_extend_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/rdtsc_zero_extend_x86_64",
     "selector": "timestamp",
     "selector_kind": "name"
   },

@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis/src/loader]
+touches: [crates/unlace-analysis/src/loader]
 scope: small
 regression_of: null
 pr: null
@@ -70,11 +70,11 @@ Read and decompile the declared entry at 0x400154, or explicitly map its file-ba
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_headerentry_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_headerentry_i386.exe",
     "binary_sha256": "ca5f1405e7c60baccf2f00e0848febf941243e35f070b1a8adfd64ce3df82705",
     "binary_size": 1024,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_headerentry_i386.exe"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_headerentry_i386.exe"
   },
   "timeout_s": 60,
   "cmd": [

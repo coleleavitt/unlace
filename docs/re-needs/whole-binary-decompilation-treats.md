@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis/src/loader]
+touches: [crates/unlace-analysis/src/loader]
 scope: small
 regression_of: null
 pr: null
@@ -73,11 +73,11 @@ Decompile actual code while keeping known import address table slots as data.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_headercode_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_headercode_i386.exe",
     "binary_sha256": "43d2d88fd87b1756b1a0ae6feac7ee8701f40a91b30be8171f689aeea7f88382",
     "binary_size": 1024,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_headercode_i386.exe"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_headercode_i386.exe"
   },
   "timeout_s": 60,
   "cmd": [

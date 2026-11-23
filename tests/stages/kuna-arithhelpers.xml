@@ -28,7 +28,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arithhelpers_i386</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arithhelpers_i386</com>
   <com>option arithhelpers off</com>
   <com>read symbols</com>
   <com>load function sdiv</com>
@@ -41,7 +41,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arithhelpers_i386</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arithhelpers_i386</com>
   <com>read symbols</com>
   <com>load function sdiv</com>
   <com>decompile</com>
@@ -53,7 +53,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arithhelpers_thumb</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arithhelpers_thumb</com>
   <com>option arithhelpers off</com>
   <com>read symbols</com>
   <com>load function udiv</com>
@@ -72,7 +72,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arithhelpers_thumb</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arithhelpers_thumb</com>
   <com>read symbols</com>
   <com>load function udiv</com>
   <com>decompile</com>
@@ -90,7 +90,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arithhelpers_msvc_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arithhelpers_msvc_i386.exe</com>
   <com>option arithhelpers off</com>
   <com>read symbols</com>
   <com>load function _sdiv</com>
@@ -100,7 +100,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arithhelpers_msvc_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arithhelpers_msvc_i386.exe</com>
   <com>read symbols</com>
   <com>load function _sdiv</com>
   <com>decompile</com>

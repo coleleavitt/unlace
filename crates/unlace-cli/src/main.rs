@@ -1,0 +1,485 @@
+//! Command dispatch for the kuna CLI.
+
+mod args;
+mod armember;
+mod assertdecl;
+mod blobs;
+mod callgraph;
+mod catalog;
+mod crypto;
+mod cryptosig;
+mod decompile;
+mod decompile_all;
+mod decompile_graph;
+mod decompile_project;
+mod disassemble;
+mod docs;
+mod embedded_specs;
+mod fid;
+mod flirt;
+mod followimages;
+mod funcdecl;
+mod function_info;
+mod image;
+mod interior;
+mod jobs;
+mod jsonfmt;
+mod kuna_allocrelease;
+mod limits;
+mod loadtime;
+mod optname;
+mod output;
+mod paths;
+mod project_stream;
+mod rawfront;
+mod runtime_hints;
+mod rust_signatures;
+mod skill;
+mod specs;
+mod strings;
+mod test;
+mod unpack;
+mod xrefs;
+
+use std::process::ExitCode;
+
+use crate::args::take_value;
+use test::{Mode, TestArgs};
+
+type CommandHandler = fn(&[String]) -> i32;
+
+const COMMANDS: &[(&str, CommandHandler)] = &[
+    ("decompile", |args| args::report(decompile::main(args))),
+    ("decompile-all", decompile_all::run),
+    ("decompile-project", decompile_project::run),
+    ("decompile-graph", decompile_graph::run),
+    ("functions", decompile_all::run_functions),
+    ("disassemble", disassemble::run),
+    ("raw-pcode", disassemble::raw_pcode::run),
+    ("read", disassemble::run_read),
+    ("xrefs", xrefs::run),
+    ("strings", strings::run),
+    ("crypto", crypto::run),
+    ("blobs", blobs::run),
+    ("unpack", unpack::run),
+    ("docs", docs::run),
+    ("install-skill", |args| args::report(skill::run(args))),
+    ("test", |args| args::report(cmd_test(args))),
+    ("catalog", |args| args::report(cmd_catalog(args))),
+    ("modes", cmd_modes),
+    ("specs", specs::run),
+    ("fid", fid::run),
+    ("flirt", flirt::run),
+    ("rust-signatures", rust_signatures::run),
+];
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        usage();
+        return ExitCode::from(2);
+    }
+    let sub = args[1].as_str();
+    match sub {
+        paths::DECOMP_DBG_SUBCOMMAND => {
+            return unlace_console::consolemain::main(args[1..].to_vec());
+        }
+        paths::SLACOMP_SUBCOMMAND => return unlace_slacomp::slacompmain::main(args[1..].to_vec()),
+        _ => {}
+    }
+    let mut rest = args[2..].to_vec();
+    if let Err(e) = args::take_global_image(&mut rest) {
+        eprintln!("error: {e}");
+        return ExitCode::from(2);
+    }
+    let follow_limit = match followimages::take_limit(&mut rest) {
+        Ok(limit) => limit,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let (_staged, flat) = match armember::resolve(sub, &mut rest) {
+        Ok(armember::Resolved::Run(staged)) => (staged, None),
+        Ok(armember::Resolved::Flat(flat)) => (None, Some(*flat)),
+        Ok(armember::Resolved::Done(code)) => return ExitCode::from(code as u8),
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let mut prepared = match rawfront::prepare(sub, &rest, flat) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let rest = &mut prepared.args;
+    loadtime::export_image_selection(rest);
+    followimages::apply(sub, rest, follow_limit);
+    let rest = rest.as_slice();
+    runtime_hints::note_for_invocation(sub, rest);
+    let code = match sub {
+        "-V" | "--version" | "version" => {
+            // Release CI bakes the repo-derived MAJOR.MINOR (docs/release.md)
+            // via KUNA_VERSION; dev builds report the workspace Cargo version.
+            output::emit_with_status(
+                &format!(
+                    "unlace {}\n",
+                    option_env!("KUNA_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
+                ),
+                0,
+            )
+        }
+        "-h" | "--help" | "help" => {
+            usage();
+            0
+        }
+        other => {
+            if let Some((_, run)) = COMMANDS.iter().find(|(name, _)| *name == other) {
+                run(rest)
+            } else {
+                eprintln!("unlace: unknown subcommand {other:?}");
+                usage();
+                2
+            }
+        }
+    };
+    ExitCode::from(code as u8)
+}
+
+fn usage() {
+    let names = COMMANDS
+        .iter()
+        .map(|(name, _)| *name)
+        .collect::<Vec<_>>()
+        .join("|");
+    eprintln!(
+        "usage: unlace <{names}> ...\n\
+         \n\
+         LLM agents: run `unlace install-skill` once.  It installs the kuna skill -- how to drive\n\
+         this CLI well, embedded in the binary, no network -- for Claude Code, Codex and OpenCode\n\
+         (`--dir DIR` for other agents).  `unlace install-skill --print` shows it without installing.\n\
+         \n\
+         unlace decompile <binary> [--isa auto|arm|thumb] <func> [--addr] [--json] [--no-vars] [--omit aliases,line_mappings,variables,types] [--slice ARCH] [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] [--option NAME VALUE]... [--kassert ARGS]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--max-fn-seconds N] [--max-fn-memory MiB] [--raw-image --target T --base VMA]\n\
+         unlace decompile-all <binary> [--isa auto|arm|thumb] [--json] [--functions a,b,..] [--addr 0xVMA]... [--no-vars] [--omit aliases,line_mappings,variables,types] [--language auto|c|rust|java|go] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
+         unlace decompile-project <binary> [--isa auto|arm|thumb] [-o DIR] [--functions a,b,..] [--addr 0xVMA]... [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
+         unlace decompile-graph <binary> [--isa auto|arm|thumb] [-o FILE] [--label TEXT] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]...\n\
+         unlace functions <binary> [--isa auto|arm|thumb] [--json] [--jobs N|auto] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
+         unlace xrefs <binary> [--isa auto|arm|thumb] (--to <name|0xaddr> | --from <name|0xaddr>) [--json] [--kind call,jump,data,read,write,vcall] [--mode auto|reliable|aggressive|fast]\n\
+         unlace crypto <binary> [--isa auto|arm|thumb] [--json] [--algorithm SUBSTR] [--section NAME] [--no-xrefs]\n\
+         unlace blobs <binary> [--isa auto|arm|thumb] [--json] [--extract DIR] [--kind png,jpeg,gif,bmp,ico,zip,gzip,xz,zstd] [--section NAME] [--no-xrefs]\n\
+         unlace unpack <binary> [-o OUT] [--json]\n\
+         unlace unpack <dyld_shared_cache> (--list | --image NAME [-o OUT]) [--json]\n\
+         unlace strings <binary> [--isa auto|arm|thumb] [--json] [--min-length N] [--filter REGEX] [--encoding ascii|utf16|all] [--section NAME] [--no-xrefs]\n\
+         unlace raw-pcode <binary> [--isa auto|arm|thumb] <name|0xaddr|0xstart-0xend> [--addr] [--count N] [--bytes N] [--follow] [--json] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--slice ARCH] [--target T] [--sleighpath D]\n\
+         unlace disassemble <binary> [--isa auto|arm|thumb] <name|0xaddr|0xstart-0xend> [--addr] [--as code|data|auto] [--count N] [--bytes N] [--json] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--slice ARCH] [--target T] [--sleighpath D]\n\
+         unlace read <binary> [--isa auto|arm|thumb] <name|0xaddr|0xstart-0xend> [--addr] [--bytes N] [--count N] [--json]   # the hexdump view of the same target\n\
+         unlace docs [<topic>] [--json] [--all]\n\
+         unlace install-skill [--agent claude|codex|opencode|all] [--project | --dir DIR] [--force] [--print]\n\
+         unlace test [--all|--unittests|--datatests] [--name N]... [--baseline F] [--save-baseline F] [--json]\n\
+         unlace catalog [--json|--markdown|--check] [--option NAME] [--tier transform|analysis|core]\n\
+         unlace modes [--json]\n\
+         unlace specs [-a <dir>] [<slaspec>...] [--diff]\n\
+         unlace fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>\n\
+         unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
+         unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
+         unlace rust-signatures check [--manifest PATH] [--json]\n\
+         unlace --version\n\
+         \n\
+         --image NAME[+NAME...] (any subcommand): load those images of a dyld shared cache\n\
+         --follow-images N (decompile, disassemble, xrefs): also load up to N images holding\n\
+         a requested address outside them (default 2)\n\
+         --member [NAME] (any <binary> that is an ar, tar or zip archive or a U-Boot FIT image): load that member, or list the members when no NAME follows; <lib.a>:NAME is the same selection"
+    );
+}
+
+/// Honor `--engine cpp|rust` like the Python tools: set `KUNA_ENGINE`.  In the
+/// Rust-only world `rust` is already the default and `cpp` would fail to resolve,
+/// but the flag is accepted (and exported) for compatibility with existing
+/// invocations / the pipeline.
+fn apply_engine(engine: Option<&str>) {
+    if let Some(e) = engine {
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("KUNA_ENGINE", e) };
+    }
+}
+
+// --- test --------------------------------------------------------------------
+
+fn cmd_test(argv: &[String]) -> Result<i32, String> {
+    let mut mode = Mode::All;
+    let mut names: Vec<String> = Vec::new();
+    let mut binary: Option<String> = None;
+    let mut engine: Option<String> = None;
+    let mut sleighpath: Option<String> = None;
+    let mut datatests_dir: Option<String> = None;
+    let mut baseline: Option<String> = None;
+    let mut save_baseline: Option<String> = None;
+    let mut json = false;
+
+    let mut i = 0;
+    while i < argv.len() {
+        let a = argv[i].as_str();
+        match a {
+            "--all" => {
+                mode = Mode::All;
+            }
+            "--unittests" => {
+                mode = Mode::Unittests;
+            }
+            "--datatests" => {
+                mode = Mode::Datatests;
+            }
+            "--name" => {
+                names.push(take_value(argv, &mut i, "--name")?);
+            }
+            "--binary" => binary = Some(take_value(argv, &mut i, "--binary")?),
+            "--engine" => engine = Some(take_value(argv, &mut i, "--engine")?),
+            "--sleighpath" => sleighpath = Some(take_value(argv, &mut i, "--sleighpath")?),
+            "--datatests-dir" => datatests_dir = Some(take_value(argv, &mut i, "--datatests-dir")?),
+            "--baseline" => baseline = Some(take_value(argv, &mut i, "--baseline")?),
+            "--save-baseline" => save_baseline = Some(take_value(argv, &mut i, "--save-baseline")?),
+            "--json" => json = true,
+            "-h" | "--help" => {
+                usage_test();
+                return Ok(0);
+            }
+            s if s.starts_with("--") => {
+                return Err(format!("unknown option {s}"));
+            }
+            other => {
+                return Err(format!("unexpected argument {other:?}"));
+            }
+        }
+        i += 1;
+    }
+
+    if !names.is_empty() && mode == Mode::All {
+        return Err("--name requires --unittests or --datatests".into());
+    }
+    apply_engine(engine.as_deref());
+
+    let targs = TestArgs {
+        mode,
+        names,
+        binary,
+        sleighpath,
+        datatests_dir,
+        baseline,
+        save_baseline,
+        json,
+    };
+    Ok(test::run_cmd(&targs))
+}
+
+fn usage_test() {
+    eprintln!(
+        "usage: unlace test [--all|--unittests|--datatests] [--name N].. [--json] \\\n\
+         \x20                [--datatests-dir D] [--baseline F] [--save-baseline F] \\\n\
+         \x20                [--binary B] [--sleighpath D]\n\
+         \n\
+         Run the parity gates.  Unit results are parsed off stderr and datatest\n\
+         results off stdout, and the exit code is nonzero on any failure OR any\n\
+         regression against --baseline.  Default is --all.\n\
+         --name N (repeatable) narrows to named tests and requires --unittests or\n\
+         --datatests.  A name that matches no test, or a datatest corpus with no\n\
+         *.xml files, is a selection error: the tests that exist still run and are\n\
+         reported, the run exits 2, and --save-baseline writes nothing.\n\
+         \n\
+         --datatests-dir D selects the corpus: tests/datatests (the default) or\n\
+         tests/stages (the kuna-owned issue cases); crates/unlace-cli/tests/parity.rs\n\
+         runs both against docs/baseline.json and docs/baseline-stages.json.\n\
+         --baseline F compares against a recorded result; --save-baseline F re-records\n\
+         one.  Re-recording docs/baseline.json to absorb a regression is never\n\
+         sanctioned -- see CLAUDE.md.\n\
+         --json emits {{unit_footer,data_footer,passing,returncode,failures,selection}},\n\
+         plus parity with --baseline; selection is {{complete,errors,data,unit}}, where\n\
+         data is {{corpus,requested,matched,missing}} (file names) and unit is\n\
+         {{requested,matched,missing}}, each null when that half did not run."
+    );
+}
+
+// --- catalog -----------------------------------------------------------------
+
+fn cmd_catalog(argv: &[String]) -> Result<i32, String> {
+    let mut option: Option<String> = None;
+    let mut tier: Option<String> = None;
+    let mut json = false;
+    let mut markdown = false;
+    let mut check = false;
+    let mut engine: Option<String> = None;
+    let mut decomp_dbg_flag = false;
+    // --decomp-dbg / --sleighpath are accepted (Python had them); they map to the
+    // env overrides paths.rs already honors, so just set them.
+    let mut i = 0;
+    while i < argv.len() {
+        let a = argv[i].as_str();
+        match a {
+            "--option" => option = Some(take_value(argv, &mut i, "--option")?),
+            "--tier" => tier = Some(take_value(argv, &mut i, "--tier")?),
+            "--json" => json = true,
+            "--markdown" => markdown = true,
+            "--check" => check = true,
+            "--engine" => engine = Some(take_value(argv, &mut i, "--engine")?),
+            "--decomp-dbg" => {
+                // FIXME: Audit that the environment access only happens in single-threaded code.
+                unsafe {
+                    std::env::set_var("KUNA_DECOMP_DBG", take_value(argv, &mut i, "--decomp-dbg")?)
+                };
+                decomp_dbg_flag = true;
+            }
+            "--sleighpath" => {
+                // FIXME: Audit that the environment access only happens in single-threaded code.
+                unsafe {
+                    std::env::set_var("KUNA_SPECS", take_value(argv, &mut i, "--sleighpath")?)
+                };
+            }
+            "-h" | "--help" => {
+                usage_catalog();
+                return Ok(0);
+            }
+            s if s.starts_with("--") => {
+                return Err(format!("unknown option {s}"));
+            }
+            other => {
+                return Err(format!("unexpected argument {other:?}"));
+            }
+        }
+        i += 1;
+    }
+    // argparse mutually-exclusive group: at most one of json/markdown/check.
+    if (json as u8) + (markdown as u8) + (check as u8) > 1 {
+        return Err("--json, --markdown, --check are mutually exclusive".into());
+    }
+    apply_engine(engine.as_deref());
+    let pinned_by = if decomp_dbg_flag {
+        Some("--decomp-dbg")
+    } else {
+        paths::pinned_by("KUNA_DECOMP_DBG")
+    };
+
+    Ok(if check {
+        catalog::cmd_check(pinned_by)
+    } else if json {
+        catalog::cmd_json(option.as_deref(), tier.as_deref(), pinned_by)
+    } else if markdown {
+        catalog::cmd_markdown(option.as_deref())
+    } else {
+        catalog::cmd_text(option.as_deref(), tier.as_deref(), pinned_by)
+    })
+}
+
+fn usage_catalog() {
+    eprintln!(
+        "usage: unlace catalog [--json|--markdown|--check] [--option NAME] \\\n\
+         \x20                   [--tier transform|analysis|core] [--decomp-dbg P] \\\n\
+         \x20                   [--sleighpath D] [--engine cpp|rust]\n\
+         \n\
+         List the settable phase-model assertions -- the decisions `--option NAME VALUE`\n\
+         flips on every decompiling surface.  Each row carries its phase, tier, values,\n\
+         default, the symptoms it addresses and when to flip it.\n\
+         By default the catalog comes from this binary, without a console or specs.\n\
+         --decomp-dbg P or a non-empty KUNA_DECOMP_DBG selects an external console\n\
+         instead (the flag wins); a missing selected console is an error.\n\
+         --sleighpath and --engine remain accepted but do not select that route.\n\
+         --markdown always renders this binary's catalog.\n\
+         \n\
+         --json is the machine-readable form an agent selects options from: an\n\
+         ARRAY, one object per option, [{{option,values,default,phase,subphase,tier,\n\
+         summary,use_when,symptoms,..}}] (one element with --option NAME).  It and\n\
+         `unlace docs --json` are the two array-rooted documents; every other --json\n\
+         is an object.\n\
+         --markdown regenerates docs/options.md (tier-grouped, symptom-indexed).\n\
+         --check cross-checks the selected catalog against this binary's registered\n\
+         option names and exits nonzero on drift; this is the CI gate.\n\
+         --option NAME reports one row; --tier keeps one tier, in the table and\n\
+         in --json.\n\
+         \n\
+         Upstream OptionDatabase names (maxinstruction, errortoomanyinstructions, ..)\n\
+         are reachable through --option but are NOT catalog rows, so they do not\n\
+         appear here.  Mode presets are `unlace modes`."
+    );
+}
+
+// --- modes -------------------------------------------------------------------
+
+/// `unlace modes [--json]` — list the decompiler mode policies and presets.
+/// Modes are *not* settable catalog rows (`unlace catalog` covers those);
+/// concrete modes are option presets, while `auto` selects one using input
+/// file size.
+fn cmd_modes(argv: &[String]) -> i32 {
+    let mut json = false;
+    for a in argv {
+        match a.as_str() {
+            "--json" => json = true,
+            "-h" | "--help" => {
+                eprintln!(
+                    "usage: unlace modes [--json]\n\n\
+                     --json emits {{modes:[{{name,summary,automatic,overrides}}]}}."
+                );
+                return 0;
+            }
+            s if s.starts_with("--") => {
+                eprintln!("error: unknown option {s}");
+                return 2;
+            }
+            other => {
+                eprintln!("error: unexpected argument {other:?}");
+                return 2;
+            }
+        }
+    }
+
+    use jsonfmt::Json;
+    use std::fmt::Write as _;
+    let mut text = String::new();
+    if json {
+        let modes: Vec<Json> = unlace_decomp::modes::MODE_TABLE
+            .iter()
+            .map(|m| {
+                let overrides: Vec<Json> = m
+                    .overrides
+                    .iter()
+                    .map(|(opt, val)| {
+                        Json::Object(vec![
+                            ("option".into(), Json::Str((*opt).into())),
+                            ("value".into(), Json::Str((*val).into())),
+                        ])
+                    })
+                    .collect();
+                Json::Object(vec![
+                    ("name".into(), Json::Str(m.name.into())),
+                    ("summary".into(), Json::Str(m.summary.into())),
+                    ("automatic".into(), Json::Bool(m.automatic)),
+                    ("overrides".into(), Json::Array(overrides)),
+                ])
+            })
+            .collect();
+        let root = Json::Object(vec![("modes".into(), Json::Array(modes))]);
+        let _ = writeln!(text, "{}", jsonfmt::dumps_indent2(&root));
+    } else {
+        for m in unlace_decomp::modes::MODE_TABLE {
+            let _ = writeln!(text, "{}", m.name);
+            let _ = writeln!(text, "  {}", m.summary);
+            let joined: Vec<String> = m
+                .overrides
+                .iter()
+                .map(|(o, v)| format!("{o}={v}"))
+                .collect();
+            if m.automatic {
+                let _ = writeln!(
+                    text,
+                    "  (automatic size policy) overrides under every selected preset: {}",
+                    joined.join(", ")
+                );
+            } else if m.overrides.is_empty() {
+                let _ = writeln!(text, "  (no overrides — the shipped defaults)");
+            } else {
+                let _ = writeln!(text, "  overrides: {}", joined.join(", "));
+            }
+        }
+    }
+    output::emit_with_status(&text, 0)
+}

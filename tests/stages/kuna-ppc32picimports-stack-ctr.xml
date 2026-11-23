@@ -5,14 +5,14 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-base-spill.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ppc32-pic-base-spill.elf</com>
   <com>read symbols</com>
   <com>option ppc32picimports on</com>
   <com>load function check</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-ctr-decrement.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ppc32-pic-ctr-decrement.elf</com>
   <com>read symbols</com>
   <com>option ppc32picimports on</com>
   <com>load function check2</com>

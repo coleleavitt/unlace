@@ -16,7 +16,7 @@ The fingerprint fixtures for kuna's FID (Function-ID) port — a tiny, hermetic,
 | `prog` | **Vendored.** The statically-linked, `-no-pie`, **stripped** x86-64 ELF (`lib.o` + `main.o`), the FID PR4 re-identification target. No symbol table; the FID e2e (`unlace-console/tests/verify_fid.rs`) renames its `sub_<addr>` placeholder back to `kuna_crc32` by full-hash match against `lib.fid`. The pinned VMA of `kuna_crc32` in `prog` is **`0x4017c0`** (`-static -no-pie` keeps it stable; recorded by the e2e as `KUNA_CRC32_VMA`). |
 
 The same `lib.o`/`lib.c`/`lib.fid` are mirrored into
-`decompiler/crates/unlace-analysis/tests/fixtures/` as `fid_lib_x86_64.{o,c,fid}`
+`crates/unlace-analysis/tests/fixtures/` as `fid_lib_x86_64.{o,c,fid}`
 (the `cargo test` fixtures home — the consistency gate `verify_fid_build.rs` reads
 them there).
 
@@ -31,12 +31,12 @@ gcc -O2 -ffreestanding -fno-stack-protector -c lib.c -o lib.o
 
 # 2. fingerprint it with kuna's own generator → the vendored .fid
 #    (SLEIGHHOME must point at the repo `specs/` with the x86 .sla built:
-#     `make specs`, or `slacomp specs/.../x86-64.slaspec`)
+#     `target/release/slacomp -a specs`, or `slacomp specs/.../x86-64.slaspec`)
 SLEIGHHOME="$PWD/../../../specs" \
   unlace fid build lib.o -o lib.fid --lang x86:LE:64:default --cspec gcc
 
 # 3. mirror into the cargo-test fixtures dir
-cp lib.{o,c,fid} ../../../decompiler/crates/unlace-analysis/tests/fixtures/
+cp lib.{o,c,fid} ../../../crates/unlace-analysis/tests/fixtures/
 #   …renaming to fid_lib_x86_64.{o,c,fid}
 
 # 4. (PR4) build the stripped re-identification target `prog`.

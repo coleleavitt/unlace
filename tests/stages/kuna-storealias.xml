@@ -38,7 +38,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/storealias_gcc_O2_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/storealias_gcc_O2_x86_64</com>
   <com>option indexaliasguard load</com>
   <com>read symbols</com>
   <com>load function s_param</com>
@@ -84,7 +84,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/storealias_gcc_O2_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/storealias_gcc_O2_x86_64</com>
   <com>read symbols</com>
   <com>load function s_param</com>
   <com>decompile</com>
@@ -129,7 +129,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/storealias_gcc_O0_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/storealias_gcc_O0_x86_64</com>
   <com>option indexaliasguard load</com>
   <com>read symbols</com>
   <com>load function r_loop</com>
@@ -145,7 +145,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/storealias_gcc_O0_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/storealias_gcc_O0_x86_64</com>
   <com>read symbols</com>
   <com>load function r_loop</com>
   <com>decompile</com>

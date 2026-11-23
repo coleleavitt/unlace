@@ -3,7 +3,7 @@
 <!--
     Kuna: P1 environment binding, option dyldimage with several images
     (`A+B`). The script loads the committed synthetic dyld shared cache
-    (decompiler/crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e.py):
+    (crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e.py):
     libcaller calls libcallee's callee_add through a __TEXT_STUBS island.
 
     Pass 1 (`option dyldimage /usr/lib/libcaller.dylib`) is the gap: only
@@ -22,14 +22,14 @@
 <script>
   <com>option dyldimage /usr/lib/libcaller.dylib</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
   <com>read symbols</com>
   <com>load function caller_entry</com>
   <com>decompile</com>
   <com>print C</com>
   <com>option dyldimage libcaller+libcallee</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
   <com>read symbols</com>
   <com>load function _callee_add</com>
   <com>decompile</com>

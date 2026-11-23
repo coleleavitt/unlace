@@ -20,7 +20,7 @@
     Stage: P1 program prep (relocatable-object loader); a strict loader fix,
     no option.  Single pass.
 
-    Images: decompiler/crates/unlace-analysis/tests/fixtures/relocobj_*.o, from
+    Images: crates/unlace-analysis/tests/fixtures/relocobj_*.o, from
     relocobj_calls.c (see relocobj.provenance).
 
     Assert #1: PPC32 -fno-pic: store calls add64 and stores sink64 high word
@@ -36,7 +36,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/relocobj_ppc32_O2.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/relocobj_ppc32_O2.o</com>
   <com>option typevote off</com>
   <com>read symbols</com>
   <com>lo fu add64</com>
@@ -46,14 +46,14 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/relocobj_ppc32_pic_O2.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/relocobj_ppc32_pic_O2.o</com>
   <com>option typevote off</com>
   <com>read symbols</com>
   <com>lo fu callint</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/relocobj_mips32_O2.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/relocobj_mips32_O2.o</com>
   <com>option typevote off</com>
   <com>read symbols</com>
   <com>lo fu store</com>
@@ -63,14 +63,14 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/relocobj_mipsel_pic_O2.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/relocobj_mipsel_pic_O2.o</com>
   <com>option typevote off</com>
   <com>read symbols</com>
   <com>lo fu wrap</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/relocobj_ppc64_O2.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/relocobj_ppc64_O2.o</com>
   <com>option typevote off</com>
   <com>read symbols</com>
   <com>lo fu store</com>

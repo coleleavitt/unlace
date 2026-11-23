@@ -17,11 +17,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/callbacktype_x86_64",
     "binary_sha256": "5832788491b29b10513da669765b36cc8b84aa3c67b50fee2e6cb7a8692a7df5",
     "binary_size": 16544,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/callbacktype_x86_64",
     "selector": "by_key",
     "selector_kind": "name"
   },

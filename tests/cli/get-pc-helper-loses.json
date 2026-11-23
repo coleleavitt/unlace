@@ -19,11 +19,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/getpcthunk_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/getpcthunk_i386",
     "binary_sha256": "6ffdac39f28967a3ce2426581ae054440f7440bcfb0edc926d2627d888842237",
     "binary_size": 4104,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/getpcthunk_i386",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/getpcthunk_i386",
     "selector": "0x8049f20",
     "selector_kind": "addr"
   },

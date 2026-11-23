@@ -9,7 +9,7 @@
     `kuna_itaniumeh.rs`). The class Odd has hidden visibility, so only its
     type_info name string names it.
 
-    Fixtures: `decompiler/crates/unlace-analysis/tests/fixtures/ehcatch_x86_64.so`,
+    Fixtures: `crates/unlace-analysis/tests/fixtures/ehcatch_x86_64.so`,
     `ehcatch_arm.so` and `ehcatch_thumb_stripped.so`, three builds of
     `ehcatch.cc` (clang 22 -O2 -fPIC -fexceptions, ld.lld -shared; the recipe
     is in the source):
@@ -30,7 +30,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ehcatch_x86_64.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ehcatch_x86_64.so</com>
   <com>option itaniumeh on</com>
   <com>read symbols</com>
   <com>load function guarded</com>
@@ -40,7 +40,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ehcatch_arm.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ehcatch_arm.so</com>
   <com>option itaniumeh on</com>
   <com>read symbols</com>
   <com>load function guarded</com>
@@ -50,7 +50,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ehcatch_thumb_stripped.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ehcatch_thumb_stripped.so</com>
   <com>option itaniumeh on</com>
   <com>read symbols</com>
   <com>load function guarded</com>

@@ -11,7 +11,7 @@ Generated at C++ tree rev `87016be` against the pinned architecture datatest
 ## Regeneration
 
 ```bash
-make binaries        # rebuild decomp_dbg after any C++ change
+cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli        # rebuild decomp_dbg after any C++ change
 ~/.virtualenvs/kuna/bin/python tools/rust-port/gen_vectors.py
 ```
 

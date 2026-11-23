@@ -12,7 +12,7 @@
     block whose two predecessors are a two-way condition and a block entered
     only from that condition that runs into the return.
 
-    The bytes are functions of decompiler/crates/unlace-analysis/tests/fixtures/
+    The bytes are functions of crates/unlace-analysis/tests/fixtures/
     rettriangle.c built by gcc 11.4 at -O0 with -fstack-protector-strong
     (x86-64 SysV): finish (`if (ok) celebrate(); return 0;`), check_name (the
     same `if` behind a stack-protected buffer, whose stripped canary check

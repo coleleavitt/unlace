@@ -5,7 +5,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-tail-callback.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ppc32-pic-tail-callback.elf</com>
   <com>option voidtailreturn off</com>
   <com>read symbols</com>
   <com>option ppc32picimports on</com>
@@ -13,7 +13,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-local-alias.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ppc32-pic-local-alias.elf</com>
   <com>option voidtailreturn off</com>
   <com>read symbols</com>
   <com>option ppc32picimports on</com>

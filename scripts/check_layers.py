@@ -26,12 +26,12 @@ FOLDER_BAND = {
     "p9_emit": "emit", "infra": "driver",
 }
 MODULE_BAND = {
-    "kuna_option_dispatch": "driver", "kuna_phases": "driver",
+    "kuna_option_dispatch": "driver",
     "action": "middle", "architecture": "middle", "kuna_fasthash": "middle",
     "typeop": "middle", "fspec": "middle", "variable": "middle", "cover": "middle", "varmap": "middle",
     "dynamic": "middle", "heritage": "middle", "merge": "middle", "jumptable": "middle",
 }
-SRC = "decompiler/crates/unlace-decomp/src"
+SRC = "crates/unlace-decomp/src"
 ALLOWLIST = "scripts/layers-allowlist.txt"
 TOKEN = re.compile(r"\w+|::|\S")
 WORD = re.compile(r"\w+")

@@ -22,7 +22,7 @@
 
     All four constants render as literals: pi/4 and 0.1 in `_scale`, 1.0 and
     0.5 in `_fscale`. The loader-level facts are covered by the Rust gate
-    `decompiler/crates/unlace-console/tests/verify_msvcfpconst.rs`.
+    `crates/unlace-console/tests/verify_msvcfpconst.rs`.
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -31,7 +31,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/msvcfpconst_i386.obj</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/msvcfpconst_i386.obj</com>
   <com>read symbols</com>
   <com>load function _scale</com>
   <com>decompile</com>

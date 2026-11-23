@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 0
 covered_by_option: callpopret
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/568
@@ -92,7 +92,7 @@ Recover the string pointer returned by the helper at 0x4f7036.
     "binary_sha256": "f7e5bd8677a8bf0591999f9aa44da8bf6a2cc575f97f8b91e9bd13f3311b6196",
     "binary_size": 4896,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/callpopret_i386"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/callpopret_i386"
   }
 }
 ```

@@ -26,7 +26,7 @@
     declaration or from nowhere; the callees are named, so the signature is what
     the table adds.
 
-    Source: decompiler/crates/unlace-analysis/tests/fixtures/libcwiden_x86_64.c
+    Source: crates/unlace-analysis/tests/fixtures/libcwiden_x86_64.c
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -35,7 +35,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/libcwiden_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/libcwiden_x86_64</com>
   <com>read symbols</com>
   <com>lo fu can_write</com>
   <com>decompile</com>

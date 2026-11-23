@@ -1,0 +1,242 @@
+//! CLI end-to-end gate for `option ctypes`: the emitted C carries the target's
+//! own C type names, and the SAME core type spells differently on targets with
+//! different data models.
+//!
+//! The per-architecture claim is what needs a gate. A table that is right for
+//! x86-64 Linux and wrong for i386 would pass any single-target test, and the
+//! specific trap is the 8-byte integer: `int8` must spell `long` under LP64 (where
+//! `long` is 8 bytes) and `long long` under ILP32 (where it is 4). Both fixtures
+//! are decompiled here in one gate so the two spellings are compared directly
+//! rather than asserted apart.
+//!
+//! Integration tests require the built processor specs under `specs/`.
+
+use crate::common;
+use std::path::PathBuf;
+use std::process::Command;
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap()
+}
+
+fn fixture(name: &str) -> String {
+    repo_root()
+        .join("crates/unlace-analysis/tests/fixtures")
+        .join(name)
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+fn specs() -> String {
+    repo_root().join("specs").to_str().unwrap().to_string()
+}
+
+/// Every Ghidra core-type name that can reach the emitted C. `ctypes on` must
+/// leave none of them behind; that is the whole contract.
+const GHIDRA_TYPE_NAMES: &[&str] = &[
+    "uint1",
+    "uint2",
+    "uint4",
+    "uint8",
+    "int1",
+    "int2",
+    "int4",
+    "int8",
+    "float4",
+    "float8",
+    "float10",
+    "float16",
+    "xunknown1",
+    "xunknown2",
+    "xunknown4",
+    "xunknown8",
+    "wchar2",
+    "wchar4",
+];
+
+/// Run `unlace decompile-all <fixture> --option ctypes <on|off>`.
+fn decompile_all(fixture_name: &str, ctypes: &str) -> String {
+    let sp = specs();
+    let bin = fixture(fixture_name);
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args([
+            "decompile-all",
+            &bin,
+            "--sleighpath",
+            &sp,
+            "--option",
+            "ctypes",
+            ctypes,
+        ])
+        .output()
+        .expect("failed to spawn the kuna binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if !out.status.success() {
+        panic!("unlace decompile-all failed on {fixture_name}: {stderr}");
+    }
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+/// Count whole-word occurrences of `needle` in `hay`, so `int` does not match
+/// inside `print` and `long` does not match inside `long long`'s second word.
+fn word_count(hay: &str, needle: &str) -> usize {
+    let bytes = hay.as_bytes();
+    let mut n = 0;
+    let mut from = 0;
+    while let Some(i) = hay[from..].find(needle) {
+        let s = from + i;
+        let e = s + needle.len();
+        let before_ok =
+            s == 0 || !(bytes[s - 1] as char).is_ascii_alphanumeric() && bytes[s - 1] != b'_';
+        let after_ok =
+            e == bytes.len() || !(bytes[e] as char).is_ascii_alphanumeric() && bytes[e] != b'_';
+        if before_ok && after_ok {
+            n += 1;
+        }
+        from = e;
+    }
+    n
+}
+
+/// The headline contract: with `ctypes on`, no Ghidra core-type name survives
+/// into the emitted C, on any target. Asserted over four data models so a table
+/// that happens to be complete for one cannot pass.
+#[test]
+fn no_ghidra_type_name_survives_on_any_target() {
+    for name in ["fmt_x86_64", "i386_pie_nl", "fmt_arm", "fmt_aarch64"] {
+        let c = decompile_all(name, "on");
+        for ghidra in GHIDRA_TYPE_NAMES {
+            assert_eq!(
+                word_count(&c, ghidra),
+                0,
+                "{name}: `{ghidra}` survived into the emitted C with ctypes on"
+            );
+        }
+    }
+}
+
+/// The per-architecture claim, compared directly rather than asserted apart: the
+/// same 8-byte core type spells `long` under LP64 and `long long` under ILP32.
+/// Getting this backwards is the single most likely way a size->name table is
+/// wrong, and it is invisible on either target alone.
+#[test]
+fn eight_byte_integers_spell_per_data_model() {
+    let lp64 = decompile_all("fmt_x86_64", "on");
+    let ilp32 = decompile_all("i386_pie_nl", "on");
+
+    // x86-64 System V is LP64: `long` is 8 bytes, so the 8-byte core types land
+    // there and `long long` is never reached.
+    assert!(
+        word_count(&lp64, "unsigned long") > 0,
+        "LP64 must spell an 8-byte unsigned `unsigned long`"
+    );
+    assert_eq!(
+        word_count(&lp64, "long long"),
+        0,
+        "LP64 must NOT reach `long long` -- `long` is already 8 bytes there"
+    );
+
+    // i386 is ILP32: `long` is 4, so the same 8-byte types must reach `long long`.
+    assert!(
+        word_count(&ilp32, "long long") > 0,
+        "ILP32 must spell an 8-byte integer `long long`, not `long`"
+    );
+}
+
+/// `ctypes off` restores the Ghidra vocabulary exactly, so the option is a real
+/// gate and the parity corpus (which runs at the shipped default of off) is
+/// unaffected.
+#[test]
+fn off_keeps_the_ghidra_vocabulary() {
+    let off = decompile_all("i386_pie_nl", "off");
+    assert!(
+        word_count(&off, "int4") > 0,
+        "ctypes off must keep the core-type names"
+    );
+    assert!(
+        word_count(&off, "int8") > 0,
+        "ctypes off must keep the 8-byte core-type names"
+    );
+}
+
+/// The spelling must be *consistent*, not merely valid: the defect this feature
+/// fixes is that one function rendered `unsigned int` (via the older `realtypes`
+/// relabel, which covers only residual TYPE_UNKNOWN) beside `int4` (a genuine
+/// TYPE_INT core type). With `ctypes on` both vocabularies collapse onto one.
+#[test]
+fn the_two_vocabularies_no_longer_coexist() {
+    let on = decompile_all("i386_pie_nl", "on");
+    let off = decompile_all("i386_pie_nl", "off");
+    // Off: both a C spelling (from realtypes) and a Ghidra spelling are present --
+    // the reported mixture.
+    assert!(word_count(&off, "unsigned int") > 0 && word_count(&off, "uint4") > 0);
+    // On: only the C spelling remains.
+    assert!(word_count(&on, "unsigned int") > 0);
+    assert_eq!(word_count(&on, "uint4"), 0);
+}
+
+/// Run `unlace decompile-all <path> <args>` with no `--option ctypes`, so the
+/// spelling is whatever the mode policy gives.
+fn decompile_all_with(path: &str, args: &[&str]) -> String {
+    let sp = specs();
+    let mut argv = vec!["decompile-all", path, "--sleighpath", sp.as_str()];
+    argv.extend_from_slice(args);
+    let (stdout, stderr, code) = common::run_kuna(&argv);
+    assert_eq!(
+        code, 0,
+        "unlace decompile-all {args:?} failed on {path}: {stderr}"
+    );
+    stdout
+}
+
+fn assert_spelled_as_c(c: &str, what: &str) {
+    for ghidra in GHIDRA_TYPE_NAMES {
+        assert_eq!(
+            word_count(c, ghidra),
+            0,
+            "{what}: `{ghidra}` survived into the emitted C:\n{c}"
+        );
+    }
+    assert!(
+        c.contains("((long *)a0)[4]"),
+        "{what}: the 8-byte element cast must spell `long` on LP64:\n{c}"
+    );
+}
+
+/// GH-1063: the speed preset and every `auto` size spell the 8-byte element
+/// cast as C, where `((int8 *)a0)[4]` reads like a byte offset. The `reliable`
+/// and `fast` tiers are reached by padding a copy of the fixture past their
+/// size thresholds; an explicit `--mode reliable` keeps the catalog spelling.
+#[test]
+fn fast_and_every_auto_size_spell_core_types_as_c() {
+    let bin = fixture("elemindex_x86_64");
+    assert_spelled_as_c(
+        &decompile_all_with(&bin, &["--mode", "fast"]),
+        "--mode fast",
+    );
+    assert_spelled_as_c(&decompile_all_with(&bin, &[]), "auto (aggressive)");
+    for (size, tier) in [
+        (unlace_decomp::modes::AUTO_RELIABLE_MIN_BYTES, "reliable"),
+        (unlace_decomp::modes::AUTO_FAST_MIN_BYTES, "fast"),
+    ] {
+        let padded = common::scratch_file("elemindex-auto", "bin");
+        std::fs::copy(&bin, &padded).expect("copy the fixture");
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&padded)
+            .and_then(|f| f.set_len(size))
+            .expect("pad the fixture");
+        let c = decompile_all_with(padded.to_str().unwrap(), &[]);
+        assert_spelled_as_c(&c, &format!("auto ({tier})"));
+        let _ = std::fs::remove_file(&padded);
+    }
+    let reliable = decompile_all_with(&bin, &["--mode", "reliable"]);
+    assert!(
+        reliable.contains("((int8 *)a0)[4]"),
+        "an explicit --mode reliable stays the catalog defaults:\n{reliable}"
+    );
+}

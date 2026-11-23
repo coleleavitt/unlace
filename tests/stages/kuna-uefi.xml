@@ -22,14 +22,14 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/uefi_diskio_x64.efi</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/uefi_diskio_x64.efi</com>
   <com>option uefi off</com>
   <com>read symbols</com>
   <com>load addr 0x1743</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/uefi_diskio_x64.efi</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/uefi_diskio_x64.efi</com>
   <com>read symbols</com>
   <com>load function _ModuleEntryPoint</com>
   <com>decompile</com>

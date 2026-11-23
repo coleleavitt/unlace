@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import config
 
-STAGES_TOML = config.repo_root() / "decompiler" / "crates" / "unlace-decomp" / "phases.toml"
+STAGES_TOML = config.repo_root() / "crates" / "unlace-decomp" / "phases.toml"
 FEATURES_DIR = config.repo_root() / "docs" / "features"
 
 

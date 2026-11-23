@@ -47,13 +47,13 @@
   <com>print C</com>
   <com>option realtypes on</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/floatstore_x86_64_O2.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/floatstore_x86_64_O2.o</com>
   <com>read symbols</com>
   <com>load function mat_param</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/floatstore_a64_O2.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/floatstore_a64_O2.o</com>
   <com>read symbols</com>
   <com>load function mat_param</com>
   <com>decompile</com>

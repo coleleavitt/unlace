@@ -1,0 +1,211 @@
+//! (kuna) A C-rendering plan for ARM register-controlled logical left shifts.
+//!
+//! ARM masks a register LSL count to its low eight bits and returns zero when
+//! that value is at least the operand width. C leaves an equal-or-larger shift
+//! undefined, so the C printer needs a range guard unless the count's known
+//! bits keep it below 32 (or `armshiftguard off` drops it). This module keeps
+//! the architecture/opcode selection, the range proof, and the proof that
+//! printing both the guard and the shift will not repeat an effect;
+//! [`crate::p9_emit::printc::PrintC`] owns only the token emission.
+
+use std::rc::Rc;
+
+use crate::architecture::Architecture;
+use crate::context::{OpId, VarnodeId};
+use crate::dtype::{Datatype, type_metatype};
+use crate::funcdata::Funcdata;
+use unlace_num::opcodes::OpCode;
+
+/// The operands and types needed to emit one guarded variable ARM LSL.
+pub(crate) struct ArmRegisterLslPlan {
+    pub(crate) lhs: VarnodeId,
+    pub(crate) count: VarnodeId,
+    pub(crate) lhs_type: Rc<Datatype>,
+    pub(crate) count_type: Rc<Datatype>,
+    /// A signed result type when the original p-code output is signed.
+    /// Keeping the conditional's arms signed preserves signed consumers such
+    /// as `INT_SRIGHT` and `INT_SLESS` after the shift itself is made unsigned.
+    pub(crate) signed_result_type: Option<Rc<Datatype>>,
+    /// Whether the conditional `< 32u` guard is printed around the shift.
+    pub(crate) guarded: bool,
+}
+
+/// Select a variable ARM `CPUI_INT_LEFT` whose inputs can safely appear twice
+/// in its C conditional expression.
+pub(crate) fn plan_arm_register_lsl(
+    fd: &Funcdata,
+    arch: &Architecture,
+    op: OpId,
+) -> Option<ArmRegisterLslPlan> {
+    if !arch.archid.starts_with("ARM:") {
+        return None;
+    }
+    let o = fd.obank().get(op)?;
+    if o.code() != OpCode::CPUI_INT_LEFT || o.num_input() != 2 {
+        return None;
+    }
+    let (lhs, count) = (o.get_in(0)?, unsigned_extension_source(fd, o.get_in(1)?));
+    let (lhs_v, count_v, out_v) = (
+        fd.vbank().get(lhs)?,
+        fd.vbank().get(count)?,
+        fd.vbank().get(o.get_out()?)?,
+    );
+    if count_v.is_constant() || lhs_v.get_size() != 4 || out_v.get_size() != 4 {
+        return None;
+    }
+    let guarded = arch
+        .kuna_options
+        .get::<crate::kuna_armregistershift::ArmShiftGuard>()
+        .0
+        && count_v.get_nz_mask() >= 32;
+    if guarded && !(operand_is_repeatable(fd, lhs, 16) && operand_is_repeatable(fd, count, 16)) {
+        return None;
+    }
+
+    let lhs_type = arch
+        .types()
+        .get_base(lhs_v.get_size(), type_metatype::TYPE_UINT)
+        .ok()?;
+    let count_type = arch.types().get_base(4, type_metatype::TYPE_UINT).ok()?;
+    let signed_result_type = match out_v.get_type().get_metatype() {
+        type_metatype::TYPE_INT | type_metatype::TYPE_ENUM_INT => Some(
+            arch.types()
+                .get_base(out_v.get_size(), type_metatype::TYPE_INT)
+                .ok()?,
+        ),
+        _ => None,
+    };
+
+    Some(ArmRegisterLslPlan {
+        lhs,
+        count,
+        lhs_type,
+        count_type,
+        signed_result_type,
+        guarded,
+    })
+}
+
+/// (kuna `regnarrow`) The unsigned value an implied zero extension `vn`
+/// widens, which the guard casts and the shift reads as they are; `vn` itself
+/// otherwise. Printing the extension would cast the count a second time.
+fn unsigned_extension_source(fd: &Funcdata, vn: VarnodeId) -> VarnodeId {
+    let Some(v) = fd.vbank().get(vn) else {
+        return vn;
+    };
+    if !fd.get_arch().narrow_locals || v.is_explicit() || v.get_size() != 4 {
+        return vn;
+    }
+    let Some(def) = v.get_def().and_then(|d| fd.obank().get(d)) else {
+        return vn;
+    };
+    if def.code() != OpCode::CPUI_INT_ZEXT {
+        return vn;
+    }
+    match def
+        .get_in(0)
+        .and_then(|x| fd.vbank().get(x).map(|v| (x, v)))
+    {
+        Some((x, xv)) if xv.get_type().get_metatype() == type_metatype::TYPE_UINT => x,
+        _ => vn,
+    }
+}
+
+/// Whether printing `vn` twice emits the same side-effect-free C value.
+///
+/// A volatile leaf must be rejected even when it has no p-code definition:
+/// persistent/global values can print as direct C reads. An explicit written
+/// value is also safe as a leaf because its defining statement (including a
+/// CALL or LOAD) has already materialized it once; implied values instead need
+/// a recursive walk and may only contain the pure operations listed below.
+fn operand_is_repeatable(fd: &Funcdata, vn: VarnodeId, depth: u8) -> bool {
+    let v = match fd.vbank().get(vn) {
+        Some(v) => v,
+        None => return false,
+    };
+    if v.is_volatile() {
+        return false;
+    }
+    if v.is_constant() || !v.is_written() {
+        return true;
+    }
+    if v.is_explicit() && !v.is_implied() && v.get_def().is_some() {
+        return true;
+    }
+    if depth == 0 {
+        return false;
+    }
+    let def = match v.get_def().and_then(|op| fd.obank().get(op)) {
+        Some(def) => def,
+        None => return false,
+    };
+    if !matches!(
+        def.code(),
+        OpCode::CPUI_COPY
+            | OpCode::CPUI_INT_EQUAL
+            | OpCode::CPUI_INT_NOTEQUAL
+            | OpCode::CPUI_INT_SLESS
+            | OpCode::CPUI_INT_SLESSEQUAL
+            | OpCode::CPUI_INT_LESS
+            | OpCode::CPUI_INT_LESSEQUAL
+            | OpCode::CPUI_INT_ZEXT
+            | OpCode::CPUI_INT_SEXT
+            | OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_INT_SUB
+            | OpCode::CPUI_INT_CARRY
+            | OpCode::CPUI_INT_SCARRY
+            | OpCode::CPUI_INT_SBORROW
+            | OpCode::CPUI_INT_2COMP
+            | OpCode::CPUI_INT_NEGATE
+            | OpCode::CPUI_INT_XOR
+            | OpCode::CPUI_INT_AND
+            | OpCode::CPUI_INT_OR
+            | OpCode::CPUI_INT_LEFT
+            | OpCode::CPUI_INT_RIGHT
+            | OpCode::CPUI_INT_SRIGHT
+            | OpCode::CPUI_INT_MULT
+            | OpCode::CPUI_INT_DIV
+            | OpCode::CPUI_INT_SDIV
+            | OpCode::CPUI_INT_REM
+            | OpCode::CPUI_INT_SREM
+            | OpCode::CPUI_BOOL_NEGATE
+            | OpCode::CPUI_BOOL_XOR
+            | OpCode::CPUI_BOOL_AND
+            | OpCode::CPUI_BOOL_OR
+            | OpCode::CPUI_PIECE
+            | OpCode::CPUI_SUBPIECE
+            | OpCode::CPUI_PTRADD
+            | OpCode::CPUI_PTRSUB
+            | OpCode::CPUI_INSERT
+            | OpCode::CPUI_ZPULL
+            | OpCode::CPUI_POPCOUNT
+            | OpCode::CPUI_LZCOUNT
+            | OpCode::CPUI_SPULL
+    ) {
+        return false;
+    }
+    for slot in 0..def.num_input() {
+        let input = match def.get_in(slot) {
+            Some(input) => input,
+            None => return false,
+        };
+        if !operand_is_repeatable(fd, input, depth - 1) {
+            return false;
+        }
+    }
+    true
+}
+
+crate::kuna_flag!(
+    /// (kuna `armshiftguard`) Print `count < 32u ? x << count : 0` around a
+    /// variable ARM LSL whose count is not proven below 32 (on), or the plain
+    /// shift (off).
+    ArmShiftGuard,
+    "armshiftguard",
+    "ARM register-count shift range guard",
+    unset: true,
+    shipped: true
+);
+
+#[cfg(test)]
+mod tests;

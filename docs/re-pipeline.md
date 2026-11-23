@@ -25,7 +25,7 @@ One iteration:
 ## 0. Prerequisites
 
 ```bash
-make binaries && make specs
+cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli && target/release/slacomp -a specs
 tools/repipe/run.sh --preflight        # hard-fails on anything missing
 ```
 
@@ -256,8 +256,8 @@ Merges are **serialized** behind a `merge` lease. The sequence, after taking it:
 git fetch origin && git rebase origin/main          # rebase FIRST
 python3 -m scripts.repipe.counters --fix            # re-derive; never arithmetic
 python3 -m scripts.repipe.mergecheck --against origin/main
-make test && make test-stages && make rust-test && make check-spec
-decompiler/target/release/unlace catalog --check
+cargo test --release -p unlace-cli --test parity datatests && cargo test --release -p unlace-cli --test parity stage_tests && cargo nextest run --workspace --exclude unlace-wasm --profile ci && python3 tools/check_spec.py
+target/release/unlace catalog --check
 python3 -m scripts.repipe.verify --need <id> --json  # acceptance must be PASS
 tools/pipeline/open_pr.sh --merge feat/re-<slug>
 ```
@@ -345,9 +345,9 @@ come from a slot.
   CARGO_PROFILE_TEST_DEBUG=0` and removes `target/debug` from a **trap**, so it fires on
   timeout and crash too. A disk governor stops dispatching below `REPIPE_MIN_FREE_GB` and halts
   below `REPIPE_HALT_FREE_GB`.
-- **Specs.** Never `make specs` in a worktree. `KUNA_SPECS`/`SLEIGHHOME` point at the main tree,
+- **Specs.** Never `target/release/slacomp -a specs` in a worktree. `KUNA_SPECS`/`SLEIGHHOME` point at the main tree,
   but they do **not** reach the cargo workspace suite (~22 targets fail "Could not find .sla
-  file"), so `worker.sh` symlinks the built `.sla` in before `make rust-test`.
+  file"), so `worker.sh` symlinks the built `.sla` in before `cargo nextest run --workspace --exclude unlace-wasm --profile ci`.
 - **Never `git stash`** with sibling worktrees live — `refs/stash` is one shared stack and work
   has been lost that way.
 - **codex sqlite.** Each tester gets `CODEX_HOME=.kuna-repipe/runs/<id>/codexhome` (with
@@ -402,7 +402,7 @@ acceptance to fail; it proves a misresolved target refuses instead of lying; it 
 duplicate into one need; it proves two `quality` needs cannot dispatch together; and it curls
 every dashboard route including a path-traversal attempt.
 
-**Four false-green canaries** (in the spirit of `make test-ghidra`'s two) fail the run if: no
+**Four false-green canaries** (in the spirit of `cargo test --release -p unlace-ghidra -- --include-ignored`'s two) fail the run if: no
 probe reproduced (a broken runner would "pass" everything by failing everything), the sandbox
 assertions were skipped because `bwrap` was missing, the redactor dropped *every* extras file
 (over-redaction hides a broken allowlist), or clustering produced nothing.

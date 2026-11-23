@@ -8,7 +8,7 @@
     P0 assertion: option cil on|off (default on).
 
     The script loads the committed fixture
-    decompiler/crates/unlace-analysis/tests/fixtures/cil_hello.dll (source
+    crates/unlace-analysis/tests/fixtures/cil_hello.dll (source
     cil_hello.cs): a top-level statement that sums an int array through a
     local function.
 
@@ -25,14 +25,14 @@
 <script>
   <com>option cil off</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/cil_hello.dll</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/cil_hello.dll</com>
   <com>read symbols</com>
   <com>load addr 0x4027f6</com>
   <com>decompile</com>
   <com>print C</com>
   <com>option cil on</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/cil_hello.dll</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/cil_hello.dll</com>
   <com>read symbols</com>
   <com>load addr 0x402084</com>
   <com>decompile</com>

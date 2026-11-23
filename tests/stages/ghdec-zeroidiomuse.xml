@@ -21,7 +21,7 @@
     67f9bdc38f555589f3530a85), a stripped x86-64 ELF whose per-input-byte
     watchdog(timers, count) call at 0x11477 renders watchdog(), reduced to one
     loop and assembled from
-    decompiler/crates/unlace-analysis/tests/fixtures/zeroidiomuse_x86_64.s:
+    crates/unlace-analysis/tests/fixtures/zeroidiomuse_x86_64.s:
 
         401068  44 39 e3        CMP   EBX,R12D      ; loop head
         40106b  7e 20           JLE   0x40108d

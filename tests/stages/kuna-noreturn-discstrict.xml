@@ -25,7 +25,7 @@
     datatest is not constructible here. The end-to-end behavior - three
     undecodable bytes no longer deleting a caller's `return retseven() + 3` - is
     proven by the cross-crate gate
-    `decompiler/crates/unlace-console/tests/verify_noreturn_discstrict.rs` against a
+    `crates/unlace-console/tests/verify_noreturn_discstrict.rs` against a
     real x86-64 fixture (`noreturn_discstrict_x86_64`), the same split
     `noreturn_error` uses (ghangr-noreturn-error.xml + verify_noreturn_error.rs).
 

@@ -98,8 +98,9 @@ Caching:
 A new push to a PR cancels that PR's running workflow. Each commit on `main` runs in a
 concurrency group of its own, so no landed commit's run is cancelled or replaced.
 
-`.github/workflows/coverage.yml` runs the whole suite (nextest profile `full`, the slow
-tests included) under cargo-llvm-cov once a day and on manual dispatch, writes `lcov.info`
+`.github/workflows/coverage.yml` runs the whole suite (the slow tests included) under
+cargo-llvm-cov once a day and on manual dispatch, on cargo's own harness (under nextest
+every test process wrote its own `.profraw` and the runner's disk filled), writes `lcov.info`
 whether or not a test failed, and uploads it to Repowise. It is kept off the push path
 because instrumented binaries run the suite several times slower.
 

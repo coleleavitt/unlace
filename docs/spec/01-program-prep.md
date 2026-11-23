@@ -7516,6 +7516,32 @@ both
   `swift_release_x20(v)` for the bare `swift_release_x20()`. The stage test
   `tests/stages/kuna-swiftrrregs.xml` runs `swift_rr_regs_macho`, an arm64
   Mach-O assembled against the iOS libswiftCore.
+  The standard library's own C entry points are in the table too
+  (`_swift_stdlib_*`, declared in the shims headers
+  `stdlib/public/SwiftShims/swift/shims/AssertionReporting.h`,
+  `RuntimeShims.h`, `LibcShims.h`, `FoundationShims.h`,
+  `ThreadLocalStorage.h`, plus `swift_reportError`, `swift_reportWarning`,
+  `swift_lookUpClassMethod` and `swift_deletedMethodError`): the fatal-error
+  and unimplemented-initializer reporters take their strings as `char *`
+  with `int` lengths and a `uint32_t` flags word and return nothing, the
+  `strto*_clocale` parsers return the `char *` they stopped at, and
+  `_swift_stdlib_operatingSystemVersion` returns the three-word
+  `swift.NSOperatingSystemVersion` (`majorVersion`, `minorVersion`,
+  `patchVersion`), which on arm64 comes back through `x8`, so a caller's
+  `v1[0]` reads `v1.majorVersion`. The stage test
+  `tests/stages/kuna-swiftstdlib.xml` runs `swift_stdlib_macho`, assembled
+  the same way.
+  The rest of the compiler's list of runtime calls
+  (`include/swift/Runtime/RuntimeFunctions.def`) is in the table as well, for
+  every entry whose arguments all ride in the platform's argument registers:
+  the typed allocators (`swift_allocObjectTyped`, `swift_deallocBox`, …), the
+  array and `swift_cvw_*` layout-string value witnesses, the metatype casts,
+  the class-metadata initializers and the non-atomic reference counting. The
+  three runtime entry points that never return (`swift_unexpectedError`, which
+  a failed `try!` calls, `swift_errorInMain` and
+  `swift_onceClosureDestroyedError`) are no-return functions on a Swift image
+  in every format (`loader/noreturn.rs` `SWIFT_NORETURN`), so the code after
+  the call is not printed as reachable.
   The concurrency runtime's entry points come from a second, generated table
   (`kuna_swiftconcurrency.rs`, from the Swift project's
   `swift/Runtime/Concurrency.h` by `tools/gen_swift_concurrency.py`, 64-bit

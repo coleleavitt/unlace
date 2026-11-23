@@ -174,6 +174,8 @@ mod caller_stack_cli;
 
 #[path = "castnarrow_round_trip.rs"]
 mod castnarrow_round_trip;
+#[path = "copyrun_round_trip.rs"]
+mod copyrun_round_trip;
 #[path = "repstring_round_trip.rs"]
 mod repstring_round_trip;
 #[path = "strlenscan_round_trip.rs"]

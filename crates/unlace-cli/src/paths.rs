@@ -18,9 +18,7 @@
 //!   one: popping three parents off it lands on a path that exists nowhere.
 //!
 //! The environment overrides (`KUNA_ROOT`, `KUNA_SPECS`, `KUNA_DECOMP_DBG`,
-//! `KUNA_DECOMP_TEST`, `KUNA_SLACOMP`, `KUNA_RUST_PROFILE` — all documented in
-//! `docs/cli.md`) win over all of this. `decomp_test_dbg` lives outside `unlace`
-//! and is still probed for under its bare and executable-suffixed names.
+//! `KUNA_SLACOMP` — all documented in `docs/cli.md`) win over all of this.
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -65,18 +63,6 @@ fn in_tree_root(dir: &Path) -> Option<PathBuf> {
         cur = d.parent();
     }
     None
-}
-
-/// The kuna repository root (override with `KUNA_ROOT`), or the current directory
-/// when the running binary is not an in-tree build.
-pub fn repo_root() -> PathBuf {
-    if let Some(root) = env_path("KUNA_ROOT") {
-        return root;
-    }
-    if let Some(root) = exe_dir().as_deref().and_then(in_tree_root) {
-        return root;
-    }
-    env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
 /// A directory holding a SLEIGH tree (`Ghidra/Processors/...`).
@@ -168,91 +154,12 @@ pub fn require_specs_dir() -> Result<PathBuf, String> {
 pub const SPECS_HINT: &str = "set KUNA_SPECS to a specs/ directory (from the kuna-v<ver>-specs release \
      archive), or run `target/release/slacomp -a specs` in a checkout";
 
-/// The directories [`binary`] probes, in order.
-fn binary_search_dirs() -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = Vec::new();
-    let exe = exe_dir();
-    if let Some(dir) = exe.clone() {
-        dirs.push(dir);
-    }
-    let root = env_path("KUNA_ROOT").or_else(|| exe.as_deref().and_then(in_tree_root));
-    if let Some(root) = root {
-        let profile = env::var("KUNA_RUST_PROFILE").unwrap_or_else(|_| "release".to_string());
-        let built = root.join("target").join(profile);
-        if !dirs.contains(&built) {
-            dirs.push(built);
-        }
-    }
-    dirs
-}
-
-/// The file names an engine binary can carry in `dir`: the bare name, and the
-/// name plus `suffix` — `.exe` on Windows, where the release archive ships
-/// `decomp_dbg.exe` and `Path::exists()` applies no suffix of its own.
-fn probe_binary_with(dir: &Path, name: &str, suffix: &str) -> Option<PathBuf> {
-    let bare = dir.join(name);
-    if bare.is_file() {
-        return Some(bare);
-    }
-    if suffix.is_empty() {
-        return None;
-    }
-    let suffixed = dir.join(format!("{name}{suffix}"));
-    suffixed.is_file().then_some(suffixed)
-}
-
-/// [`probe_binary_with`] against the host platform's executable suffix.
-fn probe_binary(dir: &Path, name: &str) -> Option<PathBuf> {
-    probe_binary_with(dir, name, env::consts::EXE_SUFFIX)
-}
-
 /// A comma-separated rendering of a probe list, for a diagnostic.
 fn joined(dirs: &[PathBuf]) -> String {
     dirs.iter()
         .map(|d| d.display().to_string())
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-/// The XML datatest corpus directory.
-pub fn datatests_dir() -> PathBuf {
-    repo_root().join("tests").join("datatests")
-}
-
-/// Resolve a built engine binary, honoring a per-binary env override.
-///
-/// An explicit `<env_var>` always wins; otherwise the binary is looked for in
-/// each [`binary_search_dirs`] entry under both its bare and suffixed names.  When
-/// no probe hits, the returned path is the one a checkout would build to, so the
-/// caller can still test it for existence — the diagnostic to print in that case
-/// is [`missing_binary`], which names what was actually probed.
-pub fn binary(name: &str, env_var: &str) -> PathBuf {
-    if let Some(over) = env_path(env_var) {
-        return over;
-    }
-    let dirs = binary_search_dirs();
-    for dir in &dirs {
-        if let Some(found) = probe_binary(dir, name) {
-            return found;
-        }
-    }
-    match dirs.last() {
-        Some(dir) => dir.join(name),
-        None => PathBuf::from(name),
-    }
-}
-
-/// The diagnostic for an engine binary no probe found: the directories actually
-/// looked in, the override that pins one, and how to build it.
-pub fn missing_binary(name: &str, env_var: &str, cargo_package: &str) -> String {
-    if let Some(pinned) = env_path(env_var) {
-        return format!("{name} not found at {} ({env_var})", pinned.display());
-    }
-    format!(
-        "{name} not found in {} -- set {env_var} to point at it, or run `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli` \
-         (or `cargo build --release -p {cargo_package}`)",
-        joined(&binary_search_dirs())
-    )
 }
 
 /// `env_var` itself when it is set, i.e. when it, not a probe, chose the binary.
@@ -310,10 +217,6 @@ pub fn decomp_dbg() -> Result<Program, String> {
     builtin("KUNA_DECOMP_DBG", DECOMP_DBG_SUBCOMMAND)
 }
 
-pub fn decomp_test_dbg() -> PathBuf {
-    binary("decomp_test_dbg", "KUNA_DECOMP_TEST")
-}
-
 /// The SLEIGH compiler `unlace specs` runs.
 pub fn slacomp() -> Result<Program, String> {
     builtin("KUNA_SLACOMP", SLACOMP_SUBCOMMAND)
@@ -330,49 +233,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create sandbox");
         dir
-    }
-
-    /// The Windows release archive ships `decomp_dbg.exe`; the probe must find it.
-    /// Pinned on every platform by passing the suffix explicitly, because
-    /// `EXE_SUFFIX` is empty on the box this usually runs on.
-    #[test]
-    fn the_probe_finds_a_windows_named_sibling() {
-        let dir = sandbox("winexe");
-        std::fs::write(dir.join("decomp_dbg.exe"), b"").expect("write the shipped name");
-        assert_eq!(
-            probe_binary_with(&dir, "decomp_dbg", ".exe"),
-            Some(dir.join("decomp_dbg.exe")),
-            "the Windows archive's decomp_dbg.exe is invisible to the sibling probe"
-        );
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// The bare name still wins where both exist, and a suffix-less platform is
-    /// unaffected by the new candidate.
-    #[test]
-    fn the_bare_name_is_still_preferred() {
-        let dir = sandbox("bare");
-        std::fs::write(dir.join("decomp_dbg"), b"").expect("write");
-        std::fs::write(dir.join("decomp_dbg.exe"), b"").expect("write");
-        assert_eq!(
-            probe_binary_with(&dir, "decomp_dbg", ".exe"),
-            Some(dir.join("decomp_dbg"))
-        );
-        assert_eq!(
-            probe_binary_with(&dir, "decomp_dbg", ""),
-            Some(dir.join("decomp_dbg"))
-        );
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// A directory is not a binary, and an absent one is not a hit.
-    #[test]
-    fn a_directory_is_not_a_binary() {
-        let dir = sandbox("notafile");
-        std::fs::create_dir_all(dir.join("decomp_dbg")).expect("create the decoy directory");
-        assert_eq!(probe_binary_with(&dir, "decomp_dbg", ".exe"), None);
-        assert_eq!(probe_binary_with(&dir, "slacomp", ".exe"), None);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A workspace checkout: `<root>/crates/unlace-cli/Cargo.toml` beside `<root>/target`.

@@ -204,7 +204,7 @@ implement it.
 All of these green, on the **rebased** tree, before you merge:
 
 ```
-cargo test --release -p unlace-cli --test parity   # datatests PARITY OK 675/675 + stages PARITY OK — NEVER re-pin a baseline
+cargo test --release -p unlace-harness --test parity   # datatests PARITY OK 675/675 + stages PARITY OK — NEVER re-pin a baseline
 cargo nextest run --workspace --exclude unlace-wasm --profile ci       # the long pole; on an internal-branch PR CI SKIPS it, so you are the gate
 python3 tools/check_spec.py
 target/release/unlace catalog --check    # catalog OK

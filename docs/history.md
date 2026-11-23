@@ -336,11 +336,11 @@ table above: a frozen index, not a register anything is added to.
   `Ghidra/Processors/<P>/data/languages/` → `specs/Ghidra/Processors/<P>/data/languages/`.
   The C++ source (`decompiler/cpp/`, `unittests/`) was removed after the port was proven.
 - Sync: `python3 tools/sync_upstream.py --ghidra <checkout> --to origin/master [--dry-run]`,
-  then `cargo test -p unlace-cli --test parity datatests` (675/675 PARITY OK), review, commit. Plain `git apply` first, `--3way`
+  then `cargo test -p unlace-harness --test parity datatests` (675/675 PARITY OK), review, commit. Plain `git apply` first, `--3way`
   fallback; hard-fails on renames/binary diffs (handle manually). The DIV-2 re-pinned
   datatest files (15 files / 22 assertions) no longer clean-apply — expect `--3way` there.
   If a sync intentionally changes the corpus, re-pin with
-  `unlace test --datatests --save-baseline docs/baseline.json` and say so in the commit;
+  `UNLACE_BLESS=1 cargo test -p unlace-harness --test parity datatests` and say so in the commit;
   never re-pin to absorb an unexplained regression.
 - Local-modification policy: byte-identical to upstream until 2026-06-06 (GH-558); since
   then kuna intentionally diverges — it is its own decompiler, not a tracking mirror. New

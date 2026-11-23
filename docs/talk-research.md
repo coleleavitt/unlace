@@ -180,8 +180,8 @@ target/release/unlace decompile /tmp/kuna-talk-byte-sum byte_sum \
 Focused SIMD regressions passed 12/12:
 
 ```sh
-target/release/unlace test --datatests --datatests-dir tests/stages \
-  --name kuna-devectorize --name kuna-devectorize-effects --name kuna-wideslice --json
+target/release/decomp_test_dbg -sleighpath specs -path tests/stages \
+  datatests kuna-devectorize.xml kuna-devectorize-effects.xml kuna-wideslice.xml
 ```
 
 The lifetime replay used the checked-in fixture and assertions; changing `on` to `off` reproduces the incompatible aggregate assignment:

@@ -29,7 +29,6 @@ fn specs() -> String {
 fn decompile(binary: &str, selector: &str) -> (String, String, bool) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
         .args([
             "decompile",
@@ -101,7 +100,6 @@ fn a_stripped_image_still_gets_the_addr_advice() {
 fn a_macho_data_name_is_reported_as_data() {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
         .args([
             "functions",
@@ -142,7 +140,6 @@ fn a_macho_data_name_is_reported_as_data() {
 
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
         .args([
             "decompile",

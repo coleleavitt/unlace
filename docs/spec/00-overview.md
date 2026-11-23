@@ -1020,12 +1020,9 @@ then the built-in tree, then the first directory that holds a
 to the directory holding `unlace`, and the current directory's. A checkout build is
 recognised by its path, `<root>/target/[<triple>/]<profile>/kuna`; any
 other directory has no repo root, and popping three parents off it lands on a path
-that exists nowhere, so the pop is refused rather than reported. `decomp_test_dbg`
-is not built in: it is probed for beside `unlace` and in the checkout's
-`target/<profile>/`, under its bare name and then the platform's
-executable suffix, because `Path::exists` applies no suffix of its own. The
+that exists nowhere, so the pop is refused rather than reported. The
 environment overrides (`KUNA_ROOT`, `KUNA_SPECS`, `KUNA_DECOMP_DBG`,
-`KUNA_DECOMP_TEST`, `KUNA_SLACOMP`, `KUNA_RUST_PROFILE`, all documented in
+`KUNA_SLACOMP`, all documented in
 `docs/cli.md`) win over everything else. A probe that finds nothing names the
 directories it looked in and why a built-in tree could not be unpacked: a missing
 SLEIGH tree is reported where it is resolved rather than as the engine's
@@ -1360,8 +1357,7 @@ spawn of `decomp_dbg` or `decomp_test_dbg` exports the parent's identity as
 (`crates/unlace-console/src/kuna_buildstamp.rs (identity, answer_parent, report)`).
 The child compares it with its own before reading its arguments and, only when the
 two differ, writes one `kuna-build-mismatch: <identity>` line to stderr. `unlace`
-removes that line from the captured stderr before anything reads it (`unlace test`
-parses the unit-test grammar from the same stream) and prints one warning per
+removes that line from the captured stderr before anything reads it and prints one warning per
 process naming both paths, both identities, and the flag or variable that chose the
 child. Stdout is not involved, so no transcript, datatest result or `--json`
 document can be disturbed, and a child older than the handshake simply ignores the
@@ -1483,7 +1479,7 @@ status and says nothing, any other write error is reported and forces 1.
 Keeping the status is the load-bearing half. The write failed because nobody was
 reading, which is orthogonal to whether the work succeeded, and stderr is still
 open — so collapsing it to 0 would convert a false red into a false green:
-`unlace test | head` would report a REGRESSED parity run as passing, and the DIV-45
+`unlace catalog --check | head` would report a stale catalog as current, and the DIV-45
 contract above would hold only while someone was listening. `unlace specs` is the
 one command whose stdout is a child's (`slacomp`): it streams that pipe through
 the same boundary and leaves stderr inherited, because slacomp's diagnostics are
@@ -1491,23 +1487,15 @@ on stderr while the `Compiling <spec>:` line that attributes them is on stdout,
 and capturing both would print every warning of a run ahead of every progress
 line (DIV-89).
 
-(kuna) **The parity command's selection.** `unlace test` cannot learn from
-`decomp_test_dbg` which datatest *files* it ran. The harness keeps a requested
-name only when it is the file name of an `*.xml` directly in the corpus
-directory, drops every other name silently, and reports the tests *inside*
-each file by their own names. So
-`crates/unlace-cli/src/test/selection.rs` resolves the file-level
-selection itself, by the harness's rule, before starting it: the corpus files
-matched, and the requested names that match none. Unit tests are named in the
-harness's own stream, so a requested unit test that never reported is missing
-once the run reaches its footer. A missing name, an empty corpus or an
-unreadable corpus directory is a selection error. Each error is named on
-stderr and in the `--json` `selection` object, the existing tests still run
-and are reported, the run exits 2, and `--save-baseline` refuses to record the
-partial result. Before this, each of those cases scored `0/0` or a subset and
-exited 0, a false green to anything reading only the status or `data_footer`.
-The empty unit registry stays a complete selection, because it is empty by
-design and no name was asked of it. The saved baseline record is unchanged.
+(kuna) **The parity gates.** The datatest and stage corpora are plain cargo tests
+(`crates/unlace-harness/tests/parity.rs`): each corpus runs in-process through the harness's
+datatest runner, every `*.xml` directly in the corpus directory, from the repository root.
+The passing assertions become `data:<name>` keys (a repeated name's Nth occurrence is
+`data:<name> @dupN`) and are compared with the baseline's `data:` keys. A baseline key that no
+longer passes, any failing assertion and any test file that cannot be parsed or run fail
+the gate; a passing key absent from the baseline is reported and does not. A baseline
+without a string-array `passing` is an error, never an empty baseline. `UNLACE_BLESS=1`
+re-records the baseline from a run with no failures, keeping the file's other keys.
 
 Script construction borrows the parsed single-function request. The subprocess
 driver supplies its resolved binary path, effective address mode, output paths

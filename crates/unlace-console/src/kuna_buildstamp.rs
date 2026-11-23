@@ -1,6 +1,6 @@
 //! The build handshake between `unlace` and the engine binaries it spawns.
 //!
-//! `unlace decompile` and `unlace catalog` run `decomp_dbg`, and `unlace test` runs
+//! `unlace decompile` and `unlace catalog` run `decomp_dbg`; a parent can also spawn
 //! `decomp_test_dbg`. Either can come from a different build than the `unlace`
 //! that spawned it -- `KUNA_DECOMP_DBG` pointing at another install, or a sibling
 //! left behind when only `unlace` was rebuilt -- and nothing in the render says so.

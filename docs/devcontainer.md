@@ -58,9 +58,9 @@ docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
 
 # the three required gates
 docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
-    bash -lc 'cargo test -p unlace-cli --test parity datatests'         # 675/675 datatest parity  -> PARITY OK
+    bash -lc 'cargo test -p unlace-harness --test parity datatests'         # 675/675 datatest parity  -> PARITY OK
 docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
-    bash -lc 'cargo test -p unlace-cli --test parity stage_tests'  # stage-model corpus       -> PARITY OK
+    bash -lc 'cargo test -p unlace-harness --test parity stage_tests'  # stage-model corpus       -> PARITY OK
 docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
     bash -lc 'cargo nextest run --workspace --exclude unlace-wasm --profile ci'    # full cargo workspace suite
 ```

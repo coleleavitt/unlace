@@ -57,9 +57,5 @@ def decomp_dbg() -> Path:
     return binary("decomp_dbg", "KUNA_DECOMP_DBG")
 
 
-def decomp_test_dbg() -> Path:
-    return binary("decomp_test_dbg", "KUNA_DECOMP_TEST")
-
-
 def sleigh() -> Path:
     return binary("sleigh_opt", "KUNA_SLEIGH")

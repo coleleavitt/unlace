@@ -168,10 +168,10 @@ jobs:
           fi
 
       # tests/datatests vs docs/baseline.json and tests/stages vs docs/baseline-stages.json,
-      # through `unlace test` and the decomp_test_dbg built above (crates/unlace-cli/tests/parity.rs).
+      # run in-process through the harness's datatest runner (crates/unlace-harness/tests/parity.rs).
       # The workspace suite runs the same two tests; this job carries them on every PR.
       - name: parity -- datatest and stage corpora vs their baselines
-        run: cargo test --release -p unlace-cli --test parity
+        run: cargo test --release -p unlace-harness --test parity
 
       - name: spec anchors and phase-folder ownership (tools/check_spec.py)
         run: python3 tools/check_spec.py

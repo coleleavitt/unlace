@@ -37,18 +37,12 @@ TARGET="$CARGO_LLVM_COV_TARGET_DIR"
 export LLVM_PROFILE_FILE="$TARGET/kuna-%16m.profraw"
 
 fail=0
-echo "== coverage 1/4: cargo workspace suite =="
+echo "== coverage 1/2: cargo workspace suite (with the datatest and stage parity target) =="
 cargo test --workspace --no-fail-fast || fail=1
 
-echo "== coverage 2/4..3/4: datatest + stages corpora =="
-cargo build --release -p unlace-cli -p unlace-harness -p unlace-console
+echo "== coverage 2/2: tests/cli probes =="
+cargo build --release -p unlace-cli
 KUNA="$TARGET/release/unlace"
-export KUNA_DECOMP_TEST="$TARGET/release/decomp_test_dbg"
-(cd "$ROOT" && "$KUNA" test --datatests --baseline docs/baseline.json) || fail=1
-(cd "$ROOT" && "$KUNA" test --datatests --datatests-dir tests/stages \
-  --baseline docs/baseline-stages.json) || fail=1
-
-echo "== coverage 4/4: tests/cli probes =="
 (cd "$ROOT" && REPIPE_KUNA="$KUNA" PYTHONPATH="$ROOT" python3 -m scripts.repipe.clitests) || fail=1
 
 echo "== coverage: reports =="

@@ -70,10 +70,9 @@ re-measures from scratch: a full instrumented build into
 `target/llvm-cov-target` (a second build tree; debug info is
 forced off to keep it small) plus every suite — expect 30–60 minutes. Suite
 failures do not abort the measurement; they are reported as
-`meta.runsFailed` and the report covers what ran. Two sharp edges it handles
-for you: `KUNA_DECOMP_TEST` is pinned so the datatest runs cannot silently
-fall back to an uninstrumented `decomp_test_dbg`, and profile output uses a
-pool-merged `%16m` pattern so the thousands of spawned processes do not
+`meta.runsFailed` and the report covers what ran. The datatest and stage corpora run inside the
+workspace suite (the `unlace-harness` parity target), so they are measured in-process.
+Profile output uses a pool-merged `%16m` pattern so the thousands of spawned processes do not
 leave one `.profraw` each. A process killed by a watchdog/timeout loses its
 counters; if that matters for a run, llvm's continuous mode (`%c` in
 `LLVM_PROFILE_FILE` plus `-C llvm-args=-runtime-counter-relocation` in

@@ -465,7 +465,6 @@ pub struct Funcdata {
     /// ([`Self::set_kuna_pipeline_failure`]) so the printer says the pipeline
     /// failed, and why, instead of blaming structuring (`PrintC::emit_function_document`).
     kuna_pipeline_failure: Option<String>,
-    pub(crate) kuna_call_mechanisms: crate::kuna_callmechanisms::State,
     /// The \e fspec handles this function's call-spec annotations registered
     /// in the fspec-space side table, released when the function is dropped.
     pub(crate) kuna_fspec_handles: Vec<unlace_base::types::uintb>,
@@ -754,6 +753,8 @@ pub struct Funcdata {
     /// ([`crate::kuna_retpushedhalf::PushedRegisters`]).
     kuna_pushed_registers: crate::kuna_retpushedhalf::PushedRegisters,
     pub(crate) kuna_atomic_xadds: Vec<crate::p2_lift::kuna_atomicxadd::Instruction>,
+    /// The kuna passes' per-function state ([`crate::kuna_funcstate`]).
+    kuna_states: crate::kuna_funcstate::FuncStates,
 }
 
 /// Opaque handle for a jump-table (C++ `JumpTable *` slot in `jumpvec`).
@@ -921,7 +922,6 @@ impl Funcdata {
             kuna_call_target_types: std::collections::HashMap::new(),
             kuna_field_calls: Vec::new(),
             kuna_pipeline_failure: None,
-            kuna_call_mechanisms: Default::default(),
             kuna_fspec_handles: Vec::new(),
             kuna_rejected_flow: Vec::new(),
             kuna_rejected_callee: Vec::new(),
@@ -1000,6 +1000,7 @@ impl Funcdata {
             kuna_elemptr_stated: std::collections::HashMap::new(),
             kuna_pushed_registers: crate::kuna_retpushedhalf::PushedRegisters::default(),
             kuna_atomic_xadds: Vec::new(),
+            kuna_states: Default::default(),
         })
     }
 
@@ -2257,6 +2258,17 @@ impl Funcdata {
 
     pub fn get_arch(&self) -> &ArchHandle {
         &self.glb
+    }
+
+    /// A kuna pass's per-function state, created with its default on first use
+    /// ([`crate::kuna_funcstate`]).
+    pub fn kuna_state<S: crate::kuna_funcstate::FuncState>(&self) -> &S {
+        self.kuna_states.get::<S>()
+    }
+
+    /// A kuna pass's per-function state for writing ([`crate::kuna_funcstate`]).
+    pub fn kuna_state_mut<S: crate::kuna_funcstate::FuncState>(&mut self) -> &mut S {
+        self.kuna_states.get_mut::<S>()
     }
 
     /// Build a fresh empty Funcdata sharing this function's arch / entry /
@@ -4965,7 +4977,7 @@ impl Funcdata {
         self.kuna_regnarrow_failed.clear();
         self.kuna_regsigned_values.clear();
 
-        self.kuna_call_mechanisms = Default::default();
+        self.kuna_states.clear();
         self.kuna_fpu_trunc_views.clear();
         self.kuna_x87_empty_returns.clear();
         self.kuna_x87_float_returns.clear();

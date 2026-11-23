@@ -27,6 +27,7 @@ pub(crate) mod kuna_checkedarena;
 pub mod kuna_emittedop;
 pub mod kuna_fnmemory;
 pub mod kuna_funcreport;
+pub mod kuna_funcstate;
 pub mod kuna_hostmem;
 pub mod kuna_namespaces; // (kuna) which namespaces print in front of a name
 pub mod kuna_optionset;

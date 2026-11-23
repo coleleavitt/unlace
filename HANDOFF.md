@@ -108,8 +108,13 @@ tidy/clippy/parity are green, then the next one.
    `Funcdata` / `ArchContext` / `Architecture`: that is step 6.
 
 ### Later crate-split steps (not started)
-- **Step 6:** move the ~100 kuna pass tables off `Funcdata` into typed per-function slots
-  (each with a flag for whether it survives `clear()`).
+- **Step 6 (in progress):** move the ~100 kuna pass tables off `Funcdata` into typed per-function
+  slots (each with a flag for whether it survives `clear()`). The slot store is
+  `substrate/kuna_funcstate.rs` (`FuncState`, `kuna_func_state!`, `Funcdata::kuna_state[_mut]`);
+  a pass's accessors move with its table into an `impl Funcdata` block in the pass module, so
+  callers keep their method names. Done: callmechanisms (`State`). Left: the other
+  `funcdata -> *` lines of `scripts/layers-allowlist.txt`, then the arch/context edges
+  (callmechanisms `Mechanisms`, jumpassist, segmentize, modelrules, heritage -> prefersplit).
 - **Step 8:** `#[inline]` on small core accessors before they cross a crate boundary; compare
   `decompile-all` CPU time on 3 binaries, best of 3.
 - **Step 9:** the physical split, one crate per PR, bottom-up via `git mv` + re-exports:

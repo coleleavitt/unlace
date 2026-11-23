@@ -1562,7 +1562,11 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
             (r, ctx.reflow_requested, ctx.abandoned_for_restart)
         };
         let (r, reflow_requested, abandoned) = res;
-        if let Some(error) = fd.kuna_call_mechanisms.failure.as_ref() {
+        if let Some(error) = fd
+            .kuna_state::<crate::kuna_callmechanisms::State>()
+            .failure
+            .as_ref()
+        {
             return Err(KunaError::lowlevel(error.clone()));
         }
         // (unlace decompile-all watchdog) A budgeted drive that ran past its
@@ -2928,7 +2932,11 @@ pub fn run_named_pipeline_variant(
         if let Some(error) = ctx.error {
             return Err(error);
         }
-        if let Some(error) = fd.kuna_call_mechanisms.failure.as_ref() {
+        if let Some(error) = fd
+            .kuna_state::<crate::kuna_callmechanisms::State>()
+            .failure
+            .as_ref()
+        {
             return Err(KunaError::lowlevel(error.clone()));
         }
         if r < 0 {

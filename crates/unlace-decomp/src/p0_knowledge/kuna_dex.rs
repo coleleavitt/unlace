@@ -545,7 +545,9 @@ fn copy_operations(
 /// payload `ActionConstbase` injects upstream).
 pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
     if data.get_arch().dex.is_none()
-        || data.kuna_call_mechanisms.dex_entry
+        || data
+            .kuna_state::<crate::kuna_callmechanisms::State>()
+            .dex_entry
         || data.bblocks_get_size() == 0
     {
         return Ok(());
@@ -565,7 +567,8 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
     let start = data.bblocks_block_start(block);
     let operations = copy_operations(&start, register, &copies);
     crate::kuna_callmechanisms::install_at_entry(data, block, &operations)?;
-    data.kuna_call_mechanisms.dex_entry = true;
+    data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
+        .dex_entry = true;
     Ok(())
 }
 

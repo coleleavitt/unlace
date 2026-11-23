@@ -181,7 +181,12 @@ impl Rule for RuleStrcpyChain {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().helper_roles {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_helperrole::HelperRoles>()
+            .0
+        {
             return 0;
         }
         let role = role_of(data, op);
@@ -259,3 +264,13 @@ impl Rule for RuleStrcpyChain {
         1
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `helperroles`) Role-tagged helper-call rewrites
+    /// ([`crate::kuna_helperrole`]).
+    HelperRoles,
+    "helperroles",
+    "Role-tagged helper-call rewrites",
+    unset: false,
+    shipped: true
+);

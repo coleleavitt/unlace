@@ -241,7 +241,10 @@ impl FlowEnvironment for ArchFlowEnv {
         // (kuna funcboundflow) the Architecture-owned gate (`option funcboundflow`).
         // When on, `flow.rs` truncates a fall-through that reaches a known function
         // entry (via `query_call`) so the next function is not decoded into this one.
-        self.arch().funcbound_flow
+        self.arch()
+            .kuna_options
+            .get::<crate::decompile_drive::FuncboundFlow>()
+            .0
     }
     fn funcbound_entry_is_unconditional_return(&self, entry: &Address) -> bool {
         // Decode exactly the candidate entry instruction out of band.  The
@@ -632,7 +635,12 @@ impl FlowEnvironment for ArchFlowEnv {
     }
     fn relro_noreturn_call(&self, fd: &Funcdata, op: crate::context::OpId) -> Option<Address> {
         let arch = self.arch();
-        if !arch.relro_noreturn || arch.dynreloc_const.is_empty() {
+        if !arch
+            .kuna_options
+            .get::<crate::decompile_drive::RelroNoreturn>()
+            .0
+            || arch.dynreloc_const.is_empty()
+        {
             return None;
         }
         let (slot, size) = crate::kuna_msvcimportcall::call_slot(fd, op)?;
@@ -3558,6 +3566,31 @@ fn parameter_storage(fd: &Funcdata, arg_index: usize) -> Option<(Address, i64)> 
     }
     None
 }
+
+crate::kuna_flag!(
+    /// (kuna `relronoreturn`) Make a call through a relocated read-only slot
+    /// direct while the flow is followed when the function the slot holds never
+    /// returns, instead of after `ActionDeindirect` and a restart. Default off
+    /// (`option relronoreturn`).
+    RelroNoreturn,
+    "relronoreturn",
+    "Flow-time no-return call through a relocated read-only slot",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna `funcboundflow`) Bound fall-through at a known function entry: when a
+    /// fall-through reaches the entry of another known function (the callee just
+    /// executed being an unnamed static no-return the analysis could not prove
+    /// no-return), truncate flow with a no-return halt instead of decoding the
+    /// next function's body into the current one (`option funcboundflow`).
+    FuncboundFlow,
+    "funcboundflow",
+    "Fall-through bound at function entries",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 fn variable_storage_varrefs(fd: &Funcdata, variable: &VarInfo) -> BTreeSet<u64> {

@@ -282,7 +282,12 @@ impl Rule for RuleSelectDiv {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().pow2_select {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_selectdiv::Pow2Select>()
+            .0
+        {
             return 0;
         }
         match data.obank().get(op).map(|o| o.code()) {
@@ -323,3 +328,12 @@ impl Rule for RuleSelectDiv {
         }
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) Rewrite a signed division or remainder by a power of two written as a select or a sign-mask shift. (option `pow2select`).
+    Pow2Select,
+    "pow2select",
+    "power-of-two division select recovery",
+    unset: false,
+    shipped: true
+);

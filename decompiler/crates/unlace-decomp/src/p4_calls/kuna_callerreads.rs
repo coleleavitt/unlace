@@ -85,7 +85,8 @@ pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
         .kuna_call_returns
         .partition_point(|&(callee, _)| callee < off);
     let mut found: Option<(usize, int4)> = None;
-    let x87 = crate::p4_calls::kuna_x87emptyreturn::storage(arch).filter(|_| arch.x87_depth);
+    let x87 = crate::p4_calls::kuna_x87emptyreturn::storage(arch)
+        .filter(|_| arch.kuna_options.get::<crate::kuna_x87depth::X87Depth>().0);
     let sites = arch.kuna_call_returns[lo..]
         .iter()
         .take_while(|&&(callee, _)| callee == off);

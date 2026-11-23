@@ -69,7 +69,12 @@ pub fn thunk_register(read: impl Fn(u64) -> Option<u8>) -> Option<&'static str> 
 /// The inject id of the `x86_indirect_thunk_<reg>` call-fixup for a retpoline
 /// thunk at `entry`, or -1.
 pub fn inject_id(arch: &Architecture, entry: &Address) -> int4 {
-    if !arch.retpoline_thunk || !arch.get_description().starts_with("x86:") {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_retpolinethunk::RetpolineThunk>()
+        .0
+        || !arch.get_description().starts_with("x86:")
+    {
         return -1;
     }
     let read = |i: u64| {
@@ -85,6 +90,16 @@ pub fn inject_id(arch: &Architecture, entry: &Address) -> int4 {
         .base
         .get_payload_id(crate::pcodeinject::CALLFIXUP_TYPE, name.as_bytes())
 }
+
+crate::kuna_flag!(
+    /// (kuna) A retpoline thunk recognized by its body gets the cspec's
+    /// `x86_indirect_thunk_<reg>` fixup (option `retpolinethunk`).
+    RetpolineThunk,
+    "retpolinethunk",
+    "retpoline thunks recognized by their body",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

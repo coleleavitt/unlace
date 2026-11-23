@@ -68,5 +68,5 @@ pub mod kuna_callarrayextent;
 pub mod kuna_calltransport;
 pub mod kuna_declhightype;
 pub mod kuna_naming;
-pub(crate) mod kuna_stackstruct;
+pub mod kuna_stackstruct;
 pub mod kuna_varsources;

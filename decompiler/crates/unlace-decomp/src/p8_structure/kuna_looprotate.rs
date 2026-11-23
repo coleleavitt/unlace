@@ -780,7 +780,12 @@ impl Action for ActionLoopRotate {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().loop_rotate {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_looprotate::LoopRotate>()
+            .0
+        {
             return 0;
         }
         let heads: Vec<BlockId> = (0..data.bblocks_get_size())
@@ -799,3 +804,12 @@ impl Action for ActionLoopRotate {
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `looprotate`) A guarded do-while loop becomes a while loop.
+    LoopRotate,
+    "looprotate",
+    "Guarded do-while loops rotated to while loops",
+    unset: false,
+    shipped: true
+);

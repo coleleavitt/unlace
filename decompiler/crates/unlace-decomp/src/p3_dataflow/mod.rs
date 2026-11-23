@@ -28,7 +28,7 @@ pub mod kuna_flagcompare;
 pub(crate) mod kuna_floatnegation;
 pub(crate) mod kuna_floatnegpiece;
 pub mod kuna_floatquiet;
-pub(crate) mod kuna_globalarrayanchor;
+pub mod kuna_globalarrayanchor;
 pub(crate) mod kuna_globalcallranges;
 pub mod kuna_globalcallstore;
 pub(crate) mod kuna_globalfieldstore;

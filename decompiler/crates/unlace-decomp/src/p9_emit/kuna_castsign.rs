@@ -279,3 +279,15 @@ pub(crate) fn drops_printed_cast(fd: &Funcdata, casts: &[OpId], newty: &Datatype
         })
     })
 }
+
+crate::kuna_flag!(
+    /// (kuna `castsign`) Let `signedness` declare a frame local or a body local
+    /// with an input member signed, and read a same-width pointer conversion or a
+    /// pointer-width index as neutral, when every signedness-sensitive use of the
+    /// value is signed.  See [`crate::kuna_castsign`].
+    CastSign,
+    "castsign",
+    "signed declarations for signed-only locals",
+    unset: false,
+    shipped: true
+);

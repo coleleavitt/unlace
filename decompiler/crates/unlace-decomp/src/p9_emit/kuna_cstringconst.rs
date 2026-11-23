@@ -57,7 +57,12 @@ pub fn literal_sections<'a>(
 /// The character type a constant `val` inside a string-literal section is read
 /// with, when the option is on and the constant is as wide as a pointer.
 pub fn literal_char(arch: &Architecture, val: uintb, size: i32) -> Option<Rc<Datatype>> {
-    if !arch.cstring_const || size != arch.types().get_size_of_pointer() {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_cstringconst::CstringConst>()
+        .0
+        || size != arch.types().get_size_of_pointer()
+    {
         return None;
     }
     if !arch
@@ -163,6 +168,16 @@ pub fn is_call_argument(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
     }
     false
 }
+
+crate::kuna_flag!(
+    /// (kuna `cstringconst`) Print a pointer-wide constant inside one of
+    /// [`Self::cstring_ranges`] as the string literal there, whatever its type.
+    CstringConst,
+    "cstringconst",
+    "string-literal rendering of constants inside a string-literal section",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

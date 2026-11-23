@@ -22,6 +22,11 @@ unlace-analysis.workspace = true
 # unlace-analysis, so this adds no new crate.
 object.workspace = true
 unicode-ident = "1"
+unlace-decomp-dylib = { workspace = true, optional = true }
+
+[features]
+# Dev only: link the engine as one Rust dylib (crates/unlace-decomp-dylib). Off by default.
+dynamic_linking = ["dep:unlace-decomp-dylib"]
 
 [dev-dependencies]
 unlace-slacomp.workspace = true

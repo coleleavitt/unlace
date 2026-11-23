@@ -1,0 +1,21 @@
+# Dev-only dynamic-link facade (notes/crate-architecture.md, section 5 "Dylib", plan step 3).
+# Built only when a front-end enables its `dynamic_linking` feature; excluded from the workspace
+# so `cargo build --workspace` never links it. Never for release, dist or wasm.
+
+[package]
+name = "unlace-decomp-dylib"
+description = "Dev-only: unlace-decomp and unlace-analysis as one Rust dylib, so the front-end binaries relink fast"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["dylib"]
+test = false
+doctest = false
+
+[dependencies]
+unlace-decomp = { path = "../unlace-decomp" }
+unlace-analysis = { path = "../unlace-analysis" }

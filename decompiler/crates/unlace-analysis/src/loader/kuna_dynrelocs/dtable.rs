@@ -18,10 +18,11 @@ pub struct DynEntry {
     pub addend: Option<i64>,
 }
 
-/// A dynamic symbol's value and whether it is defined in this image.
+/// A dynamic symbol's value, its size and whether it is defined in this image.
 #[derive(Debug, Clone, Copy)]
 pub struct DynSym {
     pub value: u64,
+    pub size: u64,
     pub defined: bool,
 }
 
@@ -189,13 +190,18 @@ impl<'a> ElfView<'a> {
     pub fn symbol(&self, symtab: u64, index: u32) -> Option<DynSym> {
         let entsize = if self.is64 { 24 } else { 16 };
         let at = self.file_offset(symtab.checked_add(u64::from(index) * entsize)?)?;
-        let (value, shndx) = if self.is64 {
-            (self.u64(at + 8)?, self.u16(at + 6)?)
+        let (value, size, shndx) = if self.is64 {
+            (self.u64(at + 8)?, self.u64(at + 16)?, self.u16(at + 6)?)
         } else {
-            (u64::from(self.u32(at + 4)?), self.u16(at + 14)?)
+            (
+                u64::from(self.u32(at + 4)?),
+                u64::from(self.u32(at + 8)?),
+                self.u16(at + 14)?,
+            )
         };
         Some(DynSym {
             value,
+            size,
             defined: shndx != 0,
         })
     }

@@ -210,6 +210,7 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "callarrayextent" => on_off(conf.call_array_extent),
         "stackstruct" => on_off(conf.stack_struct),
         "globalarrayanchor" => on_off(conf.global_array_anchor),
+        "opaquepredicate" if conf.opaque_predicate && conf.opaque_globals => "globals",
 
         "bitidioms" => on_off(conf.bit_idioms),
         "helperroles" => on_off(conf.helper_roles),

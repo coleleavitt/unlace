@@ -932,6 +932,16 @@ pub struct ArchContext {
     /// (kuna `callresultuse`) An unknown callee's result read by the next
     /// call or the RETURN is that call's result.
     pub call_result_use: crate::p4_calls::kuna_callresultuse::CallResultUse,
+    /// (kuna `opaquepredicate globals`) The writable data nothing may write,
+    /// once the scan has run; read by
+    /// [`constant_read`](crate::kuna_opaqueglobals::constant_read).
+    pub opaque_globals: Option<Rc<crate::kuna_opaqueglobals::UnwrittenGlobals>>,
+    /// (kuna `opaquepredicate globals`) The value is on and the scan can run
+    /// but has not.
+    pub opaque_globals_pending: bool,
+    /// (kuna `opaquepredicate globals`) A comparison asked while the scan was
+    /// pending.
+    pub opaque_globals_wanted: std::cell::Cell<bool>,
     /// (kuna) refuse to split a shared RETURN block that stores to GLOBALS
     /// (`retsplitglobal`).  Read by
     /// [`Funcdata::return_split_is_splittable`](crate::funcdata::Funcdata),
@@ -1872,6 +1882,9 @@ impl ArchContext {
             switch_guard_merge: false,
             global_array_anchor: false,
             opaque_predicate: false,
+            opaque_globals: None,
+            opaque_globals_pending: false,
+            opaque_globals_wanted: std::cell::Cell::new(false),
             call_result_use: crate::p4_calls::kuna_callresultuse::CallResultUse::Off,
             ret_split_global: false, // retsplitglobal (the ArchSeam carries the real default)
             ret_split_limit: None,   // retsplitlimit (the ArchSeam carries the real default)

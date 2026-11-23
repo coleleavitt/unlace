@@ -86,6 +86,12 @@ pub struct DynRelocs {
     pub const_ranges: Vec<(u64, u64)>,
     /// `IRELATIVE` resolvers: functions only the dynamic loader calls.
     pub ifunc_resolvers: Vec<u64>,
+    /// (kuna `opaquepredicate globals`) `[lo, hi)` of every slot whose run-time
+    /// content this image does not determine: an import's bind, a `COPY`
+    /// relocation's whole object, any relocation kuna does not apply. `None`
+    /// when the tables were not all read, or the image's format keeps such
+    /// slots where this walk does not look.
+    pub runtime_written: Option<Vec<(u64, u64)>>,
 }
 
 /// The `RELATIVE` / `GLOB_DAT` / `JUMP_SLOT` `r_type` triple for `machine`, or
@@ -308,7 +314,7 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
     // The run-time loader's view first: `PT_DYNAMIC`'s tables, which also hold
     // the RELR and Android packed encodings and survive a stripped section
     // table. An image without `PT_DYNAMIC` falls back to the section walk.
-    let entries: Vec<(u64, u32, Option<(u64, bool)>, Option<i64>)> =
+    let entries: Vec<(u64, u32, Option<(u64, bool, u64)>, Option<i64>)> =
         match dtable::ElfView::new(bytes).and_then(|view| {
             let (entries, symtab) = dtable::dynamic_relocations(&view)?;
             Some(
@@ -323,7 +329,7 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
                         let sym = symtab
                             .filter(|_| e.sym != 0)
                             .and_then(|table| view.symbol(table, e.sym))
-                            .map(|s| (s.value, !s.defined));
+                            .map(|s| (s.value, !s.defined, s.size));
                         (e.offset, r_type, sym, e.addend)
                     })
                     .collect(),
@@ -334,10 +340,10 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
                 let Some(relocs) = file.dynamic_relocations() else {
                     return out;
                 };
-                let mut dynsyms: std::collections::HashMap<usize, (u64, bool)> =
+                let mut dynsyms: std::collections::HashMap<usize, (u64, bool, u64)> =
                     std::collections::HashMap::new();
                 for s in file.dynamic_symbols() {
-                    dynsyms.insert(s.index().0, (s.address(), s.is_undefined()));
+                    dynsyms.insert(s.index().0, (s.address(), s.is_undefined(), s.size()));
                 }
                 relocs
                     .filter_map(|(offset, reloc)| {
@@ -360,17 +366,23 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
     // away so the formula stays the ABI's `B + A`.
     let load_bias: u64 = 0;
 
+    let mut unknown = Vec::new();
     for (offset, r_type, sym, explicit) in entries {
+        let object = sym.map_or(0, |(_, _, size)| size).max(width as u64);
+        let mut unwritten = || unknown.push((offset, offset.saturating_add(object)));
         // A REL-style table keeps the addend in the slot being patched.
         let addend = match explicit {
             Some(a) => a as u64,
             None => match implicit_addend(file, offset, width, le) {
                 Some(a) => a,
-                None => continue,
+                None => {
+                    unwritten();
+                    continue;
+                }
             },
         };
-        let defined = |sym: Option<(u64, bool)>| match sym {
-            Some((addr, false)) => Some(addr),
+        let defined = |sym: Option<(u64, bool, u64)>| match sym {
+            Some((addr, false, _)) => Some(addr),
             _ => None,
         };
         let value = if r_type == types.relative {
@@ -380,18 +392,26 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
             // is a function the image never names.
             out.ifunc_resolvers
                 .push(load_bias.wrapping_add(addend) & mask);
+            unwritten();
             continue;
         } else if Some(r_type) == types.glob_dat || r_type == types.jump_slot {
             // An undefined symbol is an import: the value lives in another
             // image. Nothing to write, and the PLT/import naming already covers
             // the call — leave the slot exactly as the linker left it. A
             // REL-style GLOB_DAT/JUMP_SLOT is `S`, not `S + A`.
-            let Some(addr) = defined(sym) else { continue };
+            let Some(addr) = defined(sym) else {
+                unwritten();
+                continue;
+            };
             addr.wrapping_add(if explicit.is_some() { addend } else { 0 })
         } else if Some(r_type) == types.abs {
-            let Some(addr) = defined(sym) else { continue };
+            let Some(addr) = defined(sym) else {
+                unwritten();
+                continue;
+            };
             addr.wrapping_add(addend)
         } else {
+            unwritten();
             continue;
         };
 
@@ -409,6 +429,7 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
             }
         }
     }
+    out.runtime_written = unread_tables(file).is_empty().then_some(unknown);
 
     out
 }

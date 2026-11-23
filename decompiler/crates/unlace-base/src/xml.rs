@@ -2324,7 +2324,8 @@ mod tests {
         // and kuna-iokitcxx / IOKit classes typed like C++ classes (option iokitclasses on)
         // and kuna-relswitch-a64 / an arm64e hardened jump table is a switch; its inline table is no function start
         // and kuna-mba-solve / constant operands, a shared complement, a complemented sum and bit logic alone simplify
-        assert_eq!(count, 989, "corpus file count drifted");
+        // and kuna-opaquepredicate-proofs / narrow inputs, dominating branches, identical arms and never-written globals fold
+        assert_eq!(count, 990, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

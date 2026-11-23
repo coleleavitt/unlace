@@ -49,6 +49,13 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
             width,
         }));
     out.writes.sort_unstable_by_key(|w| w.vma);
+    let listed = fixups.damage().is_none() && !out.writes.is_empty();
+    out.runtime_written = listed.then(|| {
+        fixups
+            .binds()
+            .map(|(vma, _)| (vma, vma.saturating_add(u64::from(width))))
+            .collect()
+    });
     out
 }
 

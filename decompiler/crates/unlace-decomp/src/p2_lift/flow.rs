@@ -3442,7 +3442,12 @@ truncating the fall-through here"
         run_pipeline: &mut JtPipelineFn<'_>,
     ) -> KunaResult<()> {
         self.generate_ops()?;
-        let reentry = self.data.get_arch().const_select_jump.admits_reentry();
+        let reentry = self
+            .data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_constselectjump::ConstSelectMode>()
+            .admits_reentry();
         let mut provisional = std::collections::BTreeSet::new();
         let mut followed = std::collections::HashSet::new();
         let mut stages = 0usize;

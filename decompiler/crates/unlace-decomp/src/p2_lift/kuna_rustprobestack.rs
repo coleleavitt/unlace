@@ -28,6 +28,23 @@ pub enum RustProbestackMode {
     Always,
 }
 
+impl crate::kuna_optionset::KunaOption for RustProbestackMode {
+    const NAME: &'static str = "rustprobestack";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        RustProbestackMode::Off
+    }
+
+    fn shipped() -> Self {
+        RustProbestackMode::Off
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        parse_mode(value).map_err(unlace_base::error::KunaError::parse)
+    }
+}
+
 impl RustProbestackMode {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -316,7 +333,7 @@ impl Action for ActionRustProbestack {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        match data.get_arch().rust_probestack {
+        match data.get_arch().kuna_options.get::<RustProbestackMode>() {
             RustProbestackMode::Off => return 0,
             RustProbestackMode::Auto if !data.get_arch().source_lang.is_rust() => return 0,
             _ => {}

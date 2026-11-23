@@ -63,8 +63,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::funcdata::Funcdata;
 use crate::idiom::{match_entry_guard_halt, match_entry_guard_loop};
 
-/// The three-valued `gomorestack` gate, stored on the `Architecture` as a `u8`
-/// (the `rustabi` pattern).
+/// The three-valued `gomorestack` gate.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GoMorestackMode {
     /// Keep the stack-growth guard.
@@ -76,6 +75,23 @@ pub enum GoMorestackMode {
     Always,
 }
 
+impl crate::kuna_optionset::KunaOption for GoMorestackMode {
+    const NAME: &'static str = "gomorestack";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        GoMorestackMode::Auto
+    }
+
+    fn shipped() -> Self {
+        GoMorestackMode::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        parse_gomorestack_mode(value).map_err(unlace_base::error::KunaError::parse)
+    }
+}
+
 impl GoMorestackMode {
     /// The catalog `current` token.
     pub fn as_str(self) -> &'static str {
@@ -83,24 +99,6 @@ impl GoMorestackMode {
             GoMorestackMode::Off => "off",
             GoMorestackMode::Auto => "auto",
             GoMorestackMode::Always => "always",
-        }
-    }
-
-    /// Stored form for the `Architecture` field.
-    pub fn as_u8(self) -> u8 {
-        match self {
-            GoMorestackMode::Off => 0,
-            GoMorestackMode::Auto => 1,
-            GoMorestackMode::Always => 2,
-        }
-    }
-
-    /// Inverse of [`GoMorestackMode::as_u8`] (unknown values read as `Off`).
-    pub fn from_u8(v: u8) -> GoMorestackMode {
-        match v {
-            1 => GoMorestackMode::Auto,
-            2 => GoMorestackMode::Always,
-            _ => GoMorestackMode::Off,
         }
     }
 }
@@ -138,7 +136,7 @@ pub fn is_morestack_name(name: &str) -> bool {
 
 /// Is the fold live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match GoMorestackMode::from_u8(data.get_arch().go_morestack) {
+    match data.get_arch().kuna_options.get::<GoMorestackMode>() {
         GoMorestackMode::Off => false,
         GoMorestackMode::Auto => data.get_arch().source_lang.is_go(),
         GoMorestackMode::Always => true,

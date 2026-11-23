@@ -43,7 +43,7 @@ fn build_fd(mode: GoWriteBarrierMode, lang: SourceLang) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.go_write_barrier = mode.as_u8();
+    ctx.kuna_options.set(mode);
     ctx.source_lang = lang;
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
@@ -52,7 +52,7 @@ fn build_fd(mode: GoWriteBarrierMode, lang: SourceLang) -> Funcdata {
 }
 
 #[test]
-fn mode_parses_and_round_trips() {
+fn mode_parses() {
     for (tok, mode) in [
         ("off", GoWriteBarrierMode::Off),
         ("auto", GoWriteBarrierMode::Auto),
@@ -62,11 +62,9 @@ fn mode_parses_and_round_trips() {
         let (m, msg) = parse_gowritebarrier_mode(tok).expect("parses");
         assert_eq!(m, mode, "{tok}");
         assert!(msg.contains(m.as_str()));
-        assert_eq!(GoWriteBarrierMode::from_u8(m.as_u8()), m);
     }
     assert!(parse_gowritebarrier_mode("sometimes").is_err());
     assert_eq!(GoWriteBarrierMode::default(), GoWriteBarrierMode::Auto);
-    assert_eq!(GoWriteBarrierMode::from_u8(99), GoWriteBarrierMode::Off);
 }
 
 #[test]

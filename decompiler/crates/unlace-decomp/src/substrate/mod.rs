@@ -21,10 +21,12 @@ pub mod idiom;
 pub mod kuna_avxintrin; // (kuna `avxintrinsics`) Intel intrinsic names for the SLEIGH AVX user-ops
 pub(crate) mod kuna_budget;
 pub(crate) mod kuna_checkedarena;
+pub mod kuna_emittedop;
 pub mod kuna_fnmemory;
 pub mod kuna_funcreport;
 pub mod kuna_hostmem;
 pub mod kuna_optionset;
+pub mod kuna_outlang;
 pub mod kuna_passhooks;
 pub mod kuna_regioneval;
 pub mod op;

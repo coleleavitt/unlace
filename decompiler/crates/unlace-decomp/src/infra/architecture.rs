@@ -4195,7 +4195,7 @@ impl Architecture {
         ctx.index_rescale = self.index_rescale;
         ctx.loop_rotate = self.loop_rotate;
         ctx.guarded_loop =
-            self.guarded_loop && self.print.out_lang() == crate::kuna_lang::OutLang::C;
+            self.guarded_loop && self.print.out_lang() == crate::kuna_outlang::OutLang::C;
         ctx.va_start = self.va_start;
         ctx.switch_guard_merge = self.switch_guard_merge;
         ctx.global_array_anchor = self.global_array_anchor;
@@ -4248,8 +4248,8 @@ impl Architecture {
         ctx.ptrdepthcap = self.ptrdepthcap; // (kuna) ptrdepthcap
         ctx.call_target_type = self.call_target_type && self.ctypes; // (kuna) calltargettype: only C's own spelling needs it
         ctx.call_target_c =
-            ctx.call_target_type && self.print.out_lang() == crate::kuna_lang::OutLang::C; // (kuna) calltargettype
-        ctx.java_casts = self.print.out_lang() == crate::kuna_lang::OutLang::Java;
+            ctx.call_target_type && self.print.out_lang() == crate::kuna_outlang::OutLang::C; // (kuna) calltargettype
+        ctx.java_casts = self.print.out_lang() == crate::kuna_outlang::OutLang::Java;
         if self.float_globals {
             ctx.float_globals = self.kuna_float_globals.clone(); // (kuna) floatglobals
             ctx.float_globals_pending =
@@ -4257,13 +4257,15 @@ impl Architecture {
         }
         ctx.bool_byte = self.bool_byte; // (kuna) boolbyte
         ctx.unknown_byte_is_char =
-            self.realtypes && self.print.out_lang() == crate::kuna_lang::OutLang::C;
+            self.realtypes && self.print.out_lang() == crate::kuna_outlang::OutLang::C;
         ctx.unknown_is_integer =
-            self.realtypes || self.print.out_lang() != crate::kuna_lang::OutLang::C;
+            self.realtypes || self.print.out_lang() != crate::kuna_outlang::OutLang::C;
         ctx.int_promotion = self.print.out_lang().profile().caps.integer_promotion;
         ctx.char_byte = self.char_byte; // (kuna) charbyte
-        ctx.cast_arith = self.cast_arith && self.print.out_lang() == crate::kuna_lang::OutLang::C; // (kuna) castarith
-        ctx.cast_index = self.cast_index && self.print.out_lang() == crate::kuna_lang::OutLang::C; // (kuna) castindex
+        ctx.cast_arith =
+            self.cast_arith && self.print.out_lang() == crate::kuna_outlang::OutLang::C; // (kuna) castarith
+        ctx.cast_index =
+            self.cast_index && self.print.out_lang() == crate::kuna_outlang::OutLang::C; // (kuna) castindex
         ctx.char_ptr = self.char_ptr; // (kuna) charptr
         ctx.analysis_valuewitness = self.analysis_valuewitness; // (kuna) valuewitness
         ctx.elem_ptr = self.elem_ptr; // (kuna) elemptr
@@ -4320,7 +4322,7 @@ impl Architecture {
             != crate::kuna_lang::DoWhileForm::RustLoopBreakIf;
         ctx.goto_next = self.goto_next; // gotonext
         ctx.post_increment =
-            self.post_increment && self.print.out_lang() == crate::kuna_lang::OutLang::C;
+            self.post_increment && self.print.out_lang() == crate::kuna_outlang::OutLang::C;
         ctx.loop_cond_hoist = self.loop_cond_hoist; // loopcondhoist
         ctx.region_loop_refine = self.region_loop_refine; // regionlooprefine
         ctx.region_edge_order = self.region_edge_order; // regionedgeorder
@@ -5789,10 +5791,10 @@ impl Architecture {
     /// it mirrors the upstream setter; this is the surface a front-end should
     /// use, so a typo is an error rather than a silent fall back to C.
     pub fn set_print_language_checked(&mut self, name: &str) -> KunaResult<()> {
-        let lang = crate::kuna_lang::OutLang::from_print_name(name).ok_or_else(|| {
+        let lang = crate::kuna_outlang::OutLang::from_print_name(name).ok_or_else(|| {
             KunaError::parse(format!(
                 "unknown output language {name:?} (expected one of: {})",
-                crate::kuna_lang::OutLang::names().join(", ")
+                crate::kuna_outlang::OutLang::names().join(", ")
             ))
         })?;
         self.print.set_name(lang.print_name());
@@ -8135,7 +8137,7 @@ impl ArchOptionContext for Architecture {
         self.print.get_name() == "c-language"
     }
     fn print_lang_known(&self) -> bool {
-        crate::kuna_lang::OutLang::from_print_name(self.print.get_name()).is_some()
+        crate::kuna_outlang::OutLang::from_print_name(self.print.get_name()).is_some()
     }
     fn set_null_printing(&mut self, val: bool) {
         self.print.set_null_printing(val);

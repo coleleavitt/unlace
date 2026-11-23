@@ -121,6 +121,7 @@ pub mod kuna_x87emptyreturn;
 pub mod kuna_x87free;
 
 pub mod kuna_callmechanisms;
+pub mod kuna_elfmaindecl; // (kuna) an executable's own main declared from its unlocked analysis
 pub(crate) mod kuna_registerslots;
 
 pub mod kuna_gotimportproto;

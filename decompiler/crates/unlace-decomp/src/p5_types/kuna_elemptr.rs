@@ -329,7 +329,7 @@ fn in_data(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
     let arch = data.get_arch();
     let spc = arch.manage().get_default_data_space()?;
     (v.get_addr().get_space().is_some_and(|s| Rc::ptr_eq(s, spc))
-        && crate::kuna_globalref::in_ranges(&arch.elem_ptr_ranges, v.get_offset()))
+        && crate::rangeutil::in_ranges(&arch.elem_ptr_ranges, v.get_offset()))
     .then(|| v.get_offset())
 }
 
@@ -882,7 +882,7 @@ fn candidate_kind(data: &Funcdata, vn: VarnodeId) -> Option<(Kind, Vec<VarnodeId
     let objects = data.kuna_elemptr_objects();
     if v.is_constant() {
         let off = v.get_offset();
-        if !objects || !crate::kuna_globalref::in_ranges(&arch.elem_ptr_ranges, off) {
+        if !objects || !crate::rangeutil::in_ranges(&arch.elem_ptr_ranges, off) {
             return None;
         }
         let spc = Rc::clone(arch.manage().get_default_data_space()?);
@@ -915,8 +915,7 @@ fn candidate_kind(data: &Funcdata, vn: VarnodeId) -> Option<(Kind, Vec<VarnodeId
     }
     let data_space = arch.manage().get_default_data_space()?;
     let in_data = addr.get_space().is_some_and(|s| Rc::ptr_eq(s, data_space));
-    if objects && in_data && crate::kuna_globalref::in_ranges(&arch.elem_ptr_ranges, v.get_offset())
-    {
+    if objects && in_data && crate::rangeutil::in_ranges(&arch.elem_ptr_ranges, v.get_offset()) {
         // A global the image names only by a symbol with no type (an ELF symtab
         // entry) is as open as one it does not name at all.
         let open = match arch.query_container_global(&addr, v.get_size(), &Address::new_invalid()) {
@@ -2248,7 +2247,7 @@ fn has_pointer_use(data: &Funcdata, x: VarnodeId) -> bool {
                     .is_some_and(|c| {
                         c.is_constant()
                             && sign_extend(c.get_offset(), c.get_size()).unsigned_abs() < 0x10000
-                            && !crate::kuna_globalref::in_ranges(
+                            && !crate::rangeutil::in_ranges(
                                 &data.get_arch().elem_ptr_ranges,
                                 c.get_offset(),
                             )

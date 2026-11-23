@@ -2509,7 +2509,7 @@ prototype name always wins. The angr scheme's second visible artifact is P9-owne
 local declaration gains a trailing storage comment — `// rax` (register,
 lowercased), `// stack - 0x10` (frame-relative signed offset), `// rdx:rax` (a
 join value's register pieces), `// tmp` (an SSA temporary with no machine
-home). `decompiler/crates/unlace-decomp/src/p9_emit/kuna_varsources.rs` gathers
+home). `decompiler/crates/unlace-decomp/src/p6_variables/kuna_varsources.rs` gathers
 every member's machine storage and the storage retained when simplification
 removed an equivalent copy. Distinct homes print once, in sorted order, separated
 by ` | `: `// eax | ebx`. A register pair holding one split value keeps its
@@ -2526,7 +2526,7 @@ that variable's base: a register copied from the field at -0x80 of a record at
 `--mode reliable`, e.g. `stack - 0x208` to `stack - 0x1c0`).
 Register copies used only to supply outgoing CALL or CALLIND arguments are
 transport locations, so they do not contribute to a local's source comment.
-`decompiler/crates/unlace-decomp/src/p9_emit/kuna_calltransport.rs` checks that
+`decompiler/crates/unlace-decomp/src/p6_variables/kuna_calltransport.rs` checks that
 the copy has an earlier home and reaches only argument slots whose ABI storage
 matches that register. This keeps a saved register's home even when its only
 readers forward the value to outgoing arguments. A reload from an existing

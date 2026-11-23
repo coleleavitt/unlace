@@ -418,7 +418,7 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
             return (hit, CUT);
         }
     }
-    let found = if crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, entry) {
+    let found = if crate::kuna_calleenoreturn::is_no_return(arch, entry) {
         (
             Summary {
                 effect: Effect::NoReturn,
@@ -457,7 +457,7 @@ fn slot_effect(arch: &Architecture, slot: &Address) -> Summary {
     {
         return hit;
     }
-    let found = if crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, slot) {
+    let found = if crate::kuna_calleenoreturn::is_no_return(arch, slot) {
         Summary {
             effect: Effect::NoReturn,
             ..UNKNOWN
@@ -1236,7 +1236,7 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
             let effect = match call {
                 Call::Direct(t) if depth == 0 => {
                     let target = Address::new(space.clone(), t);
-                    if crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, &target) {
+                    if crate::kuna_calleenoreturn::is_no_return(arch, &target) {
                         Summary {
                             effect: Effect::NoReturn,
                             ..UNKNOWN

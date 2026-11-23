@@ -760,7 +760,7 @@ crate::kuna_flag!(
     /// (kuna) Re-roll a vectorized integer reduction (guard, stride loop with
     /// one accumulator per lane, fold, scalar remainder loop) into its scalar
     /// loop (option `devectorize`, opt-in default-off).  See
-    /// [`crate::p3_dataflow::kuna_devectorize`].
+    /// [`crate::kuna_devectorize`].
     DevectorizeReduction,
     "devectorize",
     "Vectorized reduction re-roll",

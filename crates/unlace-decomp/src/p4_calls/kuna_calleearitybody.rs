@@ -3,9 +3,9 @@
 //!
 //! # The gap
 //!
-//! [`calleearity`](crate::p4_calls::kuna_calleearity),
-//! [`calleearityfwd`](crate::p4_calls::kuna_calleearityfwd) and
-//! [`calleearitylive`](crate::p4_calls::kuna_calleearitylive) are all *sibling*
+//! [`calleearity`](crate::kuna_calleearity),
+//! [`calleearityfwd`](crate::kuna_calleearityfwd) and
+//! [`calleearitylive`](crate::kuna_calleearitylive) are all *sibling*
 //! reconciliation: each needs another call to the same entry address in the same
 //! function whose argument list is already final and longer.  That leaves one
 //! quadrant of the family empty — the callee that is called exactly **once**:
@@ -33,7 +33,7 @@
 //! Relaxing `onlyOpUse` is the wrong fix and the family already says so: it would
 //! fabricate an argument at every `test rcx,rcx; jz; call` there is.  What is
 //! left is the evidence `calleearitylive` already reads — the bounded decode of
-//! the callee body [`calleedeadarg`](crate::p4_calls::kuna_calleedeadarg) takes
+//! the callee body [`calleedeadarg`](crate::kuna_calleedeadarg) takes
 //! (`probe_callee_entry_dead`) — standing **alone** as the witness rather than
 //! only extending a sibling's list.
 //!
@@ -56,7 +56,7 @@
 //! An import, a thunk and a body past the decode budget all answer neither, and
 //! decline the same way.
 //!
-//! Everything else is [`calleearity`](crate::p4_calls::kuna_calleearity)'s,
+//! Everything else is [`calleearity`](crate::kuna_calleearity)'s,
 //! unchanged: register storage only, real Varnodes only, all-or-nothing, never
 //! subtractive, and only a call that recovered **nothing at all** — a site with a
 //! self-consistent partial list is `calleearitylive`'s, and is left alone.
@@ -65,7 +65,7 @@
 //! sibling can speak the sibling still wins.
 //!
 //! Inert unless `calleearity` is also on: this completes that rule rather than
-//! adding a second one.  [`calleearitycut`](crate::p4_calls::kuna_calleearitycut)
+//! adding a second one.  [`calleearitycut`](crate::kuna_calleearitycut)
 //! widens the dead-boundary test for the common body whose decode is cut at a
 //! nested call before it can prove one.
 
@@ -79,7 +79,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::{FuncCallSpecs, ParamEntry};
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead;
+use crate::kuna_calleedeadarg::CalleeEntryDead;
 
 /// Marshaling element `<calleearitybody>` (kuna 4000+ range; 4151 = calleepop).
 pub const ELEM_CALLEEARITYBODY: ElementId = ElementId::new("calleearitybody", 4152);
@@ -100,14 +100,14 @@ pub struct BodyTrial {
     pub vn: Option<VarnodeId>,
     /// Did the caller place NOTHING in this trial's storage — no computed value
     /// and no constant, only its own untouched incoming register, or nothing at
-    /// all?  Read by [`crate::p4_calls::kuna_calleearitycut`], which refuses to
+    /// all?  Read by [`crate::kuna_calleearitycut`], which refuses to
     /// end a run at a register the caller loaded a value into.
     pub caller_quiet: bool,
     /// Has `check_input_trial_use` scored this trial at all?
     pub caller_checked: bool,
     /// Did that scoring mark the trial ACTIVE — `ancestor_op_use` finding the
     /// value reaches the CALL and nothing else?  Read by
-    /// [`crate::p4_calls::kuna_calleearityscratch`], which lets an INACTIVE
+    /// [`crate::kuna_calleearityscratch`], which lets an INACTIVE
     /// boundary end a run the caller wrote into.
     pub caller_active: bool,
     /// Is the Varnode standing at this trial a constant the caller materialized?
@@ -280,7 +280,7 @@ pub fn plan_from_body(
         return None;
     }
     if !left.iter().any(|(a, sz)| live.proves_dead(a, *sz))
-        && !crate::p4_calls::kuna_calleearitycut::accepts_cut_run(trials, &picked, entries)
+        && !crate::kuna_calleearitycut::accepts_cut_run(trials, &picked, entries)
     {
         return None;
     }

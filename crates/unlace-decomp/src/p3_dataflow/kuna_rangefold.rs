@@ -317,7 +317,7 @@ impl Action for ActionRangeFold {
 crate::kuna_flag!(
     /// (kuna) Fold a comparison or mask whose outcome the ranges dominating
     /// branches establish fixes (option `rangefold`).  See
-    /// [`crate::p3_dataflow::kuna_rangefold`].
+    /// [`crate::kuna_rangefold`].
     RangeFold,
     "rangefold",
     "dominating-range folding",

@@ -1,6 +1,6 @@
 //! P4 matching-format evidence for partial call argument recovery.
 //!
-//! [`kuna_calleearitylive`](crate::p4_calls::kuna_calleearitylive) normally
+//! [`kuna_calleearitylive`](crate::kuna_calleearitylive) normally
 //! requires the callee body to prove a sibling's longer argument list.  That
 //! proof deliberately declines variadic callees, whose register-save prologue
 //! reads every argument register.  A stripped `printf` therefore leaves this
@@ -28,7 +28,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_calleearity::witness_storage;
+use crate::kuna_calleearity::witness_storage;
 
 const MAX_FORMAT: usize = 256;
 

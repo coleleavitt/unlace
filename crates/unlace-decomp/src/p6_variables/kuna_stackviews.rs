@@ -55,7 +55,7 @@ impl OptionStackViews {
 }
 
 pub(crate) fn declared_view(fd: &Funcdata, call: OpId, slot: i32) -> Option<Rc<Datatype>> {
-    crate::p6_variables::kuna_stackuses::declared_view(fd, call, slot)
+    crate::kuna_stackuses::declared_view(fd, call, slot)
 }
 
 fn indexed_width(fd: &Funcdata, base: crate::context::VarnodeId) -> Option<i32> {
@@ -719,16 +719,16 @@ pub fn prepare_casts(fd: &mut Funcdata) {
             objects.insert(v.get_offset().wrapping_sub(info.sym_off as u64), backing);
         }
     }
-    crate::p6_variables::kuna_stackvaluecopies::prepare(fd, factory.as_ref());
+    crate::kuna_stackvaluecopies::prepare(fd, factory.as_ref());
     for (start, backing) in objects {
         seed_writes(fd, &space, start, &backing, factory.as_ref());
         crate::kuna_stackobjectasserts::seed_writes(fd, start, &backing, factory.as_ref());
     }
-    crate::p6_variables::kuna_stackvalueviews::prepare(fd, factory.as_ref());
+    crate::kuna_stackvalueviews::prepare(fd, factory.as_ref());
     crate::kuna_stackobjects::finish(fd);
     crate::kuna_stackparamviews::prepare_casts(fd);
     crate::kuna_stackobjectasserts::prepare_casts(fd, factory.as_ref());
-    crate::p6_variables::kuna_stackuses::prepare_casts(fd, factory.as_ref());
+    crate::kuna_stackuses::prepare_casts(fd, factory.as_ref());
 }
 
 /// Casts must use the selected storage view, even if the SSA value's preferred

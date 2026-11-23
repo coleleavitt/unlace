@@ -804,7 +804,7 @@ impl Rule for RuleIndirectCollapse {
         if data.obank().get(op).is_some_and(|o| {
             o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_persist_stale != 0
         }) {
-            crate::p3_dataflow::kuna_persistcalls::restart_full(data);
+            crate::kuna_persistcalls::restart_full(data);
         } else if data.obank().get(op).is_some_and(|o| {
             o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_persist_guard != 0
         }) {
@@ -815,8 +815,8 @@ impl Rule for RuleIndirectCollapse {
                     .expect("RuleIndirectCollapse: stale op out");
                 (v.get_addr().clone(), v.get_size())
             };
-            if !crate::p3_dataflow::kuna_persistcalls::guarded(data, op, &addr, size) {
-                crate::p3_dataflow::kuna_persistcalls::restart_full(data);
+            if !crate::kuna_persistcalls::guarded(data, op, &addr, size) {
+                crate::kuna_persistcalls::restart_full(data);
             }
         }
         data.total_replace(out, in0)
@@ -893,7 +893,7 @@ fn multi_branch(
         return MultiBranch::Match;
     }
     if !nofunc
-        && !crate::p3_dataflow::kuna_indexaliasguard::keeps_forced_join(data, out, def, vn)
+        && !crate::kuna_indexaliasguard::keeps_forced_join(data, out, def, vn)
         && crate::expression::functional_equality(def, vn, data.vbank(), data.obank())
     {
         return MultiBranch::Match;
@@ -2232,7 +2232,7 @@ impl Rule for RulePropagateCopy {
             )
         };
         if machine_read {
-            crate::p3_dataflow::kuna_stackreadscope::record_current_read(data, op);
+            crate::kuna_stackreadscope::record_current_read(data, op);
         }
         if return_copy {
             return 0;
@@ -2269,23 +2269,23 @@ impl Rule for RulePropagateCopy {
                 continue;
             }
             // (kuna) a store of a value used as an address into a global keeps
-            // its COPY; see [`crate::p3_dataflow::kuna_pointeestorekeep`].
-            if crate::p3_dataflow::kuna_pointeestorekeep::declines(data, op, vn, invn) {
+            // its COPY; see [`crate::kuna_pointeestorekeep`].
+            if crate::kuna_pointeestorekeep::declines(data, op, vn, invn) {
                 continue;
             }
             if invn == vn {
                 // throw LowlevelError("Self-defined varnode") -- internal invariant.
                 panic!("RulePropagateCopy: Self-defined varnode");
             }
-            if crate::p3_dataflow::kuna_globalcallstore::declines(data, op, vn, invn) {
+            if crate::kuna_globalcallstore::declines(data, op, vn, invn) {
                 continue;
             }
-            if crate::p3_dataflow::kuna_globalorderkeep::declines(data, op, vn, invn) {
+            if crate::kuna_globalorderkeep::declines(data, op, vn, invn) {
                 continue;
             }
             // (kuna) a store of a sign-sensitively read value into a global
-            // keeps its COPY; see [`crate::p3_dataflow::kuna_globalstorekeep`].
-            if crate::p3_dataflow::kuna_globalstorekeep::declines(data, op, vn, invn) {
+            // keeps its COPY; see [`crate::kuna_globalstorekeep`].
+            if crate::kuna_globalstorekeep::declines(data, op, vn, invn) {
                 continue;
             }
             let is_marker = data
@@ -2293,14 +2293,12 @@ impl Rule for RulePropagateCopy {
                 .get(op)
                 .expect("RulePropagateCopy: stale op")
                 .is_marker();
-            if is_marker && crate::p3_dataflow::kuna_globalfieldstore::keeps_store(data, vn, invn) {
+            if is_marker && crate::kuna_globalfieldstore::keeps_store(data, vn, invn) {
                 continue;
             }
             if !is_marker
-                && (crate::p3_dataflow::kuna_indexaliasguard::keeps_store_before_load(data, op, vn)
-                    || crate::p3_dataflow::kuna_indexaliasguard::keeps_forced_self_copy(
-                        data, op, vn,
-                    ))
+                && (crate::kuna_indexaliasguard::keeps_store_before_load(data, op, vn)
+                    || crate::kuna_indexaliasguard::keeps_forced_self_copy(data, op, vn))
             {
                 continue;
             }
@@ -2322,7 +2320,7 @@ impl Rule for RulePropagateCopy {
                 {
                     continue; // Don't propagate if we are keeping the COPY anyway
                 }
-                if crate::p3_dataflow::kuna_indexaliasguard::keeps_store_guard_input(data, op, vn) {
+                if crate::kuna_indexaliasguard::keeps_store_guard_input(data, op, vn) {
                     continue;
                 }
                 // STUB(W3-varnode): the addrtied merge-safety guard reads
@@ -2361,18 +2359,18 @@ impl Rule for RulePropagateCopy {
                 // just above: decline when this marker is the LAST reader of an
                 // address-tied COPY output, which would otherwise strand the frame
                 // store for dead-code elimination.  See
-                // [`crate::p3_dataflow::kuna_tiedstorekeep`].
-                if crate::p3_dataflow::kuna_tiedstorekeep::declines(data, op, vn, invn) {
+                // [`crate::kuna_tiedstorekeep`].
+                if crate::kuna_tiedstorekeep::declines(data, op, vn, invn) {
                     continue;
                 }
                 // (kuna) The loop-counter store brake refuses the same
                 // propagation for a self-updating address-tied phi, which is how
                 // a frame-slot loop counter's write-back is deleted.  See
-                // [`crate::p3_dataflow::kuna_loopcounterstore`].
-                if crate::p3_dataflow::kuna_loopcounterstore::declines(data, op, vn, invn) {
+                // [`crate::kuna_loopcounterstore`].
+                if crate::kuna_loopcounterstore::declines(data, op, vn, invn) {
                     continue;
                 }
-                if crate::p3_dataflow::kuna_indexaliasguard::keeps_store_before_load(data, op, vn) {
+                if crate::kuna_indexaliasguard::keeps_store_before_load(data, op, vn) {
                     continue;
                 }
                 if op_code(data, op) == OpCode::CPUI_MULTIEQUAL {
@@ -2394,7 +2392,7 @@ impl Rule for RulePropagateCopy {
                     }
                 }
             }
-            crate::p3_dataflow::kuna_stackreadscope::record_propagated_read(data, copyop, invn);
+            crate::kuna_stackreadscope::record_propagated_read(data, copyop, invn);
             data.kuna_inherit_storage(invn, vn);
             data.note_wave_input_change(op, vn, invn);
             data.op_set_input(op, invn, i)
@@ -3823,9 +3821,7 @@ mod tests {
             let manage = build_manager();
             let mut glb = ArchContext::new(manage);
             glb.kuna_options
-                .set(crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard(
-                    level,
-                ));
+                .set(crate::kuna_indexaliasguard::IndexAliasGuard(level));
             let glb = Rc::new(glb);
             let memory = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
             let mut data = Funcdata::new(
@@ -3853,7 +3849,7 @@ mod tests {
                 true,
             );
             assert_eq!(
-                crate::p3_dataflow::kuna_globalfieldstore::keeps_store(&data, output, source),
+                crate::kuna_globalfieldstore::keeps_store(&data, output, source),
                 expected
             );
         }

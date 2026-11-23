@@ -336,7 +336,7 @@ impl Rule for RuleLoadVarnode {
             data.op_remove_input(op, 1);
             set_opcode(data, op, OpCode::CPUI_COPY);
         }
-        crate::p3_dataflow::kuna_stackreadscope::mark_stack_read(data, op);
+        crate::kuna_stackreadscope::mark_stack_read(data, op);
         // C++ ruleaction.cc:4316-4324 — the spacebase-placeholder tail.  When the
         // converted COPY output is the stack-pointer placeholder the call set up,
         // clear the trigger and resolve the call's relative stack offset (the RSP
@@ -684,10 +684,9 @@ impl Rule for RuleSubCommute {
                 if is_written(data, lin0) {
                     let opc = code(data, def_of(data, lin0));
                     if opc != OpCode::CPUI_INT_ZEXT && opc != OpCode::CPUI_PIECE {
-                        byte_cancellation =
-                            crate::p3_dataflow::kuna_cancelbytearithmetic::find_cancellation(
-                                data, op, longform, outsize,
-                            );
+                        byte_cancellation = crate::kuna_cancelbytearithmetic::find_cancellation(
+                            data, op, longform, outsize,
+                        );
                         if byte_cancellation.is_none() {
                             return 0;
                         }
@@ -826,7 +825,7 @@ impl Rule for RuleSubCommute {
         }
 
         if let Some(plan) = byte_cancellation {
-            crate::p3_dataflow::kuna_cancelbytearithmetic::apply_cancellation(data, plan);
+            crate::kuna_cancelbytearithmetic::apply_cancellation(data, plan);
             return 1;
         }
 
@@ -911,7 +910,7 @@ impl Rule for RuleConcatCommute {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if crate::p3_dataflow::kuna_floatnegpiece::recover(data, op) {
+        if crate::kuna_floatnegpiece::recover(data, op) {
             return 1;
         }
         let outsz = size_of(data, out_vn(data, op));

@@ -158,7 +158,7 @@ pub fn value_leaves(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
 /// subtracts and non-creation INDIRECTs along their first input? Before
 /// constant propagation `add x8,sp,#16` adds a temporary, not a constant.
 fn frame_address(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(sp) = crate::p4_calls::kuna_spillargtrial::stack_pointer_storage(data) else {
+    let Some(sp) = crate::kuna_spillargtrial::stack_pointer_storage(data) else {
         return false;
     };
     let Some(spspace) = sp.space.as_ref() else {

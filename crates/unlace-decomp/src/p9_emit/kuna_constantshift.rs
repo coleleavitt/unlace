@@ -23,8 +23,8 @@ pub(crate) fn plan_fixed64_lsl(
 ) -> Option<ConstantLslPlan> {
     if arch
         .kuna_options
-        .get::<crate::p9_emit::kuna_armconstantshift::ConstShiftMode>()
-        != crate::p9_emit::kuna_armconstantshift::ConstShiftMode::All
+        .get::<crate::kuna_armconstantshift::ConstShiftMode>()
+        != crate::kuna_armconstantshift::ConstShiftMode::All
     {
         return None;
     }

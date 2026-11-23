@@ -306,7 +306,7 @@ pub(crate) fn gotosink_apply(data: &mut Funcdata) -> i32 {
         }
     }
     if !released.is_empty() {
-        crate::p8_structure::kuna_gotolabel::release_converted_labels(data, &released);
+        crate::kuna_gotolabel::release_converted_labels(data, &released);
         // A new loop prints its head's label above itself, as ActionFinalStructure
         // arranges for the loops collapse built.
         data.sblocks_mut().mark_label_bump_up(root, false);

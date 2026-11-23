@@ -31,8 +31,8 @@
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, VarnodeId};
+use crate::kuna_globalstorekeep::{WALK_BOUND, passes_signedness, reads_signedness};
 use crate::merge::MergeContext;
-use crate::p3_dataflow::kuna_globalstorekeep::{WALK_BOUND, passes_signedness, reads_signedness};
 
 /// Must HighVariables `a` and `b` stay apart because one is a global and the
 /// other a value a sign-sensitive operation reads, and that no load of the

@@ -325,13 +325,13 @@ pub(crate) fn callable_by_recovery(
 fn takes_every_input(
     arch: &mut Architecture,
     entry: &Address,
-    stated: &crate::p4_calls::kuna_protoorder::RecoveredTypes,
+    stated: &crate::kuna_protoorder::RecoveredTypes,
 ) -> bool {
-    use crate::p4_calls::kuna_entryreads::overlaps;
+    use crate::kuna_entryreads::overlaps;
     if stated
         .inputs
         .iter()
-        .any(|(a, _, _)| !crate::p4_calls::kuna_calleearitybody::is_register(a))
+        .any(|(a, _, _)| !crate::kuna_calleearitybody::is_register(a))
     {
         return false;
     }
@@ -345,8 +345,8 @@ fn takes_every_input(
     else {
         return false;
     };
-    let facts = crate::p4_calls::kuna_calleedeadarg::probe_cached(arch, entry, reg_idx)
-        .filter(|f| f.is_complete());
+    let facts =
+        crate::kuna_calleedeadarg::probe_cached(arch, entry, reg_idx).filter(|f| f.is_complete());
     stated.inputs.iter().all(|(a, s, _)| {
         overlaps(&stated.passes, a, *s)
             || match &facts {

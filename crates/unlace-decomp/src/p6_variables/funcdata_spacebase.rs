@@ -469,7 +469,7 @@ impl FuncdataSpacebaseExt for Funcdata {
             for j in 0..numparam {
                 // (kuna) `msvcbyval`: a by-value slot a constructor builds is an
                 // object as well as an argument.
-                if crate::p4_calls::kuna_msvcbyval::keeps_slot_mapped(self, call_op, j) {
+                if crate::kuna_msvcbyval::keeps_slot_mapped(self, call_op, j) {
                     continue;
                 }
                 let (addr, psize) = {
@@ -705,21 +705,14 @@ impl FuncdataSpacebaseExt for Funcdata {
             None => Vec::new(),
         };
         state.gather_symbols(&hints);
-        crate::p6_variables::kuna_arrayextent::extend_unbounded(
-            self, &mut state, &space, &unbounded,
-        );
+        crate::kuna_arrayextent::extend_unbounded(self, &mut state, &space, &unbounded);
 
         super::kuna_callarrayextent::coalesce_delay_slot_init(self, &mut state, &space);
         super::kuna_callarrayextent::coalesce(self, &mut state, &space);
         super::kuna_arraysize::gather(self, &mut state, &space);
 
         let reach_checks = match self.get_arch().types_rc() {
-            Some(t) => crate::p6_variables::kuna_storereach::prepare_hints(
-                self,
-                &mut state,
-                &space,
-                t.as_ref(),
-            ),
+            Some(t) => crate::kuna_storereach::prepare_hints(self, &mut state, &space, t.as_ref()),
             None => Default::default(),
         };
 
@@ -1385,7 +1378,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
         let extent = self
             .get_arch()
             .kuna_options
-            .get::<crate::p6_variables::kuna_arrayextent::ArrayExtent>()
+            .get::<crate::kuna_arrayextent::ArrayExtent>()
             .0;
         let mut unbounded = Vec::new();
         // checker.gather(&fd, spaceid, false): build the alias base/offset lists.
@@ -1838,8 +1831,7 @@ impl FuncdataAliasExt for Funcdata {
         exempt_scramble: bool,
     ) {
         use std::collections::BTreeSet;
-        let skip_reads =
-            exempt_scramble && crate::p4_calls::kuna_calleereginputs::skips_read_operands(self);
+        let skip_reads = exempt_scramble && crate::kuna_calleereginputs::skips_read_operands(self);
         // (base, index) queue.
         let mut vnqueue: Vec<(VarnodeId, Option<VarnodeId>)> = vec![(startvn, None)];
         let mut marked: BTreeSet<VarnodeId> = BTreeSet::new();
@@ -1924,13 +1916,10 @@ impl FuncdataAliasExt for Funcdata {
                         // (kuna) A stack-pointer scramble against a live value
                         // (MSVC's `/GS` cookie) is not an address, so it does
                         // not open an escape site for the call-site checker.
-                        nonadduse |= crate::p6_variables::kuna_cookiescramble::is_escape_site(
-                            exempt_scramble,
-                            code,
-                        ) && !(skip_reads
-                            && crate::p4_calls::kuna_calleereginputs::is_read_operand(
-                                self, op, vn,
-                            ));
+                        nonadduse |=
+                            crate::kuna_cookiescramble::is_escape_site(exempt_scramble, code)
+                                && !(skip_reads
+                                    && crate::kuna_calleereginputs::is_read_operand(self, op, vn));
                     }
                 }
             }

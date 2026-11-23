@@ -3,12 +3,12 @@
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::kuna_stackreadscope::FuncdataStackreadscopeExt;
-use crate::p3_dataflow::kuna_stackreadscope::MachineRead;
+use crate::kuna_stackreadscope::MachineRead;
 use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 
 #[cfg(test)]
-use crate::p3_dataflow::kuna_stackreadscope::{mark_stack_read, record_propagated_read};
+use crate::kuna_stackreadscope::{mark_stack_read, record_propagated_read};
 
 pub(crate) fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> Option<BlockId> {
     let value = data.vbank().get(vn)?;

@@ -3019,7 +3019,7 @@ mod w10_printc_cast_render {
             for offset in 0..=4 {
                 let shift = fd.new_constant(4, offset);
                 fd.op_set_input(op, shift, 1).unwrap();
-                assert!(crate::p9_emit::kuna_floatslice::recognize(&fd, op).is_some());
+                assert!(crate::kuna_floatslice::recognize(&fd, op).is_some());
                 for language in ["c", "rust"] {
                     for nocasts in [false, true] {
                         let mut printer = PrintC::new();
@@ -3064,7 +3064,7 @@ mod w10_printc_cast_render {
             for offset in [5, u64::MAX] {
                 let shift = fd.new_constant(8, offset);
                 fd.op_set_input(op, shift, 1).unwrap();
-                assert!(crate::p9_emit::kuna_floatslice::recognize(&fd, op).is_none());
+                assert!(crate::kuna_floatslice::recognize(&fd, op).is_none());
             }
             let zero = fd.new_constant(4, 0);
             fd.op_set_input(op, zero, 1).unwrap();
@@ -3073,14 +3073,14 @@ mod w10_printc_cast_render {
                 4,
                 type_metatype::TYPE_UINT,
             ));
-            assert!(crate::p9_emit::kuna_floatslice::recognize(&fd, op).is_none());
+            assert!(crate::kuna_floatslice::recognize(&fd, op).is_none());
             fd.vbank_mut().get_mut(output).unwrap().update_type(named(
                 "float",
                 4,
                 type_metatype::TYPE_FLOAT,
             ));
             fd.op_set_opcode_code(op, OpCode::CPUI_FLOAT_FLOAT2FLOAT);
-            assert!(crate::p9_emit::kuna_floatslice::recognize(&fd, op).is_none());
+            assert!(crate::kuna_floatslice::recognize(&fd, op).is_none());
         }
         execute_float_slice_expressions(&cases);
     }
@@ -3136,7 +3136,7 @@ mod w10_printc_cast_render {
             fd.op_set_output(op, output).unwrap();
             fd.set_high_level();
             assert_eq!(
-                crate::p9_emit::kuna_floatslice::recognize(&fd, op).is_some(),
+                crate::kuna_floatslice::recognize(&fd, op).is_some(),
                 producer == OpCode::CPUI_LOAD
             );
         }

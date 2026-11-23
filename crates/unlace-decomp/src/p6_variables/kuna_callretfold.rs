@@ -5,7 +5,7 @@
 //! # The presentation gap
 //!
 //! Ghidra/kuna force **every** call output to be *explicit* in
-//! [`ActionMarkExplicit::base_explicit`](crate::p6_variables::coreaction_cleanup)
+//! [`ActionMarkExplicit::base_explicit`](crate::coreaction_cleanup)
 //! (`coreaction.cc:3105`, the `if (op->isCall()) return -1;` arm), so a call
 //! result always spills to its own named local:
 //!
@@ -264,7 +264,7 @@ pub(crate) fn op_reads_indirect_output_of(data: &Funcdata, op: OpId, call: OpId)
 /// travelling and is evaluated wherever that value is finally consumed, which
 /// can be several statements later — past a write the callee reads (GH-657) or
 /// in another block.  Called from
-/// [`check_implied_cover`](crate::p6_variables::coreaction_cleanup), where
+/// [`check_implied_cover`](crate::coreaction_cleanup), where
 /// `ActionMarkImplied`'s descendants-first walk has already classified the
 /// downstream values, so the landing statement is derivable.
 pub fn fold_print_point_is_order_safe(data: &Funcdata, vn: VarnodeId) -> bool {

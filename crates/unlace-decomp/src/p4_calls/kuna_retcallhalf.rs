@@ -1484,13 +1484,13 @@ pub fn plant(data: &mut Funcdata) {
     if first_size != second_size || !only_returns_read(data, &first_addr, first_size) {
         return;
     }
-    let plant_first = !crate::p4_calls::kuna_passthrough::touched(data, &first_addr, first_size);
+    let plant_first = !crate::kuna_passthrough::touched(data, &first_addr, first_size);
     let plant_second = !named_whole(data, &second_addr, second_size);
     if plant_first {
-        crate::p4_calls::kuna_voidret::plant_piece(data, first_addr, first_size);
+        crate::kuna_voidret::plant_piece(data, first_addr, first_size);
     }
     if plant_second {
-        crate::p4_calls::kuna_voidret::plant_piece(data, second_addr, second_size);
+        crate::kuna_voidret::plant_piece(data, second_addr, second_size);
     }
 }
 

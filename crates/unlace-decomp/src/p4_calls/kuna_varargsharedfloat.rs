@@ -40,7 +40,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_class;
 use crate::fspec::ParamTrial;
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_varargretreg::{VarargFloats, float_register_count};
+use crate::kuna_varargretreg::{VarargFloats, float_register_count};
 
 /// Is the inactive trial `trial`, holding `vn` at call spec `idx`, a variadic
 /// double that also feeds an earlier argument of the call (see the module)?
@@ -219,7 +219,7 @@ fn register_free(data: &Funcdata, call: OpId, vn: VarnodeId, reg: &Address) -> b
 crate::kuna_flag!(
     /// (kuna) Keep a counted variadic double whose register also feeds an
     /// earlier argument of the same call (option `varargsharedfloat`).  See
-    /// [`crate::p4_calls::kuna_varargsharedfloat`].
+    /// [`crate::kuna_varargsharedfloat`].
     VarargSharedFloat,
     "varargsharedfloat",
     "variadic doubles that also feed an earlier argument",

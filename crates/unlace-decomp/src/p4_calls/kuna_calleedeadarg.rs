@@ -287,7 +287,7 @@ impl CalleeEntryDead {
     /// before writing it — the callee consuming the register as an input?
     ///
     /// The mirror of [`Self::proves_dead`] and the evidence
-    /// [`crate::p4_calls::kuna_calleearitylive`] extends an argument list on.
+    /// [`crate::kuna_calleearitylive`] extends an argument list on.
     /// An incomplete walk clears `reads`, so it answers `false` there too.
     pub fn proves_read(&self, addr: &Address, size: int4) -> bool {
         if !self.complete || size <= 0 {
@@ -313,7 +313,7 @@ impl CalleeEntryDead {
     /// before writing it, for a value that can actually reach something?
     ///
     /// [`Self::proves_read`] with the register-zeroing idiom excluded, and the
-    /// evidence [`crate::p4_calls::kuna_calleearitybody`] recovers an argument
+    /// evidence [`crate::kuna_calleearitybody`] recovers an argument
     /// list on.  The distinction matters there and only there: that rule takes
     /// a read as proof of an INPUT with no sibling call to check it against, and
     /// an API-resolution stub whose prologue is `xor ecx,ecx; lea rdx,[..]; call`
@@ -350,7 +350,7 @@ impl CalleeEntryDead {
     /// only pushes it as an alignment pad above a call's stack arguments
     /// ([`Self::unpadded_read_bytes`]) does not count with `pads`. A walk that
     /// met an undecodable instruction answers `false`. Read by
-    /// [`crate::p4_calls::kuna_calleereadarg`].
+    /// [`crate::kuna_calleereadarg`].
     pub fn reads_low_byte(&self, addr: &Address, size: int4, stores: bool, pads: bool) -> bool {
         if !self.complete || self.undecodable || size <= 0 {
             return false;
@@ -518,7 +518,7 @@ impl CalleeEntryDead {
     /// jump (through a GOT slot or a register), none returns, calls or runs a
     /// user op, and nothing is read before it is written? What such a body
     /// writes is its own business; every other register goes to the real
-    /// target untouched. Read by [`crate::p4_calls::kuna_calleefilledarg`].
+    /// target untouched. Read by [`crate::kuna_calleefilledarg`].
     pub fn is_trampoline(&self) -> bool {
         self.complete
             && !self.lost
@@ -1964,7 +1964,7 @@ pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data
     // `passthrough` asks this walk of the function's OWN body too: a register it
     // writes before reading is not a parameter it can be carrying, which is what
     // says a claim across that slot would materialize one
-    // ([`crate::p4_calls::kuna_passthrough`]'s `no_hole_before`).
+    // ([`crate::kuna_passthrough`]'s `no_hole_before`).
     // `calleereadarg` asks it too, of a function with a call to extend: one
     // that reads its last argument register on entry may be variadic, and is
     // left alone.

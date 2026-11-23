@@ -276,15 +276,7 @@ fn a_read_crosses_only_guarded_calls() {
     let x = addr(&fd, X);
     assert!(!guarded(&fd, r_op, &x, 8), "c2 has no guard of the global");
     let (mut pending, mut iops) = (Vec::new(), Default::default());
-    let g2 = crate::p3_dataflow::kuna_renamereads::new_indirect(
-        &mut fd,
-        c2,
-        &x,
-        8,
-        0,
-        &mut pending,
-        &mut iops,
-    );
+    let g2 = crate::kuna_renamereads::new_indirect(&mut fd, c2, &x, 8, 0, &mut pending, &mut iops);
     assert!(
         guarded(&fd, r_op, &x, 8),
         "c2's guard is what the read sees"
@@ -302,21 +294,13 @@ fn a_read_crosses_only_guarded_calls() {
         !guarded(&fd, r_op, &x, 8),
         "the value read is live past c3, which has no guard"
     );
-    crate::p3_dataflow::kuna_renamereads::new_indirect(
-        &mut fd,
-        c3,
-        &x,
-        8,
-        0,
-        &mut pending,
-        &mut iops,
-    );
+    crate::kuna_renamereads::new_indirect(&mut fd, c3, &x, 8, 0, &mut pending, &mut iops);
     assert!(
         guarded(&fd, r_op, &x, 8),
         "c3's guard keeps the value read apart from the global"
     );
     let _ = c1;
-    crate::p3_dataflow::kuna_renamereads::finish(&mut fd, &mut pending);
+    crate::kuna_renamereads::finish(&mut fd, &mut pending);
 }
 
 #[test]

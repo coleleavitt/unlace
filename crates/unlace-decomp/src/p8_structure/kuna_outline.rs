@@ -53,7 +53,7 @@
 //! # The seam
 //!
 //! Pre-heritage `bblocks` surgery, self-gated on `get_heritage_pass() == 0`
-//! (the documented pre-SSA window, as [`crate::p2_lift::kuna_loweredswitch`] uses).
+//! (the documented pre-SSA window, as [`crate::kuna_loweredswitch`] uses).
 //! Before SSA there are no `MULTIEQUAL`s to patch when edges move, and
 //! `ActionFuncLink` still runs afterwards to materialize the call's argument and
 //! return varnodes. Doing this later, as a P8 print-tree edit, would be wrong:
@@ -113,7 +113,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::p7_regions::kuna_regiongraph::{
+use crate::kuna_regiongraph::{
     KunaIncrementalDominators, KunaNodeId, KunaNodePool, KunaNodeSet, KunaRegionGraph, NodeKind,
     kuna_subgraph_between_nodes,
 };
@@ -901,7 +901,7 @@ impl OptionOutline {
 /// own condition is not charged and a folded operand can render more than one
 /// call.  That is deliberate and is a readability bound, not a soundness bound —
 /// see
-/// [`MAX_PREFIX_ROOT_CALLS`](crate::p8_structure::kuna_condfold::MAX_PREFIX_ROOT_CALLS).
+/// [`MAX_PREFIX_ROOT_CALLS`](crate::kuna_condfold::MAX_PREFIX_ROOT_CALLS).
 /// Rule B charges every call op.
 ///
 /// Two effects are accepted rather than fixed: this is **not a monotone goto
@@ -913,14 +913,14 @@ impl OptionOutline {
 /// The value is the **shared printed-width budget**, which doubles as the whole
 /// option's policy level: `0` = `option condfold off` (byte-identical to
 /// upstream: the precompute is skipped and every gate disjunct is dead), `5`
-/// ([`MAX_PREFIX_STMTS_ANGR`](crate::p8_structure::kuna_condfold::MAX_PREFIX_STMTS_ANGR))
+/// ([`MAX_PREFIX_STMTS_ANGR`](crate::kuna_condfold::MAX_PREFIX_STMTS_ANGR))
 /// = `on` (angr parity), `9`
-/// ([`MAX_PREFIX_STMTS_WIDE`](crate::p8_structure::kuna_condfold::MAX_PREFIX_STMTS_WIDE))
+/// ([`MAX_PREFIX_STMTS_WIDE`](crate::kuna_condfold::MAX_PREFIX_STMTS_WIDE))
 /// = `wide` (absorbs kuna's finer printed-statement granularity).  The level moves
 /// the budget for BOTH rules and nothing else.  Default-OFF opt-in.  See
-/// [`crate::p8_structure::kuna_condfold`].
+/// [`crate::kuna_condfold`].
 /// (kuna) `outline` region spec, empty when off.  See
-/// [`crate::p8_structure::kuna_outline`].
+/// [`crate::kuna_outline`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutlineOption(pub String);
 
@@ -937,7 +937,7 @@ impl crate::kuna_optionset::KunaOption for OutlineOption {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p8_structure::kuna_outline::OptionOutline.apply(value)?;
+        let (v, msg) = crate::kuna_outline::OptionOutline.apply(value)?;
         Ok((OutlineOption(v), msg))
     }
 }

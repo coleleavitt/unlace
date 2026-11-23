@@ -28,7 +28,7 @@
 //!
 //! A floating-point register is refused where the caller states how many it
 //! filled (`al` on x86-64 SysV, CR bit 6 on 32-bit PowerPC: those registers are
-//! [`crate::p4_calls::kuna_varargretreg`]'s) and where it only shadows a general
+//! [`crate::kuna_varargretreg`]'s) and where it only shadows a general
 //! register (64-bit PowerPC).
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
@@ -40,7 +40,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{type_class, type_metatype};
 use crate::fspec::{FuncCallSpecs, ParameterPieces, PrototypePieces};
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_varargretreg::{VarargFloats, float_register_count};
+use crate::kuna_varargretreg::{VarargFloats, float_register_count};
 
 /// Is the input trial `[addr, addr + size)` at `slot` of variadic call spec `idx`
 /// a declared parameter of the calling function, or the declared result of
@@ -291,12 +291,9 @@ fn format_stops_before(
     let Some((value, width)) = constant_value(data, vn, 0) else {
         return false;
     };
-    let Some(count) = crate::p4_calls::kuna_formatwitness::pointed_format_count(
-        data,
-        value,
-        width,
-        call.get_addr(),
-    ) else {
+    let Some(count) =
+        crate::kuna_formatwitness::pointed_format_count(data, value, width, call.get_addr())
+    else {
         return false;
     };
     vararg_position(data, fc, addr, size, float).is_some_and(|position| position > count)

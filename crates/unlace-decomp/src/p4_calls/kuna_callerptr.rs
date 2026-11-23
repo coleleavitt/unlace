@@ -372,7 +372,7 @@ fn addresses_a_string(data: &Funcdata, v: VarnodeId) -> bool {
         (def, base)
     };
     match (reader, constant) {
-        (Some(op), Some(c)) => crate::p5_types::kuna_charptr::constant_is_string(data, op, c),
+        (Some(op), Some(c)) => crate::kuna_charptr::constant_is_string(data, op, c),
         _ => false,
     }
 }

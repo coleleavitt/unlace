@@ -12,7 +12,7 @@ use crate::dtype::type_metatype;
 use crate::fspec::effect_type;
 use crate::funcdata::Funcdata;
 use crate::funcdata_varnode::*;
-use crate::p4_calls::kuna_noreturnretuse;
+use crate::kuna_noreturnretuse;
 use crate::varnode::DefOpInfo;
 use crate::varnode::VarnodeBank;
 use crate::varnode::varnode_flags;

@@ -18,7 +18,7 @@
 //! extra lines, and a duplicated call per cloned block.
 //!
 //! This is the exact **inverse** of the three SAILR goto-reduction passes
-//! ([`crate::p8_structure::kuna_gotoreduce`] / `kuna_crossjumpreverter` /
+//! ([`crate::kuna_gotoreduce`] / `kuna_crossjumpreverter` /
 //! `kuna_taildup`), which *duplicate* a shared tail to remove a `goto`.  Here kuna
 //! has *over-duplicated* a shared if/else head, and the readability win is to
 //! **merge** the identical copies back into one.
@@ -646,7 +646,7 @@ impl crate::kuna_optionset::KunaOption for DedupIteTail {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p8_structure::kuna_dedupitetail::OptionDedupIteTail.apply(value)?;
+        let (v, msg) = crate::kuna_dedupitetail::OptionDedupIteTail.apply(value)?;
         Ok((DedupIteTail(v), msg))
     }
 }

@@ -6,7 +6,7 @@ use unlace_num::opbehavior::{
 };
 
 use crate::context::ArchContext;
-use crate::p6_variables::funcdata_spacebase::spacebase_tests::{build_fd, make_sp_in, reg_addr};
+use crate::funcdata_spacebase::spacebase_tests::{build_fd, make_sp_in, reg_addr};
 
 use super::*;
 

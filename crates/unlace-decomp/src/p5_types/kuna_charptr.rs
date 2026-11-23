@@ -692,7 +692,7 @@ crate::kuna_flag!(
     /// (kuna `charptr`) Commit a pointer-width parameter or stack local the
     /// program only ever uses on characters to `char *`; option
     /// `charptr on|off`.  The rule lives in
-    /// [`kuna_charptr`](crate::p5_types::kuna_charptr).
+    /// [`kuna_charptr`](crate::kuna_charptr).
     CharPtr,
     "charptr",
     "character-pointer evidence",

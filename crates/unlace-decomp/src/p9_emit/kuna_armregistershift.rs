@@ -6,7 +6,7 @@
 //! bits keep it below 32 (or `armshiftguard off` drops it). This module keeps
 //! the architecture/opcode selection, the range proof, and the proof that
 //! printing both the guard and the shift will not repeat an effect;
-//! [`crate::p9_emit::printc::PrintC`] owns only the token emission.
+//! [`crate::printc::PrintC`] owns only the token emission.
 
 use std::rc::Rc;
 

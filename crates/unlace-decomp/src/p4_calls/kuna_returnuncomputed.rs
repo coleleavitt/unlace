@@ -149,7 +149,7 @@ const MAX_NODES: u32 = 4096;
 /// function instead of once per returned register pair.
 ///
 /// Running out of budget answers `false`, not `true`: the answer is read by
-/// [`crate::p4_calls::kuna_protoorder`]'s `recovered_output`, where `true` states
+/// [`crate::kuna_protoorder`]'s `recovered_output`, where `true` states
 /// the callee's return to every caller ahead of it and `false` states nothing at
 /// all, so the unfinished walk has to take the second.
 fn computes_everywhere(
@@ -295,7 +295,7 @@ pub fn every_return_computes(data: &Funcdata) -> bool {
 /// [`every_return_computes`], with a value read out of global memory
 /// (`return stdout;`) counted as computed when `globals`: the program's own
 /// data, not a register or frame slot the caller left behind.  `callrettype`
-/// asks it this way ([`crate::p4_calls::kuna_callrettype`]).
+/// asks it this way ([`crate::kuna_callrettype`]).
 pub fn every_return_computes_with(data: &Funcdata, globals: bool) -> bool {
     for retop in data
         .obank()

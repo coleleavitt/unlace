@@ -316,7 +316,7 @@ impl crate::kuna_optionset::KunaOption for FlattenIfelse {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p8_structure::kuna_ifelseflatten::OptionIfElseFlatten.apply(value)?;
+        let (v, msg) = crate::kuna_ifelseflatten::OptionIfElseFlatten.apply(value)?;
         Ok((FlattenIfelse(v), msg))
     }
 }

@@ -734,7 +734,7 @@ pub fn proven(data: &Funcdata, entry: &Address) -> bool {
     let Some(sp) = entry.get_space() else {
         return false;
     };
-    crate::p4_calls::kuna_callwide::proven(data, entry)
+    crate::kuna_callwide::proven(data, entry)
         || data
             .kuna_wide()
             .is_some_and(|w| w.get((sp.get_index(), entry.get_offset())))
@@ -1287,9 +1287,10 @@ impl<'a> Walk<'a> {
                         {
                             return None;
                         }
-                        if target.as_ref().is_some_and(|t| {
-                            crate::p4_calls::kuna_calleenoreturn::is_no_return(self.arch, t)
-                        }) {
+                        if target
+                            .as_ref()
+                            .is_some_and(|t| crate::kuna_calleenoreturn::is_no_return(self.arch, t))
+                        {
                             self.reads.append(&mut path.reads);
                             return Some(false);
                         }

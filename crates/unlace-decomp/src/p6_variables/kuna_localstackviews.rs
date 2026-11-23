@@ -317,8 +317,7 @@ fn collect(fd: &mut Funcdata) {
                 continue;
             }
             for slot in 0..op.num_input() {
-                let Some(ty) = crate::p6_variables::kuna_stackuses::declared_view(fd, id, slot)
-                else {
+                let Some(ty) = crate::kuna_stackuses::declared_view(fd, id, slot) else {
                     continue;
                 };
                 let aggregate = matches!(
@@ -512,7 +511,7 @@ pub(crate) fn publication(fd: &Funcdata, value: VarnodeId) -> bool {
             .and_then(|op| op.get_in(0))
             .and_then(|input| fixed(fd, input, p.pointee.get_size()))
             == Some(p.start)
-        && crate::p6_variables::kuna_stackuses::declared_view(fd, id, 0)
+        && crate::kuna_stackuses::declared_view(fd, id, 0)
             .is_some_and(|ty| Rc::ptr_eq(&ty, &p.pointee))
 }
 

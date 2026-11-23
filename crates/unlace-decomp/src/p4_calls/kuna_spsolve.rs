@@ -34,7 +34,7 @@
 //! * the stack pointer of a return, or of a jump that leaves the function,
 //!   is the entry stack pointer;
 //! * a direct callee whose own returns prove its extrapop
-//!   ([`crate::p4_calls::kuna_calleepurge`]) contributes that constant.
+//!   ([`crate::kuna_calleepurge`]) contributes that constant.
 //!
 //! The system is first checked with every call unknown at zero. When that
 //! holds the model is consistent and only the proven extrapops are applied.
@@ -87,8 +87,8 @@ use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::{EXTRAPOP_UNKNOWN, effect_type};
 use crate::funcdata::Funcdata;
+use crate::kuna_calleepurge::{Effect, summary};
 use crate::kuna_fasthash::FxHashMap as HashMap;
-use crate::p4_calls::kuna_calleepurge::{Effect, summary};
 
 /// How many levels of nested direct calls a callee walk reads.
 const DEPTH: u8 = 3;

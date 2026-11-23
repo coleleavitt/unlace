@@ -1086,7 +1086,7 @@ pub(crate) fn output_type(data: &Funcdata, op_id: OpId) -> Option<Rc<Datatype>> 
 crate::kuna_flag!(
     /// (kuna) Collapse an x86 `rep movs`/`rep stos`/`repz cmpsb` loop into a
     /// copy, fill or compare builtin (option `repstring`).  See
-    /// [`crate::p3_dataflow::kuna_repstring`].
+    /// [`crate::kuna_repstring`].
     RepString,
     "repstring",
     "rep movs/stos/cmps loops as copy, fill and compare builtins",

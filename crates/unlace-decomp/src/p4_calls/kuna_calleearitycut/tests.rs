@@ -1,6 +1,6 @@
 //! Unit tests for the three conditions that let a callee-body argument run
 //! stand without a provably dead boundary register.  The cases run through
-//! [`plan_from_body`](crate::p4_calls::kuna_calleearitybody::plan_from_body).  The end-to-end behaviour is
+//! [`plan_from_body`](crate::kuna_calleearitybody::plan_from_body).  The end-to-end behaviour is
 //! `tests/cli/bytecode-reader-call-site.json`.
 
 use super::*;
@@ -9,8 +9,8 @@ use std::rc::Rc;
 use unlace_base::space::{AddrSpace, spacetype};
 
 use crate::context::VarnodeId;
-use crate::p4_calls::kuna_calleearitybody::plan_from_body;
-use crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead;
+use crate::kuna_calleearitybody::plan_from_body;
+use crate::kuna_calleedeadarg::CalleeEntryDead;
 
 const REG: int4 = 3;
 

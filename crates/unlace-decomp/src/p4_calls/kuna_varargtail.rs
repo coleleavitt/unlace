@@ -17,7 +17,7 @@
 //! with `push %rdx; ...; push %rax; xor %eax,%eax`, where the `push %rdx` is
 //! gcc's stack-alignment filler and `rdx` holds nothing at all. Recovery cannot
 //! tell that push from an argument, so `rdx` becomes a parameter, and
-//! [`crate::p4_calls::kuna_passthrough`] would then hand it to every caller that
+//! [`crate::kuna_passthrough`] would then hand it to every caller that
 //! forwards the register — `tohex`, `pwcopy` and `init_hostkeys` all gain a third
 //! parameter their DWARF prototype does not have. gnulib
 //! `open_safer(char const *file, int flags, ...)` is the same shape with the
@@ -30,7 +30,7 @@
 //! incoming value for it, through value-preserving operations, is an argument at
 //! a call that is variadic: one the function set up as variadic (SysV's `xor
 //! %eax,%eax` vector-register count, recorded by
-//! [`crate::p4_calls::kuna_passthrough`] before heritage) or a declared `...`
+//! [`crate::kuna_passthrough`] before heritage) or a declared `...`
 //! prototype at a slot past its named parameters. Such a parameter is recorded
 //! with the callee's statement and `passthrough` never claims it: the register is
 //! read by the callee, but only where the ABI says the caller need not have put
@@ -152,7 +152,7 @@ fn moves_the_value(data: &Funcdata, op: OpId, vn: VarnodeId, code: OpCode) -> bo
 /// a caller leave unset?
 ///
 /// Either the function set the call up as variadic (the recorded SysV
-/// vector-register count, [`crate::p4_calls::kuna_passthrough`]), or the callee's
+/// vector-register count, [`crate::kuna_passthrough`]), or the callee's
 /// prototype is declared `...` and the slot is past its named parameters.
 fn is_vararg_slot(data: &Funcdata, op: OpId, slot: int4) -> bool {
     if slot < 1 {

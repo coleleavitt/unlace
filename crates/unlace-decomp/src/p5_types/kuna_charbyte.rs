@@ -107,8 +107,7 @@ pub fn zext_is_only_unsigned_vote(data: &Funcdata, vn: VarnodeId) -> bool {
             zext = true;
             continue;
         }
-        let vote =
-            crate::p5_types::coreaction_infertypes::input_type_local(data, r, o.get_slot(vn));
+        let vote = crate::coreaction_infertypes::input_type_local(data, r, o.get_slot(vn));
         if vote.get_metatype() == type_metatype::TYPE_UINT {
             return false;
         }
@@ -546,7 +545,7 @@ pub fn keep_or_restore(data: &mut Funcdata, upstream: Snapshot) -> bool {
 crate::kuna_flag!(
     /// (kuna `charbyte`) Keep `char` for a byte loaded through a `char *` when
     /// the only unsigned vote on it is a zero-extension.  Implementation:
-    /// [`kuna_charbyte`](crate::p5_types::kuna_charbyte).
+    /// [`kuna_charbyte`](crate::kuna_charbyte).
     CharByte,
     "charbyte",
     "char-pointer byte typing",

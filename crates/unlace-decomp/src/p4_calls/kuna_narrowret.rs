@@ -683,7 +683,7 @@ fn sole_tail(
                 .get(r)
                 .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
         })
-        .map(|r| crate::p4_calls::kuna_passthrough::producing_call(data, r))
+        .map(|r| crate::kuna_passthrough::producing_call(data, r))
         .collect();
     if !producers.contains(&Some(op)) {
         return true;
@@ -738,7 +738,7 @@ fn trace() -> bool {
 
 /// (kuna) Make a call to a callee that returns a narrow value zero-extended
 /// read that value (option `narrowret`).  See
-/// [`crate::p4_calls::kuna_narrowret`].
+/// [`crate::kuna_narrowret`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NarrowRet(pub bool);
 

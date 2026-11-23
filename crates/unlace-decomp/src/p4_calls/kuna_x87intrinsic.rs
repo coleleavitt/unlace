@@ -6,7 +6,7 @@
 //! has an `ST0` input, so the call recovers no argument, nothing reads `ST0`, and
 //! the whole expression that computed the operand is dead-code eliminated.
 //! Adding an `ST0` input to a shared model would invent a phantom argument on
-//! every other callee (see [`crate::p2_lift::kuna_msvcftol`]), so these helpers
+//! every other callee (see [`crate::kuna_msvcftol`]), so these helpers
 //! get a model of their own, bound to them by address by the analysis tier.
 //!
 //! [`MODEL_NAME`] takes one floating-point input in `ST0` and returns one in

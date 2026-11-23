@@ -1848,7 +1848,7 @@ impl crate::kuna_optionset::KunaOption for StructSynthMode {
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::p5_types::kuna_structsynth::StructSynthMode::Locals
+        crate::kuna_structsynth::StructSynthMode::Locals
     }
 
     fn shipped() -> Self {

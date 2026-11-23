@@ -2,7 +2,7 @@
 //! makes without a function in front of it: which ranges a claim covers
 //! ([`overlaps_claim`]), which forwarded registers extend a
 //! settled argument list ([`extension`]), and the width a callee's body says it
-//! consumes ([`crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead::live_input_width`]).
+//! consumes ([`crate::kuna_calleedeadarg::CalleeEntryDead::live_input_width`]).
 //! The end-to-end behaviour is
 //! `tests/cli/passthrough-gives-a-forwarding-function-its-parameter.json` and
 //! its option-off arm.
@@ -10,7 +10,7 @@
 use super::*;
 use crate::kuna_passthrough::FuncdataPassthroughExt;
 
-use crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead;
+use crate::kuna_calleedeadarg::CalleeEntryDead;
 use std::rc::Rc;
 use unlace_base::space::{AddrSpace, spacetype};
 

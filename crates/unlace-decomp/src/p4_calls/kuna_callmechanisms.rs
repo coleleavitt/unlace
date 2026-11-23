@@ -177,7 +177,7 @@ pub fn evaluation_model(data: &crate::funcdata::Funcdata) -> Option<Rc<crate::fs
     // takes a callee-saved register as a custom argument evaluates its own
     // prototype under the synthesized model, so its printed parameters are the
     // ones its callers pass.
-    if let Some(model) = crate::p4_calls::kuna_calleereginputs::own_register_model(
+    if let Some(model) = crate::kuna_calleereginputs::own_register_model(
         data.get_arch(),
         &data.get_address().clone(),
     ) {

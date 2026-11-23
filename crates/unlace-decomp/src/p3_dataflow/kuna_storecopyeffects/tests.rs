@@ -1,7 +1,7 @@
 use super::*;
 use crate::action::Rule;
 use crate::context::ArchContext;
-use crate::p3_dataflow::ruleaction_4::RuleStoreVarnode;
+use crate::ruleaction_4::RuleStoreVarnode;
 use std::rc::Rc;
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::{

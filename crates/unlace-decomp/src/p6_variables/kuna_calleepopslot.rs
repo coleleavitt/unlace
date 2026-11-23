@@ -79,7 +79,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p6_variables::kuna_calleepop::{
+use crate::kuna_calleepop::{
     MAX_ARG_BYTES, RETURN_ADDRESS_ONLY, at_address, caller_cleans_up, caller_raise, child_at,
     const_signed, decompose, is_argument_push, is_imported,
 };

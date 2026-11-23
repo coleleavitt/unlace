@@ -1730,23 +1730,20 @@ fn check_implied_cover(
             }
         }
     }
-    if load.is_some()
-        && has_cover
-        && crate::p6_variables::kuna_stackloadcover::crosses_write(data, vn)
-    {
+    if load.is_some() && has_cover && crate::kuna_stackloadcover::crosses_write(data, vn) {
         return false;
     }
     // (kuna `indexaliasguard global`) a load stays ahead of a store to a global
-    // it may read; see [`crate::p3_dataflow::kuna_indexaliasguard`].
+    // it may read; see [`crate::kuna_indexaliasguard`].
     if load.is_some()
         && has_cover
-        && crate::p3_dataflow::kuna_indexaliasguard::load_crosses_global_store(data, vn)
+        && crate::kuna_indexaliasguard::load_crosses_global_store(data, vn)
     {
         return false;
     }
     // (kuna) a load of a global holding a stored pointer stays ahead of a write;
-    // see [`crate::p6_variables::kuna_pointeevalue::load_crosses_write`].
-    if crate::p6_variables::kuna_pointeevalue::load_crosses_write(data, vn) {
+    // see [`crate::kuna_pointeevalue::load_crosses_write`].
+    if crate::kuna_pointeevalue::load_crosses_write(data, vn) {
         return false;
     }
     // (kuna syscallregs) a system call's error flag reads like the call it
@@ -2258,7 +2255,7 @@ impl Action for ActionCopyMarker {
         data.with_covermerge(|merge, data| {
             merge.mark_internal_copies(data);
         });
-        crate::p6_variables::kuna_undefinedcopy::mark(data);
+        crate::kuna_undefinedcopy::mark(data);
         0
     }
 }

@@ -18,8 +18,8 @@ use unlace_base::space::{
 
 use crate::context::{ArchContext, TypeOp};
 use crate::fspec::{EffectRecord, FuncCallSpecs, ProtoModel, effect_type};
+use crate::kuna_calleepreserves::callee_preserves_range;
 use crate::kuna_rustabi::CalleeReturnWrites;
-use crate::p4_calls::kuna_calleepreserves::callee_preserves_range;
 use unlace_num::opcodes::OpCode;
 
 /// x86-64-win's shape, reduced to what the rule reads: RBX (0x18) preserved,

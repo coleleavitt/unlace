@@ -451,9 +451,7 @@ fn memory(
                     .spills
                     .iter()
                     .filter_map(|(&(at, width), &value)| {
-                        if width == stack.size
-                            && crate::p3_dataflow::kuna_calleehomes::is_home_slot(at, width)
-                        {
+                        if width == stack.size && crate::kuna_calleehomes::is_home_slot(at, width) {
                             if let Value::Pointer(root, _) = value {
                                 return Some(DeferredFrameEscape {
                                     offset: at,
@@ -470,7 +468,7 @@ fn memory(
                 } else {
                     state.spills.retain(|&(at, width), &mut value| {
                         width == stack.size
-                            && (crate::p3_dataflow::kuna_calleehomes::is_home_slot(at, width)
+                            && (crate::kuna_calleehomes::is_home_slot(at, width)
                                 || (at < 0
                                     && at
                                         .checked_add(i64::from(width))
@@ -940,12 +938,8 @@ fn for_call<'a>(
         {
             return None;
         }
-        let (start, size) = crate::p3_dataflow::kuna_calleehomes::callee_frame_cell(
-            fd,
-            call,
-            0,
-            return_address.size,
-        )?;
+        let (start, size) =
+            crate::kuna_calleehomes::callee_frame_cell(fd, call, 0, return_address.size)?;
         if !(1..=16).contains(&size) {
             return None;
         }
@@ -961,12 +955,8 @@ fn for_call<'a>(
         if !summary.deferred_frame_escapes.contains(&home) {
             return None;
         }
-        let (home_start, home_size) = crate::p3_dataflow::kuna_calleehomes::callee_frame_cell(
-            fd,
-            call,
-            home.offset,
-            home.size,
-        )?;
+        let (home_start, home_size) =
+            crate::kuna_calleehomes::callee_frame_cell(fd, call, home.offset, home.size)?;
         if !(1..=16).contains(&home_size) {
             return None;
         }
@@ -976,12 +966,8 @@ fn for_call<'a>(
         }
     }
     for &(cell, effect) in &summary.private_write_conditions {
-        let (start, size) = crate::p3_dataflow::kuna_calleehomes::callee_frame_cell(
-            fd,
-            call,
-            cell.offset,
-            cell.size,
-        )?;
+        let (start, size) =
+            crate::kuna_calleehomes::callee_frame_cell(fd, call, cell.offset, cell.size)?;
         if !(1..=16).contains(&size) || reaches(fd, call, effect, start, size, (1u32 << size) - 1)?
         {
             return None;
@@ -1163,12 +1149,8 @@ fn unobserved_inner(
         if !allow_home_discharge {
             return None;
         }
-        let (home_start, home_size) = crate::p3_dataflow::kuna_calleehomes::caller_home_cell(
-            fd,
-            call,
-            deferred.offset,
-            deferred.size,
-        )?;
+        let (home_start, home_size) =
+            crate::kuna_calleehomes::caller_home_cell(fd, call, deferred.offset, deferred.size)?;
         if home_discharge_returns_pointer(fd, call, summary, deferred.root)? {
             return None;
         }
@@ -1202,9 +1184,7 @@ fn unobserved_inner(
         let home_is_unobserved = *caller_home_scan_cache
             .entry((home_start, home_size))
             .or_insert_with(|| {
-                crate::p3_dataflow::kuna_calleehomes::caller_home_unobserved(
-                    fd, id, home_start, home_size,
-                )
+                crate::kuna_calleehomes::caller_home_unobserved(fd, id, home_start, home_size)
             });
         if !home_is_unobserved {
             return None;
@@ -1295,9 +1275,7 @@ mod tests {
     use super::*;
     use crate::dtype::{Datatype, type_metatype};
     use crate::fspec::ParameterPieces;
-    use crate::p3_dataflow::kuna_calleehomes::tests::{
-        Fx, Out, call_with_r8_argument, locked_home_call_on,
-    };
+    use crate::kuna_calleehomes::tests::{Fx, Out, call_with_r8_argument, locked_home_call_on};
     use unlace_base::space::{AddrSpace, addrspace_flags};
 
     struct Program {
@@ -2392,30 +2370,15 @@ mod tests {
         let index = fx.fd.get_call_specs_index(call).unwrap();
         let call_specs = fx.fd.get_call_specs(index);
         assert!(
-            crate::p3_dataflow::kuna_calleehomes::callee_frame_cell(&fx.fd, call_specs, 16, 8,)
+            crate::kuna_calleehomes::callee_frame_cell(&fx.fd, call_specs, 16, 8,)
                 .is_some_and(|(start, size)| start == ((-48i64) as u64) && size == 8)
         );
+        assert!(crate::kuna_calleehomes::caller_home_cell(&fx.fd, call_specs, 16, 8,).is_none());
         assert!(
-            crate::p3_dataflow::kuna_calleehomes::caller_home_cell(&fx.fd, call_specs, 16, 8,)
-                .is_none()
+            crate::kuna_calleehomes::callee_frame_cell(&fx.fd, call_specs, i64::MIN, 8,).is_none()
         );
         assert!(
-            crate::p3_dataflow::kuna_calleehomes::callee_frame_cell(
-                &fx.fd,
-                call_specs,
-                i64::MIN,
-                8,
-            )
-            .is_none()
-        );
-        assert!(
-            crate::p3_dataflow::kuna_calleehomes::callee_frame_cell(
-                &fx.fd,
-                call_specs,
-                16,
-                u32::MAX,
-            )
-            .is_none()
+            crate::kuna_calleehomes::callee_frame_cell(&fx.fd, call_specs, 16, u32::MAX,).is_none()
         );
         assert!(test_call_summary_is_usable(&fx.fd, call, query, 8));
         assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);

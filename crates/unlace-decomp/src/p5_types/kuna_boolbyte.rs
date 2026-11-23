@@ -551,7 +551,7 @@ fn is_mask_proven(data: &Funcdata, vn: VarnodeId) -> bool {
 crate::kuna_flag!(
     /// (kuna `boolbyte`) Offer `bool` as a `getLocalType` candidate for a byte
     /// whose every read is a truth test.  Implementation:
-    /// [`kuna_boolbyte`](crate::p5_types::kuna_boolbyte).
+    /// [`kuna_boolbyte`](crate::kuna_boolbyte).
     BoolByte,
     "boolbyte",
     "truth-valued byte typing",

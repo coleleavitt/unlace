@@ -52,7 +52,7 @@
 //! what keeps it off the call.
 //!
 //! Then the callee's own body, read by the entry-liveness walk
-//! [`crate::p4_calls::kuna_calleedeadarg`] already caches for every direct
+//! [`crate::kuna_calleedeadarg`] already caches for every direct
 //! call, has to agree. The stub is a TRAMPOLINE
 //! ([`CalleeEntryDead::is_trampoline`]): every path it has leaves through an
 //! indirect jump (`br x16` through a GOT slot), none returns or calls, and it
@@ -133,7 +133,7 @@ fn is_selector_stub(name: &str) -> bool {
 crate::kuna_flag!(
     /// (kuna) `option calleefilledarg`: an unfilled argument register an
     /// Objective-C selector stub loads itself ends no argument list.  See
-    /// [`crate::p4_calls::kuna_calleefilledarg`].
+    /// [`crate::kuna_calleefilledarg`].
     CalleeFilledArg,
     "calleefilledarg",
     "Callee-filled argument slots",

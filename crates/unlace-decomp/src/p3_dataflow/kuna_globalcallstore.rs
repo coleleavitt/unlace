@@ -44,7 +44,7 @@ pub fn declines(data: &Funcdata, op: OpId, global: VarnodeId, source: VarnodeId)
 pub(crate) fn load_order_enabled(data: &Funcdata) -> bool {
     data.get_arch()
         .kuna_options
-        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
         .0
         == LEVEL_GLOBAL
 }

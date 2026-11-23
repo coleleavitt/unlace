@@ -26,9 +26,6 @@ mod hook_registry;
 #[path = "options_md_fresh.rs"]
 mod options_md_fresh;
 
-#[path = "phase_codegen.rs"]
-mod phase_codegen;
-
 #[path = "print_b5_boolless.rs"]
 mod print_b5_boolless;
 

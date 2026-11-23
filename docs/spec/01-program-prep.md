@@ -110,7 +110,7 @@ Names are generated when enumerated; address and anonymous-name selection use
 the compact entries without constructing the whole canonical inventory. Real
 names and entries carrying other commit facts keep their symbol records.
 The entry starts are parked on the `Architecture`
-(`crates/unlace-decomp/src/infra/architecture.rs (set_lazy_entry_starts)`)
+(`crates/unlace-middle/src/infra/architecture.rs (set_lazy_entry_starts)`)
 and no `Function` is created. An entry some other fact of the same commit attaches
 to is not parked — a committed name (`_INIT_<i>`, the entry oracle's `main`), a
 no-return verdict, a FID rename, an address-keyed prototype (library, `elfmain`,
@@ -119,7 +119,7 @@ DWARF, demangled), locals, comments, tracked registers or a format site
 each of those lands on the `Function` itself and would otherwise be dropped; the
 string and data arms also treat a parked start as occupied, as they would its
 `Function`. Flow still reads such an entry as a function rather
-than code to follow into — `crates/unlace-decomp/src/substrate
+than code to follow into — `crates/unlace-middle/src/substrate
 (ArchFlowEnv)` consults the parked set once the symbol table declines — so a
 `BRANCH` into a lazy entry stays a tail call. The raw walk `bejoin evidence` makes
 of a function and its callees stops at a parked entry for the same reason
@@ -457,7 +457,7 @@ stack-argument offsets, register banks and other Go models remain as stated.
 The AArch64 C model already has a zero extra pop.
 
 (kuna) **The default model follows the image's Go release**
-(`crates/unlace-decomp/src/infra/architecture.rs
+(`crates/unlace-middle/src/infra/architecture.rs
 (kuna_go_stack_default)`, run right after the cspec's models are registered).
 The register ABI reached amd64 in go1.17 and arm64 in go1.18
 (`crates/unlace-decomp/src/p1_partition/kuna_goreg.rs
@@ -537,7 +537,7 @@ splits at the starts it has evidence for.
 named, typed global `g`** (always on;
 `crates/unlace-decomp/src/p1_partition/kuna_goreg.rs`, installed by
 the architecture build right after the cspec `<global>` decode —
-`crates/unlace-decomp/src/infra/architecture.rs (kuna_install_goreg)`).
+`crates/unlace-middle/src/infra/architecture.rs (kuna_install_goreg)`).
 The register ABI pins the current goroutine in a register — `R14` on amd64,
 `x28` on arm64, the values the vendored golang `register.info` files state —
 which the cspec lists as `unaffected` and no `<pentry>` names, so every access
@@ -551,7 +551,7 @@ register-ABI era, and the layouts are **versioned off the image's own
 toolchain**: the build-info blob's version string
 (`crates/unlace-analysis/src/loader/gobuildinfo.rs
 (go_toolchain_version)`) travels on the load options
-(`crates/unlace-decomp/src/p0_knowledge/kuna_loadoptions.rs
+(`crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs
 (go_version)`) — set by the object bootstrap from the image's bytes before the
 loader parses them and the sleigh build runs, because the shells are interned
 inside the cspec decode, upstream of every per-image fact write. The image's
@@ -783,7 +783,7 @@ read --json` lists every other segment that declares a listed address in its
 visible rather than silent.
 
 **Character sanitizing** (`symbolnamechars`, `off|safe|ident`, default `safe`;
-`crates/unlace-decomp/src/p0_knowledge/kuna_symbolnamechars.rs`) is the
+`crates/unlace-middle/src/p0_knowledge/kuna_symbolnamechars.rs`) is the
 last step of that name reduction, and it is the only one that treats the name as
 *bytes*. A symbol name is unvalidated binary data, and it is printed verbatim
 into the `// Function:` header comment, the `.h` prototype, the definition, every
@@ -943,7 +943,7 @@ first error, so a rejected symbol abandoned every later arm — prototypes, cont
 paints, tracked registers, call-fixups, DWARF locals and line comments — and the
 pending stash is taken by then, so a second `read symbols` cannot retry; a
 negative size was worse still, indexing the type factory's fixed-size caches out
-of bounds. `crates/unlace-decomp/src/substrate/dtype.rs` therefore also
+of bounds. `crates/unlace-middle/src/substrate/dtype.rs` therefore also
 refuses a negative size at both cache lookups, as an ordinary error rather than an
 invariant, because sizes reach them from image bytes. The clamp is saturating, not
 narrowing: a hostile extent stays hostile — a symbol claiming ~2 GiB still covers,
@@ -1364,7 +1364,7 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   An
   arm64e slice selects the Apple-Silicon pointer-auth SLEIGH spec instead of
   generic v8A unless the `macho-arm64e` env gate is off
-  (`crates/unlace-decomp/src/p0_knowledge/kuna_macho_arm64e.rs (MACHO_ARM64E_ENV)`).
+  (`crates/unlace-middle/src/p0_knowledge/kuna_macho_arm64e.rs (MACHO_ARM64E_ENV)`).
   Modern Mach-O pointer slots are chained-fixup entries, not pointers;
   `crates/unlace-analysis/src/loader/format/macho/chained.rs (ChainedFixups)`
   parses `LC_DYLD_CHAINED_FIXUPS` into a VMA→resolved-pointer overlay. It
@@ -1812,7 +1812,7 @@ each function's snapshot carries the model whose mapping holds its entry
 (`architecture.rs (Architecture::build_arch_handle_for_entry)`): a constant-pool
 index resolves in the method's own file. A call into a class defined in another
 file of the APK prints by name through that pool. Its target is linked across
-the files by `crates/unlace-decomp/src/p0_knowledge/kuna_dex/links.rs
+the files by `crates/unlace-middle/src/p0_knowledge/kuna_dex/links.rs
 (MethodIndex)`: a method reference is the declaring class's descriptor, the
 name and the prototype descriptor, which name the same method in every file, so
 an index of every defined method by that key, plus each class's superclass for
@@ -2085,7 +2085,7 @@ as x86 the image has one function. The dispatcher
 whose PE data directory 14 names a CLI header, whose metadata reads and which
 has at least one method body, unless the caller names a target language or
 sets `cil off`
-(`crates/unlace-decomp/src/p0_knowledge/kuna_cil.rs (cil_enabled)`);
+(`crates/unlace-middle/src/p0_knowledge/kuna_cil.rs (cil_enabled)`);
 every other input keeps the object path. The image
 (`crates/unlace-analysis/src/loadimage_cil.rs (CilImage)`) is the PE
 mapped by RVA at 0x400000, through the raw-image path as the language
@@ -3665,7 +3665,7 @@ address, where upstream indirects through `ExternRefSymbol::refaddr`, so no extr
 symbol is needed. The flow half rides the same gate: `query_function` also carries
 the resolved callee's no-return flag onto the prototype it hands `ActionDeindirect`
 (the snapshot in
-`crates/unlace-decomp/src/p0_knowledge/database.rs (Database::build_global_query)`
+`crates/unlace-middle/src/p0_knowledge/database.rs (Database::build_global_query)`
 dropped it, where upstream returns the callee's live `Funcdata`), which is what makes
 the deindirect schedule the restart whose re-flow plants the artificial halt. The
 extra upstream Win32 no-return-name list remains on the PE/COFF arm only. An ELF
@@ -5127,7 +5127,7 @@ moves.
   module's FFS file type and, with `--protocols`, every interface instance
   each module installs, read off one load of the module (the pass leaves them
   on the architecture as
-  `crates/unlace-decomp/src/p0_knowledge/kuna_uefiprotocols.rs (InstalledInterface)`).
+  `crates/unlace-middle/src/p0_knowledge/kuna_uefiprotocols.rs (InstalledInterface)`).
   A module loaded from
   that directory takes its phase from its file type (PEIM, PEI core and
   combined PEIM/driver are PEI; MM standalone and MM core standalone are MM;
@@ -5526,7 +5526,7 @@ moves.
   DWARF register number is turned into the SLEIGH name by the psABI tables in
   `register_name` (x86-64, i386, AArch64, ARM, RISC-V, MIPS, PowerPC). The
   commit parks them on the architecture by function entry, and the decompile
-  (`crates/unlace-decomp/src/substrate/funcdata.rs (seed_dwarf_register_locals)`)
+  (`crates/unlace-middle/src/substrate/funcdata.rs (seed_dwarf_register_locals)`)
   maps each as a namelocked, typelocked local at the use point its value will
   have after heritage: the range's start when it begins a basic block (a
   loop-carried value's phi), otherwise the last raw write covering the storage
@@ -5785,7 +5785,7 @@ moves.
   The geometry — the discriminant's offset and width, each variant's name,
   discriminant value and absolute field offsets, and whether the encoding is a
   niche — is recorded in a side table on the `TypeFactory`
-  (`crates/unlace-decomp/src/p0_knowledge/kuna_dwarfvariants.rs`). It is
+  (`crates/unlace-middle/src/p0_knowledge/kuna_dwarfvariants.rs`). It is
   the `kuna_wire_symbols` arrangement: nothing in the analysis reads it, no
   `Datatype` points at it, and it is not encoded onto the wire, so filling it
   cannot perturb emitted C. It exists so a later pass can render `match` /
@@ -6260,7 +6260,7 @@ moves.
   are refused. At the commit an MSVC prototype is parked by entry address on every
   address the import resolver names (the IAT slot and each `FF 25` thunk), its
   model is recorded against that address
-  (`crates/unlace-decomp/src/infra/architecture.rs
+  (`crates/unlace-middle/src/infra/architecture.rs
   (Architecture::set_function_prototype_model_at)`), and it is also locked onto the
   function symbol as the prototype-bearing `TypeCode` a `--assert prototype`
   directive would lock (04 §4.1). The lock is what reaches a 32-bit IAT call:
@@ -6368,7 +6368,7 @@ moves.
   of the verdict is `Architecture::source_lang_detected`, written once at
   `load file` (`crates/unlace-console/src/engine.rs
   (bootstrap_from_object_with_isa)`) as a `SourceLang`
-  (`crates/unlace-decomp/src/p0_knowledge/kuna_sourcelang.rs`), with
+  (`crates/unlace-middle/src/p0_knowledge/kuna_sourcelang.rs`), with
   the console `option sourcelang` arm layering a per-run force on top
   (`Architecture::source_lang` reports the effective value, and the catalog's
   `current` reports the option — `auto` until a run forces a language). The
@@ -6618,7 +6618,7 @@ every other binary's pass list is byte-identical to before the pass existed):
   as a zero-size marker. True zero-size fields retain the existing treatment.
   The pass also interns the well-known header shells `go.string`/`go.slice`/
   `go.iface`/`go.eface` with their `LangFacet` records
-  (`crates/unlace-decomp/src/p0_knowledge/kuna_langfacet.rs`). The
+  (`crates/unlace-middle/src/p0_knowledge/kuna_langfacet.rs`). The
   shell interning is OUTPUT-NEUTRAL by construction — nothing binds a shell
   to a variable by itself — the knowledge is for the type surfaces and the
   consumers (the descriptor globals below, then interface dispatch and
@@ -10254,7 +10254,7 @@ than a second parse of the file; an empty `ContextPainter`, since a per-address
 decode mode is not carried by a context snapshot; every address of every
 executable range mapped by some segment; and enough executable bytes (8 MiB) to
 pay for the engine builds. Each lane then builds its own bare `Sleigh` from an
-`EngineRecipe` (`crates/unlace-decomp/src/infra/kuna_decodekit.rs`) over
+`EngineRecipe` (`crates/unlace-middle/src/infra/kuna_decodekit.rs`) over
 the shared bytes, with the parent's context values copied in by value
 (`crates/unlace-sleigh/src/kuna_ctxsnapshot.rs`) and `allow_context_set`
 off. Before anything is spawned, one such engine re-decodes 1,024 sampled seeds

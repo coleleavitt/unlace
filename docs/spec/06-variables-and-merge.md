@@ -3,6 +3,7 @@
 ```yaml
 Anchors:
   - crates/unlace-decomp/src/p6_variables
+  - crates/unlace-middle/src/p6_variables
 ```
 
 This phase turns SSA values into *human variables*: it decides which Varnodes
@@ -37,7 +38,7 @@ default-divergences are DIV-3/14 in `docs/history.md`.
 
 ## 6.1 HighVariables & Cover
 
-**The artifact.** A `crates/unlace-decomp/src/p6_variables/variable.rs
+**The artifact.** A `crates/unlace-middle/src/p6_variables/variable.rs
 (HighVariable)` is an ordered list of member Varnodes that will render as one
 named variable. Its derived state — boolean properties, data-type, name
 representative, cover — is *lazily* recomputed under dirty bits
@@ -115,7 +116,7 @@ dynamic dataflow anchor instead of accepting an ambiguous storage mapping.
 
 **Cover.** A variable can only absorb another if their live ranges do not
 collide, and the live range is the
-`crates/unlace-decomp/src/p6_variables/cover.rs (Cover)`: per basic
+`crates/unlace-middle/src/p6_variables/cover.rs (Cover)`: per basic
 block, one interval from a start point to a stop point in the block's op order
 (sentinels for block-begin/block-end/function-input). Interval comparison
 returns a three-level verdict — 0 no overlap, 1 boundary-touch only, 2 real
@@ -131,7 +132,7 @@ and output Varnodes, and their owning HighVariables, must be marked dirty.
 The next merge comparison rebuilds those ranges using the new positions.
 The renumbering walks the block once and marks each Varnode as it meets it,
 skipping one already marked that has no HighVariable, since marking it again
-changes nothing (`crates/unlace-decomp/src/substrate/funcdata.rs
+changes nothing (`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::bb_set_order_within)`). Heritage inserts one INDIRECT per guarded
 range in front of every call, which renumbers a large block about once every
 dozen insertions at each call; collecting the block's Varnodes into a set at
@@ -140,7 +141,7 @@ every renumbering spent 47 s of `tests/hang-repro/escaped_locals`' 95 s
 
 A Cover is keyed by block index; its walk over the CFG resolves an index to its
 block through a table built once per walk, the first block in list order with
-that index (`crates/unlace-decomp/src/substrate/funcdata.rs
+that index (`crates/unlace-middle/src/substrate/funcdata.rs
 (FuncdataCoverCtx::block_id_of_index)`), rather than by rescanning the block list
 at every step, which made each Cover quadratic in the function's blocks.
 
@@ -219,7 +220,7 @@ Refreshing the positions preserves the boundary exclusion and the actual PHI
 dataflow. Calls genuinely inside the range still veto the merge.
 
 **What makes two Varnodes mergeable.** The gate is a three-rung test ladder in
-`crates/unlace-decomp/src/p6_variables/merge.rs`, and the rung used
+`crates/unlace-middle/src/p6_variables/merge.rs`, and the rung used
 determines how aggressive the merge may be:
 
 - `merge.rs (Merge::merge_test_basic)` — can this Varnode ever be part of a
@@ -292,13 +293,13 @@ secondary test:
 - Blocks where the two covers overlap at level 2 are re-examined per instance
   pair, and an overlap is *forgiven* when the two Varnodes are copy shadows —
   provably the same value (`merge.rs (MergeIntersect::test_block_intersection)`,
-  through `crates/unlace-decomp/src/substrate/funcdata_merge.rs
+  through `crates/unlace-middle/src/substrate/funcdata_merge.rs
   (MergeContext for Funcdata)` to `Varnode::copy_shadow`); overlap-group pieces
   are tested at their relative offsets with partial shadows. A partial shadow
   between two constants compares the smaller one with the larger one truncated
   by the relative byte offset; a constant wider than 8 bytes holds zero above
   bit 63, so a truncation of 8 or more bytes compares against 0
-  (`crates/unlace-decomp/src/substrate/funcdata.rs
+  (`crates/unlace-middle/src/substrate/funcdata.rs
   (Funcdata::find_subpiece_shadow)`).
 - If the covers are disjoint but exactly one high is address-tied, the
   *untied-call* test runs (`merge.rs
@@ -338,7 +339,7 @@ forbids a forced merge, the machinery edits the data flow until it doesn't:
    block for an input Varnode, otherwise directly after the defining op — with
    one carve-out: a value defined by an INDIRECT gets its COPY after the op
    *causing* the effect (the call or store iop-encoded in the INDIRECT's
-   input 1; `crates/unlace-decomp/src/substrate/funcdata.rs
+   input 1; `crates/unlace-middle/src/substrate/funcdata.rs
    (Funcdata::do_snip_reads_insert_point)`), never at the INDIRECT marker
    itself, which sits *before* that op in block order. Without the carve-out
    an out-parameter's post-call copy lands textually above the call that
@@ -417,7 +418,7 @@ instead of one per predecessor.
 
 *(kuna perf)* A merge pass edits ops but never blocks, so while one runs
 every Cover walk shares a single block-index table built on first use
-(`crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::cover_blocks)`,
+(`crates/unlace-middle/src/substrate/funcdata.rs (Funcdata::cover_blocks)`,
 set and dropped by `funcdata_merge.rs (Funcdata::with_covermerge)`) instead of
 each walk rebuilding it from the block list. The intersection tests read the
 highs' and members' covers in place instead of copying them
@@ -504,7 +505,7 @@ decides per Varnode via `coreaction_cleanup.rs (base_explicit)`: explicit
 (but see `foldcallret`, §6.4), belongs to a multi-instance high, is
 address-tied or mapped or a proto-partial, has no or too many readers —
 more than `max_implied_ref` descendants, which ships at 2
-(`crates/unlace-decomp/src/infra/architecture.rs
+(`crates/unlace-middle/src/infra/architecture.rs
 (reset_defaults_internal)`; a PTRSUB off the spacebase lifts the cap to
 1000000 so stack addresses always fold). A multi-reader implied candidate is
 then re-examined for *term duplication*
@@ -907,7 +908,7 @@ distinct highs, such as a list element held across an inner loop and the loop's
 current element when both are passed to one `consume(Node *object)`, both
 become `object`. The walk now carries the set of names it has already bound to
 HighVariables, and a callee's parameter name is made unique against that set as
-well as the scope (`crates/unlace-decomp/src/p6_variables/varmap.rs
+well as the scope (`crates/unlace-middle/src/p6_variables/varmap.rs
 (ScopeLocal::make_local_name_unique_among)`), continuing the same `_00`, `_01`,
 ... sequence. Two highs that denote one object are unaffected: they share a
 name through their shared Symbol, never through a recommendation.
@@ -1099,7 +1100,7 @@ looking at the scope, so after `name v3 v1` the untouched local that came first
 in location order also became `v1`, and the printer's collision suffix then
 turned one of the two -- often the caller's -- into `v1_1`: the requested name
 landed on a variable nobody named. Every default now comes from
-`crates/unlace-decomp/src/p6_variables/varmap.rs
+`crates/unlace-middle/src/p6_variables/varmap.rs
 (ScopeLocal::next_default_name)`, which advances `base` past any name a
 name-locked Symbol of the local scope already holds. A default index is still
 consumed per local, so a function with no such Symbol numbers its locals exactly
@@ -1428,7 +1429,7 @@ have its address taken or later hold another value, and an excluded slot loses
 both its declaration and its stores. The cost is that a function which
 also pushes such a register to save it, and whose frame escapes, can keep the
 push slot as a dead local assignment of the parameter. The same
-mechanism (`crates/unlace-decomp/src/p6_variables/varmap.rs
+mechanism (`crates/unlace-middle/src/p6_variables/varmap.rs
 (ScopeLocal::mark_not_mapped)`) later excludes an unaliased return-value
 staging slot (`funcdata_spacebase.rs (Funcdata::check_unaliased_return)`).
 
@@ -2644,7 +2645,7 @@ queued outgoing parameters would always sit "after" the locals). On every
 pass but the first (`ActionRestructureVarnode`'s `aliasyes = numpass != 0` —
 first-pass aliases are unreliable because the pointer forms haven't
 simplified yet), the sorted alias list drives
-`crates/unlace-decomp/src/p0_knowledge/database.rs
+`crates/unlace-middle/src/p0_knowledge/database.rs
 (Database::mark_unaliased)`: every stack Symbol *not* crossed by an alias
 (walked in lock-step with the mapped ranges; symbols are visited by increasing
 end offset because overlapping entries can appear in a different record-list
@@ -2713,7 +2714,7 @@ category-less symbol at the pass head — so its *name* survives separately: C++
 harvests such symbols into `ScopeLocal::nameRecommend` records and re-applies
 them at naming time (`recoverNameRecommendationsForSymbols`, varmap.cc:1050 —
 run at the top of `ActionNameVars::apply`).  The kuna port carries the record
-type (`crates/unlace-decomp/src/p6_variables/varmap.rs
+type (`crates/unlace-middle/src/p6_variables/varmap.rs
 (NameRecommend)`) with a list on the scope
 (`ScopeLocal::add_recommend_name`/`ScopeLocal::name_recommendations`) and
 applies it in the `ActionNameVars` port
@@ -2723,7 +2724,7 @@ storage + size wins the recommended name — the use-address selects the arm
 (invalid = address-tied whole, `entry-1` = a function input, else the defining
 write's address) — before both the container bind and the `vN` allocator.
 The address-tied arm is upstream's at the Symbol level too
-(`crates/unlace-decomp/src/p6_variables/varmap.rs
+(`crates/unlace-middle/src/p6_variables/varmap.rs
 (ScopeLocal::recover_addrtied_name_recommendations)`, run at the head of the
 naming pass): the address-tied Symbol whose entry starts at the recorded
 address is renamed whatever its size, and the per-high arm then defers to it.
@@ -2734,7 +2735,7 @@ A variable whose storage is a HASH rather than an address needs the parallel
 list: C++ keeps `dynRecommend` and re-applies it through
 `DynamicHash::findVarnode` (varmap.cc:1557-1573).  kuna ports that too
 (`ScopeLocal::add_recommend_dynamic` /
-`crates/unlace-decomp/src/substrate/funcdata.rs
+`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::kuna_apply_dynamic_recommendations)`): the recorded hash resolves
 back to its Varnode, and when that Varnode's high is still unnamed it takes the
 recommended name AND a dynamic Symbol carrying the same hash — so the
@@ -2774,10 +2775,10 @@ entry.
 
 **The scope wire encode.** The whole local scope marshals out for the
 ghidra-mode `decompileAt` response as the `<localdb>` element
-(`crates/unlace-decomp/src/p6_variables/varmap.rs
+(`crates/unlace-middle/src/p6_variables/varmap.rs
 (ScopeLocal::encode)`, the varmap.cc:462 port): the `main=` stack space and
 `lock=` attributes, then the `<scope>` document
-(`crates/unlace-decomp/src/p0_knowledge/database.rs
+(`crates/unlace-middle/src/p0_knowledge/database.rs
 (Database::encode_scope)`) — the positional `<parent>` + `<rangelist>` pair
 (Java's `LocalSymbolMap.decodeScope` skips its first two scope children
 blind, so both are always written; the parentless private database writes its
@@ -2801,7 +2802,7 @@ decompiler-internal temporary or a constant has no storage that survives
 re-decompilation, so an assertion attached to it ("this constant is an
 equate", "this union access uses field X") needs a different identity. The
 identity is a 64-bit hash of the value's *local data-flow neighborhood*
-(`crates/unlace-decomp/src/p6_variables/dynamic.rs (DynamicHash)`):
+(`crates/unlace-middle/src/p6_variables/dynamic.rs (DynamicHash)`):
 starting from the root Varnode, grow the sub-graph one edge layer at a time
 (four methods of increasing reach for Varnodes, methods 0–3; three for op/slot
 roots, methods 4–6), fold every edge through CRC32 in a deterministic order,
@@ -2820,7 +2821,7 @@ method reaches uniqueness, the champion list's *position* and *total* are
 packed into dedicated bit fields of the hash (bits 49–51 and 52–54), making
 "the 3rd of 5 identical values at this address" a stable identity. When even
 that fails — every method's list overflows the budget — the hash is 0 and the
-consumer errors: `crates/unlace-decomp/src/substrate/funcdata.rs
+consumer errors: `crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::build_dynamic_symbol)` aborts the request with "Unable to find
 unique hash for varnode".
 
@@ -2858,7 +2859,7 @@ still sees the binding and keeps the dynamic temporary a distinct variable.
 ## 6.4 kuna extensions
 
 Shipped defaults below are the `phases.toml` settable rows (mirrored into
-`crates/unlace-decomp/src/infra/architecture.rs
+`crates/unlace-middle/src/infra/architecture.rs
 (reset_defaults_internal)`); module doc-comments in this folder predate the
 default flips and may state stale defaults — `phases.toml` is the source of
 truth.
@@ -3183,7 +3184,7 @@ on). When parameter recovery widens an unjustified input container
 (ActionUnjustifiedParams)`), upstream only absorbs earlier inputs that
 overlap the container's *low* end; an input overlapping the *high* end (mc68k
 `link`/`unlk` overlapping stack params) survives to
-`crates/unlace-decomp/src/substrate/funcdata_varnode.rs
+`crates/unlace-middle/src/substrate/funcdata_varnode.rs
 (Funcdata::adjust_input_varnodes)`, which refuses with "Cannot properly
 adjust input varnodes" (upstream that throw kills the whole function; kuna's
 driver skips the adjustment and leaves the overlapping inputs unrecombined).
@@ -3425,7 +3426,7 @@ the one-shot tail runs in tree order (`crates/unlace-decomp/src/infra/universala
 (universal_sched)`): the final symbol sync (`ActionMappedLocalSync`, §6.2),
 then `crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs
 (ActionStartCleanUp)` — which snapshots the Varnode creation index
-(`crates/unlace-decomp/src/substrate/funcdata.rs
+(`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::start_clean_up)`) so later passes can tell cleanup-born values from
 analyzed ones — then the 22-rule `cleanup` pool (a repeat-pool: it still runs
 to its own local fixpoint, just outside the analysis loop), then structuring
@@ -3451,7 +3452,7 @@ sequences the rule pools deliberately kept elementwise.
 action is `rule_onceperfunc` — it commits, it does not iterate. Three facts
 force the placement: (1) HighVariables do not exist until `ActionAssignHigh`
 turns them on, and downstream surfaces hard-refuse earlier
-(`crates/unlace-decomp/src/substrate/funcdata.rs
+(`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::build_dynamic_symbol)` errors "Cannot create dynamic symbols until
 decompile has completed"); (2) a Cover is only meaningful over a stable CFG
 and stable SSA — any further heritage pass or block edit would silently

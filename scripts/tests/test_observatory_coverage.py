@@ -25,8 +25,8 @@ class RollupTests(unittest.TestCase):
         data = coverage.rollup(
             summary(
                 [
-                    entry("/repo/crates/unlace-decomp/src/p3_dataflow/heritage.rs", 100, 80),
-                    entry("/repo/crates/unlace-decomp/src/substrate/op.rs", 50, 10),
+                    entry("/repo/crates/unlace-middle/src/p3_dataflow/heritage.rs", 100, 80),
+                    entry("/repo/crates/unlace-middle/src/substrate/op.rs", 50, 10),
                     entry("/repo/crates/unlace-decomp/src/lib.rs", 10, 10),
                     entry("/repo/crates/unlace-cli/src/main.rs", 40, 20),
                     entry("/elsewhere/external.rs", 999, 999),

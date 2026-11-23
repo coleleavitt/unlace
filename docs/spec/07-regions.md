@@ -358,7 +358,7 @@ the binary executes (`REMOVES CODE` in its catalog row, `destructive = true`)
 contract of the toggleable-transform tier (flip guidance: the catalog row).
 Default **on** since DIV-14 (`docs/history.md`; live flag
 `strip_stack_guard` set in
-`crates/unlace-decomp/src/infra/architecture.rs
+`crates/unlace-middle/src/infra/architecture.rs
 (reset_defaults_internal)` and carried to the per-function ArchContext); the
 one affected datatest file (`tests/datatests/partialsplit.xml`, whose Partial
 splitting #1/#2 would change) opts out with a single `option stackguard off`
@@ -444,7 +444,7 @@ as *returning* panic blocks the P7 guard correctly declines to remove.
 instructions the binary executes (`REMOVES CODE`, `destructive = true`).
 Default **on** since DIV-82 (`docs/history.md`; live flag
 `strip_security_check` set in
-`crates/unlace-decomp/src/infra/architecture.rs
+`crates/unlace-middle/src/infra/architecture.rs
 (reset_defaults_internal)` and carried to the per-function ArchContext).
 Because the trigger is a Rust-only name it changes nothing on the C corpus:
 0/675 datatest assertions and zero differing `code` fields over the whole-binary
@@ -620,7 +620,7 @@ made every read explicit, so this action sits in the fullloop tail beside the
 other edge strippers and uses the same `remove_branch` +
 `remove_unreachable_blocks` pair.
 
-The matcher (`crates/unlace-decomp/src/substrate/idiom.rs
+The matcher (`crates/unlace-middle/src/substrate/idiom.rs
 (match_guarded_cold_call_phi)`) refuses unless ALL of: every predecessor of
 the arm is a CBRANCH-terminated guard whose condition derives from a global
 flag (a `ram`-storage read or a LOAD through a constant pointer — the

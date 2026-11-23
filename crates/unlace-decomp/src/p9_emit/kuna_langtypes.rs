@@ -29,6 +29,7 @@
 //! [`Datatype`]: crate::dtype::Datatype
 //! [`Datatype::hash_name`]: crate::dtype::Datatype
 
+use crate::kuna_lang::OutLangExt;
 use std::borrow::Cow;
 use std::rc::Rc;
 

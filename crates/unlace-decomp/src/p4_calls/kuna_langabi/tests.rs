@@ -1,6 +1,7 @@
 //! Tests for the ABI seam.
 
 use crate::kuna_lang::OutLang;
+use crate::kuna_lang::OutLangExt;
 
 /// The rule that makes this seam load-bearing rather than decorative: rustc
 /// rejects a C-variadic on anything but an `unsafe extern "C" fn`.

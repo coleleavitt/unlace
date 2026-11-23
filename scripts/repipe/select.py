@@ -50,8 +50,8 @@ TRACK_RESOURCES = {
 # identical `85 -> 86` edit on two branches merges CLEANLY to the wrong number.
 PATH_RESOURCES = [
     ("crates/unlace-decomp/phases.toml", "file:phases.toml"),
-    ("crates/unlace-decomp/src/p0_knowledge/options.rs", "counter:catalog"),
-    ("crates/unlace-decomp/src/p0_knowledge/kuna_phases", "counter:catalog"),
+    ("crates/unlace-middle/src/p0_knowledge/options.rs", "counter:catalog"),
+    ("crates/unlace-middle/src/p0_knowledge/kuna_phases", "counter:catalog"),
     ("crates/unlace-decomp/tests/catalog_bytecompat.rs", "counter:catalog"),
     ("crates/unlace-base/src/xml.rs", "counter:stages-corpus"),
     ("docs/options.md", "file:docs/options.md"),

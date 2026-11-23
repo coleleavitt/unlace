@@ -24,7 +24,8 @@ use unlace_base::types::int4;
 
 /// The LOAD guard reads of one heritage pass.
 #[derive(Debug, Default)]
-pub(crate) struct Reads {
+#[doc(hidden)]
+pub struct Reads {
     ranges: Vec<(Address, int4)>,
     by_op: FxHashMap<OpId, Vec<(u32, u32)>>,
     pairs: u32,
@@ -36,50 +37,58 @@ pub(crate) struct Reads {
 }
 
 /// A guard read a later read of the range sees on top of the stack.
-pub(crate) struct Behind {
-    pub(crate) pair: u32,
-    pub(crate) range: u32,
-    pub(crate) load: OpId,
+#[doc(hidden)]
+pub struct Behind {
+    pub pair: u32,
+    pub range: u32,
+    pub load: OpId,
 }
 
 impl Reads {
     /// Record the range `addr`/`size` and return its index for [`Reads::guard`].
-    pub(crate) fn add_range(&mut self, addr: &Address, size: int4) -> u32 {
+    #[doc(hidden)]
+    pub fn add_range(&mut self, addr: &Address, size: int4) -> u32 {
         self.ranges.push((addr.clone(), size));
         (self.ranges.len() - 1) as u32
     }
 
     /// The LOAD `op` reads range `range` just before it executes. Pairs are
     /// numbered in the order upstream builds their COPYs.
-    pub(crate) fn guard(&mut self, op: OpId, range: u32) {
+    #[doc(hidden)]
+    pub fn guard(&mut self, op: OpId, range: u32) {
         self.by_op.entry(op).or_default().push((range, self.pairs));
         self.pairs += 1;
     }
 
     /// Did this pass guard any LOAD?
-    pub(crate) fn active(&self) -> bool {
+    #[doc(hidden)]
+    pub fn active(&self) -> bool {
         self.pairs > 0
     }
 
     /// Is a guarded LOAD still to be renamed?
-    pub(crate) fn has_guards(&self) -> bool {
+    #[doc(hidden)]
+    pub fn has_guards(&self) -> bool {
         !self.by_op.is_empty()
     }
 
     /// The ranges the LOAD `op` reads and their pair numbers, in the order
     /// they were guarded.
-    pub(crate) fn take(&mut self, op: OpId) -> Option<Vec<(u32, u32)>> {
+    #[doc(hidden)]
+    pub fn take(&mut self, op: OpId) -> Option<Vec<(u32, u32)>> {
         self.by_op.remove(&op)
     }
 
-    pub(crate) fn range(&self, index: u32) -> &(Address, int4) {
+    #[doc(hidden)]
+    pub fn range(&self, index: u32) -> &(Address, int4) {
         &self.ranges[index as usize]
     }
 
     /// Renaming linked the read of range `range` at the LOAD `op` to `vn`, the
     /// entry `depth` of its stack holds from below; reads of that entry until
     /// it is popped read upstream's COPY for `pair` instead.
-    pub(crate) fn reach(&mut self, vn: VarnodeId, op: OpId, range: u32, pair: u32, depth: usize) {
+    #[doc(hidden)]
+    pub fn reach(&mut self, vn: VarnodeId, op: OpId, range: u32, pair: u32, depth: usize) {
         if self.seen.insert(vn) {
             self.reached.push((vn, op, range));
         }
@@ -92,7 +101,8 @@ impl Reads {
     }
 
     /// The block that pushed a [`Reads::reach`] entry for `key` is done.
-    pub(crate) fn pop(&mut self, key: &Address) {
+    #[doc(hidden)]
+    pub fn pop(&mut self, key: &Address) {
         if let Some((_, entries)) = self.behind.get_mut(key) {
             entries.pop();
         }
@@ -101,7 +111,8 @@ impl Reads {
     /// Renaming links a read of `key` to the entry `depth` of its stack holds
     /// from below. The guard read upstream's COPY for it would read instead,
     /// when one stands between them.
-    pub(crate) fn behind(&self, key: &Address, depth: usize) -> Option<Behind> {
+    #[doc(hidden)]
+    pub fn behind(&self, key: &Address, depth: usize) -> Option<Behind> {
         let (range, entries) = self.behind.get(key)?;
         let &(d, pair, load) = entries
             .iter()
@@ -115,29 +126,34 @@ impl Reads {
     }
 
     /// The output of the COPY built for `pair`, if any.
-    pub(crate) fn copy(&self, pair: u32) -> Option<VarnodeId> {
+    #[doc(hidden)]
+    pub fn copy(&self, pair: u32) -> Option<VarnodeId> {
         self.copies.get(&pair).copied()
     }
 
     /// The COPY `op` writing `out` was built for `pair`.
-    pub(crate) fn built(&mut self, pair: u32, out: VarnodeId, op: OpId) {
+    #[doc(hidden)]
+    pub fn built(&mut self, pair: u32, out: VarnodeId, op: OpId) {
         self.copies.insert(pair, out);
         self.built.push((pair, op));
     }
 
-    pub(crate) fn take_reached(&mut self) -> Vec<(VarnodeId, OpId, u32)> {
+    #[doc(hidden)]
+    pub fn take_reached(&mut self) -> Vec<(VarnodeId, OpId, u32)> {
         self.seen.clear();
         std::mem::take(&mut self.reached)
     }
 
     /// The COPYs [`Reads::built`] recorded, in upstream's propagation order.
-    pub(crate) fn take_built(&mut self) -> Vec<OpId> {
+    #[doc(hidden)]
+    pub fn take_built(&mut self) -> Vec<OpId> {
         let mut built = std::mem::take(&mut self.built);
         built.sort_unstable_by_key(|&(pair, _)| pair);
         built.into_iter().map(|(_, op)| op).collect()
     }
 
-    pub(crate) fn clear(&mut self) {
+    #[doc(hidden)]
+    pub fn clear(&mut self) {
         self.ranges.clear();
         self.by_op.clear();
         self.pairs = 0;

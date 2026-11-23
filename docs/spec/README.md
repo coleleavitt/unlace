@@ -29,7 +29,7 @@ chapter is anchored to the code that implements it.
    `Anchors:` front-matter (chapters map 1:1 onto the phase folders). A pure
    move/rename updates only anchor paths. `python3 tools/check_spec.py` enforces the basics.
 2. **Live code only.** Every claim is anchored to a kuna path plus a symbol name in
-   parentheses — `crates/unlace-decomp/src/p2_lift/jumptable.rs
+   parentheses — `crates/unlace-middle/src/p2_lift/jumptable.rs
    (JumpBasic::recoverModel)`. **No line numbers** (they rot). Upstream citations
    (`coreaction.cc:5722`, angr `.py` paths) appear only as parenthetical
    provenance/history, never as the basis of a claim.

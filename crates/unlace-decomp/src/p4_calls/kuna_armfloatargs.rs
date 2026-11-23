@@ -4,11 +4,11 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
 use crate::kuna_protoorder::FuncdataProtoorderExt;
 use crate::{
+    architecture::Architecture,
     context::VarnodeId,
     dtype::{Datatype, type_class, type_metatype},
     fspec::{FuncCallSpecs, ParameterPieces, PrototypePieces},
     funcdata::Funcdata,
-    infra::architecture::Architecture,
     varnode::varnode_flags,
 };
 use unlace_base::address::Address;

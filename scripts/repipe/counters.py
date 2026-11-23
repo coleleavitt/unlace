@@ -63,7 +63,7 @@ ELEMENT_ID_BASE = int(os.environ.get("REPIPE_ELEMENT_ID_BASE", "4000"))
 CORPUS_DIRS = ("tests/datatests", "tests/stages")
 
 REL_PHASES_TOML = "crates/unlace-decomp/phases.toml"
-REL_TESTS_RS = "crates/unlace-decomp/src/p0_knowledge/kuna_phases/tests.rs"
+REL_TESTS_RS = "crates/unlace-middle/src/p0_knowledge/kuna_phases/tests.rs"
 REL_BYTECOMPAT_RS = "crates/unlace-decomp/tests/catalog_bytecompat.rs"
 REL_CATALOG_FIXTURE = "crates/unlace-decomp/tests/fixtures/phase_catalog.json"
 REL_CATALOG_XML = "tests/stages/kuna-catalog.xml"

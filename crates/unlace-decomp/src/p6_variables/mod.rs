@@ -5,8 +5,6 @@
 
 pub mod coreaction_cleanup;
 pub mod coreaction_stackptr;
-pub mod cover;
-pub mod dynamic;
 pub mod funcdata_facing;
 pub mod funcdata_spacebase;
 pub mod kuna_arrayextent;
@@ -57,9 +55,6 @@ pub(crate) mod kuna_storereach;
 pub mod kuna_tiedphitrim;
 pub mod kuna_undefinedcopy;
 pub mod kuna_undefname;
-pub mod merge;
-pub mod variable;
-pub mod varmap;
 
 pub(crate) mod kuna_wrappedstackaggregate;
 

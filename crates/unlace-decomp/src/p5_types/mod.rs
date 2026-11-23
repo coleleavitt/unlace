@@ -49,7 +49,5 @@ pub mod kuna_valuewitness; // (kuna) a Swift value witness table load through me
 pub mod kuna_varargfloat; // (kuna) a variadic argument in a floating-point register is a double
 pub mod kuna_vtabletypes; // (kuna) typed C++ vtables: a virtual call through a named slot of its class
 pub mod kuna_zextreturn; // (kuna) a return the convention zero-extends only when unsigned is unsigned
-pub mod prefersplit;
-pub mod typeop;
 pub mod unionresolve;
 pub mod unionresolve_run; // (kuna) structured values kept whole until their fields can be named

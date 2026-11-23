@@ -15,11 +15,11 @@
 //! its arguments take Apple's rule under `compiler`.
 pub use crate::fspec::Widen;
 use crate::{
+    architecture::Architecture,
     context::{OpId, VarnodeId},
     dtype::{Datatype, type_class, type_metatype},
     fspec::ParamListStandard,
     funcdata::Funcdata,
-    infra::architecture::Architecture,
     op::pcodeop_addlflags,
 };
 use unlace_base::address::{Address, calc_mask};

@@ -4,8 +4,6 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod flow;
-pub mod inject_sleigh;
-pub mod jumptable;
 pub mod kuna_arithhelpers; // (kuna) 32-bit runtime arithmetic helpers (__udivdi3, __aeabi_uldivmod, _alldiv) as C operators
 pub mod kuna_armflowcontext;
 pub mod kuna_brktrap; // (kuna) an AArch64 brk compiler trap ends the flow instead of returning through SoftwareBreakpoint
@@ -15,7 +13,6 @@ pub mod kuna_cleanupcode; // (kuna) oxidizer CleanupCodeRemover: delete rust dro
 pub mod kuna_constselectjump; // (kuna) recover a BRANCHIND whose destination is selected between constants
 pub mod kuna_cortexmpriv; // (kuna) fold the Cortex-M isCurrentModePrivileged() guard around MRS/MSR
 pub mod kuna_decodehalt; // (kuna) a halt planted where the decode failed says so instead of printing as an ordinary return
-pub mod kuna_emulatefunction;
 pub mod kuna_entryretdispatch; // (kuna) recover an entry-point push/push/ret dispatch chain as calls
 pub mod kuna_fastfailnoreturn; // (kuna) a Windows `int 0x29` (__fastfail) ends the flow instead of unbalancing the stack
 pub mod kuna_fpuemu; // (kuna) decode the 8087 emulator's INT 34h-3Dh as the x87 instructions they stand for

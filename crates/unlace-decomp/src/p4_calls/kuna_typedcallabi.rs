@@ -18,11 +18,11 @@
 //! variadic one returns under the base standard on an ARM image that states the
 //! VFP variant.
 use crate::{
+    architecture::Architecture,
     context::ArchContext,
     dtype::{TypeFactory, type_class, type_metatype},
     fspec::{FuncProto, ProtoModel, PrototypePieces},
     funcdata::Funcdata,
-    infra::architecture::Architecture,
     kuna_narrowext::Widen,
 };
 use std::rc::Rc;

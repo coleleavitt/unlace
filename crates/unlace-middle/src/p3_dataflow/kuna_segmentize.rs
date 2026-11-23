@@ -332,12 +332,14 @@ fn segment_at(defs: Option<&SegmentDefs>, i: int4) -> Option<&Rc<SegmentDef>> {
 impl crate::architecture::Architecture {
     /// (kuna `segmentize`) The live segment definition for the space with index
     /// `i`, or `None` when the space has none.
-    pub(crate) fn segment_def(&self, i: int4) -> Option<&Rc<SegmentDef>> {
+    #[doc(hidden)]
+    pub fn segment_def(&self, i: int4) -> Option<&Rc<SegmentDef>> {
         segment_at(self.kuna_states.get::<SegmentDefs>(), i)
     }
 
     /// (kuna `segmentize`) Does any address space have a segment definition?
-    pub(crate) fn has_segment_defs(&self) -> bool {
+    #[doc(hidden)]
+    pub fn has_segment_defs(&self) -> bool {
         self.kuna_states
             .get::<SegmentDefs>()
             .is_some_and(|defs| defs.0.iter().any(Option::is_some))

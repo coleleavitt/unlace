@@ -33,9 +33,11 @@ MODULE_BAND = {
     "modelrules": "middle", "kuna_aggregateabi": "middle", "prefersplit": "middle",
     "engine_translate": "middle", "inject_sleigh": "middle", "kuna_emulatefunction": "middle",
     "kuna_decodekit": "middle", "remote_provider": "middle", "stringmanage": "middle",
-    "kuna_calloverlap": "middle", "kuna_loadguardreads": "middle", "kuna_revisitrefine": "middle",
+    "kuna_calloverlap": "middle", "kuna_loadguardreads": "middle", "kuna_revisitrefine": "middle", "kuna_segmentize": "middle",
 }
 SRC = "crates/unlace-decomp/src"
+# The middle band's own crate (crate-split step 9): same folder layout, scanned with SRC as one tree.
+MIDDLE_SRC = "crates/unlace-middle/src"
 ALLOWLIST = "scripts/layers-allowlist.txt"
 TOKEN = re.compile(r"\w+|::|\S")
 WORD = re.compile(r"\w+")
@@ -202,15 +204,16 @@ def band(node: str, modules: dict[str, str]) -> int:
 
 
 def upward_edges(root: Path) -> set[tuple[str, str]]:
-    src = root / SRC
-    files = [p for p in sorted(src.glob("*/**/*.rs")) if not is_test_file(p.relative_to(src))]
+    roots = [root / SRC] + ([root / MIDDLE_SRC] if (root / MIDDLE_SRC).is_dir() else [])
+    files = [(src, p) for src in roots for p in sorted(src.glob("*/**/*.rs"))
+             if not is_test_file(p.relative_to(src))]
     modules = {}
-    for p in files:
+    for src, p in files:
         folder, top = p.relative_to(src).parts[:2]
         if top != "mod.rs":
             modules[top.removesuffix(".rs")] = folder
     edges = set()
-    for p in files:
+    for src, p in files:
         rel = p.relative_to(src)
         node = rel.parts[0] if rel.parts[1] == "mod.rs" else rel.parts[1].removesuffix(".rs")
         text = strip_literals(p.read_text())

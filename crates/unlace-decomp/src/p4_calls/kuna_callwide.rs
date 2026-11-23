@@ -1,5 +1,6 @@
 //! Retain a big-endian register-pair return established by complete caller evidence.
 
+use crate::kuna_lang::OutLangExt;
 use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::rc::Rc;

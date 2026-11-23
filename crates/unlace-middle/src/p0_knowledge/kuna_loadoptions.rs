@@ -567,7 +567,10 @@ mod tests {
             crate::kuna_libctypes::libctypes_layout(),
             LibcTypesLayout::Glibc
         );
-        assert!(!crate::kuna_calltargettype::dwarf_function_types());
+        assert!(
+            !crate::kuna_loadoptions::scoped(|o| o.calltargettype)
+                .unwrap_or_else(crate::kuna_loadoptions::env::calltargettype)
+        );
         assert!(!crate::kuna_macho_arm64e::macho_arm64e_enabled());
         assert_eq!(crate::kuna_sourcelang::forced(), Some(SourceLang::Rust));
         assert!(crate::kuna_ppc32picimports::abi_enabled());

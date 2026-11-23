@@ -57,16 +57,15 @@ const XMM: [&[u8]; 8] = [
     b"XMM0", b"XMM1", b"XMM2", b"XMM3", b"XMM4", b"XMM5", b"XMM6", b"XMM7",
 ];
 
-impl Regs {
-    fn named(&self, name: &[u8]) -> Option<Key> {
-        key_of(
-            self.caller_saved
-                .iter()
-                .find(|(n, _)| n.as_slice() == name)?
-                .1
-                .as_ref()?,
-        )
-    }
+/// The key of the caller-saved register `name` in `regs`.
+fn named(regs: &Regs, name: &[u8]) -> Option<Key> {
+    key_of(
+        regs.caller_saved
+            .iter()
+            .find(|(n, _)| n.as_slice() == name)?
+            .1
+            .as_ref()?,
+    )
 }
 
 pub fn regs(arch: &crate::architecture::Architecture) -> Option<Regs> {
@@ -366,7 +365,7 @@ fn save_address_escapes(
 ) -> bool {
     let caller_saved: Vec<Key> = CALLER_SAVED
         .iter()
-        .filter_map(|n| data.get_arch().vararg_regs.as_ref()?.named(n))
+        .filter_map(|n| named(data.get_arch().vararg_regs.as_ref()?, n))
         .collect();
     let mut defs = seed.clone();
     let mut holders: std::collections::HashSet<Key> = std::collections::HashSet::new();

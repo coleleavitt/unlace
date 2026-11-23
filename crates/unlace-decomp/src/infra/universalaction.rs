@@ -101,7 +101,7 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p2_lift::kuna_highslice_guard::provide(&mut slots);
     crate::p4_calls::kuna_joincalloutput::provide(&mut slots);
     crate::p3_dataflow::kuna_octeoneffects::provide(&mut slots);
-    crate::p3_dataflow::kuna_segmentize::provide(&mut slots);
+    crate::kuna_segmentize::provide(&mut slots);
     crate::p2_lift::kuna_switchextent::provide(&mut slots);
     crate::p2_lift::kuna_switchtrim::provide(&mut slots);
     crate::p4_calls::kuna_varargtransfer::provide(&mut slots);
@@ -111,6 +111,7 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p6_variables::kuna_loadorder::provide(&mut slots);
     crate::p6_variables::kuna_pointeevalue::provide(&mut slots);
     crate::p6_variables::kuna_tiedphitrim::provide(&mut slots);
+    crate::p0_knowledge::kuna_option_dispatch::provide(&mut slots);
     crate::p6_variables::kuna_stackvalueorder::provide(&mut slots);
     crate::p6_variables::kuna_isolated::provide(&mut slots);
     crate::p6_variables::kuna_stablenames::provide(&mut slots);
@@ -132,12 +133,12 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p4_calls::kuna_inputstorage::provide(&mut slots);
     crate::p4_calls::kuna_narrowext::provide(&mut slots);
     crate::p6_variables::kuna_nulterminator::provide(&mut slots);
-    crate::p3_dataflow::kuna_revisitrefine::provide(&mut slots);
+    crate::kuna_revisitrefine::provide(&mut slots);
     crate::p4_calls::kuna_stackaddrargtrial::provide(&mut slots);
     crate::p4_calls::kuna_stackarggap::provide(&mut slots);
     crate::p4_calls::kuna_swifterror::provide(&mut slots);
     crate::p4_calls::kuna_varargstackargs::provide(&mut slots);
-    crate::p3_dataflow::kuna_calloverlap::provide(&mut slots);
+    crate::kuna_calloverlap::provide(&mut slots);
     crate::p3_dataflow::kuna_partialglobalload::provide(&mut slots);
     crate::p3_dataflow::kuna_persistcalls::provide(&mut slots);
     crate::p3_dataflow::kuna_prunedssa::provide(&mut slots);

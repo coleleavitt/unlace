@@ -14,9 +14,15 @@ macro_rules! kuna_options {
     ($this:ident, $value:ident; $($name:literal => $apply:expr_2021),* $(,)?) => {
         pub const KUNA_OPTION_NAMES: &[&str] = &[$($name),*];
 
-        impl Architecture {
+        /// The driver's option dispatch on [`Architecture`]; middle code reaches it through
+        /// `Architecture::set_kuna_option` and the `set_kuna_option` pass hook.
+        pub(crate) trait KunaOptionDispatch {
+            fn dispatch_kuna_option(&mut self, name: &str, value: &str) -> KunaResult<String>;
+        }
+
+        impl KunaOptionDispatch for Architecture {
             /// Validate and apply a named kuna option to its live configuration.
-            pub fn set_kuna_option(&mut $this, name: &str, $value: &str) -> KunaResult<String> {
+            fn dispatch_kuna_option(&mut $this, name: &str, $value: &str) -> KunaResult<String> {
                 macro_rules! on_off {
                     ($field:ident, $label:literal) => {{
                         let val = on_or_off($value)?;
@@ -39,6 +45,16 @@ macro_rules! kuna_options {
             }
         }
     };
+}
+
+/// The `set_kuna_option` pass hook: the dispatch below.
+fn set_kuna_option(arch: &mut Architecture, name: &str, value: &str) -> KunaResult<String> {
+    arch.dispatch_kuna_option(name, value)
+}
+
+/// Fill this module's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.set_kuna_option = Some(set_kuna_option);
 }
 
 kuna_options! { self, p1;
@@ -245,7 +261,7 @@ kuna_options! { self, p1;
     "mixedtailret" => registered!(crate::kuna_mixedtailret::MixedTailRet),
     "cachereturn" => registered!(crate::kuna_cachereturn::CacheReturn),
     "varargsharedfloat" => registered!(crate::kuna_varargsharedfloat::VarargSharedFloat),
-    "calloverlap" => registered!(crate::p3_dataflow::kuna_calloverlap::CallOverlap),
+    "calloverlap" => registered!(crate::kuna_calloverlap::CallOverlap),
     "spillargtrial" => registered!(crate::kuna_spillargtrial::SpillArgTrial),
     "indexaliasguard" => registered!(crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard),
     "callarrayextent" => registered!(crate::kuna_callarrayextent::CallArrayExtent),

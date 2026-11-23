@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::kuna_lang::OutLang;
+use crate::kuna_lang::OutLangExt;
 use crate::printc::tokens;
 
 #[test]

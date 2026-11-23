@@ -201,7 +201,8 @@ pub struct GlobalQuery {
 /// the two cases distinct so a plain `code`, integer, or pointer-to-data symbol
 /// cannot borrow unrelated address-keyed function pieces.
 #[derive(Debug, Clone)]
-pub(crate) enum IndirectSlotType {
+#[doc(hidden)]
+pub enum IndirectSlotType {
     /// An exact function-symbol entry with a code type.  `ActionDefaultParams`
     /// may consult the prototype pieces parked at this same address.
     FunctionCode,
@@ -338,7 +339,8 @@ impl GlobalQuery {
     /// the ghidra-mode [`RemoteScope`](crate::remote_provider::RemoteScope)
     /// rebuilds its merged snapshot from the base Database snapshot's entries
     /// plus its decoded ones).
-    pub(crate) fn entries_cloned(&self) -> Vec<GlobalEntry> {
+    #[doc(hidden)]
+    pub fn entries_cloned(&self) -> Vec<GlobalEntry> {
         self.entries.clone()
     }
 
@@ -1603,7 +1605,8 @@ impl ArchContext {
 
     /// Memory-range properties without a covering symbol's inherited flags.
     #[inline]
-    pub(crate) fn query_global_range_properties(&self, addr: &Address) -> uint4 {
+    #[doc(hidden)]
+    pub fn query_global_range_properties(&self, addr: &Address) -> uint4 {
         self.effective_global_query(addr)
             .map_or(0, |gq| gq.get_property(addr))
     }
@@ -1650,7 +1653,8 @@ impl ArchContext {
 
     /// The first offset and size of the smallest global Symbol whose storage
     /// holds `addr`, if any.
-    pub(crate) fn global_symbol_extent(&self, addr: &Address) -> Option<(u64, int4)> {
+    #[doc(hidden)]
+    pub fn global_symbol_extent(&self, addr: &Address) -> Option<(u64, int4)> {
         self.effective_global_query(addr).and_then(|gq| {
             gq.find_container_entry(addr, 1, &Address::default())
                 .map(|e| (e.first, e.size))
@@ -1659,7 +1663,8 @@ impl ArchContext {
 
     /// The first offset, size and name of the smallest global data Symbol
     /// whose storage holds `addr`, if any.
-    pub(crate) fn global_data_symbol_at(&self, addr: &Address) -> Option<(u64, int4, String)> {
+    #[doc(hidden)]
+    pub fn global_data_symbol_at(&self, addr: &Address) -> Option<(u64, int4, String)> {
         let gq = self.effective_global_query(addr)?;
         let e = gq.find_container_entry(addr, 1, &Address::default())?;
         (!e.is_function).then(|| (e.first, e.size, e.symbol_name.clone()))
@@ -1864,7 +1869,8 @@ impl ArchContext {
 
     /// Return the callable type attached to the exact global slot loaded as an
     /// indirect-call target.  See [`GlobalQuery::indirect_slot_type`].
-    pub(crate) fn query_indirect_slot_type(
+    #[doc(hidden)]
+    pub fn query_indirect_slot_type(
         &self,
         addr: &Address,
         size: int4,

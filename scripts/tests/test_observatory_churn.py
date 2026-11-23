@@ -10,9 +10,9 @@ def commit(date, author="Ada", agent=False, files=()):
 
 class ClassifyTests(unittest.TestCase):
     def test_buckets(self):
-        tags = churn._classify("crates/unlace-decomp/src/p3_dataflow/heritage.rs")
+        tags = churn._classify("crates/unlace-middle/src/p3_dataflow/heritage.rs")
         self.assertEqual(tags, {"area": "crates", "crate": "unlace-decomp", "phase": "P3"})
-        tags = churn._classify("crates/unlace-decomp/src/substrate/op.rs")
+        tags = churn._classify("crates/unlace-middle/src/substrate/op.rs")
         self.assertEqual(tags["phase"], "substrate")
         self.assertEqual(churn._classify("docs/spec/05-types.md")["crate"], None)
         self.assertIsNone(churn._classify("specs/Ghidra/Processors/x86/foo.sinc"))

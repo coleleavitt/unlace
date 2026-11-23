@@ -21,11 +21,11 @@
 //! being guarded is the whole `xmm` register or a lane of it.
 pub use crate::architecture::VarargFloats;
 use crate::{
+    architecture::Architecture,
     context::OpId,
     dtype::{type_class, type_metatype},
     fspec::{FuncCallSpecs, ParameterPieces, PrototypePieces},
     funcdata::Funcdata,
-    infra::architecture::Architecture,
 };
 use std::rc::Rc;
 use unlace_base::address::Address;

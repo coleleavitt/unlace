@@ -121,7 +121,8 @@ impl OptionCallOverlap {
 }
 
 /// Whether a call has one low-word scalar ABI slot inside this physical register.
-pub(crate) fn auto_register(
+#[doc(hidden)]
+pub fn auto_register(
     manager: &unlace_base::space::AddrSpaceManager,
     proto: &crate::fspec::FuncProto,
     addr: &unlace_base::address::Address,

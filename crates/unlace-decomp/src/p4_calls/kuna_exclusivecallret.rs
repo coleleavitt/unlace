@@ -46,7 +46,7 @@ pub(crate) fn applies(data: &Funcdata, opmatch: OpId, trial: &crate::fspec::Para
         return false;
     };
     let wide = addr - if space.is_big_endian() { 4 } else { 0 };
-    crate::p3_dataflow::kuna_calloverlap::auto_register(
+    crate::kuna_calloverlap::auto_register(
         data.get_arch().manage(),
         data.get_func_proto(),
         &wide,

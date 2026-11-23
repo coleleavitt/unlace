@@ -266,6 +266,21 @@ prelude), item 6 (#150, `pub(crate)` -> `#[doc(hidden)] pub` in middle files exc
   `MemoryOps::{clear,collect}` (`kuna_persistcalls`) and `LiveCalls::needs` (`kuna_prunedssa`), all called by
   `heritage`; `OutLang::{profile,abi,speller}` (`kuna_lang`), called by `Architecture::build_arch_handle`.
 
+**9a landed (unlace-middle):** `crates/unlace-middle` holds the 108 middle-band modules (plus
+`kuna_segmentize`, which had no upward dependency and is read by `Architecture`/`ArchContext`), moved with
+`git mv` in the same folder layout; unlace-decomp re-exports it (`#[doc(hidden)] pub use unlace_middle::*;`), so
+`crate::<module>` paths and every outside caller are unchanged. In the same PR: `build.rs`/`build/registry.rs`
+moved to middle (they read `../unlace-decomp/phases.toml`, which keeps its path; the build-script test is
+middle's `tests/phase_codegen.rs`); `ArchState`/`ArchTable` are blanket-implemented and indexed by `TypeId`
+(the `kuna_arch_state!`/`kuna_arch_table!` macros are kept as no-ops), because 23 pass modules register type
+aliases of `Option`/maps that a pass crate cannot implement a middle trait for; `set_kuna_option` is a middle
+method that calls the driver's dispatch through the `set_kuna_option` pass hook; `OutLang`'s emit records are
+`kuna_lang::OutLangExt` (Architecture reads the two capabilities it needs through hooks); middle's unit tests
+link a `#[cfg(test)]` `__unlace_default_pass_hooks` whose hooks panic naming themselves, so a middle test that
+reaches a hook must live in `infra/middle_tests/`. `check_layers.py` scans both crates;
+`kuna_callwide -> kuna_lang` (a `speller()` call that was a method edge before) is the one allowlist line.
+Next: 9b `unlace-lift`.
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

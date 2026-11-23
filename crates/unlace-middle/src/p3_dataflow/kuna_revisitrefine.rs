@@ -18,7 +18,8 @@
 use unlace_base::types::int4;
 
 /// The partition holding each byte of a refined range.
-pub(crate) struct Partitions {
+#[doc(hidden)]
+pub struct Partitions {
     starts: Vec<usize>,
     ends: Vec<usize>,
 }
@@ -26,7 +27,8 @@ pub(crate) struct Partitions {
 impl Partitions {
     /// `refine` holds each partition's size at its first byte, as
     /// `Heritage::refinement` leaves it.
-    pub(crate) fn new(refine: &[int4]) -> Partitions {
+    #[doc(hidden)]
+    pub fn new(refine: &[int4]) -> Partitions {
         let mut starts = vec![0; refine.len()];
         let mut ends = vec![0; refine.len()];
         let mut pos = 0;
@@ -41,7 +43,8 @@ impl Partitions {
 
     /// The partitions `[lo, hi)` that `[start, start + size)` spans when it
     /// crosses a partition boundary, or `None` when one partition holds it.
-    pub(crate) fn cut_span(&self, start: usize, size: usize) -> Option<(usize, usize)> {
+    #[doc(hidden)]
+    pub fn cut_span(&self, start: usize, size: usize) -> Option<(usize, usize)> {
         let last = (start + size).checked_sub(1)?;
         let (&end, &hi) = (self.ends.get(start)?, self.ends.get(last)?);
         (end < start + size).then(|| (self.starts[start], hi))
@@ -49,7 +52,8 @@ impl Partitions {
 }
 
 /// Does the partition starting at `start` lie in one of the retired `spans`?
-pub(crate) fn spanned(spans: &[(usize, usize)], start: usize) -> bool {
+#[doc(hidden)]
+pub fn spanned(spans: &[(usize, usize)], start: usize) -> bool {
     spans.iter().any(|&(lo, hi)| lo <= start && start < hi)
 }
 

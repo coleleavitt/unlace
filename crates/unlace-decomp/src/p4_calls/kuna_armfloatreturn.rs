@@ -2,11 +2,11 @@
 use crate::kuna_passthrough::FuncdataPassthroughExt;
 use crate::kuna_protoorder::FuncdataProtoorderExt;
 use crate::{
+    architecture::Architecture,
     context::VarnodeId,
     dtype::{type_class, type_metatype},
     fspec::{ParamActive, ParamEntry, ParamListStandard, ProtoModel, PrototypePieces},
     funcdata::Funcdata,
-    infra::architecture::Architecture,
 };
 use std::borrow::Cow;
 use std::rc::Rc;

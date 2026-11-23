@@ -406,10 +406,12 @@ jobs:
         with:
           name: nextest-archive
 
+      # --extract-to . puts the binaries in decompiler/target, the path the build job
+      # compiled into every test that names a binary with env!("CARGO_BIN_EXE_...").
       - name: cargo nextest run (partition ${{ matrix.partition }}/3)
         run: |
           cd decompiler && cargo nextest run --archive-file ../nextest-archive.tar.zst \
-            --workspace-remap . --profile ci --partition count:${{ matrix.partition }}/3
+            --workspace-remap . --extract-to . --profile ci --partition count:${{ matrix.partition }}/3
 
       - name: Upload the JUnit report
         if: always()

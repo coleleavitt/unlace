@@ -413,4 +413,24 @@ declare_hooks! {
     mzdgroup_apply: fn(&Architecture);
     /// `kuna_swiftcall::derive_model`.
     swiftcall_derive_model: fn(&Element, &str, &str, Option<&str>, Option<&str>) -> Element;
+    /// `kuna_dfunaffected::assert_direction_flag_unaffected`.
+    dfunaffected_assert_direction_flag_unaffected: fn(&mut ProtoModel, &dyn Fn(&[u8]) -> Option<VarnodeData>);
+    /// `kuna_inputrefinement::coalesce`.
+    inputrefinement_coalesce: fn(&mut [int4], &mut dyn FnMut(usize, usize, usize) -> bool);
+    /// `kuna_msvcftol::decode_payload`.
+    msvcftol_decode_payload: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
+    /// `kuna_msvcftol::language_is_x86_32`.
+    msvcftol_language_is_x86_32: fn(&dyn Fn(&[u8]) -> bool, i32) -> bool;
+    /// `kuna_objcarc::decode_payload`.
+    objcarc_decode_payload: fn(&str, &mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
+    /// `kuna_objcarc::payload_xml`.
+    objcarc_payload_xml: fn(&dyn Fn(&[u8]) -> bool, i32) -> Option<String>;
+    /// `kuna_stackarggap::ends_argument_list`.
+    stackarggap_ends_argument_list: fn(&ParamActive, int4, int4, &dyn Fn(int4) -> bool) -> bool;
+    /// `kuna_swiftcall::swift_registers`.
+    swiftcall_swift_registers: fn(&dyn Fn(&str) -> Option<int4>) -> Option<(&'static str, &'static str, &'static str)>;
+    /// `kuna_switchrunon::own_rows`.
+    switchrunon_own_rows: fn(u64, &[u64], &dyn Fn(u64) -> Option<u64>) -> Option<usize>;
+    /// `kuna_x87intrinsic::decode_prototype`.
+    x87intrinsic_decode_prototype: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
 }

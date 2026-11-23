@@ -6,7 +6,7 @@ use unlace_base::types::int4;
 /// 3+1 junction only when joining it would straddle a known input.
 pub(crate) fn coalesce(
     refine: &mut [int4],
-    mut straddles_input: impl FnMut(usize, usize, usize) -> bool,
+    straddles_input: &mut dyn FnMut(usize, usize, usize) -> bool,
 ) {
     if refine.is_empty() {
         return;
@@ -42,6 +42,7 @@ pub(crate) fn span_straddles_join(
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.inputrefinement_coalesce = Some(coalesce);
     hooks.inputrefinement_span_straddles_join = Some(span_straddles_join);
 }
 
@@ -65,7 +66,7 @@ mod tests {
     #[test]
     fn known_argument_boundary_survives_mixed_byte_halfword_word_reads() {
         let mut refine = [2, 0, 1, 1, 3, 0, 0, 1];
-        coalesce(&mut refine, |start, junction, end| {
+        coalesce(&mut refine, &mut |start, junction, end| {
             [(0, 4), (4, 8)]
                 .into_iter()
                 .any(|span| span_straddles_join(span, start, junction, end))
@@ -80,7 +81,7 @@ mod tests {
             ([2, 0, 3, 0, 0, 1, 2, 0], (0, 5)),
         ] {
             let before = partitions(&refine);
-            coalesce(&mut refine, |start, junction, end| {
+            coalesce(&mut refine, &mut |start, junction, end| {
                 span_straddles_join(span, start, junction, end)
             });
             assert_eq!(partitions(&refine), before);
@@ -90,7 +91,7 @@ mod tests {
     #[test]
     fn contained_narrow_input_keeps_legacy_join() {
         for (mut refine, span) in [([1, 3, 0, 0], (0, 1)), ([3, 0, 0, 1], (3, 4))] {
-            coalesce(&mut refine, |start, junction, end| {
+            coalesce(&mut refine, &mut |start, junction, end| {
                 span_straddles_join(span, start, junction, end)
             });
             assert_eq!(partitions(&refine), [(0, 4)]);
@@ -100,7 +101,7 @@ mod tests {
     #[test]
     fn ordinary_slices_retain_legacy_coalescing() {
         for mut refine in [[1, 3, 0, 0], [3, 0, 0, 1]] {
-            coalesce(&mut refine, |_, _, _| false);
+            coalesce(&mut refine, &mut |_, _, _| false);
             assert_eq!(partitions(&refine), [(0, 4)]);
         }
     }

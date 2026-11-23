@@ -21,7 +21,6 @@ architecture -> kuna_cortexmpriv
 architecture -> kuna_cppsig
 architecture -> kuna_deadcascade
 architecture -> kuna_decodekit
-architecture -> kuna_dfunaffected
 architecture -> kuna_elemptr
 architecture -> kuna_esprom
 architecture -> kuna_fatstr
@@ -40,12 +39,10 @@ architecture -> kuna_lanefuse
 architecture -> kuna_lang
 architecture -> kuna_langfamily
 architecture -> kuna_msvcbyval
-architecture -> kuna_msvcftol
 architecture -> kuna_mzdgroup
 architecture -> kuna_narrowext
 architecture -> kuna_narrowret
 architecture -> kuna_nullable_reloc
-architecture -> kuna_objcarc
 architecture -> kuna_objcrettype
 architecture -> kuna_octeoneffects
 architecture -> kuna_opaqueglobals
@@ -135,7 +132,6 @@ fspec -> kuna_narrowext
 fspec -> kuna_passthrough
 fspec -> kuna_registerslots
 fspec -> kuna_spsolve
-fspec -> kuna_stackarggap
 fspec -> modelrules
 fspec -> remote_provider
 funcdata -> kuna_atomicxadd
@@ -187,7 +183,6 @@ heritage -> kuna_bejoin
 heritage -> kuna_calloverlap
 heritage -> kuna_globalcallranges
 heritage -> kuna_indexaliasguard
-heritage -> kuna_inputrefinement
 heritage -> kuna_loadguardreads
 heritage -> kuna_revisitrefine
 heritage -> prefersplit
@@ -196,7 +191,6 @@ jumptable -> kuna_constselectjump
 jumptable -> kuna_emulatefunction
 jumptable -> kuna_jumpassist
 jumptable -> kuna_switchguardrange
-jumptable -> kuna_switchrunon
 jumptable -> rangeutil
 kuna_assert -> kuna_phases
 kuna_bytehonest -> printc

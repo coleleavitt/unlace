@@ -37,7 +37,7 @@
 /// the function at `entry`, when the rest run on forward into other
 /// functions: `owner` names the known function entry at or before an
 /// address. `None` keeps the table whole.
-pub fn own_rows(entry: u64, rows: &[u64], owner: impl Fn(u64) -> Option<u64>) -> Option<usize> {
+pub fn own_rows(entry: u64, rows: &[u64], owner: &dyn Fn(u64) -> Option<u64>) -> Option<usize> {
     let own = |row: u64| owner(row) == Some(entry);
     let cut = rows
         .iter()
@@ -53,6 +53,11 @@ pub fn own_rows(entry: u64, rows: &[u64], owner: impl Fn(u64) -> Option<u64>) ->
         spread |= other != first;
     }
     spread.then_some(cut)
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.switchrunon_own_rows = Some(own_rows);
 }
 
 #[cfg(test)]

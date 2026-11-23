@@ -26,6 +26,7 @@
 //! upstream's merge reaches further on its own, the array is upstream's.
 
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+pub use crate::varmap::Extended;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, sign_extend};
@@ -181,17 +182,6 @@ fn access_size(fd: &Funcdata, vn: VarnodeId) -> Option<int4> {
         size = size.max(width);
     }
     (size > 0).then_some(size)
-}
-
-/// An array `extend_unbounded` lengthened: its open hint's offset, start and
-/// element size, and its high index before and after.
-#[derive(Clone, Copy)]
-pub(crate) struct Extended {
-    start: uintb,
-    sstart: intb,
-    elem: int4,
-    from: int4,
-    to: int4,
 }
 
 /// Lengthen the open hint of each unbounded indexed base over the contiguous
@@ -518,6 +508,11 @@ fn observed(fd: &Funcdata, space: &Rc<AddrSpace>, start: intb, slot: intb, elem:
                     .is_some_and(|(s, e)| e <= start || end <= s)
         })
     })
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.arrayextent_settle = Some(settle);
 }
 
 #[cfg(test)]

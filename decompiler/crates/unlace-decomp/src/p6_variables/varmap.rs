@@ -1922,7 +1922,7 @@ impl ScopeLocal {
             return Ok(overlap_problems); // No references to stack at all
         }
 
-        crate::p6_variables::kuna_arrayextent::settle(state, &self.space, types);
+        (crate::architecture::default_pass_hooks().arrayextent_settle)(state, &self.space, types);
         let mut cur: RangeHint = state.next().clone();
         let mut cur_end = cur.sstart.wrapping_add(cur.size as int8);
         while state.get_next() {
@@ -3599,6 +3599,17 @@ impl MapState {
         self.range
             .in_range(&Address::new(Rc::clone(&self.spaceid), st), size)
     }
+}
+
+/// An array `extend_unbounded` lengthened: its open hint's offset, start and
+/// element size, and its high index before and after.
+#[derive(Clone, Copy)]
+pub struct Extended {
+    pub(crate) start: uintb,
+    pub(crate) sstart: intb,
+    pub(crate) elem: int4,
+    pub(crate) from: int4,
+    pub(crate) to: int4,
 }
 
 #[cfg(test)]

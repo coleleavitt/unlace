@@ -47,7 +47,6 @@ architecture -> kuna_phases
 architecture -> kuna_ppc32piccalls
 architecture -> kuna_protoorder
 architecture -> kuna_ptrauthtrap
-architecture -> kuna_registerslots
 architecture -> kuna_retsysreg
 architecture -> kuna_roundingops
 architecture -> kuna_rustabi
@@ -62,11 +61,8 @@ architecture -> kuna_structsynth
 architecture -> kuna_swiftcall
 architecture -> kuna_syscallregs
 architecture -> kuna_tlsnames
-architecture -> kuna_varargretreg
-architecture -> kuna_varargsave
 architecture -> kuna_voidret
 architecture -> kuna_x64syscall
-architecture -> kuna_x87emptyreturn
 architecture -> kuna_x87intrinsic
 architecture -> kuna_x87truncate
 architecture -> modelrules
@@ -120,7 +116,6 @@ fspec -> kuna_calleedeadarg
 fspec -> kuna_calleepurge
 fspec -> kuna_condexeret
 fspec -> kuna_libcnames
-fspec -> kuna_narrowext
 fspec -> kuna_passthrough
 fspec -> kuna_registerslots
 fspec -> kuna_spsolve

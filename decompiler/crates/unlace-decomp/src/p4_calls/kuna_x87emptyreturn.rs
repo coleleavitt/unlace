@@ -1,16 +1,9 @@
 //! Do not infer an x87 result when every returning path explicitly freed ST0.
+pub use crate::architecture::Storage;
 use crate::{context::OpId, fspec::ParamActive, funcdata::Funcdata};
 use std::collections::{HashMap, VecDeque};
 use unlace_base::address::Address;
 use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
-
-#[derive(Clone)]
-pub struct Storage {
-    pub(super) free: u64,
-    pub(super) top: VarnodeData,
-    pub(super) tags: VarnodeData,
-    pub(super) bank: Vec<VarnodeData>,
-}
 
 pub fn storage(arch: &crate::architecture::Architecture) -> Option<Storage> {
     let free = arch.userops.get_op_by_name(b"ffree")?;
@@ -281,6 +274,11 @@ pub fn drop_empty(data: &Funcdata, active: &mut ParamActive, returns: &[OpId]) {
             active.get_trial_mut(i).mark_inactive();
         }
     }
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.x87emptyreturn_storage = Some(storage);
 }
 
 #[cfg(test)]

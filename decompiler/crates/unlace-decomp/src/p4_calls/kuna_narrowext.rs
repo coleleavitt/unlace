@@ -13,6 +13,7 @@
 //! x86-64 System V document states no extension at all, yet GCC and clang
 //! callers extend a narrow argument to 32 bits and clang callees rely on it, so
 //! its arguments take Apple's rule under `compiler`.
+pub use crate::fspec::Widen;
 use crate::{
     context::{OpId, VarnodeId},
     dtype::{Datatype, type_class, type_metatype},
@@ -68,15 +69,6 @@ impl OptionNarrowExt {
             format!("Narrow integer extension set to {}", mode.as_str()),
         ))
     }
-}
-
-/// How a narrow integer fills its register: extended by the sign of its type to
-/// 32 bits, then sign-extended to the whole register (`Register`), or with the
-/// bits above 32 left unspecified (`Word`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Widen {
-    Register,
-    Word,
 }
 
 /// The widening an image's arguments and return values follow, if known.
@@ -308,6 +300,7 @@ fn implied_mask(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>) -> Op
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.narrowext_or_model = Some(or_model);
     hooks.narrowext_mark = Some(mark);
 }
 

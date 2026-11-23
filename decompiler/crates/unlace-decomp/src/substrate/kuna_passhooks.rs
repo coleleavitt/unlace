@@ -20,15 +20,16 @@ use unlace_base::types::{int4, uint4, uintb};
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::IdRegistry;
 use unlace_base::xml::Element;
+use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::architecture::{Architecture, HelperAbi};
+use crate::architecture::{Architecture, GoLayout, HelperAbi, Regs, Storage, VarargFloats};
 use crate::context::{ArchContext, BlockId, HighVariableId, OpId, VarnodeId};
 use crate::database::SymbolEntry;
 use crate::dtype::{Datatype, TypeFactory};
 use crate::fspec::{
-    FuncCallSpecs, FuncProto, ParamActive, ParamEntry, ParamListStandard, ParamTrial,
-    ParameterPieces, ProtoModel, PrototypePieces,
+    Extension, FuncCallSpecs, FuncProto, ParamActive, ParamEntry, ParamListStandard, ParamTrial,
+    ParameterPieces, ProtoModel, PrototypePieces, Widen,
 };
 use crate::funcdata::Funcdata;
 use crate::heritage::{Guard, LiveCalls, LoadGuard, MemoryOps, StoreBounds};
@@ -450,4 +451,26 @@ declare_hooks! {
         &'a PrototypePieces,
         &dyn TypeFactory,
     ) -> KunaResult<std::borrow::Cow<'a, PrototypePieces>>;
+    /// `kuna_arrayextent::settle`.
+    arrayextent_settle: fn(&mut MapState, &Rc<AddrSpace>, &dyn TypeFactory);
+    /// `kuna_goreg::g_pointer_type`.
+    goreg_g_pointer_type: fn(&dyn TypeFactory, GoLayout) -> KunaResult<std::rc::Rc<Datatype>>;
+    /// `kuna_narrowext::or_model`.
+    narrowext_or_model: fn(Option<Widen>, &ParamListStandard, &Address, i32, Option<&Datatype>, &mut VarnodeData) -> (OpCode, bool);
+    /// `kuna_passthrough::anchors_neutral_run`.
+    passthrough_anchors_neutral_run: fn(&ParamActive, &ParamTrial, bool) -> bool;
+    /// `kuna_passthrough::ends_rescued_run`.
+    passthrough_ends_rescued_run: fn(&ParamActive, &ParamTrial, bool) -> bool;
+    /// `kuna_passthrough::neutral_in_chain`.
+    passthrough_neutral_in_chain: fn(&ParamActive, int4, bool) -> bool;
+    /// `kuna_registerslots::assumed`.
+    registerslots_assumed: fn(&[ParamEntry], &Address, i32, &mut VarnodeData) -> Option<OpCode>;
+    /// `kuna_registerslots::decode`.
+    registerslots_decode: fn(&Element, Option<VarnodeData>, i32, i32, u32) -> KunaResult<Option<Extension>>;
+    /// `kuna_varargretreg::image_vararg_floats`.
+    varargretreg_image_vararg_floats: fn(&Architecture) -> VarargFloats;
+    /// `kuna_varargsave::regs`.
+    varargsave_regs: fn(&Architecture) -> Option<Regs>;
+    /// `kuna_x87emptyreturn::storage`.
+    x87emptyreturn_storage: fn(&Architecture) -> Option<Storage>;
 }

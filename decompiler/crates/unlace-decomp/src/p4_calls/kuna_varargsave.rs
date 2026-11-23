@@ -45,6 +45,7 @@
 //! operation left to name. A `-O0` spill of named arguments stores in the
 //! opposite order with no vector block, so it does not match.
 
+pub use crate::architecture::Regs;
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use unlace_base::types::int4;
@@ -55,15 +56,6 @@ const GP: [&[u8]; 6] = [b"RDI", b"RSI", b"RDX", b"RCX", b"R8", b"R9"];
 const XMM: [&[u8]; 8] = [
     b"XMM0", b"XMM1", b"XMM2", b"XMM3", b"XMM4", b"XMM5", b"XMM6", b"XMM7",
 ];
-
-/// The System V argument registers, present only where the pass applies.
-#[derive(Clone)]
-pub struct Regs {
-    sp: VarnodeData,
-    gp: Vec<VarnodeData>,
-    xmm: Vec<VarnodeData>,
-    caller_saved: Vec<(Vec<u8>, Option<VarnodeData>)>,
-}
 
 impl Regs {
     fn named(&self, name: &[u8]) -> Option<Key> {
@@ -544,4 +536,9 @@ pub fn strip(data: &mut Funcdata) {
         return;
     }
     data.get_func_proto_mut().set_dotdotdot(true);
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.varargsave_regs = Some(regs);
 }

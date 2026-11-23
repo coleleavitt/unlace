@@ -1,10 +1,10 @@
 //! Preserve partial global stores without forcing heritage's synthetic writes.
 
-use crate::context::{OpId, VarnodeId};
+use crate::context::VarnodeId;
 use crate::funcdata::Funcdata;
 use crate::heritage::Guard;
 use crate::kuna_fasthash::{FxHashMap, FxHashSet};
-use unlace_base::address::{Address, calc_mask};
+use unlace_base::address::calc_mask;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 

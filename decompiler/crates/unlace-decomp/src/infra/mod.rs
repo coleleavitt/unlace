@@ -4,7 +4,6 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod action;
-pub mod actionprof;
 pub mod analyzesigs;
 pub mod architecture;
 pub mod callgraph;

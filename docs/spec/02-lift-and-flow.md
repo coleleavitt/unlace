@@ -932,7 +932,7 @@ a spec-declared eraser such as ARM's `setISAMode` `<callotherfixup>` removes the
 op uniformly, whether the block was reached by fall-thru or only through a
 recovered switch table.
 
-- **Injection library.** `decompiler/crates/unlace-decomp/src/p2_lift/pcodeinject.rs
+- **Injection library.** `decompiler/crates/unlace-decomp/src/substrate/pcodeinject.rs
   (PcodeInjectLibraryBase)` holds the payloads — `<callfixup>`,
   `<callotherfixup>`, and executable-p-code snippets — decoded from the
   compiler/processor specs; their SLEIGH source bodies are compiled to p-code
@@ -943,7 +943,7 @@ recovered switch table.
   never compiled, and each injection instead asks the host to lift the snippet
   for that one call site (chapter 00). The metadata half is unchanged either
   way; only the ops change source.
-- **User ops.** `decompiler/crates/unlace-decomp/src/p2_lift/userop.rs
+- **User ops.** `decompiler/crates/unlace-decomp/src/substrate/userop.rs
   (UserOpManage)` manages the CALLOTHER black-box ops (unspecialized, datatype,
   volatile, segment, jump-assist, injected). A CALLOTHER whose user op is
   *injected* is queued during classification and replaced by its
@@ -1960,7 +1960,7 @@ the C library tests it right after the instruction (`movz` or `bnez` on `a3`;
 `bns`, or `mfcr` and a mask). So on those two families the rewrite also inserts,
 right after the system call, `a3 = syscall_error()` or `cr0 = syscall_error()`
 (`kuna_syscallregs.rs (define_error_flag)`): a `CALLOTHER` of the built-in user
-op `BUILTIN_SYSCALL_ERROR` (`decompiler/crates/unlace-decomp/src/p2_lift/userop.rs`)
+op `BUILTIN_SYSCALL_ERROR` (`decompiler/crates/unlace-decomp/src/substrate/userop.rs`)
 whose only input is that user-op id, with its call flag cleared. It is an
 ordinary write placed before heritage, so heritage treats it like any other
 register write (an `INDIRECT` there would not work, see below), and with no

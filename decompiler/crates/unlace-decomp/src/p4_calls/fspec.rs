@@ -6393,7 +6393,10 @@ impl FuncProto {
         if model.is_some() {
             self.set_model(model);
         }
-        let assignment = super::kuna_customreturn::input_assignment(pieces, typefactory)?;
+        let assignment = (crate::architecture::default_pass_hooks().customreturn_input_assignment)(
+            pieces,
+            typefactory,
+        )?;
         self.update_all_types(&assignment, typefactory, manager)?;
         let custom_storage = pieces
             .input_storage

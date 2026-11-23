@@ -4045,7 +4045,7 @@ Flow-follow itself runs *before* the tree (the upstream `followFlow` →
 **Where a run's time went** (kuna). The schedule can be asked to account for
 itself: with `KUNA_ACTION_PROF` set to a path, every `apply` call is timed and
 the engine writes an exclusive-time table there
-(`decompiler/crates/unlace-decomp/src/infra/actionprof.rs`), rewritten each time
+(`decompiler/crates/unlace-decomp/src/substrate/actionprof.rs`), rewritten each time
 the outermost timing frame closes. A scope guard closes frames on both normal
 return and panic unwind, so a caught action panic cannot strand the timing stack
 or prevent later actions from publishing. Totals belong to the current thread;

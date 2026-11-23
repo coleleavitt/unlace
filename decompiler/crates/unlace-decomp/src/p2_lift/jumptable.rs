@@ -2297,7 +2297,7 @@ impl JumpBasicModel {
         let stride;
         (*rng, stride) = Self::width_range(fd, vn);
 
-        crate::p2_lift::kuna_switchguardrange::intersect(fd, &self.selectguards, vn, rng);
+        (fd.hooks().switchguardrange_intersect)(fd, &self.selectguards, vn, rng);
 
         // It may be assumed the switch value is positive; if the size is too big,
         // try only positive values.
@@ -2307,7 +2307,7 @@ impl JumpBasicModel {
             positive.intersect(rng);
             if !positive.is_empty() {
                 *rng = positive;
-                crate::p2_lift::kuna_switchguardrange::intersect(fd, &self.selectguards, vn, rng);
+                (fd.hooks().switchguardrange_intersect)(fd, &self.selectguards, vn, rng);
             }
         }
     }
@@ -2679,12 +2679,7 @@ impl JumpBasicModel {
             let start_vn = self.path_meld.get_varnode(pos);
             let (mut range, _) = Self::width_range(fd, start_vn);
             let unguarded = range.get_size();
-            crate::p2_lift::kuna_switchguardrange::intersect(
-                fd,
-                &self.selectguards,
-                start_vn,
-                &mut range,
-            );
+            (fd.hooks().switchguardrange_intersect)(fd, &self.selectguards, start_vn, &mut range);
             if range.is_empty()
                 || range.get_size() >= unguarded
                 || range.get_min() > range.get_max()

@@ -59,19 +59,13 @@
 
 mod infra;
 mod p0_knowledge;
-mod p3_dataflow;
-mod p4_calls;
-mod p5_types;
-mod p6_variables;
 mod p9_emit;
 
 pub use infra::*;
 pub use p0_knowledge::*;
-pub use p3_dataflow::*;
-pub use p4_calls::*;
-pub use p5_types::*;
-pub use p6_variables::*;
 pub use p9_emit::*;
+#[doc(hidden)]
+pub use unlace_bandb::*;
 #[doc(hidden)]
 pub use unlace_lift::*;
 #[doc(hidden)]

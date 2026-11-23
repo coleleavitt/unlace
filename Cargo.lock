@@ -1018,6 +1018,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-bandb"
+version = "0.1.0"
+dependencies = [
+ "slotmap",
+ "smallvec",
+ "thiserror 2.0.18",
+ "unlace-base",
+ "unlace-lift",
+ "unlace-middle",
+ "unlace-num",
+ "unlace-sleigh",
+ "unlace-structure",
+]
+
+[[package]]
 name = "unlace-base"
 version = "0.1.0"
 dependencies = [
@@ -1080,6 +1095,7 @@ dependencies = [
  "smallvec",
  "thiserror 2.0.18",
  "toml",
+ "unlace-bandb",
  "unlace-base",
  "unlace-lift",
  "unlace-middle",

@@ -1,6 +1,6 @@
 //! `ActionStackPtrFlow` — stack-pointer flow analysis (C++ `coreaction.cc:40-512`).
 //!
-//! This is the realized body of [`ActionStackPtrFlow`](crate::coreaction_render)
+//! This is the realized body of `ActionStackPtrFlow` (`coreaction_render`)
 //! (its `apply` previously a `// STUB(W8-funcdata)` stub).  It is the third link
 //! of the stack-variable promotion chain: after `Funcdata::spacebase` marks the
 //! stack-pointer Varnodes (link 1) and `RuleLoad/StoreVarnode` rewrites

@@ -351,6 +351,13 @@ unlace-decomp re-exports it. Its `lib.rs` carries the `#[cfg(test)]` hook stub. 
 copies in `kuna_msvcstackguard/tests.rs` (unused there after #173/#174) went with it, so structure's tests no
 longer reach bandb. `check_layers.py` and `check_spec.py` scan the new root.
 
+**9d (unlace-bandb):** `crates/unlace-bandb` holds `p3_dataflow/`, `p4_calls/`, `p5_types/` and
+`p6_variables/` (all four folders whole, `git mv`); it depends on unlace-middle, unlace-lift and
+unlace-structure and re-exports unlace-structure; unlace-decomp re-exports it. Its `lib.rs` carries the
+`#[cfg(test)]` hook stub. Prep in the same change: the band's last two `pub(crate) use` re-exports became
+`#[doc(hidden)] pub`, and eight intra-doc links to emit modules became plain text. `check_layers.py` and
+`check_spec.py` scan the new root; spec anchors follow. Next: 9e `unlace-emit` (p9).
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

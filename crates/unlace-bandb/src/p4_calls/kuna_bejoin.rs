@@ -3249,7 +3249,8 @@ mod evidence;
 
 pub use evidence::WidePairEvidenceExt;
 
-pub(crate) use evidence::{
+#[doc(hidden)]
+pub use evidence::{
     WideCache, WidePair, WideView, build_high_read, missed_proven as wide_callee_missed,
     seed as seed_wide_returns, wide_pair,
 };

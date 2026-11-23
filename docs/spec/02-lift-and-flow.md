@@ -459,7 +459,7 @@ generated catalog ([docs/options.md](../options.md)); the rows are defined in
 `crates/unlace-decomp/phases.toml` and the intentional
 default-divergences are DIV-3/4/13/14 in `docs/history.md`.
 
-> Scope note: `crates/unlace-decomp/src/p5_types/funcdata_resolveflow.rs
+> Scope note: `crates/unlace-bandb/src/p5_types/funcdata_resolveflow.rs
 > (Funcdata::resolve_in_flow)` is, despite its name, the union-field
 > `resolveInFlow`/`resolveTruncation` dispatch — type-recovery machinery
 > described in chapter [05 — Types](05-types.md). It lives in this folder only
@@ -862,7 +862,7 @@ here, copies the locked prototype at flow and so never reaches the
 `ActionDefaultParams` arm that gives a declared callee the stack adjustment its
 parameter list implies (`kuna_calleeprotostack.rs`, 04); the copy applies that rule
 itself
-(`crates/unlace-decomp/src/p4_calls/kuna_calleeprotostack.rs
+(`crates/unlace-bandb/src/p4_calls/kuna_calleeprotostack.rs
 (resolve_declared_extra_pop)`), so a
 `__thiscall` or `__stdcall` import pops what its declaration says instead of
 what the push run in front of it suggests. (kuna `relronoreturn`, default on)
@@ -1258,7 +1258,7 @@ per site: `override_flow` refuses `branch` on a computed jump, so the only
 switch is the option value.
 
 **(kuna) Tail calls through a GOT slot — part of `tailcalljump` (GH-904),
-`crates/unlace-decomp/src/p4_calls/kuna_gottailcall.rs`.**
+`crates/unlace-bandb/src/p4_calls/kuna_gottailcall.rs`.**
 A position-independent tail call loads its target from a GOT slot and jumps
 through it: MIPS `lw $t9,%call16(f)($gp); jr $t9`, x86-64 `-fno-plt`
 `jmp *f@GOTPCREL(%rip)`. Jump-table recovery reads the slot, so it is the
@@ -3101,7 +3101,7 @@ strand phi state:
 One repair hook closes the loop: heritage may widen the synthetic BRANCHIND's
 storage read and null its input, so `funcdata_block.rs
 (Funcdata::kuna_repair_lowered_switch_inputs)` (driven from
-`crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs`) re-points
+`crates/unlace-bandb/src/p3_dataflow/coreaction_early.rs`) re-points
 it at the live reaching SSA def of the recorded storage — accepting a
 heritage-known input (written, function input, *or constant*) as healthy. The
 constant case is load-bearing: `ActionConditionalConst` may legitimately prove
@@ -3513,7 +3513,7 @@ site rather than per callee:
 `decompile_drive.rs (ArchFlowEnv::query_call_no_return_at)`, asked by
 `flow.rs (FlowInfo::call_site_no_return)` with the call instruction's address
 and fall-through, and decided by
-`crates/unlace-decomp/src/p4_calls/kuna_calleenoreturn.rs
+`crates/unlace-bandb/src/p4_calls/kuna_calleenoreturn.rs
 (is_proxy_no_return_at)`. The call is no-return when three facts hold
 together. The callee's name is `<prefix>__<entry>`
 (`kuna_noreturn_externmatch.rs (is_proxy_noreturn_name)`): the text after the

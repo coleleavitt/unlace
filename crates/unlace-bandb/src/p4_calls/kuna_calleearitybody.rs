@@ -126,7 +126,8 @@ pub struct PendingBodyArgs {
     swift_self: bool,
 }
 
-pub(crate) use crate::kuna_calleefacts::is_register;
+#[doc(hidden)]
+pub use crate::kuna_calleefacts::is_register;
 
 /// Capture a call site that is about to render with an empty argument list.
 ///

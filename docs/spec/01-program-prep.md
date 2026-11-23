@@ -123,7 +123,7 @@ than code to follow into — `crates/unlace-middle/src/substrate
 (ArchFlowEnv)` consults the parked set once the symbol table declines — so a
 `BRANCH` into a lazy entry stays a tail call. The raw walk `bejoin evidence` makes
 of a function and its callees stops at a parked entry for the same reason
-(`crates/unlace-decomp/src/p4_calls/kuna_bejoin/evidence.rs (destination)`):
+(`crates/unlace-bandb/src/p4_calls/kuna_bejoin/evidence.rs (destination)`):
 its verdict is cached once per image, before any `Function` is materialized, so a
 walk that ran on into a tail-called entry would swap a big-endian pair's halves in
 every later read. Materialization then happens on read,
@@ -4449,7 +4449,7 @@ moves.
   converted it by value. A float-returning name fewer than three corpus binaries import
   (`nanf`, `sqrtf`, `fabsf`) stays out, and its import stub is recovered from what
   its callers read instead (chapter 04). These rows are seeded only on x86 and AArch64
-  (`crates/unlace-decomp/src/p4_calls/kuna_typedcallabi.rs (returns_doubles_whole)`),
+  (`crates/unlace-bandb/src/p4_calls/kuna_typedcallabi.rs (returns_doubles_whole)`),
   whose return recovery reads a `double` whole (`xmm0`, `ST0`, `d0`), and on a
   hard-float ARM image once `armfloatreturn` applies (chapter 04). Otherwise ARM
   gets none of them. Its default model lists only `s0`..`s7` among the outputs, so on
@@ -5821,7 +5821,7 @@ moves.
   it.
 
 - **Prototype merge** (`protomerge`, default-on; kuna;
-  `crates/unlace-decomp/src/p4_calls/kuna_protomerge.rs (merge)`): the
+  `crates/unlace-bandb/src/p4_calls/kuna_protomerge.rs (merge)`): the
   load-time sources park whole prototypes on a function at the analysis commit
   (the by-name and by-address libc tables, the demangled C++ signature, DWARF),
   and the last used to replace the earlier wholesale. Two prototypes of the same
@@ -7355,7 +7355,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     `presentViewController:animated:completion:(vc, (UIViewController *)v10, 1, NULL)`).
 
   - **Message sends typed and resolved by their receiver**
-    (`crates/unlace-decomp/src/p5_types/kuna_objcrettype.rs (instancetype)`,
+    (`crates/unlace-bandb/src/p5_types/kuna_objcrettype.rs (instancetype)`,
     options **`objcrettype`** and **`objcresolve`**, kuna, default-on, inert
     unless `objc` is on): the names above are per entry point, so a send still
     read `objc_msgSend(v1, sel_setInner_, v2)` with `v1` an `objc_object *`
@@ -7411,7 +7411,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     (`crates/unlace-console/src/engine.rs (commit_analysis_output)`)
     is a class receiver while it holds the value the loader put there (the
     same test as `importdata`'s `&<import>`). A receiver is followed by its
-    value (`crates/unlace-decomp/src/p5_types/kuna_objcrettype.rs (class_value)`):
+    value (`crates/unlace-bandb/src/p5_types/kuna_objcrettype.rs (class_value)`):
     through copies and casts, a value a call leaves alone (`INDIRECT`), a join
     whose inputs all name the same class (an input that leads back to the join
     adds nothing), and the runtime functions that return their argument
@@ -8203,7 +8203,7 @@ both
   is the header struct `<T>` when there is a header, else the element (an
   array of `void *` when the site names a pointer type, `site.T *`). The
   struct `<T>` of that size is laid out from the signature
-  (`crates/unlace-decomp/src/p5_types/kuna_kalloctype.rs (view_struct)`): a `void *` field per pointer granule, an
+  (`crates/unlace-bandb/src/p5_types/kuna_kalloctype.rs (view_struct)`): a `void *` field per pointer granule, an
   `undefined8` per data granule, a trailing `undefined1[n]` where the size is
   not a multiple of eight, each named `field_0x<off>` except the first pointer
   of a class `iokitclasses` recovered, which is its `vtable`; a name another
@@ -8216,7 +8216,7 @@ both
   2.4 KB after). The view-to-layout map is handed to the engine
   (`Architecture::kuna_kalloc_types`), where
   `TypeOpCall::getOutputLocal`
-  (`crates/unlace-decomp/src/p5_types/kuna_kalloctype.rs (allocated_type)`)
+  (`crates/unlace-bandb/src/p5_types/kuna_kalloctype.rs (allocated_type)`)
   answers for a call to one of the allocators whose view argument folds to a
   known view with `<T> *`, ahead of the prototype's locked `void *`: the
   allocation is declared `<T> *` and the stores into it are field accesses.
@@ -8324,7 +8324,7 @@ both
 - **Swift value witnesses** (`valuewitness`, the value-witness arm of the pass
   above, default-on and inert unless `swiftmetadata` is on;
   `crates/unlace-analysis/src/analyzers/swift/kuna_swiftwitness.rs`,
-  `crates/unlace-decomp/src/p5_types/kuna_valuewitness.rs`): the word
+  `crates/unlace-bandb/src/p5_types/kuna_valuewitness.rs`): the word
   before a struct's or enum's type metadata points at its value witness table,
   the functions the runtime and generic code call to copy, move and destroy a
   value whose layout they do not know (`initializeBufferWithCopyOfBuffer`,
@@ -9033,7 +9033,7 @@ both
   followed by `...`, is offered and scores the same trials past them that it
   gets under `off`, and sheds whatever it took there once every call in the
   function has its arguments (chapter [04](04-calls-and-prototypes.md),
-  `crates/unlace-decomp/src/p4_calls/kuna_formattail.rs`). A phantom
+  `crates/unlace-bandb/src/p4_calls/kuna_formattail.rs`). A phantom
   it would claim under `off` therefore still keeps that value from the calls
   around it. Installed closed from the start it did not, and x86-64 showed
   both ways that goes wrong: gnulib's `version_etc` keeps its `va_list` in the
@@ -10014,7 +10014,7 @@ cleared), and the commit keeps it OFF the symbol, in
 other prototype for it — no operator declaration, nothing another stream parked
 (a DWARF `main` is decompiled against DWARF alone) — it lays the declaration out
 under the default calling convention
-(`crates/unlace-decomp/src/p4_calls/kuna_elfmaindecl.rs (Runtime)`), locks
+(`crates/unlace-bandb/src/p4_calls/kuna_elfmaindecl.rs (Runtime)`), locks
 only its `int` return (the inputs stay unlocked), and seeds the function with
 the storage, name and type of `argc`, `argv` and `envp`
 (`crates/unlace-decomp/src/infra/decompile_drive.rs (decompile_func_full_with_objects)`).
@@ -10025,11 +10025,11 @@ through the registers it would otherwise have recovered as the return:
 `protoorder_cyclestruct_x86_64` prints `look(v2)` where the option-off output has
 `look(v3,v2)` and the source `look(&leaf)`. Every such case found agrees with
 the source. The seed itself is consulted only through one question,
-`crates/unlace-decomp/src/p4_calls/kuna_elfmaindecl.rs (read_slots)`: are the
+`crates/unlace-bandb/src/p4_calls/kuna_elfmaindecl.rs (read_slots)`: are the
 function inputs the body reads, in any storage the convention passes a parameter
 in, exactly the first k runtime slots? When they are, type inference gives each
 such input its runtime type
-(`crates/unlace-decomp/src/p4_calls/kuna_elfmaindecl.rs (input_type)`, at the
+(`crates/unlace-bandb/src/p4_calls/kuna_elfmaindecl.rs (input_type)`, at the
 same unlocked seam `calleevote` votes through in `build_localtypes`); the type
 holds through propagation (`propagate_type_edge` does not overwrite it) and record
 synthesis gives way to it (`kuna_structsynth.rs (accepts)` refuses a runtime
@@ -10039,7 +10039,7 @@ call treat the input as they treat any recovered parameter. And
 runtime name (`param_name`). The whole declaration is therefore applied in the one
 decompile the function was getting anyway.
 
-`crates/unlace-decomp/src/p4_calls/kuna_elfmaindecl.rs (settled)` checks the
+`crates/unlace-bandb/src/p4_calls/kuna_elfmaindecl.rs (settled)` checks the
 finished function: its parameters must be no parameter at all where the body reads
 no runtime argument, or exactly the first k runtime slots, each named. Otherwise —
 a `main` that reads `argv` but not `argc` (the recovery fills the unread slot

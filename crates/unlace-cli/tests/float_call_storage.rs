@@ -5,6 +5,7 @@ use crate::common;
 use common::process;
 use object::Object;
 use std::process::Command;
+use unlace_decomp::printc::ArchPrintExt;
 #[test]
 fn pe32_float_call_word_storage() {
     check("i686-w64-windows-gnu", true, false, false);

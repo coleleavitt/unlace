@@ -15,6 +15,7 @@ use unlace_console::inspect::{FUNCTION_ROW_CAP, function_rows};
 use unlace_console::project::{DecompileOptions, FuncResult, decompile_targets_with};
 use unlace_decomp::kuna_srcmap::verify;
 use unlace_decomp::prettyprint::TokenKind;
+use unlace_decomp::printc::ArchPrintExt;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

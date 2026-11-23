@@ -43,6 +43,7 @@ use crate::decompile_all::{
     resolve_targets_allow_bodyless, synth_base,
 };
 use crate::jsonfmt::{Json, dumps_indent2};
+use unlace_decomp::printc::ArchPrintExt;
 
 /// The document shape. Bumped whenever a field is added, removed or changes
 /// meaning, so a consumer can refuse a document it does not understand.

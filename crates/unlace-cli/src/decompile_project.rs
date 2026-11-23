@@ -66,6 +66,7 @@ use crate::decompile_all::{
 };
 use crate::jobs::PoolWatch;
 use crate::project_stream::StreamMode;
+use unlace_decomp::printc::ArchPrintExt;
 
 /// `unlace decompile-project` entry point.
 pub fn run(argv: &[String]) -> i32 {

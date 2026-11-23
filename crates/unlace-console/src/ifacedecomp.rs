@@ -85,6 +85,7 @@ use unlace_decomp::decompile_drive::{
 };
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::options::OptionDatabase;
+use unlace_decomp::printc::ArchPrintExt;
 
 /// The module name every decompiler command shares (C++
 /// `IfaceDecompCommand::getModule() { return "decompile"; }`).

@@ -4753,7 +4753,10 @@ fn build_engine_and_init(sleigh: &mut SleighArchitecture, db: &LanguageDatabase)
         // engine elsewhere means applying them there too
         // (`kuna_decodekit::EngineRecipe`).
         arch.set_decode_truncations(db.truncations(langindex));
-        arch.set_language_families(unlace_decomp::kuna_langfamily::families(db));
+        unlace_decomp::kuna_langfamily::set_language_families(
+            arch,
+            unlace_decomp::kuna_langfamily::families(db),
+        );
     }
 
     // Hand the resolved compiler-spec (`.cspec`) XML to the architecture so

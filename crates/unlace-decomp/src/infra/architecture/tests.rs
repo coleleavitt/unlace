@@ -273,6 +273,7 @@ fn real_sla_creates_funcdata_at_entry() {
 // ===========================================================================
 
 use crate::options::{ArchOptionContext, BraceCategory, BraceStyle, NamespaceStrategy};
+use crate::printc::ArchPrintExt;
 
 #[test]
 fn owned_subsystems_are_constructed_and_accessible() {

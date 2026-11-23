@@ -1,6 +1,7 @@
 //! C declarations for named calls with complete locked prototypes.
 use crate::dtype::{Datatype, DatatypeKind, type_metatype};
 use crate::kuna_calltargettype::FuncdataCalltargettypeExt;
+use crate::printc::ArchPrintExt;
 use crate::{architecture::Architecture, funcdata::Funcdata};
 use std::{collections::BTreeSet, rc::Rc};
 use unlace_num::opcodes::OpCode;

@@ -60,6 +60,7 @@ use crate::decompile_all::{
 };
 use crate::jobs::{self, ChunkSource, TargetSpec};
 use crate::jsonfmt::{Json, dumps_compact};
+use unlace_decomp::printc::ArchPrintExt;
 
 /// The status file, present only while an export is running.
 const STATUS_FILE: &str = ".streaming";

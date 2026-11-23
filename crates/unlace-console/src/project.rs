@@ -39,6 +39,7 @@ use unlace_sleigh::loadimage::section_flags;
 
 use crate::engine::{ConsoleProgram, EntryProvenance, FunctionEntry, ObjectLocation};
 pub use crate::kuna_stringoverlaps::GlobalAliasNames;
+use unlace_decomp::printc::ArchPrintExt;
 
 /// `dat_` blocks larger than this are truncated in the `.asm` data tail (the
 /// printer's `dat_<hex>` names carry no size; the label only marks the start).

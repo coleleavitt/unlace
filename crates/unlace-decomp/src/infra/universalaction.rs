@@ -167,6 +167,8 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p2_lift::kuna_loweredswitchvalue::provide(&mut slots);
     crate::p4_calls::kuna_bejoin::provide(&mut slots);
     crate::p4_calls::kuna_callwide::provide(&mut slots);
+    crate::kuna_hooks::provide(&mut slots);
+    crate::kuna_lang::provide(&mut slots);
     crate::p4_calls::kuna_inputhints::provide(&mut slots);
     crate::p3_dataflow::kuna_globalcallranges::provide(&mut slots);
     crate::p4_calls::kuna_calleepurge::provide(&mut slots);
@@ -199,7 +201,7 @@ fn universal_action(arch: &crate::architecture::Architecture) -> Box<dyn Action>
         stackspace_index,
         Vec::new(),
         truncated,
-        arch.hooks(),
+        arch.kuna_tables.get::<crate::kuna_hooks::HookRegistry>(),
     )
 }
 

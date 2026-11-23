@@ -1,7 +1,1 @@
 # Upward crate:: edges between unlace-decomp's layering bands (scripts/check_layers.py). Only delete lines.
-architecture -> kuna_cortexmpriv
-architecture -> kuna_hooks
-architecture -> kuna_lang
-architecture -> kuna_langfamily
-architecture -> printc
-architecture -> printlanguage

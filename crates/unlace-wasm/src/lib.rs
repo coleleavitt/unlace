@@ -47,6 +47,7 @@ use json::{
     Obj, arr, assertions_json, json_object_location, json_opt_num, json_opt_str, json_str,
     json_str_array,
 };
+use unlace_decomp::printc::ArchPrintExt;
 
 /// How a command names its function.
 #[derive(Debug, Clone, PartialEq, Eq)]

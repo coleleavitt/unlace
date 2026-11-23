@@ -243,6 +243,7 @@ mod harness {
     use unlace_base::xml::{DocumentStorage, Element};
 
     use unlace_decomp::decompile_drive::{decompile_func, print_c};
+    use unlace_decomp::printc::ArchPrintExt;
     use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
     use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 

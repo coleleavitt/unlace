@@ -299,6 +299,26 @@ declare_hooks! {
         fn(&mut crate::heritage::GlobalCallRanges, &Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
     /// `kuna_inputhints`: did a pass give any method's `this` input hints?
     inputhints_has_this_hints: fn(&crate::kuna_archstate::ArchTables) -> bool;
+    /// `kuna_hooks`: register an embedder rule on the architecture's registry.
+    hooks_add_rule: fn(
+        &mut crate::kuna_archstate::ArchTables,
+        &str,
+        crate::action::RuleState,
+        Box<dyn crate::action::Rule>,
+    ) -> KunaResult<()>;
+    /// `kuna_hooks`: register an embedder phase callback on the architecture's registry.
+    hooks_on_phase: fn(
+        &mut crate::kuna_archstate::ArchTables,
+        crate::kuna_phases::KunaPhase,
+        Box<dyn FnMut(&mut Funcdata)>,
+    ) -> KunaResult<()>;
+    /// `printc`: a new output-language printer (C++ `PrintCLanguageCapability::buildLanguage`).
+    printer_new: fn() -> Box<dyn crate::kuna_printhandle::PrintHandle>;
+    /// `printc`: a default printer, standing in while the owned one is lent out.
+    printer_default: fn() -> Box<dyn crate::kuna_printhandle::PrintHandle>;
+    /// `kuna_lang`: does the output language continue a bottom-tested loop (not Rust's
+    /// `loop { ...; if !c { break; } }`)?
+    lang_do_while_continue: fn(crate::kuna_outlang::OutLang) -> bool;
     /// `kuna_calleepurge`: forget the x86-32 callee walks (the host's facts changed).
     calleepurge_forget_walks: fn(&mut crate::kuna_archstate::ArchTables);
     /// `kuna_jumpassist`: compile the jump assists out of the loaded inject library.

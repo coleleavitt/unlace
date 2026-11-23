@@ -3720,6 +3720,11 @@ and an agent writes:
   `ArchStates` (`crates/unlace-decomp/src/substrate/kuna_archstate.rs (ArchState, ArchStates)`):
   the pass installs its shared value on `Architecture` while the specs load (through a
   pass hook), and each per-function `ArchContext` holds a clone that shares it.
+  Run-wide mutable pass ledgers live in an `ArchTables` on `Architecture`
+  (`arch.kuna_tables.get::<T>()`), and the output-language printer is held as a
+  `PrintHandle` (`crates/unlace-decomp/src/substrate/kuna_printhandle.rs (PrintHandle)`),
+  so the core drives the printer without naming the emit band; `printc::ArchPrintExt`
+  lends the concrete C printer to the passes that render.
   The handler declaration generates both the dispatch and its name allowlist;
   adding a handler cannot leave those two out of sync. Catalog metadata remains
   independent, so `unlace catalog --check` compares the documented options against

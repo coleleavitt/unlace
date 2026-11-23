@@ -17223,6 +17223,8 @@ mod kuna_rustoption_niche;
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.printc_decl_type_representative = Some(decl_type_representative);
     hooks.printc_type_to_c_string = Some(type_to_c_string);
+    hooks.printer_new = Some(printer_new);
+    hooks.printer_default = Some(printer_default);
 }
 
 pub use crate::kuna_coreoptions::Realtypes;
@@ -17265,6 +17267,149 @@ crate::kuna_flag!(
     unset: false,
     shipped: true
 );
+
+/// A new C printer for an architecture (C++ `PrintCLanguageCapability::buildLanguage`).
+fn printer_new() -> Box<dyn crate::kuna_printhandle::PrintHandle> {
+    Box::new(PrintC::new())
+}
+
+/// A default C printer, standing in while an architecture lends its own out.
+fn printer_default() -> Box<dyn crate::kuna_printhandle::PrintHandle> {
+    Box::new(PrintC::default())
+}
+
+impl crate::kuna_printhandle::PrintHandle for PrintC {
+    fn get_name(&self) -> &str {
+        PrintC::get_name(self)
+    }
+    fn set_name(&mut self, name: &str) {
+        PrintC::set_name(self, name);
+    }
+    fn out_lang(&self) -> crate::kuna_outlang::OutLang {
+        PrintC::out_lang(self)
+    }
+    fn reset_wire_defaults(&mut self) {
+        self.context = crate::printlanguage::PrintContext::new();
+        self.reset_wire_option_defaults();
+    }
+    fn comment_filter(&self) -> u32 {
+        self.context.header_comment() | self.context.instruction_comment()
+    }
+    fn initialize_from_architecture(&mut self) {
+        PrintC::initialize_from_architecture(self);
+    }
+    fn set_null_printing(&mut self, val: bool) {
+        PrintC::set_null_printing(self, val);
+    }
+    fn set_inplace_ops(&mut self, val: bool) {
+        PrintC::set_inplace_ops(self, val);
+    }
+    fn set_convention_printing(&mut self, val: bool) {
+        PrintC::set_convention_printing(self, val);
+    }
+    fn set_no_cast_printing(&mut self, val: bool) {
+        PrintC::set_no_cast_printing(self, val);
+    }
+    fn set_hide_implied_exts(&mut self, val: bool) {
+        PrintC::set_hide_implied_exts(self, val);
+    }
+    fn set_max_line_size(&mut self, val: int4) -> KunaResult<()> {
+        PrintC::set_max_line_size(self, val)
+    }
+    fn set_indent_increment(&mut self, val: int4) {
+        PrintC::set_indent_increment(self, val);
+    }
+    fn set_line_comment_indent(&mut self, val: int4) -> KunaResult<()> {
+        PrintC::set_line_comment_indent(self, val)
+    }
+    fn set_comment_style(&mut self, style: &str) {
+        PrintC::set_comment_style(self, style);
+    }
+    fn header_comment_flags(&self) -> uint4 {
+        PrintC::header_comment_flags(self)
+    }
+    fn set_header_comment_flags(&mut self, flags: uint4) {
+        PrintC::set_header_comment_flags(self, flags);
+    }
+    fn instruction_comment_flags(&self) -> uint4 {
+        PrintC::instruction_comment_flags(self)
+    }
+    fn set_instruction_comment_flags(&mut self, flags: uint4) {
+        PrintC::set_instruction_comment_flags(self, flags);
+    }
+    fn set_integer_format(&mut self, fmt: &str) -> KunaResult<()> {
+        PrintC::set_integer_format(self, fmt)
+    }
+    fn set_namespace_strategy(&mut self, strategy: NamespaceStrategy) {
+        PrintC::set_namespace_strategy(self, strategy);
+    }
+    fn set_brace_format(&mut self, category: crate::options::BraceCategory, style: BraceStyle) {
+        PrintC::set_brace_format(self, category, style);
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+/// The C printer an [`Architecture`] owns, by its concrete type.
+pub trait ArchPrintExt {
+    /// Borrow the c-language printer (C++ `glb->print`).
+    fn print(&self) -> &PrintC;
+    /// Mutably borrow the c-language printer (drives `docFunction` + the print option setters).
+    fn print_mut(&mut self) -> &mut PrintC;
+    /// Run `render` with the printer moved out of the architecture (a default stands in
+    /// meanwhile), so it can drive `PrintC::doc_function_full(fd, &arch)`, which needs an immutable
+    /// borrow of the rest of the architecture (register-name lookup) while it mutates the printer,
+    /// then move it back.
+    ///
+    /// The printer goes back on every exit. A panic in `render` returns it cleared of the partial
+    /// document ([`PrintC::clear`], C++ `docFunction`'s `catch { clear(); throw; }`) with the
+    /// printing modifiers it had before `render`, then resumes unwinding, so a caller that contains
+    /// the panic renders every later function with the printer the run configured, not the default.
+    fn with_print<R>(&mut self, render: impl FnOnce(&mut PrintC, &Architecture) -> R) -> R;
+}
+
+impl ArchPrintExt for Architecture {
+    #[inline]
+    fn print(&self) -> &PrintC {
+        self.printer()
+            .as_any()
+            .downcast_ref::<PrintC>()
+            .expect("the architecture's printer is the C printer")
+    }
+
+    fn print_mut(&mut self) -> &mut PrintC {
+        self.printer_mut()
+            .as_any_mut()
+            .downcast_mut::<PrintC>()
+            .expect("the architecture's printer is the C printer")
+    }
+
+    fn with_print<R>(&mut self, render: impl FnOnce(&mut PrintC, &Architecture) -> R) -> R {
+        let mut lent = self.take_printer();
+        let result = {
+            let print = lent
+                .as_any_mut()
+                .downcast_mut::<PrintC>()
+                .expect("the architecture's printer is the C printer");
+            let mods = print.context.mods();
+            let arch: &Architecture = self;
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                render(&mut *print, arch)
+            }));
+            if result.is_err() {
+                print.clear();
+                print.context.set_mods(mods);
+            }
+            result
+        };
+        self.put_printer(lent);
+        result.unwrap_or_else(|payload| std::panic::resume_unwind(payload))
+    }
+}
 
 #[cfg(test)]
 mod tests;

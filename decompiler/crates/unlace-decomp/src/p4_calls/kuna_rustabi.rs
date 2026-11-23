@@ -221,7 +221,7 @@ pub fn parse_rust_abi_mode(p1: &str) -> KunaResult<(RustAbiMode, String)> {
 
 /// Is the Rust return-ABI rule live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match RustAbiMode::from_u8(data.get_arch().rust_abi) {
+    match data.get_arch().kuna_options.get::<RustAbiMode>() {
         RustAbiMode::Off => false,
         RustAbiMode::Auto => data.get_arch().source_lang.is_rust(),
         RustAbiMode::Always => true,
@@ -1276,6 +1276,23 @@ fn register_piece(data: &Funcdata, vn: VarnodeId) -> Option<(Address, int4)> {
         return None;
     }
     Some((v.get_addr().clone(), v.get_size()))
+}
+
+impl crate::kuna_optionset::KunaOption for RustAbiMode {
+    const NAME: &'static str = "rustabi";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        RustAbiMode::Off
+    }
+
+    fn shipped() -> Self {
+        RustAbiMode::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(parse_rust_abi_mode(value)?)
+    }
 }
 
 #[cfg(test)]

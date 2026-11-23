@@ -3972,9 +3972,15 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // (kuna `fatstr`) The Rust `&str`-record string pass — gated on the SAME
         // option mode the engine's (ptr,len) literal rule reads, so one option
         // governs both recognizers; `off` (0) drops the bounded facts here.
-        "fatstrrecords" => arch.fat_str != 0,
+        "fatstrrecords" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_fatstr::FatStrMode>()
+                != unlace_decomp::kuna_fatstr::FatStrMode::Off
+        }
         "strcodelen" => {
-            arch.fat_str != 0
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_fatstr::FatStrMode>()
+                != unlace_decomp::kuna_fatstr::FatStrMode::Off
                 && arch
                     .kuna_options
                     .get::<unlace_decomp::kuna_analysisgates::Strcodelen>()
@@ -7865,7 +7871,13 @@ fn commit_analysis_output(
     //    rustc packs literals back to back, so the row glues the literal before
     //    it to this one (IDA 9.5 rust.so splits at every referenced byte the
     //    same way).
-    let narrow: Vec<unlace_analysis::pass::StringFact> = if prog.arch().fat_str != 0 {
+    let narrow: Vec<unlace_analysis::pass::StringFact> = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_fatstr::FatStrMode>(
+    )
+        != unlace_decomp::kuna_fatstr::FatStrMode::Off
+    {
         let mut starts: Vec<u64> = out.bounded_strings.iter().map(|f| f.addr).collect();
         starts.sort_unstable();
         out.strings

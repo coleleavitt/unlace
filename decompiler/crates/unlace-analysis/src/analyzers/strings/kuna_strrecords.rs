@@ -38,7 +38,7 @@
 //!
 //! One option, two recognizers: this pass is registered only for rustc- and
 //! Go-detected images (`passes_for`), and its commit is gated on the same
-//! `Architecture::fat_str` mode the engine rule reads (`off` drops the facts
+//! the registered option `FatStrMode` mode the engine rule reads (`off` drops the facts
 //! at the read-symbols boundary, exactly like every analysis gate).
 //!
 //! # The Go arm

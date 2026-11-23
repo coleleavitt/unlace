@@ -352,10 +352,20 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .get::<unlace_decomp::kuna_callmechanisms::CallMechanismMode>()
             .as_str(),
         // (kuna `rustabi`) Three-valued, so it reports its own token.
-        "rustabi" => unlace_decomp::kuna_rustabi::RustAbiMode::from_u8(conf.rust_abi).as_str(),
+        "rustabi" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_rustabi::RustAbiMode>()
+            .as_str(),
         // (kuna `fatstr`) Three-valued, so it reports its own token.
-        "fatstr" => unlace_decomp::kuna_fatstr::FatStrMode::from_u8(conf.fat_str).as_str(),
-        "swiftstr" => unlace_decomp::kuna_fatstr::FatStrMode::from_u8(conf.swift_str).as_str(),
+        "fatstr" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_fatstr::FatStrMode>()
+            .as_str(),
+        "swiftstr" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_swiftstr::SwiftStr>()
+            .0
+            .as_str(),
         // (kuna `gobool`) Three-valued, so it reports its own token.
         "gobool" => conf
             .kuna_options

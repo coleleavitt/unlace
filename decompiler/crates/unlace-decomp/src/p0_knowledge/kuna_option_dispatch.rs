@@ -202,21 +202,9 @@ kuna_options! { self, p1;
         self.kuna_options.set(mode);
         Ok(msg)
     },
-    "rustabi" => {
-        let (mode, msg) = crate::kuna_rustabi::parse_rust_abi_mode(p1)?;
-        self.rust_abi = mode.as_u8();
-        Ok(msg)
-    },
-    "fatstr" => {
-        let (mode, msg) = crate::kuna_fatstr::parse_fatstr_mode(p1).map_err(KunaError::parse)?;
-        self.fat_str = mode.as_u8();
-        Ok(msg)
-    },
-    "swiftstr" => {
-        let (mode, msg) = crate::kuna_swiftstr::parse_mode(p1).map_err(KunaError::parse)?;
-        self.swift_str = mode.as_u8();
-        Ok(msg)
-    },
+    "rustabi" => registered!(crate::kuna_rustabi::RustAbiMode),
+    "fatstr" => registered!(crate::kuna_fatstr::FatStrMode),
+    "swiftstr" => registered!(crate::kuna_swiftstr::SwiftStr),
     "gobool" => registered!(crate::kuna_gobool::GoBoolMode),
     "gonewtype" => registered!(crate::kuna_gonewtype::GoNewType),
     "rustprobestack" => registered!(crate::kuna_rustprobestack::RustProbestackMode),

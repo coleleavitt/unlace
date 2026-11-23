@@ -592,11 +592,6 @@ pub struct Architecture {
     pub kuna_mips_pairs: Option<Rc<Vec<u64>>>,
     /// (kuna) Whether those halves carry the pair flag.
     pub kuna_mips_pairs_painted: bool,
-    /// (kuna) `option rustabi`: how hard to try to keep a rustc two-register
-    /// (`ScalarPair`) return intact -- 0 off, 1 auto (only on a detected rustc
-    /// image), 2 always.  Read by [`crate::kuna_rustabi`] through the
-    /// `ArchContext` handle.
-    pub rust_abi: u8,
     /// (kuna) The loader's source-language verdict for the image being
     /// decompiled.  A FACT, not an option: written once at `load file` from
     /// `unlace_analysis::sourcelang` (the `KUNA_SOURCELANG` override already
@@ -627,14 +622,6 @@ pub struct Architecture {
     /// apart from the fact so `option sourcelang auto` restores the detected
     /// verdict and the catalog `current` reports the option, not the image.
     pub source_lang_forced: Option<crate::kuna_sourcelang::SourceLang>,
-    /// (kuna) `option fatstr` mode (`FatStrMode` as u8): rewrite a read-only
-    /// `(ptr, len)` constant call-argument pair into a bounded string literal.
-    /// Default auto (act when `source_lang` is Rust or Go).
-    pub fat_str: u8,
-    /// (kuna) `option swiftstr` mode (`FatStrMode` as u8): render a Swift
-    /// string literal's two constant words as the literal. Default auto (act
-    /// when `source_lang` is Swift).
-    pub swift_str: u8,
     /// (kuna) `option ptrauthtrap`: cut the branch into each arm64e
     /// pointer-auth failure trap whose guard is the return-address bit test.
     /// Default on.
@@ -1666,7 +1653,6 @@ impl Architecture {
             call_wide: false,
             kuna_mips_pairs: None,
             kuna_mips_pairs_painted: false,
-            rust_abi: 0, // (kuna) option rustabi; reset_defaults sets the shipped default
             rustc_stable_version: None,
             rustc_pieces_layout: false,
             rust_fmt_pieces_relro: None,
@@ -1680,8 +1666,6 @@ impl Architecture {
             go_chanrecv2: None,
             go_chanrecv_status_sites: Default::default(),
             source_lang_forced: None, // (kuna) option sourcelang; reset_defaults restores auto
-            fat_str: 0, // (kuna) option fatstr; reset_defaults sets the shipped default (auto)
-            swift_str: 0, // (kuna) option swiftstr; reset_defaults sets the shipped default (auto)
             ptrauth_trap: false, // (kuna) option ptrauthtrap; reset_defaults sets the shipped default (on)
 
             dead_cascade: Some(crate::p3_dataflow::kuna_deadcascade::DEFAULT_PASSES),
@@ -1911,10 +1895,7 @@ impl Architecture {
         self.ret_split_global = true; // (kuna) DIV-PENDING default-on: a shared RETURN block that stores to GLOBALS is not the bare epilogue `ActionReturnSplit::isSplittable` assumes, so it is no longer cloned into every predecessor. One-directional (it can only decline a split) and byte-identical (0/675) on the datatest corpus; restore the upstream predicate with `option retsplitglobal off`
         self.call_wide = false;
         self.kuna_callwide.clear();
-        self.rust_abi = crate::kuna_rustabi::RustAbiMode::Auto.as_u8(); // (kuna) option rustabi default `auto`: acts only on an image the loader detected as rustc-produced
         self.source_lang_forced = None; // (kuna) option sourcelang default auto; the detected fact survives resets
-        self.fat_str = crate::kuna_fatstr::FatStrMode::Auto.as_u8(); // (kuna) bounded (ptr,len) literals on Rust/Go images
-        self.swift_str = crate::kuna_fatstr::FatStrMode::Auto.as_u8(); // (kuna) Swift two-word string literals on Swift images
 
         self.ptrauth_trap = true; // (kuna) drop arm64e pointer-auth failure checks; inert unless a brk #0xc47x trap's guard is the return-address bit test, 0/675 datatests
 
@@ -2638,10 +2619,7 @@ impl Architecture {
         ctx.call_wide = self.call_wide;
         // (kuna) carry the Rust return-ABI gate and the detected source language
         // so `kuna_rustabi` reaches both via `glb`.
-        ctx.rust_abi = self.rust_abi;
         ctx.source_lang = self.source_lang();
-        ctx.fat_str = self.fat_str;
-        ctx.swift_str = self.swift_str;
         ctx.chkstk_darwin = self.chkstk_darwin
             && self.image_apple
             && (self.pass_hooks().chkstkdarwin_applies_to)(&self.archid);

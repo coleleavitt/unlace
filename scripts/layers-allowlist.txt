@@ -20,7 +20,6 @@ architecture -> kuna_deadcascade
 architecture -> kuna_decodekit
 architecture -> kuna_elemptr
 architecture -> kuna_esprom
-architecture -> kuna_fatstr
 architecture -> kuna_floatglobals
 architecture -> kuna_formatstring
 architecture -> kuna_fpuemu

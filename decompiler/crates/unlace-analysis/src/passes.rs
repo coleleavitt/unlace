@@ -505,7 +505,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // `(ptr, len)` records (`strings::kuna_strrecords`), the analysis-side half
     // of the fatstr option. Registered ONLY for `Compiler::Rustc`, so every
     // non-Rust binary's pass set is byte-identical to before; committed under
-    // the `fatstr` mode gate (`Architecture::fat_str`), so `--option fatstr
+    // the `fatstr` mode gate (the registered option `FatStrMode`), so `--option fatstr
     // off` drops the facts at the read-symbols boundary.
     if compiler.is_rust() {
         passes.push(Box::new(

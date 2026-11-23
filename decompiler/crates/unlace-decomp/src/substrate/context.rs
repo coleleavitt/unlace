@@ -818,19 +818,11 @@ pub struct ArchContext {
     pub retsysreg_userops: Vec<unlace_base::types::uint4>,
     pub retsysreg_cop_userops: Vec<unlace_base::types::uint4>,
     pub call_wide: bool,
-    /// (kuna) `option rustabi` (0 off / 1 auto / 2 always): keep a rustc
-    /// two-register `ScalarPair` return intact; read by [`crate::kuna_rustabi`].
-    pub rust_abi: u8,
     /// (kuna) The source language of this image (`option sourcelang` override
     /// applied): what `option rustabi auto` tests and `option reloadarg`
     /// stands down on.  Copied from the engine `Architecture` in
     /// `build_arch_handle`.
     pub source_lang: crate::kuna_sourcelang::SourceLang,
-    /// (kuna) `option fatstr` mode; read by [`crate::p5_types::kuna_fatstr`].
-    /// Copied from the engine `Architecture` in `build_arch_handle`.
-    pub fat_str: u8,
-    /// (kuna) `option swiftstr` mode; read by [`crate::p5_types::kuna_swiftstr`].
-    pub swift_str: u8,
     /// (kuna) `option chkstkdarwin` on an AArch64 language; read by
     /// [`crate::p2_lift::kuna_chkstkdarwin`].  Copied from the engine
     /// `Architecture` in `build_arch_handle`.
@@ -1357,14 +1349,7 @@ impl ArchContext {
             // (kuna) `option bejoin`; the real value is copied from the engine
             // Architecture in `build_arch_handle`.
             call_wide: false,
-            // (kuna) `option rustabi` default-off; the real value is copied from
-            // the engine Architecture in `build_arch_handle`.
-            rust_abi: 0,
             source_lang: Default::default(),
-            // (kuna) `option fatstr` default auto; the real value is copied
-            // from the engine Architecture in `build_arch_handle`.
-            fat_str: 1,
-            swift_str: 1,
             chkstk_darwin: false,
             sp_solve: false,
             // (kuna) `option gobool` default auto; copied the same way.

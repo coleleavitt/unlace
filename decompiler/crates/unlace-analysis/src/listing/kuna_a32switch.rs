@@ -189,8 +189,7 @@ impl<'a> A32Tables<'a> {
                 return TableRead {
                     cases: targets,
                     stated: Some(cases),
-                    gap: None,
-                    unbounded: false,
+                    ..TableRead::default()
                 };
             }
             if index.is_none()

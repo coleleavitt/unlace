@@ -12,8 +12,8 @@ use unlace_decomp::kuna_loadoptions::{self, LoadOptions, LoadScope};
 use crate::engine::{
     ArmIsa, ConsoleProgram, FileInput, Languages, RawBytes, arm_isa_from_env, bootstrap_cil,
     bootstrap_dex_bytes, bootstrap_esp_image, bootstrap_image, bootstrap_mz_bytes,
-    bootstrap_object, bootstrap_raw_image, bootstrap_te, bootstrap_te_bytes, bootstrap_wasm_bytes,
-    bootstrap_xml_image, classify_file, xml_root_image,
+    bootstrap_object, bootstrap_raw_image, bootstrap_retro_bytes, bootstrap_te, bootstrap_te_bytes,
+    bootstrap_wasm_bytes, bootstrap_xml_image, classify_file, xml_root_image,
 };
 
 /// Where a [`Bootstrap`] finds its languages: spec roots (a slice, array or
@@ -129,7 +129,8 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     }
 
     /// Load a real image on disk, choosing the loader by its bytes: a UEFI
-    /// TE, a DOS `MZ`, or an object-format binary, as
+    /// TE, a DOS `MZ`, one of the [`Bootstrap::retro_bytes`] containers, or an
+    /// object-format binary, as
     /// [`bootstrap_from_image`](crate::engine::bootstrap_from_image) does.
     pub fn image(&self, path: &str) -> KunaResult<ConsoleProgram> {
         let isa = self.resolved_isa()?;
@@ -165,6 +166,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
                 bootstrap_esp_image(path, &image, self.target, self.languages, isa)
             }
             FileInput::Te(bytes) => self.te_bytes(path, &bytes),
+            FileInput::Retro(bytes) => self.retro_bytes(path, &bytes),
             FileInput::Dex(bytes) => self.dex_bytes(path, bytes),
             FileInput::Cil(image) => {
                 let _load = self.enter();
@@ -227,6 +229,14 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     pub fn wasm_bytes(&self, path: &str, bytes: &[u8]) -> KunaResult<ConsoleProgram> {
         let _load = self.enter();
         bootstrap_wasm_bytes(path, bytes, self.target, self.languages)
+    }
+
+    /// Load a PS-X EXE, N64 ROM, a.out, Amiga hunk or PEF executable from
+    /// bytes already read from `path`.
+    pub fn retro_bytes(&self, path: &str, bytes: &[u8]) -> KunaResult<ConsoleProgram> {
+        let isa = self.resolved_isa()?;
+        let _load = self.enter();
+        bootstrap_retro_bytes(path, bytes, self.target, self.languages, isa)
     }
 
     /// Load a `<binaryimage>` element as language `arch_id`, as

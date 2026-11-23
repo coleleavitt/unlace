@@ -31,11 +31,13 @@
 //! defined-function reader lifted out of [`crate::loadimage_object`].
 
 pub mod arm_markers;
-// (kuna) WebAssembly bodies lowered from stack form to register form.
 pub(crate) mod kuna_arctarget;
 pub(crate) mod kuna_mipstarget;
 pub(crate) mod kuna_ppc64elfv2target;
 pub(crate) mod kuna_ppcaputarget;
+// (kuna `retroimage`) PS-X EXE, N64 ROM, a.out, Amiga hunk and PEF containers.
+pub mod kuna_retroimage;
+// (kuna) WebAssembly bodies lowered from stack form to register form.
 pub mod kuna_wasmlower;
 #[cfg(test)]
 mod mips_target_tests;

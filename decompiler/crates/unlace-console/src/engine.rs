@@ -30,9 +30,11 @@
 //! function entry the faithful way (the binaryimage's own symbol records, which
 //! is precisely what `readLoaderSymbols` reads).
 
+mod kuna_retroimage;
 mod kuna_signature_names;
 mod kuna_thunknames;
 mod lazy_inventory;
+pub(crate) use kuna_retroimage::bootstrap_retro_bytes;
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -680,6 +682,9 @@ pub struct ConsoleProgram {
     loader_data_objects: Vec<(u64, String, u64)>,
     /// (kuna) A PE image's data exports, `(addr, name)`: lookup names only.
     loader_data_exports: Vec<(u64, String)>,
+    /// (kuna `retroimage`) The names a container gives its code addresses,
+    /// taken in place of a synthetic name when its entries are installed.
+    loader_entry_names: BTreeMap<u64, String>,
     /// (kuna `mzsweep`) An MS-DOS executable's relocated module and relocation
     /// words, the evidence its raw-image call sweep reads.
     mz_evidence: Option<unlace_analysis::listing::kuna_mzsweep::MzEvidence>,
@@ -3384,11 +3389,14 @@ impl ConsoleProgram {
                     Vec::new()
                 };
             let entries = std::mem::take(&mut self.pending_synthetic_entries);
+            let mut names = std::mem::take(&mut self.loader_entry_names);
             let symbols = entries
                 .into_iter()
                 .map(|addr| ProgramSymbol {
                     ordinal: 0,
-                    name: self.arch().name_function(&addr),
+                    name: names
+                        .remove(&addr.get_offset())
+                        .unwrap_or_else(|| self.arch().name_function(&addr)),
                     addr,
                     object_location: None,
                     binding: None,
@@ -4816,6 +4824,7 @@ fn empty_program(
         arm_frames: None,
         loader_data_objects: Vec::new(),
         loader_data_exports: Vec::new(),
+        loader_entry_names: BTreeMap::new(),
         mz_evidence: None,
         esprom_applied: None,
         flow_ends: None,
@@ -4872,17 +4881,26 @@ pub fn bootstrap_from_raw(
         .raw(path, base, entries)
 }
 
-/// [`bootstrap_from_raw`] over the file, or over `bytes` built in memory.
+/// A raw image built in memory: its bytes, and the ranges its container
+/// names as `(offset, size, flags)` (none maps the bytes as one code range).
+pub(crate) struct RawModule {
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) sections: Vec<(u64, u64, u32)>,
+}
+
 /// Where [`bootstrap_raw_image`] takes the image's bytes from.
 pub(crate) enum RawBytes {
     /// The file at the path, whole.
     File,
     /// One run built in memory, such as a relocated DOS load module.
     Whole(Vec<u8>),
+    /// One run built in memory with the ranges its container names.
+    Module(RawModule),
     /// Separate runs, such as a firmware image's segments.
     Segmented(unlace_sleigh::loadimage::RawLoadImage),
 }
 
+/// [`bootstrap_from_raw`] over the file, or over bytes built in memory.
 pub(crate) fn bootstrap_raw_image(
     path: &str,
     target: &str,
@@ -4921,7 +4939,12 @@ pub(crate) fn bootstrap_raw_image(
     };
     let base_bytes = address_to_byte(base, "base")?;
     match bytes {
-        RawBytes::Whole(bytes) => raw.build_loader_from_bytes(Rc::clone(&code_space), base, bytes),
+        RawBytes::Whole(bytes) => {
+            raw.build_loader_from_bytes(Rc::clone(&code_space), base, bytes, Vec::new())
+        }
+        RawBytes::Module(module) => {
+            raw.build_loader_from_bytes(Rc::clone(&code_space), base, module.bytes, module.sections)
+        }
         RawBytes::Segmented(image) => {
             raw.build_loader_from_image(Rc::clone(&code_space), base, image)
         }
@@ -5075,6 +5098,9 @@ pub(crate) fn bootstrap_image(
     if file_is_te_image(path) {
         let _load = enter_load(options, from_env);
         bootstrap_te(path, target, languages, isa)
+    } else if let Some(bytes) = kuna_retroimage::file_retro_image(path) {
+        let _load = enter_load(options, from_env);
+        bootstrap_retro_bytes(path, &bytes, target, languages, isa)
     } else if file_is_dex(path) {
         let bytes = std::fs::read(path).map_err(|error| {
             KunaError::lowlevel(format!("Unable to open DEX file: {path}: {error}"))
@@ -8685,6 +8711,7 @@ pub(crate) enum FileInput {
     Dex(Vec<u8>),
     Esp(unlace_analysis::loader::firmware::esp::EspImage),
     Cil(Box<CilImage>),
+    Retro(Vec<u8>),
     Object,
     Xml(Rc<Element>),
 }
@@ -8718,6 +8745,9 @@ pub(crate) fn classify_file(path: &str) -> KunaResult<FileInput> {
     }
     if let Some(image) = cil_image(&bytes) {
         return Ok(FileInput::Cil(Box::new(image)));
+    }
+    if unlace_analysis::loader::kuna_retroimage::is_retro_image(&bytes) {
+        return Ok(FileInput::Retro(bytes));
     }
     if is_object_binary(&bytes) || is_apple_container(&bytes) {
         return Ok(FileInput::Object);

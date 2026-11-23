@@ -70,7 +70,8 @@ pub(crate) fn image_bytes_and_repairs(
     Ok((bytes, spans))
 }
 
-/// `bytes`, unless the image has no object-file view (TE, MZ, WebAssembly).
+/// `bytes`, unless the image has no object-file view (TE, MZ, WebAssembly,
+/// the `retroimage` formats).
 fn object_view(binary: &str, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
     if unlace_analysis::loadimage_te::is_te_image(&bytes) {
         return unlace_analysis::loader::kuna_objectview::te_as_pe(&bytes)
@@ -78,6 +79,9 @@ fn object_view(binary: &str, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
     }
     if unlace_analysis::loadimage_mz::is_mz_dos_image(&bytes) {
         return Err(mz_object_view_error(binary));
+    }
+    if unlace_analysis::loader::kuna_retroimage::is_retro_image(&bytes) {
+        return Err(retro_object_view_error(binary));
     }
     if unlace_analysis::loadimage_wasm::is_wasm_module(&bytes) {
         return Err(wasm_object_view_error(binary));
@@ -99,6 +103,16 @@ pub(crate) fn slice_offset(binary: &str, pref: SlicePref) -> u64 {
         .ok()
         .and_then(|bytes| unlace_analysis::loader::macho_fat::fat_slice_offset(&bytes, pref))
         .unwrap_or(0)
+}
+
+/// The same capability error for a PS-X EXE, N64 ROM, a.out, Amiga hunk or
+/// PEF executable, which loads through its own parser.
+fn retro_object_view_error(binary: &str) -> String {
+    format!(
+        "{binary}: this executable format has no object-file view, which this operation needs; \
+         its support covers decompile, decompile-all, functions, disassemble/read, \
+         decompile-project, and the console"
+    )
 }
 
 /// The capability error every object-view consumer reports for an MS-DOS

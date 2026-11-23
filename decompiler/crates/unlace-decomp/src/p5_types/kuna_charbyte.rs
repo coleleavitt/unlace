@@ -58,7 +58,7 @@
 //! `unsigned char *` ([`splits_pointer`]): both print as a cast the rule was
 //! meant to remove.
 //!
-//! Gated by [`Architecture::char_byte`](crate::architecture::Architecture)
+//! Gated by [the registered option `CharByte`](crate::architecture::Architecture)
 //! (option `charbyte on|off`); with the option off nothing is recorded and the
 //! pass runs once, exactly as upstream.
 
@@ -299,7 +299,11 @@ pub fn is_candidate(data: &Funcdata, vn: VarnodeId) -> bool {
 
 /// Start recording for one `ActionInferTypes` propagation of `data`.
 pub fn begin(data: &Funcdata) {
-    let on = data.get_arch().char_byte;
+    let on = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_charbyte::CharByte>()
+        .0;
     NOTED.with(|n| *n.borrow_mut() = if on { Some(Vec::new()) } else { None });
 }
 
@@ -538,6 +542,17 @@ pub fn keep_or_restore(data: &mut Funcdata, upstream: Snapshot) -> bool {
     }
     !strays
 }
+
+crate::kuna_flag!(
+    /// (kuna `charbyte`) Keep `char` for a byte loaded through a `char *` when
+    /// the only unsigned vote on it is a zero-extension.  Implementation:
+    /// [`kuna_charbyte`](crate::p5_types::kuna_charbyte).
+    CharByte,
+    "charbyte",
+    "char-pointer byte typing",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests;

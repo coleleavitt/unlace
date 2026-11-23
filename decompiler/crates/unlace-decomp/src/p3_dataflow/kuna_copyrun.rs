@@ -98,7 +98,12 @@ impl Action for ActionCopyRun {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().copy_run {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_copyrun::CopyRun>()
+            .0
+        {
             return 0;
         }
         let blocks: Vec<BlockId> = (0..data.bblocks_get_size())
@@ -456,3 +461,13 @@ fn rewrite(data: &mut Funcdata, run: &Run) -> KunaResult<()> {
     }
     Ok(())
 }
+
+crate::kuna_flag!(
+    /// (kuna) Collapse an unrolled element-copy run into `memcpy` (option
+    /// `copyrun`).  See [`crate::p3_dataflow::kuna_copyrun`].
+    CopyRun,
+    "copyrun",
+    "unrolled element-copy runs as memcpy",
+    unset: false,
+    shipped: true
+);

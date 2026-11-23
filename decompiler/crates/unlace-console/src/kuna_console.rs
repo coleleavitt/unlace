@@ -211,24 +211,68 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // exposed via `Architecture::print()` (the owned `PrintC`).
         "arraynotation" => on_off(conf.print().options.array_notation()),
         "armfloatargs" => on_off(conf.arm_float_args),
-        "callarrayextent" => on_off(conf.call_array_extent),
-        "stackstruct" => on_off(conf.stack_struct),
-        "globalarrayanchor" => on_off(conf.global_array_anchor),
+        "callarrayextent" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_callarrayextent::CallArrayExtent>()
+                .0,
+        ),
+        "stackstruct" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_stackstruct::StackStruct>()
+                .0,
+        ),
+        "globalarrayanchor" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_globalarrayanchor::GlobalArrayAnchor>()
+                .0,
+        ),
         "opaquepredicate" if conf.opaque_predicate && conf.opaque_globals => "globals",
 
-        "bitidioms" => on_off(conf.bit_idioms),
-        "helperroles" => on_off(conf.helper_roles),
+        "bitidioms" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_bitidioms::BitIdioms>()
+                .0,
+        ),
+        "helperroles" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_helperrole::HelperRoles>()
+                .0,
+        ),
         "dynalloca" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_dynalloca::DynAlloca>()
                 .0,
         ),
-        "vaarg" => on_off(conf.va_arg),
-        "indexrescale" => on_off(conf.index_rescale),
-        "looprotate" => on_off(conf.loop_rotate),
-        "vastart" => on_off(conf.va_start),
-        "typevote" => on_off(conf.type_vote),
-        "switchguardmerge" => on_off(conf.switch_guard_merge),
+        "vaarg" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_vaarg::VaArg>()
+                .0,
+        ),
+        "indexrescale" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_indexrescale::IndexRescale>()
+                .0,
+        ),
+        "looprotate" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_looprotate::LoopRotate>()
+                .0,
+        ),
+        "vastart" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_vastart::VaStartRewrite>()
+                .0,
+        ),
+        "typevote" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_typevote::TypeVote>()
+                .0,
+        ),
+        "switchguardmerge" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_switchguardmerge::SwitchGuardMerge>()
+                .0,
+        ),
         "opaquepredicate" => on_off(conf.opaque_predicate),
         "memsetrecover" => on_off(conf.memset_recover),
         "rodatastring" => on_off(conf.rodata_string),
@@ -306,7 +350,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .kuna_options
             .get::<unlace_decomp::kuna_gowritebarrier::GoWriteBarrierMode>()
             .as_str(),
-        "gonewtype" => on_off(conf.go_new_type),
+        "gonewtype" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_gonewtype::GoNewType>()
+                .0,
+        ),
         // (kuna `sourcelang`) Reports the OPTION state, not the detected fact:
         // `auto` until a run forces a language.
         "sourcelang" => match conf.source_lang_forced {
@@ -328,10 +376,22 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_sparcstructret::SparcStructReturn>()
                 .0,
         ),
-        "arraystride" => on_off(conf.recover_array_stride),
-        "stackalias" => on_off(conf.stack_alias_deadstore),
+        "arraystride" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_arraystride::RecoverArrayStride>()
+                .0,
+        ),
+        "stackalias" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::heritage::StackAliasDeadstore>()
+                .0,
+        ),
         "stackviews" => on_off(conf.stack_views),
-        "v850indirectbranch" => on_off(conf.v850_indirect_branch),
+        "v850indirectbranch" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_v850indbranch::V850IndirectBranch>()
+                .0,
+        ),
         "switchmodbound" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::jumptable::SwitchModuloBound>()
@@ -346,7 +406,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::jumptable::SwitchSharedCase>()
                 .0,
         ),
-        "realtypes" => on_off(conf.realtypes),
+        "realtypes" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::printc::Realtypes>()
+                .0,
+        ),
         // (kuna `calloverlap`) Report the selected overlap policy.
         "calloverlap" => match conf
             .kuna_options
@@ -446,7 +510,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "aif" => conf.analysis_aif.as_str(),
 
         "objectview" => on_off(conf.analysis_objectview),
-        "mapglobalsyms" => on_off(conf.mapglobalsyms),
+        "mapglobalsyms" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_mapglobalsyms::Mapglobalsyms>()
+                .0,
+        ),
         "aifpoolslide" => on_off(conf.analysis_aifpoolslide),
         "esprom" => conf.esprom.as_str(),
         "armconstshift" => conf

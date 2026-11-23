@@ -79,7 +79,7 @@
 //! prototype model could place a parameter in, or a Varnode in the stack space.
 //! A register temporary is neither a parameter nor a declaration.
 //!
-//! Gated by [`Architecture::char_ptr`](crate::architecture::Architecture)
+//! Gated by [the registered option `CharPtr`](crate::architecture::Architecture)
 //! (option `charptr on|off`, shipped `off`); with the option off nothing here is
 //! reachable.
 
@@ -687,6 +687,18 @@ pub(crate) fn value_is_string(data: &Funcdata, op: OpId, off: uintb, size: int4)
 pub fn folds_over(cand: &Rc<Datatype>, cur: &Rc<Datatype>) -> bool {
     0 > cand.type_order(cur).unwrap_or(0)
 }
+
+crate::kuna_flag!(
+    /// (kuna `charptr`) Commit a pointer-width parameter or stack local the
+    /// program only ever uses on characters to `char *`; option
+    /// `charptr on|off`.  The rule lives in
+    /// [`kuna_charptr`](crate::p5_types::kuna_charptr).
+    CharPtr,
+    "charptr",
+    "character-pointer evidence",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 mod tests;

@@ -20,7 +20,7 @@ pub(crate) fn plan(
     id: OpId,
     printed: impl Fn(VarnodeId) -> Rc<Datatype>,
 ) -> Option<WidenedAddPlan> {
-    if !arch.wrap_add {
+    if !arch.kuna_options.get::<crate::kuna_widenedadd::WrapAdd>().0 {
         return None;
     }
     let op = data.obank().get(id)?;
@@ -160,6 +160,16 @@ fn integer_observes(data: &Funcdata, start: VarnodeId) -> bool {
     }
     false
 }
+
+crate::kuna_flag!(
+    /// (kuna `wrapadd`) Print a four-byte addition that a wider sign extension
+    /// observes through unsigned C, so it wraps as the machine word does.
+    WrapAdd,
+    "wrapadd",
+    "Wrapping four-byte addition before a wider sign extension",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 mod tests;

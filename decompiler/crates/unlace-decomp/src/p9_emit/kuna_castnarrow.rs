@@ -208,3 +208,15 @@ fn c_integer(t: &Datatype) -> bool {
             && !t.is_enum_type()
             && matches!(t.get_size(), 1 | 2 | 4 | 8))
 }
+
+crate::kuna_flag!(
+    /// (kuna `castnarrow`) Leave out an integer truncation or sign change that
+    /// flows whole into an assignment, a store, a trusted argument or a `return`
+    /// whose type is spelled exactly as the cast's: C's own conversion there is
+    /// that very conversion.  See [`crate::kuna_castnarrow`].
+    CastNarrow,
+    "castnarrow",
+    "implied narrowing-cast elision",
+    unset: false,
+    shipped: true
+);

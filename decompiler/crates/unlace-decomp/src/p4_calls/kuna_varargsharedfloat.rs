@@ -51,7 +51,11 @@ pub fn feeds_earlier_argument(
     trial: &mut ParamTrial,
     maxancestor: int4,
 ) -> bool {
-    if !data.get_arch().vararg_shared_float
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_varargsharedfloat::VarargSharedFloat>()
+        .0
         || data.get_arch().vararg_floats != VarargFloats::ConditionBit
         || trial.get_size() != 8
     {
@@ -211,3 +215,14 @@ fn register_free(data: &Funcdata, call: OpId, vn: VarnodeId, reg: &Address) -> b
     }
     true
 }
+
+crate::kuna_flag!(
+    /// (kuna) Keep a counted variadic double whose register also feeds an
+    /// earlier argument of the same call (option `varargsharedfloat`).  See
+    /// [`crate::p4_calls::kuna_varargsharedfloat`].
+    VarargSharedFloat,
+    "varargsharedfloat",
+    "variadic doubles that also feed an earlier argument",
+    unset: false,
+    shipped: false
+);

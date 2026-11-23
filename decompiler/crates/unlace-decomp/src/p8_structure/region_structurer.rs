@@ -211,10 +211,18 @@ pub fn run_region_structurer(
     // falling back to `CollapseStructure`.  OFF ⇒ byte-identical to the base
     // region structurer (the refinement is dead).  Read before the `sblocks_mut`
     // borrow so we still hold `&Funcdata`.
-    let loop_refine = data.get_arch().region_loop_refine;
+    let loop_refine = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::region_structurer::RegionLoopRefine>()
+        .0;
     // SAILR P2 last-resort edge-virtualization ordering gate (`regionedgeorder`,
     // default-OFF opt-in).  Read while we still hold `&Funcdata`.
-    let edge_order = data.get_arch().region_edge_order;
+    let edge_order = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::region_structurer::RegionEdgeOrder>()
+        .0;
 
     // When refinement is ON, project the region identifier's cyclic (loop) regions
     // onto basic-block start addresses: for each loop the head address, the body
@@ -377,7 +385,7 @@ struct RegionStructurer<'a> {
     /// `boolean_flip`/`fallthru_true` toggled (the deferred data-flow half of
     /// `BlockBasic::negateCondition`) — mirrors `CollapseStructure::pending_flips`.
     pending_flips: Vec<BlockId>,
-    /// Cyclic loop-successor refinement gate (`Architecture::region_loop_refine`,
+    /// Cyclic loop-successor refinement gate (the registered option `RegionLoopRefine`,
     /// option `regionlooprefine`, default-OFF).  When set, `match_cyclic_schemas`
     /// refines a multi-exit / multi-latch / mid-entry loop that `try_fold_loop`
     /// rejected — virtualizing its secondary exits and latches to gotos so it
@@ -398,7 +406,7 @@ struct RegionStructurer<'a> {
     /// when `loop_refine` is on.
     bb_addr: std::collections::BTreeMap<BlockId, uintb>,
     /// (kuna SAILR P2) Last-resort edge-virtualization ORDERING gate
-    /// (`Architecture::region_edge_order`, option `regionedgeorder`, default-OFF).
+    /// (the registered option `RegionEdgeOrder`, option `regionedgeorder`, default-OFF).
     /// When set, [`virtualize_one_edge`](Self::virtualize_one_edge) orders the edges
     /// it virtualizes to gotos via the dominance-tiered bucketing
     /// (crossing/secondary/other) + H2 post-dominator heuristic (capped), instead of
@@ -3425,6 +3433,47 @@ enum LoopRefineOutcome {
     /// caller tries the next head.
     NoChange,
 }
+
+crate::kuna_flag!(
+    /// (kuna) Region structurer cyclic loop-successor refinement: when
+    /// `region_structure` is on, refine a multi-exit / multi-latch (or
+    /// irreducible mid-entry) loop by virtualizing its *secondary* exits and
+    /// latches to gotos (lowered to `break;`/`continue;` by the existing
+    /// `scopeBreak`/loop-construction passes) so the loop folds into a structured
+    /// `while`/`do-while`/`for`/inf-loop instead of falling back to
+    /// `CollapseStructure` (option `regionlooprefine`, default-OFF opt-in).  A
+    /// strict superset of the cyclic schemas: a loop the base schemas already fold
+    /// is untouched (so reducible code stays byte-identical); only loops that
+    /// would otherwise fall back are refined.  Port of angr `RegionIdentifier`'s
+    /// `_refine_loop_successors_to_guarded_successors` /
+    /// `_ensure_jump_at_loop_exit_ends` (the `force_loop_single_exit` path).
+    RegionLoopRefine,
+    "regionlooprefine",
+    "Region structurer multi-exit/irreducible loop-successor refinement",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna) Region structurer last-resort edge-virtualization ORDERING (SAILR P2):
+    /// when the structurer must virtualize an edge to a `goto` (no schema applies),
+    /// pick the order that minimizes the resulting goto count.  Replaces the flat
+    /// H1/H3 + block-index tiebreak with angr's `_last_resort_refinement` dominance-
+    /// tiered bucketing (crossing / secondary / other via forward immediate-
+    /// dominators) and the SAILR `_order_virtualizable_edges` H2 post-dominator
+    /// heuristic (with the `postdom_max_edges` ≈ 10 / `postdom_max_graph_size` ≈ 50
+    /// caps so post-dom computation stays bounded).  Option `regionedgeorder`,
+    /// default-OFF opt-in: OFF ⇒ the existing H1/H3 + address ordering, so output is
+    /// byte-identical (on reducible code the structurer never virtualizes, so the
+    /// reordering is unobservable — this only changes WHICH goto is chosen when the
+    /// structurer is already forced to emit one).  Port of angr SAILR
+    /// `phoenix._last_resort_refinement` + `sailr._order_virtualizable_edges`.
+    RegionEdgeOrder,
+    "regionedgeorder",
+    "Region structurer H2 post-dominator + dominance-tiered edge-virtualization ordering",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 mod tests {

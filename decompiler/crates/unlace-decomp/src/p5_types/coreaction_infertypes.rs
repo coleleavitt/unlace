@@ -888,7 +888,11 @@ fn build_localtypes(data: &mut Funcdata) {
         // the call.  Folded by `type_order`, and allowed to refine only a pointer
         // vote that points at nothing (`void *`, `undefined1 *`).  See `kuna_charptr`.
         let ct = {
-            let on = data.get_arch().char_ptr;
+            let on = data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_charptr::CharPtr>()
+                .0;
             if from_seed {
                 ct
             } else {
@@ -919,7 +923,14 @@ fn build_localtypes(data: &mut Funcdata) {
         // vote, folded by `type_order` (`SUB_BOOL` 10 beats `SUB_INT_CHAR` 19 and
         // `SUB_UINT_PLAIN` 16) so a locked callee parameter type still wins.  See
         // `kuna_boolbyte`.
-        let ct = if data.get_arch().bool_byte && vn_size == 1 && !from_seed {
+        let ct = if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_boolbyte::BoolByte>()
+            .0
+            && vn_size == 1
+            && !from_seed
+        {
             match crate::kuna_boolbyte::truth_value_type(data, vn, &ct) {
                 Some(cand) => cand,
                 None => ct,
@@ -1091,7 +1102,12 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
     };
     // (kuna `ptrdepthcap`) Refuse a candidate that keeps deepening an already
     // unsatisfiable pointer equation -- see `kuna_ptrdepth`.
-    let newtype = if data.get_arch().ptrdepthcap {
+    let newtype = if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::coreaction_infertypes::Ptrdepthcap>()
+        .0
+    {
         match data
             .get_arch()
             .types()
@@ -2574,6 +2590,24 @@ fn propagate_all(data: &mut Funcdata) {
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.coreaction_infertypes_propagate_type_pub = Some(propagate_type_pub);
 }
+
+crate::kuna_flag!(
+    /// (kuna `ptrdepthcap`) Cap the pointer nesting `ActionInferTypes` will adopt.
+    ///
+    /// A small-string-optimized C++ object writes the unsatisfiable equation
+    /// `T == ptr(T)` into the type lattice (`p = &obj` on one MULTIEQUAL edge,
+    /// `p = obj.ptr` -- a LOAD from the same address -- on the other), so the
+    /// propagation adds one pointer level per pass until the seven-pass ceiling
+    /// and declares the object `unsigned long long *****`.  When set, every
+    /// candidate type is put through `kuna_ptrdepth::cap_pointer_depth`, which is
+    /// upstream `TypeFactory::getTypePointerNoDepth`'s rule (`type.cc:1509`)
+    /// applied at the propagation funnel rather than only at LOAD/STORE.
+    Ptrdepthcap,
+    "ptrdepthcap",
+    "inferred pointer-nesting cap",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 mod propagate_type_tests {

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod host;
 pub mod process;
 
 use std::path::PathBuf;

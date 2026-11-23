@@ -20,7 +20,11 @@ pub fn paint(arch: &mut Architecture, entry: &Address) {
     if !arch.archid.starts_with("AARCH64:") {
         return;
     }
-    let want = u32::from(arch.acle_intrinsics);
+    let want = u32::from(
+        arch.kuna_options
+            .get::<crate::kuna_memtag::AcleIntrinsics>()
+            .0,
+    );
     if arch.with_context_db(|db| {
         db.get_variable_value(SHOW_MEMTAG, entry)
             .map_or(true, |v| v == want)
@@ -36,3 +40,14 @@ pub fn paint(arch: &mut Architecture, entry: &Address) {
         let _ = db.set_variable_region(SHOW_MEMTAG, &begin, &Address::default(), want);
     });
 }
+
+crate::kuna_flag!(
+    /// (kuna `acleintrinsics`) On AArch64, lift the memory-tagging instructions
+    /// with their tag effect (`kuna_memtag`) and print the barrier, hint and
+    /// memory-tagging user ops as ACLE intrinsics (`kuna_acleintrinsics`).
+    AcleIntrinsics,
+    "acleintrinsics",
+    "AArch64 ACLE intrinsics",
+    unset: false,
+    shipped: true
+);

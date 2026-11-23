@@ -181,7 +181,8 @@ fn check_target(target: &str) {
     }
     assert_eq!(fd.high_bank().get(high).unwrap().kuna_symbol_offset(), 4);
     let arch = data.conf.as_mut().unwrap().arch_mut();
-    arch.realtypes = true;
+    arch.kuna_options
+        .set(unlace_decomp::printc::Realtypes(true));
     arch.ctypes = true;
     let body = arch.with_print(|printer, arch| {
         printer.options.partial_access = true;

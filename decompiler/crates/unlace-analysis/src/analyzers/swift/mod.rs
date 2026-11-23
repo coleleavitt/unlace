@@ -206,7 +206,13 @@ impl AnalysisPass for SwiftMetadataPass {
                         });
                     }
                 }
-                if let (true, Some(regs)) = (ctx.arch.analysis_swiftcall, regs.as_ref()) {
+                if let (true, Some(regs)) = (
+                    ctx.arch
+                        .kuna_options
+                        .get::<unlace_decomp::kuna_swiftcall::Swiftcall>()
+                        .0,
+                    regs.as_ref(),
+                ) {
                     let symbols: Vec<(u64, String)> = ctx
                         .file
                         .symbols()

@@ -47,7 +47,7 @@
 //! Varnode whose mask exceeds 1) is left exactly as upstream wrote it, so the
 //! seed cannot leak along a copy chain into a value that can hold more than 0/1.
 //!
-//! Gated by [`Architecture::bool_byte`](crate::architecture::Architecture) (option
+//! Gated by [the registered option `BoolByte`](crate::architecture::Architecture) (option
 //! `boolbyte on|off`, default on); with the option off nothing in this module is
 //! reachable.
 
@@ -90,7 +90,12 @@ pub fn truth_value_type(
     vn: VarnodeId,
     cur: &Rc<Datatype>,
 ) -> Option<Rc<Datatype>> {
-    if !data.get_arch().bool_byte {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_boolbyte::BoolByte>()
+        .0
+    {
         return None;
     }
     let cand = data
@@ -542,6 +547,17 @@ fn is_mask_proven(data: &Funcdata, vn: VarnodeId) -> bool {
         .map(|v| v.is_written() && v.get_nz_mask() <= 1)
         .unwrap_or(false)
 }
+
+crate::kuna_flag!(
+    /// (kuna `boolbyte`) Offer `bool` as a `getLocalType` candidate for a byte
+    /// whose every read is a truth test.  Implementation:
+    /// [`kuna_boolbyte`](crate::p5_types::kuna_boolbyte).
+    BoolByte,
+    "boolbyte",
+    "truth-valued byte typing",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests;

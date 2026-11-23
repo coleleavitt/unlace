@@ -67,6 +67,9 @@ fn linked_images(endian: &str) -> Vec<String> {
     } else {
         "powerpcle"
     };
+    if !common::host::mc_targets(mc, &format!("{triple}-unknown-linux-gnu")) {
+        return images;
+    }
     let object = common::scratch_file("stack-chk-fail-local-linked", "o");
     let image = common::scratch_file("stack-chk-fail-local-linked", "so");
     process::required_output(

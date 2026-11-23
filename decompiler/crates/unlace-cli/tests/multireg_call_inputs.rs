@@ -9,6 +9,9 @@ fn unlocked_sparc_math_wrappers_preserve_entry_values() {
         eprintln!("skipping SPARC compiler control: Clang unavailable");
         return;
     }
+    if !common::host::cc_targets("clang", "sparc-linux-gnu") {
+        return;
+    }
     let compilers: Vec<_> = ["gcc", "clang"]
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())

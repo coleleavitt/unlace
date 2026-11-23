@@ -436,7 +436,13 @@ fn proven_unobserved(fd: &Funcdata, saves: &[Save], stack_space: &Rc<AddrSpace>)
 }
 
 pub(crate) fn restrict_local_saved_lanes(fd: &mut Funcdata) -> i32 {
-    if !fd.get_arch().stack_views && !fd.get_arch().stack_alias_deadstore {
+    if !fd.get_arch().stack_views
+        && !fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::heritage::StackAliasDeadstore>()
+            .0
+    {
         return 0;
     }
     let Some(stack_space) = fd.get_arch().manage().get_stack_space().map(Rc::clone) else {

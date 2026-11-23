@@ -329,7 +329,12 @@ impl Action for ActionVaStart {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().va_start {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_vastart::VaStartRewrite>()
+            .0
+        {
             return 0;
         }
         let Some(m) = find(data) else { return 0 };
@@ -340,3 +345,12 @@ impl Action for ActionVaStart {
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `vastart`) The x86-64 va_start prologue as va_start(ap, last).
+    VaStartRewrite,
+    "vastart",
+    "va_start prologue as one call",
+    unset: false,
+    shipped: true
+);

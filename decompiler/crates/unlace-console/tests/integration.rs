@@ -24,6 +24,8 @@ mod octeon_n64_arguments;
 #[path = "setup_commands.rs"]
 mod setup_commands;
 
+#[path = "verify_cortexmdevice.rs"]
+mod verify_cortexmdevice;
 #[path = "verify_language_database.rs"]
 mod verify_language_database;
 #[path = "verify_memoryspecs.rs"]

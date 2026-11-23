@@ -5001,6 +5001,13 @@ pub(crate) fn bootstrap_raw_image(
         prog.pending_analysis
             .push((unlace_analysis::cortexmscs::ID, scs));
     }
+    if unlace_analysis::loader::kuna_cortexmdevice::is_m_profile(&arch_id, None) {
+        unlace_analysis::loader::kuna_cortexmdevice::paint_volatile(
+            prog.arch_mut(),
+            &code_space,
+            &[(image_base, image_size, 0)],
+        );
+    }
     prog.analysis_code_space = Some(code_space);
     prog.raw_address_units = Some((word_size, arm32));
     if word_size == 1 {
@@ -5894,6 +5901,8 @@ pub(crate) fn bootstrap_object(
             })
         })
         .flatten();
+    let m_profile =
+        unlace_analysis::loader::kuna_cortexmdevice::is_m_profile(&arch_id, parsed.as_ref());
     drop(parsed);
     sleigh.base_mut().unwrap().mapped_flow_boundary_image =
         unlace_decomp::kuna_mappedflowboundary::eligible_elf(&bytes, &arch_id);
@@ -6236,6 +6245,14 @@ pub(crate) fn bootstrap_object(
         prog.loader_aliases.entry(vma).or_default().push(name);
     }
     prog.pending_entry_thumb = entry_thumb_walk;
+    if m_profile {
+        let mapped = prog.sections();
+        unlace_analysis::loader::kuna_cortexmdevice::paint_volatile(
+            prog.arch_mut(),
+            &code_space,
+            &mapped,
+        );
+    }
     // conf->readLoaderSymbols("::"): install the ELF symbols as FunctionSymbols.
     // The deferred analysis commit at `read symbols` REQUIRES this to have run
     // first (no-return/callfixup address+name resolution finds the funcsyms).

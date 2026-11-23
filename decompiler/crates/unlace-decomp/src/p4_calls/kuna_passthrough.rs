@@ -2126,6 +2126,7 @@ pub(crate) fn truncate_before(
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.passthrough_claim_after_go_stack_guard = Some(claim_after_go_stack_guard);
     hooks.passthrough_suppresses_return_trial = Some(suppresses_return_trial);
 }
 

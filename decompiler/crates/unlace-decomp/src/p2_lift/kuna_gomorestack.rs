@@ -198,7 +198,7 @@ impl Action for ActionGoMorestack {
             changed = 1;
         }
         if changed != 0 {
-            crate::p4_calls::kuna_passthrough::claim_after_go_stack_guard(data);
+            (data.hooks().passthrough_claim_after_go_stack_guard)(data);
         }
         changed
     }

@@ -2492,7 +2492,7 @@ fn kuna_qualify_global_name(
     name_used: &dyn Fn(&str) -> bool,
 ) -> String {
     let prefix = crate::kuna_namespaces::scope_prefix(
-        crate::printlanguage::NamespaceStrategy::MinimalNamespaces,
+        crate::kuna_namespaces::NamespaceStrategy::MinimalNamespaces,
         base,
         sym_scope_path,
         func_ns_path,

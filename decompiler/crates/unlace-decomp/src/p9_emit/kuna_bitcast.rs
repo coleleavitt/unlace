@@ -520,3 +520,8 @@ pub(crate) fn array_float_conversion(fd: &Funcdata, op: OpId) -> Option<Rc<Datat
         .get_base(value.get_size(), type_metatype::TYPE_FLOAT)
         .ok()
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.bitcast_reinterprets_to_float = Some(reinterprets_to_float);
+}

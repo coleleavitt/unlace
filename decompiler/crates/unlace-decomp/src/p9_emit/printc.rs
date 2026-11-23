@@ -17081,6 +17081,12 @@ mod kuna_rustarrayinit;
 #[path = "kuna_rustoption_niche.rs"]
 mod kuna_rustoption_niche;
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.printc_decl_type_representative = Some(decl_type_representative);
+    hooks.printc_type_to_c_string = Some(type_to_c_string);
+}
+
 #[cfg(test)]
 mod tests;
 

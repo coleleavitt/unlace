@@ -65,7 +65,8 @@ pub fn argument_requirement(
 /// float would reinterpret?  An implied `CAST` folded into the argument counts
 /// only when its own source is integer bits or already a float.
 pub(crate) fn integer_bits(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    let bits = |v| crate::kuna_bitcast::reinterprets_to_float(data, v);
+    let reinterprets = data.hooks().bitcast_reinterprets_to_float;
+    let bits = |v| reinterprets(data, v);
     let Some(node) = data.vbank().get(vn) else {
         return false;
     };

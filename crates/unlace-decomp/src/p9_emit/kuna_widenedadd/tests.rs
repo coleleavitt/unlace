@@ -29,7 +29,7 @@ fn architecture() -> Architecture {
     arch.types_impl().setup_sizes(Some(4), 8, 8);
     arch.types_impl().set_default_alignment_map();
     arch.build_core_types().unwrap();
-    arch.wrap_add = true;
+    arch.kuna_options.set(crate::kuna_widenedadd::WrapAdd(true));
     arch
 }
 fn function() -> Funcdata {
@@ -145,6 +145,7 @@ fn the_option_gates_the_wrapping_form() {
     fd.op_set_input(ret, extended, 1).unwrap();
     let signed = |_| Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
     assert!(plan(&fd, &arch, add, signed).is_some());
-    arch.wrap_add = false;
+    arch.kuna_options
+        .set(crate::kuna_widenedadd::WrapAdd(false));
     assert!(plan(&fd, &arch, add, signed).is_none());
 }

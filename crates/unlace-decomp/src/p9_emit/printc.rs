@@ -1733,7 +1733,7 @@ pub struct PrintC {
     /// from its own cases.  Computed per function with `goto_rewrites`.
     switch_plans: crate::p8_structure::kuna_switchmerge::SwitchPlans,
     /// (kuna) Resolved `realtypes` rendering context for the function currently
-    /// being printed — the `Architecture::realtypes` gate plus the data-model fact
+    /// being printed — the the registered option `Realtypes` gate plus the data-model fact
     /// (`long` is 8 bytes) needed to relabel residual `TYPE_UNKNOWN` (`xunknownN`)
     /// types as real C types.  Refreshed at the top of [`doc_function_full`] from
     /// the live `arch`; `OFF` until then (so an out-of-band print never relabels).
@@ -2976,7 +2976,8 @@ impl PrintC {
         // any declaration is written and consumed by
         // `local_decl_type_and_comment` (the declaration) and `op_type_cast_ir`
         // (the casts the new declaration makes redundant).
-        let cast_sign = arch.cast_sign && self.out_lang.profile().caps.integer_promotion;
+        let cast_sign = arch.kuna_options.get::<crate::kuna_castsign::CastSign>().0
+            && self.out_lang.profile().caps.integer_promotion;
         self.sign_plan = crate::kuna_typeround::plan(
             fd,
             arch.kuna_options.get::<crate::kuna_typeround::SignPolicy>(),
@@ -4768,7 +4769,7 @@ impl PrintC {
         // load-once/decompile-many run (generations are globally unique, so this
         // is purely to bound memory, not for correctness).
         self.emit.reset_pending_fired();
-        self.void_tail_return = if arch.voidtailreturn {
+        self.void_tail_return = if arch.kuna_options.get::<crate::printc::Voidtailreturn>().0 {
             elidable_void_tail_return(fd)
         } else {
             None
@@ -4783,7 +4784,12 @@ impl PrintC {
             self.lang().forms.switch,
             crate::kuna_lang::SwitchForm::CSwitch
         );
-        self.switch_plans = if arch.switchmerge && c_switch {
+        self.switch_plans = if arch
+            .kuna_options
+            .get::<crate::kuna_switchmerge::Switchmerge>()
+            .0
+            && c_switch
+        {
             let facts = crate::p8_structure::kuna_switchmerge::PrintFacts {
                 prints_nothing: &|head| self.header_prints_nothing(fd, head),
                 labels: &|sw| self.switch_label_set(fd, arch, sw),
@@ -8644,7 +8650,7 @@ impl PrintC {
                 (false, None) => format!("CALLOTHER[{:#x}]", in0_off),
             };
             let mut order: Vec<int4> = (1..nin).collect();
-            if arch.avx_intrinsics {
+            if arch.kuna_options.get::<crate::printc::AvxIntrinsics>().0 {
                 let size = fd
                     .obank()
                     .get(op)
@@ -11345,7 +11351,9 @@ impl PrintC {
             None => return,
         };
         if let Some(name) = arch
-            .import_data
+            .kuna_options
+            .get::<crate::printc::ImportData>()
+            .0
             .then(|| import_slot_name(fd, ptr))
             .flatten()
         {
@@ -13561,7 +13569,9 @@ impl PrintC {
             return;
         }
         if let Some(name) = arch
-            .import_data
+            .kuna_options
+            .get::<crate::printc::ImportData>()
+            .0
             .then(|| import_slot_address(fd, arch, vn, op))
             .flatten()
         {
@@ -16224,7 +16234,7 @@ impl RealTypeCtx {
     pub(crate) fn from_arch(arch: &Architecture, lang: crate::kuna_lang::OutLang) -> RealTypeCtx {
         RealTypeCtx {
             lang,
-            enabled: arch.realtypes,
+            enabled: arch.kuna_options.get::<crate::printc::Realtypes>().0,
             long_is_8: arch.types().get_size_of_long() == 8,
             ctypes: arch.ctypes,
             model: crate::kuna_ctypes::CDataModel::from_types(&*arch.types()),
@@ -17119,6 +17129,57 @@ mod kuna_rustarrayinit;
 
 #[path = "kuna_rustoption_niche.rs"]
 mod kuna_rustoption_niche;
+
+crate::kuna_flag!(
+    /// (kuna DIV-6) Render residual `TYPE_UNKNOWN` (`xunknownN`) values as real C
+    /// types by size — 1→`char`, 2/4/8→unsigned ints, pointer-to-unknown→`void *` —
+    /// instead of the `xunknownN`/`undefined<N>` placeholder.  Default-on; read by
+    /// the printc declarator chokepoints (`RealTypeCtx`).
+    Realtypes,
+    "realtypes",
+    "Real-C-type rendering for unknowns",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna `voidtailreturn`) Elide the trailing bare `return;` of a void
+    /// function -- the one the C source it came from does not have, because the
+    /// source just falls off the end of the body.
+    ///
+    /// Only the function's OWN last statement, only when the prototype returns
+    /// void, only when the owning structured leaf is not a goto target (a label
+    /// would be left dangling) and only when exactly one structured leaf carries
+    /// that RETURN op (`returndup`/`taildup` clone a shared epilogue by aliasing
+    /// one op across several leaves, and suppressing by identity would delete
+    /// genuine mid-body early returns).
+    Voidtailreturn,
+    "voidtailreturn",
+    "void tail-return elision",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna `importdata`) Render a data read through a loader-marked import slot
+    /// (a GOT / `__got` / `__auth_got` / IAT entry holding an import's address) as
+    /// the import itself, instead of a dereference of the anonymous slot. Default
+    /// **on**.
+    ImportData,
+    "importdata",
+    "import-slot data-read rendering",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna `avxintrinsics`) Print SLEIGH AVX user-ops as Intel intrinsics.
+    AvxIntrinsics,
+    "avxintrinsics",
+    "Intel intrinsic names for AVX user-ops",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests;

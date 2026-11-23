@@ -3851,10 +3851,18 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         "arm64evcall" => arch.analysis_arm64evcall,
         // (kuna) ELF GOT data imports: the slot names + externref paint exist only
         // to let `importdata` render a read through the slot, so they share its gate.
-        "elfgotimports" => arch.import_data,
+        "elfgotimports" => {
+            arch.kuna_options
+                .get::<unlace_decomp::printc::ImportData>()
+                .0
+        }
 
         "machobinds" => arch.analysis_machobinds,
-        "machodataslots" => arch.import_data,
+        "machodataslots" => {
+            arch.kuna_options
+                .get::<unlace_decomp::printc::ImportData>()
+                .0
+        }
         // (kuna) The measured libc signature extension — the ~200 prototypes the
         // 27-entry base table does not carry, seeded onto IMPORTED names only. The
         // facts are computed at LOAD and COMMITTED only when this gate is on, so
@@ -6925,7 +6933,12 @@ fn commit_analysis_output(
 
     // 1---. (kuna `outlinedinline`) Flag clang's MachineOutliner fragments inline,
     //       so flow splices each into its callers.
-    if prog.arch().outlined_inline {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::flow::OutlinedInline>()
+        .0
+    {
         let fragments: Vec<Address> = prog
             .symbols
             .iter()

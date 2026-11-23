@@ -193,7 +193,12 @@ fn is_alloca(data: &Funcdata, vn: VarnodeId) -> bool {
 /// `and reg,0xff0`) counts, and not one the block computed from constants:
 /// `mov x9,#N; bl ___chkstk_darwin; sub sp,sp,x9,lsl #4` is a fixed frame.
 pub fn rewrite_raw(data: &mut Funcdata) {
-    if !data.get_arch().alloca_calls {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_alloca::AllocaCalls>()
+        .0
+    {
         return;
     }
     let Some(base) = data
@@ -340,7 +345,12 @@ impl Rule for RuleAlloca {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().alloca_calls {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_alloca::AllocaCalls>()
+            .0
+        {
             return 0;
         }
         let Some(o) = data.obank().get(op) else {
@@ -557,7 +567,12 @@ impl Rule for RuleAllocaProbe {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().alloca_calls {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_alloca::AllocaCalls>()
+            .0
+        {
             return 0;
         }
         let Some(o) = data.obank().get(op) else {
@@ -606,6 +621,16 @@ impl Rule for RuleAllocaProbe {
         1
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) A dynamic stack allocation becomes `alloca(size)` (option
+    /// `alloca`). See [`crate::p3_dataflow::kuna_alloca`].
+    AllocaCalls,
+    "alloca",
+    "dynamic stack allocation as alloca(size)",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

@@ -375,10 +375,25 @@ impl Action for ActionGotoSink {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().goto_sink || data.sblocks_get_size() == 0 {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_gotosink::GotoSink>()
+            .0
+            || data.sblocks_get_size() == 0
+        {
             return 0;
         }
         self.base.count += gotosink_apply(data);
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) Sink `if (c) goto L` over the statements it skips and turn a backward goto into a loop. (option `gotosink`).
+    GotoSink,
+    "gotosink",
+    "goto sinking and backward-goto loops",
+    unset: false,
+    shipped: true
+);

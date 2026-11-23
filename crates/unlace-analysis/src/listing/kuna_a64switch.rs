@@ -79,7 +79,10 @@ impl<'a> A64Tables<'a> {
             max_entries,
             entries,
             tables: FunctionTables::new(pool),
-            extent: arch.switch_extent,
+            extent: arch
+                .kuna_options
+                .get::<unlace_decomp::jumptable::SwitchExtent>()
+                .0,
         }
     }
 

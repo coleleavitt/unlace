@@ -1398,7 +1398,13 @@ impl ActionPool {
             }
             self.allrules[rl_idx].state.count_tests += 1;
             let res = self.allrules[rl_idx].rule.apply_op(op, data);
-            if res > 0 && data.get_arch().dirty_pool {
+            if res > 0
+                && data
+                    .get_arch()
+                    .kuna_options
+                    .get::<crate::action::DirtyPool>()
+                    .0
+            {
                 touch_neighbourhood(&mut self.touched, data, op);
             }
             if res > 0 {
@@ -1707,7 +1713,11 @@ impl Action for ActionPool {
         self.lookahead_epoch = None;
         // (kuna `dirtypool`) A repeat sweep visits only what the previous sweep's
         // rules touched and the ops created since it began.
-        let dirty = data.get_arch().dirty_pool;
+        let dirty = data
+            .get_arch()
+            .kuna_options
+            .get::<crate::action::DirtyPool>()
+            .0;
         let filter = if dirty && self.base.status == statusflags::status_repeat {
             self.focus.take()
         } else {
@@ -2184,6 +2194,15 @@ pub fn build_default_groups(db: &mut ActionDatabase) {
     db.set_group("firstpass", ["base"]);
     db.is_default_groups = true;
 }
+
+crate::kuna_flag!(
+    /// (kuna) Let a repeated rule-pool sweep visit only the ops near the previous sweep's rewrites. (option `dirtypool`).
+    DirtyPool,
+    "dirtypool",
+    "dirty-op rule scheduling",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 mod tests;

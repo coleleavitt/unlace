@@ -173,7 +173,12 @@ pub fn capture(data: &mut Funcdata) {
     };
     data.kuna_x87_float_returns.clear();
     data.kuna_x87_float_calls.clear();
-    if data.get_arch().x87_depth {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_x87depth::X87Depth>()
+        .0
+    {
         let facts = crate::p4_calls::kuna_x87depth::facts(data, &storage);
         data.kuna_x87_empty_returns = facts.empty_returns;
         data.kuna_x87_float_returns = facts.float_returns;

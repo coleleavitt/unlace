@@ -254,6 +254,11 @@ fn reaches_avoiding(data: &Funcdata, from: BlockId, target: BlockId, wall: Block
     false
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.sharedpush_declared_arm_shares = Some(declared_arm_shares);
+}
+
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;

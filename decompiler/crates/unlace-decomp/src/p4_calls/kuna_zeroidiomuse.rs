@@ -131,6 +131,11 @@ fn is_pure_reshape(code: OpCode) -> bool {
     )
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.zeroidiomuse_op_discards_operand = Some(op_discards_operand);
+}
+
 #[cfg(test)]
 #[path = "kuna_zeroidiomuse/tests.rs"]
 mod tests;

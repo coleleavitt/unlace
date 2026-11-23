@@ -509,6 +509,11 @@ pub(crate) fn block_at_start(data: &Funcdata, addr: &Address) -> Option<BlockId>
         })
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.loweredswitchexact_raw_install_keeps_values = Some(raw_install_keeps_values);
+}
+
 #[cfg(test)]
 #[path = "kuna_loweredswitchexact/tests.rs"]
 mod tests;

@@ -2567,6 +2567,11 @@ fn propagate_all(data: &mut Funcdata) {
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.coreaction_infertypes_propagate_type_pub = Some(propagate_type_pub);
+}
+
 #[cfg(test)]
 mod propagate_type_tests {
     //! Focused tests of the LOAD/STORE pointer-propagation helpers (C++

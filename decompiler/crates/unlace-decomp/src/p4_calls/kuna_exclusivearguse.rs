@@ -177,6 +177,11 @@ pub(crate) fn reaches(data: &Funcdata, from: BlockId, target: BlockId) -> bool {
     false
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.exclusivearguse_access_cannot_reach_call = Some(access_cannot_reach_call);
+}
+
 #[cfg(test)]
 #[path = "kuna_exclusivearguse/tests.rs"]
 mod tests;

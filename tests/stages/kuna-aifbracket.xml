@@ -28,12 +28,12 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/aifbracket_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/aifbracket_pe_i386.exe</com>
   <com>mode aggressive</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/aifbracket_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/aifbracket_pe_i386.exe</com>
   <com>mode aggressive</com>
   <com>option aif off</com>
   <com>read symbols</com>

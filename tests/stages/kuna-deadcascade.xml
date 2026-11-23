@@ -12,7 +12,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/prunedssa_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/prunedssa_x86_64</com>
   <com>read symbols</com>
   <com>option deadcascade off</com>
   <com>load function churn</com>

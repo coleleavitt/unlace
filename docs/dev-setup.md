@@ -6,14 +6,18 @@ they run on dev binaries, which is faster to build and gives the same results.
 
 ## Layout
 
+- The repository root is the Cargo workspace: `Cargo.toml`, `Cargo.lock`, `crates/`,
+  `.config/nextest.toml`, `clippy.toml` and `rustfmt.toml` sit at the top, so every `cargo`
+  command below runs from the root. There is no Makefile; each gate is one `cargo` or
+  `python3` command (below).
 - One git worktree per agent or task: `../unlace-wt-<name>`. The main branch lives in
   `../unlace-wt-main`.
-- Build output never goes inside a worktree. Each worktree's `decompiler/target` is a
+- Build output never goes inside a worktree. Each worktree's `target` is a
   symlink to its own target dir (`../unlace-target/<name>`, or wherever you keep them):
-  `ln -s <target-dir> decompiler/target`. The Makefile and the gate script find the dev
+  `ln -s <target-dir> target` at the worktree root. The gate script finds the dev
   binaries through it.
 - Built `.sla` files live in each checkout's `specs/` (gitignored). Build them once per
-  worktree with `decompiler/target/debug/slacomp -a specs` (about 20 s), or symlink them
+  worktree with `target/debug/slacomp -a specs` (about 20 s), or symlink them
   from another checkout of the same commit. Rebuild after any change to
   `specs/**/*.{slaspec,sinc,pspec,cspec}`, and check that every `.slaspec` has its `.sla`.
 - Never `git stash` (refs/stash is shared by every worktree). Stage explicit paths only.
@@ -35,41 +39,70 @@ if [ -p "$fifo" ]; then export MAKEFLAGS="-j --jobserver-auth=fifo:$fifo"; unset
 export CARGO_PROFILE_DEV_OPT_LEVEL=1 CARGO_PROFILE_DEV_DEBUG=line-tables-only CARGO_PROFILE_TEST_DEBUG=line-tables-only
 # Never export RUSTFLAGS: it replaces the linker and -Z flags set in ~/.cargo/config.toml.
 # Never set CARGO_INCREMENTAL=0.
-export CARGO_TARGET_DIR=$(readlink -f decompiler/target)
+export CARGO_TARGET_DIR=$(readlink -f target)
 export KUNA_SPECS=$PWD/specs SLEIGHHOME=$PWD/specs
 
-cd decompiler && cargo check -p <crate>                        # while editing
-cd decompiler && cargo test -p <crate> --lib <filter>           # focused
-cd decompiler && cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli   # dev profile
+cargo check -p <crate>                        # while editing
+cargo test -p <crate> --lib <filter>           # focused
+cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli   # dev profile
 ```
 
-Heavy runs (decompile-all over a corpus, `make test`, `make test-stages`) go through
+Heavy runs (decompile-all over a corpus, `cargo test -p unlace-cli --test parity`) go through
 `tools/hooks/unlace-slot <cmd>`, which holds one of `UNLACE_SLOTS` (default 6)
 machine-wide slots.
 
 ## Gates
 
+Each gate is one command, run from the repository root on dev binaries:
+
+```bash
+cargo fmt --all --check                                  # rustfmt (2024 style, rustfmt.toml)
+cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
+target/debug/slacomp -a specs                            # only when specs/ has no .sla yet
+cargo test -p unlace-cli --test parity                   # datatests + stages vs their baselines
+python3 tools/check_spec.py                              # docs/spec anchors, phase-folder ownership
+PYTHONPATH=. python3 -m unittest discover -s scripts/tests -p 'test_*.py'   # Python tooling, test layout, layering
+PYTHONPATH=. python3 -m scripts.repipe.clitests          # tests/cli acceptance probes
+target/debug/unlace catalog --check                      # option catalog vs docs/options.md
+target/debug/unlace catalog --markdown | diff -u docs/options.md -   # options.md is the generator's bytes
+cargo clippy -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings
+cargo nextest run --workspace --exclude unlace-wasm --profile ci   # the workspace suite
+```
+
+The parity target (`crates/unlace-cli/tests/parity.rs`) holds two tests:
+`datatests_match_the_baseline` runs `tests/datatests` against `docs/baseline.json` (PARITY OK,
+675/675 assertions) and `stage_tests_match_the_baseline` runs `tests/stages` against
+`docs/baseline-stages.json`. Each runs `unlace test --datatests`, the command a person runs,
+and passes only on its `PARITY OK`; on a failure the message carries the report with the
+regressed keys. Filter with a name (`cargo test -p unlace-cli --test parity datatests`). The
+harness binary `decomp_test_dbg` comes from `unlace-harness`, so build it first, as above;
+`cargo nextest run --workspace` builds it. A harness from other sources than the `unlace`
+under test fails the gate. Re-record a baseline only for a sanctioned change:
+`target/debug/unlace test --datatests --save-baseline docs/baseline.json` (stages:
+`--datatests-dir tests/stages --save-baseline docs/baseline-stages.json`).
+
+Other one-liners: `cargo test --release -p unlace-ghidra -- --include-ignored` (the ghidra-mode
+differential harness with its heavier breadth test), `bash scripts/version.sh` (the version CI
+tags with), `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna
+target/release/unlace` and `bash scripts/coverage.sh` (docs/observatory.md).
+
+`tools/hooks/unlace-ci-gates.sh` runs them in order:
+
 ```bash
 tools/hooks/unlace-ci-gates.sh [fast|parity|full]   # default parity
 ```
 
-- `fast`: rustfmt (`cargo fmt --all --check`; `decompiler/rustfmt.toml` sets the 2024 edition
-  and style), forbidden words (no IDA/Hex-Rays text in a branch meant for Noelo-Lab/kuna;
+- `fast`: rustfmt, forbidden words (no IDA/Hex-Rays text in a branch meant for Noelo-Lab/kuna;
   skipped on `main`), ignored fixtures, `scripts/check_test_layout.py`.
-- `parity` adds: `make test-tools`, build, specs, lint (clippy `-D warnings` on
-  unlace-cli/base/num), `make test` (PARITY OK 675/675), `make test-stages` (PARITY OK),
-  `make check-spec`, the CLI tests, `unlace catalog --check`, the repipe counters,
+- `parity` adds: the Python tooling tests, build, specs, lint, the parity target,
+  `tools/check_spec.py`, the CLI probes, `unlace catalog --check`, the repipe counters,
   `docs/options.md` freshness and unlace-ghidra. A full pass records the
   tree hash in `$CARGO_TARGET_DIR/.ci-gates-pass`.
-- `full` adds `make rust-test` (slow; CI runs it on every push to main).
+- `full` adds the workspace suite under nextest (slow; CI runs it on every push to main).
 - Skip named steps with `UNLACE_GATES_SKIP="lint ghidra"`.
 - The browser front-end (`integrations/web`, the `unlace-wasm` crate) is opt-in:
-  `UNLACE_GATES_WEB=1` adds its tests to the gates, `make rust-test WEB=1` adds the crate to the
-  workspace suite, and CI runs both only when the repository variable `UNLACE_WEB` is `true`.
-
-Individually, on dev binaries: `make test BINDIR=$CARGO_TARGET_DIR/debug`,
-`make test-stages BINDIR=$CARGO_TARGET_DIR/debug`, `make check-spec`,
-`$CARGO_TARGET_DIR/debug/unlace catalog --check`.
+  `UNLACE_GATES_WEB=1` adds its tests to the gates and the crate to the workspace suite,
+  and CI runs both only when the repository variable `UNLACE_WEB` is `true`.
 
 ## CI
 
@@ -78,29 +111,51 @@ called whole by the nightly). Its four jobs start together; none waits for anoth
 
 | Job | What it runs | Typical time |
 |---|---|---|
-| `tidy` | `cargo fmt --all --check`, `make test-tools` (includes `scripts/check_test_layout.py`), actionlint with shellcheck over `.github/workflows` | about 1 min |
-| `clippy` | `make lint`: `-D warnings` on unlace-cli, unlace-base and unlace-num (the rest of the workspace is not clippy-clean yet) | about 2 min |
-| `parity gates` | release build, `make test`, `make test-stages`, `make check-spec`, `make test-cli`, `unlace catalog --check`, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
-| `cargo workspace suite` | `make rust-test` under cargo-llvm-cov, then the Repowise coverage upload. Skipped on a PR from a branch of this repository unless it has the `full-ci` label | about 20 min |
+| `tidy` | `cargo fmt --all --check`, the Python tooling tests (`scripts/check_test_layout.py`, `scripts/check_layers.py`, `scripts/tests`), actionlint with shellcheck over `.github/workflows` | about 1 min |
+| `clippy` | `cargo clippy --release ... -- -D warnings` on unlace-cli, unlace-base and unlace-num (the rest of the workspace is not clippy-clean yet) | about 2 min |
+| `parity gates` | release build, `cargo test --release -p unlace-cli --test parity`, `tools/check_spec.py`, the `tests/cli` probes, `unlace catalog --check`, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
+| `workspace suite (build)` | builds every workspace test binary into a cargo-nextest archive (`cargo nextest archive`), runs the doc tests | about 12 min |
+| `cargo workspace suite (1/3..3/3)` | three jobs, each running a third of the archive (`--partition count:N/3`) under the nextest profile `ci` (`.config/nextest.toml`), which leaves out the slow tests listed there. Both suite jobs are skipped on a PR from a branch of this repository unless it has the `full-ci` label | a few min each |
 
 Caching:
 
 - `Swatinem/rust-cache` keeps each job's dependency build under its own key (`clippy`,
-  `gates`, `rust-test-line-tables`; the jobs build different units, so a shared key would not help).
+  `gates`, `rust-test-nextest`; the jobs build different units, so a shared key would not help).
   Only runs on `main` save it; PR runs read it. The workspace suite also saves after a
   failing test (`cache-on-failure`).
 - The compiled `.sla` files are cached under a hash of `specs/**/*.{slaspec,sinc}`,
-  `decompiler/Cargo.lock` and the slacomp, sleigh, base and num crates; a hit skips
-  `make specs`. Both jobs still check that every `.slaspec` has its `.sla`.
+  `Cargo.lock` and the slacomp, sleigh, base and num crates; a hit skips
+  `target/release/slacomp -a specs`. Both jobs still check that every `.slaspec` has its `.sla`.
 - `CARGO_INCREMENTAL=0` for the whole workflow (CI builds are never incremental).
 
-A new push to a PR cancels that PR's running workflow; runs on `main` are never cancelled.
+A new push to a PR cancels that PR's running workflow. Each commit on `main` runs in a
+concurrency group of its own, so no landed commit's run is cancelled or replaced.
+
+`.github/workflows/coverage.yml` runs the whole suite (the slow tests included) under
+cargo-llvm-cov once a day and on manual dispatch, on cargo's own harness (under nextest
+every test process wrote its own `.profraw` and the runner's disk filled), writes `lcov.info`
+whether or not a test failed, and uploads it to Repowise. It is kept off the push path
+because instrumented binaries run the suite several times slower.
+
+Locally the same suite runs with `cargo nextest run --workspace
+--exclude unlace-wasm --profile ci` (or `--profile full`). A test binary outside the
+checkout (a target dir elsewhere, or an archive) finds the repository through `KUNA_ROOT`.
+
+Many tests build their input with a cross toolchain. The PE tests run
+`clang --target=x86_64-w64-windows-gnu` (and `i686-…`), which links with `ld` unless a
+`<triple>-ld` is on `PATH`; a distribution `ld` built for ELF only fails with
+`unrecognised emulation mode: i386pep`. With MinGW binutils installed, link the triple
+names to them (`ln -s /usr/bin/x86_64-w64-mingw32-ld ~/.local/bin/x86_64-w64-windows-gnu-ld`,
+the same for `i686`). A test that needs an LLVM backend the host's clang or llvm-mc was
+built without (SPARC, PowerPC, MIPS) checks it with `common::host` in
+`unlace-cli/tests/common/host.rs` and skips with a `skipped: this host lacks …` note; with
+`CI` set the same check fails the test, so a runner never skips one.
 `.github/actionlint.yaml` declares the `ubuntu-26.04` runner label, which actionlint does not
 know yet. Run `actionlint` from the repository root before pushing a workflow change.
 
 ## Benchmarks
 
-`decompiler/crates/unlace-bench` holds a divan benchmark suite over committed fixtures:
+`crates/unlace-bench` holds a divan benchmark suite over committed fixtures:
 `.sla` decode (x86-64, AArch64), image load (an x86-64 ELF and an arm64 Mach-O), the raw
 p-code lift of one function, and full decompiles of a jump-table switch, an arm64 Mach-O
 caller and an irreducible loop. It reads the compiled specs (`$KUNA_SPECS`, else `specs/`).
@@ -109,9 +164,9 @@ main and every PR (with the same `.sla` cache and `CARGO_INCREMENTAL=0` as `test
 results are at <https://codspeed.io/coleleavitt/unlace>.
 
 ```bash
-cd decompiler && cargo bench -p unlace-bench                  # wall-clock, plain divan
+cargo bench -p unlace-bench                  # wall-clock, plain divan
 cargo install --locked cargo-codspeed                         # once
-cd decompiler && cargo codspeed build -p unlace-bench && cargo codspeed run -p unlace-bench
+cargo codspeed build -p unlace-bench && cargo codspeed run -p unlace-bench
 ```
 
 Locally `cargo codspeed run` only checks that every benchmark runs; measurements come from CI.

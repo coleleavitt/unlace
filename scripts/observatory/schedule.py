@@ -15,9 +15,9 @@ from pathlib import Path
 
 from scripts.paths import repo_root
 
-SNAPSHOT = "decompiler/crates/unlace-decomp/tests/fixtures/list_action_decompile_snapshot.txt"
-UNIVERSAL = "decompiler/crates/unlace-decomp/src/infra/universalaction.rs"
-SRC = "decompiler/crates/unlace-decomp/src"
+SNAPSHOT = "crates/unlace-decomp/tests/fixtures/list_action_decompile_snapshot.txt"
+UNIVERSAL = "crates/unlace-decomp/src/infra/universalaction.rs"
+SRC = "crates/unlace-decomp/src"
 
 _RROW = re.compile(r'rrow!\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*((?:crate::)?[\w:]+)')
 _BOXED = re.compile(r"act!\(\s*(?:[\w:]+::)*(\w+)::boxed\(\s*\"([^\"]+)\"\s*\)")

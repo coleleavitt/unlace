@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/cet_pie_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/cet_pie_x86_64",
     "binary_sha256": "47b2894f9c778ffe12cc52390aa849d77dd89bddf7e8651e8e9ef795ce110dc4",
     "binary_size": 20376,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/cet_pie_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/cet_pie_x86_64",
     "selector": "get_elf_header",
     "selector_kind": "name"
   },

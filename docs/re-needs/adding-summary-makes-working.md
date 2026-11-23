@@ -14,7 +14,7 @@ rounds: [7]
 first_seen_round: 7
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli/src/decompile_graph.rs, decompiler/crates/unlace-cli/src/decompile_all.rs, decompiler/crates/unlace-cli/src/xrefs.rs]
+touches: [crates/unlace-cli/src/decompile_graph.rs, crates/unlace-cli/src/decompile_all.rs, crates/unlace-cli/src/xrefs.rs]
 scope: small
 regression_of: whole-binary-json-untriageable
 pr: null

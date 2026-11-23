@@ -30,7 +30,7 @@ now be produced in-env.
   `runArgs: ["--privileged"]`. This (and passwordless sudo) is **intentional per project
   policy**: an agent must always be able to run privileged and `apt-get install` anything
   without rebuilding the image.
-- **Rust pinned to 1.90.0** (the host version; matches `decompiler/Cargo.toml`
+- **Rust pinned to 1.90.0** (the host version; matches `Cargo.toml`
   `rust-version = "1.90"`), installed via rustup **as the `dev` user** with `CARGO_HOME` /
   `RUSTUP_HOME` under `/home/dev`. The image build fails if `rustc` is not 1.90.0 or if
   `arm-linux-gnueabihf-gcc` is missing (a baked-in sanity gate).
@@ -49,23 +49,23 @@ CLI, which reads `.devcontainer/devcontainer.json` directly.
 
 ## Run the gates inside the container
 
-Mount the repo worktree and run the make targets. From the repo root:
+Mount the repo worktree and run the gates. From the repo root:
 
 ```bash
 # build all binaries (decomp_dbg, decomp_test_dbg, slacomp, kuna)
 docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
-    bash -lc 'make binaries'
+    bash -lc 'cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli'
 
 # the three required gates
 docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
-    bash -lc 'make test'         # 675/675 datatest parity  -> PARITY OK
+    bash -lc 'cargo test -p unlace-cli --test parity datatests'         # 675/675 datatest parity  -> PARITY OK
 docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
-    bash -lc 'make test-stages'  # stage-model corpus       -> PARITY OK
+    bash -lc 'cargo test -p unlace-cli --test parity stage_tests'  # stage-model corpus       -> PARITY OK
 docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
-    bash -lc 'make rust-test'    # full cargo workspace suite
+    bash -lc 'cargo nextest run --workspace --exclude unlace-wasm --profile ci'    # full cargo workspace suite
 ```
 
-`decompiler/target/` is gitignored, so building inside the mounted worktree leaves the host
+`target/` is gitignored, so building inside the mounted worktree leaves the host
 tree clean of artifacts (the `target/` produced is the host's own and is never committed).
 
 For an interactive session:

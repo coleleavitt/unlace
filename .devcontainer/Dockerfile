@@ -83,7 +83,7 @@ RUN useradd --create-home --shell /bin/bash --uid 1000 dev \
 
 # ---------------------------------------------------------------------------
 # Rust toolchain, installed AS the dev user and pinned to the host's 1.90.0
-# (matches decompiler/Cargo.toml `rust-version = "1.90"`). CARGO_HOME /
+# (matches Cargo.toml `rust-version = "1.90"`). CARGO_HOME /
 # RUSTUP_HOME live under the dev home so the toolchain is owned by `dev`.
 # ---------------------------------------------------------------------------
 ENV RUSTUP_HOME=/home/dev/.rustup \

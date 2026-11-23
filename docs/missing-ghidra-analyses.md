@@ -20,7 +20,7 @@ to a stage in [`history/stage-mapping.md`](history/stage-mapping.md). The items 
 ## Where these live: the `unlace-analysis` crate
 
 These analyses have a dedicated home: the **`unlace-analysis`** crate
-(`decompiler/crates/unlace-analysis/`). It sits *above* `unlace-decomp` in the
+(`crates/unlace-analysis/`). It sits *above* `unlace-decomp` in the
 dependency graph so an analysis can both read the parsed object (via
 `unlace-sleigh`'s loader + the `object` crate) and seed the engine's symbol/type
 tables (`unlace_decomp::{architecture, database}`):
@@ -103,7 +103,7 @@ structurally untouched.
 and turn each PLT stub into a thunk to an external function. The decompiler then
 sees the import name at the call site.
 
-**kuna now:** [`unlace-analysis/src/loader/elf_plt.rs`](../decompiler/crates/unlace-analysis/src/loader/elf_plt.rs)
+**kuna now:** [`unlace-analysis/src/loader/elf_plt.rs`](../crates/unlace-analysis/src/loader/elf_plt.rs)
 reconstructs `got_slot → name` from the dynamic relocations and decodes each
 `.plt*` stub's GOT reference per architecture (x86-64, x86-32, AArch64, ARM32,
 RISC-V, SPARC; classic, CET `.plt.sec`, PIE, and stripped layouts). SPARC is the
@@ -329,13 +329,13 @@ Each row is a future `AnalysisPass` (or extension) under `unlace-analysis/src/s1
 Difficulty: **easy** = self-contained byte/string transform, no new heavy dep;
 **med** = needs an engine API or a parser; **hard** = a new subsystem (a
 debug-format reader or a discovery loop). Vendored fixtures live in
-`decompiler/crates/unlace-analysis/tests/fixtures/` (`fauxware`, `cet_pie_x86_64`,
+`crates/unlace-analysis/tests/fixtures/` (`fauxware`, `cet_pie_x86_64`,
 `stripped_dynamic_x86_64`).
 
 | # | Analysis | Stage | Diff | Concrete testcase (fixture → assertion) |
 |---|----------|-------|------|------------------------------------------|
 | ✅ | PLT/GOT import names | S1 | done | **fauxware**: `0x400510→puts`, no symbol at `0x0`, no `@` in names (`unlace-analysis` tests + console e2e). Per-arch e2e: x86-64 (`verify_w11_elf_plt_names`), AArch64 (`verify_aarch64_plt`), RISC-V64 (`verify_riscv64_plt`), **MIPS32** (`verify_mips_plt`: `plt_mips32` `puts`/`printf` via the `.MIPS.stubs`/GOT layout — Increment 27) |
-| ✅ | **Foundation: generic commit seam** | S1 | done | `bootstrap_from_elf` runs `run_default_analyses` + `commit_analysis_output`; no funcsym regression (`make test` PARITY OK) |
+| ✅ | **Foundation: generic commit seam** | S1 | done | `bootstrap_from_elf` runs `run_default_analyses` + `commit_analysis_output`; no funcsym regression (`cargo test -p unlace-cli --test parity datatests` PARITY OK) |
 | ✅ | **No-return detection** | S1 | done | **fauxware** `rejected` calls `exit`: no dead fall-through after `exit(1)` (5 unit tests + e2e). The vendored `ElfFunctionsThatDoNotReturn` carries two kuna divergence blocks appended in place, each fenced by its own `# (kuna divergence, DIV-nn)` comment: DIV-21's unconditional libc names and DIV-78's libstdc++ `std::__throw_*` family (mangled + demangled spellings; upstream omits it, so C++ binaries emitted the dead code after every `std::__throw_length_error`). See [`history/analysis-port-log.md`](history/analysis-port-log.md) increment 1 |
 | ✅ | **Demangling** (Itanium C++ / Rust) | S1 | done | `cpp_mangled` `main` renders `foo::Bar::baz(...)` (cpp_demangle + rustc-demangle; needed the cross-scope call-resolution fix). Increment 2 |
 | ✅ | **Library prototype seeding** | S1 | done | **fauxware** `main`: `puts("Username: ")`, `puts("Password: ")` (libproto types arg `char*`; the route that actually renders literals in kuna). Increment 3 |

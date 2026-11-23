@@ -85,7 +85,7 @@ def decbench_commit() -> dict:
 def binary_identity(path: str) -> dict:
     """Which kuna produced a row, by content — a path is not an identity.
 
-    `make binaries` rewrites the same path in place, so a cache keyed on the
+    `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli` rewrites the same path in place, so a cache keyed on the
     path alone republishes yesterday's rows under today's binary.
     """
     out = {"path": str(path), "sha256": None, "size": None}

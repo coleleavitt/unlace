@@ -1,6 +1,6 @@
 name: CodSpeed
 
-# Benchmarks in decompiler/crates/unlace-bench, measured by CodSpeed's CPU
+# Benchmarks in crates/unlace-bench, measured by CodSpeed's CPU
 # simulation on every push to main and every PR. workflow_dispatch lets CodSpeed
 # backfill a baseline.
 
@@ -44,7 +44,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: decompiler
           key: codspeed
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -54,11 +53,11 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'decompiler/Cargo.lock', 'decompiler/crates/unlace-slacomp/**', 'decompiler/crates/unlace-sleigh/**', 'decompiler/crates/unlace-base/**', 'decompiler/crates/unlace-num/**') }}
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
       - name: Compile the SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
-        run: make specs
+        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
 
       - name: Save the compiled SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
@@ -68,12 +67,10 @@ jobs:
           key: ${{ steps.sla.outputs.cache-primary-key }}
 
       - name: Build the benchmarks
-        working-directory: decompiler
         run: cargo codspeed build -p unlace-bench
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v5
         with:
           mode: simulation
-          working-directory: decompiler
           run: cargo codspeed run -p unlace-bench

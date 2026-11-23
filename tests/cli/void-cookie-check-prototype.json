@@ -28,11 +28,11 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_void_cookie_multi_exit_x86_64.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_void_cookie_multi_exit_x86_64.exe",
     "binary_sha256": "16512154b0c419b2e4b064dbabd4932251ec5e0e11e14302d86821dca1ade1f0",
     "binary_size": 16384,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_void_cookie_multi_exit_x86_64.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_void_cookie_multi_exit_x86_64.exe",
     "selector": "sub_1400012f0",
     "selector_kind": "name"
   }

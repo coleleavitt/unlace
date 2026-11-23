@@ -35,7 +35,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/calleepopslot_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/calleepopslot_i386.exe</com>
   <com>read symbols</com>
   <com>load addr 0x401000</com>
   <com>decompile</com>

@@ -22,13 +22,15 @@ on:
 permissions:
   contents: read
 
-# A new push to a PR supersedes that PR's in-flight run; runs on main are never
-# cancelled, so every commit that lands keeps a result of its own. In a called
+# A new push to a PR supersedes that PR's in-flight run. Each commit on main gets a
+# group of its own (its sha): GitHub keeps one pending run per group and cancels the
+# one waiting behind it when another queues, so a shared main group left most landed
+# commits untested while one long run held the group. In a called
 # workflow `github.workflow` is the CALLER's name, which keeps the nightly's call
 # out of the push runs' group: sharing it, a push landing while the nightly's run
 # waited would cancel that pending run.
 concurrency:
-  group: tests-${{ github.workflow }}-${{ github.ref }}
+  group: tests-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 defaults:
@@ -59,12 +61,15 @@ jobs:
           rustup toolchain install stable --profile minimal --component rustfmt
           rustup default stable
 
-      - name: rustfmt (edition 2024 style, decompiler/rustfmt.toml)
-        run: cd decompiler && cargo fmt --all --check
+      - name: rustfmt (edition 2024 style, rustfmt.toml)
+        run: cargo fmt --all --check
 
-      # scripts/check_test_layout.py plus the scripts/tests unit tests.
+      # The test-layout and module-layering checks plus the scripts/tests unit tests.
       - name: Python tooling unit tests
-        run: make test-tools
+        run: |
+          python3 scripts/check_test_layout.py
+          python3 scripts/check_layers.py
+          PYTHONPATH=$PWD python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
       - name: actionlint (workflows, with shellcheck on their scripts)
         run: |
@@ -85,15 +90,16 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: decompiler
           key: clippy
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # Only these three crates are clean. The rest of the workspace has about 2000 warn-level
-      # findings and about 490 `disallowed_types` errors (HashMap/HashSet, decompiler/clippy.toml),
+      # findings and about 490 `disallowed_types` errors (HashMap/HashSet, clippy.toml),
       # mostly in unlace-decomp, so a workspace-wide clippy would fail until those are fixed.
+      # One invocation: a crate an earlier `--no-deps` run checked only as a dependency
+      # is fresh to a later run, which then passes without linting it.
       - name: Lint the CLI and the base and numeric libraries (-D warnings)
-        run: make lint
+        run: cargo clippy --release -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings
 
   gates:
     name: parity gates
@@ -122,12 +128,11 @@ jobs:
       # crowd main's out of the repository's cache quota.
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: decompiler
           key: gates
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build binaries
-        run: make binaries
+        run: cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
 
       # The .sla files depend only on the spec sources and the SLEIGH compiler (slacomp and
       # the crates it builds from), so they are reused until one of those changes.
@@ -136,11 +141,11 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'decompiler/Cargo.lock', 'decompiler/crates/unlace-slacomp/**', 'decompiler/crates/unlace-sleigh/**', 'decompiler/crates/unlace-base/**', 'decompiler/crates/unlace-num/**') }}
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
       - name: Compile the SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
-        run: make specs
+        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
 
       - name: Save the compiled SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
@@ -150,9 +155,8 @@ jobs:
           key: ${{ steps.sla.outputs.cache-primary-key }}
 
       # `.sla` files are gitignored build artifacts and EVERY datatest decodes
-      # through them. `make test` would bootstrap them on demand, but asserting
-      # the tree is complete here turns a partial spec build into a clear
-      # failure instead of a confusing corpus error.
+      # through them. Asserting the tree is complete here turns a partial spec
+      # build into a clear failure instead of a confusing corpus error.
       - name: Verify the compiled spec tree is complete
         run: |
           want=$(find specs -name '*.slaspec' | wc -l)
@@ -163,24 +167,24 @@ jobs:
             exit 1
           fi
 
-      - name: make test -- datatest corpus vs docs/baseline.json
-        run: make test
+      # tests/datatests vs docs/baseline.json and tests/stages vs docs/baseline-stages.json,
+      # through `unlace test` and the decomp_test_dbg built above (crates/unlace-cli/tests/parity.rs).
+      # The workspace suite runs the same two tests; this job carries them on every PR.
+      - name: parity -- datatest and stage corpora vs their baselines
+        run: cargo test --release -p unlace-cli --test parity
 
-      - name: make test-stages -- stage corpus vs docs/baseline-stages.json
-        run: make test-stages
-
-      - name: make check-spec
-        run: make check-spec
+      - name: spec anchors and phase-folder ownership (tools/check_spec.py)
+        run: python3 tools/check_spec.py
 
       # The RE-friction loop's regression corpus (docs/re-pipeline.md). Every gap the loop
       # closes leaves the acceptance probe that proved the fix in tests/cli/; running them
       # here is what stops a closed need from silently re-opening. Needs no dataset -- every
       # case targets an in-repo fixture -- and an empty corpus passes.
-      - name: make test-cli
-        run: make test-cli
+      - name: tests/cli probes
+        run: PYTHONPATH=$PWD python3 -m scripts.repipe.clitests
 
       - name: unlace catalog --check
-        run: ./decompiler/target/release/unlace catalog --check
+        run: ./target/release/unlace catalog --check
 
       # Shared-counter drift and ElementId collisions. Both are shapes that every
       # other gate passes cleanly: a stale hard-coded settable count only fails
@@ -202,9 +206,9 @@ jobs:
       # Free: it reuses the release binary this job already built.
       - name: docs/options.md is the generator's bytes
         run: |
-          ./decompiler/target/release/unlace catalog --markdown > /tmp/options.generated.md
+          ./target/release/unlace catalog --markdown > /tmp/options.generated.md
           if ! diff -u docs/options.md /tmp/options.generated.md; then
-            echo "::error file=docs/options.md::stale -- regenerate with 'decompiler/target/release/unlace catalog --markdown > docs/options.md'"
+            echo "::error file=docs/options.md::stale -- regenerate with 'target/release/unlace catalog --markdown > docs/options.md'"
             exit 1
           fi
 
@@ -215,12 +219,11 @@ jobs:
       # leaks, ghidra-vs-CLI diff ratio, query traffic). Lives in the workspace
       # suite too, but that job is skipped on internal PRs -- and a regression in
       # the GUI path is exactly what these pins exist to catch pre-merge. Cheap:
-      # release profile over the deps `make binaries` already built (~2 min
+      # release profile over the deps the binaries step already built (~2 min
       # compile, seconds of runtime). `--include-ignored` picks up the heavier
       # sort/grep breadth test that the dev-profile workspace run skips.
       - name: ghidra-sim differential harness (unlace-ghidra, release)
         run: |
-          cd decompiler
           cargo test -p unlace-ghidra --release -- --include-ignored --nocapture
 
       # Node 22: the web suites below are written for (and only run on) a
@@ -263,30 +266,25 @@ jobs:
           node integrations/web/test/decompile-worker.mjs
           node integrations/web/test/decompile-replay.mjs
 
-  rust-test:
-    name: cargo workspace suite
-    # Runs on: every push to main, manual dispatch, any PR from a FORK, and any
-    # PR carrying the `full-ci` label. It is skipped only for a PR from a branch
-    # in this repo -- the automated agent PRs, where AGENTS.md already requires
-    # `make rust-test` green locally before the commit, so this job re-derives an
-    # answer we have. Skipping it halves this workflow's runner demand per PR
-    # and still leaves the parity gates (the cheap regression net) on every PR.
-    #
-    # The safety net for the skip is the `push: branches: [main]` trigger above:
-    # the suite always runs on the merge commit, so nothing reaches main without
-    # it -- the answer just arrives at merge rather than before it. To demand it
-    # BEFORE merging a particular internal PR, add the `full-ci` label: that is
-    # itself a trigger (see `types:` above), so the suite starts on the label
-    # alone -- no push, no re-run, no workflow edit.
+  # The workspace suite, under cargo-nextest: one job builds every test binary into an
+  # archive, three run a third of the tests each from it. Coverage (cargo-llvm-cov) and
+  # the slow tests the `ci` profile leaves out run on the Coverage workflow's schedule:
+  # instrumented, this suite took 45-105 min, against 30 min without.
+  #
+  # Runs on: every push to main, manual dispatch, any PR from a FORK, and any PR
+  # carrying the `full-ci` label. It is skipped only for a PR from a branch in this
+  # repo -- the automated agent PRs, which gate on the parity job. The `push:
+  # branches: [main]` trigger is the safety net: the suite always runs on the merge
+  # commit. To demand it BEFORE merging a particular internal PR, add the `full-ci`
+  # label: that is itself a trigger (see `types:` above).
+  rust-test-build:
+    name: workspace suite (build)
     if: >-
       github.event_name != 'pull_request'
       || github.event.pull_request.head.repo.fork
       || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-26.04
-    timeout-minutes: 180
-    permissions:
-      contents: read
-      id-token: write   # lets the Repowise upload prove it comes from this repository
+    timeout-minutes: 90
     # Full debug information across the test executables can fill the runner disk.
     # Keep backtrace line numbers and the workspace's debug/overflow checks.
     env:
@@ -300,28 +298,28 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
-      # cache-on-failure: one failing test must not throw away the dependency build.
+      # cache-on-failure: one failing build step must not throw away the dependency build.
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: decompiler
-          key: rust-test-line-tables
+          key: rust-test-nextest
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
 
-      # Missing or unusable required processor specs fail the tests.
-      #
+      - uses: taiki-e/install-action@cargo-nextest
+
       # The .sla files depend only on the spec sources and the SLEIGH compiler (slacomp and
-      # the crates it builds from), so they are reused until one of those changes.
+      # the crates it builds from), so they are reused until one of those changes. This job
+      # saves them for the three test jobs, which only restore.
       - name: Restore the compiled SLEIGH specs
         id: sla
         uses: actions/cache/restore@v4
         with:
           path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'decompiler/Cargo.lock', 'decompiler/crates/unlace-slacomp/**', 'decompiler/crates/unlace-sleigh/**', 'decompiler/crates/unlace-base/**', 'decompiler/crates/unlace-num/**') }}
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
       - name: Compile the SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
-        run: make specs
+        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
 
       - name: Save the compiled SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
@@ -330,6 +328,70 @@ jobs:
           path: specs/**/*.sla
           key: ${{ steps.sla.outputs.cache-primary-key }}
 
+      - name: Test layout
+        run: python3 scripts/check_test_layout.py
+
+      - name: Build and archive the workspace tests
+        run: |
+          df -h .
+          cargo nextest archive --workspace \
+            ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }} \
+            --archive-file nextest-archive.tar.zst
+          ls -la nextest-archive.tar.zst
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nextest-archive
+          path: nextest-archive.tar.zst
+          retention-days: 1
+          compression-level: 0
+
+      - name: Doc tests
+        run: |
+          cargo test --doc --workspace \
+            ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }}
+
+      - name: Workspace build disk usage
+        if: always()
+        run: |
+          df -h .
+          if [ -d target ]; then
+            du -sh target
+          fi
+
+  rust-test:
+    name: cargo workspace suite (${{ matrix.partition }}/3)
+    needs: rust-test-build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3]
+    # The archive's binaries run from outside the checkout, so they cannot find the
+    # repository root (fixtures, tests/datatests) or the specs from their own path.
+    env:
+      KUNA_ROOT: ${{ github.workspace }}
+      KUNA_SPECS: ${{ github.workspace }}/specs
+      SLEIGHHOME: ${{ github.workspace }}/specs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - uses: taiki-e/install-action@cargo-nextest
+
+      - name: Restore the compiled SLEIGH specs
+        id: sla
+        uses: actions/cache/restore@v4
+        with:
+          path: specs/**/*.sla
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
+
+      # Missing or unusable required processor specs fail the tests.
       - name: Verify the compiled spec tree is complete
         run: |
           want=$(find specs -name '*.slaspec' | wc -l)
@@ -340,45 +402,34 @@ jobs:
             exit 1
           fi
 
-      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: actions/download-artifact@v4
+        with:
+          name: nextest-archive
 
-      # `make rust-test`, run under cargo-llvm-cov so the same run also writes
-      # lcov.info; the tests run once.
-      - name: make rust-test -- the full cargo workspace suite, with coverage
+      # --extract-to . puts the binaries in target, the path the build job
+      # compiled into every test that names a binary with env!("CARGO_BIN_EXE_...").
+      - name: cargo nextest run (partition ${{ matrix.partition }}/3)
         run: |
-          df -h .
-          python3 scripts/check_test_layout.py
-          cd decompiler && cargo llvm-cov --lcov --output-path ../lcov.info --workspace \
-            ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }} --no-fail-fast
+          cargo nextest run --archive-file nextest-archive.tar.zst \
+            --workspace-remap . --extract-to . --profile ci --partition count:${{ matrix.partition }}/3
 
-      - name: Upload coverage to Repowise
+      # The inputs a failing round trip compiled and decompiled (scratch C, shared
+      # objects, projects), for reproducing a failure that only the runner's
+      # compilers or load show.
+      - name: Upload the test scratch files
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-scratch-${{ matrix.partition }}
+          path: target/tmp
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Upload the JUnit report
         if: always()
-        continue-on-error: true
-        env:
-          REPORTS: "lcov.info"
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          shopt -s globstar nullglob
-          files=()
-          for pattern in $REPORTS; do for f in $pattern; do [ -f "$f" ] && files+=(-F "report=@$f"); done; done
-          if [ ${#files[@]} -eq 0 ]; then echo "::warning::Repowise: no coverage report found at: $REPORTS"; exit 0; fi
-          auth=()
-          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
-            token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=repowise" | jq -r '.value // empty' || true)
-            [ -n "$token" ] && auth=(-H "Authorization: Bearer $token")
-          fi
-          curl -sS --fail-with-body --max-time 60 "${auth[@]}" "${files[@]}" \
-            -F "repository=$GITHUB_REPOSITORY" -F "head_sha=$HEAD_SHA" -F "pr_number=$PR_NUMBER" \
-            -F "event=$GITHUB_EVENT_NAME" -F "run_url=$RUN_URL" -F "workspace=$GITHUB_WORKSPACE" \
-            https://api.repowise.dev/ci/coverage \
-            || echo "::warning::Repowise: coverage upload failed; see the message above."
-
-      - name: Workspace build disk usage
-        if: always()
-        run: |
-          df -h .
-          if [ -d decompiler/target ]; then
-            du -sh decompiler/target
-          fi
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.partition }}
+          path: target/nextest/ci/junit.xml
+          retention-days: 14
+          if-no-files-found: ignore

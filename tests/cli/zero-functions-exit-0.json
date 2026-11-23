@@ -5,11 +5,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/upx_packed_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/upx_packed_x86_64",
     "binary_sha256": "907b4dc30be0c0e53fda3ad1905ef3d804735a472f1c9484d3cfb5d3180e26c1",
     "binary_size": 11364,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/upx_packed_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/upx_packed_x86_64",
     "selector": null,
     "selector_kind": "none"
   },

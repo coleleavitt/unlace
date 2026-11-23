@@ -8,7 +8,7 @@
 // build. The `binary` path is rewritten to the file name so the fixtures do
 // not depend on where the repo lives.
 //
-// Usage:  (cd decompiler && cargo build --release -p unlace-wasm)
+// Usage:  (cargo build --release -p unlace-wasm)
 //         node integrations/web/test/make-inspect-fixtures.mjs
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../../..');
-const native = process.env.NATIVE || join(repo, 'decompiler/target/release/unlace_wasm');
+const native = process.env.NATIVE || join(repo, 'target/release/unlace_wasm');
 const specs = process.env.SPECS || join(repo, 'specs');
 
 const runOn = (name, ...args) => {

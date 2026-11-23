@@ -2,7 +2,7 @@
 
 ## 1. The change
 
-New module `p6_variables/kuna_bytehonest.rs`, two functions:
+New module `p9_emit/kuna_bytehonest.rs`, two functions:
 
 ```rust
 pub fn is_uncommitted_byte(dt: &Rc<Datatype>) -> bool {

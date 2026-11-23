@@ -15,11 +15,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/protoorder_floatpointee_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/protoorder_floatpointee_x86_64",
     "binary_sha256": "4dcdf4fc9990870be79aeed722c88f0f986be801fbdd9c481b78e91e1b0e1f6c",
     "binary_size": 16296,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/protoorder_floatpointee_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/protoorder_floatpointee_x86_64",
     "selector": "u1",
     "selector_kind": "name"
   },

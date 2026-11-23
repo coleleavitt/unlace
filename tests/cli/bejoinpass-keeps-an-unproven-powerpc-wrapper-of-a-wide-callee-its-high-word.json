@@ -17,11 +17,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/bejoinpass_ppc32_O2.o",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/bejoinpass_ppc32_O2.o",
     "binary_sha256": "9ff498d789eb7c0299954fa7f5f13a40ce9633b266dafc8c4c36afe5ce45a0b6",
     "binary_size": 1496,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/bejoinpass_ppc32_O2.o",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/bejoinpass_ppc32_O2.o",
     "selector": "hi",
     "selector_kind": "name"
   },

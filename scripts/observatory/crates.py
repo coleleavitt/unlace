@@ -11,7 +11,7 @@ DECOMP = "unlace-decomp"
 
 def _tracked_rs(root: Path) -> list:
     out = subprocess.run(
-        ["git", "ls-files", "decompiler/crates/*.rs", "decompiler/crates/**/*.rs"],
+        ["git", "ls-files", "crates/*.rs", "crates/**/*.rs"],
         cwd=root,
         capture_output=True,
         text=True,
@@ -30,7 +30,7 @@ def collect(root: Path | None = None) -> dict:
     meta = json.loads(
         subprocess.run(
             ["cargo", "metadata", "--no-deps", "--format-version", "1"],
-            cwd=root / "decompiler",
+            cwd=root,
             capture_output=True,
             text=True,
             check=True,
@@ -39,9 +39,9 @@ def collect(root: Path | None = None) -> dict:
 
     counts: dict = {}
     folders: dict = {}
-    src_prefix = f"decompiler/crates/{DECOMP}/src/"
+    src_prefix = f"crates/{DECOMP}/src/"
     for rel in _tracked_rs(root):
-        crate = rel.split("/")[2]
+        crate = rel.split("/")[1]
         loc = _line_count(root / rel)
         stat = counts.setdefault(crate, {"files": 0, "loc": 0})
         stat["files"] += 1

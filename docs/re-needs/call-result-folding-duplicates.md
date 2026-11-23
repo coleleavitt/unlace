@@ -14,7 +14,7 @@ rounds: [10]
 first_seen_round: 10
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: null
@@ -56,7 +56,7 @@ Preserve one random-number draw per outer iteration, reusing its result for comp
     "binary_sha256": "8c9139dd5b2083a6bc27bcffa08d3ad4da3d4688710292c5f9e4dba823707a26",
     "binary_size": 9040,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/callretmulti_x86_64"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/callretmulti_x86_64"
   }
 }
 ```
@@ -87,7 +87,7 @@ Preserve one random-number draw per outer iteration, reusing its result for comp
     "binary_sha256": "8c9139dd5b2083a6bc27bcffa08d3ad4da3d4688710292c5f9e4dba823707a26",
     "binary_size": 9040,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/callretmulti_x86_64"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/callretmulti_x86_64"
   }
 }
 ```

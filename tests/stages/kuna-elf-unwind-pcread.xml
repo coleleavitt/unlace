@@ -5,7 +5,7 @@
 </binaryimage>
 <script>
 <com>clear architecture</com>
-<com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc-pc-read.elf</com>
+<com>load file crates/unlace-cli/tests/fixtures/ppc-pc-read.elf</com>
 <com>read symbols</com>
 <com>load function bump</com>
 <com>decompile</com>

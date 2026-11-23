@@ -336,7 +336,7 @@ table above: a frozen index, not a register anything is added to.
   `Ghidra/Processors/<P>/data/languages/` → `specs/Ghidra/Processors/<P>/data/languages/`.
   The C++ source (`decompiler/cpp/`, `unittests/`) was removed after the port was proven.
 - Sync: `python3 tools/sync_upstream.py --ghidra <checkout> --to origin/master [--dry-run]`,
-  then `make test` (675/675 PARITY OK), review, commit. Plain `git apply` first, `--3way`
+  then `cargo test -p unlace-cli --test parity datatests` (675/675 PARITY OK), review, commit. Plain `git apply` first, `--3way`
   fallback; hard-fails on renames/binary diffs (handle manually). The DIV-2 re-pinned
   datatest files (15 files / 22 assertions) no longer clean-apply — expect `--3way` there.
   If a sync intentionally changes the corpus, re-pin with

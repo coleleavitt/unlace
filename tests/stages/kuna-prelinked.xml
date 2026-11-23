@@ -21,27 +21,27 @@
 <script>
   <com>option kernelcache off</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_merged.macho</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_merged.macho</com>
   <com>read symbols</com>
   <com>load addr 0xfffffff007006920</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_split.macho</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_split.macho</com>
   <com>read symbols</com>
   <com>load addr 0xfffffff00700d000</com>
   <com>decompile</com>
   <com>print C</com>
   <com>option kernelcache auto</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_merged.macho</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_merged.macho</com>
   <com>read symbols</com>
   <com>load addr 0xfffffff007006920</com>
   <com>decompile</com>
   <com>print C</com>
   <com>option kernelcache Widget</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_split.macho</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_split.macho</com>
   <com>read symbols</com>
   <com>load addr 0xfffffff00700d000</com>
   <com>decompile</com>

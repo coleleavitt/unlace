@@ -10,8 +10,8 @@ from scripts.paths import repo_root
 
 _ANCHORS = re.compile(r"```yaml\nAnchors:\n(.*?)```", re.S)
 _ROOTS = {
-    "unlace-decomp": "decompiler/crates/unlace-decomp/src",
-    "unlace-analysis": "decompiler/crates/unlace-analysis/src",
+    "unlace-decomp": "crates/unlace-decomp/src",
+    "unlace-analysis": "crates/unlace-analysis/src",
 }
 
 

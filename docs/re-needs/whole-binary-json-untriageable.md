@@ -10,7 +10,7 @@ instances: 1
 rounds: [1]
 first_seen_round: 1
 attempts: 1
-touches: [decompiler/crates/unlace-cli/src/decompile_all.rs, docs/cli.md]
+touches: [crates/unlace-cli/src/decompile_all.rs, docs/cli.md]
 scope: small
 closed_in_round: 1
 closing_pr: 367

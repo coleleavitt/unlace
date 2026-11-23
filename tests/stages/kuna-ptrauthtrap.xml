@@ -105,7 +105,7 @@ fe0301aa400000b4220080d2d0071eca5000f0b6208e38d4e00302aac0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_arm64e_auth</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_arm64e_auth</com>
   <com>option ptrauthtrap off</com>
   <com>read symbols</com>
   <com>load function _tail_auth</com>
@@ -115,7 +115,7 @@ fe0301aa400000b4220080d2d0071eca5000f0b6208e38d4e00302aac0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_arm64e_auth</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_arm64e_auth</com>
   <com>read symbols</com>
   <com>load function _tail_auth</com>
   <com>decompile</com>
@@ -124,7 +124,7 @@ fe0301aa400000b4220080d2d0071eca5000f0b6208e38d4e00302aac0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_arm64e_brk</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_arm64e_brk</com>
   <com>read symbols</com>
   <com>load function _check</com>
   <com>decompile</com>

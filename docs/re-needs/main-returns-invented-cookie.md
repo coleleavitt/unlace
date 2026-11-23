@@ -14,7 +14,7 @@ rounds: [6]
 first_seen_round: 6
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: null
@@ -60,7 +60,7 @@ Recover main's zero return across the MSVC cookie checker.
     "binary_sha256": "97095d9bf909a03e82924dfa826988c27ef3aac9b1c90b64bc4f71f4e3582f12",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_cookiecheck_x86_64.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_cookiecheck_x86_64.exe",
     "selector": "0x140001000",
     "selector_kind": "addr"
   }
@@ -97,7 +97,7 @@ Recover main's zero return across the MSVC cookie checker.
     "binary_sha256": "97095d9bf909a03e82924dfa826988c27ef3aac9b1c90b64bc4f71f4e3582f12",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_cookiecheck_x86_64.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_cookiecheck_x86_64.exe",
     "selector": "0x140001000",
     "selector_kind": "addr"
   }

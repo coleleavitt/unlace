@@ -13,11 +13,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/upx_packed_lzma_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/upx_packed_lzma_x86_64",
     "binary_sha256": "c57e9889d3fb7431859b30623fee0182e877f71a72241764e403ef732e09d246",
     "binary_size": 12728,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/upx_packed_lzma_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/upx_packed_lzma_x86_64",
     "selector": null,
     "selector_kind": "none"
   },

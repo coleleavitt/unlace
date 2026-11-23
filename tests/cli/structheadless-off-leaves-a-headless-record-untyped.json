@@ -17,11 +17,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/structheadless_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/structheadless_x86_64",
     "binary_sha256": "ff88739d9abde3af1e716fb7540318d69a2f174fd66c5a3e38d10e1b2b6452e1",
     "binary_size": 16176,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/structheadless_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/structheadless_x86_64",
     "selector": "mode_of",
     "selector_kind": "name"
   },

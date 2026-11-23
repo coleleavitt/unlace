@@ -20,12 +20,12 @@
     the rule is inert in the rendered C of `main`, which calls `puts`,
     `printf` and `strlen` through the PLT stubs it concerns. The row-level
     proof (the slot as a Read and no partial sum) lives in the cargo gate
-    `decompiler/crates/unlace-console/tests/verify_xreffp.rs`, over the
+    `crates/unlace-console/tests/verify_xreffp.rs`, over the
     `xreffp_arm_le32` fixture this case also loads.
 
     The XML wrapper only supplies the harness architecture; the pass clears it
     and loads the real linked ARM fixture (built from
-    decompiler/crates/unlace-analysis/tests/fixtures/xreffp_arm_le32.c).
+    crates/unlace-analysis/tests/fixtures/xreffp_arm_le32.c).
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -34,7 +34,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/xreffp_arm_le32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/xreffp_arm_le32</com>
   <com>option libcnames off</com>
   <com>read symbols</com>
   <com>load function main</com>

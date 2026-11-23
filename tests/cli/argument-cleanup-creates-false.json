@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/tailcallsaved_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/tailcallsaved_i386",
     "binary_sha256": "bfe31e8be755cd52b171c9b70233d1c859766224b4b1643420d659f6ca8f0585",
     "binary_size": 4552,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/tailcallsaved_i386",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/tailcallsaved_i386",
     "selector": "classify",
     "selector_kind": "name"
   },

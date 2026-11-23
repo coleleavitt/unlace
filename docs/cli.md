@@ -1,8 +1,8 @@
 # The `unlace` CLI reference
 
 The user-facing commands are the single Rust binary `unlace`
-(`decompiler/crates/unlace-cli`, built to `decompiler/target/release/unlace` by
-`make binaries`). This is the full reference; the one-screen version is in
+(`crates/unlace-cli`, built to `target/release/unlace` by
+`cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`). This is the full reference; the one-screen version is in
 `CLAUDE.md`.
 
 **Every subcommand describes itself.** `unlace <subcommand> -h|--help` prints that
@@ -88,15 +88,15 @@ only prints verification guidance; it does not invoke a compiler or run checks.
 From the source checkout's root:
 
 ```sh
-cargo test --manifest-path decompiler/Cargo.toml --release -p unlace-slacomp --test compiler_parity
-make test
+cargo test --release -p unlace-slacomp --test compiler_parity
+cargo test -p unlace-cli --test parity datatests
 ```
 
 The first command compares decompressed `.sla` contents with pinned Ghidra
 outputs. The second checks decompiler behavior against the datatest baseline.
 These are separate contracts: passing the datatests does not establish compiler
 output equality. Fixture provenance is in
-`decompiler/crates/unlace-slacomp/tests/golden/README.md`; the retired live C++
+`crates/unlace-slacomp/tests/golden/README.md`; the retired live C++
 differential is described in `docs/history.md`.
 
 ## Where kuna finds the engine and the specs
@@ -114,7 +114,7 @@ SLEIGH tree, found in this order when nothing pins it:
   directory — `%LOCALAPPDATA%\kuna`, `~/Library/Caches/kuna`, or
   `$XDG_CACHE_HOME/kuna` (default `~/.cache/kuna`) — falling back to the system
   temp directory;
-- **a repo checkout**: the repo's `specs/`, above `decompiler/target/<profile>/`;
+- **a repo checkout**: the repo's `specs/`, above `target/<profile>/`;
 - **beside the binary**: a `specs/` directory inside or next to the one holding
   `unlace`, then one in the current directory.
 
@@ -125,10 +125,10 @@ tree could not be unpacked.
 |---|---|
 | `KUNA_SPECS` | The SLEIGH tree passed as `-sleighpath` (`SLEIGHHOME` is the engine's own name for the same thing). Wins over a built-in tree. |
 | `KUNA_DECOMP_DBG` | A separate `decomp_dbg` binary to run instead of the built-in console; a non-empty value also makes `catalog` query that build. `--decomp-dbg PATH` does the same for one `decompile` or `catalog` run, and wins over the variable. |
-| `KUNA_DECOMP_TEST` | The `decomp_test_dbg` datatest harness (`unlace test --binary PATH`). It is not built in; it is looked for beside `unlace`, then in the checkout's `decompiler/target/<profile>/`, under its bare and `.exe` names. |
+| `KUNA_DECOMP_TEST` | The `decomp_test_dbg` datatest harness (`unlace test --binary PATH`). It is not built in; it is looked for beside `unlace`, then in the checkout's `target/<profile>/`, under its bare and `.exe` names. |
 | `KUNA_SLACOMP` | A separate `slacomp` binary for `unlace specs` to run instead of the built-in compiler. |
-| `KUNA_ROOT` | The repo root, when the binaries are not in-tree: `specs/`, `tests/datatests/` and `decompiler/target/<profile>/` are all read from it. |
-| `KUNA_RUST_PROFILE` | The `decompiler/target/<profile>` directory the in-tree fallback reads (default `release`). |
+| `KUNA_ROOT` | The repo root, when the binaries are not in-tree: `specs/`, `tests/datatests/` and `target/<profile>/` are all read from it. |
+| `KUNA_RUST_PROFILE` | The `target/<profile>` directory the in-tree fallback reads (default `release`). |
 | `KUNA_DECODE_JOBS` | Decode lanes for the discovery walk, without `--jobs` — what `--jobs N` exports for the duration of the load (capped at 32, forced to `1` in pool workers). |
 | `KUNA_DECODE_MIN_BYTES` | Lowers the 8 MiB executable-bytes floor under which the lanes decline. The only way to get lanes on a small image; the equivalence tests set `0`. |
 | `KUNA_DECODE_INTERVALS` | Intervals per lane (default 32, clamped to 4096). A measurement knob. |
@@ -151,7 +151,7 @@ answers, and `unlace` prints one warning on stderr naming both, then carries on:
 ```
 $ KUNA_DECOMP_DBG=/opt/kuna-v1.329/decomp_dbg unlace decompile ./a.out main
 warning: decomp_dbg is a different build from this unlace
-  unlace:     0.1.0 (source 6cbd2f1a5e1f83af) /home/me/unlace/decompiler/target/release/unlace
+  unlace:     0.1.0 (source 6cbd2f1a5e1f83af) /home/me/unlace/target/release/unlace
   decomp_dbg: 1.329 (source 91c04e7d2b3a5f60) /opt/kuna-v1.329/decomp_dbg, chosen by KUNA_DECOMP_DBG
 ```
 
@@ -170,7 +170,7 @@ answer: it runs as before, without a warning.
 unlace test --all --baseline docs/baseline.json          # expect: PARITY OK
 unlace test --datatests --json                           # machine-readable
 unlace test --datatests --datatests-dir tests/stages \
-    --baseline docs/baseline-stages.json               # the stage-issue corpus (= make test-stages)
+    --baseline docs/baseline-stages.json               # the stage-issue corpus (= cargo test -p unlace-cli --test parity stage_tests)
 ```
 
 `unlace test` parses the harness's two streams separately (unit results on **stderr**,
@@ -201,7 +201,7 @@ named unit test the harness did not run is an error.
 | `128+N` | without `--baseline`, the harness was killed by signal `N` |
 
 A selection error takes precedence over every other status. With `--baseline`, as
-`make test` and `make test-stages` run it, the status is only ever `0`, `1` or `2`, so
+`cargo test -p unlace-cli --test parity datatests` and `cargo test -p unlace-cli --test parity stage_tests` run it, the status is only ever `0`, `1` or `2`, so
 `2` there always means an error. Without `--baseline` the status is the failure count,
 so a run with two failed tests also exits `2`, and automation should read
 `selection.complete` rather than the status alone.
@@ -4396,7 +4396,7 @@ unlace decompile-project ./a.out --progress --jobs 12    # progress, artifacts a
 ```
 
 The project-export face of the same in-process core
-(`decompiler/crates/unlace-cli/src/decompile_project.rs`, a thin wrapper over the shared
+(`crates/unlace-cli/src/decompile_project.rs`, a thin wrapper over the shared
 `unlace_console::project` module — the decompile loop + artifact builders also behind the
 web UI's Download-Binary-Source zip and `unlace_wasm project`). Identical
 load-once/decompile-many path and flags —
@@ -4807,7 +4807,7 @@ unlace decompile-graph ./a.out --jobs 12                 # the same document, 12
 
 One document holding every discovered function — its recovered signature,
 parameters, C body and assembly — plus the call edges between them
-(`decompiler/crates/unlace-cli/src/decompile_graph.rs`). The same in-process
+(`crates/unlace-cli/src/decompile_graph.rs`). The same in-process
 load-once path and the same flags as `decompile-project`
 (`--functions`/`--addr`/`--max-fn-seconds`/`--max-fn-memory`/`--mode`/`--define-function`/
 `--option`/`--slice`/`--target`/`--sleighpath`/`--jobs`; no `--json`, the document
@@ -4967,7 +4967,7 @@ unlace catalog --tier transform    # filter to the transform-tier control surfac
 
 By default, reads the static catalog directly from the linked engine library, without
 starting `decomp_dbg` or loading SLEIGH specs. The single source of truth is
-`settableTable`, generated from `decompiler/crates/unlace-decomp/phases.toml`; the console's
+`settableTable`, generated from `crates/unlace-decomp/phases.toml`; the console's
 `phase catalog` command uses the same emitter. `--json` emits a JSON **array** with one
 object per option —
 `[{option,values,default,destructive_as_default,phase,subphase,strength,rewind,issue,summary,

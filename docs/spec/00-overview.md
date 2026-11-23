@@ -2,12 +2,12 @@
 
 ```yaml
 Anchors:
-  - decompiler/crates/unlace-decomp/src/substrate
-  - decompiler/crates/unlace-decomp/src/p0_knowledge
-  - decompiler/crates/unlace-decomp/src/infra
-  - decompiler/crates/unlace-cli/src
-  - decompiler/crates/unlace-console/src
-  - decompiler/crates/unlace-ghidra/src
+  - crates/unlace-decomp/src/substrate
+  - crates/unlace-decomp/src/p0_knowledge
+  - crates/unlace-decomp/src/infra
+  - crates/unlace-cli/src
+  - crates/unlace-console/src
+  - crates/unlace-ghidra/src
 ```
 
 This chapter is the machinery every other chapter assumes: the two tiers and their
@@ -71,31 +71,31 @@ cloned Listings retain independent records.
 (kuna) The hand-off is a three-step *stash → flags → gated commit* protocol, and
 the order is load-bearing:
 
-1. **Stash at load.** `decompiler/crates/unlace-console/src/engine.rs
+1. **Stash at load.** `crates/unlace-console/src/engine.rs
    (bootstrap_from_object)` opens the object, builds the engine, then runs every
    analysis pass read-only over the parsed image
-   (`decompiler/crates/unlace-analysis/src/passes.rs (run_default_analyses_per_pass)`).
+   (`crates/unlace-analysis/src/passes.rs (run_default_analyses_per_pass)`).
    Nothing is committed: the per-pass facts — function/data symbols, discovered
    entries, no-return marks, no-fall-through call sites
-   (`decompiler/crates/unlace-analysis/src/pass.rs (AnalysisOutput)`) — are parked on
-   the program keyed by pass id (`decompiler/crates/unlace-console/src/engine.rs
+   (`crates/unlace-analysis/src/pass.rs (AnalysisOutput)`) — are parked on
+   the program keyed by pass id (`crates/unlace-console/src/engine.rs
    (ConsoleProgram::pending_analysis)`).
 2. **Flags.** The caller applies its `option` lines. Each analysis pass has an
-   enable flag on the engine `Architecture` (`decompiler/crates/unlace-decomp/src/infra/architecture.rs
+   enable flag on the engine `Architecture` (`crates/unlace-decomp/src/infra/architecture.rs
    (reset_defaults_internal)`, the `analysis_*` block), flippable per run.
 3. **Gated commit at the read-symbols boundary.**
-   `decompiler/crates/unlace-console/src/ifacedecomp.rs (IfcReadSymbols)` calls
-   `decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::commit_pending_analysis)`,
+   `crates/unlace-console/src/ifacedecomp.rs (IfcReadSymbols)` calls
+   `crates/unlace-console/src/engine.rs (ConsoleProgram::commit_pending_analysis)`,
    which drains the stash, drops the facts of any disabled pass
-   (`decompiler/crates/unlace-console/src/engine.rs (analysis_pass_enabled)` — an
+   (`crates/unlace-console/src/engine.rs (analysis_pass_enabled)` — an
    unregistered id fails *open*, so a new pass runs by default unless it is
    output-changing and registers a default-off gate), merges the survivors in pass
    order, and installs them through
-   `decompiler/crates/unlace-console/src/engine.rs (commit_analysis_output)`. Every
+   `crates/unlace-console/src/engine.rs (commit_analysis_output)`. Every
    commit arm is additive and idempotent against the loader symbols already
    installed *in the symbol table*: the discovered-entry arm's overlap check
    resolves **across scopes**
-   (`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
+   (`crates/unlace-decomp/src/p0_knowledge/database.rs
    (Database::find_function_across_scopes)`, the port of C++ `Scope::queryFunction`,
    which spans the scope tree; it visits only the scopes that mapped a function at
    the address, since a demangled C++ image has a scope per class), so a function already known under a *namespaced*
@@ -109,7 +109,7 @@ the order is load-bearing:
    `FlowInfo::queryCall`, rendering `sub_<addr>` at every C++ call site on any
    surface that enables a discovery pass. Idempotence does **not** extend to the
    flat name→address stream
-   `decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::register_symbol)`
+   `crates/unlace-console/src/engine.rs (ConsoleProgram::register_symbol)`
    maintains: that retains by NAME, so an entry the loader already named
    accumulates a second record whenever a pass supplies a different name for it —
    a debug-info name (DWARF/PDB/pclntab/objc), a FID rename, or the generated
@@ -117,7 +117,7 @@ the order is load-bearing:
    is therefore the normal state, and §0.2 defines how the whole-binary surfaces
    collapse it.
 
-   That stream (`decompiler/crates/unlace-console/src/engine.rs (SymbolStream)`) is
+   That stream (`crates/unlace-console/src/engine.rs (SymbolStream)`) is
    an insertion-ordered record list plus a name index, not a bare vector.
    Retaining by name as a rescan costs a full pass with a string compare per live
    record on every registration, and the analysis tier registers one symbol per
@@ -130,8 +130,8 @@ the order is load-bearing:
 
 Two pass families cannot run at load at all and are deferred *into* the commit:
 the Listing walk and its consumers (the call-graph no-return fixpoint, §1.6–§1.7;
-`decompiler/crates/unlace-analysis/src/passes.rs (run_listing_consumers)`) and the
-scalar-operand markup (`decompiler/crates/unlace-analysis/src/passes.rs
+`crates/unlace-analysis/src/passes.rs (run_listing_consumers)`) and the
+scalar-operand markup (`crates/unlace-analysis/src/passes.rs
 (run_operand_refs)`). Both decode through the engine's SLEIGH translator, whose
 program load-image is only attached after the load-time pass list runs — so
 `commit_pending_analysis` re-parses the stashed image bytes and runs them at the
@@ -141,8 +141,8 @@ The failure mode of this protocol is silent: an analysis option applied *after*
 the read-symbols boundary is a no-op — the facts were already committed or
 dropped, and the drained stash means a second `read symbols` re-commits nothing.
 Every driver therefore emits option lines strictly between `load file` and
-`read symbols` (`decompiler/crates/unlace-cli/src/decompile_all.rs (load_program)`,
-`decompiler/crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`).
+`read symbols` (`crates/unlace-cli/src/decompile_all.rs (load_program)`,
+`crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`).
 
 The commit is also not transactional. Its arms mutate the architecture in place
 and in order, so an arm that fails leaves the earlier ones applied and abandons
@@ -157,7 +157,7 @@ visible in the C it would render, which is what makes reporting it — rather th
 printing that C — the contract.
 
 **Parity isolation.** The XML `<binaryimage>` bootstrap the datatests use
-(`decompiler/crates/unlace-console/src/engine.rs (bootstrap_program)`) never runs
+(`crates/unlace-console/src/engine.rs (bootstrap_program)`) never runs
 the analysis tier: nothing is stashed, so the gated commit is structurally a
 no-op and the datatest parity oracle (`docs/baseline.json`) cannot be perturbed
 by any analysis change. Only the real-object path pays for — or benefits from —
@@ -166,28 +166,28 @@ tier one.
 ## 0.2 Front-ends and the decompile-all walk
 
 The public command names and handlers have one ordered table in
-`decompiler/crates/unlace-cli/src/main.rs`. Dispatch and the top-level help's
+`crates/unlace-cli/src/main.rs`. Dispatch and the top-level help's
 command list use that same table. Help integration tests discover the names
 from the real CLI, reject empty or repeated entries, and exercise both help
 spellings for every advertised command. Version/help aliases remain separate;
 missing or unknown commands retain exit status 2 and diagnostics on stderr.
 
 The CLI shares flag-value and option-pair consumption in
-`decompiler/crates/unlace-cli/src/args.rs`. Command-specific parsers retain their
+`crates/unlace-cli/src/args.rs`. Command-specific parsers retain their
 flag sets and diagnostics; option names are validated before loading, and pairs
 remain in argv order when forwarded from `decompile --json` to `decompile-all`.
 Missing flag values make the parsers return a usage error (exit status 2)
 immediately, without invoking the command engine.
 
 String filtering is separate from inventory and reference attribution. The
-private `decompiler/crates/unlace-cli/src/strings/filter.rs (Regex)` module owns
+private `crates/unlace-cli/src/strings/filter.rs (Regex)` module owns
 the existing pattern grammar, case folding and bounded matching. A repetition
 carries its node, limits and greedy/lazy policy together; ordinary and counted
 quantifiers share suffix handling. Count parsing scans all ASCII digits before
 checking the value, so overflow retains the same cursor and literal-brace
 fallback behavior. Match-budget accounting and warnings remain unchanged.
 
-The private `decompiler/crates/unlace-cli/src/decompile_all/callee_first.rs`
+The private `crates/unlace-cli/src/decompile_all/callee_first.rs`
 owns callee-first execution for whole-binary and project-export commands.
 It applies the call-graph plan, runs caller-vote rounds and structure convergence,
 parks eligible callbacks, then converges element globals. Results retain target
@@ -197,7 +197,7 @@ part of the same execution path. Loading and target selection stay in the parent
 command module, while call-graph planning stays in `callgraph.rs`.
 
 FID library ingestion deduplicates across inputs in
-`decompiler/crates/unlace-cli/src/fid.rs (dedup_records)`. Membership is keyed by
+`crates/unlace-cli/src/fid.rs (dedup_records)`. Membership is keyed by
 full hash, specific hash and borrowed name; a retain mask preserves input order
 and the first record's metadata without cloning names. Different names or
 specific hashes remain separate records. Database serialization and command
@@ -211,7 +211,7 @@ sets record and string-blob order explicitly. The flat format, version and
 reader behavior are unchanged.
 
 Archive-member loading is owned by
-`decompiler/crates/unlace-cli/src/fid/archive.rs`. Each object member is written to
+`crates/unlace-cli/src/fid/archive.rs`. Each object member is written to
 a privately created temporary file whose guard removes it after loading or on
 unwind. The writing handle is closed before the path-based loader opens it;
 simultaneous ingests have independent member files. Non-object members are
@@ -219,7 +219,7 @@ still skipped, bootstrap failures retain the archive/member warning, and
 record order and cross-input deduplication remain unchanged.
 
 Archive inputs to the image commands are settled before dispatch by
-`decompiler/crates/unlace-cli/src/armember.rs (resolve)`. An argument that names
+`crates/unlace-cli/src/armember.rs (resolve)`. An argument that names
 an `ar` archive, alone or as `lib.a:NAME`, is replaced by the path of one
 member: the one `--member NAME` or the `:NAME` suffix names, else the only
 object member, else the only object member defining a symbol that another
@@ -237,14 +237,14 @@ Commands never see the archive, so a member loads exactly as its `.o` does.
 
 The same resolution covers a tar archive (plain or gzip-compressed), a zip
 archive and a U-Boot FIT image, whose member tables come from
-`decompiler/crates/unlace-analysis/src/loader/firmware/bundles.rs (Bundle::parse)`
+`crates/unlace-analysis/src/loader/firmware/bundles.rs (Bundle::parse)`
 (chapter [01](01-program-prep.md)). A member is named by
 its stored path or its FIT `/images` node name and is decoded only when it is
 selected or tested for being an object. A FIT with no member named selects the
 image its default configuration boots, else its only image with a load
 address. A selected FIT image that states a load address and is not an object
 file is not staged by this module: `resolve` returns its flat image
-(`Resolved::Flat`) and `decompiler/crates/unlace-cli/src/rawfront.rs (prepare)`
+(`Resolved::Flat`) and `crates/unlace-cli/src/rawfront.rs (prepare)`
 lays it out as it does a U-Boot legacy image. A tar or zip archive with no
 object member and no member named is passed through untouched, so the loader
 reports it as it did before these formats were recognized.
@@ -257,7 +257,7 @@ a driver error before spawning the console. Script ordering, empty-output
 handling and recovered pipeline diagnostics remain unchanged.
 
 Inventory queries share function attribution and address records through
-`decompiler/crates/unlace-cli/src/function_info.rs`. Attribution prefers the
+`crates/unlace-cli/src/function_info.rs`. Attribution prefers the
 reference walk, then the engine's inventory. String and constant rows prefer
 their canonical inventory names before entry, symbol and generated-name
 fallbacks. Cross-reference queries retain their separate target/global-name
@@ -272,20 +272,20 @@ caller's decision; a failed launch is not converted into a skip.
 Four front-ends drive one engine assembly:
 
 - **The console** — `decomp_dbg`
-  (`decompiler/crates/unlace-console/src/bin/decomp_dbg.rs`), the interactive
+  (`crates/unlace-console/src/bin/decomp_dbg.rs`), the interactive
   command interpreter (`load file` / `read symbols` / `decompile` / `print C`),
   and the datatest harness `decomp_test_dbg`
-  (`decompiler/crates/unlace-harness/src/bin/decomp_test_dbg.rs`), which drives the
+  (`crates/unlace-harness/src/bin/decomp_test_dbg.rs`), which drives the
   same bootstrap over the XML corpus. This is the parity surface: it never arms
   the watchdog and (on the XML path) never runs tier one.
-- (kuna) **`unlace decompile`** (`decompiler/crates/unlace-cli/src/decompile/script.rs
+- (kuna) **`unlace decompile`** (`crates/unlace-cli/src/decompile/script.rs
   (build_script_for_input)`) — subprocess-per-function: it scripts a fresh `decomp_dbg` for
   each request, so every invocation re-parses the SLEIGH spec and re-runs the
   whole-binary analysis. It injects `option listing on` by default (unless the
   caller names `listing`), so the no-return analyses fire even on the
   single-function path. Its two selection forms resolve the printed function name
   the same way: `load function <name>` carries the requested name through, and
-  `--addr <vma>` (`decompiler/crates/unlace-console/src/ifacedecomp.rs
+  `--addr <vma>` (`crates/unlace-console/src/ifacedecomp.rs
   (IfcAddrrangeLoad)`) first asks the symbol table what is installed at that
   address — across scopes, so a demangled C++ entry reports its qualified
   `Class::method` form — and only falls back to the generic
@@ -295,7 +295,7 @@ Four front-ends drive one engine assembly:
   binary printed a `sub_<addr>` header that the by-name form printed correctly.
   Because the engine runs in another process, this surface holds no error object:
   it recovers what failed from the transcript
-  (`decompiler/crates/unlace-cli/src/decompile.rs (check_errors)`), and does so to
+  (`crates/unlace-cli/src/decompile.rs (check_errors)`), and does so to
   the same wording the in-process surfaces produce, so one failure reads the same
   from all four commands (DIV-90). A failed `load file` prints the escaped error
   and then `Could not create architecture`, so the reason is the line before the
@@ -310,11 +310,11 @@ Four front-ends drive one engine assembly:
   `option` line is read the same way and reported ahead of it (`option_failure`,
   below).
 - (kuna) **`unlace decompile-all` / `unlace functions`**
-  (`decompiler/crates/unlace-cli/src/decompile_all.rs (run, decompile_all)`) — the
+  (`crates/unlace-cli/src/decompile_all.rs (run, decompile_all)`) — the
   whole-binary, machine-readable surface: load and analyze **once** in-process
   (`bootstrap_from_object` → options → `commit_pending_analysis`, i.e. the
   `load file` + `read symbols` seam inlined,
-  `decompiler/crates/unlace-cli/src/decompile_all.rs (load_program)`), then loop
+  `crates/unlace-cli/src/decompile_all.rs (load_program)`), then loop
   `decompile_func_full_with_override_dyn` + `print_c` over every selected
   function. A failed function degrades to a per-function `error` record — the
   pipeline drive catches un-ported-seam panics, and the render/variable
@@ -332,8 +332,8 @@ Four front-ends drive one engine assembly:
 
   The `--json` record is one shape for `decompile-all` and `unlace decompile`,
   which renders its one function through the same serializer
-  (`decompiler/crates/unlace-cli/src/decompile_all.rs (result_json)`). A caller can
-  narrow it with `--omit` (`decompiler/crates/unlace-cli/src/decompile_all/omit.rs`):
+  (`crates/unlace-cli/src/decompile_all.rs (result_json)`). A caller can
+  narrow it with `--omit` (`crates/unlace-cli/src/decompile_all/omit.rs`):
   each named collection (`aliases`, `line_mappings`, `variables` with
   `stack_objects`, `types`) is absent from every record and listed in a
   top-level `omitted`, so absence is never read as an examined empty
@@ -350,33 +350,33 @@ Four front-ends drive one engine assembly:
   which keeps its primary `name` and address.
 
   The full callable-symbol inventory these surfaces share is
-  `decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::function_entries_canonical)`,
+  `crates/unlace-console/src/engine.rs (ConsoleProgram::function_entries_canonical)`,
   which yields **exactly one record per function entry address**, address-ordered.
   It exists because the raw symbol stream
-  (`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::function_entries)`)
+  (`crates/unlace-console/src/engine.rs (ConsoleProgram::function_entries)`)
   holds one record per NAME (§0.1), so without it a whole-binary run reports — and
   decompiles — the same function once per name it carries. Each record keeps the
   most informative name and carries the rest as aliases, ranked by
-  `decompiler/crates/unlace-console/src/engine.rs (entry_name_rank)`: a real symbol
+  `crates/unlace-console/src/engine.rs (entry_name_rank)`: a real symbol
   outranks a synthesized dynamic-table name (`_INIT_<i>` / `_FINI_<i>` /
   `_DT_INIT` / `_DT_FINI`,
-  `decompiler/crates/unlace-console/src/engine.rs (is_structural_entry_name)`), which
+  `crates/unlace-console/src/engine.rs (is_structural_entry_name)`), which
   outranks a generated placeholder
-  (`decompiler/crates/unlace-console/src/engine.rs (is_generic_placeholder_name)`);
+  (`crates/unlace-console/src/engine.rs (is_generic_placeholder_name)`);
   ties prefer the unprefixed spelling over the underscore-prefixed one, then the
   shorter name, then lexicographic order, so the choice is total and independent of
   symbol-stream order. Name-keyed selection resolves aliases too
-  (`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::find_entry_by_name)`),
+  (`crates/unlace-console/src/engine.rs (ConsoleProgram::find_entry_by_name)`),
   so collapsing the records never makes a name stop selecting its function.
 
   A name-keyed selection that matches nothing is then retried as the ADDRESS it
   spells, when — and only when — it is a name this build would MINT there
-  (`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::placeholder_name_address)`).
+  (`crates/unlace-console/src/engine.rs (ConsoleProgram::placeholder_name_address)`).
   The decision is made by minting rather than by parsing: the candidate offset is
   rendered in EVERY naming style — `sub_<addr>` (the default), `func_<addr>`
   (upstream) and `FUN_<addr>` (ghidra mode), the three arms of
   `Architecture::name_function` gathered by
-  `decompiler/crates/unlace-console/src/engine.rs (minted_function_names)` — and
+  `crates/unlace-console/src/engine.rs (minted_function_names)` — and
   accepted only if one of them comes back as the requested name, so a
   word-addressed space's scaling of the printed offset follows without parsing
   it. All three rather than only the ACTIVE one because `option namestyle`
@@ -396,7 +396,7 @@ Four front-ends drive one engine assembly:
   inventory does not hold — a recovered tail call renders `sub_1170(a0)` at a
   call target that discovery folded into the enclosing function, and `kuna
   strings` names a literal's owner from the reference walk's own flow attribution
-  (`decompiler/crates/unlace-cli/src/strings.rs (owning_function)`), which reaches
+  (`crates/unlace-cli/src/strings.rs (owning_function)`), which reaches
   starts the inventory never recorded — so the name kuna printed was one the
   by-name selector then refused.
 
@@ -406,7 +406,7 @@ Four front-ends drive one engine assembly:
   and `unlace decompile <macho> main` missed on an image whose symbol table held
   every name it needed. The decoration is a one-bit property of the container,
   read off its magic at bootstrap
-  (`decompiler/crates/unlace-console/src/engine.rs (bootstrap_from_object_with_isa)`
+  (`crates/unlace-console/src/engine.rs (bootstrap_from_object_with_isa)`
   → `ConsoleProgram::symbol_underscore_prefix`) rather than guessed from the
   names, so ELF, PE and COFF are untouched: an ELF that carries `_start` and not
   `start` still answers `start` as a miss. The name as GIVEN is tried first and
@@ -417,25 +417,25 @@ Four front-ends drive one engine assembly:
 
   (kuna, issue #666) A miss that remains a miss reports what the image DOES
   carry, because the front-end cannot know. `EntryLookupError::NotFound`
-  (`decompiler/crates/unlace-console/src/entry_selector.rs`) carries two facts the
+  (`crates/unlace-console/src/entry_selector.rs`) carries two facts the
   selector model is the only thing in a position to state: the nearest spelling
   the image holds — the same identifier under a different leading-underscore
   decoration, never a merely similar name
-  (`decompiler/crates/unlace-console/src/engine.rs (nearest_spelling)`) — and how
+  (`crates/unlace-console/src/engine.rs (nearest_spelling)`) — and how
   many entries carry a name the image supplied rather than one the engine minted
-  (`decompiler/crates/unlace-console/src/engine.rs (named_entry_count)`). Zero of
+  (`crates/unlace-console/src/engine.rs (named_entry_count)`). Zero of
   the latter is the stripped image, where no name can select and only an address
   can; that, and only that, is what the CLI's "for a stripped binary pass an
   address with `--addr`" is the answer to
-  (`decompiler/crates/unlace-cli/src/decompile.rs (name_miss_hint)`). Before this,
+  (`crates/unlace-cli/src/decompile.rs (name_miss_hint)`). Before this,
   every by-name miss carried that sentence, so an unstripped Mach-O with all its
   symbols present was reported as stripped. On an
   ARM-family spec the grouping key folds away the Thumb mode bit (`vma & !1`, the
   same normalization
-  `decompiler/crates/unlace-console/src/project.rs (build_asm)` applies to its
+  `crates/unlace-console/src/project.rs (build_asm)` applies to its
   labels), so an `entry` and its `entry|1` twin are one entry; address-keyed
   selection folds it too
-  (`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::find_entry_at)`),
+  (`crates/unlace-console/src/engine.rs (ConsoleProgram::find_entry_at)`),
   so `--addr` on an odd ARM address reaches the function rather than decoding
   mid-instruction. Both folds are gated to ARM, where an odd symbol address is
   never an instruction boundary; elsewhere an odd address is genuine and is left
@@ -443,7 +443,7 @@ Four front-ends drive one engine assembly:
   inventory, including callable import pointer slots. Unfiltered
   `decompile-all`, `decompile-project`, and wasm whole-binary runs derive their
   default target set through
-  `decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::function_entries_executable)`:
+  `crates/unlace-console/src/engine.rs (ConsoleProgram::function_entries_executable)`:
   only entries inside a loader section carrying `CODE` are treated as function
   bodies. Import slots remain installed for call naming, prototypes, and generic
   symbol/address lookup. A decompiling selection adds a body check: a known IAT
@@ -454,7 +454,7 @@ Four front-ends drive one engine assembly:
 
   When a stub and its slot share a name, that same executability test settles the
   SELECTION rather than pruning the inventory
-  (`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::lone_executable_candidate)`,
+  (`crates/unlace-console/src/engine.rs (ConsoleProgram::lone_executable_candidate)`,
   reached from both name lookups). A dynamically linked image spells an import's
   name on both the forwarding veneer a direct call targets and the IAT/GOT slot
   that veneer reads, so the name matches two entries and every by-name surface
@@ -489,7 +489,7 @@ Four front-ends drive one engine assembly:
   reported at the address the program runs at. This is
   what makes Mach-O behave the way ELF already did by naming only the PLT stub.
   A **caller-declared** entry (the declared-extent plane below) is kept whatever the section flags say
-  (`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::is_declared_entry)`).
+  (`crates/unlace-console/src/engine.rs (ConsoleProgram::is_declared_entry)`).
   The `CODE` test is a guess about where code lives, and a packer defeats it for
   free by not setting the bit: a NEOLite-packed PE flags all six of its sections
   `INITIALIZED_DATA|READ|WRITE`, `.text` included, so `--define-function
@@ -510,7 +510,7 @@ Four front-ends drive one engine assembly:
   functions --summary` answered `count: 6` with a null error and exit 0 — the
   packed-image diagnosis the caller can act on, withheld from the two surfaces an
   agent orients with first. All three now ask
-  `decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::any_executable_entry)`,
+  `crates/unlace-console/src/engine.rs (ConsoleProgram::any_executable_entry)`,
   which is `function_entries_executable` decided over an inventory already in
   hand: one section-table walk, no second enumeration. The six names stay in the
   listing beside the error, because a name the packed stub is going to call is
@@ -520,7 +520,7 @@ Four front-ends drive one engine assembly:
   (kuna) **The native decompile verdict is also read after the selected functions
   run.** Selection succeeded and individual failures were isolated, but a non-empty
   result set with no `FuncResult::code` body is not a usable decompilation. The shared
-  `decompiler/crates/unlace-console/src/project.rs (BatchOutcome)` classifier makes
+  `crates/unlace-console/src/project.rs (BatchOutcome)` classifier makes
   `decompile-all` and both `decompile-project` writers report that state as a
   run-level error. This is an aggregate verdict, not fail-fast: all text/JSON records
   and all project artifacts are finished first; one body keeps a mixed batch at exit
@@ -533,7 +533,7 @@ Four front-ends drive one engine assembly:
   object's undefined symbol bound to a synthetic extern-area address
   so that calls to it render by name — answers with the entry's nature rather
   than with the lifter's byte-load failure: the shared decompile step probes
-  `decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::entry_bytes_mapped)`
+  `crates/unlace-console/src/engine.rs (ConsoleProgram::entry_bytes_mapped)`
   first and emits a one-line external-symbol body. The console performs the same
   check before following flow and reports
   `Selected entry is an undefined external symbol` only for entries with
@@ -554,7 +554,7 @@ Four front-ends drive one engine assembly:
   `CODE` section (packed code in `.data`, a hand-picked `--addr`) decompiles
   exactly as before. The browser inventory sorts the same entries into its
   imports-and-thunks group off that predicate
-  (`decompiler/crates/unlace-console/src/classify.rs`), which a name test cannot
+  (`crates/unlace-console/src/classify.rs`), which a name test cannot
   do: loader names are demangled (`CellClass::Cell_Coord`) and symbol-table names
   are not. That classifier sits beside the shared decompile-project core rather
   than in either front-end because two surfaces answer "what kind of function is
@@ -563,15 +563,15 @@ Four front-ends drive one engine assembly:
 
   (kuna) **The listing surfaces read the same section flags to choose a view.**
   `unlace disassemble` and its `unlace read` spelling
-  (`decompiler/crates/unlace-cli/src/disassemble.rs (render)`) are one command with
+  (`crates/unlace-cli/src/disassemble.rs (render)`) are one command with
   two renderings of one walk: decoded instructions, or the bytes as a hexdump
   with an ASCII gutter and, under `--json`, the span as one contiguous hex
   string. `--as code|data|auto` selects, and `auto` — the default for
   `disassemble`, where `read` defaults to `data` — decides from the loader's own
   classification of the section holding the start address
-  (`decompiler/crates/unlace-cli/src/disassemble.rs (decide_view)`): a section
+  (`crates/unlace-cli/src/disassemble.rs (decide_view)`): a section
   carrying `DATA` without `CODE`
-  (`decompiler/crates/unlace-sleigh/src/loadimage.rs (section_flags)`) holds bytes,
+  (`crates/unlace-sleigh/src/loadimage.rs (section_flags)`) holds bytes,
   so it is shown as bytes. Two exceptions keep the inference honest. A target that
   resolved to a discovered function entry is code wherever it was linked, so it is
   never reclassified; and an address in no section the loader published — the XML
@@ -592,9 +592,9 @@ Four front-ends drive one engine assembly:
   zero where the loader writes another image's address. Showing the file instead
   would turn every rebased pointer back into a chain encoding, so the listed bytes
   stay the image's and every fixup slot the listed span overlaps is reported
-  whole (`decompiler/crates/unlace-cli/src/disassemble/fixups.rs (overlapping)`),
+  whole (`crates/unlace-cli/src/disassemble/fixups.rs (overlapping)`),
   from the loader's own list
-  (`decompiler/crates/unlace-analysis/src/loader/kuna_dynrelocs.rs (fixup_sites)`):
+  (`crates/unlace-analysis/src/loader/kuna_dynrelocs.rs (fixup_sites)`):
   its kind (`rebase`, `bind`, `relocation`), the symbol a bind names, the value
   the loader stores where the image determines it, the file's bytes and the
   image's. What the listed bytes are there is decided by comparing the two: the
@@ -614,18 +614,18 @@ Four front-ends drive one engine assembly:
   that deliberately, and the resulting listing is not merely short a row — it
   spells calls and out-of-image jumps the bytes do not contain. So every code
   listing reports the addresses its own instructions branch or call to that no
-  row of it starts at (`decompiler/crates/unlace-console/src/disasm.rs
+  row of it starts at (`crates/unlace-console/src/disasm.rs
   (skipped_targets)`), on stderr and in the JSON `notes`. The evidence is the
   listing's own: the fixed flow targets already harvested for the literal-pool
-  fold (`decompiler/crates/unlace-console/src/engine.rs (FixedRefs)`), restricted to
+  fold (`crates/unlace-console/src/engine.rs (FixedRefs)`), restricted to
   the listed span, because a branch out of the range says nothing about the range.
-  `--follow` (`decompiler/crates/unlace-console/src/disasm.rs (follow_rows)`) then
+  `--follow` (`crates/unlace-console/src/disasm.rs (follow_rows)`) then
   decodes from every address flow from the start reaches, to a fixpoint over
   whatever the newly decoded rows themselves name: one re-anchor is not enough,
   because the instruction at a jumped-to address is commonly another jump over
   another decoy byte. A run steps forward while the instruction has a
   fall-through successor — the `xref_control_flow` last-op rule
-  (`decompiler/crates/unlace-console/src/engine.rs (FixedRefs::harvest)`), where a
+  (`crates/unlace-console/src/engine.rs (FixedRefs::harvest)`), where a
   `goto` whose destination is the instruction's own fall-through is not a dead
   end, since SLEIGH gives the x86 `E8 00000000` get-PC idiom its own `goto`
   constructor — and stops at an address an earlier run already decoded, so no
@@ -649,7 +649,7 @@ Four front-ends drive one engine assembly:
   rows, clipped so nothing crosses into one, which is why `--follow` never lists
   less than the plain listing and both cover the same span. A target still
   without a row is reported with the reason that is true of it
-  (`decompiler/crates/unlace-console/src/disasm.rs (Skip)`): named only by that
+  (`crates/unlace-console/src/disasm.rs (Skip)`): named only by that
   straight-line fill, not decodable, at or past the window's end, or past the row
   budget; the note on what `--follow` re-anchored counts only targets it actually
   started a row at that the straight line walked over. It is off by default
@@ -658,17 +658,17 @@ Four front-ends drive one engine assembly:
 
   (kuna) **A window the caller bounded is answered without the discovery walk.**
   `--count`, `--bytes` and an explicit `start-end` range each bound the listing on
-  their own (`decompiler/crates/unlace-cli/src/disassemble.rs
+  their own (`crates/unlace-cli/src/disassemble.rs
   (window_is_caller_bounded)`), so such a target does not need the program-wide
   function inventory the whole-binary driver defaults build. It is loaded once
   with the analysis tier's two discovery gates — `listing` and `fast_funcdisc` —
-  turned off (`decompiler/crates/unlace-cli/src/disassemble.rs
+  turned off (`crates/unlace-cli/src/disassemble.rs
   (windowed_options)`), unless the caller named either option, in which case their
   word stands. The walk is deferred, not dropped: the inventory reaches a bounded
   listing through exactly two values, the target's name and whether it resolved to
   an entry, so the windowed answer is kept only when the program named the target
   from a fact it already held AND the view it chose does not depend on there being
-  an entry at that address (`decompiler/crates/unlace-cli/src/disassemble.rs
+  an entry at that address (`crates/unlace-cli/src/disassemble.rs
   (windowed_answer_is_final)`). Anything else — a name only discovery invents, an
   address only it knows, a bare address in a data section — reloads with the full
   bundle and answers exactly as it did before, which is what keeps `kuna
@@ -680,18 +680,18 @@ Four front-ends drive one engine assembly:
   `fast_funcdisc` pass decodes every executable byte, and on a 9.4 MB PE that is
   99.4% `.text` printing 40 instructions cost 20.1 s
   (`docs/re-needs/disassembling-40-instructions-takes.md`).
-- **`unlace_ghidra`** (`decompiler/crates/unlace-ghidra/src/bin/unlace_ghidra.rs`) —
+- **`unlace_ghidra`** (`crates/unlace-ghidra/src/bin/unlace_ghidra.rs`) —
   the ghidra-mode process front-end: the stock Ghidra GUI spawns it as its
   decompiler core and talks the burst-framed stdin/stdout protocol
-  (`decompiler/crates/unlace-ghidra/src/protocol.rs`). No `.sla` is loaded in this
+  (`crates/unlace-ghidra/src/protocol.rs`). No `.sla` is loaded in this
   mode; every instruction's p-code, every byte, symbol, and type arrives by
-  callback query (`decompiler/crates/unlace-ghidra/src/client.rs`).
+  callback query (`crates/unlace-ghidra/src/client.rs`).
   `registerProgram` builds a live engine `Architecture` over the query-backed
-  translator (`decompiler/crates/unlace-ghidra/src/process.rs`,
-  `decompiler/crates/unlace-ghidra/src/translate.rs (GhidraTranslate)`), and
+  translator (`crates/unlace-ghidra/src/process.rs`,
+  `crates/unlace-ghidra/src/translate.rs (GhidraTranslate)`), and
   `decompileAt` drives the real `decompile_func`, its providers issuing nested
   queries on the still-open command response
-  (`decompiler/crates/unlace-ghidra/src/provider.rs (SharedClient, GhidraLoadImage)`).
+  (`crates/unlace-ghidra/src/provider.rs (SharedClient, GhidraLoadImage)`).
   A decompile failure degrades to the incomplete-function response shape so the
   GUI never desyncs.
 
@@ -700,15 +700,15 @@ Four front-ends drive one engine assembly:
   eager pre-population (what the console's analysis commit does) is impossible;
   kuna instead ports upstream's lazy `ScopeGhidra` model to the seams its own
   pipeline reads. `RemoteScope`
-  (`decompiler/crates/unlace-decomp/src/infra/remote_provider.rs`) is installed on
+  (`crates/unlace-decomp/src/infra/remote_provider.rs`) is installed on
   the `Architecture` at registerProgram (after the cspec `<global>` ranges and
   pspec property paints are in — the `lockDefaultProperties` point) and rides
   every per-function `ArchContext`; when present, every global-scope read
-  (`decompiler/crates/unlace-decomp/src/substrate/context.rs
+  (`crates/unlace-decomp/src/substrate/context.rs
   (ArchContext::effective_global_query)`: properties, global names/types,
   containers, callee prototypes, deindirect resolution) and the flow
   environment's callee name / no-return queries
-  (`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (ArchFlowEnv)`)
+  (`crates/unlace-decomp/src/infra/decompile_drive.rs (ArchFlowEnv)`)
   resolve through it. A miss inside a cspec `<global>`-ranged space fires ONE
   getMappedSymbols query; the `<doc><mapsym>` answer decodes through the
   symbol-family decoder (`decode_mapped_answer`: `<symbol>`, `<function>` with
@@ -727,18 +727,18 @@ Four front-ends drive one engine assembly:
   no-return call sites, exactly as the console's analysis facts do.
   Types: registerProgram decodes the wire `<coretypes>` (so kuna's core-type
   ids equal the host's), and a `find_by_id` miss fetches the definition with
-  getDataType (`decompiler/crates/unlace-decomp/src/substrate/dtype.rs
+  getDataType (`crates/unlace-decomp/src/substrate/dtype.rs
   (decode_type, decode_core_types, find_by_id_or_remote)`); composites intern
   an incomplete stub before their fields decode so a self-referential struct
   cannot re-query forever. Comments fill once per flush cycle from getComments,
   filtered by the printer's comment settings (an empty filter issues no query).
   Registers resolve through a query-backed lookup installed on the ghidra-mode
-  space manager (`decompiler/crates/unlace-ghidra/src/translate.rs
+  space manager (`crates/unlace-ghidra/src/translate.rs
   (GhidraRegisterLookup)`) — the mirror of the Sleigh's own installed lookup,
   without which the naming pass misclassifies every register-storage high as
   global data and the output leaks raw `EAX`-style tokens. The pspec
   `<tracked_set>` (e.g. x86-64's `DF = 0`) decodes into the engine trackbase in
-  ghidra mode too (`decompiler/crates/unlace-decomp/src/infra/architecture.rs
+  ghidra mode too (`crates/unlace-decomp/src/infra/architecture.rs
   (decode_ghidra_tracked_sets)`), resolving register names through the
   query-backed translator, so `ActionConstbase` plants the direction seed.
   Because that lookup is a host query, an undefined name is not a local miss:
@@ -748,8 +748,8 @@ Four front-ends drive one engine assembly:
   unsuppressible from this side. So a *speculative* by-name lookup — a pass
   asking "does this language happen to have register X?" rather than resolving
   a name the host itself supplied — must go through the probe seam
-  (`decompiler/crates/unlace-base/src/space.rs (RegisterLookup)`'s
-  `probe_register` and `decompiler/crates/unlace-decomp/src/infra/engine_translate.rs
+  (`crates/unlace-base/src/space.rs (RegisterLookup)`'s
+  `probe_register` and `crates/unlace-decomp/src/infra/engine_translate.rs
   (EngineTranslate)`'s `probe_register_varnode`) instead of the exact lookup.
   Both default to the exact lookup's `Ok`-to-`Some`, so the standalone Sleigh
   path is unchanged; the ghidra translator overrides them to answer from the
@@ -765,9 +765,9 @@ Four front-ends drive one engine assembly:
   flags and their parameter lists all decode as usual, and the passes that read
   that metadata are unaffected — but the snippet bodies are never compiled, so
   the two template consumers
-  (`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (emit_inject)`)
+  (`crates/unlace-decomp/src/infra/decompile_drive.rs (emit_inject)`)
   fall through to a second translator seam
-  (`decompiler/crates/unlace-decomp/src/infra/engine_translate.rs
+  (`crates/unlace-decomp/src/infra/engine_translate.rs
   (EngineTranslate)`'s `fetch_inject_pcode`). The ghidra translator answers it
   with a getPcodeInject query carrying the live injection context — base
   address, call address, and the sized input/output operand lists, with the
@@ -798,14 +798,14 @@ Four front-ends drive one engine assembly:
   function's name.  The printer's read-only test for a string literal
   (`PrintC::pushPtrCharConstant`'s `isReadOnly` on the global scope) goes
   through the remote scope as well
-  (`decompiler/crates/unlace-decomp/src/infra/architecture.rs
+  (`crates/unlace-decomp/src/infra/architecture.rs
   (Architecture::is_global_read_only)`): the local symbol table is empty in
   ghidra mode, so asking it answered "not read-only" for every string Ghidra
   defines, and each printed as its `s_…`/`u_…` label.  A C++ symbol arrives
   as its bare name plus the host id of its namespace, and the namespace chain
   is printed the way upstream's
   `PrintC::pushSymbolScope` prints it
-  (`decompiler/crates/unlace-decomp/src/p9_emit/kuna_namespaces.rs`): a call
+  (`crates/unlace-decomp/src/substrate/kuna_namespaces.rs`): a call
   carries the scopes Ghidra's namespace strategy (Minimal by default) needs
   from the calling function's namespace, its own declaration carries its whole
   path, and each scope is a separate token so Java renders the `::`.  The
@@ -837,7 +837,7 @@ Four front-ends drive one engine assembly:
   ghidra-mode also prints a `Kuna v…` plate comment (the release
   `KUNA_VERSION` bake, `kuna_banner_text`) at the top of every function —
   cache-only, HEADER-typed, rendered by the printer's plate arm
-  (`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs
+  (`crates/unlace-decomp/src/p9_emit/printc.rs
   (emit_comment_func_header)`), which also renders the host's PLATE comments;
   the standalone pipeline never inserts HEADER comments, so that arm is inert
   there.  `flushNative` clears it all in the upstream order
@@ -845,7 +845,7 @@ Four front-ends drive one engine assembly:
   the tracked cache, non-core types (`TypeFactoryImpl::clear_noncore`),
   comments, decoded strings.
   `setOptions` decodes the `<optionslist>` for real through
-  `decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs (decode_lenient)`
+  `crates/unlace-decomp/src/p0_knowledge/options.rs (decode_lenient)`
   — every known option applies, unknown elements are skipped whole with a
   "Warning:"-prefixed 16/17 line (DIV-76), and the command always answers `t`.
   registerProgram also applies the CLI `aggressive` ENGINE-TIER preset (the
@@ -858,13 +858,13 @@ Four front-ends drive one engine assembly:
   (kuna) **The Phase-4 full response encode** makes the `decompileAt` answer
   carry everything the native GUI features consume, in the upstream child
   order (`Funcdata::encode`,
-  `decompiler/crates/unlace-decomp/src/substrate/funcdata_encode.rs`): the base
+  `crates/unlace-decomp/src/substrate/funcdata_encode.rs`): the base
   `<addr>`, the `<localdb>` symbol scope, the `<ast>` (savetree), the
   `<highlist>` (savetree + high-level on), the `<jumptablelist>`, and the
   `<prototype>`.  `<localdb>` is `ScopeLocal::encode`
-  (`decompiler/crates/unlace-decomp/src/p6_variables/varmap.rs`) over the
+  (`crates/unlace-decomp/src/p6_variables/varmap.rs`) over the
   function's private symbol database
-  (`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
+  (`crates/unlace-decomp/src/p0_knowledge/database.rs
   (Database::encode_scope, Symbol::encode_header, SymbolEntry::encode)`):
   every `<symbol>` carries its NONZERO id (internal `SYMBOL_ID_BASE`-range for
   kuna-invented symbols; Java's `HighSymbol.decodeHeader` throws on 0), every
@@ -877,7 +877,7 @@ Four front-ends drive one engine assembly:
   C++ `ActionNameVars::linkSymbols` Symbol objects, two mechanisms supply the
   ids the wire needs. First, the naming pass RECORDS the bind it actually made
   (`HighVariable::kuna_link_symbol`,
-  `decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs`) when
+  `crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs`) when
   a high resolves to a covering localmap entry — and, for a `&symbol`
   REFERENCE, the identity of the Symbol referred to
   (`HighVariable::kuna_ref_symbol`, set by `Funcdata::link_symbol_reference`,
@@ -891,7 +891,7 @@ Four front-ends drive one engine assembly:
   mapped local symref. Second, an encode-time link
   pass (`Funcdata::kuna_link_high_symbols`) gives every REMAINING named high a
   **wire-only symbol**
-  (`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs (WireSymbol)`):
+  (`crates/unlace-decomp/src/p0_knowledge/database.rs (WireSymbol)`):
   a mapped one at its storage when nothing covers it, or — when a Symbol does
   cover the storage yet the naming pass declined the bind as a CONFLICT (the
   narrower addr-tied return over a wider scalar parameter; the float8 lane over
@@ -917,7 +917,7 @@ Four front-ends drive one engine assembly:
   is a dead rename on that line, which is the whole point of the attribute.
   Globals echo the REAL host database id delivered by
   getMappedSymbols (`GlobalEntry::symbol_id`,
-  `decompiler/crates/unlace-decomp/src/substrate/context.rs`) and NEVER a
+  `crates/unlace-decomp/src/substrate/context.rs`) and NEVER a
   fabricated one — an unknown id omits `symref` (Java warns and falls back to
   address-keyed rename) rather than silently renaming the wrong symbol.  Type
   references marshal through the `Datatype::encode_ref` port (chapter
@@ -927,10 +927,10 @@ Four front-ends drive one engine assembly:
   analyzer asks `noc`+`notree`+`jumpload` and consumes only this list; the
   session's jumpload toggle reaches recovery as the upstream
   `FlowInfo::record_jumploads` flowoptions bit, applied per-decompile in
-  `decompiler/crates/unlace-ghidra/src/process.rs` so the setOptions baseline
+  `crates/unlace-ghidra/src/process.rs` so the setOptions baseline
   reset can never strand it.  Under action `paramid` with parammeasures on,
   the doc contains ONLY `<parammeasures>`
-  (`decompiler/crates/unlace-decomp/src/infra/paramid.rs
+  (`crates/unlace-decomp/src/infra/paramid.rs
   (ParamIDAnalysis::encode)`, the `<rank>` child always on — Java throws
   without it); otherwise an optional `<parammeasures>` precedes the function
   pair.  The markup `<function>` is rendered BEFORE `fd.encode` runs (the
@@ -941,7 +941,7 @@ Four front-ends drive one engine assembly:
   re-decompile whose getMappedSymbols answer now carries the edited local in
   the function's `<localdb>` (Java `LocalSymbolMap.grabFromFunction`).  kuna
   decodes those non-parameter locals
-  (`decompiler/crates/unlace-decomp/src/infra/remote_provider.rs
+  (`crates/unlace-decomp/src/infra/remote_provider.rs
   (RemoteLocalVar)`) and seeds them into the fresh `Funcdata` along FOUR
   channels, chosen by the two bits Java sets — the storage class and the
   typelock:
@@ -982,10 +982,10 @@ Four front-ends drive one engine assembly:
   applied.
 
 (kuna) **Locating the engine and the specs.** `unlace` is the whole toolchain
-(`decompiler/crates/unlace-cli/src/paths.rs (decomp_dbg, slacomp, specs_dir)`). The
+(`crates/unlace-cli/src/paths.rs (decomp_dbg, slacomp, specs_dir)`). The
 decompiler console and the SLEIGH compiler are library entry points
-(`decompiler/crates/unlace-console/src/consolemain.rs (main)`,
-`decompiler/crates/unlace-slacomp/src/slacompmain.rs (main)`) that the `decomp_dbg`
+(`crates/unlace-console/src/consolemain.rs (main)`,
+`crates/unlace-slacomp/src/slacompmain.rs (main)`) that the `decomp_dbg`
 and `slacomp` binaries and `unlace`'s own hidden `decomp_dbg` and `slacomp`
 subcommands all call, so `unlace decompile`, `unlace catalog` and `unlace specs` launch
 the running `unlace` again rather than look for siblings — a separate binary is used
@@ -993,11 +993,11 @@ only when `KUNA_DECOMP_DBG` or `KUNA_SLACOMP` names one. The child is still a
 separate process, which keeps the per-run memory limit and crash isolation the
 console had as its own binary. A release `unlace` also carries the compiled SLEIGH
 tree (cargo feature `embed-specs`, an `include_bytes!` table that
-`decompiler/crates/unlace-cli/build.rs` generates from every file under `specs/`
+`crates/unlace-cli/build.rs` generates from every file under `specs/`
 except the SLEIGH sources). The engine reads specs only through plain `std::fs`
 path reads — the same contract the WASI front-end relies on — so the table is
 unpacked rather than read in place
-(`decompiler/crates/unlace-cli/src/embedded_specs.rs (unpack)`): into
+(`crates/unlace-cli/src/embedded_specs.rs (unpack)`): into
 `specs-<id>` under the per-user cache directory, falling back to the system temp
 directory, where `<id>` hashes every path and byte of the table. Each unpack is
 written to a private staging directory and renamed into place only after its
@@ -1016,11 +1016,11 @@ The spec root resolves in this order: `KUNA_SPECS`, then `KUNA_ROOT`'s `specs/`,
 then the built-in tree, then the first directory that holds a
 `Ghidra/Processors` tree among the checkout's `specs/`, a `specs/` inside or next
 to the directory holding `unlace`, and the current directory's. A checkout build is
-recognised by its path, `<root>/decompiler/target/[<triple>/]<profile>/kuna`; any
+recognised by its path, `<root>/target/[<triple>/]<profile>/kuna`; any
 other directory has no repo root, and popping three parents off it lands on a path
 that exists nowhere, so the pop is refused rather than reported. `decomp_test_dbg`
 is not built in: it is probed for beside `unlace` and in the checkout's
-`decompiler/target/<profile>/`, under its bare name and then the platform's
+`target/<profile>/`, under its bare name and then the platform's
 executable suffix, because `Path::exists` applies no suffix of its own. The
 environment overrides (`KUNA_ROOT`, `KUNA_SPECS`, `KUNA_DECOMP_DBG`,
 `KUNA_DECOMP_TEST`, `KUNA_SLACOMP`, `KUNA_RUST_PROFILE`, all documented in
@@ -1030,7 +1030,7 @@ SLEIGH tree is reported where it is resolved rather than as the engine's
 downstream `No sleigh specification` — which reads as a problem with the binary.
 
 `unlace specs --diff` is informational: it writes verification guidance without
-starting a compiler (`decompiler/crates/unlace-cli/src/specs.rs (run)`). It identifies
+starting a compiler (`crates/unlace-cli/src/specs.rs (run)`). It identifies
 pinned Ghidra compiler element-stream comparisons separately from decompiler
 behavioral assertions; neither substitutes for the other.
 
@@ -1041,25 +1041,25 @@ suffixes, including the filenames `.slaspec` and `.sla`, are accepted unchanged,
 while other filename extensions are rejected. With no output argument it writes
 the input's sibling `.sla`. Extra positional arguments fail before compilation.
 Both filename arguments use the same normalization rule
-(`decompiler/crates/unlace-slacomp/src/bin/slacomp.rs (with_extension)`).
+(`crates/unlace-slacomp/src/bin/slacomp.rs (with_extension)`).
 
 The compiler's `-y` flag selects the XML debug encoding in both single-file and
 recursive (`-a`) modes. After successful parsing and compilation, the driver
 chooses the XML encoder or the default compressed binary encoder according to
 that flag; filename selection and write-error handling are the same in both
-modes (`decompiler/crates/unlace-slacomp/src/slgh_compile.rs (run_compilation)`,
-`decompiler/crates/unlace-slacomp/src/encode.rs (encode_to_xml_bytes)`).
+modes (`crates/unlace-slacomp/src/slgh_compile.rs (run_compilation)`,
+`crates/unlace-slacomp/src/encode.rs (encode_to_xml_bytes)`).
 The symbol and constructor encoding path retains the `OpcodeEncoder` interface
 so each encoder chooses its own opcode representation: names in XML, signed
 integer values in binary. Treating every encoder as binary would produce numeric
 XML attributes where Ghidra expects names
-(`decompiler/crates/unlace-sleigh/src/sleighbase.rs (encode)`,
-`decompiler/crates/unlace-sleigh/src/slghsymbol.rs (SleighBaseTrans)`).
+(`crates/unlace-sleigh/src/sleighbase.rs (encode)`,
+`crates/unlace-sleigh/src/slghsymbol.rs (SleighBaseTrans)`).
 
 The corresponding decoding path retains `OpcodeDecoder` through symbol tables,
 subtables and constructor templates. XML opcode names and packed opcode values
 therefore use the existing format-specific readers, including their validation.
-The shared ID table in `decompiler/crates/unlace-sleigh/src/slaformat/ids.rs` defines
+The shared ID table in `crates/unlace-sleigh/src/slaformat/ids.rs` defines
 every SLA element and attribute once and supplies the complete XML registration
 list. Existing `sla` import paths re-export that table. `SleighBase::registry`
 builds its XML name lookup on demand; binary decoding uses numeric IDs directly.
@@ -1090,8 +1090,8 @@ so the compiler rejects the constructor with
 `idx: operand is defined as itself or an operand that follows it`, as Ghidra's
 compiler does with `operand idx has an issue`. Listing the source operand first,
 or writing an expression such as `fld + 0`, compiles
-(`decompiler/crates/unlace-sleigh/src/slghsymbol.rs (build_constructor_pattern)`,
-`decompiler/crates/unlace-sleigh/src/slghpatexpress.rs (gen_min_pattern)`).
+(`crates/unlace-sleigh/src/slghsymbol.rs (build_constructor_pattern)`,
+`crates/unlace-sleigh/src/slghpatexpress.rs (gen_min_pattern)`).
 
 The consistency checker rejects a temporary that is read exactly once and
 written exactly once in the same semantic section when the read precedes or
@@ -1191,7 +1191,7 @@ writes lowercase hex directly into the content string, with a leading newline,
 a newline after every twentieth byte and a final newline. Decoding retains its
 signed-byte stopping rules and permissive digit arithmetic, skipping whitespace
 only before each pair. These rules are implemented in
-`decompiler/crates/unlace-sleigh/src/loadimage_xml.rs`.
+`crates/unlace-sleigh/src/loadimage_xml.rs`.
 
 XML image relocation uses the same ordered operation for byte chunks and
 symbols. The signed adjustment is scaled by each address space's word size,
@@ -1355,7 +1355,7 @@ build than `unlace` itself (an override naming another install, or a sibling lef
 behind when only `unlace` was rebuilt), and nothing in the output shows it. So every
 spawn of `decomp_dbg` or `decomp_test_dbg` exports the parent's identity as
 `KUNA_PARENT_BUILD`
-(`decompiler/crates/unlace-console/src/kuna_buildstamp.rs (identity, answer_parent, report)`).
+(`crates/unlace-console/src/kuna_buildstamp.rs (identity, answer_parent, report)`).
 The child compares it with its own before reading its arguments and, only when the
 two differ, writes one `kuna-build-mismatch: <identity>` line to stderr. `unlace`
 removes that line from the captured stderr before anything reads it (`unlace test`
@@ -1368,7 +1368,7 @@ definition, so they stay fixed.
 
 An identity is the version `unlace --version` prints plus a hash of the selected
 child's production source graph, the workspace `Cargo.toml` and `Cargo.lock`
-(`decompiler/crates/unlace-console/build.rs`). `decomp_dbg` is rooted at
+(`crates/unlace-console/build.rs`). `decomp_dbg` is rooted at
 `unlace-console`; `decomp_test_dbg` is rooted at `unlace-harness`, so runner-only
 changes cannot masquerade as a matching test binary. `tests`, `benches` and
 `examples` are excluded and CR bytes are skipped. The version alone cannot tell
@@ -1382,9 +1382,9 @@ they are not part of either child.
 
 (kuna) **Loading a spec.** A `.sla` is a zlib stream behind a `sla\x04` header,
 inflated and checksum-verified in full before a single element is decoded
-(`decompiler/crates/unlace-sleigh/src/slaformat.rs (FormatDecode::ingest_stream)`).
+(`crates/unlace-sleigh/src/slaformat.rs (FormatDecode::ingest_stream)`).
 The decompressed buffer is then *handed* to the packed decoder rather than
-copied into it (`decompiler/crates/unlace-base/src/marshal.rs
+copied into it (`crates/unlace-base/src/marshal.rs
 (PackedDecode::ingest_owned)`): the inflate buffer becomes the decoder's leading
 byte chunk as it stands, and only the trailing partial chunk is copied, to carry
 the `ELEMENT_END` pad that ends the input one byte past its last. Where the
@@ -1401,11 +1401,11 @@ which is where end-of-stream is detected (`marshal.rs
 (kuna) **The option-name contract.** Every `unlace` surface that takes
 `--option NAME VALUE` checks the NAME in its own parser, before a binary is
 opened or a `decomp_dbg` spawned
-(`decompiler/crates/unlace-cli/src/optname.rs (check)`), against the two tables the
+(`crates/unlace-cli/src/optname.rs (check)`), against the two tables the
 engine dispatches on: the kuna stage-model options
-(`decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs (KUNA_OPTION_NAMES)`)
+(`crates/unlace-decomp/src/p0_knowledge/options.rs (KUNA_OPTION_NAMES)`)
 and the upstream `OptionDatabase` element ids
-(`decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs
+(`crates/unlace-decomp/src/p0_knowledge/options.rs
 (UPSTREAM_OPTION_ELEMENTS)`). An unrecognized name exits 2 and names the nearest
 catalogued spelling; nothing is decompiled. The check is up front rather than at
 dispatch because the settable namespace is the control surface an agent reasons
@@ -1421,11 +1421,11 @@ option owns its grammar (`on`/`off`, a closed word set, a count, a prototype
 model name) and only `Architecture::set_kuna_option` and `OptionDatabase::set`
 know it — so, unlike the NAME, it cannot be checked in the parser. The in-process
 surfaces get the refusal as a `Result` and stop
-(`decompiler/crates/unlace-cli/src/decompile_all.rs (apply_one_option)`), while the
+(`crates/unlace-cli/src/decompile_all.rs (apply_one_option)`), while the
 subprocess surface has only the transcript: the console reports the refusal as an
 `Execution error:` and, because the driver's script arrives on **stdin** rather
 than as a pushed script — `errorisdone` is set only by
-`decompiler/crates/unlace-console/src/interface.rs (push_script_state)` — the
+`crates/unlace-console/src/interface.rs (push_script_state)` — the
 session simply runs on. The run then printed the DEFAULT C and exited 0, which is
 the same false evidence the name check exists to prevent, and worse for being
 indistinguishable from a decision point that genuinely changes nothing. So
@@ -1443,7 +1443,7 @@ off"`, which reaches the console as the three tokens it wants.
 
 (kuna) **Surfacing a failed function.** A per-function pipeline abort is
 *recoverable*: the drive catches the unwind and returns the reason as an error
-(`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (panic_message)`
+(`crates/unlace-decomp/src/infra/decompile_drive.rs (panic_message)`
 recovers the panic payload's text — it must take the `catch_unwind` payload by
 value, since a `&Box<dyn Any + Send>` downcasts as the box and loses the
 message). Each front-end then decides how to report it, and every one of them
@@ -1454,23 +1454,23 @@ must make the failure observable:
 - The console keeps the session alive — it prints `Skipping <fn>: <reason>` and
   returns success, so a datatest's `<stringmatch>` rules still evaluate rather
   than the whole file erroring
-  (`decompiler/crates/unlace-console/src/ifacedecomp.rs`, the `IfcDecompile`
+  (`crates/unlace-console/src/ifacedecomp.rs`, the `IfcDecompile`
   error arm). Because the *previous*, un-decompiled `Funcdata` survives, a
   following `print C` renders a shell with no structured blocks; the arm
   therefore stamps the reason onto that `Funcdata`
-  (`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+  (`crates/unlace-decomp/src/substrate/funcdata.rs
   (Funcdata::set_kuna_pipeline_failure)`) so the emitted comment names the
   abort instead of blaming structuring (chapter
   [09](09-emission.md) §9.2).
 - `unlace decompile` recognizes that notice in the subprocess transcript
-  (`decompiler/crates/unlace-cli/src/decompile.rs (find_pipeline_failure)`) and
+  (`crates/unlace-cli/src/decompile.rs (find_pipeline_failure)`) and
   reports it: the reason plus the forwarded `decomp_dbg` stderr on its own
   stderr, and **exit 1** — the shell still goes to stdout. Without this the
   command exits 0 with a plausible-looking empty function, because the rendered
   shell is not empty (DIV-45; the contract is `docs/cli.md`).
 
 (kuna) **The stdout boundary.** Every CLI command renders its output and hands it
-to `decompiler/crates/unlace-cli/src/output.rs (emit)` rather than calling
+to `crates/unlace-cli/src/output.rs (emit)` rather than calling
 `println!`, which panics — exit 101, with a Rust panic trace on stderr — as soon
 as a downstream reader closes the pipe, because Rust `SIG_IGN`s SIGPIPE and the
 print macros unwrap the resulting `EPIPE`. A closed pipe is a normal terminal
@@ -1494,7 +1494,7 @@ line (DIV-89).
 name only when it is the file name of an `*.xml` directly in the corpus
 directory, drops every other name silently, and reports the tests *inside*
 each file by their own names. So
-`decompiler/crates/unlace-cli/src/test/selection.rs` resolves the file-level
+`crates/unlace-cli/src/test/selection.rs` resolves the file-level
 selection itself, by the harness's rule, before starting it: the corpus files
 matched, and the requested names that match none. Unit tests are named in the
 harness's own stream, so a requested unit test that never reported is missing
@@ -1517,7 +1517,7 @@ injected defaults, and each assertion keeps its existing application slot.
 (kuna) **The console's filename grammar.** `unlace decompile` is the one front-end
 that reaches the engine through a console *script* rather than an in-process
 call: it writes `load file <path>` / `openfile write <path>` into `decomp_dbg`'s
-stdin (`decompiler/crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`), where the
+stdin (`crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`), where the
 other three read the image with `bootstrap_from_object` and never tokenize the
 path at all. Upstream reads every path with `s >> filename`, a pure whitespace
 scan, so a path containing a space arrived as two arguments: `load file` took the
@@ -1525,7 +1525,7 @@ head as a BFD target and loaded the tail, and `openfile write` truncated the
 redirect at the split, writing the C to a file named after the first component.
 The four commands that take a path — `load file`, `openfile write`, `openfile
 append`, `parse file` — now read it with
-`decompiler/crates/unlace-console/src/interface.rs (CommandStream::read_filename)`,
+`crates/unlace-console/src/interface.rs (CommandStream::read_filename)`,
 which accepts an optional double-quoted argument (`\"` and `\\` are escapes
 inside quotes; any other backslash is literal, so a Windows path survives either
 spelling) and is byte-identical to `read_token` for unquoted input, so the
@@ -1537,7 +1537,7 @@ script byte-identical for every path that works today, including for an older
 
 The redirect's own write is fallible for the same reason. `decomp_dbg` re-syncs
 the open redirect after every command
-(`decompiler/crates/unlace-console/src/bin/decomp_dbg.rs (sync_redirect_file)`),
+(`crates/unlace-console/src/bin/decomp_dbg.rs (sync_redirect_file)`),
 and the open both creates and TRUNCATES its target, so discarding the error is
 how a mis-parsed path became silent data loss. A target that cannot be opened or
 written is now reported on stderr, once per target — the CLI forwards that into
@@ -1546,9 +1546,9 @@ decompiler that produced nothing.
 
 (kuna) **One decompile step, two surfaces.** Every front-end turns a function
 into a `Funcdata` through the same driver-tier step
-(`decompiler/crates/unlace-console/src/decompile_step.rs (decompile_one)`), which
+(`crates/unlace-console/src/decompile_step.rs (decompile_one)`), which
 wraps the engine drive
-(`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs
+(`crates/unlace-decomp/src/infra/decompile_drive.rs
 (decompile_func_full_with_override_dyn)`) in the parts of the per-function
 contract that are policy rather than pipeline. Today that is format-string
 varargs typing (chapter [01](01-program-prep.md) §1.4), in two parts. The
@@ -1569,9 +1569,9 @@ duration of the loop and restores the prior value. The caller supplies only the 
 `parse line` / `override` state, the whole-binary loop the function's DWARF
 locals and the no-return flow prunes — through one seed struct, and both the
 console `decompile` command
-(`decompiler/crates/unlace-console/src/ifacedecomp.rs`, `IfcDecompile`) and the
+(`crates/unlace-console/src/ifacedecomp.rs`, `IfcDecompile`) and the
 whole-binary loop
-(`decompiler/crates/unlace-console/src/project.rs (decompile_targets)`, behind
+(`crates/unlace-console/src/project.rs (decompile_targets)`, behind
 `decompile-all` / `decompile-project` / wasm) go through it. Duplicating the
 step is a defect, not a variation: while the loop lived only in the console
 command, `--option formatstring on` was a **silent no-op** on every whole-binary
@@ -1594,7 +1594,7 @@ function, even when the caller is outside the selection.
 
 (kuna) **Surface defaults.** The drivers inject their defaults before the option
 pass, from one shared table
-(`decompiler/crates/unlace-cli/src/decompile_all.rs (driver_default_options)`), and
+(`crates/unlace-cli/src/decompile_all.rs (driver_default_options)`), and
 which bundle a surface takes is named at its one call site rather than inferred: `option listing on` (DIV-15 — without the Listing the
 default-on no-return propagation is a structural no-op, and a stripped binary's
 unnamed exit wrapper swallows every following function into its caller), and
@@ -1617,7 +1617,7 @@ touches the engine default or the console/datatest surfaces.
 Single-function `unlace decompile` reads the same table, and that is why the table
 is shared rather than duplicated: it builds a `decomp_dbg` script instead of
 loading in-process, so it applies the pairs as `option` lines ahead of
-`read symbols` (`decompiler/crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`).
+`read symbols` (`crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`).
 What it does differently is *when*. It injects the Listing up front and holds the
 discovery half back for a **second attempt**, made only when the console answers
 a by-name selection with `no function matches`.
@@ -1654,25 +1654,25 @@ runs and other presets retain 120 seconds, and an explicit value always wins.
 The WASM front-end arms the same 10-second budget only for fast whole-binary
 `decompile` and `project` commands; its other commands remain unbudgeted. The
 driver sets the budget on the
-architecture (`decompiler/crates/unlace-cli/src/decompile_all.rs
+architecture (`crates/unlace-cli/src/decompile_all.rs
 (decompile_all)`), which the drive arms as a wall-clock deadline covering
 flow-follow, the jump-table sub-pipeline, and the action pipeline
-(`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs
+(`crates/unlace-decomp/src/infra/decompile_drive.rs
 (decompile_func_full_with_override_dyn)`). The deadline is probed cooperatively —
 at every group/sub-action boundary and repeat gate
-(`decompiler/crates/unlace-decomp/src/infra/action.rs (ActionGroup::apply,
+(`crates/unlace-decomp/src/infra/action.rs (ActionGroup::apply,
 Action::perform, ActionRestartGroup::apply)`), every 1024 op-visits inside the
-rule-pool loop (`decompiler/crates/unlace-decomp/src/infra/action.rs
+rule-pool loop (`crates/unlace-decomp/src/infra/action.rs
 (POOL_DEADLINE_STRIDE)`), at the heritage loop
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/heritage.rs`), before each
+(`crates/unlace-decomp/src/p3_dataflow/heritage.rs`), before each
 range heritage's guard placement visits and before each
 address the written-slot guard guards, every 256 new values a pointer walk of
 `stackstoreguard` visits, every 64 steps of a variable-merging pass
-(`decompiler/crates/unlace-decomp/src/p6_variables/merge.rs (Merge::budget)`,
+(`crates/unlace-decomp/src/p6_variables/merge.rs (Merge::budget)`,
 chapter 06), every 1024 seeds the implied-variable walk visits
-(`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
+(`crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
 (MARK_IMPLIED_PROBE_STRIDE)`), every 256 Varnodes the dead-code sweep visits
-(`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+(`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (SWEEP_DEADLINE_STRIDE)`: destroying a dead operation unlinks it from each
 input's reader list, which is linear in that list, so a function whose dead
 operations all read one Varnode sweeps in quadratic time and the sweep stops
@@ -1681,16 +1681,16 @@ before each region attempt of region identification (chapter
 07), before each call-argument trial `ActionActiveParam` scores and every 256
 steps of the trial's use walks (chapter 04), and again after the final layout checks: the drive
 publishes its deadline to
-`decompiler/crates/unlace-decomp/src/substrate/kuna_budget.rs (deadline_passed)`,
+`crates/unlace-decomp/src/substrate/kuna_budget.rs (deadline_passed)`,
 so a walk inside one pass gives up rather than run past it. Flow-time
 jump-table recovery probes it too, before and after each table's attempt and
-after its basic and default-path models (`decompiler/crates/unlace-decomp/src/p2_lift/flow.rs
-(FlowInfo::recover_jump_tables)`, `decompiler/crates/unlace-decomp/src/p2_lift/jumptable.rs
+after its basic and default-path models (`crates/unlace-decomp/src/p2_lift/flow.rs
+(FlowInfo::recover_jump_tables)`, `crates/unlace-decomp/src/p2_lift/jumptable.rs
 (JumpTable::recover_model)`); a table reached past the deadline is not attempted
 and its indirect jump is truncated as an unrecovered one. Inside a model, every
 loop over the values of the switch variable (building the address table,
 checking its rows against the guards, labelling them) advances through
-`decompiler/crates/unlace-decomp/src/p2_lift/jumptable.rs (walk_within_budget)`,
+`crates/unlace-decomp/src/p2_lift/jumptable.rs (walk_within_budget)`,
 which fails the walk once a probe sees the budget spent, so a table of any
 length the `jumptablemax` ceiling admits ends with its drive instead of after
 its last row. On expiry the
@@ -1698,10 +1698,10 @@ containers stop scheduling work and unwind; the driver converts that into the
 function's `error` record (a pass panic after the deadline passed reports the
 same budget error) and the batch continues. The record names where the budget
 ran out: the first probe to see the expiry records its site
-(`decompiler/crates/unlace-decomp/src/substrate/kuna_budget.rs (note_budget_site)`)
+(`crates/unlace-decomp/src/substrate/kuna_budget.rs (note_budget_site)`)
 and later ones leave it, so the site is the innermost polled loop that was
 running when the deadline passed — an action (a rule pool adds the rule that
-applied most since the function's reset, `decompiler/crates/unlace-decomp/src/infra/action.rs
+applied most since the function's reset, `crates/unlace-decomp/src/infra/action.rs
 (ActionPool::budget_site)`), heritage, variable merging, region identification,
 region structuring, `action activeparam`'s trial scoring, a
 store-reachability walk or a jump-table step (`jump-table value walk` for
@@ -1726,7 +1726,7 @@ jump-table step) named one, which `unlace decompile` reports as the function's f
 truncated IR is never adopted, and the drive that adopts a completed one arms
 its own, measuring from where the follow left the resident set. Its clock is
 charged for the follow: the IR carries how long the follow took
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::flow_spent)`)
+(`crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::flow_spent)`)
 and the adopting drive's deadline is that much nearer, so `unlace decompile`'s
 budget bounds the follow and the analysis together, as a `decompile-all`
 drive's does. A `decompile` that rebuilds the flow instead (a console fact
@@ -1740,19 +1740,19 @@ stopped the drive, and the shell prints nothing it adds. A later command that
 reads the IR — `print raw` and the `region` commands, which `unlace decompile
 --raw` / `--regions` run — follows it then, unbudgeted, so it prints the raw
 p-code and regions it printed when the stop followed again at once
-(`decompiler/crates/unlace-console/src/ifacedecomp.rs
+(`crates/unlace-console/src/ifacedecomp.rs
 (IfaceDecompData::follow_stopped_flow)`). The follow
 recovers every jump table, and a jump table's sub-pipeline heritages
 everything flow has reached, so in a huge function the follow is where the
 memory goes.
 `--max-fn-memory MiB` arms the
 same probes with a memory limit
-(`decompiler/crates/unlace-decomp/src/substrate/kuna_fnmemory.rs`): the driver sets
+(`crates/unlace-decomp/src/substrate/kuna_fnmemory.rs`): the driver sets
 it process-wide, each drive reads the resident set it starts from (first
 releasing free heap pages with glibc `malloc_trim` and reading again when the
 process holds 16 MiB more than the last release left,
 `kuna_fnmemory.rs (settle)`), and
-`decompiler/crates/unlace-decomp/src/substrate/kuna_budget.rs (budget_spent)` —
+`crates/unlace-decomp/src/substrate/kuna_budget.rs (budget_spent)` —
 the one test every probe makes — also asks, reading the resident set at most
 every 50 ms, whether the process is over the limit and the drive itself has
 added at least 64 MiB (`kuna_fnmemory.rs (trips)`), so what the batch built
@@ -1760,11 +1760,11 @@ up before a function began cannot stop it. What a function leaves behind for
 the rest of the run should be its result and the facts later functions read,
 not its working state: a `Funcdata` releases on drop the fspec-space entries
 its call specs registered under their process-unique handles
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::drop)`),
+(`crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::drop)`),
 which were otherwise kept for every call site of every function; an inlined
 callee's handles pass to the function it is inlined into, whose cloned call
 ops still name them
-(`decompiler/crates/unlace-decomp/src/p2_lift/flow.rs (FlowInfo::inline_flow)`), and the
+(`crates/unlace-decomp/src/p2_lift/flow.rs (FlowInfo::inline_flow)`), and the
 per-callee summaries a run caches are stored compactly (04, `kuna_calleedeadarg.rs`).
 The allocator keeps a function's freed working memory resident, so without
 a release a batch would start every later function at the high-water of the
@@ -1778,18 +1778,18 @@ the machine. A rule object outlives the function it ran on, so
 callee-first driver holds every result until its last round has run: it
 writes each one, in a `--jobs` worker's result record, to an anonymous
 temporary file and reads it back when a round or the final document needs it
-(`decompiler/crates/unlace-cli/src/decompile_all/result_store.rs (ResultStore)`),
+(`crates/unlace-cli/src/decompile_all/result_store.rs (ResultStore)`),
 falling back to the encoded record in memory when the file cannot be made or
 written; after a failed write the file is only read, so the records already
 on it stay readable.
 It also drops the call graph, and with it the reference index, before its
 first decompile and returns the freed pages: only the plan and the callback
 park read the graph, and the park's answers about the targets are taken up
-front (`decompiler/crates/unlace-cli/src/callgraph.rs (CallGraph::callback_refs)`).
+front (`crates/unlace-cli/src/callgraph.rs (CallGraph::callback_refs)`).
 On serde-hkx's `hkxc.exe` that is 242 of the 312 MiB of heap the first
 function started with, leaving about what a `--jobs` worker starts with.
 The `decompile-all --json` document is written to stdout a record at a time
-(`decompiler/crates/unlace-cli/src/decompile_all.rs (write_selected_json)`), so
+(`crates/unlace-cli/src/decompile_all.rs (write_selected_json)`), so
 neither it nor the value tree it is rendered from is held whole beside the
 results; built whole, the two took about four times the document's size at
 the end of the run. The release at a drive's start uses glibc's `malloc_trim`
@@ -1806,7 +1806,7 @@ worker (the parent passes a value only when one was given) and `decomp_dbg`
 a margin of max(512 MiB, 10% of the cap), a drive trips once some capped
 cgroup on the path to the root holds more than its cap less the margin,
 counting `memory.current` without the file-backed LRU pages reclaim can drop
-(`decompiler/crates/unlace-decomp/src/substrate/kuna_hostmem.rs
+(`crates/unlace-decomp/src/substrate/kuna_hostmem.rs
 (unreclaimable_bytes)`), AND the drive has itself grown by that cgroup's
 floor: the margin, or half the room the cap left the process when the drive
 started if that is less, and never under 64 MiB (`kuna_fnmemory.rs
@@ -1825,14 +1825,14 @@ is `kuna_hostmem.rs (resident_bytes)`: `VmRSS` on Linux, and on Windows the
 larger of the working set and the private commit; a platform that reports no
 resident set (macOS) refuses a non-zero limit. Printing the function counts
 against the same budget: the drive hands back what is left of its deadline
-with the function (`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+with the function (`crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::render_budget)`), and whoever renders it publishes that, counted
 from when rendering starts, as the deadline the probes read
 (`decompile_drive.rs (RenderBudget)`): the batch render and its variable
-extraction (`decompiler/crates/unlace-console/src/project.rs (decompile_pulled)`)
+extraction (`crates/unlace-console/src/project.rs (decompile_pulled)`)
 and the console's `print C`. The printer probes before each statement of a
 basic block and every 256 Varnodes of its local declarations
-(`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs
+(`crates/unlace-decomp/src/p9_emit/printc.rs
 (PrintC::emit_basic_block_ops, PrintC::emit_local_var_decls)`) and stops
 printing once it has passed; the batch probes again after the C text and
 after the variable extraction. A render past the budget never reaches the
@@ -1852,17 +1852,17 @@ already named. The layout ledger then mints the larger layout beside the older
 one instead of widening it (chapter [05](05-types.md) §5.2, struct synthesis).
 After an eager batch (`decompile_targets` behind `decompile-all`,
 `decompile_export_targets` behind a non-stream `decompile-project`),
-`decompiler/crates/unlace-console/src/project.rs (converge_synthesized_structs)`
+`crates/unlace-console/src/project.rs (converge_synthesized_structs)`
 asks the ledger which names have been superseded and decompiles again, once,
 exactly the results that spell one. The default callee-first order
 (`protoorder`, chapter [04](04-calls-and-prototypes.md)) runs the same sweep at
 its end, in its own plan order
-(`decompiler/crates/unlace-cli/src/decompile_all/callee_first.rs (converge_callee_first)`),
+(`crates/unlace-cli/src/decompile_all/callee_first.rs (converge_callee_first)`),
 and within a budget: a redo costs what the function's first decompile cost, so
 the redos are admitted shortest first, charged the lines each first body
 printed, up to 5% of what the whole first pass printed or 2,000 lines,
 whichever is more
-(`decompiler/crates/unlace-cli/src/decompile_all/callee_first.rs (STRUCT_SWEEP_BUDGET_PCT)`),
+(`crates/unlace-cli/src/decompile_all/callee_first.rs (STRUCT_SWEEP_BUDGET_PCT)`),
 and a body of at most 32 lines is always admitted. A function the budget does
 not reach keeps its first body, whose superseded structure is still defined and
 still answers for it. Every other binary measured redoes under 2,000 lines, so
@@ -1873,14 +1873,14 @@ entries of one interpreter routine, and redoing them took a fifth of its run.
 (kuna) **A result read from a `void` function.** After each function of the
 callee-first plan, the driver decompiles again every function recovered `void`
 whose result a caller reads
-(`decompiler/crates/unlace-cli/src/decompile_all/callee_first.rs (VoidReads::settle)`), each
+(`crates/unlace-cli/src/decompile_all/callee_first.rs (VoidReads::settle)`), each
 told the storage its callers read, in plan order, together with each reader of
 a function whose recovered return a redo changed, each function whose float
 return a reader keeps as another type, and each redone function left returning
 a register a call only clobbers, for up to ten rounds, since a redone
 wrapper reads its own callee's result. The recording hook is the one
 that states `callrettype`'s return
-(`decompiler/crates/unlace-console/src/project.rs (decompile_pulled)`), and the
+(`crates/unlace-console/src/project.rs (decompile_pulled)`), and the
 recovery is chapter [04](04-calls-and-prototypes.md)'s. A redo that fails keeps
 the first body. The worker pool, which has no callee-first order, does not run
 it.
@@ -1888,17 +1888,17 @@ it.
 (kuna) Which `struct_N` a layout becomes is decided by the order the program is
 visited in, so the whole-program surfaces that keep a ledger take the SAME
 order. `decompile-project` asks
-`decompiler/crates/unlace-cli/src/decompile_all.rs (callee_first_decision)` the
+`crates/unlace-cli/src/decompile_all.rs (callee_first_decision)` the
 question `decompile-all` asks and runs the same loop with the export's own
 per-function options
-(`decompiler/crates/unlace-console/src/project.rs (export_options)`), so a name in
+(`crates/unlace-console/src/project.rs (export_options)`), so a name in
 the exported header is the record `decompile-all` means by it. Without that the
 two disagreed wherever the orders diverged -- on coreutils `du` -O2, 29 of 30
 synthesized names -- and nothing on either surface said so. A streamed export
 writes each body as it finishes and cannot buffer a plan, so it keeps the
 address-order schedule and says on stderr that the option does not reach it; the
 browser front-end's `project` export calls the eager batch directly
-(`decompiler/crates/unlace-wasm/src/lib.rs`) and keeps that schedule too, since the
+(`crates/unlace-wasm/src/lib.rs`) and keeps that schedule too, since the
 plan is a `unlace-cli` driver. If a redo fails where the first pass
 succeeded, for example because it ran past a watchdog budget that the first pass
 fit in, the first body is kept. That body still names a structure that is
@@ -1916,11 +1916,11 @@ wall clock, and the engine is structurally single-threaded: a `Funcdata` holds
 `Rc<ArchContext>` and the flow environment a raw `*const Architecture`, so nothing
 in the pipeline is `Send`. `--jobs N` on `decompile-all`, `decompile-project` and
 `decompile-graph` therefore fans the loop out over **processes**, re-executing the
-`unlace` binary itself (`decompiler/crates/unlace-cli/src/jobs.rs`) in a hidden worker
+`unlace` binary itself (`crates/unlace-cli/src/jobs.rs`) in a hidden worker
 mode. `--jobs 1` is the default and is the in-process loop above, unchanged; the
 console and parity paths never see a pool.
 
-The record codec is isolated in `decompiler/crates/unlace-cli/src/jobs/wire.rs`;
+The record codec is isolated in `crates/unlace-cli/src/jobs/wire.rs`;
 it does not own worker processes or scheduling. Chunk specifications and result
 frames retain their existing version markers, little-endian fields and field
 order. A worker flushes each completed function's result, and the parent keeps
@@ -1934,7 +1934,7 @@ address wins, and each stored record is consumed once; missing records become
 errors without moving neighboring results. Lookup-table iteration cannot
 determine output order.
 
-Scratch storage is owned by `decompiler/crates/unlace-cli/src/jobs/scratch.rs`.
+Scratch storage is owned by `crates/unlace-cli/src/jobs/scratch.rs`.
 The session holds a temporary-directory guard through inventory, worker and
 result handling, so normal return, errors and unwinding all release its files.
 Directory creation is exclusive and requests private Unix permissions before
@@ -1955,7 +1955,7 @@ directories are left alone because their ownership cannot be proved. Normal guar
 cleanup and the workers' parent-pipe cleanup still release their own directories.
 
 Synthesized-structure reconciliation is owned by
-`decompiler/crates/unlace-cli/src/jobs/synth.rs`. It keeps the first-pass and sweep
+`crates/unlace-cli/src/jobs/synth.rs`. It keeps the first-pass and sweep
 caches, replay plans, compatible renames and serial fallback together. The pool
 hands it the recorded run and receives the final worker kind and optional table;
 worker lifetime, chunk scheduling and record serialization remain separate.
@@ -1988,10 +1988,10 @@ number its own structures. What a function ASKS the ledger, though, does not
 depend on what it is answered: the evidence is collected before anything is
 installed, and a field takes the type an access carried. So the first pool's
 workers record every lookup and what their own ledger answered
-(`decompiler/crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
 (SynthRequest)`), and the parent, which decompiles nothing, replays the lookups
 in target order through the ledger's own decision
-(`decompiler/crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
 (Replay)`). The replay yields every answer, every mint, the superseded set and
 the answers the convergence sweep's lookups will get.
 
@@ -2000,28 +2000,28 @@ lookup with a structure that has exactly the members of the serial answer's --
 it minted what it measured, and so did the serial run under another number --
 printed the serial text with other numbers, so the parent renames the
 identifiers in its C, prototype, variable types and type definitions
-(`decompiler/crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
 (renaming)`). The renaming is refused when an answer's members differ, when two
 names would become one, or when the text spells a structure name the renaming
 does not cover or spells one inside a string or character literal
-(`decompiler/crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
 (rename_identifiers)`), and when a name it covers is a symbol's rather than a
 type's -- nothing kuna names spells a `struct_N`, but a binary's own symbols
 could. On `tar` O2, 100 of the 106 functions that synthesize
 are renamed. The rest are decompiled a second time by the same workers, each of
 which first destroys the structures it minted itself, and every type built on
-one (`decompiler/crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+one (`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
 (forget_minted)`), mints the replayed structures in the serial order
-(`decompiler/crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
 (install_table)`) and answers each lookup with its replayed name; a function the
 sweep will decide differently is renamed onto its sweep answers or goes out
 twice in that pool, and the parent applies the sweep on the first-pass text
-exactly as the serial batch does (`decompiler/crates/unlace-cli/src/jobs/synth.rs (name_structs_serially)`). The second
+exactly as the serial batch does (`crates/unlace-cli/src/jobs/synth.rs (name_structs_serially)`). The second
 decompile records its lookups as well, and they have to be the first ones,
 repeats aside. A decompile can ask one question twice (a restarted pass measures
 the same layout again), whether it does follows the process's history, and a
 forced worker answers a repeat as it answered the first asking
-(`decompiler/crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
 (distinct)`), so the replay also requires every question to get the same answer
 at the end of its function as when it was first asked. A function whose first
 answers do change what it asks next is the real exception: its questions up to
@@ -2044,7 +2044,7 @@ still start from a fresh clone of the same base ledger.
 
 A structure can travel only if another process can rebuild every field type,
 and a named type counts only if the worker's load created it
-(`decompiler/crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
 (AtLoad)`): `pebnames` creates `PEB` and `TEB` the first time a function reads
 them, so one worker holds them and another does not. The unnamed unknown
 placeholder a Varnode starts with is held by no factory and is rebuilt as itself
@@ -2059,10 +2059,10 @@ watchdog or a worker failure cut short in the first pool is exempt from the
 checks, since it asks a different number of questions on every run.
 
 A `decompile-project` header is rendered by the workers
-(`decompiler/crates/unlace-cli/src/jobs/type_blocks.rs (merge_type_definitions)`). The workers that hold the replayed structures
+(`crates/unlace-cli/src/jobs/type_blocks.rs (merge_type_definitions)`). The workers that hold the replayed structures
 render their block in full; when no function was decompiled again, every idle
 worker installs them before it retires
-(`decompiler/crates/unlace-cli/src/jobs.rs (install_on_idle_workers)`). Every
+(`crates/unlace-cli/src/jobs.rs (install_on_idle_workers)`). Every
 other worker, including every worker the one-worker path did not use, renders
 its block without the structures it minted or installed, so the types its own
 functions interned (a `TEB` read by a function that synthesizes nothing) still
@@ -2088,7 +2088,7 @@ one of two spots from one serial run to the next, since the type tree orders it
 by an address. `decompile-project --stream` writes each body as
 it lands and runs no sweep, so its workers still run with `structsynth off` and
 say so
-(`decompiler/crates/unlace-cli/src/jobs.rs (structsynth_shard_note)`). The parent resolves the concrete
+(`crates/unlace-cli/src/jobs.rs (structsynth_shard_note)`). The parent resolves the concrete
 `--mode`, every `--option` and the watchdog budget once and passes them to every
 worker, so a shard cannot resolve a different policy just because the run was
 sharded. `--assert` and `--raw-image` are refused with a pool: assertion outcomes
@@ -2105,7 +2105,7 @@ worker also skips the whole-binary discovery the parent has already run
 (`fast_funcdisc`), because that discovery is most of the load; its *product* is
 what `FlowInfo::queryCall` reads, so the parent hands its canonical inventory
 over instead, replayed through the loader-symbol seam
-(`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::seed_function_inventory)`).
+(`crates/unlace-console/src/engine.rs (ConsoleProgram::seed_function_inventory)`).
 The seeding is strictly additive — an address this load already resolves, or a name
 it already carries, is left alone — because a name is installed into the scope its
 `::` path names, and replacing one buries a name the worker derived correctly.
@@ -2116,16 +2116,16 @@ the recovery's outcome next to the inventory: the final frame roots, code-pointe
 and AIF entries, and the prior entries it retained. A worker replays that record
 and builds only the final Listing from it, which is the parent's Listing because
 every discarded round ran in a rolled-back decode context
-(`decompiler/crates/unlace-cli/src/decompile_all.rs (replay_worker_arm_frames)`).
+(`crates/unlace-cli/src/decompile_all.rs (replay_worker_arm_frames)`).
 `--jobs-full-load` restores the parent's exact load in every worker.
 
 The pool's width is fixed after the parent's load, the only point at which the
-parent knows what a load costs (`decompiler/crates/unlace-cli/src/jobs.rs
+parent knows what a load costs (`crates/unlace-cli/src/jobs.rs
 (affordable_jobs)`). A worker is priced at a quarter of the parent's peak
 resident set, less what its decode lanes added (256 MiB at least; the whole
 peak under `--jobs-full-load`), and the pool may take two thirds of the memory a
 new process could still take
-(`decompiler/crates/unlace-decomp/src/substrate/kuna_hostmem.rs (available)`). On
+(`crates/unlace-decomp/src/substrate/kuna_hostmem.rs (available)`). On
 Linux that is `MemAvailable`, or the headroom of the cgroup v2 hierarchy the
 process runs in when that is smaller: each cgroup on the path to the root with
 a finite `memory.max` leaves that cap less its `memory.current` without the
@@ -2168,7 +2168,7 @@ that decompiles in 2 ms), and re-ran the rest one function per chunk, which
 undoes the ordering the path exists for. So that worker writes a begin frame as
 it starts each function, in the pass and in the sweep. The frame carries the
 function's chunk position and is not a record
-(`decompiler/crates/unlace-cli/src/jobs/wire.rs (ResultWriter::begin)`). The stall
+(`crates/unlace-cli/src/jobs/wire.rs (ResultWriter::begin)`). The stall
 window then measures one function, as it does for any streaming worker. If the
 worker dies anyway, the last frame names the function it was on, and only that
 function is the suspect.
@@ -2181,7 +2181,7 @@ function it was on, and every later target never started. The holding worker
 leaves no records, so the function it was on is the one its last begin frame
 names, and every other target counts as never started. Before it takes more
 work, the thread that served the chunk re-runs each of those targets once as a
-chunk of its own (`decompiler/crates/unlace-cli/src/jobs.rs (retry_order)`): the
+chunk of its own (`crates/unlace-cli/src/jobs.rs (retry_order)`): the
 function that was running goes first, onto the fresh worker the thread starts
 next, so the `error` record it ends with is what it does alone, and the targets
 that never started follow. A worker that died before opening its chunk (the
@@ -2206,7 +2206,7 @@ function that fails again on its own, since its crash takes the re-run's worker
 with it, and the stopping rules only cap that cost where re-running is futile.
 Chunks are cut from a size-sorted order and functions that crash alike sit side
 by side, so the targets that never started are re-run in bit-reversed order
-(`decompiler/crates/unlace-cli/src/jobs.rs (spread)`): every prefix of that order
+(`crates/unlace-cli/src/jobs.rs (spread)`): every prefix of that order
 samples the whole chunk, and a run of neighbouring crashers cannot look like a
 chunk full of them (its weakest pattern is a crasher at every other place, since
 the first half of the order is the even offsets). A function that stalls when
@@ -2216,9 +2216,9 @@ keep their record with `; not re-run: <why>` appended, at the first re-run that
 cannot reach its target (no worker spawns, or the fresh one dies before opening
 its chunk), once two of its re-runs have stalled, which caps its extra stall
 windows at two, or once eight of those targets have failed again and outnumber
-the ones recovered (`decompiler/crates/unlace-cli/src/jobs.rs (ChunkReruns)`); the
+the ones recovered (`crates/unlace-cli/src/jobs.rs (ChunkReruns)`); the
 function that was running only counts toward the stalls, since it is expected to
-crash again. And a pool-wide check (`decompiler/crates/unlace-cli/src/jobs.rs
+crash again. And a pool-wide check (`crates/unlace-cli/src/jobs.rs
 (RetryGate)`), asked each time a re-run would start, holds it back while sixteen
 or more re-runs have failed or could not start and they outnumber every record
 the workers
@@ -2235,7 +2235,7 @@ streamed writer below both depend on, and the closing warning reports what the
 re-runs recovered separately from what is still lost.
 
 (kuna) **The streamed export.** `decompile-project --stream`
-(`decompiler/crates/unlace-cli/src/project_stream.rs`) is the same pool and the
+(`crates/unlace-cli/src/project_stream.rs`) is the same pool and the
 same per-function loop with the opposite contract. It is driver policy too — a
 flag rather than a `phases.toml` row, and off by default — and it exists
 because the non-stream contract has a cost the pool cannot pay down: a document
@@ -2247,20 +2247,20 @@ file order is what it optimizes.
 
 That inverts the two things the pool paragraph above rests on. First, the static
 plan is replaced by a **dynamic, result-steered scheduler**
-(`decompiler/crates/unlace-cli/src/project_stream.rs (Scheduler)`), handed to the
+(`crates/unlace-cli/src/project_stream.rs (Scheduler)`), handed to the
 same worker threads through the chunk-source seam
-(`decompiler/crates/unlace-cli/src/jobs.rs (ChunkSource, run_pool_streaming)`)
+(`crates/unlace-cli/src/jobs.rs (ChunkSource, run_pool_streaming)`)
 that `run_pool`'s longest-first plan now also goes through: seeds (the image
 entry point and `main`) first, then the frontier their results open up, then the
 remaining targets in address order. The steering comes from the results
 themselves because the alternative does not fit the budget — building the static
 call graph on that image costs ~85 s, which is the wait the flag exists to
 remove — so each finished function reports the entries it reaches
-(`decompiler/crates/unlace-console/src/project.rs (FuncResult::callee_hints)`) and
+(`crates/unlace-console/src/project.rs (FuncResult::callee_hints)`) and
 the scheduler intersects them with the resolved target set. Those hints are a
 **scheduling hint and not an edge model**: they are never serialized into any
 artifact, they are not what `unlace decompile-graph` or `--reachable-from`
-traverse — that is `decompiler/crates/unlace-cli/src/callgraph.rs
+traverse — that is `crates/unlace-cli/src/callgraph.rs
 (CallGraph::callees_of)`, built from the reference index — and intersecting
 rather than unioning is what keeps an `--addr`/`--functions` export from growing
 callees it was not asked for. The seeds are pool chunks like any other, which is
@@ -2287,10 +2287,10 @@ at every job count including `--jobs 1`.
 The arrangement is forced by the same `!Send` reality the pool works around, one
 level in. Nothing derived from the program crosses a thread: the targets are
 flattened to plain specs and the README's program facts snapshotted on the main
-thread before the scope opens (`decompiler/crates/unlace-console/src/project.rs
+thread before the scope opens (`crates/unlace-console/src/project.rs
 (ReadmeFacts::snapshot)`), so what the pool thread sees is data. The **main
 thread keeps the program** and runs the disassembly sweep on it, one resumable
-step at a time (`decompiler/crates/unlace-console/src/project_stream.rs
+step at a time (`crates/unlace-console/src/project_stream.rs
 (AsmSweep)`), which is also why the variable comments a non-stream `.asm` prints
 under each label move to their own appended section: the sweep completes long
 before the variables exist. A separate **writer thread owns every text
@@ -2315,19 +2315,19 @@ file and the running README report on the export rather than being it, so a
 failed rewrite of either warns and is retried on the next tick.
 
 (kuna) **Progress without streaming.** `decompile-project --progress`
-(`decompiler/crates/unlace-cli/src/project_stream/progress.rs`) keeps the half of
+(`crates/unlace-cli/src/project_stream/progress.rs`) keeps the half of
 the streamed contract a pipeline polls — `.streaming` and a per-function feed —
 and drops the incremental artifacts, which is what cost reproducibility. It does not
 schedule or write anything itself: it runs the non-stream export
-(`decompiler/crates/unlace-cli/src/decompile_project.rs (decompile_project,
+(`crates/unlace-cli/src/decompile_project.rs (decompile_project,
 ExportWatch)`) with an observer attached, so the static plan, the
 structure-naming replay, the positional merge and the four artifacts are that
 export's, byte for byte, and the folder is exactly as independent of the job
 count as the non-stream export is. The observer is told about the load, the
 resolved target set, every target's *first* result — from the pool's planned
-first pass through `decompiler/crates/unlace-cli/src/jobs.rs (PoolWatch)`, a chunk
+first pass through `crates/unlace-cli/src/jobs.rs (PoolWatch)`, a chunk
 at a time, or from the serial and callee-first loops one function at a time
-(`decompiler/crates/unlace-console/src/project.rs
+(`crates/unlace-console/src/project.rs
 (decompile_export_targets_watched)`) — the start of finalization, and the
 written artifacts. Later decisions about a function (the structure-naming pass,
 the convergence sweeps) are not reported, because the feed is progress, not the
@@ -2343,36 +2343,36 @@ pairs a new feed with an old body.
 (kuna) **Declared function boundaries.** Every function boundary the engine knows
 is derived: discovery supplies the entries, and the extent is the
 address-contiguous clip `[entry, next_entry)` over an unbounded flow follow
-(`decompiler/crates/unlace-console/src/funcextent.rs`). That is the wrong answer on
+(`crates/unlace-console/src/funcextent.rs`). That is the wrong answer on
 exactly the images where reverse engineering is hard — obfuscated, packed or
 hand-written code, where a missed entry merges two functions and an invented one
 splits a body — so a caller can override both halves.
 
 The primitive is a **declared extent**, entry VMA → byte size, held per program in
-`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::declared_extents)`
+`crates/unlace-console/src/engine.rs (ConsoleProgram::declared_extents)`
 and written by
-`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::declare_function)`.
+`crates/unlace-console/src/engine.rs (ConsoleProgram::declare_function)`.
 Declaring also installs the `FunctionSymbol` and the name→address registration
 `map function` installs, so the entry enumerates, resolves by name and names its
 call sites; an address that already carries a function symbol is renamed rather
 than given a second one, and only when the caller supplied a name. The store is
 consulted by every later load of that entry — `load function`, `load addr`
-(`decompiler/crates/unlace-console/src/ifacedecomp.rs`) and the whole-binary loop
-(`decompiler/crates/unlace-console/src/project.rs (decompile_targets)`) — which pass
+(`crates/unlace-console/src/ifacedecomp.rs`) and the whole-binary loop
+(`crates/unlace-console/src/project.rs (decompile_targets)`) — which pass
 it as the `Funcdata` size that bounds flow following (chapter
 [02 §2.1](02-lift-and-flow.md)), and by `funcextent` when the inventory reports an
 extent. A declaration therefore outlives the one command that made it, which is
 what separates an interface from a one-shot flag. It also enters the whole-binary
 target list whatever the image says about where code lives, because the entry-VMA
 set `declare_function` writes
-(`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::declared_entries)`)
+(`crates/unlace-console/src/engine.rs (ConsoleProgram::declared_entries)`)
 is consulted by the section-flag filter above.
 
 (kuna) The same lying flags reach the **run verdict**. A run that discovered
 nothing is a failure only when the image carries executable content — a data-only
 relocatable object and a resource-only PE have no functions to find, and failing
 those would turn a correct answer into an error
-(`decompiler/crates/unlace-cli/src/decompile_all.rs (classify_code_evidence)`). An
+(`crates/unlace-cli/src/decompile_all.rs (classify_code_evidence)`). An
 image where *nothing* is flagged executable cleared that test, so the packed case
 answered `count: 0`, exit `0`, silent stderr: a successful run's voice for a file
 an agent could still get a body out of. An image that declares an **entry point
@@ -2385,19 +2385,19 @@ resource-only case keeps its honest empty answer.
 
 Two surfaces reach it. The console command is `function bounds <start> [<end>]
 [as <name>]`
-(`decompiler/crates/unlace-console/src/kuna_console.rs (IfcKunaFunctionBounds)`),
+(`crates/unlace-console/src/kuna_console.rs (IfcKunaFunctionBounds)`),
 which takes plain integers rather than the `parse_machaddr` address grammar
 precisely because that grammar's `[space,offset,size]` size is indistinguishable
 from the address width for a small size, and keys the name with `as` so a
 declaration that gives a name but no extent cannot have its name read as the end
 address. The CLI flag is `--define-function <start[-end][=name] | @file>`
-(`decompiler/crates/unlace-cli/src/funcdecl.rs`), repeatable, honored by
+(`crates/unlace-cli/src/funcdecl.rs`), repeatable, honored by
 `decompile`, `decompile-all`, `functions`, `decompile-project`, `decompile-graph`,
 `disassemble`, `read` and `raw-pcode`.
 `end` is exclusive. The script surface emits the console command AFTER `read
 symbols` and BEFORE the load, and the in-process surfaces apply the declarations
 after `commit_pending_analysis`
-(`decompiler/crates/unlace-cli/src/decompile_all.rs (load_program)`): in both, a
+(`crates/unlace-cli/src/decompile_all.rs (load_program)`): in both, a
 declaration is applied after discovery has had its say, because it is an assertion
 that outranks it. Durability is caller-carried — the `@file` form is the artifact,
 and kuna does not write boundaries back into the image.
@@ -2409,7 +2409,7 @@ a declaration cannot supply is bytes, so `declare_function` measures each one
 when it is made against the loader's shared byte map — the map the lifter refuses
 unmapped instructions by, rather than a staged `load_fill`, which can answer out
 of a padded window — over `[start, end)`, or the entry byte alone when no end was
-given (`decompiler/crates/unlace-console/src/kuna_declaredbytes.rs`). A segment the
+given (`crates/unlace-console/src/kuna_declaredbytes.rs`). A segment the
 image declares inaccessible (a Mach-O segment with no initial protection, such as
 `__PAGEZERO`, which the byte map serves as zero fill) is not counted, and neither is
 the last byte of the address space, which ends no half-open extent and which the
@@ -2419,7 +2419,7 @@ probe of the entry. The outcome is `mapped`, `partial` (the entry is mapped and
 the extent runs past the mapped bytes; the first unmapped byte is kept) or
 `unmapped` (the entry itself is not mapped), stored beside the declared extent
 and read back as one sentence per declaration that is not `mapped`
-(`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::declaration_notes)`).
+(`crates/unlace-console/src/engine.rs (ConsoleProgram::declaration_notes)`).
 Every surface says it the same way: the in-process ones print each sentence as a
 `warning:` once per process right after the declarations are applied (a `--jobs`
 worker, which loads the same declarations, prints nothing), the console's
@@ -2442,10 +2442,10 @@ vocabulary (`option`, `read symbols`, `load`, `kassert`, `function bounds`,
 
 A **directive** is one line of an intent-keyed vocabulary — an agent does not have
 to know that renaming is P9 to rename something — parsed by
-`decompiler/crates/unlace-console/src/assertsyntax.rs` (shared with the in-browser
-front-end; `decompiler/crates/unlace-cli/src/assertdecl.rs` keeps the console-script
+`crates/unlace-console/src/assertsyntax.rs` (shared with the in-browser
+front-end; `crates/unlace-cli/src/assertdecl.rs` keeps the console-script
 lowering) and applied by
-`decompiler/crates/unlace-console/src/assertions.rs`:
+`crates/unlace-console/src/assertions.rs`:
 
 | directive | lowers to | writes at |
 |---|---|---|
@@ -2511,7 +2511,7 @@ functions are declared with `function`/`--define-function` in the same assertion
 file. **Program-scoped** directives (`function`, `typedef`, `prototype`,
 `data`) are applied right after the analysis commit
 (`ConsoleProgram::set_assertions` + `assertions::apply_program_scoped`, called
-from `decompiler/crates/unlace-cli/src/decompile_all.rs (load_program)`), for the
+from `crates/unlace-cli/src/decompile_all.rs (load_program)`), for the
 same reason a declared boundary is: an assertion outranks discovery.
 **Function-scoped** directives (`param`, `return`, `comment`, `flow`,
 `callproto`) become
@@ -2519,12 +2519,12 @@ decompile SEEDS (`assertions::function_seed`), because a prototype fact is
 consumed at flow time and cannot be applied afterwards. **Symbol-scoped** directives (`name`,
 `type`) can only be applied to an already-decompiled function — the local they
 name does not exist until a decompile has produced it — so
-`decompiler/crates/unlace-console/src/project.rs (decompile_targets)` decompiles,
+`crates/unlace-console/src/project.rs (decompile_targets)` decompiles,
 applies them to the first pass's `Funcdata` (`assertions::apply_symbol_scoped`),
 and decompiles again with the mutated local scope carried across as
 `mapped_symbols`. That second pass is emitted only when such a directive bound to
 the function, so every run without one costs exactly what it did before. The
-script surface (`decompiler/crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`)
+script surface (`crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`)
 emits the same facts at the same three slots, with the same conditional second
 `decompile`.
 
@@ -2535,7 +2535,7 @@ callback takes different arguments at each call, so the only place the fact can
 be stated is the call itself. The engine has carried that store since the port
 (`Override::insert_proto_override`, consumed by `FlowInfo::build_call_specs`
 when the call spec is created), reachable only from the console's `override
-prototype`. `decompiler/crates/unlace-console/src/kuna_callproto.rs` is the one
+prototype`. `crates/unlace-console/src/kuna_callproto.rs` is the one
 parser both surfaces use: the declaration is the grammar `prototype` takes, the
 trailing `;` is optional, and a parameter may be followed by `@<storage>` in
 the spelling `param` takes, which rides in the pieces' `input_storage` so the
@@ -2570,7 +2570,7 @@ stack slots and the parameters. Every register-resident local kuna prints
 the scope behind it, so the plane could not name the majority of a function's
 variables — while `unlace decompile --help` taught `type v2 char[16]` on exactly
 such a name. When the scope answers nothing,
-`decompiler/crates/unlace-console/src/kuna_hightarget.rs` looks the printed
+`crates/unlace-console/src/kuna_hightarget.rs` looks the printed
 identifier up among the HighVariables, takes the name representative's storage
 and `Varnode::getUsePoint`, and maps an isolated, locked Symbol there — the
 mapping `type varnode %RAX(pc) <type>` already made, keyed by the identifier the
@@ -2582,7 +2582,7 @@ IR rebuild.
 `format` and `isolate` are symbol-scoped in the same way: each names
 something only a finished decompile has, and takes effect in the second pass.
 `format` names a constant by the address of the instruction that reads it
-(`decompiler/crates/unlace-console/src/kuna_constformat.rs`). The candidates are
+(`crates/unlace-console/src/kuna_constformat.rs`). The candidates are
 the integer constants the live operations at that address read, leaving out the
 inputs that are not printed as numbers (a LOAD or STORE space id, a user-op
 index, a branch, call or return target, a SUBPIECE truncation, a PTRSUB offset,
@@ -2609,7 +2609,7 @@ same function. A printed register local gets the isolated, type-locked Symbol
 over its definition that a `type` stating its present type would map, and the
 use-point carry brings it to the second pass. A stack local and a parameter
 are isolated without a type lock, and reach the second pass by their storage
-(chapter 06, `decompiler/crates/unlace-decomp/src/p6_variables/kuna_isolated.rs`).
+(chapter 06, `crates/unlace-decomp/src/p6_variables/kuna_isolated.rs`).
 
 When a Varnode is created at an isolated local's mapped definition,
 `Funcdata::set_varnode_properties` applies its exact, locked type before
@@ -2621,7 +2621,7 @@ its type lock; ordinary recovered local types remain inference hints.
 A parameter edit also crosses the prototype store. The standalone engine keeps
 its parameter Symbol separate from its prototype entry, so replaying only the
 Symbol can leave the old name or type in the signature while the body reads an
-uninitialized local. `decompiler/crates/unlace-console/src/kuna_paramasserts.rs`
+uninitialized local. `crates/unlace-console/src/kuna_paramasserts.rs`
 matches locked
 parameter Symbols by category, slot and input storage, and carries their edited
 names and types through the existing parameter-map seed. When any parameter
@@ -2677,7 +2677,7 @@ identifier up in, so of two independent renames the second always answered
 rebuild the IR from the scope for the second pass -- so the pass is left intact,
 and `Funcdata::kuna_directive_symbols` records every Symbol the batch renamed,
 retyped or created, keyed by the identifier the pass printed for it.
-`decompiler/crates/unlace-console/src/kuna_hightarget.rs` then gives an identifier
+`crates/unlace-console/src/kuna_hightarget.rs` then gives an identifier
 two readings, in order:
 
 1. the variable the pass printed under it, whatever an earlier directive renamed
@@ -2746,13 +2746,13 @@ left the selected function with its recovered one — silently, and `exit 0` eve
 under `--assert-strict`, because the console reported no error for a prototype it
 had genuinely parsed. The console spelling of the directive is therefore
 `map prototype <func> <C declaration>`
-(`decompiler/crates/unlace-console/src/kuna_console.rs (IfcKunaMapPrototype)` ->
+(`crates/unlace-console/src/kuna_console.rs (IfcKunaMapPrototype)` ->
 `ifacedecomp.rs (bind_prototype)`), which takes the target as its first token and
 parks the pieces under it; `parse line extern` keeps its upstream meaning.
 
 (kuna) **`<func>` is a name first and an ENTRY ADDRESS second.** Both surfaces
 resolve the operand through
-`decompiler/crates/unlace-console/src/assertions.rs (resolve_proto_target)`. An
+`crates/unlace-console/src/assertions.rs (resolve_proto_target)`. An
 existing name first goes through the same public `ConsoleProgram::resolve_entry`
 contract as decompilation: aliases canonicalize to their entry, a PE import
 slot/thunk pair narrows to its lone executable thunk, and two executable
@@ -2791,7 +2791,7 @@ while the identical directive bound the moment the same run selected the functio
 BY NAME. Pointing `--addr` at an address claims a lift entry, but does not
 override loader knowledge that the address is an import pointer. The generated
 script ensures a symbol exists
-(`decompiler/crates/unlace-cli/src/decompile/script.rs (build_script_for_input, selected_vma)` ->
+(`crates/unlace-cli/src/decompile/script.rs (build_script_for_input, selected_vma)` ->
 `function symbol <vma>` -> `ConsoleProgram::ensure_function_symbol`) between the
 caller's own `--define-function` declarations and the program-scoped directives.
 It is the symbol-table half of `--define-function <start>`, and it is skipped
@@ -2820,14 +2820,14 @@ RESOLVES to, whatever its spelling — a name, a numeric address with or without
 the Thumb mode bit, an object's section coordinate: the canonical entry
 immediately below it whose inventory size — the address-contiguous clip `kuna
 functions` reports, or a declared extent — reaches past it
-(`decompiler/crates/unlace-console/src/engine.rs (ConsoleProgram::entries_containing)`,
+(`crates/unlace-console/src/engine.rs (ConsoleProgram::entries_containing)`,
 which enumerates the inventory once for a whole batch of targets). An address
 that is itself an entry, or that no extent covers, has no answer. `kuna
 decompile` asks the console with `function containing <selector>` before
 installing the selection's symbol and reads the answer off the transcript; the
 in-process surfaces (`decompile --json`, `decompile-all`, `decompile-project`)
 ask about the targets their selection already resolved and deduplicated
-(`decompiler/crates/unlace-cli/src/interior.rs (selections)`), and an unfiltered
+(`crates/unlace-cli/src/interior.rs (selections)`), and an unfiltered
 run, which selects inventory entries only, asks nothing. `decompile-graph` does
 not ask: it keeps only executable inventory entries, so it never decompiles an
 interior target. Each prints
@@ -2840,12 +2840,12 @@ question is asked, which is how a caller says the fragment is meant.
 
 (kuna) **The C the assertion plane accepts is the C it prints.** Six directives
 carry a C declaration, and every one of them goes through the console's
-C-declaration grammar (`decompiler/crates/unlace-console/src/grammar.rs (CParse)`),
+C-declaration grammar (`crates/unlace-console/src/grammar.rs (CParse)`),
 a port of upstream's `grammar.y`. Upstream has no scalar keywords at all: a base
 type is whatever `TypeFactory::findByName` answers, so only Ghidra's own `int4` /
 `uint8` / `float8` core-type names parse. kuna's printer, though, spells those
 types the way the target's own compiler would (§9,
-`decompiler/crates/unlace-decomp/src/p9_emit/kuna_ctypes.rs`), which left the two
+`crates/unlace-decomp/src/p9_emit/kuna_ctypes.rs`), which left the two
 halves speaking different languages: a declaration kuna had just emitted could
 not be pasted back at it, and the manual's own example
 (`prototype authenticate int authenticate(char *user,char *pass)`) was rejected
@@ -2862,7 +2862,7 @@ whitespace or a completed comment ends the declaration rather than producing a
 spurious token, so a file may end with a newline.
 
 The grammar therefore also accepts the standard C scalar specifiers
-(`decompiler/crates/unlace-console/src/grammar.rs (CParse::scalar_specifier)`):
+(`crates/unlace-console/src/grammar.rs (CParse::scalar_specifier)`):
 `void`, `char`, `short`, `int`, `long`, `float`, `double`, `signed`, `unsigned`,
 `_Bool` and `wchar_t`, in any legal combination and in every position a type may
 appear — a return type, a parameter, a `type` / `param` / `return` / `data`
@@ -2890,7 +2890,7 @@ field landed four bytes past where the compiler put it
 `gain`). And `assignValues` numbers an enumerator with no `=` from one past the
 largest explicit constant, so `enum Color { RED, GREEN, BLUE }` was 1, 2, 3 and a
 function returning 2 printed `return GREEN;`. The grammar now follows C
-(`decompiler/crates/unlace-console/src/grammar/kuna_enumlayout.rs`): an enumerator
+(`crates/unlace-console/src/grammar/kuna_enumlayout.rs`): an enumerator
 with no `=` is one past the enumerator before it, the first zero, and the enum
 takes the underlying type gcc and clang give it (MSVC, which always uses `int`,
 agrees on the width whenever every constant fits `int`). With no
@@ -2918,7 +2918,7 @@ a type name. Upstream's `struct_or_union_specifier` reads its tag from the
 identifier terminal alone, which made the second mention of any struct — `struct
 JSValue` as a return type, a parameter, a field — a bare syntax error, while a
 typedef alias for the same structure worked. The tag position therefore accepts
-a type name as well (`decompiler/crates/unlace-console/src/grammar.rs
+a type name as well (`crates/unlace-console/src/grammar.rs
 (CParse::tag_identifier)`), and `enum` reads its tag the same way. The position
 is unambiguous: a type name after `struct`, `union` or `enum` matched no
 production before, with or without a body. Which type the tag names is still
@@ -2932,7 +2932,7 @@ itself (`typedef struct Node { struct Node *next; };`, or a callback member
 `void (*cb)(struct Node *)`), two records could not point at each other, and the
 forward declaration `typedef struct Node Node;` was refused. C declares such a
 tag as an incomplete record, and the grammar now does the same
-(`decompiler/crates/unlace-console/src/grammar.rs (CParse::old_struct)` through
+(`crates/unlace-console/src/grammar.rs (CParse::old_struct)` through
 `TypeFactory::kuna_declare_record`). A tagged body declares its tag before its
 members are read, so the members can name it; a body for a tag that is already
 complete is refused (`Cannot redefine a completed record`), and a member that
@@ -2945,7 +2945,7 @@ A pointer built to the declared stub reads the completed record (chapter 05,
 §5.1), so `node->next->next->value` prints as fields.
 
 Anonymous struct and union occurrences receive internal names before their
-shells are interned (`decompiler/crates/unlace-console/src/grammar.rs
+shells are interned (`crates/unlace-console/src/grammar.rs
 (CParse::new_anonymous_record)`). The declaration text, data organization and
 occurrence within that declaration determine the name, so separate occurrences
 remain distinct while worker parse order does not change their C identity.
@@ -2964,10 +2964,10 @@ reaches for when it declares an interpreter's instruction stream. The same
 collision covers a tag or typedef declared earlier in the run, and on a `-g`
 binary every DWARF type name the program uses. Two positions therefore admit a
 type name: the specifier run stops at one once it has already named a type
-(`decompiler/crates/unlace-console/src/grammar.rs
+(`crates/unlace-console/src/grammar.rs
 (CParse::declaration_specifier_starts)`, and its `specifier_qualifier_list`
 twin inside a struct body), and the name position takes it
-(`decompiler/crates/unlace-console/src/grammar.rs (CParse::declarator_identifier)`),
+(`crates/unlace-console/src/grammar.rs (CParse::declarator_identifier)`),
 which together cover `unsigned char code`, `unsigned char *code`, `int4
 (*code)(void)`, a struct field, an enum constant and the tail of a `a::b`
 scoped name. Only the *unparenthesised* name position moved: `int4 (code)` is
@@ -2981,7 +2981,7 @@ error" and "Multiple type specifiers") before.
 the other half of speaking the target's own C: on Windows every declaration
 worth pasting carries one. An identifier the loaded compiler spec registered as
 a prototype model is classified as a function specifier rather than as a bare
-identifier (`decompiler/crates/unlace-console/src/grammar.rs
+identifier (`crates/unlace-console/src/grammar.rs
 (CParse::lookup_identifier)`, upstream's `glb->hasModel`), so `__stdcall`,
 `__cdecl`, `__fastcall` and `__thiscall` parse on an x86 Windows target and
 `MSABI` or `syscall` parse on x86-64 gcc — while a spelling the spec does not
@@ -3092,7 +3092,7 @@ address in the default code space, maps the caller's word through
 `Override::string_to_type` (rejecting anything outside `branch`, `call`,
 `callreturn`, `return` with a reason rather than dropping it), and parks the pair
 in `FunctionSeed::flow_overrides`, which
-`decompiler/crates/unlace-console/src/project.rs (decompile_targets)` appends to the
+`crates/unlace-console/src/project.rs (decompile_targets)` appends to the
 derived overrides it already carries — the analysis's `call error(nonzero,…)`
 no-return prunes — so a caller-stated fact wins the map insert at an address both
 name. The script surface reaches the same store through the ported console
@@ -3123,7 +3123,7 @@ A `callee` directive states where one indirect call goes. The engine cannot
 derive the destination of `call *(%rax)`, and it already has the store for it:
 the per-function `Override` keeps an indirect-call redirect, which kuna plants
 itself when it resolves a call and restarts. The directive plants the same
-redirect before flow (`decompiler/crates/unlace-console/src/kuna_calleeoverride.rs
+redirect before flow (`crates/unlace-console/src/kuna_calleeoverride.rs
 (plant)`). It first decodes the instruction at the call site and accepts an
 indirect call or an indirect jump; a direct call, any other instruction and a
 destination that is not a function entry are rejected with the reason, and
@@ -3152,7 +3152,7 @@ one link is not enough: P2 resumes at the continuation exactly as it should, mee
 the next link's `ret`, and ends the flow there, so everything past the first
 recovered call is dead and prints as `return;`. The caller gets one call and no
 evidence the chain exists. So both surfaces extend the directive before they seed
-it (`decompiler/crates/unlace-console/src/kuna_retcallchain.rs
+it (`crates/unlace-console/src/kuna_retcallchain.rs
 (kuna_chain_sites)`): a straight-line walk from the function's entry decodes each
 instruction through a `PcodeEmit` that records each raw op and how the
 instruction leaves, follows an unconditional direct branch, falls through
@@ -3236,7 +3236,7 @@ is measurably a no-op would be the same failure the plane is built to avoid.
 bootstrap — before any console `option` line can possibly run — so the option
 surface alone cannot deliver them; each is bridged through a process environment
 variable exported first. Both CLI paths use the bindings and value conversions
-in `decompiler/crates/unlace-cli/src/loadtime.rs (binding, settings)`:
+in `crates/unlace-cli/src/loadtime.rs (binding, settings)`:
 `apply_to_command` configures the console subprocess, and `apply_to_process`
 temporarily configures the in-process loader. Repeated options keep their final
 value. An omitted option leaves the inherited environment alone; an explicit
@@ -3246,7 +3246,7 @@ conversions preserve each loader's accepted tokens and fallback behavior;
 runtime option validation remains separate.
 
 The default-on and opt-in boolean loader gates share
-`decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs (env_toggle)`.
+`crates/unlace-decomp/src/p0_knowledge/options.rs (env_toggle)`.
 They trim Unicode whitespace and compare ASCII case-insensitively: `off`, `0`
 and `false` disable; `on`, `1`, `true` and the empty string enable. Missing,
 non-Unicode or unrecognized values retain that gate's default. Gates with
@@ -3256,23 +3256,23 @@ runtime `on_or_off` parser.
 
 | env var | option | read at |
 |---|---|---|
-| `KUNA_IFUNCFPRET` | `ifuncfpret` | x86-64 IFUNC (`R_X86_64_IRELATIVE`) stub naming, `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_ifuncfpret.rs (IFUNCFPRET_ENV)` |
-| `KUNA_PPCAPU` | `ppcapu` | PowerPC32 e500 selection from an SPE APU note, `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_ppcapu.rs (PPCAPU_ENV)` |
-| `KUNA_CALLTARGETTYPE` | `calltargettype` | DWARF `DW_TAG_subroutine_type` import as a function prototype (on unless the option is set off, and never for Rust output), `decompiler/crates/unlace-decomp/src/p5_types/kuna_calltargettype.rs (CALLTARGETTYPE_ENV)` |
-| `KUNA_MACHO_SLICE` | `--slice` | Mach-O fat-binary slice peel, `decompiler/crates/unlace-console/src/engine.rs (select_macho_slice)` |
-| `KUNA_MACHO_ARM64E` | `macho-arm64e` | arm64e spec selection (on by default), `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_macho_arm64e.rs (MACHO_ARM64E_ENV)` |
-| `KUNA_ARM_ISA` | `--isa` | explicit ARM/Thumb `TMode` selection over the mapped code ranges, `decompiler/crates/unlace-console/src/engine.rs (ARM_ISA_ENV)` |
+| `KUNA_IFUNCFPRET` | `ifuncfpret` | x86-64 IFUNC (`R_X86_64_IRELATIVE`) stub naming, `crates/unlace-decomp/src/p0_knowledge/kuna_ifuncfpret.rs (IFUNCFPRET_ENV)` |
+| `KUNA_PPCAPU` | `ppcapu` | PowerPC32 e500 selection from an SPE APU note, `crates/unlace-decomp/src/p0_knowledge/kuna_ppcapu.rs (PPCAPU_ENV)` |
+| `KUNA_CALLTARGETTYPE` | `calltargettype` | DWARF `DW_TAG_subroutine_type` import as a function prototype (on unless the option is set off, and never for Rust output), `crates/unlace-decomp/src/p5_types/kuna_calltargettype.rs (CALLTARGETTYPE_ENV)` |
+| `KUNA_MACHO_SLICE` | `--slice` | Mach-O fat-binary slice peel, `crates/unlace-console/src/engine.rs (select_macho_slice)` |
+| `KUNA_MACHO_ARM64E` | `macho-arm64e` | arm64e spec selection (on by default), `crates/unlace-decomp/src/p0_knowledge/kuna_macho_arm64e.rs (MACHO_ARM64E_ENV)` |
+| `KUNA_ARM_ISA` | `--isa` | explicit ARM/Thumb `TMode` selection over the mapped code ranges, `crates/unlace-console/src/engine.rs (ARM_ISA_ENV)` |
 
 The matching `option` is still applied afterwards so the run's configuration
 record is honest.
 
 (kuna) **Explicit load options.** The environment is the CLI's channel, not
 the only one.
-`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_loadoptions.rs (LoadOptions)`
+`crates/unlace-decomp/src/p0_knowledge/kuna_loadoptions.rs (LoadOptions)`
 holds every load-time setting: the load-time catalog options, the fat slice,
 the `.pdb`, `.fid` and FLIRT paths, the Go release, and the `KUNA_LOAD_OBJC`,
 `KUNA_LOAD_STRINGS` and `KUNA_LOAD_MMAP` switches. A library caller passes it
-through `decompiler/crates/unlace-console/src/kuna_bootstrap.rs (Bootstrap)`.
+through `crates/unlace-console/src/kuna_bootstrap.rs (Bootstrap)`.
 Each gate first reads the options in force on its thread (`scoped`) and falls
 back to its environment variable only when no options are in force.
 Precedence is per load and never a merge. A load with explicit options reads
@@ -3315,7 +3315,7 @@ pointer, loop-bound or floating point values to be replaced with zero. This
 applies to integer and FPU lanes.
 
 Before `TransformManager` materializes anything,
-`decompiler/crates/unlace-decomp/src/substrate/transform.rs (check_free_fanout)`
+`crates/unlace-decomp/src/substrate/transform.rs (check_free_fanout)`
 refuses a transform that would give a free varnode it creates more than one
 reader: an undefined temporary or a lane of a varnode that is not an input.
 That is the condition `Varnode::addDescend` rejects, and the upstream code only
@@ -3332,7 +3332,7 @@ refusal as a failed trace (chapter 03).
 Lookup-only hash maps keyed by engine ids and image addresses (values the
 decompiler makes or reads from the binary, so they need speed rather than
 collision resistance) hash with
-`decompiler/crates/unlace-decomp/src/infra/kuna_fasthash.rs (FxHasher)`,
+`crates/unlace-decomp/src/infra/kuna_fasthash.rs (FxHasher)`,
 rustc's xor-multiply hash, instead of the standard library's SipHash. They
 are the per-function storage-source, call-transport and storage-write maps of
 `Funcdata` (three lookups for every deleted varnode), the region graph's
@@ -3344,13 +3344,13 @@ the fixed hash changes no result. SipHash cost about 5% of a decompile's
 instructions on these maps; the xor-multiply hash costs a small fraction of
 that.
 
-Partition lookup in `decompiler/crates/unlace-base/src/partmap.rs
+Partition lookup in `crates/unlace-base/src/partmap.rs
 (PartMap::get_value_mut)` returns the value at the greatest split point no
 larger than the query, or the default value before the first split. Mutable
 lookup handles the default interval first, then borrows the preceding tree
 entry directly. It neither clones the split key nor creates split points.
 
-Opcode-name lookup in `decompiler/crates/unlace-num/src/opcodes.rs` searches the
+Opcode-name lookup in `crates/unlace-num/src/opcodes.rs` searches the
 existing name-index table and returns immediately on an exact match. Lookup
 is case-sensitive, retains the SLEIGH aliases, skips `BLANK`, and rejects
 `UNUSED1` when converting a matched index to an opcode. Enum values and wire
@@ -3360,18 +3360,18 @@ Complement lookup returns the complementary opcode and writes whether its
 inputs must be swapped. An opcode with no defined complement returns
 `CPUI_MAX` without changing the caller's reordering flag.
 
-Integer bit queries in `decompiler/crates/unlace-base/src/address.rs` use Rust's
+Integer bit queries in `crates/unlace-base/src/address.rs` use Rust's
 primitive bit operations. Least- and most-significant-set-bit queries return
 `-1` for zero; population count returns zero and leading-zero count returns 64.
 The 128-bit operations in
-`decompiler/crates/unlace-num/src/multiprecision.rs` convert little-endian limb
+`crates/unlace-num/src/multiprecision.rs` convert little-endian limb
 pairs to native `u128` values for unsigned comparisons, wrapping addition and
 subtraction, and division. Division retains its 64-bit and smaller-numerator
 shortcuts. A zero divisor still panics when the numerator fits in 64 bits and
 returns the existing low-level error for a wider numerator, without modifying
 the result arrays.
 
-Floating-point constant evaluation uses `decompiler/crates/unlace-num/src/float.rs`
+Floating-point constant evaluation uses `crates/unlace-num/src/float.rs`
 (`FloatFormat`). Finite arithmetic uses host `f64`; NaN payloads are canonical.
 Square root, ceiling, floor, and rounding preserve an input NaN's sign;
 negation flips it and absolute value clears it. Binary arithmetic takes the
@@ -3381,23 +3381,23 @@ oracle. This policy is explicit because Rust arithmetic does not guarantee a
 NaN result's sign, even across optimization levels of the same compiler.
 
 The per-function IR is one container, `Funcdata`
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata)`), owning
+(`crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata)`), owning
 slotmap arenas keyed by three generational id newtypes — `VarnodeId`, `OpId`,
-`BlockId` (`decompiler/crates/unlace-decomp/src/substrate/context.rs`). Where the
+`BlockId` (`crates/unlace-decomp/src/substrate/context.rs`). Where the
 C++ original links objects with raw pointers, kuna links them with arena keys: a
 stale handle is a caught lookup failure, not a use-after-free. The arenas are the
-varnode bank (`decompiler/crates/unlace-decomp/src/substrate/varnode.rs
+varnode bank (`crates/unlace-decomp/src/substrate/varnode.rs
 (VarnodeBank)` — storage-sorted def/free/input trees), the op bank
-(`decompiler/crates/unlace-decomp/src/substrate/op.rs (PcodeOpBank)` — a
+(`crates/unlace-decomp/src/substrate/op.rs (PcodeOpBank)` — a
 `SeqNum`-keyed optree, whose stable key order is what lets a rule-pool cursor
 survive op deletion, §0.6, and which counts its own insertions and removals in an
 *epoch* so a holder of cached successor ids can tell in O(1) whether the tree
-still orders the way it did — `decompiler/crates/unlace-decomp/src/substrate/op.rs
+still orders the way it did — `crates/unlace-decomp/src/substrate/op.rs
 (optree_epoch, ops_after_seq)`), and **two** block graphs
-(`decompiler/crates/unlace-decomp/src/substrate/block.rs (BlockGraph)`): `bblocks`,
+(`crates/unlace-decomp/src/substrate/block.rs (BlockGraph)`): `bblocks`,
 the CFG, and `sblocks`, the structuring tree — physically distinct, seeded as a
 `BlockCopy` mirror of the CFG when structuring begins
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs (seed_sblocks_copy)`).
+(`crates/unlace-decomp/src/substrate/funcdata.rs (seed_sblocks_copy)`).
 
 Basic-block operation orders remain strictly increasing along the intrusive
 operation list. Insertion uses `before + (after - before) / 2`, so odd endpoints
@@ -3405,7 +3405,7 @@ cannot round the new order down onto the predecessor, including near the
 unsigned maximum. This preserves distinct positions for variable-cover and
 operation-order comparisons. When no integer lies between the neighbors, the
 whole block is renumbered
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs (bb_set_order)`). An
+(`crates/unlace-decomp/src/substrate/funcdata.rs (bb_set_order)`). An
 insertion between two operations spreads the block over the full order space; an
 append at the block's end spreads it over the lower half only. Appends approach
 the top of the space by halving the remaining gap, so a block renumbered to end
@@ -3433,7 +3433,7 @@ repeated accesses to the optimizer without changing their lookup contract.
 Bounds checks and full-id comparisons remain enabled in release and debug builds;
 stale and null ids still return `None`. Retired PcodeOps remain accessible until
 the bank is cleared. The checked arena
-(`decompiler/crates/unlace-decomp/src/substrate/kuna_checkedarena.rs`) stores each
+(`crates/unlace-decomp/src/substrate/kuna_checkedarena.rs`) stores each
 value in a slot followed by a 64-bit key word. An occupied slot's word is the full
 FFI encoding of its live id, so a lookup checks the slot index against the slot
 count and compares that one word. The word sits directly after the value's last
@@ -3460,18 +3460,18 @@ therefore appends a filtered location-tree view for the free class instead of
 inserting and erasing a duplicate definition entry. Free definition bounds are
 translated to location bounds with the same inclusion or exclusion; ranges
 ending in the input or written class never traverse that view
-(`decompiler/crates/unlace-decomp/src/substrate/varnode.rs (iter_free_def)`).
+(`crates/unlace-decomp/src/substrate/varnode.rs (iter_free_def)`).
 Creation inserts a free node only in the location tree. Becoming input or written
 adds its definition entry; becoming free removes that entry and rekeys its
 location entry. Destroying a free node removes only its location entry. Both
 logical orders retain the same ids and comparator semantics. Immediate teardown
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs (destroy_varnode)`)
+(`crates/unlace-decomp/src/substrate/funcdata_varnode.rs (destroy_varnode)`)
 clears the definition and class flags without reinserting a temporary free entry.
 High-variable and descendant cleanup read nodes by id, then destruction erases
 the retained indexed snapshot; no location or definition query runs in between
-(`decompiler/crates/unlace-decomp/src/substrate/varnode.rs (make_free_for_destroy)`).
+(`crates/unlace-decomp/src/substrate/varnode.rs (make_free_for_destroy)`).
 
-The keys (`decompiler/crates/unlace-decomp/src/substrate/varnode.rs (LocKey, DefKey)`)
+The keys (`crates/unlace-decomp/src/substrate/varnode.rs (LocKey, DefKey)`)
 store integer ordering fields rather than `Address` or `SeqNum` objects. Sentinel
 rank and signed space index share a packed prefix, followed by the offset;
 flipping the index's sign bit preserves signed order within each rank. The
@@ -3485,7 +3485,7 @@ live Varnode.
 Storage address and size are immutable within a Varnode. Changing its input,
 written, or free class therefore reuses those fields from the old snapshot and
 replaces only the class and sequence payload, avoiding another address-space
-lookup (`decompiler/crates/unlace-decomp/src/substrate/varnode.rs (LocKey::with_class)`).
+lookup (`crates/unlace-decomp/src/substrate/varnode.rs (LocKey::with_class)`).
 Creation constructs the key directly from the allocation's address, size,
 creation index, and optional definition; its free or written class is already
 known. A newly allocated node does not need a separate general key reconstruction.
@@ -3493,17 +3493,17 @@ Written keys retain SeqNum's uniq-only equality check before comparing PC and
 time; free keys use the same uniq slot for their creation index. Each Varnode
 caches one location snapshot, from which definition keys are copied, so removals
 use the indexed state even if other Varnode flags have changed. Insertion takes
-a single location-tree descent (`decompiler/crates/unlace-decomp/src/substrate/varnode.rs
+a single location-tree descent (`crates/unlace-decomp/src/substrate/varnode.rs
 (VarnodeBank::xref)`): the equivalent-node lookup and insertion share one search,
 and the subsequent `insert` flag is outside the key's input/written mask.
 
 A Varnode keeps no copy of its defining op's `SeqNum`: the definition order the
 trees sort on is already in its location snapshot, and a Varnode that becomes an
 input is free at that moment, so its input key takes the null sequence
-(`decompiler/crates/unlace-decomp/src/substrate/varnode.rs (VarnodeBank::set_input)`).
+(`crates/unlace-decomp/src/substrate/varnode.rs (VarnodeBank::set_input)`).
 Every PcodeOp owns its `TypeOp`, and the op-code name in it borrows the
 architecture's static name rather than copying it into a heap string for each op
-(`decompiler/crates/unlace-decomp/src/substrate/context.rs (TypeOp)`). A big
+(`crates/unlace-decomp/src/substrate/context.rs (TypeOp)`). A big
 function's banks hold millions of Varnodes and ops at once, retired ops included
 (heritage's placeholders and guards in serde-hkx 0.7.3's `hkxc.exe`, `0x1406198f0`,
 put 10.8 million Varnodes and 4.3 million ops in the arenas in one pass), so these
@@ -3512,11 +3512,11 @@ are 32 bytes off every Varnode slot (264 to 232) and one allocation off every op
 A Varnode created without a data-type has the unnamed unknown base of its size
 (`Datatype::is_unknown_placeholder`), and it allocates that 168-byte skeleton the
 first time its type is read, not when it is created
-(`decompiler/crates/unlace-decomp/src/substrate/varnode.rs (unknown_skeleton)`).
+(`crates/unlace-decomp/src/substrate/varnode.rs (unknown_skeleton)`).
 Most such Varnodes are retyped before anything reads the skeleton, or are never
 read at all, like the iop annotations of call guards; nonzero-mask propagation,
 which visits every Varnode before type inference, reads an input's type only when
-it is type-locked (`decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs
+it is type-locked (`crates/unlace-decomp/src/substrate/funcdata_varnode.rs
 (Funcdata::calc_nz_mask)`). Each skeleton still belongs
 to exactly one Varnode: merging and retyping compare types by identity, so
 sharing one skeleton per size would let two unrelated unknown-typed variables
@@ -3537,7 +3537,7 @@ alive-op snapshot remains because the depth-first walk updates op marks.
 Every cross-arena mutation routes through `Funcdata` — Rust cannot hold two
 `&mut` arenas through a method on one of them, so the op-in-block primitives the
 C++ splits between `Funcdata` and `BlockBasic` are all `Funcdata` methods here
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs (bb_insert_op,
+(`crates/unlace-decomp/src/substrate/funcdata.rs (bb_insert_op,
 bb_remove_op)`).
 
 Call/store membership and operation positions carry a per-function revision
@@ -3551,14 +3551,14 @@ mutations occur, so invalidation is checked on the next query.
 **Phi arity tracks in-degree, and the marker run is not a place to look it up.**
 A basic block's MULTIEQUALs carry one input per in-edge, in edge order, so CFG
 surgery that severs an edge must drop the matching slot from every phi in the
-target — `decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs
+target — `crates/unlace-decomp/src/substrate/funcdata_block.rs
 (branch_remove_internal, block_remove_internal)`. Both scan the target's whole op
 list for the opcode rather than walking the leading run of markers and stopping at
 the first op that is not one, because that run is not stable: a phi can be
 rewritten into an ordinary op **in place**, keeping its position among the markers
 — `op_zero_multi` turns a 1-input MULTIEQUAL into a COPY, and the stack-pointer
 solve rewrites a solved phi into an `INT_ADD`
-(`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_stackptr.rs
+(`crates/unlace-decomp/src/p6_variables/coreaction_stackptr.rs
 (analyze_extra_pop)`). A resync that stopped there would leave the phis behind it
 claiming an edge the block no longer has, and the next pass to index a phi slot as
 an in-edge — `descend2_undef`, reached from the unreachable-block sweep — would
@@ -3566,25 +3566,25 @@ read past the end of the edge list.
 
 **The impl map.** `Funcdata` is one struct whose `impl` blocks are split by the
 phase that owns the mutation — the split is itself the documentation of which
-phase mutates what (`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs`,
+phase mutates what (`crates/unlace-decomp/src/substrate/funcdata.rs`,
 module docs):
 
 | impl block | owns |
 |---|---|
-| `decompiler/crates/unlace-decomp/src/substrate/funcdata.rs` | construction, arenas, flags, `clear` |
-| `decompiler/crates/unlace-decomp/src/substrate/funcdata_op.rs` | op creation/mutation primitives |
-| `decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs` | varnode creation/lookup primitives |
-| `decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs` | CFG surgery + the jump-table drivers |
-| `decompiler/crates/unlace-decomp/src/substrate/funcdata_encode.rs`, `decompiler/crates/unlace-decomp/src/substrate/funcdata_printraw.rs` | marshaling, raw printing |
-| `decompiler/crates/unlace-decomp/src/p5_types/funcdata_resolveflow.rs` | flow resolution (P2) |
-| `decompiler/crates/unlace-decomp/src/p5_types/funcdata_union.rs` | union facet resolution (P5) |
-| `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_facing.rs`, `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_merge.rs`, `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
-| `decompiler/crates/unlace-decomp/src/p9_emit/coreaction_casts.rs` | cast insertion hooks (P9) |
+| `crates/unlace-decomp/src/substrate/funcdata.rs` | construction, arenas, flags, `clear` |
+| `crates/unlace-decomp/src/substrate/funcdata_op.rs` | op creation/mutation primitives |
+| `crates/unlace-decomp/src/substrate/funcdata_varnode.rs` | varnode creation/lookup primitives |
+| `crates/unlace-decomp/src/substrate/funcdata_block.rs` | CFG surgery + the jump-table drivers |
+| `crates/unlace-decomp/src/substrate/funcdata_encode.rs`, `crates/unlace-decomp/src/substrate/funcdata_printraw.rs` | marshaling, raw printing |
+| `crates/unlace-decomp/src/p5_types/funcdata_resolveflow.rs` | flow resolution (P2) |
+| `crates/unlace-decomp/src/p5_types/funcdata_union.rs` | union facet resolution (P5) |
+| `crates/unlace-decomp/src/p6_variables/funcdata_facing.rs`, `crates/unlace-decomp/src/p6_variables/funcdata_merge.rs`, `crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
+| `crates/unlace-decomp/src/p9_emit/coreaction_casts.rs` | cast insertion hooks (P9) |
 
 **Data types are shared IR, not per-function state.** The type factory
-(`decompiler/crates/unlace-decomp/src/substrate/dtype.rs (TypeFactoryImpl)`) is one
+(`crates/unlace-decomp/src/substrate/dtype.rs (TypeFactoryImpl)`) is one
 `Rc` owned by the engine and shared into every per-function handle
-(`decompiler/crates/unlace-decomp/src/infra/architecture.rs (build_arch_handle)`),
+(`crates/unlace-decomp/src/infra/architecture.rs (build_arch_handle)`),
 so a type interned while decompiling one function — or committed by a prototype
 lock — is the same object every later function resolves. Chapter 05 owns the
 lattice; here it only matters that `Datatype` handles cross function boundaries
@@ -3595,14 +3595,14 @@ and IR arenas do not.
 P0 is everything that outlives a function's IR — the plane a restart re-reads
 and an agent writes:
 
-- **The symbol database** (`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
+- **The symbol database** (`crates/unlace-decomp/src/p0_knowledge/database.rs
   (Database, Scope)`): symbols in a namespace-scoped hierarchy, mapped to storage
   by range-tree `SymbolEntry`s, plus the boolean property map (read-only /
   volatile paint). Populated by the loader-symbol read and the analysis commit
   (§0.1); queried by name, address, containment, or property, walking the scope
   chain exactly as the upstream `stack*` helpers do.
   A qualified symbol name is nested by splitting it on every `::`
-  (`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
+  (`crates/unlace-decomp/src/p0_knowledge/database.rs
   (find_create_scope_from_symbol_name)`), one Scope per component, and an **empty**
   component — `a::::b`, `::b` — cannot name a Scope: `attach_scope` rejects it.
   That rejection is raised while the loader symbols are being installed, i.e.
@@ -3616,14 +3616,14 @@ and an agent writes:
   that no header check
   validates, which makes that a denial-of-analysis primitive a hostile binary can
   buy for a few `.strtab` bytes. The repair
-  (`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_symbolnamerepair.rs`) skips
+  (`crates/unlace-decomp/src/p0_knowledge/kuna_symbolnamerepair.rs`) skips
   the degenerate component instead, so the symbol keeps the rest of its scope path
   and the load survives; only the empty component is treated as degenerate, since
   every other string names a Scope perfectly well however strange it looks.
   The scope path is not the only thing a name's bytes reach: the same string is
   printed into emitted C, and nothing on the way validates it.
   `symbolnamechars` (off|safe|ident, default safe;
-  `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_symbolnamechars.rs`) is the
+  `crates/unlace-decomp/src/p0_knowledge/kuna_symbolnamechars.rs`) is the
   character half of the same problem, and it sanitizes at the mint rather than at
   the printer for a reason that is about the control surface: `unlace decompile
   <name>`, the console's `load function` and the DB scope path all key on the
@@ -3642,7 +3642,7 @@ and an agent writes:
   name cost 292 MB, and the whole-binary path is quadratic in depth on top of
   that, so tens of kilobytes already bought a stall of tens of seconds.
   The scope bound (256 components, always on;
-  `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_symbolnamebound.rs`) caps
+  `crates/unlace-decomp/src/p0_knowledge/kuna_symbolnamebound.rs`) caps
   the scope-component count, and with it each component's length and the whole
   scope path's length. A name over a limit is **folded**, not truncated: the
   dropped run of components collapses into one synthetic component carrying a
@@ -3654,7 +3654,7 @@ and an agent writes:
   hasher, whose per-process seed would make the folded spelling differ between
   runs and turn every golden comparison into noise. The fold is applied
   identically on the **read** path
-  (`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
+  (`crates/unlace-decomp/src/p0_knowledge/database.rs
   (resolve_scope_from_symbol_name)`) and at the loader's own name list, and it is
   idempotent, so a symbol installed under a folded path is addressable by the name
   the binary spells *and* by the name the listing renders, and one spelling
@@ -3677,31 +3677,31 @@ and an agent writes:
   the total `Scope` population, or a cheaper `Scope`; what this gate closes is
   the reported primitive, one name turning 600 KB of `.strtab` into 292 MB, and
   the quadratic whole-binary blowup that rode on it.
-- **The Override store** (`decompiler/crates/unlace-decomp/src/p0_knowledge/overrides.rs
+- **The Override store** (`crates/unlace-decomp/src/p0_knowledge/overrides.rs
   (Override)`): per-function commands that override pipeline decisions — flow
   reclassification, direct-call redirects, prototype replacement, multistage
   jump-table requests, dead-code delays, forced gotos, and (kuna) per-call-site
   output type locks (`insert_output_typelock`, applied by the P5
   `sitetypelock` action — chapter 05). Its defining property is
   that it **survives `Funcdata::clear`**
-  (`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs (clear)` resets the
+  (`crates/unlace-decomp/src/substrate/funcdata.rs (clear)` resets the
   arenas and analysis state but not the override store): a mid-pipeline pass that
   discovers a decision too late writes the correction here and requests a
   restart, and the restarted run reads it back (§0.7).
-- **The typed assertion facade** (`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_assert.rs
+- **The typed assertion facade** (`crates/unlace-decomp/src/p0_knowledge/kuna_assert.rs
   (validate_assertion, Dispatch)`) (kuna): `kassert <phase> <subphase> …`
   validates a request against the phase registry, computes the *reported* minimal
   rewind scope, logs it, and routes it to whichever battle-tested store already
   implements it (Override, proto locks, retype/rename, an option). It adds a
   model over the stores, not a new mechanism.
-- **The option surface** (`decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs
+- **The option surface** (`crates/unlace-decomp/src/p0_knowledge/options.rs
   (OptionDatabase, KUNA_OPTION_NAMES)`): upstream options dispatch by registered
   element id through `OptionDatabase::set`; the kuna-added options are an
   allowlisted name set routed to
-  `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_option_dispatch.rs
+  `crates/unlace-decomp/src/p0_knowledge/kuna_option_dispatch.rs
   (set_kuna_option)`, which writes the live flag the consuming pass reads.
   A migrated option is a type in its pass's module that implements `KunaOption`
-  (`decompiler/crates/unlace-decomp/src/substrate/kuna_optionset.rs (KunaOption, OptionSet)`):
+  (`crates/unlace-decomp/src/substrate/kuna_optionset.rs (KunaOption, OptionSet)`):
   its value lives in the engine's `kuna_options` set, indexed by a dense id the type
   takes on first use, and every per-function `ArchContext` carries a copy, so neither
   structure names the pass. A set built for the engine reads each option's shipped
@@ -3715,10 +3715,10 @@ and an agent writes:
   independent, so `unlace catalog --check` compares the documented options against
   the implemented handlers. The machine-readable
   catalog rows — values, defaults, tier, symptoms, flip guidance — are generated
-  into `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_phases.rs
-  (SETTABLE_TABLE, emit_catalog_json)` from `decompiler/crates/unlace-decomp/phases.toml`
-  by `decompiler/crates/unlace-decomp/build.rs`. The build uses the TOML parser
-  with a typed schema in `decompiler/crates/unlace-decomp/build/registry.rs`:
+  into `crates/unlace-decomp/src/p0_knowledge/kuna_phases.rs
+  (SETTABLE_TABLE, emit_catalog_json)` from `crates/unlace-decomp/phases.toml`
+  by `crates/unlace-decomp/build.rs`. The build uses the TOML parser
+  with a typed schema in `crates/unlace-decomp/build/registry.rs`:
   row order is preserved, required fields have explicit types, and duplicate or
   unknown fields are rejected. Live mappings must supply all three fields or
   none. The rendered catalog is
@@ -3737,14 +3737,14 @@ and an agent writes:
   content. The parity command separately validates its baseline's required
   string-valued passing set: invalid records are errors, not empty expectations.
   CLI JSON rendering uses one traversal for compact, indented and sorted output
-  (`decompiler/crates/unlace-cli/src/jsonfmt/writer.rs`). Numeric tokens retain
+  (`crates/unlace-cli/src/jsonfmt/writer.rs`). Numeric tokens retain
   their original spelling; string escaping remains ASCII-safe, including UTF-16
   surrogate pairs for non-BMP characters. Unsorted objects borrow their stored
   field order directly. Sorted output orders borrowed field references stably,
   preserving duplicate-key order, and applies the same policy to nested objects.
 - **Modes (option presets)** (kuna)
-  (`decompiler/crates/unlace-decomp/src/p0_knowledge/modes.rs (MODE_TABLE, mode_overrides)`,
-  applied by `decompiler/crates/unlace-decomp/src/infra/architecture.rs (apply_mode)`):
+  (`crates/unlace-decomp/src/p0_knowledge/modes.rs (MODE_TABLE, mode_overrides)`,
+  applied by `crates/unlace-decomp/src/infra/architecture.rs (apply_mode)`):
   a *mode* is a named, ordered list of `(option, value)` overrides layered over the
   shipped defaults — a P0 pipeline-variant preset over the option surface, **not** a
   `[[settable]]` row (it references existing option names, so it never touches the
@@ -3753,7 +3753,7 @@ and an agent writes:
   **`aggressive`** (every off-by-default recovery/analysis pass on, except
   `dwarf_lines`, which annotates rather than recovers and would bury a `-g`
   binary's body in `/* src.c:NNN */` comments; the exclusion list is enforced by an invariant test in
-  `decompiler/crates/unlace-decomp/src/p0_knowledge/modes.rs`, so a default-off
+  `crates/unlace-decomp/src/p0_knowledge/modes.rs`, so a default-off
   option is either in the preset or listed there with its reason),
   and **`fast`** (`listing`, `funcstart_patterns`, and `aif` off to avoid
   program-wide decode and speculative discovery, `ctypes` on). A fourth frontend
@@ -3766,7 +3766,7 @@ and an agent writes:
   Size selects how much discovery and recovery a run can afford; spelling costs
   nothing and is not part of that trade. An explicit `--mode reliable` stays the
   catalog defaults. One function,
-  `decompiler/crates/unlace-decomp/src/p0_knowledge/modes.rs (resolve_overrides_for_size)`,
+  `crates/unlace-decomp/src/p0_knowledge/modes.rs (resolve_overrides_for_size)`,
   returns the concrete preset with the full ordered override list, and the CLI,
   the WASI/browser frontend and the ghidra-sim CLI oracle all apply it. File-based
   CLI commands use `auto` when `--mode` is omitted.
@@ -3776,11 +3776,11 @@ and an agent writes:
   explicit `--option` still wins). Discover with `unlace modes`; full membership
   and exact byte boundaries are in [docs/modes.md](../modes.md).
 - **The restart log** (kuna)
-  (`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_restartlog.rs (RestartLog)`):
+  (`crates/unlace-decomp/src/p0_knowledge/kuna_restartlog.rs (RestartLog)`):
   owned by the engine `Architecture` so it survives function clears; every
   restart trigger records *why* (§0.7). Observability only.
 - **The DEX model** (kuna, `option dexmodel`)
-  (`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_dex.rs (DexModel)`): the
+  (`crates/unlace-decomp/src/p0_knowledge/kuna_dex.rs (DexModel)`): the
   parsed DEX file a DEX image carries on its `Architecture` (one per file of an
   APK, each with the base it is mapped at), answering what the
   Dalvik spec leaves to the loading program, which in Ghidra is its Java side.
@@ -3797,26 +3797,26 @@ and an agent writes:
   `instanceof` test or `super`. Static members are qualified by their class's
   simple name. Records and Java types are built on first use and cached, so a
   65,000-method file costs nothing until a function references a method. The
-  DEX format reader is `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_dex/format.rs`;
+  DEX format reader is `crates/unlace-decomp/src/p0_knowledge/kuna_dex/format.rs`;
   every offset in it is checked against the file. With the option off the
   per-function snapshot carries no model, so the constant pool is empty and the
   register payloads are not applied.
 - The phase registry itself
-  (`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_phases.rs (KunaPhase)`):
+  (`crates/unlace-decomp/src/p0_knowledge/kuna_phases.rs (KunaPhase)`):
   P0–P9 with Band-B membership (`KunaPhase::in_band_b` — P3..P6), queryable at
   the console. The model behind it is [docs/phases.md](../phases.md).
 
 **Effective defaults — the single narrative.** A knob's effective value is
 layered, in order: (1) the engine default —
-`decompiler/crates/unlace-decomp/src/infra/architecture.rs (reset_defaults_internal)`
+`crates/unlace-decomp/src/infra/architecture.rs (reset_defaults_internal)`
 is the *single source*, and the `default` column of
-`decompiler/crates/unlace-decomp/phases.toml` mirrors it (a hard-coded live-default assertion, `decompiler/crates/unlace-decomp/src/infra/architecture/tests.rs (kuna_anchor_flags_default_to_div_values)`, pins the engine defaults to the DIV values; the toml column mirrors them by convention); (2)
+`crates/unlace-decomp/phases.toml` mirrors it (a hard-coded live-default assertion, `crates/unlace-decomp/src/infra/architecture/tests.rs (kuna_anchor_flags_default_to_div_values)`, pins the engine defaults to the DIV values; the toml column mirrors them by convention); (2)
 the file frontend's mode policy (`auto` when omitted) resolves to a concrete
 preset, and load-time members plus explicit load-time options are exported
 before bootstrap with last-write precedence; (3) per-program loader adjustments
 made at bootstrap (e.g. `readonlypropagate` forced on for
 MIPS so GOT-slot loads fold to import names,
-`decompiler/crates/unlace-console/src/engine.rs (bootstrap_from_object)`, and for
+`crates/unlace-console/src/engine.rs (bootstrap_from_object)`, and for
 a DEX image, whose bytes cannot change at run time, so a switch payload's keys
 fold to constants, `engine.rs (bootstrap_from_dex_bytes)`);
 (4) driver surface injections (`listing`, non-x86-64
@@ -3835,13 +3835,13 @@ There are two types named "architecture", and confusing them is the classic way
 to ship a dead option.
 
 The **engine god object**
-(`decompiler/crates/unlace-decomp/src/infra/architecture.rs (Architecture)`) owns
+(`crates/unlace-decomp/src/infra/architecture.rs (Architecture)`) owns
 everything program-wide: the SLEIGH translator, the symbol database, the option
 and action databases, the user-op and injection libraries, the type factory, the
 printer, the restart log, and the whole bag of tuning values.
 
 The **per-function snapshot**
-(`decompiler/crates/unlace-decomp/src/substrate/context.rs (ArchContext)`) is the
+(`crates/unlace-decomp/src/substrate/context.rs (ArchContext)`) is the
 `glb` every `Funcdata` carries (`ArchHandle`, an `Rc<ArchContext>`): the
 IR-boundary slice of the god object that passes and rules may reach while the
 pipeline holds `&mut Funcdata`. It shares the engine's single address-space
@@ -3851,7 +3851,7 @@ read-only snapshots of the global symbol scope, callee prototypes, and tracked
 registers.
 
 The global-symbol snapshot
-(`decompiler/crates/unlace-decomp/src/substrate/context.rs (GlobalQuery)`) groups
+(`crates/unlace-decomp/src/substrate/context.rs (GlobalQuery)`) groups
 mapped entries by address-space index once when it is built. Grouping is stable:
 the encounter order of entries within one space is unchanged, preserving
 `findContainer`'s first-match behavior for equal-size overlaps and its
@@ -3865,7 +3865,7 @@ space, so register, stack, and other non-global varnodes do not scan mappings
 from unrelated spaces.
 
 The copy happens in exactly one place:
-`decompiler/crates/unlace-decomp/src/infra/architecture.rs (build_arch_handle)`,
+`crates/unlace-decomp/src/infra/architecture.rs (build_arch_handle)`,
 called from `(Architecture::new_funcdata)` when a function's `Funcdata` is
 built. Two consequences:
 
@@ -3873,7 +3873,7 @@ built. Two consequences:
   handle (`data.get_arch().<flag>`) exists twice — on the god object (where
   `option`/`kassert` writes it) and on `ArchContext` (where the rule reads it).
   If `build_arch_handle` does not copy it, the rule silently reads the
-  `ArchContext` constructor default (`decompiler/crates/unlace-decomp/src/substrate/context.rs
+  `ArchContext` constructor default (`crates/unlace-decomp/src/substrate/context.rs
   (ArchContext::new_shared)`) — deliberately `false` for the kuna rule gates, so
   hand-built fixtures keep gated rules inert — regardless of what the option
   surface wrote. The symptom is an option that parses, is confirmed, appears in
@@ -3881,7 +3881,7 @@ built. Two consequences:
   through `build_arch_handle`.
 - **Snapshot timing.** The handle is built once per `Funcdata` and kept for that
   function's whole drive, including restarts (the restart re-flow clears and
-  reuses the same `Funcdata`, `decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs
+  reuses the same `Funcdata`, `crates/unlace-decomp/src/infra/decompile_drive.rs
   (refollow_flow)`). Options must therefore be in effect before the function is
   built — which the console guarantees by rebuilding a fresh `Funcdata` on every
   `decompile` command, *except* when `decompile` adopts the IR `load function`
@@ -3890,7 +3890,7 @@ built. Two consequences:
 
 (kuna) The tracked-register snapshot is the context database's track base plus the
 loader's register seeds for the entry being built
-(`decompiler/crates/unlace-decomp/src/infra/architecture.rs (Architecture::loader_entry_tracks)`,
+(`crates/unlace-decomp/src/infra/architecture.rs (Architecture::loader_entry_tracks)`,
 today only the PowerPC64 ELFv1 TOC of §1.3). The seeds are merged into that one
 entry's snapshot at this copy rather than written into the track base at load, so a
 `set track` issued at any point before the build stays visible, and a register the
@@ -3903,11 +3903,11 @@ per-function cost as soon as the symbol table is large. On an 18 MB Windows PE
 with 73,366 mapped globals each pair costs about 25 ms to build and 12 ms to free,
 flat in the size of the function being decompiled, and the symbol table it reads
 does not move once for the whole run. Both are pure functions of the symbol
-database (`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs (Database)`),
+database (`crates/unlace-decomp/src/p0_knowledge/database.rs (Database)`),
 so `build_arch_handle` derives them at most once per state of that database and
 hands every `Funcdata` a shared `Rc` to the same pair, keyed on a monotone
 mutation generation the database bumps in every one of its `&mut self` entry
-points (`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
+points (`crates/unlace-decomp/src/p0_knowledge/database.rs
 (kuna_generation)`). A mutation between two function builds — a `map addr`, a
 rename, a recovered prototype — moves the generation and both snapshots are
 rebuilt on the next build, so what a `Funcdata` sees is still the database as of
@@ -3926,12 +3926,12 @@ can be compared on any binary.
 
 The pipeline's execution order is not the folder order. Every per-function run
 executes a single declarative pass tree, `universal_sched`
-(`decompiler/crates/unlace-decomp/src/infra/universalaction.rs (universal_sched)`,
+(`crates/unlace-decomp/src/infra/universalaction.rs (universal_sched)`,
 based on upstream `ActionDatabase::universalAction`, with kuna-specific passes).
 The tree is built
 once per engine as `SchedNode` values (Action leaf / Pool of rules / Group /
 RestartGroup), *filtered* by the root variant's enabled group list
-(`decompiler/crates/unlace-decomp/src/infra/action.rs (build_default_groups,
+(`crates/unlace-decomp/src/infra/action.rs (build_default_groups,
 ActionDatabase::set_current)`), and *materialized* into engine objects. Six root
 variants exist — `decompile` (34 groups: everything), `jumptable` (12 groups:
 only what a reduced flow analysis needs — the switch-recovery sub-decompilation
@@ -3956,7 +3956,7 @@ structuring, constant-pointer recovery, the 5-rule `oppool2` (pointer-arithmetic
 forms), determined-branch pruning, node joining, and conditional-execution/
 conditional-constant analysis. Phases 3–6 therefore do not run as a sequence:
 they co-evolve inside mainloop until mutual quiescence — the Band-B fixpoint
-(`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_phases.rs
+(`crates/unlace-decomp/src/p0_knowledge/kuna_phases.rs
 (KunaPhase::in_band_b)`). Fullloop's own tail (likely-trash, switch
 normalization, (angr) lowered-switch detection and stack-guard stripping, return
 splitting and the (angr) return-duplication family, unjustified params, active
@@ -3970,11 +3970,11 @@ setting the restart-pending flag, having first persisted its lesson into the
 knowledge plane (§0.7).
 
 **The restart machinery, as actually implemented** (kuna): the in-tree
-RestartGroup (`decompiler/crates/unlace-decomp/src/infra/action.rs
+RestartGroup (`crates/unlace-decomp/src/infra/action.rs
 (ActionRestartGroup::apply)`, budget `max = 1`) cannot re-follow flow — the
 action loop carries only the IR-boundary handle, not the SLEIGH translator — so
 it hands every restart up (`ActionContext::reflow_requested`) to the outer drive,
-`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (run_pipeline)`,
+`crates/unlace-decomp/src/infra/decompile_drive.rs (run_pipeline)`,
 which owns `&mut Architecture`: it clears the function (`Funcdata::clear` — the
 Override store survives) and the analysis warnings the previous pass raised for it
 (`refollow_flow`, upstream `Architecture::clearAnalysis` clearing
@@ -3990,7 +3990,7 @@ plumbing, not semantics: trigger, clear, re-read-P0, re-run are the upstream
 restart contract.
 
 Two engine details are output-affecting and deliberately preserved
-(`decompiler/crates/unlace-decomp/src/infra/action.rs`): `Action::perform` is a
+(`crates/unlace-decomp/src/infra/action.rs`): `Action::perform` is a
 resumable status machine (an action with `rule_repeatapply` loops until its
 change count stops rising; `rule_onceperfunc` latches done), and
 `ActionPool::process_op` walks each op's per-opcode rule list *resetting the walk
@@ -4007,14 +4007,14 @@ The `decompile` listing is checked byte-for-byte against a maintained kuna
 schedule snapshot, including its added passes, flags, numbering and separators.
 It is not an independent C++ oracle. The tests separately pin pass presence and
 adjacency, root-filter behavior and the empty `UNPORTED_ALLOWLIST`
-(`decompiler/crates/unlace-decomp/src/infra/universalaction.rs`). Snapshot changes
+(`crates/unlace-decomp/src/infra/universalaction.rs`). Snapshot changes
 require an intentional schedule change; matching it alone does not prove
 decompilation parity, which remains covered by the output regression suites.
 
 **Embedder hooks** (kuna). Code that links `kuna-decomp` can extend the default
 tree without replacing it, through a registry on the `Architecture`
-(`decompiler/crates/unlace-decomp/src/infra/kuna_hooks.rs (HookRegistry)`,
-reached by `decompiler/crates/unlace-decomp/src/infra/architecture.rs
+(`crates/unlace-decomp/src/infra/kuna_hooks.rs (HookRegistry)`,
+reached by `crates/unlace-decomp/src/infra/architecture.rs
 (Architecture::add_rule, Architecture::on_phase)`). There is no option and no
 CLI surface for it. `add_rule(after_group, state, rule)` puts a rule directly
 behind the last rule of `after_group`, in the first pool in schedule order
@@ -4041,14 +4041,14 @@ and the output are the ones described above.
 Flow-follow itself runs *before* the tree (the upstream `followFlow` →
 `startProcessing` order), bounded by the P0 flow options — decode-error policy
 `error_toomanyinstructions` and a 100000-instruction ceiling by default
-(`decompiler/crates/unlace-decomp/src/infra/architecture.rs
+(`crates/unlace-decomp/src/infra/architecture.rs
 (reset_defaults_internal)`), applied at
-`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (follow_flow_on_fd)`.
+`crates/unlace-decomp/src/infra/decompile_drive.rs (follow_flow_on_fd)`.
 
 **Where a run's time went** (kuna). The schedule can be asked to account for
 itself: with `KUNA_ACTION_PROF` set to a path, every `apply` call is timed and
 the engine writes an exclusive-time table there
-(`decompiler/crates/unlace-decomp/src/substrate/actionprof.rs`), rewritten each time
+(`crates/unlace-decomp/src/substrate/actionprof.rs`), rewritten each time
 the outermost timing frame closes. A scope guard closes frames on both normal
 return and panic unwind, so a caught action panic cannot strand the timing stack
 or prevent later actions from publishing. Totals belong to the current thread;
@@ -4060,7 +4060,7 @@ so the rows sum to the schedule's wall time and a container cannot hide a leaf �
 and each row is keyed by the root variant it ran under, which is what separates a
 function's own `decompile` pass from the reduced `jumptable` pipeline running on
 a partial clone beside it. The root label is set where the variant is selected
-(`decompiler/crates/unlace-decomp/src/infra/action.rs
+(`crates/unlace-decomp/src/infra/action.rs
 (ActionDatabase::set_current)`). This is a measuring instrument, not a decision
 point: it changes nothing the engine emits, and with the variable unset it costs
 one cached read per `apply`.
@@ -4076,23 +4076,23 @@ study summarized in `docs/history.md`; every row below is re-verified against th
 
 | Edge | Mechanism | Trigger | Survives / persisted where | kuna anchor |
 |---|---|---|---|---|
-| rule pools → themselves | local fixpoint | any rule fires; opcode change rewinds the per-op rule walk | — | `decompiler/crates/unlace-decomp/src/infra/action.rs (ActionPool::process_op)` |
-| P2 → P2, jump-table recovery | reduced sub-query | `BRANCHIND` with unrecovered targets mid flow-follow | recovered table → `jumpvec`; the cloned partial is discarded | `decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (run_jumptable_pipeline)`, driven from `decompiler/crates/unlace-decomp/src/p2_lift/flow.rs (generate_ops_with_jumptables)` |
-| Band B → P3/P2, dead-code delay | restart + persisted hint | a free varnode reappears at an already-heritaged address after dead code was removed | `Override::insert_deadcode_delay` (+1) in P0 | `decompiler/crates/unlace-decomp/src/p3_dataflow/heritage.rs (bump_deadcode_delay)`; suppressed during jump-table recovery (the `is_jumptable_recovery_on` guards at its call sites) |
-| P4 → Band B, late prototype | restart + persisted hint | a resolved indirect call's prototype cannot be merged in place (`late_restriction` fails) | `Override::insert_indirect_override` — the re-flow rebuilds the CALLIND as a direct CALL | `decompiler/crates/unlace-decomp/src/p4_calls/fspec.rs (FuncCallSpecs::deindirect, FuncCallSpecs::force_set)` |
-| (angr) P2 → P2, lowered switch | detect-then-restart, two halves | a comparison cascade recognized as a compiler-lowered switch after simplification | the recovered cascade record, in a store shared by both halves | detect in fullloop writes + requests restart, install in mainloop (before heritage) reads on the restarted run — `decompiler/crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs (ActionLowerSwitchDetect, ActionLowerSwitchInstall)` |
-| P5 → P2, determined branch | in-loop re-entry | constant folding decides a conditional branch, removing a CFG edge | the simplified ops themselves | `decompiler/crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs (ActionDeterminedBranch)`, inside mainloop |
-| (kuna/angr) P7/P8 structuring fallback | degraded re-run | the region structurer cannot collapse the graph to a single root | nothing; `sblocks` is re-seeded clean | `decompiler/crates/unlace-decomp/src/p8_structure/blockaction.rs (ActionBlockStructure)` falls back to `CollapseStructure` after `decompiler/crates/unlace-decomp/src/p8_structure/region_structurer.rs (run_region_structurer)` declines |
-| P0 → everything, the outer loop | knowledge-store re-run | an operator/agent writes an assertion (`option`, `kassert`, override) and re-decompiles | the entire P0 store | `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_assert.rs (Dispatch)`; the console rebuilds the IR per `decompile`, re-seeding stashed facts — `decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (decompile_func_full_with_override_dyn)` (§0.8 is when the rebuild is skipped) |
+| rule pools → themselves | local fixpoint | any rule fires; opcode change rewinds the per-op rule walk | — | `crates/unlace-decomp/src/infra/action.rs (ActionPool::process_op)` |
+| P2 → P2, jump-table recovery | reduced sub-query | `BRANCHIND` with unrecovered targets mid flow-follow | recovered table → `jumpvec`; the cloned partial is discarded | `crates/unlace-decomp/src/infra/decompile_drive.rs (run_jumptable_pipeline)`, driven from `crates/unlace-decomp/src/p2_lift/flow.rs (generate_ops_with_jumptables)` |
+| Band B → P3/P2, dead-code delay | restart + persisted hint | a free varnode reappears at an already-heritaged address after dead code was removed | `Override::insert_deadcode_delay` (+1) in P0 | `crates/unlace-decomp/src/p3_dataflow/heritage.rs (bump_deadcode_delay)`; suppressed during jump-table recovery (the `is_jumptable_recovery_on` guards at its call sites) |
+| P4 → Band B, late prototype | restart + persisted hint | a resolved indirect call's prototype cannot be merged in place (`late_restriction` fails) | `Override::insert_indirect_override` — the re-flow rebuilds the CALLIND as a direct CALL | `crates/unlace-decomp/src/p4_calls/fspec.rs (FuncCallSpecs::deindirect, FuncCallSpecs::force_set)` |
+| (angr) P2 → P2, lowered switch | detect-then-restart, two halves | a comparison cascade recognized as a compiler-lowered switch after simplification | the recovered cascade record, in a store shared by both halves | detect in fullloop writes + requests restart, install in mainloop (before heritage) reads on the restarted run — `crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs (ActionLowerSwitchDetect, ActionLowerSwitchInstall)` |
+| P5 → P2, determined branch | in-loop re-entry | constant folding decides a conditional branch, removing a CFG edge | the simplified ops themselves | `crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs (ActionDeterminedBranch)`, inside mainloop |
+| (kuna/angr) P7/P8 structuring fallback | degraded re-run | the region structurer cannot collapse the graph to a single root | nothing; `sblocks` is re-seeded clean | `crates/unlace-decomp/src/p8_structure/blockaction.rs (ActionBlockStructure)` falls back to `CollapseStructure` after `crates/unlace-decomp/src/p8_structure/region_structurer.rs (run_region_structurer)` declines |
+| P0 → everything, the outer loop | knowledge-store re-run | an operator/agent writes an assertion (`option`, `kassert`, override) and re-decompiles | the entire P0 store | `crates/unlace-decomp/src/p0_knowledge/kuna_assert.rs (Dispatch)`; the console rebuilds the IR per `decompile`, re-seeding stashed facts — `crates/unlace-decomp/src/infra/decompile_drive.rs (decompile_func_full_with_override_dyn)` (§0.8 is when the rebuild is skipped) |
 
 **Partly implemented in kuna**: the upstream jump-table *size-mismatch*
 restart. When `matchModel` finds a flow-time table of one address whose late
 model has more entries, kuna persists `Override::insert_multistage_jump` (with
 the late model's targets) and restarts, at most once per jump
-(`decompiler/crates/unlace-decomp/src/p2_lift/jumptable.rs (JumpTable::request_multistage)`;
+(`crates/unlace-decomp/src/p2_lift/jumptable.rs (JumpTable::request_multistage)`;
 §2.3 *Multistage recovery* has the guard and reach checks). Every other size
 mismatch keeps the flow-recovered addresses and does not restart
-(`decompiler/crates/unlace-decomp/src/p2_lift/jumptable.rs (JumpTable::match_model)`).
+(`crates/unlace-decomp/src/p2_lift/jumptable.rs (JumpTable::match_model)`).
 
 Mechanisms are mutually disabling by design: no restart, and no dead-code-delay
 bump, fires inside the jump-table sub-decompilation — the sub-query must answer
@@ -4100,7 +4100,7 @@ its one question and be discarded, never mutate P0.
 
 (kuna) Every restart trigger and suppressed trigger records its reason in the
 engine-owned restart log
-(`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_restartlog.rs (RestartLog)`),
+(`crates/unlace-decomp/src/p0_knowledge/kuna_restartlog.rs (RestartLog)`),
 because a function that silently decompiles twice is otherwise invisible.
 
 ## 0.8 One flow follow per decompile
@@ -4135,8 +4135,8 @@ single most expensive thing the run does.
 
 `decompile` therefore **adopts** the loaded IR when it can prove the rebuild would
 repeat the same follow
-(`decompiler/crates/unlace-console/src/ifacedecomp.rs (PristineFlow)`, consumed
-through `decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs
+(`crates/unlace-console/src/ifacedecomp.rs (PristineFlow)`, consumed
+through `crates/unlace-decomp/src/infra/decompile_drive.rs
 (decompile_func_full_with_override_dyn_prefollowed)`). Two independent guards must
 both hold:
 
@@ -4158,7 +4158,7 @@ both hold:
   time, so IR followed before the park does not carry the typing.
 - **The `decompile` is the immediately next command.** `load function` records the
   console's command counter
-  (`decompiler/crates/unlace-console/src/interface.rs (IfaceStatus::command_seq)`)
+  (`crates/unlace-console/src/interface.rs (IfaceStatus::command_seq)`)
   and `decompile` requires it to have advanced by exactly one, along with the same
   name, entry, declared extent and flow overrides. The counter is the whole
   invalidation story on purpose: an `option` that changes a flow-time decision, a
@@ -4167,7 +4167,7 @@ both hold:
 
 Adoption is a pure-performance seam: the adopted `Funcdata` is the one the rebuild
 would have produced, so the emitted C is byte-identical either way, and
-`decompiler/crates/unlace-console/tests/verify_flowreuse.rs` asserts exactly that
+`crates/unlace-console/tests/verify_flowreuse.rs` asserts exactly that
 (plus that the fast path is really taken, via `IfaceDecompData::adopted_flows`).
 The one place the two paths differ is the failure arm: a drive that aborts
 consumes the adopted IR, where the rebuild path left the loaded `Funcdata`
@@ -4177,21 +4177,21 @@ name/entry/size/overrides to put it back.
 ## 0.9 Reading order
 
 The folder taxonomy is the *artifact* order, not the execution order. Source
-under `decompiler/crates/unlace-decomp/src` is arranged as `substrate` (the IR
+under `crates/unlace-decomp/src` is arranged as `substrate` (the IR
 containers, §0.3), `infra` (scheduler, god object, drive — this chapter),
 `p0_knowledge` (§0.4), and `p1_partition` … `p9_emit`, which map 1:1 onto
 chapters 01–09 of this spec; the program-preparation tier is
-`decompiler/crates/unlace-analysis/src` (chapter 01). Execution order is §0.6's
+`crates/unlace-analysis/src` (chapter 01). Execution order is §0.6's
 tree — when you need to know *when* a pass runs, read
-`decompiler/crates/unlace-decomp/src/infra/universalaction.rs (universal_sched)`
+`crates/unlace-decomp/src/infra/universalaction.rs (universal_sched)`
 and search for the pass's constructor, never the folder.
 
 Conventions worth knowing before reading anything:
 
 - **Tests ride in sibling directories**: a module `foo.rs` ends with
   `#[cfg(test)] mod tests;` and its tests live at `foo/tests.rs` (e.g.
-  `decompiler/crates/unlace-decomp/src/infra/universalaction.rs` +
-  `decompiler/crates/unlace-decomp/src/infra/universalaction/tests.rs`).
+  `crates/unlace-decomp/src/infra/universalaction.rs` +
+  `crates/unlace-decomp/src/infra/universalaction/tests.rs`).
 - **C++ citations in code comments** (`decompiler/cpp/<file>.cc`) are upstream
   Ghidra anchors at the pinned `GHIDRA_REV` (`docs/history.md`) — the tree kuna
   was ported from — not paths in this repository.
@@ -4207,7 +4207,7 @@ world up to SSA), then 04/05/06 as one unit (they converge together, §0.6), the
 07 → 08 → 09.
 
 Formal byte-addressed stack objects may cross entry SP=0. The mapping helper
-`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_wrappedstackmap.rs` represents
+`crates/unlace-decomp/src/p0_knowledge/kuna_wrappedstackmap.rs` represents
 that object with one whole native JOIN mapping and two mapped precision-piece
 entries, one ending at the stack space mask and one starting at zero. Their
 logical offsets preserve the object's byte positions in either endianness.
@@ -4235,7 +4235,7 @@ register-plus-stack parameter JOINs keep their existing encoding.
 ### Variable-use provenance lookup
 
 When attaching rendered line and address evidence to reported variables,
-`decompiler/crates/unlace-decomp/src/infra/decompile_drive/kuna_varrefs.rs`
+`crates/unlace-decomp/src/infra/decompile_drive/kuna_varrefs.rs`
 collects the requested parameter and stack-storage keys, then traverses the
 varnode bank once. Only matching storage buckets are retained for this render;
 there is no cache across IR edits. Parameter keys preserve exact address-space
@@ -4248,7 +4248,7 @@ cost rather than which rendered uses belong to a variable.
 
 ### Raw p-code query
 
-`unlace raw-pcode` (`decompiler/crates/unlace-cli/src/disassemble/raw_pcode.rs`) lifts
+`unlace raw-pcode` (`crates/unlace-cli/src/disassemble/raw_pcode.rs`) lifts
 each instruction with `Translate::one_instruction` before the decompiler
 pipeline and reports the opcode and ordered varnode tuples beside the exact
 loaded bytes the translator consumed. It resolves its operand, its window and

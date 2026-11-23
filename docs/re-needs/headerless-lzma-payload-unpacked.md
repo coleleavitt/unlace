@@ -14,7 +14,7 @@ rounds: [9]
 first_seen_round: 9
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli, decompiler/crates/unlace-analysis]
+touches: [crates/unlace-cli, crates/unlace-analysis]
 scope: medium
 regression_of: null
 pr: null

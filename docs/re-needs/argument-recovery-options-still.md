@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs]
+touches: [crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs]
 scope: medium
 feature_option: calleearitylive
 regression_of: argument-recovery-knobs-still

@@ -3,7 +3,7 @@
 unlace_ghidra core inside a REAL Ghidra, and write a side-by-side report with the
 same badness-scanner counts the in-tree ghidra-sim harness pins.
 
-This is the manual/dev complement to `make test-ghidra` (which needs no Ghidra
+This is the manual/dev complement to `cargo test --release -p unlace-ghidra -- --include-ignored` (which needs no Ghidra
 at all): it validates the pieces the sim cannot — the extension/exepath spawn,
 Java's real query answers, and Java-side rendering (`getC()` runs the token
 stream through IllegalCharCppTransformer, which is where kuna's over-wide type
@@ -12,7 +12,7 @@ tokens become `unsigned_long__a1`).
 Environment:
   GHIDRA_INSTALL_DIR    Ghidra release root (required; pyghidra needs it)
   KUNA_GHIDRA_EXE       path to the unlace_ghidra binary
-                        (default: <repo>/decompiler/target/release/unlace_ghidra)
+                        (default: <repo>/target/release/unlace_ghidra)
   KUNA_SMOKE_BINARY     the program to analyze (required)
   KUNA_SMOKE_FUNCTIONS  comma-separated function names (default: main plus the
                         two largest non-thunk functions)
@@ -31,7 +31,7 @@ import traceback
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 KUNA_GHIDRA = os.environ.get(
     "KUNA_GHIDRA_EXE",
-    os.path.join(REPO, "decompiler", "target", "release", "unlace_ghidra"),
+    os.path.join(REPO, "target", "release", "unlace_ghidra"),
 )
 BINARY = os.environ.get("KUNA_SMOKE_BINARY")
 FUNCTIONS = [f for f in os.environ.get("KUNA_SMOKE_FUNCTIONS", "").split(",") if f]
@@ -160,7 +160,7 @@ def main():
         sys.exit(1)
     if not os.path.exists(KUNA_GHIDRA):
         print(f"FATAL: unlace_ghidra not built at {KUNA_GHIDRA} "
-              "(cd decompiler && cargo build --release -p unlace-ghidra)")
+              "(cargo build --release -p unlace-ghidra)")
         sys.exit(1)
     os.makedirs(OUT, exist_ok=True)
 

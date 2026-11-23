@@ -17,11 +17,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/elfmainextra_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/elfmainextra_x86_64",
     "binary_sha256": "7e8d5dcd8239d4b535b6d3832a8276aaed6bcd5f2a304602ba38d05318917fa7",
     "binary_size": 13464,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/elfmainextra_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/elfmainextra_x86_64",
     "selector": "0x1026",
     "selector_kind": "addr"
   },

@@ -23,11 +23,11 @@
   "stdin": null,
   "timeout_s": 30,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/go_live_forward_amd64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/go_live_forward_amd64",
     "binary_sha256": "3d0840306d96928b2a8cdafeb46c20aa000978be7bd4649dc83f29f68ec80eed",
     "binary_size": 9264,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/go_live_forward_amd64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/go_live_forward_amd64",
     "selector": "forward_word",
     "selector_kind": "name"
   },

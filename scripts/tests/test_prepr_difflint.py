@@ -1,5 +1,6 @@
 import contextlib
 import io
+import os
 import subprocess
 import tempfile
 import unittest
@@ -7,8 +8,12 @@ from pathlib import Path
 
 from scripts.prepr import difflint
 
-FIXTURES = Path("decompiler/crates/unlace-analysis/tests/fixtures")
+FIXTURES = Path("crates/unlace-analysis/tests/fixtures")
 LEAKED = "/" + "home/someone/bin"
+# The fixture repo ignores the user's global git config: a global excludes file
+# (`*.o`, `*.exe`) would keep the binaries out of the commit, and a global
+# `commit.gpgsign` or hooks path would sign or gate the test's commits.
+GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 STAGE = '<stringmatch name="T #1: x" min="1" max="1">sub_100074\\(2,1\\)</stringmatch>\n'
 
 
@@ -27,7 +32,8 @@ class DiffLintTests(unittest.TestCase):
         self.git("checkout", "-q", "-b", "feature")
 
     def git(self, *args):
-        return subprocess.run(["git", "-C", str(self.root), *args], check=True, capture_output=True, text=True).stdout
+        return subprocess.run(["git", "-C", str(self.root), *args], check=True, capture_output=True, text=True,
+                              env=GIT_ENV).stdout
 
     def write(self, path, content):
         file = self.root / path
@@ -95,7 +101,7 @@ class DiffLintTests(unittest.TestCase):
         self.assertEqual(self.checks(), [])
 
     def test_a_new_module_without_an_option_row_is_a_warning(self):
-        self.write("decompiler/crates/unlace-decomp/src/p4_calls/kuna_thing.rs", "fn f() {}\n")
+        self.write("crates/unlace-decomp/src/p4_calls/kuna_thing.rs", "fn f() {}\n")
         self.commit("module")
         self.assertEqual(self.checks(), [("warning", "option-policy", "kuna_thing.rs")])
         with contextlib.redirect_stdout(io.StringIO()):

@@ -16,11 +16,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/calleearityscratch_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/calleearityscratch_x86_64",
     "binary_sha256": "49dc9ba334164a2bfc44b842da2646c191c39bd00b833ad37fdcb33ea484545e",
     "binary_size": 5016,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/calleearityscratch_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/calleearityscratch_x86_64",
     "selector": "scratch_byte",
     "selector_kind": "name"
   },

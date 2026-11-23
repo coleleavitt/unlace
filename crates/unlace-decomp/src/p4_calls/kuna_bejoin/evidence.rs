@@ -88,6 +88,7 @@
 //! instruction calls itself (the placeholder an unrelocated call in an
 //! object file leaves).
 
+pub use crate::heritage::WidePair;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
@@ -116,14 +117,6 @@ const MAX_PATH_INSNS: usize = 512;
 
 /// A storage location: space index, offset, size.
 type Key = (int4, u64, u32);
-
-/// The model's two-register output pair, high word's register first, with
-/// the space each lies in.
-#[derive(Clone, Debug)]
-pub struct WidePair {
-    pub hi: (Address, int4),
-    pub lo: (Address, int4),
-}
 
 impl WidePair {
     fn key(loc: &(Address, int4)) -> Option<Key> {

@@ -44,7 +44,6 @@ pub mod kuna_swiftmetaresult; // (kuna `swifttypes`) type a Swift metadata acces
 pub mod kuna_swiftstr; // (kuna) Swift two-word string literals
 pub mod kuna_thumbfuncptr;
 pub mod kuna_tlsnames; // (kuna) static TLS variables at their thread-pointer offsets
-pub mod kuna_typequal; // (kuna) C type qualifiers on their own type layer
 pub mod kuna_typevote;
 pub mod kuna_valuewitness; // (kuna) a Swift value witness table load through metadata is typed
 pub mod kuna_varargfloat; // (kuna) a variadic argument in a floating-point register is a double

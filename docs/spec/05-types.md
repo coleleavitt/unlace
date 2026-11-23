@@ -50,7 +50,7 @@ is created, and every phase from lift to emission reads it. What lives in
 carries.
 
 The qualifier representation in
-`crates/unlace-decomp/src/p5_types/kuna_typequal.rs` distinguishes a
+`crates/unlace-decomp/src/substrate/kuna_typequal.rs` distinguishes a
 volatile pointee from a volatile pointer object. Type ordering prefers the
 qualified form when its underlying type otherwise compares equal, allowing
 pointer copies and pointer arithmetic to retain the pointee qualification.

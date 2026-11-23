@@ -60,7 +60,7 @@ use crate::context::{ArchContext, ArchHandle};
 use crate::database::Database;
 use crate::dtype::{TypeFactory, TypeFactoryImpl, type_metatype};
 use crate::engine_translate::EngineTranslate;
-use crate::flow::flow_flags;
+use crate::flow_flags;
 use crate::fspec::ProtoModel;
 use crate::funcdata::Funcdata;
 use crate::inject_sleigh::PcodeInjectLibrarySleigh;
@@ -2953,7 +2953,8 @@ impl Architecture {
         ctx.vfp_variadic = (self.pass_hooks().vfpvariadic_applies)(self);
         ctx.caller_extends_returns_from =
             (self.pass_hooks().typedcallabi_caller_extends_from)(self);
-        ctx.vararg_floats = crate::p4_calls::kuna_varargretreg::image_vararg_floats(self);
+        ctx.vararg_floats =
+            (crate::architecture::default_pass_hooks().varargretreg_image_vararg_floats)(self);
         ctx.narrow_ext = crate::kuna_narrowext::rules(self);
         ctx.defaultfp = self.defaultfp.as_ref().map(|model| {
             if ctx.arm_float_return {
@@ -3003,8 +3004,9 @@ impl Architecture {
                 })
                 .collect()
         };
-        ctx.x87_empty_storage = crate::p4_calls::kuna_x87emptyreturn::storage(self);
-        ctx.vararg_regs = crate::p4_calls::kuna_varargsave::regs(self);
+        ctx.x87_empty_storage =
+            (crate::architecture::default_pass_hooks().x87emptyreturn_storage)(self);
+        ctx.vararg_regs = (crate::architecture::default_pass_hooks().varargsave_regs)(self);
         ctx.trap_after_call = self.trap_after_call && self.get_description().starts_with("x86:");
         ctx.vcall_targets = Rc::clone(&self.kuna_vcall_targets);
         ctx.retsysreg_userops = ids(crate::kuna_retsysreg::STATE_USEROP_NAMES);
@@ -3888,7 +3890,10 @@ impl Architecture {
         self.infer_ptr_spaces.push(Rc::clone(&spc));
         self.symboltab
             .add_range(scope, Rc::clone(&spc), first, last);
-        let gptr = crate::kuna_goreg::g_pointer_type(self.types(), self.go_layout())?;
+        let gptr = (crate::architecture::default_pass_hooks().goreg_g_pointer_type)(
+            self.types(),
+            self.go_layout(),
+        )?;
         let addr = Address::new(spc, first);
         let (sid, _eref) =
             self.symboltab
@@ -6349,8 +6354,9 @@ impl Architecture {
         }
         // Storage address: <register name=".."/> or <addr space=".." offset=".."/>.
         let (space, mut addressbase, register) = self.decode_pentry_storage(pentry)?;
-        let extension =
-            crate::p4_calls::kuna_registerslots::decode(pentry, register, size, alignment, flags)?;
+        let extension = (crate::architecture::default_pass_hooks().registerslots_decode)(
+            pentry, register, size, alignment, flags,
+        )?;
         if let Some(extension) = &extension {
             addressbase = extension.input.offset;
         }
@@ -7248,6 +7254,52 @@ impl crate::userop::UseropTypeArchitecture for BuiltinTypeArch {
             .ok()?;
         self.types.get_type_pointer(8, tag, 1).ok()
     }
+}
+
+/// How an image passes a floating-point value in the variadic part of a call.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VarargFloats {
+    /// Where the prototype model's rules put it.
+    #[default]
+    InModel,
+    /// Where the model puts it, with the number of vector registers used in `al`
+    /// (x86-64 SysV).
+    VectorCount,
+    /// Where the model puts it, with CR bit 6 set when any FPR is used (32-bit
+    /// PowerPC SysV).
+    ConditionBit,
+    /// In general registers or on the stack; a floating-point register holds at
+    /// most a copy (64-bit PowerPC).
+    Shadowed,
+}
+
+/// The System V argument registers, present only where the pass applies.
+#[derive(Clone)]
+pub struct Regs {
+    pub(crate) sp: unlace_num::pcoderaw::VarnodeData,
+    pub(crate) gp: Vec<unlace_num::pcoderaw::VarnodeData>,
+    pub(crate) xmm: Vec<unlace_num::pcoderaw::VarnodeData>,
+    pub(crate) caller_saved: Vec<(Vec<u8>, Option<unlace_num::pcoderaw::VarnodeData>)>,
+}
+
+#[derive(Clone)]
+pub struct Storage {
+    pub(crate) free: u64,
+    pub(crate) top: unlace_num::pcoderaw::VarnodeData,
+    pub(crate) tags: unlace_num::pcoderaw::VarnodeData,
+    pub(crate) bank: Vec<unlace_num::pcoderaw::VarnodeData>,
+}
+
+/// The release-dependent pieces of the runtime layouts: go1.23 inserted
+/// `g.syscallbp`, go1.25 dropped `gobuf.ret` (verified against the vendored
+/// go1.22.10 and go1.25.3 sources; 1.23/1.24 carry `syscallbp` with the
+/// seven-word gobuf).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GoLayout {
+    /// `runtime.gobuf`'s word count: 7 through go1.24, 6 from go1.25.
+    pub gobuf_words: int4,
+    /// `g.syscallbp` present (go1.23+).
+    pub syscallbp: bool,
 }
 
 #[cfg(test)]

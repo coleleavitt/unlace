@@ -77,7 +77,7 @@ impl LangFacet {
             || ty.has_bitfields()
             || ty.num_depend() != 2
             || !matches!(&ty.kind, DatatypeKind::Struct { bitfield, .. } if bitfield.is_empty())
-            || (crate::architecture::default_pass_hooks().typequal_is_volatile)(ty)
+            || crate::kuna_typequal::is_volatile(ty)
         {
             return None;
         }
@@ -92,9 +92,7 @@ impl LangFacet {
                 || field.name != ["result0", "result1"][index]
                 || field.field_type.get_size() != 8
                 || field.field_type.get_metatype() != meta
-                || (crate::architecture::default_pass_hooks().typequal_is_volatile)(
-                    &field.field_type,
-                )
+                || crate::kuna_typequal::is_volatile(&field.field_type)
             {
                 return None;
             }
@@ -116,7 +114,7 @@ impl LangFacet {
             || ty.has_bitfields()
             || ty.num_depend() != 3
             || !matches!(&ty.kind, DatatypeKind::Struct { bitfield, .. } if bitfield.is_empty())
-            || (crate::architecture::default_pass_hooks().typequal_is_volatile)(ty)
+            || crate::kuna_typequal::is_volatile(ty)
         {
             return None;
         }
@@ -128,7 +126,7 @@ impl LangFacet {
                 || field_type.get_size() != 8
                 || field_type.is_incomplete()
                 || field_type.has_bitfields()
-                || (crate::architecture::default_pass_hooks().typequal_is_volatile)(field_type)
+                || crate::kuna_typequal::is_volatile(field_type)
             {
                 return None;
             }
@@ -152,7 +150,7 @@ impl LangFacet {
                 if ptrto.get_metatype() != type_metatype::TYPE_VOID
                     || ptrto.get_size() != 0
                     || ptrto.is_incomplete()
-                    || (crate::architecture::default_pass_hooks().typequal_is_volatile)(ptrto)
+                    || crate::kuna_typequal::is_volatile(ptrto)
                 {
                     return None;
                 }

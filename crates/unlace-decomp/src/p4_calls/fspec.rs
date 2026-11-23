@@ -2681,7 +2681,12 @@ impl ParamListStandard {
     /// Get the type of extension and containing parameter for the given storage
     /// (C++ `assumedExtension`).
     pub fn assumed_extension(&self, addr: &Address, size: int4, res: &mut VarnodeData) -> OpCode {
-        if let Some(opcode) = super::kuna_registerslots::assumed(&self.entry, addr, size, res) {
+        if let Some(opcode) = (crate::architecture::default_pass_hooks().registerslots_assumed)(
+            &self.entry,
+            addr,
+            size,
+            res,
+        ) {
             return opcode;
         }
         for e in self.entry.iter() {
@@ -3606,9 +3611,15 @@ impl ParamListStandard {
                     ),
                     // (kuna) `passthrough`: a register the function hands on
                     // untouched is neither a run of empty slots nor its end.
-                    crate::p4_calls::kuna_passthrough::neutral_in_chain(active, i, addr_sb),
-                    crate::p4_calls::kuna_passthrough::anchors_neutral_run(active, trial, addr_sb),
-                    crate::p4_calls::kuna_passthrough::ends_rescued_run(active, trial, addr_sb),
+                    (crate::architecture::default_pass_hooks().passthrough_neutral_in_chain)(
+                        active, i, addr_sb,
+                    ),
+                    (crate::architecture::default_pass_hooks().passthrough_anchors_neutral_run)(
+                        active, trial, addr_sb,
+                    ),
+                    (crate::architecture::default_pass_hooks().passthrough_ends_rescued_run)(
+                        active, trial, addr_sb,
+                    ),
                 )
             };
             if defnouse {
@@ -8910,7 +8921,8 @@ impl FuncCallSpecs {
                 // Extend: realOut is contained in oldOut.
                 let overlap = oldaddr.justified_contain(oldsize, &paddr, psize, false);
                 let mut vardata = VarnodeData::default();
-                let (mut opc, stated) = crate::p4_calls::kuna_narrowext::or_model(
+                let (mut opc, stated) = (crate::architecture::default_pass_hooks()
+                    .narrowext_or_model)(
                     data.get_arch().narrow_ext.output,
                     self.proto.model().output(),
                     &paddr,
@@ -9029,6 +9041,51 @@ fn overlap_addr(addr: &Address, size: int4, op: &Address, opsize: int4) -> int4 
         let over = addr.overlap(size - 1, op, opsize);
         if over != -1 { opsize - 1 - over } else { -1 }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Extension {
+    pub input: VarnodeData,
+    pub(crate) output: VarnodeData,
+    pub(crate) opcode: OpCode,
+}
+
+/// Which forwarded registers at one call site [`neutral_in_chain`](crate::kuna_passthrough::neutral_in_chain) lets out of
+/// the inactive-chain count.
+#[derive(Debug, Clone, Default)]
+pub struct NeutralScope {
+    /// No other call can run before this one ([`first_calls`](crate::kuna_passthrough::first_calls)), so an argument
+    /// register no op names, or one this pass claimed, still holds the
+    /// function's own input here.
+    pub unref: bool,
+    /// The argument registers a direct callee is known not to take: its own
+    /// body never reads them
+    /// ([`crate::kuna_calleedeadarg::CalleeEntryDead::never_takes`]), or its
+    /// `protoorder` statement leaves them out.
+    pub untaken: Vec<(Address, int4)>,
+}
+
+/// How a narrow integer fills its register: extended by the sign of its type to
+/// 32 bits, then sign-extended to the whole register (`Register`), or with the
+/// bits above 32 left unspecified (`Word`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Widen {
+    Register,
+    Word,
+}
+
+/// Allocate a process-unique \e fspec handle (the offset of the \e fspec
+/// annotation address).  In C++ the offset is the raw `FuncCallSpecs *`, a unique
+/// process pointer; here a monotonic counter plays the same role, registered in
+/// the fspec-space side table ([`FuncCallSpecs::register_in_fspec_space`]).  The
+/// handle is never used as a `qlst` index (call specs are looked up by op), so a
+/// simple ever-increasing id is sufficient and stable across `sortCallSpecs`.
+pub(crate) fn next_fspec_handle() -> unlace_base::types::uintb {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    // Start above 0 so the handle is never confused with a null offset; the high
+    // bit is left clear so the value is a valid (small) address offset.
+    static NEXT: AtomicU64 = AtomicU64::new(0x10000);
+    NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
 #[cfg(test)]

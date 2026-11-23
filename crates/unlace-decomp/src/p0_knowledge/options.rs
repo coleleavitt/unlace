@@ -9,7 +9,7 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::marshal::{ATTRIB_CONTENT, Decoder, ELEM_UNKNOWN, ElementId, IdRegistry};
 use unlace_base::types::{int4, uint4};
 
-use crate::flow::flow_flags;
+use crate::flow_flags;
 
 // ---------------------------------------------------------------------------
 // Marshaling element ids (options.cc:45-85).

@@ -1,6 +1,5 @@
 # Upward crate:: edges between unlace-decomp's layering bands (scripts/check_layers.py). Only delete lines.
 architecture -> engine_translate
-architecture -> flow
 architecture -> inject_sleigh
 architecture -> kuna_aif
 architecture -> kuna_bejoin
@@ -47,7 +46,6 @@ architecture -> kuna_phases
 architecture -> kuna_ppc32piccalls
 architecture -> kuna_protoorder
 architecture -> kuna_ptrauthtrap
-architecture -> kuna_registerslots
 architecture -> kuna_retsysreg
 architecture -> kuna_roundingops
 architecture -> kuna_rustabi
@@ -62,11 +60,8 @@ architecture -> kuna_structsynth
 architecture -> kuna_swiftcall
 architecture -> kuna_syscallregs
 architecture -> kuna_tlsnames
-architecture -> kuna_varargretreg
-architecture -> kuna_varargsave
 architecture -> kuna_voidret
 architecture -> kuna_x64syscall
-architecture -> kuna_x87emptyreturn
 architecture -> kuna_x87intrinsic
 architecture -> kuna_x87truncate
 architecture -> modelrules
@@ -105,7 +100,6 @@ coreaction_cleanup -> kuna_namespaces
 coreaction_cleanup -> printlanguage
 database -> remote_provider
 dtype -> bitfield
-dtype -> kuna_typequal
 dtype -> prettyprint
 flow -> kuna_armfloatreturn
 flow -> kuna_calleearitybody
@@ -118,7 +112,6 @@ fspec -> kuna_calleedeadarg
 fspec -> kuna_calleepurge
 fspec -> kuna_condexeret
 fspec -> kuna_libcnames
-fspec -> kuna_narrowext
 fspec -> kuna_passthrough
 fspec -> kuna_registerslots
 fspec -> kuna_spsolve
@@ -159,10 +152,6 @@ funcdata -> kuna_switchextent
 funcdata -> kuna_varsources
 funcdata -> kuna_voidret
 funcdata -> unionresolve
-funcdata_block -> flow
-funcdata_block -> kuna_loweredswitchvalue
-funcdata_varnode -> kuna_condexeretuse
-heritage -> kuna_bejoin
 heritage -> kuna_calloverlap
 heritage -> kuna_globalcallranges
 heritage -> kuna_indexaliasguard
@@ -196,11 +185,9 @@ kuna_slotreport -> kuna_varsources
 kuna_stackstruct -> kuna_partialaccess
 kuna_varargfloat -> kuna_bitcast
 kuna_zextreturn -> kuna_truncarg
-options -> flow
 options -> kuna_lang
 options -> kuna_option_dispatch
 subflow -> kuna_truncarg
 varmap -> kuna_arrayextent
-varmap -> kuna_arraysize
 varmap -> kuna_stablenames
 varmap -> remote_provider

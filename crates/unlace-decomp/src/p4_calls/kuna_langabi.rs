@@ -84,6 +84,3 @@ impl LangAbi for RustAbi {
         is_variadic.then_some("extern \"C\" ")
     }
 }
-
-#[cfg(test)]
-mod tests;

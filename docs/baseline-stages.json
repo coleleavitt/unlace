@@ -1,7 +1,7 @@
 {
   "data_footer": [
-    5911,
-    5911
+    5914,
+    5914
   ],
   "passing": [
     "data:64-bit logical shift retains unsigned destination",
@@ -4457,6 +4457,9 @@
     "data:itaniumeh cold #2: on follows the pad stub into the cold code",
     "data:itaniumeh cold #3: on tests the selector",
     "data:itaniumeh cold #4: the jump into catcher.cold is not a tail call",
+    "data:itaniumeh sharedpad #1: no exceptional edge to a folded pad prints as an if",
+    "data:itaniumeh sharedpad #2: each pad of the try prints as a SysError catch",
+    "data:itaniumeh sharedpad #3: the shared handler rethrows unless errNo is ENOENT",
     "data:itaniumeh-arm #1: every guarded call prints in a try region (x86-64, ARM, Thumb)",
     "data:itaniumeh-arm #2: the handler names the caught builtin type",
     "data:itaniumeh-arm #3: a hidden class is named from its type_info string, then the catch-all",

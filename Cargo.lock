@@ -1026,6 +1026,7 @@ dependencies = [
  "smallvec",
  "thiserror 2.0.18",
  "unlace-bandb-base",
+ "unlace-bandb-core",
  "unlace-base",
  "unlace-lift",
  "unlace-middle",
@@ -1041,6 +1042,22 @@ dependencies = [
  "slotmap",
  "smallvec",
  "thiserror 2.0.18",
+ "unlace-base",
+ "unlace-lift",
+ "unlace-middle",
+ "unlace-num",
+ "unlace-sleigh",
+ "unlace-structure",
+]
+
+[[package]]
+name = "unlace-bandb-core"
+version = "0.1.0"
+dependencies = [
+ "slotmap",
+ "smallvec",
+ "thiserror 2.0.18",
+ "unlace-bandb-base",
  "unlace-base",
  "unlace-lift",
  "unlace-middle",
@@ -1116,6 +1133,7 @@ dependencies = [
  "toml",
  "unlace-bandb",
  "unlace-bandb-base",
+ "unlace-bandb-core",
  "unlace-base",
  "unlace-emit",
  "unlace-lift",
@@ -1135,6 +1153,7 @@ dependencies = [
  "thiserror 2.0.18",
  "unlace-bandb",
  "unlace-bandb-base",
+ "unlace-bandb-core",
  "unlace-base",
  "unlace-lift",
  "unlace-middle",

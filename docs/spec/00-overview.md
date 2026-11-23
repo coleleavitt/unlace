@@ -1978,10 +1978,10 @@ number its own structures. What a function ASKS the ledger, though, does not
 depend on what it is answered: the evidence is collected before anything is
 installed, and a field takes the type an access carried. So the first pool's
 workers record every lookup and what their own ledger answered
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
 (SynthRequest)`), and the parent, which decompiles nothing, replays the lookups
 in target order through the ledger's own decision
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
 (Replay)`). The replay yields every answer, every mint, the superseded set and
 the answers the convergence sweep's lookups will get.
 
@@ -1990,19 +1990,19 @@ lookup with a structure that has exactly the members of the serial answer's --
 it minted what it measured, and so did the serial run under another number --
 printed the serial text with other numbers, so the parent renames the
 identifiers in its C, prototype, variable types and type definitions
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
 (renaming)`). The renaming is refused when an answer's members differ, when two
 names would become one, or when the text spells a structure name the renaming
 does not cover or spells one inside a string or character literal
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
 (rename_identifiers)`), and when a name it covers is a symbol's rather than a
 type's -- nothing kuna names spells a `struct_N`, but a binary's own symbols
 could. On `tar` O2, 100 of the 106 functions that synthesize
 are renamed. The rest are decompiled a second time by the same workers, each of
 which first destroys the structures it minted itself, and every type built on
-one (`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
+one (`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
 (forget_minted)`), mints the replayed structures in the serial order
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
 (install_table)`) and answers each lookup with its replayed name; a function the
 sweep will decide differently is renamed onto its sweep answers or goes out
 twice in that pool, and the parent applies the sweep on the first-pass text
@@ -2011,7 +2011,7 @@ decompile records its lookups as well, and they have to be the first ones,
 repeats aside. A decompile can ask one question twice (a restarted pass measures
 the same layout again), whether it does follows the process's history, and a
 forced worker answers a repeat as it answered the first asking
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
 (distinct)`), so the replay also requires every question to get the same answer
 at the end of its function as when it was first asked. A function whose first
 answers do change what it asks next is the real exception: its questions up to
@@ -2034,7 +2034,7 @@ still start from a fresh clone of the same base ledger.
 
 A structure can travel only if another process can rebuild every field type,
 and a named type counts only if the worker's load created it
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
 (AtLoad)`): `pebnames` creates `PEB` and `TEB` the first time a function reads
 them, so one worker holds them and another does not. The unnamed unknown
 placeholder a Varnode starts with is held by no factory and is rebuilt as itself
@@ -3548,7 +3548,7 @@ the first op that is not one, because that run is not stable: a phi can be
 rewritten into an ordinary op **in place**, keeping its position among the markers
 — `op_zero_multi` turns a 1-input MULTIEQUAL into a COPY, and the stack-pointer
 solve rewrites a solved phi into an `INT_ADD`
-(`crates/unlace-bandb/src/p6_variables/coreaction_stackptr.rs
+(`crates/unlace-bandb-core/src/p6_variables/coreaction_stackptr.rs
 (analyze_extra_pop)`). A resync that stopped there would leave the phis behind it
 claiming an edge the block no longer has, and the next pass to index a phi slot as
 an in-edge — `descend2_undef`, reached from the unreachable-block sweep — would
@@ -3566,9 +3566,9 @@ module docs):
 | `crates/unlace-middle/src/substrate/funcdata_varnode.rs` | varnode creation/lookup primitives |
 | `crates/unlace-middle/src/substrate/funcdata_block.rs` | CFG surgery + the jump-table drivers |
 | `crates/unlace-middle/src/substrate/funcdata_encode.rs`, `crates/unlace-middle/src/substrate/funcdata_printraw.rs` | marshaling, raw printing |
-| `crates/unlace-bandb/src/p5_types/funcdata_resolveflow.rs` | flow resolution (P2) |
+| `crates/unlace-bandb-core/src/p5_types/funcdata_resolveflow.rs` | flow resolution (P2) |
 | `crates/unlace-bandb-base/src/p5_types/funcdata_union.rs` | union facet resolution (P5) |
-| `crates/unlace-bandb/src/p6_variables/funcdata_facing.rs`, `crates/unlace-middle/src/substrate/funcdata_merge.rs`, `crates/unlace-bandb/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
+| `crates/unlace-bandb-core/src/p6_variables/funcdata_facing.rs`, `crates/unlace-middle/src/substrate/funcdata_merge.rs`, `crates/unlace-bandb-core/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
 | `crates/unlace-emit/src/p9_emit/coreaction_casts.rs` | cast insertion hooks (P9) |
 
 **Data types are shared IR, not per-function state.** The type factory

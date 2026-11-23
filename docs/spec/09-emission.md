@@ -785,7 +785,7 @@ default arm alone printed `sink(a0 * 3)` for a callee that reads the whole
 register, passing a value the binary never passed.
 
 That trim is the evidence that the binary zero-extended. When
-`crates/unlace-bandb/src/p3_dataflow/subflow.rs
+`crates/unlace-bandb-core/src/p3_dataflow/subflow.rs
 (SubvariableFlow::try_call_pull)` narrows a call input whose non-zero mask lies
 inside the logical mask (`crates/unlace-emit/src/p9_emit/kuna_truncarg.rs
 (drops_only_zero_bits)`), `do_replacement` records the slot, its new size and
@@ -1329,7 +1329,7 @@ arithmetic for a non-`bool` integer one (`kuna_castarith.rs
 (store_value_settled)`). Finally, a constant that names a global keeps it, and
 so does an address-like constant beside an integer that was cast to a pointer:
 `table[i]` compiles to the same `INT_ADD`, with the table as the constant and the
-subscript as the "pointer" (`crates/unlace-bandb/src/p5_types/kuna_ptrfromuse.rs
+subscript as the "pointer" (`crates/unlace-bandb-core/src/p5_types/kuna_ptrfromuse.rs
 (constant_may_be_global_base)`). A record base keeps `p->field` wherever the
 offset lands on a field, because chapter 05 already made that access a `PTRSUB`.
 An offset where the record has no field is still an `INT_ADD` here and is
@@ -1430,7 +1430,7 @@ model a PTRADD/PTRSUB was built on; the driver demotes them back to raw
 arithmetic (`cast_fixup_ptradd` undoes the scaling; `cast_fixup_ptrsub`
 becomes COPY or INT_ADD) rather than print a field access into the wrong type.
 The fit test for a PTRSUB off a spacebase
-(`crates/unlace-bandb/src/p6_variables/funcdata_spacebase.rs
+(`crates/unlace-bandb-core/src/p6_variables/funcdata_spacebase.rs
 (Funcdata::is_ptrsub_matching_scope)`, shared with `RulePtrsubUndo`) looks the
 offset up in the scope the spacebase selects, as upstream `TypeSpacebase::getSubType`
 does: the global symbol table for a global reference, the function's frame map
@@ -3211,7 +3211,7 @@ for a `char *` constant once that type is established.
 **An indexed table is a literal only when the index stays inside it.** With
 `elemptr` on (05-types §5.2), a character-pointer constant that is the base of a
 `PTRADD` indexed by a computed value is probed with the index's largest value
-(`crates/unlace-bandb/src/p5_types/kuna_elemptr.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_elemptr.rs
 (literal_index_bound)`): a zero-extended byte is at most 255, a mask is at most
 its mask, an unsigned remainder is less than its divisor, and anything else is
 unbounded. `push_ptr_char_constant_ir` keeps the literal only when that bound is
@@ -3985,7 +3985,7 @@ enums (`printc.rs (render_type_definitions)`; the per-type body renderers —
 functions for unit-testability, and emission is direct string building, since
 no emitter markup exists for type definitions). The structures `structsynth`
 minted are moved after every other type, in ascending `N`
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/ledger.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/ledger.rs
 (in_name_order)`), because the tree orders them by the address of a field's type
 and the header would otherwise change from run to run (chapter
 [05](05-types.md), struct synthesis). Two documented `(kuna)`
@@ -4743,7 +4743,7 @@ definition fails the export. A conflicting definition or type-name collision
 cannot silently remove a required wide declaration. Ordinary locked-declaration
 conflicts retain the diagnostic behavior above. Capture remains after temporary
 C rendering and before publication. The proof and bounded contract checks belong to
-`crates/unlace-bandb/src/p4_calls/kuna_callwide.rs`.
+`crates/unlace-bandb-core/src/p4_calls/kuna_callwide.rs`.
 
 Format-specific call arities are not declarations of the callee. When a call
 has format-derived arguments, project declarations restore its parked formal

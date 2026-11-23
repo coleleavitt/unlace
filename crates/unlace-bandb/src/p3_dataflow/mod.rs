@@ -4,11 +4,8 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod coreaction_early;
-mod kuna_calleeflags;
-pub mod kuna_calleehomes;
-pub mod kuna_calleememory;
-pub mod kuna_globalarrayanchor;
-pub mod kuna_globalcallranges;
+#[cfg(test)]
+mod kuna_globalarrayanchor_tests;
 pub mod kuna_globalcallstore;
 pub mod kuna_globalfieldstore;
 pub mod kuna_globalorderkeep;
@@ -21,16 +18,12 @@ pub mod kuna_opaquedomain;
 pub mod kuna_opaqueglobals;
 pub mod kuna_opaquepredicate;
 pub mod kuna_pairrefine;
-pub mod kuna_regnarrow;
 pub mod kuna_repframecopy;
 pub mod kuna_stackbytecopy;
 pub mod kuna_stackeffects;
-pub mod kuna_stackstoreguard;
 #[cfg(test)]
 mod kuna_storecopyeffects_tests;
-pub mod ruleaction_1;
 pub mod ruleaction_3;
-pub mod ruleaction_4;
 pub mod ruleaction_5;
 pub mod ruleaction_6;
 #[cfg(test)]
@@ -38,4 +31,3 @@ mod ruleaction_7_ptrflow_tests;
 #[cfg(test)]
 mod ruleaction_7_tests;
 pub mod ruleaction_8;
-pub mod subflow;

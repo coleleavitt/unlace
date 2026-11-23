@@ -6,7 +6,7 @@ Checks (run from the repo root; exit 1 on any failure):
      and every `crates/...` path mentioned anywhere in docs/spec/ prose,
      exists on disk.
   2. Folder coverage: every top-level directory under unlace-decomp/src,
-     unlace-middle/src, unlace-lift/src, unlace-structure/src, unlace-bandb-base/src, unlace-bandb/src, unlace-emit/src and
+     unlace-middle/src, unlace-lift/src, unlace-structure/src, unlace-bandb-base/src, unlace-bandb-core/src, unlace-bandb/src, unlace-emit/src and
      unlace-analysis/src is owned by exactly one chapter's Anchors block.
   3. (--strict) Option mention: every `option = "..."` in phases.toml settableTable
      appears at least once in docs/spec/ (so no gated algorithm goes undescribed).
@@ -57,14 +57,14 @@ for name, text in chapters():
         # substrate/dtype.rs cross-referenced from the types chapter) does not.
         if not os.path.isdir(os.path.join(ROOT, a)):
             continue
-        for src_root in ("crates/unlace-decomp/src", "crates/unlace-middle/src", "crates/unlace-lift/src", "crates/unlace-structure/src", "crates/unlace-bandb-base/src", "crates/unlace-bandb/src", "crates/unlace-emit/src", "crates/unlace-analysis/src"):
+        for src_root in ("crates/unlace-decomp/src", "crates/unlace-middle/src", "crates/unlace-lift/src", "crates/unlace-structure/src", "crates/unlace-bandb-base/src", "crates/unlace-bandb-core/src", "crates/unlace-bandb/src", "crates/unlace-emit/src", "crates/unlace-analysis/src"):
             if a == src_root or a.startswith(src_root + "/"):
                 rel = a[len(src_root):].strip("/")
                 top = rel.split("/")[0] if rel else "*"
                 owned.setdefault((src_root, top), []).append(name)
 
 # --- 2. folder coverage ------------------------------------------------------
-for src_root in ("crates/unlace-decomp/src", "crates/unlace-middle/src", "crates/unlace-lift/src", "crates/unlace-structure/src", "crates/unlace-bandb-base/src", "crates/unlace-bandb/src", "crates/unlace-emit/src", "crates/unlace-analysis/src"):
+for src_root in ("crates/unlace-decomp/src", "crates/unlace-middle/src", "crates/unlace-lift/src", "crates/unlace-structure/src", "crates/unlace-bandb-base/src", "crates/unlace-bandb-core/src", "crates/unlace-bandb/src", "crates/unlace-emit/src", "crates/unlace-analysis/src"):
     full = os.path.join(ROOT, src_root)
     whole_crate_owners = owned.get((src_root, "*"), [])
     for entry in sorted(os.listdir(full)):

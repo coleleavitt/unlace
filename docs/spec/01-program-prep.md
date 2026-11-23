@@ -123,7 +123,7 @@ than code to follow into — `crates/unlace-middle/src/substrate
 (ArchFlowEnv)` consults the parked set once the symbol table declines — so a
 `BRANCH` into a lazy entry stays a tail call. The raw walk `bejoin evidence` makes
 of a function and its callees stops at a parked entry for the same reason
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin/evidence.rs (destination)`):
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin/evidence.rs (destination)`):
 its verdict is cached once per image, before any `Function` is materialized, so a
 walk that ran on into a tail-called entry would swap a big-endian pair's halves in
 every later read. Materialization then happens on read,
@@ -4449,7 +4449,7 @@ moves.
   converted it by value. A float-returning name fewer than three corpus binaries import
   (`nanf`, `sqrtf`, `fabsf`) stays out, and its import stub is recovered from what
   its callers read instead (chapter 04). These rows are seeded only on x86 and AArch64
-  (`crates/unlace-bandb/src/p4_calls/kuna_typedcallabi.rs (returns_doubles_whole)`),
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_typedcallabi.rs (returns_doubles_whole)`),
   whose return recovery reads a `double` whole (`xmm0`, `ST0`, `d0`), and on a
   hard-float ARM image once `armfloatreturn` applies (chapter 04). Otherwise ARM
   gets none of them. Its default model lists only `s0`..`s7` among the outputs, so on
@@ -8324,7 +8324,7 @@ both
 - **Swift value witnesses** (`valuewitness`, the value-witness arm of the pass
   above, default-on and inert unless `swiftmetadata` is on;
   `crates/unlace-analysis/src/analyzers/swift/kuna_swiftwitness.rs`,
-  `crates/unlace-bandb/src/p5_types/kuna_valuewitness.rs`): the word
+  `crates/unlace-bandb-core/src/p5_types/kuna_valuewitness.rs`): the word
   before a struct's or enum's type metadata points at its value witness table,
   the functions the runtime and generic code call to copy, move and destroy a
   value whose layout they do not know (`initializeBufferWithCopyOfBuffer`,
@@ -10014,7 +10014,7 @@ cleared), and the commit keeps it OFF the symbol, in
 other prototype for it — no operator declaration, nothing another stream parked
 (a DWARF `main` is decompiled against DWARF alone) — it lays the declaration out
 under the default calling convention
-(`crates/unlace-bandb/src/p4_calls/kuna_elfmaindecl.rs (Runtime)`), locks
+(`crates/unlace-bandb-core/src/p4_calls/kuna_elfmaindecl.rs (Runtime)`), locks
 only its `int` return (the inputs stay unlocked), and seeds the function with
 the storage, name and type of `argc`, `argv` and `envp`
 (`crates/unlace-decomp/src/infra/decompile_drive.rs (decompile_func_full_with_objects)`).
@@ -10025,11 +10025,11 @@ through the registers it would otherwise have recovered as the return:
 `protoorder_cyclestruct_x86_64` prints `look(v2)` where the option-off output has
 `look(v3,v2)` and the source `look(&leaf)`. Every such case found agrees with
 the source. The seed itself is consulted only through one question,
-`crates/unlace-bandb/src/p4_calls/kuna_elfmaindecl.rs (read_slots)`: are the
+`crates/unlace-bandb-core/src/p4_calls/kuna_elfmaindecl.rs (read_slots)`: are the
 function inputs the body reads, in any storage the convention passes a parameter
 in, exactly the first k runtime slots? When they are, type inference gives each
 such input its runtime type
-(`crates/unlace-bandb/src/p4_calls/kuna_elfmaindecl.rs (input_type)`, at the
+(`crates/unlace-bandb-core/src/p4_calls/kuna_elfmaindecl.rs (input_type)`, at the
 same unlocked seam `calleevote` votes through in `build_localtypes`); the type
 holds through propagation (`propagate_type_edge` does not overwrite it) and record
 synthesis gives way to it (`kuna_structsynth.rs (accepts)` refuses a runtime
@@ -10039,7 +10039,7 @@ call treat the input as they treat any recovered parameter. And
 runtime name (`param_name`). The whole declaration is therefore applied in the one
 decompile the function was getting anyway.
 
-`crates/unlace-bandb/src/p4_calls/kuna_elfmaindecl.rs (settled)` checks the
+`crates/unlace-bandb-core/src/p4_calls/kuna_elfmaindecl.rs (settled)` checks the
 finished function: its parameters must be no parameter at all where the body reads
 no runtime argument, or exactly the first k runtime slots, each named. Otherwise —
 a `main` that reads `argv` but not `argc` (the recovery fills the unread slot

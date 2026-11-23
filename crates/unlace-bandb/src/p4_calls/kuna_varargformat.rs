@@ -276,7 +276,7 @@ pub fn activate_trial(data: &mut Funcdata, idx: int4, i: int4, args: &[Parameter
     let trial = fc.active_input().get_trial(i);
     if trial.is_definitely_not_used()
         || trial.is_unref()
-        || super::kuna_passthrough::claimed_range(data, trial.get_address(), trial.get_size())
+        || crate::kuna_passthrough::claimed_range(data, trial.get_address(), trial.get_size())
     {
         return false;
     }
@@ -326,7 +326,7 @@ pub fn activate_trial(data: &mut Funcdata, idx: int4, i: int4, args: &[Parameter
         let previous = fc.active_input().get_trial(index);
         if previous.is_definitely_not_used()
             || previous.is_unref()
-            || super::kuna_passthrough::claimed_range(
+            || crate::kuna_passthrough::claimed_range(
                 data,
                 previous.get_address(),
                 previous.get_size(),

@@ -379,7 +379,14 @@ component (below it or unrelated to it, 84k lines) moved with `git mv` to `crate
 folders; `unlace-bandb` depends on it and re-exports it. No edge was inverted (the condensation is acyclic by
 construction); `super::<moved>` paths in unlace-bandb became `crate::<moved>`, six test modules that read
 unlace-bandb modules moved there as `<module>_tests.rs`. `check_layers.py` ranks the crate root as band
-`bandb-base`; `check_spec.py` scans it. Next (10b): `unlace-bandb-core`, the component itself.
+`bandb-base`; `check_spec.py` scans it.
+
+**Step 10b (unlace-bandb-core).** The 81 modules of the strongly connected component (116k lines) moved
+to `crates/unlace-bandb-core`, same four folders; `unlace-bandb` keeps the 59 modules above it (49k) and
+re-exports the core, which re-exports the base. Test-only constructors of `kuna_rustabi`,
+`kuna_calleedeadarg` (and its `ByteSet`) and `funcdata_spacebase::spacebase_tests`, which unlace-bandb's tests
+read, are `cfg(any(test, feature = "test-support"))`; unlace-bandb's dev-dependency turns the feature on.
+Rebuild times are in `notes/crate-architecture.md` step 10.
 
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and

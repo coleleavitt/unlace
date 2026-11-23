@@ -20,8 +20,7 @@
 
 use unlace_base::error::KunaResult;
 
-/// The one-operand model's name, as bound by the analysis tier.
-pub const MODEL_NAME: &str = "__kuna_x87unary";
+pub use crate::kuna_specnames::X87_UNARY_MODEL as MODEL_NAME;
 
 /// The two-operand model's name.
 pub const BINARY_MODEL_NAME: &str = "__kuna_x87binary";

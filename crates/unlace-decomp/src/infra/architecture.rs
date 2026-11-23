@@ -2187,8 +2187,8 @@ impl Architecture {
                 && self.get_description().starts_with("x86:"),
         ));
         ctx.vcall_targets = Rc::clone(&self.kuna_vcall_targets);
-        ctx.retsysreg_userops = ids(crate::kuna_retsysreg::STATE_USEROP_NAMES);
-        ctx.retsysreg_cop_userops = ids(crate::kuna_retsysreg::COP_USEROP_NAMES);
+        ctx.retsysreg_userops = ids(crate::kuna_specnames::RETSYSREG_STATE_USEROPS);
+        ctx.retsysreg_cop_userops = ids(crate::kuna_specnames::RETSYSREG_COP_USEROPS);
         // (kuna) carry the Rust return-ABI gate and the detected source language
         // so `kuna_rustabi` reaches both via `glb`.
         ctx.source_lang = self.source_lang();
@@ -2214,7 +2214,7 @@ impl Architecture {
             .0
             .then(|| {
                 self.userops
-                    .get_op_by_name(crate::kuna_ptrauthtrap::BREAKPOINT_USEROP)
+                    .get_op_by_name(crate::kuna_specnames::PTRAUTH_BREAKPOINT_USEROP)
             })
             .flatten()
             .map(|u| u.get_index() as unlace_base::types::uint4);
@@ -2253,7 +2253,7 @@ impl Architecture {
         // (kuna) resolve the byte-shuffle user-op ids ONCE per program, so the
         // rule can name a CALLOTHER through the ArchSeam (the boundary
         // ArchContext carries no userop table).
-        ctx.simd_shuffle_userops = crate::p3_dataflow::kuna_simdlane::SHUFFLE_USEROP_NAMES
+        ctx.simd_shuffle_userops = crate::kuna_specnames::SIMDLANE_SHUFFLE_USEROPS
             .iter()
             .filter_map(|nm| {
                 self.userops
@@ -2261,13 +2261,13 @@ impl Architecture {
                     .map(|u| u.get_index() as unlace_base::types::uint4)
             })
             .collect();
-        ctx.x87_float_to_int_userops = crate::kuna_x87truncate::USEROP_NAMES
+        ctx.x87_float_to_int_userops = crate::kuna_specnames::X87_TRUNCATE_USEROPS
             .iter()
             .filter_map(|nm| self.userops.get_op_by_name(nm))
             .filter(|u| u.get_inject_id().is_none())
             .map(|u| u.get_index() as unlace_base::types::uint4)
             .collect();
-        ctx.x87_integer_userops = crate::kuna_x87truncate::USEROP_NAMES
+        ctx.x87_integer_userops = crate::kuna_specnames::X87_TRUNCATE_USEROPS
             .iter()
             .zip([2, 4, 8])
             .filter_map(|(name, width)| {
@@ -2276,7 +2276,7 @@ impl Architecture {
                     .map(|u| (u.get_index() as unlace_base::types::uint4, width))
             })
             .collect();
-        ctx.float_rounding_userops = crate::kuna_roundingops::USEROP_NAMES
+        ctx.float_rounding_userops = crate::kuna_specnames::ROUNDING_USEROPS
             .iter()
             .filter_map(|nm| {
                 self.userops
@@ -2306,9 +2306,15 @@ impl Architecture {
             ctx.float_globals_pending =
                 self.kuna_float_globals.is_none() && self.kuna_float_scan.is_some();
         }
-        ctx.unknown_byte_is_char = self.kuna_options.get::<crate::printc::Realtypes>().0
+        ctx.unknown_byte_is_char = self
+            .kuna_options
+            .get::<crate::kuna_coreoptions::Realtypes>()
+            .0
             && self.print.out_lang() == crate::kuna_outlang::OutLang::C;
-        ctx.unknown_is_integer = self.kuna_options.get::<crate::printc::Realtypes>().0
+        ctx.unknown_is_integer = self
+            .kuna_options
+            .get::<crate::kuna_coreoptions::Realtypes>()
+            .0
             || self.print.out_lang() != crate::kuna_outlang::OutLang::C;
         ctx.int_promotion = self.print.out_lang().profile().caps.integer_promotion;
         ctx.kuna_options.set(crate::kuna_coreoptions::CastArith(
@@ -2376,7 +2382,7 @@ impl Architecture {
         // is left out, so the spec's model wins.
         ctx.x64_syscall_userops = self
             .userops
-            .get_op_by_name(crate::kuna_x64syscall::USEROP_NAME)
+            .get_op_by_name(crate::kuna_specnames::X64_SYSCALL_USEROP)
             .filter(|u| u.get_inject_id().is_none())
             .map(|u| vec![u.get_index() as unlace_base::types::uint4])
             .unwrap_or_default();
@@ -2436,7 +2442,7 @@ impl Architecture {
         ctx.dynreloc_const = Rc::clone(&self.dynreloc_const);
         ctx.eh_table = self
             .kuna_options
-            .get::<crate::kuna_itaniumeh::ItaniumEh>()
+            .get::<crate::kuna_coreoptions::ItaniumEh>()
             .on
             .then(|| Rc::clone(&self.eh_table));
         ctx.kuna_options.set(crate::kuna_coreoptions::VexZeroUpper(
@@ -3231,7 +3237,7 @@ impl Architecture {
             code_addr_size,
         ) || self
             .proto_models
-            .contains_key(crate::kuna_x87intrinsic::MODEL_NAME)
+            .contains_key(crate::kuna_specnames::X87_UNARY_MODEL)
         {
             return;
         }
@@ -5181,7 +5187,7 @@ impl Architecture {
                 .map(|v| v.size as int4)
         });
         if let (Some(el), Some((self_reg, error_reg, async_reg))) = (default_el, regs) {
-            for (name, throws, is_async) in crate::kuna_swiftcall::MODELS {
+            for (name, throws, is_async) in crate::kuna_specnames::SWIFT_MODELS {
                 if byname.contains_key(name) {
                     continue;
                 }

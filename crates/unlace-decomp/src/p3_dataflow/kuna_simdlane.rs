@@ -78,10 +78,7 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
 
-/// SLEIGH user-op names whose semantics are "permute the bytes of operand 1 by
-/// the byte mask in operand 2" — the x86 `PSHUFB` family. The AVX spelling is
-/// carried because the same three-input CALLOTHER shape is emitted for it.
-pub const SHUFFLE_USEROP_NAMES: &[&[u8]] = &[b"pshufb", b"vpshufb"];
+pub use crate::kuna_specnames::SIMDLANE_SHUFFLE_USEROPS as SHUFFLE_USEROP_NAMES;
 
 /// Marshalling element id (kuna 4000+ range).
 pub const ELEM_SIMDLANE: ElementId = ElementId::new("simdlane", 4142);

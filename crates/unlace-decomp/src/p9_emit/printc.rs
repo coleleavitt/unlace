@@ -17225,17 +17225,7 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.printc_type_to_c_string = Some(type_to_c_string);
 }
 
-crate::kuna_flag!(
-    /// (kuna DIV-6) Render residual `TYPE_UNKNOWN` (`xunknownN`) values as real C
-    /// types by size — 1→`char`, 2/4/8→unsigned ints, pointer-to-unknown→`void *` —
-    /// instead of the `xunknownN`/`undefined<N>` placeholder.  Default-on; read by
-    /// the printc declarator chokepoints (`RealTypeCtx`).
-    Realtypes,
-    "realtypes",
-    "Real-C-type rendering for unknowns",
-    unset: false,
-    shipped: true
-);
+pub use crate::kuna_coreoptions::Realtypes;
 
 crate::kuna_flag!(
     /// (kuna `voidtailreturn`) Elide the trailing bare `return;` of a void

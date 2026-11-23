@@ -158,23 +158,12 @@ fn overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
     a.overlap(0, b, bsize) >= 0 || b.overlap(0, a, asize) >= 0
 }
 
-/// The names of the four models.
-pub const SWIFTCALL: &str = "__swiftcall";
-pub const SWIFTCALL_THROWS: &str = "__swiftcall_throws";
-/// An `async` function: the task's context arrives in the `swiftasync`
-/// register (x22 / r14) and the function resumes a continuation instead of
-/// returning.
-pub const SWIFTASYNCCALL: &str = "__swiftasynccall";
-pub const SWIFTASYNCCALL_THROWS: &str = "__swiftasynccall_throws";
+pub use crate::kuna_specnames::SWIFTASYNCCALL;
+pub use crate::kuna_specnames::SWIFTASYNCCALL_THROWS;
+pub use crate::kuna_specnames::SWIFTCALL;
+pub use crate::kuna_specnames::SWIFTCALL_THROWS;
 
-/// The models to derive: `(name, takes the error register, takes the
-/// async context)`.
-pub const MODELS: [(&str, bool, bool); 4] = [
-    (SWIFTCALL, false, false),
-    (SWIFTCALL_THROWS, true, false),
-    (SWIFTASYNCCALL, false, true),
-    (SWIFTASYNCCALL_THROWS, true, true),
-];
+pub use crate::kuna_specnames::SWIFT_MODELS as MODELS;
 
 /// How many ops before the call the zeroing store is looked for.
 const MAX_SCAN: usize = 64;

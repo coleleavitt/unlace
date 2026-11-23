@@ -60,8 +60,7 @@ use crate::context::BlockId;
 use crate::database::TranslateAccess;
 use crate::funcdata::Funcdata;
 
-/// The SLEIGH user-op `brk` lowers to (`AARCH64base.sinc`, `:brk`).
-pub const BREAKPOINT_USEROP: &[u8] = b"SoftwareBreakpoint";
+pub use crate::kuna_specnames::PTRAUTH_BREAKPOINT_USEROP as BREAKPOINT_USEROP;
 
 /// Is `imm` one of the `brk` immediates LLVM reserves for a pointer-auth
 /// failure (`0xc470 | key`, keys IA, IB, DA, DB)?

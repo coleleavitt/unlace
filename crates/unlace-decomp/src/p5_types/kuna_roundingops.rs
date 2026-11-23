@@ -24,13 +24,7 @@ use crate::context::OpId;
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
-/// The user-op names a spec gives the float-to-float roundings p-code lacks.
-pub const USEROP_NAMES: [&[u8]; 4] = [
-    b"FLOAT_ROUNDEVEN",
-    b"FLOAT_TRUNC",
-    b"FLOAT_RINT",
-    b"FLOAT_NEARBYINT",
-];
+pub use crate::kuna_specnames::ROUNDING_USEROPS as USEROP_NAMES;
 
 /// Whether `op` is a CALLOTHER of one of the rounding user ops.
 fn is_rounding_op(data: &Funcdata, op: OpId) -> Option<()> {

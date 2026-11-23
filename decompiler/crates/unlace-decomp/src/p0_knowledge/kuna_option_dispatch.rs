@@ -142,12 +142,7 @@ kuna_options! { self, p1;
         self.ret_split_global = val;
         Ok(msg)
     },
-    "retsplitlimit" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_retsplitlimit::OptionRetSplitLimit.apply(p1)?;
-        self.ret_split_limit = val;
-        Ok(msg)
-    },
+    "retsplitlimit" => registered!(crate::p8_structure::kuna_retsplitlimit::RetSplitLimit),
     "v850indirectbranch" => on_off!(v850_indirect_branch, "V850 indirect-branch reclassification"),
     "ptrauthtrap" => on_off!(ptrauth_trap, "arm64e pointer-auth failure-check removal"),
     "relronoreturn" => on_off!(relro_noreturn, "Flow-time no-return call through a relocated read-only slot"),
@@ -467,17 +462,8 @@ kuna_options! { self, p1;
     },
     "callarrayextent" => on_off!(call_array_extent, "Call-escaped frame array extent"),
     "stackstruct" => on_off!(stack_struct, "Address-taken frame record layout"),
-    "arrayextent" => {
-        let (val, msg) =
-            crate::p6_variables::kuna_arrayextent::OptionArrayExtent.apply(p1)?;
-        self.array_extent = val;
-        Ok(msg)
-    },
-    "arraysize" => {
-        let (val, msg) = crate::p6_variables::kuna_arraysize::OptionArraySize.apply(p1)?;
-        self.array_size = val;
-        Ok(msg)
-    },
+    "arrayextent" => registered!(crate::p6_variables::kuna_arrayextent::ArrayExtent),
+    "arraysize" => registered!(crate::p6_variables::kuna_arraysize::ArraySize),
     "devectorize" => on_off!(devectorize_reduction, "Vectorized reduction re-roll"),
     "strlenscan" => on_off!(strlen_scan, "inline repnz scasb string length as strlen"),
     "repstring" => on_off!(rep_string, "rep movs/stos/cmps loops as copy, fill and compare builtins"),
@@ -516,12 +502,7 @@ kuna_options! { self, p1;
         self.outline_spec = val;
         Ok(msg)
     },
-    "condfold" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_condfold::OptionCondFold.apply(p1)?;
-        self.cond_fold = val;
-        Ok(msg)
-    },
+    "condfold" => registered!(crate::p8_structure::kuna_condfold::CondFold),
     "implweight" => {
         let field = p1.trim();
         if field == "off" {
@@ -536,18 +517,8 @@ kuna_options! { self, p1;
             _ => Err(KunaError::parse("Must specify off or a weight from 2 to 64")),
         }
     },
-    "condstmts" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_condstmts::OptionCondStmts.apply(p1)?;
-        self.cond_stmts = val;
-        Ok(msg)
-    },
-    "gotoreduce" => {
-        let (mode, msg) =
-            crate::p8_structure::kuna_gotoreduce::OptionGotoReduce.apply(p1)?;
-        self.goto_reduce = mode;
-        Ok(msg)
-    },
+    "condstmts" => registered!(crate::p8_structure::kuna_condstmts::CondStmts),
+    "gotoreduce" => registered!(crate::p8_structure::kuna_gotoreduce::GotoReduceMode),
     "ifelseflatten" => {
         let (val, msg) =
             crate::p8_structure::kuna_ifelseflatten::OptionIfElseFlatten.apply(p1)?;

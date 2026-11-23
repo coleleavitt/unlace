@@ -1370,7 +1370,11 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
         state: &mut crate::varmap::MapState,
         bounds: Option<&crate::varmap::ProtoBoundaries>,
     ) -> Vec<super::kuna_arrayextent::OpenBase> {
-        let extent = self.get_arch().array_extent;
+        let extent = self
+            .get_arch()
+            .kuna_options
+            .get::<crate::p6_variables::kuna_arrayextent::ArrayExtent>()
+            .0;
         let mut unbounded = Vec::new();
         // checker.gather(&fd, spaceid, false): build the alias base/offset lists.
         let mut access = FuncdataAliasAccess {

@@ -64,12 +64,35 @@ const PADDING: intb = 15;
 /// Largest count read.
 const MAX_BYTES: intb = 1 << 24;
 
+/// The `arraysize` level (0 = off).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArraySize(pub int4);
+
+impl crate::kuna_optionset::KunaOption for ArraySize {
+    const NAME: &'static str = "arraysize";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ArraySize(0)
+    }
+
+    fn shipped() -> Self {
+        ArraySize(LEVEL_ON)
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        OptionArraySize
+            .apply(value)
+            .map(|(v, msg)| (ArraySize(v), msg))
+    }
+}
+
 /// `option arraysize off|on|calls`.
 pub struct OptionArraySize;
 
 impl OptionArraySize {
     /// Parse the level and its confirmation message; the caller writes it into
-    /// `Architecture::array_size`.
+    /// the registered option `ArraySize`.
     pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
         match p1 {
             "off" => Ok((LEVEL_OFF, "Stack buffer sizing from call lengths turned off".to_string())),
@@ -582,7 +605,7 @@ fn trace(fd: &Funcdata, base: VarnodeId, offset: intb, stored: &StoredResults) -
 /// writes one terminator byte at that result (`n = readlink(p, buf, len);
 /// buf[n] = 0;`), is one byte more.
 pub(super) fn gather(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
-    let level = fd.get_arch().array_size;
+    let level = fd.get_arch().kuna_options.get::<ArraySize>().0;
     if level == LEVEL_OFF {
         return;
     }

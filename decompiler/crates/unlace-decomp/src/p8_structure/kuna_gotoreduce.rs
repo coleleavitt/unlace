@@ -78,6 +78,23 @@ pub enum GotoReduceMode {
     On,
 }
 
+impl crate::kuna_optionset::KunaOption for GotoReduceMode {
+    const NAME: &'static str = "gotoreduce";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        GotoReduceMode::Off
+    }
+
+    fn shipped() -> Self {
+        GotoReduceMode::On
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionGotoReduce.apply(value)
+    }
+}
+
 impl GotoReduceMode {
     /// The option token.
     pub fn as_str(self) -> &'static str {
@@ -130,7 +147,12 @@ impl Action for ActionGotoReduce {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().goto_reduce.return_tails() {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<GotoReduceMode>()
+            .return_tails()
+        {
             return 0;
         }
         if data.sblocks_get_size() == 0 {

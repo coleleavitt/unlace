@@ -3462,7 +3462,10 @@ impl Funcdata {
             }
             // (kuna `retsplitlimit`) a block too big to clone this many times keeps its gotos.
             if crate::p8_structure::kuna_retsplitlimit::split_is_declined(
-                self.get_arch().ret_split_limit,
+                self.get_arch()
+                    .kuna_options
+                    .get::<crate::p8_structure::kuna_retsplitlimit::RetSplitLimit>()
+                    .0,
                 self.bb_op_count(parent),
                 retnode.len() - first,
             ) {

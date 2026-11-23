@@ -26,7 +26,30 @@ pub const ELEM_RETSPLITLIMIT: ElementId = ElementId::new("retsplitlimit", 4179);
 /// cloned ops.
 pub const DEFAULT_LIMIT: u64 = 1 << 20;
 
-/// The `retsplitlimit off|<n>` option (`Architecture::ret_split_limit`).
+/// The `retsplitlimit` setting: the clone budget of a return-block split, or none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RetSplitLimit(pub Option<u64>);
+
+impl crate::kuna_optionset::KunaOption for RetSplitLimit {
+    const NAME: &'static str = "retsplitlimit";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        RetSplitLimit(None)
+    }
+
+    fn shipped() -> Self {
+        RetSplitLimit(Some(DEFAULT_LIMIT))
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        OptionRetSplitLimit
+            .apply(value)
+            .map(|(v, msg)| (RetSplitLimit(v), msg))
+    }
+}
+
+/// The `retsplitlimit off|<n>` option (the registered option `RetSplitLimit`).
 pub struct OptionRetSplitLimit;
 
 impl OptionRetSplitLimit {

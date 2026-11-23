@@ -124,7 +124,8 @@ fn kuna_anchor_flags_default_to_div_values() {
     assert!(arch.switch_multi_pred);
     assert!(arch.region_loop_refine);
     assert_eq!(
-        arch.goto_reduce,
+        arch.kuna_options
+            .get::<crate::p8_structure::kuna_gotoreduce::GotoReduceMode>(),
         crate::p8_structure::kuna_gotoreduce::GotoReduceMode::On
     );
     assert!(arch.flatten_ifelse);

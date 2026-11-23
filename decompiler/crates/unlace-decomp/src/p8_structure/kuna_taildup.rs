@@ -142,7 +142,12 @@ impl Action for ActionTailDup {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().goto_reduce.call_tails() {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<super::kuna_gotoreduce::GotoReduceMode>()
+            .call_tails()
+        {
             return 0;
         }
         if data.sblocks_get_size() == 0 {

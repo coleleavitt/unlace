@@ -525,9 +525,7 @@ pub fn publish_mips(
     {
         return 0;
     }
-    arch.kuna_tables
-        .get::<crate::p4_calls::kuna_callwide::ProofSlot>()
-        .0 = proof::prove(
+    let proven = proof::prove(
         arch,
         regions,
         functions,
@@ -535,6 +533,9 @@ pub fn publish_mips(
         declarations,
         proof::Authority::SealedMips,
     );
+    arch.kuna_tables
+        .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+        .0 = proven;
     arch.kuna_tables
         .get::<crate::p4_calls::kuna_callwide::ProofSlot>()
         .len()

@@ -1185,6 +1185,12 @@ kuna_options! { self, p1;
     "osclassinfo" => on_off!(analysis_osclassinfo, "DriverKit __osclassinfo class records"),
     "swiftcall" => on_off!(analysis_swiftcall, "Swift calling convention on methods and witnesses"),
     "swiftruntime" => on_off!(analysis_swiftruntime, "Swift runtime prototypes"),
+    "typelib" => {
+        let choice = crate::kuna_typelib::TypeLib::parse(p1).map_err(KunaError::parse)?;
+        let msg = format!("Type library set to {}", choice.as_str());
+        self.analysis_typelib = choice;
+        Ok(msg)
+    },
     "pdb" => on_off!(analysis_pdb, "PE PDB metadata recovery pass"),
     "macho-arm64e" => {
         let val = on_or_off(p1)?;

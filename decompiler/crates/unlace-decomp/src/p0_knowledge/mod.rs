@@ -62,6 +62,8 @@ pub mod kuna_langfacet;
 // (load-time, env-bridged).
 pub mod kuna_libctypes;
 pub mod kuna_loadoptions;
+// (kuna) The prebuilt type library a load reads (`typelib`).
+pub mod kuna_typelib;
 // (kuna) DWARF variant-part (discriminated-union) import option gate
 // (load-time, env-bridged) plus the recovered-layout side table.
 pub mod kuna_dwarfvariants;

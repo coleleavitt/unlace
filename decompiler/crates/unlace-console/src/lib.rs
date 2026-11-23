@@ -51,6 +51,7 @@ pub mod kuna_lazyfuncs;
 mod kuna_paramasserts;
 mod kuna_qualifiedstorage;
 pub mod kuna_retcallchain;
+pub mod kuna_typelib;
 pub mod litpool;
 pub mod project;
 pub mod project_stream;

@@ -60,7 +60,7 @@ use crate::context::{ArchContext, ArchHandle};
 use crate::database::Database;
 use crate::dtype::{TypeFactory, TypeFactoryImpl, type_metatype};
 use crate::engine_translate::EngineTranslate;
-use crate::flow::flow_flags;
+use crate::flow_flags;
 use crate::fspec::ProtoModel;
 use crate::funcdata::Funcdata;
 use crate::inject_sleigh::PcodeInjectLibrarySleigh;

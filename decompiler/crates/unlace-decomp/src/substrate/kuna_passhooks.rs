@@ -32,7 +32,9 @@ use crate::fspec::{
     ParameterPieces, ProtoModel, PrototypePieces, Widen,
 };
 use crate::funcdata::Funcdata;
-use crate::heritage::{Guard, LiveCalls, LoadGuard, MemoryOps, StoreBounds};
+use crate::funcdata_block::HeadOperand;
+use crate::funcdata_varnode::{Forced, Reach};
+use crate::heritage::{Guard, LiveCalls, LoadGuard, MemoryOps, StoreBounds, WidePair};
 use crate::jumptable::{GuardRecord, LoadTable};
 use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 use crate::merge::MergeContext;
@@ -473,4 +475,16 @@ declare_hooks! {
     x87emptyreturn_storage: fn(&Architecture) -> Option<Storage>;
     /// `kuna_arraysize::fit`.
     arraysize_fit: fn(&RangeHint, intb, intb, &MapState) -> Option<int4>;
+    /// `kuna_condexeretuse::any_retest_merge`.
+    condexeretuse_any_retest_merge: fn(&Funcdata, &[(OpId, VarnodeId)]) -> bool;
+    /// `kuna_condexeretuse::applies`.
+    condexeretuse_applies: fn(&Funcdata, OpId) -> bool;
+    /// `kuna_condexeretuse::cannot_arrive`.
+    condexeretuse_cannot_arrive: fn(&Funcdata, Forced, OpId, &mut Reach) -> bool;
+    /// `kuna_condexeretuse::carried`.
+    condexeretuse_carried: fn(&Funcdata, OpId, VarnodeId, Option<Forced>) -> Option<Forced>;
+    /// `kuna_loweredswitchvalue::head_compare_operand`.
+    loweredswitchvalue_head_compare_operand: fn(&Funcdata, BlockId, OpId, &Address, int4) -> Option<HeadOperand>;
+    /// `kuna_bejoin::wide_pair`.
+    bejoin_wide_pair: fn(&ProtoModel, &AddrSpaceManager) -> Option<WidePair>;
 }

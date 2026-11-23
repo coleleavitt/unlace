@@ -2401,10 +2401,11 @@ impl Funcdata {
         // intact so heritage threads SSA through it and the printer names it.
         // (kuna `loweredswitchvalue`) Prefer what the head compare itself reads:
         // `var_addr` need not hold the compared value at the head.
-        use crate::p2_lift::kuna_loweredswitchvalue::{HeadOperand, head_compare_operand};
         let head_operand = if prefer_head_operand {
-            head_compare_operand(self, head, cbranch, var_addr, var_size)
-                .filter(|op| *op != HeadOperand::Storage(var_addr.clone()))
+            (self.hooks().loweredswitchvalue_head_compare_operand)(
+                self, head, cbranch, var_addr, var_size,
+            )
+            .filter(|op| *op != HeadOperand::Storage(var_addr.clone()))
         } else {
             None
         };
@@ -2821,8 +2822,8 @@ impl Funcdata {
         &mut self,
         op: OpId,
         record_loads: bool,
-        visited: &crate::flow::VisitedMap,
-        run_pipeline: &mut crate::flow::JtPipelineFn<'_>,
+        visited: &VisitedMap,
+        run_pipeline: &mut JtPipelineFn<'_>,
         shared: &mut Option<Funcdata>,
     ) -> Result<Option<usize>, crate::jumptable::RecoveryMode> {
         use crate::jumptable::RecoveryMode;
@@ -2878,8 +2879,8 @@ impl Funcdata {
         jt_idx: usize,
         op: OpId,
         record_loads: bool,
-        visited: &crate::flow::VisitedMap,
-        run_pipeline: &mut crate::flow::JtPipelineFn<'_>,
+        visited: &VisitedMap,
+        run_pipeline: &mut JtPipelineFn<'_>,
         shared: &mut Option<Funcdata>,
     ) -> crate::jumptable::RecoveryMode {
         use crate::jumptable::RecoveryMode;
@@ -4785,7 +4786,7 @@ impl CloneBlockOps {
         let idx = data.get_call_specs_index(orig_op)?;
         let spec = data.get_call_specs(idx).clone_for_op(clone_op);
         let new_idx = data.push_call_specs(spec);
-        let handle = crate::flow::next_fspec_handle();
+        let handle = crate::fspec::next_fspec_handle();
         let style = data.get_arch().kuna_name_style();
         data.get_call_specs(new_idx)
             .register_in_fspec_space(handle, style);
@@ -4960,6 +4961,38 @@ crate::kuna_flag!(
     unset: false,
     shipped: true
 );
+
+/// \brief A helper describing the number of bytes in a machine instruction and
+/// the starting p-code op (C++ `struct FlowInfo::VisitStat`, `flow.hh:77`).
+#[derive(Debug, Clone)]
+pub struct VisitStat {
+    /// Sequence number of first PcodeOp in the instruction (or INVALID if no
+    /// p-code) (C++ `seqnum`).
+    pub seqnum: unlace_base::address::SeqNum,
+    /// Number of bytes in the instruction (C++ `size`).
+    pub size: int4,
+}
+
+/// The flow's instruction-boundary map (C++ `FlowInfo::visited`).  A type alias
+/// so the jump-table recovery's partial-clone seeding signatures stay readable.
+/// (`Address` is logically immutable as a key — its interior is a memoized space
+/// lookup, never mutated through a `&` key — so the `clippy::mutable_key_type`
+/// lints on the public signatures using it are `#[allow]`ed.)
+pub type VisitedMap = std::collections::BTreeMap<Address, VisitStat>;
+
+/// The reduced "jumptable" action-pipeline runner the recovery chain calls per
+/// partial clone (it builds the partial's blocks + runs the action set).  Type
+/// alias to keep the recovery signatures from tripping `clippy::type_complexity`.
+pub type JtPipelineFn<'a> = dyn FnMut(&mut Funcdata, &VisitedMap) -> KunaResult<()> + 'a;
+
+/// What the synthesized `BRANCHIND` reads.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HeadOperand {
+    /// A fresh read of this storage at the end of the head block.
+    Storage(Address),
+    /// The output of a load the head compare reads.
+    Value(VarnodeId),
+}
 
 #[cfg(test)]
 mod tests {

@@ -2503,9 +2503,8 @@ impl Funcdata {
         trial: &crate::fspec::ParamTrial,
         main_flags: unlace_base::types::uint4,
     ) -> bool {
-        use crate::p4_calls::kuna_condexeretuse as retest;
         let mut entered = Vec::new();
-        let noting = retest::applies(self, opmatch);
+        let noting = (self.hooks().condexeretuse_applies)(self, opmatch);
         if self.only_op_use_walk(
             invn,
             opmatch,
@@ -2517,7 +2516,7 @@ impl Funcdata {
             return true;
         }
         noting
-            && retest::any_retest_merge(self, &entered)
+            && (self.hooks().condexeretuse_any_retest_merge)(self, &entered)
             && self.only_op_use_walk(invn, opmatch, trial, main_flags, None, true)
     }
 
@@ -2537,12 +2536,11 @@ impl Funcdata {
     ) -> bool {
         use crate::context::OpId as OId;
         use crate::expression::{TraverseNode, traverse_flags};
-        use crate::p4_calls::kuna_condexeretuse as retest;
         let mut res = true;
         // varlist holds (vn, flags, forced); invn marked to prevent infinite loops.
-        let mut varlist: Vec<(VarnodeId, unlace_base::types::uint4, Option<retest::Forced>)> =
+        let mut varlist: Vec<(VarnodeId, unlace_base::types::uint4, Option<Forced>)> =
             Vec::with_capacity(64);
-        let mut reach = retest::Reach::default();
+        let mut reach = Reach::default();
         self.vbank_mut()
             .get_mut(invn)
             .expect("onlyOpUse: stale invn")
@@ -2567,7 +2565,9 @@ impl Funcdata {
                 None => Vec::new(),
             };
             for op in descend {
-                if forced.is_some_and(|f| retest::cannot_arrive(self, f, op, &mut reach)) {
+                if forced.is_some_and(|f| {
+                    (self.hooks().condexeretuse_cannot_arrive)(self, f, op, &mut reach)
+                }) {
                     continue;
                 }
                 // (kuna) An `INT_XOR`/`INT_SUB` of a value with itself is `0`
@@ -2763,7 +2763,7 @@ impl Funcdata {
                         e.push((op, vn));
                     }
                     let carry = if by_merge {
-                        retest::carried(self, op, vn, forced)
+                        (self.hooks().condexeretuse_carried)(self, op, vn, forced)
                     } else {
                         None
                     };
@@ -4015,6 +4015,23 @@ pub(crate) fn op_iop_encode(op: OpId) -> uintb {
 /// placeholder.
 pub(crate) fn op_iop_decode(val: uintb) -> OpId {
     OpId::from(slotmap::KeyData::from_ffi(val))
+}
+
+/// A merge block that re-tests its init block's condition, and the out block
+/// it branches to for the value carrying this.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Forced {
+    pub merge: crate::context::BlockId,
+    pub next: crate::context::BlockId,
+}
+
+/// Blocks reachable from each forced out block, computed once per walk.
+#[derive(Default)]
+pub struct Reach {
+    pub(crate) sets: std::collections::HashMap<
+        crate::context::BlockId,
+        Option<std::collections::HashSet<crate::context::BlockId>>,
+    >,
 }
 
 #[cfg(test)]

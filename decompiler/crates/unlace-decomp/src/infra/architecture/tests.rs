@@ -20,7 +20,7 @@ use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::{Translate, UniqueLayout};
 
 use super::*;
-use crate::flow::flow_flags;
+use crate::flow_flags;
 use crate::options::split_datatype;
 
 struct DummyImg;

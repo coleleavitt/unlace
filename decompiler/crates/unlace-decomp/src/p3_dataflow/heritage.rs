@@ -3215,7 +3215,7 @@ impl Heritage {
         size: int4,
     ) {
         let split = fd.get_func_proto().has_model()
-            && crate::kuna_bejoin::wide_pair(fd.get_func_proto().model(), fd.get_arch().manage())
+            && (fd.hooks().bejoin_wide_pair)(fd.get_func_proto().model(), fd.get_arch().manage())
                 .is_some_and(|pair| pair.hi.1 == 4 && pair.lo.1 == 4);
         self.guard_returns_in_range(fd, addr, size, addr, size, true, split);
     }
@@ -7186,6 +7186,14 @@ pub struct Guard {
     pub(crate) size: unlace_base::types::int4,
     pub(crate) writes: Vec<crate::context::VarnodeId>,
     pub(crate) loads: Vec<crate::context::OpId>,
+}
+
+/// The model's two-register output pair, high word's register first, with
+/// the space each lies in.
+#[derive(Clone, Debug)]
+pub struct WidePair {
+    pub hi: (unlace_base::address::Address, unlace_base::types::int4),
+    pub lo: (unlace_base::address::Address, unlace_base::types::int4),
 }
 
 #[cfg(test)]

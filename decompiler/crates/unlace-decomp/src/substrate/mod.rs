@@ -12,6 +12,7 @@ pub mod context;
 pub mod cpool;
 pub mod dtype;
 pub mod expression;
+pub mod flow_flags;
 pub mod funcdata;
 pub mod funcdata_block;
 pub mod funcdata_encode;

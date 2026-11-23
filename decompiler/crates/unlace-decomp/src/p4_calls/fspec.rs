@@ -9074,5 +9074,19 @@ pub enum Widen {
     Word,
 }
 
+/// Allocate a process-unique \e fspec handle (the offset of the \e fspec
+/// annotation address).  In C++ the offset is the raw `FuncCallSpecs *`, a unique
+/// process pointer; here a monotonic counter plays the same role, registered in
+/// the fspec-space side table ([`FuncCallSpecs::register_in_fspec_space`]).  The
+/// handle is never used as a `qlst` index (call specs are looked up by op), so a
+/// simple ever-increasing id is sufficient and stable across `sortCallSpecs`.
+pub(crate) fn next_fspec_handle() -> unlace_base::types::uintb {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    // Start above 0 so the handle is never confused with a null offset; the high
+    // bit is left clear so the value is a valid (small) address offset.
+    static NEXT: AtomicU64 = AtomicU64::new(0x10000);
+    NEXT.fetch_add(1, Ordering::Relaxed)
+}
+
 #[cfg(test)]
 mod tests;

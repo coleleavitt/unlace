@@ -51,7 +51,9 @@
 //! because the uses it skipped are then real for the other route. Call-site
 //! input trials are left alone.
 
-use std::collections::{HashMap, HashSet};
+pub use crate::funcdata_varnode::Forced;
+pub use crate::funcdata_varnode::Reach;
+use std::collections::HashSet;
 
 use unlace_num::opcodes::OpCode;
 
@@ -62,14 +64,6 @@ use crate::funcdata::Funcdata;
 /// Cap on blocks visited by one reachability walk; exceeding it treats every
 /// block as reachable, which keeps the upstream rejection.
 const MAX_VISIT: usize = 4096;
-
-/// A merge block that re-tests its init block's condition, and the out block
-/// it branches to for the value carrying this.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Forced {
-    pub merge: BlockId,
-    pub next: BlockId,
-}
 
 /// Whether the walk matched at `opmatch` may take re-tested merges into
 /// account: the match is a RETURN.
@@ -110,12 +104,6 @@ fn entered_merge(data: &Funcdata, op: OpId, vn: VarnodeId, bl: BlockId) -> Optio
     };
     let next = ConditionalExecution::forced_out_block(data, bl, slot)?;
     Some(Forced { merge: bl, next })
-}
-
-/// Blocks reachable from each forced out block, computed once per walk.
-#[derive(Default)]
-pub struct Reach {
-    sets: HashMap<BlockId, Option<HashSet<BlockId>>>,
 }
 
 /// Whether `op` is a use the value carrying `f` can never arrive at: it sits
@@ -169,6 +157,14 @@ fn reachable_from(data: &Funcdata, from: BlockId) -> Option<HashSet<BlockId>> {
         }
     }
     Some(blocks)
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.condexeretuse_any_retest_merge = Some(any_retest_merge);
+    hooks.condexeretuse_applies = Some(applies);
+    hooks.condexeretuse_cannot_arrive = Some(cannot_arrive);
+    hooks.condexeretuse_carried = Some(carried);
 }
 
 #[cfg(test)]

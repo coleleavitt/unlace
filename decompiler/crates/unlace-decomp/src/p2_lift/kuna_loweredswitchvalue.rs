@@ -16,6 +16,7 @@
 //! more over the recorded storage and then withdrawn, and the cascade renders as
 //! `option loweredswitch off` renders it.
 
+pub use crate::funcdata_block::HeadOperand;
 use std::collections::BTreeSet;
 
 use unlace_base::address::Address;
@@ -383,15 +384,6 @@ fn classify_value(
     }
 }
 
-/// What the synthesized `BRANCHIND` reads.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum HeadOperand {
-    /// A fresh read of this storage at the end of the head block.
-    Storage(Address),
-    /// The output of a load the head compare reads.
-    Value(VarnodeId),
-}
-
 /// The operand the compare at the end of `head` reads, from raw p-code.
 ///
 /// Walks the condition of `cbranch` back through the head block, and through its
@@ -681,6 +673,11 @@ pub(crate) fn verify_installed_switch_values(
         drop(store);
         data.set_restart_pending(true);
     }
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.loweredswitchvalue_head_compare_operand = Some(head_compare_operand);
 }
 
 #[cfg(test)]

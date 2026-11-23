@@ -1007,7 +1007,7 @@ pointer Varnodes become the
 sinks of a `ValueSetSolver` system (the solver itself — constraint
 generation, weak topological ordering, widening — is chapter
 [05](05-types.md)'s machinery in
-`decompiler/crates/unlace-decomp/src/p5_types/rangeutil.rs (ValueSetSolver)`),
+`decompiler/crates/unlace-decomp/src/substrate/rangeutil.rs (ValueSetSolver)`),
 one cheap `WidenerNone` solve seeds each guard
 (`heritage.rs (LoadGuard::establish_range)`: minimum from the stable range
 bound or the pointer base, step recorded only when the partial analysis shows

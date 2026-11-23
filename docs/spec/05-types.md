@@ -3663,7 +3663,7 @@ the archived stage-model study (git history) §7.3; every claim below is re-veri
 the Rust).
 
 **Circular ranges.**
-`decompiler/crates/unlace-decomp/src/p5_types/rangeutil.rs (CircleRange)` is the
+`decompiler/crates/unlace-decomp/src/substrate/rangeutil.rs (CircleRange)` is the
 value domain: a half-open interval `[left, right)` on the circle of integers
 mod 2^n, with an optional power-of-two step. The circle (rather than a plain
 interval) is what lets one object exactly represent "signed negative", a
@@ -3698,7 +3698,7 @@ reached by iteration **3**. The reason for the two-stage schedule: one cheap
 guess (the landmark) is usually exactly the loop bound, and if it is not, more
 iteration is wasted work.
 
-The solver is bound to the live IR. `decompiler/crates/unlace-decomp/src/p5_types/rangeutil.rs
+The solver is bound to the live IR. `decompiler/crates/unlace-decomp/src/substrate/rangeutil.rs
 (ValueSetSolver::establish_value_sets)` seeds the system from a set of sink
 Varnodes (walking each sink's def chain and stopping at ops whose integer
 range is unknowable — calls, LOADs, floating point — which enter as

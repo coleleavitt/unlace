@@ -569,69 +569,6 @@ fn reg_and_stack_model(
 }
 
 #[test]
-fn consume_as_assigns_general_register() {
-    let mgr = AddrSpaceManager::new();
-    let reg = reg_space_le();
-    let model = single_reg_model(&mgr, &reg);
-    let action = AssignAction::ConsumeAs {
-        resource_type: type_class::TYPECLASS_GENERAL,
-    };
-    let mut status = vec![0i32; 2];
-    let mut res = ParameterPieces::default();
-    let dt = dt_int(4);
-    let r = action
-        .assign_address(
-            &dt,
-            &proto_empty(),
-            0,
-            &PanicFactory,
-            &mut status,
-            &mut res,
-            &model,
-            &mgr,
-        )
-        .unwrap();
-    assert_eq!(r, AssignActionResponse::success);
-    assert_eq!(res.addr.get_offset(), 0x10);
-    assert_eq!(status[0], -1); // register consumed
-}
-
-#[test]
-fn goto_stack_assigns_stack_slot() {
-    let mgr = AddrSpaceManager::new();
-    let reg = reg_space_le();
-    let stk = stack_space();
-    let model = reg_and_stack_model(&mgr, &reg, &stk);
-    let mut action = AssignAction::GotoStack { stack_entry: None };
-    action.initialize(&model).unwrap();
-    let mut status = vec![0i32; 2];
-    let mut res = ParameterPieces::default();
-    let dt = dt_int(4);
-    let r = action
-        .assign_address(
-            &dt,
-            &proto_empty(),
-            0,
-            &PanicFactory,
-            &mut status,
-            &mut res,
-            &model,
-            &mgr,
-        )
-        .unwrap();
-    assert_eq!(r, AssignActionResponse::success);
-    // Stack slot at offset 0 (group 1 consumed one slot).
-    assert!(
-        res.addr
-            .get_space()
-            .map(|s| Rc::ptr_eq(s, &stk))
-            .unwrap_or(false)
-    );
-    assert_eq!(res.addr.get_offset(), 0x0);
-    assert_eq!(status[1], 1); // one stack slot consumed
-}
-
-#[test]
 fn hidden_return_signals_code() {
     let mgr = AddrSpaceManager::new();
     let reg = reg_space_le();
@@ -817,37 +754,6 @@ fn extra_stack_noop_when_already_on_stack() {
     assert_eq!(status[1], 0); // stack not further consumed
 }
 
-#[test]
-fn convert_to_pointer_recurses_and_marks_indirect() {
-    let mgr = AddrSpaceManager::new();
-    let reg = reg_space_le();
-    let model = single_reg_model(&mgr, &reg);
-    // space=Some(reg) so we don't need a default data space in the manager.
-    let action = AssignAction::ConvertToPointer {
-        space: Some(Rc::clone(&reg)),
-    };
-    let mut status = vec![0i32; 2];
-    let mut res = ParameterPieces::default();
-    let dt = dt_struct(64, 4, &[(0, dt_int(4))]); // big aggregate passed by pointer
-    let factory = PointerFactory;
-    let r = action
-        .assign_address(
-            &dt,
-            &proto_empty(),
-            0,
-            &factory,
-            &mut status,
-            &mut res,
-            &model,
-            &mgr,
-        )
-        .unwrap();
-    assert_eq!(r, AssignActionResponse::success);
-    // The pointer (4 bytes) was assigned to the register.
-    assert_eq!(res.addr.get_offset(), 0x10);
-    assert_eq!(res.flags, parameter_pieces_flags::INDIRECTSTORAGE);
-}
-
 // =========================================================================
 // fillinOutputMap
 // =========================================================================
@@ -957,131 +863,6 @@ fn decode_rule(
 }
 
 #[test]
-fn decode_rule_consume_general() {
-    let mgr = AddrSpaceManager::new();
-    let reg = reg_space_le();
-    let model = single_reg_model(&mgr, &reg);
-    let rule = decode_rule(
-        r#"<rule><datatype name="float"/><consume storage="general"/></rule>"#,
-        &model,
-        &mgr,
-    )
-    .expect("decode rule");
-    // The rule's filter accepts a float and rejects an int.
-    let mut status = vec![0i32; 2];
-    let mut res = ParameterPieces::default();
-    let r = rule
-        .assign_address(
-            &dt_int(4),
-            &proto_empty(),
-            0,
-            &PanicFactory,
-            &mut status,
-            &mut res,
-            &model,
-            &mgr,
-        )
-        .unwrap();
-    assert_eq!(r, AssignActionResponse::fail); // datatype filter (float) rejects int
-    let mut status2 = vec![0i32; 2];
-    let mut res2 = ParameterPieces::default();
-    let r2 = rule
-        .assign_address(
-            &dt_float(4),
-            &proto_empty(),
-            0,
-            &PanicFactory,
-            &mut status2,
-            &mut res2,
-            &model,
-            &mgr,
-        )
-        .unwrap();
-    assert_eq!(r2, AssignActionResponse::success);
-    assert_eq!(res2.addr.get_offset(), 0x10);
-}
-
-#[test]
-fn decode_rule_goto_stack() {
-    let mgr = AddrSpaceManager::new();
-    let reg = reg_space_le();
-    let stk = stack_space();
-    let model = reg_and_stack_model(&mgr, &reg, &stk);
-    let rule = decode_rule(
-        r#"<rule><datatype name="any"/><goto_stack/></rule>"#,
-        &model,
-        &mgr,
-    )
-    .expect("decode rule");
-    let mut status = vec![0i32; 2];
-    let mut res = ParameterPieces::default();
-    let r = rule
-        .assign_address(
-            &dt_int(4),
-            &proto_empty(),
-            0,
-            &PanicFactory,
-            &mut status,
-            &mut res,
-            &model,
-            &mgr,
-        )
-        .unwrap();
-    assert_eq!(r, AssignActionResponse::success);
-    assert!(
-        res.addr
-            .get_space()
-            .map(|s| Rc::ptr_eq(s, &stk))
-            .unwrap_or(false)
-    );
-}
-
-#[test]
-fn register_ids_drives_production_rule_decode() {
-    // The architecture cspec loader builds its decode registry as
-    // `IdRegistry::with_base_ids()` + `modelrules::register_ids(..)`; verify that
-    // production registration (NOT the test-only `modelrules_registry`) carries
-    // every id `ModelRule::decode` consults, by decoding a `<rule>` through it.
-    use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode};
-    let mgr = AddrSpaceManager::new();
-    let reg = reg_space_le();
-    let stk = stack_space();
-    let model = reg_and_stack_model(&mgr, &reg, &stk);
-    let mut registry = IdRegistry::with_base_ids();
-    crate::modelrules::register_ids(&mut registry);
-    let mut decoder = XmlDecode::new(&mgr, &registry);
-    decoder
-        .ingest_stream(br#"<rule><datatype name="any"/><goto_stack/></rule>"#)
-        .expect("ingest");
-    let rule = ModelRule::decode(&mut decoder, &model).expect("decode via register_ids");
-    // The decoded goto_stack rule routes any type to the stack resource (its
-    // canAffectFillinOutput is true), proving the `<rule>`/`<goto_stack>`/
-    // `<datatype>` element ids and the action all resolved through register_ids.
-    assert!(rule.can_affect_fillin_output());
-    let mut status = vec![0i32; 2];
-    let mut res = ParameterPieces::default();
-    let r = rule
-        .assign_address(
-            &dt_int(4),
-            &proto_empty(),
-            0,
-            &PanicFactory,
-            &mut status,
-            &mut res,
-            &model,
-            &mgr,
-        )
-        .unwrap();
-    assert_eq!(r, AssignActionResponse::success);
-    assert!(
-        res.addr
-            .get_space()
-            .map(|s| Rc::ptr_eq(s, &stk))
-            .unwrap_or(false)
-    );
-}
-
-#[test]
 fn w10_float_typeclass_register_ids_decodes_hidden_return_strategy() {
     // Adversarial (verifier): the production `register_ids` registry must carry
     // the multi-element `<hidden_return strategy="...">` rule — the exact rule
@@ -1122,52 +903,6 @@ fn w10_float_typeclass_register_ids_decodes_hidden_return_strategy() {
     // resolved through register_ids, the default (`special`) strategy would yield
     // hiddenret_specialreg instead — so this distinguishes the two registrations.
     assert_eq!(r, AssignActionResponse::hiddenret_ptrparam);
-}
-
-#[test]
-fn decode_rule_with_position_qualifier() {
-    let mgr = AddrSpaceManager::new();
-    let reg = reg_space_le();
-    let model = single_reg_model(&mgr, &reg);
-    let rule = decode_rule(
-        r#"<rule><datatype name="any"/><position index="0"/><consume storage="general"/></rule>"#,
-        &model,
-        &mgr,
-    )
-    .expect("decode rule");
-    // Qualifier passes at pos 0, fails elsewhere.
-    let mut status = vec![0i32; 2];
-    let mut res = ParameterPieces::default();
-    assert_eq!(
-        rule.assign_address(
-            &dt_int(4),
-            &proto_empty(),
-            0,
-            &PanicFactory,
-            &mut status,
-            &mut res,
-            &model,
-            &mgr
-        )
-        .unwrap(),
-        AssignActionResponse::success
-    );
-    let mut status2 = vec![0i32; 2];
-    let mut res2 = ParameterPieces::default();
-    assert_eq!(
-        rule.assign_address(
-            &dt_int(4),
-            &proto_empty(),
-            1,
-            &PanicFactory,
-            &mut status2,
-            &mut res2,
-            &model,
-            &mgr
-        )
-        .unwrap(),
-        AssignActionResponse::fail
-    );
 }
 
 #[test]
@@ -1231,98 +966,12 @@ fn dual_alignment_requires_shared_slots_and_is_explicitly_opted_in() {
     }
 }
 
-#[test]
-fn decode_rule_size_restricted_filter() {
-    let mgr = AddrSpaceManager::new();
-    let reg = reg_space_le();
-    let model = single_reg_model(&mgr, &reg);
-    let rule = decode_rule(
-        r#"<rule><datatype name="any" minsize="4" maxsize="4"/><consume storage="general"/></rule>"#,
-        &model,
-        &mgr,
-    )
-    .expect("decode rule");
-    // 4-byte type passes the size filter; an 8-byte one is rejected by the filter.
-    let mut s1 = vec![0i32; 2];
-    let mut r1 = ParameterPieces::default();
-    assert_eq!(
-        rule.assign_address(
-            &dt_int(4),
-            &proto_empty(),
-            0,
-            &PanicFactory,
-            &mut s1,
-            &mut r1,
-            &model,
-            &mgr
-        )
-        .unwrap(),
-        AssignActionResponse::success
-    );
-    let mut s2 = vec![0i32; 2];
-    let mut r2 = ParameterPieces::default();
-    assert_eq!(
-        rule.assign_address(
-            &dt_int(8),
-            &proto_empty(),
-            0,
-            &PanicFactory,
-            &mut s2,
-            &mut r2,
-            &model,
-            &mgr
-        )
-        .unwrap(),
-        AssignActionResponse::fail
-    );
-}
-
-#[test]
-fn decode_rule_consume_extra_sideeffect() {
-    // A rule with a consume_as action plus a consume_extra side-effect.
-    let mgr = AddrSpaceManager::new();
-    let reg = reg_space_le();
-    // Two general registers so the side-effect has something to consume.
-    let mut model = ParamListStandard::new(ParamListKind::Standard);
-    model.push_entry(excl_entry(0, &reg, 0x10, 4, &[], &mgr));
-    let e1 = excl_entry(1, &reg, 0x20, 4, model.get_entry(), &mgr);
-    model.push_entry(e1);
-    model.finish_decode();
-    let rule = decode_rule(
-        r#"<rule><datatype name="any"/><consume storage="general"/><consume_extra storage="general" matchsize="false"/></rule>"#,
-        &model,
-        &mgr,
-    )
-    .expect("decode rule");
-    let mut status = vec![0i32; 2];
-    let mut res = ParameterPieces::default();
-    let r = rule
-        .assign_address(
-            &dt_int(4),
-            &proto_empty(),
-            0,
-            &PanicFactory,
-            &mut status,
-            &mut res,
-            &model,
-            &mgr,
-        )
-        .unwrap();
-    assert_eq!(r, AssignActionResponse::success);
-    // The consume took group 0; the side-effect consumed group 1.
-    assert_eq!(status[0], -1);
-    assert_eq!(status[1], -1);
-}
-
 // =========================================================================
 // Test TypeFactory stubs
 // =========================================================================
 
 /// Panics on any reach; the actions that don't touch the type factory use this.
 struct PanicFactory;
-
-/// Returns a 4-byte pointer for `get_type_pointer`; everything else panics.
-struct PointerFactory;
 
 macro_rules! impl_type_factory {
     ($name:ident, $ptr_body:item) => {
@@ -1369,19 +1018,5 @@ impl_type_factory!(
     PanicFactory,
     fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> KunaResult<Rc<Datatype>> {
         panic!("type factory reached")
-    }
-);
-
-impl_type_factory!(
-    PointerFactory,
-    fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> KunaResult<Rc<Datatype>> {
-        let mut d = Datatype::new_with_align(s, s, type_metatype::TYPE_PTR);
-        d.kind = DatatypeKind::Pointer {
-            ptrto: pt,
-            spaceid: None,
-            truncate: None,
-            wordsize: ws,
-        };
-        Ok(Rc::new(d))
     }
 );

@@ -94,14 +94,16 @@ fn vn_get_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
         .get_def()
 }
 #[inline]
-fn vn_get_size(data: &Funcdata, vn: VarnodeId) -> int4 {
+#[doc(hidden)]
+pub fn vn_get_size(data: &Funcdata, vn: VarnodeId) -> int4 {
     data.vbank()
         .get(vn)
         .expect("prefersplit: stale vn")
         .get_size()
 }
 #[inline]
-fn vn_get_offset(data: &Funcdata, vn: VarnodeId) -> uintb {
+#[doc(hidden)]
+pub fn vn_get_offset(data: &Funcdata, vn: VarnodeId) -> uintb {
     data.vbank()
         .get(vn)
         .expect("prefersplit: stale vn")
@@ -163,11 +165,13 @@ fn lone_descend(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
 }
 
 #[inline]
-fn op_code(data: &Funcdata, op: OpId) -> OpCode {
+#[doc(hidden)]
+pub fn op_code(data: &Funcdata, op: OpId) -> OpCode {
     data.obank().get(op).expect("prefersplit: stale op").code()
 }
 #[inline]
-fn op_get_in(data: &Funcdata, op: OpId, slot: int4) -> VarnodeId {
+#[doc(hidden)]
+pub fn op_get_in(data: &Funcdata, op: OpId, slot: int4) -> VarnodeId {
     data.obank()
         .get(op)
         .expect("prefersplit: stale op")
@@ -175,7 +179,8 @@ fn op_get_in(data: &Funcdata, op: OpId, slot: int4) -> VarnodeId {
         .expect("prefersplit: missing input")
 }
 #[inline]
-fn op_get_out(data: &Funcdata, op: OpId) -> Option<VarnodeId> {
+#[doc(hidden)]
+pub fn op_get_out(data: &Funcdata, op: OpId) -> Option<VarnodeId> {
     data.obank()
         .get(op)
         .expect("prefersplit: stale op")
@@ -190,7 +195,8 @@ fn op_get_addr(data: &Funcdata, op: OpId) -> Address {
         .clone()
 }
 #[inline]
-fn op_is_dead(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn op_is_dead(data: &Funcdata, op: OpId) -> bool {
     data.obank()
         .get(op)
         .expect("prefersplit: stale op")

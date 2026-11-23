@@ -1,40 +1,13 @@
 use super::*;
 use crate::kuna_callwide::FuncdataCallwideExt;
 
-use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
-use unlace_sleigh::globalcontext::ContextInternal;
-use unlace_sleigh::loadimage::LoadImage;
-use unlace_sleigh::sleigh::Sleigh;
 
 use crate::context::{ArchContext, TypeOp, VarnodeId};
 use crate::kuna_bejoin::BeJoinMode;
-use crate::options::ArchOptionContext;
-
-struct NoImage;
-
-impl LoadImage for NoImage {
-    fn get_file_name(&self) -> &str {
-        "none"
-    }
-    fn load_fill(&mut self, _: &mut [u8], _: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("none"))
-    }
-    fn get_arch_type(&self) -> Vec<u8> {
-        Vec::new()
-    }
-    fn adjust_vma(&mut self, _: i64) {}
-}
-
-fn architecture() -> Architecture {
-    Architecture::new(
-        "test:BE:32",
-        Sleigh::new(Box::new(NoImage), Box::new(ContextInternal::new())),
-    )
-}
 
 fn data_and_proof() -> (Funcdata, Rc<Ledger>) {
     let mut manager = AddrSpaceManager::new();
@@ -298,48 +271,6 @@ fn project_declaration_refuses_unproved_or_mismatched_call_contracts() {
 }
 
 #[test]
-fn project_declaration_uses_final_operands_when_recovery_leaves_an_empty_proto() {
-    use crate::dtype::{Datatype, type_metatype};
-
-    for kind in [
-        None,
-        Some(type_metatype::TYPE_UINT),
-        Some(type_metatype::TYPE_UNKNOWN),
-    ] {
-        let (mut fd, proof, mut call) = export_call();
-        call.proto_mut().set_internal(
-            proof.model.clone(),
-            Rc::new(Datatype::new(0, type_metatype::TYPE_VOID)),
-        );
-        if let Some(kind) = kind {
-            let output = fd
-                .new_varnode_out(8, &proof.pair.hi.0, call.get_op())
-                .unwrap();
-            fd.vbank_mut().get_mut(output).unwrap().update_type_locked(
-                Rc::new(Datatype::new(8, kind)),
-                true,
-                true,
-            );
-        }
-        assert_eq!(call.proto().num_params(), 0);
-        assert_eq!(call.proto().get_output().get_size(), 0);
-        let (snapshot, contract) = call_prototype(&fd, &call, "producer").unwrap().unwrap();
-        assert_eq!(snapshot.num_params(), 4);
-        assert_eq!(contract.inputs, vec![true; 4]);
-        assert!(!contract.signed);
-        fd.get_func_proto_mut().copy(&snapshot);
-        assert!(
-            !definition_prototype(&fd, "producer")
-                .unwrap()
-                .unwrap()
-                .signed
-        );
-        call.set_final_input_storage(Vec::new());
-        assert!(call_prototype(&fd, &call, "producer").is_err());
-    }
-}
-
-#[test]
 fn project_declaration_requires_the_actual_wide_output_type() {
     use crate::dtype::{Datatype, type_metatype};
 
@@ -495,61 +426,6 @@ fn a_missing_second_slot_does_not_partially_activate_the_first() {
     active.get_trial_mut(1).mark_unref();
     retain_pair(&fd, &mut active, &[ret]);
     assert!((0..2).all(|i| !active.get_trial(i).is_active()));
-}
-
-#[test]
-fn every_model_mutation_revokes_an_already_seeded_drive() {
-    let mutations: &[fn(&mut Architecture)] = &[
-        |arch| arch.set_default_model_rc(Rc::new(ProtoModel::new(arch.manage()))),
-        |arch| arch.register_model(Rc::new(ProtoModel::new(arch.manage()))),
-        |arch| arch.set_function_prototype_model("f", Rc::new(ProtoModel::new(arch.manage()))),
-        |arch| {
-            let address = Address::new(Rc::new(ConstantSpace::new()), 0x1000);
-            arch.set_function_prototype_model_at(&address, Rc::new(ProtoModel::new(arch.manage())));
-        },
-        |arch| arch.build_default_proto(),
-        |arch| arch.set_cspec_xml(Vec::new()),
-        |arch| arch.set_default_extra_pop(4),
-        |arch| arch.set_flow_options(1),
-        |arch| arch.set_loader(Box::new(NoImage)),
-        |arch| {
-            arch.with_context_db_mut(|_| ());
-        },
-        |arch| {
-            let _ = arch.translate_mut();
-        },
-        |arch| {
-            arch.set_kuna_option("narrowext", "compiler").unwrap();
-        },
-    ];
-    for mutation in mutations {
-        let (fd, proof) = data_and_proof();
-        let mut arch = architecture();
-        *arch
-            .kuna_tables
-            .get_mut::<crate::kuna_callwide::ProofSlot>() = ProofSlot(Some(proof));
-        assert!(proven(&fd, fd.get_address()));
-        mutation(&mut arch);
-        assert!(!proven(&fd, fd.get_address()));
-    }
-}
-
-#[test]
-fn replaying_the_same_declared_model_does_not_split_a_batch() {
-    let (fd, proof) = data_and_proof();
-    let mut arch = architecture();
-    let model = Rc::new(ProtoModel::new(arch.manage()));
-    arch.set_function_prototype_model("f", model.clone());
-    arch.set_default_model_rc(model.clone());
-    arch.register_model(model.clone());
-    *arch
-        .kuna_tables
-        .get_mut::<crate::kuna_callwide::ProofSlot>() = ProofSlot(Some(proof));
-    arch.set_function_prototype_model("f", model.clone());
-    arch.set_default_model_rc(model.clone());
-    arch.register_model(model);
-    arch.with_context_db(|db| db.get_default_value().len());
-    assert!(proven(&fd, fd.get_address()));
 }
 
 #[test]

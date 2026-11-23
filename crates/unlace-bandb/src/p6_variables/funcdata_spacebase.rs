@@ -53,12 +53,6 @@ pub trait FuncdataSpacebaseExt {
     ) -> Option<(Rc<crate::dtype::Datatype>, int8)>;
     fn split_uses(&mut self, vn: VarnodeId);
     fn find_spacebase_input(&self, id: &Rc<unlace_base::space::AddrSpace>) -> Option<VarnodeId>;
-    fn query_local_properties(
-        &self,
-        addr: &Address,
-        size: int4,
-        usepoint: &Address,
-    ) -> unlace_base::types::uint4;
     fn restrict_local(&mut self);
     fn restructure_varnode(&mut self, aliasyes: bool) -> int4;
     fn check_unaliased_return(
@@ -403,25 +397,6 @@ impl FuncdataSpacebaseExt for Funcdata {
         let point_space = point.space.as_ref()?;
         let addr = Address::new(Rc::clone(point_space), point.offset);
         self.vbank().find_input(point.size as int4, &addr)
-    }
-
-    /// C++ `localmap->queryProperties(addr,size,usepoint,...)` for the local stack
-    /// scope (`database.cc:1268` via [`crate::varmap::ScopeLocal::query_properties`]):
-    /// the Varnode boolean properties (`mapped | addrtied | typelock | ...`) a
-    /// `map addr`-mapped stack range carries.  Returns `0` when there is no local
-    /// scope or the range is not in its map.  This is the local-scope half of the
-    /// `Heritage::guard` property walk; the global-scope half is
-    /// [`crate::context::ArchHandle::query_global_properties`].
-    fn query_local_properties(
-        &self,
-        addr: &Address,
-        size: int4,
-        usepoint: &Address,
-    ) -> unlace_base::types::uint4 {
-        match self.get_scope_local() {
-            Some(lm) => lm.query_properties(addr, size, usepoint),
-            None => 0,
-        }
     }
 
     /// C++ `ActionRestrictLocal::apply` (`coreaction.cc:2003-2059`): restrict the
@@ -2067,7 +2042,6 @@ fn stack_slot_aliased(
 
 /// Fill the spacebase and stack-alias hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
-    hooks.query_local_properties = Some(Funcdata::query_local_properties);
     hooks.find_spacebase_input = Some(Funcdata::find_spacebase_input);
     hooks.build_alias_checker_deferred = Some(Funcdata::build_alias_checker_deferred);
     hooks.stack_slot_aliased = Some(stack_slot_aliased);

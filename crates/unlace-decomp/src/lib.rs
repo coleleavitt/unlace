@@ -73,6 +73,13 @@ pub use unlace_middle::*;
 #[doc(hidden)]
 pub use unlace_structure::*;
 
+/// The pass hooks the driver's own modules provide (the option dispatch and the embedder
+/// hooks); [`PASS_HOOKS`] adds every lower crate's `provide_all` and the universal action.
+pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
+    crate::kuna_option_dispatch::provide(slots);
+    crate::kuna_hooks::provide(slots);
+}
+
 /// The `Funcdata`/`Datatype` extension traits whose methods were inherent before they moved
 /// out of the IR module; `use unlace_decomp::prelude::*;` brings every one into scope.
 pub mod prelude {

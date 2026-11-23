@@ -2035,6 +2035,20 @@ impl Funcdata {
         self.localmap.as_ref()
     }
 
+    /// C++ `localmap->queryProperties(addr,size,usepoint,...)` for the local stack
+    /// scope (`database.cc:1268` via [`crate::varmap::ScopeLocal::query_properties`]):
+    /// the Varnode boolean properties (`mapped | addrtied | typelock | ...`) a
+    /// `map addr`-mapped stack range carries.  Returns `0` when there is no local
+    /// scope or the range is not in its map.  This is the local-scope half of the
+    /// `Heritage::guard` property walk; the global-scope half is
+    /// [`crate::context::ArchHandle::query_global_properties`].
+    pub fn query_local_properties(&self, addr: &Address, size: int4, usepoint: &Address) -> uint4 {
+        match self.get_scope_local() {
+            Some(lm) => lm.query_properties(addr, size, usepoint),
+            None => 0,
+        }
+    }
+
     /// (kuna `framelayout`) Fold this pass's recovered stack-frame layout into the
     /// running union.  Called at the tail of every `restructure_varnode`.
     ///
@@ -3758,7 +3772,7 @@ impl Funcdata {
             // in the cleanup pool, just before `RuleStringCopy`) is marked
             // address-tied — the keystone `RuleStringCopy::applyOp`'s
             // `outvn->isAddrTied()` guard reads.  OR'd with the global half below.
-            let mut vflags = (self.hooks().query_local_properties)(self, &addr, size, &usepoint);
+            let mut vflags = self.query_local_properties(&addr, size, &usepoint);
             vflags |= self
                 .get_arch()
                 .query_global_properties(&addr, size, &usepoint);
@@ -6963,66 +6977,6 @@ mod tests {
         assert_eq!(
             fd.high_bank().get(high).unwrap().kuna_name(),
             Some("user_renamed")
-        );
-    }
-
-    #[test]
-    fn build_dynamic_local_preserves_inferred_type_and_is_idempotent() {
-        let mut manager = build_manager();
-        let register = Rc::new(AddrSpace::new(
-            spacetype::IPTR_PROCESSOR,
-            "register",
-            false,
-            8,
-            1,
-            5,
-            addrspace_flags::hasphysical,
-            1,
-            1,
-        ));
-        manager.insert_space(Rc::clone(&register)).unwrap();
-        manager
-            .insert_space(Rc::new(unlace_base::space::SpacebaseSpace::new(
-                "stack", 6, 8, &register, 1, true, false,
-            )))
-            .unwrap();
-        let arch = Rc::new(ArchContext::new(manager));
-        let ram = Rc::clone(arch.manage().get_space_by_name("ram").unwrap());
-        let mut fd = Funcdata::new(
-            "func",
-            "func",
-            arch,
-            Address::new(Rc::clone(&ram), 0x1000),
-            0,
-            0x40,
-        )
-        .unwrap();
-        let root = fd.bblocks_root_pub();
-        let block = fd.bblocks_mut().new_block_basic(root);
-        let input = fd.new_varnode(4, &Address::new(Rc::clone(&ram), 0x100), None);
-        let input = fd.set_input_varnode(input).unwrap();
-        let op = fd.new_op(2, Address::new(Rc::clone(&ram), 0x1000));
-        fd.op_set_opcode(op, TypeOp::new(OpCode::CPUI_INT_ADD, 0, "ADD"));
-        let out = fd
-            .new_varnode_out(4, &Address::new(ram, 0x200), op)
-            .unwrap();
-        fd.op_set_input(op, input, 0).unwrap();
-        fd.op_set_input(op, input, 1).unwrap();
-        fd.op_insert(op, block, None);
-        fd.structure_reset();
-        fd.set_high_level();
-        let dtype = fd.vbank().get(out).unwrap().get_type().clone();
-
-        fd.build_dynamic_symbol(out, 8, unk_type()).unwrap();
-        let symbol = fd.vbank().get(out).unwrap().kuna_symbol_entry().unwrap();
-        assert_eq!(fd.dynamic_symbol_specs().len(), 1);
-        assert!(Rc::ptr_eq(fd.vbank().get(out).unwrap().get_type(), &dtype));
-        assert!(!fd.vbank().get(out).unwrap().is_type_lock());
-        fd.build_dynamic_symbol(out, 8, unk_type()).unwrap();
-        assert_eq!(fd.dynamic_symbol_specs().len(), 1);
-        assert_eq!(
-            fd.vbank().get(out).unwrap().kuna_symbol_entry(),
-            Some(symbol)
         );
     }
 

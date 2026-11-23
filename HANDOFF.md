@@ -367,6 +367,13 @@ Its `lib.rs` carries the `#[cfg(test)]` hook stub. unlace-decomp is now the driv
 `infra/middle_tests/` (the lower bands' tests that need the driver). `check_layers.py` and `check_spec.py` scan
 all six source roots; the allowlist is empty.
 
+**Unit tests and pass hooks (arch/test-hooks).** Each band crate has `provide_all` (the `provide` of
+its own pass modules); `unlace_decomp::PASS_HOOKS` composes middle, lift, structure, bandb, emit and the
+driver's own. A band crate's `#[cfg(test)]` hook symbol composes its own and the lower crates' `provide_all`
+and fills the rest with `KunaHookSlots::finish_with_stubs` (each stub panics naming its hook). The 78 unit
+tests that reached a hook from a higher crate moved to the driver (`infra/{middle,lift,bandb}_tests/*_hooks.rs`);
+`query_local_properties` became a plain `Funcdata` method in middle (no hook). nextest has no hook panics.
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

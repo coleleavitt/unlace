@@ -24,8 +24,7 @@ use crate::varnode::DefOpInfo;
 
 use super::{
     AdditiveEdge, BooleanExpressionMatch, BooleanMatch, PcodeOpNode, TermOrder, boolean_match,
-    functional_difference, functional_equality, functional_equality_level, pointer_equality,
-    root_pointer, term_order,
+    functional_difference, functional_equality, pointer_equality, root_pointer, term_order,
 };
 
 // -----------------------------------------------------------------------------
@@ -389,53 +388,6 @@ fn functional_equality_free_varnodes_not_equal() {
     let b = mk_vn(&mut fd, 0x200, 4); // free
     // Both free, distinct => level0 returns -1.
     assert!(!functional_equality(a, b, fd.vbank(), fd.obank()));
-}
-
-#[test]
-fn functional_equality_level_contingent_single_input() {
-    // Two COPY ops reading distinct (free) inputs: same opcode, 1 input.
-    // level0(inputs) == 1 (contingent), so functionalEqualityLevel returns 1 and
-    // res1[0]/res2[0] are the two input varnodes.
-    let mut fd = build_fd();
-    let in_a = mk_input(&mut fd, 0x100, 4); // non-free so level0 is contingent (1), not -1
-    let in_b = mk_input(&mut fd, 0x200, 4);
-    let cp1 = mk_op(&mut fd, 1, 0x1000, OpCode::CPUI_COPY);
-    let out1 = mk_out(&mut fd, cp1, 0x300, 4);
-    wire_read(&mut fd, cp1, in_a, 0);
-    let cp2 = mk_op(&mut fd, 1, 0x1004, OpCode::CPUI_COPY);
-    let out2 = mk_out(&mut fd, cp2, 0x400, 4);
-    wire_read(&mut fd, cp2, in_b, 0);
-
-    let mut r1 = [out1, out1];
-    let mut r2 = [out2, out2];
-    let res = functional_equality_level(out1, out2, &mut r1, &mut r2, fd.vbank(), fd.obank());
-    assert_eq!(res, 1, "single-input contingent match returns 1 pair");
-    assert_eq!(r1[0], in_a);
-    assert_eq!(r2[0], in_b);
-}
-
-#[test]
-fn functional_equality_level_commutative_flip() {
-    // op1 = a + b ; op2 = b + a (commutative INT_ADD with same operands swapped).
-    // The straight pairing (a,b)/(b,a) is contingent both slots; the flip detects
-    // a==a, b==b and returns 0 (provably equal).  Uses the SAME varnodes so the
-    // == identity test in level0 fires.
-    let mut fd = build_fd();
-    let a = mk_input(&mut fd, 0x100, 4); // shared by both adds -> must allow 2 descendants
-    let b = mk_input(&mut fd, 0x200, 4);
-    let add1 = mk_op(&mut fd, 2, 0x1000, OpCode::CPUI_INT_ADD);
-    let out1 = mk_out(&mut fd, add1, 0x300, 4);
-    wire_read(&mut fd, add1, a, 0);
-    wire_read(&mut fd, add1, b, 1);
-    let add2 = mk_op(&mut fd, 2, 0x1004, OpCode::CPUI_INT_ADD);
-    let out2 = mk_out(&mut fd, add2, 0x400, 4);
-    wire_read(&mut fd, add2, b, 0); // swapped
-    wire_read(&mut fd, add2, a, 1);
-
-    assert!(
-        functional_equality(out1, out2, fd.vbank(), fd.obank()),
-        "commutative INT_ADD with swapped identical operands is functionally equal"
-    );
 }
 
 #[test]

@@ -91,43 +91,54 @@ macro_rules! declare_hooks {
             }
         }
 
-        impl KunaHooks {
-            /// A table whose every hook panics, naming itself: what the unit tests of a crate
-            /// below the driver run with, since the driver that provides the real hooks is a
-            /// crate above it.
+        impl KunaHookSlots {
+            /// The table with every slot no module filled set to a stub that panics, naming the
+            /// hook: what the unit tests of a crate below the driver run with, after providing
+            /// the hooks of their own crate and the crates below it.
             #[doc(hidden)]
-            pub fn unprovided() -> KunaHooks {
+            pub fn finish_with_stubs(self) -> KunaHooks {
                 KunaHooks {
-                    $($name: {
+                    $($name: self.$name.unwrap_or({
                         fn stub$(<$($lt),*>)?($(_: $arg),*) $(-> $ret)? {
                             panic!(concat!(
                                 "pass hook `",
                                 stringify!($name),
-                                "` is provided by the driver (unlace-decomp), not linked into this test"
+                                "` is provided by a crate above this test's crate, not linked into this test"
                             ))
                         }
                         stub
-                    },)*
+                    }),)*
                 }
+            }
+        }
+
+        impl KunaHooks {
+            /// A table whose every hook panics, naming itself.
+            #[doc(hidden)]
+            pub fn unprovided() -> KunaHooks {
+                KunaHookSlots::default().finish_with_stubs()
             }
         }
     };
 }
 
 /// This crate's unit tests link without the driver, so they define the driver's symbol
-/// themselves, as a table of hooks that panic when called ([`KunaHooks::unprovided`]).
+/// themselves: this crate's own hooks ([`crate::provide_all`]), and a stub that panics, naming
+/// itself, for every hook a higher crate provides ([`KunaHookSlots::finish_with_stubs`]).
 #[cfg(test)]
 mod unprovided {
     #[unsafe(no_mangle)]
     fn __unlace_default_pass_hooks() -> &'static super::KunaHooks {
         static HOOKS: std::sync::OnceLock<super::KunaHooks> = std::sync::OnceLock::new();
-        HOOKS.get_or_init(super::KunaHooks::unprovided)
+        HOOKS.get_or_init(|| {
+            let mut slots = super::KunaHookSlots::default();
+            crate::provide_all(&mut slots);
+            slots.finish_with_stubs()
+        })
     }
 }
 
 declare_hooks! {
-    /// `ScopeLocal::queryProperties` for a local storage range (`funcdata_spacebase`).
-    query_local_properties: fn(&Funcdata, &Address, int4, &Address) -> uint4;
     /// The input varnode holding the base register of a spacebase space (`funcdata_spacebase`).
     find_spacebase_input: fn(&Funcdata, &Rc<AddrSpace>) -> Option<VarnodeId>;
     /// An alias checker over the local stack, built on first use (`funcdata_spacebase`).

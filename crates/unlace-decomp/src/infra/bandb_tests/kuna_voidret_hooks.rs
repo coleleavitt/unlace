@@ -1,14 +1,31 @@
-//! Tests for the `voidret` ledger.
+//! Tests moved out of `kuna_voidret` because they reach pass hooks a higher crate
+//! provides. They live in the driver, which links every hook.
 
-use unlace_base::address::Address;
+#![allow(unused_imports, dead_code)]
+
+/// The imports of `kuna_voidret` itself, as a glob so the tests' own imports win.
+mod module_scope {
+    pub(super) use crate::architecture::Architecture;
+    pub(super) use crate::funcdata::Funcdata;
+    pub(super) use crate::kuna_narrowret::FuncdataNarrowretExt;
+    pub(super) use std::collections::{BTreeMap, BTreeSet};
+    pub(super) use unlace_base::address::Address;
+    pub(super) use unlace_base::space::spacetype;
+    pub(super) use unlace_base::types::{int4, uintb};
+}
+use crate::kuna_voidret::*;
+use module_scope::*;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
 
-use super::*;
+// Tests for the `voidret` ledger.
+
+use unlace_base::address::Address;
 
 struct NoImage;
+
 impl LoadImage for NoImage {
     fn get_file_name(&self) -> &str {
         "none"

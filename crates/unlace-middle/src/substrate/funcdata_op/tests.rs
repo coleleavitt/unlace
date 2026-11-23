@@ -189,30 +189,6 @@ fn cursor_cache_fixture() -> (Funcdata, OpId, OpId, VarnodeId, VarnodeId, OpId) 
 }
 
 #[test]
-fn call_position_cache_cannot_drop_a_loop_cursor_definition() {
-    let (mut fd, call, phi, begin, cursor, _) = cursor_cache_fixture();
-    let block = fd.obank().get(call).unwrap().get_parent().unwrap();
-    let pad = mk_op(&mut fd, 1, 0x1004, OpCode::CPUI_COPY);
-    let constant = fd.new_constant(8, 7);
-    fd.op_set_input(pad, constant, 0).unwrap();
-    fd.new_unique_out(8, pad).unwrap();
-    fd.op_insert_before(pad, call);
-    fd.bb_set_order(block);
-    let values: Vec<_> = fd.vbank().iter_loc().collect();
-    for value in values {
-        crate::merge::MergeContext::vn_set_cover_dirty(&mut fd, value);
-    }
-    fd.with_covermerge(|merge, data| merge.merge_marker(data))
-        .unwrap();
-    let high = fd.vbank().get(cursor).unwrap().get_high();
-    assert_eq!(fd.vbank().get(begin).unwrap().get_high(), high);
-    for slot in 0..2 {
-        let input = fd.obank().get(phi).unwrap().get_in(slot).unwrap();
-        assert_eq!(fd.vbank().get(input).unwrap().get_high(), high);
-    }
-}
-
-#[test]
 fn call_position_cache_keeps_real_crossings_and_removed_call_controls() {
     use crate::fspec::FuncCallSpecs;
     let (mut fd, call, _, _, _, indirect) = cursor_cache_fixture();
@@ -491,23 +467,6 @@ fn op_insert_before_indirect_stays_put() {
     let newind = mk_op(&mut fd, 0, 0x130, OpCode::CPUI_INDIRECT);
     fd.op_insert_before(newind, copy2);
     assert_eq!(fd.bb_ops(bl), vec![copy0, ind1, newind, copy2]);
-}
-
-#[test]
-fn op_insert_after_skips_following_multiequals() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    // block: [copy0, multi1, copy2]
-    let copy0 = mk_op(&mut fd, 0, 0x100, OpCode::CPUI_COPY);
-    let multi1 = mk_op(&mut fd, 0, 0x110, OpCode::CPUI_MULTIEQUAL);
-    let copy2 = mk_op(&mut fd, 0, 0x120, OpCode::CPUI_COPY);
-    fd.op_insert(copy0, bl, None);
-    fd.op_insert(multi1, bl, None);
-    fd.op_insert(copy2, bl, None);
-    // insert a non-MULTIEQUAL after copy0: skip forward over multi1, land before copy2.
-    let newop = mk_op(&mut fd, 0, 0x130, OpCode::CPUI_INT_ADD);
-    fd.op_insert_after(newop, copy0);
-    assert_eq!(fd.bb_ops(bl), vec![copy0, multi1, newop, copy2]);
 }
 
 #[test]
@@ -802,48 +761,6 @@ fn distribute_int_mult_add_distributes_coeff() {
     assert_eq!(fd.obank().get(multop).unwrap().get_in(0), Some(x));
     let mc = fd.obank().get(multop).unwrap().get_in(1).unwrap();
     assert_eq!(fd.vbank().get(mc).unwrap().get_offset(), 3, "coefficient");
-}
-
-#[test]
-fn cse_eliminate_list_collapses_same_block_match() {
-    // Two identical INT_ADD(x, #1) ops in the same block; cseEliminateList keeps
-    // the earlier one (lower seq order) and destroys the later, recording the
-    // survivor's output.  The heritaged predicate returns true for both outputs.
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let x = mk_input(&mut fd, 0x10);
-    let bin = pcodeop_flags::binary;
-    // op1 = INT_ADD(x, #1).
-    let op1 = mk_op_flags(&mut fd, 2, 0x100, OpCode::CPUI_INT_ADD, bin);
-    let c1a = fd.new_constant(4, 1);
-    fd.op_set_input(op1, x, 0).unwrap();
-    fd.op_set_input(op1, c1a, 1).unwrap();
-    let out1 = give_out(&mut fd, op1, 0x40);
-    fd.op_insert(op1, bl, None);
-    // op2 = INT_ADD(x, #1) (a separate but functionally identical op).
-    let op2 = mk_op_flags(&mut fd, 2, 0x104, OpCode::CPUI_INT_ADD, bin);
-    let c1b = fd.new_constant(4, 1);
-    fd.op_set_input(op2, x, 0).unwrap();
-    fd.op_set_input(op2, c1b, 1).unwrap();
-    let out2 = give_out(&mut fd, op2, 0x44);
-    fd.op_insert(op2, bl, None);
-
-    // Build the (hash, op) list the rule would (both hashes equal -> CSE match).
-    let h1 = crate::op::get_cse_hash(fd.obank().get(op1).unwrap(), fd.vbank());
-    let h2 = crate::op::get_cse_hash(fd.obank().get(op2).unwrap(), fd.vbank());
-    assert_eq!(h1, h2, "identical ops hash equal");
-    assert_ne!(h1, 0, "INT_ADD is cse-hashable");
-    let mut list = vec![(h1, op1), (h2, op2)];
-    let mut outlist: Vec<VarnodeId> = Vec::new();
-    fd.cse_eliminate_list(&mut list, &mut outlist, |_, _| true).unwrap();
-
-    // op1 (earlier seq) survives; op2 is destroyed; its readers (none) repointed.
-    assert_eq!(outlist, vec![out1], "survivor output recorded");
-    assert!(fd.obank().get(op2).unwrap().is_dead(), "duplicate op destroyed");
-    assert!(!fd.obank().get(op1).unwrap().is_dead(), "dominator survives");
-    // out2 was fully freed by op_destroy -> destroyVarnode (C++ opDestroy frees
-    // the output Varnode, not merely unsets it), so it is gone from the bank.
-    assert!(fd.vbank().get(out2).is_none(), "destroyed op output is freed");
 }
 
 #[test]
@@ -1150,43 +1067,6 @@ fn vfy_w10_forloop_unknown_special_op_blocks_move() {
         !fd.op_is_moveable(this_op, point),
         "an unhandled special op (CALLOTHER) in the path blocks the move (default reject)"
     );
-}
-
-#[test]
-fn read_only_block_queries_keep_their_distinct_orderings() {
-    let mut fd = build_fd();
-    let block = mk_block(&mut fd);
-    let other = mk_block(&mut fd);
-    let empty = mk_block(&mut fd);
-    let input = mk_vn(&mut fd, 0x100);
-    let input = fd.set_input_varnode(input).unwrap();
-    let mut ops = Vec::new();
-    for (index, (parent, output)) in [(block, true), (block, true), (block, true), (other, true), (block, false)].into_iter().enumerate() {
-        let op = mk_op(&mut fd, 1, 0x1000 + index as u64, OpCode::CPUI_COPY);
-        fd.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
-        if output {
-            fd.new_unique_out(4, op).unwrap();
-        }
-        fd.op_set_input(op, input, 0).unwrap();
-        fd.op_insert(op, parent, None);
-        ops.push(op);
-    }
-    for (&op, order) in ops.iter().zip([20, 15, 5, 1, 0]) {
-        fd.obank_mut().get_mut(op).unwrap().set_order(order);
-    }
-    let flags: Vec<_> = fd.vbank().iter_loc().map(|id| fd.vbank().get(id).unwrap().get_flags()).collect();
-    for _ in 0..3 {
-        assert_eq!(fd.cse_find_in_block(ops[0], input, block, None), Some(ops[1]));
-        assert_eq!(fd.cse_find_in_block(ops[0], input, block, Some(ops[2])), Some(ops[2]));
-        assert_eq!(fd.cse_find_in_block(ops[0], input, block, Some(ops[4])), None);
-        assert_eq!(fd.cse_find_in_block(ops[4], input, block, None), None);
-        assert_eq!(fd.cse_find_in_block(ops[0], input, other, None), Some(ops[3]));
-        assert_eq!(fd.cse_find_in_block(ops[0], input, empty, None), None);
-        assert_eq!(fd.block_earliest_use(block, input), Some(ops[4]));
-        assert_eq!(fd.block_earliest_use(other, input), Some(ops[3]));
-        assert_eq!(fd.block_earliest_use(empty, input), None);
-    }
-    assert_eq!(flags, fd.vbank().iter_loc().map(|id| fd.vbank().get(id).unwrap().get_flags()).collect::<Vec<_>>());
 }
 
 #[test]

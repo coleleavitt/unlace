@@ -70,7 +70,8 @@ const INF: i64 = 1 << 40;
 
 /// The general registers, in register-space order.
 const GPRS: [&str; 8] = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"];
-const SP: usize = 4;
+#[doc(hidden)]
+pub const SP: usize = 4;
 const BP: usize = 5;
 const CALLER_SAVED: [usize; 3] = [0, 1, 2];
 const CALLEE_SAVED: [usize; 4] = [3, 5, 6, 7];
@@ -316,7 +317,8 @@ pub struct Summary {
     pub returns_stack: bool,
 }
 
-const UNKNOWN: Summary = Summary {
+#[doc(hidden)]
+pub const UNKNOWN: Summary = Summary {
     effect: Effect::Unknown,
     writes: 0,
     arg_bytes: None,
@@ -337,13 +339,16 @@ pub struct Cache {
     /// The options the walks kept were taken under ([`walk_options`]).
     tracked: Option<u8>,
     /// Instructions the walks decoded, emptied when full.
-    decoded: HashMap<uintb, Decoded>,
+    #[doc(hidden)]
+    pub decoded: HashMap<uintb, Decoded>,
     /// Walks whose nested calls all fit within the depth asked, with the
     /// depth they needed: the answer for that depth and every deeper one.
-    whole: HashMap<uintb, (Summary, u8)>,
+    #[doc(hidden)]
+    pub whole: HashMap<uintb, (Summary, u8)>,
     /// Walks the depth limit cut short, by the depth asked; at depth [`CUT`],
     /// what a call through a pointer slot does.
-    cut: HashMap<(uintb, u8), Summary>,
+    #[doc(hidden)]
+    pub cut: HashMap<(uintb, u8), Summary>,
 }
 
 impl Cache {
@@ -356,7 +361,8 @@ impl Cache {
 }
 
 /// A depth no walk reaches: the walk was cut short.
-const CUT: u8 = u8::MAX;
+#[doc(hidden)]
+pub const CUT: u8 = u8::MAX;
 
 /// The summary of the function at `entry`, reading nested direct calls
 /// `depth` levels down.

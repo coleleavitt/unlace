@@ -10,9 +10,10 @@ use unlace_base::xml::Element;
 use unlace_decomp::kuna_loadoptions::{self, LoadOptions, LoadScope};
 
 use crate::engine::{
-    ArmIsa, ConsoleProgram, FileInput, Languages, arm_isa_from_env, bootstrap_dex_bytes,
-    bootstrap_image, bootstrap_mz_bytes, bootstrap_object, bootstrap_raw_image, bootstrap_te,
-    bootstrap_te_bytes, bootstrap_wasm_bytes, bootstrap_xml_image, classify_file, xml_root_image,
+    ArmIsa, ConsoleProgram, FileInput, Languages, RawBytes, arm_isa_from_env, bootstrap_dex_bytes,
+    bootstrap_esp_image, bootstrap_image, bootstrap_mz_bytes, bootstrap_object,
+    bootstrap_raw_image, bootstrap_te, bootstrap_te_bytes, bootstrap_wasm_bytes,
+    bootstrap_xml_image, classify_file, xml_root_image,
 };
 
 /// Where a [`Bootstrap`] finds its languages: spec roots (a slice, array or
@@ -158,6 +159,11 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
         match input {
             FileInput::Wasm(bytes) => self.wasm_bytes(path, &bytes),
             FileInput::Mz(bytes) => self.mz_bytes(path, &bytes),
+            FileInput::Esp(image) => {
+                let isa = self.resolved_isa()?;
+                let _load = self.enter();
+                bootstrap_esp_image(path, &image, self.target, self.languages, isa)
+            }
             FileInput::Te(bytes) => self.te_bytes(path, &bytes),
             FileInput::Dex(bytes) => self.dex_bytes(path, bytes),
             FileInput::Object => self.object(path),
@@ -171,7 +177,15 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     pub fn raw(&self, path: &str, base: u64, entries: &[u64]) -> KunaResult<ConsoleProgram> {
         let isa = self.resolved_isa()?;
         let _load = self.enter();
-        bootstrap_raw_image(path, self.target, base, entries, isa, self.languages, None)
+        bootstrap_raw_image(
+            path,
+            self.target,
+            base,
+            entries,
+            isa,
+            self.languages,
+            RawBytes::File,
+        )
     }
 
     /// Load a UEFI TE image, as [`bootstrap_from_te`](crate::engine::bootstrap_from_te) does.

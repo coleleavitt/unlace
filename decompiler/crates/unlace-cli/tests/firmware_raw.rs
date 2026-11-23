@@ -134,3 +134,72 @@ fn unpack_decodes_efi_standard_and_tiano_compressed_files() {
     assert!(out.contains("2 modules in 1 volumes"), "{out}");
     assert!(!out.contains("undecoded"), "{out}");
 }
+
+#[test]
+fn an_esp_image_loads_its_segments_and_names_its_rom_calls() {
+    let bin = common::fixture("esprom_esp32.bin");
+    let (out, err, code) = common::run_kuna(&["decompile-all", &bin]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        err.contains("ESP application image (esp32, 2 segments, entry 0x40080010)"),
+        "{err}"
+    );
+    assert!(out.contains("return memcpy(a0,a1,0x10);"), "{out}");
+    assert!(
+        out.contains("v1 = dat_3ff4001c;"),
+        "a volatile register is read twice: {out}"
+    );
+    assert!(
+        !out.contains("Function: memcpy"),
+        "a ROM function has no body to decompile: {out}"
+    );
+
+    let (off, err, code) = common::run_kuna(&["decompile-all", &bin, "--option", "esprom", "off"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        off.contains("0x4000c2c8)(a0,a1,0x10);") && !off.contains("memcpy"),
+        "{off}"
+    );
+    assert!(off.contains("return dat_3ff4001c * 2;"), "{off}");
+
+    let (other, err, code) =
+        common::run_kuna(&["decompile-all", &bin, "--option", "esprom", "esp32c3"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        !other.contains("memcpy"),
+        "another chip's ROM has other addresses: {other}"
+    );
+
+    let (_, err, code) = common::run_kuna(&["decompile-all", &bin, "--option", "esprom", "esp33"]);
+    assert_ne!(code, 0);
+    assert!(err.contains("esprom takes auto, off or a chip"), "{err}");
+}
+
+#[test]
+fn an_esp_segment_dump_takes_the_chip_from_the_option() {
+    let bin = common::fixture("esprom_esp32.bin");
+    let image = std::fs::read(&bin).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let iram = dir.path().join("iram.bin");
+    std::fs::write(&iram, &image[0x3c..0x8c]).unwrap();
+    let args = [
+        "decompile-all",
+        iram.to_str().unwrap(),
+        "--raw-image",
+        "--target",
+        "Xtensa:LE:32:default",
+        "--base",
+        "0x40080000",
+        "--entry",
+        "0x40080010",
+        "--assert",
+        "readonly 0x40080000+0x50",
+    ];
+    let (out, err, code) = common::run_kuna(&args);
+    assert_eq!(code, 0, "{err}");
+    assert!(!out.contains("memcpy"), "a raw dump names no chip: {out}");
+    let (out, err, code) =
+        common::run_kuna(&[&args[..], &["--option", "esprom", "esp32"]].concat());
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("memcpy(a0,a1,0x10)"), "{out}");
+}

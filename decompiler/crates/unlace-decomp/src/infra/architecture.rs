@@ -1729,6 +1729,11 @@ pub struct Architecture {
     pub analysis_dwarfscopes: bool,
     /// (kuna) Gate the UEFI module markup pass (`uefi`); default on.
     pub analysis_uefi: bool,
+    /// (kuna `esprom`) Whose mask-ROM names and memory map apply; default
+    /// `auto`, the chip of [`Self::esp_image_chip`].
+    pub esprom: crate::kuna_esprom::EspRom,
+    /// (kuna `esprom`) The chip the loaded Espressif application image names.
+    pub esp_image_chip: Option<crate::kuna_esprom::EspChip>,
     /// (kuna) Gate the Cortex-M System Control Space globals (`cortexmscs`);
     /// default on. Inert unless the image is a Cortex-M one.
     pub analysis_cortexmscs: bool,
@@ -3081,6 +3086,8 @@ impl Architecture {
             analysis_dwarfglobaltypes: false,
             analysis_dwarfscopes: true,
             analysis_uefi: false,
+            esprom: crate::kuna_esprom::EspRom::Auto,
+            esp_image_chip: None,
             analysis_cortexmscs: false,
             analysis_typelib: crate::kuna_typelib::TypeLib::Auto,
             analysis_x86listingswitch: false,
@@ -3538,6 +3545,7 @@ impl Architecture {
         self.analysis_tlsnames = true;
         self.analysis_dwarfglobaltypes = false;
         self.storetype = crate::kuna_storetype::StoreTypeMode::Uefi;
+        self.esprom = crate::kuna_esprom::EspRom::Auto; // Espressif mask-ROM names + memory map (ESP images only)
         self.analysis_uefi = true;
         self.analysis_cortexmscs = true; // Cortex-M System Control Space globals (Cortex-M images only)
         // (kuna) DIV-139 declared-name libc prototype lookup -- default-ON.

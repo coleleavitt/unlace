@@ -7456,7 +7456,13 @@ both
   — an enum with payloads, an imported value type (`Foundation.Date`), a
   generic instantiation without a known layout, a tuple, an existential — is
   `undefined<n>` over the bytes up to the next field, so the layout is always
-  right and the names are always real; only the field's own type is withheld. Each binding carries a `self` hint
+  right and the names are always real; only the field's own type is withheld. An import stub (a PLT entry or a
+  Mach-O `__stubs` entry, in a code section) whose symbol demangles to a
+  throwing function of another image that is not `async`, a protocol
+  requirement's dispatch thunk included, binds `__swiftcall_throws` with no
+  `self` type: a throwing function calls such imports with the error register
+  holding the zero its own caller passed, reloaded rather than stored, so the
+  zeroing-store rule of 04 §4.4 does not see the call. Each binding carries a `self` hint
   (`AnalysisOutput::swift_types.models` / `input_hints` → the decompile
   drive): the name always, and the type where the layout arm has one — `Class
   *` for an instance member of a class, `swift.class_metadata *` for a class
@@ -13361,7 +13367,7 @@ with the 5-bit position set), Brotli (`brotli-decompressor`, after EDK2's
 16-byte size header) and CRC32; a standard compression section of type 1 is
 decoded as EFI 1.1 (4-bit position set) and retried as Tiano. Every
 PE32/TE section is a module named by the file's UI section. `containers.rs (detect)` reads U-Boot
-legacy images, Intel HEX, Motorola S-records, ESP32/ESP8266 application images,
+legacy images, Intel HEX, Motorola S-records,
 uClinux bFLT v4 (rebasing GOT entries and relocations past the 64-byte header,
 as `binfmt_flat` does), Qualcomm MBN/SBL wrappers, MediaTek `md1img` (the
 `md1rom` section at 0x90000000 as MIPS32 LE, the LZMA `md1_dbginfo` symbol
@@ -13370,10 +13376,8 @@ decodes it) and PC BIOS images (the reset-vector test of IDA's
 `bios_image.py`; the last 128 KiB mapped below 1 MiB with `register CS`
 assertions for segments E000 and F000, or with a 32-bit target the whole flash
 ending at 4 GiB), and returns either one
-flat image (lowest to highest loaded address, gaps filled, at most 256 MiB;
-an ESP image whose segments span more keeps the segments in the entry's
-16 MiB window) with the processor, base and entries its header states, or the
-ELF it wraps. `svd.rs (parse)` reads a CMSIS-SVD device with the kuna XML
+flat image (lowest to highest loaded address, gaps filled, at most 256 MiB)
+with the processor, base and entries its header states, or the ELF it wraps. `svd.rs (parse)` reads a CMSIS-SVD device with the kuna XML
 reader: peripherals (`derivedFrom` reusing the base's registers and type),
 clusters, `dim`/`dimIncrement`/`dimIndex` expansion, register sizes inherited
 from the peripheral or device, and `<interrupt>` names. `Peripheral::c_struct`
@@ -13381,6 +13385,58 @@ lays a peripheral out as a C structure, dropping a register that overlaps an
 earlier one and padding gaps. The CLI asserts the structure (`typedef`), the
 peripheral as a typed global at its base (`data`) and its register range as
 volatile, and names IRQ handlers from the interrupts.
+
+(lowest to highest loaded address, gaps filled, at most 256 MiB) with
+(kuna) **Espressif application images and `esprom`.** An ESP32-family or
+ESP8266 application image (`esp.rs (parse)`: `0xE9`, a segment count, the
+entry, on ESP32-family parts a 16-byte extended header with the chip id, then
+`address, length, bytes` per segment) is not flattened. Its segments load far
+apart: on an ESP32-C3 the constants are at `0x3c000000`, the RAM code at
+`0x40380000` and the flash code at `0x42000000`, so one flat image would be
+100 MiB of padding or would drop every segment but the entry's. The engine
+loads it instead as a raw image over separate runs
+(`decompiler/crates/unlace-sleigh/src/loadimage.rs (RawLoadImage::from_segments)`):
+each segment is one section, an address between two segments is not mapped,
+and the header's entry is the seed raw-image discovery widens from. The parse
+refuses a segment that runs past the file, a segment outside
+`0x20000000..0x70000000`, overlapping segments and an entry no segment holds;
+the header allows at most 16 segments. A segment takes the properties of the
+region of the chip's memory map it loads into (`esprom.rs (regions,
+load_flags)`): DROM is read-only data, so its strings and tables fold as
+constants; IROM and IRAM are read-only code, so the literal pool an Xtensa
+`l32r` reads folds too; DRAM and RTC memory are writable data. The C6 and H2
+map flash on one bus, so there the segment that starts with the application
+descriptor (`0xABCD5432`) is the constants and the other flash segments are
+code. The language is Xtensa or RISC-V by the chip id unless `--target` names
+one.
+
+`esprom` (default `auto`; `decompiler/crates/unlace-decomp/src/p1_partition/kuna_esprom.rs`
+holds the value, `decompiler/crates/unlace-console/src/kuna_esprom.rs (apply)`
+applies it at the analysis commit) adds what the image does not carry. An ESP
+application calls the routines of the chip's mask ROM at fixed addresses, and
+without a name each call renders as a call through a literal
+(`(*dat_40080504)(dst,src,n)`) or to a bare address. With a chip in force,
+every ROM function of the chip is a function symbol at its address, with the
+call fixup and the libc prototype its name selects, so the call renders as
+`memcpy(dst,src,n)`; every ROM data symbol is a named untyped global unless a
+symbol already covers the address; and every peripheral register range of the
+chip's map that the image does not load into is volatile, so a register poll
+keeps its read. A ROM function is a symbol only: it has no bytes in the input,
+so it is not in the function inventory and nothing decompiles it. `auto` uses
+the chip the image header names (an image without the extended header is an
+ESP8266) and names no chip on any other input, which is what keeps the option
+inert off-target. A chip name (`esp32`, `esp32s2`, `esp32s3`, `esp32c2`,
+`esp32c3`, `esp32c6`, `esp32h2`, `esp8266`) applies that chip's ROM and
+peripheral ranges to any input, such as the firmware's ELF; `off` applies
+nothing. The tables under `loader/firmware/esprom/` are generated by
+`scripts/gen_esprom.py` from the ROM linker scripts of ESP-IDF v5.5.6
+(`components/esp_rom/<chip>/ld/*.ld`) and ESP8266_RTOS_SDK v3.4
+(`esp8266.rom.ld`), both Apache-2.0: one name per address, the chip's main
+script first, a symbol being a function when its address is in the ROM's code
+range and the script does not list it under a `Data` heading. The memory maps
+are the `SOC_*_LOW`/`SOC_*_HIGH` bounds of ESP-IDF's `soc.h`. A ROM revision
+that moved a routine is not detected; the table holds the first address a
+name was given.
 
 The real-binary path of §1.2 is the fourth binding, console-side: `bootstrap_from_object`
 plays the leaf role itself — it resolves the language from the object header

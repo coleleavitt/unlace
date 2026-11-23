@@ -510,10 +510,6 @@ pub struct Architecture {
     /// one element type as a pointer to that element; option `elemptr on|off`.
     /// The rule lives in [`kuna_elemptr`](crate::p5_types::kuna_elemptr).
     pub elem_ptr: bool,
-    /// (kuna `ptrfromuse`) Type a function input whose only memory role is to be
-    /// a LOAD/STORE base as a pointer, and what that pointer points at.  See
-    /// [`kuna_ptrfromuse`](crate::p5_types::kuna_ptrfromuse).
-    pub ptr_from_use: crate::p5_types::kuna_ptrfromuse::PtrFromUseMode,
     /// (kuna `protoorder`) Callee-first whole-binary order and what it states
     /// (`types` or `lock`); read by the `unlace-cli` driver.
     pub protoorder: crate::kuna_protoorder::ProtoOrderMode,
@@ -569,11 +565,6 @@ pub struct Architecture {
     /// identified as an operating system's user-space program) or `on`.  See
     /// [`kuna_syscallregs`](crate::kuna_syscallregs).
     pub syscall_regs: crate::kuna_syscallregs::SyscallRegsMode,
-    /// (kuna `pebnames`) When the Windows thread-environment segment base (`GS`
-    /// on x86-64, `FS` on x86) is typed `TEB *`: `off`, `auto` (the default: only
-    /// on an image the loader proved is a Windows user-mode PE) or `on` (any image
-    /// with a Windows compiler spec).  See [`kuna_pebnames`](crate::kuna_pebnames).
-    pub peb_names: crate::kuna_pebnames::PebNamesMode,
     /// (kuna) `tlsnames`: the static TLS block the loader committed.
     pub tls_layout: Option<std::rc::Rc<crate::p5_types::kuna_tlsnames::TlsLayout>>,
     /// (kuna `dwarfscopes`) Register-held DWARF locals by function entry:
@@ -587,13 +578,6 @@ pub struct Architecture {
     /// (kuna `structsynth`) A `--jobs` worker's ledger hook: records every lookup,
     /// or answers each from the parent's replay. `None` outside a worker.
     pub struct_synth_shard: Option<crate::kuna_structsynth::shard::ShardHandle>,
-    /// (kuna `structmerge`) Does a synthesized record take in the claims of a
-    /// sibling reader of the same record?  See
-    /// [`kuna_structmerge`](crate::kuna_structmerge).
-    pub struct_merge: crate::kuna_structmerge::StructMergeMode,
-    /// (kuna `structheadless`) May a closed function's parameter be a record read
-    /// only past its start?  See [`kuna_structheadless`](crate::kuna_structheadless).
-    pub struct_headless: crate::kuna_structheadless::StructHeadlessMode,
     /// (kuna `fieldtype`) Is a synthesized field some access holds as a pointer
     /// declared as that pointer?  See [`kuna_fieldtype`](crate::kuna_fieldtype).
     pub field_type: bool,
@@ -2801,7 +2785,6 @@ impl Architecture {
             cast_index: false, // (kuna) option castindex; reset_defaults sets the shipped default
             char_ptr: false, // (kuna) option charptr; shipped off
             elem_ptr: false, // (kuna) option elemptr; reset_defaults sets the shipped default
-            ptr_from_use: crate::p5_types::kuna_ptrfromuse::PtrFromUseMode::Off, // (kuna) option ptrfromuse; reset_defaults sets the shipped default
             protoorder: crate::kuna_protoorder::ProtoOrderMode::Off, // (kuna) option protoorder; reset_defaults sets the shipped default
             callbacktype: crate::kuna_callbacktype::CallbackTypeMode::Off, // (kuna) option callbacktype
             calleevote: crate::kuna_calleevote::CalleeVoteMode::Off, // (kuna) option calleevote
@@ -2825,11 +2808,8 @@ impl Architecture {
 
             tls_layout: None,
             dwarf_reg_locals: std::collections::BTreeMap::new(),
-            peb_names: crate::kuna_pebnames::PebNamesMode::Off, // (kuna) option pebnames; reset_defaults sets the shipped default
             struct_synth: crate::kuna_structsynth::StructSynthMode::Off, // (kuna) option structsynth; reset_defaults sets the shipped default
             struct_synth_shard: None,
-            struct_merge: crate::kuna_structmerge::StructMergeMode::Off, // (kuna) option structmerge; reset_defaults sets the shipped default
-            struct_headless: crate::kuna_structheadless::StructHeadlessMode::Off, // (kuna) option structheadless; reset_defaults sets the shipped default
             field_type: false, // (kuna) option fieldtype; reset_defaults sets the shipped default
             image_windows_user: false, // (kuna) a load-time fact; set by the console's `load file`
             chkstk_darwin: false, // (kuna) option chkstkdarwin; reset_defaults sets the shipped default
@@ -3301,11 +3281,8 @@ impl Architecture {
         crate::kuna_fpuemu::apply(self);
         self.mz_dgroup_on = true; // (kuna #1288) an MS-DOS executable's functions start with DS holding the data segment its startup code loads; only the MZ loader states one, so every other input and every datatest is unchanged; `option mzdgroup off` leaves DS unknown
         crate::kuna_mzdgroup::apply(self);
-        self.peb_names = crate::kuna_pebnames::PebNamesMode::Auto; // (kuna) DIV-175 default `auto`: TYPES ONLY. Types the Windows TEB segment base (`GS_OFFSET`/`FS_OFFSET`) as `TEB *teb` so PEB/TEB field reads render by name. Gated on a Windows compiler spec AND the loader's user-mode-PE fact, which the XML bootstrap never sets, so it is structurally inert on the datatest corpus (0/675); `option pebnames on` trusts the compiler spec alone, `off` restores the untyped register
         self.struct_synth = crate::kuna_structsynth::StructSynthMode::Locals; // (kuna) structsynth default `locals`: a pointer parameter, or a pointer a call returned, read at two or more constant offsets is declared `struct_N *` and the reads render as fields. Moves 0/675 datatest assertions; `option structsynth param` restores parameters only, `off` the raw offset arithmetic
-        self.struct_merge = crate::kuna_structmerge::StructMergeMode::Off; // (kuna) structmerge default `off`: a freshly measured layout that agrees with a held record is answered with the union of the two, so a field one reader proved is kept for the others. Off because at the agreement floor two records that merely begin alike are indistinguishable; `option structmerge siblings` turns it on
         self.field_type = false; // (kuna) option fieldtype default-off: the flip moves which record the layout ledger shares between readers (fields-only layout precision .8713 -> .8693); docs/features/fieldtype/default-on-evaluation.md
-        self.struct_headless = crate::kuna_structheadless::StructHeadlessMode::Off; // (kuna) structheadless default `off`: a closed function's parameter read at two or more constant offsets, none of them zero, is declared `struct_N *` with filler over the bytes before its first access; `option structheadless closed` turns it on
         self.chkstk_darwin = true; // (kuna) default-on, Darwin AArch64 only (`image_apple` and an AArch64 language): inert unless a call reaches `___chkstk_darwin`; 0/675 datatests
         self.sp_solve = true; // (kuna) default-on, a loaded x86-32 ELF under a default model with a stated extrapop: inert unless a function's stack-pointer deltas disagree or a direct callee's returns pop arguments; 0/675 datatests
 
@@ -3497,7 +3474,6 @@ impl Architecture {
         self.elem_ptr = true; // (kuna) option elemptr default-on: see docs/features/elemptr/default-on-evaluation.md
         self.cstring_const = true; // (kuna) option cstringconst default-on: inert without a string-literal section, so 0/675 datatest assertions move
         self.char_ptr = false; // (kuna) option charptr; shipped off -- the flip is held on `make test-cli`, see docs/features/charptr/default-on-evaluation.md
-        self.ptr_from_use = crate::p5_types::kuna_ptrfromuse::PtrFromUseMode::Void; // (kuna) option ptrfromuse default void: 0/675 datatests, stages PARITY OK, type_match 0 worse over 10,748 decbench functions; evidence in docs/features/ptrfromuse/default-on-evaluation.md
         self.callbacktype = crate::kuna_callbacktype::CallbackTypeMode::On; // (kuna) option callbacktype default `on`: a function whose address reaches exactly one kind of declared callback slot takes that slot's prototype; evidence in docs/features/callbacktype/default-on-evaluation.md
         self.callee_reginputs = true; // (kuna) option calleereginputs default-on: only x86-32 Windows (x86win.cspec) decodes a callee; 0/675 datatest assertions move
         self.callee_reginputs_custom = crate::p4_calls::kuna_calleereginputs::CUSTOM_DEFAULT; // (kuna) option calleereginputs `custom`: callee-saved EBX/ESI/EDI custom args; see the module and docs/spec chapter 04
@@ -4376,7 +4352,6 @@ impl Architecture {
         ctx.char_byte = self.char_byte; // (kuna) charbyte
         ctx.cast_arith = self.cast_arith && self.print.out_lang() == crate::kuna_lang::OutLang::C; // (kuna) castarith
         ctx.cast_index = self.cast_index && self.print.out_lang() == crate::kuna_lang::OutLang::C; // (kuna) castindex
-        ctx.ptr_from_use = self.ptr_from_use; // (kuna) ptrfromuse
         ctx.char_ptr = self.char_ptr; // (kuna) charptr
         ctx.analysis_valuewitness = self.analysis_valuewitness; // (kuna) valuewitness
         ctx.elem_ptr = self.elem_ptr; // (kuna) elemptr
@@ -4456,15 +4431,11 @@ impl Architecture {
         ctx.syscall_regs_family = crate::kuna_syscallregs::SyscallFamily::from_archid(&self.archid);
         ctx.syscall_regs_userops =
             crate::kuna_syscallregs::userop_ids(&self.userops, ctx.syscall_regs_family);
-        ctx.peb_names = self.peb_names.fires(
-            crate::kuna_fastfailnoreturn::archid_is_windows(self.get_description()),
-            self.image_windows_user,
-        ); // (kuna) pebnames
+        ctx.windows_cspec = crate::kuna_fastfailnoreturn::archid_is_windows(self.get_description()); // (kuna) pebnames
+        ctx.image_windows_user = self.image_windows_user;
         ctx.tls_layout = self.tls_layout.clone(); // (kuna) tlsnames
         ctx.struct_synth = self.struct_synth; // (kuna) structsynth
         ctx.struct_synth_shard = self.struct_synth_shard.clone();
-        ctx.struct_merge = self.struct_merge; // (kuna) structmerge
-        ctx.struct_headless = self.struct_headless; // (kuna) structheadless
         ctx.field_type = self.field_type; // (kuna) fieldtype
         // (kuna) resolve the `SYSCALL` user-op ids ONCE per program, for the same
         // reason `simd_shuffle_userops` above is resolved here: the boundary

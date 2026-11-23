@@ -173,26 +173,14 @@ kuna_options! { self, p1;
         self.syscall_regs = mode;
         Ok(msg)
     },
-    "pebnames" => {
-        let (mode, msg) = crate::kuna_pebnames::OptionPebNames.apply(p1)?;
-        self.peb_names = mode;
-        Ok(msg)
-    },
+    "pebnames" => registered!(crate::kuna_pebnames::PebNamesMode),
     "structsynth" => {
         let (mode, msg) = crate::kuna_structsynth::OptionStructSynth.apply(p1)?;
         self.struct_synth = mode;
         Ok(msg)
     },
-    "structmerge" => {
-        let (mode, msg) = crate::kuna_structmerge::OptionStructMerge.apply(p1)?;
-        self.struct_merge = mode;
-        Ok(msg)
-    },
-    "structheadless" => {
-        let (mode, msg) = crate::kuna_structheadless::OptionStructHeadless.apply(p1)?;
-        self.struct_headless = mode;
-        Ok(msg)
-    },
+    "structmerge" => registered!(crate::kuna_structmerge::StructMergeMode),
+    "structheadless" => registered!(crate::kuna_structheadless::StructHeadlessMode),
     "fieldtype" => {
         let (val, msg) = crate::kuna_fieldtype::OptionFieldType.apply(p1)?;
         self.field_type = val;
@@ -747,12 +735,7 @@ kuna_options! { self, p1;
     "charbyte" => on_off!(char_byte, "char-pointer byte typing"),
     "castarith" => on_off!(cast_arith, "pointer arithmetic in pointer terms"),
     "castindex" => on_off!(cast_index, "variable indexes and pointer differences in pointer terms"),
-    "ptrfromuse" => {
-        let (val, msg) =
-            crate::p5_types::kuna_ptrfromuse::OptionPtrFromUse.apply(p1)?;
-        self.ptr_from_use = val;
-        Ok(msg)
-    },
+    "ptrfromuse" => registered!(crate::p5_types::kuna_ptrfromuse::PtrFromUseMode),
     "charptr" => on_off!(char_ptr, "character-pointer evidence"),
     "cstringconst" => on_off!(cstring_const, "string-literal rendering of constants inside a string-literal section"),
     "elemptr" => {

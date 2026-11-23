@@ -69,13 +69,11 @@ architecture -> kuna_objcarc
 architecture -> kuna_objcrettype
 architecture -> kuna_octeoneffects
 architecture -> kuna_opaqueglobals
-architecture -> kuna_pebnames
 architecture -> kuna_phases
 architecture -> kuna_ppc32piccalls
 architecture -> kuna_protomerge
 architecture -> kuna_protoorder
 architecture -> kuna_ptrauthtrap
-architecture -> kuna_ptrfromuse
 architecture -> kuna_registerslots
 architecture -> kuna_retsplitlimit
 architecture -> kuna_retsysreg
@@ -91,8 +89,6 @@ architecture -> kuna_spsolve
 architecture -> kuna_stablenames
 architecture -> kuna_stackparamalign
 architecture -> kuna_storetype
-architecture -> kuna_structheadless
-architecture -> kuna_structmerge
 architecture -> kuna_structsynth
 architecture -> kuna_swiftcall
 architecture -> kuna_syscallregs
@@ -137,11 +133,8 @@ context -> kuna_nullable_reloc
 context -> kuna_objcrettype
 context -> kuna_octeoneffects
 context -> kuna_opaqueglobals
-context -> kuna_ptrfromuse
 context -> kuna_qualifiedcall
 context -> kuna_segmentize
-context -> kuna_structheadless
-context -> kuna_structmerge
 context -> kuna_structsynth
 context -> kuna_swiftcall
 context -> kuna_syscallregs

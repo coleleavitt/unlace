@@ -861,7 +861,10 @@ fn build_localtypes(data: &mut Funcdata) {
         // folded by `type_order`, never as a replacement, so a callee-derived
         // `FILE *` keeps its place.  See `kuna_ptrfromuse`.
         let ct = {
-            let mode = data.get_arch().ptr_from_use;
+            let mode = data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_ptrfromuse::PtrFromUseMode>();
             // A vote that is ALREADY a pointer came from real evidence (a callee's
             // locked prototype, DWARF, an offset-0 dereference), and it names a
             // pointee this rule cannot know.  Use evidence adds nothing there, and

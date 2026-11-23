@@ -1037,12 +1037,6 @@ pub struct ArchContext {
     /// C output; read by [`kuna_castarith`](crate::p9_emit::kuna_castarith).
     pub cast_index: bool,
 
-    /// (kuna `ptrfromuse`) Type a function input whose only memory role is to be a
-    /// LOAD/STORE base as a pointer; mirrors
-    /// [`Architecture::ptr_from_use`](crate::architecture::Architecture).  Read by
-    /// `ActionInferTypes::buildLocaltypes` (`coreaction_infertypes`); the mechanism
-    /// lives in [`kuna_ptrfromuse`](crate::p5_types::kuna_ptrfromuse).
-    pub ptr_from_use: crate::p5_types::kuna_ptrfromuse::PtrFromUseMode,
     /// (kuna `charptr`) Commit a pointer used only on characters to `char *`;
     /// option `charptr on|off`.  Copied from
     /// [`Architecture::char_ptr`](crate::architecture::Architecture).  The rule
@@ -1360,10 +1354,11 @@ pub struct ArchContext {
     /// (kuna) The family's system-call user-op ids, minus any a compiler spec
     /// specialized with its own `<callotherfixup>`.
     pub syscall_regs_userops: Vec<unlace_base::types::uint4>,
-    /// (kuna) `option pebnames`, resolved against the compiler spec and the
-    /// loader's user-mode-PE fact: does
-    /// [`ActionPebNames`](crate::p5_types::kuna_pebnames::ActionPebNames) act?
-    pub peb_names: bool,
+    /// (kuna) The compiler spec is a Windows one: a fact `option pebnames` acts on.
+    pub windows_cspec: bool,
+    /// (kuna) The loader identified a Windows user-mode PE: the fact
+    /// `option pebnames auto` acts on.
+    pub image_windows_user: bool,
     /// (kuna) `option tlsnames`: the executable's static TLS block, when the
     /// loader found one.
     pub tls_layout: Option<std::rc::Rc<crate::p5_types::kuna_tlsnames::TlsLayout>>,
@@ -1374,12 +1369,6 @@ pub struct ArchContext {
     /// (kuna `structsynth`) The engine Architecture's `--jobs` worker ledger hook,
     /// shared: `None` outside a worker.
     pub struct_synth_shard: Option<crate::p5_types::kuna_structsynth::shard::ShardHandle>,
-    /// (kuna) `option structmerge`: may a synthesized record take in the claims
-    /// of a sibling reader of the same record?
-    pub struct_merge: crate::p5_types::kuna_structmerge::StructMergeMode,
-    /// (kuna) `option structheadless`: may a closed function's parameter be a
-    /// record read only past its start?
-    pub struct_headless: crate::p5_types::kuna_structheadless::StructHeadlessMode,
     /// (kuna) `option fieldtype`: is a synthesized field some access holds as a
     /// pointer declared as that pointer?  See
     /// [`kuna_fieldtype`](crate::p5_types::kuna_fieldtype).
@@ -1892,8 +1881,6 @@ impl ArchContext {
             float_globals_wanted: std::cell::Cell::new(false),
             struct_synth: crate::p5_types::kuna_structsynth::StructSynthMode::Locals, // (kuna) option structsynth, default `locals`; the real value is copied from the engine Architecture in `build_arch_handle`
             struct_synth_shard: None,
-            struct_merge: crate::p5_types::kuna_structmerge::StructMergeMode::Off, // (kuna) option structmerge, default `off`; the real value is copied from the engine Architecture in `build_arch_handle`
-            struct_headless: crate::p5_types::kuna_structheadless::StructHeadlessMode::Off, // (kuna) option structheadless, default `off`; the real value is copied from the engine Architecture in `build_arch_handle`
             field_type: false, // (kuna) option fieldtype, copied from Architecture
             bool_byte: true,   // (kuna) option boolbyte (default on)
             unknown_byte_is_char: false, // (kuna) realtypes + C output
@@ -1902,12 +1889,11 @@ impl ArchContext {
             char_byte: true,   // (kuna) option charbyte
             cast_arith: false, // (kuna) option castarith
             cast_index: false, // (kuna) option castindex
-            ptr_from_use: crate::p5_types::kuna_ptrfromuse::PtrFromUseMode::Void, // (kuna) option ptrfromuse (default void)
-            char_ptr: false,             // (kuna) option charptr (default off)
+            char_ptr: false,   // (kuna) option charptr (default off)
             analysis_valuewitness: true, // (kuna) option valuewitness
-            elem_ptr: false,             // (kuna) option elemptr, copied from Architecture
+            elem_ptr: false,   // (kuna) option elemptr, copied from Architecture
             elem_ptr_ranges: std::rc::Rc::new(Vec::new()), // (kuna) elemptr
-            libctypes: false,            // (kuna) option libctypes, copied from Architecture
+            libctypes: false,  // (kuna) option libctypes, copied from Architecture
             recover_lowered_switch: false, // loweredswitch
             nul_terminator: false,
             // endptrbound only re-expresses an address the walk already compares
@@ -1995,7 +1981,8 @@ impl ArchContext {
             syscall_regs: false,
             syscall_regs_family: None,
             syscall_regs_userops: Vec::new(),
-            peb_names: false,
+            windows_cspec: false,
+            image_windows_user: false,
             tls_layout: None,
             switch_selector_guard: false, // switchselector (opt-in default-off)
             lowered_switch_linear: false, // loweredswitch linear|all

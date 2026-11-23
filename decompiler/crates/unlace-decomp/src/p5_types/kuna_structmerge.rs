@@ -123,6 +123,23 @@ pub enum StructMergeMode {
     Siblings,
 }
 
+impl crate::kuna_optionset::KunaOption for StructMergeMode {
+    const NAME: &'static str = "structmerge";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        StructMergeMode::Off
+    }
+
+    fn shipped() -> Self {
+        StructMergeMode::Off
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionStructMerge.apply(value)
+    }
+}
+
 impl StructMergeMode {
     /// Does the rule act at all?
     pub fn fires(self) -> bool {

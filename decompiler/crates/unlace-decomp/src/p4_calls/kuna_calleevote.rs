@@ -536,7 +536,10 @@ pub fn decide(
     expected: &dyn Fn((int4, uintb)) -> Option<Vec<uintb>>,
 ) -> Vec<(int4, uintb)> {
     let ptr_size = arch.types().get_size_of_pointer();
-    let headless = arch.struct_headless.fires();
+    let headless = arch
+        .kuna_options
+        .get::<crate::kuna_structheadless::StructHeadlessMode>()
+        .fires();
     let pointers = crate::kuna_callerptr::void_pointer(arch);
     let decided = decide_ledger_with(
         &arch.kuna_calleevote,
@@ -826,8 +829,14 @@ pub fn input_vote(data: &Funcdata, vn: VarnodeId, ct: &Rc<Datatype>) -> Option<R
         .map(|t| t.get_size_of_pointer())
         .unwrap_or(8);
     let open = uncommitted(ct, ptr_size)
-        || (uncommitted_under(ct, ptr_size, data.get_arch().struct_headless.fires())
-            && crate::kuna_structheadless::gives_a_pointee(&want.ct));
+        || (uncommitted_under(
+            ct,
+            ptr_size,
+            data.get_arch()
+                .kuna_options
+                .get::<crate::kuna_structheadless::StructHeadlessMode>()
+                .fires(),
+        ) && crate::kuna_structheadless::gives_a_pointee(&want.ct));
     let refuses = if want.by_class {
         crate::kuna_callerptr::refuses(data, vn, &want.ct)
     } else {

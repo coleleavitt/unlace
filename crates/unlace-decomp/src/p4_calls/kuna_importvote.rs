@@ -248,7 +248,10 @@ pub fn seed(arch: &mut Architecture, data: &Funcdata) {
         let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(&stub) else {
             continue;
         };
-        if arch.kuna_protoorder_types.contains_key(&key)
+        if arch
+            .kuna_tables
+            .get::<crate::kuna_protoorder::CalleeTypes>()
+            .contains_key(&key)
             || arch
                 .symboltab
                 .function_proto_pieces_across_scopes(&stub)
@@ -260,7 +263,9 @@ pub fn seed(arch: &mut Architecture, data: &Funcdata) {
             continue;
         };
         if let Some(stated) = statement(arch, v) {
-            arch.kuna_protoorder_types.insert(key, Rc::new(stated));
+            arch.kuna_tables
+                .get_mut::<crate::kuna_protoorder::CalleeTypes>()
+                .insert(key, Rc::new(stated));
         }
     }
 }

@@ -2508,9 +2508,15 @@ pub fn state(arch: &mut crate::architecture::Architecture, entry: &Address, data
         .into_iter()
         .any(|vn| element_derived(data, vn));
     if st == Stated::default() {
-        arch.kuna_elemptr.stated.remove(&key);
+        arch.kuna_tables
+            .get_mut::<crate::kuna_elemptr::Ledger>()
+            .stated
+            .remove(&key);
     } else {
-        arch.kuna_elemptr.stated.insert(key, Rc::new(st));
+        arch.kuna_tables
+            .get_mut::<crate::kuna_elemptr::Ledger>()
+            .stated
+            .insert(key, Rc::new(st));
     }
 }
 
@@ -3043,7 +3049,7 @@ pub struct Ledger {
 /// that decides them together (the callee-first driver, or a single
 /// function), not one whose functions are decompiled as if alone.
 pub fn start(arch: &mut crate::architecture::Architecture, objects: bool) {
-    arch.kuna_elemptr = Ledger {
+    *arch.kuna_tables.get_mut::<crate::kuna_elemptr::Ledger>() = Ledger {
         recording: arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0,
         no_objects: !objects,
         ..Ledger::default()
@@ -3055,7 +3061,7 @@ pub fn start(arch: &mut crate::architecture::Architecture, objects: bool) {
 /// a share of the functions, and a streamed export, which writes each one as
 /// it lands.
 pub fn without_objects(arch: &mut crate::architecture::Architecture) {
-    arch.kuna_elemptr = Ledger {
+    *arch.kuna_tables.get_mut::<crate::kuna_elemptr::Ledger>() = Ledger {
         no_objects: true,
         ..Ledger::default()
     };
@@ -3063,7 +3069,9 @@ pub fn without_objects(arch: &mut crate::architecture::Architecture) {
 
 /// End a batch's recording; the blocked sets stay for any later redo.
 pub fn stop(arch: &mut crate::architecture::Architecture) {
-    arch.kuna_elemptr.recording = false;
+    arch.kuna_tables
+        .get_mut::<crate::kuna_elemptr::Ledger>()
+        .recording = false;
 }
 
 /// Hand a function the objects it must not type.
@@ -3071,7 +3079,7 @@ pub fn seed(arch: &crate::architecture::Architecture, data: &mut Funcdata) {
     if !arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0 {
         return;
     }
-    let ledger = &arch.kuna_elemptr;
+    let ledger = arch.kuna_tables.get::<crate::kuna_elemptr::Ledger>();
     data.kuna_set_elemptr_objects(!ledger.no_objects);
     if !ledger.stated.is_empty() {
         let own = data.get_address().get_offset();
@@ -3108,19 +3116,28 @@ pub fn seed(arch: &crate::architecture::Architecture, data: &mut Funcdata) {
 /// File what a decompiled function said about each object, replacing what an
 /// earlier decompile of the same function said.
 pub fn record(arch: &mut crate::architecture::Architecture, data: &Funcdata) {
-    if !arch.kuna_elemptr.recording {
+    if !arch
+        .kuna_tables
+        .get::<crate::kuna_elemptr::Ledger>()
+        .recording
+    {
         return;
     }
-    arch.kuna_elemptr.file(
-        data.get_address().get_offset(),
-        data.kuna_elemptr_verdicts(),
-    );
+    arch.kuna_tables
+        .get_mut::<crate::kuna_elemptr::Ledger>()
+        .file(
+            data.get_address().get_offset(),
+            data.kuna_elemptr_verdicts(),
+        );
 }
 
 /// The functions to decompile again: every one that typed an object some other
 /// function disagrees about, with that object now blocked for it.
 pub fn disagreements(arch: &mut crate::architecture::Architecture) -> BTreeSet<u64> {
-    let redo = arch.kuna_elemptr.disagreements();
+    let redo = arch
+        .kuna_tables
+        .get_mut::<crate::kuna_elemptr::Ledger>()
+        .disagreements();
     if trace_on() {
         eprintln!(
             "[elemptr] batch disagreements: {} functions to redo",
@@ -3621,6 +3638,8 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
         self.kuna_state::<ElemptrSlot>().verdicts.borrow().clone()
     }
 }
+
+crate::kuna_arch_table!(Ledger);
 
 #[cfg(test)]
 #[path = "kuna_elemptr/tests.rs"]

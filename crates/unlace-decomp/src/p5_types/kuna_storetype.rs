@@ -210,3 +210,5 @@ impl crate::kuna_optionset::KunaOption for StoreTypeMode {
             })?)
     }
 }
+
+crate::kuna_arch_table!(Ledger);

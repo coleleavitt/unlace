@@ -87,7 +87,6 @@ pub use substrate::*;
 /// out of the IR module; `use unlace_decomp::prelude::*;` brings every one into scope.
 pub mod prelude {
     pub use crate::coreaction_casts::FuncdataCastExt;
-    pub use crate::evidence::WidePairEvidenceExt;
     pub use crate::funcdata_facing::FuncdataFacingExt;
     pub use crate::funcdata_merge::FuncdataMergeExt;
     pub use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
@@ -96,6 +95,7 @@ pub mod prelude {
     pub use crate::funcdata_union::FuncdataUnionExt;
     pub use crate::kuna_atomicxadd::FuncdataAtomicxaddExt;
     pub use crate::kuna_bejoin::FuncdataBejoinExt;
+    pub use crate::kuna_bejoin::WidePairEvidenceExt;
     pub use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
     pub use crate::kuna_calleememory::FuncdataCalleememoryExt;
     pub use crate::kuna_calleevote::FuncdataCalleevoteExt;

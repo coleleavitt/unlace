@@ -119,7 +119,7 @@ pub fn mark(call: &mut FuncCallSpecs, data: &Funcdata) {
             }
         }
     }
-    active.set_callee_filled(dead);
+    active.set_callee_filled(dead.map(|d| d as std::rc::Rc<dyn crate::fspec::EntryLiveness>));
 }
 
 /// Is `name` an Objective-C selector stub, `objc_msgSend$<sel>` (with the

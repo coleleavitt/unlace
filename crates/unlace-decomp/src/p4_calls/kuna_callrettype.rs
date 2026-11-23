@@ -132,10 +132,14 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     };
     match stated {
         Some(s) => {
-            arch.kuna_callret_types.insert(k, Rc::new(s));
+            arch.kuna_tables
+                .get_mut::<crate::kuna_callrettype::StatedReturns>()
+                .insert(k, Rc::new(s));
         }
         None => {
-            arch.kuna_callret_types.remove(&k);
+            arch.kuna_tables
+                .get_mut::<crate::kuna_callrettype::StatedReturns>()
+                .remove(&k);
         }
     }
 }
@@ -186,7 +190,10 @@ fn states(ct: &Rc<Datatype>) -> bool {
 
 /// What the function filed under `k` states it returns, for [`restore`].
 pub fn statement(arch: &Architecture, k: (int4, uintb)) -> Option<Rc<StatedReturn>> {
-    arch.kuna_callret_types.get(&k).cloned()
+    arch.kuna_tables
+        .get::<crate::kuna_callrettype::StatedReturns>()
+        .get(&k)
+        .cloned()
 }
 
 /// Do two statements say the same: one storage, one width, one type?
@@ -209,10 +216,14 @@ pub fn same_statement(a: Option<&StatedReturn>, b: Option<&StatedReturn>) -> boo
 pub fn restore(arch: &mut Architecture, k: (int4, uintb), stated: Option<Rc<StatedReturn>>) {
     match stated {
         Some(s) => {
-            arch.kuna_callret_types.insert(k, s);
+            arch.kuna_tables
+                .get_mut::<crate::kuna_callrettype::StatedReturns>()
+                .insert(k, s);
         }
         None => {
-            arch.kuna_callret_types.remove(&k);
+            arch.kuna_tables
+                .get_mut::<crate::kuna_callrettype::StatedReturns>()
+                .remove(&k);
         }
     }
 }
@@ -223,7 +234,8 @@ pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
     if names.is_empty() {
         return;
     }
-    arch.kuna_callret_types
+    arch.kuna_tables
+        .get_mut::<crate::kuna_callrettype::StatedReturns>()
         .retain(|_, s| !crate::kuna_protoorder::names_type(&s.ct, names));
 }
 
@@ -235,7 +247,10 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
         .kuna_options
         .get::<crate::kuna_callrettype::CallRetType>()
         .0
-        || arch.kuna_callret_types.is_empty()
+        || arch
+            .kuna_tables
+            .get::<crate::kuna_callrettype::StatedReturns>()
+            .is_empty()
     {
         return;
     }
@@ -249,10 +264,18 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
         if Some(k) == own {
             continue;
         }
-        let Some(s) = arch.kuna_callret_types.get(&k) else {
+        let Some(s) = arch
+            .kuna_tables
+            .get::<crate::kuna_callrettype::StatedReturns>()
+            .get(&k)
+        else {
             continue;
         };
-        if own.is_some_and(|o| arch.kuna_callret_refused.contains(&(o, k))) {
+        if own.is_some_and(|o| {
+            arch.kuna_tables
+                .get::<crate::kuna_callrettype::Refusals>()
+                .contains(&(o, k))
+        }) {
             data.kuna_set_callret_withdrawn(k, Rc::clone(s));
         } else {
             data.kuna_set_callret_type(k, Rc::clone(s));
@@ -410,7 +433,9 @@ fn returned_sources(data: &Funcdata) -> (Vec<OpId>, bool) {
 pub fn refuse(arch: &mut Architecture, entry: &Address, callees: &[(int4, uintb)]) {
     let Some(own) = key(entry) else { return };
     for &k in callees {
-        arch.kuna_callret_refused.insert((own, k));
+        arch.kuna_tables
+            .get_mut::<crate::kuna_callrettype::Refusals>()
+            .insert((own, k));
     }
 }
 
@@ -1147,3 +1172,10 @@ impl FuncdataCallrettypeExt for crate::funcdata::Funcdata {
             .map(|r| r.as_ref())
     }
 }
+
+crate::kuna_arch_table!(StatedReturns);
+
+/// (kuna `callrettype`) The (caller, callee) pairs whose statement the caller's finished
+/// variables contradicted; an [`ArchTable`](crate::kuna_archstate::ArchTable).
+pub type Refusals = std::collections::HashSet<Refusal>;
+crate::kuna_arch_table!(Refusals);

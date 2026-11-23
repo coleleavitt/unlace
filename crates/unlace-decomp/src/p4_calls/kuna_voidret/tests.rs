@@ -33,18 +33,31 @@ fn arch() -> Architecture {
 fn a_displaced_float_return_is_withdrawn_once_its_forced_decompile_is_discarded() {
     let mut arch = arch();
     let (put, main) = ((1, 0x1270), (1, 0x1080));
-    arch.kuna_voidret.returns.insert(put, Returns::Float);
-    arch.kuna_voidret
+    arch.kuna_tables
+        .get_mut::<crate::kuna_voidret::Ledger>()
+        .returns
+        .insert(put, Returns::Float);
+    arch.kuna_tables
+        .get_mut::<crate::kuna_voidret::Ledger>()
         .float_refused
         .entry(put)
         .or_default()
         .insert(main);
-    arch.kuna_voidret.displacing.insert(put);
+    arch.kuna_tables
+        .get_mut::<crate::kuna_voidret::Ledger>()
+        .displacing
+        .insert(put);
     assert!(
         withdrawals(&mut arch).is_empty(),
         "withdrawn before its forced decompile ran"
     );
     restore(&mut arch, put, Some(Returns::Float), None);
-    assert!(!arch.kuna_voidret.displacing.contains(&put));
+    assert!(
+        !arch
+            .kuna_tables
+            .get::<crate::kuna_voidret::Ledger>()
+            .displacing
+            .contains(&put)
+    );
     assert_eq!(withdrawals(&mut arch), BTreeSet::from([put]));
 }

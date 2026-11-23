@@ -721,9 +721,9 @@ pub struct ArchContext {
     pub pass_hooks: &'static crate::kuna_passhooks::KunaHooks,
     /// The registered kuna options, copied from the engine.
     pub kuna_options: crate::kuna_optionset::OptionSet,
-    pub x87_empty_storage: Option<crate::p4_calls::kuna_x87emptyreturn::Storage>,
+    pub x87_empty_storage: Option<crate::architecture::Storage>,
     /// (kuna `varargsave`) The System V argument registers, when the pass applies.
-    pub vararg_regs: Option<crate::p4_calls::kuna_varargsave::Regs>,
+    pub vararg_regs: Option<crate::architecture::Regs>,
     /// (kuna `arm64evcall`) The architecture's resolved arm64e virtual calls.
     pub vcall_targets: Rc<std::collections::BTreeMap<u64, crate::architecture::VcallTargets>>,
 
@@ -950,7 +950,7 @@ pub struct ArchContext {
     pub caller_extends_returns_from: i32,
     /// (kuna) How the image passes a floating-point value in the variadic part
     /// of a call.  Read by [`crate::p4_calls::kuna_varargretreg`].
-    pub vararg_floats: crate::p4_calls::kuna_varargretreg::VarargFloats,
+    pub vararg_floats: crate::architecture::VarargFloats,
     /// (kuna) how a narrow integer argument or return value fills its register
     /// (`narrowext`).  Read by [`crate::p4_calls::kuna_narrowext`].
     pub narrow_ext: NarrowExtRules,
@@ -1572,7 +1572,7 @@ impl ArchContext {
     pub fn callee_library_names(
         &self,
         addr: &Address,
-    ) -> Option<&'static crate::kuna_libcnames::LibraryNames> {
+    ) -> Option<&'static crate::fspec::LibraryNames> {
         if self.remote_scope.is_some() {
             return None;
         }

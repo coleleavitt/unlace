@@ -290,6 +290,12 @@ declare_hooks! {
     callmechanisms_compiled_ids: fn(&Architecture, &str) -> (i32, i32);
     /// `kuna_callmechanisms::register`: register the compiler spec's prototype p-code.
     callmechanisms_register: fn(Option<&str>, &AddrSpaceManager, &mut Architecture) -> KunaResult<()>;
+    /// `kuna_callwide`: drop the whole-image caller proof (the image or its facts changed).
+    callwide_clear: fn(&mut crate::kuna_archstate::ArchTables);
+    /// `kuna_callwide`: revoke the whole-image caller proof through a shared borrow.
+    callwide_revoke: fn(&crate::kuna_archstate::ArchTables);
+    /// `kuna_calleepurge`: forget the x86-32 callee walks (the host's facts changed).
+    calleepurge_forget_walks: fn(&mut crate::kuna_archstate::ArchTables);
     /// `kuna_jumpassist`: compile the jump assists out of the loaded inject library.
     jumpassist_load: fn(&mut Architecture);
     /// `kuna_segmentize`: compile the registered segment operations into the states.

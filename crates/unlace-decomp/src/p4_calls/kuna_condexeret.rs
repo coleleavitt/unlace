@@ -35,29 +35,7 @@ use crate::fspec::{ParamActive, ParamTrial};
 use crate::funcdata::Funcdata;
 use crate::funcdata_varnode::AncestorRealistic;
 
-/// A trial whose walk at one RETURN failed only at inputs read in threadable
-/// merge blocks.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Remembered {
-    pub trial: int4,
-    pub ret: OpId,
-    /// The merge blocks that read the failing inputs.
-    pub merges: Vec<BlockId>,
-    /// The storage of the failing inputs.
-    pub inputs: Vec<(Address, int4)>,
-}
-
-/// Where a function's output trials stand with respect to the retry pass.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub enum CondExeRetry {
-    /// No retry scheduled.
-    #[default]
-    Idle,
-    /// The next pass re-walks only these (trial, RETURN) pairs.
-    Pending(Vec<Remembered>),
-    /// The retry pass has run.
-    Done,
-}
+pub use crate::fspec::{CondExeRetry, Remembered};
 
 /// How the current pass treats one trial at one RETURN.
 #[derive(Debug, PartialEq, Eq)]

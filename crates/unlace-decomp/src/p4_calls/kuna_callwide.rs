@@ -112,7 +112,8 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
             .get::<crate::kuna_bejoin::BeJoinMode>()
             .proves()
     {
-        arch.kuna_callwide
+        arch.kuna_tables
+            .get::<crate::p4_calls::kuna_callwide::ProofSlot>()
             .0
             .as_ref()
             .filter(|proof| {
@@ -503,7 +504,9 @@ pub fn publish_mips(
     closed_sites: &std::collections::BTreeMap<u64, Vec<u64>>,
     declarations: &[Declaration],
 ) -> usize {
-    arch.kuna_callwide.clear();
+    arch.kuna_tables
+        .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+        .clear();
     if !arch.kuna_options.get::<CallWide>().0
         || !arch
             .kuna_options
@@ -522,7 +525,7 @@ pub fn publish_mips(
     {
         return 0;
     }
-    arch.kuna_callwide.0 = proof::prove(
+    let proven = proof::prove(
         arch,
         regions,
         functions,
@@ -530,7 +533,12 @@ pub fn publish_mips(
         declarations,
         proof::Authority::SealedMips,
     );
-    arch.kuna_callwide.len()
+    arch.kuna_tables
+        .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+        .0 = proven;
+    arch.kuna_tables
+        .get::<crate::p4_calls::kuna_callwide::ProofSlot>()
+        .len()
 }
 
 /// (kuna `callwide`) The function's call-width ledger, kept across `Funcdata::clear`.
@@ -558,6 +566,24 @@ impl FuncdataCallwideExt for crate::funcdata::Funcdata {
     fn kuna_callwide(&self) -> Option<&crate::p4_calls::kuna_callwide::Ledger> {
         self.kuna_state::<LedgerSlot>().0.as_deref()
     }
+}
+
+crate::kuna_arch_table!(ProofSlot);
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.callwide_clear = Some(clear_proof);
+    hooks.callwide_revoke = Some(revoke_proof);
+}
+
+/// Drop the architecture's whole-image caller proof.
+fn clear_proof(tables: &mut crate::kuna_archstate::ArchTables) {
+    tables.get_mut::<ProofSlot>().clear();
+}
+
+/// Revoke the architecture's whole-image caller proof.
+fn revoke_proof(tables: &crate::kuna_archstate::ArchTables) {
+    tables.get::<ProofSlot>().revoke();
 }
 
 #[cfg(test)]

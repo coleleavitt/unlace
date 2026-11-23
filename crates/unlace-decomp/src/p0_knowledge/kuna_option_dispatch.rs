@@ -123,10 +123,9 @@ kuna_options! { self, p1;
     "int3pad" => registered!(crate::kuna_int3pad::Int3PadMode),
     "x64syscall" => registered!(crate::kuna_x64syscall::X64SyscallMode),
     "fpuemu" => {
-        let (mode, msg) = crate::kuna_fpuemu::parse_fpuemu_mode(p1).map_err(KunaError::parse)?;
-        self.fpu_emu = mode.as_u8();
+        let msg = registered!(crate::kuna_fpuemu::FpuEmuMode);
         crate::kuna_fpuemu::apply(self);
-        Ok(msg)
+        msg
     },
     "mzdgroup" => {
         let msg = registered!(crate::kuna_coreoptions::MzDgroupOn);
@@ -159,10 +158,10 @@ kuna_options! { self, p1;
     "stackaddrargtrial" => registered!(crate::kuna_stackaddrargtrial::StackAddrArgTrial),
     "calleefilledarg" => registered!(crate::kuna_calleefilledarg::CalleeFilledArg),
     "callwide" => {
-        let enabled = on_or_off(p1)?;
+        let (enabled, msg) = <crate::kuna_callwide::CallWide as crate::kuna_optionset::KunaOption>::parse(p1)?;
         self.kuna_callwide.clear();
-        self.call_wide = enabled;
-        Ok(format!("Caller-proved register-pair returns turned {}", if enabled { "on" } else { "off" }))
+        self.kuna_options.set(enabled);
+        Ok(msg)
     },
     "bejoin" => {
         let (mode, msg) = crate::kuna_bejoin::BeJoinMode::parse(p1)?;
@@ -187,22 +186,19 @@ kuna_options! { self, p1;
     "rustprobestack" => registered!(crate::kuna_rustprobestack::RustProbestackMode),
     "gomorestack" => registered!(crate::kuna_gomorestack::GoMorestackMode),
     "goabi" => {
-        let on = crate::kuna_goabi::parse_goabi(p1).map_err(KunaError::parse)?;
-        self.load_options_mut().goabi = on;
-        crate::kuna_goabi::set_goabi_env(on);
-        self.analysis_goabi = on;
-        Ok(format!("Golang compiler-spec selection turned {}", if on { "auto" } else { "off" }))
+        let (on, msg) = <crate::kuna_goabi::GoAbi as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        self.load_options_mut().goabi = on.0;
+        crate::kuna_goabi::set_goabi_env(on.0);
+        self.kuna_options.set(on);
+        Ok(msg)
     },
     "gowritebarrier" => registered!(crate::kuna_gowritebarrier::GoWriteBarrierMode),
     "sourcelang" => {
-        let forced = crate::kuna_sourcelang::parse_option_value(p1).map_err(KunaError::parse)?;
-        self.load_options_mut().sourcelang = forced;
-        crate::kuna_sourcelang::set_sourcelang_env(forced);
-        self.source_lang_forced = forced;
-        Ok(match forced {
-            Some(lang) => format!("Source language forced to {}", lang.as_str()),
-            None => "Source language follows detection (auto)".to_string(),
-        })
+        let (forced, msg) = <crate::kuna_sourcelang::SourceLangForced as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        self.load_options_mut().sourcelang = forced.0;
+        crate::kuna_sourcelang::set_sourcelang_env(forced.0);
+        self.kuna_options.set(forced);
+        Ok(msg)
     },
     "sparcstructret" => registered!(crate::kuna_sparcstructret::SparcStructReturn),
     "arraystride" => registered!(crate::kuna_arraystride::RecoverArrayStride),
@@ -229,10 +225,7 @@ kuna_options! { self, p1;
     "castobject" => registered!(crate::kuna_castobject::CastObject),
     "calleeargs" => registered!(crate::kuna_calleestackargs::KunaCalleeargs),
     "argclobber" => registered!(crate::kuna_argclobber::ArgClobber),
-    "armfloatargs" => {
-        self.arm_float_args = on_or_off(p1)?;
-        Ok(format!("ARM floating argument recovery turned {p1}"))
-    },
+    "armfloatargs" => registered!(crate::kuna_armfloatargs::ArmFloatArgs),
     "narrowargs" => registered!(crate::kuna_narrowargs::NarrowArgs),
     "regnarrow" => registered!(crate::kuna_regnarrow::NarrowLocals),
     "pairparam" => registered!(crate::kuna_borrowcompare::PairParams),
@@ -246,10 +239,7 @@ kuna_options! { self, p1;
         self.kuna_options.set(mode);
         Ok(msg)
     },
-    "armfloatreturn" => {
-        self.arm_float_return = on_or_off(p1)?;
-        Ok(format!("ARM floating return recovery turned {p1}"))
-    },
+    "armfloatreturn" => registered!(crate::kuna_armfloatreturn::ArmFloatReturn),
     "passthrough" => registered!(crate::kuna_passthrough::PassThrough),
     "mixedtailret" => registered!(crate::kuna_mixedtailret::MixedTailRet),
     "cachereturn" => registered!(crate::kuna_cachereturn::CacheReturn),
@@ -388,29 +378,11 @@ kuna_options! { self, p1;
 
     "arm64evcall" => registered!(crate::kuna_analysisgates::Arm64evcall),
     "libctypes" => {
-        use crate::kuna_libctypes::LibcTypesLayout;
-        let layout = match p1.trim().to_ascii_lowercase().as_str() {
-            "opaque" | "on" | "1" | "true" => LibcTypesLayout::Opaque,
-            "glibc" => LibcTypesLayout::Glibc,
-            "off" | "0" | "false" => LibcTypesLayout::Off,
-            other => {
-                return Err(KunaError::lowlevel(format!(
-                    "libctypes: expected `off`, `opaque` or `glibc`, got `{other}`"
-                )))
-            }
-        };
-        self.analysis_libctypes = layout != LibcTypesLayout::Off;
-        self.analysis_libctypes_glibc = layout == LibcTypesLayout::Glibc;
+        let (layout, msg) = <crate::kuna_libctypes::LibcTypesLayout as crate::kuna_optionset::KunaOption>::parse(p1)?;
         self.load_options_mut().libctypes = layout;
         crate::kuna_libctypes::set_libctypes_env_layout(layout);
-        Ok(format!(
-            "Named libc aggregate types turned {}",
-            match layout {
-                LibcTypesLayout::Off => "off",
-                LibcTypesLayout::Opaque => "on (opaque)",
-                LibcTypesLayout::Glibc => "on (glibc layouts)",
-            }
-        ))
+        self.kuna_options.set(layout);
+        Ok(msg)
     },
     "tlsnames" => registered!(crate::kuna_tlsnames::Tlsnames),
     "uefi" => registered!(crate::kuna_analysisgates::Uefi),
@@ -474,24 +446,18 @@ kuna_options! { self, p1;
         Ok(format!("PPC32 PIC import recovery {}", mode.as_str()))
     },
     "ppcapu" => {
-        let val = on_or_off(p1)?;
-        self.analysis_ppcapu = val;
-        self.load_options_mut().ppcapu = val;
-        crate::kuna_ppcapu::set_ppcapu_env(val);
-        Ok(format!(
-            "PowerPC APU-note language selection turned {}",
-            if val { "on" } else { "off" }
-        ))
+        let (val, msg) = <crate::kuna_ppcapu::PpcApu as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        self.load_options_mut().ppcapu = val.0;
+        crate::kuna_ppcapu::set_ppcapu_env(val.0);
+        self.kuna_options.set(val);
+        Ok(msg)
     },
     "ifuncfpret" => {
-        let val = on_or_off(p1)?;
-        self.analysis_ifuncfpret = val;
-        self.load_options_mut().ifuncfpret = val;
-        crate::kuna_ifuncfpret::set_ifuncfpret_env(val);
-        Ok(format!(
-            "IFUNC PLT-stub naming turned {}",
-            if val { "on" } else { "off" }
-        ))
+        let (val, msg) = <crate::kuna_ifuncfpret::IfuncFpRet as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        self.load_options_mut().ifuncfpret = val.0;
+        crate::kuna_ifuncfpret::set_ifuncfpret_env(val.0);
+        self.kuna_options.set(val);
+        Ok(msg)
     },
     "kernelcache" => {
         let (choice, msg) = crate::kuna_kernelcache::parse_kernelcache(p1)?;
@@ -511,10 +477,10 @@ kuna_options! { self, p1;
         Ok(crate::kuna_dyldcache::set_dyldimage(p1))
     },
     "debuglink" => {
-        let val = on_or_off(p1)?;
-        self.analysis_debuglink = val;
-        crate::kuna_debuglink::set_debuglink_env(val);
-        Ok(format!("separate debug file lookup turned {}", if val { "on" } else { "off" }))
+        let (val, msg) = <crate::kuna_debuglink::DebugLink as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        crate::kuna_debuglink::set_debuglink_env(val.0);
+        self.kuna_options.set(val);
+        Ok(msg)
     },
     "cil" => {
         let msg = crate::kuna_cil::set_cil(p1)?;
@@ -527,15 +493,11 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "symbolnamechars" => {
-        let mode = crate::kuna_symbolnamechars::NameChars::parse(p1).ok_or_else(|| {
-            KunaError::lowlevel(format!(
-                "symbolnamechars must be off|safe|ident, got `{p1}`"
-            ))
-        })?;
-        self.analysis_symbolnamechars = mode;
+        let (mode, msg) = <crate::kuna_symbolnamechars::NameChars as crate::kuna_optionset::KunaOption>::parse(p1)?;
         self.load_options_mut().symbolnamechars = mode;
         crate::kuna_symbolnamechars::set_symbolnamechars_env(mode);
-        Ok(format!("symbol-name character sanitizing set to {}", mode.as_str()))
+        self.kuna_options.set(mode);
+        Ok(msg)
     },
     "dwarf" => registered!(crate::kuna_analysisgates::Dwarf),
     "cvftrace" => registered!(crate::kuna_analysisgates::CvfTrace),
@@ -547,11 +509,11 @@ kuna_options! { self, p1;
     "cppsig" => registered!(crate::kuna_cppsig::CppSigMode),
     "dwarfglobaltypes" => registered!(crate::kuna_analysisgates::Dwarfglobaltypes),
     "dwarfscopes" => {
-        let val = on_or_off(p1)?;
-        self.analysis_dwarfscopes = val;
+        let (val, msg) = <crate::kuna_analysisgates::DwarfScopes as crate::kuna_optionset::KunaOption>::parse(p1)?;
         // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("KUNA_DWARFSCOPES", if val { "on" } else { "off" }) };
-        Ok(format!("DWARF lexical-block and location-list locals turned {}", if val { "on" } else { "off" }))
+        unsafe { std::env::set_var("KUNA_DWARFSCOPES", if val.0 { "on" } else { "off" }) };
+        self.kuna_options.set(val);
+        Ok(msg)
     },
     "addrtable" => registered!(crate::kuna_analysisgates::Addrtable),
     "operand_refs" => registered!(crate::kuna_analysisgates::OperandRefs),
@@ -634,11 +596,11 @@ kuna_options! { self, p1;
     "swifttypes" => registered!(crate::kuna_analysisgates::Swifttypes),
     "swifthelpers" => registered!(crate::kuna_analysisgates::Swifthelpers),
     "objcivars" => {
-        let val = on_or_off(p1)?;
-        self.analysis_objcivars = val;
-        self.load_options_mut().objcivars = val;
-        crate::kuna_objcivars::set_objcivars_env(val);
-        Ok(format!("Objective-C instance layouts turned {}", if val { "on" } else { "off" }))
+        let (val, msg) = <crate::kuna_objcivars::ObjcIvars as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        self.load_options_mut().objcivars = val.0;
+        crate::kuna_objcivars::set_objcivars_env(val.0);
+        self.kuna_options.set(val);
+        Ok(msg)
     },
     "swiftobjcthunk" => registered!(crate::kuna_analysisgates::Swiftobjcthunk),
     "valuewitness" => registered!(crate::kuna_valuewitness::Valuewitness),
@@ -656,21 +618,13 @@ kuna_options! { self, p1;
     "osclassinfo" => registered!(crate::kuna_analysisgates::Osclassinfo),
     "swiftcall" => registered!(crate::kuna_swiftcall::Swiftcall),
     "swiftruntime" => registered!(crate::kuna_analysisgates::Swiftruntime),
-    "typelib" => {
-        let choice = crate::kuna_typelib::TypeLib::parse(p1).map_err(KunaError::parse)?;
-        let msg = format!("Type library set to {}", choice.as_str());
-        self.analysis_typelib = choice;
-        Ok(msg)
-    },
+    "typelib" => registered!(crate::kuna_typelib::TypeLib),
     "pdb" => registered!(crate::kuna_analysisgates::Pdb),
     "macho-arm64e" => {
-        let val = on_or_off(p1)?;
-        self.macho_arm64e = val;
-        self.load_options_mut().macho_arm64e = val;
-        crate::kuna_macho_arm64e::set_macho_arm64e_env(val);
-        Ok(format!(
-            "Mach-O arm64e Apple-Silicon spec selection turned {}",
-            if val { "on" } else { "off" }
-        ))
+        let (val, msg) = <crate::kuna_macho_arm64e::MachoArm64e as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        self.load_options_mut().macho_arm64e = val.0;
+        crate::kuna_macho_arm64e::set_macho_arm64e_env(val.0);
+        self.kuna_options.set(val);
+        Ok(msg)
     },
 }

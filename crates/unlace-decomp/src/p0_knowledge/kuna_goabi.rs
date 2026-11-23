@@ -67,6 +67,32 @@ pub fn parse_goabi(value: &str) -> Result<bool, String> {
     }
 }
 
+/// (kuna `goabi`) `auto` lets a Go image take the vendored golang compiler spec.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GoAbi(pub bool);
+
+impl crate::kuna_optionset::KunaOption for GoAbi {
+    const NAME: &'static str = "goabi";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        GoAbi(false)
+    }
+
+    fn shipped() -> Self {
+        GoAbi(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let on = parse_goabi(value).map_err(unlace_base::error::KunaError::parse)?;
+        let state = if on { "auto" } else { "off" };
+        Ok((
+            GoAbi(on),
+            format!("Golang compiler-spec selection turned {state}"),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

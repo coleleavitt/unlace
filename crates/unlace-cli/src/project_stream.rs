@@ -983,7 +983,13 @@ fn export(
     )?);
     asm.write_all(sweep.header_lines().as_bytes())
         .map_err(|e| format!("cannot write {}.asm: {e}", layout.file_name))?;
-    let selected_entries = if prog.arch().call_wide && specs.len() <= CALLWIDE_PENDING_RECORDS {
+    let selected_entries = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_callwide::CallWide>()
+        .0
+        && specs.len() <= CALLWIDE_PENDING_RECORDS
+    {
         specs.iter().map(|spec| spec.addr).collect()
     } else {
         BTreeSet::new()

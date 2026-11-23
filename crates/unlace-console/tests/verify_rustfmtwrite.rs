@@ -142,8 +142,10 @@ fn layout_language_and_complete_method_identity_bound_recovery() {
                         0 => arch.rustc_stable_version = None,
                         1 => arch.rustc_stable_version = Some((1, 93, 2)),
                         2 => {
-                            arch.source_lang_forced =
-                                Some(unlace_decomp::kuna_sourcelang::SourceLang::C)
+                            arch.kuna_options
+                                .set(unlace_decomp::kuna_sourcelang::SourceLangForced(Some(
+                                    unlace_decomp::kuna_sourcelang::SourceLang::C,
+                                )))
                         }
                         3 => arch.rust_string_writer_methods.clear(),
                         index => {

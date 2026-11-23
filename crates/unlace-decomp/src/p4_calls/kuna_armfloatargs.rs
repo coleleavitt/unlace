@@ -45,7 +45,7 @@ impl Action for ActionArmFloatArgs {
 /// The option is on over `armfloatreturn`'s widened model, whose positional
 /// rules keep an unused leading VFP parameter in its slot.
 pub fn applies(arch: &Architecture) -> bool {
-    arch.arm_float_args && crate::kuna_armfloatreturn::applies(arch)
+    arch.kuna_options.get::<ArmFloatArgs>().0 && crate::kuna_armfloatreturn::applies(arch)
 }
 
 /// Keep a proven double argument independent of an overlapping float call result.
@@ -1289,4 +1289,29 @@ pub fn base_inputs(arch: &Architecture, pieces: &mut PrototypePieces) -> bool {
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.armfloatargs_applies = Some(applies);
     hooks.armfloatargs_stated_singles = Some(stated_singles);
+}
+
+/// (kuna `armfloatargs`) Recover VFP arguments under the widened model; the message echoes the value as given.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ArmFloatArgs(pub bool);
+
+impl crate::kuna_optionset::KunaOption for ArmFloatArgs {
+    const NAME: &'static str = "armfloatargs";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ArmFloatArgs(false)
+    }
+
+    fn shipped() -> Self {
+        ArmFloatArgs(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let on = crate::options::on_or_off(value)?;
+        Ok((
+            ArmFloatArgs(on),
+            format!("ARM floating argument recovery turned {value}"),
+        ))
+    }
 }

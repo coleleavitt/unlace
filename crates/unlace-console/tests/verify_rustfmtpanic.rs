@@ -166,7 +166,12 @@ fn language_version_and_formatting_options_bound_recovery() {
                 "panic_literal",
                 enabled,
                 "rust",
-                |arch| arch.source_lang_forced = Some(source),
+                |arch| {
+                    arch.kuna_options
+                        .set(unlace_decomp::kuna_sourcelang::SourceLangForced(Some(
+                            source,
+                        )))
+                },
                 |_| {},
             )
         };

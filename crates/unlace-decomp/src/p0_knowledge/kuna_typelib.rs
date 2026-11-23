@@ -66,6 +66,25 @@ impl TypeLib {
     }
 }
 
+impl crate::kuna_optionset::KunaOption for TypeLib {
+    const NAME: &'static str = "typelib";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        TypeLib::Auto
+    }
+
+    fn shipped() -> Self {
+        TypeLib::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let choice = TypeLib::parse(value).map_err(unlace_base::error::KunaError::parse)?;
+        let msg = format!("Type library set to {}", choice.as_str());
+        Ok((choice, msg))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::TypeLib;

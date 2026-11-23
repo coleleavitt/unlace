@@ -105,7 +105,7 @@
 //! load-time gates use:
 //! [`SYMBOLNAMECHARS_ENV`], set by the `unlace` CLI before `bootstrap_from_object`
 //! (and on the `decomp_dbg` subprocess). The companion
-//! `Architecture::analysis_symbolnamechars` exists only so the option is
+//! registered [`NameChars`] value exists only so the option is
 //! catalog-visible and `phase catalog`'s live `current` field reflects it.
 
 use std::borrow::Cow;
@@ -372,6 +372,31 @@ pub fn sanitize_ident_chain(name: &str) -> String {
         .filter(|c| !c.is_empty())
         .collect::<Vec<_>>()
         .join("::")
+}
+
+impl crate::kuna_optionset::KunaOption for NameChars {
+    const NAME: &'static str = "symbolnamechars";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        NameChars::Off
+    }
+
+    fn shipped() -> Self {
+        NameChars::Safe
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let mode = NameChars::parse(value).ok_or_else(|| {
+            unlace_base::error::KunaError::lowlevel(format!(
+                "symbolnamechars must be off|safe|ident, got `{value}`"
+            ))
+        })?;
+        Ok((
+            mode,
+            format!("symbol-name character sanitizing set to {}", mode.as_str()),
+        ))
+    }
 }
 
 #[cfg(test)]

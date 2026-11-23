@@ -13,7 +13,7 @@ use unlace_num::opcodes::OpCode;
 
 /// The option is on and the loaded ARM image states the VFP procedure-call standard.
 pub fn applies(arch: &Architecture) -> bool {
-    arch.arm_float_return
+    arch.kuna_options.get::<ArmFloatReturn>().0
         && arch.archid.starts_with("ARM:")
         && arch.translate().loader_rc().borrow().arm_vfp_args()
 }
@@ -1193,6 +1193,31 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.armfloatreturn_base_pcs_helper = Some(base_pcs_helper);
     hooks.armfloatreturn_model = Some(model);
     hooks.armfloatreturn_call_input_allowed = Some(call_input_allowed);
+}
+
+/// (kuna `armfloatreturn`) Recover VFP return values; the message echoes the value as given.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ArmFloatReturn(pub bool);
+
+impl crate::kuna_optionset::KunaOption for ArmFloatReturn {
+    const NAME: &'static str = "armfloatreturn";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ArmFloatReturn(false)
+    }
+
+    fn shipped() -> Self {
+        ArmFloatReturn(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let on = crate::options::on_or_off(value)?;
+        Ok((
+            ArmFloatReturn(on),
+            format!("ARM floating return recovery turned {value}"),
+        ))
+    }
 }
 
 #[cfg(test)]

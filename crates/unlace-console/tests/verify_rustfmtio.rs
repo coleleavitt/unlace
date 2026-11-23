@@ -140,10 +140,11 @@ fn producer_language_and_current_image_evidence_are_required() {
                 |arch| match mutation {
                     0 => arch.rustc_stable_version = None,
                     1 => arch.rustc_stable_version = Some((1, 93, 0)),
-                    2 => {
-                        arch.source_lang_forced =
-                            Some(unlace_decomp::kuna_sourcelang::SourceLang::C)
-                    }
+                    2 => arch
+                        .kuna_options
+                        .set(unlace_decomp::kuna_sourcelang::SourceLangForced(Some(
+                            unlace_decomp::kuna_sourcelang::SourceLang::C,
+                        ))),
                     3 => arch.rust_io_writer_profiles.clear(),
                     4 => {
                         for profile in arch.rust_io_writer_profiles.values_mut() {

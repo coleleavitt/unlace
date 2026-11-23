@@ -21,7 +21,10 @@ fn setup(
 ) {
     let mut arch = bare_arch();
     arch.archid = "x86:LE:64:default:gcc".into();
-    arch.source_lang_forced = Some(SourceLang::Rust);
+    arch.kuna_options
+        .set(crate::kuna_sourcelang::SourceLangForced(Some(
+            SourceLang::Rust,
+        )));
     arch.types_impl().set_max_basetype_size(8);
     arch.types_impl().set_default_alignment_map();
     let types = arch.types();
@@ -221,7 +224,11 @@ fn named_reference_niche_refuses_consumed_saved_partial_and_foreign_values() {
         match case {
             0 => printer.set_name("c"),
             1 => printer.set_name("go"),
-            2 => arch.source_lang_forced = Some(SourceLang::C),
+            2 => arch
+                .kuna_options
+                .set(crate::kuna_sourcelang::SourceLangForced(Some(
+                    SourceLang::C,
+                ))),
             3 => arch.archid = "AARCH64:LE:64:v8A:default".into(),
             4 => fd.vbank_mut().get_mut(condition).unwrap().clear_implied(),
             5 => fd

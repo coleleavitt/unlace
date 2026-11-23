@@ -17,7 +17,6 @@ architecture -> kuna_elemptr
 architecture -> kuna_esprom
 architecture -> kuna_floatglobals
 architecture -> kuna_formatstring
-architecture -> kuna_fpuemu
 architecture -> kuna_gottailcall
 architecture -> kuna_hooks
 architecture -> kuna_inputhints

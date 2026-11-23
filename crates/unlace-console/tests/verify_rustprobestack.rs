@@ -35,12 +35,16 @@ fn raw_policy(
         .arch_mut()
         .set_kuna_option("rustprobestack", mode)
         .unwrap();
-    program.arch_mut().source_lang_forced = match language {
+    let forced = match language {
         "auto" => None,
         "c" => Some(unlace_decomp::kuna_sourcelang::SourceLang::C),
         "go" => Some(unlace_decomp::kuna_sourcelang::SourceLang::Go),
         _ => panic!("unsupported test language"),
     };
+    program
+        .arch_mut()
+        .kuna_options
+        .set(unlace_decomp::kuna_sourcelang::SourceLangForced(forced));
     if let Some(policy) = policy {
         program.arch_mut().set_kuna_option(policy, "on").unwrap();
     }

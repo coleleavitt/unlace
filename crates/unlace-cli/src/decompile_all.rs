@@ -970,17 +970,22 @@ fn seed_worker_inventory(prog: &mut ConsoleProgram, path: &str) -> Result<(), St
         .ok_or("no default code space")?;
     let manage = prog.arch().manage();
     let inventory = jobs::read_spec(path)?;
-    let callwide_inventory = prog.arch().call_wide.then(|| {
-        inventory
-            .iter()
-            .map(|entry| unlace_console::kuna_callwide::InventoryEntry {
-                address: entry.addr,
-                size: entry.size,
-                name: entry.name.clone(),
-                aliases: entry.aliases.clone(),
-            })
-            .collect()
-    });
+    let callwide_inventory = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_callwide::CallWide>()
+        .0
+        .then(|| {
+            inventory
+                .iter()
+                .map(|entry| unlace_console::kuna_callwide::InventoryEntry {
+                    address: entry.addr,
+                    size: entry.size,
+                    name: entry.name.clone(),
+                    aliases: entry.aliases.clone(),
+                })
+                .collect()
+        });
     let entries: Vec<(String, Address)> = inventory
         .into_iter()
         .map(|t| {

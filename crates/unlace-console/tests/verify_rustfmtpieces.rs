@@ -192,7 +192,12 @@ fn language_options_and_layout_evidence_bound_recovery() {
                 "pieces_u32",
                 enabled,
                 "rust",
-                |arch| arch.source_lang_forced = Some(source),
+                |arch| {
+                    arch.kuna_options
+                        .set(unlace_decomp::kuna_sourcelang::SourceLangForced(Some(
+                            source,
+                        )))
+                },
                 |_| {},
             )
         };

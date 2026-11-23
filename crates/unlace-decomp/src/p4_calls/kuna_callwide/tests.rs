@@ -57,7 +57,7 @@ fn data_and_proof() -> (Funcdata, Rc<Ledger>) {
     let register = manager.get_space_by_name("register").unwrap().clone();
     let model = Rc::new(ProtoModel::new(&manager));
     let mut context = ArchContext::new(manager);
-    context.call_wide = true;
+    context.kuna_options.set(super::CallWide(true));
     context.kuna_options.set(BeJoinMode::Evidence);
     let mut fd = Funcdata::new(
         "f",

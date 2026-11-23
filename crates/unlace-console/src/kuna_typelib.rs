@@ -475,15 +475,17 @@ pub fn seed(
     facts: &TypeLibFacts,
     merged: &mut AnalysisOutput,
 ) -> Result<usize, String> {
-    let Some(text) = library_text(&arch.analysis_typelib, facts.target)? else {
+    let typelib = arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_typelib::TypeLib>();
+    let Some(text) = library_text(&typelib, facts.target)? else {
         return Ok(0);
     };
-    let lib = Library::parse(&text)
-        .map_err(|e| format!("typelib {}: {e}", arch.analysis_typelib.as_str()))?;
+    let lib = Library::parse(&text).map_err(|e| format!("typelib {}: {e}", typelib.as_str()))?;
     if lib.target != facts.target {
         return Err(format!(
             "typelib {}: the library is for {}, the image is {}",
-            arch.analysis_typelib.as_str(),
+            typelib.as_str(),
             lib.target,
             facts.target
         ));

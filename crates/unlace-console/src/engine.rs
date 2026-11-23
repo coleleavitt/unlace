@@ -3939,7 +3939,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         }
         // (kuna `typelib`) The image's library target and imports; dropped
         // here when no library is to be read.
-        "typelib" => arch.analysis_typelib != unlace_decomp::kuna_typelib::TypeLib::Off,
+        "typelib" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_typelib::TypeLib>()
+                != unlace_decomp::kuna_typelib::TypeLib::Off
+        }
         // (kuna) The LOAD-TIME format-string resolver — a Listing consumer whose
         // per-call-site overrides are computed at the deferred commit point and
         // applied only when the gate asks for the static half (`static` on x86,
@@ -7169,7 +7173,11 @@ fn commit_analysis_output(
     //     1a: `Scope::addMap` copies the range property into the SymbolEntry, and
     //     the per-function snapshot reads the symbol's flags.
     //     `objcivars` gates the ivar offset variables the same way.
-    let ivars_on = prog.arch().analysis_objcivars;
+    let ivars_on = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_objcivars::ObjcIvars>()
+        .0;
     let const_on = |gate: unlace_analysis::pass::ConstGate| match gate {
         unlace_analysis::pass::ConstGate::ObjcRefs => true,
         unlace_analysis::pass::ConstGate::ObjcIvars => ivars_on,
@@ -8293,12 +8301,16 @@ fn commit_analysis_output(
     //    silent no-op.
     //    (kuna `objcivars`) An Objective-C method whose class has an instance
     //    struct takes `self` as `Class *` instead of the encoding's `id`.
-    let self_types: std::collections::HashMap<String, Rc<unlace_decomp::dtype::Datatype>> =
-        if prog.arch().analysis_objcivars {
-            out.objc_self_types.into_iter().collect()
-        } else {
-            Default::default()
-        };
+    let self_types: std::collections::HashMap<String, Rc<unlace_decomp::dtype::Datatype>> = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_objcivars::ObjcIvars>()
+        .0
+    {
+        out.objc_self_types.into_iter().collect()
+    } else {
+        Default::default()
+    };
     // (kuna `objcrettype`/`objcresolve`) The ObjC class table the engine types
     // and resolves message sends with; it rides the `objc` gate like the labels.
     if let Some(mut table) = out.objc_classes {

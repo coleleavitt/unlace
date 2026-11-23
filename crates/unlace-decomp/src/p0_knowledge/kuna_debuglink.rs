@@ -17,3 +17,12 @@ pub fn set_debuglink_env(on: bool) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(DEBUGLINK_ENV, if on { "on" } else { "off" }) };
 }
+
+crate::kuna_flag!(
+    /// (kuna `debuglink`) The requested state of the separate debug file lookup.
+    DebugLink,
+    "debuglink",
+    "separate debug file lookup",
+    unset: true,
+    shipped: true
+);

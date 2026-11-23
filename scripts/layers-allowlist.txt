@@ -90,15 +90,9 @@ fspec -> kuna_spsolve
 fspec -> modelrules
 fspec -> remote_provider
 funcdata -> kuna_atomicxadd
-funcdata -> kuna_calleedeadarg
 funcdata -> kuna_calleememory
-funcdata -> kuna_callrettype
-funcdata -> kuna_elemptr
 funcdata -> kuna_localstackviews
-funcdata -> kuna_narrowret
 funcdata -> kuna_ppc32piccalls
-funcdata -> kuna_protoorder
-funcdata -> kuna_rustabi
 funcdata -> kuna_slotptr
 funcdata -> kuna_stablenames
 funcdata -> kuna_stackobjectasserts
@@ -109,7 +103,6 @@ funcdata -> kuna_stackviews
 funcdata -> kuna_storereach
 funcdata -> kuna_switchextent
 funcdata -> kuna_varsources
-funcdata -> kuna_voidret
 funcdata -> unionresolve
 heritage -> kuna_calloverlap
 heritage -> kuna_globalcallranges

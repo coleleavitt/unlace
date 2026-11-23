@@ -1295,6 +1295,46 @@ impl crate::kuna_optionset::KunaOption for RustAbiMode {
     }
 }
 
+/// (kuna `rustabi`) Per direct-call-target evidence about the registers the callee is *proven*
+/// not to write, keyed by `(space index, entry offset)`; seeded by the driver after the flow
+/// build and kept across `Funcdata::clear`.
+#[derive(Default)]
+struct CalleeWritesSlot(
+    std::collections::HashMap<
+        (unlace_base::types::int4, unlace_base::types::uintb),
+        std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
+    >,
+);
+crate::kuna_func_state!(CalleeWritesSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `rustabi`) Record what a probe of `entry`'s body proved about the
+    /// registers it writes.
+    pub fn kuna_set_callee_ret_writes(
+        &mut self,
+        entry: &unlace_base::address::Address,
+        writes: std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
+    ) {
+        if let Some(sp) = entry.get_space() {
+            self.kuna_state_mut::<CalleeWritesSlot>()
+                .0
+                .insert((sp.get_index(), entry.get_offset()), writes);
+        }
+    }
+
+    /// (kuna `rustabi`) The recorded probe of `entry`'s body, if one was taken.
+    pub fn kuna_callee_ret_writes(
+        &self,
+        entry: &unlace_base::address::Address,
+    ) -> Option<&crate::kuna_rustabi::CalleeReturnWrites> {
+        let sp = entry.get_space()?;
+        self.kuna_state::<CalleeWritesSlot>()
+            .0
+            .get(&(sp.get_index(), entry.get_offset()))
+            .map(|r| r.as_ref())
+    }
+}
+
 #[cfg(test)]
 #[path = "kuna_rustabi/tests.rs"]
 mod tests;

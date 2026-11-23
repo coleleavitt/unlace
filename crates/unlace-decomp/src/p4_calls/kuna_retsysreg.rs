@@ -180,41 +180,9 @@ fn sinks(data: &Funcdata, root: VarnodeId) -> Option<Vec<OpId>> {
     Some(found)
 }
 
-/// The user ops that set processor state from their operands: interrupt
-/// masks and priorities, mode and control bits, the banked stack pointers,
-/// the CP15 control registers, PowerPC's `wrtee` and AArch64's `msr` to a
-/// system register the language has no name for. A hint or a cache, TLB or
-/// barrier op takes an address, which a returned word can be, so none of them
-/// is here.
-pub const STATE_USEROP_NAMES: &[&[u8]] = &[
-    b"setBasePriority",
-    b"enableIRQinterrupts",
-    b"disableIRQinterrupts",
-    b"enableFIQinterrupts",
-    b"disableFIQinterrupts",
-    b"enableDataAbortInterrupts",
-    b"disableDataAbortInterrupts",
-    b"writeCPSRControl",
-    b"setThreadModePrivileged",
-    b"setStackMode",
-    b"setMainStackPointer",
-    b"setProcessStackPointer",
-    b"setMainStackPointerLimit",
-    b"setProcStackPointerLimit",
-    b"coproc_moveto_Control",
-    b"coproc_moveto_Auxiliary_Control",
-    b"coproc_moveto_Coprocessor_Access_Control",
-    b"coproc_moveto_Domain_Access_Control",
-    b"coproc_moveto_Translation_table_control",
-    b"coproc_moveto_Context_ID",
-    b"WriteExternalEnable",
-    b"UnkSytemRegWrite",
-];
+pub use crate::kuna_specnames::RETSYSREG_STATE_USEROPS as STATE_USEROP_NAMES;
 
-/// The MIPS coprocessor writes, which set processor state only for
-/// coprocessor 0 (`mtc0`) and the FPU's control words (`ctc1`); coprocessor 2
-/// takes data.
-pub const COP_USEROP_NAMES: &[&[u8]] = &[b"setCopReg", b"setCopRegH", b"setCopControlWord"];
+pub use crate::kuna_specnames::RETSYSREG_COP_USEROPS as COP_USEROP_NAMES;
 
 /// Is `op` a CALLOTHER that sets processor state: a [`STATE_USEROP_NAMES`] op,
 /// a [`COP_USEROP_NAMES`] write to coprocessor 0 or 1, or the volatile write

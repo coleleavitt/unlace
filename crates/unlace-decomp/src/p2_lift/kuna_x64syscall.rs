@@ -91,9 +91,7 @@ use unlace_base::error::{KunaError, KunaResult};
 /// 4160 was the previous max.
 pub const ELEM_X64SYSCALL: ElementId = ElementId::new("x64syscall", 4161);
 
-/// The vendored x86 user-op the 64-bit `SYSCALL` constructor emits
-/// (`ia.sinc:4838`).
-pub const USEROP_NAME: &[u8] = b"syscall";
+pub use crate::kuna_specnames::X64_SYSCALL_USEROP as USEROP_NAME;
 
 /// The register carrying the syscall number on the way in and the result on the
 /// way out.

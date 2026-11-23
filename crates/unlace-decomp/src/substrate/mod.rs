@@ -35,6 +35,7 @@ pub mod kuna_optionset;
 pub mod kuna_outlang;
 pub mod kuna_passhooks;
 pub mod kuna_regioneval;
+pub mod kuna_specnames;
 pub mod kuna_typequal; // (kuna) C type qualifiers on their own type layer
 pub mod op;
 pub mod pcodeinject;

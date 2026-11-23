@@ -1,10 +1,14 @@
 name: Coverage
 
-# The workspace suite under cargo-llvm-cov, every test included (nextest profile
-# `full`, so also the slow ones the Tests workflow's `ci` profile leaves out), then
-# the lcov upload to Repowise. Kept off the push path: instrumented binaries ran the
-# suite 4-9x slower, and a failing test used to skip the report entirely. Here the
-# report is written and uploaded whether or not a test failed.
+# The workspace suite under cargo-llvm-cov, every test included (also the slow ones
+# the Tests workflow's nextest profile `ci` leaves out), then the lcov upload to
+# Repowise. Kept off the push path: instrumented binaries ran the suite 4-9x slower,
+# and a failing test used to skip the report entirely. Here the report is written and
+# uploaded whether or not a test failed.
+#
+# The suite runs under cargo's own harness, not nextest: nextest starts a process per
+# test, each instrumented process writes its own .profraw, and ~12k of them filled the
+# runner's disk.
 
 on:
   schedule:
@@ -40,6 +44,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Instrumented test binaries and their .profraw files need more than the image's
+      # free space; these preinstalled SDKs are unused here.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/share/swift || true
+          df -h /
+
       - name: Install Rust (stable) with llvm-tools
         run: |
           rustup toolchain install stable --profile minimal --component llvm-tools-preview
@@ -72,14 +85,12 @@ jobs:
             exit 1
           fi
 
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov,cargo-nextest
+      - uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Workspace suite under coverage (nextest profile full)
+      - name: Workspace suite under coverage
         run: |
-          cd decompiler && cargo llvm-cov nextest --no-report --workspace \
-            ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }} --profile full
+          cd decompiler && cargo llvm-cov --no-report --workspace \
+            ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }} --no-fail-fast
 
       - name: Write lcov.info
         if: always()
@@ -107,6 +118,12 @@ jobs:
             -F "event=$GITHUB_EVENT_NAME" -F "run_url=$RUN_URL" -F "workspace=$GITHUB_WORKSPACE" \
             https://api.repowise.dev/ci/coverage \
             || echo "::warning::Repowise: coverage upload failed; see the message above."
+
+      - name: Disk usage
+        if: always()
+        run: |
+          df -h /
+          du -sh decompiler/target 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         if: always()

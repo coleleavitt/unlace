@@ -3,7 +3,8 @@
 # `ci` is what every push to main and every full-ci PR runs (.github/workflows/tests.yml),
 # split three ways. It leaves out the tests below, each 40-80 s on a fast machine and
 # several times that on a CI runner: they would set the length of whichever partition
-# drew them. `full` runs everything; the scheduled Coverage workflow uses it.
+# drew them. `full` runs everything (the scheduled Coverage workflow runs the same
+# set under cargo's own harness, which keeps it to one coverage profile per binary).
 
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 10 }

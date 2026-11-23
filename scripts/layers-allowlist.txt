@@ -25,6 +25,7 @@ architecture -> kuna_calleevote
 architecture -> kuna_callerargs
 architecture -> kuna_callmechanisms
 architecture -> kuna_calloverlap
+architecture -> kuna_callresultuse
 architecture -> kuna_callrettype
 architecture -> kuna_callwide
 architecture -> kuna_castwiden
@@ -39,6 +40,7 @@ architecture -> kuna_declorder
 architecture -> kuna_decodekit
 architecture -> kuna_dfunaffected
 architecture -> kuna_elemptr
+architecture -> kuna_esprom
 architecture -> kuna_fastfailnoreturn
 architecture -> kuna_fatstr
 architecture -> kuna_floatglobals
@@ -50,6 +52,7 @@ architecture -> kuna_goreg
 architecture -> kuna_gotoreduce
 architecture -> kuna_gottailcall
 architecture -> kuna_gowritebarrier
+architecture -> kuna_hooks
 architecture -> kuna_indexaliasguard
 architecture -> kuna_inputhints
 architecture -> kuna_int3pad
@@ -70,7 +73,9 @@ architecture -> kuna_nullable_reloc
 architecture -> kuna_objcarc
 architecture -> kuna_objcrettype
 architecture -> kuna_octeoneffects
+architecture -> kuna_opaqueglobals
 architecture -> kuna_pebnames
+architecture -> kuna_phases
 architecture -> kuna_ppc32piccalls
 architecture -> kuna_protomerge
 architecture -> kuna_protoorder
@@ -88,6 +93,7 @@ architecture -> kuna_rustfmtwrite
 architecture -> kuna_rustprobestack
 architecture -> kuna_segmentize
 architecture -> kuna_simdlane
+architecture -> kuna_spsolve
 architecture -> kuna_stablenames
 architecture -> kuna_stackparamalign
 architecture -> kuna_storetype
@@ -122,6 +128,7 @@ context -> kuna_bejoin
 context -> kuna_bejoinpass
 context -> kuna_callmechanisms
 context -> kuna_calloverlap
+context -> kuna_callresultuse
 context -> kuna_constselectjump
 context -> kuna_deadcascade
 context -> kuna_floatglobals
@@ -136,6 +143,7 @@ context -> kuna_narrowext
 context -> kuna_nullable_reloc
 context -> kuna_objcrettype
 context -> kuna_octeoneffects
+context -> kuna_opaqueglobals
 context -> kuna_ptrfromuse
 context -> kuna_qualifiedcall
 context -> kuna_rustprobestack
@@ -171,6 +179,7 @@ flow -> kuna_calleeprotostack
 flow -> kuna_calleepurge
 flow -> kuna_localstackviews
 flow -> kuna_retpushedhalf
+flow -> kuna_spsolve
 fspec -> flow
 fspec -> kuna_calleedeadarg
 fspec -> kuna_calleepurge
@@ -183,7 +192,9 @@ fspec -> kuna_inputstorage
 fspec -> kuna_joincalloutput
 fspec -> kuna_libcnames
 fspec -> kuna_narrowext
+fspec -> kuna_passthrough
 fspec -> kuna_registerslots
+fspec -> kuna_spsolve
 fspec -> kuna_stackaddrargtrial
 fspec -> kuna_stackarggap
 fspec -> kuna_stackparamalign
@@ -251,6 +262,7 @@ funcdata_resolveflow -> unionresolve
 funcdata_resolveflow -> unionresolve_run
 funcdata_varnode -> funcdata_spacebase
 funcdata_varnode -> kuna_calleereginputs
+funcdata_varnode -> kuna_callresultuse
 funcdata_varnode -> kuna_calltransport
 funcdata_varnode -> kuna_condexeretuse
 funcdata_varnode -> kuna_exclusivearguse
@@ -325,6 +337,10 @@ kuna_dex -> kuna_callmechanisms
 kuna_dex -> pcodeinject
 kuna_elemptr -> kuna_globalref
 kuna_elfmaindecl -> kuna_calleevote
+kuna_fidproto -> comment
+kuna_fidproto -> kuna_langtypes
+kuna_fidproto -> kuna_structdefs
+kuna_fidproto -> printc
 kuna_gomorestack -> idiom
 kuna_gomorestack -> kuna_passthrough
 kuna_gottailcall -> kuna_calleearitybody
@@ -333,6 +349,7 @@ kuna_gottailcall -> kuna_entryreads
 kuna_gottailcall -> kuna_protoorder
 kuna_gowbphi -> idiom
 kuna_gowritebarrier -> idiom
+kuna_guardedloop -> kuna_strlenscan
 kuna_iteboolean -> funcdata_facing
 kuna_javanew -> cpool
 kuna_jumpassist -> kuna_callmechanisms
@@ -342,6 +359,7 @@ kuna_loadoptions -> kuna_calltargettype
 kuna_loadoptions -> kuna_goreg
 kuna_looprotate -> kuna_strlenscan
 kuna_narrowret -> kuna_truncarg
+kuna_objcrettype -> printc
 kuna_reglocals -> decompile_drive
 kuna_reglocals -> kuna_varsources
 kuna_reglocals -> printc

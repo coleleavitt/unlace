@@ -1458,7 +1458,7 @@ repair is disabled by `indexaliasguard off`.
 removal is only *allowed* in a space once heritage there is past the space's
 dead-code delay: `heritage.rs (Heritage::dead_removal_allowed)` is the gate
 (`pass > deadcodedelay`), consumed by
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs (ActionDeadCode)`
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs (ActionDeadCode)`
 and by `crates/unlace-bandb/src/p3_dataflow/ruleaction_1.rs
 (RuleEarlyRemoval)` — the checked variant (`dead_removal_allowed_seen`) also
 records that removal has now *happened* (`deadremoved`). The reason the gate
@@ -2478,7 +2478,7 @@ over `ExecutablePcode::evaluate`). The definitions are shared into the
 per-function architecture snapshot.
 
 `ActionSegmentize`
-(`crates/unlace-decomp/src/p9_emit/coreaction_render.rs (ActionSegmentize)`)
+(`crates/unlace-emit/src/p9_emit/coreaction_render.rs (ActionSegmentize)`)
 runs once per function right after the first heritage pass: each live CALLOTHER
 of a segment op with three inputs becomes `SEGMENTOP(space, base, inner)`,
 constant terms re-sized to the snippet's declared input sizes; a malformed one
@@ -2707,7 +2707,7 @@ found — a rewrite whose small value never actually escapes the shadow graph
 would churn the IR for no output gain. (kuna) A call pull whose dropped bits
 are known zero, because the wide input's non-zero mask lies inside the logical
 mask, is recorded on the call's spec when the rewrite commits
-(`crates/unlace-decomp/src/p9_emit/kuna_truncarg.rs (note_trimmed_arg)`),
+(`crates/unlace-emit/src/p9_emit/kuna_truncarg.rs (note_trimmed_arg)`),
 so emission can print the zero-extension C's promotion would otherwise lose
 (chapter [09](09-emission.md)). (kuna) A RETURN pull is recorded on the RETURN
 op the same way when its dropped bits are known zero and the calling convention
@@ -2869,7 +2869,7 @@ with a thousand splits traces each failing Varnode a thousand times (hkxc's
 0x1401cd7a0: 146,912 traces for 1,001 splits, 37 s). A failed trace changes
 nothing, and what it reads is bounded: the Varnodes it reached and every input
 and output of the ops that define and read them
-(`crates/unlace-decomp/src/p9_emit/kuna_lanetrace.rs (footprint)`). A
+(`crates/unlace-emit/src/p9_emit/kuna_lanetrace.rs (footprint)`). A
 split rewrites only within its own trace's footprint, taken before it is
 applied. So the rescan skips a Varnode whose failed trace read nothing a later
 split's footprint holds, which would fail the same way, and traces again every
@@ -2896,7 +2896,7 @@ new ops, new varnodes, the old ops removed, the old inputs deleted and the
 lane pieces made inputs. A stage can still fail (another input overlapping a
 lane piece, a varnode that cannot be deleted), and by then the function is
 half rewritten. Upstream throws, failing the function; the action
-(`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+(`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionLaneDivide)`) fails it the same way, with the stage's error. It used
 to count the failure as a split that was never tried and walk on over the
 storage it had already rewritten, so the next varnode it read could be one the
@@ -3158,7 +3158,7 @@ ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 (or INT_XOR) where one operand is provably zero along the path that reaches it (the
 `MultiPredicate` zero-slot analysis) collapses to a COPY of the other operand.
 
-**Conditional constants.** `crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+**Conditional constants.** `crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionConditionalConst)` (mainloop tail, wrapper over
 `crates/unlace-bandb/src/p3_dataflow/condconst.rs (condconst_apply)`)
 propagates the knowledge a CBRANCH creates: after `x == k` branches, `x` *is*

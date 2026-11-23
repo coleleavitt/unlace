@@ -839,7 +839,7 @@ Four front-ends drive one engine assembly:
   ghidra-mode also prints a `Kuna v…` plate comment (the release
   `KUNA_VERSION` bake, `kuna_banner_text`) at the top of every function —
   cache-only, HEADER-typed, rendered by the printer's plate arm
-  (`crates/unlace-decomp/src/p9_emit/printc.rs
+  (`crates/unlace-emit/src/p9_emit/printc.rs
   (emit_comment_func_header)`), which also renders the host's PLATE comments;
   the standalone pipeline never inserts HEADER comments, so that arm is inert
   there.  `flushNative` clears it all in the upstream order
@@ -1674,7 +1674,7 @@ address the written-slot guard guards, every 256 new values a pointer walk of
 chapter 06), every 1024 seeds the implied-variable walk visits
 (`crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs
 (MARK_IMPLIED_PROBE_STRIDE)`), every 256 Varnodes the dead-code sweep visits
-(`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+(`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (SWEEP_DEADLINE_STRIDE)`: destroying a dead operation unlinks it from each
 input's reader list, which is linear in that list, so a function whose dead
 operations all read one Varnode sweeps in quadratic time and the sweep stops
@@ -1834,7 +1834,7 @@ from when rendering starts, as the deadline the probes read
 extraction (`crates/unlace-console/src/project.rs (decompile_pulled)`)
 and the console's `print C`. The printer probes before each statement of a
 basic block and every 256 Varnodes of its local declarations
-(`crates/unlace-decomp/src/p9_emit/printc.rs
+(`crates/unlace-emit/src/p9_emit/printc.rs
 (PrintC::emit_basic_block_ops, PrintC::emit_local_var_decls)`) and stops
 printing once it has passed; the batch probes again after the C text and
 after the variable extraction. A render past the budget never reaches the
@@ -2847,7 +2847,7 @@ a port of upstream's `grammar.y`. Upstream has no scalar keywords at all: a base
 type is whatever `TypeFactory::findByName` answers, so only Ghidra's own `int4` /
 `uint8` / `float8` core-type names parse. kuna's printer, though, spells those
 types the way the target's own compiler would (§9,
-`crates/unlace-decomp/src/p9_emit/kuna_ctypes.rs`), which left the two
+`crates/unlace-emit/src/p9_emit/kuna_ctypes.rs`), which left the two
 halves speaking different languages: a declaration kuna had just emitted could
 not be pasted back at it, and the manual's own example
 (`prototype authenticate int authenticate(char *user,char *pass)`) was rejected
@@ -3581,7 +3581,7 @@ module docs):
 | `crates/unlace-bandb/src/p5_types/funcdata_resolveflow.rs` | flow resolution (P2) |
 | `crates/unlace-bandb/src/p5_types/funcdata_union.rs` | union facet resolution (P5) |
 | `crates/unlace-bandb/src/p6_variables/funcdata_facing.rs`, `crates/unlace-middle/src/substrate/funcdata_merge.rs`, `crates/unlace-bandb/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
-| `crates/unlace-decomp/src/p9_emit/coreaction_casts.rs` | cast insertion hooks (P9) |
+| `crates/unlace-emit/src/p9_emit/coreaction_casts.rs` | cast insertion hooks (P9) |
 
 **Data types are shared IR, not per-function state.** The type factory
 (`crates/unlace-middle/src/substrate/dtype.rs (TypeFactoryImpl)`) is one

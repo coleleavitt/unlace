@@ -16,6 +16,7 @@ unlace-middle.workspace = true
 unlace-lift.workspace = true
 unlace-structure.workspace = true
 unlace-bandb.workspace = true
+unlace-emit.workspace = true
 thiserror.workspace = true
 smallvec.workspace = true
 slotmap.workspace = true

@@ -134,7 +134,7 @@ gives every parked entry the p-code read one — transfer targets plus code addr
 taken as *values*, a Thumb pointer's odd value naming its even start — while
 `crates/unlace-console/src/decompile_step.rs (decompile_one_prefollowed)`
 drives again while that makes progress. The value case is load-bearing:
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs (ActionConstantPtr)`
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs (ActionConstantPtr)`
 types a constant as a code pointer, and the printer names it, only through a global
 Symbol, so a merely-stored function address would lose both. Only parked entries
 are materialized — never a constant that merely looks like an address, nor a
@@ -8086,16 +8086,16 @@ both
   alone. The commit also records each seeded entry address
   (`Architecture::cfstring_entries`), and the C printer wraps a literal found at one
   of them as `CFSTR("...")`
-  (`crates/unlace-decomp/src/p9_emit/kuna_cfstr.rs (wrap)`): the value is
+  (`crates/unlace-emit/src/p9_emit/kuna_cfstr.rs (wrap)`): the value is
   the entry, a `CFStringRef`, not the characters, so
   `NSLog(CFSTR("Reachability Flag Status: …"))` is what was written. The printer
   reads an entry's seeded string through a `char` element whatever the
   reference's type (`cfstring_char` in
-  `crates/unlace-decomp/src/p9_emit/printc.rs`), at both the constant
+  `crates/unlace-emit/src/p9_emit/printc.rs`), at both the constant
   arm and the global-symbol arm, so the entry's own type is free to say what the
   value is: the commit declares `struct __CFString` at the entry size and a
   pointer to it named `CFStringRef`
-  (`crates/unlace-decomp/src/p9_emit/kuna_cfstr.rs (declare_types)`),
+  (`crates/unlace-emit/src/p9_emit/kuna_cfstr.rs (declare_types)`),
   reusing a `CFStringRef` and `__CFString` the type factory already holds (an
   opaque one is completed to the entry size), and registers that pointer as the
   one the factory returns for any later pointer to the struct

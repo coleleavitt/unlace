@@ -34,7 +34,11 @@
 //! - an import whose symbol demangles to such a member, at the stub a call
 //!   enters: the model alone, so a call to `String.append(_:)` passes the
 //!   string it appends to; a struct member's `self` is passed only when the
-//!   caller set the register for that call.
+//!   caller set the register for that call;
+//! - an import stub of another image's Swift function that throws, a
+//!   protocol requirement's dispatch thunk included: `__swiftcall_throws`
+//!   only, so a caller that hands on its own error register reads the
+//!   callee's error.
 //!
 //! Only `self` is typed, and only when the body reads the register at its
 //! full width; a struct method whose `self` is exploded declares no `self`.
@@ -122,6 +126,34 @@ struct Binder<'t, 'a> {
 }
 
 impl Binder<'_, '_> {
+    /// The image's stubs of other images' Swift functions that throw (`imports`,
+    /// each in a code section): a call to one hands its error back in the
+    /// error register. Only the model is bound; the callee's body is not in the
+    /// image to type its `self`.
+    fn imports(&mut self, imports: &[(u64, String)]) {
+        for (addr, name) in imports {
+            match throwing_import(name) {
+                Some(Imported::Free) => {
+                    self.free.push(*addr);
+                    self.bind_import(*addr, false);
+                }
+                Some(Imported::Member { maybe_self }) => self.bind_import(*addr, maybe_self),
+                None => {}
+            }
+        }
+    }
+
+    /// Bind `__swiftcall_throws` to the stub at `f`, which lies in a code
+    /// section the caller checked (a stub section need not be `Text`).
+    fn bind_import(&mut self, f: u64, maybe_self: bool) {
+        self.bound.entry(f).or_insert(Binding {
+            model: SWIFTCALL_THROWS,
+            self_t: None,
+            maybe_self,
+            conflicted: false,
+        });
+    }
+
     fn put(&mut self, f: u64, model: &'static str, self_t: Option<Rc<Datatype>>) {
         self.put_with(f, model, self_t, false);
     }
@@ -656,6 +688,43 @@ fn requirement_is(flags: Option<u32>) -> Option<SelfIs> {
     })
 }
 
+/// What an imported Swift function that throws, and is not `async`, is.
+#[derive(Debug, PartialEq, Eq)]
+enum Imported {
+    /// A module's function: no `self`.
+    Free,
+    /// A type's member, or a protocol requirement's dispatch thunk;
+    /// `maybe_self` for a struct or enum instance member.
+    Member { maybe_self: bool },
+}
+
+/// [`Imported`] for the symbol an import stub binds, `None` for a function
+/// that does not throw or is not Swift's.
+fn throwing_import(name: &str) -> Option<Imported> {
+    let tree = demangle_swift_tree(name).or_else(|| demangle_swift_tree(&format!("_{name}")))?;
+    let [entity] = tree.children.as_slice() else {
+        return None;
+    };
+    let entity = if entity.kind == Kind::DispatchThunk {
+        entity.first()?
+    } else {
+        entity
+    };
+    if is_async(entity) {
+        return None;
+    }
+    if entity.kind == Kind::Function && entity.first().is_some_and(|c| c.kind == Kind::Module) {
+        return throws(entity).then_some(Imported::Free);
+    }
+    let (owner, is, true) = member(entity)? else {
+        return None;
+    };
+    let value_type = matches!(owner_kind(&owner), Some(Kind::Structure | Kind::Enum));
+    Some(Imported::Member {
+        maybe_self: value_type && is == SelfIs::Instance,
+    })
+}
+
 /// `self` of the member an imported method descriptor (`…Tq`) names.
 fn imported_is(import: &str) -> Option<SelfIs> {
     let tree =
@@ -853,6 +922,7 @@ pub fn bind(
     };
     b.symbols(symbols, true);
     b.symbols(import_calls, false);
+    b.imports(import_calls);
     b.classes();
     b.conformances();
     let mut stats = Stats::default();
@@ -977,5 +1047,20 @@ mod tests {
         assert_eq!(get("Swift.Task.yield()"), Some(false));
         assert_eq!(get(names[2]), None);
         assert_eq!(found.len(), 4);
+    }
+
+    #[test]
+    fn imported_requirement_thunks_that_throw_bind() {
+        let thunk = "$ss7DecoderP9container7keyedBys22KeyedDecodingContainerVyqd__Gqd__m_tKs9CodingKeyRd__lFTj";
+        assert_eq!(
+            throwing_import(thunk),
+            Some(Imported::Member { maybe_self: false })
+        );
+        assert_eq!(
+            throwing_import(
+                "$ss7DecoderP9container7keyedBys22KeyedDecodingContainerVyqd__Gqd__m_ts9CodingKeyRd__lFTj"
+            ),
+            None
+        );
     }
 }

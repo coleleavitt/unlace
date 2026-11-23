@@ -846,6 +846,13 @@ pub struct AnalysisOutput {
     /// [`crate::formatstring::kuna_fmtstatic::FormatStringStaticPass`], which
     /// requires the Listing; empty otherwise. See [`FormatSiteFact`].
     pub format_sites: Vec<FormatSiteFact>,
+    /// (kuna) The prototype of one call instruction, by the instruction's
+    /// address: what a pass that read the call's arguments knows beyond its
+    /// callee's prototype (`unlace_decomp::kuna_callsiteproto`).
+    pub call_prototypes: Vec<(u64, unlace_decomp::fspec::PrototypePieces)>,
+    /// (kuna `uefi`) The protocol and PPI interface instances an EFI module
+    /// installs.
+    pub uefi_installs: Vec<unlace_decomp::kuna_uefiprotocols::InstalledInterface>,
     /// (kuna `libctypes glibc`) The published glibc x86-64 field layouts went
     /// into THIS image's named aggregates.
     ///
@@ -865,6 +872,9 @@ pub struct AnalysisOutput {
     /// Carried for the same late consumer as [`Self::libctypes_glibc`], which
     /// must then answer from the width-stable `void *` tables too.
     pub libctypes_refused: bool,
+    /// (kuna `typelib`) The library target of this image and its imports, for
+    /// the commit to consult the prebuilt type library with.
+    pub typelib: Option<TypeLibFacts>,
     /// (kuna `armframes`) What whole-image frame recovery decided, for a
     /// `--jobs` worker to replay.
     pub arm_frames: Option<crate::aif::kuna_framereplay::ArmFrameReplay>,
@@ -1012,6 +1022,9 @@ impl AnalysisOutput {
         self.format_sites
             .iter_mut()
             .for_each(|f| fix_proto(&mut f.pieces));
+        self.call_prototypes
+            .iter_mut()
+            .for_each(|(_, p)| fix_proto(p));
         let helpers = &mut self.swift_helpers;
         helpers.symbols.iter_mut().for_each(|s| {
             if s.kind == SymKind::Data {
@@ -1243,12 +1256,32 @@ impl AnalysisOutput {
             .msvc_builders
             .extend(other.cpp_sig.msvc_builders);
         self.format_sites.extend(other.format_sites);
+        self.call_prototypes.extend(other.call_prototypes);
+        self.uefi_installs.extend(other.uefi_installs);
         self.libctypes_glibc |= other.libctypes_glibc;
         self.libctypes_refused |= other.libctypes_refused;
+        if other.typelib.is_some() {
+            self.typelib = other.typelib;
+        }
         if other.arm_frames.is_some() {
             self.arm_frames = other.arm_frames;
         }
     }
+}
+
+/// (kuna `typelib`) What [`crate::protos::kuna_typelib::TypeLibPass`] read off
+/// the object file for the prebuilt type library.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypeLibFacts {
+    /// The library target the image is (`linux x86_64`).
+    pub target: &'static str,
+    /// The image links against glibc rather than the C library the library was
+    /// built from.
+    pub glibc: bool,
+    /// Every imported function with each address it is reached at.
+    pub imports: Vec<(String, u64)>,
+    /// The imported names no function the image defines shares, sorted.
+    pub named: Vec<String>,
 }
 
 /// (kuna `formatstring static`) One printf/scanf-family call site whose format

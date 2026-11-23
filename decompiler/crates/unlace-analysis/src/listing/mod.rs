@@ -64,6 +64,7 @@ pub mod kuna_rawdiscover;
 pub mod kuna_rawextent;
 mod kuna_regcarry;
 mod kuna_switchextent;
+mod kuna_switchflow;
 mod kuna_switchtable;
 pub mod kuna_tailcallentry;
 mod kuna_thumbswitch;

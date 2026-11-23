@@ -1207,6 +1207,17 @@ binary was built against. A type does not replace one the run already has: a
 `struct`, `union` or `typedef` name that DWARF, a built-in table or an earlier
 header defined keeps that definition, and the header's is reported as rejected.
 
+**The built-in type library.** An x86-64 Linux ELF linked against glibc or musl
+needs no header for libc itself: unlace carries the declarations of the C library
+(1,447 functions, 347 records, 190 typedefs, generated from the musl 1.2.6
+headers) and reads the ones the image imports. `--option typelib off` turns that
+off, and `--option typelib <file>` reads a library file of your own instead (the
+format is described in `docs/spec/01-program-prep.md`; `scripts/typelib/gen_musl.py`
+writes one). A function the library declared is still overridden by a header's
+or an `--assert`'s declaration of it. A record the library already defined is
+not redefined by a header: that definition is rejected with the usual warning,
+so pass `--option typelib off` when your header's layout must win.
+
 The text must be preprocessed C. kuna runs no preprocessor on its own: it skips
 `#` lines, so a header that needs its macros or its `#include`s expanded leaves
 declarations that do not parse. **`--types-cpp <cc>`** runs your preprocessor
@@ -1691,7 +1702,6 @@ arguments its header states:
 | U-Boot legacy uImage | magic `27 05 19 56` | `ih_arch` (ARM, AArch64, x86, MIPS with the byte order that finds more `jr ra`, PowerPC, SH, SPARC, m68k, Xtensa, RISC-V) | `ih_load`, `ih_ep` (odd ARM entry: Thumb); gzip payloads inflated |
 | Intel HEX | every line a checksummed `:` record | `--target` or the Cortex-M probe | lowest address; type 03/05 records |
 | Motorola S-record | every line a checksummed `S0`-`S9` record | `--target` or the Cortex-M probe | lowest address; S7/S8/S9 |
-| ESP32 / ESP8266 app image | `E9`, segment table | chip id: Xtensa (ESP32, S2, S3, ESP8266) or RISC-V (C2, C3, C6, H2, P4) | lowest segment; header entry |
 | uClinux bFLT v4 | `bFLT` | ColdFire unless `--target` | 0; header entry; GOT and relocations rebased past the 64-byte header |
 | Qualcomm MBN / SBL / GPT image | SBL codeword, MBN header, `EFI PART` | the wrapped ELF's | the ELF is loaded as is |
 | MediaTek `md1img` | chained `0x58881688` section headers | MIPS32 LE (a nanoMIPS `md1rom` is reported: no SLEIGH spec decodes it) | `md1rom` at 0x90000000; `md1_dbginfo` (LZMA) symbols name functions |
@@ -1709,6 +1719,32 @@ declared at its base address as a typed global with a volatile range over its
 registers, and each `<interrupt>` names the Cortex-M handler of that IRQ
 `<NAME>_IRQHandler`. The access then reads `USART1.DR = 0x78;` instead of
 `dat_40011004 = 0x78;`.
+
+### Espressif (ESP32 / ESP8266) application images
+
+An ESP application image (`E9`, a segment table; what `esptool elf2image` and
+an ESP-IDF build write as `<project>.bin`) is loaded by every subcommand as
+it is, not flattened: each segment is mapped at its load address with the
+properties of the chip's memory region it loads into (DROM read-only data,
+IROM/IRAM read-only code, DRAM and RTC writable data), and the header's entry
+seeds function discovery. The processor follows the chip id: Xtensa (ESP32,
+S2, S3, ESP8266) or RISC-V (C2, C3, C5, C6, C61, H2, P4).
+
+The `esprom` option (default `auto`) names the calls into the chip's mask ROM
+and marks its peripheral registers volatile, for esp32, esp32s2, esp32s3,
+esp32c2, esp32c3, esp32c6, esp32h2 and esp8266. A ROM function names its call
+sites only; it has no bytes, so `kuna functions` does not list it.
+`--option esprom <chip>` applies a chip's ROM names to another input of the
+same firmware: its ELF, or a `--raw-image` dump of one segment whose code is
+also asserted `readonly` (an Xtensa call reaches the ROM through a literal,
+which folds only from read-only bytes). `--option esprom off` applies nothing.
+
+```sh
+$ kuna decompile hello_world.bin 0x400d6f04 --addr
+[kuna esp] hello_world.bin: ESP application image (esp32, 6 segments, entry 0x40081220)
+  ...
+  memcpy(&v2,a1,0x10);
+```
 
 ```sh
 $ unlace decompile-all stm32.hex --svd STM32F401.svd
@@ -4275,12 +4311,25 @@ and `--json` reports volumes, modules (file, GUID, name, FFS type, size) and the
 sections it could not decode. EFI 1.1 standard compression sections and
 EDK2 Tiano GUID-defined sections are decoded (`firmware/tiano.rs`, a port of
 EDK2's `Decompress.c`; a standard section that fails as EFI 1.1 is retried as
-Tiano, which some vendors store there). Each module is then an ordinary EFI image for the other subcommands.
+Tiano, which some vendors store there). Each module is then an ordinary EFI image for the other subcommands. A pad file (the free
+space EDK2 leaves in front of an aligned file) does not end a volume.
+
+Beside the modules `unlace unpack` writes `kuna-uefi.index`, which the `uefi`
+pass reads when a module of that directory is loaded: each module's FFS file
+type (a PEIM and a standalone-MM module are entered differently from a DXE
+driver) and, with `--protocols`, every protocol and PPI interface each module
+installs. `--protocols` loads every module once (about 20 s for an OVMF image
+on a development build); afterwards a `LocateProtocol` or `LocatePpi` in one
+module carries a comment naming the module that installs the interface:
 
 ```sh
 $ unlace unpack OVMF.fd --list | tail -2
 SECURITY_CORE          DF1CCEF6-F301-4A63-9661-FC6030DCC880    45824  SecMain.efi
-107 modules in 5 volumes
+122 modules in 5 volumes
+$ unlace unpack OVMF.fd -o fv --protocols >/dev/null
+$ unlace decompile fv/StatusCodeHandlerPei.efi _ModuleEntryPoint | grep -B1 LocatePpi
+                    /* gEfiPeiRscHandlerPpiGuid is installed by ReportStatusCodeRouterPei.efi (EFI_PEI_RSC_HANDLER_PPI at 0x829a90: Register=0x8297ff, Unregister=0x8298c8) */
+  (*(*v2)->LocatePpi)(v2,&gEfiPeiRscHandlerPpiGuid,0,NULL,&v6);
 ```
 
 ### A dyld shared cache

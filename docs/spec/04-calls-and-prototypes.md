@@ -7337,6 +7337,19 @@ u64)`, which only forwards `a0`..`a3` to a `jalr`, printed `void c_add(void)`,
 and zlib `adler32`'s `jr $t9` tail call printed no arguments. ARM's `r0 = r0`
 is no return-only register, so nothing else moves.
 
+A return-only register is one that overlaps no argument register at all
+(`kuna_passthrough.rs (return_only)`, the model's input list contains no part
+of it). AArch64's 16-byte `q0` is a possible output but no input entry,
+while its low half `d0` is the first float argument; clang clears a local
+struct through it (`movi v0.2d,#0; stp q0,q0,[sp]`) just before calling a
+function that fills the struct, and the test took the write for SysV's vector
+count. The call then counted as set up for a variadic callee and kept only
+the argument the function wrote: nanopb's `pb_get_encoded_size(size_t *,
+const pb_msgdesc_t *, const void *)` forwards `x1` and `x2` to `pb_encode`
+and printed `void _pb_get_encoded_size(unsigned long *a0)` with `_pb_encode(&v1)`;
+now `_pb_encode(&v1,a1,a2)` and three parameters
+(`tests/cli/passthrough-q0-zeroing-is-not-a-variadic-setup.json`).
+
 The argument is as wide as the callee's body reads it — the narrowest of the
 trial, the stated parameter and the widest body read starting at `R` — so a
 parameter recovered as `rdi` but read as `edi` is passed, and becomes the
@@ -7676,10 +7689,146 @@ wrong return: 212 of 4,267 gained returns over 444 decbench slices, against 6 of
 budget answers `false` when it runs out, because `true` there states a return on a
 body it never finished reading.
 
-Nothing is added where a callee stated nothing: a single-function `kuna
-decompile`, a narrowed or sharded `decompile-all`, an import, `--option
-protoorder off`, and under `--option protoorder types` a callee in a recursive
-component, leave every call as the option-off run renders it. Under the default
+**A forwarded register in front of a live one, whatever the callee stated.**
+One rule of this option asks nothing of the callee, so it reaches an indirect
+call and a call whose target stated no list: `forceInactiveChain`
+(`fspec.cc:1519`, `maxchain = 2`) must not count a register the function hands
+on untouched as an empty argument slot. The chain rule reads a run of more than
+two inactive slots as the end of the argument list and demotes every trial after
+it, the active ones included; its premise is that an inactive register holds
+incidental caller state. A register the function never writes is not that: it
+holds what the function was called with, whether no op names it (an unreferenced
+trial `buildTrialMap` synthesized for the slot) or an op reads it elsewhere and
+the call's input is the function's own input Varnode
+(`kuna_passthrough::forwarded_in_place`, recorded on the trial by
+`check_input_trial_use`). The ABI fills argument registers in order, so when a
+later register *is* actively set up for the call, the forwarded registers in
+front of it are the arguments the callee reads before it, and the function's
+parameters. `f(a,b,c,d,fp){ if (d<=32) d=32; fp(a,b,c,d); }` compiles at -O2 to
+`cmp x3,#0x20; csel x3,x3,x8,gt; br x4`: the three unreferenced slots before
+`x3` were a chain of three, `x3` was demoted with them, the `csel` had no reader
+and dead-code removal took the clamp, and the function printed
+`(*a4)(); // jump-as-call`. With `fp(a,b,c)` in front of the clamp, a chain of
+two, the same shape recovered all four arguments already. At a call site
+(`isRecoverSubcall`), a forwarded REGISTER trial now counts toward neither a run
+nor its end (`kuna_passthrough::neutral_in_chain`), and the tail loop that fills
+the holes below the last active trial takes it as it takes any two-slot hole;
+the `stackarggap` end-of-list test is still asked of it first. A forwarded
+register after the last active trial is still dropped (`k(a,b,fp){ fp(a+1,b); }`
+stays `(*a2)(a0 + 1)`: nothing after `x0` was set up), a stack slot is never
+neutral (an untouched incoming stack argument says nothing about the callee's
+list), and the function's own input recovery has `inputparamgap` for the same
+shape.
+
+The rule is held to registers that *are* the function's input in front of an
+argument the callee takes, because without those limits it reads incidental
+caller state as arguments, which is what the chain veto exists to stop: over 15
+decbench ARM firmware binaries and two router binaries it changed 345 of 5,067
+functions, most of them by inventing arguments. Each call site gets a
+`kuna_passthrough::NeutralScope` from `neutral_scope`, and:
+
+- an unreferenced slot, or one on a range this option claimed because the
+  function never touches it (recorded on the trial by `check_input_trial_use`),
+  is neutral only at a call no other call can precede (`first_calls`); after
+  an earlier call it holds that call's leftovers, so
+  gcc ARM's `push {r3,lr}; bl g; pop.w {r3,lr}; b.w h` does not pass `g`'s
+  r0/r1, an r2 nothing set and the reloaded alignment push r3 to `h`;
+- where upstream's count of the run in front of an active trial, forwarded
+  registers included, exceeds `maxchain`, `force_inactive_chain` keeps the
+  trial only when every register in the run is forwarded and
+  `anchors_neutral_run` allows the trial, and from then on keeps only later
+  active trials it allows. gcc AArch64's stack-protector epilogue in front of
+  a tail `b lseek` leaves x3 holding the guard's address (read by the check,
+  so inactive but not forwarded), x4 the zero `subs` left and x5 the zero the
+  canary was wiped with; the forwarded x1 and x2 do not carry `lseek` past x3;
+- `anchors_neutral_run` refuses a stack slot holding one of the function's own
+  incoming registers stored there unchanged
+  (`kuna_passthrough::saves_own_register`, recorded on the trial by
+  `check_input_trial_use`): `push {r3,lr}; bl errp` leaves the caller's own r3
+  at `[sp]`, where it reads as an active fifth argument. A stack slot the
+  caller set up is allowed like a register: glibc's `re_search_2` forwards all
+  eight argument registers and its own stack argument and passes a constant
+  tenth;
+- it also refuses a register a direct callee is known not to take: its own
+  bounded entry decode never takes it (`CalleeEntryDead::never_takes`), or its
+  `protoorder` statement leaves it out. gcc's IPA register allocation keeps a
+  value across a call to a known `void g(void)` in `rcx` (AArch64 `x3`), read
+  after the call, which scores as an active fourth argument, and the canary
+  wipe in front of a tail call to a four-argument function reads as its fifth
+  and sixth;
+- it refuses a trial that is not set up *for* the call, recorded on the trial
+  by `check_input_trial_use`. That is storage the function reads again after
+  the call (`kuna_passthrough::survives_call`): every INDIRECT heritage put on
+  the trial's bytes at the call counts, whether it reads the value before the
+  call (a callee the analysis knows leaves it alone) or creates a new one (a
+  register the model kills), and whether it covers the trial exactly or a
+  wider range (a 16-byte reload of two 8-byte slots); its output is followed
+  through further INDIRECTs and MULTIEQUALs, and a CALL or RETURN reading it is
+  no read, since heritage hands every later call of unknown prototype and
+  every RETURN the range anyway. gcc's `-fipa-ra` keeps `expandload_zext`'s
+  result in `r8` across `call sink` and returns it, so `rsi`, `rdx` and `rcx`
+  stay a chain of three and `sink` keeps its one argument
+  (`kuna-cli/tests/decompile_all_cli.rs`
+  `a_zero_extended_narrow_load_round_trips_through_the_printed_c`); it keeps
+  crazyflie's `s14`/`s15` across `bl` to a `bx lr` callee and subtracts them
+  after it, where the INDIRECT is a creation and the 13 untouched float
+  registers in front of them were printed as arguments; and mirai's `main`
+  reloads the six function pointers it stored at `[rsp]` before its first
+  call. It is also the zero gcc's stack-protector epilogue wipes the canary
+  register with (`kuna_passthrough::set_before_branch`: a constant, through
+  COPYs, written in a block that ends in a branch one of whose other
+  successors makes a call, and not in the call's own block): ARM's
+  `eors ip,r3,ip; mov r3,#0; bne __stack_chk_fail` leaves no inactive register
+  in front of r3 for the rule above to see. And it is a register reloaded
+  from the frame (`has_frame_reload`, from `kuna_reloadarg`): FreeRTOS
+  `xTaskIncrementTick` is `push {r3,lr}; ...; ldmia sp!,{r3,lr}; b.w part`
+  at a call no other call precedes, and the r3 the pop restores is the
+  function's own alignment slot, not a fourth argument behind r0..r2;
+- the trial the rescued run ends at may not be a stack slot holding a
+  constant the function stored there (`kuna_passthrough::ends_rescued_run`,
+  recorded on the trial by `check_input_trial_use`): with every argument
+  register in front of it forwarded, it is a frame local in the
+  outgoing-argument area, not an argument the forwarded registers lead up to.
+  mirai's `main` stores its function pointers there before
+  `xprintf("DEBUG MODE YO\n")` and printed eleven arguments and five
+  parameters; where the reload after the call is not yet linked to the slot
+  when the trial is scored, `survives_call` cannot see it and this test is
+  what refuses the slot. A constant stack slot after an active register is
+  unaffected (bzip2's `BZ2_bzWriteClose64(a,b,c,d,NULL,e,NULL)`).
+
+`tests/stages/kuna-passthrough-fwdchain-arm.xml` pins both ARM shapes and the
+`i9` case of `tests/stages/kuna-passthrough-fwdchain.xml` the IPA shape, each
+printing the empty call in both passes. `tests/stages/kuna-passthrough-anchor-arm.xml`
+pins the canary wipe, the restored alignment slot and the floats kept across
+the call, and `tests/stages/kuna-passthrough-anchor-x86.xml` the frame locals.
+
+One trial is scored inactive before any of this, with the option on or off: the
+register an indirect call jumps through (`kuna_passthrough::is_call_target`:
+the trial's Varnode is the CALLIND's input 0). The jump target is never an
+argument on the strength of the jump itself, even with `--option passthrough
+off`: reading it as one prints an argument the bytes do not pass, so this is a
+strict correctness fix and has no flag; `passthrough off` does not bring back
+upstream's reading of it. `onlyOpUse` takes the matched
+call's read of the trial slot as the parameter use and never asks about slot 0,
+so `mov r9,0x401020; cmovz r9,r8; jmp r9` scored `r9` an active sixth argument
+of the call it is the target of, and a tail jump through `r8` read `r8` as its
+fifth argument (`tests/stages/kuna-callproto.xml`); the chain veto was all that
+hid the first. Inactive, it never anchors a hole fill and is dropped from the
+end of a list, but is still filled below a later argument, where the ABI's
+order makes it an argument: `fp(fp,x+1)` is `inc %rsi; jmp *%rdi`, and
+definitely-not-used would make `forceNoUse` drop the `x+1` with it
+(`tests/stages/kuna-passthrough-calltarget.xml`). An AArch64 `br`/`blr` reads
+its target through a copy into `pc`, so the rule does not arise there.
+`tests/stages/kuna-passthrough-fwdchain.xml` pins the four-argument tail jump
+and the `blr` form beside it, with the option off reproducing the empty call,
+and the three-argument control and the trailing-register control that move in
+neither pass.
+
+Beyond that rule, nothing is added where a callee stated nothing: a
+single-function `kuna decompile`, a narrowed or sharded `decompile-all`, an
+import, `--option protoorder off`, and under `--option protoorder types` a
+callee in a recursive component, leave every call as the option-off run renders
+it. Under the default
 `cycles` a recursive callee states its list like any other, and this rule reads
 it on the same terms. `tests/stages/kuna-passthrough.xml` is the negative
 control for that clause (the console states no prototype); the positive witness
@@ -8271,7 +8420,10 @@ the wrong one would land on whatever the caller passed as its data pointer.
 constant a declared callback slot carried: the CALL's input at the slot's
 storage, resolved through the forms a global address takes on the way to a call
 (a plain constant, the `PTRSUB` off the constant spacebase a `&DAT_3a72` is
-built as, and the copies, casts and zero-extensions between them). Anything
+built as, and the copies, casts and zero-extensions between them). Where each
+argument lives is what the call's own recovery recorded; when the entry point
+has a declared prototype (the type library's `qsort`, a `--types` header's) no
+recovery ran, and the storage is the declared parameters'. Anything
 else — a load, a phi, arithmetic on a base — is not one address and is not
 recorded. Of the addresses it did record, `record` also files the ones this
 body used somewhere no callback argument accounts for: every operation that
@@ -10003,6 +10155,163 @@ global; e2fsck's `ext2fs_iblk_set` and `set_undo_io_backup_file`
 goes from `char` to `unsigned long`, its reader only renumbered; and dash's
 `hashvar` and bash -O0's `pshash_getbucket`, which compute a pointer in 32 bits,
 return 64-bit values (a `char *` for bash).
+
+### (kuna) `callresultuse` — an unknown callee's result read by the next call or the RETURN
+
+`voidret` above recovers `call g; ret` from the callers: a wrapper is `void`
+until some caller in the image reads its result. The Objective-C and Swift
+code of an iOS app hands results on without that evidence. `bl allKeys; bl
+objc_retainAutoreleasedReturnValue; mov x2,x21; bl containsObject:` reads
+each message's `x0` as the next receiver, and the callees are imports, so no
+caller inside the image reads `x0` after them. Every such hand-off was lost:
+`allKeys(a); objc_retainAutoreleasedReturnValue(); containsObject:()`,
+receiver and argument gone; over 300 functions of such an app's main binary,
+668 call sites printed with no argument at all.
+
+Three things in upstream's recovery conspire. A register an unknown callee
+may return is modelled at the call by an INDIRECT creation
+(`Heritage::guardCalls`, `heritage.cc:1522`), and `ancestor_op_use`
+(`funcdata_varnode.cc:1963`) refuses such a value as a trial for the next
+call's input or the function's RETURN ("an indirectCreation is an indication
+of an output trial, this should not count as an only use"), as it refuses a
+CALL's output when the callee's prototype is known. The refusal is a design
+choice: `call g; ret` is both `void f(void) { g(); }` and `T f(void) { return
+g(); }`. Second, `only_op_use` (`funcdata_varnode.cc:1851`) refuses a
+Varnode two different callees read: the retained object saved in `x22`,
+handed to `containsObject:` and later to `objc_release` is one Varnode after
+copy propagation, and `checkCallDoubleUse` allows the double use only for the
+same callee. Third, heritage visits only a range some op reads or writes, so
+`bl g; bl g2` with `x0` handed straight on is never heritaged there: the
+first call gets no output trial and the second no input trial.
+
+With the option on (`decompiler/crates/unlace-decomp/src/p4_calls/kuna_callresultuse.rs`,
+`off|on|all`, default `off`, see below), a trial whose root is a call result on every path
+(`kuna_callresultuse.rs (call_result_root)`: through MULTIEQUALs, COPYs and
+the INDIRECT effects of later calls, every definition is a CALL or CALLIND's
+output or a creation whose range is a possible output of the callee's model,
+whose effect is a call, and whose callee's result is not settled elsewhere
+(`kuna_callresultuse.rs (returns_value)`: a locked `void` output, a
+locked output in other storage, or under `protoorder types` a stated result
+in other storage, as hard-float ARM's `double dfi(double, float, int)` returns
+in `d0` and clobbers the `r0` the next call reads; a stated recovery with no
+result is `void` when `passthrough` records results),
+`kuna_callresultuse.rs (scores_def)`) is scored like any other value as the
+next call's input: `ancestor_op_use` accepts the creation or the output as a
+use (`Funcdata::ancestor_op_step`, the `memo.call_result_root` arm), and
+`only_op_use` lets another call read the same value in an argument slot
+(`kuna_callresultuse.rs (scoring_argument)`). Only the output model's first
+general-purpose register counts (`x0`, `rax`, `r0`;
+`kuna_callresultuse.rs (first_result_register)`): the second register of a
+pair (`x1`, `rdx`) is never a result on its own, and a float result (`d0`) is
+left to the stricter reading, since a receiver or an argument handed on is a
+pointer. A root the function computes itself on another path keeps the strict
+reading: `statuscmp`'s `fnstsw ax` on one arm and a call's `ax` on the other
+is a scratch register, not a return, and the datatest that collapses it to
+`val2 <= val1` is unchanged.
+
+A hand-off also needs one end of it to say it is one
+(`kuna_callresultuse.rs (scoring_argument)`): the next callee takes an
+argument in the register, by its body (the bounded entry decode reads it
+before writing it, `CalleeEntryDead::proves_input`) or by a recovery
+`protoorder` stated, or every callee behind the value returns one there, by
+a locked or stated output (`kuna_callresultuse.rs (takes_argument)`,
+`kuna_callresultuse.rs (returns_value)`). Neither end may say no: a body
+that never reads the register (`CalleeEntryDead::never_takes`), a stated
+recovery that lists no argument there, or a prototype that returns nothing
+there ends it. Two calls nothing is known of hand nothing on, since in C
+`bl g; bl h` between two of them is far more often `g(); h();` than
+`h(g())`, and in Swift the second is often a runtime entry point that takes
+its object in another register (`swift_release_x8`). An Objective-C
+selector stub's call, which already carries the result its method types
+give, says yes, and so does a C callee in the image that reads its first
+argument.
+
+On AArch64 the Objective-C and Swift runtime's entry points are known by
+name (`kuna_callresultuse.rs (runtime_entry)`), since their stubs say
+nothing. The ARC calls (`objc_retain`, `objc_release`,
+`objc_retainAutoreleasedReturnValue`, ...; clang's ARC specification,
+"Runtime support"), the Swift runtime's (`swift_retain`,
+`swift_bridgeObjectRelease`, ...), a message send's receiver
+(`objc_msgSend`, `objc_msgSendSuper2`, the `objc_msgSend$<selector>`
+stubs), `objc_sync_enter`, `objc_sync_exit` and `objc_exception_throw`
+take their object in `x0`: as the next callee they say yes. The
+register-specific entry points `objc_retain_x<N>`, `objc_release_x<N>`,
+`swift_retain_x<N>` and `swift_release_x<N>` take it in `x<N>`: libobjc's
+begin `ands x0, x<N>, x<N>`, and libswiftCore's return `function(ptr)` with
+`ptr` moved from `x<N>` (`swift/Runtime/CustomRRABI.h`), so neither reads
+`x0` and as the next callee they say no. As the callee behind the value, a
+release (and `objc_exception_throw`) says no. A retain returns its object,
+but that says nothing of the next call: Swift code goes on with the object
+it passed, and leaves the result in `x0` for a callee that takes nothing
+there (`swift_bridgeObjectRetain(v8); Foundation.Locale.current.getter(v7)`,
+or `objc_retainAutoreleasedReturnValue(..)` before
+`URL._bridgeToObjectiveC()`, whose `self` is in `x20`). `tests/stages/kuna-callresultuse-runtime.xml`
+pins both ends.
+
+So the hand-off is heritaged at all, `kuna_callresultuse.rs (plant)` gives
+the RETURNs a read of that register the way `voidret` plants the storage a
+caller reads, when the function makes a call, its output is not locked,
+nothing names the register, it is not a stated input of a first call
+(`passthrough` then claims it as the function's own parameter handed
+through), and `voidret` has not planted there already. The planted trial is
+settled by `kuna_callresultuse.rs (settle_planted)` once the value at each
+RETURN is known: inactive under `on`, and under `all` active only when every
+live RETURN hands back a call result on every path, since the read an
+untouched input register reaches would otherwise make it active, as a read
+of an input does (`scale_err`: `oflow`'s `r0` on one exit, the function's own
+`r0` beside the `s0` it converts on the other, printed `return a1`). A trial
+the function's own value in another storage class competes with is yielded
+to it (`kuna_callresultuse.rs (yield_to_own_value)`, `passthrough`'s
+`returns_own_value`).
+
+The RETURN keeps upstream's strict reading under `on`: `bl g; cbz x0,L; ...;
+L: ret` is `long h(long a) { long r = g(a); if (r) *p = 1; return r; }` and
+`void h(long a) { if (g(a)) *p = 1; }` alike, and a store of the result
+before the `ret` is the body of as many `void` functions as of returning
+ones. nanopb's `pb_decode_bool` is that shape (`bl pb_decode_varint32_eof;
+cbz w0,L; ...; L: ret`, the source `return false` / `return true` folded
+into the callee's `w0`), has no caller in the image, and stays `void` under
+`on`. `all` (`kuna_callresultuse.rs (scoring_return)`) takes a result that
+reaches every live RETURN untouched for the return value, the reading a
+reader who takes an untouched `x0` at the `ret` for the result makes, and
+prints it `int _pb_decode_bool(...)` with `return v2;`.
+
+Forced on, the option moves none of the 675 datatest assertions and none of
+the stage assertions. On an iOS app's main binary (Apple options on), `on`
+changes 17 of a 91-function sample and 23 of a 300-function one. No result
+of a void runtime release (`swift_bridgeObjectRelease`, `swift_release_x<N>`,
+`objc_release_x<N>`) is handed to the next call, where the reading without
+the evidence rule printed 38 and 110, and no register-specific entry point
+takes a value a call left in `x0` (the reading before the runtime entry
+points were known printed 8 in one 1,015-line function, `objc_release_x19(
+CGRectGetMinY(..))` among them). The ARC calls printed with no argument fall
+from 121 to 12 and from 77 to 23; the ones left take a value the function
+loaded, not a call's result. In the app's AppAuthCore framework (705
+functions, selector stubs) they fall from 644 to 15, and the app's nanopb
+framework does not change. A register-specific entry point printed with no
+argument (118 and 310 times there, on or off) takes `x<N>`, which no call
+result is; only its prototype names it. Over clang 22 arm64 builds of bzip2
+and zlib at O0 and O2, nothing changes; the reading without the evidence
+rule added four arguments there, all to bzip2's `cadvise(void)`.
+
+The option is off by default because, without that rule, the reading was
+right where results are handed from message to message and wrong in most
+other code. In C, `bl g; bl h` with `x0` untouched is far more often `g();
+h();`, two calls of which the second takes nothing, than `h(g())`. Over 12
+AArch64 builds of bzip2, zlib, dash and gzip (clang 21 at O0, O2 and O2
+`-fno-inline`), it changed 141 of 3,202 functions; of the 276 arguments it
+added at calls to in-image functions whose DWARF gives their parameter
+count, 275 were false (`cadvise(void)`, `onint(void)`, `yylex(void)`,
+`flush_outbuf(void)`), and 8 `void` functions became returning (dash's
+`flushall`, gzip's `warning`). Once the first register is active at a call,
+upstream's contiguity rules follow it: gcc's ARM `push {r3,lr}; bl g; pop.w
+{r3,lr}; b.w h`, from `void t1(void) { g(6); h(); }`, gave `h` the pair
+`r1:r0`, the leftover `r2` and the reloaded `r3`, and `t1` four parameters
+(`tests/stages/kuna-callresultuse-armtail.xml` pins the default, and holds
+with the option on). On x86-64 `rax` is no argument register, but a `mov
+rcx,rax` temporary at a gcc -O0 variadic call was taken for a trailing
+argument (`fprintf(stream,fmt,v1,fmt)`). With the option off every function
+decompiles as it did before the option existed.
 
 ### Raw caller reads prove a return outside callee-first settling (`kuna_callerreads.rs`)
 

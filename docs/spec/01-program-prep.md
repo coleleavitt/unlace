@@ -334,7 +334,7 @@ wins.
 
 (kuna) An ELF32 whose `e_machine` is 249 (`EM_NANOMIPS`) selects
 `nanoMIPS:LE:32:default` or `nanoMIPS:BE:32:default` by its byte order
-(`decompiler/crates/kuna-analysis/src/loader/kuna_nanomips.rs`). The neutral
+(`decompiler/crates/unlace-analysis/src/loader/kuna_nanomips.rs`). The neutral
 object parser has no architecture for that machine, so the id is read from the
 ELF header itself, before the per-architecture table that would otherwise
 report an unsupported machine. nanoMIPS is its own encoding, not a mode of
@@ -2401,14 +2401,14 @@ index spaces too. The decompiler works on addressed code that reads and writes
 storage locations. Two steps at load close the gap, and after them a module is
 an ordinary image.
 
-*The module.* `decompiler/crates/kuna-analysis/src/loader/format/wasm.rs (Module)`
+*The module.* `decompiler/crates/unlace-analysis/src/loader/format/wasm.rs (Module)`
 reads the type, import, function, table, memory, global, export, start, element,
 code and data sections and the `name` custom section's function and global
 names. Every count is checked against the bytes left in its section before
 anything is allocated, and a malformed section is an error with a reason; a
 damaged `name` section only loses names.
 
-*The layout.* `decompiler/crates/kuna-analysis/src/loadimage_wasm.rs (WasmImage)`
+*The layout.* `decompiler/crates/unlace-analysis/src/loadimage_wasm.rs (WasmImage)`
 gives each index space a fixed place in one 32-bit space:
 
 | Address | Contents |
@@ -2438,7 +2438,7 @@ that is neither imported nor exported in a module whose every body was lowered
 
 *The lowering.* A body is validated code, so the height of the operand stack at
 each instruction is a static fact, and so is the type of each slot.
-`decompiler/crates/kuna-analysis/src/loader/kuna_wasmlower.rs (Lowering::lower)`
+`decompiler/crates/unlace-analysis/src/loader/kuna_wasmlower.rs (Lowering::lower)`
 walks a
 body with the validation algorithm's control stack and type stack and writes one
 16-byte record per operation that still does something once the stack is gone:
@@ -2496,13 +2496,13 @@ stack space. Operations p-code has no operator for are user ops (`rotl`,
 `f*.nearest` are the `FLOAT_TRUNC` and `FLOAT_ROUNDEVEN` user ops that chapter
 05 types as float to float.
 
-The dispatcher is `decompiler/crates/kuna-console/src/engine.rs
+The dispatcher is `decompiler/crates/unlace-console/src/engine.rs
 (bootstrap_wasm_bytes)`. Surfaces that need an `object::File` (`strings`,
 `xrefs`, `decompile-graph`) refuse a module with a capability error, as they do
 a TE. Measured on a 2.6 MB Go `wasip1` module: 1792 functions load in 0.08 s
 and every body lowers. Checked by compiling the printed C of functions from
 `tests/fixtures/wasm/calls.wasm` beside their source and comparing results on
-random inputs (`decompiler/crates/kuna-cli/tests/wasm_cli.rs`), and by
+random inputs (`decompiler/crates/unlace-cli/tests/wasm_cli.rs`), and by
 `tests/stages/kuna-wasm-module.xml`.
 
 ## 1.3 Loader markup
@@ -4098,6 +4098,90 @@ moves.
   `return -(a / b);` and `return f ? a / b : c;` keep only the high word or
   return nothing, where the off output returns every word, and the helper's
   stub and `-Os` parameter losses above keep it off as well.
+- **(kuna) The prebuilt type library** (`typelib`, default `auto`,
+  `decompiler/crates/unlace-analysis/src/analyzers/protos/kuna_typelib.rs (TypeLibPass)`,
+  `decompiler/crates/unlace-console/src/kuna_typelib.rs (seed)`):
+  the tables above are written by hand, so they stop where the hand stopped:
+  about 740 functions, and member layouts for nine records. The type library
+  is the same knowledge generated: every function a platform's C library
+  declares, with its prototype, and every record with the size, alignment and
+  member offsets the platform's compiler gives it. One library is built in, for
+  an x86-64 Linux ELF dynamically linked against glibc or musl (1,447
+  functions, 347 records, 190 typedefs); on every other image the option does
+  nothing. `off` reads no library and `typelib <file>` reads a library file in
+  place of the built-in one, for an image of the target the file names.
+
+  *Format.* A library is a text file. Three header lines name the format
+  version (`kuna-typelib 1`), the target (`target linux x86_64`) and the source
+  (`source musl 1.2.6`). Each entry after them is one line: `F name flag<TAB>C
+  declaration` for a function, `T name flag<TAB>C type` for a typedef, and `S
+  name flag size alignment` (`U` for a union) for a record, followed by one
+  indented line per member, `offset name<TAB>C type`. Types are spelled in C
+  and read by the C grammar `--types` and `--assert` use. A record is never
+  laid out by kuna: its size, alignment and member offsets are the ones in the
+  file, so a packed record (`epoll_event`) or an over-aligned one is carried
+  as the compiler built it, and a member the file leaves out (a bit-field, a
+  flexible array, a reserved word) is a hole. The `flag` says which C
+  libraries of the target the entry is true of: `*` for all, `m` for the source
+  library only, and `m=<integer type>` or `m=<size>,<alignment>` when the other
+  C library holds an integer, or a record of that width with other members,
+  under the same type name.
+
+  *Where it comes from.* `scripts/typelib/gen_musl.py` writes the built-in
+  library from the musl libc headers (MIT), release and tarball hash pinned in
+  the script. It reads the headers with clang, takes every declaration from
+  clang's syntax tree, and asks the compiler for each record's layout rather
+  than computing one. No header text is copied. The library also serves glibc
+  images, and which entries hold there is measured, not assumed: with
+  `--measure-glibc` the script compiles one assertion per entry against the
+  installed glibc headers (a function's type must be compatible and its name
+  must bind to the same symbol, a record's size, alignment and every public
+  member offset and width must be equal, an integer typedef's width and
+  signedness must be equal) and writes the names that fail to
+  `scripts/typelib/glibc-x86_64.differs`. Only that list of names and widths
+  enters the repository. Against glibc 2.43, 136 of the 1,984 names differ:
+  `strerror_r`, `basename`, `ioctl`, the `scanf` and `strtol` families that
+  glibc binds to `__isoc23_*` symbols, records such as `msghdr`, `rusage`,
+  `sysinfo` and `sigset_t`, and functions glibc does not have. 1,374 of the
+  1,447 functions are offered to a glibc image.
+
+  *Reading.* `TypeLibPass` runs at load and records only what needs the object
+  file: the image's target, whether it names glibc (`libc.so.6` or a `GLIBC_`
+  version in `.dynstr`) or musl (an `ld-musl` interpreter or a `libc.musl-`
+  dependency), and the imported functions with their addresses. An image that
+  names neither C library yields nothing. The library is consulted at the
+  analysis commit, after every other pass has contributed, and it declares only
+  an import no earlier source declared: a prototype from the tables above, from
+  debug information, or from a demangled name stands. Reading a prototype
+  interns the types it names, and through them the types those name; nothing
+  else in the library is interned, so an image that imports `poll` gains
+  `pollfd` and `nfds_t` and not the other 345 records. A type name the factory
+  already holds is used as it is and never redefined, which is how a record from
+  debug information or a `libctypes` shell wins. A `struct` tag no entry defines
+  becomes a record of unknown members. A prototype that passes or returns a
+  `long double` by value is not offered, because the compiler models do not
+  place one. A malformed library is refused with its line number, an entry
+  that does not parse is skipped alone, and a member that does not fit where
+  the file puts it is left a hole; sizes, offsets, line lengths, the file size
+  and the depth of one type's references are all bounded.
+
+  *After load.* A `--types` header or an `--assert prototype` for the same
+  function replaces the library's declaration. A header's definition of a
+  record the library already defined is rejected like any redefinition; `typelib
+  off` lets the header's layout stand. A callback slot the library now declares
+  (`qsort`'s comparator, `signal`'s handler) still gives its prototype to the
+  function passed there: the callback pass (chapter 04) reads the slot's storage
+  from the declared parameter when the callee has a declared prototype, where
+  it used to find no recorded argument storage and say nothing.
+
+  LOSS: a typed callee moves its callers. A pointer parameter that names a
+  record sizes the stack object whose address is passed, so a caller that passes
+  the address of something else at that slot (the first member of a larger
+  local, a buffer reused under two types) prints that object as the record. An
+  `int` result returned through a function whose own return is recovered as the
+  whole register prints the unset upper half (`CONCAT44(v3,getrlimit(7,&v5))`).
+  Both are what any declared prototype does, including the tables above; the
+  library reaches about twice as many functions.
 - **(kuna) Measured libc signatures** (`libcsigs`,
   `decompiler/crates/unlace-analysis/src/analyzers/protos/kuna_libcsigs.rs (LibcSigsPass)`):
   the second, larger half of the same table, closing most of the LOSS above. Which
@@ -4697,8 +4781,123 @@ moves.
   `ArmReadTpidrurw` returning `EFI_PEI_SERVICES **`. A typed data fact outranks a
   string literal the string scan found at the same address (a table's
   signature reads as text), so the commit skips such a string. The model is IDA
-  9.5's `uefi.so` load-time half; the value tracking that names `gBS`/`gST` is
-  `storetype` (P5).
+  9.5's `uefi.so` load-time half.
+
+  The pass then follows the service tables through the code
+  (`decompiler/crates/unlace-analysis/src/analyzers/uefi/flow.rs (Walk)`). It
+  decodes, so it runs at the analysis commit
+  (`decompiler/crates/unlace-analysis/src/passes.rs (run_uefi)`), not in the
+  load-time list. It lifts the code reachable from the entry point and from the
+  code pointers the data sections hold, at most 60,000 instructions shared
+  between the two, and walks each function over its basic blocks with a small
+  state per register and stack slot: a constant, a stack address, the
+  function's own parameter, or a pointer to one of the EFI structures. The
+  state at the head of a block is the intersection of what its predecessors
+  leave, iterated to a fixed point around a loop, and a block only an indirect
+  jump reaches starts from nothing, so a value is known only when it is the
+  same on every way in. A call keeps stack addresses, the registers the
+  prototype model preserves and, when the callee calls nothing, the registers
+  the callee does not write. The entry's parameters seed the walk, a typed
+  pointer passed to a function seeds that function's parameter, and a typed
+  pointer a function returns on every path is what its callers receive. The
+  walk repeats, at most four times, until nothing more is learned. What it
+  reads:
+
+  - A typed pointer stored into a writable global types the global and names
+    it as EDK2 does: `gImageHandle`, `gST`, `gBS`, `gRT`, `gDS`, `gSmst`,
+    `gMmst`, and `m<Interface>` for a protocol pointer. A global two different
+    types are stored into gets neither.
+  - `LocateProtocol`, `HandleProtocol`, `OpenProtocol`, `SmmLocateProtocol` /
+    `MmLocateProtocol` and `LocatePpi` take a GUID. When the GUID has an
+    interface struct, the global or stack slot the interface out-parameter
+    addresses holds a pointer to it, and that one call gets a prototype whose
+    out-parameter is `INTERFACE **`
+    (`decompiler/crates/unlace-decomp/src/p2_lift/kuna_callsiteproto.rs (parked)`:
+    a prototype parked by call-instruction address, installed as the call's
+    prototype override when `FlowInfo` builds the call, unless the function
+    already carries an override there).
+  - Every other call the walk reads through a table or interface member
+    (`gBS->CreateEvent`, `This->ReadDisk`) gets the member's prototype the
+    same way. The decompiler would otherwise learn the prototype only when
+    type propagation reaches the pointer the call goes through, which is too
+    late to place the arguments, so it analyzes the whole function a second
+    time; with the prototype there when the call is built it analyzes the
+    function once, and an argument that is a function address is a function
+    from the start. It is also the only source for a PEIM that reads the table
+    pointer inline, which leaves the decompiler no typed pointer to read the
+    member from. A jump through a member (a tail call) states nothing, and a
+    call the walk cannot follow to its table (its pointer comes from a heap
+    record, or the block is only reached through a jump table) is still
+    resolved by the decompiler, at the cost of the second analysis.
+  - `InstallProtocolInterface`, `InstallMultipleProtocolInterfaces` (its
+    GUID/interface pairs up to the NULL), the MM installs and `InstallPpi` /
+    `ReInstallPpi` name an interface instance. The instance is typed with the
+    interface struct and named `g<Interface>`, and each function it points at
+    is named `<Interface><Member>` with the member's prototype, so a driver's
+    `DriverBindingSupported(EFI_DRIVER_BINDING_PROTOCOL *This, EFI_HANDLE
+    ControllerHandle, ...)` is recovered from its binding instance. A PPI list
+    is walked descriptor by descriptor to the entry flagged
+    `EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST`, each one typed
+    `EFI_PEI_PPI_DESCRIPTOR`; `NotifyPpi` does the same with
+    `EFI_PEI_NOTIFY_DESCRIPTOR` and gives each callback the notify prototype
+    with its PPI typed from the GUID.
+  - A member whose prototype has an out-parameter `T **` for a known `T`
+    (`EFI_SMM_BASE2_PROTOCOL.GetSmstLocation`) types what it is handed, which is
+    how an SMM driver's `gSmst` is found.
+
+  The interface structs come from
+  `decompiler/crates/unlace-analysis/src/analyzers/uefi/protocols.txt`, generated
+  by `scripts/gen_uefi_protocols.py` from the EDK2 `MdePkg` and `MdeModulePkg`
+  headers (edk2-stable202505, BSD-2-Clause-Patent): 371 protocol and PPI GUIDs
+  with the layout of their interface, plus `EFI_MM_SYSTEM_TABLE` and
+  `EFI_SMM_SYSTEM_TABLE2`. A member the generator cannot lay out exactly (a
+  union, a bit-field, a packed or unknown by-value type) ends its struct, so
+  every offset in the table is the header's. A struct is built in the type
+  factory the first time something names it
+  (`decompiler/crates/unlace-analysis/src/analyzers/uefi/types.rs (EfiTypes)`),
+  so an image pays for the interfaces it uses; a `This` parameter is a pointer
+  to its own interface. An interface installed under a GUID the table has no
+  struct for gets one synthesized from the instance: one member per pointer
+  slot up to the last slot that points at a function start, `Function_<off>`
+  for those and `Field_<off>` for the others, named from the GUID
+  (`gEdkiiFooProtocolGuid` gives `EDKII_FOO_PROTOCOL`, an unknown GUID
+  `PROTOCOL_<Data1>`).
+
+  The phase decides the entry prototype. A module whose service calls go
+  through `EFI_PEI_SERVICES` is a PEIM, entered as `EFI_STATUS
+  _ModuleEntryPoint(VOID *FileHandle, EFI_PEI_SERVICES **PeiServices)`; a
+  standalone-MM module is entered with `EFI_MM_SYSTEM_TABLE *MmSystemTable`.
+  Without other evidence the walk reads the module as a DXE module first and
+  as the other two only when that resolves no service call. Two EDK2 library
+  shapes are recognized in a PEIM because every service call goes through
+  them: a function that reads the IDT register (`sidt`) and loads the pointer
+  below the IDT base is `GetPeiServicesTablePointer`, returning
+  `EFI_PEI_SERVICES **` (the X64 and IA32 counterpart of the ARM getters
+  above), and a short function that only forwards its own parameters to one
+  PEI service is named `PeiServices<Service>` and treated as that service at
+  its call sites. On 32-bit ARM (PE machine `ARM`,
+  `THUMB` or `ARMNT`) a code pointer's low bit selects Thumb and is not part
+  of the address, for the entry point as for an interface member.
+
+  Across the modules of one firmware volume, `unlace unpack <firmware>` writes
+  `kuna-uefi.index` beside the modules
+  (`decompiler/crates/unlace-analysis/src/analyzers/uefi/index.rs (Index)`): each
+  module's FFS file type and, with `--protocols`, every interface instance
+  each module installs, read off one load of the module (the pass leaves them
+  on the architecture as
+  `decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_uefiprotocols.rs (InstalledInterface)`).
+  A module loaded from
+  that directory takes its phase from its file type (PEIM, PEI core and
+  combined PEIM/driver are PEI; MM standalone and MM core standalone are MM;
+  a traditional SMM driver is entered as a DXE driver), takes the struct
+  another module synthesized for a GUID, and gets a comment at each interface
+  lookup naming the module that installs it, the instance address and the
+  member functions: `gEfiPeiRscHandlerPpiGuid is installed by
+  ReportStatusCodeRouterPei.efi (EFI_PEI_RSC_HANDLER_PPI at 0x829a90:
+  Register=0x8297ff, Unregister=0x8298c8)`. The index is plain text, a line that does not parse
+  is skipped and a file over 16 MiB is not read. The walk is static: an
+  interface installed from a heap copy, or under a GUID computed at run time,
+  is not seen.
 - **(kuna) Cortex-M System Control Space** (`cortexmscs`, default on,
   `decompiler/crates/unlace-analysis/src/analyzers/cortexmscs/mod.rs (CortexMScsPass)`):
   every ARMv7-M and ARMv8-M core maps the same registers at fixed addresses of
@@ -7372,7 +7571,13 @@ both
   — an enum with payloads, an imported value type (`Foundation.Date`), a
   generic instantiation without a known layout, a tuple, an existential — is
   `undefined<n>` over the bytes up to the next field, so the layout is always
-  right and the names are always real; only the field's own type is withheld. Each binding carries a `self` hint
+  right and the names are always real; only the field's own type is withheld. An import stub (a PLT entry or a
+  Mach-O `__stubs` entry, in a code section) whose symbol demangles to a
+  throwing function of another image that is not `async`, a protocol
+  requirement's dispatch thunk included, binds `__swiftcall_throws` with no
+  `self` type: a throwing function calls such imports with the error register
+  holding the zero its own caller passed, reloaded rather than stored, so the
+  zeroing-store rule of 04 §4.4 does not see the call. Each binding carries a `self` hint
   (`AnalysisOutput::swift_types.models` / `input_hints` → the decompile
   drive): the name always, and the type where the layout arm has one — `Class
   *` for an instance member of a class, `swift.class_metadata *` for a class
@@ -7432,6 +7637,32 @@ both
   `swift_release_x20(v)` for the bare `swift_release_x20()`. The stage test
   `tests/stages/kuna-swiftrrregs.xml` runs `swift_rr_regs_macho`, an arm64
   Mach-O assembled against the iOS libswiftCore.
+  The standard library's own C entry points are in the table too
+  (`_swift_stdlib_*`, declared in the shims headers
+  `stdlib/public/SwiftShims/swift/shims/AssertionReporting.h`,
+  `RuntimeShims.h`, `LibcShims.h`, `FoundationShims.h`,
+  `ThreadLocalStorage.h`, plus `swift_reportError`, `swift_reportWarning`,
+  `swift_lookUpClassMethod` and `swift_deletedMethodError`): the fatal-error
+  and unimplemented-initializer reporters take their strings as `char *`
+  with `int` lengths and a `uint32_t` flags word and return nothing, the
+  `strto*_clocale` parsers return the `char *` they stopped at, and
+  `_swift_stdlib_operatingSystemVersion` returns the three-word
+  `swift.NSOperatingSystemVersion` (`majorVersion`, `minorVersion`,
+  `patchVersion`), which on arm64 comes back through `x8`, so a caller's
+  `v1[0]` reads `v1.majorVersion`. The stage test
+  `tests/stages/kuna-swiftstdlib.xml` runs `swift_stdlib_macho`, assembled
+  the same way.
+  The rest of the compiler's list of runtime calls
+  (`include/swift/Runtime/RuntimeFunctions.def`) is in the table as well, for
+  every entry whose arguments all ride in the platform's argument registers:
+  the typed allocators (`swift_allocObjectTyped`, `swift_deallocBox`, …), the
+  array and `swift_cvw_*` layout-string value witnesses, the metatype casts,
+  the class-metadata initializers and the non-atomic reference counting. The
+  three runtime entry points that never return (`swift_unexpectedError`, which
+  a failed `try!` calls, `swift_errorInMain` and
+  `swift_onceClosureDestroyedError`) are no-return functions on a Swift image
+  in every format (`loader/noreturn.rs` `SWIFT_NORETURN`), so the code after
+  the call is not printed as reachable.
   The concurrency runtime's entry points come from a second, generated table
   (`kuna_swiftconcurrency.rs`, from the Swift project's
   `swift/Runtime/Concurrency.h` by `tools/gen_swift_concurrency.py`, 64-bit
@@ -10772,8 +11003,8 @@ no frame at all the Thumb scan runs exactly as with the option off.
 
 A start that only the raw Thumb scan found is withdrawn after the
 code-pointer-table scan when the Listing enters it by straight-line flow
-(`decompiler/crates/kuna-analysis/src/passes.rs`, the rule of
-`decompiler/crates/kuna-analysis/src/analyzers/aif/kuna_frameflow.rs` that frame
+(`decompiler/crates/unlace-analysis/src/passes.rs`, the rule of
+`decompiler/crates/unlace-analysis/src/analyzers/aif/kuna_frameflow.rs` that frame
 recovery already applies to its roots). The instruction just before the start must
 be a non-call that falls through or conditionally branches into it, on a run that
 begins at a function entry or a branch target, and no call may target the start.
@@ -10785,7 +11016,7 @@ never withdrawn. That covers every `<patternpairs>` start, which the deferred
 `funcstart_patterns` pass commits before the walk, as well as vector-table handlers
 and symbols. The rule does not run when frame recovery rebuilt the Listing. The
 rebuild that withdraws a start reuses every decode of the raw-scan rebuild
-(`decompiler/crates/kuna-analysis/src/listing/kuna_decodememo.rs`), so it walks the
+(`decompiler/crates/unlace-analysis/src/listing/kuna_decodememo.rs`), so it walks the
 image again without decoding it again. On stripped Cleanflight O2-noinline it withdraws 25 of 2,679 starts, none of them a
 symbol of the unstripped image; `Handle_USBAsynchXfer` (0x803b95c) is whole again.
 Over the 92 distinct stripped ARM firmware images of DecBench (O0, O2 and
@@ -12449,6 +12680,92 @@ stop), and AArch64's byte and halfword tables scaled by four (`ldrb w11,
 compose, and a range check on another value than the selector with no mask to
 overrule it.
 
+*Predecessor edges.* (kuna; `decompiler/crates/unlace-analysis/src/listing/kuna_switchflow.rs
+(register_targets)`) The slice steps back by address and stops at the first
+instruction that does not fall through, so a base hoisted above a `jmp` never
+reaches it, and the sixteen-instruction search for the range check has the
+same wall. Three shapes every x86-64 compiler emits lost whole switches to that
+— every call their case bodies make, with `coverage.unwalked` and `notes`
+empty: a base hoisted out of a loop above an `if/else` whose first arm ends in
+`jmp` (clang `-O2`, MSVC `/O2`; the slice stops at the `jmp` seven
+instructions short of the `lea`), two switches sharing one hoisted `LEA
+RBP,[__ImageBase]` where the first switch's case bodies end in `jmp` or `ret`
+before the second dispatch (MSVC: the second switch read 0 of 8), and a range
+check more than sixteen instructions above the jump. Once a body's queue has
+drained, every dispatch in it that the linear read declined is read again over
+the body's own **predecessor edges** — each decoded instruction's fall-through
+and branch targets, and the case edges of the switches it has read, the edges
+the walk already follows forward. The value a register holds on entry to an
+instruction is what each decoded predecessor leaves in it, met: asked on
+demand from the `BRANCHIND`'s input back through the ops that define what it
+still wants, folded through the slice's own four values, with a call killing
+what the calling convention does not preserve. Predecessors that agree keep
+the value, ones that disagree make it unknown, and a predecessor the walk has
+not decoded — the back edge of a loop whose latch only the case bodies reach
+— contributes nothing, as the linear slice never saw it either. The range
+check is found on **every path** of predecessors up from the dispatch: on
+each, the nearest conditional branch, whether the path leaves it by its
+fall-through or by its taken side, read by the same rule as before. clang
+`-O3` copies a switch's check into both arms of an `if/else` above the
+dispatch's block, `cmp $7,%r15d; jbe disp` in one and `cmp $7,%r15d; ja
+default` falling into it in the other; a join takes the largest count of its
+paths. A check that sends its constant itself away from the dispatch (`cmp
+$5,%edi; jb disp` by its taken side, MSVC's `cmp ecx,5; jae default` by its
+fall-through, where `jbe`/`ja` would keep 5) states one case fewer than the
+count rule reads: cases 0 to 4. Each
+check must compare the **selector**: the addend of the sum that addresses
+the table itself (the sum the table's load reads from, or one whose constant
+is the table), which the fold could not value, followed up the path through
+copies, extensions and arithmetic with a constant (the steps the masked index
+is followed by), must reach the comparison still naming a register it reads, or a
+copy of one made in the straight-line code just above the comparison (MSVC
+copies the selector before its check and indexes the table by the copy:
+`mov r10d,ecx; cmp ecx,8; jae default; ...; mov ecx,[rdx+r10*4+rvas]`, with
+no write to `ecx` between the copy and the comparison), or be loaded from the address the comparison loads from (gcc's `cmpb
+$0x78,(%rax,%rcx); ja; movzbl (%rax,%rcx),%edi`) with no store, call or write
+to that address's registers in between; a register the calling convention
+does not preserve is a different value past a call. Any other constant plus
+unknown on the way is no index: a field's address (`mov 8(%rdi),%eax`) is
+one, and its base register is what a comparison of another field (`cmpl
+$0x800,4(%rdi)`) reads. The function's entry, a path that comes back to
+itself, more than 256 predecessors visited, a conditional branch that is no
+range check and a comparison of another value all bound nothing. Without that
+test the far reach read
+comparisons the slice never could as table sizes: Rust's `write_char` matches
+an enum discriminant loaded from memory with no range check, seventeen
+instructions under `cmp $0x800,%esi; jae` on the code point, and that read
+as 2,049 cases ran through the next tables into the middle of other
+functions, whose own dispatches it then decoded and read wrongly in turn
+(cargo: 34 such reads among 139, 219 references lost). An index masked by
+`and $m` caps the count at `m + 1` here as in the slice. Only a range-checked
+table is read this way (the unchecked call-table read stays with the slice),
+and only by the walk of the function whose extent holds the dispatch: a
+body that reaches another function's dispatch through an edge into its
+middle leaves it to that function's walk, which reads it linearly once the
+code falling into it is decoded. A function with no declined dispatch pays
+nothing; one read decodes at most 512 instructions, each once,
+and a jump that is no switch — a tail call through a pointer, a virtual
+dispatch — declines at the first definition the fold does not model, as the
+slice does. On the issue's repro (Clang 21/22 `-O2 -fPIE -pie`, MSVC 19.50
+`/O2`) all four functions read 8 of 8 case helpers where three read 0 of 8 or 8
+of 16; on gcc 15 `-O2` the hoisted-loop shape stays unread, because gcc keeps
+the base in a caller-saved `%r8` across calls whose bodies it has seen
+(`-fipa-ra`), which no model of the default calling convention admits. On bash
+`kuna strings` owns 29 more literals (1,031 to 1,060) at the same 0.43 s;
+`kuna xrefs` on a 14.5 MB libavcodec goes from 5.49 s to 5.61 s.
+
+*What is left is said.* (kuna; `decompiler/crates/unlace-cli/src/xrefs.rs
+(unresolved_jumps_note)`) Every decoded computed jump on a register or a
+loaded temporary that neither read resolved to a switch or a call table is
+recorded (`XrefIndex::unresolved_computed_jumps`; a jump through a pointer
+slot — `jmp *slot(%rip)`, a PLT entry, or crt's `mov slot(%rip),%rax; jmp
+*%rax`, which the fold reads as a slot and never a table — and a trap's
+`BRANCHIND` on what its own `CALLOTHER` yields are not ones), and `kuna
+xrefs` puts them in `coverage.notes`: for `--from` a function, the ones inside
+it; for a `--to` that found nothing, every one in the image, since the
+reference asked about may sit in a case body the walk never decoded. A miss
+is no longer silent.
+
 A complete call graph is not a better one for every consumer. Case bodies are
 where an interpreter recurses, so the new edges merge recursive functions into
 larger strongly connected components of `decompile-all`'s callee-first plan, and
@@ -13165,7 +13482,7 @@ with the 5-bit position set), Brotli (`brotli-decompressor`, after EDK2's
 16-byte size header) and CRC32; a standard compression section of type 1 is
 decoded as EFI 1.1 (4-bit position set) and retried as Tiano. Every
 PE32/TE section is a module named by the file's UI section. `containers.rs (detect)` reads U-Boot
-legacy images, Intel HEX, Motorola S-records, ESP32/ESP8266 application images,
+legacy images, Intel HEX, Motorola S-records,
 uClinux bFLT v4 (rebasing GOT entries and relocations past the 64-byte header,
 as `binfmt_flat` does), Qualcomm MBN/SBL wrappers, MediaTek `md1img` (the
 `md1rom` section at 0x90000000 as MIPS32 LE, the LZMA `md1_dbginfo` symbol
@@ -13174,10 +13491,8 @@ decodes it) and PC BIOS images (the reset-vector test of IDA's
 `bios_image.py`; the last 128 KiB mapped below 1 MiB with `register CS`
 assertions for segments E000 and F000, or with a 32-bit target the whole flash
 ending at 4 GiB), and returns either one
-flat image (lowest to highest loaded address, gaps filled, at most 256 MiB;
-an ESP image whose segments span more keeps the segments in the entry's
-16 MiB window) with the processor, base and entries its header states, or the
-ELF it wraps. `svd.rs (parse)` reads a CMSIS-SVD device with the kuna XML
+flat image (lowest to highest loaded address, gaps filled, at most 256 MiB)
+with the processor, base and entries its header states, or the ELF it wraps. `svd.rs (parse)` reads a CMSIS-SVD device with the kuna XML
 reader: peripherals (`derivedFrom` reusing the base's registers and type),
 clusters, `dim`/`dimIncrement`/`dimIndex` expansion, register sizes inherited
 from the peripheral or device, and `<interrupt>` names. `Peripheral::c_struct`
@@ -13185,6 +13500,58 @@ lays a peripheral out as a C structure, dropping a register that overlaps an
 earlier one and padding gaps. The CLI asserts the structure (`typedef`), the
 peripheral as a typed global at its base (`data`) and its register range as
 volatile, and names IRQ handlers from the interrupts.
+
+(lowest to highest loaded address, gaps filled, at most 256 MiB) with
+(kuna) **Espressif application images and `esprom`.** An ESP32-family or
+ESP8266 application image (`esp.rs (parse)`: `0xE9`, a segment count, the
+entry, on ESP32-family parts a 16-byte extended header with the chip id, then
+`address, length, bytes` per segment) is not flattened. Its segments load far
+apart: on an ESP32-C3 the constants are at `0x3c000000`, the RAM code at
+`0x40380000` and the flash code at `0x42000000`, so one flat image would be
+100 MiB of padding or would drop every segment but the entry's. The engine
+loads it instead as a raw image over separate runs
+(`decompiler/crates/unlace-sleigh/src/loadimage.rs (RawLoadImage::from_segments)`):
+each segment is one section, an address between two segments is not mapped,
+and the header's entry is the seed raw-image discovery widens from. The parse
+refuses a segment that runs past the file, a segment outside
+`0x20000000..0x70000000`, overlapping segments and an entry no segment holds;
+the header allows at most 16 segments. A segment takes the properties of the
+region of the chip's memory map it loads into (`esprom.rs (regions,
+load_flags)`): DROM is read-only data, so its strings and tables fold as
+constants; IROM and IRAM are read-only code, so the literal pool an Xtensa
+`l32r` reads folds too; DRAM and RTC memory are writable data. The C6 and H2
+map flash on one bus, so there the segment that starts with the application
+descriptor (`0xABCD5432`) is the constants and the other flash segments are
+code. The language is Xtensa or RISC-V by the chip id unless `--target` names
+one.
+
+`esprom` (default `auto`; `decompiler/crates/unlace-decomp/src/p1_partition/kuna_esprom.rs`
+holds the value, `decompiler/crates/unlace-console/src/kuna_esprom.rs (apply)`
+applies it at the analysis commit) adds what the image does not carry. An ESP
+application calls the routines of the chip's mask ROM at fixed addresses, and
+without a name each call renders as a call through a literal
+(`(*dat_40080504)(dst,src,n)`) or to a bare address. With a chip in force,
+every ROM function of the chip is a function symbol at its address, with the
+call fixup and the libc prototype its name selects, so the call renders as
+`memcpy(dst,src,n)`; every ROM data symbol is a named untyped global unless a
+symbol already covers the address; and every peripheral register range of the
+chip's map that the image does not load into is volatile, so a register poll
+keeps its read. A ROM function is a symbol only: it has no bytes in the input,
+so it is not in the function inventory and nothing decompiles it. `auto` uses
+the chip the image header names (an image without the extended header is an
+ESP8266) and names no chip on any other input, which is what keeps the option
+inert off-target. A chip name (`esp32`, `esp32s2`, `esp32s3`, `esp32c2`,
+`esp32c3`, `esp32c6`, `esp32h2`, `esp8266`) applies that chip's ROM and
+peripheral ranges to any input, such as the firmware's ELF; `off` applies
+nothing. The tables under `loader/firmware/esprom/` are generated by
+`scripts/gen_esprom.py` from the ROM linker scripts of ESP-IDF v5.5.6
+(`components/esp_rom/<chip>/ld/*.ld`) and ESP8266_RTOS_SDK v3.4
+(`esp8266.rom.ld`), both Apache-2.0: one name per address, the chip's main
+script first, a symbol being a function when its address is in the ROM's code
+range and the script does not list it under a `Data` heading. The memory maps
+are the `SOC_*_LOW`/`SOC_*_HIGH` bounds of ESP-IDF's `soc.h`. A ROM revision
+that moved a routine is not detected; the table holds the first address a
+name was given.
 
 The real-binary path of §1.2 is the fourth binding, console-side: `bootstrap_from_object`
 plays the leaf role itself — it resolves the language from the object header

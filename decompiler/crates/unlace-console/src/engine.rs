@@ -677,6 +677,8 @@ pub struct ConsoleProgram {
     /// (kuna `mzsweep`) An MS-DOS executable's relocated module and relocation
     /// words, the evidence its raw-image call sweep reads.
     mz_evidence: Option<unlace_analysis::listing::kuna_mzsweep::MzEvidence>,
+    /// (kuna `esprom`) The chip whose ROM names and memory map are applied.
+    pub(crate) esprom_applied: Option<unlace_decomp::kuna_esprom::EspChip>,
     /// (kuna #1288) An x86 real-mode raw image's flow ends, entry VMA ->
     /// exclusive end (`kuna_rawextent`): what bounds [`crate::funcextent`]'s
     /// clip where the one CODE range holds the program's data too. `None` on
@@ -2899,6 +2901,29 @@ impl ConsoleProgram {
         Ok(name)
     }
 
+    /// (kuna `esprom`) Name the function at `addr`, which lies outside the
+    /// input, for the calls that reach it: a `FunctionSymbol` with the call
+    /// fixup and the libc prototype its name selects, and no inventory entry.
+    /// An address that already has a function keeps it.
+    pub(crate) fn name_external_function(&mut self, addr: &Address, name: &str) -> KunaResult<()> {
+        let type_code = self.arch().types().get_type_code()?;
+        let min_size = self.arch().min_funcsymbol_size;
+        let num_spaces = self.arch().manage().num_spaces() as int4;
+        let arch = self.arch_mut();
+        if arch.symboltab.find_function_across_scopes(addr).is_some() {
+            return Ok(());
+        }
+        let (scope, basename) = arch
+            .symboltab
+            .find_create_scope_from_symbol_name(name, "::", None, num_spaces)?;
+        let sym = arch
+            .symboltab
+            .add_function(scope, addr, &basename, min_size, type_code)?;
+        install_named_call_fixup(arch, sym, &basename);
+        self.seed_declared_libc_prototype(name, addr);
+        Ok(())
+    }
+
     /// Ensure a `FunctionSymbol` exists at `addr` without asserting that the
     /// address has a body. Used by an addressed CLI run that needs a symbol for
     /// prototype directives before selection.
@@ -3260,6 +3285,7 @@ impl ConsoleProgram {
     /// this Listing while the ordinary Listing-consumer gates remain off.
     pub fn commit_pending_analysis(&mut self) -> KunaResult<()> {
         let _load = self.arch().load_scope();
+        crate::kuna_esprom::apply(self)?;
         let rust_profile_request = self.rust_profile_request.take();
         let apply_rust_names = std::mem::take(&mut self.rust_profile_apply);
         if apply_rust_names && (self.rust_profile_image_modified || self.analysis_image.is_none()) {
@@ -3459,6 +3485,15 @@ impl ConsoleProgram {
                         merged.merge(out);
                     }
                 }
+                // (kuna `uefi`) UEFI module markup decodes the module, so it
+                // runs here; it declines everything but an EFI-subsystem PE.
+                if analysis_pass_enabled(self.arch(), "uefi") {
+                    merged.merge(unlace_analysis::passes::run_uefi(
+                        &bytes,
+                        self.arch(),
+                        image_path,
+                    ));
+                }
                 // Deferred Listing build + consumer/fast-inventory run, gated
                 // on the matching option. The call-fixup seed list is the names
                 // the load-time pass flagged resolved to addresses via the
@@ -3609,6 +3644,14 @@ impl ConsoleProgram {
         suppress_pdb_interior_entries(self.arch(), &code_space, &mut merged);
         merged.context_paints.extend(input_context_paints);
         self.fid_databases = std::mem::take(&mut merged.fid_databases);
+        // (kuna `typelib`) Last, so every other source of a prototype has
+        // spoken: the library declares only the imports nothing else did.
+        if let Some(facts) = merged.typelib.take() {
+            if let Err(message) = crate::kuna_typelib::seed(self.arch(), &facts, &mut merged) {
+                let path = self.image_path();
+                unlace_base::notes::say_once(&path, &format!("[kuna typelib] {message}"));
+            }
+        }
         let committed = commit_analysis_output(self, &code_space, merged, zero_size_data_names);
         self.stash_float_scan();
         committed
@@ -3791,6 +3834,9 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // facts are computed at LOAD and COMMITTED only when this gate is on, so
         // `off` renders exactly what the base table alone renders.
         "libgccsigs" => arch.analysis_libgccsigs,
+        // (kuna `typelib`) The image's library target and imports; dropped
+        // here when no library is to be read.
+        "typelib" => arch.analysis_typelib != unlace_decomp::kuna_typelib::TypeLib::Off,
         // (kuna) The LOAD-TIME format-string resolver — a Listing consumer whose
         // per-call-site overrides are computed at the deferred commit point and
         // applied only when the gate asks for the static half (`static` on x86,
@@ -4753,6 +4799,7 @@ fn empty_program(
         loader_data_objects: Vec::new(),
         loader_data_exports: Vec::new(),
         mz_evidence: None,
+        esprom_applied: None,
         flow_ends: None,
         data_name_aliases: HashMap::new(),
         declared_extents: BTreeMap::new(),
@@ -4808,6 +4855,16 @@ pub fn bootstrap_from_raw(
 }
 
 /// [`bootstrap_from_raw`] over the file, or over `bytes` built in memory.
+/// Where [`bootstrap_raw_image`] takes the image's bytes from.
+pub(crate) enum RawBytes {
+    /// The file at the path, whole.
+    File,
+    /// One run built in memory, such as a relocated DOS load module.
+    Whole(Vec<u8>),
+    /// Separate runs, such as a firmware image's segments.
+    Segmented(unlace_sleigh::loadimage::RawLoadImage),
+}
+
 pub(crate) fn bootstrap_raw_image(
     path: &str,
     target: &str,
@@ -4815,7 +4872,7 @@ pub(crate) fn bootstrap_raw_image(
     entries: &[u64],
     isa: Option<ArmIsa>,
     languages: &(impl Languages + ?Sized),
-    bytes: Option<Vec<u8>>,
+    bytes: RawBytes,
 ) -> KunaResult<ConsoleProgram> {
     if target.trim().is_empty() {
         return Err(KunaError::lowlevel(
@@ -4846,8 +4903,11 @@ pub(crate) fn bootstrap_raw_image(
     };
     let base_bytes = address_to_byte(base, "base")?;
     match bytes {
-        Some(bytes) => raw.build_loader_from_bytes(Rc::clone(&code_space), base, bytes),
-        None => raw.build_loader_at(Rc::clone(&code_space), base)?,
+        RawBytes::Whole(bytes) => raw.build_loader_from_bytes(Rc::clone(&code_space), base, bytes),
+        RawBytes::Segmented(image) => {
+            raw.build_loader_from_image(Rc::clone(&code_space), base, image)
+        }
+        RawBytes::File => raw.build_loader_at(Rc::clone(&code_space), base)?,
     }
     let loader = raw
         .loader()
@@ -4999,6 +5059,9 @@ pub(crate) fn bootstrap_image(
     } else if let Some(bytes) = file_mz_dos_image(path) {
         let _load = enter_load(options, from_env);
         bootstrap_mz_bytes(path, &bytes, target, languages, isa)
+    } else if let Some(image) = crate::kuna_esprom::file_esp_image(path) {
+        let _load = enter_load(options, from_env);
+        bootstrap_esp_image(path, &image, target, languages, isa)
     } else if let Some(bytes) = file_wasm_module(path) {
         let _load = enter_load(options, from_env);
         bootstrap_wasm_bytes(path, &bytes, target, languages)
@@ -5226,7 +5289,7 @@ pub(crate) fn bootstrap_mz_bytes(
         &[entry],
         isa,
         languages,
-        Some(image.module.clone()),
+        RawBytes::Whole(image.module.clone()),
     )?;
     if let Some(space) = program.analysis_code_space.clone() {
         unlace_analysis::loader::kuna_realmodecs::paint(
@@ -5369,6 +5432,44 @@ pub(crate) fn bootstrap_dex_bytes(
     apply_readonly_ranges(&mut program, &readonly_ranges);
     program.read_loader_symbols()?;
     program.pending_dex_prototypes = true;
+    Ok(program)
+}
+
+/// Bootstrap an Espressif application image: its segments are the mapped
+/// ranges, each with the properties of the memory region it loads into, and
+/// its header's entry the seed raw-image discovery widens from. The language
+/// follows the chip's core unless `target` names one.
+pub(crate) fn bootstrap_esp_image(
+    path: &str,
+    image: &unlace_analysis::loader::firmware::esp::EspImage,
+    target: &str,
+    languages: &(impl Languages + ?Sized),
+    isa: Option<ArmIsa>,
+) -> KunaResult<ConsoleProgram> {
+    let target = unlace_analysis::loadimage_object::explicit_language_target(target)
+        .unwrap_or(image.target());
+    let (loader, base, metadata) = crate::kuna_esprom::raw_image(path, image)?;
+    let mut program = bootstrap_raw_image(
+        path,
+        target,
+        base,
+        &[image.entry],
+        isa,
+        languages,
+        RawBytes::Segmented(loader),
+    )?;
+    unlace_base::notes::say_once(path, &format!("[kuna esp] {path}: {}", image.describe()));
+    let readonly = {
+        let loader = program.arch().translate().loader_rc();
+        let loader = loader.borrow();
+        loader_readonly_ranges(&**loader, program.arch().manage())
+    };
+    apply_readonly_ranges(&mut program, &readonly);
+    let litpool_const =
+        unlace_decomp::kuna_litpoolconst::code_const_ranges(&program.sections(), &[]);
+    program.arch_mut().litpool_const = Rc::new(litpool_const);
+    program.arch_mut().esp_image_chip = image.chip;
+    program.image_metadata = Some(metadata);
     Ok(program)
 }
 
@@ -7001,6 +7102,19 @@ fn commit_analysis_output(
         prog.arch_mut().format_call_overrides = parked;
     }
 
+    // (kuna) Park the prototypes a pass stated for single call instructions
+    // (`unlace_decomp::kuna_callsiteproto`) and the interface instances the
+    // `uefi` pass found installed.
+    for (site, pieces) in &out.call_prototypes {
+        prog.arch_mut()
+            .kuna_callsite_protos
+            .entry(*site)
+            .or_insert_with(|| pieces.clone());
+    }
+    prog.arch_mut()
+        .kuna_uefi_installs
+        .clone_from(&out.uefi_installs);
+
     // (kuna `pushpadread`) The stack-argument count per format call site, carried
     // for the callee-body probe (not the varargs typing above, so independent of
     // the `formatstring` gate). gcc pushes a format call's stack arguments below
@@ -8431,6 +8545,7 @@ pub(crate) enum FileInput {
     Mz(Vec<u8>),
     Te(Vec<u8>),
     Dex(Vec<u8>),
+    Esp(unlace_analysis::loader::firmware::esp::EspImage),
     Object,
     Xml(Rc<Element>),
 }
@@ -8458,6 +8573,9 @@ pub(crate) fn classify_file(path: &str) -> KunaResult<FileInput> {
     }
     if unlace_analysis::loadimage_dex::is_dex_image(&bytes) {
         return Ok(FileInput::Dex(bytes));
+    }
+    if let Some(image) = unlace_analysis::loader::firmware::esp::parse(&bytes) {
+        return Ok(FileInput::Esp(image));
     }
     if is_object_binary(&bytes) || is_apple_container(&bytes) {
         return Ok(FileInput::Object);

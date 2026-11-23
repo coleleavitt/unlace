@@ -85,6 +85,52 @@ fn svd_peripheral_replaces_a_system_control_space_block() {
 }
 
 #[test]
+fn unpack_protocols_indexes_what_each_module_installs() {
+    let fv = common::fixture("uefi_tiano_efi_compressed.fv");
+    let dir = tempfile::tempdir().unwrap();
+    let out_dir = dir.path().to_string_lossy().into_owned();
+    let (_, err, code) = common::run_kuna(&["unpack", &fv, "-o", &out_dir, "--protocols"]);
+    assert_eq!(code, 0, "{err}");
+    let index = std::fs::read_to_string(dir.path().join("kuna-uefi.index")).unwrap();
+    assert!(
+        index.starts_with("kuna-uefi-index 1\nmodule DiskIoDxe.efi 07\n"),
+        "{index}"
+    );
+    let binding = "install DiskIoDxe.efi ab31a01843b41a4da5c00c09261e9f71 1920 EFI_DRIVER_BINDING_PROTOCOL \
+                   Supported=24f Start=aac Stop=5b9";
+    assert!(index.contains(binding), "{index}");
+    let module = dir
+        .path()
+        .join("DiskIoDxe.efi")
+        .to_string_lossy()
+        .into_owned();
+    let (out, err, code) = common::run_kuna(&["decompile", &module, "_ModuleEntryPoint"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        out.contains("gEfiDevicePathUtilitiesProtocolGuid,NULL,&mDevicePathUtilities)"),
+        "{out}"
+    );
+    assert!(
+        !out.contains("installed by"),
+        "nothing in this volume installs the located protocol: {out}"
+    );
+}
+
+/// A call through a service-table member has the member's prototype when the
+/// call is built, so the notify function it is handed is a function and the
+/// function is analyzed once.
+#[test]
+fn a_uefi_service_call_is_built_with_its_prototype() {
+    let module = common::fixture("uefi_diskio_x64.efi");
+    let (out, err, code) = common::run_kuna(&["decompile", &module, "0x9c2"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        out.contains("(*gBS->CreateEvent)(0x200,8,sub_52e,v1,"),
+        "{out}"
+    );
+}
+
+#[test]
 fn intel_hex_with_svd_names_peripherals_and_interrupts() {
     let hex = common::fixture("cortexm3_raw.hex");
     let svd = common::fixture("cortexm3_raw.svd");
@@ -133,4 +179,73 @@ fn unpack_decodes_efi_standard_and_tiano_compressed_files() {
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("2 modules in 1 volumes"), "{out}");
     assert!(!out.contains("undecoded"), "{out}");
+}
+
+#[test]
+fn an_esp_image_loads_its_segments_and_names_its_rom_calls() {
+    let bin = common::fixture("esprom_esp32.bin");
+    let (out, err, code) = common::run_kuna(&["decompile-all", &bin]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        err.contains("ESP application image (esp32, 2 segments, entry 0x40080010)"),
+        "{err}"
+    );
+    assert!(out.contains("return memcpy(a0,a1,0x10);"), "{out}");
+    assert!(
+        out.contains("v1 = dat_3ff4001c;"),
+        "a volatile register is read twice: {out}"
+    );
+    assert!(
+        !out.contains("Function: memcpy"),
+        "a ROM function has no body to decompile: {out}"
+    );
+
+    let (off, err, code) = common::run_kuna(&["decompile-all", &bin, "--option", "esprom", "off"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        off.contains("0x4000c2c8)(a0,a1,0x10);") && !off.contains("memcpy"),
+        "{off}"
+    );
+    assert!(off.contains("return dat_3ff4001c * 2;"), "{off}");
+
+    let (other, err, code) =
+        common::run_kuna(&["decompile-all", &bin, "--option", "esprom", "esp32c3"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        !other.contains("memcpy"),
+        "another chip's ROM has other addresses: {other}"
+    );
+
+    let (_, err, code) = common::run_kuna(&["decompile-all", &bin, "--option", "esprom", "esp33"]);
+    assert_ne!(code, 0);
+    assert!(err.contains("esprom takes auto, off or a chip"), "{err}");
+}
+
+#[test]
+fn an_esp_segment_dump_takes_the_chip_from_the_option() {
+    let bin = common::fixture("esprom_esp32.bin");
+    let image = std::fs::read(&bin).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let iram = dir.path().join("iram.bin");
+    std::fs::write(&iram, &image[0x3c..0x8c]).unwrap();
+    let args = [
+        "decompile-all",
+        iram.to_str().unwrap(),
+        "--raw-image",
+        "--target",
+        "Xtensa:LE:32:default",
+        "--base",
+        "0x40080000",
+        "--entry",
+        "0x40080010",
+        "--assert",
+        "readonly 0x40080000+0x50",
+    ];
+    let (out, err, code) = common::run_kuna(&args);
+    assert_eq!(code, 0, "{err}");
+    assert!(!out.contains("memcpy"), "a raw dump names no chip: {out}");
+    let (out, err, code) =
+        common::run_kuna(&[&args[..], &["--option", "esprom", "esp32"]].concat());
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("memcpy(a0,a1,0x10)"), "{out}");
 }

@@ -388,6 +388,11 @@ re-exports the core, which re-exports the base. Test-only constructors of `kuna_
 read, are `cfg(any(test, feature = "test-support"))`; unlace-bandb's dev-dependency turns the feature on.
 Rebuild times are in `notes/crate-architecture.md` step 10.
 
+**Step 10, second half (lifting heritage/jumptable/merge/varmap/fspec out of middle): measured, not done.**
+All five sit in middle's 61-module strongly connected component, as `Funcdata` fields or `KunaHooks` signature
+types (fspec is part of `Architecture`/`ArchContext`/`Datatype`). Moving only their method bodies would save
+about 0.5 s per middle edit. Numbers and the decision are in `notes/crate-architecture.md`.
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

@@ -199,6 +199,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "chkstkdarwin" => on_off!(chkstk_darwin, "Darwin stack-probe call removal"),
+    "spsolve" => on_off!(sp_solve, "x86-32 stack-pointer delta solve"),
 
     "arithhelpers" => on_off!(arith_helpers, "arithmetic runtime-helper call-fixups"),
     "objcarc" => on_off!(objc_arc, "Objective-C ARC call hiding"),

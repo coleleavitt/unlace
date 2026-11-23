@@ -853,6 +853,10 @@ pub struct ArchContext {
     /// [`crate::p2_lift::kuna_chkstkdarwin`].  Copied from the engine
     /// `Architecture` in `build_arch_handle`.
     pub chkstk_darwin: bool,
+    /// (kuna) `option spsolve` on its target; read by
+    /// [`crate::p4_calls::kuna_spsolve`].  Copied from the engine
+    /// `Architecture` in `build_arch_handle`.
+    pub sp_solve: bool,
     /// (kuna) `option typevote`; read by [`crate::p5_types::kuna_typevote`].
     pub type_vote: bool,
     /// (kuna) `option gobool` mode; read by [`crate::p4_calls::kuna_gobool`].
@@ -1841,6 +1845,7 @@ impl ArchContext {
             go_morestack: 1,
             rust_probestack: crate::kuna_rustprobestack::RustProbestackMode::Off,
             chkstk_darwin: false,
+            sp_solve: false,
             type_vote: false,
             // (kuna) `option gobool` default auto; copied the same way.
             go_bool: 1,

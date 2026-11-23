@@ -67,13 +67,13 @@ fn surface_count_is_101() {
 }
 
 #[test]
-fn settable_count_is_323() {
-    assert_eq!(kuna_num_settables(), 323);
-    assert_eq!(SETTABLE_TABLE.len(), 323);
+fn settable_count_is_324() {
+    assert_eq!(kuna_num_settables(), 324);
+    assert_eq!(SETTABLE_TABLE.len(), 324);
 }
 
 #[test]
-fn tier_counts_are_66_core_157_transform_100_analysis() {
+fn tier_counts_are_66_core_158_transform_100_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -85,7 +85,7 @@ fn tier_counts_are_66_core_157_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (66, 157, 100));
+    assert_eq!((core, transform, analysis), (66, 158, 100));
 }
 
 #[test]
@@ -1298,7 +1298,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
     // +1 for `oslog`; its P9 row.
     // +1 for `callresultuse`; its P4 row.
-    assert_eq!(json.matches("},\n").count(), 322);
+    assert_eq!(json.matches("},\n").count(), 323);
 }
 
 #[test]

@@ -83,6 +83,7 @@ pub mod kuna_rustabi; // (kuna) the rustc two-register return: keep the pair, co
 pub mod kuna_sharedpush; // (kuna) a push above a branch is the argument of the call on each arm
 pub mod kuna_slotargs; // (kuna) a call through an import slot takes the declared parameters its caller's writes back
 pub mod kuna_spillargtrial;
+pub mod kuna_spsolve; // (kuna) an x86-32 function's stack-pointer deltas solved for the calls that pop or do not return
 pub mod kuna_stackaddrargtrial;
 pub mod kuna_stackarggap; // (kuna) an unwritten argument register ends a call site's argument list
 pub mod kuna_stackcookie; // (kuna) the frame cookie MSVC stores on the stack is no argument

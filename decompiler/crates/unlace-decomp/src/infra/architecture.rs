@@ -622,6 +622,10 @@ pub struct Architecture {
     /// FACT, not an option: written once at `load file` and the thing `option
     /// linuxsyscall auto` tests.  The XML `<binaryimage>` bootstrap never sets it.
     pub image_linux_elf: bool,
+    /// (kuna) Is the image an ELF?  A FACT, not an option: written once at
+    /// `load file` and the target gate of `option spsolve`.  The XML
+    /// `<binaryimage>` bootstrap never sets it.
+    pub image_elf: bool,
     /// (kuna) Is the image an Apple container (Mach-O, fat Mach-O or a dyld
     /// shared cache)?  A FACT, not an option: written once at `load file` and
     /// the target gate of `option chkstkdarwin`.  The XML `<binaryimage>`
@@ -632,6 +636,11 @@ pub struct Architecture {
     /// (`p2_lift/kuna_chkstkdarwin.rs`), so the argument registers it preserves
     /// keep their values across it. Default on.
     pub chkstk_darwin: bool,
+    /// (kuna `spsolve`) In an x86-32 ELF under a compiler spec whose default model
+    /// states its extrapop, solve each function's stack-pointer deltas for the
+    /// calls that pop arguments or do not return
+    /// (`p4_calls/kuna_spsolve.rs`). Default on.
+    pub sp_solve: bool,
 
     /// (kuna `arithhelpers`) Install the arithmetic runtime-helper call-fixups
     /// (`p2_lift/kuna_arithhelpers.rs`) so a 32-bit call to `__udivdi3`,
@@ -2838,6 +2847,7 @@ impl Architecture {
             syscall_regs: crate::kuna_syscallregs::SyscallRegsMode::Off, // (kuna) option syscallregs; reset_defaults sets the shipped default
             image_os_userland: false, // (kuna) a load-time fact; set by the console's `load file`
             image_linux_elf: false,   // (kuna) a load-time fact; set by the console's `load file`
+            image_elf: false,         // (kuna) a load-time fact; set by the console's `load file`
             image_apple: false,       // (kuna) a load-time fact; set by the console's `load file`
 
             tls_layout: None,
@@ -2850,6 +2860,7 @@ impl Architecture {
             field_type: false, // (kuna) option fieldtype; reset_defaults sets the shipped default
             image_windows_user: false, // (kuna) a load-time fact; set by the console's `load file`
             chkstk_darwin: false, // (kuna) option chkstkdarwin; reset_defaults sets the shipped default
+            sp_solve: false,      // (kuna) option spsolve; reset_defaults sets the shipped default
 
             arith_helpers: false, // (kuna) option arithhelpers; reset_defaults sets the shipped default
             objc_arc: false,      // (kuna) option objcarc; reset_defaults sets the shipped default
@@ -3328,6 +3339,7 @@ impl Architecture {
         self.field_type = false; // (kuna) option fieldtype default-off: the flip moves which record the layout ledger shares between readers (fields-only layout precision .8713 -> .8693); docs/features/fieldtype/default-on-evaluation.md
         self.struct_headless = crate::kuna_structheadless::StructHeadlessMode::Off; // (kuna) structheadless default `off`: a closed function's parameter read at two or more constant offsets, none of them zero, is declared `struct_N *` with filler over the bytes before its first access; `option structheadless closed` turns it on
         self.chkstk_darwin = true; // (kuna) default-on, Darwin AArch64 only (`image_apple` and an AArch64 language): inert unless a call reaches `___chkstk_darwin`; 0/675 datatests
+        self.sp_solve = true; // (kuna) default-on, a loaded x86-32 ELF under a default model with a stated extrapop: inert unless a function's stack-pointer deltas disagree or a direct callee's returns pop arguments; 0/675 datatests
 
         self.relro_noreturn = true; // (kuna) option relronoreturn: default on, a speed trade (see its catalog row)
         self.arith_helpers = true; // (kuna) default-on: x86-32 and ARM32 only, inert unless the binary names a helper; 0/675 datatests name one
@@ -4290,6 +4302,7 @@ impl Architecture {
         ctx.chkstk_darwin = self.chkstk_darwin
             && self.image_apple
             && crate::kuna_chkstkdarwin::applies_to(&self.archid);
+        ctx.sp_solve = crate::p4_calls::kuna_spsolve::applies(self);
         ctx.type_vote = self.type_vote;
         ctx.go_bool = self.go_bool;
         ctx.go_write_barrier = self.go_write_barrier;

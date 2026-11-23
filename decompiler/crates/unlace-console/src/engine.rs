@@ -6274,6 +6274,13 @@ pub(crate) fn bootstrap_object(
     // linuxsyscall auto` names an x86 `int 0x80` only when it is.
     sleigh.base_mut().unwrap().image_linux_elf =
         unlace_analysis::loader::format::elf_userland::is_linux_image(&bytes);
+    // (kuna `spsolve`) And whether it is an ELF at all: the stack-pointer solve
+    // stands in for the analysis that records a callee's `ret n`, which an XML
+    // `<binaryimage>` never had.
+    sleigh.base_mut().unwrap().image_elf = matches!(
+        object::FileKind::parse(&*bytes),
+        Ok(object::FileKind::Elf32 | object::FileKind::Elf64)
+    );
     let image_family = unlace_analysis::formatstring::kuna_fmtstatic::image_family(&bytes);
     // (kuna `chkstkdarwin`) And whether it is an Apple container: the Darwin
     // stack probe is removed only there.

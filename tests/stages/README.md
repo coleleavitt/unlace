@@ -680,3 +680,9 @@ itself (a load of `s->end`), goes. With the option off both stay do-while loops.
 a switch on the 16-bit node type that clang lowered to two bit masks and four
 equality tests, prints as the source's switch with all twelve labels. The off
 pass runs first, as an installed switch stays for the session.
+
+`kuna-cil.xml` loads the committed managed .NET assembly `cil_hello.dll`
+(Kuna #1633): with `cil off` the PE's one function is the `_CorExeMain` stub;
+by default its methods are named from the metadata and the local function
+decompiles to the loop that sums its array. The CLI companion checks the
+inventory with each method's own size, the listing and both native views.

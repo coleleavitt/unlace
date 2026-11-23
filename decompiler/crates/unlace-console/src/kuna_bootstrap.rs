@@ -10,9 +10,9 @@ use unlace_base::xml::Element;
 use unlace_decomp::kuna_loadoptions::{self, LoadOptions, LoadScope};
 
 use crate::engine::{
-    ArmIsa, ConsoleProgram, FileInput, Languages, RawBytes, arm_isa_from_env, bootstrap_dex_bytes,
-    bootstrap_esp_image, bootstrap_image, bootstrap_mz_bytes, bootstrap_object,
-    bootstrap_raw_image, bootstrap_te, bootstrap_te_bytes, bootstrap_wasm_bytes,
+    ArmIsa, ConsoleProgram, FileInput, Languages, RawBytes, arm_isa_from_env, bootstrap_cil,
+    bootstrap_dex_bytes, bootstrap_esp_image, bootstrap_image, bootstrap_mz_bytes,
+    bootstrap_object, bootstrap_raw_image, bootstrap_te, bootstrap_te_bytes, bootstrap_wasm_bytes,
     bootstrap_xml_image, classify_file, xml_root_image,
 };
 
@@ -166,6 +166,10 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
             }
             FileInput::Te(bytes) => self.te_bytes(path, &bytes),
             FileInput::Dex(bytes) => self.dex_bytes(path, bytes),
+            FileInput::Cil(image) => {
+                let _load = self.enter();
+                bootstrap_cil(path, *image, self.languages)
+            }
             FileInput::Object => self.object(path),
             FileInput::Xml(root) => self.xml_root(&root),
         }

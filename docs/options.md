@@ -845,6 +845,9 @@ Three tiers:
 | a stripped mach-o dylib's exported functions are unnamed although its export trie lists them | [`exporttrie`](#exporttrie----on--off-default-on) |
 | a dyld cache call is named after the implementation (_platform_memmove) instead of the imported name (memmove) | [`exporttrie`](#exporttrie----on--off-default-on) |
 | re-exported symbols resolve to the wrong name | [`exporttrie`](#exporttrie----on--off-default-on) |
+| managed .NET assembly: native decompilation shows only the stub | [`cil`](#cil----on--off-default-on) |
+| unlace functions lists only _CorExeMain for a .dll or .exe built by dotnet | [`cil`](#cil----on--off-default-on) |
+| a c# or unity Assembly-CSharp.dll decompiles to a single jump | [`cil`](#cil----on--off-default-on) |
 | rust binary renders with c output and no rust abi handling because a stripped image lost its language signals | [`sourcelang`](#sourcelang----auto--c--rust--go--swift-default-auto) |
 | a c binary is detected as another language and language-gated rules misfire | [`sourcelang`](#sourcelang----auto--c--rust--go--swift-default-auto) |
 | go runtime passes do not run on a go binary whose buildinfo section was stripped | [`sourcelang`](#sourcelang----auto--c--rust--go--swift-default-auto) |
@@ -3046,6 +3049,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** Leave on. Turn off to see cross-image calls named after the target image's own symbols (the implementation name) and a stripped dylib's exports unnamed.
 - **Where / provenance:** P1/environment-binding · kuna · analysis-enablement · unlace-analysis-exporttrie
 - **Example:** `--option exporttrie off`
+
+### `cil` -- on | off, default `on`
+
+- **Symptoms:** managed .NET assembly: native decompilation shows only the stub; unlace functions lists only _CorExeMain for a .dll or .exe built by dotnet; a c# or unity Assembly-CSharp.dll decompiles to a single jump.
+- **What it does:** A managed .NET assembly (a PE with a CLI header) decodes from its CIL method bodies. The PE's only native code is the jump to _CorExeMain; the program is ECMA-335 metadata and CIL, which kuna used to leave unread. With the option on (default) the loader maps the PE by RVA at 0x400000 as the CIL:LE:64:default language, reads the metadata tables and heaps, and makes one function per method body, named Namespace.Type::Method and prototyped from its signature. CIL names no operand types and its calls name metadata tokens, so the loader walks each body as the verifier does, paints the evaluation-stack depth and operand class over every instruction as decode context, and rewrites each token operand to the address of the method, static field, instance-field offset or string it resolves to. The evaluation stack lifts to the registers s0..s63, arguments to a0..a15 and locals to cells below SP; managed arrays index from element 0 and ldlen, newarr, newobj, box, unbox and isinst are operators. Classes of the assembly get struct types laid out from their field order, so a field access renders this->field. A body the walk does not cover (an exception-handling clause, a value type on the stack, ldarga, a checked conversion, calli) is listed and decodes as unimplemented instead of as a guess. Inert on every input without a CLI header, and on an explicit --target.
+- **When to flip:** Leave on: `unlace functions` and `decompile-all` cover the managed methods of a .NET Framework, .NET Core or Unity assembly. Turn off (or pass --target) to read the PE as native code, for example the ReadyToRun or mixed-mode native code beside the CIL.
+- **Where / provenance:** P1/environment-binding · kuna · analysis-enablement · kuna-1633
+- **Example:** `option cil off`
 
 ### `sourcelang` -- auto | c | rust | go | swift, default `auto`
 

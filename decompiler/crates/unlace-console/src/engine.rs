@@ -60,6 +60,10 @@ use unlace_num::pcoderaw::VarnodeData;
 use unlace_analysis::flirt::kuna_rustprofiles::{
     ImageReport as RustProfileReport, Request as RustProfileRequest,
 };
+use unlace_analysis::loadimage_cil::image::CilLoadImage;
+use unlace_analysis::loadimage_cil::{
+    CIL_BASE, CIL_LANGUAGE, CLI_PROBE_LEN, CilImage, has_cli_header, is_cil_image,
+};
 use unlace_analysis::loadimage_mz::{MZ_LANGUAGE, MzImage, is_mz_dos_image};
 use unlace_analysis::loadimage_object::{ObjectLoadImage, PE_MACHINES, is_arm32_language};
 use unlace_analysis::loadimage_te::{TE_PROBE_LEN, TeLoadImage, is_te_image};
@@ -251,6 +255,8 @@ enum ProgramContainer {
     Te,
     /// A DEX file mapped whole at address 0.
     Dex,
+    /// A managed .NET assembly: its methods come from the metadata.
+    Cil,
     /// A WebAssembly module, its bodies lowered to register form.
     Wasm,
 }
@@ -679,10 +685,11 @@ pub struct ConsoleProgram {
     mz_evidence: Option<unlace_analysis::listing::kuna_mzsweep::MzEvidence>,
     /// (kuna `esprom`) The chip whose ROM names and memory map are applied.
     pub(crate) esprom_applied: Option<unlace_decomp::kuna_esprom::EspChip>,
-    /// (kuna #1288) An x86 real-mode raw image's flow ends, entry VMA ->
-    /// exclusive end (`kuna_rawextent`): what bounds [`crate::funcextent`]'s
-    /// clip where the one CODE range holds the program's data too. `None` on
-    /// every other image.
+    /// (kuna #1288) Where each function ends, entry VMA -> exclusive end: what
+    /// bounds [`crate::funcextent`]'s clip where the one CODE range holds the
+    /// program's data too. An x86 real-mode raw image measures its flow ends
+    /// (`kuna_rawextent`) and a managed assembly states its method bodies';
+    /// `None` on every other image.
     flow_ends: Option<BTreeMap<u64, u64>>,
     data_name_aliases: HashMap<String, u64>,
     /// (kuna) **Caller-declared function extents**, entry VMA → byte size — what
@@ -1199,7 +1206,7 @@ impl ConsoleProgram {
     /// first: `(extent, clip)`. `None` when the flow did not shorten it.
     pub fn extent_cut_by_flow(&self, vma: u64) -> Option<(u64, u64)> {
         let entry = self.thumb_normalized(vma);
-        if self.flow_ends.is_none() || self.declared_extent(entry) > 0 {
+        if !self.flow_ends_measured() || self.declared_extent(entry) > 0 {
             return None;
         }
         let clip = if self.anonymous_entries.is_empty() {
@@ -1238,7 +1245,11 @@ impl ConsoleProgram {
     /// VMA -> `(extent, clip)`, measured in one pass; empty on an image that
     /// measured no flow ends.
     pub fn extents_cut_by_flow(&self) -> BTreeMap<u64, (u64, u64)> {
-        let Some(ends) = &self.flow_ends else {
+        let Some(ends) = self
+            .flow_ends
+            .as_ref()
+            .filter(|_| self.flow_ends_measured())
+        else {
             return BTreeMap::new();
         };
         if !self.anonymous_entries.is_empty() {
@@ -1261,8 +1272,15 @@ impl ConsoleProgram {
             .collect()
     }
 
-    /// `clip` bounded by the measured flow ends (`flow_ends`), unchanged on an
-    /// image that measured none.
+    /// Whether [`Self::flow_ends`] were measured from the functions' flow. A
+    /// managed assembly's are the stated ends of its method bodies: they bound
+    /// an extent, but no flow stopped short of the bytes after one.
+    fn flow_ends_measured(&self) -> bool {
+        self.flow_ends.is_some() && self.container != ProgramContainer::Cil
+    }
+
+    /// `clip` bounded by the function ends (`flow_ends`), unchanged on an
+    /// image that has none.
     fn bound_by_flow(&self, vma: u64, clip: u64) -> u64 {
         let Some(ends) = &self.flow_ends else {
             return clip;
@@ -5069,6 +5087,12 @@ pub(crate) fn bootstrap_image(
     } else if let Some(image) = crate::kuna_esprom::file_esp_image(path) {
         let _load = enter_load(options, from_env);
         bootstrap_esp_image(path, &image, target, languages, isa)
+    } else if let Some(image) = {
+        let _load = enter_load(options, from_env);
+        file_cil_image(path, target)
+    } {
+        let _load = enter_load(options, from_env);
+        bootstrap_cil(path, image, languages)
     } else if let Some(bytes) = file_wasm_module(path) {
         let _load = enter_load(options, from_env);
         bootstrap_wasm_bytes(path, &bytes, target, languages)
@@ -5226,6 +5250,88 @@ pub(crate) fn bootstrap_wasm_bytes(
     program.read_loader_symbols()?;
     apply_readonly_ranges(&mut program, &readonly_ranges);
     program.arch_mut().litpool_const = Rc::new(litpool_const);
+    Ok(program)
+}
+
+/// The file as a managed .NET assembly with at least one method body, unless
+/// the caller names a target language for its native view. The file is read
+/// whole only when its headers name a CLI header.
+fn file_cil_image(path: &str, target: &str) -> Option<CilImage> {
+    use std::io::Read;
+    if !unlace_decomp::kuna_cil::cil_enabled()
+        || unlace_analysis::loadimage_object::explicit_language_target(target).is_some()
+    {
+        return None;
+    }
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut head = [0u8; CLI_PROBE_LEN];
+    let mut got = 0;
+    while got < head.len() {
+        match file.read(&mut head[got..]).ok()? {
+            0 => break,
+            n => got += n,
+        }
+    }
+    if has_cli_header(&head[..got]) == Some(false) {
+        return None;
+    }
+    cil_image(&std::fs::read(path).ok()?)
+}
+
+/// `bytes` as a managed .NET assembly with at least one method body.
+fn cil_image(bytes: &[u8]) -> Option<CilImage> {
+    if !unlace_decomp::kuna_cil::cil_enabled() || !is_cil_image(bytes) {
+        return None;
+    }
+    CilImage::parse(bytes)
+        .ok()
+        .filter(|image| !image.methods.is_empty())
+}
+
+/// Bootstrap a managed .NET assembly as CIL: the PE mapped by RVA, one
+/// function per method body, and the names, prototypes and decode context
+/// the metadata gives them.
+pub(crate) fn bootstrap_cil(
+    path: &str,
+    mut image: CilImage,
+    languages: &(impl Languages + ?Sized),
+) -> KunaResult<ConsoleProgram> {
+    let entries: Vec<u64> = image.methods.iter().map(|method| method.addr).collect();
+    let bytes = std::mem::take(&mut image.image);
+    let mut program = bootstrap_raw_image(
+        path,
+        CIL_LANGUAGE,
+        CIL_BASE,
+        &entries,
+        None,
+        languages,
+        RawBytes::Whole(bytes),
+    )?;
+    program.container = ProgramContainer::Cil;
+    program.pending_synthetic_entries.clear();
+    program.flow_ends = Some(
+        image
+            .methods
+            .iter()
+            .map(|method| (method.addr, method.end))
+            .collect(),
+    );
+    if let Some(space) = program.analysis_code_space.clone() {
+        let handle = program.arch().translate().loader_rc();
+        let mut loader = handle.borrow_mut();
+        let raw = std::mem::replace(&mut *loader, Box::new(NullLoad));
+        *loader = Box::new(CilLoadImage::new(
+            raw,
+            space,
+            std::mem::take(&mut image.sections),
+        ));
+    }
+    let facts = image.facts(program.arch());
+    program.pending_analysis.push(("cil", facts));
+    program.image_metadata = Some(ProgramImageMetadata {
+        entry: image.entry,
+        sections: Vec::new(),
+    });
     Ok(program)
 }
 
@@ -8563,6 +8669,7 @@ pub(crate) enum FileInput {
     Te(Vec<u8>),
     Dex(Vec<u8>),
     Esp(unlace_analysis::loader::firmware::esp::EspImage),
+    Cil(Box<CilImage>),
     Object,
     Xml(Rc<Element>),
 }
@@ -8593,6 +8700,9 @@ pub(crate) fn classify_file(path: &str) -> KunaResult<FileInput> {
     }
     if let Some(image) = unlace_analysis::loader::firmware::esp::parse(&bytes) {
         return Ok(FileInput::Esp(image));
+    }
+    if let Some(image) = cil_image(&bytes) {
+        return Ok(FileInput::Cil(Box::new(image)));
     }
     if is_object_binary(&bytes) || is_apple_container(&bytes) {
         return Ok(FileInput::Object);

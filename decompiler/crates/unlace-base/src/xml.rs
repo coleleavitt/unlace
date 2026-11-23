@@ -2325,7 +2325,7 @@ mod tests {
         // and kuna-relswitch-a64 / an arm64e hardened jump table is a switch; its inline table is no function start
         // and kuna-mba-solve / constant operands, a shared complement, a complemented sum and bit logic alone simplify
         // and kuna-opaquepredicate-proofs / narrow inputs, dominating branches, identical arms and never-written globals fold
-        assert_eq!(count, 992, "corpus file count drifted");
+        assert_eq!(count, 993, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

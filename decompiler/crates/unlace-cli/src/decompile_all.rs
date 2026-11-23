@@ -456,7 +456,11 @@ fn summarize(
         buckets,
         largest,
         runtime: crate::image::inspect(binary, |bytes| {
-            Some(crate::runtime_hints::detect(bytes, true))
+            Some(crate::runtime_hints::detect(
+                bytes,
+                true,
+                prog.arch().archid.starts_with("CIL:"),
+            ))
         })
         .unwrap_or_default(),
         limits: crate::limits::measure(prog, graph, selected),
@@ -1362,7 +1366,10 @@ fn run_summary(args: &Args, filters: &Filters) -> i32 {
     let (prog, all) = match loaded {
         Ok(loaded) => loaded,
         Err(e) => {
-            crate::runtime_hints::note_to_stderr(&args.binary);
+            crate::runtime_hints::note_to_stderr(
+                &args.binary,
+                crate::runtime_hints::cil_view(&std::env::args().collect::<Vec<_>>()),
+            );
             eprintln!("error: {e}");
             return 1;
         }

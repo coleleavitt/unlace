@@ -417,7 +417,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // Mach-O (fixup slots resolved first); every other target's pass set is
     // byte-identical (the pass ALSO self-gates in `run`). DEFAULT-OFF: its
     // facts are computed at load but committed only when `--option itaniumrtti on`
-    // (`engine.rs::analysis_pass_enabled` reads `arch.analysis_itaniumrtti`, default
+    // (`engine.rs::analysis_pass_enabled` reads `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Itaniumrtti>().0`, default
     // false), so a default run is byte-identical.
     if matches!(
         format,
@@ -542,7 +542,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // before (the no-op is structural, not a runtime check — and the pass ALSO
     // self-gates on PE in `run`). DEFAULT-OFF: its facts are computed at load but
     // committed only when `--option rtti on` (`engine.rs::analysis_pass_enabled`
-    // reads `arch.analysis_rtti`, default false), so a default run is byte-identical
+    // reads `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Rtti>().0`, default false), so a default run is byte-identical
     // and bound to the real-PE path (the XML datatest oracle is untouched).
     if format == object::BinaryFormat::Pe {
         passes.push(Box::new(crate::rtti::RttiPass));
@@ -614,7 +614,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // `BinaryFormat::Pe`, so every non-PE binary's pass set is byte-identical to
     // before (the gate is structural, and the pass ALSO self-gates on PE in `run`).
     // DEFAULT-OFF: its facts are computed at load but committed only when `--option
-    // pdb on` (`engine.rs::analysis_pass_enabled` reads `arch.analysis_pdb`, default
+    // pdb on` (`engine.rs::analysis_pass_enabled` reads `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Pdb>().0`, default
     // false) AND a fingerprint-matching `.pdb` is supplied via `kuna_pdb_path`, so a
     // default run is byte-identical and bound to the real-PE path (the XML datatest
     // oracle is untouched). Types/typed-locals/lines are the deferred PR-P2/P3.
@@ -758,18 +758,24 @@ pub fn run_deferred_entry_passes_without_image(
 fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPass>)> {
     vec![
         (
-            arch.analysis_noreturn_disc,
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::NoreturnDisc>()
+                .0,
             Box::new(crate::noreturn_disc::NoReturnDiscoveredPass),
         ),
         (
-            arch.analysis_noreturn_propagate,
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::NoreturnPropagate>()
+                .0,
             Box::new(crate::noreturn_propagate::NoReturnPropagatePass),
         ),
         (arch.analysis_fid, Box::new(crate::fid::FidPass)),
         // (kuna `itaniumrtti`) Constructor/destructor names from vptr stores: the
         // vtable half runs at load, this half needs the Listing's data edges.
         (
-            arch.analysis_itaniumrtti,
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Itaniumrtti>()
+                .0,
             Box::new(crate::rtti::kuna_itaniumctors::ItaniumCtorsPass),
         ),
         (arch.analysis_flirt, Box::new(crate::flirt::FlirtPass)),
@@ -801,7 +807,7 @@ fn dispatch_if_enabled<T>(enabled: bool, run: impl FnOnce() -> T) -> Option<T> {
 /// (before `read symbols`). So the Listing — and any pass that reads it — must be
 /// built/run at the deferred commit point, when the flag is finally in effect.
 /// The console calls this from `commit_pending_analysis` (reached at `read
-/// symbols`), gated on `arch.analysis_listing` or `arch.analysis_fast_funcdisc`;
+/// symbols`), gated on `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Listing>().0` or `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>().0`;
 /// it parses `bytes`, builds the Listing with funcsym names +
 /// Known-no-return/call-fixup seed metadata, and either runs the enabled
 /// [`listing_consumer_passes`] passes or emits the fast discovery inventory.
@@ -937,8 +943,14 @@ pub fn run_listing_consumers_replaying_observed(
     // names, where the `gopclntab` pass ran and commits them: the pass set
     // follows the load-time verdict, not a later `sourcelang` force.
     // See `pclntab::function_entries`.
-    if arch.analysis_fast_funcdisc
-        && !arch.analysis_listing
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+        .0
+        && !arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Listing>()
+            .0
         && arch.source_lang_detected == unlace_decomp::kuna_sourcelang::SourceLang::Go
     {
         let go = crate::pclntab::function_entries(&file);
@@ -960,7 +972,15 @@ pub fn run_listing_consumers_replaying_observed(
     // have no recognizable prologue (Ghidra's disassembler-driven recursive descent).
     // betaflight STM32F405: the walk grows 1 -> 1470 discovered functions (Ghidra 1822).
     // Gated by the same flag, so x86-64 (funcstart_patterns off) is unchanged.
-    if arch.analysis_listing && arch.analysis_funcstart_patterns {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0
+    {
         let execs = crate::entry::executable_sections(&file);
         seeds.extend(
             crate::entry::full_pattern_starts(&file)
@@ -1018,8 +1038,14 @@ pub fn run_listing_consumers_replaying_observed(
     // million edges spread over two `BTreeMap<u64, Vec<Reference>>` that nothing
     // then read.
     let detail = crate::listing::ListingDetail {
-        assembly: arch.analysis_listing,
-        refs: arch.analysis_listing,
+        assembly: arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Listing>()
+            .0,
+        refs: arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Listing>()
+            .0,
     };
     let mut listing = crate::listing::Listing::build_with_meta_planned_without_image(
         &file,
@@ -1031,7 +1057,10 @@ pub fn run_listing_consumers_replaying_observed(
         detail,
         plan,
     );
-    if arch.analysis_fast_funcdisc
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+        .0
         && matches!(
             file.architecture(),
             object::Architecture::I386 | object::Architecture::X86_64
@@ -1082,7 +1111,11 @@ pub fn run_listing_consumers_replaying_observed(
             // (kuna `incrementalwalk`) Continue the walk from the new roots,
             // the way IDA queues only what a new fact affects, instead of
             // decoding the whole program again.
-            listing = if arch.analysis_incrementalwalk {
+            listing = if arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Incrementalwalk>()
+                .0
+            {
                 listing.resume(
                     &file,
                     arch,
@@ -1109,12 +1142,27 @@ pub fn run_listing_consumers_replaying_observed(
     }
     // (kuna `thunkentry`, `addrtakenentry`) Where the walk's own function set is
     // committed (`funcdisc_recursive`, `fast_funcdisc`).
-    let walk_committed =
-        (arch.analysis_listing && arch.analysis_funcstart_patterns) || arch.analysis_fast_funcdisc;
+    let walk_committed = (arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0)
+        || arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+            .0;
     // (kuna `addrtakenentry`) Code whose address the program takes and no flow
     // reaches re-seeds the walk, which resumes from the Listing it already has.
     // See `aif/kuna_addrtakenentry.rs`.
-    if arch.analysis_addrtakenentry && walk_committed {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Addrtakenentry>()
+        .0
+        && walk_committed
+    {
         let evidence = crate::aif::kuna_addrtakenentry::AddrTaken::new(&file, bytes);
         if let (Some(evidence), Some(code_space)) =
             (evidence, arch.manage().get_default_code_space())
@@ -1151,7 +1199,16 @@ pub fn run_listing_consumers_replaying_observed(
     // keeping every entry the frameless inventory would report unless the
     // frame-expanded Listing contradicts it. A `--jobs` worker replays the
     // parent's recovery and builds only its final Listing.
-    if arch.analysis_listing && arch.analysis_funcstart_patterns && arch.analysis_armframes {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0
+        && arch.analysis_armframes
+    {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let memo = std::rc::Rc::new(crate::listing::kuna_decodememo::DecodeMemo::new(
                 listing.exec_ranges(),
@@ -1309,7 +1366,11 @@ pub fn run_listing_consumers_replaying_observed(
                             if let Some(scope) = &probe {
                                 let _ = scope.protect_variable(b"TMode");
                             }
-                            let pointers = if arch.analysis_ptrentry {
+                            let pointers = if arch
+                                .kuna_options
+                                .get::<unlace_decomp::kuna_analysisgates::Ptrentry>()
+                                .0
+                            {
                                 crate::aif::kuna_ptrentry::pointer_entry_seeds(
                                     &file,
                                     &listing,
@@ -1384,7 +1445,16 @@ pub fn run_listing_consumers_replaying_observed(
     }
     let mut thumb_roots = std::collections::BTreeSet::new();
     let mut thumb_memo = None;
-    if arch.analysis_listing && arch.analysis_funcstart_patterns && !frames_recovered {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0
+        && !frames_recovered
+    {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let raw = crate::aif::raw_thumb_prologue_seeds(
                 &file,
@@ -1437,7 +1507,16 @@ pub fn run_listing_consumers_replaying_observed(
     // `code_pointer_table_seeds`), so x86-64 (funcstart_patterns off) is byte-identical
     // and every non-ARM binary is a strict no-op. Measured recovery (real, ground-truth
     // functions, zero false starts): cf2 +3, usart-stdio +1, betaflight +8.
-    if arch.analysis_listing && arch.analysis_funcstart_patterns && frame_pointers.is_none() {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0
+        && frame_pointers.is_none()
+    {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let ptr = crate::aif::code_pointer_table_seeds(
                 &file,
@@ -1519,7 +1598,15 @@ pub fn run_listing_consumers_replaying_observed(
     let mut ptrentry_out: Vec<u64> = Vec::new();
     if let Some(checked) = &frame_aif {
         ptrentry_out.clone_from(&checked.pointer_entries);
-    } else if arch.analysis_listing && arch.analysis_ptrentry {
+    } else if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Ptrentry>()
+            .0
+    {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             ptrentry_out = crate::aif::kuna_ptrentry::pointer_entry_seeds(
                 &file,
@@ -1531,7 +1618,11 @@ pub fn run_listing_consumers_replaying_observed(
         }
     }
     let mut fast_pointer_seeds = Vec::new();
-    if arch.analysis_fast_funcdisc {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+        .0
+    {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             fast_pointer_seeds = crate::fast_funcdisc::pointer_table_seeds(
                 &file,
@@ -1554,7 +1645,11 @@ pub fn run_listing_consumers_replaying_observed(
         listing: Some(&listing),
         image_path: None,
     };
-    let mut out: Vec<(&'static str, AnalysisOutput)> = if arch.analysis_listing {
+    let mut out: Vec<(&'static str, AnalysisOutput)> = if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+    {
         listing_consumer_passes(arch)
             .into_iter()
             .filter_map(|(enabled, pass)| {
@@ -1573,7 +1668,12 @@ pub fn run_listing_consumers_replaying_observed(
     // is checked before this speculative work; the output keeps the `aif` id for
     // the defensive commit gate. A no-op (empty `entries`) when there is no code
     // space.
-    if arch.analysis_listing && arch.analysis_aif.enabled() {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch.analysis_aif.enabled()
+    {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let mut aif_out = AnalysisOutput::default();
             let checked = frame_aif.unwrap_or_else(|| {
@@ -1592,7 +1692,11 @@ pub fn run_listing_consumers_replaying_observed(
             aif_out.entries = checked.entries;
             // (kuna `aifdataveto`) IDA rolls a speculative code run back when
             // the program reads or writes any of it as data.
-            if arch.analysis_aifdataveto {
+            if arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Aifdataveto>()
+                .0
+            {
                 if let Some(data) = arch.manage().get_default_data_space() {
                     let targets = crate::listing::kuna_accesswidth::data_targets(
                         &listing, translate, code_space, data,
@@ -1643,19 +1747,37 @@ pub fn run_listing_consumers_replaying_observed(
     // option can never remove an entry" a property of the wiring (the walk's
     // instruction closure is invariant under the split; see
     // `listing/kuna_tailcallentry.rs`).
-    if arch.analysis_listing && arch.analysis_tailcallentry {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Tailcallentry>()
+            .0
+    {
         let mut tce_out = AnalysisOutput::default();
         tce_out.entries = crate::listing::kuna_tailcallentry::tail_call_entries(
             &file,
             &listing,
-            arch.analysis_tailcallentryall,
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Tailcallentryall>()
+                .0,
         );
         out.push(("tailcallentry", tce_out));
     }
 
     // (kuna `funcchunks`) The flow body of every function, for the inventory
     // `size` the console reports.
-    if arch.analysis_listing && arch.analysis_funcchunks {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Funcchunks>()
+            .0
+    {
         let model = crate::listing::kuna_funcchunks::ChunkModel::build(&listing);
         let mut fc_out = AnalysisOutput::default();
         fc_out.function_bodies = listing
@@ -1667,7 +1789,16 @@ pub fn run_listing_consumers_replaying_observed(
 
     // (kuna `calltable`) Call tables add their targets as entries; a discovered
     // entry on a switch case that nothing calls is not a function.
-    if arch.analysis_listing && arch.analysis_calltable && listing.has_refs() {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+            .0
+        && listing.has_refs()
+    {
         let tables = crate::listing::kuna_calltable::scan(&file, &listing, arch, translate);
         let mut ct_out = AnalysisOutput::default();
         ct_out.entries = tables.entries;
@@ -1676,7 +1807,15 @@ pub fn run_listing_consumers_replaying_observed(
     }
 
     // (kuna `globalwidth`) The access width of each symbol-table data object.
-    if arch.analysis_listing && arch.analysis_globalwidth {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Globalwidth>()
+            .0
+    {
         if let (Some(code), Some(data)) = (
             arch.manage().get_default_code_space(),
             arch.manage().get_default_data_space(),
@@ -1700,7 +1839,12 @@ pub fn run_listing_consumers_replaying_observed(
 
     // (kuna `callerreads`) Where each direct call returns to, for the decompile
     // step to read a `void` function's callers from.
-    if arch.analysis_listing && listing.has_refs() {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && listing.has_refs()
+    {
         let mut cr_out = AnalysisOutput::default();
         cr_out.call_returns = crate::listing::kuna_callerreads::call_returns(&listing);
         out.push(("callerreads", cr_out));
@@ -1709,7 +1853,10 @@ pub fn run_listing_consumers_replaying_observed(
     // (kuna `poolextents`) The ARM32 literal pools the Listing's trusted
     // instructions prove, for the flow walk's `funcboundflow` bound. See
     // `listing/kuna_poolextents.rs`.
-    if arch.analysis_listing
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
         && listing.has_assembly()
         && crate::loadimage_object::is_arm32_language(&arch.archid)
     {
@@ -1743,7 +1890,15 @@ pub fn run_listing_consumers_replaying_observed(
     // CreateFunctionCmd analog); the commit arm names them `sub_<addr>` and dedups against
     // the already-committed set. Gated by `funcdisc_recursive` → the same
     // `analysis_funcstart_patterns` flag, so x86-64 (funcstart_patterns off) is byte-identical.
-    if arch.analysis_listing && arch.analysis_funcstart_patterns {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0
+    {
         let mut rd_out = AnalysisOutput::default();
         rd_out.entries = listing
             .functions()
@@ -1758,7 +1913,11 @@ pub fn run_listing_consumers_replaying_observed(
         pe_out.entries = ptrentry_out;
         out.push(("ptrentry", pe_out));
     }
-    if arch.analysis_fast_funcdisc {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+        .0
+    {
         let mut fast_out = AnalysisOutput::default();
         fast_out.entries = listing
             .functions()
@@ -1835,7 +1994,7 @@ pub fn run_uefi(
 /// `Sleigh` *after* the load-time pass list runs (`set_loader` in
 /// `bootstrap_from_object`). A load-time decode would find no bytes (every decode
 /// fails). The console calls this from `commit_pending_analysis` (reached at `read
-/// symbols`, after `set_loader`), gated on `arch.analysis_operand_refs`
+/// symbols`, after `set_loader`), gated on `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::OperandRefs>().0`
 /// (`--option operand_refs on`). `ctx.listing` is `None` — the pass does its own
 /// linear decode, independent of the Listing tier (which never populates the data
 /// references this pass needs; see `docs/history/listing-tier-design.md` §2.2).
@@ -1996,7 +2155,9 @@ pub fn run_default_analyses(
     // read-only by every consumer pass via `ctx.listing`.
     let seeds = listing_seeds_for_language(&file, bytes, Some(arch.get_description()));
     let listing = arch
-        .analysis_listing
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
         .then(|| crate::listing::Listing::build_without_image(&file, arch, translate, &seeds));
     let ctx = AnalysisCtx {
         file: &file,
@@ -2040,14 +2201,16 @@ pub fn run_default_analyses_per_pass(
     let (file, bytes) = crate::loader::kuna_relocrebase::select(raw, bytes, &view);
     let compiler = crate::sourcelang::effective_compiler(&file, bytes);
     // Listing/xref tier (design §1.3): built once, before the pass loop, only
-    // when `arch.analysis_listing` (i.e. `--option listing on`). Default-off ⇒
+    // when `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Listing>().0` (i.e. `--option listing on`). Default-off ⇒
     // `.then(...)` is `None` ⇒ no decode work, `ctx.listing == None`, and the
     // real-ELF bootstrap is byte-identical to today. The `Listing` is owned here
     // (same lifetime shape as `file`), outlives the pass loop, and is borrowed
     // read-only by every consumer pass via `ctx.listing`.
     let seeds = listing_seeds_for_language(&file, bytes, Some(arch.get_description()));
     let listing = arch
-        .analysis_listing
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
         .then(|| crate::listing::Listing::build_without_image(&file, arch, translate, &seeds));
     let ctx = AnalysisCtx {
         file: &file,
@@ -2157,10 +2320,13 @@ mod tests {
     #[test]
     fn listing_consumer_schedule_pairs_each_pass_with_its_option() {
         let mut arch = test_arch();
-        arch.analysis_noreturn_disc = false;
-        arch.analysis_noreturn_propagate = true;
+        arch.kuna_options
+            .set(unlace_decomp::kuna_analysisgates::NoreturnDisc(false));
+        arch.kuna_options
+            .set(unlace_decomp::kuna_analysisgates::NoreturnPropagate(true));
         arch.analysis_fid = false;
-        arch.analysis_itaniumrtti = true;
+        arch.kuna_options
+            .set(unlace_decomp::kuna_analysisgates::Itaniumrtti(true));
         arch.analysis_formatstring = unlace_decomp::kuna_formatstring::FormatStringMode::Off;
 
         let schedule: Vec<(&str, bool)> = listing_consumer_passes(&arch)

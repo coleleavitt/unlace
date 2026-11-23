@@ -4,6 +4,7 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod database;
+pub mod kuna_analysisgates;
 pub mod kuna_assert;
 mod kuna_option_dispatch;
 pub mod kuna_phases;

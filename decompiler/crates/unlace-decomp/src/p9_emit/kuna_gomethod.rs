@@ -32,7 +32,12 @@ pub(super) fn direct_method<'a>(
     arch: &'a Architecture,
     id: OpId,
 ) -> Option<DirectMethod<'a>> {
-    if !arch.analysis_godwarfsig || !fd.get_arch().source_lang.is_go() {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_analysisgates::Godwarfsig>()
+        .0
+        || !fd.get_arch().source_lang.is_go()
+    {
         return None;
     }
     let op = fd.obank().get(id)?;

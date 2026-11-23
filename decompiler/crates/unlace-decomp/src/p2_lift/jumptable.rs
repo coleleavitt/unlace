@@ -834,7 +834,11 @@ impl GuardRecord {
         let c1 = fd.obank().get(op1).unwrap().code();
         if c1 != fd.obank().get(op2).unwrap().code() {
             return i32::from(
-                fd.get_arch().highslice_guard && (fd.hooks().highslice_guard_matches)(fd, op1, op2),
+                fd.get_arch()
+                    .kuna_options
+                    .get::<crate::jumptable::HighsliceGuard>()
+                    .0
+                    && (fd.hooks().highslice_guard_matches)(fd, op1, op2),
             );
         }
         match c1 {
@@ -3028,7 +3032,12 @@ impl JumpBasicModel {
         maxpullback: int4,
         usenzmask: bool,
     ) {
-        if !fd.get_arch().switch_multi_pred {
+        if !fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::jumptable::SwitchMultiPred>()
+            .0
+        {
             // STUB default: unrolled-guard detection stays off; upstream
             // byte-identical (the guard duplicated across predecessors is left
             // undetected exactly as before).
@@ -3129,7 +3138,12 @@ impl JumpBasicModel {
         maxpullback: int4,
         usenzmask: bool,
     ) {
-        if !fd.get_arch().switch_multi_pred {
+        if !fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::jumptable::SwitchMultiPred>()
+            .0
+        {
             return;
         }
         let size_in = fd.bblocks_ref().block(bl).size_in();
@@ -3285,7 +3299,11 @@ impl JumpBasicModel {
             // lockstep walk could not collapse them because the guards are
             // semantically different).  Union the per-input bounds across the
             // MULTIEQUAL and re-bound the table to [0, N).
-            if fd.get_arch().switch_multi_pred
+            if fd
+                .get_arch()
+                .kuna_options
+                .get::<crate::jumptable::SwitchMultiPred>()
+                .0
                 && self.kuna_try_multipred_guard_table(fd, indop, maxtablesize)
             {
                 self.mark_foldable_guards(fd);
@@ -3294,7 +3312,11 @@ impl JumpBasicModel {
             // (kuna `switchextent`) No guard at all: the table ends where the
             // function's next jump table begins (`kuna_switchextent.rs`).
             if unbounded
-                && fd.get_arch().switch_extent
+                && fd
+                    .get_arch()
+                    .kuna_options
+                    .get::<crate::jumptable::SwitchExtent>()
+                    .0
                 && self.kuna_try_extent_bound_table(fd, maxtablesize)
             {
                 self.mark_foldable_guards(fd);
@@ -5566,7 +5588,13 @@ impl JumpBasicModel {
     /// (`kuna_switchextent::later_tables`). A jump-table partial asks the flow
     /// for the next functions' tables first ([`NextTableRows::Ask`]).
     fn kuna_next_table_rows(&self, fd: &Funcdata, rows: &[Address]) -> NextTableRows {
-        if !fd.get_arch().switch_extent || self.is_model2 {
+        if !fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::jumptable::SwitchExtent>()
+            .0
+            || self.is_model2
+        {
             return NextTableRows::Keep;
         }
         let entry = fd.get_address();
@@ -7673,6 +7701,44 @@ crate::kuna_flag!(
     SwitchTrim,
     "switchtrim",
     "Unguarded jump-table recovery with layout trimming",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna) `option switchextent`: end a jump table no range check bounds
+    /// at the next jump table its function dispatches through
+    /// (`p2_lift/kuna_switchextent.rs`, and the Listing's AArch64 table read).
+    SwitchExtent,
+    "switchextent",
+    "Unchecked jump table ends at the function's next table",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// Match complete high-byte slices to equivalent logical shifts.
+    HighsliceGuard,
+    "highsliceguard",
+    "High-byte slice jump-table guard",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna, angr `test_decompiling_abnormal_switch_case_case3`) Recover an
+    /// image-base-relative jump table whose bound guard is "unrolled" /
+    /// duplicated across MULTIPLE predecessors of the dispatch block (the
+    /// `BRANCHIND` parent has `sizeIn() > 1`, each incoming block ending in its
+    /// own copy of the bound CBRANCH, the per-path switch indices meeting in a
+    /// MULTIEQUAL).  Ports the upstream multi-predecessor unrolled-guard
+    /// machinery (`JumpBasic::checkCommonCbranch` + `BlockBasic::findMultiequal`
+    /// + `BlockBasic::liftVerifyUnroll`) into `JumpBasic::checkUnrolledGuard`,
+    /// lifting the common guard onto the MULTIEQUAL output so the table bounds
+    /// (C++ `switch_multi_pred`).
+    SwitchMultiPred,
+    "switchmultipred",
+    "Switch multi-predecessor unrolled-guard table",
     unset: false,
     shipped: true
 );

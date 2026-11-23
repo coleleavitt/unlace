@@ -3192,7 +3192,12 @@ impl ConsoleProgram {
             .collect();
         // (kuna `funcstart_patterns`) The prologue patterns of the target's
         // language, swept over the same executable bytes, seed the walk too.
-        if self.arch().analysis_funcstart_patterns {
+        if self
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0
+        {
             if let Some(set) =
                 unlace_analysis::entry::patterns::for_language(self.arch().get_description())
             {
@@ -3261,7 +3266,12 @@ impl ConsoleProgram {
         if !matches!(self.container, ProgramContainer::Raw | ProgramContainer::Te) {
             return;
         }
-        if !self.arch().analysis_objectview {
+        if !self
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Objectview>()
+            .0
+        {
             self.analysis_image = None;
             return;
         }
@@ -3301,7 +3311,7 @@ impl ConsoleProgram {
     /// is gated on `--option listing on`, a flag the CLI sets after `load file`,
     /// so the Listing — and any pass that reads it (e.g. discovered-no-return) —
     /// is built/run HERE (when the flag is finally in effect), not at load. When
-    /// `arch.analysis_listing` is on, the stashed image bytes are re-parsed, the
+    /// `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Listing>().0` is on, the stashed image bytes are re-parsed, the
     /// Listing is built, and the enabled Listing-consumer passes run; their
     /// defensively re-gated facts merge into the same `merged` output committed
     /// below. Fast inventory or an explicit Rust profile request can also need
@@ -3434,7 +3444,12 @@ impl ConsoleProgram {
             .filter(|(id, _)| analysis_pass_enabled(self.arch(), id))
             .flat_map(|(_, out)| out.noreturn.iter().map(|f| f.addr))
             .collect();
-        if self.arch().analysis_listing {
+        if self
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Listing>()
+            .0
+        {
             noreturn_seed_addrs.extend(self.function_entries().filter_map(|(_, addr)| {
                 self.arch()
                     .symboltab
@@ -3463,15 +3478,36 @@ impl ConsoleProgram {
         // `--option` flag (now in effect). Default-off (both) ⇒ skipped ⇒ zero cost.
         // Real-object path only (the XML path stashes no image). The stash is consumed
         // once and shared by both deferred passes.
-        let want_listing = self.arch().analysis_listing;
-        let want_fast_funcdisc = self.arch().analysis_fast_funcdisc;
-        let want_operand_refs = self.arch().analysis_operand_refs;
-        let want_wide32_alone = self.arch().analysis_widestrings32 && !want_operand_refs;
+        let want_listing = self
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Listing>()
+            .0;
+        let want_fast_funcdisc = self
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+            .0;
+        let want_operand_refs = self
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::OperandRefs>()
+            .0;
+        let want_wide32_alone = self
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Widestrings32>()
+            .0
+            && !want_operand_refs;
         // (kuna) The full byte-pattern entry sweep is deferred here too — not
         // because it decodes, but because its gate is only known now. Registered at
         // load it swept the whole image on every binary and was discarded whenever
         // the gate was off (the default). See `passes::run_deferred_entry_passes`.
-        let want_addrtable = self.arch().analysis_addrtable;
+        let want_addrtable = self
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
+            .0;
         if self.analysis_image.is_some() {
             if let Some((path, bytes, import_proofs)) = self.analysis_image.take() {
                 let profile_request = if rust_profile_request.is_some() {
@@ -3767,7 +3803,10 @@ fn suppress_pdb_interior_entries(
             || arch
                 .symboltab
                 .function_is_no_return_across_scopes(&at(target))
-            || (arch.analysis_noreturn_known
+            || (arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+                .0
                 && (names_at(target).any(is_known_noreturn_name)
                     || arch
                         .symboltab
@@ -3834,10 +3873,25 @@ fn install_named_call_fixup(
 fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
     match pass_id {
         "armframes" => {
-            arch.analysis_listing && arch.analysis_funcstart_patterns && arch.analysis_armframes
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Listing>()
+                .0
+                && arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+                    .0
+                && arch.analysis_armframes
         }
-        "noreturn_known" => arch.analysis_noreturn_known,
-        "gonoreturn" => arch.analysis_noreturn_known,
+        "noreturn_known" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+                .0
+        }
+        "gonoreturn" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+                .0
+        }
         // (kuna) PE/Mach-O import-slot call binding — typed-slot `externref`
 
         // paint plus PE-only Win32 no-return names, committed only when enabled.
@@ -3848,18 +3902,38 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // commit; so the fact is always parked.
         "poolextents" => true,
 
-        "arm64evcall" => arch.analysis_arm64evcall,
+        "arm64evcall" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Arm64evcall>()
+                .0
+        }
         // (kuna) ELF GOT data imports: the slot names + externref paint exist only
         // to let `importdata` render a read through the slot, so they share its gate.
-        "elfgotimports" => arch.import_data,
+        "elfgotimports" => {
+            arch.kuna_options
+                .get::<unlace_decomp::printc::ImportData>()
+                .0
+        }
 
-        "machobinds" => arch.analysis_machobinds,
-        "machodataslots" => arch.import_data,
+        "machobinds" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Machobinds>()
+                .0
+        }
+        "machodataslots" => {
+            arch.kuna_options
+                .get::<unlace_decomp::printc::ImportData>()
+                .0
+        }
         // (kuna) The measured libc signature extension — the ~200 prototypes the
         // 27-entry base table does not carry, seeded onto IMPORTED names only. The
         // facts are computed at LOAD and COMMITTED only when this gate is on, so
         // `off` renders exactly what the base table alone renders.
-        "libgccsigs" => arch.analysis_libgccsigs,
+        "libgccsigs" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Libgccsigs>()
+                .0
+        }
         // (kuna `typelib`) The image's library target and imports; dropped
         // here when no library is to be read.
         "typelib" => arch.analysis_typelib != unlace_decomp::kuna_typelib::TypeLib::Off,
@@ -3877,30 +3951,73 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_tlsnames::Tlsnames>()
                 .0
         }
-        "uefi" => arch.analysis_uefi,
-        "cortexmscs" => arch.analysis_cortexmscs,
-        "strings" => arch.analysis_strings,
+        "uefi" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Uefi>()
+                .0
+        }
+        "cortexmscs" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Cortexmscs>()
+                .0
+        }
+        "strings" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Strings>()
+                .0
+        }
         // (kuna `fatstr`) The Rust `&str`-record string pass — gated on the SAME
         // option mode the engine's (ptr,len) literal rule reads, so one option
         // governs both recognizers; `off` (0) drops the bounded facts here.
         "fatstrrecords" => arch.fat_str != 0,
-        "strcodelen" => arch.fat_str != 0 && arch.analysis_strcodelen,
-        "panicloc" => arch.analysis_panicloc,
-        "entry_disc" => arch.analysis_entry_disc,
+        "strcodelen" => {
+            arch.fat_str != 0
+                && arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::Strcodelen>()
+                    .0
+        }
+        "panicloc" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Panicloc>()
+                .0
+        }
+        "entry_disc" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::EntryDisc>()
+                .0
+        }
         // (kuna) `.eh_frame` LSDA landing-pad discovery (GccExceptionAnalyzer) — a
         // standalone stashed pass whose facts (the exception landing pads) are
         // computed at LOAD but COMMITTED only when this gate is on. Default-off
         // (output-changing: adds entries), so a default run never commits them and
         // the discovery set is byte-identical to FDE-pcBegin-only.
-        "eh_frame_full" => arch.analysis_eh_frame_full,
+        "eh_frame_full" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::EhFrameFull>()
+                .0
+        }
         "itaniumeh" => arch.itanium_eh,
-        "ehnote" => arch.analysis_ehnote && !arch.itanium_eh,
+        "ehnote" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Ehnote>()
+                .0
+                && !arch.itanium_eh
+        }
         // (kuna) Mach-O `__unwind_info` function-start discovery — facts computed
         // at LOAD, COMMITTED only when this gate is on. Default-off (output-
         // changing: adds entries), so a default run is byte-identical and an image
         // carrying `LC_FUNCTION_STARTS` gains nothing (the starts are a subset).
-        "unwindstarts" => arch.analysis_unwindstarts,
-        "machoehframe" => arch.analysis_machoehframe,
+        "unwindstarts" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Unwindstarts>()
+                .0
+        }
+        "machoehframe" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Machoehframe>()
+                .0
+        }
         // (kuna) PE CRT entry-function prototype recovery — a standalone stashed pass
         // whose one prototype is computed at LOAD but COMMITTED only when this gate
         // is on. Default-ON; off renders the `void(void)` form exactly.
@@ -3918,65 +4035,133 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // pass whose one name and one prototype are computed at LOAD but
         // COMMITTED only when this gate is on. Default-ON; off restores the
         // `sub_<addr>` / width-only form exactly.
-        "elfmain" => arch.analysis_elfmain,
+        "elfmain" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Elfmain>()
+                .0
+        }
         // (kuna) `.eh_frame` FDE-interior entry suppression — the pass reports the
         // single-function FDE bodies and the commit rejects any discovered entry
         // strictly inside one. Default-ON; with the gate off the fact stream is
         // dropped here and the discovery set is exactly what it was before.
-        "ehcold" => arch.analysis_ehcold,
-        "importvote" => arch.analysis_importvote,
+        "ehcold" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Ehcold>()
+                .0
+        }
+        "importvote" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_importvote::Importvote>()
+                .0
+        }
         // (kuna) PDB-procedure-interior entry suppression — the extents come out of
         // the `.pdb`, so switching `pdb` off withdraws them too.
-        "pdbinterior" => arch.analysis_pdb,
+        "pdbinterior" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Pdb>()
+                .0
+        }
         // (kuna) The widened Cortex-M vector-table oracle — a standalone stashed
         // pass whose handler seeds + Thumb region paint are computed at LOAD but
         // COMMITTED only when this gate is on. Default-off (output-changing: adds
         // entries), so a default run never commits them and the discovery set is
         // byte-identical to the shipped (e_entry-matching) signature.
-        "cortexmvectors" => arch.analysis_cortexmvectors,
-        "ptrentry" => arch.analysis_ptrentry,
+        "cortexmvectors" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Cortexmvectors>()
+                .0
+        }
+        "ptrentry" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Ptrentry>()
+                .0
+        }
         // (kuna) ARM literal-pool inference — the additive pool-end entries are
         // emitted under this id so the commit gate mirrors the pre-invocation check
         // in `run_listing_consumers`. The subtractive half rides the `aif` stream it
         // filters, which the `aif` arm above already gates.
-        "poolentry" => arch.analysis_poolentry,
+        "poolentry" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Poolentry>()
+                .0
+        }
         // (kuna) The full byte-pattern function-start pass — default-OFF
         // (output-changing). The `_ => true` fail-open below would otherwise run it
         // by default, so this explicit arm reading the (default-false)
         // `analysis_funcstart_patterns` flag is load-bearing for the default-off
         // contract.
-        "funcstart_patterns" => arch.analysis_funcstart_patterns,
+        "funcstart_patterns" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+                .0
+        }
         // (kuna) The recursive-descent discovery commit — promotes the Listing walk's
         // followed CALL targets to functions. Coupled to the same flag as the prologue
         // seeds that feed it (default-OFF; DIV-20 turns it on for non-x86-64 on the
         // decompile-all surface). x86-64 keeps it off ⇒ byte-identical there.
-        "funcdisc_recursive" => arch.analysis_funcstart_patterns,
+        "funcdisc_recursive" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+                .0
+        }
         // (kuna `armfuncmode`) An explicit `--isa` states the mode of the whole
         // image, so the symbol-derived A32 extents yield to it.
         "armfuncmode" => !arch.input_arm_isa_override,
         // (kuna) The entry-reachable Thumb context walk. Its paints are computed at
         // the commit (after byte overlays) and stashed under this id, so the gate
         // here is the defensive half of the check that decides whether it runs.
-        "dwarf" => arch.analysis_dwarf,
+        "dwarf" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Dwarf>()
+                .0
+        }
         // (kuna `cppsig`) The whole-pass gate; WHICH certainty tier survives is a
         // second decision, made on the mode in `commit_analysis_output`.
         "cppsig" => arch.analysis_cppsig.enabled(),
         // Explicit (NOT the fail-open `_ => true` default): the source-line pass is
         // default-OFF (it changes the output), so it must be registered here to be
         // gated by the `analysis_dwarf_lines` flag rather than running by default.
-        "dwarf_lines" => arch.analysis_dwarf_lines,
+        "dwarf_lines" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::DwarfLines>()
+                .0
+        }
         "cvftrace" => arch.analysis_cvftrace,
         "cvftrace_lines" => arch.analysis_cvftrace_lines,
-        "addrtable" => arch.analysis_addrtable,
-        "operand_refs" => arch.analysis_operand_refs,
-        "listing" => arch.analysis_listing,
-        "fast_funcdisc" => arch.analysis_fast_funcdisc,
-        "noreturn_disc" => arch.analysis_noreturn_disc,
+        "addrtable" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
+                .0
+        }
+        "operand_refs" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::OperandRefs>()
+                .0
+        }
+        "listing" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Listing>()
+                .0
+        }
+        "fast_funcdisc" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+                .0
+        }
+        "noreturn_disc" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::NoreturnDisc>()
+                .0
+        }
         // (kuna, GH-312) The positive-evidence-only tally has no fact stream of its
         // own — it shapes which callees `noreturn_disc` concludes, which the arm
         // above already gates. Registered here so the fail-open `_ => true` never
         // silently re-enables a pass id that does not exist.
-        "noreturn_propagate" => arch.analysis_noreturn_propagate,
+        "noreturn_propagate" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::NoreturnPropagate>()
+                .0
+        }
         "fid" => arch.analysis_fid,
         "flirt" => arch.analysis_flirt,
         // (kuna) MSVC RTTI / vftable recovery — a standalone load-time pass whose
@@ -3984,14 +4169,22 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // this gate is on. Default-OFF (output-changing: adds named data symbols),
         // PE-only (the pass + its passes_for registration both self-gate on PE), so
         // a default run / every non-PE binary commits nothing here.
-        "rtti" => arch.analysis_rtti,
+        "rtti" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Rtti>()
+                .0
+        }
         // (kuna, NOVEL) Itanium (GCC/Clang) RTTI + vtable recovery — the class
         // names, typeinfo/vtable labels and per-slot virtual-method names are
         // computed at LOAD but COMMITTED only when this gate is on. Default-OFF
         // (output-changing: adds named data + function symbols), ELF-only (the pass
         // + its passes_for registration both self-gate on ELF), so a default run /
         // every non-ELF binary commits nothing here.
-        "itaniumrtti" => arch.analysis_itaniumrtti,
+        "itaniumrtti" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Itaniumrtti>()
+                .0
+        }
         "aif" => arch.analysis_aif.enabled(),
         // (kuna, GH-299) The AIF bracketed-candidate reject has no fact stream of
         // its own -- it shapes the `aif` accept list inside `run_aif`, which the
@@ -4002,44 +4195,100 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // same way; registered for the same fail-open reason.
         // (kuna, GH-299) The AIF literal-pool slide, shaping the `aif` accept list
         // the same way; registered for the same fail-open reason.
-        "aifpoolslide" => arch.analysis_aifpoolslide,
+        "aifpoolslide" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
+                .0
+        }
         // (kuna) Tail-call function-entry recovery — default-OFF (discovers more
         // functions, so it changes emitted C by construction). Listing consumer;
         // the live gate is the pre-invocation check in `run_listing_consumers`.
-        "tailcallentry" => arch.analysis_tailcallentry,
+        "tailcallentry" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Tailcallentry>()
+                .0
+        }
 
-        "funcchunks" => arch.analysis_funcchunks,
-        "globalwidth" => arch.analysis_globalwidth,
-        "aifdataveto" => arch.analysis_aifdataveto,
-        "calltable" => arch.analysis_calltable,
+        "funcchunks" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Funcchunks>()
+                .0
+        }
+        "globalwidth" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Globalwidth>()
+                .0
+        }
+        "aifdataveto" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Aifdataveto>()
+                .0
+        }
+        "calltable" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+                .0
+        }
         // (kuna) Stripped Mach-O stub naming from chained binds; default-on,
         // output-changing (names `sub_` stubs), so `off` really skips it.
-        "stubbinds" => arch.analysis_stubbinds,
+        "stubbinds" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Stubbinds>()
+                .0
+        }
         // (kuna) Mach-O Objective-C metadata recovery — default-OFF (output-changing:
         // renames IMP functions + adds class/selector symbols). Registered here so it
         // is gated by `analysis_objc` rather than running by the fail-open default.
-        "objc" => arch.analysis_objc,
+        "objc" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Objc>()
+                .0
+        }
         // (kuna) Swift runtime-metadata recovery — default-OFF (output-changing:
         // names stripped functions and descriptor records).
-        "swiftmetadata" => arch.analysis_swiftmetadata,
+        "swiftmetadata" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Swiftmetadata>()
+                .0
+        }
         // (kuna) The Swift runtime prototypes — default-ON (a Swift image's
         // runtime calls are the same functions everywhere).
-        "swiftruntime" => arch.analysis_swiftruntime,
+        "swiftruntime" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Swiftruntime>()
+                .0
+        }
         // (kuna) Mach-O `__cfstring` constant-string recovery — default-on,
         // output-changing (renders CFString constants as `CFSTR("...")` typed
         // `CFStringRef`). Registered here so `off` really skips it; `off`
         // renders the entry exactly as before.
         "cfstrings" => arch.analysis_cfstrings,
         "iokitclasses" => arch.analysis_iokitclasses,
-        "xnutables" => arch.analysis_xnutables,
-        "osclassinfo" => arch.analysis_osclassinfo,
-        "blobs" => arch.analysis_blobs,
+        "xnutables" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Xnutables>()
+                .0
+        }
+        "osclassinfo" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Osclassinfo>()
+                .0
+        }
+        "blobs" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Blobs>()
+                .0
+        }
         // (kuna) PE PDB metadata recovery — default-OFF (output-changing: renames
         // stripped functions to their real PDB names). PE-only + externally gated on
         // a fingerprint-matching `.pdb` (the `kuna_pdb_path` env var). Registered
         // here so it is gated by `analysis_pdb` rather than running by the fail-open
         // default.
-        "pdb" => arch.analysis_pdb,
+        "pdb" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Pdb>()
+                .0
+        }
         // (kuna) `libctypes` has NO arm on purpose and reaches this fail-open
         // default. Its gate is the load-time `KUNA_LIBCTYPES` env bridge read
         // inside the pass itself, because the pass interns its named type shells
@@ -6534,7 +6783,12 @@ fn commit_analysis_output(
     // 0. (kuna `cppproto`) The DWARF C++ arm's facts, stashed apart by the
     //    producing pass: they fold into the normal symbol/local streams below and
     //    their address-keyed prototypes are applied at step 5a.
-    if prog.arch().analysis_dwarfnocall {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Dwarfnocall>()
+        .0
+    {
         out.apply_dwarf_nocall();
     }
     if let Some(entry) = out.go_chanrecv2 {
@@ -6557,12 +6811,22 @@ fn commit_analysis_output(
         prog.arch_mut().tls_layout = Some(Rc::new(layout));
     }
     let dwarf_globals = std::mem::take(&mut out.dwarf_typed_globals);
-    if prog.arch().analysis_dwarfglobaltypes {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Dwarfglobaltypes>()
+        .0
+    {
         let typed: std::collections::BTreeSet<u64> = dwarf_globals.iter().map(|g| g.addr).collect();
         out.data_objects.retain(|d| !typed.contains(&d.addr));
         out.typed_data.splice(0..0, dwarf_globals);
     }
-    let go_prototypes = if prog.arch().analysis_godwarfsig {
+    let go_prototypes = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Godwarfsig>()
+        .0
+    {
         out.go_dwarf
             .iter()
             .flat_map(|facts| facts.materialize(prog.arch(), &out.go_pointer_methods))
@@ -6595,7 +6859,13 @@ fn commit_analysis_output(
     // 0a'. (kuna `swiftobjcthunk`) Off, every function the Swift metadata
     //      pass named after an `@objc` member takes its positional name back.
     let positional = std::mem::take(&mut out.swift_positional_names);
-    if !prog.arch().analysis_swiftobjcthunk && !positional.is_empty() {
+    if !prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Swiftobjcthunk>()
+        .0
+        && !positional.is_empty()
+    {
         let back: HashMap<u64, (String, String)> = positional
             .into_iter()
             .map(|(addr, member, slot)| (addr, (member, slot)))
@@ -6620,14 +6890,29 @@ fn commit_analysis_output(
     //     prototypes, and the tables typed beside the static ones: on, they
     //     fold into their streams; off, they are dropped.
     let witnesses = std::mem::take(&mut out.swift_witnesses);
-    if prog.arch().analysis_valuewitness {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_valuewitness::Valuewitness>()
+        .0
+    {
         out.symbols.extend(witnesses.names);
         out.prototypes_at.extend(witnesses.prototypes);
-        if prog.arch().analysis_swifttypes {
+        if prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+            .0
+        {
             out.typed_data.extend(witnesses.typed_data);
         }
     }
-    if prog.arch().analysis_swifttypes {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+        .0
+    {
         let swift = std::mem::take(&mut out.swift_types);
         out.typed_data.extend(swift.typed_data);
         out.prototypes.extend(swift.prototypes);
@@ -6652,7 +6937,12 @@ fn commit_analysis_output(
     // (kuna `swifthelpers`) The Swift helper arm's facts, the same deferred
     // shape: on, they fold into their streams; off, they are dropped.
     let helpers = std::mem::take(&mut out.swift_helpers);
-    if prog.arch().analysis_swifthelpers {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Swifthelpers>()
+        .0
+    {
         out.symbols.extend(helpers.symbols);
         out.fid_names.extend(helpers.fid_names);
         out.typed_data.extend(helpers.typed_data);
@@ -6663,7 +6953,12 @@ fn commit_analysis_output(
     //     typed-data stream and commit at arm 4b (`type:main.Point` of shell
     //     `go.typedesc`, `typelock|namelock`); off, they are dropped whole and
     //     the image renders exactly what the `gotypes` provider alone renders.
-    if prog.arch().analysis_go_type_globals {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::GoTypeGlobals>()
+        .0
+    {
         let descriptors = std::mem::take(&mut out.go_type_globals);
         out.typed_data.extend(descriptors);
         let itabs = std::mem::take(&mut out.go_itabs);
@@ -6925,7 +7220,12 @@ fn commit_analysis_output(
 
     // 1---. (kuna `outlinedinline`) Flag clang's MachineOutliner fragments inline,
     //       so flow splices each into its callers.
-    if prog.arch().outlined_inline {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::flow::OutlinedInline>()
+        .0
+    {
         let fragments: Vec<Address> = prog
             .symbols
             .iter()
@@ -7072,8 +7372,17 @@ fn commit_analysis_output(
     //    global first, so that duplicate then shadowed the real name at every call
     //    site and the printer rendered `sub_<addr>` (DIV-59).
     // (kuna `lazyfuncs`) On, an entry keeps its NAME but no `Function` is created here.
-    let lazy_funcs = prog.arch().analysis_lazyfuncs;
-    let jump_thunks = if prog.arch().analysis_thunknames {
+    let lazy_funcs = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Lazyfuncs>()
+        .0;
+    let jump_thunks = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Thunknames>()
+        .0
+    {
         kuna_thunknames::jump_thunks(prog.arch(), code_space, &out.entries)
     } else {
         Default::default()
@@ -7504,12 +7813,22 @@ fn commit_analysis_output(
     //    unterminated literals read back as one 39-byte string). A bounded
     //    fact's `len` is the exact element count — there is no terminator.
     let blob_extents = crate::kuna_blobdata::Extents::new(&out.blobs);
-    let wide = if prog.arch().analysis_widestrings {
+    let wide = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Widestrings>()
+        .0
+    {
         out.wide_strings.as_slice()
     } else {
         &[]
     };
-    let wide32 = if prog.arch().analysis_widestrings32 {
+    let wide32 = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Widestrings32>()
+        .0
+    {
         out.wide_strings32.as_slice()
     } else {
         &[]
@@ -7902,7 +8221,12 @@ fn commit_analysis_output(
     // (kuna `objcrettype`/`objcresolve`) The ObjC class table the engine types
     // and resolves message sends with; it rides the `objc` gate like the labels.
     if let Some(mut table) = out.objc_classes {
-        if prog.arch().analysis_objc {
+        if prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Objc>()
+            .0
+        {
             let data_slots: std::collections::HashSet<u64> =
                 out.data_import_slots.iter().copied().collect();
             table.class_slot_at.extend(
@@ -8194,7 +8518,12 @@ fn commit_analysis_output(
     //     the shape of a console `map param`, which the decompile drive seeds
     //     the function's own decompile with. A register the language does not
     //     define is a silent no-op, as for the tracked registers above.
-    if prog.arch().analysis_swifttypes {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+        .0
+    {
         for fact in &out.swift_types.param_locks {
             let Ok(loc) = prog.arch().get_register_varnode(fact.reg.as_bytes()) else {
                 continue;

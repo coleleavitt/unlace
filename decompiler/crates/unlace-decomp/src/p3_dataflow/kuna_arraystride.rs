@@ -72,7 +72,13 @@ impl Rule for RuleArrayStride {
     /// C++ `RuleArrayStride::applyOp` (`kuna_arraystride.cc:88`) — transcribed.
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         // (kuna) gate (ArchContext-carried).
-        if !self.enabled && !data.get_arch().recover_array_stride {
+        if !self.enabled
+            && !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_arraystride::RecoverArrayStride>()
+                .0
+        {
             return 0;
         }
 
@@ -282,6 +288,16 @@ fn vn_offset(data: &Funcdata, vn: VarnodeId) -> uintb {
 fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
     data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(0)
 }
+
+crate::kuna_flag!(
+    /// (kuna GH-8724) Re-express a strided-induction offset as counter*stride
+    /// (C++ `recover_array_stride`).
+    RecoverArrayStride,
+    "arraystride",
+    "Strided-induction array recovery",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 #[path = "kuna_arraystride/tests.rs"]

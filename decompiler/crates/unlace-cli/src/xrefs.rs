@@ -302,7 +302,10 @@ fn query(args: &XrefArgs) -> Result<String, String> {
     let seeds = unlace_analysis::listing::xrefs::discovery_seeds(
         &file,
         &inventory,
-        prog.arch().analysis_funcstart_patterns,
+        prog.arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0,
     );
     // The operand resolves to an address BEFORE the walk so the walk can be
     // pointed at it: a function whose only inbound edge is an indirect call
@@ -1891,7 +1894,13 @@ fn objc_resolved_edges(
     target: &Target,
     direction: Direction,
 ) -> Vec<Xref> {
-    if !prog.arch().objc_resolve || prog.arch().kuna_objc_classes.classes.is_empty() {
+    if !prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_objcrettype::ObjcResolve>()
+        .0
+        || prog.arch().kuna_objc_classes.classes.is_empty()
+    {
         return Vec::new();
     }
     let candidates: Vec<u64> = match direction {

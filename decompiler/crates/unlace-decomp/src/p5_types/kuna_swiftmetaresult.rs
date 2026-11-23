@@ -41,7 +41,12 @@ fn returns_metadata(callee: &str) -> bool {
 /// Idempotent.
 pub fn contribute(data: &mut Funcdata) {
     let arch = Rc::clone(data.get_arch());
-    if !arch.swift_metadata_results || !arch.analysis_valuewitness {
+    if !arch.swift_metadata_results
+        || !arch
+            .kuna_options
+            .get::<crate::kuna_valuewitness::Valuewitness>()
+            .0
+    {
         return;
     }
     if !(0..data.num_calls()).any(|i| returns_metadata(data.get_call_specs(i).get_name())) {

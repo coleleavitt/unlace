@@ -521,7 +521,13 @@ fn measure(
 /// Replace the hints of every recognized frame record with one fixed hint of
 /// its synthesized structure.
 pub(super) fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
-    if !fd.get_arch().stack_struct || space.get_word_size() != 1 {
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_stackstruct::StackStruct>()
+        .0
+        || space.get_word_size() != 1
+    {
         return;
     }
     let Some(types) = fd.get_arch().types_rc() else {
@@ -612,3 +618,13 @@ fn mint(
         record,
     })
 }
+
+crate::kuna_flag!(
+    /// (kuna `stackstruct`) Lay out an address-taken frame record as one
+    /// structure. See [`crate::p6_variables::kuna_stackstruct`].
+    StackStruct,
+    "stackstruct",
+    "Address-taken frame record layout",
+    unset: false,
+    shipped: false
+);

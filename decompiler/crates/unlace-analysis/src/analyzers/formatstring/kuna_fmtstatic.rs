@@ -276,7 +276,12 @@ impl AnalysisPass for FormatStringStaticPass {
                 }
             }
         }
-        if ctx.arch.analysis_format_callees {
+        if ctx
+            .arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FormatCallees>()
+            .0
+        {
             let inputs = super::kuna_fmtcallee::Inputs {
                 ctx,
                 listing,

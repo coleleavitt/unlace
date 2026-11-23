@@ -109,7 +109,7 @@
 //! # The option
 //!
 //! `option cleanupcode on|off`, default **on** (DIV-81), live flag
-//! [`ArchContext::remove_cleanup_code`](crate::context::ArchContext).  Marked
+//! [the registered option `RemoveCleanupCode`](crate::context::ArchContext).  Marked
 //! destructive: it deletes real calls with real side effects, which is the
 //! declared intent.
 
@@ -373,7 +373,12 @@ impl Action for ActionRemoveCleanupCode {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().remove_cleanup_code {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_cleanupcode::RemoveCleanupCode>()
+            .0
+        {
             return 0;
         }
         // The pre-SSA window: no INDIRECT call effects to unpick, and the
@@ -397,6 +402,21 @@ impl Action for ActionRemoveCleanupCode {
         1
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `cleanupcode`) Delete the Rust drop/deallocate call sites (the
+    /// `core::ptr::drop_in_place` / `Drop::drop` / `RawVecInner::deallocate` /
+    /// `__rust_dealloc` family) from the pre-SSA op graph, so the drop glue and
+    /// the argument setup that only feeds it never reach the output
+    /// (`option cleanupcode`).  Structurally inert on a C binary — no C ELF
+    /// resolves a call to one of those names.  See
+    /// [`crate::p2_lift::kuna_cleanupcode`].
+    RemoveCleanupCode,
+    "cleanupcode",
+    "Rust drop/deallocate call removal",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests;

@@ -1052,7 +1052,11 @@ fn descend(
         preserved: &preserved,
         settled: false,
         named: Some(&named),
-        next_table: arch.switch_extent.then_some(&next_table),
+        next_table: arch
+            .kuna_options
+            .get::<unlace_decomp::jumptable::SwitchExtent>()
+            .0
+            .then_some(&next_table),
     };
     let arm = file.architecture() == object::Architecture::Arm;
     let pic_image = pool.as_ref().map(|pool| kuna_picpool::Image {
@@ -1094,7 +1098,10 @@ fn descend(
         .map(|pool| super::kuna_a32switch::A32Tables::new(arch, pool));
 
     let preserve_bodies = sections_are_runtime
-        && arch.analysis_funcstart_patterns
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0
         && file.architecture() == object::Architecture::Arm;
     let prologues = preserve_bodies && arch.analysis_armframes && arch.analysis_armframes_full;
     let mut st = State::new(&seed_set, measure || preserve_bodies);
@@ -1118,7 +1125,12 @@ fn descend(
     let mut frame_partition = None;
     let mut walk_context =
         super::kuna_walkcontext::WalkContext::new(prologues, translate, arch, &code_space, &exec);
-    if arch.analysis_listing && arch.input_arm_isa_override {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .0
+        && arch.input_arm_isa_override
+    {
         if let Some(context) = &mut walk_context {
             context.seed_inventory_modes(seed_set.iter().copied(), &arch.arm_inventory_modes);
         }
@@ -1399,7 +1411,13 @@ fn descend(
                 // (kuna `calltable`) Nothing fell into these dispatches: a
                 // pointer table with no range check above it is a call table
                 // or nothing.
-                None if arch.analysis_calltable && !waiting.is_empty() && pool.is_some() => {
+                None if arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+                    .0
+                    && !waiting.is_empty()
+                    && pool.is_some() =>
+                {
                     let settled = kuna_switchtable::Reach {
                         settled: true,
                         ..reach
@@ -1969,12 +1987,20 @@ fn descend(
                     // functions' entries (40% of a checked table, all of an
                     // unchecked one) dispatches tail calls, not cases of this
                     // function.
-                    if unbounded && arch.analysis_calltable {
+                    if unbounded
+                        && arch
+                            .kuna_options
+                            .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+                            .0
+                    {
                         cases = kuna_calltable::call_table_run(cases, arm, |t| {
                             st.decoded.contains(&t) && !st.funcs.contains(&t)
                         });
                     }
-                    let call_table = arch.analysis_calltable
+                    let call_table = arch
+                        .kuna_options
+                        .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+                        .0
                         && kuna_calltable::is_call_table(&cases, stated.is_none(), |t| {
                             st.funcs.contains(&t) && t != entry
                         });
@@ -2007,7 +2033,13 @@ fn descend(
             }
             // (kuna `calltable`) An indexed call through a table of function
             // pointers calls every entry of the table.
-            if arch.analysis_calltable && c.flows.is_empty() && c.flow.is_computed && c.flow.is_call
+            if arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+                .0
+                && c.flows.is_empty()
+                && c.flow.is_computed
+                && c.flow.is_call
             {
                 let callind = cap
                     .ops()
@@ -2181,7 +2213,12 @@ fn descend(
     if !measure {
         index.flow = None;
     }
-    if arch.analysis_addrtable && sections_are_runtime {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
+        .0
+        && sections_are_runtime
+    {
         let width = crate::addrtable::ptr_width(file);
         index.file_pointer_tables(
             &crate::addrtable::scan_address_tables(file, 2, width),
@@ -2237,7 +2274,10 @@ fn gap_entries(
         partition,
         contexts,
     );
-    let poolslide = (arch.analysis_aifpoolslide
+    let poolslide = (arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
+        .0
         && crate::loadimage_object::is_arm32_language(&arch.archid))
     .then_some(arch);
     if let Some(prior) = frame {

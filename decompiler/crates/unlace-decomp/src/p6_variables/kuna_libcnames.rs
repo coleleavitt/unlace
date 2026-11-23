@@ -320,7 +320,11 @@ fn addressed_object(fd: &Funcdata, vn: VarnodeId) -> Option<Addressed> {
 /// object.
 fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Evidence>)> {
     let mut found: BTreeMap<Target, (HighVariableId, bool, Vec<Evidence>)> = BTreeMap::new();
-    let shown = fd.get_arch().libc_names;
+    let shown = fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_libcnames::LibcNames>()
+        .0;
     let mut note = |target: Target, high: HighVariableId, scalar: bool, e: Evidence| {
         found
             .entry(target)
@@ -508,7 +512,10 @@ pub struct LibraryAlias {
 /// (a naming record is being taken or replayed).
 pub fn candidates(fd: &mut Funcdata) -> Vec<Candidate> {
     let arch = fd.get_arch();
-    if !arch.libc_names
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_libcnames::LibcNames>()
+        .0
         && !arch
             .kuna_options
             .get::<crate::kuna_contextnames::ContextNames>()
@@ -670,6 +677,16 @@ pub fn shown_number(fd: &Funcdata, high: HighVariableId) -> Option<&str> {
         .find(|a| a.high == high && a.shown)
         .map(|a| a.number.as_str())
 }
+
+crate::kuna_flag!(
+    /// (kuna `libcnames`) Name locals from the library calls they meet.
+    /// See [`crate::kuna_libcnames`].
+    LibcNames,
+    "libcnames",
+    "library-call local names",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

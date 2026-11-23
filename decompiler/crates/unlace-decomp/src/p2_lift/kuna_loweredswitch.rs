@@ -1023,7 +1023,13 @@ fn recover_cascade(
     if st != spacetype::IPTR_PROCESSOR && st != spacetype::IPTR_SPACEBASE {
         return None;
     }
-    if data.get_arch().switch_selector_guard && !selector_defined_in_function(data, swvar) {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_loweredswitch::SwitchSelectorGuard>()
+        .0
+        && !selector_defined_in_function(data, swvar)
+    {
         return None;
     }
 
@@ -1253,7 +1259,12 @@ impl ActionLowerSwitchDetect {
 
     /// (kuna `loweredswitchbits`) Record a switch lowered to bit tests.
     fn detect_bits(&mut self, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().lowered_switch_bits {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_loweredswitchbits::LoweredSwitchBits>()
+            .0
+        {
             return 0;
         }
         let Some(rec) = crate::p2_lift::kuna_loweredswitchbits::recover(data) else {
@@ -1701,6 +1712,20 @@ fn block_false_out(data: &Funcdata, bl: BlockId) -> BlockId {
 fn block_is_switch_out(data: &Funcdata, bl: BlockId) -> bool {
     data.bblocks_ref().block(bl).is_switch_out()
 }
+
+crate::kuna_flag!(
+    /// (kuna `switchselector`) Refuse to install a recovered lowered-switch
+    /// cascade whose synthesized BRANCHIND cannot be given the switch value as
+    /// its selector, so the compiler's `if`/`else if` chain over the real
+    /// variable survives instead of a `switch` over something else
+    /// (`option switchselector`).  See
+    /// [`crate::p2_lift::kuna_loweredswitch::install_selector_is_sound`].
+    SwitchSelectorGuard,
+    "switchselector",
+    "Lowered-switch in-function-selector restriction",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 #[path = "kuna_loweredswitch/tests.rs"]

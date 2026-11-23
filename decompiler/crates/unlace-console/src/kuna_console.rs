@@ -216,8 +216,16 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_callarrayextent::CallArrayExtent>()
                 .0,
         ),
-        "stackstruct" => on_off(conf.stack_struct),
-        "globalarrayanchor" => on_off(conf.global_array_anchor),
+        "stackstruct" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_stackstruct::StackStruct>()
+                .0,
+        ),
+        "globalarrayanchor" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_globalarrayanchor::GlobalArrayAnchor>()
+                .0,
+        ),
         "opaquepredicate" if conf.opaque_predicate && conf.opaque_globals => "globals",
 
         "bitidioms" => on_off(
@@ -225,19 +233,31 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_bitidioms::BitIdioms>()
                 .0,
         ),
-        "helperroles" => on_off(conf.helper_roles),
+        "helperroles" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_helperrole::HelperRoles>()
+                .0,
+        ),
         "dynalloca" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_dynalloca::DynAlloca>()
                 .0,
         ),
-        "vaarg" => on_off(conf.va_arg),
+        "vaarg" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_vaarg::VaArg>()
+                .0,
+        ),
         "indexrescale" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_indexrescale::IndexRescale>()
                 .0,
         ),
-        "looprotate" => on_off(conf.loop_rotate),
+        "looprotate" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_looprotate::LoopRotate>()
+                .0,
+        ),
         "vastart" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_vastart::VaStartRewrite>()
@@ -248,7 +268,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_typevote::TypeVote>()
                 .0,
         ),
-        "switchguardmerge" => on_off(conf.switch_guard_merge),
+        "switchguardmerge" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_switchguardmerge::SwitchGuardMerge>()
+                .0,
+        ),
         "opaquepredicate" => on_off(conf.opaque_predicate),
         "memsetrecover" => on_off(conf.memset_recover),
         "rodatastring" => on_off(conf.rodata_string),
@@ -352,14 +376,22 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_sparcstructret::SparcStructReturn>()
                 .0,
         ),
-        "arraystride" => on_off(conf.recover_array_stride),
+        "arraystride" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_arraystride::RecoverArrayStride>()
+                .0,
+        ),
         "stackalias" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::heritage::StackAliasDeadstore>()
                 .0,
         ),
         "stackviews" => on_off(conf.stack_views),
-        "v850indirectbranch" => on_off(conf.v850_indirect_branch),
+        "v850indirectbranch" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_v850indbranch::V850IndirectBranch>()
+                .0,
+        ),
         "switchmodbound" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::jumptable::SwitchModuloBound>()
@@ -374,7 +406,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::jumptable::SwitchSharedCase>()
                 .0,
         ),
-        "realtypes" => on_off(conf.realtypes),
+        "realtypes" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::printc::Realtypes>()
+                .0,
+        ),
         // (kuna `calloverlap`) Report the selected overlap policy.
         "calloverlap" => match conf
             .kuna_options
@@ -390,10 +426,26 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // per-run enable flag (set by `--option <id> on|off`). Real-ELF path only;
         // with no program loaded these never reach (kuna_live_value's caller passes
         // None), so the no-program catalog byte-compat fixture is untouched.
-        "noreturn_known" => on_off(conf.analysis_noreturn_known),
-        "godwarfsig" => on_off(conf.analysis_godwarfsig),
-        "libgccsigs" => on_off(conf.analysis_libgccsigs),
-        "gotypeglobals" => on_off(conf.analysis_go_type_globals),
+        "noreturn_known" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+                .0,
+        ),
+        "godwarfsig" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Godwarfsig>()
+                .0,
+        ),
+        "libgccsigs" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Libgccsigs>()
+                .0,
+        ),
+        "gotypeglobals" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::GoTypeGlobals>()
+                .0,
+        ),
         // (kuna `libctypes`) Valued `off|opaque|glibc`, so the live token is the
         // value, not an on/off word.
         "libctypes" => match (conf.analysis_libctypes, conf.analysis_libctypes_glibc) {
@@ -401,16 +453,52 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             (true, false) => "opaque",
             (true, true) => "glibc",
         },
-        "strings" => on_off(conf.analysis_strings),
-        "blobs" => on_off(conf.analysis_blobs),
-        "widestrings" => on_off(conf.analysis_widestrings),
-        "widestrings32" => on_off(conf.analysis_widestrings32),
-        "entry_disc" => on_off(conf.analysis_entry_disc),
-        "eh_frame_full" => on_off(conf.analysis_eh_frame_full),
-        "unwindstarts" => on_off(conf.analysis_unwindstarts),
+        "strings" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Strings>()
+                .0,
+        ),
+        "blobs" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Blobs>()
+                .0,
+        ),
+        "widestrings" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Widestrings>()
+                .0,
+        ),
+        "widestrings32" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Widestrings32>()
+                .0,
+        ),
+        "entry_disc" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::EntryDisc>()
+                .0,
+        ),
+        "eh_frame_full" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::EhFrameFull>()
+                .0,
+        ),
+        "unwindstarts" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Unwindstarts>()
+                .0,
+        ),
 
-        "machoehframe" => on_off(conf.analysis_machoehframe),
-        "machobinds" => on_off(conf.analysis_machobinds),
+        "machoehframe" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Machoehframe>()
+                .0,
+        ),
+        "machobinds" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Machobinds>()
+                .0,
+        ),
         "exporttrie" => on_off(unlace_decomp::kuna_exporttrie::exporttrie_enabled()),
         "ppc32picimports" => conf.analysis_ppc32picimports.as_str(),
         "ifuncfpret" => on_off(conf.analysis_ifuncfpret),
@@ -429,14 +517,26 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "cil" => on_off(unlace_decomp::kuna_cil::cil_enabled()),
         // (kuna `symbolnamechars`) Three-valued, so it reports its own token.
         "symbolnamechars" => conf.analysis_symbolnamechars.as_str(),
-        "dwarf" => on_off(conf.analysis_dwarf),
+        "dwarf" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Dwarf>()
+                .0,
+        ),
         // (kuna) ELF data-symbol naming (DIV-76): committed at `read symbols`
         // like the analysis-pass gates, so the live flag is authoritative.
         // (kuna `cppsig`) Three-valued, so it reports its own token rather than
         // on/off.
         "cppsig" => conf.analysis_cppsig.as_str(),
-        "addrtable" => on_off(conf.analysis_addrtable),
-        "listing" => on_off(conf.analysis_listing),
+        "addrtable" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
+                .0,
+        ),
+        "listing" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Listing>()
+                .0,
+        ),
         "fid" => {
             if !conf.analysis_fid {
                 "off"
@@ -455,8 +555,16 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 "inventory"
             }
         }
-        "x86listingswitch" => on_off(conf.analysis_x86listingswitch),
-        "addrtakenentry" => on_off(conf.analysis_addrtakenentry),
+        "x86listingswitch" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::X86listingswitch>()
+                .0,
+        ),
+        "addrtakenentry" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Addrtakenentry>()
+                .0,
+        ),
         // (kuna `flowmode`) Valued `on|aftercall|off`, so it reports its own token.
         "flowmode" => match (conf.analysis_flowmode, conf.analysis_flowmode_aftercall) {
             (false, _) => "off",
@@ -468,18 +576,34 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             (true, false) => "on",
             (true, true) => "lines",
         },
-        "elfmain" => on_off(conf.analysis_elfmain),
-        "fast_funcdisc" => on_off(conf.analysis_fast_funcdisc),
+        "elfmain" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Elfmain>()
+                .0,
+        ),
+        "fast_funcdisc" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+                .0,
+        ),
         // (kuna `aif`) Four-valued, so it reports its own token.
         "aif" => conf.analysis_aif.as_str(),
 
-        "objectview" => on_off(conf.analysis_objectview),
+        "objectview" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Objectview>()
+                .0,
+        ),
         "mapglobalsyms" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_mapglobalsyms::Mapglobalsyms>()
                 .0,
         ),
-        "aifpoolslide" => on_off(conf.analysis_aifpoolslide),
+        "aifpoolslide" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
+                .0,
+        ),
         "esprom" => conf.esprom.as_str(),
         "armconstshift" => conf
             .kuna_options

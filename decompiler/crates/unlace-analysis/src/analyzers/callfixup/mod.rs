@@ -112,7 +112,12 @@ pub fn target_fixup_map(arch: &Architecture) -> Vec<(String, String)> {
         {
             continue;
         }
-        if fixup_name.starts_with(unlace_decomp::kuna_objcarc::FIXUP_PREFIX) && !arch.objc_arc {
+        if fixup_name.starts_with(unlace_decomp::kuna_objcarc::FIXUP_PREFIX)
+            && !arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_objcarc::ObjcArc>()
+                .0
+        {
             continue;
         }
         for target in &cf.target_symbol_names {

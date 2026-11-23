@@ -68,7 +68,7 @@ impl StackObject {
 }
 
 pub fn objects(fd: &Funcdata) -> &[StackObject] {
-    &fd.stack_objects
+    fd.stack_objects()
 }
 
 struct Origins<'a> {
@@ -333,7 +333,7 @@ impl Origins<'_> {
 
 /// Keep content families separate without assigning them different addresses.
 pub fn recover(fd: &mut Funcdata) {
-    fd.stack_objects.clear();
+    fd.stack_objects_mut().clear();
     if !crate::kuna_stackviews::enabled(fd) {
         return;
     }
@@ -442,15 +442,15 @@ pub fn recover(fd: &mut Funcdata) {
             });
         }
     }
-    fd.stack_objects = objects;
+    *fd.stack_objects_mut() = objects;
 }
 
 pub(crate) fn finish(fd: &mut Funcdata) {
-    if fd.stack_objects.is_empty() {
+    if fd.stack_objects().is_empty() {
         recover(fd);
         return;
     }
-    let mut objects = std::mem::take(&mut fd.stack_objects);
+    let mut objects = std::mem::take(fd.stack_objects_mut());
     for object in &mut objects {
         object
             .uses
@@ -460,7 +460,7 @@ pub(crate) fn finish(fd: &mut Funcdata) {
         }
     }
     objects.retain(|object| !object.uses.is_empty());
-    fd.stack_objects = objects;
+    *fd.stack_objects_mut() = objects;
 }
 
 pub fn describe(fd: &Funcdata) -> String {
@@ -520,6 +520,40 @@ pub fn describe(fd: &Funcdata) -> String {
         }
     }
     text
+}
+
+/// (kuna `stackobjects`) The stack objects recovered for the function; reset by `Funcdata::clear`.
+#[derive(Default)]
+struct ObjectsSlot(Vec<crate::kuna_stackobjects::StackObject>);
+crate::kuna_func_state!(ObjectsSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn stack_objects(&self) -> &Vec<crate::kuna_stackobjects::StackObject> {
+        &self.kuna_state::<ObjectsSlot>().0
+    }
+
+    pub(crate) fn stack_objects_mut(&mut self) -> &mut Vec<crate::kuna_stackobjects::StackObject> {
+        &mut self.kuna_state_mut::<ObjectsSlot>().0
+    }
+}
+
+/// (kuna `stackobjects`) The source uses already bound to a stack object's shared storage; reset by `Funcdata::clear`.
+#[derive(Default)]
+struct BoundUsesSlot(std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)>);
+crate::kuna_func_state!(BoundUsesSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn stack_object_bound_uses(
+        &self,
+    ) -> &std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)> {
+        &self.kuna_state::<BoundUsesSlot>().0
+    }
+
+    pub(crate) fn stack_object_bound_uses_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)> {
+        &mut self.kuna_state_mut::<BoundUsesSlot>().0
+    }
 }
 
 #[cfg(test)]

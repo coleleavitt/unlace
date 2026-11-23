@@ -73,7 +73,7 @@ fn source_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<crate::dtype::Datatype
                 continue;
             }
             let point = SourcePoint::op(fd, copy)?;
-            for object in &fd.stack_objects {
+            for object in fd.stack_objects() {
                 if object.address != *output.get_addr()
                     || object.size != output.get_size()
                     || !object

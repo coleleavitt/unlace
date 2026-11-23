@@ -53,7 +53,7 @@ pub(crate) struct LocalStackViews {
 }
 
 fn invalidate(fd: &mut Funcdata) {
-    fd.local_stack_views = LocalStackViews {
+    *fd.local_stack_views_mut() = LocalStackViews {
         invalid: true,
         ..Default::default()
     };
@@ -147,10 +147,10 @@ fn c_identifier(name: &str) -> bool {
 
 /// Record original lifted memory operations; generational OpIds do not match clones.
 pub(crate) fn record_native(fd: &mut Funcdata, id: OpId) {
-    if !enabled(fd) || fd.local_stack_views.invalid {
+    if !enabled(fd) || fd.local_stack_views().invalid {
         return;
     }
-    if fd.local_stack_views.native.contains_key(&id) {
+    if fd.local_stack_views().native.contains_key(&id) {
         return;
     }
     let Some(op) = fd.obank().get(id) else { return };
@@ -179,45 +179,45 @@ pub(crate) fn record_native(fd: &mut Funcdata, id: OpId) {
     } else {
         return;
     };
-    if fd.local_stack_views.native.len() == MAX_RECORDS {
+    if fd.local_stack_views().native.len() == MAX_RECORDS {
         invalidate(fd);
         return;
     }
-    fd.local_stack_views.native.insert(id, event);
+    fd.local_stack_views_mut().native.insert(id, event);
 }
 
 /// Capture actual STORE extent and expose positive ranges before the next heritage.
 pub(crate) fn record_store(fd: &mut Funcdata, op: OpId, address: &Address, size: i32) {
     if !enabled(fd)
-        || fd.local_stack_views.invalid
+        || fd.local_stack_views().invalid
         || fd
             .obank()
             .get(op)
             .is_none_or(|o| o.is_dead() || o.code() != OpCode::CPUI_STORE)
-        || !matches!(fd.local_stack_views.native.get(&op), Some(NativeWrite::Store(point, width))
+        || !matches!(fd.local_stack_views().native.get(&op), Some(NativeWrite::Store(point, width))
             if *width == size && Some(*point) == SourcePoint::op(fd, op))
         || !local(fd, address, size)
     {
         return;
     }
-    if fd.local_stack_views.writes.contains_key(&op) {
+    if fd.local_stack_views().writes.contains_key(&op) {
         return;
     }
-    if fd.local_stack_views.writes.len() == MAX_RECORDS {
+    if fd.local_stack_views().writes.len() == MAX_RECORDS {
         invalidate(fd);
         return;
     }
-    fd.local_stack_views
+    fd.local_stack_views_mut()
         .writes
         .insert(op, (address.get_offset(), size));
     let pass = fd.get_heritage_pass();
-    let window = *fd.local_stack_views.early_window.get_or_insert(pass);
+    let window = *fd.local_stack_views_mut().early_window.get_or_insert(pass);
     if window != pass {
         return;
     }
-    if !fd.local_stack_views.collected {
+    if !fd.local_stack_views().collected {
         collect(fd);
-        fd.local_stack_views.collected = true;
+        fd.local_stack_views_mut().collected = true;
     }
     promote(fd, true);
 }
@@ -229,7 +229,7 @@ fn native_receiver(fd: &Funcdata, id: OpId) -> Option<(Address, i32)> {
         .filter(|op| !op.is_dead() && !op.is_return_copy())?;
     let point = SourcePoint::op(fd, id)?;
     if op.code() == OpCode::CPUI_STORE {
-        let NativeWrite::Store(original, width) = fd.local_stack_views.native.get(&id)? else {
+        let NativeWrite::Store(original, width) = fd.local_stack_views().native.get(&id)? else {
             return None;
         };
         if *original != point || fd.vbank().get(op.get_in(2)?)?.get_size() != *width {
@@ -262,7 +262,7 @@ fn native_receiver(fd: &Funcdata, id: OpId) -> Option<(Address, i32)> {
         return None;
     }
     let out = fd.vbank().get(op.get_out()?).filter(|v| v.is_persist())?;
-    match fd.local_stack_views.native.get(&id)? {
+    match fd.local_stack_views().native.get(&id)? {
         NativeWrite::Store(original, width) if *original == point && *width == out.get_size() => (),
         NativeWrite::Copy(original, address, width)
             if *original == point && address == out.get_addr() && *width == out.get_size() =>
@@ -363,25 +363,25 @@ fn collect(fd: &mut Funcdata) {
         invalidate(fd);
         return;
     };
-    fd.local_stack_views.candidates = groups;
-    fd.local_stack_views.pending = publications;
-    fd.local_stack_views.unrepresented_publication = unrepresented;
+    fd.local_stack_views_mut().candidates = groups;
+    fd.local_stack_views_mut().pending = publications;
+    fd.local_stack_views_mut().unrepresented_publication = unrepresented;
 }
 
 fn promote(fd: &mut Funcdata, early: bool) {
-    if fd.local_stack_views.invalid {
+    if fd.local_stack_views().invalid {
         return;
     }
-    let candidates = fd.local_stack_views.candidates.clone();
+    let candidates = fd.local_stack_views().candidates.clone();
     for ((at, size), views) in candidates {
         let escaped = fd
-            .local_stack_views
+            .local_stack_views()
             .pending
             .values()
             .any(|p| p.start == at && p.pointee.get_size() == size);
         let incompatible = views.iter().filter(|ty| nominal(ty)).count() >= 2;
         let written = fd
-            .local_stack_views
+            .local_stack_views()
             .writes
             .values()
             .any(|&(start, width)| overlaps(at, size, start, width));
@@ -389,8 +389,8 @@ fn promote(fd: &mut Funcdata, early: bool) {
             continue;
         }
         let key = (at, size);
-        if !fd.local_stack_views.admission.contains_key(&key) {
-            if fd.local_stack_views.admission.len() == MAX_FOOTPRINTS {
+        if !fd.local_stack_views().admission.contains_key(&key) {
+            if fd.local_stack_views().admission.len() == MAX_FOOTPRINTS {
                 invalidate(fd);
                 return;
             }
@@ -399,20 +399,22 @@ fn promote(fd: &mut Funcdata, early: bool) {
             } else {
                 Err(Refusal::Unavailable)
             };
-            fd.local_stack_views.admission.insert(key, decision);
+            fd.local_stack_views_mut().admission.insert(key, decision);
         }
-        if fd.local_stack_views.admission[&key].is_err() {
+        if fd.local_stack_views().admission[&key].is_err() {
             continue;
         }
-        fd.local_stack_views.footprints.insert((at, size), views);
+        fd.local_stack_views_mut()
+            .footprints
+            .insert((at, size), views);
     }
-    if fd.local_stack_views.footprints.len() > MAX_FOOTPRINTS {
+    if fd.local_stack_views().footprints.len() > MAX_FOOTPRINTS {
         invalidate(fd);
         return;
     }
-    for (&id, publication) in &fd.local_stack_views.pending {
+    for (&id, publication) in &fd.local_stack_views().pending {
         let covered = fd
-            .local_stack_views
+            .local_stack_views()
             .footprints
             .iter()
             .any(|(&(at, size), views)| {
@@ -421,22 +423,22 @@ fn promote(fd: &mut Funcdata, early: bool) {
             });
         if covered
             || fd
-                .local_stack_views
+                .local_stack_views()
                 .footprints
                 .contains_key(&(publication.start, publication.pointee.get_size()))
         {
-            fd.local_stack_views
+            fd.local_stack_views_mut()
                 .publications
                 .insert(id, publication.clone());
         }
     }
-    if fd.local_stack_views.publications.len() > MAX_RECORDS {
+    if fd.local_stack_views().publications.len() > MAX_RECORDS {
         invalidate(fd);
     }
 }
 
 pub(crate) fn active(fd: &Funcdata) -> bool {
-    enabled(fd) && !fd.local_stack_views.invalid && !fd.local_stack_views.footprints.is_empty()
+    enabled(fd) && !fd.local_stack_views().invalid && !fd.local_stack_views().footprints.is_empty()
 }
 
 pub(crate) fn preserves_range(fd: &Funcdata, address: &Address, size: i32) -> bool {
@@ -448,7 +450,7 @@ pub(crate) fn preserves_range(fd: &Funcdata, address: &Address, size: i32) -> bo
                 .is_some_and(|stack| s.get_index() == stack.get_index())
         })
         && fd
-            .local_stack_views
+            .local_stack_views()
             .footprints
             .keys()
             .any(|&(at, width)| overlaps(at, width, address.get_offset(), size))
@@ -471,12 +473,12 @@ pub(crate) fn native_store(fd: &Funcdata, value: VarnodeId) -> bool {
     }) {
         return false;
     }
-    let Some(NativeWrite::Store(point, width)) = fd.local_stack_views.native.get(&id) else {
+    let Some(NativeWrite::Store(point, width)) = fd.local_stack_views().native.get(&id) else {
         return false;
     };
     if Some(*point) != SourcePoint::op(fd, id)
         || *width != v.get_size()
-        || fd.local_stack_views.writes.get(&id) != Some(&(v.get_offset(), *width))
+        || fd.local_stack_views().writes.get(&id) != Some(&(v.get_offset(), *width))
     {
         return false;
     }
@@ -485,7 +487,7 @@ pub(crate) fn native_store(fd: &Funcdata, value: VarnodeId) -> bool {
     };
     v.get_space().get_index() == stack.get_index()
         && fd
-            .local_stack_views
+            .local_stack_views()
             .footprints
             .keys()
             .any(|&(at, size)| contains(at, size, v.get_offset(), *width))
@@ -500,7 +502,7 @@ pub(crate) fn publication(fd: &Funcdata, value: VarnodeId) -> bool {
         return false;
     };
     let Some(id) = v.get_def() else { return false };
-    let Some(p) = fd.local_stack_views.publications.get(&id) else {
+    let Some(p) = fd.local_stack_views().publications.get(&id) else {
         return false;
     };
     native_receiver(fd, id).is_some_and(|(at, width)| at == p.receiver && width == p.width)
@@ -517,7 +519,7 @@ pub(crate) fn publication(fd: &Funcdata, value: VarnodeId) -> bool {
 pub(crate) fn aggregate(fd: &Funcdata, start: u64, size: i32) -> bool {
     active(fd)
         && fd
-            .local_stack_views
+            .local_stack_views()
             .footprints
             .get(&(start, size))
             .is_some_and(|views| views.iter().filter(|ty| nominal(ty)).count() >= 2)
@@ -680,7 +682,7 @@ fn accesses_fit_early(
     width: i32,
     scalar_component: bool,
 ) -> Result<(), Refusal> {
-    if fd.local_stack_views.unrepresented_publication {
+    if fd.local_stack_views().unrepresented_publication {
         return Err(Refusal::Unavailable);
     }
     let stack = fd
@@ -689,7 +691,7 @@ fn accesses_fit_early(
         .get_stack_space()
         .ok_or(Refusal::Unavailable)?;
     let (start, size) = fd
-        .local_stack_views
+        .local_stack_views()
         .writes
         .values()
         .copied()
@@ -699,7 +701,7 @@ fn accesses_fit_early(
         .max_by_key(|&(_, size)| size)
         .unwrap_or((at, width));
     if fd
-        .local_stack_views
+        .local_stack_views()
         .candidates
         .keys()
         .any(|&(at, width)| overlaps(start, size, at, width) && !contains(start, size, at, width))
@@ -749,7 +751,8 @@ fn accesses_fit_early(
         .filter(|&size| size > 0)
         .ok_or(Refusal::Unavailable)?;
         if op.code() == OpCode::CPUI_STORE {
-            if let Some(NativeWrite::Store(point, original)) = fd.local_stack_views.native.get(&id)
+            if let Some(NativeWrite::Store(point, original)) =
+                fd.local_stack_views().native.get(&id)
             {
                 if *original != bytes || Some(*point) != SourcePoint::op(fd, id) {
                     return Err(Refusal::Unavailable);
@@ -776,7 +779,7 @@ fn accesses_fit_early(
         }
         let mut related = false;
         for (&publication_id, publication) in fd
-            .local_stack_views
+            .local_stack_views()
             .pending
             .iter()
             .filter(|(_, p)| contains(start, size, p.start, p.pointee.get_size()))
@@ -842,7 +845,7 @@ fn stores_fit(fd: &Funcdata, start: u64, size: i32) -> bool {
         else {
             return false;
         };
-        if let Some(NativeWrite::Store(point, original)) = fd.local_stack_views.native.get(&id) {
+        if let Some(NativeWrite::Store(point, original)) = fd.local_stack_views().native.get(&id) {
             if *original != width || Some(*point) != SourcePoint::op(fd, id) {
                 return false;
             }
@@ -875,21 +878,24 @@ pub(crate) fn backing(fd: &Funcdata, start: u64, size: i32) -> bool {
     if !active(fd) || !matches!(size, 1 | 2 | 4 | 8) || !stores_fit(fd, start, size) {
         return false;
     }
-    let writes = &fd.local_stack_views.writes;
+    let writes = &fd.local_stack_views().writes;
     if writes.values().any(|&(at, width)| {
         overlaps(start, size, at, width)
             && (!matches!(width, 1 | 2 | 4 | 8) || !contains(start, size, at, width))
     }) {
         return false;
     }
-    let exact = fd.local_stack_views.footprints.contains_key(&(start, size));
+    let exact = fd
+        .local_stack_views()
+        .footprints
+        .contains_key(&(start, size));
     let native_component = writes
         .values()
         .any(|&(at, width)| at == start && width == size);
     if !exact && !native_component {
         return false;
     }
-    fd.local_stack_views.publications.values().any(|p| {
+    fd.local_stack_views().publications.values().any(|p| {
         let width = p.pointee.get_size();
         if !scalar(&p.pointee) || !contains(start, size, p.start, width) {
             return false;
@@ -926,7 +932,7 @@ pub(crate) fn views(fd: &Funcdata) -> Vec<(u64, Rc<Datatype>)> {
     if !active(fd) {
         return Vec::new();
     }
-    fd.local_stack_views
+    fd.local_stack_views()
         .footprints
         .iter()
         .flat_map(|(&(start, _), views)| views.iter().map(move |ty| (start, Rc::clone(ty))))
@@ -937,6 +943,20 @@ pub(crate) fn views(fd: &Funcdata) -> Vec<(u64, Rc<Datatype>)> {
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.localstackviews_record_native = Some(record_native);
     hooks.localstackviews_preserves_range = Some(preserves_range);
+}
+
+crate::kuna_func_state!(crate::kuna_localstackviews::LocalStackViews, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn local_stack_views(&self) -> &crate::kuna_localstackviews::LocalStackViews {
+        self.kuna_state::<crate::kuna_localstackviews::LocalStackViews>()
+    }
+
+    pub(crate) fn local_stack_views_mut(
+        &mut self,
+    ) -> &mut crate::kuna_localstackviews::LocalStackViews {
+        self.kuna_state_mut::<crate::kuna_localstackviews::LocalStackViews>()
+    }
 }
 
 #[cfg(test)]

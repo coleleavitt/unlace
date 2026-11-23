@@ -780,7 +780,7 @@ pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
             arch.kuna_callee_memory_cache.insert(key, Rc::new(summary));
         }
         if let Some(summary) = arch.kuna_callee_memory_cache.get(&key) {
-            fd.callee_memory.insert(key, Rc::clone(summary));
+            fd.callee_memory_mut().insert(key, Rc::clone(summary));
         }
     }
 }
@@ -890,7 +890,7 @@ fn for_call<'a>(
     }
     let entry = call.get_entry_address();
     let summary = fd
-        .callee_memory
+        .callee_memory()
         .get(&(entry.get_space()?.get_index(), entry.get_offset()))?;
     if !summary.complete || call.get_spacebase_offset() == OFFSET_UNKNOWN {
         return None;
@@ -1224,6 +1224,36 @@ fn unobserved_inner(
         }
     }
     Some(wanted)
+}
+
+/// (kuna `calleememory`) The memory summary of each direct callee, by `(space index, entry offset)`; reset by `Funcdata::clear`.
+#[derive(Default)]
+struct SummariesSlot(
+    std::collections::HashMap<
+        (unlace_base::types::int4, unlace_base::types::uintb),
+        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+    >,
+);
+crate::kuna_func_state!(SummariesSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn callee_memory(
+        &self,
+    ) -> &std::collections::HashMap<
+        (unlace_base::types::int4, unlace_base::types::uintb),
+        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+    > {
+        &self.kuna_state::<SummariesSlot>().0
+    }
+
+    pub(crate) fn callee_memory_mut(
+        &mut self,
+    ) -> &mut std::collections::HashMap<
+        (unlace_base::types::int4, unlace_base::types::uintb),
+        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+    > {
+        &mut self.kuna_state_mut::<SummariesSlot>().0
+    }
 }
 
 #[cfg(test)]
@@ -1684,7 +1714,7 @@ mod tests {
             let actual = fx.frame_pointer(offset);
             let call = make_call_site(&mut fx, actual);
             fx.fd
-                .callee_memory
+                .callee_memory_mut()
                 .insert((fx.reg.get_index(), 0x2000), Rc::new(summary.clone()));
             assert_eq!(
                 test_call_summary_is_usable(&fx.fd, call, (-32i64) as u64, 8),
@@ -1698,7 +1728,7 @@ mod tests {
             .new_varnode(8, &Address::new(Rc::clone(&fx.reg), 0x88), None);
         let call = make_call_site(&mut fx, unknown);
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
         assert!(!test_call_summary_is_usable(
             &fx.fd,
@@ -1739,7 +1769,7 @@ mod tests {
             let actual = fx.frame_pointer(offset);
             let call = make_call_site(&mut fx, actual);
             fx.fd
-                .callee_memory
+                .callee_memory_mut()
                 .insert((fx.reg.get_index(), 0x2000), Rc::new(summary.clone()));
             assert_eq!(
                 test_call_summary_is_usable(&fx.fd, call, (-32i64) as u64, 8),
@@ -1753,7 +1783,7 @@ mod tests {
             .new_varnode(8, &Address::new(Rc::clone(&fx.reg), 0x88), None);
         let call = make_call_site(&mut fx, unknown);
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
         assert!(!test_call_summary_is_usable(
             &fx.fd,
@@ -1932,7 +1962,7 @@ mod tests {
         let actual = fx.frame_pointer(-64);
         let call = make_call_site(&mut fx, actual);
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(unpublished));
         set_call_output_register(&mut fx, call, 0x10);
         assert_eq!(unobserved(&fx.fd, call, (-32i64) as u64, 8, 0xff), None);
@@ -2262,7 +2292,7 @@ mod tests {
         summary.home_write_conditions.insert((home, effect));
         summary.writes.insert(effect);
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
         call_op
     }
@@ -2276,7 +2306,7 @@ mod tests {
         let mut fx = Fx::with_stack_views();
         let actual = fx.frame_pointer(-64);
         let call = make_call_site(&mut fx, actual);
-        fx.fd.callee_memory.insert(
+        fx.fd.callee_memory_mut().insert(
             (fx.reg.get_index(), 0x2000),
             Rc::new(CalleeMemory {
                 complete: true,
@@ -2384,9 +2414,9 @@ mod tests {
 
     fn set_call_return_states(fx: &mut Fx, returns: Vec<State>) {
         let key = (fx.reg.get_index(), 0x2000);
-        let mut summary = fx.fd.callee_memory.get(&key).unwrap().as_ref().clone();
+        let mut summary = fx.fd.callee_memory().get(&key).unwrap().as_ref().clone();
         summary.returns = returns;
-        fx.fd.callee_memory.insert(key, Rc::new(summary));
+        fx.fd.callee_memory_mut().insert(key, Rc::new(summary));
     }
 
     #[test]
@@ -2463,7 +2493,7 @@ mod tests {
         let actual = fx.frame_pointer(-64);
         let call = make_call_site(&mut fx, actual);
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(exact));
         assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), Some(0xff));
 
@@ -2480,7 +2510,7 @@ mod tests {
             let actual = fx.frame_pointer(-64);
             let call = make_call_site(&mut fx, actual);
             fx.fd
-                .callee_memory
+                .callee_memory_mut()
                 .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
             assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);
         }
@@ -2535,7 +2565,7 @@ mod tests {
         let r8_actual = fx.frame_pointer(-40);
         let call = call_with_r8_argument(&mut fx, rcx_actual, 40, r8_actual);
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(summary.clone()));
         assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);
 
@@ -2544,7 +2574,7 @@ mod tests {
         let r8_actual = fx.constant(8, 0x8000);
         let call = call_with_r8_argument(&mut fx, rcx_actual, 40, r8_actual);
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
         assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), Some(0xff));
     }
@@ -2594,7 +2624,7 @@ mod tests {
         let r8_actual = fx.frame_pointer(-40);
         let call = call_with_r8_argument(&mut fx, rcx_actual, 40, r8_actual);
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
         assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);
     }
@@ -2625,7 +2655,7 @@ mod tests {
             };
             let call = call_with_r8_argument(&mut fx, rcx_actual, 40, r8_actual);
             fx.fd
-                .callee_memory
+                .callee_memory_mut()
                 .insert((fx.reg.get_index(), 0x2000), Rc::new(summary.clone()));
             assert_eq!(
                 unobserved_strict(&fx.fd, call, query, 8, 0xff),
@@ -2662,7 +2692,7 @@ mod tests {
         let actual = fx.frame_pointer(-64);
         let call = make_call_site(&mut fx, actual);
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
         assert_eq!(unobserved_strict(&fx.fd, call, query, 8, 0xff), None);
     }
@@ -2718,7 +2748,7 @@ mod tests {
             let actual = fx.frame_pointer(-64);
             let call = make_call_site(&mut fx, actual);
             fx.fd
-                .callee_memory
+                .callee_memory_mut()
                 .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
             assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);
         }
@@ -2731,10 +2761,10 @@ mod tests {
         let actual = fx.frame_pointer(-64);
         let call = install_call_summary(&mut fx, actual);
         let key = (fx.reg.get_index(), 0x2000);
-        let mut summary = fx.fd.callee_memory.get(&key).unwrap().as_ref().clone();
+        let mut summary = fx.fd.callee_memory().get(&key).unwrap().as_ref().clone();
         summary.lossy_pointer_overflow = true;
         assert!(summary.lossy_pointer_roots.is_empty());
-        fx.fd.callee_memory.insert(key, Rc::new(summary));
+        fx.fd.callee_memory_mut().insert(key, Rc::new(summary));
         assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);
     }
 
@@ -2878,7 +2908,7 @@ mod tests {
             let actual = fx.frame_pointer(-64);
             let call = make_call_site(&mut fx, actual);
             fx.fd
-                .callee_memory
+                .callee_memory_mut()
                 .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
             assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);
         }
@@ -2946,7 +2976,7 @@ mod tests {
             let actual = fx.frame_pointer(-64);
             let call = make_call_site(&mut fx, actual);
             fx.fd
-                .callee_memory
+                .callee_memory_mut()
                 .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
             assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);
         }
@@ -3040,7 +3070,7 @@ mod tests {
                     );
                 }
                 fx.fd
-                    .callee_memory
+                    .callee_memory_mut()
                     .insert((fx.reg.get_index(), 0x2000), Rc::new(summary.clone()));
                 assert_eq!(
                     unobserved(&fx.fd, call, (-32i64) as u64, 8, 0xff),
@@ -3070,7 +3100,7 @@ mod tests {
         let actual = fx.constant(8, 0x4000);
         let call = make_call_site(&mut fx, actual);
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
         assert_eq!(unobserved(&fx.fd, call, (-32i64) as u64, 8, 0xff), None);
     }
@@ -3218,7 +3248,7 @@ mod tests {
             size: 4,
         });
         fx.fd
-            .callee_memory
+            .callee_memory_mut()
             .insert((fx.reg.get_index(), 0x2000), Rc::new(summary));
         (fx, op)
     }
@@ -3326,9 +3356,9 @@ mod tests {
     fn global_return_memory_needs_a_solved_frame_and_effect_overrides_remain_authoritative() {
         let (mut fx, op) = global_call_site(0x8000, 0);
         let key = (fx.reg.get_index(), 0x2000);
-        let mut summary = fx.fd.callee_memory.get(&key).unwrap().as_ref().clone();
+        let mut summary = fx.fd.callee_memory().get(&key).unwrap().as_ref().clone();
         summary.frame_return_read = true;
-        fx.fd.callee_memory.insert(key, Rc::new(summary));
+        fx.fd.callee_memory_mut().insert(key, Rc::new(summary));
         let space = Rc::clone(fx.fd.get_arch().manage().get_default_data_space().unwrap());
         let watched = Address::new(Rc::clone(&space), 0x9000);
         let index = fx.fd.get_call_specs_index(op).unwrap();

@@ -333,7 +333,7 @@ fn initialize_parameters(
                 .ok()?;
         resolution.set_lock(true);
         fd.set_union_field(backing, op, -1, resolution);
-        fd.stack_write_views.insert(
+        fd.stack_write_views_mut().insert(
             op,
             crate::kuna_stackviews::StorageView {
                 backing: Rc::clone(backing),
@@ -467,7 +467,7 @@ fn closed_reuse(fd: &Funcdata, object: &StackObject) -> bool {
                         return false;
                     };
                     if aliases(fd, input, object)
-                        && !fd.stack_objects.iter().any(|other| {
+                        && !fd.stack_objects().iter().any(|other| {
                             other.address == object.address
                                 && other.size == object.size
                                 && other.is_defined()
@@ -585,7 +585,7 @@ pub(crate) fn separates_parameter(
                     value.is_stack_store()
                         && value.get_addr() == parameter.get_addr()
                         && value.get_size() > parameter.get_size()
-                        && fd.stack_objects.iter().any(|object| {
+                        && fd.stack_objects().iter().any(|object| {
                             object.address == *value.get_addr()
                                 && object.size == value.get_size()
                                 && object.is_defined()
@@ -683,7 +683,7 @@ pub(crate) fn prepare_casts(fd: &mut Funcdata) {
     let Some(factory) = fd.get_arch().types_rc() else {
         return;
     };
-    let objects = fd.stack_objects.clone();
+    let objects = fd.stack_objects().clone();
     let mut initialized = BTreeSet::new();
     if !fd
         .get_arch()

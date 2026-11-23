@@ -90,9 +90,9 @@ fn full_policy_disables_every_local_evidence_entry_point() {
     let op = store(&mut fd, 0x1000);
     record_native(&mut fd, op);
     record_store(&mut fd, op, &address, 4);
-    assert!(fd.local_stack_views.native.is_empty());
-    assert!(fd.local_stack_views.writes.is_empty());
-    fd.local_stack_views
+    assert!(fd.local_stack_views().native.is_empty());
+    assert!(fd.local_stack_views().writes.is_empty());
+    fd.local_stack_views_mut()
         .footprints
         .insert((address.get_offset(), 4), Vec::new());
     assert!(!active(&fd));
@@ -109,15 +109,15 @@ fn only_original_live_store_identity_records_physical_extent() {
     let generated = store(&mut fd, 0x1000);
     record_native(&mut fd, original);
     record_store(&mut fd, generated, &at, 4);
-    assert!(fd.local_stack_views.writes.is_empty());
+    assert!(fd.local_stack_views().writes.is_empty());
     record_store(&mut fd, original, &at, 4);
     assert_eq!(
-        fd.local_stack_views.writes.get(&original),
+        fd.local_stack_views().writes.get(&original),
         Some(&(at.get_offset(), 4))
     );
     fd.clear();
-    assert!(fd.local_stack_views.native.is_empty());
-    assert!(fd.local_stack_views.writes.is_empty());
+    assert!(fd.local_stack_views().native.is_empty());
+    assert!(fd.local_stack_views().writes.is_empty());
 }
 
 #[test]
@@ -143,8 +143,8 @@ fn missing_formal_store_cannot_admit_local_evidence() {
     let original = store(&mut fd, 0x1000);
     record_native(&mut fd, original);
     record_store(&mut fd, original, &at, 4);
-    assert!(fd.local_stack_views.writes.is_empty());
-    assert!(fd.local_stack_views.early_window.is_none());
+    assert!(fd.local_stack_views().writes.is_empty());
+    assert!(fd.local_stack_views().early_window.is_none());
     assert!(!active(&fd));
 }
 
@@ -190,16 +190,16 @@ fn local_footprints_reject_formals_wrong_space_wrap_and_oversize() {
 #[test]
 fn provenance_overflow_invalidates_every_prior_candidate() {
     let (mut fd, _) = frame_data();
-    fd.local_stack_views
+    fd.local_stack_views_mut()
         .footprints
         .insert(((-32i64) as u64, 4), Vec::new());
     for pc in 0..=MAX_RECORDS {
         let op = store(&mut fd, 0x1000 + pc as u64);
         record_native(&mut fd, op);
     }
-    assert!(fd.local_stack_views.invalid);
-    assert!(fd.local_stack_views.native.is_empty());
-    assert!(fd.local_stack_views.footprints.is_empty());
+    assert!(fd.local_stack_views().invalid);
+    assert!(fd.local_stack_views().native.is_empty());
+    assert!(fd.local_stack_views().footprints.is_empty());
     assert!(!active(&fd));
 }
 
@@ -347,7 +347,7 @@ fn locked_layout_refuses_before_preserving_a_containing_scalar() {
     assert!(!locked_layout(&fd, start - 8, 8));
     assert!(!locked_layout(&fd, start + 8, 8));
     let op = store(&mut fd, 0x1000);
-    fd.local_stack_views.writes.insert(op, (start, 8));
+    fd.local_stack_views_mut().writes.insert(op, (start, 8));
     assert_eq!(
         accesses_fit_early(&fd, start + 4, 4, true),
         Err(Refusal::LockedLayout)
@@ -363,24 +363,24 @@ fn nominal_contracts_cannot_bypass_or_reopen_a_refused_physical_footprint() {
         ty.name = name.to_owned();
         Rc::new(ty)
     });
-    fd.local_stack_views
+    fd.local_stack_views_mut()
         .candidates
         .insert((at, 8), views.to_vec());
     let op = store(&mut fd, 0x1000);
-    fd.local_stack_views.writes.insert(op, (at, 8));
-    fd.local_stack_views
+    fd.local_stack_views_mut().writes.insert(op, (at, 8));
+    fd.local_stack_views_mut()
         .admission
         .insert((at, 8), Err(Refusal::Crossing));
     promote(&mut fd, true);
-    assert!(fd.local_stack_views.footprints.is_empty());
-    fd.local_stack_views.admission.clear();
+    assert!(fd.local_stack_views().footprints.is_empty());
+    fd.local_stack_views_mut().admission.clear();
     promote(&mut fd, false);
     assert_eq!(
-        fd.local_stack_views.admission[&(at, 8)],
+        fd.local_stack_views().admission[&(at, 8)],
         Err(Refusal::Unavailable)
     );
     promote(&mut fd, true);
-    assert!(fd.local_stack_views.footprints.is_empty());
+    assert!(fd.local_stack_views().footprints.is_empty());
 }
 
 #[test]
@@ -395,7 +395,7 @@ fn nominal_extent_cannot_expand_to_a_containing_native_scalar() {
     let value = fd.new_constant(8, 0);
     fd.op_set_input(op, value, 2).unwrap();
     record_native(&mut fd, op);
-    fd.local_stack_views.writes.insert(op, (start, 8));
+    fd.local_stack_views_mut().writes.insert(op, (start, 8));
     assert_eq!(
         accesses_fit_early(&fd, start, 4, false),
         Err(Refusal::Crossing)
@@ -407,10 +407,10 @@ fn nominal_extent_cannot_expand_to_a_containing_native_scalar() {
 fn physical_component_must_cover_all_overlapping_declared_candidates() {
     let (mut fd, stack) = frame_data();
     let start = (-32i64) as u64;
-    fd.local_stack_views
+    fd.local_stack_views_mut()
         .candidates
         .insert((start, 8), Vec::new());
-    fd.local_stack_views
+    fd.local_stack_views_mut()
         .candidates
         .insert((start + 4, 8), Vec::new());
     for at in [start, start + 4] {
@@ -418,12 +418,14 @@ fn physical_component_must_cover_all_overlapping_declared_candidates() {
             accesses_fit_early(&fd, at, 8, false),
             Err(Refusal::Crossing)
         );
-        fd.local_stack_views
+        fd.local_stack_views_mut()
             .admission
             .insert((at, 8), Err(Refusal::Unavailable));
     }
-    fd.local_stack_views.candidates.remove(&(start + 4, 8));
-    fd.local_stack_views
+    fd.local_stack_views_mut()
+        .candidates
+        .remove(&(start + 4, 8));
+    fd.local_stack_views_mut()
         .candidates
         .insert((start + 4, 4), Vec::new());
     assert_eq!(accesses_fit_early(&fd, start, 8, false), Ok(()));
@@ -439,7 +441,7 @@ fn physical_component_must_cover_all_overlapping_declared_candidates() {
     let value = fd.new_constant(8, 0);
     fd.op_set_input(op, value, 2).unwrap();
     record_native(&mut fd, op);
-    fd.local_stack_views.writes.insert(op, (start, 8));
+    fd.local_stack_views_mut().writes.insert(op, (start, 8));
     assert_eq!(accesses_fit_early(&fd, start + 4, 4, true), Ok(()));
 }
 
@@ -451,15 +453,17 @@ fn duplicate_native_and_physical_records_do_not_invalidate_at_capacity() {
     for pc in 0..MAX_RECORDS {
         let op = store(&mut fd, 0x1000 + pc as u64);
         record_native(&mut fd, op);
-        fd.local_stack_views.writes.insert(op, (at.get_offset(), 4));
+        fd.local_stack_views_mut()
+            .writes
+            .insert(op, (at.get_offset(), 4));
         last = Some(op);
     }
     let last = last.unwrap();
     record_native(&mut fd, last);
     record_store(&mut fd, last, &at, 4);
-    assert!(!fd.local_stack_views.invalid);
-    assert_eq!(fd.local_stack_views.native.len(), MAX_RECORDS);
-    assert_eq!(fd.local_stack_views.writes.len(), MAX_RECORDS);
+    assert!(!fd.local_stack_views().invalid);
+    assert_eq!(fd.local_stack_views().native.len(), MAX_RECORDS);
+    assert_eq!(fd.local_stack_views().writes.len(), MAX_RECORDS);
 }
 
 #[test]
@@ -548,8 +552,8 @@ fn unrepresented_frame_publication_refuses_the_whole_candidate() {
     record_native(&mut fd, op);
     assert!(native_receiver(&fd, op).is_some());
     collect(&mut fd);
-    assert!(fd.local_stack_views.pending.is_empty());
-    assert!(fd.local_stack_views.unrepresented_publication);
+    assert!(fd.local_stack_views().pending.is_empty());
+    assert!(fd.local_stack_views().unrepresented_publication);
     assert_eq!(
         accesses_fit_early(&fd, (-32i64) as u64, 8, false),
         Err(Refusal::Unavailable)
@@ -575,17 +579,19 @@ fn native_marker_copy_requires_exact_live_original_write_inside_admitted_storage
         let at = Address::new(stack.clone(), (-32i64) as u64);
         let op = store(&mut fd, 0x1000);
         let point = SourcePoint::op(&fd, op).unwrap();
-        fd.local_stack_views
+        fd.local_stack_views_mut()
             .native
             .insert(op, NativeWrite::Store(point, 4));
-        fd.local_stack_views.writes.insert(op, (at.get_offset(), 4));
+        fd.local_stack_views_mut()
+            .writes
+            .insert(op, (at.get_offset(), 4));
         if mode != "unadmitted" {
             let (start, width) = if mode == "partial" {
                 (at.get_offset() + 2, 2)
             } else {
                 (at.get_offset(), 4)
             };
-            fd.local_stack_views
+            fd.local_stack_views_mut()
                 .footprints
                 .insert((start, width), Vec::new());
         }
@@ -621,10 +627,10 @@ fn native_marker_copy_requires_exact_live_original_write_inside_admitted_storage
         }
         if mode == "origin" {
             let other = store(&mut fd, 0x1004);
-            fd.local_stack_views.native.insert(
-                op,
-                NativeWrite::Store(SourcePoint::op(&fd, other).unwrap(), 4),
-            );
+            let point = SourcePoint::op(&fd, other).unwrap();
+            fd.local_stack_views_mut()
+                .native
+                .insert(op, NativeWrite::Store(point, 4));
         }
         if mode == "dead" {
             fd.obank_mut().mark_dead(copy);

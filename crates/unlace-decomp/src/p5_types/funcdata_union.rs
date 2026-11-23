@@ -126,7 +126,7 @@ impl FuncdataUnionExt for Funcdata {
         slot: int4,
     ) -> Option<&ResolvedUnion> {
         let edge = self.union_edge_op(unres_type, op, slot);
-        if let Some(res) = self.union_map.get(&edge) {
+        if let Some(res) = self.union_map().get(&edge) {
             let dt = res.get_datatype();
             // Check that the Varnode size matches the data-type
             if unres_type.get_size() == dt.get_size() {
@@ -149,7 +149,7 @@ impl FuncdataUnionExt for Funcdata {
         slot: int4,
     ) -> Option<&ResolvedUnion> {
         let edge = self.union_edge_op(unres_type, op, slot);
-        self.union_map.get(&edge)
+        self.union_map().get(&edge)
     }
 
     /// \brief Get any resolution (union field) associated with an unresolved
@@ -162,7 +162,7 @@ impl FuncdataUnionExt for Funcdata {
         slot: int4,
     ) -> Option<&ResolvedUnion> {
         let edge = ResolveEdge::new_addr(unres_type, addr, slot);
-        self.union_map.get(&edge)
+        self.union_map().get(&edge)
     }
 
     /// \brief Associate a resolution (union field) with an unresolved data-type
@@ -186,7 +186,7 @@ impl FuncdataUnionExt for Funcdata {
         // a vacant entry inserts (the "second == true" arm), an occupied entry
         // runs the C++ "!res.second" arm.
         use std::collections::btree_map::Entry;
-        match self.union_map.entry(edge) {
+        match self.union_map_mut().entry(edge) {
             Entry::Occupied(mut occ) => {
                 if !occ.get_mut().update(&resolve) {
                     return !occ.get().is_locked();
@@ -218,7 +218,7 @@ impl FuncdataUnionExt for Funcdata {
             }
             for i in dup_slots {
                 let dupedge = self.union_edge_op(unres_type, op, i);
-                match self.union_map.entry(dupedge) {
+                match self.union_map_mut().entry(dupedge) {
                     Entry::Occupied(mut occ) => {
                         occ.get_mut().update(&resolve);
                     }
@@ -246,7 +246,7 @@ impl FuncdataUnionExt for Funcdata {
     ) -> bool {
         let edge = ResolveEdge::new_addr(unres_type, addr, slot);
         use std::collections::btree_map::Entry;
-        match self.union_map.entry(edge) {
+        match self.union_map_mut().entry(edge) {
             Entry::Occupied(mut occ) => {
                 if occ.get().is_locked() {
                     return false;
@@ -382,7 +382,7 @@ impl FuncdataUnionExt for Funcdata {
         res_type: Rc<Datatype>,
     ) -> bool {
         let edge = self.union_edge_op(unres_type, op, slot);
-        if let Some(entry) = self.union_map.get_mut(&edge) {
+        if let Some(entry) = self.union_map_mut().get_mut(&edge) {
             entry.set_resolve(res_type);
             return true;
         }
@@ -456,7 +456,7 @@ impl FuncdataUnionExt for Funcdata {
             slot
         };
         let edge = self.union_edge_op(unres_type, old_op, old_slot);
-        let inherited = match self.union_map.get(&edge) {
+        let inherited = match self.union_map().get(&edge) {
             Some(res) => res.clone(),
             None => return -1,
         };
@@ -495,7 +495,7 @@ impl FuncdataUnionExt for Funcdata {
             slot
         };
         let edge = self.union_edge_op(&parent, old_op, old_slot);
-        let inherited_field = match self.union_map.get(&edge) {
+        let inherited_field = match self.union_map().get(&edge) {
             Some(res) => res.get_field_num(),
             None => return Ok(-1),
         };

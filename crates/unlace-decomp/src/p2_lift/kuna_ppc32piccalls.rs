@@ -417,7 +417,7 @@ pub(crate) fn bind(
         return Ok(false);
     };
     let Some(binding) = data
-        .ppc32_pic_calls
+        .ppc32_pic_calls()
         .get(&o.get_addr().get_offset())
         .cloned()
     else {
@@ -462,6 +462,32 @@ pub(crate) fn clear_stale_warnings(db: &mut crate::architecture::CommentDatabase
             || comment.tp != crate::architecture::comment_type::warning
             || !comment.text.ends_with(WARNING)
     });
+}
+
+/// (kuna `ppc32piccalls`) The proved PIC call bindings, by call address. They belong to this entry's flow only and are rebuilt after a clear or restart.
+#[derive(Default)]
+struct BindingsSlot(std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding>);
+crate::kuna_func_state!(BindingsSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn ppc32_pic_calls(
+        &self,
+    ) -> &std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding> {
+        &self.kuna_state::<BindingsSlot>().0
+    }
+
+    pub(crate) fn ppc32_pic_calls_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding> {
+        &mut self.kuna_state_mut::<BindingsSlot>().0
+    }
+
+    /// The caller-local PPC32 import calls this entry's flow applied.
+    pub fn ppc32_import_calls(
+        &self,
+    ) -> impl Iterator<Item = &crate::kuna_ppc32piccalls::CallBinding> {
+        self.ppc32_pic_calls().values()
+    }
 }
 
 #[cfg(test)]

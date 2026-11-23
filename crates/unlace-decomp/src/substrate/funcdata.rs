@@ -157,10 +157,6 @@ pub struct DirectiveSymbol {
 }
 
 pub struct Funcdata {
-    /// (kuna `switchextent`) The jump tables the function's extent dispatches
-    /// through, and those a Swift enum's case indexes, once a flow with a
-    /// computed jump decoded it (`p2_lift/kuna_switchextent.rs`).
-    pub(crate) kuna_extent_tables: Option<std::rc::Rc<crate::kuna_switchextent::ExtentTables>>,
     /// (kuna `switchextent`) The tables of the functions after this one, once
     /// a table that is the function's last asked for them.
     pub(crate) kuna_later_tables: Option<std::rc::Rc<Vec<u64>>>,
@@ -317,7 +313,6 @@ pub struct Funcdata {
     /// Machine homes retained when equivalent values replace their Varnodes.
     kuna_storage_sources:
         crate::kuna_fasthash::FxHashMap<VarnodeId, Vec<crate::kuna_varsources::StorageSource>>,
-    pub(crate) kuna_guarded_reads: crate::p3_dataflow::kuna_stackreadscope::ReadScopes,
     kuna_call_transport: crate::kuna_fasthash::FxHashSet<VarnodeId>,
     kuna_call_transport_projections: crate::kuna_fasthash::FxHashMap<VarnodeId, int4>,
     kuna_denied_storage_writes:
@@ -356,9 +351,6 @@ pub struct Funcdata {
     /// *is* that pointer; here the entries live inline and the offset is the
     /// vector index (the faithful equivalent — see `newVarnodeCallSpecs`).
     qlst: Vec<FuncCallSpecs>,
-    /// Proofs belong to this entry's flow only, and are rebuilt after clear/restart.
-    pub(crate) ppc32_pic_calls:
-        std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding>,
     /// HighVariable merging engine (C++ `Merge covermerge`, `funcdata.hh:91`).
     ///
     /// The C++ `Funcdata` owns a single `Merge` whose `copyTrims` accumulator
@@ -382,34 +374,8 @@ pub struct Funcdata {
     /// and `FlowInfo` reads `hasFlowOverride()`/`getFlowOverride(addr)` from it at
     /// flow time (`flow.cc:43,434`).
     localoverride: crate::overrides::Override,
-    /// A map from data-flow edges to the resolved field of a `TypeUnion` being
-    /// accessed (C++ `map<ResolveEdge,ResolvedUnion> unionMap`, `funcdata.hh:101`).
-    ///
-    /// The W8 cast-insertion / union-resolution subsystem
-    /// ([`crate::coreaction_cleanup::ActionSetCasts`]) and the per-op
-    /// `getInputCast`/`resolveInFlow` surface read and write this through
-    /// `getUnionField`/`setUnionField`/`forceFacingType`/`inheritUnionField`
-    /// ([`crate::funcdata_union`]).  Keyed by [`crate::unionresolve::ResolveEdge`]
-    /// (its [`Ord`] is the verbatim C++ `operator<`), so a `BTreeMap` reproduces
-    /// the C++ `std::map` iteration / `emplace` semantics exactly (HashMap is
-    /// clippy-banned and would not preserve the ordered `find`).
-    pub(crate) union_map: std::collections::BTreeMap<
-        crate::unionresolve::ResolveEdge,
-        crate::unionresolve::ResolvedUnion,
-    >,
-    pub(crate) stack_write_views:
-        std::collections::BTreeMap<OpId, crate::kuna_stackviews::StorageView>,
-    pub(crate) local_stack_views: crate::kuna_localstackviews::LocalStackViews,
     pub(crate) stack_parameter_store_extents: std::collections::BTreeMap<u64, i32>,
-    pub(crate) stack_objects: Vec<crate::kuna_stackobjects::StackObject>,
-    pub(crate) stack_object_assertions: Vec<crate::kuna_stackobjectasserts::ObjectAssertion>,
-    pub(crate) stack_object_bound_uses:
-        std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)>,
     pub(crate) stack_alias_holds: Option<std::collections::BTreeSet<VarnodeId>>,
-    pub(crate) callee_memory: std::collections::HashMap<
-        (int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
-    >,
     /// Warning/header comments produced during flow analysis (C++
     /// `Funcdata::warning`/`warningHeader` push directly into
     /// `glb->commentdb`; `funcdata.cc:119,135`).
@@ -616,7 +582,6 @@ pub struct Funcdata {
     kuna_swift_async_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
     /// (kuna `calleevote fields`) Every caller of this function is a known direct call.
     kuna_calleevote_closed: bool,
-    pub(crate) kuna_atomic_xadds: Vec<crate::p2_lift::kuna_atomicxadd::Instruction>,
     /// The kuna passes' per-function state ([`crate::kuna_funcstate`]).
     kuna_states: crate::kuna_funcstate::FuncStates,
 }
@@ -706,7 +671,6 @@ impl Funcdata {
 
         Ok(Funcdata {
             kuna_fpu_trunc_views: Vec::new(),
-            kuna_extent_tables: None,
             kuna_later_tables: None,
             kuna_later_wanted: std::rc::Rc::default(),
             kuna_x87_empty_returns: Vec::new(),
@@ -753,7 +717,6 @@ impl Funcdata {
             jumpvec: Vec::new(),
             vbank,
             kuna_storage_sources: Default::default(),
-            kuna_guarded_reads: Default::default(),
             kuna_call_transport: Default::default(),
             kuna_call_transport_projections: Default::default(),
             kuna_denied_storage_writes: Default::default(),
@@ -764,20 +727,12 @@ impl Funcdata {
             high_bank: crate::variable::HighVariableBank::new(),
             heritage: crate::heritage::Heritage::new(),
             qlst: Vec::new(),
-            ppc32_pic_calls: Default::default(),
             covermerge: None,
             cover_blocks: None,
             affecting_ops_revision: 0,
             localoverride: crate::overrides::Override::new(),
-            union_map: std::collections::BTreeMap::new(),
-            stack_write_views: std::collections::BTreeMap::new(),
-            local_stack_views: Default::default(),
             stack_parameter_store_extents: std::collections::BTreeMap::new(),
-            stack_objects: Vec::new(),
-            stack_object_assertions: Vec::new(),
-            stack_object_bound_uses: std::collections::BTreeSet::new(),
             stack_alias_holds: None,
-            callee_memory: std::collections::HashMap::new(),
             pending_comments: Vec::new(),
             kuna_vector_code: false,
             global_covers: Vec::new(),
@@ -830,7 +785,6 @@ impl Funcdata {
             kuna_swift_self_callees: std::collections::BTreeSet::new(),
             kuna_swift_async_callees: std::collections::BTreeSet::new(),
             kuna_calleevote_closed: false,
-            kuna_atomic_xadds: Vec::new(),
             kuna_states: Default::default(),
         })
     }
@@ -4224,13 +4178,6 @@ impl Funcdata {
     // clear / printRaw (W3-portable / seam-noted)
     // -----------------------------------------------------------------------
 
-    /// The caller-local PPC32 import calls this entry's flow applied.
-    pub fn ppc32_import_calls(
-        &self,
-    ) -> impl Iterator<Item = &crate::kuna_ppc32piccalls::CallBinding> {
-        self.ppc32_pic_calls.values()
-    }
-
     /// Clear everything associated with decompilation analysis
     /// (C++ `Funcdata::clear`, `funcdata.cc:84`).
     ///
@@ -4241,8 +4188,6 @@ impl Funcdata {
     /// the flag/index reset are faithful. Buffered comments survive; the
     /// restart drive drops the warnings (`refollow_flow`).
     pub fn clear(&mut self) {
-        self.kuna_atomic_xadds.clear();
-        self.ppc32_pic_calls.clear();
         self.kuna_regnarrow_runs = 0;
         self.kuna_regnarrow_values.clear();
         self.kuna_regnarrow_failed.clear();
@@ -4289,20 +4234,12 @@ impl Funcdata {
             }
             self.funcp.clear_unlocked_input();
         }
-        // unionMap.clear() (funcdata.cc:90): drop the union-field resolution cache.
-        self.union_map.clear();
-        self.stack_write_views.clear();
-        self.local_stack_views = Default::default();
         self.stack_parameter_store_extents.clear();
-        self.stack_objects.clear();
-        self.stack_object_bound_uses.clear();
         self.stack_alias_holds = None;
-        self.callee_memory.clear();
         self.clear_blocks();
         self.obank.clear();
         self.vbank.clear();
         self.kuna_storage_sources.clear();
-        self.kuna_guarded_reads = Default::default();
         self.kuna_call_transport.clear();
         self.kuna_call_transport_projections.clear();
         self.kuna_denied_storage_writes.clear();

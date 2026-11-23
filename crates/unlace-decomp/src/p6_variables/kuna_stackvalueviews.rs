@@ -98,7 +98,7 @@ pub(crate) fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
         resolution.set_lock(true);
         fd.set_union_field(&backing, id, slot, resolution);
         if slot < 0 {
-            fd.stack_write_views
+            fd.stack_write_views_mut()
                 .insert(id, crate::kuna_stackviews::StorageView { backing, offset });
         }
     }

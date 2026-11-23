@@ -1315,7 +1315,7 @@ fn follow_flow_on_fd(arch: &mut Architecture, fd: Funcdata) -> KunaResult<Funcda
         // describes the replacement. Comments buffered before it are kept.
         data.clear();
         data.truncate_pending_comments(comments);
-        data.ppc32_pic_calls = bindings;
+        *data.ppc32_pic_calls_mut() = bindings;
         data = generate_flow(arch, data)?;
     }
     publish_flow(arch, data)

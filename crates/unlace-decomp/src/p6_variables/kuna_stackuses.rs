@@ -174,7 +174,7 @@ pub(crate) fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
         let Some(point) = crate::kuna_stackobjects::SourcePoint::op(fd, id) else {
             continue;
         };
-        if fd.stack_object_bound_uses.contains(&(point, slot)) {
+        if fd.stack_object_bound_uses().contains(&(point, slot)) {
             continue;
         }
         let Some(input) = fd.obank().get(id).and_then(|op| op.get_in(slot)) else {
@@ -219,7 +219,7 @@ pub(crate) fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
             crate::kuna_stackobjectasserts::backing_view(fd, id, width, &info, member, &ty, factory)
         {
             if fd.op_set_input(id, value, slot).is_ok() {
-                fd.stack_object_bound_uses.insert((point, slot));
+                fd.stack_object_bound_uses_mut().insert((point, slot));
             }
         }
     }

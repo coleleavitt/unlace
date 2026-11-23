@@ -13,8 +13,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_num::opcodes::OpCode;
 
-use crate::decompile_drive::VarInfo;
 use crate::funcdata::Funcdata;
+use crate::kuna_funcreport::VarInfo;
 use crate::prettyprint::{EmitToken, SyntaxHighlight, TokenKind};
 
 /// One token of the `code` a surface reports.

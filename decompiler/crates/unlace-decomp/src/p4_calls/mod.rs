@@ -124,4 +124,5 @@ pub mod kuna_callmechanisms;
 pub(crate) mod kuna_registerslots;
 
 pub mod kuna_gotimportproto;
+pub mod kuna_gottailcall; // (kuna) a one-destination computed jump to a function is a tail call when the call loses nothing
 pub mod kuna_qualifiedcall; // (kuna) a type-only declaration binds at a loader-proven MIPS GOT import call

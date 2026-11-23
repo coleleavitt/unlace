@@ -55,7 +55,7 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_strlenscan::{eval, taken};
+use crate::kuna_regioneval::{eval, taken};
 
 /// `(base, offset)` of a pointer expression `base + offset`.
 fn field(data: &Funcdata, mut v: VarnodeId) -> Option<(VarnodeId, u64)> {

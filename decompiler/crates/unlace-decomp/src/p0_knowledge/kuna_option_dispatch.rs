@@ -1086,6 +1086,11 @@ kuna_options! { self, p1;
         self.analysis_aif = mode;
         Ok(msg)
     },
+    "esprom" => {
+        let (value, msg) = crate::kuna_esprom::parse_esprom(p1)?;
+        self.esprom = value;
+        Ok(msg)
+    },
     "aifpoolslide" => {
         on_off!(analysis_aifpoolslide, "AIF literal-pool candidate slide (GH-299)")
     },
@@ -1180,6 +1185,12 @@ kuna_options! { self, p1;
     "osclassinfo" => on_off!(analysis_osclassinfo, "DriverKit __osclassinfo class records"),
     "swiftcall" => on_off!(analysis_swiftcall, "Swift calling convention on methods and witnesses"),
     "swiftruntime" => on_off!(analysis_swiftruntime, "Swift runtime prototypes"),
+    "typelib" => {
+        let choice = crate::kuna_typelib::TypeLib::parse(p1).map_err(KunaError::parse)?;
+        let msg = format!("Type library set to {}", choice.as_str());
+        self.analysis_typelib = choice;
+        Ok(msg)
+    },
     "pdb" => on_off!(analysis_pdb, "PE PDB metadata recovery pass"),
     "macho-arm64e" => {
         let val = on_or_off(p1)?;

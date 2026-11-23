@@ -781,7 +781,9 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             pinned_by,
         );
         let forwarded = |line: &&str| {
-            line.starts_with("[kuna target] ") || line.starts_with("[kuna] MH_FILESET: ")
+            line.starts_with("[kuna target] ")
+                || line.starts_with("[kuna] MH_FILESET: ")
+                || line.starts_with("[kuna typelib] ")
         };
         for note in stderr_text.lines().filter(forwarded) {
             unlace_base::notes::say_once(&binary, note);

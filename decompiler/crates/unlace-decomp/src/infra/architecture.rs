@@ -1729,9 +1729,17 @@ pub struct Architecture {
     pub analysis_dwarfscopes: bool,
     /// (kuna) Gate the UEFI module markup pass (`uefi`); default on.
     pub analysis_uefi: bool,
+    /// (kuna `esprom`) Whose mask-ROM names and memory map apply; default
+    /// `auto`, the chip of [`Self::esp_image_chip`].
+    pub esprom: crate::kuna_esprom::EspRom,
+    /// (kuna `esprom`) The chip the loaded Espressif application image names.
+    pub esp_image_chip: Option<crate::kuna_esprom::EspChip>,
     /// (kuna) Gate the Cortex-M System Control Space globals (`cortexmscs`);
     /// default on. Inert unless the image is a Cortex-M one.
     pub analysis_cortexmscs: bool,
+    /// (kuna `typelib`) The prebuilt type library the analysis commit reads;
+    /// default `auto`.
+    pub analysis_typelib: crate::kuna_typelib::TypeLib,
     /// (kuna) Gate the string-literal pass (`strings`); default on.
     pub analysis_strings: bool,
     /// (kuna) Gate the 2-byte (UTF-16LE) width of the string-literal pass
@@ -3078,7 +3086,10 @@ impl Architecture {
             analysis_dwarfglobaltypes: false,
             analysis_dwarfscopes: true,
             analysis_uefi: false,
+            esprom: crate::kuna_esprom::EspRom::Auto,
+            esp_image_chip: None,
             analysis_cortexmscs: false,
+            analysis_typelib: crate::kuna_typelib::TypeLib::Auto,
             analysis_x86listingswitch: false,
             analysis_addrtakenentry: false,
             analysis_flowmode: false,
@@ -3526,11 +3537,15 @@ impl Architecture {
         // and the layout value defaults to `opaque`: the field layouts are the
         // `glibc` value, which is opt-in.
         self.analysis_libctypes_glibc = false;
+        // (kuna) The prebuilt type library -- default `auto`: the built-in
+        // library on a target that has one, nothing anywhere else.
+        self.analysis_typelib = crate::kuna_typelib::TypeLib::Auto;
         // (kuna) DIV-141 built-in Win32 API signature table -- default-ON.
 
         self.analysis_tlsnames = true;
         self.analysis_dwarfglobaltypes = false;
         self.storetype = crate::kuna_storetype::StoreTypeMode::Uefi;
+        self.esprom = crate::kuna_esprom::EspRom::Auto; // Espressif mask-ROM names + memory map (ESP images only)
         self.analysis_uefi = true;
         self.analysis_cortexmscs = true; // Cortex-M System Control Space globals (Cortex-M images only)
         // (kuna) DIV-139 declared-name libc prototype lookup -- default-ON.

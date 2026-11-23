@@ -67,13 +67,13 @@ fn surface_count_is_101() {
 }
 
 #[test]
-fn settable_count_is_319() {
-    assert_eq!(kuna_num_settables(), 319);
-    assert_eq!(SETTABLE_TABLE.len(), 319);
+fn settable_count_is_321() {
+    assert_eq!(kuna_num_settables(), 321);
+    assert_eq!(SETTABLE_TABLE.len(), 321);
 }
 
 #[test]
-fn tier_counts_are_66_core_156_transform_97_analysis() {
+fn tier_counts_are_66_core_156_transform_99_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -85,7 +85,7 @@ fn tier_counts_are_66_core_156_transform_97_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (66, 156, 97));
+    assert_eq!((core, transform, analysis), (66, 156, 99));
 }
 
 #[test]
@@ -336,10 +336,14 @@ fn option_values_live_value_present_for_129() {
         "storetype",
         // (kuna) The UEFI module pass -- an analysis-pass gate read console-side. Default-ON.
         "uefi",
+        "esprom",
         "cortexmscs",
         // (kuna) The libgcc `__divdi3` contract -- an analysis-pass gate read
         // console-side via kuna_live_value, like `libcsigs`. Default-off.
         "libgccsigs",
+        // (kuna) The prebuilt type library -- an analysis-commit choice read
+        // console-side via kuna_live_value. Default `auto`.
+        "typelib",
         // (kuna) The Go `_type` descriptor globals -- an analysis-pass commit
         // gate (`analysis_go_type_globals`) read console-side via
         // kuna_live_value, like `libgccsigs`. Default-on.
@@ -1288,7 +1292,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `calleeargs`; its P4 row sits after `argclobber`.
     // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
     // +1 for `oslog`; its P9 row.
-    assert_eq!(json.matches("},\n").count(), 318);
+    assert_eq!(json.matches("},\n").count(), 320);
 }
 
 #[test]

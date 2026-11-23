@@ -334,7 +334,7 @@ wins.
 
 (kuna) An ELF32 whose `e_machine` is 249 (`EM_NANOMIPS`) selects
 `nanoMIPS:LE:32:default` or `nanoMIPS:BE:32:default` by its byte order
-(`decompiler/crates/kuna-analysis/src/loader/kuna_nanomips.rs`). The neutral
+(`decompiler/crates/unlace-analysis/src/loader/kuna_nanomips.rs`). The neutral
 object parser has no architecture for that machine, so the id is read from the
 ELF header itself, before the per-architecture table that would otherwise
 report an unsupported machine. nanoMIPS is its own encoding, not a mode of
@@ -2401,14 +2401,14 @@ index spaces too. The decompiler works on addressed code that reads and writes
 storage locations. Two steps at load close the gap, and after them a module is
 an ordinary image.
 
-*The module.* `decompiler/crates/kuna-analysis/src/loader/format/wasm.rs (Module)`
+*The module.* `decompiler/crates/unlace-analysis/src/loader/format/wasm.rs (Module)`
 reads the type, import, function, table, memory, global, export, start, element,
 code and data sections and the `name` custom section's function and global
 names. Every count is checked against the bytes left in its section before
 anything is allocated, and a malformed section is an error with a reason; a
 damaged `name` section only loses names.
 
-*The layout.* `decompiler/crates/kuna-analysis/src/loadimage_wasm.rs (WasmImage)`
+*The layout.* `decompiler/crates/unlace-analysis/src/loadimage_wasm.rs (WasmImage)`
 gives each index space a fixed place in one 32-bit space:
 
 | Address | Contents |
@@ -2438,7 +2438,7 @@ that is neither imported nor exported in a module whose every body was lowered
 
 *The lowering.* A body is validated code, so the height of the operand stack at
 each instruction is a static fact, and so is the type of each slot.
-`decompiler/crates/kuna-analysis/src/loader/kuna_wasmlower.rs (Lowering::lower)`
+`decompiler/crates/unlace-analysis/src/loader/kuna_wasmlower.rs (Lowering::lower)`
 walks a
 body with the validation algorithm's control stack and type stack and writes one
 16-byte record per operation that still does something once the stack is gone:
@@ -2496,13 +2496,13 @@ stack space. Operations p-code has no operator for are user ops (`rotl`,
 `f*.nearest` are the `FLOAT_TRUNC` and `FLOAT_ROUNDEVEN` user ops that chapter
 05 types as float to float.
 
-The dispatcher is `decompiler/crates/kuna-console/src/engine.rs
+The dispatcher is `decompiler/crates/unlace-console/src/engine.rs
 (bootstrap_wasm_bytes)`. Surfaces that need an `object::File` (`strings`,
 `xrefs`, `decompile-graph`) refuse a module with a capability error, as they do
 a TE. Measured on a 2.6 MB Go `wasip1` module: 1792 functions load in 0.08 s
 and every body lowers. Checked by compiling the printed C of functions from
 `tests/fixtures/wasm/calls.wasm` beside their source and comparing results on
-random inputs (`decompiler/crates/kuna-cli/tests/wasm_cli.rs`), and by
+random inputs (`decompiler/crates/unlace-cli/tests/wasm_cli.rs`), and by
 `tests/stages/kuna-wasm-module.xml`.
 
 ## 1.3 Loader markup
@@ -4098,6 +4098,90 @@ moves.
   `return -(a / b);` and `return f ? a / b : c;` keep only the high word or
   return nothing, where the off output returns every word, and the helper's
   stub and `-Os` parameter losses above keep it off as well.
+- **(kuna) The prebuilt type library** (`typelib`, default `auto`,
+  `decompiler/crates/unlace-analysis/src/analyzers/protos/kuna_typelib.rs (TypeLibPass)`,
+  `decompiler/crates/unlace-console/src/kuna_typelib.rs (seed)`):
+  the tables above are written by hand, so they stop where the hand stopped:
+  about 740 functions, and member layouts for nine records. The type library
+  is the same knowledge generated: every function a platform's C library
+  declares, with its prototype, and every record with the size, alignment and
+  member offsets the platform's compiler gives it. One library is built in, for
+  an x86-64 Linux ELF dynamically linked against glibc or musl (1,447
+  functions, 347 records, 190 typedefs); on every other image the option does
+  nothing. `off` reads no library and `typelib <file>` reads a library file in
+  place of the built-in one, for an image of the target the file names.
+
+  *Format.* A library is a text file. Three header lines name the format
+  version (`kuna-typelib 1`), the target (`target linux x86_64`) and the source
+  (`source musl 1.2.6`). Each entry after them is one line: `F name flag<TAB>C
+  declaration` for a function, `T name flag<TAB>C type` for a typedef, and `S
+  name flag size alignment` (`U` for a union) for a record, followed by one
+  indented line per member, `offset name<TAB>C type`. Types are spelled in C
+  and read by the C grammar `--types` and `--assert` use. A record is never
+  laid out by kuna: its size, alignment and member offsets are the ones in the
+  file, so a packed record (`epoll_event`) or an over-aligned one is carried
+  as the compiler built it, and a member the file leaves out (a bit-field, a
+  flexible array, a reserved word) is a hole. The `flag` says which C
+  libraries of the target the entry is true of: `*` for all, `m` for the source
+  library only, and `m=<integer type>` or `m=<size>,<alignment>` when the other
+  C library holds an integer, or a record of that width with other members,
+  under the same type name.
+
+  *Where it comes from.* `scripts/typelib/gen_musl.py` writes the built-in
+  library from the musl libc headers (MIT), release and tarball hash pinned in
+  the script. It reads the headers with clang, takes every declaration from
+  clang's syntax tree, and asks the compiler for each record's layout rather
+  than computing one. No header text is copied. The library also serves glibc
+  images, and which entries hold there is measured, not assumed: with
+  `--measure-glibc` the script compiles one assertion per entry against the
+  installed glibc headers (a function's type must be compatible and its name
+  must bind to the same symbol, a record's size, alignment and every public
+  member offset and width must be equal, an integer typedef's width and
+  signedness must be equal) and writes the names that fail to
+  `scripts/typelib/glibc-x86_64.differs`. Only that list of names and widths
+  enters the repository. Against glibc 2.43, 136 of the 1,984 names differ:
+  `strerror_r`, `basename`, `ioctl`, the `scanf` and `strtol` families that
+  glibc binds to `__isoc23_*` symbols, records such as `msghdr`, `rusage`,
+  `sysinfo` and `sigset_t`, and functions glibc does not have. 1,374 of the
+  1,447 functions are offered to a glibc image.
+
+  *Reading.* `TypeLibPass` runs at load and records only what needs the object
+  file: the image's target, whether it names glibc (`libc.so.6` or a `GLIBC_`
+  version in `.dynstr`) or musl (an `ld-musl` interpreter or a `libc.musl-`
+  dependency), and the imported functions with their addresses. An image that
+  names neither C library yields nothing. The library is consulted at the
+  analysis commit, after every other pass has contributed, and it declares only
+  an import no earlier source declared: a prototype from the tables above, from
+  debug information, or from a demangled name stands. Reading a prototype
+  interns the types it names, and through them the types those name; nothing
+  else in the library is interned, so an image that imports `poll` gains
+  `pollfd` and `nfds_t` and not the other 345 records. A type name the factory
+  already holds is used as it is and never redefined, which is how a record from
+  debug information or a `libctypes` shell wins. A `struct` tag no entry defines
+  becomes a record of unknown members. A prototype that passes or returns a
+  `long double` by value is not offered, because the compiler models do not
+  place one. A malformed library is refused with its line number, an entry
+  that does not parse is skipped alone, and a member that does not fit where
+  the file puts it is left a hole; sizes, offsets, line lengths, the file size
+  and the depth of one type's references are all bounded.
+
+  *After load.* A `--types` header or an `--assert prototype` for the same
+  function replaces the library's declaration. A header's definition of a
+  record the library already defined is rejected like any redefinition; `typelib
+  off` lets the header's layout stand. A callback slot the library now declares
+  (`qsort`'s comparator, `signal`'s handler) still gives its prototype to the
+  function passed there: the callback pass (chapter 04) reads the slot's storage
+  from the declared parameter when the callee has a declared prototype, where
+  it used to find no recorded argument storage and say nothing.
+
+  LOSS: a typed callee moves its callers. A pointer parameter that names a
+  record sizes the stack object whose address is passed, so a caller that passes
+  the address of something else at that slot (the first member of a larger
+  local, a buffer reused under two types) prints that object as the record. An
+  `int` result returned through a function whose own return is recovered as the
+  whole register prints the unset upper half (`CONCAT44(v3,getrlimit(7,&v5))`).
+  Both are what any declared prototype does, including the tables above; the
+  library reaches about twice as many functions.
 - **(kuna) Measured libc signatures** (`libcsigs`,
   `decompiler/crates/unlace-analysis/src/analyzers/protos/kuna_libcsigs.rs (LibcSigsPass)`):
   the second, larger half of the same table, closing most of the LOSS above. Which
@@ -13197,7 +13281,7 @@ with the 5-bit position set), Brotli (`brotli-decompressor`, after EDK2's
 16-byte size header) and CRC32; a standard compression section of type 1 is
 decoded as EFI 1.1 (4-bit position set) and retried as Tiano. Every
 PE32/TE section is a module named by the file's UI section. `containers.rs (detect)` reads U-Boot
-legacy images, Intel HEX, Motorola S-records, ESP32/ESP8266 application images,
+legacy images, Intel HEX, Motorola S-records,
 uClinux bFLT v4 (rebasing GOT entries and relocations past the 64-byte header,
 as `binfmt_flat` does), Qualcomm MBN/SBL wrappers, MediaTek `md1img` (the
 `md1rom` section at 0x90000000 as MIPS32 LE, the LZMA `md1_dbginfo` symbol
@@ -13206,10 +13290,8 @@ decodes it) and PC BIOS images (the reset-vector test of IDA's
 `bios_image.py`; the last 128 KiB mapped below 1 MiB with `register CS`
 assertions for segments E000 and F000, or with a 32-bit target the whole flash
 ending at 4 GiB), and returns either one
-flat image (lowest to highest loaded address, gaps filled, at most 256 MiB;
-an ESP image whose segments span more keeps the segments in the entry's
-16 MiB window) with the processor, base and entries its header states, or the
-ELF it wraps. `svd.rs (parse)` reads a CMSIS-SVD device with the kuna XML
+flat image (lowest to highest loaded address, gaps filled, at most 256 MiB)
+with the processor, base and entries its header states, or the ELF it wraps. `svd.rs (parse)` reads a CMSIS-SVD device with the kuna XML
 reader: peripherals (`derivedFrom` reusing the base's registers and type),
 clusters, `dim`/`dimIncrement`/`dimIndex` expansion, register sizes inherited
 from the peripheral or device, and `<interrupt>` names. `Peripheral::c_struct`
@@ -13217,6 +13299,58 @@ lays a peripheral out as a C structure, dropping a register that overlaps an
 earlier one and padding gaps. The CLI asserts the structure (`typedef`), the
 peripheral as a typed global at its base (`data`) and its register range as
 volatile, and names IRQ handlers from the interrupts.
+
+(lowest to highest loaded address, gaps filled, at most 256 MiB) with
+(kuna) **Espressif application images and `esprom`.** An ESP32-family or
+ESP8266 application image (`esp.rs (parse)`: `0xE9`, a segment count, the
+entry, on ESP32-family parts a 16-byte extended header with the chip id, then
+`address, length, bytes` per segment) is not flattened. Its segments load far
+apart: on an ESP32-C3 the constants are at `0x3c000000`, the RAM code at
+`0x40380000` and the flash code at `0x42000000`, so one flat image would be
+100 MiB of padding or would drop every segment but the entry's. The engine
+loads it instead as a raw image over separate runs
+(`decompiler/crates/unlace-sleigh/src/loadimage.rs (RawLoadImage::from_segments)`):
+each segment is one section, an address between two segments is not mapped,
+and the header's entry is the seed raw-image discovery widens from. The parse
+refuses a segment that runs past the file, a segment outside
+`0x20000000..0x70000000`, overlapping segments and an entry no segment holds;
+the header allows at most 16 segments. A segment takes the properties of the
+region of the chip's memory map it loads into (`esprom.rs (regions,
+load_flags)`): DROM is read-only data, so its strings and tables fold as
+constants; IROM and IRAM are read-only code, so the literal pool an Xtensa
+`l32r` reads folds too; DRAM and RTC memory are writable data. The C6 and H2
+map flash on one bus, so there the segment that starts with the application
+descriptor (`0xABCD5432`) is the constants and the other flash segments are
+code. The language is Xtensa or RISC-V by the chip id unless `--target` names
+one.
+
+`esprom` (default `auto`; `decompiler/crates/unlace-decomp/src/p1_partition/kuna_esprom.rs`
+holds the value, `decompiler/crates/unlace-console/src/kuna_esprom.rs (apply)`
+applies it at the analysis commit) adds what the image does not carry. An ESP
+application calls the routines of the chip's mask ROM at fixed addresses, and
+without a name each call renders as a call through a literal
+(`(*dat_40080504)(dst,src,n)`) or to a bare address. With a chip in force,
+every ROM function of the chip is a function symbol at its address, with the
+call fixup and the libc prototype its name selects, so the call renders as
+`memcpy(dst,src,n)`; every ROM data symbol is a named untyped global unless a
+symbol already covers the address; and every peripheral register range of the
+chip's map that the image does not load into is volatile, so a register poll
+keeps its read. A ROM function is a symbol only: it has no bytes in the input,
+so it is not in the function inventory and nothing decompiles it. `auto` uses
+the chip the image header names (an image without the extended header is an
+ESP8266) and names no chip on any other input, which is what keeps the option
+inert off-target. A chip name (`esp32`, `esp32s2`, `esp32s3`, `esp32c2`,
+`esp32c3`, `esp32c6`, `esp32h2`, `esp8266`) applies that chip's ROM and
+peripheral ranges to any input, such as the firmware's ELF; `off` applies
+nothing. The tables under `loader/firmware/esprom/` are generated by
+`scripts/gen_esprom.py` from the ROM linker scripts of ESP-IDF v5.5.6
+(`components/esp_rom/<chip>/ld/*.ld`) and ESP8266_RTOS_SDK v3.4
+(`esp8266.rom.ld`), both Apache-2.0: one name per address, the chip's main
+script first, a symbol being a function when its address is in the ROM's code
+range and the script does not list it under a `Data` heading. The memory maps
+are the `SOC_*_LOW`/`SOC_*_HIGH` bounds of ESP-IDF's `soc.h`. A ROM revision
+that moved a routine is not detected; the table holds the first address a
+name was given.
 
 The real-binary path of §1.2 is the fourth binding, console-side: `bootstrap_from_object`
 plays the leaf role itself — it resolves the language from the object header

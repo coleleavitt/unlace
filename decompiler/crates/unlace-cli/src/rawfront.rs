@@ -1,5 +1,5 @@
 //! Firmware front end: a raw Cortex-M dump, or a firmware container (U-Boot
-//! uImage, Intel HEX, S-record, ESP image, bFLT, Qualcomm MBN, MediaTek
+//! uImage, Intel HEX, S-record, bFLT, Qualcomm MBN, MediaTek
 //! md1img, PC BIOS image), gets the
 //! `--raw-image --target --base --entry` arguments it would otherwise need by
 //! hand (`unlace_analysis::loader::firmware`). `--svd FILE` adds a CMSIS-SVD
@@ -9,7 +9,7 @@
 //! take a raw image. The binary must be the first argument. A container is
 //! flattened into a temporary file that [`Prepared`] removes when dropped.
 
-use unlace_analysis::loader::firmware::{containers, cortexm, svd};
+use unlace_analysis::loader::firmware::{containers, cortexm, esp, svd};
 
 const RAW_COMMANDS: [&str; 4] = [
     "decompile",
@@ -66,6 +66,9 @@ pub fn prepare(sub: &str, args: &[String]) -> Result<Prepared, String> {
     let Ok(mut bytes) = std::fs::read(&binary) else {
         return Ok(prepared);
     };
+    if !prepared.args.iter().any(|a| a == "--raw-image") && esp::parse(&bytes).is_some() {
+        return Ok(prepared);
+    }
     let out = &mut prepared.args;
     let has = |args: &[String], flag: &str| args.iter().any(|a| a == flag);
     let value = |args: &[String], flag: &str| {

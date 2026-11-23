@@ -93,16 +93,7 @@ pub const LEVEL_GLOBAL: int4 = 2;
 /// Ghidra's behavior.
 pub const LEVEL_FULL: int4 = 3;
 
-/// How many global STORE guards one function's heritage builds before it stops
-/// guarding further ranges.  Every later pass visits each guard: a run of data
-/// decoded as code, with hundreds of stores and of addresses it "reads",
-/// reaches 100k guards and triples a whole firmware decompile, and at 2048 the
-/// guards still cost that firmware 6% of its time.
-pub const GLOBAL_STORE_BUDGET: usize = 1024;
-
-/// How many global LOAD guard `COPY`s one heritage pass builds before it stops
-/// guarding further ranges.
-pub const GLOBAL_LOAD_BUDGET: usize = 4096;
+pub use crate::heritage::{GLOBAL_LOAD_BUDGET, GLOBAL_STORE_BUDGET};
 
 /// The `indexaliasguard` level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -748,4 +739,26 @@ mod tests {
         assert_eq!(o.apply("full").unwrap().0, LEVEL_FULL);
         assert!(o.apply("sometimes").is_err());
     }
+}
+
+fn stores_into_hook(
+    fd: &Funcdata,
+    spc: &Rc<AddrSpace>,
+    store_space: &dyn Fn(&Funcdata, VarnodeId) -> Option<Rc<AddrSpace>>,
+) -> Vec<OpId> {
+    stores_into(fd, spc, store_space)
+}
+
+fn loads_from_hook(
+    fd: &Funcdata,
+    spc: &Rc<AddrSpace>,
+    load_space: &dyn Fn(&Funcdata, VarnodeId) -> Option<Rc<AddrSpace>>,
+) -> Vec<(OpId, Option<(u64, u64)>)> {
+    loads_from(fd, spc, load_space)
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.indexaliasguard_stores_into = Some(stores_into_hook);
+    hooks.indexaliasguard_loads_from = Some(loads_from_hook);
 }

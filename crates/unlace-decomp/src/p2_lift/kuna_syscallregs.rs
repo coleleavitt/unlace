@@ -164,73 +164,7 @@ impl OptionSyscallRegs {
     }
 }
 
-/// The processor families whose system-call user-op this pass models.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SyscallFamily {
-    Arm,
-    AArch64,
-    RiscV,
-    Mips,
-    PowerPc,
-}
-
-impl SyscallFamily {
-    /// The family a language id names, from its processor field.
-    pub fn from_archid(archid: &str) -> Option<Self> {
-        match archid.split(':').next()? {
-            "ARM" => Some(SyscallFamily::Arm),
-            "AARCH64" => Some(SyscallFamily::AArch64),
-            "RISCV" => Some(SyscallFamily::RiscV),
-            "MIPS" => Some(SyscallFamily::Mips),
-            "PowerPC" => Some(SyscallFamily::PowerPc),
-            _ => None,
-        }
-    }
-
-    /// The user-op the family's system-call constructor emits.
-    pub fn userop(self) -> &'static str {
-        match self {
-            SyscallFamily::Arm => "software_interrupt",
-            SyscallFamily::AArch64 => "CallSupervisor",
-            SyscallFamily::RiscV => "ecall",
-            SyscallFamily::Mips | SyscallFamily::PowerPc => "syscall",
-        }
-    }
-
-    /// The register the kernel returns its result in.
-    pub fn result(self) -> &'static str {
-        match self {
-            SyscallFamily::Arm => "r0",
-            SyscallFamily::AArch64 => "x0",
-            SyscallFamily::RiscV => "a0",
-            SyscallFamily::Mips => "v0",
-            SyscallFamily::PowerPc => "r3",
-        }
-    }
-
-    /// The register the kernel flags a failure in besides the result: `a3` is 0
-    /// or 1 on MIPS, and the summary-overflow bit of `cr0` is set on PowerPC.
-    pub fn error_flag(self) -> Option<&'static str> {
-        match self {
-            SyscallFamily::Mips => Some("a3"),
-            SyscallFamily::PowerPc => Some("cr0"),
-            _ => None,
-        }
-    }
-
-    /// The registers the call may read, number register first. `wide` selects
-    /// the 64-bit MIPS ABIs, whose fifth and sixth arguments are `t0`/`t1`.
-    pub fn inputs(self, wide: bool) -> &'static [&'static str] {
-        match self {
-            SyscallFamily::Arm => &["r7", "r0", "r1", "r2", "r3", "r4", "r5", "r6"],
-            SyscallFamily::AArch64 => &["x8", "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7"],
-            SyscallFamily::RiscV => &["a7", "a0", "a1", "a2", "a3", "a4", "a5", "a6"],
-            SyscallFamily::Mips if wide => &["v0", "a0", "a1", "a2", "a3", "t0", "t1"],
-            SyscallFamily::Mips => &["v0", "a0", "a1", "a2", "a3"],
-            SyscallFamily::PowerPc => &["r0", "r3", "r4", "r5", "r6", "r7", "r8"],
-        }
-    }
-}
+pub use crate::context::SyscallFamily;
 
 /// The family's registers, resolved against the loaded language.
 struct SyscallStorage {
@@ -737,6 +671,7 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.syscallregs_is_error_flag_op = Some(is_error_flag_op);
     hooks.syscallregs_is_error_flag = Some(is_error_flag);
     hooks.syscallregs_reads_as_argument = Some(reads_as_argument);
+    hooks.syscallregs_userop_ids = Some(userop_ids);
 }
 
 #[cfg(test)]

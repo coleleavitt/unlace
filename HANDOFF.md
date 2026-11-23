@@ -84,16 +84,26 @@ tidy/clippy/parity are green, then the next one.
 
 ### Hooks and pass-to-pass edges
 1. Land #120 and #119, then `arch/hooks-13` and `arch/p2p-5`.
-2. Remaining middle -> pass call edges are tied to option/state types and fall to step 5/6:
-   `architecture` -> callmechanisms / narrowext / octeoneffects / syscallregs / goreg / jumpassist /
-   segmentize / prefersplit / modelrules (constructors of per-arch state stored on Architecture);
-   `heritage` -> indexaliasguard; `jumptable` -> constselectjump.
-3. **Decisions needed:**
-   - `architecture -> universalaction`: `default_pass_hooks()` reads the driver's `PASS_HOOKS`.
-     Inverting needs the driver to install the hook table (e.g. a `OnceLock`) before any
-     `ArchContext` exists, including in unit tests that call `ArchContext::new` directly.
-   - `kuna_assert` (middle) -> `kuna_phases`: `check_layers.py` pins `kuna_phases` to the driver
-     band on purpose; it has no upward deps, so re-banding it to middle would clear the edge.
+2. Middle -> pass edges after `arch/hooks-14` (which cleared jumptable -> constselectjump /
+   jumpassist, architecture -> goreg / prefersplit, context -> prefersplit / narrowext / syscallregs,
+   kuna_loadoptions -> goreg; their calls go through KunaHooks):
+   - Held only by option types (clear when the option registry moves them to the knowledge
+     plane; the calls already go through hooks): architecture -> syscallregs (`SyscallRegsMode`),
+     narrowext (`NarrowExtMode`); heritage -> indexaliasguard (`IndexAliasGuard`, `LEVEL_*`).
+   - octeoneffects (architecture, context): the mode is being registered by the optreg track;
+     after that, move `Effect`/`Kind`/`UPSTREAM` down and hook `userop_ids`.
+   - Step 6 (per-arch or per-function state with behaviour; a hook signature would have to name
+     the pass type): architecture/context -> callmechanisms (`Mechanisms`, funcdata `State`,
+     plus `CallMechanismMode`), jumpassist (`JumpAssists`), segmentize (`SegmentDef`);
+     architecture and fspec -> modelrules (`ModelRule` on `ParamListStandard`); heritage ->
+     prefersplit (`PreferSplitManager`).
+3. **Decided and done (`arch/hooks-14`):**
+   - `architecture -> universalaction`: the driver installs the hook table at link time.
+     `kuna_passhooks::default_pass_hooks()` calls an `extern "Rust"` symbol that
+     `universalaction` defines (`#[no_mangle]`), so unit tests and embedders need no setup
+     call; the universal action tree is built through the `universal_action` hook.
+   - `kuna_phases` is in the middle band (`check_layers.py`), clearing `kuna_assert -> kuna_phases`
+     and `architecture -> kuna_phases`.
 4. About 160 remaining middle edges are type references to per-function / per-arch pass state on
    `Funcdata` / `ArchContext` / `Architecture`: that is step 6.
 

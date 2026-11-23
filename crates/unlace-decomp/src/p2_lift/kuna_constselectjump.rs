@@ -57,7 +57,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::jumptable::{JumpModel, LoadTable};
+use crate::jumptable::{JumpModel, JumpTable, LoadTable};
 
 /// Widest distance from the indirect branch at which a constant destination is
 /// still taken as intraprocedural.  Upstream uses the same `0xffff` window to
@@ -468,3 +468,42 @@ impl JumpModel for JumpModelConstSelect {
 #[cfg(test)]
 #[path = "kuna_constselectjump/tests.rs"]
 mod tests;
+
+/// (kuna) The constant-select model needs `constselectjump on`, except on a
+/// table staged again for re-entry, which only `off` prevents.
+pub fn admits(table: &JumpTable, mode: ConstSelectMode) -> bool {
+    mode == ConstSelectMode::On || table.kuna_is_reentered()
+}
+
+/// (kuna) The constant-select model of `table`'s branch at `indirect`, when the
+/// option admits one for this table and the destinations are constants.
+pub fn recover(
+    table: &JumpTable,
+    fd: &mut Funcdata,
+    indirect: OpId,
+    matchsize: uint4,
+    maxtablesize: uint4,
+) -> KunaResult<Option<Box<dyn JumpModel>>> {
+    if !admits(table, fd.get_arch().kuna_options.get::<ConstSelectMode>()) {
+        return Ok(None);
+    }
+    let mut model = JumpModelConstSelect::new();
+    if table.kuna_is_reentered() {
+        model.kuna_admit_return(table.kuna_target_encoding());
+    }
+    if model.recover_model(fd, indirect, matchsize, maxtablesize)? {
+        return Ok(Some(Box::new(model)));
+    }
+    Ok(None)
+}
+
+fn from_flow_targets(dests: Vec<uintb>, stub: Option<uintb>) -> Box<dyn JumpModel> {
+    Box::new(JumpModelConstSelect::from_flow_targets(dests, stub))
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.constselectjump_destination_is_local = Some(kuna_destination_is_local);
+    hooks.constselectjump_from_flow_targets = Some(from_flow_targets);
+    hooks.constselectjump_recover = Some(recover);
+}

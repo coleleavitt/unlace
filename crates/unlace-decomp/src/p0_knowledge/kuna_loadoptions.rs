@@ -452,7 +452,7 @@ pub mod env {
     /// The `"<maj>.<min>"` release in `KUNA_GOVERSION`; `None` when it is
     /// unset or unparsable.
     pub fn go_version() -> Option<(u16, u16)> {
-        let value = std::env::var(crate::kuna_goreg::GOVERSION_ENV).ok()?;
+        let value = std::env::var(crate::architecture::GOVERSION_ENV).ok()?;
         let mut parts = value.trim().split('.');
         Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
     }

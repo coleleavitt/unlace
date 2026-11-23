@@ -24,7 +24,6 @@ architecture -> kuna_fatstr
 architecture -> kuna_floatglobals
 architecture -> kuna_formatstring
 architecture -> kuna_fpuemu
-architecture -> kuna_goreg
 architecture -> kuna_gottailcall
 architecture -> kuna_hooks
 architecture -> kuna_inputhints
@@ -42,7 +41,6 @@ architecture -> kuna_nullable_reloc
 architecture -> kuna_objcrettype
 architecture -> kuna_octeoneffects
 architecture -> kuna_opaqueglobals
-architecture -> kuna_phases
 architecture -> kuna_ppc32piccalls
 architecture -> kuna_protoorder
 architecture -> kuna_ptrauthtrap
@@ -65,12 +63,10 @@ architecture -> kuna_x64syscall
 architecture -> kuna_x87intrinsic
 architecture -> kuna_x87truncate
 architecture -> modelrules
-architecture -> prefersplit
 architecture -> printc
 architecture -> printlanguage
 architecture -> remote_provider
 architecture -> stringmanage
-architecture -> universalaction
 context -> kuna_callmechanisms
 context -> kuna_callresultuse
 context -> kuna_deadcascade
@@ -80,7 +76,6 @@ context -> kuna_jumpassist
 context -> kuna_kalloctype
 context -> kuna_libcnames
 context -> kuna_msvcbyval
-context -> kuna_narrowext
 context -> kuna_nullable_reloc
 context -> kuna_objcrettype
 context -> kuna_octeoneffects
@@ -88,12 +83,10 @@ context -> kuna_opaqueglobals
 context -> kuna_segmentize
 context -> kuna_structsynth
 context -> kuna_swiftcall
-context -> kuna_syscallregs
 context -> kuna_tlsnames
 context -> kuna_varargretreg
 context -> kuna_varargsave
 context -> kuna_x87emptyreturn
-context -> prefersplit
 context -> remote_provider
 context -> stringmanage
 coreaction_cleanup -> kuna_namespaces
@@ -158,10 +151,7 @@ heritage -> kuna_indexaliasguard
 heritage -> kuna_loadguardreads
 heritage -> kuna_revisitrefine
 heritage -> prefersplit
-jumptable -> kuna_constselectjump
 jumptable -> kuna_emulatefunction
-jumptable -> kuna_jumpassist
-kuna_assert -> kuna_phases
 kuna_bytehonest -> printc
 kuna_callrettype -> kuna_globalref
 kuna_calltargettype -> printc
@@ -175,7 +165,6 @@ kuna_fidproto -> printc
 kuna_gomorestack -> kuna_passthrough
 kuna_jumpassist -> kuna_callmechanisms
 kuna_loadoptions -> kuna_calltargettype
-kuna_loadoptions -> kuna_goreg
 kuna_narrowret -> kuna_truncarg
 kuna_objcrettype -> printc
 kuna_reglocals -> kuna_varsources

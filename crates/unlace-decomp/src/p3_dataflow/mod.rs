@@ -6,7 +6,6 @@
 pub mod condconst;
 pub mod condexe;
 pub mod coreaction_early;
-pub mod heritage;
 pub mod kuna_addcarrychain;
 pub mod kuna_alloca; // (kuna) a dynamic stack allocation becomes alloca(size)
 pub mod kuna_arraystride;
@@ -15,7 +14,6 @@ pub mod kuna_booleanmask;
 mod kuna_calleeflags;
 pub(crate) mod kuna_calleehomes;
 pub mod kuna_calleememory;
-pub mod kuna_calloverlap;
 pub mod kuna_cancelbytearithmetic;
 pub mod kuna_cmpmerge;
 pub mod kuna_compareform;
@@ -42,7 +40,6 @@ pub mod kuna_inputtile;
 pub mod kuna_intfloatround;
 pub mod kuna_latecse;
 pub(crate) mod kuna_leafmemory;
-pub(crate) mod kuna_loadguardreads;
 pub mod kuna_loopcounterstore;
 pub mod kuna_mba; // (kuna `mba`) linear mixed boolean-arithmetic simplification
 pub(crate) mod kuna_memoryguard;
@@ -66,8 +63,6 @@ pub mod kuna_regnarrow;
 pub(crate) mod kuna_renamereads;
 pub(crate) mod kuna_repframecopy;
 pub mod kuna_repstring;
-pub(crate) mod kuna_revisitrefine;
-pub mod kuna_segmentize;
 pub mod kuna_selectdiv;
 pub mod kuna_simdlane;
 pub(crate) mod kuna_spillstoreguard;

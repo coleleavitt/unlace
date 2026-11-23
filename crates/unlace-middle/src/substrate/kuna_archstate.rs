@@ -31,25 +31,48 @@ impl ArchStateId {
     }
 }
 
-/// One pass's architecture-wide state.
+/// One pass's architecture-wide state: any `'static` type. Its index comes from [`state_index`],
+/// keyed by `TypeId`, so a pass crate can use a type it does not own (a type alias of an
+/// `Option` or a map) without implementing a trait of this crate for it.
 pub trait ArchState: Any {
-    /// This type's index; implement it with [`kuna_arch_state!`].
-    fn id() -> ArchStateId;
+    /// This type's index.
+    #[inline]
+    fn id() -> ArchStateId
+    where
+        Self: Sized,
+    {
+        state_index(std::any::TypeId::of::<Self>())
+    }
 }
 
-/// Implement [`ArchState`] for a type.
+impl<T: Any> ArchState for T {}
+
+/// The dense index of a state or table type, assigned on first use.
+pub fn state_index(ty: std::any::TypeId) -> ArchStateId {
+    use std::cell::RefCell;
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+    static GLOBAL: Mutex<BTreeMap<std::any::TypeId, ArchStateId>> = Mutex::new(BTreeMap::new());
+    thread_local! {
+        static LOCAL: RefCell<BTreeMap<std::any::TypeId, ArchStateId>> =
+            const { RefCell::new(BTreeMap::new()) };
+    }
+    if let Some(id) = LOCAL.with(|local| local.borrow().get(&ty).copied()) {
+        return id;
+    }
+    let id = *GLOBAL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .entry(ty)
+        .or_insert_with(ArchStateId::next);
+    LOCAL.with(|local| local.borrow_mut().insert(ty, id));
+    id
+}
+
+/// Kept for the pass modules that register a state type; every `'static` type is one.
 #[macro_export]
 macro_rules! kuna_arch_state {
-    ($ty:ty) => {
-        impl $crate::kuna_archstate::ArchState for $ty {
-            #[inline]
-            fn id() -> $crate::kuna_archstate::ArchStateId {
-                static ID: std::sync::OnceLock<$crate::kuna_archstate::ArchStateId> =
-                    std::sync::OnceLock::new();
-                *ID.get_or_init($crate::kuna_archstate::ArchStateId::next)
-            }
-        }
-    };
+    ($ty:ty) => {};
 }
 
 /// The architecture-wide state of every pass that installed one; a clone shares the values.
@@ -118,25 +141,22 @@ impl ArchStates {
 /// How many state and table types a process can register.
 pub const MAX_ARCH_TABLES: usize = 256;
 
-/// One pass's run-wide mutable table on the architecture.
+/// One pass's run-wide mutable table on the architecture: any `'static` type with a default,
+/// indexed like [`ArchState`].
 pub trait ArchTable: Any + Default {
-    /// This type's index; implement it with [`kuna_arch_table!`].
-    fn id() -> ArchStateId;
+    /// This type's index.
+    #[inline]
+    fn id() -> ArchStateId {
+        state_index(std::any::TypeId::of::<Self>())
+    }
 }
 
-/// Implement [`ArchTable`] for a type (or a type alias of one).
+impl<T: Any + Default> ArchTable for T {}
+
+/// Kept for the pass modules that register a table type; every `'static + Default` type is one.
 #[macro_export]
 macro_rules! kuna_arch_table {
-    ($ty:ty) => {
-        impl $crate::kuna_archstate::ArchTable for $ty {
-            #[inline]
-            fn id() -> $crate::kuna_archstate::ArchStateId {
-                static ID: std::sync::OnceLock<$crate::kuna_archstate::ArchStateId> =
-                    std::sync::OnceLock::new();
-                *ID.get_or_init($crate::kuna_archstate::ArchStateId::next)
-            }
-        }
-    };
+    ($ty:ty) => {};
 }
 
 /// The run-wide tables of every pass that has used one.

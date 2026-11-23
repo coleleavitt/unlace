@@ -401,3 +401,45 @@ fn with_print_hands_back_the_configured_printer_after_a_render_panic() {
         assert_eq!(print.emit.state().indentlevel, 0);
     }
 }
+
+#[test]
+fn owned_subsystems_are_constructed_and_accessible() {
+    let mut arch = Architecture::new("t", bare_sleigh());
+    // The type factory + printer exist immediately (empty, as the C++ ctor
+    // leaves them null until init; the Rust port default-constructs them).
+    assert_eq!(arch.print().get_name(), "c-language");
+    // The proto registry starts empty (no cspec parsed).
+    assert!(arch.default_fp().is_none());
+    assert!(!arch.has_model("unknown"));
+    // build_default_proto seeds an `unknown` default model.
+    arch.build_default_proto();
+    assert!(arch.has_model("unknown"));
+    assert!(arch.default_fp().is_some());
+    assert_eq!(arch.get_model("unknown").unwrap().get_name(), "unknown");
+    // The full type-factory finish (`finish_typegrp` -> `get_default_size`)
+    // needs a decoded `.sla`'s default code space; the e2e gate exercises that
+    // real path.  Here (a bare Sleigh, no spaces) the factory is the empty
+    // container `build_typegrp` produces.
+    arch.build_typegrp();
+}
+
+#[test]
+fn arch_option_context_drives_the_printer() {
+    let mut arch = Architecture::new("t", bare_sleigh());
+    assert!(arch.print_is_c_language());
+    // (kuna) DIV-34: NULL printing is default-on; the option still drives it.
+    assert!(arch.print().options.null);
+    arch.set_null_printing(false);
+    assert!(!arch.print().options.null);
+    arch.set_null_printing(true);
+    assert!(arch.print().options.null);
+    arch.set_convention_printing(false);
+    assert!(!arch.print().options.convention);
+    arch.set_brace_format(BraceCategory::Function, BraceStyle::SameLine);
+    assert_eq!(arch.print().options.brace_func, BraceStyle::SameLine);
+    arch.set_namespace_strategy(NamespaceStrategy::None);
+    arch.set_integer_format("hex");
+    // Switching the print language flips print_is_c_language.
+    arch.set_print_language("not-c");
+    assert!(!arch.print_is_c_language());
+}

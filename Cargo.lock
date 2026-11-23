@@ -1081,6 +1081,7 @@ dependencies = [
  "thiserror 2.0.18",
  "toml",
  "unlace-base",
+ "unlace-middle",
  "unlace-num",
  "unlace-sleigh",
 ]
@@ -1114,6 +1115,20 @@ name = "unlace-lift-diff"
 version = "0.1.0"
 dependencies = [
  "unlace-harness",
+]
+
+[[package]]
+name = "unlace-middle"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "slotmap",
+ "smallvec",
+ "thiserror 2.0.18",
+ "toml",
+ "unlace-base",
+ "unlace-num",
+ "unlace-sleigh",
 ]
 
 [[package]]

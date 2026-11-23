@@ -64,7 +64,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
    `source_decompiler="angr"`, `inspiration="{{TEST_NAME}}; <angr pass/class>; {{SELECTOR}}"`,
    `change_kind` ∈ correctness-fix|presentation-default|structure-recovery|opt-in-tool, plus `summary` (WHAT), — plus `tier` (transform if it restructures/duplicates/removes/inserts code; core if near-always-better rendering; analysis for prep passes) and `symptoms` (2–5 output-shaped phrases an LLM would grep for).
    `use_when` (the angr-vs-kuna symptom = WHEN), `example` (HOW). Register the option in
-   `crates/unlace-decomp/src/p0_knowledge/options.rs` (so it appears in `KUNA_OPTION_NAMES`).
+   `crates/unlace-middle/src/p0_knowledge/options.rs` (so it appears in `KUNA_OPTION_NAMES`).
 5. **If an existing option already covers this gap** (check `unlace catalog --json`), do NOT
    duplicate it. Record that finding in `docs/features/{{SLUG}}/record.json`, set state `--status failed
    --note "covered by <option>"`, and stop without a PR.

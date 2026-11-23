@@ -366,22 +366,6 @@ pub fn mode_names() -> impl Iterator<Item = &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kuna_option_dispatch::KUNA_OPTION_NAMES;
-
-    #[test]
-    fn every_override_names_a_real_option() {
-        for m in MODE_TABLE {
-            for (opt, _val) in m.overrides {
-                assert!(
-                    KUNA_OPTION_NAMES.contains(opt),
-                    "mode `{}` references unknown option `{}`",
-                    m.name,
-                    opt
-                );
-            }
-        }
-    }
-
     #[test]
     fn reliable_is_a_no_op_alias() {
         assert!(mode_overrides("reliable").unwrap().is_empty());

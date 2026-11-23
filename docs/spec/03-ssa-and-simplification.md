@@ -3,6 +3,7 @@
 ```yaml
 Anchors:
   - crates/unlace-decomp/src/p3_dataflow
+  - crates/unlace-middle/src/p3_dataflow
 ```
 
 A LOAD through a pointer with an explicitly volatile pointee is treated as a
@@ -34,9 +35,9 @@ default-divergence measurements are DIV-2/DIV-3 in `docs/history.md`.
 
 ## 3.1 Heritage
 
-`crates/unlace-decomp/src/p3_dataflow/heritage.rs (Heritage)` is the
+`crates/unlace-middle/src/p3_dataflow/heritage.rs (Heritage)` is the
 SSA construction engine — the port of the upstream `heritage.cc`. It is owned by
-the function (`crates/unlace-decomp/src/substrate/funcdata.rs
+the function (`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::op_heritage_with_deadline)`) and driven once per mainloop iteration
 by `crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs
 (ActionHeritage)`. SSA is therefore built over **multiple passes**, not once: a
@@ -59,7 +60,7 @@ A spacebase space additionally carries `has_call_placeholders`, and reaching it
 for the first time is the moment the call sites' stack-pointer placeholders come
 back off (`heritage.rs (Heritage::clear_stack_placeholders)`, which strips every
 call spec's placeholder input through
-`crates/unlace-decomp/src/p4_calls/fspec.rs
+`crates/unlace-middle/src/p4_calls/fspec.rs
 (FuncCallSpecs::abort_spacebase_relative)`). The placeholder exists only to let a
 call's stack offset be read out of the data flow before the stack is in SSA
 (§4.3); once the space is being heritaged it has either been resolved or never
@@ -88,7 +89,7 @@ padding assignment temporary storage rather than writing to the constant space;
 real member locations still receive their values, including zero-valued fields. These padding rules are not optional: a constant piece
 has no storage to write. Any output created at a renormalized address that lies
 wholly in padding receives a temporary instead
-(`crates/unlace-decomp/src/substrate/funcdata_varnode.rs (varnode_out)`);
+(`crates/unlace-middle/src/substrate/funcdata_varnode.rs (varnode_out)`);
 padding renormalizes to constant zero, and any other constant output address is
 still refused. Attaching a constant as an operation's output is refused before
 the operation changes. A struct- or array-typed concatenation with low zero
@@ -250,7 +251,7 @@ reports that function as failed and continues with the remaining functions.
 **Op properties on a heritage-created op.** The three op-codes heritage installs
 (the phi, the read-size SUBPIECE, the write-size PIECE) take their property flags
 from the same op-code table every other producer of p-code resolves through
-(`crates/unlace-decomp/src/p5_types/typeop.rs (seam_type_op_for)`), so a
+(`crates/unlace-middle/src/p5_types/typeop.rs (seam_type_op_for)`), so a
 heritage-created op is indistinguishable from the same op-code installed by a
 simplification rule. The phi's entry carries `special`, `marker` and `nocollapse`
 together, and each of the three is load-bearing somewhere: `marker` is what
@@ -289,7 +290,7 @@ arrives on a subsequent pass, the read is asking for exactly the value those
 pieces still hold. `kuna_inputtile.rs (new_tiled_input)` therefore
 completes the tiling (creating an input for any gap, as `guard_input` does) and
 folds it into one full-size input with
-`crates/unlace-decomp/src/substrate/funcdata_varnode.rs (Funcdata::combine_input_varnodes)`, which
+`crates/unlace-middle/src/substrate/funcdata_varnode.rs (Funcdata::combine_input_varnodes)`, which
 destroys the pieces, rewrites each concatenating PIECE into a COPY, and repoints
 every other reader at a SUBPIECE of the new whole. Only write-masked pieces
 fully contained in the request are folded — a write-masked varnode is never
@@ -328,7 +329,7 @@ is refined again and indexes past its refinement array. Upstream's refinement
 and renaming assume every Varnode of a range lies inside it.
 `Heritage::refinement` keeps that true. Once the partition is final, each
 marker it would cut
-(`crates/unlace-decomp/src/p3_dataflow/kuna_revisitrefine.rs (Partitions::cut_span)`)
+(`crates/unlace-middle/src/p3_dataflow/kuna_revisitrefine.rs (Partitions::cut_span)`)
 is retired first, as a revisited marker always is, against the partitions it
 spans, and the read of those partitions that replaces it is refined with the
 other reads. Each partition a retired marker spans is flagged
@@ -421,7 +422,7 @@ in full.
 **Call and return guards.** For ranges with new addresses, data-flow across
 call sites is made explicit before renaming
 (`heritage.rs (Heritage::guard_calls)`). Each call spec is asked what effect the
-call has on the (callee-translated) range (`crates/unlace-decomp/src/p4_calls/fspec.rs
+call has on the (callee-translated) range (`crates/unlace-middle/src/p4_calls/fspec.rs
 (FuncProto::has_effect)`):
 
 - *unknown effect* or *return address* → an INDIRECT op re-defines the range
@@ -1007,7 +1008,7 @@ pointer Varnodes become the
 sinks of a `ValueSetSolver` system (the solver itself — constraint
 generation, weak topological ordering, widening — is chapter
 [05](05-types.md)'s machinery in
-`crates/unlace-decomp/src/substrate/rangeutil.rs (ValueSetSolver)`),
+`crates/unlace-middle/src/substrate/rangeutil.rs (ValueSetSolver)`),
 one cheap `WidenerNone` solve seeds each guard
 (`heritage.rs (LoadGuard::establish_range)`: minimum from the stable range
 bound or the pointer base, step recorded only when the partial analysis shows
@@ -1468,7 +1469,7 @@ there, its defining stores may be gone. When the driver detects exactly that
 (an old-range overlap, `deadremoved > 0`), it fires
 `heritage.rs (Heritage::bump_deadcode_delay)`: install `deadcodedelay + 1` for
 the space as a **persistent Override**
-(`crates/unlace-decomp/src/p0_knowledge/overrides.rs
+(`crates/unlace-middle/src/p0_knowledge/overrides.rs
 (Override::insert_deadcode_delay)` — it survives `Funcdata::clear`), set the
 restart-pending flag, and let the outer drive re-flow the function (§0.6); the
 restarted run re-applies the persisted delay to the fresh per-space info before
@@ -1478,7 +1479,7 @@ self-limiting: if the Override already carries a delay for the space, the bump
 is suppressed rather than re-requested — that suppression is what makes the
 restart converge instead of looping. The bump machinery records both events into a
 throwaway per-call `RestartLog`
-(`crates/unlace-decomp/src/p0_knowledge/kuna_restartlog.rs
+(`crates/unlace-middle/src/p0_knowledge/kuna_restartlog.rs
 (RestartLog)`) that is dropped on return — diagnostic plumbing not yet wired to
 the Architecture-owned log — and neither fires during a jump-table
 sub-decompilation (the `is_jumptable_recovery_on` guards at the call sites —
@@ -1491,17 +1492,17 @@ the only live writer of the Override is `Heritage::bump_deadcode_delay`.
 (kuna early restart) Upstream finishes the pass that asked for
 the restart: every later mainloop iteration, the merges and the structuring of
 IR known to be missing data flow, all of which the restart throws away. A bump
-also marks the function (`crates/unlace-decomp/src/substrate/funcdata.rs
+also marks the function (`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::kuna_set_restart_now)`, cleared by `Funcdata::clear`), and when the
 outer drive will re-follow flow (fewer than its eight re-flows so far) the
 action group that ran the bumping heritage stops right after it
-(`crates/unlace-decomp/src/infra/action.rs (ActionGroup::apply)`): the
+(`crates/unlace-middle/src/infra/action.rs (ActionGroup::apply)`): the
 context abandons the pass as on an expired deadline and requests the re-flow,
 and the drive skips the stack-store-guard layout check for the stopped pass
 (`crates/unlace-decomp/src/infra/decompile_drive.rs (run_pipeline)`).
 The restarted run is the one that is printed in both orders, but it is not
 independent of the first. Like upstream's `Funcdata::clear`, kuna's
-(`crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::clear)`)
+(`crates/unlace-middle/src/substrate/funcdata.rs (Funcdata::clear)`)
 drops the local scope's unlocked symbols (`Database::clear_unlocked`), resets
 the local window and clears the prototype's unlocked output and inputs. The
 pending comments the first run recovered still seed the restarted one (upstream's
@@ -1539,7 +1540,7 @@ time inside heritage, and a function that hands the addresses of thousands of
 stack locals to thousands of calls gets one INDIRECT per range per call, so
 the pass bails here rather than at the next action boundary; the abandoned
 partial pass is never rendered), and after every pass `ActionHeritage` runs the lowered-switch input
-repair (`crates/unlace-decomp/src/substrate/funcdata_block.rs
+repair (`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::kuna_repair_lowered_switch_inputs)`), which re-points a synthetic
 lowered-switch BRANCHIND whose input heritage normalized away (chapter 02). The
 repair accepts written, input, *or heritage-known* varnodes as healthy — the
@@ -1557,12 +1558,12 @@ that output when propagated into integer storage: the declared address remains
 available for named-global recovery instead of becoming an image-address integer.
 This also applies to computed interior addresses: losing the declaration before pointer recovery can leave a base address embedded in integer arithmetic. Without a pointer declaration, integer expressions retain their ordinary meaning.
 
-A `crates/unlace-decomp/src/infra/action.rs (Rule)` is a
+A `crates/unlace-middle/src/infra/action.rs (Rule)` is a
 pattern→rewrite unit with no state of its own beyond what its `reset` clears: `get_op_list` declares the opcodes it can fire on
 (defaulting to *all* opcodes), and `apply_op(op, data)` either returns 0 (no
 match — every guard along the way simply declines) or performs its whole
 rewrite and returns 1. Rules are owned by an
-`crates/unlace-decomp/src/infra/action.rs (ActionPool)`, which indexes
+`crates/unlace-middle/src/infra/action.rs (ActionPool)`, which indexes
 them at registration into a flat per-opcode table (`perop`, insertion order
 preserved). One pool sweep visits every op in the function in sequence-number
 order through a resumable cursor that survives op deletion (§0.3) — it is
@@ -1602,14 +1603,14 @@ the readers of the Varnodes they read, so a test the next sweep makes fails
 again unless it reads what a removal changed. That next pass is therefore a
 wave: it walks the ops in the same order with the same cursor but offers the
 rules only the ops
-`crates/unlace-decomp/src/infra/action.rs (ActionPool::wave_wants)`
+`crates/unlace-middle/src/infra/action.rs (ActionPool::wave_wants)`
 names: the dead ops (destroyed, as the sweep destroys them), the definition and
 readers of each Varnode a removed op read, every op of an opcode a far-walking
 rule fires on (the sub-variable and split flows, which walk a whole data-flow
 web, and `RuleIgnoreNan`, which follows a NaN test through three levels of
 boolean readers; `action.rs (Rule::walks_far)`), and the same neighbourhood of each op the
 wave itself removes. Removals are recorded as they happen
-(`crates/unlace-decomp/src/substrate/funcdata.rs
+(`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::note_dead_removal)`). The first application other than a removal
 turns the rest of the pass back into the ordinary sweep, and a pool with a
 breakpoint set always sweeps. A rule whose test reads two or more ops away from
@@ -1625,7 +1626,7 @@ each path's last call left, 626 to 674 of them. Each of those passes also
 removes the COPY the pass before freed, and every one swept the whole
 function. An input replacement is a change a wave can follow:
 the rule records the op and the Varnodes it touches before and after
-(`crates/unlace-decomp/src/substrate/funcdata.rs
+(`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::note_wave_input_change)`; `action.rs (Rule::replaces_inputs_only)`
 marks the rule), so a pass whose only changes were removals and such
 replacements is followed by a wave over the op, its output's readers, and the
@@ -1690,7 +1691,7 @@ type recovery started and a stable block structure; and the **cleanup** pool,
 rewrites that must not perturb the analysis fixpoint. The architecture may
 append CPU-specific rules to oppool1 (`universalaction.rs (build_universal_action)`
 takes `extra_pool_rules`); the engine currently always passes an empty list
-(`crates/unlace-decomp/src/infra/architecture.rs
+(`crates/unlace-middle/src/infra/architecture.rs
 (Architecture::build_action)`).
 
 **Binary64 sign-word operations.** (kuna) Before its commute logic,
@@ -1771,7 +1772,7 @@ only reassembled into a condition after the guards are gone, so x87
 status-word compares keep the upstream approximation.
 
 Every comparison these folds issue or rewrite carries the `kuna_exactfloat`
-addlflag (`crates/unlace-decomp/src/substrate/op.rs`). It already
+addlflag (`crates/unlace-middle/src/substrate/op.rs`). It already
 decides the unordered case, so `RuleIgnoreNan`'s
 `ignorenan_check_back_for_compare` refuses to treat it as a comparison that
 protects a NaN test: an explicit `isnan(x) || x > c` or the `setnp`/`jp` of a
@@ -2122,7 +2123,7 @@ These questions are asked again every time the rule pool visits a reader
 (issue #818). One search for an earlier value read after the store first sets
 aside every value of the global written at or after the store. Each of those
 questions walks up the dominator tree plainly for eight blocks
-(`crates/unlace-decomp/src/substrate/block.rs
+(`crates/unlace-middle/src/substrate/block.rs
 (BlockGraph::dominates_within)`), and only a walk still going after that asks
 one memo for the store's block (`block.rs (BlockGraph::dominates_memo)`), which
 keeps the answer for every block it passes, so a long chain of blocks below the
@@ -2344,7 +2345,7 @@ architecture's singleton property record (`glb->inst[opc]`); kuna's
 `Funcdata::op_set_opcode` takes the already-resolved record, so each rule file
 resolves it at the call site. Every one of those call sites goes through the
 single canonical port of that table,
-`crates/unlace-decomp/src/p5_types/typeop.rs (seam_type_op_for)`, whose
+`crates/unlace-middle/src/p5_types/typeop.rs (seam_type_op_for)`, whose
 per-op-code rows are transcribed field-for-field from the upstream `typeop.cc`
 constructors. The seam is **total**: the table's `match` carries no wildcard arm
 (so a new op-code cannot enter the enum without the compiler demanding its row),
@@ -2466,12 +2467,12 @@ pspec `<segmentop space="ram" userop="segment" farpointer="yes">` of x86 16-bit
 real and protected mode, Z80 and HCS12, with a `<pcode>` snippet for the address
 (`res = (zext(base) << 4) + zext(inner)` in real mode) and a `<constresolve>`
 register that holds the implied segment of a constant near pointer (`DS`).
-`crates/unlace-decomp/src/infra/architecture.rs (decode_segment_ops)`
+`crates/unlace-middle/src/infra/architecture.rs (decode_segment_ops)`
 registers each one in the user-op table after the translator's own ops, the
 pspec's before the cspec's, and its snippet joins the inject library;
 `architecture.rs (initialize_segments)` then emits the compiled snippet into a
 snippet emulator,
-`crates/unlace-decomp/src/p3_dataflow/kuna_segmentize.rs (SegmentDef)`,
+`crates/unlace-middle/src/p3_dataflow/kuna_segmentize.rs (SegmentDef)`,
 which `SegmentDef::execute` runs on constant inputs (C++ `SegmentOp::execute`
 over `ExecutablePcode::evaluate`). The definitions are shared into the
 per-function architecture snapshot.
@@ -2491,13 +2492,13 @@ constant segment and offset to the snippet's result, and, for a far-pointer
 segment op, replaces one whose segment and offset are the high and low SUBPIECEs
 of a single value with that value (the `LES` far pointer). The jump-table
 emulator executes SEGMENTOP through the same snippet
-(`crates/unlace-decomp/src/p2_lift/kuna_emulatefunction.rs`), so a
+(`crates/unlace-middle/src/p2_lift/kuna_emulatefunction.rs`), so a
 `jmp [cs:bx+table]` is recovered. A stack reference built against a stack whose
 containing space has a segment op is wrapped in `SEGMENTOP(contain, 0, ref)`
-(`crates/unlace-decomp/src/substrate/funcdata_op.rs (create_stack_ref)`).
+(`crates/unlace-middle/src/substrate/funcdata_op.rs (create_stack_ref)`).
 
 Constant pointers resolve through the segment op
-(`crates/unlace-decomp/src/substrate/context.rs (resolve_constant)`, C++
+(`crates/unlace-middle/src/substrate/context.rs (resolve_constant)`, C++
 `SegmentedResolver`): a constant no wider than the near pointer takes its segment
 from the tracked value of the resolve register at the use point (0 when the
 pspec tracks none), anything wider is a far pointer with the segment in its high
@@ -2782,7 +2783,7 @@ which is what `voidret` asks its callers about.
 
 Three sibling engines share the file. `subflow.rs (SplitFlow)` (trigger
 `RuleSplitFlow`, oppool1) splits a double-sized value into hi/lo lanes through
-the `crates/unlace-decomp/src/substrate/transform.rs
+the `crates/unlace-middle/src/substrate/transform.rs
 (TransformManager)` machinery when a SUBPIECE proves the halves live separate
 lives. `subflow.rs (SubfloatFlow)` (trigger `RuleSubfloatConvert`, group
 `floatprecision`) does the same for a float value carried in a wider float
@@ -2905,7 +2906,7 @@ option.
 
 One such failure is now caught before anything is rewritten: a transform that
 would give a free varnode it creates a second reader
-(`crates/unlace-decomp/src/substrate/transform.rs
+(`crates/unlace-middle/src/substrate/transform.rs
 (check_free_fanout)`). The action runs that check once a trace succeeds and
 counts a refusal as a failed trace: it tries the next lane size, and the
 failure memo holds it like any other failure, since the check reads only what
@@ -2937,7 +2938,7 @@ a COPY whose **output Varnode is read-only** — an address the load image repor
 inside a non-writable section — is never split. A store into a read-only range is
 not something the program performs, and the split is what makes such a copy
 *visible*: whole, its input and output share a HighVariable and
-`crates/unlace-decomp/src/p6_variables/merge.rs
+`crates/unlace-middle/src/p6_variables/merge.rs
 (Merge::mark_internal_copies)` marks it non-printing; split into one COPY per
 array element, the pieces land in different HighVariables and P9 prints a block of
 per-byte assignments into a `.rodata` string literal. The copies that reach the
@@ -3126,7 +3127,7 @@ satisfy the two-block merge condition
    purely a re-join of one earlier decision (`find_init_pre`);
 3. the initblock also ends in a CBRANCH, and the two branch conditions are
    provably identical or complementary —
-   `crates/unlace-decomp/src/substrate/expression.rs
+   `crates/unlace-middle/src/substrate/expression.rs
    (BooleanExpressionMatch::verify_condition)` matches the boolean expressions
    structurally (complement flips which path is "true");
 4. every op in the iblock other than its branch is removable or movable
@@ -3140,7 +3141,7 @@ the data-flow — each iblock op's output is replaced per consuming block, with
 pulled-back MULTIEQUALs materialized in the post-blocks as needed
 (`do_replacement`/`get_new_multi`) — deletes the iblock's ops in reverse order,
 and splices the block out of the graph
-(`crates/unlace-decomp/src/substrate/funcdata_block.rs
+(`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::remove_from_flow_split)`). The action loops over all blocks until a
 full round makes no change, and refuses to run at all while unreachable blocks
 exist. An iblock op whose output has **no readers** is removable only once
@@ -3246,7 +3247,7 @@ it), so each `apply_op` defers per-op to the live gate on the per-function
 architecture snapshot (e.g. `kuna_addcarrychain.rs (RuleAddCarryChain::apply_op)`
 testing `add_carry_chain`) — which makes them subject to the flag-copy hazard
 of §0.5 — and every gate's engine default is set in
-`crates/unlace-decomp/src/infra/architecture.rs
+`crates/unlace-middle/src/infra/architecture.rs
 (reset_defaults_internal)`, mirrored by the `default` column of
 `crates/unlace-decomp/phases.toml` (the source quoted below; the
 DIV-2/DIV-3 rows of `docs/history.md` carry the ablation evidence). With a
@@ -3310,7 +3311,7 @@ terms at `min(max_term_duplication, N / readers)`, so an expression prints
 inline at every reader while terms times readers stays within N.
 
 Option `dirtypool` changes `ActionPool::apply`
-(`crates/unlace-decomp/src/infra/action.rs`): when a rule changes an
+(`crates/unlace-middle/src/infra/action.rs`): when a rule changes an
 op, that op and every op within two def-use steps of it are recorded, and a
 repeated sweep of the same pool (`rule_repeatapply`) visits only those ops and
 the ops created since the previous sweep began. Rules that act further from
@@ -3404,7 +3405,7 @@ ZEXT(a))`, recovering the single 16-bit addition the 6502-class ADC pair
 implements. The rule is always on.
 
 Carry-chain and array-stride helper outputs use
-`crates/unlace-decomp/src/substrate/funcdata_varnode.rs (new_unique_out)`
+`crates/unlace-middle/src/substrate/funcdata_varnode.rs (new_unique_out)`
 instead of private copies of the bank allocation sequence. The shared factory
 links each definition and assigns its HighVariable when high-level variables
 are already enabled; it also owns lane bookkeeping. Pattern guards, opcode
@@ -3962,7 +3963,7 @@ Always on (DIV-2).
 
 **compareform** (GH-558) — not a pool peephole but the canonicalization
 round-trip for `<=`. The analysis wants one canonical compare form, so
-`crates/unlace-decomp/src/substrate/funcdata_op.rs
+`crates/unlace-middle/src/substrate/funcdata_op.rs
 (Funcdata::replace_lessequal)` rewrites `V <= c` into `V < c+1` (and
 `c-1 < V` from `c <= V`), with overflow guards, from exactly three sites: the
 pool rule `ruleaction_1.rs (RuleIntLessEqual)` — carried in its own group
@@ -4058,7 +4059,7 @@ C++ did there happens in the drive, which follows flow before the tree runs
 register* the context database pins to a constant at this function's address
 (the console `set track` surface). For a DEX method with `option dexmodel`
 on it first inserts the method's `uponentry` copies
-(`crates/unlace-decomp/src/p0_knowledge/kuna_dex.rs (apply_entry)`):
+(`crates/unlace-middle/src/p0_knowledge/kuna_dex.rs (apply_entry)`):
 the Dalvik compiler spec passes arguments in the designated input registers
 `iv0..` and leaves the move into the frame to a dynamic payload, which Ghidra's
 `InjectPayloadDexParameters` builds from the method's code item. `this`, when
@@ -4168,7 +4169,7 @@ early and late; `ActionRedundBranch` removes a branch whose target join adds
 nothing (the redundant-join splice); and `ActionDeterminedBranch` converts a
 CBRANCH whose condition has simplified to a constant into an unconditional
 branch, severing the dead edge
-(`crates/unlace-decomp/src/substrate/funcdata_block.rs
+(`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::remove_branch)`) — this is the in-loop feedback edge by which a
 constant-propagation result (P5 facts) edits the P2 control-flow artifact
 without any restart (§0.7): the next mainloop iteration simply re-heritages

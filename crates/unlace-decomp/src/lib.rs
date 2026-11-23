@@ -68,7 +68,6 @@ mod p6_variables;
 mod p7_regions;
 mod p8_structure;
 mod p9_emit;
-mod substrate;
 
 pub use infra::*;
 pub use p0_knowledge::*;
@@ -81,7 +80,8 @@ pub use p6_variables::*;
 pub use p7_regions::*;
 pub use p8_structure::*;
 pub use p9_emit::*;
-pub use substrate::*;
+#[doc(hidden)]
+pub use unlace_middle::*;
 
 /// The `Funcdata`/`Datatype` extension traits whose methods were inherent before they moved
 /// out of the IR module; `use unlace_decomp::prelude::*;` brings every one into scope.

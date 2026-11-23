@@ -4,7 +4,7 @@ A **mode** is a named preset over kuna's runtime option surface: an ordered list
 of `(option, value)` overrides layered on top of the shipped defaults. Modes are
 **not** catalog options (`unlace catalog` covers the per-option settable surface);
 they reference existing option names and live in one table,
-`crates/unlace-decomp/src/p0_knowledge/modes.rs` (`MODE_TABLE`), applied
+`crates/unlace-middle/src/p0_knowledge/modes.rs` (`MODE_TABLE`), applied
 by `Architecture::apply_mode` (a fan-out over `set_kuna_option`).
 
 Select a mode with `--mode <name>` on `unlace decompile`, `unlace decompile-all`,

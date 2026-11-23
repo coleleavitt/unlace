@@ -3,6 +3,7 @@
 ```yaml
 Anchors:
   - crates/unlace-decomp/src/p9_emit
+  - crates/unlace-middle/src/p9_emit
 ```
 
 The CLI's `functions --json` serializes borrowed inventory records through
@@ -1487,7 +1488,7 @@ completes.
 
 **A render that panics.** The architecture owns the printer, and a render needs
 the printer mutably while it reads the rest of the architecture, so every render
-runs inside `crates/unlace-decomp/src/infra/architecture.rs
+runs inside `crates/unlace-middle/src/infra/architecture.rs
 (Architecture::with_print)`, which lends the printer out and moves it back. It
 moves back on every exit, a panic included: the printer is first cleared of the
 partial document by `printc.rs (PrintC::clear)` (the emitter's indent and paren
@@ -1756,7 +1757,7 @@ decompile-all --json`) get a parseable function with an explicit tombstone
 rather than pseudo-C garbage. The comment distinguishes the two ways a
 function can arrive here, because they call for different investigations: when
 the drive recorded *why* the pipeline aborted for this function
-(`crates/unlace-decomp/src/substrate/funcdata.rs
+(`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::set_kuna_pipeline_failure)` — chapter [00](00-overview.md) §0.2), the tombstone is
 `/* WARNING: decompilation failed: <reason> */`, naming the recoverable error
 verbatim; otherwise the pipeline genuinely ran and structuring produced
@@ -2372,11 +2373,11 @@ an element offset of 0x20 (GH-1063). Exercised by
 
 **(angr) namestyle — the policy.** The master toggle `option namestyle
 angr|ghidra` (default `angr` since DIV-5; live flag `name_style_angr` set in
-`crates/unlace-decomp/src/infra/architecture.rs
+`crates/unlace-middle/src/infra/architecture.rs
 (reset_defaults_internal)`) re-skins every *default* (generated) name; user
 and recovered names are never touched. The policy helpers live in
 `crates/unlace-decomp/src/p6_variables/kuna_naming.rs` with the pure
-address renderers in `crates/unlace-decomp/src/p0_knowledge/database.rs
+address renderers in `crates/unlace-middle/src/p0_knowledge/database.rs
 (kuna_global_data_name, kuna_function_name, kuna_label_name, kuna_arg_name)`.
 Under the angr scheme: locals and decompiler temporaries are `v1`, `v2`, … —
 **sequential per function**, not SSA-subscripted (one name per merged
@@ -2481,10 +2482,10 @@ process sets a separate `name_style_ghidra` flag alongside (not instead of)
 the angr default; the resolver `Architecture::kuna_name_style` /
 `ArchContext::kuna_name_style` gives it precedence at exactly the
 ADDRESS-DERIVED fallback sites — an unresolved callee prints `FUN_%08x`
-(`crates/unlace-decomp/src/p4_calls/fspec.rs (fspec_printed_name)`),
+(`crates/unlace-middle/src/p4_calls/fspec.rs (fspec_printed_name)`),
 an unnamed global `DAT_%08x` (`printc.rs (kuna_global_data_name)`), a goto
 target `LAB_%08x` (`printc.rs (PrintC::block_label_name)`), the renderers in
-`crates/unlace-decomp/src/p0_knowledge/database.rs
+`crates/unlace-middle/src/p0_knowledge/database.rs
 (ghidra_function_name, ghidra_global_data_name, ghidra_label_name)` — because
 the Java side's dynamic-name heuristics key on those spellings
 (`isDynamicSymbolName`). Local/parameter naming keeps the angr scheme (the
@@ -2947,7 +2948,7 @@ variable and emit one declaration — the invariant upstream gets for free by
 walking the symbol table. The symbol behind a storage location is the
 smallest entry containing its base byte — upstream `Funcdata::linkSymbol`'s own
 query — ignoring the use-point exactly as the parameter-category query of §9.3
-does (`crates/unlace-decomp/src/p6_variables/varmap.rs
+does (`crates/unlace-middle/src/p6_variables/varmap.rs
 (ScopeLocal::containing_symbol_for_storage)`), and the survivor is the first in
 emission order. When the collapsing highs *agree* about the slot's type, that
 recovered type stands, being the sharper information. When they *disagree*, the
@@ -3094,7 +3095,7 @@ literal was clipped, the terminator `..." /* TRUNCATED STRING LITERAL */`
 (`printc.rs (PrintC::push_ptr_char_constant_ir, PrintC::print_character_constant)`).
 On any refusal the constant falls back to the ordinary integer render, so a
 wrong guess costs readability, never correctness. The manager itself —
-`crates/unlace-decomp/src/p9_emit/stringmanage.rs
+`crates/unlace-middle/src/p9_emit/stringmanage.rs
 (StringManagerUnicode)`, one shared instance per Architecture with a
 2048-character budget — pulls loadimage bytes 32 at a time until it finds a
 character-width-aligned NUL (no terminator within budget, or unreadable
@@ -3240,14 +3241,14 @@ constant falls through to the pointer arm's casted-hex print, and with
 `globalref` on (§9.9) to `&dat_<addr>` declared `char`.
 
 **Comments.** Comments reach the output through the P0 knowledge plane, never
-inline in the IR: analysis passes call `crates/unlace-decomp/src/substrate/funcdata.rs
+inline in the IR: analysis passes call `crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::warning, Funcdata::warning_header)` — buffered per function, then
 flushed by the decompile drive into the Architecture-wide comment database
-`crates/unlace-decomp/src/infra/architecture.rs (CommentDatabase)`
+`crates/unlace-middle/src/infra/architecture.rs (CommentDatabase)`
 with byte-exact de-duplication (same function, address, and text ⇒ dropped),
 so re-decompilation never doubles a warning. At print time
 `printc.rs (PrintC::setup_comments)` loads the function's comments into the
-sorter `crates/unlace-decomp/src/substrate/comment.rs (CommentSorter)`,
+sorter `crates/unlace-middle/src/substrate/comment.rs (CommentSorter)`,
 which bins each comment by the basic block containing its address and orders
 it against the block's ops; the body emitters then interleave them — each
 statement flushes the comments sorted before it (`printc.rs
@@ -3975,7 +3976,7 @@ directives keep their final applied outcomes.
 stub and now wires through it, via the driver
 `crates/unlace-decomp/src/infra/decompile_drive.rs (print_c_types)`.
 It emits a C definition for every user-defined data-type in the factory,
-consuming `crates/unlace-decomp/src/substrate/dtype.rs
+consuming `crates/unlace-middle/src/substrate/dtype.rs
 (TypeFactoryImpl::dependent_order)` (chapter [05](05-types.md) §5.1) so every
 definition precedes its uses. Core types, unnamed types, and the internal
 `Partial*` slices are skipped; what renders is typedefs, structs, unions, and
@@ -4805,7 +4806,7 @@ from its Symbol's scalar type (`kuna_pointerstorecast.rs (target)`).
 
 ## (kuna) Intel intrinsic names for AVX user-ops — `option avxintrinsics`, default on
 
-**`crates/unlace-decomp/src/substrate/kuna_avxintrin.rs (intrinsic)`,
+**`crates/unlace-middle/src/substrate/kuna_avxintrin.rs (intrinsic)`,
 called from `printc.rs (op_callother_ir)`.** The x86 SLEIGH spec lifts most
 AVX2, FMA and AVX-512 instructions to opaque user-ops named after the mnemonic
 and its extension: `vpaddd_avx2`, `vfmadd132ps_fma`, `vaddps_avx512f`. When a

@@ -3,6 +3,7 @@
 ```yaml
 Anchors:
   - crates/unlace-decomp/src/p2_lift
+  - crates/unlace-middle/src/p2_lift
 ```
 
 For Go images, `kuna_atomicxadd.rs` records a bounded single-instruction
@@ -24,7 +25,7 @@ branch that is really a switch. The driver is
 `crates/unlace-decomp/src/p2_lift/flow.rs (FlowInfo)` over the fresh
 `Funcdata`, applies the architecture's flow options (default
 `error_toomanyinstructions`, instruction budget 100000 —
-`crates/unlace-decomp/src/infra/architecture.rs (reset_defaults_internal)`),
+`crates/unlace-middle/src/infra/architecture.rs (reset_defaults_internal)`),
 runs op generation + block generation, maps each recovered jump table's
 addresses onto block out-edges (`JumpTable::switch_over`), and finally computes
 the dominator tree (`structure_reset`) the SSA phase requires. `FlowInfo`
@@ -932,18 +933,18 @@ a spec-declared eraser such as ARM's `setISAMode` `<callotherfixup>` removes the
 op uniformly, whether the block was reached by fall-thru or only through a
 recovered switch table.
 
-- **Injection library.** `crates/unlace-decomp/src/substrate/pcodeinject.rs
+- **Injection library.** `crates/unlace-middle/src/substrate/pcodeinject.rs
   (PcodeInjectLibraryBase)` holds the payloads — `<callfixup>`,
   `<callotherfixup>`, and executable-p-code snippets — decoded from the
   compiler/processor specs; their SLEIGH source bodies are compiled to p-code
-  templates by `crates/unlace-decomp/src/p2_lift/inject_sleigh.rs
+  templates by `crates/unlace-middle/src/p2_lift/inject_sleigh.rs
   (parse_inject)` and emitted at a concrete address through
   `inject_sleigh.rs (SleighInjectEngine)`. Local compilation needs a loaded
   language, so in ghidra mode — no `.sla` — the payloads are registered but
   never compiled, and each injection instead asks the host to lift the snippet
   for that one call site (chapter 00). The metadata half is unchanged either
   way; only the ops change source.
-- **User ops.** `crates/unlace-decomp/src/substrate/userop.rs
+- **User ops.** `crates/unlace-middle/src/substrate/userop.rs
   (UserOpManage)` manages the CALLOTHER black-box ops (unspecialized, datatype,
   volatile, segment, jump-assist, injected). A CALLOTHER whose user op is
   *injected* is queued during classification and replaced by its
@@ -959,7 +960,7 @@ recovered switch table.
   which an `invoke-*/range` instruction uses to copy a run of frame registers
   into the input registers `iv0..`. For a DEX image with `option dexmodel` on,
   `crates/unlace-decomp/src/infra/decompile_drive.rs (emit_inject)`
-  answers it from `crates/unlace-decomp/src/p0_knowledge/kuna_dex.rs
+  answers it from `crates/unlace-middle/src/p0_knowledge/kuna_dex.rs
   (emit_range)`: one 4-byte COPY per register, as `InjectPayloadDexRange` emits.
   Any other dynamic payload still goes to the translator, which fails it on a
   standalone run (chapter 00).
@@ -1981,7 +1982,7 @@ the C library tests it right after the instruction (`movz` or `bnez` on `a3`;
 `bns`, or `mfcr` and a mask). So on those two families the rewrite also inserts,
 right after the system call, `a3 = syscall_error()` or `cr0 = syscall_error()`
 (`kuna_syscallregs.rs (define_error_flag)`): a `CALLOTHER` of the built-in user
-op `BUILTIN_SYSCALL_ERROR` (`crates/unlace-decomp/src/substrate/userop.rs`)
+op `BUILTIN_SYSCALL_ERROR` (`crates/unlace-middle/src/substrate/userop.rs`)
 whose only input is that user-op id, with its call flag cleared. It is an
 ordinary write placed before heritage, so heritage treats it like any other
 register write (an `INDIRECT` there would not work, see below), and with no
@@ -2282,7 +2283,7 @@ finite encoding refuse normalization with a warning.
 ## 2.3 Jump tables & switch recovery
 
 A switch exists in the output only if a BRANCHIND op carries a recovered
-`crates/unlace-decomp/src/p2_lift/jumptable.rs (JumpTable)` — a map
+`crates/unlace-middle/src/p2_lift/jumptable.rs (JumpTable)` — a map
 from index values to code targets, attached to the op, with per-target case
 labels. Everything in this section exists to manufacture, verify, or rescue
 that artifact; when all of it fails the BRANCHIND is demoted to a CALLIND and
@@ -2299,7 +2300,7 @@ the loop re-runs while `tablelist` is non-empty. The address computation
 feeding a raw BRANCHIND is unusable as lifted — it must be simplified first, but
 the function has no blocks or SSA yet. So each attempt runs as a **reduced-tree
 sub-decompilation on a clone**
-(`crates/unlace-decomp/src/substrate/funcdata_block.rs
+(`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::stage_jump_table)`, C++ `stageJumpTable`): the raw ops and existing
 tables are cloned into a partial `Funcdata` (`"@@jumprecovery"`), its blocks are
 built against the parent flow's `visited` snapshot, and the reduced
@@ -2475,7 +2476,7 @@ the case targets.
    guard's CBRANCH has no record that restricts the chosen variable
    (`jumptable.rs (JumpBasicModel::unbounded_guards)`). It emulates each
    value's path and evaluates those guards' varnodes from what the path
-   computed (`crates/unlace-decomp/src/p2_lift/kuna_emulatefunction.rs
+   computed (`crates/unlace-middle/src/p2_lift/kuna_emulatefunction.rs
    (EmulateFunction::evaluate_held)`: pure ops back to computed values and
    constants, a LOAD only through an address computed from them). A value
    outside a guard's range is not dispatched (`jumptable.rs
@@ -2548,7 +2549,7 @@ the case targets.
    `max_jumptable_size` entries are not affected.
 5. **Enumeration.** `jumptable.rs (JumpBasicModel::build_addresses_basic)`
    emulates the meld path once per in-range value on the one-path syntax-tree
-   emulator (`crates/unlace-decomp/src/p2_lift/kuna_emulatefunction.rs
+   emulator (`crates/unlace-middle/src/p2_lift/kuna_emulatefunction.rs
    (EmulateFunction::emulate_path)`), masking each result by the architecture's
    function-pointer alignment; with `option jumpload` the table LOADs are also
    recorded as `jumptable.rs (LoadTable)` entries. A sanity pass
@@ -4199,7 +4200,7 @@ wrapped in a loop whose latch calls the runtime. The fold restores
 straight-line entry flow.
 
 **Matching is a shape, not a name.** The matcher is the first shared
-entry-guard-loop shape in `crates/unlace-decomp/src/substrate/idiom.rs
+entry-guard-loop shape in `crates/unlace-middle/src/substrate/idiom.rs
 (match_entry_guard_loop)` (the language-runtime idiom vocabulary of
 `docs/multilang.md` W2): the cold arm is a basic block whose ONE predecessor
 and ONE successor are the same block — the guard — which itself ends in a
@@ -4228,7 +4229,7 @@ diverging, and flow then HALTS at the prologue's call: the back-edge is never
 lifted, no entry block is inserted, and the loop shape above cannot exist —
 which silently kept the guard on every function of such an image while its
 stripped twin folded. The matcher therefore accepts a second, equally tight
-sub-shape (`crates/unlace-decomp/src/substrate/idiom.rs
+sub-shape (`crates/unlace-middle/src/substrate/idiom.rs
 (match_entry_guard_halt)`): the cold arm is a basic block with no out-edges
 whose ONLY call is the matched runtime routine, its one predecessor ends in a
 CBRANCH, and that predecessor is the function start (a block nothing enters —
@@ -4266,7 +4267,7 @@ modeled return, so the recording stores read an undefined local, and the
 value split can mangle even the real store's address expression.
 
 **The second shared idiom shape.** The matcher is
-`crates/unlace-decomp/src/substrate/idiom.rs (match_guarded_cold_call)`:
+`crates/unlace-middle/src/substrate/idiom.rs (match_guarded_cold_call)`:
 a one-block cold arm holding exactly one call (`block_has_other_call` refuses
 an arm with a second transfer — that is a real `if` body), whose guard ends in
 a CBRANCH and whose other out-edge closes the diamond in ONE hop. Either

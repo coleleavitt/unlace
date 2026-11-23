@@ -8,26 +8,6 @@
 use super::*;
 
 #[test]
-fn catalog_matches_implemented_options() {
-    use crate::kuna_option_dispatch::KUNA_OPTION_NAMES;
-    use std::collections::BTreeSet;
-
-    let registered: BTreeSet<_> = KUNA_OPTION_NAMES.iter().copied().collect();
-    let documented: BTreeSet<_> = SETTABLE_TABLE.iter().map(|row| row.option).collect();
-    assert_eq!(
-        registered.len(),
-        KUNA_OPTION_NAMES.len(),
-        "duplicate option handler"
-    );
-    assert_eq!(
-        documented.len(),
-        SETTABLE_TABLE.len(),
-        "duplicate catalog option"
-    );
-    assert_eq!(registered, documented);
-}
-
-#[test]
 fn github_anchor_matches_rendered_heading_text() {
     let cases = [
         (

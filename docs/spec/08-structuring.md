@@ -558,7 +558,7 @@ A for-loop header's initializer and iterator are each a statement moved out
 of the body or the pre-loop block into the header, so the move must not
 reorder them against a printed statement. When the PHI's input is a hidden
 COPY, the statement the header prints is the one feeding that COPY, not the
-COPY itself; `crates/unlace-decomp/src/substrate/funcdata_block.rs
+COPY itself; `crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::while_test_terminal)` therefore requires that statement to move,
 respecting cover, up to the COPY as well. A call, or a statement whose result a
 printed statement between them reads (`n = v & 1;` ahead of a loop over
@@ -571,7 +571,7 @@ removing this discarded analysis does not enable branch normalization.
 
 **The label invariant.** An emitted `goto label_X;` without a `label_X:` in
 the same function is not C, so the set of blocks
-`crates/unlace-decomp/src/substrate/block.rs
+`crates/unlace-middle/src/substrate/block.rs
 (BlockGraph::mark_unstructured)` labels must cover every goto the printer
 emits. It marks the front leaf of a `BlockGoto`'s target, a `BlockIf`'s goto
 target, and each `BlockSwitch` case arm whose edge stayed unstructured.
@@ -595,9 +595,9 @@ new composite at the end of the parent's list, so the component that happens to
 collapse last lands last no matter where its code lives in the function. The
 first step of `blockaction.rs (ActionFinalStructure)` therefore re-sorts the
 root's components into their final order
-(`crates/unlace-decomp/src/substrate/funcdata_block.rs
+(`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::sblocks_order_blocks)` →
-`crates/unlace-decomp/src/substrate/block.rs
+`crates/unlace-middle/src/substrate/block.rs
 (BlockGraph::order_blocks)`): the component containing the function entry
 first, components that end in a RETURN last, everything else by ascending
 block index — the reverse-post-order number that `block.rs
@@ -620,7 +620,7 @@ the second `ActionPreferComplement` pass
 (universal_sched)`). Pattern: a 3-component `if/else` whose guard is the
 negated / equality-to-zero form — exactly the flip class the upstream
 `preferComplement` leaves alone
-(`crates/unlace-decomp/src/substrate/funcdata_block.rs
+(`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::branch_flip_complement)`: `split_flip_in_place_test` result `1`,
 i.e. `==` / `== 0` / a constant-operand `<`/`<=`, where `preferComplement`
 only takes result `0`, the flips that *remove* negation). Transform: flip the
@@ -635,7 +635,7 @@ that pin the pre-flip polarity via per-test opt-outs); registered at the
 `readability-rewrites` subphase in `phases.toml`. Invariant: the flip is a
 *pure* arm swap, so the multiset of leaf components reachable under the
 `BlockIf` is identical before and after it — a debug-build assertion in
-`crates/unlace-decomp/src/substrate/funcdata_block.rs
+`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::block_if_flip_negated_guard)` checks exactly that, and polices the
 whole arm-rearranging family against a dropped or re-parented component. What
 the swap *does* change is which arm the printer sees in the else slot; when
@@ -823,7 +823,7 @@ the schedule (`crates/unlace-decomp/src/infra/universalaction.rs
 
 - **CFG splitters** in fullloop's `returnsplit` group (`returndup`,
   `earlyreturn`, `switchreturn`): they duplicate real p-code via
-  `crates/unlace-decomp/src/substrate/funcdata_block.rs
+  `crates/unlace-middle/src/substrate/funcdata_block.rs
   (Funcdata::node_split)` — the same machinery `ActionReturnSplit` drives —
   *before* final structuring, so the split returns flow through merge/naming
   and are structured normally on the next iteration.
@@ -837,7 +837,7 @@ the schedule (`crates/unlace-decomp/src/infra/universalaction.rs
 
 A CFG split must leave every path performing the same writes, the same number
 of times. The p-code half of `node_split`,
-`crates/unlace-decomp/src/substrate/funcdata_block.rs (CloneBlockOps)`,
+`crates/unlace-middle/src/substrate/funcdata_block.rs (CloneBlockOps)`,
 copies two kinds of op that write nothing but name a global as their output.
 Upstream's clone let copy propagation turn both into stores (kuna #1355):
 
@@ -960,7 +960,7 @@ the printer would otherwise drop but can never remove one.
 ### retsplitglobal — a bound on cloning a global-writing epilogue
 
 `crates/unlace-decomp/src/p8_structure/kuna_retsplitglobal.rs`, read by
-`crates/unlace-decomp/src/substrate/funcdata_block.rs
+`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::return_split_is_splittable)` — the predicate BOTH return splitters
 consult, upstream `ActionReturnSplit` and kuna's `ActionReturnDup`
 (`returndup`), which is why `option returndup off` does not change the shapes
@@ -994,7 +994,7 @@ duplication or change what the surviving merged block does. Settable
 ### retsplitlimit — a bound on what one return split may clone
 
 `crates/unlace-decomp/src/p8_structure/kuna_retsplitlimit.rs
-(split_is_declined)`, read by `crates/unlace-decomp/src/substrate/funcdata_block.rs
+(split_is_declined)`, read by `crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::return_split_apply)` once a return block's split edges are known.
 *Pattern:* `node_split` clones the whole return block once per split edge, and
 a return block carries, besides its epilogue, one `Heritage::guardReturns`
@@ -1029,7 +1029,7 @@ Condensing), leaving all but one predecessor to arrive by `goto` — a
 through to a unique successor `S`. *Transform:* duplicate the one tail block
 inline and drop the goto — but only under the **convergence precondition**
 (`kuna_crossjumpreverter.rs (converges_on)`): the structured fall-through
-after the goto's parent (`crates/unlace-decomp/src/substrate/block.rs
+after the goto's parent (`crates/unlace-middle/src/substrate/block.rs
 (BlockGraph::next_flow_after)`) must be exactly `S`, because unlike a return
 tail this path stays open — duplicating it is only semantics-preserving if
 both routes provably rejoin at `S`. *Bounds/failure:* exactly one tail block
@@ -1104,7 +1104,7 @@ on any mismatch, and a leaf carrying a label/goto is never hoisted. An arm
 left with one component is replaced by that component, and every goto that
 targeted the arm (a `goto`, an if-goto, a multi-goto edge or a switch case goto)
 is pointed at the component instead
-(`crates/unlace-decomp/src/substrate/block.rs (retarget_gotos)`): both
+(`crates/unlace-middle/src/substrate/block.rs (retarget_gotos)`): both
 share the arm's entry leaf, so the goto keeps its label. Flipped on by DIV-14.
 
 The hoist frees tree nodes: each dropped else-arm copy, and any arm list that
@@ -1112,7 +1112,7 @@ is left with one component and unwrapped to it. A goto, switch case or
 multi-goto edge elsewhere in the tree can still name one of those nodes. A
 goto from one arm into the start of the other names that whole arm. Before a
 node is freed, every branch that names it is pointed at the node that took its
-place (`crates/unlace-decomp/src/substrate/block.rs
+place (`crates/unlace-middle/src/substrate/block.rs
 (kuna_free_replaced)`). An unwrapped arm hands over to its sole component,
 which starts at the same leaf, so the goto keeps its label and lands on the
 same statement. A dropped copy hands over to the copy that was kept. Before
@@ -1491,7 +1491,7 @@ const/variable diamonds this whole-block gate rejects outright.
 the arguments and jumps to one `call f; ...; ret` block, so the call reads
 MULTIEQUALs and prints as `if (c) { a = b; k = 2; } return f(a, k);`. The pass
 splits such a block once per predecessor with
-`crates/unlace-decomp/src/substrate/funcdata_block.rs
+`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::node_split_calls)`, the `node_split` clone with CALL and INDIRECT
 cloning enabled: each cloned call gets its own copy of the original call spec
 (`FuncCallSpecs::clone_for_op`, a fresh fspec handle), and a cloned INDIRECT's
@@ -1604,7 +1604,7 @@ returns and calls what the source does.
 ## 8.4 The quality signal
 
 What kuna can *measure* about a structuring today is the goto census. The
-structured tree is walked by `crates/unlace-decomp/src/substrate/block.rs
+structured tree is walked by `crates/unlace-middle/src/substrate/block.rs
 (BlockGraph::kuna_count_quality)`, tallying `BlockGoto` nodes — split into
 nodes and *printed* gotos, because a `BlockGoto` whose target is exactly the
 next block in normal flow prints nothing (`block.rs
@@ -1612,7 +1612,7 @@ next block in normal flow prints nothing (`block.rs
 `BlockMultiGoto` virtual edges and `BlockIf` if-goto edges still tagged as
 real gotos. The console command `quality`
 (`crates/unlace-console/src/kuna_console.rs (IfcKunaQuality)`,
-surfaced through `crates/unlace-decomp/src/substrate/funcdata.rs
+surfaced through `crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::kuna_quality_counts)`) reports the census for the current
 function — basic-block count, goto nodes (and printed), multi-goto edges,
 if-goto edges, and the unstructured total — and refuses politely when the

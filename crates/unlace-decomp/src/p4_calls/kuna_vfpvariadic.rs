@@ -14,10 +14,10 @@
 //! sits in a VFP register, and moving only its variadic callee's would break
 //! `return vr(...)`.
 use crate::{
+    architecture::Architecture,
     context::ArchContext,
     dtype::type_metatype,
     fspec::{FuncProto, ParameterPieces, ProtoModel, PrototypePieces},
-    infra::architecture::Architecture,
     modelrules::{ModelRule, register_ids},
 };
 use std::rc::Rc;

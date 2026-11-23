@@ -3,7 +3,8 @@
 ```yaml
 Anchors:
   - crates/unlace-decomp/src/p5_types
-  - crates/unlace-decomp/src/substrate/dtype.rs
+  - crates/unlace-middle/src/p5_types
+  - crates/unlace-middle/src/substrate/dtype.rs
 ```
 
 For the Octeon memory user operations `octeoneffects` resolves, local input-type
@@ -43,14 +44,14 @@ upstream GH issue that inspired it, per its `phases.toml` row).
 ## 5.1 Type representation
 
 The type *data model* lives in the substrate —
-`crates/unlace-decomp/src/substrate/dtype.rs` — not under `p5_types`,
+`crates/unlace-middle/src/substrate/dtype.rs` — not under `p5_types`,
 because it is shared IR: every Varnode carries a `Datatype` from the moment it
 is created, and every phase from lift to emission reads it. What lives in
 `p5_types` is the *inference* — the passes that decide which type a Varnode
 carries.
 
 The qualifier representation in
-`crates/unlace-decomp/src/substrate/kuna_typequal.rs` distinguishes a
+`crates/unlace-middle/src/substrate/kuna_typequal.rs` distinguishes a
 volatile pointee from a volatile pointer object. Type ordering prefers the
 qualified form when its underlying type otherwise compares equal, allowing
 pointer copies and pointer arithmetic to retain the pointee qualification.
@@ -61,7 +62,7 @@ The same module recovers declared pointer types through bounded address
 expressions for volatile-read preservation before inference runs (chapter 03).
 
 **The metatype lattice.** Every type reduces to one of 18 meta-types
-(`crates/unlace-decomp/src/substrate/dtype.rs (type_metatype)`),
+(`crates/unlace-middle/src/substrate/dtype.rs (type_metatype)`),
 transcribed with explicit discriminants because **the numeric order is the
 specificity order**: lower is more specific, from `TYPE_PARTIALUNION` (0)
 through struct/enum/array/pointer/float down to `TYPE_UNKNOWN` (15),
@@ -91,7 +92,7 @@ hidden-return/vector, plus four architecture-specific classes) and belongs to ch
 (`TypePointer`/`TypeArray`/`TypeStruct`/…) becomes a single `Datatype` struct
 carrying the shared members (id, size, flags, name, metatype, submeta,
 alignment) plus a `DatatypeKind` payload enum
-(`crates/unlace-decomp/src/substrate/dtype.rs (DatatypeKind)`) with one
+(`crates/unlace-middle/src/substrate/dtype.rs (DatatypeKind)`) with one
 variant per C++ subclass; methods match on the kind to reproduce virtual
 dispatch. The variants worth knowing:
 
@@ -127,7 +128,7 @@ dispatch. The variants worth knowing:
   through it can type its arguments.
 
 **The factory.** All types are interned:
-`crates/unlace-decomp/src/substrate/dtype.rs (TypeFactoryImpl)` is the
+`crates/unlace-middle/src/substrate/dtype.rs (TypeFactoryImpl)` is the
 per-architecture container behind the `TypeFactory` trait handle. Every
 constructor (`get_base`, `get_type_pointer`, `get_type_array`, …) builds a
 candidate and de-duplicates it through a `BTreeSet` ordered by
@@ -166,7 +167,7 @@ The interning tree's order is a dependency *comparison*, not a dependency
 *ordering*: `compare_dependency` ranks by sub-metatype then **descending**
 size, so a struct contained by value sorts *after* the struct that contains
 it — walking the tree front to back is not definition-before-use. The
-explicit fix is `crates/unlace-decomp/src/substrate/dtype.rs
+explicit fix is `crates/unlace-middle/src/substrate/dtype.rs
 (TypeFactoryImpl::dependent_order)`, the C++
 `TypeFactory::dependentOrder`/`orderRecurse` port: a postorder DFS over each
 type's typedef base (`get_typedef`) then its component sub-types
@@ -207,7 +208,7 @@ declaration named ahead of its body (a forward `struct Node;`, a sibling record
 first named inside a member list, a parameter declared before the body
 arrived); every access through one printed as offset arithmetic
 (`*(int *)(*(long *)n + 8)` for `n->next->value`). A stub the C grammar
-declares (`crates/unlace-decomp/src/substrate/dtype.rs
+declares (`crates/unlace-middle/src/substrate/dtype.rs
 (TypeFactory::kuna_declare_record)`, chapter 00's assertion grammar) therefore
 carries a completion link, a shared cell holding a weak reference to the record
 that completes it. Completing the stub fills the cell
@@ -235,9 +236,9 @@ link would read an opaque pointer in a third unit as the wrong layout.
 
 **The data organization.** The factory also carries the target's C scalar
 widths, decoded from the compiler spec's `<data_organization>` by
-`crates/unlace-decomp/src/infra/architecture.rs
+`crates/unlace-middle/src/infra/architecture.rs
 (decode_data_organization)` and completed by
-`crates/unlace-decomp/src/substrate/dtype.rs
+`crates/unlace-middle/src/substrate/dtype.rs
 (TypeFactoryImpl::setup_sizes)` for whatever the spec left unset. kuna reads the
 full set — `char`, `short`, `int`, `long`, `long long`, pointer, `wchar_t`,
 `float`, `double`, `long double` — because knowing a value's *size* is not
@@ -283,10 +284,10 @@ the fallback.
 
 **The wire marshal.** Types cross the ghidra-mode wire in both directions.
 Inbound, registerProgram's `<coretypes>` and per-miss getDataType answers
-decode through `crates/unlace-decomp/src/substrate/dtype.rs
+decode through `crates/unlace-middle/src/substrate/dtype.rs
 (decode_core_types, decode_type, find_by_id_or_remote)`. Outbound — the
 Phase-4 `decompileAt` response — every type reference marshals through the
-`Datatype::encodeRef` port (`crates/unlace-decomp/src/substrate/dtype.rs
+`Datatype::encodeRef` port (`crates/unlace-middle/src/substrate/dtype.rs
 (Datatype::encode_ref)`): a type with a nonzero id (and non-void metatype)
 travels as the compact `<typeref name id>` — a variable-length base emits the
 size-independent id (`Datatype::hash_size` is reversible, and both
@@ -335,7 +336,7 @@ pass with inference live.
    asks its defining op and each reading op for a suggestion
    (`output_type_local` / `input_type_local`, same module) and keeps the most
    specific by `type_order`. The suggestions come from the per-opcode table
-   `crates/unlace-decomp/src/p5_types/typeop.rs (type_op_info)` — the
+   `crates/unlace-middle/src/p5_types/typeop.rs (type_op_info)` — the
    port of the C++ `TypeOp` `inst[]` registry, which bundles each opcode's
    p-code property flags, display attributes, and local input/output
    meta-types — with two live upgrades: a CALL/CALLIND whose resolved callee
@@ -445,7 +446,7 @@ monotone but the *environment* is not — rule-pool rewrites between passes can
 keep presenting new ops, and a pathological int↔pointer disagreement can
 alternate forever. Failure mode when the ceiling hits: types freeze at the
 last settled state, and downstream pointer-arithmetic rewrites self-type their
-new ops directly — `crates/unlace-decomp/src/substrate/addtreestate.rs
+new ops directly — `crates/unlace-middle/src/substrate/addtreestate.rs
 (assign_propagated_type)` fires whenever `is_type_recovery_exceeded` holds —
 since no further inference pass will visit them. The budget is compile-time and
 deliberately latent (the `solver-budget` row in
@@ -651,7 +652,7 @@ locals only ever hold a copy of it. They took `obstack *` by propagating it
 down from `kwset`, and with `kwset` declined nothing gives it to them, so grep
 `-O0`'s `kwsprep` loses those locals' names along with the wrong one. The rule speaks
 only about the names `libctypes` can mint or adopt (`AGGREGATE_NAMES` in
-`crates/unlace-decomp/src/p0_knowledge/kuna_libctypes.rs`), only while
+`crates/unlace-middle/src/p0_knowledge/kuna_libctypes.rs`), only while
 that option is on (`ArchContext::libctypes`), and only about the vote. It never
 touches a type that arrives by another road: a call's OUTPUT (`getpwnam`'s
 `passwd *`), or propagation between Varnodes that are later merged into one
@@ -1417,7 +1418,7 @@ a hole prints the offset-named `field_0x<off>`. The structures have grown with
 nearly every release, so each is built as a variable-length type at the largest
 published size (TEB 0x1878 and PEB 0x7d0 on x64, 0x1038 and 0x488 on x86).
 Variable length is what keeps a phantom neighbour's name out:
-`crates/unlace-decomp/src/substrate/addtreestate.rs (AddTreeState::calc_subtype)`
+`crates/unlace-middle/src/substrate/addtreestate.rs (AddTreeState::calc_subtype)`
 takes a variable-length base as size 0, so a constant offset past the end of the
 modelled fields (`gs:[0x18d8]`, which a fixed-size TEB would wrap into the next
 TEB's `ProcessEnvironmentBlock`) — or a negative one — stays an integer addition
@@ -1675,7 +1676,7 @@ hard-float).
 rule for the simple case: a constant with a single reader, already typed as a
 pointer (or used where only a pointer makes sense), whose value resolves to a
 mapped global symbol, is rewritten to reference that symbol via the space's
-spacebase (`crates/unlace-decomp/src/substrate/funcdata.rs
+spacebase (`crates/unlace-middle/src/substrate/funcdata.rs
 (spacebase_constant)`) — and the symbol's type then seeds the next inference
 pass. The machinery around it is all about *not* firing: the action is gated
 on type recovery having started and capped at 4 passes per function; the space
@@ -1720,7 +1721,7 @@ an MSP430 enum return of 296 from printing as `(State)&FCTL1` instead of `BUSY`.
 An explicit global data declaration is authoritative at an exact address.
 Both `--assert 'data …'` surfaces — the in-process assertion plane and its
 `map address` console lowering — route through
-`crates/unlace-decomp/src/p0_knowledge/database.rs
+`crates/unlace-middle/src/p0_knowledge/database.rs
 (upsert_data_mapped)`. If analysis already planted non-function data there,
 the declaration retypes, resizes, and renames that mapping in place before
 setting its type/name locks; it does not add a second overlapping symbol.
@@ -2080,7 +2081,7 @@ installs its record with `over=false` so it never displaces an existing lock,
 and `HighVariable::getTypeRepresentative` prefers the locked member when the
 high's type is derived. The primitive extends exactly that plane to a call
 site. The lock is recorded in the P0 override store
-(`crates/unlace-decomp/src/p0_knowledge/overrides.rs
+(`crates/unlace-middle/src/p0_knowledge/overrides.rs
 (insert_output_typelock)`), keyed by the CALL op's address, engine-internal
 (not marshaled) like the `/GS` cookie-call and format-call commands, and
 surviving a decompilation restart like every other per-site override.
@@ -2180,7 +2181,7 @@ register pair (`rbx:rax`), not the pointer, so it refuses rather than mint a
 multi-word pointer that mislabels the wide storage. And a result whose SSA value
 is ever joined, through a phi, with a value of other provenance — a parameter, a
 global, a different allocation — refuses
-(`crates/unlace-decomp/src/substrate/funcdata.rs (site_value_is_pure)`),
+(`crates/unlace-middle/src/substrate/funcdata.rs (site_value_is_pure)`),
 because the forced type would propagate across the join onto a variable that is
 only *sometimes* that type; the per-site lock is also withheld from electing a
 HighVariable's representative when the high holds a foreign member, so a merge
@@ -2274,7 +2275,7 @@ each one's layout back, and declines any whose members are not all named
 parsed header) and is never handed out as the answer to an access pattern.
 A lookup therefore makes up to 1,024 name probes. Each probe is a binary search
 of the factory's name index, which is kept sorted by (name, id) as the C++
-`nametree` set is (`crates/unlace-decomp/src/substrate/dtype.rs
+`nametree` set is (`crates/unlace-middle/src/substrate/dtype.rs
 (find_by_id_local)`). The port used to scan the whole index on every probe. A
 lookup then cost the full ledger times every named type the program holds, and
 once a whole-image MSVC run filled the ledger, that cost grew to half of each
@@ -2607,7 +2608,7 @@ is different. No factory holds it: it is the `Datatype::new(size,
 TYPE_UNKNOWN)` skeleton that stands in for `getBase` where no factory is
 consulted. A pointer to it still reaches a field type, so every process builds
 it identically
-(`crates/unlace-decomp/src/substrate/dtype.rs
+(`crates/unlace-middle/src/substrate/dtype.rs
 (Datatype::is_unknown_placeholder)`), and it travels as itself. A type that
 differs from that skeleton in any property, the interned `undefined8`
 included, does not pass for it. Without that recipe, one onnxruntime.dll
@@ -3663,7 +3664,7 @@ the archived stage-model study (git history) §7.3; every claim below is re-veri
 the Rust).
 
 **Circular ranges.**
-`crates/unlace-decomp/src/substrate/rangeutil.rs (CircleRange)` is the
+`crates/unlace-middle/src/substrate/rangeutil.rs (CircleRange)` is the
 value domain: a half-open interval `[left, right)` on the circle of integers
 mod 2^n, with an optional power-of-two step. The circle (rather than a plain
 interval) is what lets one object exactly represent "signed negative", a
@@ -3671,7 +3672,7 @@ wrapped `x-c < k` guard, or a strided jump-table index. The per-opcode
 `pull_back_*` operators invert an op's effect on a range (given the output
 range, what was the input range), and `push_forward_*` run it forward. The
 live consumers are (a) jump-table recovery — the guard analysis in
-`crates/unlace-decomp/src/p2_lift/jumptable.rs (GuardRecord,
+`crates/unlace-middle/src/p2_lift/jumptable.rs (GuardRecord,
 circlerange_pull_back)` pulls the branch condition back to the switch variable
 to bound the case count (chapter 02), and (b) the boolean-expression melding
 rule `crates/unlace-decomp/src/p3_dataflow/ruleaction_1.rs
@@ -3698,7 +3699,7 @@ reached by iteration **3**. The reason for the two-stage schedule: one cheap
 guess (the landmark) is usually exactly the loop bound, and if it is not, more
 iteration is wasted work.
 
-The solver is bound to the live IR. `crates/unlace-decomp/src/substrate/rangeutil.rs
+The solver is bound to the live IR. `crates/unlace-middle/src/substrate/rangeutil.rs
 (ValueSetSolver::establish_value_sets)` seeds the system from a set of sink
 Varnodes (walking each sink's def chain and stopping at ops whose integer
 range is unknowable — calls, LOADs, floating point — which enter as
@@ -3733,7 +3734,7 @@ wider mask before complementation. Strided predicates and relative
 stack-pointer constraints keep their existing path.
 
 The solver's one in-tree client is the LoadGuard range refinement at
-`crates/unlace-decomp/src/p3_dataflow/heritage.rs (LoadGuard)`,
+`crates/unlace-middle/src/p3_dataflow/heritage.rs (LoadGuard)`,
 always on: at the end of each heritage
 pass the pointer of every newly discovered indexed-stack LOAD/STORE guard is
 solved for its `[min,max,step]` window (chapter
@@ -3746,7 +3747,7 @@ splits any element past index 3 of an indexed array into a separate
 never-assigned scalar — an *under*-sized array with out-of-bounds subscripts
 in the printed C (GH-182), not merely extra heritage conservatism.
 
-**Non-zero masks.** `crates/unlace-decomp/src/substrate/
+**Non-zero masks.** `crates/unlace-middle/src/substrate/
 funcdata_varnode.rs (Funcdata::calc_nz_mask)`, driven once per `mainloop` pass
 by `crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs
 (ActionNonzeroMask)`, computes for every Varnode the mask of bits that can
@@ -4129,9 +4130,9 @@ pairs, a switch and a selected store, off, on, and on with `swiftmetadata`;
 `s == "…"` tests compare both words inline, off and on.
 
 The **language-facet table** the rule consults is the multilang W3 plane's
-first slice (`crates/unlace-decomp/src/p0_knowledge/kuna_langfacet.rs
+first slice (`crates/unlace-middle/src/p0_knowledge/kuna_langfacet.rs
 (LangFacet)`): a name-keyed side record on the type factory
-(`crates/unlace-decomp/src/substrate/dtype.rs
+(`crates/unlace-middle/src/substrate/dtype.rs
 (kuna_register_lang_facet, kuna_lang_facet)`) stating what a C-shaped type
 *means* in the source language — `RustStr`, `RustSlice` — exactly the
 `VariantLayout` pattern, and for the same reason: `type_metatype`'s consumers
@@ -4243,7 +4244,7 @@ re-stored the field's old byte. `RuleBitFieldIn` likewise never takes a
 constant as a pull root.
 
 **Preferred splits**
-(`crates/unlace-decomp/src/p5_types/prefersplit.rs
+(`crates/unlace-middle/src/p5_types/prefersplit.rs
 (PreferSplitManager)`). The inverse of §5.5: some processors keep two logical
 values in one physical register (SIMD halves), and the spec can declare a
 `<prefersplit>` table of storage+offset records. Wherever the whole register
@@ -4253,7 +4254,7 @@ paired `test*`/`split*` guard, and the op-insertion order is transcribed
 exactly because it is output-determining); a second sweep (`split_additional`)
 cleans up temporaries the first sweep exposed. Honest port status: the
 transforms are ported and unit-tested, but the pass-0 heritage hook that
-drives them (`crates/unlace-decomp/src/p3_dataflow/heritage.rs
+drives them (`crates/unlace-middle/src/p3_dataflow/heritage.rs
 (Heritage::heritage)`) is a documented stub — inert for every architecture
 without split records, which is the entire current test surface, so no live
 output depends on it yet.

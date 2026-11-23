@@ -73,6 +73,7 @@
 use crate::funcdata_facing::FuncdataFacingExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::funcdata_union::FuncdataUnionExt;
+use crate::kuna_lang::OutLangExt;
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::KunaResult;
 use unlace_base::space::AddrSpace;
@@ -2698,7 +2699,6 @@ use crate::architecture::Architecture;
 use crate::cast::{CastContext, CastStrategy, CastStrategyC, OpRef, VnRef};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_lang::OutLangExt;
 use unlace_num::opcodes::OpCode;
 
 /// One resolved member token of a partial-symbol access walk (C++

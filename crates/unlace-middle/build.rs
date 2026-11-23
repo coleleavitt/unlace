@@ -1,4 +1,5 @@
-//! Generate the phase tables and string-valued option storage from `phases.toml`.
+//! Generate the phase tables and string-valued option storage from `phases.toml` (which stays in
+//! unlace-decomp, the catalog's home; `kuna_phases` in this crate includes the output).
 
 use std::fmt::Write as _;
 
@@ -9,8 +10,8 @@ use registry::{Group, Registry, Settable, Subphase, Surface};
 #[cfg(not(test))]
 fn main() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
-    let toml_path = std::path::Path::new(&manifest_dir).join("phases.toml");
-    println!("cargo:rerun-if-changed=phases.toml");
+    let toml_path = std::path::Path::new(&manifest_dir).join("../unlace-decomp/phases.toml");
+    println!("cargo:rerun-if-changed=../unlace-decomp/phases.toml");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build/registry.rs");
 
@@ -434,7 +435,7 @@ mod tests {
 
     #[test]
     fn shipped_registry_generates_the_compiled_tables() {
-        let generated = generate(include_str!("phases.toml")).unwrap();
+        let generated = generate(include_str!("../unlace-decomp/phases.toml")).unwrap();
         assert_eq!(
             generated,
             include_str!(concat!(env!("OUT_DIR"), "/phases_generated.rs"))
@@ -443,7 +444,8 @@ mod tests {
 
     #[test]
     fn live_mappings_are_complete_or_absent() {
-        let registry: Registry = toml::from_str(include_str!("phases.toml")).unwrap();
+        let registry: Registry =
+            toml::from_str(include_str!("../unlace-decomp/phases.toml")).unwrap();
         let mut row = registry.settable.into_iter().next().unwrap();
         for mask in 0..8 {
             row.live_field = (mask & 1 != 0).then(|| "flag".into());

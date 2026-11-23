@@ -62,17 +62,17 @@ pub fn default_pass_hooks() -> &'static KunaHooks {
 }
 
 macro_rules! declare_hooks {
-    ($($(#[$attr:meta])* $name:ident: $ty:ty;)*) => {
+    ($($(#[$attr:meta])* $name:ident: $(for<$($lt:lifetime),*>)? fn($($arg:ty),* $(,)?) $(-> $ret:ty)?;)*) => {
         /// The pass hooks, every one provided; call one as `(fd.hooks().name)(args)`.
         #[derive(Clone, Copy)]
         pub struct KunaHooks {
-            $($(#[$attr])* pub $name: $ty,)*
+            $($(#[$attr])* pub $name: $(for<$($lt),*>)? fn($($arg),*) $(-> $ret)?,)*
         }
 
         /// A [`KunaHooks`] under construction: each pass module's `provide` fills its slots.
         #[derive(Default)]
         pub struct KunaHookSlots {
-            $(pub $name: Option<$ty>,)*
+            $(pub $name: Option<$(for<$($lt),*>)? fn($($arg),*) $(-> $ret)?>,)*
         }
 
         impl KunaHookSlots {
@@ -90,7 +90,38 @@ macro_rules! declare_hooks {
                 }
             }
         }
+
+        #[cfg(test)]
+        impl KunaHooks {
+            /// A table whose every hook panics, naming itself: what this crate's own unit tests
+            /// run with, since the driver that provides the real hooks is a crate above this one.
+            fn unprovided() -> KunaHooks {
+                KunaHooks {
+                    $($name: {
+                        fn stub$(<$($lt),*>)?($(_: $arg),*) $(-> $ret)? {
+                            panic!(concat!(
+                                "pass hook `",
+                                stringify!($name),
+                                "` is provided by the driver (unlace-decomp), not linked into this test"
+                            ))
+                        }
+                        stub
+                    },)*
+                }
+            }
+        }
     };
+}
+
+/// This crate's unit tests link without the driver, so they define the driver's symbol
+/// themselves, as a table of hooks that panic when called ([`KunaHooks::unprovided`]).
+#[cfg(test)]
+mod unprovided {
+    #[unsafe(no_mangle)]
+    fn __unlace_default_pass_hooks() -> &'static super::KunaHooks {
+        static HOOKS: std::sync::OnceLock<super::KunaHooks> = std::sync::OnceLock::new();
+        HOOKS.get_or_init(super::KunaHooks::unprovided)
+    }
 }
 
 declare_hooks! {
@@ -623,4 +654,6 @@ declare_hooks! {
     globalorder_copy_moves_write: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> bool;
     /// `kuna_guardedreadtrim::guarded_block`.
     guardedreadtrim_guarded_block: fn(&Funcdata, VarnodeId, &[OpId]) -> Option<BlockId>;
+    /// `kuna_option_dispatch`: validate and apply a named kuna option.
+    set_kuna_option: fn(&mut Architecture, &str, &str) -> KunaResult<String>;
 }

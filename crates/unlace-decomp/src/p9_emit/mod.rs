@@ -115,7 +115,6 @@ pub mod kuna_widelocal;
 pub mod prettyprint;
 pub mod printc;
 pub mod printlanguage;
-pub mod stringmanage; // (kuna) the token-level source map of a rendered function
 
 pub(crate) mod kuna_stackmarkers;
 pub(crate) mod kuna_stackversions;

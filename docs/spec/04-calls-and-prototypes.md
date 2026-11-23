@@ -283,13 +283,14 @@ the positional rule; outside Objective-C images the option is inert.
 ```yaml
 Anchors:
   - crates/unlace-decomp/src/p4_calls
+  - crates/unlace-middle/src/p4_calls
 ```
 
 This phase computes the **interface contract of every call**: which storage
 locations carry parameters into each sub-function call, which location carries
 each call's return value, and what the analyzed function's *own* prototype is.
 Its artifacts are one `FuncCallSpecs` per CALL/CALLIND site and one `FuncProto`
-for the function itself (`crates/unlace-decomp/src/p4_calls/fspec.rs
+for the function itself (`crates/unlace-middle/src/p4_calls/fspec.rs
 (FuncCallSpecs, FuncProto)`). Everything runs in two directions over the same
 storage model: the **assignment** direction (a declared prototype's data-types
 are mapped to registers/stack per the calling convention, §4.1) and the
@@ -305,14 +306,14 @@ fixation runs in the tail. Option metadata lives in the generated catalog,
 
 ### The model
 
-A `ProtoModel` (`crates/unlace-decomp/src/p4_calls/fspec.rs
+A `ProtoModel` (`crates/unlace-middle/src/p4_calls/fspec.rs
 (ProtoModel)`) is one named calling convention: an input and an output resource
 list (`ParamListStandard`), the *extrapop* (how far the callee moves the stack
 pointer past the return-address pop; `EXTRAPOP_UNKNOWN = 0x8000` means
 "callee-cleanup, amount unknown"), the side-effect lists (§4.3), the
 likely-trash and internal-storage register lists, the local/parameter stack
 ranges, and optional entry/return p-code injections. Models are decoded from
-the compiler spec at engine build: `crates/unlace-decomp/src/infra/architecture.rs
+the compiler spec at engine build: `crates/unlace-middle/src/infra/architecture.rs
 (decode_default_proto, decode_pentry_list, decode_effect_block)` parses the
 cspec's `<default_proto><prototype>` — its `<pentry>`/`<group>` storage
 entries, `<rule>` model rules, a synthetic pointer-conversion rule when the
@@ -408,7 +409,7 @@ conventions keep their own allocation rules.
 The model's stack ranges come from the spec too, as upstream `ProtoModel::decode`
 takes them (§6.2): the parameter range is every stack `<pentry>` of `<input>` plus any
 `<paramrange>`, and the local range is the `<localrange>` element
-(`crates/unlace-decomp/src/infra/architecture.rs (decode_proto_ranges)`).
+(`crates/unlace-middle/src/infra/architecture.rs (decode_proto_ranges)`).
 Only a spec that states neither keeps `defaultParamRange` (stack 0..511) and
 `defaultLocalRange` (the million bytes below the return address). The
 difference is visible: x86-64-win.cspec declares the caller-allocated home
@@ -426,7 +427,7 @@ open array there ran on through the parameter range. kuna's copy sign-extends
 it, as x86-64-gcc.cspec does; an array at `fp+0x7fb` now ends at the frame.
 
 The spec's **named** models are registered alongside it, in document order
-(`crates/unlace-decomp/src/infra/architecture.rs (decode_named_protos,
+(`crates/unlace-middle/src/infra/architecture.rs (decode_named_protos,
 decode_resolve_proto)`, mirroring the `<prototype>`/`<resolveprototype>`/
 `<modelalias>` arms of the C++ `parseCompilerConfig` dispatch). A top-level
 `<prototype>` decodes through the same body as the default one, so a named
@@ -455,18 +456,18 @@ The first is a **declaration that names its convention** — `--assert 'prototyp
 extern` behind it (00 §0.2). The parser only classifies an identifier as a
 convention because the registry names it, so the resolution cannot fail: the
 resolved `ProtoModel` is recorded against the function
-(`crates/unlace-decomp/src/infra/architecture.rs
+(`crates/unlace-middle/src/infra/architecture.rs
 (Architecture::set_function_prototype_model)`) and used in both directions. The
 function's own prototype is seeded under it rather than under `defaultfp`, and
 the prototype-bearing `TypeCode` the declaration locks onto the symbol is built
 under it too — which is the copy a CALLER reads (`ArchContext::query_callee_proto`
 / `ArchContext::callee_proto_model`,
-`crates/unlace-decomp/src/substrate/context.rs`), so declaring a callee
+`crates/unlace-middle/src/substrate/context.rs`), so declaring a callee
 `__fastcall` moves where the caller's arguments come from. Without that second
 half the keyword would parse and change nothing, which is the failure mode the
 directive exists to avoid. The other two are
 `option defaultprototype` / `option protoeval`
-(`crates/unlace-decomp/src/p0_knowledge/options.rs (OptionDefaultPrototype,
+(`crates/unlace-middle/src/p0_knowledge/options.rs (OptionDefaultPrototype,
 OptionProtoEval)`) — the ABI-trust knob of the `abi-trust` sub-phase row in
 `crates/unlace-decomp/phases.toml`. Those options are what the registry
 makes usable: on an x86 PE target `option defaultprototype __thiscall`
@@ -474,7 +475,7 @@ resolves and recovers the ECX `this` pointer as the first parameter, where
 before it failed with "Unknown prototype model". The demangler assigns a model
 automatically only for an MSVC name, which states its convention (`msvcsig`,
 01): the model is recorded against the function's entry ADDRESS
-(`crates/unlace-decomp/src/infra/architecture.rs
+(`crates/unlace-middle/src/infra/architecture.rs
 (Architecture::set_function_prototype_model_at)`), because the name-keyed record
 above is shared by every function of one spelling and an MSVC import set carries
 overloads (`Arr::Arr()` and `Arr::Arr(class Arr const &)`); a name-keyed
@@ -488,7 +489,7 @@ DWARF `DW_AT_object_pointer` is not wired.
 Registration is not the whole story, because a spec can also **nominate** one of
 its registered models for evaluating a function's own unlocked prototype:
 `<eval_current_prototype name=…>` (always honored;
-`crates/unlace-decomp/src/p0_knowledge/kuna_evalcurrentproto.rs
+`crates/unlace-middle/src/p0_knowledge/kuna_evalcurrentproto.rs
 (eval_current_model_name)`). The nominated model is looked up at
 `<default_proto>` time and handed to each function through the arch handle, where
 `ActionPrototypeTypes` installs it on any prototype that is not model-locked —
@@ -504,7 +505,7 @@ slot.
 What the nomination buys is the **merged-model machinery** — a
 `ProtoModelMerged` union whose `FuncProto::resolveModel` picks the constituent
 best fitting the observed trials via `ScoreProtoModel`
-(`crates/unlace-decomp/src/p4_calls/fspec.rs (ProtoModel::select_model,
+(`crates/unlace-middle/src/p4_calls/fspec.rs (ProtoModel::select_model,
 ScoreProtoModel)`) — which was fully ported but had no live producer: `resolve_model`
 short-circuits on a non-merged model, and the default model is never merged, so
 before the nomination was read the union only ran when a merged model was named by
@@ -522,12 +523,12 @@ or an unmappable trial costs 20, lowest total wins, starting threshold 500
 
 ### ParamEntry: the storage atoms
 
-A `ParamEntry` (`crates/unlace-decomp/src/p4_calls/fspec.rs
+A `ParamEntry` (`crates/unlace-middle/src/p4_calls/fspec.rs
 (ParamEntry)`) is one range of memory usable for parameter passing. Two shapes:
 an **exclusion** entry (`alignment == 0`) holds exactly one parameter (a
 register — using EAX consumes the whole RAX group), and an **aligned resource**
 is carved into slots (the stack parameter area). Each entry carries a storage
-class (`crates/unlace-decomp/src/substrate/dtype.rs (type_class)` —
+class (`crates/unlace-middle/src/substrate/dtype.rs (type_class)` —
 general/float/pointer/hiddenret/vector, plus the reserved class1–class4), the group(s) it occupies, minimum and
 maximum value sizes, endian-aware justification, and the extension the model
 assumes for undersized values (zero/sign/float/int-dependent). The
@@ -574,7 +575,7 @@ extent to recover a four-byte trial for an inferred result read as a whole
 register. Neither path enlarges the return slots or enables generic call-overlap
 recovery. Overlapping alternative entries do not supply an unconditional extension.
 
-The `ParamListStandard` kinds (`crates/unlace-decomp/src/p4_calls/fspec.rs
+The `ParamListStandard` kinds (`crates/unlace-middle/src/p4_calls/fspec.rs
 (ParamListKind)`) collapse the upstream subclass tree into one struct: `Standard`
 (ordered input resources), `StandardOut` / `RegisterOut` (return-value storage),
 `Register` (unordered register sets — order-free conventions), and `Merged`.
@@ -585,7 +586,7 @@ The `ParamListStandard` kinds (`crates/unlace-decomp/src/p4_calls/fspec.rs
 (`PrototypePieces`) to concrete storage: the output list first, then the input
 list, each walk threading a per-group `status` array so an exclusion group one
 parameter consumes blocks every later parameter in that list
-(`crates/unlace-decomp/src/p4_calls/fspec.rs
+(`crates/unlace-middle/src/p4_calls/fspec.rs
 (ProtoModel::assign_parameter_storage, ParamListStandard::assign_map)`); the
 output hands its verdict to the input walk through the result list itself (a
 hidden-return marker there claims the first input slot). Per
@@ -615,7 +616,7 @@ placements remain the caller's asserted contract. An impossible automatic
 placement raises a parameter-assignment error.
 
 The rules themselves live in
-`crates/unlace-decomp/src/p4_calls/modelrules.rs (ModelRule,
+`crates/unlace-middle/src/p4_calls/modelrules.rs (ModelRule,
 AssignAction, DatatypeFilter, QualifierFilter)`. A `ModelRule` is a data-type
 filter (size bounds, a metatype, or a homogeneous float aggregate of up to 4
 primitives), an optional prototype qualifier (varargs position range, absolute
@@ -742,7 +743,7 @@ and trailing padding. Zero join pieces represent unspecified padding without
 inventing a physical register dependency; heritage discards writes to them.
 This form is restricted
 to output resources. The opt-in implementation is in
-`crates/unlace-decomp/src/p4_calls/kuna_aggregateabi.rs`. N32 preserves even f20..f30 and N64 preserves
+`crates/unlace-middle/src/p4_calls/kuna_aggregateabi.rs`. N32 preserves even f20..f30 and N64 preserves
 f24..f31; other FPRs and v0/v1 are call-clobbered. Original GCC 7.3 and 4.7
 fixtures cover both hard-float ABIs without a compiler dependency in CI.
 The selected Octeon compiler ID also supplies the floating-point convention to
@@ -763,7 +764,7 @@ and declared calls at the 32-bit pointer / 64-bit result boundary.
 ### Recovery: trials → parameters
 
 The recovery direction runs on `ParamTrial`/`ParamActive`
-(`crates/unlace-decomp/src/p4_calls/fspec.rs (ParamTrial,
+(`crates/unlace-middle/src/p4_calls/fspec.rs (ParamTrial,
 ParamActive)`): one trial per storage location that *might* be a parameter,
 carrying its life-cycle flags (checked, active, used, definitely-not-used,
 unreferenced) and its evidence bits (killed-by-call — set heuristically at
@@ -1401,9 +1402,9 @@ nothing.
 **The trial budget.** A `ParamActive` freezes when `numpasses > maxpass`.
 `maxpass` is 0 (one look) unless the model's parameter registers have a
 non-zero heritage delay, in which case it is fixed at 3 (a delay of 1 or 2 is raised, not capped)
-(`crates/unlace-decomp/src/p4_calls/fspec.rs
+(`crates/unlace-middle/src/p4_calls/fspec.rs
 (FuncCallSpecs::init_active_input)`,
-`crates/unlace-decomp/src/substrate/funcdata.rs
+`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::init_active_output)`). This is the `trial-budget` sub-phase of
 `crates/unlace-decomp/phases.toml` — recorded there as LATENT: no
 user surface sets it today.
@@ -1424,7 +1425,7 @@ Everything below is *recovery* — what runs when the function's prototype is
 unknown. Before any of it, the drive
 (`crates/unlace-decomp/src/infra/decompile_drive.rs`) asks whether the
 signature is already known, and locks it if so
-(`crates/unlace-decomp/src/substrate/funcdata.rs
+(`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::apply_locked_prototype)`). The model it is locked under is the one the
 declaration named when it named one (§4.1), else the architecture default, with
 two exceptions: on an ARM image that states the soft-float convention and no
@@ -1515,7 +1516,7 @@ at the match (01 §1.4).
 - **`ActionDefaultParams`** (`coreaction_protos.rs (ActionDefaultParams)`)
   gives every call spec a model: a callee with a source-declared prototype
   gets a locked copy re-built from the pieces parked on its global symbol
-  (`crates/unlace-decomp/src/infra/architecture.rs
+  (`crates/unlace-middle/src/infra/architecture.rs
   (Architecture::callee_proto_pieces)`); everything else gets the
   called-function evaluation model with a void internal store. (kuna) A
   callee whose parked pieces contain *only* custom return storage — what the
@@ -1812,10 +1813,10 @@ at the match (01 §1.4).
   (`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
   (ActionStackPtrFlow)`, its home by port history) and, per-function, to
   `option extrapop`
-  (`crates/unlace-decomp/src/p0_knowledge/options.rs
+  (`crates/unlace-middle/src/p0_knowledge/options.rs
   (OptionExtraPop)`). With a function name, `option extrapop <n> <name>`
   parks `n` on that FunctionSymbol
-  (`crates/unlace-decomp/src/p0_knowledge/database.rs
+  (`crates/unlace-middle/src/p0_knowledge/database.rs
   (Database::set_function_extra_pop)`). `ActionDefaultParams` copies it into
   every call spec that targets the function, as upstream copies the callee's
   own prototype, and the function's own prototype takes it when it is
@@ -1948,7 +1949,7 @@ at the match (01 §1.4).
   when the pinned ones agree.
 
   The call sites found not to return are recorded on the function's override
-  (`crates/unlace-decomp/src/p0_knowledge/overrides.rs
+  (`crates/unlace-middle/src/p0_knowledge/overrides.rs
   (insert_no_return_call)`), a restart is requested, and the next flow ends
   those calls where it ends a call to a named no-return function; a site
   already recorded asks for no further restart. A direct callee with no
@@ -1983,7 +1984,7 @@ at the match (01 §1.4).
   (`set_stack_output_lock`); unlocked → `init_active_output`. When stack
   parameters may exist but the call-time stack offset is unknown, a
   **spacebase placeholder** input is appended
-  (`crates/unlace-decomp/src/p4_calls/fspec.rs
+  (`crates/unlace-middle/src/p4_calls/fspec.rs
   (FuncCallSpecs::create_placeholder)`), resolved later in §4.3. The
   `jumptable` root variant swaps this for **`ActionFuncLinkOutOnly`** (group
   `noproto`): outputs are still guarded — otherwise callee return registers
@@ -1993,7 +1994,7 @@ at the match (01 §1.4).
 ### Trials are populated by heritage
 
 The trial containers fill during SSA construction, not in P4 passes: when
-heritage processes an address range, `crates/unlace-decomp/src/p3_dataflow/heritage.rs
+heritage processes an address range, `crates/unlace-middle/src/p3_dataflow/heritage.rs
 (Heritage::guard_calls)` asks each call spec how the range relates to the
 model. A justified input candidate registers an input trial *and appends the
 Varnode to the CALL op*; an output candidate registers an output trial and —
@@ -2235,12 +2236,12 @@ classified:
   jump read its target from (`fspec.rs (FuncCallSpecs::carries_jump_target)`).
   A register trial overlapping it is no-use: at the call it holds the callee's
   own address, so `ldr r1,=f; bx r1` never prints `f(a0,f)`.
-- **Ancestor analysis** (`crates/unlace-decomp/src/substrate/funcdata_varnode.rs
+- **Ancestor analysis** (`crates/unlace-middle/src/substrate/funcdata_varnode.rs
   (AncestorRealistic, Funcdata::ancestor_op_use)`): the trial is *active* only
   if the value reaching the call has a realistic def chain (not an INDIRECT
   fabrication, not uninitialized junk) **and** the Varnode's only role (within
   a recursion budget, `trim_recurse_max`, default 5 —
-  `crates/unlace-decomp/src/infra/architecture.rs
+  `crates/unlace-middle/src/infra/architecture.rs
   (reset_defaults_internal)`) is feeding this call. A read by *another* call
   is admitted when that call provably takes the same value as the same
   parameter (`funcdata_varnode.rs (Funcdata::check_call_double_use)` — same
@@ -2267,7 +2268,7 @@ classified:
   of a few stack trials walked 14-16 million paths and took 12-35 s, and
   `ActionActiveParam` was still running after 35 minutes. One call to
   `ancestor_op_use` now keeps a memo of the steps that found no use
-  (`crates/unlace-decomp/src/substrate/funcdata_varnode.rs
+  (`crates/unlace-middle/src/substrate/funcdata_varnode.rs
   (AncestorMemo)`). A step's key is the Varnode plus the offset and flags it
   is reached with. With the answer, the memo records which marked MULTIEQUALs
   above the step cut off a path below it, and the level, if any path ended at
@@ -2284,7 +2285,7 @@ classified:
 
   *(unlace decompile-all watchdog)* Every `ancestor_op_use` step and every step
   of an `only_op_use` walk also probes the drive's budget through
-  `crates/unlace-decomp/src/substrate/kuna_budget.rs (budget_probe)`;
+  `crates/unlace-middle/src/substrate/kuna_budget.rs (budget_probe)`;
   once it is spent the walks answer *not a parameter* at once, and
   `check_input_trial_use` asks the clock before each trial, so it stops at the
   next one and names `action activeparam` as the budget's site. The drive then
@@ -3041,7 +3042,7 @@ That collection walks *backwards* from the CALL and stops at the first op that
 is not a `CPUI_INDIRECT`, so it is exact only while the guard INDIRECTs form one
 unbroken run immediately before the CALL. Upstream keeps that run whole from both
 sides: `op_insert_before` skips back over it, and `op_insert_after`
-(`crates/unlace-decomp/src/substrate/funcdata_op.rs (Funcdata::op_insert_after)`)
+(`crates/unlace-middle/src/substrate/funcdata_op.rs (Funcdata::op_insert_after)`)
 redirects — asked to insert after an INDIRECT marker it decodes the iop annotation
 in the marker's second input and inserts after the CALL (or STORE) that marker
 speaks for. kuna carried that redirect as a stub, so an op inserted after a guard
@@ -3160,7 +3161,7 @@ long` in `r3:r4` with the high word in `r3`, MIPS o32 in `$2:$3`, SPARC in
 endianness: `reversesignif` flips it, and AVR's gcc spec, little-endian, lists
 `R25` first and joins with `reversesignif="true"`, so its `int` comes back with
 the high byte in `R25`, the first register, too
-(`crates/unlace-decomp/src/p4_calls/fspec.rs (ParamActive::join_pair_order)`).
+(`crates/unlace-middle/src/p4_calls/fspec.rs (ParamActive::join_pair_order)`).
 Upstream joins the first register low everywhere, so on those ABIs a genuine
 `long long` printed its halves swapped (`wide_mul` as `CONCAT44(low,high)`). A
 little-endian rule without `reversesignif` never sets the flag, so its joins are
@@ -4201,7 +4202,7 @@ the schedule so the materialized tree stays byte-equal to the upstream oracle
 (00 §0.6): `ActionParamDouble` (double-precision split/join of call arguments;
 its `apply` carries the transcribed upstream body as pseudocode and performs
 no rewrites — the ported `FuncCallSpecs::check_input_join`/`do_input_join`
-surface in `crates/unlace-decomp/src/p4_calls/fspec.rs` waits on this
+surface in `crates/unlace-middle/src/p4_calls/fspec.rs` waits on this
 driver) and `ActionPrototypeWarnings` (prototype-error headers; the warning
 channel exists but nothing is emitted). Failure modes: a genuinely split
 two-register argument is passed as two separate arguments, and a prototype
@@ -4210,7 +4211,7 @@ S4-grouped passes live outside this folder by port history:
 `crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (ActionDirectWrite)` — the `protorecovery_a` paint of Varnodes reachable from
 legal parameter sources that ancestor realism consumes (the `decompile` root
-enables the INDIRECT-propagating variant, `crates/unlace-decomp/src/infra/action.rs
+enables the INDIRECT-propagating variant, `crates/unlace-middle/src/infra/action.rs
 (build_default_groups)`) — and `crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (ActionUnjustifiedParams)`, the fullloop-tail repair that re-justifies an
 input recovered off-center in its containing entry.
@@ -4222,12 +4223,12 @@ input recovered off-center in its containing entry.
 Call specs are born at lift time: `crates/unlace-decomp/src/p2_lift/flow.rs
 (FlowInfo::setup_call_specs, FlowInfo::setup_callind_specs,
 FlowInfo::build_call_specs)` creates a `FuncCallSpecs` per CALL/CALLIND and
-pushes it onto the function's spec list (`crates/unlace-decomp/src/substrate/funcdata.rs
+pushes it onto the function's spec list (`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::num_calls)`, the upstream `qlst`). A direct CALL's input 0 is
 replaced by an **fspec annotation**: a Varnode in the reserved fspec address
 space whose offset is a process-unique handle into a side table mapping back
 to the spec (`crates/unlace-decomp/src/p2_lift/flow.rs
-(next_fspec_handle)`, `crates/unlace-decomp/src/p4_calls/fspec.rs
+(next_fspec_handle)`, `crates/unlace-middle/src/p4_calls/fspec.rs
 (FuncCallSpecs::register_in_fspec_space)`) — the arena-safe replacement for
 the upstream pointer-cast-into-offset trick. A CALLIND keeps the computed
 target Varnode in slot 0, which is exactly what the printer renders as
@@ -4247,13 +4248,13 @@ direct and indirect calls.
 
 Every call's data-flow shadow is the effect list: address-sorted
 `EffectRecord`s of type **unaffected**, **killedbycall**, or
-**return_address** (`crates/unlace-decomp/src/p4_calls/fspec.rs
+**return_address** (`crates/unlace-middle/src/p4_calls/fspec.rs
 (EffectRecord, effect_type)`), decoded from the cspec per model, overridable
 per call site (`FuncProto::effect_list` prefers the prototype's own list and
 falls back to the model's; lookup is `ProtoModel::lookup_effect` — a
 zero-size record blankets its whole space, and unique-space temporaries are
 always unaffected). Heritage consumes the verdicts
-(`crates/unlace-decomp/src/p3_dataflow/heritage.rs
+(`crates/unlace-middle/src/p3_dataflow/heritage.rs
 (Heritage::guard_calls)`): *unaffected* ranges flow through the call
 untouched; *killedbycall* ranges become INDIRECT creations (fabricated-value
 markers — and return-value seeds when the range is an output candidate);
@@ -4265,7 +4266,7 @@ pointer, skewing the entire frame layout.
 
 The mirror failure is an output register missing from the killed set. A model
 whose `<output>` carries no `<rule>` kills its output registers on its own
-(`crates/unlace-decomp/src/p4_calls/fspec.rs
+(`crates/unlace-middle/src/p4_calls/fspec.rs
 (ParamListStandard::initialize)`); one with rules relies on its `<killedbycall>`
 list. The vendored SPARC specs have output rules (the `%o0:%o1` and float joins)
 and listed no killed registers, so `%o0` crossed every call as an unknown
@@ -4304,7 +4305,7 @@ stack-pointer value *at that site* is known. `ActionFuncLink` appends a
 placeholder input (§4.2); once simplification collapses the placeholder's
 pointer to `spacebase + constant`, the rule-pool hook
 `crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs
-(RuleLoadVarnode)` fires `crates/unlace-decomp/src/p4_calls/fspec.rs
+(RuleLoadVarnode)` fires `crates/unlace-middle/src/p4_calls/fspec.rs
 (FuncCallSpecs::resolve_spacebase_relative)`: the spec records the relative
 stack offset, and stack trials can from then on be translated between callee-
 and caller-relative addresses (`build_input_from_trials`,
@@ -4325,7 +4326,7 @@ forever — rendering as a trailing argument past the declared arity, reading th
 very stack slot the `call` pushed its return address into, and contradicting the
 prototype the same output declares. The unconditional strip is therefore the
 stack space's own heritage step: once
-`crates/unlace-decomp/src/p3_dataflow/heritage.rs (Heritage::heritage)`
+`crates/unlace-middle/src/p3_dataflow/heritage.rs (Heritage::heritage)`
 reaches a spacebase space it flagged `has_call_placeholders`, it calls
 `abort_spacebase_relative` on **every** call spec in the function before
 heritaging that space, whether or not the site resolved. The placeholder has
@@ -4341,10 +4342,10 @@ CALLIND whose target Varnode — chased through COPYs — resolves to a known
 function: an external-reference symbol, or a constant converted to a code
 address (masked by `funcptr_align` when the architecture encodes bits in
 function pointers). On a hit,
-`crates/unlace-decomp/src/p4_calls/fspec.rs (FuncCallSpecs::deindirect)`
+`crates/unlace-middle/src/p4_calls/fspec.rs (FuncCallSpecs::deindirect)`
 rewrites the op to a direct CALL with a fresh fspec annotation and immediately
 persists the lesson into P0:
-`crates/unlace-decomp/src/p0_knowledge/overrides.rs
+`crates/unlace-middle/src/p0_knowledge/overrides.rs
 (Override::insert_indirect_override)` keyed by the site address, so a restart
 re-lifts the site as a direct call from the start
 (`FlowInfo::setup_callind_specs` consults the override before building specs).
@@ -4382,7 +4383,7 @@ forwarded-value rule. The format evidence parser remains restricted to promoted 
 Failure sets the restart-pending
 flag — the P4 → Band B feedback edge of 00 §0.7, bounded and executed by the
 drive — (kuna) recording `ProtoDeindirect` in the restart log
-(`crates/unlace-decomp/src/p0_knowledge/kuna_restartlog.rs
+(`crates/unlace-middle/src/p0_knowledge/kuna_restartlog.rs
 (RestartLog)`). The reasoning: by the time the target resolves, heritage has
 already committed guards and trials under the wrong prototype; edits cannot be
 made backwards, but the Override survives `Funcdata::clear`, so the re-run
@@ -4394,7 +4395,7 @@ has started, if the target Varnode's read-facing type is a pointer to a code
 type that carries a prototype — a function-pointer struct field, local or
 parameter declared through the C grammar — and the call site's inputs are not
 yet locked, the arm forces that prototype onto the site with
-`crates/unlace-decomp/src/p4_calls/fspec.rs (FuncCallSpecs::force_set)`.
+`crates/unlace-middle/src/p4_calls/fspec.rs (FuncCallSpecs::force_set)`.
 The lock test is what makes the arm fire at most once per site, and it is also
 why an existing lock wins: a user `override prototype` at the call address, or
 a prototype an earlier pass already forced, is never replaced. A target with no
@@ -4537,7 +4538,7 @@ recovered `float` return is still read from `s0` at its callers.
 
 `force_set` first saves a copy of the full `FuncProto` — model, storage, locks
 and all — into the function's Override store keyed by the call address
-(`crates/unlace-decomp/src/p0_knowledge/overrides.rs
+(`crates/unlace-middle/src/p0_knowledge/overrides.rs
 (FuncProtoOverride::prototype)`). It then tries `late_restriction`, the same
 in-place merge as above. A locked output in join storage requires a
 restart unless the call already defines that exact address and full size (`crates/unlace-decomp/src/p4_calls/kuna_joincalloutput.rs
@@ -4578,7 +4579,7 @@ jump-table sub-decompilation like every other feedback edge (00 §0.7).
 
 **The prototype wire encode.** The recovered prototype marshals out for the
 ghidra-mode `decompileAt` response through the `FuncProto::encode` port
-(`crates/unlace-decomp/src/p4_calls/fspec.rs (FuncProto::encode)`):
+(`crates/unlace-middle/src/p4_calls/fspec.rs (FuncProto::encode)`):
 the model name (a model-less fixture degrades to the `"default"` spelling
 Java maps onto the program default), the extrapop (the reserved
 `EXTRAPOP_UNKNOWN` spells the string `"unknown"`), the eight boolean flag
@@ -5024,7 +5025,7 @@ list, so only the threshold changes there.
 A convention can be bound to a function without a signature: the analysis
 tier's `(addr, model)` facts land in `Architecture::loader_proto_models` and
 reach every function's handle as `ArchContext::bound_proto_models`
-(`crates/unlace-decomp/src/substrate/context.rs
+(`crates/unlace-middle/src/substrate/context.rs
 (ArchContext::bound_proto_model)`). The function's own decompile, when no
 prototype is declared for it, sets the model on its prototype and locks the
 model alone, so `ActionPrototypeTypes` keeps it and input recovery runs under
@@ -5507,7 +5508,7 @@ double-width return type. The extension is a one-line gate at the join point:
 (ActionReturnRecovery::build_return_output)` — when `option returnpair single`
 is set, a gathered multi-register return is truncated to its first
 (least-significant) register instead of joined. The flag rides
-`crates/unlace-decomp/src/infra/architecture.rs (Architecture)`
+`crates/unlace-middle/src/infra/architecture.rs (Architecture)`
 (`return_single`, default `false` = upstream `pair` behavior) and is copied
 into the per-function snapshot per 00 §0.5.
 
@@ -5539,7 +5540,7 @@ the same order.
 
 When the walk fails at a non-directwrite
 function input read by op `m`
-(`crates/unlace-decomp/src/substrate/funcdata_varnode.rs
+(`crates/unlace-middle/src/substrate/funcdata_varnode.rs
 (AncestorRealistic::input_fail_reader)`), and `m` is a MULTIEQUAL in a block
 `ActionConditionalExe` could thread — two in-edges that lead back through
 straight-line blocks to one block ending in a CBRANCH, two out-edges, and a
@@ -5616,7 +5617,7 @@ return 7; }` printed `void pick(int a0)`.
 A sole-use walk matched at a RETURN
 that fails, and that passed through a MULTIEQUAL in a merge block of the shape
 the retry pass uses, is walked once more
-(`crates/unlace-decomp/src/substrate/funcdata_varnode.rs
+(`crates/unlace-middle/src/substrate/funcdata_varnode.rs
 (Funcdata::only_op_use)`). In the repeated walk, a value that enters such a
 MULTIEQUAL through exactly one in-edge fixes the merge's branch for that
 execution: the edge leads back through straight-line blocks to one out-edge of
@@ -5638,7 +5639,7 @@ visited (block, in-edge) states every block counts as reachable.
 A skipped use is one the value being scored cannot reach. Skipping uses is
 only half of the argument, though: the repeated walk passes only if it also
 reaches the RETURN slot being matched through a use it did not skip
-(`crates/unlace-decomp/src/substrate/funcdata_varnode.rs
+(`crates/unlace-middle/src/substrate/funcdata_varnode.rs
 (Funcdata::only_op_use_walk)`). Without that, a value whose forced branch
 leads away from the RETURN would pass with nothing checked: in
 `cmp r0,#0; moveq r0,#7; beq 1f; str r0,[r1]; bx lr; 1: b 1b` the 7 goes

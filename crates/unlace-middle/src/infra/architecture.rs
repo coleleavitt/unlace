@@ -230,7 +230,8 @@ impl CommentDatabase {
         &self.comments
     }
 
-    pub(crate) fn retain_comments(&mut self, keep: impl FnMut(&ArchWarning) -> bool) {
+    #[doc(hidden)]
+    pub fn retain_comments(&mut self, keep: impl FnMut(&ArchWarning) -> bool) {
         self.comments.retain(keep);
     }
 
@@ -924,7 +925,8 @@ pub struct Architecture {
 ///
 /// Dropping it leaves the scope; the depth is shared with the `Architecture`, so
 /// an unwinding drive still balances the count.
-pub(crate) struct KunaDriveScope {
+#[doc(hidden)]
+pub struct KunaDriveScope {
     depth: std::rc::Rc<std::cell::Cell<u32>>,
 }
 
@@ -999,6 +1001,12 @@ impl Architecture {
     /// The pass hooks this architecture's contexts start with ([`crate::kuna_passhooks`]).
     pub fn pass_hooks(&self) -> &'static crate::kuna_passhooks::KunaHooks {
         default_pass_hooks()
+    }
+
+    /// Validate and apply a named kuna option to its live configuration (the driver's
+    /// dispatch, `kuna_option_dispatch`, through the pass hooks).
+    pub fn set_kuna_option(&mut self, name: &str, value: &str) -> KunaResult<String> {
+        (self.pass_hooks().set_kuna_option)(self, name, value)
     }
 
     /// Construct an `Architecture` over an already-initialized disassembly
@@ -4538,7 +4546,8 @@ impl Architecture {
     /// unwinds still keeps the depth balanced.
     ///
     /// [`decompile_func_full_with_objects`]: crate::decompile_drive::decompile_func_full_with_objects
-    pub(crate) fn kuna_drive_scope(&self) -> KunaDriveScope {
+    #[doc(hidden)]
+    pub fn kuna_drive_scope(&self) -> KunaDriveScope {
         let depth = std::rc::Rc::clone(&self.kuna_drive_depth);
         depth.set(depth.get() + 1);
         KunaDriveScope { depth }
@@ -4547,7 +4556,8 @@ impl Architecture {
     /// Does the active drive own the Architecture's externally visible output?
     /// True outside a drive (a standalone flow build keeps its old behaviour)
     /// and for the outermost drive; false for a nested recovery drive.
-    pub(crate) fn kuna_drive_publishes(&self) -> bool {
+    #[doc(hidden)]
+    pub fn kuna_drive_publishes(&self) -> bool {
         self.kuna_drive_depth.get() <= 1
     }
 
@@ -6166,18 +6176,18 @@ pub enum VarargFloats {
 /// The System V argument registers, present only where the pass applies.
 #[derive(Clone)]
 pub struct Regs {
-    pub(crate) sp: unlace_num::pcoderaw::VarnodeData,
-    pub(crate) gp: Vec<unlace_num::pcoderaw::VarnodeData>,
-    pub(crate) xmm: Vec<unlace_num::pcoderaw::VarnodeData>,
-    pub(crate) caller_saved: Vec<(Vec<u8>, Option<unlace_num::pcoderaw::VarnodeData>)>,
+    pub sp: unlace_num::pcoderaw::VarnodeData,
+    pub gp: Vec<unlace_num::pcoderaw::VarnodeData>,
+    pub xmm: Vec<unlace_num::pcoderaw::VarnodeData>,
+    pub caller_saved: Vec<(Vec<u8>, Option<unlace_num::pcoderaw::VarnodeData>)>,
 }
 
 #[derive(Clone)]
 pub struct Storage {
-    pub(crate) free: u64,
-    pub(crate) top: unlace_num::pcoderaw::VarnodeData,
-    pub(crate) tags: unlace_num::pcoderaw::VarnodeData,
-    pub(crate) bank: Vec<unlace_num::pcoderaw::VarnodeData>,
+    pub free: u64,
+    pub top: unlace_num::pcoderaw::VarnodeData,
+    pub tags: unlace_num::pcoderaw::VarnodeData,
+    pub bank: Vec<unlace_num::pcoderaw::VarnodeData>,
 }
 
 /// The release-dependent pieces of the runtime layouts: go1.23 inserted
@@ -6242,7 +6252,8 @@ impl PreferSplitRecord {
     /// Ordering: space index, then **bigger sizes first**, then offset.  This is
     /// the comparator `initialize`'s `sort` and `find_record`'s `lower_bound`
     /// both rely on, so it is output-determining and transcribed field-by-field.
-    pub(crate) fn cmp_key(&self) -> (i32, std::cmp::Reverse<u32>, u64) {
+    #[doc(hidden)]
+    pub fn cmp_key(&self) -> (i32, std::cmp::Reverse<u32>, u64) {
         let space_index = self
             .storage
             .space

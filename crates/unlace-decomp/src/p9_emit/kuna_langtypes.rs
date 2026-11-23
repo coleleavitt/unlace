@@ -29,6 +29,7 @@
 //! [`Datatype`]: crate::dtype::Datatype
 //! [`Datatype::hash_name`]: crate::dtype::Datatype
 
+use crate::kuna_lang::OutLangExt;
 use std::borrow::Cow;
 use std::rc::Rc;
 
@@ -36,7 +37,6 @@ use unlace_base::types::int4;
 
 use crate::dtype::Datatype;
 use crate::kuna_lang::OutLang;
-use crate::kuna_lang::OutLangExt;
 
 /// The per-document type-rendering context (C++ has no analogue: the `realtypes`
 /// and `ctypes` gates are kuna divergences).

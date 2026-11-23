@@ -4,9 +4,7 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod coreaction_protos;
-pub mod fspec;
 pub mod funcdata_callsite;
-mod kuna_aggregateabi;
 pub mod kuna_argclobber; // (kuna) drop a trailing register argument a previous call's clobber put there
 pub mod kuna_armfloatargs; // (kuna) an ARM hard-float function takes its scalar VFP inputs at their full widths
 pub mod kuna_armfloatreturn; // (kuna) an ARM hard-float function returns and takes whole VFP values
@@ -106,7 +104,6 @@ pub mod kuna_x87return;
 pub mod kuna_zerocallregs; // (kuna) a register a -fzero-call-used-regs epilogue clears is no part of the return value
 pub mod kuna_zerofillreturn; // (kuna) the zero a narrow write leaves in a returned q register's upper half is no part of the value
 pub mod kuna_zeroidiomuse; // (kuna) a self-cancelling `xor r,r` is not a competing use of the value it eats
-pub mod modelrules; // (kuna) a big-endian pair a call hands back to the RETURN untouched is one value
 
 pub(crate) mod kuna_customreturn;
 pub mod kuna_floatregister;

@@ -569,6 +569,22 @@ impl FuncdataCallwideExt for crate::funcdata::Funcdata {
 
 crate::kuna_arch_table!(ProofSlot);
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.callwide_clear = Some(clear_proof);
+    hooks.callwide_revoke = Some(revoke_proof);
+}
+
+/// Drop the architecture's whole-image caller proof.
+fn clear_proof(tables: &mut crate::kuna_archstate::ArchTables) {
+    tables.get_mut::<ProofSlot>().clear();
+}
+
+/// Revoke the architecture's whole-image caller proof.
+fn revoke_proof(tables: &crate::kuna_archstate::ArchTables) {
+    tables.get::<ProofSlot>().revoke();
+}
+
 #[cfg(test)]
 #[path = "kuna_callwide/tests.rs"]
 mod tests;

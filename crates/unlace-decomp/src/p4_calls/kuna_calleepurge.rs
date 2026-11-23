@@ -1321,5 +1321,15 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
 pub type CacheCell = std::cell::RefCell<Cache>;
 crate::kuna_arch_table!(CacheCell);
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.calleepurge_forget_walks = Some(forget_walks);
+}
+
+/// Forget the architecture's x86-32 callee walks.
+fn forget_walks(tables: &mut crate::kuna_archstate::ArchTables) {
+    tables.get_mut::<CacheCell>().get_mut().forget_walks();
+}
+
 #[cfg(test)]
 mod tests;

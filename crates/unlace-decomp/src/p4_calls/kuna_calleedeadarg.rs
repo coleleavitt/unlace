@@ -2313,6 +2313,12 @@ pub type CalleeDeadCache = std::collections::HashMap<
 >;
 crate::kuna_arch_table!(CalleeDeadCache);
 
+impl crate::fspec::EntryLiveness for CalleeEntryDead {
+    fn proves_dead(&self, addr: &Address, size: int4) -> bool {
+        CalleeEntryDead::proves_dead(self, addr, size)
+    }
+}
+
 /// (kuna `argclobber`) The run-wide cache of forwarding resolutions, by callee
 /// `(space index, entry offset)`; an [`ArchTable`](crate::kuna_archstate::ArchTable).
 pub type CalleeForwardCache = std::collections::HashMap<

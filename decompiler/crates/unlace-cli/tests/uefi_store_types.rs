@@ -1,5 +1,7 @@
-//! (kuna `storetype`) A UEFI driver's service-table globals are typed from the
-//! value its entry stores into them, so every reader calls through `gBS->`.
+//! (kuna `storetype`, `uefi`) A UEFI driver's service-table globals are typed from
+//! the value its entry stores into them, so every reader calls through `gBS->`.
+//! The `uefi` pass names and types the tables on its own, so the untyped control
+//! turns both off.
 
 use crate::common;
 
@@ -14,7 +16,7 @@ fn decompile_all(extra: &[&str]) -> String {
 
 #[test]
 fn store_typed_boot_services_reach_every_reader() {
-    let off = decompile_all(&["--option", "storetype", "off"]);
+    let off = decompile_all(&["--option", "storetype", "off", "--option", "uefi", "off"]);
     assert!(
         off.contains("(dat_1a70 + 0x30)"),
         "off: the readers index an untyped word"

@@ -9,7 +9,10 @@
 //! and the result is read back as `SUB6432(zmm0, 0)`.
 //!
 //! This splits each such write into the result's own width and a zero fill of
-//! the bytes above it: `ymm0 = result; zmm0[32..64] = 0`. The two pieces never
+//! the bytes above it: `ymm0 = result; zmm0[32..64] = 0`. A scalar result
+//! (`vmulsd`, `vaddss`) is split the same way, `xmm0[0..8] = result;
+//! xmm0[8..16] = 0; ...`: left whole, its 64-byte write sat between the double a
+//! function computes in `xmm0` and its `ret`, and the return was lost. The two pieces never
 //! overlap a read of the low register, so heritage keeps `xmm`/`ymm` storage
 //! at its real width.
 
@@ -22,7 +25,8 @@ use crate::context::OpId;
 use crate::funcdata::Funcdata;
 
 /// Split the zero-extending register write `op`, if it is one: `INT_ZEXT` into a
-/// 32- or 64-byte register from a 16- or 32-byte value. Returns the zero-fill op
+/// 32- or 64-byte register from a 4-, 8-, 16- or 32-byte value (a scalar
+/// `vmulsd`/`vaddss` result, or an XMM or YMM one). Returns the zero-fill op
 /// inserted after it.
 pub fn split(data: &mut Funcdata, op: OpId, insn: &[OpId]) -> KunaResult<Option<OpId>> {
     let Some(o) = data.obank().get(op) else {
@@ -42,7 +46,7 @@ pub fn split(data: &mut Funcdata, op: OpId, insn: &[OpId]) -> KunaResult<Option<
     let is_register = reg.get_space().is_some_and(|s| s.get_name() == "register");
     if !is_register
         || !matches!(out_size, 32 | 64)
-        || !matches!(in_size, 16 | 32)
+        || !matches!(in_size, 4 | 8 | 16 | 32)
         || in_size >= out_size
     {
         return Ok(None);
@@ -97,8 +101,9 @@ pub fn split(data: &mut Funcdata, op: OpId, insn: &[OpId]) -> KunaResult<Option<
 }
 
 /// Zero bytes `[from, to)` of the register at `reg`, one op per piece that ends
-/// at the next YMM/ZMM boundary (so an XMM write leaves the YMM and ZMM upper
-/// halves as separate storage). With `reuse`, `op` itself becomes the first
+/// at the next XMM, YMM or ZMM boundary (so a scalar write leaves the rest of its
+/// XMM register, and an XMM write the YMM and ZMM upper halves, as separate
+/// storage). With `reuse`, `op` itself becomes the first
 /// piece; otherwise the pieces follow it. Returns the last op.
 fn zero_fill(
     data: &mut Funcdata,
@@ -117,7 +122,7 @@ fn zero_fill(
     let mut pieces = Vec::new();
     let mut at = from;
     while at < to {
-        let end = if at < 32 { 32.min(to) } else { to };
+        let end = [16, 32].into_iter().find(|&b| at < b).unwrap_or(to).min(to);
         pieces.push((at, end - at));
         at = end;
     }

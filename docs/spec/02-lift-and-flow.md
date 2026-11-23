@@ -4584,16 +4584,20 @@ whole register, `ZmmReg1 = zext(result)`. Every such write overlaps every
 read of the same XMM/YMM register, so heritage widened the register to all
 64 bytes: a function that read `ymm0` had a 64-byte `zmm0` input and read
 `SUB6432(zmm0, 0)`. At flow time (`FlowInfo::process_instruction`, x86-64
-only) each `INT_ZEXT` into a 32- or 64-byte register from a 16- or 32-byte
-value is split:
+only) each `INT_ZEXT` into a 32- or 64-byte register from a 4-, 8-, 16- or
+32-byte value is split (the 4- and 8-byte values are scalar results such as
+`vmulsd`'s and `vaddss`'s):
 
 - the low part keeps the value at its own width. When the value is a
   temporary that only this write reads, its producer (the user-op) writes the
   low register itself; when the value already is the low register, nothing is
   copied;
-- the bytes above it are zeroed by `COPY 0` ops cut at the YMM/ZMM boundary
-  (`[16, 32)` and `[32, 64)` for an XMM write), so an XMM write does not create
-  a YMM-wide value either.
+- the bytes above it are zeroed by `COPY 0` ops cut at the XMM and YMM/ZMM
+  boundaries (`[8, 16)`, `[16, 32)` and `[32, 64)` for a scalar `double`;
+  `[16, 32)` and `[32, 64)` for an XMM write), so neither creates a wider value.
+  A scalar result left whole was a 64-byte `zmm0` write between the `double`
+  a function computes in `xmm0` and its `ret`, and the function printed `void`
+  (fixture `vexret_avx_x86_64`, which Ubuntu's gcc emits without `-mavx`).
 
 **(kuna) `option lanefuse on|off`, default on,
 `decompiler/crates/unlace-decomp/src/p2_lift/kuna_lanefuse.rs`.** The spec writes

@@ -14,9 +14,18 @@ fn hello() -> String {
 fn the_inventory_is_the_method_bodies_at_their_own_sizes() {
     let (out, err, code) = common::run_kuna(&["functions", &hello()]);
     assert_eq!(code, 0, "{err}");
+    // An entry's aliases follow its name on the same line; only the names count here.
+    let names: Vec<String> = out
+        .lines()
+        .map(|line| line.split('\t').take(2).collect::<Vec<_>>().join("\t"))
+        .collect();
     assert_eq!(
-        out,
-        "0x402051\tProgram::<Main>$\n0x40206e\tProgram::.ctor\n0x402084\tProgram::<<Main>$>g__Sum|0_0\n"
+        names,
+        [
+            "0x402051\tProgram::<Main>$",
+            "0x40206e\tProgram::.ctor",
+            "0x402084\tProgram::<<Main>$>g__Sum|0_0"
+        ]
     );
     assert_eq!(err, "", "nothing sends the reader to another tool");
 

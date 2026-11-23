@@ -107,8 +107,13 @@ tidy/clippy/parity are green, then the next one.
   facade. Only after steps 5, 6 and 8 (splitting earlier makes builds worse; see the plan).
 
 ### CI and tests
-- Most Tests runs on `main` were cancelled by newer pushes; the last run at the stop was pending on
-  e341da1802. Check the next finished run before trusting `main` is green.
+- 2026-11-23, after the stop: every finished Tests run on `main` since 2026-11-22 20:57 had failed
+  the workspace suite (11 real failures), and queued main runs were replaced by newer pushes, so most
+  landed commits had no run. Branch `ci/fast-tests` fixed the failures (a raw-image object view
+  built from the file instead of the mapped bytes; five tests pinned to output that later landings
+  changed on purpose), moved the suite to cargo-nextest (one archive build, three partitions,
+  `decompiler/.config/nextest.toml`), gave each main commit its own concurrency group, and moved
+  coverage plus the slowest tests to the scheduled `coverage.yml`.
 - Known follow-ups:
   - `kuna_phases::tests::option_values_live_value_present_for_129` pins 137 options with a live
     field; the tree has 138 (spsolve added one without bumping it). Fix: pin 138.
@@ -116,7 +121,10 @@ tidy/clippy/parity are green, then the next one.
     design, but ugly). Turning such jumps into tail calls is a `tailcalljump` design change.
   - patchelf: two `SysError` handlers are found but print as a plain `if`, not `try`
     (structuring gap).
-  - `project_named_globals` failed once in CI and did not reproduce locally; watch it.
+  - `project_named_globals` was not flaky: Ubuntu 26.04's gcc emits AVX (`vmulsd`/`vmovsd`), and
+    `vexzeroupper` left scalar VEX results as whole-`zmm0` writes, so `grow` lost its `double`
+    return. Fixed on `ci/fast-tests` (fixture `vexret_avx_x86_64`).
+  - The live-value pin above passed in a full local run on 692e5ae40c; recheck before bumping it.
 - Landings in this round went in on compile checks only (Cole's rule: `cargo check` + build +
   clippy + fmt, no local test runs; CI runs the tests). 18 upward edges slipped in that way and were
   re-baselined once (78cc72dbd3); keep running `python3 scripts/check_layers.py` before every push.

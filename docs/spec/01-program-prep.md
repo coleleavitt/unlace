@@ -10993,8 +10993,12 @@ A byte-addressed raw image also runs the object-file pass list
 (`objectview`, default-on), through an ELF view
 (`decompiler/crates/unlace-analysis/src/loader/kuna_objectview.rs (raw_as_elf)`).
 The view has one `PT_LOAD` and one `SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR`
-`.text` section covering the file at `--base`, which is the read-write-execute
-block Ghidra's raw importer makes. Its machine, class and byte order come from
+`.text` section covering the mapped bytes at `--base`, which is the read-write-execute
+block Ghidra's raw importer makes. The mapped bytes are the file for a headerless
+image, and the image the container builds for a load that strips a header or
+relocates (a PS-X EXE's 0x800-byte header, a DOS load module, a CIL method run): a
+view of the whole file would put every byte the header's length past its address, so
+the prologue oracle named functions in unmapped memory. Its machine, class and byte order come from
 the selected SLEIGH language, and its `e_entry` is the first seed. A processor
 ELF assigns no number gets `EM_NONE`: the sections still scan, and only
 `object`'s architecture is unknown. The view runs at the commit like a TE's,

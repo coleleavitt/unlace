@@ -4974,7 +4974,7 @@ impl SplitDatatype {
             } else {
                 self.data_type_pieces[i].offset
             };
-            let val = super::kuna_constantbytes::pair(hi, lo, losize, sa, dt.get_size());
+            let val = crate::kuna_constantbytes::pair(hi, lo, losize, sa, dt.get_size());
             let out_vn = data.new_constant(dt.get_size(), val);
             in_varnodes.push(out_vn);
             data.vbank_mut()
@@ -5004,7 +5004,7 @@ impl SplitDatatype {
             } else {
                 self.data_type_pieces[i].offset
             };
-            let val = super::kuna_constantbytes::word(base_val, off, dt.get_size());
+            let val = crate::kuna_constantbytes::word(base_val, off, dt.get_size());
             let out_vn = data.new_constant(dt.get_size(), val);
             in_varnodes.push(out_vn);
             data.vbank_mut()
@@ -6951,7 +6951,7 @@ impl SubfloatFlow {
                 }
                 let original_size = data.vbank().get(origvn).expect("stale origvn").get_size();
                 let constant = iv.is_constant().then(|| iv.get_offset());
-                if !super::kuna_intfloatround::lowers(
+                if !crate::kuna_intfloatround::lowers(
                     &self.arch,
                     iv.get_size(),
                     constant,
@@ -6975,7 +6975,7 @@ impl SubfloatFlow {
                     .expect("in0");
                 let iv = data.vbank().get(invn).expect("stale invn");
                 let original_size = data.vbank().get(origvn).expect("stale origvn").get_size();
-                if iv.get_size() == self.precision && !super::kuna_floatquiet::can_elide(data, invn)
+                if iv.get_size() == self.precision && !crate::kuna_floatquiet::can_elide(data, invn)
                 {
                     return Ok(false);
                 }

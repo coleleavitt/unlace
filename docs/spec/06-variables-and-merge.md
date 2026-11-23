@@ -2,6 +2,7 @@
 
 ```yaml
 Anchors:
+  - crates/unlace-bandb-base/src/p6_variables
   - crates/unlace-bandb/src/p6_variables
   - crates/unlace-middle/src/p6_variables
 ```
@@ -731,7 +732,7 @@ same storage is called redundant and silenced, the emitted C returns the call's
 result on a path where the binary returns the parameter.
 
 The copy marker also runs
-`crates/unlace-bandb/src/p6_variables/kuna_undefinedcopy.rs` for trim
+`crates/unlace-bandb-base/src/p6_variables/kuna_undefinedcopy.rs` for trim
 copies whose source is an INDIRECT creation explicitly marked as killed by a
 call, rather than a possible return value. Predicated loads can leave such a
 source on an unused phi edge: `if (valid) p = load(); if (valid && pending) use(p)`
@@ -918,7 +919,7 @@ name through their shared Symbol, never through a recommendation.
 carries the library's names for its parameters and result (chapter 01), which the
 recommendation above never sees: they are not `innames` and lock nothing. The
 library name is a second name for a numbered local, never a replacement for
-its number. `crates/unlace-bandb/src/p6_variables/kuna_libcnames.rs
+its number. `crates/unlace-bandb-base/src/p6_variables/kuna_libcnames.rs
 (candidates)` reads the evidence before the naming walk, the walk numbers
 every local exactly as it does with the option off and records that numbering
 for a directive replay, and only then does `kuna_libcnames.rs (apply)` give a
@@ -974,7 +975,7 @@ still `fd_2` and no local becomes `fd`; after `name v5 n`, read's result prints
 `v3` and `name v3 got` reaches it.
 
 **A loop counter and the returned local are named from their shape
-(`contextnames`, default off).** `crates/unlace-bandb/src/p6_variables/kuna_contextnames.rs
+(`contextnames`, default off).** `crates/unlace-bandb-base/src/p6_variables/kuna_contextnames.rs
 (evidence)` adds two kinds of evidence to the `libcnames` walk above, so they
 are aliases of the same kind: the walk numbers every local as with the option
 off, the name is printed over the number afterwards, a directive reaches the
@@ -1004,7 +1005,7 @@ structure or scalar whose own address is a library argument
 `ReadFile(hFile,Buffer,0x200,&NumberOfBytesRead,NULL)`) is not a value the
 argument evidence above can reach: the argument is a `PTRSUB` of the frame's
 spacebase, and the object is the stack Symbol it addresses.
-`crates/unlace-bandb/src/p6_variables/kuna_libcnames.rs
+`crates/unlace-bandb-base/src/p6_variables/kuna_libcnames.rs
 (addressed_object)` reads that Symbol at the address the naming walk links the
 reference to (`Funcdata::resolve_spacebase_ref_addr`), and takes it only when
 the reference addresses its first byte, its name is still undefined (a DWARF,
@@ -1122,7 +1123,7 @@ old `v10` printed as `v9`, and a later directive naming `v9` (the web page sends
 every edit as a directive naming what the first decompile printed) reached a
 different variable than the one the caller saw. A retype that splits or merges a
 variable shifted the numbers the same way.
-`crates/unlace-bandb/src/p6_variables/kuna_stablenames.rs (snapshot)`
+`crates/unlace-bandb-base/src/p6_variables/kuna_stablenames.rs (snapshot)`
 now records which name each local got as the naming pass hands it out, when the
 caller may replay a directive against the function (the CLI's and the web page's
 first pass when a `name`/`type` directive targets it, and every console
@@ -1530,7 +1531,7 @@ that pass ran before type recovery committed anything, so at -O0 almost every
 filler slot reads `undefined8` while the C body prints the value that lived in
 it as `char *`. The value is still in the final function; only the link from
 the slot to it is gone.
-`crates/unlace-bandb/src/p6_variables/kuna_slotptr.rs (record_pass)`
+`crates/unlace-bandb-base/src/p6_variables/kuna_slotptr.rs (record_pass)`
 runs beside the union at the tail of every `restructure_varnode` and notes, per
 exact `(offset, size)`, every value stored into the frame by its durable
 identity: the root op that computed it (walked back through COPY chains; an
@@ -2103,7 +2104,7 @@ the value-set refinement no range to lock. With the option on,
 slot a constant COPY writes, whether each such write is a zero that no op reads
 directly (`varmap.rs (MapState::note_terminator_store)`), and after
 `attempt_join` declines a hint,
-`crates/unlace-bandb/src/p6_variables/kuna_nulterminator.rs
+`crates/unlace-bandb-base/src/p6_variables/kuna_nulterminator.rs
 (close_at_terminator)` closes the open range into a *fixed* range ending one
 element after that hint -- when the range is open and unlocked with one- or
 two-byte integer elements, the hint is a plain fixed constant-COPY slot of
@@ -2139,7 +2140,7 @@ no array covers it) prints as `char buf[8200]`, `char buf[1001]` as
 buf[32]`. The source size is anywhere in the last 16 bytes of the gap, and the
 frame alone cannot say where. The call that receives the buffer often can.
 
-`crates/unlace-bandb/src/p6_variables/kuna_arraysize.rs (gather)`
+`crates/unlace-bandb-base/src/p6_variables/kuna_arraysize.rs (gather)`
 runs in `restructure_varnode` after the open hints are gathered. For every call
 it reads the argument a library buffer function takes the buffer in and the
 byte count it states for it (`kuna_arraysize.rs (LENGTH_CALLS)`), and what that
@@ -2576,7 +2577,7 @@ signed, so a stack local the body reads with bit tests comes back `unsigned int`
 even where the callee that fills it declares `int *`: `waitpid`'s status prints
 as `unsigned int v5;` and the call as `waitpid(v2,(int *)&v5,0)`, with the
 arithmetic shift of `WEXITSTATUS` casting the value back (`(int)v5 >> 8`).
-`crates/unlace-bandb/src/p6_variables/kuna_castobject.rs
+`crates/unlace-bandb-base/src/p6_variables/kuna_castobject.rs
 (declare_out_params)` runs in `restructure_varnode` after the three gathers and
 before the layout decision. From the alias checker's additive bases
 (`kuna_castobject.rs (frame_refs)`) it keeps an offset only when every base that
@@ -2829,7 +2830,7 @@ unique hash for varnode".
 hard-codes the collision budget at 8, which dense unrolled AArch64/Go NEON
 loops overflow, turning the whole decompilation into that abort. kuna's own
 analysis uses 16
-(`crates/unlace-bandb/src/p6_variables/kuna_dynamichashmax.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_dynamichashmax.rs
 (MAX_DUPLICATES)`, always on): collision lists of up to 8 still encode exactly in
 the 3-bit position/total fields, and a 9–16-entry champion escapes the
 "Unable to find unique hash" abort — its overflowing position/total then makes
@@ -2869,7 +2870,7 @@ truth.
 (`base_explicit`'s call arm, §6.1), so a call result always spills:
 `v5 = timespec_cmp(...); if (v5 <= -1)`. angr folds a single-use call return
 into its consumer. The kuna port
-(`crates/unlace-bandb/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
 (call_output_foldable)`) relaxes the forced-explicit rule only when the fold
 is provably order-safe — marking a call output implied *moves the call's
 evaluation* to the use site, so the predicate demands: exactly one descendant
@@ -2898,11 +2899,11 @@ can read". Heritage promotes a write to a fixed global address into a plain
 return t + k;` once folded to `k = 0x2a; return f(7) + 0x2a;` — the binary
 returns 50, that C reads 91 (kuna GH-657). The barrier set is therefore stated
 in storage as well as opcodes
-(`crates/unlace-bandb/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
 (op_is_barrier)`): a barrier is a call, a `CPUI_LOAD`/`CPUI_STORE`/
 `CPUI_CALLOTHER`, **or** any op whose output varnode is persistent or
 address-tied
-(`crates/unlace-bandb/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
 (op_writes_tied_storage)`). A global's output is persistent; a frame slot's is
 tied to its stack address, and the callee can reach one whenever the frame
 address escaped into it — an escaped slot is *not* held back as a `CPUI_STORE`,
@@ -2911,7 +2912,7 @@ callee could not have reached.
 
 One op with a tied output writes nothing: a `CPUI_COPY` back into the storage
 its input already occupies
-(`crates/unlace-bandb/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
 (op_is_self_copy)`). `RuleIndirectCollapse` leaves that shape behind — `glob =
 COPY glob` — wherever a call turns out not to write a global it carried an
 INDIRECT for, and it stores the value that is already there, so it is exempt
@@ -2924,16 +2925,16 @@ consumed. So the call output is re-examined in `ActionMarkImplied`
 (`crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs
 (check_implied_cover)`), where the descendants-first walk has already classified
 the chain below the use and the landing statement is therefore derivable
-(`crates/unlace-bandb/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
 (print_chain)`); a landing statement in another block, or one with a write in
 between, keeps the call spilled
-(`crates/unlace-bandb/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
 (fold_print_point_is_order_safe)`). The ops of that chain are themselves exempt:
 each consumes the previous one's value, so the call is evaluated before them in
 the folded text exactly as it is in the binary.
 
 Over that second span the question narrows to **writes**
-(`crates/unlace-bandb/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
 (op_is_write_barrier)`): a call, a `CPUI_STORE` or `CPUI_CALLOTHER`, or a write
 to persistent or address-tied storage. `CPUI_LOAD` is a barrier only up to the
 use. Both halves of that split are measured on the 37-binary sweep in
@@ -2978,7 +2979,7 @@ every op of the chain can sit in the call's own block, but the printer emits
 them as C's `&&` and `||`, which skip the right-hand operand whenever the
 left-hand one decides. So a fold whose value reaches input 1 of a `BOOL_AND` or
 `BOOL_OR` anywhere along the chain keeps the call in its own statement
-(`crates/unlace-bandb/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
 (chain_reaches_short_circuit_rhs)`). gcc -O0 compiles `int r = tick(a); if ((r
 == 0) & (a > 5)) puts("A");` to one block (`call tick; cmpl $0,-4(%rbp); sete
 %dl; cmpl $5,-0x14(%rbp); setg %al; and %edx,%eax`), and the fold used to print
@@ -3029,7 +3030,7 @@ globals as an argument (`v3 = sub_3700(stdin,v7); v1 = 1; v12 &= v3;`) is enough
 to put a second version of the operand's high over the call output's cover. The
 colliding version is produced by the very call being moved.
 
-`crates/unlace-bandb/src/p6_variables/kuna_foldcallretphi.rs
+`crates/unlace-bandb-base/src/p6_variables/kuna_foldcallretphi.rs
 (conflict_is_self_call_effect)` discounts exactly that case: the rejection is
 ignored only when at least one instance of the operand's high collides and
 *every* colliding instance is the output of an INDIRECT whose effect op is this
@@ -3042,7 +3043,7 @@ discounted. Second, a use op that itself reads an INDIRECT effect of the call
 declines, since the folded text would otherwise name the operand's high both as
 the call's argument (pre-call) and as an operand of the use (post-call). Third,
 the call's output has to carry everything the callee returns
-(`crates/unlace-bandb/src/p6_variables/kuna_foldcallretphi.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_foldcallretphi.rs
 (call_output_is_full_width)`). A locked output is the callee's declared type and
 qualifies. An unlocked one qualifies only when no wider return storage contains
 it. An unlocked `eax` read out of `rax` does not qualify: the callee may write
@@ -3067,14 +3068,14 @@ carry `__int128` or a two-word struct, and counting them would mark every
 
 How far the call travels is the rest of this option's question, and it is asked
 here rather than borrowed from `foldcallret`
-(`crates/unlace-bandb/src/p6_variables/kuna_foldcallretphi.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_foldcallretphi.rs
 (print_point_is_order_safe)`): from the call up to the landing statement nothing
 may be a barrier — any opcode in `foldcallret`'s first set, or any op writing
 persistent or address-tied storage, the self-copy exemption not applied — and
 nothing up to and including that statement may read a value the call writes
 indirectly. Nor may the call's value reach a `BOOL_AND` or `BOOL_OR` as its
 right-hand operand anywhere along the chain the expression travels through
-(`crates/unlace-bandb/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
 (chain_reaches_short_circuit_rhs)`, the rule `foldcallret` asks of its own
 folds). Both ops evaluate both operands, and every
 op of the chain can sit in the call's own block, but C prints them as `&&` and
@@ -3210,7 +3211,7 @@ sub-cases both route here: two-or-more trimmed slots (later collapsed by
 `buildDominantCopy`) and exactly one trimmed slot (no dominant-copy pass at all,
 so the single `opInsertEnd` is final).
 
-When on, `crates/unlace-bandb/src/p6_variables/kuna_paramcopyhoist.rs
+When on, `crates/unlace-bandb-base/src/p6_variables/kuna_paramcopyhoist.rs
 (ActionParamCopyHoist)` relocates the COPY to the end of the entry block. It is
 the **last** action in `universal_sched`, and that position is load-bearing:
 taking the decision inside `Merge::trimOpInput` defeats the trim's own purpose
@@ -3236,7 +3237,7 @@ definitions sit today, so two definitions of one variable can both be admitted
 even though, once both have moved, the second kills the first on every path.
 
 **(kuna, issue #767) A pointer stored to a global keeps its own variable**
-(`crates/unlace-bandb/src/p6_variables/kuna_pointeevalue.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_pointeevalue.rs
 (keeps_apart)`, a strict fix, no option). `Merge` joins a register value with the
 persistent global it is copied to whenever their Covers allow it, and the joined
 value prints as a read of the global. When the value is a pointer the binary
@@ -3297,7 +3298,7 @@ after the loop the C is wrong, not only misleading: an in-place lowercase loop
 followed by `strcmp(buf, name)` compares an empty string in the C, because every
 iteration stored into `buf[0]`.
 
-`crates/unlace-bandb/src/p6_variables/kuna_tiedphitrim.rs
+`crates/unlace-bandb-base/src/p6_variables/kuna_tiedphitrim.rs
 (tied_slots)` runs inside `merge_op` after upstream's own trims. It fires on a
 MULTIEQUAL whose output is not address-tied when every address-tied input reads
 one location a pointer can observe and arrives from outside the loop, and some
@@ -3637,7 +3638,7 @@ use a dynamic-symbol anchor instead of a physical address. The console verifies
 that hashing and resolving the selected representative returns the same high and
 width; a missing or ambiguous anchor rejects the assertion. Both the CLI's second
 pass and later console decompiles carry these symbols and their isolation flags.
-`crates/unlace-bandb/src/p6_variables/kuna_dynamiclocals.rs` applies a
+`crates/unlace-bandb-base/src/p6_variables/kuna_dynamiclocals.rs` applies a
 locked dynamic type before propagation and merging, then refreshes the symbol on
 a rebuilt high without rebinding another symbol's value. The late mapping follows
 CASTs to the explicit value. Analysis-local arena identities are never replay keys.
@@ -3657,7 +3658,7 @@ native and emitted C agree for inputs with both zero and nonzero upper words.
 The fallback that ties a return register across its marker definitions requires
 one connected SSA value family, whether the return contract is declared or
 inferred.
-`crates/unlace-bandb/src/p6_variables/kuna_registerepochs.rs`
+`crates/unlace-bandb-base/src/p6_variables/kuna_registerepochs.rs`
 walks same-width COPY, CAST, MULTIEQUAL and non-creating INDIRECT edges in both
 directions, excluding constants and the INDIRECT operation annotation. Unrelated
 loads or computations occupying the register do not join that family. The walk
@@ -3930,7 +3931,7 @@ and name swaps preserve the original parameter slots. The console
 `kassert P9 naming-policy` directive uses the same local-assertion path as
 `rename`, so its parameter edits also survive prototype reconstruction.
 
-`crates/unlace-bandb/src/p6_variables/kuna_stackranges.rs` follows
+`crates/unlace-bandb-base/src/p6_variables/kuna_stackranges.rs` follows
 same-width copies, casts and additive pointer expressions back to the input
 spacebase. It retains byte scales, constant displacements and bounded index
 terms. Native-width scalar additions, subtractions, negations and constant
@@ -4125,7 +4126,7 @@ alignment slots are never written.
 A declared struct parameter split across registers and the entry stack can be
 spilled contiguously beside its incoming stack tail. The spill then crosses
 entry SP=0, so the ordinary local-only range cannot describe the whole object.
-`crates/unlace-bandb/src/p6_variables/kuna_wrappedstackaggregate.rs`
+`crates/unlace-bandb-base/src/p6_variables/kuna_wrappedstackaggregate.rs`
 recovers one local struct only from a nonindexed typed stack reference whose
 wrapping extent exactly matches a type-locked joined parameter of the same
 struct type. The logical tail must map to stack offset zero, consume the

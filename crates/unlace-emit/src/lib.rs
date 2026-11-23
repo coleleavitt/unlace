@@ -41,6 +41,7 @@ mod unprovided {
             unlace_middle::provide_all(&mut slots);
             unlace_lift::provide_all(&mut slots);
             unlace_structure::provide_all(&mut slots);
+            unlace_bandb_base::provide_all(&mut slots);
             unlace_bandb::provide_all(&mut slots);
             super::provide_all(&mut slots);
             slots.finish_with_stubs()

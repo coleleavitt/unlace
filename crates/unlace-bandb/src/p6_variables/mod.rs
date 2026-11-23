@@ -8,59 +8,33 @@ pub mod coreaction_stackptr;
 pub mod funcdata_facing;
 pub mod funcdata_spacebase;
 pub mod kuna_arrayextent;
-pub mod kuna_arraysize;
 pub mod kuna_calleepop;
 pub mod kuna_calleepopframe;
 pub mod kuna_calleepopslot;
-pub mod kuna_callretfold;
-pub mod kuna_castobject;
-pub mod kuna_contextnames;
-pub mod kuna_cookiescramble;
-pub mod kuna_dynamichashmax;
-pub mod kuna_dynamiclocals;
 pub mod kuna_endptrbound;
-pub mod kuna_foldcallretphi;
 pub mod kuna_fputruncviews;
 pub mod kuna_globalorder;
-pub mod kuna_globalvalue;
-pub mod kuna_guardedreadtrim;
-pub mod kuna_hideshadow;
-pub mod kuna_impliedrefs;
-pub mod kuna_indirectonly;
-pub mod kuna_isolated;
-pub mod kuna_libcnames;
 pub mod kuna_loadorder;
 pub mod kuna_localstackviews;
-pub mod kuna_nulterminator;
-pub mod kuna_paramcopyhoist;
-pub mod kuna_pointeevalue;
-pub mod kuna_registerepochs;
 pub mod kuna_savedregisterspills;
-pub mod kuna_slotptr;
-pub mod kuna_stablenames;
 pub mod kuna_stackalias;
-pub mod kuna_stackexitanchor; // (kuna) the epilogue settles the last unknown call's purge
 pub mod kuna_stackloadcover;
 pub mod kuna_stackobjectalias;
 pub mod kuna_stackobjectasserts;
 pub mod kuna_stackobjects;
 pub mod kuna_stackparamviews;
-pub mod kuna_stackranges;
 pub mod kuna_stackuses;
 pub mod kuna_stackvaluecopies;
 pub mod kuna_stackvalueorder;
 pub mod kuna_stackvalueviews;
 pub mod kuna_stackviews;
 pub mod kuna_storereach;
-pub mod kuna_tiedphitrim;
-pub mod kuna_undefinedcopy;
-pub mod kuna_undefname;
-
-pub mod kuna_wrappedstackaggregate;
 
 pub mod kuna_callarrayextent;
-pub mod kuna_calltransport;
-pub mod kuna_declhightype;
-pub mod kuna_naming;
+#[cfg(test)]
+mod kuna_calltransport_tests;
+#[cfg(test)]
+mod kuna_nulterminator_tests;
+#[cfg(test)]
+mod kuna_registerepochs_tests;
 pub mod kuna_stackstruct;
-pub mod kuna_varsources;

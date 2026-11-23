@@ -35,6 +35,7 @@ unlace-sleigh = { path = "crates/unlace-sleigh" }
 unlace-middle = { path = "crates/unlace-middle" }
 unlace-lift = { path = "crates/unlace-lift" }
 unlace-structure = { path = "crates/unlace-structure" }
+unlace-bandb-base = { path = "crates/unlace-bandb-base" }
 unlace-bandb = { path = "crates/unlace-bandb" }
 unlace-emit = { path = "crates/unlace-emit" }
 unlace-decomp = { path = "crates/unlace-decomp" }

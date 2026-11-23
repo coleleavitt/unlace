@@ -1,0 +1,22 @@
+[package]
+name = "unlace-bandb-base"
+description = "The base of Band B (P3-P6): the modules outside the fixpoint's cyclic core, split out of unlace-bandb"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+unlace-base.workspace = true
+unlace-num.workspace = true
+unlace-sleigh.workspace = true
+unlace-middle.workspace = true
+unlace-lift.workspace = true
+unlace-structure.workspace = true
+thiserror.workspace = true
+smallvec.workspace = true
+slotmap.workspace = true
+
+[lints]
+workspace = true

@@ -4,7 +4,8 @@
 Each top-level module of unlace-decomp (`src/<folder>/<module>.rs` plus its child files) belongs to a
 band, and each phase folder's `mod.rs` belongs to its folder's band. The bands, lowest first, are a
 planned split of the crate: middle (the IR, types, options, symbols), lift (P1-P2), structure (P7-P8),
-bandb (P3-P6), emit (P9) and driver (scheduling, option dispatch, the decompile loop).
+bandb-base and bandb (P3-P6: the modules outside and inside the fixpoint's cyclic core, by crate root),
+emit (P9) and driver (scheduling, option dispatch, the decompile loop).
 
 Every `crate::`, `super::` and `self::` path in non-test code is resolved to the module it names; a path
 that stops at a folder (`crate::p9_emit::*`, an item the folder's `mod.rs` re-exports) names the folder.
@@ -17,7 +18,7 @@ from pathlib import Path
 import re
 import sys
 
-BANDS = ["middle", "lift", "structure", "bandb", "emit", "driver"]
+BANDS = ["middle", "lift", "structure", "bandb-base", "bandb", "emit", "driver"]
 FOLDER_BAND = {
     "substrate": "middle", "p0_knowledge": "middle",
     "p1_partition": "lift", "p2_lift": "lift",
@@ -42,6 +43,11 @@ MIDDLE_SRC = "crates/unlace-middle/src"
 LIFT_SRC = "crates/unlace-lift/src"
 STRUCTURE_SRC = "crates/unlace-structure/src"
 BANDB_SRC = "crates/unlace-bandb/src"
+# Step 10: the part of Band B outside the fixpoint's cyclic core, below unlace-bandb.
+BANDB_BASE_SRC = "crates/unlace-bandb-base/src"
+# A crate whose phase folders are a sub-band of their folder's band.
+ROOT_BAND = {BANDB_BASE_SRC: "bandb-base"}
+MODULE_ROOT: dict[str, str] = {}
 EMIT_SRC = "crates/unlace-emit/src"
 ALLOWLIST = "scripts/layers-allowlist.txt"
 TOKEN = re.compile(r"\w+|::|\S")
@@ -205,11 +211,12 @@ def resolve(path: list[str], here: list[str], modules: dict[str, str]) -> str | 
 
 
 def band(node: str, modules: dict[str, str]) -> int:
-    return BANDS.index(MODULE_BAND.get(node) or FOLDER_BAND[modules.get(node, node)])
+    return BANDS.index(MODULE_BAND.get(node) or ROOT_BAND.get(MODULE_ROOT.get(node, ""))
+                       or FOLDER_BAND[modules.get(node, node)])
 
 
 def upward_edges(root: Path) -> set[tuple[str, str]]:
-    roots = [root / SRC] + [root / s for s in (MIDDLE_SRC, LIFT_SRC, STRUCTURE_SRC, BANDB_SRC, EMIT_SRC) if (root / s).is_dir()]
+    roots = [root / SRC] + [root / s for s in (MIDDLE_SRC, LIFT_SRC, STRUCTURE_SRC, BANDB_BASE_SRC, BANDB_SRC, EMIT_SRC) if (root / s).is_dir()]
     files = [(src, p) for src in roots for p in sorted(src.glob("*/**/*.rs"))
              if not is_test_file(p.relative_to(src))]
     modules = {}
@@ -217,6 +224,7 @@ def upward_edges(root: Path) -> set[tuple[str, str]]:
         folder, top = p.relative_to(src).parts[:2]
         if top != "mod.rs":
             modules[top.removesuffix(".rs")] = folder
+            MODULE_ROOT[top.removesuffix(".rs")] = str(src.relative_to(root))
     edges = set()
     for src, p in files:
         rel = p.relative_to(src)
@@ -231,7 +239,13 @@ def upward_edges(root: Path) -> set[tuple[str, str]]:
                     and (i == 0 or tokens[i - 1] != "::"):
                 for path in use_paths(tokens, i):
                     target = resolve(path, here, modules)
-                    if target and target != node and band(target, modules) > band(node, modules):
+                    if target in FOLDER_BAND and (src / target).is_dir():
+                        # a path that stops at a phase folder names this crate's folder
+                        rootrel = str(src.relative_to(root))
+                        target_band = BANDS.index(ROOT_BAND.get(rootrel) or FOLDER_BAND[target])
+                    elif target:
+                        target_band = band(target, modules)
+                    if target and target != node and target_band > band(node, modules):
                         edges.add((node, target))
     return edges
 

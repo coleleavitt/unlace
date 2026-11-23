@@ -374,6 +374,13 @@ and fills the rest with `KunaHookSlots::finish_with_stubs` (each stub panics nam
 tests that reached a hook from a higher crate moved to the driver (`infra/{middle,lift,bandb}_tests/*_hooks.rs`);
 `query_local_properties` became a plain `Funcdata` method in middle (no hook). nextest has no hook panics.
 
+**Step 10a (unlace-bandb-base).** The 168 Band B modules outside the fixpoint's strongly connected
+component (below it or unrelated to it, 84k lines) moved with `git mv` to `crates/unlace-bandb-base`, same four
+folders; `unlace-bandb` depends on it and re-exports it. No edge was inverted (the condensation is acyclic by
+construction); `super::<moved>` paths in unlace-bandb became `crate::<moved>`, six test modules that read
+unlace-bandb modules moved there as `<module>_tests.rs`. `check_layers.py` ranks the crate root as band
+`bandb-base`; `check_spec.py` scans it. Next (10b): `unlace-bandb-core`, the component itself.
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

@@ -2599,7 +2599,7 @@ same function. A printed register local gets the isolated, type-locked Symbol
 over its definition that a `type` stating its present type would map, and the
 use-point carry brings it to the second pass. A stack local and a parameter
 are isolated without a type lock, and reach the second pass by their storage
-(chapter 06, `crates/unlace-bandb/src/p6_variables/kuna_isolated.rs`).
+(chapter 06, `crates/unlace-bandb-base/src/p6_variables/kuna_isolated.rs`).
 
 When a Varnode is created at an isolated local's mapped definition,
 `Funcdata::set_varnode_properties` applies its exact, locked type before
@@ -3567,7 +3567,7 @@ module docs):
 | `crates/unlace-middle/src/substrate/funcdata_block.rs` | CFG surgery + the jump-table drivers |
 | `crates/unlace-middle/src/substrate/funcdata_encode.rs`, `crates/unlace-middle/src/substrate/funcdata_printraw.rs` | marshaling, raw printing |
 | `crates/unlace-bandb/src/p5_types/funcdata_resolveflow.rs` | flow resolution (P2) |
-| `crates/unlace-bandb/src/p5_types/funcdata_union.rs` | union facet resolution (P5) |
+| `crates/unlace-bandb-base/src/p5_types/funcdata_union.rs` | union facet resolution (P5) |
 | `crates/unlace-bandb/src/p6_variables/funcdata_facing.rs`, `crates/unlace-middle/src/substrate/funcdata_merge.rs`, `crates/unlace-bandb/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
 | `crates/unlace-emit/src/p9_emit/coreaction_casts.rs` | cast insertion hooks (P9) |
 

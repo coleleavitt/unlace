@@ -5821,7 +5821,7 @@ moves.
   it.
 
 - **Prototype merge** (`protomerge`, default-on; kuna;
-  `crates/unlace-bandb/src/p4_calls/kuna_protomerge.rs (merge)`): the
+  `crates/unlace-bandb-base/src/p4_calls/kuna_protomerge.rs (merge)`): the
   load-time sources park whole prototypes on a function at the analysis commit
   (the by-name and by-address libc tables, the demangled C++ signature, DWARF),
   and the last used to replace the earlier wholesale. Two prototypes of the same
@@ -7355,7 +7355,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     `presentViewController:animated:completion:(vc, (UIViewController *)v10, 1, NULL)`).
 
   - **Message sends typed and resolved by their receiver**
-    (`crates/unlace-bandb/src/p5_types/kuna_objcrettype.rs (instancetype)`,
+    (`crates/unlace-bandb-base/src/p5_types/kuna_objcrettype.rs (instancetype)`,
     options **`objcrettype`** and **`objcresolve`**, kuna, default-on, inert
     unless `objc` is on): the names above are per entry point, so a send still
     read `objc_msgSend(v1, sel_setInner_, v2)` with `v1` an `objc_object *`
@@ -7411,7 +7411,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     (`crates/unlace-console/src/engine.rs (commit_analysis_output)`)
     is a class receiver while it holds the value the loader put there (the
     same test as `importdata`'s `&<import>`). A receiver is followed by its
-    value (`crates/unlace-bandb/src/p5_types/kuna_objcrettype.rs (class_value)`):
+    value (`crates/unlace-bandb-base/src/p5_types/kuna_objcrettype.rs (class_value)`):
     through copies and casts, a value a call leaves alone (`INDIRECT`), a join
     whose inputs all name the same class (an input that leads back to the join
     adds nothing), and the runtime functions that return their argument
@@ -8203,7 +8203,7 @@ both
   is the header struct `<T>` when there is a header, else the element (an
   array of `void *` when the site names a pointer type, `site.T *`). The
   struct `<T>` of that size is laid out from the signature
-  (`crates/unlace-bandb/src/p5_types/kuna_kalloctype.rs (view_struct)`): a `void *` field per pointer granule, an
+  (`crates/unlace-bandb-base/src/p5_types/kuna_kalloctype.rs (view_struct)`): a `void *` field per pointer granule, an
   `undefined8` per data granule, a trailing `undefined1[n]` where the size is
   not a multiple of eight, each named `field_0x<off>` except the first pointer
   of a class `iokitclasses` recovered, which is its `vtable`; a name another
@@ -8216,7 +8216,7 @@ both
   2.4 KB after). The view-to-layout map is handed to the engine
   (`Architecture::kuna_kalloc_types`), where
   `TypeOpCall::getOutputLocal`
-  (`crates/unlace-bandb/src/p5_types/kuna_kalloctype.rs (allocated_type)`)
+  (`crates/unlace-bandb-base/src/p5_types/kuna_kalloctype.rs (allocated_type)`)
   answers for a call to one of the allocators whose view argument folds to a
   known view with `<T> *`, ahead of the prototype's locked `void *`: the
   allocation is declared `<T> *` and the stores into it are field accesses.
@@ -9033,7 +9033,7 @@ both
   followed by `...`, is offered and scores the same trials past them that it
   gets under `off`, and sheds whatever it took there once every call in the
   function has its arguments (chapter [04](04-calls-and-prototypes.md),
-  `crates/unlace-bandb/src/p4_calls/kuna_formattail.rs`). A phantom
+  `crates/unlace-bandb-base/src/p4_calls/kuna_formattail.rs`). A phantom
   it would claim under `off` therefore still keeps that value from the calls
   around it. Installed closed from the start it did not, and x86-64 showed
   both ways that goes wrong: gnulib's `version_etc` keeps its `va_list` in the

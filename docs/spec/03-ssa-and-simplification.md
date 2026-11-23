@@ -2,6 +2,7 @@
 
 ```yaml
 Anchors:
+  - crates/unlace-bandb-base/src/p3_dataflow
   - crates/unlace-bandb/src/p3_dataflow
   - crates/unlace-middle/src/p3_dataflow
 ```
@@ -303,7 +304,7 @@ split at every varnode boundary observed inside it before phis are placed
 (`heritage.rs (Heritage::refinement)`): ranges over 1024 bytes are never
 refined, and a 1-byte/3-byte adjacent split is normally healed back to a
 four-byte piece (`Heritage::remove13Refinement`, implemented through
-`crates/unlace-bandb/src/p3_dataflow/kuna_inputrefinement.rs`). The
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_inputrefinement.rs`). The
 join is skipped when that four-byte piece would partially overlap a known
 input: an input starts or ends at the junction and extends beyond the joined
 piece. Inputs contained wholly within the piece retain the ordinary join.
@@ -357,7 +358,7 @@ another (`Overlapping input varnodes`), and where neither fails a write through
 the wrapping range never reaches a read of the low bytes. Before heritage walks
 a space, every read, write and input in it that runs past the top is split at
 the top (`heritage.rs (Heritage::split_wrapped)`,
-`crates/unlace-bandb/src/p3_dataflow/kuna_wrapsplit.rs (wrap_cut)`),
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_wrapsplit.rs (wrap_cut)`),
 with the refinement helpers: a read becomes the `PIECE` of the bytes below the
 top and the bytes from offset 0, and a write or an input is carved into the two
 by `SUBPIECE`s. `split_pieces` reduces each piece's byte offset modulo the space,
@@ -400,7 +401,7 @@ A pair assembled only from half-register writes and stored whole is not
 selected.
 
 **Refinement pieces keep the store mark**
-(`crates/unlace-bandb/src/p3_dataflow/kuna_splitstorekeep.rs
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_splitstorekeep.rs
 (keep_store_mark)`, always on). A frame store reaches this phase as a
 direct `stackvn = COPY(value)` whose output `RuleStoreVarnode` marked
 `stack_store` — "originally came from a CPUI_STORE". That mark is what keeps the
@@ -496,7 +497,7 @@ guard at least N persistent-range and call pairs (its calls times its new
 ranges in the default data space,
 `heritage.rs (Heritage::persist_cross_product)`) gives a writable persistent
 global an unknown-effect INDIRECT only at the calls that need one
-(`crates/unlace-bandb/src/p3_dataflow/kuna_persistcalls.rs (keep)`).
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_persistcalls.rs (keep)`).
 Upstream guards every persistent global at every call with an unknown effect
 on it (`Heritage::guardCalls`), and since the range is address-tied and its
 INDIRECT outputs are direct writes, `ActionDeadCode` keeps all of them: a
@@ -602,7 +603,7 @@ argument the call reads from the register it returns in. A declared
 on x86-64 (`d0` on AArch64, `f1` on 32-bit PowerPC), and the call printed as
 `vr(k,k + 1)`. kuna still registers the input trial for such a range when the
 call is variadic and its model passes a variadic argument there (chapter 04,
-`crates/unlace-bandb/src/p4_calls/kuna_varargretreg.rs
+`crates/unlace-bandb-base/src/p4_calls/kuna_varargretreg.rs
 (argument_in_own_output)`); the range still gets no INDIRECT.
 
 **A counted floating-point register whose range is not the register.** On
@@ -617,7 +618,7 @@ four 4-byte lane copies, so clang's `movaps` swap of two doubles refines the
 range into 4-byte lanes: the low lane is a justified piece of the entry, and the
 argument was registered at 4 bytes (`vr(k,y,SUB84(x,0))`).
 `heritage.rs (Heritage::guard_counted_float_input)` handles both for a register
-that `crates/unlace-bandb/src/p4_calls/kuna_varargretreg.rs
+that `crates/unlace-bandb-base/src/p4_calls/kuna_varargretreg.rs
 (counted_float_entry)` names: one of the first `al` floating-point entries of a
 variadic call's model that the range overlaps without being it. A range that
 contains the register passes its low 8 bytes through a SUBPIECE, as
@@ -872,7 +873,7 @@ exclusive arms keep each other's narrow scalar trial.
 A physical register range
 completely covered by two or more general ABI input slots receives separate
 call trials before dead-code elimination, at every `calloverlap` level
-(`crates/unlace-bandb/src/p3_dataflow/kuna_multiregargs.rs
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_multiregargs.rs
 (input_partition)`). A wide return can coalesce these slots even after the
 caller overwrites each component. The trials keep those current component
 values live; ordinary trial scoring still decides whether they are used.
@@ -898,7 +899,7 @@ a single argument the caller just wrote whenever the other half of the range
 still holds a stale or clobbered pair half, as in `ldd [p],%o0; call f;
 mov 3,%o0; call g`. The walk skips a SUBPIECE whose kept
 bytes lie wholly outside the PIECE input it reached the PIECE through
-(`crates/unlace-bandb/src/p3_dataflow/kuna_multiregargs.rs
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_multiregargs.rs
 (subpiece_drops_reached_piece)`); that SUBPIECE cannot carry the value.
 
 On the input side (`heritage.rs (Heritage::guard_call_overlapping_input)`), the
@@ -1430,7 +1431,7 @@ stack-store guard.
 Spilled pointers to fixed stack offsets also need a temporary STORE guard: the
 stack read can acquire its initializer during renaming, while the pointer
 reload resolves only in the following rule pool.
-`crates/unlace-bandb/src/p3_dataflow/kuna_spillstoreguard.rs` guards
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_spillstoreguard.rs` guards
 STOREs rooted in a free stack-slot read identified by `protect_free_stores`.
 After renaming, it follows only COPYs and constant additions to the input stack
 base with the stack pointer's full width on byte-addressed stacks, and retains
@@ -1641,7 +1642,7 @@ for dead-removal waves applies: a rule reading two or more ops away without walk
 can see a change the wave does not offer it, and `RulePropagateCopy`'s own
 `kuna_globalstorekeep` refusal is one, since it reads the readers of the COPY's
 input and walks the blocks after the store
-(`crates/unlace-bandb/src/p3_dataflow/kuna_globalstorekeep.rs
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_globalstorekeep.rs
 (declines)`). Neither mechanism ends a pool run with a full sweep: the run stops
 at its first pass that changes nothing, which can be a wave. Such a rule is
 caught by the schedule around oppool1, the only pool holding `RuleEarlyRemoval`
@@ -1659,7 +1660,7 @@ counts the passes since the run began and sets
 `RuleEarlyRemoval` removes a join (`MULTIEQUAL`) or a guard (`INDIRECT`), it
 also removes the joins and guards behind the cursor that defined what that op
 read and that nothing reads any more, and theirs in turn
-(`crates/unlace-bandb/src/p3_dataflow/kuna_deadcascade.rs`). They go
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_deadcascade.rs`). They go
 in the order the following passes would have removed them: one batch per
 pass, each batch in sequence order; a definition that dies behind the op
 removing it joins the next batch and one ahead of it the same batch. A
@@ -1696,7 +1697,7 @@ takes `extra_pool_rules`); the engine currently always passes an empty list
 
 **Binary64 sign-word operations.** (kuna) Before its commute logic,
 `RuleConcatCommute` recognizes the exact binary64 sign-word idioms in
-`crates/unlace-bandb/src/p3_dataflow/kuna_floatnegpiece.rs`.
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_floatnegpiece.rs`.
 `PIECE(FLOAT_NEG(SUBPIECE(x,4)), SUBPIECE(x,0))` becomes `FLOAT_NEG(x)`;
 the corresponding `FLOAT_ABS` pattern becomes `FLOAT_ABS(x)`. Negating or
 clearing the binary32 high word's sign bit changes exactly the binary64 sign
@@ -1792,12 +1793,12 @@ group):
 | File | Theme | Representative rules |
 |---|---|---|
 | `crates/unlace-bandb/src/p3_dataflow/ruleaction_1.rs` | dead-op pruning, term ordering, bit-mask algebra, SUBPIECE motion through phis/INDIRECTs | `RuleEarlyRemoval` (the all-opcode dead-op reaper, gated by §3.1's dead-definition gate), `RuleCollectTerms`, `RuleAndMask`/`RuleShiftBitops`, `RulePullsubMulti`/`RulePushMulti`, `RuleIntLessEqual` (§3.5 compareform), `RuleRangeMeld`, `RulePiece2Zext` |
-| `crates/unlace-bandb/src/p3_dataflow/ruleaction_2.rs` | logical ops through extensions/pieces, double-op fusion, zext elimination | `RuleAndCommute`, `RuleAndCompare`, `RuleDoubleShift`, `RuleConcatShift`, `RuleLeftRight`, `RuleZextEliminate`, `RuleBooleanUndistribute`, `RuleFloatRange` |
+| `crates/unlace-bandb-base/src/p3_dataflow/ruleaction_2.rs` | logical ops through extensions/pieces, double-op fusion, zext elimination | `RuleAndCommute`, `RuleAndCompare`, `RuleDoubleShift`, `RuleConcatShift`, `RuleLeftRight`, `RuleZextEliminate`, `RuleBooleanUndistribute`, `RuleFloatRange` |
 | `crates/unlace-bandb/src/p3_dataflow/ruleaction_3.rs` | boolean normalization, phi/INDIRECT collapse, constant folding, reassociation | `RuleMultiCollapse`, `RuleIndirectCollapse`, `RuleCollapseConstants` (the OpBehavior constant evaluator), `RulePropagateCopy`, `RuleAddMultCollapse`, `RuleSborrow`, `RuleShift2Mult` |
 | `crates/unlace-bandb/src/p3_dataflow/ruleaction_4.rs` | the SUBPIECE/ZEXT/CONCAT commuting family, piece reassembly, stack-var promotion | `RuleSubCommute`, `RuleConcatZext`, `RuleSubCancel`, `RuleHumptyDumpty`/`RuleDumptyHump`, `RuleLoadVarnode`/`RuleStoreVarnode` (oppool2, group `stackvars`), `RuleSwitchSingle`, `RuleCondNegate` |
 | `crates/unlace-bandb/src/p3_dataflow/ruleaction_5.rs` | comparisons against extremal constants, equation solving, the pointer-recovery trio | `RuleLess2Zero`, `RuleSLess2Zero`, `RuleEqual2Constant`, and oppool2's `RulePtrArith`/`RuleStructOffset0`/`RulePushPtr` (all no-ops until `ActionStartTypes` flips `has_type_recovery_started` — chapter 05 owns what they build) |
 | `crates/unlace-bandb/src/p3_dataflow/ruleaction_6.rs` | pointer-op undo, division strength-reduction inversion, cleanup arithmetic | `RulePtraddUndo`/`RulePtrsubUndo`, `RuleDivOpt`/`RuleDivTermAdd`/`RuleSubNormal` (recover `/`, `%` from magic-number multiplies), cleanup-pool `RuleMultNegOne`/`RuleAddUnsigned`/`RuleSubRight`/`RulePieceStructure` |
-| `crates/unlace-bandb/src/p3_dataflow/ruleaction_7.rs` | signed div/mod idioms, segments, pointer flow, predication, float compares | `RuleSignDiv2`, `RuleSignMod2nOpt`, `RuleModOpt`, `RuleSegment`, `RulePtrFlow`, `RuleConditionalMove` (group `conditionalexe`), `RuleFloatCast`, `RuleIgnoreNan` |
+| `crates/unlace-bandb-base/src/p3_dataflow/ruleaction_7.rs` | signed div/mod idioms, segments, pointer flow, predication, float compares | `RuleSignDiv2`, `RuleSignMod2nOpt`, `RuleModOpt`, `RuleSegment`, `RulePtrFlow`, `RuleConditionalMove` (group `conditionalexe`), `RuleFloatCast`, `RuleIgnoreNan` |
 | `crates/unlace-bandb/src/p3_dataflow/ruleaction_8.rs` | int↔float conversion recovery, bit-counting booleans, float sign ops, compare splitting | `RuleUnsigned2Float`, `RuleThreeWayCompare`, `RulePopcountBoolXor`, `RuleLzcountShiftBool`, `RuleFloatSign`, `RuleOrCompare`, `RuleFuncPtrEncoding`, cleanup-pool `RuleExpandLoad` |
 
 `RuleMultiCollapse` keeps its operand traversal, marked-output list and
@@ -2042,7 +2043,7 @@ its last store printed, so the brake has nothing to add there.
 **Keeping a retyped local out of its readers** (a strict fix, no option). A
 `type` directive that retypes a printed pointer local to a pointer to a record
 is replayed by locking the new type on the local's own definitions before type
-inference (chapter 06, `crates/unlace-bandb/src/p6_variables/kuna_stablenames.rs
+inference (chapter 06, `crates/unlace-bandb-base/src/p6_variables/kuna_stablenames.rs
 (lock_retyped)`). Inference can then re-lay the frame the pointer points into,
 and `RulePtrsubUndo` folds the old frame offset into a new `INT_ADD`, turning
 the local's definition into a `COPY` of it. Propagated, that `COPY` handed its
@@ -2052,14 +2053,14 @@ PowerPC32 a register holding `&frame[1]` and retyped to `struct Probe *` printed
 as `nothing is declared as \`v1\` after it`. `RulePropagateCopy` leaves a `COPY`
 whose output is a definition the lock matched, still carrying the replayed type
 itself
-(`crates/unlace-bandb/src/p6_variables/kuna_stablenames.rs (is_retyped_definition)`),
+(`crates/unlace-bandb-base/src/p6_variables/kuna_stablenames.rs (is_retyped_definition)`),
 as it leaves the type-locked pointer of an isolated Symbol, so the local keeps
 its readers and prints `v1 = &v4; consume(v1);`. Another varnode locked to the
 same type is not one of them and propagates as before. A run without such a directive
 locks nothing and is unchanged.
 
 **Keeping a pointer stored to a global out of the global's markers**
-(`crates/unlace-bandb/src/p3_dataflow/kuna_pointeestorekeep.rs
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_pointeestorekeep.rs
 (declines)`, a strict fix, no option, issue #767). When a register value is
 stored to a persistent global and the value is also used as an address (the
 address of a `LOAD` or `STORE`, or the base of a `PTRADD` or `PTRSUB`, directly
@@ -2156,7 +2157,7 @@ at `indexaliasguard load` a load after a pointer store still prints the stored
 value there (issue #792).
 
 **Keeping a loop counter's write-back**
-(`crates/unlace-bandb/src/p3_dataflow/kuna_loopcounterstore.rs
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_loopcounterstore.rs
 (declines)`, always on) is the same refusal for the same op, on a different
 shape. A counter the compiler keeps in a frame slot is read, bumped in a
 register and stored back — `MOV EAX,[RSP+0x84]` / `INC EAX` /
@@ -2215,7 +2216,7 @@ Keeping the copies lets chapter 06 leave the selector separate and each store
 on the path where the binary makes it.
 
 **Keeping a global store whose value is read sign-sensitively**
-(`crates/unlace-bandb/src/p3_dataflow/kuna_globalstorekeep.rs
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_globalstorekeep.rs
 (declines)`, a strict fix, no option) is the same refusal once more, for a
 persistent global. When a register value is stored to a global and an operation
 also reads that value where its declared signedness decides the result — a
@@ -2305,7 +2306,7 @@ is left to upstream, since a parameter never merges with a global, and so is a
 constant's. Every other propagation is upstream's.
 
 **Resolving a direct store's effects**
-(`crates/unlace-bandb/src/p3_dataflow/kuna_storecopyeffects.rs`,
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_storecopyeffects.rs`,
 a strict fix, no option). A STORE can become a direct COPY only after a
 spilled address is recovered. Its existing INDIRECT guards must then read the
 new write immediately: waiting for `RuleIndirectCollapse` lets the next
@@ -2407,9 +2408,9 @@ the sign bit instead, since that is a sign extraction.
 Rules registered in the pools but implemented elsewhere: the sub-variable
 triggers and split rules (§3.3, `subflow.rs`), `RuleOrPredicate` (§3.4,
 `condexe.rs`), the kuna gated rules (§3.5), the double-precision family
-(`crates/unlace-bandb/src/p5_types/double.rs`, chapter 05), the
+(`crates/unlace-bandb-base/src/p5_types/double.rs`, chapter 05), the
 constant-sequence and bit-field cleanup rules
-(`crates/unlace-bandb/src/p5_types/constseq.rs`,
+(`crates/unlace-bandb-base/src/p5_types/constseq.rs`,
 `crates/unlace-bandb/src/p5_types/bitfield.rs`, chapter 05), and the
 stack-probe-loop phi resolver
 (`crates/unlace-lift/src/p2_lift/kuna_stackprobeloop.rs`, chapter
@@ -2532,7 +2533,7 @@ ops are not decoded and the CALLOTHER stays.
 default data space has addresses narrower than the registers
 that hold them: MIPS 64-32addr and N32, PowerPC e500 and the 32addr variants,
 AArch64 ilp32. On such an architecture `RulePtrFlow`
-(`crates/unlace-bandb/src/p3_dataflow/ruleaction_7.rs (RulePtrFlow)`)
+(`crates/unlace-bandb-base/src/p3_dataflow/ruleaction_7.rs (RulePtrFlow)`)
 narrows
 LOAD/STORE address operands to their referenced space's address width and
 indirect branch/call targets to the code-space width. A SUBPIECE takes the low
@@ -2554,14 +2555,14 @@ values, returned old values and other consumers of the original GPR retain
 their full width. Ordering operations have no pointer input.
 
 **(kuna) Octeon memory effects — `option octeoneffects`, default `atomic`,
-`crates/unlace-bandb/src/p3_dataflow/kuna_octeoneffects.rs`.** It
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_octeoneffects.rs`.** It
 resolves the atomic, reservation and ordering operations an Octeon language
 declares, unless a compiler spec injects its own p-code for one. A
 fetch-and-add, exchange, load-linked, store-conditional or cache-block zero
 accesses memory through its address operand, so under `atomic` heritage places
 a guard across each of them over writable RAM and stack ranges, including
 partial overlaps, through the shared helper in
-`crates/unlace-bandb/src/p3_dataflow/kuna_memoryguard.rs (guard_memory)`
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_memoryguard.rs (guard_memory)`
 that the system-call guards also use. A guard retains preceding stores even when the
 instruction result has no scalar consumer, so a store that only a load-linked
 reads is kept, and a later read cannot reuse a value from before the update.
@@ -2571,7 +2572,7 @@ forced: a guard on a local whose address never escapes collapses under
 `RuleIndirectCollapse`, so a spill stays a value. Cache-block zeroing is the
 exception: it can overwrite such a local through a neighboring stack address,
 so its guards survive even when that local's own address never escapes
-(`crates/unlace-bandb/src/p3_dataflow/kuna_octeoneffects.rs (keeps_unaliased_guard)`).
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_octeoneffects.rs (keeps_unaliased_guard)`).
 An address built from the stack pointer, loaded from memory, returned by a
 call or transformed by arithmetic may reach any local. Absence of a
 stack-pointer dependency does not prove disjointness: subtracting 256 from an
@@ -2590,7 +2591,7 @@ a kept guard covers every writable range.
 
 The system calls of `syscallregs` and `x64syscall` and the selected Octeon
 operations form one list
-(`crates/unlace-bandb/src/p3_dataflow/kuna_memoryguard.rs (memory_ops)`),
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_memoryguard.rs (memory_ops)`),
 found once per heritage pass and once per `ActionMarkImplied` pass. Heritage
 guards each. Guards alone do not stop an unresolved LOAD expression from moving
 to a later use, so `ActionMarkImplied` also checks LOAD and call-result covers
@@ -2816,7 +2817,7 @@ the policy that keeps every NaN behaviour. The shipped `nanignore compare`
 default and `all` drop it as upstream does, since the source most likely held
 a plain copy (`*d = *s` compiles to `fldl; fstpl` on i386) and C does not
 promise signaling-NaN preservation. Under `none`,
-`crates/unlace-bandb/src/p3_dataflow/kuna_floatquiet.rs (can_elide)`
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_floatquiet.rs (can_elide)`
 permits removing the final conversion only when the input is already quiet.
 Floating arithmetic, integer conversion and a conversion to another floating
 format produce quiet values; copies and merges require their sources to be
@@ -2827,7 +2828,7 @@ uses this guard before making an identity COPY; `SubfloatFlow::trace_backward`
 uses it before replacing a conversion by a COPY at the reduced precision.
 
 Integer-to-float conversions also retain their rounding width (always on;
-`crates/unlace-bandb/src/p3_dataflow/kuna_intfloatround.rs`). `RuleFloatCast`
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_intfloatround.rs`). `RuleFloatCast`
 combines an integer conversion followed by a floating conversion only when
 both floating widths match or the intermediate format can represent every
 signed source integer exactly. The required precision is one less than the
@@ -3114,7 +3115,7 @@ cast (`(long)(int)v` on AArch64), which is why the option stays off by default
 
 ## 3.4 Conditional execution
 
-`crates/unlace-bandb/src/p3_dataflow/condexe.rs
+`crates/unlace-bandb-base/src/p3_dataflow/condexe.rs
 (ActionConditionalExe)` (mainloop tail) removes a CBRANCH that re-tests a
 condition an earlier block already decided. The candidate — the *iblock* — must
 satisfy the two-block merge condition
@@ -3160,7 +3161,7 @@ ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 
 **Conditional constants.** `crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionConditionalConst)` (mainloop tail, wrapper over
-`crates/unlace-bandb/src/p3_dataflow/condconst.rs (condconst_apply)`)
+`crates/unlace-bandb-base/src/p3_dataflow/condconst.rs (condconst_apply)`)
 propagates the knowledge a CBRANCH creates: after `x == k` branches, `x` *is*
 `k` on one out-edge (and a raw boolean is 0/1 down its two edges). Every read
 of the varnode dominated by the constant edge is rewritten to the constant
@@ -3201,7 +3202,7 @@ has a loop in-edge and leaves the phi edge untouched (always on; DIV-3 —
 corpus-neutral, 0 of 675 assertions changed).
 
 **Range folding** (`option rangefold`, default **on**) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_rangefold.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_rangefold.rs
 (ActionRangeFold)`, right after `ActionConditionalConst`, in the action group
 `unreachable` with `ActionDeterminedBranch`: the reduced `jumptable` pipeline
 that recovers a switch reads its bounds check, which this pass may decide
@@ -3257,7 +3258,7 @@ only reproduced an unfolded idiom, so they run unconditionally. Full option
 metadata: [docs/options.md](../options.md).
 
 **pow2select** —
-`crates/unlace-bandb/src/p3_dataflow/kuna_selectdiv.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_selectdiv.rs
 (RuleSelectDiv)` (oppool1, group `analysis`), option `pow2select`, default
 **on**. Signed `x / 2^k` rounds toward zero, so the compiler adds `2^k - 1` to
 a negative `x` before the arithmetic shift. Upstream's division rules
@@ -3290,7 +3291,7 @@ most negative `x` both inputs hold the same value, so those two values may go
 either way. Varnodes are compared through their `COPY` chains.
 
 **latecse, implweight, dirtypool** (all default off).
-`crates/unlace-bandb/src/p3_dataflow/kuna_latecse.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_latecse.rs
 (ActionLateCse)`, option `latecse`, runs once per function in group
 `unreachable`: for every varnode with more than one reader, the readers that
 `get_cse_hash` accepts (pure unary or binary ops, no COPY or LOAD) go through
@@ -3318,7 +3319,7 @@ the ops created since the previous sweep began. Rules that act further from
 the op they match can reach a different fixpoint, which is why it is off by
 default.
 
-**cmpmerge** — `crates/unlace-bandb/src/p3_dataflow/kuna_cmpmerge.rs
+**cmpmerge** — `crates/unlace-bandb-base/src/p3_dataflow/kuna_cmpmerge.rs
 (RuleCompareMerge, ActionBranchMerge)`, option `cmpmerge`, default off.
 A comparison of `a` and `b` is the set of relations that make it true: `LT`,
 `EQ`, `GT` for integers, plus `UN` (unordered) for floats, so `!=` is
@@ -3395,7 +3396,7 @@ including auto when the input size selects aggressive. An explicit
 `option globalarrayanchor off` after mode selection restores ordinary folding.
 
 **addcarrychain** (GH-8913) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_addcarrychain.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_addcarrychain.rs
 (RuleAddCarryChain)`, oppool1, fires on PIECE. Pattern: the reassembly of an
 8-bit carry-chained add, `PIECE(hi, lo)` where `lo = INT_ADD(a, b)` and
 `hi = INT_ADD(hipart, carry)` with `carry` the carry of `(a, b)` — either a raw
@@ -3414,7 +3415,7 @@ schedule applies these rules before high-level assignment, while direct rule
 invocations must also preserve the function's existing high-level state.
 
 **booleanmask** (GH-1282) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_booleanmask.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_booleanmask.rs
 (RuleBoolSignShift)`, oppool1, fires on INT_SRIGHT. Pattern:
 `(b << k) s>> k` with the same non-byte-aligned `k` on both shifts (the
 byte-aligned case already belongs to `RuleLeftRight`), where the pre-shift
@@ -3424,7 +3425,7 @@ giving 0 or all-ones), which the surrounding compare rules then clean to a
 plain boolean test. Always on.
 
 **bitidioms** (kuna) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_bitidioms.rs (RuleBitIdioms)`,
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_bitidioms.rs (RuleBitIdioms)`,
 `(RuleIntAbs)` and `(ActionBitScanLoop)`, live gate `bit_idioms`
 (`option bitidioms`, default on). On an `INT_OR` the rule follows where each bit
 of the result comes from, through constant shifts, masks, ORs of disjoint bits,
@@ -3454,10 +3455,10 @@ loop, replaces the counter's uses after the loop with `ctz(x)` (or
 `BUILTIN_BSWAP`, `BUILTIN_ROTL`, `BUILTIN_BITREV`, `BUILTIN_CTZ` (unspecialised)
 and `BUILTIN_ABS`/`BUILTIN_LABS` (typed `int`/`long`).
 
-**alloca** (kuna) — `crates/unlace-bandb/src/p3_dataflow/kuna_alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/kuna-alloca.xml`.
+**alloca** (kuna) — `crates/unlace-bandb-base/src/p3_dataflow/kuna_alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/kuna-alloca.xml`.
 
 **cancelbytearithmetic** (repipe `cancelling-byte-arithmetic-splits`) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_cancelbytearithmetic.rs`
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_cancelbytearithmetic.rs`
 owns the exact graph matcher; a small hook remains in the
 upstream-derived `RuleSubCommute::apply_op` because the witness begins at its
 `SUBPIECE(INT_LEFT(...),0)` arm. Pattern: an outer one-byte add whose inputs are
@@ -3478,7 +3479,7 @@ shift and never creates narrow shift arithmetic, avoiding signed `char << s`
 in emitted C. The original INT_ZEXT/PIECE route is unchanged. Always on.
 
 **simdlane** (repipe `simd-constant-string-initializer`) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_simdlane.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_simdlane.rs
 (RuleSimdShuffleLane)`, oppool1, fires on SUBPIECE. *Pattern:* a one-byte lane
 read of a byte-shuffle user op whose mask is constant — `SUBPIECE(CALLOTHER
 pshufb(src, m), k)` with `m` a constant Varnode. `pshufb` has no p-code
@@ -3506,7 +3507,7 @@ value and every lane byte is provably zero — the broadcast mask, and the only
 wide constant mask the engine constructs. Always on.
 
 **Wide-slice SSA reduction** (always on) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_wideslice.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_wideslice.rs
 (RuleWideSlice)`, in the repeated analysis pool. Heritage widens each partial
 lane write of a vector register by joining it with the bytes below it
 (`normalize_write_size`), so a run of byte writes leaves intermediates 2..15
@@ -3533,7 +3534,7 @@ no `SUB13x` reads);
 `gh275-spillargtrial.xml` independently exercises a 12-byte packed-double tree.
 
 **De-vectorized reductions** (`option devectorize`, default **off**) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_devectorize.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_devectorize.rs
 (ActionDevectorize)`, in the fullloop tail beside the stack-guard and
 security-check strippers. clang and gcc vectorize `for (i) sum += a[i]` into a
 guard `length >= S`, a stride-S loop with one accumulator per lane, a
@@ -3573,7 +3574,7 @@ measured.
 hand-written sums whose exits disagree on a global store.
 
 **Inline string lengths** (`option strlenscan`, default **on**) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_strlenscan.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_strlenscan.rs
 (ActionStrlenScan)`, in the fullloop tail right after `devectorize`. gcc up to
 version 9 (at -O1 and above) and older MSVC expand `strlen(s)` inline as
 `or rcx,-1; xor eax,eax; repnz scasb; not rcx` (ECX on 32-bit x86). The
@@ -3632,7 +3633,7 @@ x86-64 ones beside the source, with buffers whose bytes past the terminator are
 not zero, to check each printed function computes the same values.
 
 **Inline copies, fills and compares** (`option repstring`, default **on**) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_repstring.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_repstring.rs
 (ActionRepString)`, in the fullloop tail right after `strlenscan`. On x86 a
 copy, fill or compare a compiler inlines (gcc and clang at `-Os`, gcc's
 `-minline-all-stringops`, MSVC with `/Oi`) is one `rep movs`, `rep stos` or
@@ -3725,7 +3726,7 @@ the same values.
 
 
 **Unrolled copies** (`option copyrun`, default **on**) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_copyrun.rs (ActionCopyRun)`,
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_copyrun.rs (ActionCopyRun)`,
 in the fullloop tail after `repstring`. A fixed-size copy (a struct
 assignment, a constant-length `memcpy`) is expanded by the compiler into loads
 and stores of its widest registers, which printed one assignment per element.
@@ -3757,7 +3758,7 @@ does not promise for buffers that overlap through different pointers; the
 rewrite cannot see that, which is what the option is for.
 
 **constspaceload** (repipe `arm-neon-zero-initialization`) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_constspaceload.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_constspaceload.rs
 (RuleConstSpaceLoad)`, oppool1, fires on LOAD. *Pattern:* a LOAD whose space
 operand names the **constant** space and whose pointer is a defined Varnode
 rather than a constant. That shape is what a SLEIGH constructor ending in
@@ -3787,7 +3788,7 @@ also resolves the spacebase-placeholder tail that a bare COPY would drop; a
 free pointer is declined. Always on (DIV-158).
 
 **x87truncate** —
-`crates/unlace-bandb/src/p3_dataflow/kuna_x87truncate.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_x87truncate.rs
 (RuleX87Truncate)`, oppool1, fires on CALLOTHER. *Pattern:* one of the x87
 `x87_float_to_int16/32/64` user operations that `FIST`/`FISTP` lift to (§2,
 x87 integer conversions), whose control-word operand provably has both
@@ -3943,7 +3944,7 @@ of what the binary does: with it folded, the output no longer shows that the
 function was obfuscated or which blocks the bogus edges reached.
 
 **flagcompare** (GH-1276 / GH-8777) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_flagcompare.rs`, two rules
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_flagcompare.rs`, two rules
 for architectures that model condition flags as explicit bits.
 `RuleBoolSignLess` (fires on INT_SLESS): a boolean shifted into the sign bit
 and tested with `s< 0` — where the operand's nonzero mask is exactly the bit
@@ -3954,7 +3955,7 @@ AND-of-ORs or OR-of-ANDs lowering — becomes `INT_SLESSEQUAL(K, V)` (`V >= K`
 as the source wrote it). Always on (DIV-3).
 
 **ovlesssimplify** (GH-7190) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_ovlesssimplify.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_ovlesssimplify.rs
 (RuleOvLessSimplify)`, oppool1, fires on INT_NOTEQUAL. Pattern: the explicit
 S/OV-flag signed-less-than computation (V850-style),
 `NE(SLESS(V+K, 0), BOOL_AND(signtest, SLESS(-1, V+K)))` — the sign flag XORed
@@ -3972,7 +3973,7 @@ primitives in `funcdata_op.rs` (`op_normalize_flip` and the flip-in-place
 path). Each rewrite stamps a provenance bit on the op
 (`canonical_lessequal`). At the very end of the drive — after structuring's
 last flips, before prototype/cast/naming fixation —
-`crates/unlace-bandb/src/p3_dataflow/kuna_compareform.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_compareform.rs
 (ActionPresentCompareForm)` (group `presentcompare`, `decompile` variant only)
 inverts every still-marked op back to the source `<=` form, re-validating the
 shape from scratch so an op reshaped by a later transform is simply left
@@ -3982,7 +3983,7 @@ assertions); `option compareform canonical` leaves the analysis form standing,
 reproducing upstream Ghidra's rendering.
 
 **arraystride** (GH-8724) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_arraystride.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_arraystride.rs
 (RuleArrayStride)`, oppool1, fires on MULTIEQUAL. Pattern: a strength-reduced
 array walk — a loop-header offset accumulator
 `acc = MULTIEQUAL(#0, acc + STRIDE)` (STRIDE constant, neither 0 nor 1) with a
@@ -3993,7 +3994,7 @@ pointer rules and the emitter can render `arr[i]` instead of
 `iVar += 0x414`. Settable `arraystride`, shipped default **on** (DIV-3).
 
 **mulblob** (kuna) —
-`crates/unlace-bandb/src/p3_dataflow/kuna_mulblob.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_mulblob.rs
 (declines_zext)`, consulted by `RulePieceStructure` rather than registered as a
 rule of its own. It answers one question: whether a widened operand of a wide
 multiply is a *value* or an *aggregate*.
@@ -4122,7 +4123,7 @@ displacements) folds only in the rule pool, after `ActionDeadCode` has already
 run, so a read whose value the program discards used to be deleted first when
 the address sat deeper than the general `lastChanceLoad` lookahead (three
 levels of binary operations). So before any removal path discards a LOAD,
-`crates/unlace-bandb/src/p3_dataflow/kuna_volatileload.rs` evaluates
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_volatileload.rs` evaluates
 its address through a bounded graph of constant integer operations and asks the
 same local and global property query a new varnode at that address would get.
 When the answer is `volatile`, the LOAD is kept: `lastChanceLoad` holds it on
@@ -4348,7 +4349,7 @@ arithmetic/SUBPIECE checks. Explicit locked array types keep their structuring.
 
 ## (kuna) MBA simplification — `option mba`, default off
 
-**`crates/unlace-bandb/src/p3_dataflow/kuna_mba.rs (RuleMbaSimplify)`,
+**`crates/unlace-bandb-base/src/p3_dataflow/kuna_mba.rs (RuleMbaSimplify)`,
 in oppool1 after `boolsignshift`.** Obfuscators hide `x + y` as
 `(x ^ y) + 2*(x & y)`, `x | y` as `(x & ~y) + y`, and so on. Each of these is a
 *linear mixed boolean-arithmetic* expression: an integer combination of bitwise

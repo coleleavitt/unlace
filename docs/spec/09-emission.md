@@ -145,7 +145,7 @@ sub-decisions `cast-policy`, `naming-policy`, `literal-format`,
 (the console/`kassert` assertion writer — an output *consumer* that writes P0
 assertions for the next run, not an algorithm of this folder). One P9-registered
 pass lives outside the folder: the (kuna, GH-558) comparison canonicalizer
-`crates/unlace-bandb/src/p3_dataflow/kuna_compareform.rs
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_compareform.rs
 (ActionPresentCompareForm)`, group `presentcompare`, is described with its
 folder in chapter [03](03-ssa-and-simplification.md). Option defaults, tiers,
 and flip guidance for the kuna settable options named below live in the
@@ -239,7 +239,7 @@ conversion, and structured member extraction retains priority.
 whose input may be a signaling NaN and whose result reaches a conversion back
 to the source format materializes its C result in a volatile compound literal
 (`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::op_float_quiet_ir)`,
-`crates/unlace-bandb/src/p3_dataflow/kuna_floatquiet.rs (feeds_round_trip)`):
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_floatquiet.rs (feeds_round_trip)`):
 `(float)(*&(volatile double){ (double)x })`. A C compiler erases a plain
 `(float)(double)x` pair even with strict rounding flags. The literal evaluates
 its input once and forces the wider format to exist in storage. The read goes
@@ -2376,7 +2376,7 @@ angr|ghidra` (default `angr` since DIV-5; live flag `name_style_angr` set in
 `crates/unlace-middle/src/infra/architecture.rs
 (reset_defaults_internal)`) re-skins every *default* (generated) name; user
 and recovered names are never touched. The policy helpers live in
-`crates/unlace-bandb/src/p6_variables/kuna_naming.rs` with the pure
+`crates/unlace-bandb-base/src/p6_variables/kuna_naming.rs` with the pure
 address renderers in `crates/unlace-middle/src/p0_knowledge/database.rs
 (kuna_global_data_name, kuna_function_name, kuna_label_name, kuna_arg_name)`.
 Under the angr scheme: locals and decompiler temporaries are `v1`, `v2`, … —
@@ -2510,7 +2510,7 @@ prototype name always wins. The angr scheme's second visible artifact is P9-owne
 local declaration gains a trailing storage comment — `// rax` (register,
 lowercased), `// stack - 0x10` (frame-relative signed offset), `// rdx:rax` (a
 join value's register pieces), `// tmp` (an SSA temporary with no machine
-home). `crates/unlace-bandb/src/p6_variables/kuna_varsources.rs` gathers
+home). `crates/unlace-bandb-base/src/p6_variables/kuna_varsources.rs` gathers
 every member's machine storage and the storage retained when simplification
 removed an equivalent copy. Distinct homes print once, in sorted order, separated
 by ` | `: `// eax | ebx`. A register pair holding one split value keeps its
@@ -2527,7 +2527,7 @@ that variable's base: a register copied from the field at -0x80 of a record at
 `--mode reliable`, e.g. `stack - 0x208` to `stack - 0x1c0`).
 Register copies used only to supply outgoing CALL or CALLIND arguments are
 transport locations, so they do not contribute to a local's source comment.
-`crates/unlace-bandb/src/p6_variables/kuna_calltransport.rs` checks that
+`crates/unlace-bandb-base/src/p6_variables/kuna_calltransport.rs` checks that
 the copy has an earlier home and reaches only argument slots whose ABI storage
 matches that register. This keeps a saved register's home even when its only
 readers forward the value to outgoing arguments. A reload from an existing
@@ -2557,7 +2557,7 @@ declaration says `unsigned long long *` — so the same `*v9` reads eight bytes
 past the object and drops the sign extension. kuna declares the type
 representative's type (always on), which is the
 `sym->getType()` upstream would have written
-(`crates/unlace-bandb/src/p6_variables/kuna_declhightype.rs
+(`crates/unlace-bandb-base/src/p6_variables/kuna_declhightype.rs
 (type_representative)`). It is presentation only: no cast, no statement and no
 p-code moves. It applies only to a high the symbol table does not describe — a
 mapped local keeps the declaration representative's type, because kuna does not

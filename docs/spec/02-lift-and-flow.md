@@ -862,7 +862,7 @@ here, copies the locked prototype at flow and so never reaches the
 `ActionDefaultParams` arm that gives a declared callee the stack adjustment its
 parameter list implies (`kuna_calleeprotostack.rs`, 04); the copy applies that rule
 itself
-(`crates/unlace-bandb/src/p4_calls/kuna_calleeprotostack.rs
+(`crates/unlace-bandb-base/src/p4_calls/kuna_calleeprotostack.rs
 (resolve_declared_extra_pop)`), so a
 `__thiscall` or `__stdcall` import pops what its declaration says instead of
 what the push run in front of it suggests. (kuna `relronoreturn`, default on)
@@ -3513,7 +3513,7 @@ site rather than per callee:
 `decompile_drive.rs (ArchFlowEnv::query_call_no_return_at)`, asked by
 `flow.rs (FlowInfo::call_site_no_return)` with the call instruction's address
 and fall-through, and decided by
-`crates/unlace-bandb/src/p4_calls/kuna_calleenoreturn.rs
+`crates/unlace-bandb-base/src/p4_calls/kuna_calleenoreturn.rs
 (is_proxy_no_return_at)`. The call is no-return when three facts hold
 together. The callee's name is `<prefix>__<entry>`
 (`kuna_noreturn_externmatch.rs (is_proxy_noreturn_name)`): the text after the

@@ -44,13 +44,6 @@ const KILL: u8 = 2;
 
 type Event = (usize, u32, u8, OpId);
 
-impl LiveCalls {
-    /// Can a read of the range follow `call`?
-    pub(crate) fn needs(&self, call: OpId) -> bool {
-        self.keep.contains(&call)
-    }
-}
-
 /// May the markers of the range `addr` with properties `fl` be pruned on this
 /// heritage pass: the range is neither persistent nor address-tied, and the
 /// `ActionDeadCode` after this pass may remove from its space?

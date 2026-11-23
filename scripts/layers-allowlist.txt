@@ -176,16 +176,13 @@ flow -> kuna_calleepurge
 flow -> kuna_localstackviews
 flow -> kuna_retpushedhalf
 flow -> kuna_spsolve
-fspec -> flow
 fspec -> kuna_calleedeadarg
 fspec -> kuna_calleepurge
-fspec -> kuna_callmechanisms
 fspec -> kuna_condexeret
 fspec -> kuna_customreturn
 fspec -> kuna_floatregister
 fspec -> kuna_inputparamgap
 fspec -> kuna_inputstorage
-fspec -> kuna_joincalloutput
 fspec -> kuna_libcnames
 fspec -> kuna_narrowext
 fspec -> kuna_passthrough
@@ -195,7 +192,6 @@ fspec -> kuna_stackaddrargtrial
 fspec -> kuna_stackarggap
 fspec -> kuna_stackparamalign
 fspec -> kuna_varargstackargs
-fspec -> kuna_varargtransfer
 fspec -> modelrules
 fspec -> remote_provider
 funcdata -> kuna_atomicxadd
@@ -208,7 +204,6 @@ funcdata -> kuna_callmechanisms
 funcdata -> kuna_callrettype
 funcdata -> kuna_calltargettype
 funcdata -> kuna_callwide
-funcdata -> kuna_dynamiclocals
 funcdata -> kuna_elemptr
 funcdata -> kuna_elfmaindecl
 funcdata -> kuna_entryreads
@@ -217,7 +212,6 @@ funcdata -> kuna_libcnames
 funcdata -> kuna_localstackviews
 funcdata -> kuna_msvcbyval
 funcdata -> kuna_narrowret
-funcdata -> kuna_octeoneffects
 funcdata -> kuna_passthrough
 funcdata -> kuna_ppc32piccalls
 funcdata -> kuna_protoorder
@@ -260,13 +254,9 @@ heritage -> prefersplit
 heritage -> rangeutil
 jumptable -> kuna_constselectjump
 jumptable -> kuna_emulatefunction
-jumptable -> kuna_highslice_guard
 jumptable -> kuna_jumpassist
-jumptable -> kuna_segmentize
-jumptable -> kuna_switchextent
 jumptable -> kuna_switchguardrange
 jumptable -> kuna_switchrunon
-jumptable -> kuna_switchtrim
 jumptable -> rangeutil
 kuna_assert -> kuna_phases
 kuna_bytehonest -> printc

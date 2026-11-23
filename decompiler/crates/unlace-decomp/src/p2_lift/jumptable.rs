@@ -834,8 +834,7 @@ impl GuardRecord {
         let c1 = fd.obank().get(op1).unwrap().code();
         if c1 != fd.obank().get(op2).unwrap().code() {
             return i32::from(
-                fd.get_arch().highslice_guard
-                    && crate::p2_lift::kuna_highslice_guard::matches(fd, op1, op2),
+                fd.get_arch().highslice_guard && (fd.hooks().highslice_guard_matches)(fd, op1, op2),
             );
         }
         match c1 {
@@ -3516,7 +3515,7 @@ impl JumpBasicModel {
             })
             .collect();
         let [load] = loads[..] else { return false };
-        let Some((table, stride, index)) = crate::kuna_switchextent::table_read(fd, load) else {
+        let Some((table, stride, index)) = (fd.hooks().switchextent_table_read)(fd, load) else {
             return false;
         };
         let width = fd
@@ -5358,7 +5357,7 @@ impl JumpModel for JumpBasicModel {
         }
         let mut i = Self::reasonable_rows(fd, addresstable);
         if self.trim_rows {
-            i = i.min(crate::p2_lift::kuna_switchtrim::trimmed_rows(
+            i = i.min((fd.hooks().switchtrim_trimmed_rows)(
                 fd,
                 addresstable,
                 loadpoints,
@@ -5400,7 +5399,7 @@ impl JumpModel for JumpBasicModel {
                 }
             }
         }
-        if crate::kuna_segmentize::table_leaves_image(fd, indop, addresstable) {
+        if (fd.hooks().segmentize_table_leaves_image)(fd, indop, addresstable) {
             return Ok(false);
         }
         Ok(true)
@@ -5612,7 +5611,7 @@ impl JumpBasicModel {
             })
             .collect();
         let [load] = loads[..] else { return None };
-        let (table, stride, _) = crate::kuna_switchextent::table_read(fd, load)?;
+        let (table, stride, _) = (fd.hooks().switchextent_table_read)(fd, load)?;
         let width = fd
             .obank()
             .get(load)?

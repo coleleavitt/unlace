@@ -138,5 +138,8 @@ unlace-decomp            18k   driver: schedule, option dispatch, fills the hook
   middle fixpoint is one unit by design; splitting it further fights the algorithm.
 - Binary Ninja splits that middle only because it lowers through separate IR levels. This engine
   does not, and Ghidra's ruleset assumes it does not.
-- Hex-Rays' maturity levels are the idea to borrow inside `bandb` later: mark what each phase has
-  settled, so later passes can rely on it.
+- Hex-Rays' maturity levels are borrowed as a record, not a new IR: each function carries how far
+  the scheduler has got through the current pass (`raw` … `band-b` … `complete`), and passes ask
+  whether a fact is settled instead of reading ad-hoc flags. Because the middle is one fixpoint
+  that restarts, a level only rises within a pass and drops back to `raw` on a restart
+  (`docs/spec/00-overview.md` §0.10).

@@ -17,7 +17,7 @@
     (challenge 673da52e9b533b4c22bd2eeb), whose JSValue-returning call to
     sub_875e0 at 0x9d9d8 rendered as a bare statement followed by a cast of an
     unassigned rdx local.  Reduced to one call and assembled from
-    decompiler/crates/unlace-analysis/tests/fixtures/callretpair_x86_64.s:
+    crates/unlace-analysis/tests/fixtures/callretpair_x86_64.s:
 
         401020  push %rbx
         40102b  call read_value            ; returns { void *u; long tag; }

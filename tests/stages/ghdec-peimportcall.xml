@@ -44,7 +44,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/pe_noreturn_import.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/pe_noreturn_import.exe</com>
   <com>read symbols</com>
   <com>load function entry</com>
   <com>decompile</com>
@@ -53,7 +53,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_import_slots</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_import_slots</com>
   <com>read symbols</com>
   <com>load function _call_slots</com>
   <com>decompile</com>

@@ -32,7 +32,7 @@ legitimate outcome — record it and stop (§4). Not every gap is a feature.
 ## 0. Prerequisites
 
 ```bash
-make binaries && make specs      # decomp_dbg / kuna at decompiler/target/release/, .sla specs
+cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli && target/release/slacomp -a specs      # decomp_dbg / kuna at target/release/, .sla specs
 cd <repo-root>                   # every `python -m scripts.pipeline.<mod>` below runs from the root
 ```
 
@@ -110,7 +110,7 @@ triage checklist in `docs/decbench-loop.md` before turning a case into a feature
 
 ```bash
 python3 -m scripts.pipeline.compare /path/to/bin <func> --reference angr   # side-by-side + metrics + signals
-decompiler/target/release/unlace decompile-all ./bin --json                  # eyeball a whole binary (JSON per function)
+target/release/unlace decompile-all ./bin --json                  # eyeball a whole binary (JSON per function)
 ```
 
 `compare` takes a name, `0x`-address, or `@entry` as selector, and works on any binary —
@@ -158,7 +158,7 @@ investigating.
    - **Console session** for the pipeline's own view:
      ```bash
      printf 'load file ./bin\nread symbols\nload function fn\ndecompile\nquality\nregion tree\nrestarts\nphase status\nquit\n' \
-       | SLEIGHHOME=$PWD/specs decompiler/target/release/decomp_dbg
+       | SLEIGHHOME=$PWD/specs target/release/decomp_dbg
      ```
      `quality` = the goto/structure metric; `restarts` = why the function restarted;
      `region tree` = the P7 region view; `pipeline <variant>` runs reduced sub-queries;
@@ -181,7 +181,7 @@ investigating.
 
 ## 3. Implement: one option-gated feature
 
-Canonical template: `decompiler/crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs`
+Canonical template: `crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs`
 (+ its `phases.toml` row and `tests/stages/ghangr-loweredswitch.xml`). Model the code,
 registration, and test on it. New logic lives in `kuna_<slug>.rs` inside the owning phase
 folder; edits to ported-core files only where an anchor demands it, each marked
@@ -190,16 +190,16 @@ byte-identical until the ablation says otherwise.
 
 The artifact checklist (every item, or the gates fail opaquely):
 
-1. `decompiler/crates/unlace-decomp/src/<phase>/kuna_<slug>.rs` — the feature, early-return
+1. `crates/unlace-decomp/src/<phase>/kuna_<slug>.rs` — the feature, early-return
    when its flag is off. Flag on the architecture struct, defaulted in its reset path.
    ElementId from the 4000+ range (grep for the current highest).
-2. `[[settable]]` row in `decompiler/crates/unlace-decomp/phases.toml` — **every field**,
+2. `[[settable]]` row in `crates/unlace-decomp/phases.toml` — **every field**,
    including the provenance contract (§below): `summary`, `use_when`, `values`+`example`,
    `tier`, `symptoms`, `source_decompiler`, `inspiration`, `change_kind`.
 3. Option name registered in `src/p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`).
 4. **Bump the hard-coded catalog counts** (three places; grep the current total):
    `src/p0_knowledge/kuna_phases/tests.rs` (count asserts),
-   `decompiler/crates/unlace-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
+   `crates/unlace-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
    `tests/fixtures/phase_catalog.json` fixture — regenerate it with the console
    `openfile write`/`phase catalog` recapture documented in that file's header), and the
    `tests/stages/kuna-catalog.xml` stringmatch counts (bump whichever bucket the new
@@ -218,16 +218,16 @@ The artifact checklist (every item, or the gates fail opaquely):
    stringmatch spans both passes' transcript — absent in pass 1 AND present in pass 2.
    Then re-record the stages baseline:
    ```bash
-   decompiler/target/release/unlace test --datatests --datatests-dir tests/stages --save-baseline docs/baseline-stages.json
+   target/release/unlace test --datatests --datatests-dir tests/stages --save-baseline docs/baseline-stages.json
    ```
-6. Regenerate the catalog doc: `decompiler/target/release/unlace catalog --markdown > docs/options.md`.
-7. Update the owning `docs/spec/` chapter; `make check-spec`.
+6. Regenerate the catalog doc: `target/release/unlace catalog --markdown > docs/options.md`.
+7. Update the owning `docs/spec/` chapter; `python3 tools/check_spec.py`.
 
 ## 4. Verify & ship
 
 **Ablation decides the default.** `unlace test` has no option flag — to measure the flip,
 temporarily set the option's default to ON (its architecture reset path + the
-`phases.toml` row's `default =`), `make binaries`, then run
+`phases.toml` row's `default =`), `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`, then run
 `unlace test --all --baseline docs/baseline.json`; revert the flip if the table below says
 opt-in:
 
@@ -250,8 +250,8 @@ python3 -m scripts.pipeline.timeit --record docs/features/<slug>/record.json \
 ```
 
 **The four gates, all green, before commit**:
-`make test` (**PARITY OK** 675/675) · `make test-stages` (**PARITY OK**) ·
-`make rust-test` · `make check-spec`. Plus `unlace catalog --check` → `catalog OK`.
+`cargo test --release -p unlace-cli --test parity datatests` (**PARITY OK** 675/675) · `cargo test --release -p unlace-cli --test parity stage_tests` (**PARITY OK**) ·
+`cargo nextest run --workspace --exclude unlace-wasm --profile ci` · `python3 tools/check_spec.py`. Plus `unlace catalog --check` → `catalog OK`.
 
 **The PR** carries the per-feature bundle `docs/features/<slug>/`:
 
@@ -318,7 +318,7 @@ re-queues violations.
 5. **Large/multi-part features go through a draft `[PROPOSAL]` PR first** (§4) — an
    explicit human go/no-go before implementation.
 6. **The spec is live.** Any behavior change updates the owning `docs/spec/` chapter in
-   the same PR; `make check-spec` must pass.
+   the same PR; `python3 tools/check_spec.py` must pass.
 7. **Sweep every changed function, not just the witness.** For any pass that moves,
    deletes or re-anchors statements, the PR carries a whole-corpus before/after diff over
    **all** functions the option changes, with each hunk classified. A design that is right
@@ -361,7 +361,7 @@ touch .kuna-pipeline/STOP                          # graceful stop; in-flight wo
 Mechanics an operator should know: workers claim opportunities atomically
 (`state claim`, exit code 0/1); state always lives in the **main** tree
 (`KUNA_PIPELINE_STATE_DIR`) so `status` sees worktree workers; worktrees reuse the main
-tree's compiled specs (`KUNA_SPECS` — never `make specs` in a worktree); session ids are
+tree's compiled specs (`KUNA_SPECS` — never `target/release/slacomp -a specs` in a worktree); session ids are
 recorded for review (`claude --resume` for Claude, `codex exec resume` for Codex), and Codex
 JSONL plus final output are retained beside the worker log; merged/closed-PR worktrees are
 GC'd, open ones kept. Proposals: `status --proposals` lists parked drafts;
@@ -370,7 +370,7 @@ GC'd, open ones kept. Proposals: `status --proposals` lists parked drafts;
 Only a missing inventory initializes empty state. An unreadable or malformed
 `inventory.json`, or a section with the wrong container type, stops the operation
 without replacing the file; the state CLI reports the error and exits `2`. Repair
-or restore the inventory before continuing. `make test-tools` covers these failure
+or restore the inventory before continuing. `PYTHONPATH=. python3 -m unittest discover -s scripts/tests -p 'test_*.py'` covers these failure
 paths using temporary state directories and also runs in CI.
 
 The driver distinguishes an empty selection from a retryable disk brake or

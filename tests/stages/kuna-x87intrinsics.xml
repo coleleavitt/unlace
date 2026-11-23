@@ -12,11 +12,11 @@
     (__CIatan2, __CIpow, __CIfmod) take ST1 then ST0, in source order, under a
     second model.
 
-    Fixture: decompiler/crates/unlace-analysis/tests/fixtures/x87intrinsic_i386.obj,
+    Fixture: crates/unlace-analysis/tests/fixtures/x87intrinsic_i386.obj,
     x87intrinsic_i386.c compiled by Visual C++ 2005 SP1 (`cl /O2 /c`); its
     __CI* intrinsics are undefined externs, bound by name.
 
-    Fixture: decompiler/crates/unlace-analysis/tests/fixtures/x87import_pe_i386.exe
+    Fixture: crates/unlace-analysis/tests/fixtures/x87import_pe_i386.exe
     (x87import_pe_i386.asm): `_CIcos` imported from msvcr90.dll through a
     `jmp` thunk keeps its x87 model rather than the C runtime's `__cdecl`.
 -->
@@ -27,7 +27,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/x87intrinsic_i386.obj</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/x87intrinsic_i386.obj</com>
   <com>read symbols</com>
   <com>load function _polar</com>
   <com>decompile</com>
@@ -36,7 +36,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/x87import_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/x87import_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as spin</com>
   <com>load function spin</com>

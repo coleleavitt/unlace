@@ -1,0 +1,2123 @@
+//! (kuna) `passthrough` — a register a function forwards untouched to a callee
+//! that reads it is a parameter of that function too.
+//!
+//! # The symptom
+//!
+//! gzip -O2 `gzip_base_name` is `endbr64; jmp gzip_last_component` — it hands
+//! its own `rdi` to the callee and returns what the callee returns. kuna recovers
+//! the callee as `char *sub_dfd0(char *a0)` in the same run, yet prints
+//!
+//! ```text
+//!   void sub_d290(void) { sub_dfd0(); } // tail-call
+//! ```
+//!
+//! while DWARF says `char *gzip_base_name(char const *fname)`. coreutils df
+//! `dir_name` (`call mdir_name; test rax,rax; ...`) and tar's `*_diag` helpers
+//! are the same shape without the tail call.
+//!
+//! # Why the argument is lost
+//!
+//! A call site's argument trials come from `Heritage::guardCalls`
+//! (`heritage.cc:1444`), which registers one for each HERITAGED storage range
+//! the callee's model could take a parameter in. A range is heritaged only when
+//! some op of the function reads or writes it, and a register the function only
+//! forwards is named by no op at all: the call gets no trial for it, so no
+//! argument, so the function's own input never has a reader and it gets no
+//! parameter either. Where the register IS heritaged (the function also tests
+//! it), `AncestorRealistic::execute` (`funcdata_varnode.cc:2159`) refuses the
+//! trial anyway, because upstream expects "active movement into the parameter"
+//! and an input Varnode sitting at the call slot is the absence of one.
+//!
+//! # The evidence
+//!
+//! Only the callee can say whether it wanted the register, and the statement
+//! this pass reads is the one `argclobber` reads in the other direction: the
+//! callee's own RECOVERED prototype, which [`crate::p4_calls::kuna_protoorder`]
+//! states for every callee `decompile-all` decompiled before its callers. For a
+//! register `R` at a direct, unlocked, non-variadic call ([`stated_width`]):
+//!
+//! * the stated prototype has a parameter starting at `R`, and the list is one
+//!   `protoorder`'s locking mode would accept as an arity claim
+//!   ([`crate::p4_calls::kuna_protoorder::RecoveredTypes::arity_sound`]): all in
+//!   registers, the callee's body does not read the register the next parameter
+//!   would arrive in (a variadic's register-save prologue does), the list does not
+//!   end on the last argument register, and it sits where the convention puts
+//!   those types -- or else every register the list names is one the callee's
+//!   body takes;
+//! * the callee's own body READS `R` before writing it on some path, for a value
+//!   that reaches something ([`crate::p4_calls::kuna_calleedeadarg`]'s
+//!   `proves_input`), or hands it on to a declared parameter or a callee that
+//!   takes it; where that bounded walk cannot finish, the registers the callee's
+//!   first heritage saw it read ([`crate::kuna_entryreads::callee_takes`]). A
+//!   function calling itself asks its own body the same way. So the parameter is
+//!   not a recovery artifact of the callee;
+//!   a body that hands `R` unwritten to a direct call whose target takes it
+//!   on these same terms (`call f; ret`) reads it too, up to three calls deep
+//!   ([`crate::p4_calls::kuna_calleedeadarg::reads_through_calls`]);
+//! * that read is for something other than a variadic tail
+//!   ([`crate::p4_calls::kuna_varargtail`]): a callee whose parameter only
+//!   reaches an argument slot the ABI lets a caller leave unset says nothing
+//!   about what its callers put there -- openssh `xcalloc`'s third parameter is
+//!   gcc's `push %rdx` alignment filler at a variadic call, gnulib `open_safer`'s
+//!   is `open`'s `mode`;
+//! * every EARLIER parameter the callee states is either forwarded here too or
+//!   is one this function's own entry does not write before reading
+//!   ([`no_hole_before`]): a claim the positional list can only reach across a
+//!   register this function loads itself materializes that register as a
+//!   parameter that is nothing -- the `overrec(unsigned long *a0,unsigned long
+//!   a1,long a2)` of the `protoorder` fixture, whose `a1` occurs in no
+//!   statement and whose one call site passes one argument;
+//! * the caller did not set the call up as variadic (`set_up_as_variadic`:
+//!   `xor %eax,%eax` before a SysV call), and is not variadic itself
+//!   (`reads_the_vararg_count`: `test %al,%al` in its entry block);
+//! * the value at the call is the function's own incoming `R` — the SSA input
+//!   Varnode itself, never a value any op of the function wrote.
+//!
+//! The argument is as wide as the callee's body reads it, so a parameter the
+//! callee recovered as `rdi` but reads as `edi` becomes the caller's `int`.
+//!
+//! Nothing is added for a callee that stated nothing: a single-function
+//! `unlace decompile`, a narrowed or sharded `decompile-all`, an import,
+//! `--option protoorder off`, and under `--option protoorder types` a callee
+//! inside a recursive component, all leave every call as it was. Under the
+//! default `cycles` a recursive callee states its list like any other, and what
+//! it stated is read here on the same terms as any other callee's.
+//!
+//! # The mechanism
+//!
+//! The pass only ever adds to a list every other rule has settled. The scoring
+//! of a heritaged register is upstream's, and a call left empty by it is often
+//! finished by a later rule (`calleearityfwd` fills tar `sysinttostr`'s first
+//! tail call from its sibling), which an argument supplied while scoring would
+//! turn off.
+//!
+//! [`claim_untouched_registers`] runs at the end of `ActionFuncLink`, before the
+//! first heritage: for a register no op of the function touches, it registers
+//! the trial at each call no other call can precede ([`first_calls`]) whose
+//! callee states it, and gives the CALL a read of it, exactly as the
+//! locked-prototype branch of `funcLinkInput` does. Heritage links that read to
+//! the function's input. The claim is recorded on the `Funcdata`; heritage
+//! registers the now visible range at every other call as usual, and only the
+//! function's own RETURN is kept off it ([`suppresses_return_trial`]).
+//!
+//! A trial on a claimed range, at any call, is never scored ([`claimed_range`]):
+//! it is inactive, where the option-off run's hole-filling trial for the slot
+//! starts. Left to `AncestorRealistic`, a register that reaches a call through
+//! an earlier call is "killed by call", definitely not used, and `forceNoUse`
+//! drops every argument after it (`noop(); twoarg(p,3)` at gcc -O2 lost the `3`).
+//!
+//! [`capture`] runs first in `buildInputFromTrials`: it keeps the unused trials
+//! that stand on the function's own input and satisfy the evidence, and retires
+//! the unused ones on claimed ranges so the sibling and body rescues see what
+//! they see with the option off. [`extend_pending`] runs last in `ActionActiveParam`: a call's
+//! final list, when it is a leading run of the stated one, gains the stated
+//! registers that follow it, up to the first the function does not forward.
+//! `ActionInputPrototype` then makes the function's input a parameter because
+//! the call now reads it.
+//!
+//! # The tail call's result
+//!
+//! When every live RETURN is reached from a direct call with nothing in between,
+//! every such callee states a non-`void` return in the same register or register
+//! pair (a callee with no parameters states its return too), and the function
+//! never touches those registers (`stated_tail_return`), each RETURN gets a read
+//! of each and the function's return trial for each (`claim_tail_return`). A
+//! register that carries no argument (x86 `eax`, MIPS `v0`) may be written before
+//! the call, which overwrites it; heritage then reads the claimed register as
+//! the low SUBPIECE of the wider one the function wrote. Upstream's `ancestorOpUse` refuses an INDIRECT creation
+//! at a RETURN, so [`returns_tail_result`] accepts the one planted at a claimed
+//! call, whose output then takes the callee's recovered return type
+//! ([`tail_return_type`]). A register pair is kept whole or not at all
+//! ([`keep_tail_return_whole`]). The `r0 = r0` an ARM return's mode switch is
+//! injected as (`v0 = v0` on MIPS) is not a touch of the returned register
+//! ([`is_injected_noop`]), so `bl f; pop {r4,pc}` hands back `f`'s result as
+//! `call f; ret` does. The claim yields to a return value the function computes
+//! itself in another storage class ([`returns_own_value`]): `bl f;
+//! vadd.f32 s0,s16,s16; pop {r4,pc}` returns `s0`, not `f`'s leftover `r0`.
+
+pub use crate::fspec::NeutralScope;
+use unlace_base::address::Address;
+use unlace_base::error::KunaResult;
+use unlace_base::marshal::ElementId;
+use unlace_base::space::spacetype;
+use unlace_base::types::int4;
+
+use unlace_num::opcodes::OpCode;
+
+use crate::context::{OpId, VarnodeId};
+use crate::fspec::{FuncCallSpecs, ParamActive, ParamTrial};
+use crate::funcdata::Funcdata;
+use crate::p0_knowledge::options::on_or_off;
+use crate::varnode::Varnode;
+
+/// Marshaling element `<passthrough>` (kuna 4000+ range).
+pub const ELEM_PASSTHROUGH: ElementId = ElementId::new("passthrough", 4177);
+
+/// `option passthrough on|off`.
+pub struct OptionPassThrough;
+
+impl OptionPassThrough {
+    /// The option name.
+    pub const NAME: &'static str = "passthrough";
+
+    /// Resolve the flag and its confirmation message; the caller writes it into
+    /// `Architecture::pass_through`.
+    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+        let val = on_or_off(p1)?;
+        let prop = if val { "on" } else { "off" };
+        Ok((
+            val,
+            format!("Forwarded-register parameter recovery turned {prop}"),
+        ))
+    }
+}
+
+/// A register range this pass made visible to heritage, and the sites whose
+/// trial for it the pass owns.
+#[derive(Clone, Debug)]
+pub struct PassThroughClaim {
+    /// The register storage.
+    pub addr: Address,
+    /// Its size in bytes.
+    pub size: int4,
+    /// The CALL ops that own an ARGUMENT trial for it.
+    pub arg_owners: Vec<OpId>,
+    /// The CALL ops that own a RETURN-VALUE trial for it: the tail calls whose
+    /// result every RETURN of the function hands back.
+    pub ret_owners: Vec<OpId>,
+    /// Some op of the function reads or writes the range itself, so heritage
+    /// visits it with the option off too.
+    pub body_touches: bool,
+    /// A RETURN reached from no call hands back the function's own value in the
+    /// range beside the tail calls (`mixedtailret`).
+    pub beside_own: bool,
+}
+
+/// How many bytes of `[addr, addr+size)` the callee of `fc` takes as a
+/// parameter, by its own recovered prototype and its own body.
+///
+/// The stated prototype must have a parameter starting at `addr`, and the
+/// callee's body must take it ([`crate::kuna_entryreads::callee_takes`]); the
+/// answer is the narrowest of the range, that parameter and what the body
+/// consumes, so a register the callee reads as `edi` is passed as the `int` it
+/// is. A call of the function to itself asks its own body instead
+/// ([`self_takes`]). `None` for a locked or variadic call spec (its argument
+/// list is not recovered from trials), an indirect call, a call the caller set
+/// up as variadic, a callee `protoorder` stated nothing for, a stated list that
+/// is not an arity claim and names a register the body does not take, a
+/// register the callee's body is not seen taking, a register the calling
+/// function's own prototype could not take as a parameter, and any call of a
+/// variadic function.
+pub fn stated_width(
+    data: &Funcdata,
+    fc: &FuncCallSpecs,
+    addr: &Address,
+    size: int4,
+) -> Option<int4> {
+    if !data.get_arch().pass_through || size <= 0 || data.kuna_passthrough_variadic() {
+        return None;
+    }
+    if fc.is_input_locked() || fc.is_dotdotdot() {
+        return None;
+    }
+    let op = fc.get_op();
+    let is_call = data
+        .obank()
+        .get(op)
+        .map(|o| !o.is_dead() && o.code() == OpCode::CPUI_CALL)
+        .unwrap_or(false);
+    if !is_call || !is_register(addr) || data.kuna_passthrough_vararg_calls().contains(&op) {
+        return None;
+    }
+    let entry = fc.get_entry_address();
+    if entry == data.get_address() {
+        if !general_purpose(data.get_func_proto(), addr, size) || !self_takes(data, addr, size) {
+            return None;
+        }
+        let seen = data
+            .kuna_entry_reads()
+            .and_then(|r| r.width(addr))
+            .unwrap_or(size)
+            .min(size);
+        let width = match data
+            .kuna_callee_entry_dead(entry)
+            .filter(|f| f.is_complete())
+        {
+            Some(f) => f.live_input_width(addr, size).map_or(seen, |w| w.min(seen)),
+            None => seen,
+        };
+        return data
+            .get_func_proto()
+            .possible_input_param(addr, width)
+            .then_some(width);
+    }
+    let stated = data.kuna_protoorder_types(entry)?;
+    if stated.vararg_tail.iter().any(|a| a == addr) {
+        return None;
+    }
+    let (stated_size, stated_type) = stated
+        .inputs
+        .iter()
+        .find(|(a, _, _)| a == addr)
+        .map(|(_, s, t)| (*s, t))?;
+    if crate::kuna_armfloatargs::partial_float(data, stated_size, stated_type, size) {
+        return None;
+    }
+    let size = size.min(stated_size);
+    let float = stated_type.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT;
+    if !general_purpose(fc.proto(), addr, size) && !float {
+        let facts = data
+            .kuna_callee_entry_through(entry)
+            .or_else(|| data.kuna_callee_entry_dead(entry))?;
+        if !stated.arity_sound || !facts.proves_input(addr, size) {
+            return None;
+        }
+        let width = facts.live_input_width(addr, size).unwrap_or(size);
+        return data
+            .get_func_proto()
+            .possible_input_param(addr, width)
+            .then_some(width);
+    }
+    let takes = |a: &Address, s: int4, strict: bool| {
+        crate::kuna_entryreads::callee_takes(data, entry, a, s, strict)
+    };
+    let read = if stated.callers_vote {
+        true
+    } else if stated.arity_sound {
+        takes(addr, size, false)
+    } else {
+        takes(addr, size, true)
+            && stated
+                .inputs
+                .iter()
+                .filter(|(a, _, _)| is_register(a))
+                .all(|(a, s, _)| takes(a, *s, true))
+    };
+    if !read {
+        return None;
+    }
+    let facts = data
+        .kuna_callee_entry_through(entry)
+        .or_else(|| data.kuna_callee_entry_dead(entry))
+        .filter(|f| f.is_complete());
+    let seen = stated
+        .reads
+        .iter()
+        .find(|(a, _)| a == addr)
+        .map_or(size, |(_, w)| (*w).min(size));
+    let width = match &facts {
+        Some(f) => f.live_input_width(addr, size).map_or(seen, |w| w.min(seen)),
+        None => seen,
+    };
+    data.get_func_proto()
+        .possible_input_param(addr, width)
+        .then_some(width)
+}
+
+/// Is `[addr, addr+size)` in a general-purpose input register of `proto`'s
+/// model? The body's own reads answer only for those, and for a register the
+/// callee's statement types as a float: a callee that only moves its `float` in
+/// `xmm0` is recovered with an integer parameter, and a forward of that
+/// register gives its wrapper a parameter of the wrong kind.
+fn general_purpose(proto: &crate::fspec::FuncProto, addr: &Address, size: int4) -> bool {
+    proto.has_model()
+        && proto.model().input().get_entry().iter().any(|e| {
+            e.get_type() == crate::dtype::type_class::TYPECLASS_GENERAL
+                && e.justified_contain(addr, size) >= 0
+        })
+}
+
+/// Does the function's own body take `[addr, addr+size)`: its complete entry
+/// decode reads it, or it hands it to a declared parameter; without a complete
+/// decode, its first heritage saw it read ([`crate::kuna_entryreads`]).
+fn self_takes(data: &Funcdata, addr: &Address, size: int4) -> bool {
+    let Some(own) = data.kuna_entry_reads() else {
+        return false;
+    };
+    match data
+        .kuna_callee_entry_dead(data.get_address())
+        .filter(|f| f.is_complete())
+    {
+        Some(f) => {
+            f.reads_low_byte(addr, size, false, true)
+                || crate::kuna_entryreads::overlaps(&own.declared, addr, size)
+        }
+        None => own.takes(addr, size),
+    }
+}
+
+/// The registers the callee at `entry` takes, in order: its `protoorder`
+/// statement, or, for a call of the function to itself, the argument registers
+/// of its model up to the first its own body does not read.
+fn stated_registers(data: &Funcdata, entry: &Address) -> Option<Vec<Address>> {
+    if entry == data.get_address() {
+        data.kuna_entry_reads()?;
+        let proto = data.get_func_proto();
+        if !proto.has_model() {
+            return None;
+        }
+        let mut out = Vec::new();
+        for e in proto.model().input().get_entry() {
+            if e.get_type() != crate::dtype::type_class::TYPECLASS_GENERAL
+                || e.get_space().get_type() != spacetype::IPTR_PROCESSOR
+            {
+                continue;
+            }
+            let a = Address::new(std::rc::Rc::clone(e.get_space()), e.get_base());
+            if !self_takes(data, &a, e.get_size()) {
+                break;
+            }
+            out.push(a);
+        }
+        return Some(out);
+    }
+    Some(
+        data.kuna_protoorder_types(entry)?
+            .inputs
+            .iter()
+            .map(|(a, _, _)| a.clone())
+            .collect(),
+    )
+}
+
+/// Does `[addr, addr+size)` hold nothing a call takes but something it gives
+/// back -- the return register on a convention that passes no argument in it?
+/// A range that only overlaps an argument register is not one: AArch64's `q0`,
+/// zeroed by `movi v0.16b,#0` to clear a local struct, holds `d0`.
+fn return_only(proto: &crate::fspec::FuncProto, addr: &Address, size: int4) -> bool {
+    is_register(addr)
+        && proto.characterize_as_output(addr, size) != crate::fspec::Containment::NoContainment
+        && proto.model().characterize_as_input_param(addr, size)
+            == crate::fspec::Containment::NoContainment
+}
+
+/// Did the caller set call spec `idx` up as a variadic call?
+///
+/// A register that carries no argument but the return value is written, and
+/// not read again except by the writing instruction's own ops -- its operands
+/// and its flag computation -- between the call and the last call or block start
+/// before it: `xor %eax,%eax` before a SysV variadic call is the
+/// vector-register count in `al`,
+/// and nothing else has a reason to write the register the call is about to
+/// overwrite. A variadic callee's recovered list can stop on a tail
+/// register its body saves (gnulib `open_safer(char const *,int,...)` saves only
+/// `rdx`), so the caller's side is what says the tail is optional. An injected
+/// no-op (a MIPS mode switch's `v0 = v0`) is neither read nor write.
+pub(crate) fn set_up_as_variadic(data: &Funcdata, idx: int4) -> bool {
+    let fc = data.get_call_specs(idx);
+    let proto = fc.proto();
+    let mut cur = data.op_previous_op(fc.get_op());
+    // The instruction whose ops have read the register so far. Walking back, an
+    // instruction's flag computation is reached BEFORE the write it derives
+    // from, and `xor %eax,%eax` -- the idiom gcc actually emits for the vector
+    // count -- reads the register it zeroes twice over: once as its own operand,
+    // once in `ZF = (EAX == 0)`. Those reads are the writing instruction's own,
+    // and only a read by some OTHER instruction says the register was carrying
+    // something the call is about to take.
+    let mut read_at: Option<Address> = None;
+    while let Some(op) = cur {
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
+        if matches!(
+            o.code(),
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER
+        ) {
+            return false;
+        }
+        if is_injected_noop(data, op) {
+            cur = data.op_previous_op(op);
+            continue;
+        }
+        let reads_it = (0..o.num_input()).filter_map(|i| o.get_in(i)).any(|v| {
+            data.vbank()
+                .get(v)
+                .map(|v| return_only(proto, v.get_addr(), v.get_size()))
+                .unwrap_or(false)
+        });
+        if reads_it {
+            match &read_at {
+                Some(a) if a != o.get_addr() => return false,
+                Some(_) => {}
+                None => read_at = Some(o.get_addr().clone()),
+            }
+        }
+        let writes_it = o
+            .get_out()
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| return_only(proto, v.get_addr(), v.get_size()))
+            .unwrap_or(false);
+        if writes_it {
+            return read_at.as_ref().is_none_or(|a| a == o.get_addr());
+        }
+        cur = data.op_previous_op(op);
+    }
+    false
+}
+
+/// Is the function itself variadic -- does its entry block read a register
+/// that carries no argument but the return value before writing it or calling
+/// anything (a SysV register-save prologue's `test %al,%al`)?
+///
+/// Asked before heritage, of the raw p-code. Such a function's own parameter
+/// recovery reads every register the prologue saves, so an argument this pass
+/// supplies is what tips the saved tail into its list: gnulib
+/// `version_etc(FILE *,char const *,char const *,char const *,...)` would come
+/// out with fourteen parameters.
+fn reads_the_vararg_count(data: &Funcdata) -> bool {
+    vararg_count_read(data, true)
+}
+
+/// [`reads_the_vararg_count`] without a read that only stores the register:
+/// clang's `push %rax` reserves an aligned stack slot, and is no
+/// `test %al,%al`. Read by [`crate::p4_calls::kuna_calleereadarg`].
+pub(crate) fn tests_the_vararg_count(data: &Funcdata) -> bool {
+    vararg_count_read(data, false)
+}
+
+/// Does the entry block read the return-only register before writing it,
+/// counting a read by a `STORE` of its value only with `stores`? An injected
+/// no-op moves nothing: a MIPS mode switch's `v0 = v0` is no such read.
+fn vararg_count_read(data: &Funcdata, stores: bool) -> bool {
+    if data.bblocks_get_size() == 0 {
+        return false;
+    }
+    let proto = data.get_func_proto();
+    let mut written: Vec<(u64, int4)> = Vec::new();
+    let mut cur = data.bb_op_head(data.bblocks_get_block(0));
+    while let Some(op) = cur {
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
+        if matches!(
+            o.code(),
+            OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER
+        ) {
+            return false;
+        }
+        if is_injected_noop(data, op) {
+            cur = o.basic_neighbours().1;
+            continue;
+        }
+        for i in 0..o.num_input() {
+            if !stores && i == 2 && o.code() == OpCode::CPUI_STORE {
+                continue;
+            }
+            let Some(v) = o.get_in(i).and_then(|v| data.vbank().get(v)) else {
+                continue;
+            };
+            if !return_only(proto, v.get_addr(), v.get_size()) {
+                continue;
+            }
+            let (off, end) = (v.get_offset(), v.get_offset() + v.get_size() as u64);
+            if !written
+                .iter()
+                .any(|&(w, ws)| w <= off && end <= w + ws as u64)
+            {
+                return true;
+            }
+        }
+        if let Some(v) = o.get_out().and_then(|v| data.vbank().get(v)) {
+            if return_only(proto, v.get_addr(), v.get_size()) {
+                written.push((v.get_offset(), v.get_size()));
+            }
+        }
+        cur = o.basic_neighbours().1;
+    }
+    false
+}
+
+/// Is `addr` in a processor register space?
+fn is_register(addr: &Address) -> bool {
+    addr.get_space()
+        .map(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
+        .unwrap_or(false)
+}
+
+/// Does any Varnode of the function share a byte with `[addr, addr+size)`?
+pub(crate) fn touched(data: &Funcdata, addr: &Address, size: int4) -> bool {
+    touched_by(data, addr, size, false)
+}
+
+/// [`touched`], with the two sides of an injected no-op ([`is_injected_noop`])
+/// not counted.
+fn touched_by(data: &Funcdata, addr: &Address, size: int4, past_noops: bool) -> bool {
+    register_touch(data, addr, size, |v| {
+        !past_noops
+            || match v.get_def() {
+                Some(def) => !is_injected_noop(data, def),
+                None => {
+                    v.descend_iter().next().is_none()
+                        || v.descend_iter().any(|op| !is_injected_noop(data, op))
+                }
+            }
+    })
+}
+
+fn register_touch(
+    data: &Funcdata,
+    addr: &Address,
+    size: int4,
+    counts: impl Fn(&Varnode) -> bool,
+) -> bool {
+    let off = addr.get_offset();
+    let end = off.wrapping_add(size as u64);
+    let lo = Address::new(
+        std::rc::Rc::clone(addr.get_space().expect("register address has a space")),
+        off.saturating_sub(64),
+    );
+    let hi = addr + size as i64;
+    data.vbank().iter_loc_addr_range(&lo, &hi).any(|id| {
+        data.vbank().get(id).is_some_and(|v| {
+            let voff = v.get_offset();
+            voff < end && off < voff.wrapping_add(v.get_size() as u64) && counts(v)
+        })
+    })
+}
+
+/// Is `op` an injected COPY of a storage range onto itself?
+///
+/// The ARM compiler specs inject the `setISAMode` of every `bx lr` and
+/// `pop {...,pc}` as `r0 = r0` (MIPS: `v0 = v0` at `jr ra`), marked incidental
+/// so parameter recovery walks through it; it moves nothing.
+pub(crate) fn is_injected_noop(data: &Funcdata, op: OpId) -> bool {
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
+    if o.code() != OpCode::CPUI_COPY || !o.is_incidental_copy() {
+        return false;
+    }
+    let out = o.get_out().and_then(|v| data.vbank().get(v));
+    let inp = o.get_in(0).and_then(|v| data.vbank().get(v));
+    matches!((out, inp), (Some(a), Some(b)) if a.get_addr() == b.get_addr() && a.get_size() == b.get_size())
+}
+
+/// The calls no other call can execute before: the first CALL or CALLIND of a
+/// block that every path from the entry reaches without passing one.
+///
+/// A register no op of the function touches reaches such a call as the
+/// function's own input; at any other call it may be a clobber, or the return
+/// value, of the call before it.
+pub(crate) fn first_calls(data: &Funcdata) -> Vec<OpId> {
+    let n = data.bblocks_get_size();
+    let is_call = |op: OpId| {
+        data.obank()
+            .get(op)
+            .map(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+            .unwrap_or(false)
+    };
+    let first_call_in = |i: int4| {
+        let mut cur = data.bb_op_head(data.bblocks_get_block(i));
+        while let Some(op) = cur {
+            if is_call(op) {
+                return Some(op);
+            }
+            cur = data.obank().get(op).and_then(|o| o.basic_neighbours().1);
+        }
+        None
+    };
+    let index_of = |bl| data.bblocks_ref().block(bl).get_index();
+    let calls: Vec<Option<OpId>> = (0..n).map(first_call_in).collect();
+    let mut after_call = vec![false; n as usize];
+    loop {
+        let mut changed = false;
+        for i in 0..n {
+            let b = data.bblocks_ref().block(data.bblocks_get_block(i));
+            let entered_after = (0..b.size_in())
+                .any(|k| after_call.get(index_of(b.get_in(k)) as usize) == Some(&true));
+            let out = entered_after || calls[i as usize].is_some();
+            if out && !after_call[i as usize] {
+                after_call[i as usize] = true;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    (0..n)
+        .filter(|&i| {
+            let b = data.bblocks_ref().block(data.bblocks_get_block(i));
+            !(0..b.size_in()).any(|k| after_call.get(index_of(b.get_in(k)) as usize) == Some(&true))
+        })
+        .filter_map(|i| calls[i as usize])
+        .collect()
+}
+
+/// Give each call whose callee states a register parameter the function never
+/// touches a trial and a read of it, and record the claim.
+///
+/// Called at the end of `ActionFuncLink`, after every call's locked inputs are
+/// in place, so "touched" is asked of the whole function once, and only at a
+/// call no other call can precede ([`first_calls`]), where the read is the
+/// function's own input. Inert with the option off.
+pub fn claim_untouched_registers(data: &mut Funcdata) {
+    claim_untouched_registers_mode(data, ClaimPass::Initial)
+}
+
+/// (kuna callee-contract) [`claim_untouched_registers`] re-run after a callee's
+/// statement arrived mid-pipeline (the P4 trial-storage bootstrap).
+///
+/// The first run at `ActionFuncLink` could not know the callee, and by now the
+/// function's own input Varnode at the stated storage is already read, so
+/// `newVarnode` would mint a duplicate without the input flag.  Prefer the
+/// actual input Varnode here: `capture` recognises that as the forwarded input
+/// it is, exactly as the pre-link run would have.
+pub fn claim_untouched_registers_late(data: &mut Funcdata) {
+    claim_untouched_registers_mode(data, ClaimPass::Bootstrap)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ClaimPass {
+    Initial,
+    Bootstrap,
+    GoStackGuard,
+}
+
+/// Re-offer untouched input registers after the Go stack-growth spill arm is gone.
+pub(crate) fn claim_after_go_stack_guard(data: &mut Funcdata) {
+    let proto = data.get_func_proto();
+    if !data.get_arch().pass_through
+        || !data.get_arch().source_lang.is_go()
+        || data.get_heritage_pass() != 0
+        || data.num_calls() != 1
+        || !go_register_model(proto)
+        || proto.is_input_locked()
+        || proto.is_dotdotdot()
+        || data
+            .get_arch()
+            .manage()
+            .register_lookup()
+            .and_then(|lookup| lookup.probe_register("RAX"))
+            .is_none_or(|reg| reg.size != 8)
+    {
+        return;
+    }
+    let call = data.get_call_specs(0);
+    if go_register_model(call.proto()) && !call.get_entry_address().is_invalid() {
+        claim_untouched_registers_mode(data, ClaimPass::GoStackGuard);
+    }
+}
+
+fn go_register_model(proto: &crate::fspec::FuncProto) -> bool {
+    proto.has_model() && proto.get_model_name() == "abi-internal"
+}
+
+fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
+    if !data.get_arch().pass_through {
+        return;
+    }
+    let after_go_stack_guard = pass == ClaimPass::GoStackGuard;
+    if !after_go_stack_guard {
+        data.kuna_set_passthrough_variadic(reads_the_vararg_count(data));
+    }
+    if data.kuna_passthrough_variadic() {
+        return;
+    }
+    let returned_call_result = if after_go_stack_guard {
+        None
+    } else {
+        stated_tail_return(data).map(|(pieces, producers, beside_own)| {
+            let pieces = pieces
+                .into_iter()
+                .map(|(a, s)| (touched(data, &a, s), a, s))
+                .collect();
+            (pieces, producers, beside_own)
+        })
+    };
+    if !after_go_stack_guard {
+        let vararg: Vec<OpId> = (0..data.num_calls())
+            .filter(|&i| set_up_as_variadic(data, i))
+            .map(|i| data.get_call_specs(i).get_op())
+            .collect();
+        data.kuna_set_passthrough_vararg_calls(vararg);
+    }
+    let first = first_calls(data);
+    let mut claims = if pass == ClaimPass::Initial {
+        Vec::new()
+    } else {
+        data.kuna_passthrough_claims().to_vec()
+    };
+    for idx in 0..data.num_calls() {
+        if !data.get_call_specs(idx).is_input_active()
+            || !first.contains(&data.get_call_specs(idx).get_op())
+        {
+            continue;
+        }
+        let entry = data.get_call_specs(idx).get_entry_address().clone();
+        let stated: Vec<(Address, int4)> = match data.kuna_protoorder_types(&entry) {
+            Some(s) => s.inputs.iter().map(|(a, sz, _)| (a.clone(), *sz)).collect(),
+            None => continue,
+        };
+        let op = data.get_call_specs(idx).get_op();
+        for (pos, (addr, stated_size)) in stated.iter().cloned().enumerate() {
+            let Some(size) = stated_width(data, data.get_call_specs(idx), &addr, stated_size)
+            else {
+                continue;
+            };
+            if !no_hole_before(data, &stated, pos, &claims) {
+                continue;
+            }
+            if data
+                .get_call_specs(idx)
+                .active_input()
+                .which_trial(&addr, stated_size)
+                >= 0
+            {
+                continue;
+            }
+            if after_go_stack_guard {
+                if size != 8
+                    || stated_size != 8
+                    || !general_purpose(data.get_call_specs(idx).proto(), &addr, size)
+                    || overlaps_claim(&claims, &addr, size)
+                    || register_touch(data, &addr, size, |v| {
+                        v.is_written() || v.descend_iter().next().is_some()
+                    })
+                {
+                    continue;
+                }
+            } else {
+                let claimed = claims.iter().any(|c| c.addr == addr && c.size == size);
+                if !claimed && touched(data, &addr, stated_size) {
+                    continue;
+                }
+            }
+            let nin = data.obank().get(op).map(|o| o.num_input()).unwrap_or(0);
+            let vn = if pass == ClaimPass::Bootstrap {
+                match own_input_varnode(data, &addr, size) {
+                    Some(vn) => vn,
+                    None => {
+                        // The entry-time input at this storage is gone (dead code
+                        // removed the only read before the call site knew the
+                        // callee).  Recreate it as an input, which is the state
+                        // the pre-link claim saw.
+                        let vn = data.new_varnode(size, &addr, None);
+                        data.set_input_varnode(vn).unwrap_or(vn)
+                    }
+                }
+            } else {
+                data.new_varnode(size, &addr, None)
+            };
+            if data.op_insert_input(op, vn, nin).is_err() {
+                continue;
+            }
+            let ai = data.get_call_specs_mut(idx).get_active_input();
+            ai.register_trial(&addr, size);
+            let t = ai.get_num_trials() - 1;
+            ai.get_trial_mut(t).set_slot(nin);
+            match claims.iter_mut().find(|c| c.addr == addr && c.size == size) {
+                Some(c) => c.arg_owners.push(op),
+                None => claims.push(PassThroughClaim {
+                    addr,
+                    size,
+                    arg_owners: vec![op],
+                    ret_owners: Vec::new(),
+                    body_touches: false,
+                    beside_own: false,
+                }),
+            }
+        }
+    }
+    if let Some(ret) = returned_call_result {
+        claim_tail_return(data, &mut claims, ret);
+    }
+    data.kuna_set_passthrough_claims(claims);
+}
+
+/// Is `vn`, read by a call, the function's own incoming register `addr:size`
+/// carried past earlier calls that leave it alone? gcc keeps a register across
+/// a call to a function it knows does not write it, so heritage reaches the
+/// call slot through that call's non-creating INDIRECT, and inside a loop
+/// through a MULTIEQUAL that joins the incoming Varnode with the value the loop
+/// carries back past the call. Followed through MULTIEQUAL, COPY and
+/// non-creating INDIRECT, every source must be that one incoming Varnode, and
+/// each INDIRECT must guard a direct call whose decoded callee body is proven
+/// never to write the register ([`call_leaves_alone`]): the convention lets any
+/// other call clobber it, and a register that survives only on paper is no
+/// argument.
+pub fn forwarded_own_input(data: &Funcdata, vn: VarnodeId, addr: &Address, size: int4) -> bool {
+    let mut todo = vec![vn];
+    let mut seen = vec![vn];
+    let mut found = false;
+    while let Some(cur) = todo.pop() {
+        let Some(v) = data.vbank().get(cur) else {
+            return false;
+        };
+        if v.get_size() != size {
+            return false;
+        }
+        if v.is_input() {
+            if v.get_addr() != addr {
+                return false;
+            }
+            found = true;
+            continue;
+        }
+        let Some(op) = v.get_def().and_then(|d| data.obank().get(d)) else {
+            return false;
+        };
+        let ins: Vec<VarnodeId> = match op.code() {
+            OpCode::CPUI_MULTIEQUAL => (0..op.num_input()).filter_map(|i| op.get_in(i)).collect(),
+            OpCode::CPUI_COPY => op.get_in(0).into_iter().collect(),
+            OpCode::CPUI_INDIRECT
+                if !op.is_indirect_creation() && call_leaves_alone(data, op, addr, size) =>
+            {
+                op.get_in(0).into_iter().collect()
+            }
+            _ => return false,
+        };
+        for next in ins {
+            if !seen.contains(&next) {
+                if seen.len() >= 64 {
+                    return false;
+                }
+                seen.push(next);
+                todo.push(next);
+            }
+        }
+    }
+    found
+}
+
+/// Is the INDIRECT `ind` guarding a direct call (not a PLT stub) whose callee's
+/// fully decoded body is proven never to write `addr:size`
+/// ([`crate::kuna_rustabi::CalleeReturnWrites::proves_untouched_for`])?
+fn call_leaves_alone(
+    data: &Funcdata,
+    ind: &crate::op::PcodeOp,
+    addr: &Address,
+    size: int4,
+) -> bool {
+    let Some(iop) = ind.get_in(1).and_then(|i| data.vbank().get(i)) else {
+        return false;
+    };
+    let call = OpId::from(slotmap::KeyData::from_ffi(iop.get_offset()));
+    if !data
+        .obank()
+        .get(call)
+        .is_some_and(|o| !o.is_dead() && o.code() == OpCode::CPUI_CALL)
+    {
+        return false;
+    }
+    let Some(idx) = data.get_call_specs_index(call) else {
+        return false;
+    };
+    let fc = data.get_call_specs(idx);
+    let entry = fc.get_entry_address();
+    !entry.is_invalid()
+        && fc.plt_stub().is_none()
+        && data.kuna_callee_ret_writes(entry).is_some_and(|w| {
+            w.proves_untouched_for(crate::kuna_rustabi::call_model(fc.proto()), addr, size)
+        })
+}
+
+/// The function's own incoming Varnode at `addr:size`, if it is still unread
+/// memory of the entry (not recomputed).
+fn own_input_varnode(data: &Funcdata, addr: &Address, size: int4) -> Option<VarnodeId> {
+    data.vbank()
+        .iter_def_flag(crate::varnode::varnode_flags::input)
+        .find(|&v| {
+            data.vbank()
+                .get(v)
+                .is_some_and(|n| n.get_addr() == addr && n.get_size() == size && !n.is_written())
+        })
+}
+
+/// Can the claim of the register at `pos` in the callee's stated list be made
+/// without materializing a parameter this function does not have?
+///
+/// Parameters are positional: a claim at the third stated register gives the
+/// function a third parameter, and the first two come with it whether or not
+/// anything put a value in them. Every earlier stated register must therefore be
+/// one this function could be carrying -- already claimed here (so forwarded
+/// untouched), or one its own entry does not WRITE before reading on every path
+/// ([`crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead::proves_dead`],
+/// asked of this function's own body). A register the function loads for itself
+/// before the call is not a parameter, and a claim reaching across it prints an
+/// argument-less slot: the `protoorder` fixture's `overrec` sets `rsi` to 16 and
+/// forwards `rdx`, and rendered `void overrec(unsigned long *a0,unsigned long
+/// a1,long a2)` against the call site `overrec(v1)`.
+///
+/// The evidence is one-sided, as everywhere this walk is read: a body the walk
+/// cannot settle keeps the claim.
+fn no_hole_before(
+    data: &Funcdata,
+    stated: &[(Address, int4)],
+    pos: usize,
+    claims: &[PassThroughClaim],
+) -> bool {
+    if pos == 0 {
+        return true;
+    }
+    let Some(facts) = data.kuna_callee_entry_dead(data.get_address()) else {
+        return true;
+    };
+    stated[..pos]
+        .iter()
+        .all(|(a, sz)| overlaps_claim(claims, a, *sz) || !facts.proves_dead(a, *sz))
+}
+
+/// How many blocks [`producing_call`] walks back from a RETURN.
+const RETURN_WALK_BLOCKS: usize = 4;
+
+/// The call whose result a RETURN hands back when nothing in between writes the
+/// return register: the last CALL before `ret` in its block, or in the chain of
+/// single predecessors above it. `None` when a join, an indirect call or the
+/// entry comes first.
+pub(crate) fn producing_call(data: &Funcdata, ret: OpId) -> Option<OpId> {
+    let mut cur = data.op_previous_op(ret);
+    let mut bl = data.obank().get(ret)?.get_parent()?;
+    for _ in 0..RETURN_WALK_BLOCKS {
+        while let Some(op) = cur {
+            match data.obank().get(op)?.code() {
+                OpCode::CPUI_CALL => return Some(op),
+                OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER => return None,
+                _ => cur = data.op_previous_op(op),
+            }
+        }
+        let b = data.bblocks_ref().block(bl);
+        if b.size_in() != 1 {
+            return None;
+        }
+        bl = b.get_in(0);
+        cur = data.bb_op_tail(bl);
+    }
+    None
+}
+
+/// The stated return value of the call every live RETURN of the function hands
+/// back, when there is one: the registers the callee's own recovery put it in,
+/// the same for every such call, and those calls.
+///
+/// Asked before any argument is claimed, so "untouched" means untouched by the
+/// function's own code. `None` unless the function's own output is recovered
+/// (not locked), every live RETURN is reached from a direct call with nothing
+/// between ([`touched_after`]), every one of those callees states a non-`void`
+/// return in the same storage (under `narrowret`, on a little-endian image, at
+/// the same register, the widest taken when it is at least four bytes and every
+/// narrower one is a value its callee states it zero-extends), and that storage is
+/// a register or a register
+/// pair ([`register_pieces`]) the function's model returns in and no op of the
+/// function touches.
+///
+/// A register that carries no argument ([`return_only`]: x86 `eax`, MIPS `v0`)
+/// may also be touched BEFORE the call, which overwrites it, so `mov
+/// (%rdi),%rax; ...; jmp g` returns what `g` does. An argument register is not
+/// relaxed: ARM `mov r0,#5; b g` is how a `void` function calls `g(5)` as often
+/// as how an `int` one returns it.
+///
+/// Under `mixedtailret`, a RETURN reached from no call is no refusal when at
+/// least one RETURN is such a tail call and the value it returns in that one
+/// register is the one the function wrote and branched on to choose between
+/// them ([`crate::p4_calls::kuna_mixedtailret::returns_decided_value`]); the
+/// register may then be touched anywhere. An argument register is taken only
+/// when no claimed callee reads it.
+fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId>, bool)> {
+    if data.get_func_proto().is_output_locked() || data.get_active_output().is_none() {
+        return None;
+    }
+    let rets: Vec<OpId> = data
+        .obank()
+        .iter_code(OpCode::CPUI_RETURN)
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .map(|o| !o.is_dead() && o.get_halt_type() == 0)
+                .unwrap_or(false)
+        })
+        .collect();
+    if rets.is_empty() {
+        return None;
+    }
+    let mut storage: Option<(Address, int4)> = None;
+    let mut producers: Vec<OpId> = Vec::new();
+    let mut paths: Vec<(OpId, OpId)> = Vec::new();
+    let mut own: Vec<OpId> = Vec::new();
+    let mut widths: Vec<(int4, bool)> = Vec::new();
+    let narrow_tails = data.get_arch().narrow_ret
+        && !data
+            .get_arch()
+            .manage()
+            .get_default_code_space()
+            .is_some_and(|c| c.is_big_endian());
+    let beside_own = data.get_arch().mixed_tail_ret;
+    for &r in &rets {
+        let Some(call) = producing_call(data, r) else {
+            if !beside_own {
+                return None;
+            }
+            own.push(r);
+            continue;
+        };
+        let idx = (0..data.num_calls()).find(|&i| data.get_call_specs(i).get_op() == call)?;
+        let fc = data.get_call_specs(idx);
+        if fc.proto().is_output_locked() || !fc.is_output_active() {
+            return None;
+        }
+        let (addr, size, _) = data
+            .kuna_protoorder_types(fc.get_entry_address())?
+            .output
+            .clone()?;
+        let zero_extended = narrow_tails
+            && fc.get_entry_address().get_space().is_some_and(|sp| {
+                data.kuna_narrowret((sp.get_index(), fc.get_entry_address().get_offset()))
+                    .is_some_and(|n| n.addr == addr && n.size == size)
+            });
+        widths.push((size, zero_extended));
+        match &storage {
+            Some((a, s)) if *a != addr || (*s != size && !narrow_tails) => return None,
+            Some((_, s)) => storage = Some((addr, size.max(*s))),
+            _ => storage = Some((addr, size)),
+        }
+        if !producers.contains(&call) {
+            producers.push(call);
+        }
+        paths.push((call, r));
+    }
+    let (addr, size) = storage?;
+    if widths
+        .iter()
+        .any(|&(w, zext)| w < size && !(zext && size >= 4))
+    {
+        return None;
+    }
+    let pieces = register_pieces(data, &addr, size)?;
+    let proto = data.get_func_proto();
+    let mixed = !own.is_empty();
+    let free = |(a, s): &(Address, int4)| {
+        proto.characterize_as_output(a, *s) != crate::fspec::Containment::NoContainment
+            && (mixed || !touched_by(data, a, *s, true) || return_only(proto, a, *s))
+    };
+    if !pieces.iter().all(free)
+        || paths
+            .iter()
+            .any(|&(call, ret)| touched_after(data, call, ret, &pieces))
+    {
+        return None;
+    }
+    if mixed {
+        let argument = pieces.iter().any(|(a, s)| !return_only(proto, a, *s));
+        if (argument
+            && crate::p4_calls::kuna_mixedtailret::feeds_tail_call(data, &producers, &pieces))
+            || !own.iter().all(|&r| {
+                crate::p4_calls::kuna_mixedtailret::returns_decided_value(data, r, &pieces, &paths)
+            })
+        {
+            return None;
+        }
+    }
+    Some((pieces, producers, mixed))
+}
+
+/// Does an op between `call` and `ret`, on the path [`producing_call`] walks,
+/// read or write a byte of `pieces`? An injected no-op ([`is_injected_noop`])
+/// moves nothing. A path the walk cannot follow back to `call` answers `true`.
+fn touched_after(data: &Funcdata, call: OpId, ret: OpId, pieces: &[(Address, int4)]) -> bool {
+    let hits = |v: Option<VarnodeId>| {
+        v.and_then(|v| data.vbank().get(v)).is_some_and(|v| {
+            let (voff, vend) = (
+                v.get_offset(),
+                v.get_offset().wrapping_add(v.get_size().max(0) as u64),
+            );
+            pieces.iter().any(|(a, s)| {
+                a.get_space()
+                    .is_some_and(|sp| sp.get_index() == v.get_space().get_index())
+                    && a.get_offset() < vend
+                    && voff < a.get_offset().wrapping_add((*s).max(0) as u64)
+            })
+        })
+    };
+    let Some(mut bl) = data.obank().get(ret).and_then(|o| o.get_parent()) else {
+        return true;
+    };
+    let mut cur = data.op_previous_op(ret);
+    for _ in 0..RETURN_WALK_BLOCKS {
+        while let Some(op) = cur {
+            if op == call {
+                return false;
+            }
+            let Some(o) = data.obank().get(op) else {
+                return true;
+            };
+            if !is_injected_noop(data, op)
+                && (hits(o.get_out()) || (0..o.num_input()).any(|i| hits(o.get_in(i))))
+            {
+                return true;
+            }
+            cur = data.op_previous_op(op);
+        }
+        let b = data.bblocks_ref().block(bl);
+        if b.size_in() != 1 {
+            return true;
+        }
+        bl = b.get_in(0);
+        cur = data.bb_op_tail(bl);
+    }
+    true
+}
+
+/// The registers a stated return value occupies: its own storage, or each piece
+/// of a register pair's join (`rdx:rax`, ARM `r1:r0`). `None` for anything
+/// else, including a join with a piece outside the register file.
+fn register_pieces(data: &Funcdata, addr: &Address, size: int4) -> Option<Vec<(Address, int4)>> {
+    let space = addr.get_space()?;
+    if space.get_type() != spacetype::IPTR_JOIN {
+        return is_register(addr).then(|| vec![(addr.clone(), size)]);
+    }
+    let rec = data.get_arch().manage().find_join(addr.get_offset()).ok()?;
+    if rec.num_pieces() < 2 {
+        return None;
+    }
+    let pieces: Vec<(Address, int4)> = (0..rec.num_pieces())
+        .map(|i| rec.get_piece(i))
+        .filter_map(|p| {
+            p.space
+                .clone()
+                .map(|sp| (Address::new(sp, p.offset), p.size as int4))
+        })
+        .collect();
+    (pieces.len() == rec.num_pieces() as usize && pieces.iter().all(|(a, _)| is_register(a)))
+        .then_some(pieces)
+}
+
+/// Give every live RETURN a read of each return register its tail calls
+/// produce, register the function's return trial for it, and record the claim.
+///
+/// The RETURN reads are the function's own return trials, so heritage's
+/// `guardReturns` is kept off the ranges ([`suppresses_return_trial`]); the
+/// producing calls keep their return-value trials, which is what hands the
+/// RETURN the callee's result. A register pair gets one trial per register, as
+/// heritage would register them, and return recovery joins them again.
+fn claim_tail_return(
+    data: &mut Funcdata,
+    claims: &mut Vec<PassThroughClaim>,
+    ret: (Vec<(bool, Address, int4)>, Vec<OpId>, bool),
+) {
+    let (pieces, producers, beside_own) = ret;
+    let rets: Vec<OpId> = data
+        .obank()
+        .iter_code(OpCode::CPUI_RETURN)
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .map(|o| !o.is_dead() && o.get_halt_type() == 0)
+                .unwrap_or(false)
+        })
+        .collect();
+    let nins: Vec<int4> = rets
+        .iter()
+        .filter_map(|&r| data.obank().get(r).map(|o| o.num_input()))
+        .collect();
+    if nins.len() != rets.len() || nins.iter().any(|&n| n != nins[0]) {
+        return;
+    }
+    for (k, (body_touches, addr, size)) in pieces.into_iter().enumerate() {
+        let slot = nins[0] + k as int4;
+        for &r in &rets {
+            let vn = data.new_varnode(size, &addr, None);
+            if data.op_insert_input(r, vn, slot).is_err() {
+                return;
+            }
+        }
+        if let Some(active) = data.get_active_output_mut() {
+            active.register_trial(&addr, size);
+            let t = active.get_num_trials() - 1;
+            active.get_trial_mut(t).set_slot(slot);
+        }
+        match claims.iter_mut().find(|c| c.addr == addr && c.size == size) {
+            Some(c) => {
+                c.ret_owners.extend(producers.iter().copied());
+                c.beside_own |= beside_own;
+            }
+            None => claims.push(PassThroughClaim {
+                addr,
+                size,
+                arg_owners: Vec::new(),
+                ret_owners: producers.clone(),
+                body_touches,
+                beside_own,
+            }),
+        }
+    }
+}
+
+/// Is `vn`, read by a RETURN in `[addr, addr+size)`, the result of a tail call
+/// this pass claimed the return value of?
+///
+/// The scoring arm of `ActionReturnRecovery`. Upstream's `ancestorOpUse`
+/// refuses an INDIRECT creation outright ("an indication of an output trial"),
+/// so a callee whose return value is still recovered from trials never reaches
+/// a RETURN; a claimed tail call's creation is the callee's stated result, read
+/// directly or through an injected no-op ([`is_injected_noop`]).
+pub fn returns_tail_result(data: &Funcdata, vn: VarnodeId, addr: &Address, size: int4) -> bool {
+    if !data.get_arch().pass_through {
+        return false;
+    }
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
+    if v.get_addr() != addr || v.get_size() != size {
+        return false;
+    }
+    let mut def = v.get_def();
+    while let Some(d) = def.filter(|&d| is_injected_noop(data, d) || is_low_piece(data, d)) {
+        def = data
+            .obank()
+            .get(d)
+            .and_then(|o| o.get_in(0))
+            .and_then(|i| data.vbank().get(i))
+            .and_then(|i| i.get_def());
+    }
+    let Some(def) = def.and_then(|d| data.obank().get(d)) else {
+        return false;
+    };
+    if !def.is_indirect_creation() {
+        return false;
+    }
+    let Some(iop) = def.get_in(1).and_then(|i| data.vbank().get(i)) else {
+        return false;
+    };
+    let call = OpId::from(slotmap::KeyData::from_ffi(iop.get_offset()));
+    data.kuna_passthrough_claims()
+        .iter()
+        .any(|c| c.addr == *addr && c.size == size && c.ret_owners.contains(&call))
+}
+
+/// Is `op` a SUBPIECE taking the least significant bytes of its input: the
+/// `eax` heritage reads out of the whole `rax` a call writes once the function
+/// also writes `rax` itself before the call?
+fn is_low_piece(data: &Funcdata, op: OpId) -> bool {
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
+    o.code() == OpCode::CPUI_SUBPIECE
+        && o.get_in(1)
+            .and_then(|c| data.vbank().get(c))
+            .is_some_and(|c| c.is_constant() && c.get_offset() == 0)
+}
+
+/// Is `[addr, addr+size)` a register of a tail call's result this pass claimed
+/// as the function's return value?
+fn is_tail_return_piece(data: &Funcdata, addr: &Address, size: int4) -> bool {
+    data.kuna_passthrough_claims()
+        .iter()
+        .any(|c| c.addr == *addr && c.size == size && !c.ret_owners.is_empty())
+}
+
+/// Take a claimed return value whole or not at all, and only when the function
+/// returns nothing of its own, once `ActionReturnRecovery` has scored its trials
+/// for the last time.
+///
+/// Every register of a claimed pair must have been accepted as the tail call's
+/// result ([`returns_tail_result`]). One the callee's model does not kill -- the
+/// `xmm1` of a `struct { double, double }` on the x86-64 gcc model -- reaches
+/// the RETURN through an ordinary INDIRECT instead, and keeping the other
+/// register alone would return half the callee's value as the whole of the
+/// function's. And the claim yields to a value the function computes itself in
+/// another storage class ([`returns_own_value`]), unless the claim also
+/// covers a value the function returns itself
+/// ([`crate::p4_calls::kuna_mixedtailret::claimed_beside_own`]). Inert with the
+/// option off.
+pub fn keep_tail_return_whole(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
+    if !data.get_arch().pass_through {
+        return;
+    }
+    let claimed: Vec<int4> = (0..active.get_num_trials())
+        .filter(|&i| {
+            is_tail_return_piece(
+                data,
+                active.get_trial(i).get_address(),
+                active.get_trial(i).get_size(),
+            )
+        })
+        .collect();
+    let own = !crate::p4_calls::kuna_mixedtailret::claimed_beside_own(data)
+        && returns_own_value(data, active, &claimed);
+    if claimed.iter().any(|&i| !active.get_trial(i).is_active()) || own {
+        for i in claimed {
+            active.get_trial_mut(i).mark_inactive();
+        }
+    }
+}
+
+/// Does the function return a value of its own, in another storage class than
+/// a claimed register?
+///
+/// The value is what the output model derives from the trials the claim does
+/// not own, which upstream accepts only for a value the function wrote and
+/// hands to the RETURN alone: the `s0` of `bl f; vadd.f32 s0,s16,s16;
+/// pop {r4,pc}`, the `xmm0` of `call f; addss %xmm0,%xmm0; ret`. A convention
+/// returns a value in one class, so the callee's integer result left in `r0` is
+/// a leftover, not a second half. Three things keep the claim: the zeroed upper
+/// lanes `movss` leaves in `xmm0`, which derive nothing; a register of the same
+/// class (the `r1` of `bl f; mov r1,#0`), which can be the rest of the claimed
+/// value; and a value that is zero at every RETURN ([`is_zero`]), which is also
+/// what `-fzero-call-used-regs` leaves in every call-used register the function
+/// does not return in (openssh's `call f; ...; pxor %xmm0,%xmm0; ret`).
+pub(crate) fn returns_own_value(
+    data: &Funcdata,
+    active: &crate::fspec::ParamActive,
+    claimed: &[int4],
+) -> bool {
+    let proto = data.get_func_proto();
+    let Some(out) = proto
+        .has_model()
+        .then(|| proto.model().output_list())
+        .flatten()
+    else {
+        return false;
+    };
+    let class = |t: &crate::fspec::ParamTrial| {
+        out.get_entry()
+            .iter()
+            .find(|e| e.intersects(t.get_address(), t.get_size()))
+            .map(|e| e.get_type())
+    };
+    let theirs: Vec<_> = claimed
+        .iter()
+        .filter_map(|&i| class(active.get_trial(i)))
+        .collect();
+    if theirs.is_empty() {
+        return false;
+    }
+    let mut own = active.clone();
+    for &i in claimed {
+        own.get_trial_mut(i).mark_inactive();
+    }
+    let manager = data.get_arch().manage.clone();
+    if proto.derive_output_map(&mut own, &manager).is_err() {
+        return false;
+    }
+    let rets: Vec<OpId> = data
+        .obank()
+        .iter_code(OpCode::CPUI_RETURN)
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .map(|o| !o.is_dead() && o.get_halt_type() == 0)
+                .unwrap_or(false)
+        })
+        .collect();
+    let used: Vec<&crate::fspec::ParamTrial> = (0..own.get_num_trials())
+        .map(|i| own.get_trial(i))
+        .filter(|t| t.is_used())
+        .collect();
+    let nonzero = used.iter().any(|t| {
+        rets.iter().any(
+            |&r| match data.obank().get(r).and_then(|o| o.get_in(t.get_slot())) {
+                Some(vn) => !is_zero(data, vn, ZERO_DEPTH),
+                None => false,
+            },
+        )
+    });
+    nonzero
+        && used
+            .iter()
+            .filter_map(|t| class(t))
+            .any(|c| theirs.iter().any(|&k| k != c))
+}
+
+/// How many defining ops [`is_zero`] follows.
+const ZERO_DEPTH: u32 = 8;
+
+/// Is `vn` zero whatever the function's inputs: a zero constant, `x ^ x`,
+/// `x - x`, or a copy, extension, truncation, concatenation or conversion of
+/// zeros?
+fn is_zero(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
+    if v.is_constant() {
+        return v.get_offset() == 0;
+    }
+    let Some(o) = v
+        .get_def()
+        .filter(|_| depth > 0)
+        .and_then(|d| data.obank().get(d))
+    else {
+        return false;
+    };
+    let zero = |k: int4| o.get_in(k).is_some_and(|i| is_zero(data, i, depth - 1));
+    match o.code() {
+        OpCode::CPUI_COPY
+        | OpCode::CPUI_INT_ZEXT
+        | OpCode::CPUI_INT_SEXT
+        | OpCode::CPUI_SUBPIECE
+        | OpCode::CPUI_FLOAT_INT2FLOAT
+        | OpCode::CPUI_FLOAT_FLOAT2FLOAT => zero(0),
+        OpCode::CPUI_PIECE | OpCode::CPUI_INT_OR => zero(0) && zero(1),
+        OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB => {
+            o.get_in(0) == o.get_in(1) || (zero(0) && zero(1))
+        }
+        OpCode::CPUI_INT_AND | OpCode::CPUI_INT_MULT => zero(0) || zero(1),
+        _ => false,
+    }
+}
+
+/// The type a tail call this pass claimed hands back: the callee's own
+/// recovered return type, offered as the CALL output's local type.
+pub fn tail_return_type(
+    data: &Funcdata,
+    op: OpId,
+    size: int4,
+) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
+    if !data.get_arch().pass_through {
+        return None;
+    }
+    if !data
+        .kuna_passthrough_claims()
+        .iter()
+        .any(|c| c.ret_owners.contains(&op))
+    {
+        return None;
+    }
+    let fc = (0..data.num_calls())
+        .map(|i| data.get_call_specs(i))
+        .find(|fc| fc.get_op() == op)?;
+    let (_, osize, ct) = data
+        .kuna_protoorder_types(fc.get_entry_address())?
+        .output
+        .as_ref()?;
+    (*osize == size && ct.get_size() == size).then(|| std::rc::Rc::clone(ct))
+}
+
+/// Must heritage leave `[addr, addr+size)` out of the function's own RETURN
+/// trials?
+///
+/// A range this pass claimed is one the option-off run heritages only if a
+/// later hole fill reads it, so the function's RETURN never registers it: a
+/// claimed return register's RETURN trial is the pass's own
+/// ([`claim_tail_return`]), and a claimed argument register gives the function
+/// no return value it would not have had. Every CALL registers the range as
+/// usual -- the trials are left unscored instead ([`claimed_range`]) -- so a
+/// later hole fill needs no new read of a range dead-code removal has already
+/// visited, and an earlier call keeps the return value a later read of the
+/// range asks for (a Cortex-M `double` returned in r0:r1).
+pub fn suppresses_return_trial(data: &Funcdata, addr: &Address, size: int4) -> bool {
+    overlaps_claim(data.kuna_passthrough_claims(), addr, size)
+}
+
+/// Does `[addr, addr+size)` share a byte with any claimed range?
+fn overlaps_claim(claims: &[PassThroughClaim], addr: &Address, size: int4) -> bool {
+    let Some(sp) = addr.get_space() else {
+        return false;
+    };
+    let off = addr.get_offset();
+    let end = off.wrapping_add(size.max(0) as u64);
+    claims.iter().any(|c| {
+        let same_space = c.addr.get_space().map(|s| s.get_index()) == Some(sp.get_index());
+        let coff = c.addr.get_offset();
+        same_space && coff < end && off < coff.wrapping_add(c.size as u64)
+    })
+}
+
+/// Is the argument trial `[addr, addr+size)` on a range this pass claimed?
+///
+/// Such a trial, at any call, is never scored: `checkInputTrialUse` marks it
+/// inactive, which is where the option-off run's trial for the slot starts --
+/// an unreferenced one `fillinMap` adds only to fill a hole before a later
+/// argument. Left to `AncestorRealistic`, a register that reaches the call
+/// through an earlier call is "killed by call", definitely not used, and
+/// `forceNoUse` drops every argument after it. A returned register the body
+/// touches itself (ARM `r0` at a `pop {r4,pc}`) has its trials with the option
+/// off as well, and they are scored as they are there.
+pub fn claimed_range(data: &Funcdata, addr: &Address, size: int4) -> bool {
+    data.get_arch().pass_through && holds_trials(data.kuna_passthrough_claims(), addr, size)
+}
+
+/// Is the value the call `op` reads in `slot` the function's own incoming
+/// register, untouched, in exactly the storage the trial `[addr, addr+size)`
+/// names -- itself, or through COPYs that keep it in that storage?
+///
+/// Upstream scores such a trial inactive ("not likely a parameter but maybe"):
+/// the caller moved nothing into the register, so nothing says the callee
+/// wants it. `checkInputTrialUse` records the shape on the trial
+/// ([`crate::fspec::ParamTrial::set_forwarded_input`]) for
+/// [`neutral_in_chain`] to read.
+pub fn forwarded_in_place(
+    data: &Funcdata,
+    op: OpId,
+    slot: int4,
+    addr: &Address,
+    size: int4,
+) -> bool {
+    if !data.get_arch().pass_through {
+        return false;
+    }
+    let mut cur = data.obank().get(op).and_then(|o| o.get_in(slot));
+    for _ in 0..8 {
+        let Some(v) = cur.and_then(|vn| data.vbank().get(vn)) else {
+            return false;
+        };
+        if v.get_size() != size || v.get_addr() != addr {
+            return false;
+        }
+        if v.is_input() {
+            return !v.is_written();
+        }
+        cur = match v.get_def().and_then(|d| data.obank().get(d)) {
+            Some(d) if d.code() == OpCode::CPUI_COPY => d.get_in(0),
+            _ => return false,
+        };
+    }
+    false
+}
+
+/// Is `vn`, the value an argument trial of the indirect call `op` reads, the
+/// value `op` jumps through?
+///
+/// The register that carries an indirect call's target is not also carrying an
+/// argument. Upstream's `checkCallDoubleUse` says as much for a SECOND call
+/// that reads the value as its target ("indirect call variable, definitely
+/// not a param"), but `onlyOpUse` takes the matched call's own read of its
+/// trial slot as the parameter use and never looks at slot 0, so `mov
+/// r9,0x401020; cmovz r9,r8; jmp r9` scored `r9` an active sixth argument of
+/// the call it is the target of, and `(*v1)(...,v1)` only stayed `(*v1)()`
+/// because the forwarded registers in front of it vetoed the list
+/// ([`neutral_in_chain`]). Scored inactive, it never anchors a hole fill and
+/// is dropped from the end of the list; it is filled only below a later
+/// argument, where the ABI's order makes it the target passed to itself
+/// (`fp(fp,x+1)` is `inc %rsi; jmp *%rdi`). Definitely-not-used would make
+/// `forceNoUse` drop that `x+1` too.
+pub fn is_call_target(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
+    data.obank()
+        .get(op)
+        .is_some_and(|o| o.code() == OpCode::CPUI_CALLIND && o.get_in(0) == Some(vn))
+}
+
+/// Does the function read the storage of `vn`, the value the call `op` reads
+/// in an argument trial, again after the call?
+///
+/// Heritage puts an INDIRECT naming the call on every range the call may
+/// change; a read of its output is a read of the storage past the call. The
+/// INDIRECT may read the value before the call (a callee the analysis knows
+/// leaves it alone) or create a new one (a register the model kills), and it
+/// may cover more bytes than the trial (a 16-byte reload of two 8-byte
+/// slots), so every INDIRECT of `op` overlapping the trial counts. Its output
+/// is followed through further INDIRECTs and MULTIEQUALs; a CALL or RETURN
+/// reading it is no read, since heritage hands every later call of unknown
+/// prototype and every RETURN the range anyway. gcc keeps a value in a
+/// caller-saved register across a call when it knows the callee leaves it
+/// alone (`-fipa-ra`): `expandload_zext`'s `f` computes `r8`, calls `sink`
+/// and returns `r8d`, and crazyflie's `piecewise_compressed_is_finished`
+/// keeps `s14`/`s15` across `bl` to a `bx lr` callee and subtracts them after
+/// it. A frame local in the outgoing-argument area is read again too: mirai's
+/// `main` stores six function pointers at `[rsp]` before its first call and
+/// reloads them after. `checkInputTrialUse` records the shape on the active
+/// trial ([`crate::fspec::ParamTrial::set_live_past_call`]) for
+/// [`anchors_neutral_run`] to read.
+pub fn survives_call(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
+    let read = |start: VarnodeId| {
+        let (mut work, mut seen) = (vec![start], Vec::new());
+        while let Some(cur) = work.pop() {
+            if seen.contains(&cur) || seen.len() > 32 {
+                continue;
+            }
+            seen.push(cur);
+            for o in data
+                .vbank()
+                .get(cur)
+                .into_iter()
+                .flat_map(|c| c.descend_iter())
+                .filter_map(|d| data.obank().get(d))
+            {
+                match o.code() {
+                    OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL => work.extend(o.get_out()),
+                    OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN => {}
+                    _ => return true,
+                }
+            }
+        }
+        false
+    };
+    let Some(space) = v.get_addr().get_space() else {
+        return false;
+    };
+    let (off, end) = (
+        v.get_offset(),
+        v.get_offset().wrapping_add(v.get_size().max(0) as u64),
+    );
+    let lo = Address::new(std::rc::Rc::clone(space), off.saturating_sub(32));
+    data.vbank()
+        .iter_loc_addr_range(&lo, &Address::new(std::rc::Rc::clone(space), end))
+        .any(|w| {
+            data.vbank().get(w).is_some_and(|x| {
+                x.get_offset() < end
+                    && x.get_offset().wrapping_add(x.get_size().max(0) as u64) > off
+                    && x.get_def()
+                        .and_then(|d| data.obank().get(d))
+                        .is_some_and(|d| {
+                            d.code() == OpCode::CPUI_INDIRECT
+                                && d.get_in(1)
+                                    .and_then(|i| data.vbank().get(i))
+                                    .is_some_and(|i| {
+                                        OpId::from(slotmap::KeyData::from_ffi(i.get_offset())) == op
+                                    })
+                        })
+                    && read(w)
+            })
+        })
+}
+
+/// Is `vn` a constant moved into place, through at most a few COPYs?
+pub fn holds_constant(data: &Funcdata, vn: VarnodeId) -> bool {
+    let mut cur = data.vbank().get(vn);
+    for _ in 0..4 {
+        let Some(v) = cur else { return false };
+        if v.is_constant() {
+            return true;
+        }
+        let Some(d) = v
+            .get_def()
+            .and_then(|d| data.obank().get(d))
+            .filter(|d| d.code() == OpCode::CPUI_COPY)
+        else {
+            return false;
+        };
+        cur = d.get_in(0).and_then(|c| data.vbank().get(c));
+    }
+    false
+}
+
+/// Is `vn` a constant written in a block that ends in a branch one of whose
+/// other successors makes a call, not in the block of the call `op`?
+///
+/// That is the zero gcc's stack-protector epilogue wipes a canary register
+/// with: `eors ip,r3,ip; mov r3,#0; bne __stack_chk_fail` and then `b g`, where
+/// r3 is no argument of `g`. `checkInputTrialUse` records it as
+/// [`survives_call`]'s shape: a value that is not set up for the call.
+pub fn set_before_branch(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
+    let Some(d) = data
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+    else {
+        return false;
+    };
+    if !holds_constant(data, vn) {
+        return false;
+    }
+    let (Some(db), Some(cb)) = (
+        d.get_parent(),
+        data.obank().get(op).and_then(|o| o.get_parent()),
+    ) else {
+        return false;
+    };
+    if db == cb
+        || !data
+            .bb_op_tail(db)
+            .and_then(|t| data.obank().get(t))
+            .is_some_and(|t| t.code() == OpCode::CPUI_CBRANCH)
+    {
+        return false;
+    }
+    let blocks = data.bblocks_ref();
+    let b = blocks.block(db);
+    (0..b.size_out()).any(|k| {
+        let s = b.get_out(k);
+        let mut cur = if s == cb { None } else { data.bb_op_head(s) };
+        while let Some(o) = cur.and_then(|c| data.obank().get(c)) {
+            if matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
+                return true;
+            }
+            cur = o.basic_neighbours().1;
+        }
+        false
+    })
+}
+
+/// Does the inactive trial `i` at a call site stay out of `forceInactiveChain`'s
+/// count of empty argument slots?
+///
+/// The chain rule (`fspec.cc:1519`, `maxchain = 2`) reads a run of more than
+/// two inactive slots as the end of the argument list and demotes every later
+/// trial, the active ones included. Its premise is that an inactive register
+/// holds incidental caller state. A REGISTER the function hands on untouched
+/// is not that: it holds what the function was called with, whether no op of
+/// the function names it (an unreferenced trial `buildTrialMap` synthesized)
+/// or an op reads it elsewhere ([`forwarded_in_place`]). The ABI fills
+/// argument registers in order, so when a later register IS actively set up
+/// for the call, the forwarded registers in front of it are the arguments the
+/// callee reads before it, and the function's own parameters. So a forwarded
+/// register counts toward neither a run nor its end; the tail loop that fills
+/// the holes below the last active trial then takes it, as it does any
+/// two-slot hole today. `f(a,b,c,d,fp){ if (d<=32) d=32; fp(a,b,c,d); }` at
+/// -O2 (`csel x3,...; br x4`) kept `(*a4)()` and lost the clamp to dead-code
+/// elimination; it is `(*a4)(a0,a1,a2,a3)` with the rule. A forwarded register
+/// after the last active trial stays dropped (`k(a,b,fp){ fp(a+1,b); }` is
+/// still `(*a2)(a0 + 1)`), the `stackarggap` end-of-list test still runs
+/// first, and a stack slot is never neutral: an untouched incoming stack
+/// argument says nothing about the callee's list. Only a call site's trials
+/// qualify (`isRecoverSubcall`); the function's own input recovery has
+/// `inputparamgap`.
+///
+/// The rule keeps to registers that ARE the function's input in front of an
+/// argument the callee takes. An unreferenced slot, or one on a range this
+/// pass claimed ([`claimed_range`]), is the function's input only at a call no
+/// other call can precede ([`NeutralScope`]): after gcc
+/// ARM's `push {r3,lr}; bl g; pop {r3,lr}; b h`, r2 at `h` is what `g` left
+/// and r3 the alignment push reloaded, not `h`'s third and fourth arguments.
+/// And where upstream's count, forwarded registers included, would veto a
+/// trial, `force_inactive_chain` lets it through only when every register of
+/// the run in front of it is forwarded and the trial may end one
+/// ([`anchors_neutral_run`], [`ends_rescued_run`]), and from then on keeps
+/// only trials that may: in gcc AArch64's stack-protector epilogue before
+/// `b lseek`, x3 holds the guard's address for the check, x4 the zero `subs`
+/// left and x5 the zero the canary was wiped with, and none of them is
+/// `lseek`'s fourth argument.
+pub fn neutral_in_chain(active: &ParamActive, i: int4, is_spacebase: bool) -> bool {
+    let Some(scope) = active.forwarded_neutral() else {
+        return false;
+    };
+    if !active.is_recover_subcall() || is_spacebase {
+        return false;
+    }
+    let trial = active.get_trial(i);
+    trial.is_forwarded_input() || ((trial.is_unref() || trial.is_untouched()) && scope.unref)
+}
+
+/// May the active trial `trial` end a run of [`neutral_in_chain`] registers,
+/// so the run does not count toward `forceInactiveChain`'s veto of it?
+///
+/// Not a stack slot holding a register the function saved there
+/// ([`saves_own_register`]): ARM's `push {r3,lr}` keeps the stack aligned and
+/// leaves the caller's own r3 at `[sp]`, where it reads as an active fifth
+/// argument. And not a register a direct callee is known not to take
+/// ([`NeutralScope::untaken`]): gcc's IPA register allocation keeps a value
+/// across a call to a known `void g(void)` in `rcx`, which reads as an active
+/// fourth argument. And the trial must be set up FOR the call: not a value
+/// the function reads again after it ([`survives_call`]), which is caller
+/// state the callee happens not to clobber (`expandload_zext`'s `f` keeps its
+/// result in `r8` across `call sink` with `rsi`, `rdx` and `rcx` forwarded in
+/// front of it, and `sink` keeps its one argument), not the stack-protector
+/// wipe ([`set_before_branch`]), and not a register reloaded from the frame
+/// ([`crate::p4_calls::kuna_reloadarg`]): FreeRTOS `xTaskIncrementTick` is
+/// `push {r3,lr}; ...; ldmia sp!,{r3,lr}; b.w part`, and the r3 the pop
+/// restores is the function's own, not a fourth argument behind r0..r2.
+pub fn anchors_neutral_run(active: &ParamActive, trial: &ParamTrial, is_spacebase: bool) -> bool {
+    let Some(scope) = active.forwarded_neutral() else {
+        return true;
+    };
+    !(is_spacebase && trial.is_forwarded_input())
+        && !trial.is_live_past_call()
+        && !trial.has_frame_reload()
+        && !scope
+            .untaken
+            .iter()
+            .any(|(a, s)| shares_byte(a, *s, trial.get_address(), trial.get_size()))
+}
+
+/// May the active trial `trial`, the one a run of [`neutral_in_chain`]
+/// registers upstream would veto ends at, be where the rescued list starts
+/// again?  Not a stack slot holding a constant the function stored: with every
+/// argument register in front of it forwarded, that is a frame local in the
+/// outgoing-argument area, not an argument the forwarded registers lead up to.
+pub fn ends_rescued_run(active: &ParamActive, trial: &ParamTrial, is_spacebase: bool) -> bool {
+    active.forwarded_neutral().is_none() || !(is_spacebase && trial.is_stored_constant())
+}
+
+/// Does the stack argument slot `addr` the call `op` reads in `slot` hold one
+/// of the function's own incoming registers, stored there unchanged -- a
+/// register save or an alignment push, not a value set up for the callee?
+pub fn saves_own_register(data: &Funcdata, op: OpId, slot: int4, addr: &Address) -> bool {
+    if !data.get_arch().pass_through
+        || addr
+            .get_space()
+            .is_none_or(|s| s.get_type() != spacetype::IPTR_SPACEBASE)
+    {
+        return false;
+    }
+    let mut cur = data.obank().get(op).and_then(|o| o.get_in(slot));
+    for _ in 0..8 {
+        let Some(v) = cur.and_then(|vn| data.vbank().get(vn)) else {
+            return false;
+        };
+        if v.is_input() {
+            return v.get_space().get_type() == spacetype::IPTR_PROCESSOR;
+        }
+        let def = v.get_def().and_then(|d| data.obank().get(d));
+        cur = match def {
+            Some(d) if matches!(d.code(), OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT) => d.get_in(0),
+            _ => return false,
+        };
+    }
+    false
+}
+
+fn shares_byte(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
+    a.get_space().map(|sp| sp.get_index()) == b.get_space().map(|sp| sp.get_index())
+        && a.get_offset() < b.get_offset().wrapping_add(bsize.max(0) as u64)
+        && b.get_offset() < a.get_offset().wrapping_add(asize.max(0) as u64)
+}
+
+/// The [`NeutralScope`] of the call `fc`, `None` with the option off. `first`
+/// caches [`first_calls`] across the calls of one `ActionActiveParam` pass.
+pub fn neutral_scope(
+    data: &Funcdata,
+    fc: &FuncCallSpecs,
+    first: &mut Option<Vec<OpId>>,
+) -> Option<NeutralScope> {
+    if !data.get_arch().pass_through {
+        return None;
+    }
+    let op = fc.get_op();
+    let unref = first.get_or_insert_with(|| first_calls(data)).contains(&op);
+    let entry = fc.get_entry_address();
+    let direct = data
+        .obank()
+        .get(op)
+        .is_some_and(|o| o.code() == OpCode::CPUI_CALL)
+        && entry != data.get_address();
+    let mut untaken = Vec::new();
+    if direct && fc.proto().has_model() {
+        let stated = data.kuna_protoorder_types(entry);
+        let probe = data.kuna_callee_entry_dead(entry);
+        for e in fc.proto().model().input().get_entry() {
+            if e.get_space().get_type() != spacetype::IPTR_PROCESSOR {
+                continue;
+            }
+            let a = Address::new(std::rc::Rc::clone(e.get_space()), e.get_base());
+            let size = e.get_size();
+            let unstated = stated.is_some_and(|s| {
+                !s.inputs
+                    .iter()
+                    .any(|(sa, ss, _)| shares_byte(sa, *ss, &a, size))
+            });
+            if unstated || probe.is_some_and(|p| p.never_takes(&a, size)) {
+                untaken.push((a, size));
+            }
+        }
+    }
+    Some(NeutralScope { unref, untaken })
+}
+
+/// Does `[addr, addr+size)` share a byte with a claim that keeps call-site
+/// trials unscored: any claim but a return register the body touches itself?
+fn holds_trials(claims: &[PassThroughClaim], addr: &Address, size: int4) -> bool {
+    claims
+        .iter()
+        .filter(|c| !(c.arg_owners.is_empty() && c.body_touches))
+        .any(|c| overlaps_claim(std::slice::from_ref(c), addr, size))
+}
+
+/// The forwarded registers a finalized call may still take, captured before its
+/// dropped trials' Varnodes are gone.
+#[derive(Clone, Debug)]
+pub struct PendingPassThrough {
+    /// The CALL op.
+    pub op: OpId,
+    /// `(storage, width, the function's own incoming Varnode)` per register.
+    pub candidates: Vec<(Address, int4, VarnodeId)>,
+}
+
+/// Record which of `fc`'s unused register trials stand on the function's own
+/// incoming register with the callee's recovered prototype reading it, and
+/// retire the unused trials on a range this pass claimed.
+///
+/// Called by `buildInputFromTrials` before anything else reads the trials. A
+/// retired trial is invisible to the sibling and body rescues that run after it,
+/// as it is with the option off, where the range was never heritaged and the
+/// trial never existed.
+pub fn capture(fc: &mut FuncCallSpecs, data: &Funcdata) -> Option<PendingPassThrough> {
+    if !data.get_arch().pass_through {
+        return None;
+    }
+    let op = fc.get_op();
+    let mut candidates: Vec<(Address, int4, VarnodeId)> = Vec::new();
+    let mut retire: Vec<int4> = Vec::new();
+    for i in 0..fc.active_input().get_num_trials() {
+        let t = fc.active_input().get_trial(i);
+        if t.is_used() || t.is_definitely_not_used() || t.is_unref() || t.get_slot() < 1 {
+            continue;
+        }
+        let (addr, size) = (t.get_address().clone(), t.get_size());
+        if claimed_range(data, &addr, size) {
+            retire.push(i);
+        }
+        let Some(vn) = data.obank().get(op).and_then(|o| o.get_in(t.get_slot())) else {
+            continue;
+        };
+        let own_input = data
+            .vbank()
+            .get(vn)
+            .map(|v| {
+                v.is_input() && !v.is_written() && *v.get_addr() == addr && v.get_size() == size
+            })
+            .unwrap_or(false)
+            || forwarded_own_input(data, vn, &addr, size);
+        if !own_input
+            && !crate::kuna_armfloatargs::is_forwarded_input(data, vn, &addr, size)
+            && !reassembled(data, vn, &addr, size)
+        {
+            continue;
+        }
+        if let Some(width) = stated_width(data, fc, &addr, size) {
+            candidates.push((addr, width, vn));
+        }
+    }
+    for i in retire {
+        fc.get_active_input().get_trial_mut(i).mark_no_use();
+    }
+    (!candidates.is_empty()).then_some(PendingPassThrough { op, candidates })
+}
+
+/// Is `vn` the function's own incoming integer register `[addr, addr+size)`
+/// put back together from the pieces heritage split it into, around a
+/// narrower result of a call read out of the same register (AArch64 `w0`
+/// returned by a tail call that also takes the incoming `x0`)?
+fn reassembled(data: &Funcdata, vn: VarnodeId, addr: &Address, size: int4) -> bool {
+    data.vbank().get(vn).is_some_and(|v| v.is_written())
+        && crate::kuna_armfloatargs::incoming_storage(data, vn)
+            .is_some_and(|(a, s)| a == *addr && s == size)
+}
+
+/// Extend each captured call's final argument list with the forwarded registers
+/// its callee's recovered prototype names next, once every other rule has
+/// finalized it. Returns how many calls gained arguments.
+///
+/// Runs last in `ActionActiveParam::apply`, so it can only add: the list the
+/// upstream scoring and the sibling and body rescues settled on is kept as it
+/// is, and must be a leading run of the stated list. Registers are taken in the
+/// stated order and the extension stops at the first one the function does not
+/// forward untouched.
+pub fn extend_pending(data: &mut Funcdata, pending: &[PendingPassThrough]) -> int4 {
+    pending.iter().filter(|p| extend_one(data, p)).count() as int4
+}
+
+/// [`extend_pending`] for one call.
+fn extend_one(data: &mut Funcdata, p: &PendingPassThrough) -> bool {
+    let Some(idx) = data.get_call_specs_index(p.op) else {
+        return false;
+    };
+    let (entry, current) = {
+        let fc = data.get_call_specs(idx);
+        (
+            fc.get_entry_address().clone(),
+            fc.final_input_storage().to_vec(),
+        )
+    };
+    let nin = match data.obank().get(p.op) {
+        Some(o) if !o.is_dead() && o.code() == OpCode::CPUI_CALL => o.num_input(),
+        _ => return false,
+    };
+    if nin != current.len() as int4 + 1 || current.iter().any(|(a, _)| !is_register(a)) {
+        return false;
+    }
+    let Some(stated) = stated_registers(data, &entry) else {
+        return false;
+    };
+    let have: Vec<Address> = current.iter().map(|(a, _)| a.clone()).collect();
+    let offered: Vec<Address> = p.candidates.iter().map(|(a, _, _)| a.clone()).collect();
+    let added: Vec<(Address, int4, VarnodeId)> = extension(&have, &stated, &offered)
+        .into_iter()
+        .map(|k| p.candidates[k].clone())
+        .collect();
+    if added.is_empty() {
+        return false;
+    }
+    let mut newparam: Vec<VarnodeId> = (0..nin)
+        .filter_map(|i| data.obank().get(p.op).and_then(|o| o.get_in(i)))
+        .collect();
+    if newparam.len() != nin as usize {
+        return false;
+    }
+    let mut storage = current;
+    for (addr, width, vn) in added {
+        let Some(vsize) = data
+            .vbank()
+            .get(vn)
+            .filter(|v| {
+                (v.is_input() && *v.get_addr() == addr)
+                    || forwarded_own_input(data, vn, &addr, v.get_size())
+                    || crate::kuna_armfloatargs::is_forwarded_input(data, vn, &addr, width)
+                    || reassembled(data, vn, &addr, v.get_size())
+            })
+            .map(|v| v.get_size())
+        else {
+            return false;
+        };
+        let arg = if width < vsize {
+            match truncate_before(data, vn, width, p.op) {
+                Some(v) => v,
+                None => return false,
+            }
+        } else {
+            vn
+        };
+        newparam.push(arg);
+        storage.push((addr, width));
+    }
+    if data.op_set_all_input(p.op, &newparam).is_err() {
+        return false;
+    }
+    data.get_call_specs_mut(idx)
+        .set_final_input_storage(storage);
+    true
+}
+
+/// Which of `offered` extend the argument list `have` along the callee's stated
+/// list, as indices into `offered`, in order.
+///
+/// `have` must be a leading run of `stated`; the registers `stated` names after
+/// it are taken while each is offered, and the first that is not ends the
+/// extension, because parameters are positional.
+pub fn extension(have: &[Address], stated: &[Address], offered: &[Address]) -> Vec<usize> {
+    if have.len() >= stated.len() || have.iter().zip(stated).any(|(a, s)| a != s) {
+        return Vec::new();
+    }
+    stated[have.len()..]
+        .iter()
+        .map_while(|s| offered.iter().position(|a| a == s))
+        .collect()
+}
+
+/// The low `width` bytes of `vn`, as a `SUBPIECE` inserted before `op`: what
+/// `buildInputFromTrials` does for a trial narrower than its Varnode.
+pub(crate) fn truncate_before(
+    data: &mut Funcdata,
+    vn: VarnodeId,
+    width: int4,
+    op: OpId,
+) -> Option<VarnodeId> {
+    let (vaddr, vsize) = data
+        .vbank()
+        .get(vn)
+        .map(|v| (v.get_addr().clone(), v.get_size()))?;
+    let big_endian = data
+        .get_arch()
+        .manage()
+        .get_default_code_space()
+        .map(|s| s.is_big_endian())
+        .unwrap_or(false);
+    let outaddr = if big_endian {
+        &vaddr + ((vsize - width) as i64)
+    } else {
+        vaddr
+    };
+    let opaddr = data.obank().get(op)?.get_addr().clone();
+    let newop = data.new_op(2, opaddr);
+    let out = data.new_varnode_out(width, &outaddr, newop).ok()?;
+    data.op_set_opcode_code(newop, OpCode::CPUI_SUBPIECE);
+    data.op_set_input(newop, vn, 0).ok()?;
+    let zero = data.new_constant(1, 0);
+    data.op_set_input(newop, zero, 1).ok()?;
+    data.op_insert_before(newop, op);
+    Some(out)
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.passthrough_anchors_neutral_run = Some(anchors_neutral_run);
+    hooks.passthrough_ends_rescued_run = Some(ends_rescued_run);
+    hooks.passthrough_neutral_in_chain = Some(neutral_in_chain);
+    hooks.passthrough_suppresses_return_trial = Some(suppresses_return_trial);
+}
+
+#[cfg(test)]
+#[path = "kuna_passthrough/tests.rs"]
+mod tests;

@@ -14,11 +14,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/passthroughpair_le32",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/passthroughpair_le32",
     "binary_sha256": "bd53a689d8f38b108c95a6e25025a81ac2a3c92ea96352835e3d3ce0f72925be",
     "binary_size": 4744,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/passthroughpair_le32",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/passthroughpair_le32",
     "selector": "fwd_wide",
     "selector_kind": "name"
   },

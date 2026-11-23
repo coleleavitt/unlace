@@ -14,7 +14,7 @@ rounds: [11]
 first_seen_round: 11
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis/src/analyzers/objc/methods.rs]
+touches: [crates/unlace-analysis/src/analyzers/objc/methods.rs]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/571
@@ -92,11 +92,11 @@ Decompile checkCode: at the exact IMP stored in Objective-C metadata.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_odd_imp",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/macho_objc_odd_imp",
     "binary_sha256": "254ed9afc05e4c4913b325058e436fc4ecbfa15ca950777a83ff064cc87753c2",
     "binary_size": 16728,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_odd_imp",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/macho_objc_odd_imp",
     "selector": "-[Greeter greet:]",
     "selector_kind": "name"
   },

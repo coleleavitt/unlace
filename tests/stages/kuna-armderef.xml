@@ -18,12 +18,12 @@
     the rule is inert in the rendered C of `abs_write`, whose two stores
     through a pool-loaded `g_cfg` across calls are the instruction shape it
     concerns. The row-level proof (a Read or Write of each address accessed)
-    lives in the cargo gate `decompiler/crates/unlace-console/tests/verify_armderef.rs`,
+    lives in the cargo gate `crates/unlace-console/tests/verify_armderef.rs`,
     over the `armderef_arm_le32` fixture this case also loads.
 
     The XML wrapper only supplies the harness architecture; the pass clears it
     and loads the real linked ARM fixture (built from
-    decompiler/crates/unlace-analysis/tests/fixtures/armderef_arm_le32.c).
+    crates/unlace-analysis/tests/fixtures/armderef_arm_le32.c).
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -32,7 +32,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armderef_arm_le32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/armderef_arm_le32</com>
   <com>read symbols</com>
   <com>load function abs_write</com>
   <com>decompile</com>

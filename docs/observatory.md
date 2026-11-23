@@ -1,17 +1,17 @@
 # The codebase observatory
 
-Local, generated views of the codebase — run `make observatory` from the repo
+Local, generated views of the codebase — run `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace` from the repo
 root and open `observatory/index.html` in a browser (the pages are
 self-contained and work over `file://`). Nothing under `observatory/` is
 committed; regenerate at will. Generators live in `scripts/observatory/`
-(unit-tested by `make test-tools`).
+(unit-tested by `PYTHONPATH=. python3 -m unittest discover -s scripts/tests -p 'test_*.py'`).
 
 | Page | Shows | Regenerate |
 |---|---|---|
-| `observatory/atlas.html` | The architecture atlas: the P0–P9 pipeline with per-phase cards (owned artifact, modules by size, sub-phases, options, console surfaces, owning `docs/spec/` chapter), the shared layers (`substrate/`, `infra/`), the workspace crate graph, and the real pass order. | `make observatory` |
-| `observatory/churn.html` | Churn & ownership: a squarified treemap of every tracked file (area = live size or windowed churn; color = churn intensity, agent share, or recency), with scope/window controls and a per-group rollup table. | `make observatory` |
-| `observatory/walkthrough.html` | Bytes → C: one pinned function (`main` of the `aliasoverlap_x86_64` fixture) at every stage — bytes, disassembly, raw p-code (pre-analysis), final IR (post Band B), region tree, C — each pane naming its owning phase(s) and the command that produced it. Raw dumps land in `observatory/walkthrough/NN-*.txt`. | `make observatory` |
-| `observatory/coverage.html` | Merged line coverage: workspace suite + datatest/stages corpora + tests/cli probes through instrumented binaries, per crate / per phase folder / per file, with the llvm-cov HTML report under `observatory/coverage/`. The atlas phase cards pick the numbers up too. | `make coverage` |
+| `observatory/atlas.html` | The architecture atlas: the P0–P9 pipeline with per-phase cards (owned artifact, modules by size, sub-phases, options, console surfaces, owning `docs/spec/` chapter), the shared layers (`substrate/`, `infra/`), the workspace crate graph, and the real pass order. | `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace` |
+| `observatory/churn.html` | Churn & ownership: a squarified treemap of every tracked file (area = live size or windowed churn; color = churn intensity, agent share, or recency), with scope/window controls and a per-group rollup table. | `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace` |
+| `observatory/walkthrough.html` | Bytes → C: one pinned function (`main` of the `aliasoverlap_x86_64` fixture) at every stage — bytes, disassembly, raw p-code (pre-analysis), final IR (post Band B), region tree, C — each pane naming its owning phase(s) and the command that produced it. Raw dumps land in `observatory/walkthrough/NN-*.txt`. | `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace` |
+| `observatory/coverage.html` | Merged line coverage: workspace suite + datatest/stages corpora + tests/cli probes through instrumented binaries, per crate / per phase folder / per file, with the llvm-cov HTML report under `observatory/coverage/`. The atlas phase cards pick the numbers up too. | `bash scripts/coverage.sh` |
 
 Each page inlines its data; the same data is written as raw JSON under
 `observatory/data/` for agents and scripts:
@@ -36,7 +36,7 @@ Each page inlines its data; the same data is written as raw JSON under
   windows{all,d30,d90,d365}{added,removed,commits,agentCommits}}`. Full
   no-merge history with `--find-renames`; agent commits are `[AUTOMATED]`
   or Co-authored-by claude/codex/chatgpt/copilot; only currently-tracked
-  files under decompiler/scripts/tools/integrations/docs/tests are kept
+  files under crates/scripts/tools/integrations/docs/tests are kept
   (vendored `specs/` is excluded).
 
 ## Where the data comes from
@@ -46,10 +46,10 @@ silently from the tree:
 
 - `docs/phases.md` (the two pipe tables: phase names/artifacts/Band B and the
   folder map) — parsed, not duplicated.
-- `decompiler/crates/unlace-decomp/phases.toml` (groups, sub-phases, surfaces,
+- `crates/unlace-decomp/phases.toml` (groups, sub-phases, surfaces,
   settable options).
 - `docs/spec/*.md` `Anchors:` blocks (folder → owning chapter).
-- `decompiler/crates/unlace-decomp/tests/fixtures/list_action_decompile_snapshot.txt`
+- `crates/unlace-decomp/tests/fixtures/list_action_decompile_snapshot.txt`
   — the byte-enforced listing of the default `decompile` schedule — joined
   against the declarative registry in `infra/universalaction.rs` (`rrow!`
   rows, `act!` group literals, `ActionBase::new` definition sites) for each
@@ -64,10 +64,10 @@ Options:
 
 ## Coverage: prerequisites and caveats
 
-`make coverage` needs `rustup component add llvm-tools-preview` and
+`bash scripts/coverage.sh` needs `rustup component add llvm-tools-preview` and
 `cargo install cargo-llvm-cov` (the script checks and says so). It always
 re-measures from scratch: a full instrumented build into
-`decompiler/target/llvm-cov-target` (a second build tree; debug info is
+`target/llvm-cov-target` (a second build tree; debug info is
 forced off to keep it small) plus every suite — expect 30–60 minutes. Suite
 failures do not abort the measurement; they are reported as
 `meta.runsFailed` and the report covers what ran. Two sharp edges it handles

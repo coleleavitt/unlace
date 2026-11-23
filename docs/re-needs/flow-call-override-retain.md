@@ -14,7 +14,7 @@ rounds: [9]
 first_seen_round: 9
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli]
+touches: [crates/unlace-cli]
 scope: small
 regression_of: null
 pr: null
@@ -143,7 +143,7 @@ says the next link exists.
 
 - round 9 CAPTAIN, at dispatch of `b-r9-flow-call-overri` (04:04Z). Three corrections to the sibling-contract block in that builder's prompt, which was composed 16s before this was written and is stale in one row.
 
-1. `prototype-parser-rejects-previously` IS NOT RUNNING. It merged as PR #501 at 03:58Z and released every lease. `decompiler/crates/unlace-cli/src/assertdecl.rs` and `decompiler/crates/unlace-console/src/grammar` are FREE -- take them, do not report `blocked` on them. The live lease table is authoritative over the prompt text; check it (`python3 -m scripts.repipe.status --json`) before believing any row. Rebase onto `origin/main` at `3e11d193` or later: the worktree was cut from LOCAL main `8df2a52e`, which is two commits behind and does not contain #501 or #492.
+1. `prototype-parser-rejects-previously` IS NOT RUNNING. It merged as PR #501 at 03:58Z and released every lease. `crates/unlace-cli/src/assertdecl.rs` and `crates/unlace-console/src/grammar` are FREE -- take them, do not report `blocked` on them. The live lease table is authoritative over the prompt text; check it (`python3 -m scripts.repipe.status --json`) before believing any row. Rebase onto `origin/main` at `3e11d193` or later: the worktree was cut from LOCAL main `8df2a52e`, which is two commits behind and does not contain #501 or #492.
 
 2. HARD CONSTRAINT -- NO NEW OPTION THIS ROUND. `b-r9-bcryptgetpropert` holds `counter:catalog`, `counter:div`, `counter:stages-corpus`, `file:docs/options.md` and `file:phases.toml`. You may not add a settableTable row, edit docs/options.md, or bump a catalog/DIV/stages count; two option-adding PRs collide on those hard-coded counts. The intended shape here is a correctness fix, not a feature: the user typed `--assert 'flow 0x40176f call'` and kuna answered `applied`, so making that answer true needs no flag. If your diagnosis genuinely requires an option, stop and report blocked rather than racing for the counters.
 

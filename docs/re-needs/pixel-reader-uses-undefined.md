@@ -14,7 +14,7 @@ rounds: [6]
 first_seen_round: 6
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: null
@@ -54,7 +54,7 @@ Recover the ReadFile buffer and bytes-read variable in the bitmap decoder at 0x4
   ],
   "target": {
     "binary_rel": "bin/Imagination.zip.__x/Imagination.exe",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
     "binary_sha256": "78d28ec6d13b9c1634101e86b2042ed61560db31ba63705adfb2b75f5757b7b4",
     "binary_size": 40960,
     "binary_source": "in-repo"
@@ -95,7 +95,7 @@ Recover the ReadFile buffer and bytes-read variable in the bitmap decoder at 0x4
   ],
   "target": {
     "binary_rel": "bin/Imagination.zip.__x/Imagination.exe",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
     "binary_sha256": "78d28ec6d13b9c1634101e86b2042ed61560db31ba63705adfb2b75f5757b7b4",
     "binary_size": 40960,
     "binary_source": "in-repo"

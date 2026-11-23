@@ -24,7 +24,7 @@ import tomllib
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 from scripts.observatory import atlas  # noqa: E402
-CATALOG = "decompiler/crates/unlace-decomp/phases.toml"
+CATALOG = "crates/unlace-decomp/phases.toml"
 PHASES = [
     ("P0", "Knowledge", "Configuration, symbols & assertions"),
     ("P1", "Partition", "Images, code boundaries & entry points"),
@@ -90,7 +90,7 @@ def phase_for(path: str, names: dict[str, str]) -> str | None:
 
 
 def is_source(path: str) -> bool:
-    return path.startswith(("decompiler/", "rust/")) and Path(path).suffix in {
+    return path.startswith(("crates/", "decompiler/", "rust/")) and Path(path).suffix in {
         ".rs", ".cc", ".hh", ".cpp", ".h", ".c"
     }
 
@@ -195,7 +195,7 @@ def export(repo: Path) -> dict:
     if git(repo, "rev-parse", "--is-shallow-repository").strip() == "true":
         raise ValueError("dev-viz requires full git history (checkout fetch-depth: 0)")
     sha = git(repo, "rev-parse", "HEAD").strip()
-    names = phase_names(tracked(repo, "decompiler/crates/unlace-decomp/src"))
+    names = phase_names(tracked(repo, "crates/unlace-decomp/src"))
     log = git(repo, "log", "HEAD", "--no-merges", "--find-renames", "--numstat",
               "--format=%x1e%H%x1f%cI%x1f%B%x1f")
     commits = parse_commits(log, names)

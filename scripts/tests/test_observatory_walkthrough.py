@@ -39,7 +39,7 @@ class StageAssemblyTests(unittest.TestCase):
             self.assertEqual(walkthrough._kuna_bin(Path("/r")), Path("/custom/kuna"))
         with mock.patch.dict(os.environ, {}, clear=True):
             self.assertEqual(
-                walkthrough._kuna_bin(Path("/r")), Path("/r/decompiler/target/release/unlace")
+                walkthrough._kuna_bin(Path("/r")), Path("/r/target/release/unlace")
             )
 
 

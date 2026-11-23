@@ -17,11 +17,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/followoverlap_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/followoverlap_x86_64",
     "binary_sha256": "16ce89d06dc8805fcd80ceee50c398ca28f2aa66abe1b05692e1dcabdb921b8c",
     "binary_size": 1184,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/followoverlap_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/followoverlap_x86_64",
     "selector": "audit_overlap",
     "selector_kind": "name"
   },

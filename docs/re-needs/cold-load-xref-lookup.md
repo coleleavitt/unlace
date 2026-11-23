@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli, decompiler/crates/unlace-analysis, decompiler/crates/unlace-sleigh]
+touches: [crates/unlace-cli, crates/unlace-analysis, crates/unlace-sleigh]
 scope: small
 regression_of: null
 pr: null

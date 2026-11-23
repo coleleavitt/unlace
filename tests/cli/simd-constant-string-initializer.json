@@ -18,11 +18,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/simdlane_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/simdlane_x86_64",
     "binary_sha256": "8c802273524df8edacbda50e39fdb72a1e098b1353d70f15db9b63a80810867d",
     "binary_size": 13640,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/simdlane_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/simdlane_x86_64",
     "selector": "alphabet_init",
     "selector_kind": "name"
   },

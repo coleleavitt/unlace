@@ -19,9 +19,9 @@
 
     Stage: P1 program prep (loader constant ranges).  Single pass; the loader
     facts are checked by
-    decompiler/crates/unlace-analysis/tests/verify_dynrelocs_gate.rs.
+    crates/unlace-analysis/tests/verify_dynrelocs_gate.rs.
 
-    Image: decompiler/crates/unlace-analysis/tests/fixtures/mipsgot_gcc_be.so
+    Image: crates/unlace-analysis/tests/fixtures/mipsgot_gcc_be.so
     (mipsgot.c); see mipsgot.provenance.
 
     Assert #1: c_add calls add64 and stores to sink64.
@@ -33,7 +33,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/mipsgot_gcc_be.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/mipsgot_gcc_be.so</com>
   <com>read symbols</com>
   <com>lo fu c_add</com>
   <com>decompile</com>

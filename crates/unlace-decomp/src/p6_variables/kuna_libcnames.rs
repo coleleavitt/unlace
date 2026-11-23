@@ -1,0 +1,911 @@
+//! (kuna `libcnames`) Name locals from the library calls they meet.
+//!
+//! A prototype the analysis parks from a built-in library table carries the
+//! library's own names for its parameters and, where the result has a
+//! conventional name, for its return value ([`LibraryNames`]). With the option
+//! on, a local the naming pass numbered prints the name of the strongest
+//! evidence it has instead of its `vN`:
+//!
+//! 1. the value a library call returns (`fd = open(...)`), counted only when
+//!    every library result the local holds has the same name;
+//! 2. a library argument it is passed whole as (`read(fd, ...)`), a name
+//!    describing what the value is;
+//! 3. the same, for a name that only describes the slot's role in that one call
+//!    (`dest`/`src`, `s1`/`s2`, ...), which counts only when every role name
+//!    the local receives is the same one.
+//!
+//! A stack object whose own address is a library argument (`read(fd, buf,
+//! n)`, `ReadFile(h, Buffer, n, &NumberOfBytesRead, 0)`) has the evidence of
+//! 2. and 3. under the name of the object the parameter points at
+//! ([`pointee_name`]), except from a call that only fills it ([`FILLERS`]),
+//! and prints that name at every reference to it. A scalar object (not an
+//! array or a structure) is one value, so arguments that name it two ways are
+//! two variables its stack slot holds in turn, and name it not.
+//!
+//! Evidence follows a value through the copies and casts the printer folds
+//! into the statement, and through nothing else. Within a kind the earliest
+//! call decides, then the lowest slot. A name equal to a type the printed code
+//! can mention or to a C or Rust keyword is never used.
+//!
+//! The library name is a second name for a numbered local, not a replacement
+//! for its number ([`LibraryAlias`]). The naming pass numbers every local
+//! exactly as it does with the option off, records that numbering for a
+//! directive replay, and only then gives each candidate its library name
+//! ([`apply`]), so `v4` is the same variable in every mode, a directive may
+//! name the local by either name, and a replay identifies it by its number. A
+//! clash takes `_2`, `_3`, ... in the order of the evidence, and no spelling
+//! repeats a name another variable, the scope or a callee holds. A name a
+//! directive or the binary chose stays, even when it is shaped like a number
+//! (`name fd v9`). Under a
+//! carried naming record a local keeps the spelling it printed; a spelling a
+//! rename took or vacated is handed to no other local, and a local whose
+//! spelling a rename took prints its number.
+//!
+//! [`crate::kuna_contextnames`] adds evidence of its own (loop counters, the
+//! returned local) under `option contextnames`; evidence an option prints is
+//! preferred to evidence only a directive may use.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use unlace_base::address::Address;
+use unlace_num::opcodes::OpCode;
+
+use crate::context::{HighVariableId, VarnodeId};
+use crate::database::{SymbolId, symbol_category};
+use crate::dtype::type_metatype;
+use crate::funcdata::Funcdata;
+
+/// A library function's own names for its parameters, in slot order (an
+/// empty string for a slot its declaration leaves unnamed), and for the value
+/// it returns, where that value has a conventional name.
+#[derive(Debug, PartialEq, Eq)]
+pub struct LibraryNames {
+    pub params: &'static [&'static str],
+    pub ret: Option<&'static str>,
+}
+
+/// Parameter names that say which side of one call a value is on rather than
+/// what it is.
+const ROLE_NAMES: &[&str] = &[
+    "act",
+    "cchCount1",
+    "cchCount2",
+    "cchDest",
+    "cchSrc",
+    "dest",
+    "dst",
+    "e1",
+    "e2",
+    "fdin",
+    "fdout",
+    "from",
+    "fromfd",
+    "hSourceHandle",
+    "hSourceProcessHandle",
+    "hTargetProcessHandle",
+    "haystack",
+    "infd",
+    "lpDestStr",
+    "lpSrcStr",
+    "lpString1",
+    "lpString2",
+    "lpTargetHandle",
+    "needle",
+    "new",
+    "newfd",
+    "newmask",
+    "oact",
+    "old",
+    "oldfd",
+    "oldmask",
+    "oset",
+    "outfd",
+    "pvargDest",
+    "pvargSrc",
+    "s1",
+    "s2",
+    "set",
+    "src",
+    "to",
+    "tofd",
+    "x",
+    "y",
+];
+
+/// How far evidence follows a value through folded copies and casts.
+const FOLD_DEPTH: usize = 4;
+
+/// Evidence kinds, strongest first: the value a library call returns, a loop
+/// counter ([`crate::kuna_contextnames`]), a library argument named for what
+/// it is, a role name, and the value the function returns.
+const RET: u8 = 0;
+pub(crate) const LOOP: u8 = 1;
+const ARG: u8 = 2;
+const ROLE: u8 = 3;
+pub(crate) const RESULT: u8 = 4;
+
+/// One piece of evidence for a local: its kind, the operation (instruction,
+/// creation time), the slot, the name, and whether the output prints it.
+pub(crate) type Evidence = (u8, (Address, u32), i32, &'static str, bool);
+
+fn is_role(name: &str) -> bool {
+    ROLE_NAMES.binary_search(&name).is_ok()
+}
+
+/// The value `vn` names when it is printed folded into a statement: through
+/// the implied copy or cast it feeds (`x = (T)call()`), else itself.
+fn folded_into(fd: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
+    for _ in 0..FOLD_DEPTH {
+        let Some(v) = fd.vbank().get(vn) else { break };
+        if !v.is_implied() {
+            break;
+        }
+        let Some(op) = fd.lone_descend(vn).and_then(|op| fd.obank().get(op)) else {
+            break;
+        };
+        if !matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) {
+            break;
+        }
+        let Some(out) = op.get_out() else { break };
+        vn = out;
+    }
+    vn
+}
+
+/// The value an argument `vn` prints as: through the implied copies and casts
+/// that write it (`call((T)x)`), else itself.
+pub(crate) fn folded_from(fd: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
+    for _ in 0..FOLD_DEPTH {
+        let Some(v) = fd.vbank().get(vn) else { break };
+        if !(v.is_implied() && v.is_written()) {
+            break;
+        }
+        let Some(op) = v.get_def().and_then(|op| fd.obank().get(op)) else {
+            break;
+        };
+        if !matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) {
+            break;
+        }
+        let Some(input) = op.get_in(0) else { break };
+        vn = input;
+    }
+    vn
+}
+
+/// The local `vn` is an instance of, when it is one this pass may name: a
+/// printed, unmerged-by-speculation variable that is not a function input,
+/// a global or a constant.
+pub(crate) fn local_of(fd: &mut Funcdata, vn: VarnodeId) -> Option<HighVariableId> {
+    let v = fd.vbank().get(vn)?;
+    if v.is_constant() || v.is_input() || v.is_persist() || v.is_implied() || v.is_free() {
+        return None;
+    }
+    let high = v.get_high()?;
+    let h = fd.high_bank().get(high)?;
+    if h.kuna_global() || h.kuna_name().is_some() || h.get_num_merge_classes() > 1 {
+        return None;
+    }
+    let rep = fd.high_name_representative(high)?;
+    let r = fd.vbank().get(rep)?;
+    if r.is_input() || r.is_free() || r.is_proto_partial() {
+        return None;
+    }
+    Some(high)
+}
+
+/// What a piece of evidence names: a numbered local, or a stack object by its
+/// Symbol, whose every reference prints the one name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Target {
+    Local(HighVariableId),
+    Object(SymbolId),
+}
+
+/// Library parameter names that say only that the argument is a pointer
+/// (besides `p` and the `ptr`, `Ptr` and `_p` endings).
+const POINTER_NAMES: &[&str] = &[
+    "argp", "pbstr", "penv", "psa", "psz", "pvarg", "pwc", "pwcs", "setp", "tvp",
+];
+
+fn names_pointer(name: &str) -> bool {
+    name == "p"
+        || name.ends_with("ptr")
+        || name.ends_with("Ptr")
+        || name.ends_with("_p")
+        || POINTER_NAMES.binary_search(&name).is_ok()
+}
+
+/// The name of the object a pointer parameter `name` points at: the name less
+/// a Windows pointer prefix (`lpBuffer` names the buffer `Buffer`,
+/// `lpflOldProtect` the protection `flOldProtect`, `phModule` the handle
+/// `hModule`), else the name itself (`buf`, `stat_loc`, `timer`). `None` for a
+/// name that says only that the argument is a pointer (`ptr`, `iptr`,
+/// `termios_p`), unless the object is itself a pointer (`asprintf(&ptr, ...)`,
+/// `strtol(s, &endptr, 10)`).
+fn pointee_name(name: &'static str, pointer: bool) -> Option<&'static str> {
+    let hungarian = |rest: &str| {
+        let tag = rest.bytes().take_while(u8::is_ascii_lowercase).count();
+        rest.as_bytes().get(tag).is_some_and(u8::is_ascii_uppercase)
+    };
+    if let Some(rest) = ["lp", "p"]
+        .into_iter()
+        .find_map(|p| name.strip_prefix(p).filter(|rest| hungarian(rest)))
+    {
+        return Some(rest);
+    }
+    (pointer || !names_pointer(name)).then_some(name)
+}
+
+/// Library calls that only fill the memory they are given (`memset(&x, 0,
+/// sizeof x)`), whose destination says nothing about what the object is.
+const FILLERS: &[&str] = &["bzero", "explicit_bzero", "memset"];
+
+/// Is `callee` a [`FILLERS`] entry, or its `_`-prefixed or FORTIFY
+/// (`__memset_chk`) spelling?
+fn fills(callee: &str) -> bool {
+    let base = callee.trim_start_matches('_');
+    let base = base
+        .strip_suffix("_chk")
+        .map_or(base, |b| b.trim_start_matches('_'));
+    FILLERS.binary_search(&base).is_ok()
+}
+
+/// What [`addressed_object`] finds: the object's Symbol, the reference's
+/// local, whether the object is a pointer (or an array of them), and whether
+/// it is a scalar (neither an array nor a structure).
+struct Addressed {
+    sym: SymbolId,
+    high: HighVariableId,
+    pointer: bool,
+    scalar: bool,
+}
+
+/// The stack object `vn` is the address of, when the naming pass would number
+/// it: `vn` is a `PTRSUB` of the frame's spacebase addressing the first byte
+/// of a local Symbol that has no name yet and is not a parameter, and the
+/// pointer is not to a field of it (`&h.size`).
+fn addressed_object(fd: &Funcdata, vn: VarnodeId) -> Option<Addressed> {
+    let v = fd.vbank().get(vn)?;
+    let op = fd.obank().get(v.get_def()?)?;
+    if op.code() != OpCode::CPUI_PTRSUB {
+        return None;
+    }
+    let off = op.get_in(1)?;
+    let addr = fd.resolve_spacebase_ref_addr(off)?;
+    let lm = fd.get_scope_local()?;
+    let db = lm.database();
+    let entry = db.entry(
+        lm.scope_id(),
+        db.find_container(lm.scope_id(), &addr, 1, &Address::default())?,
+    );
+    if addr.get_offset() != entry.get_addr().get_offset() || entry.get_offset() != 0 {
+        return None;
+    }
+    let sym = db.symbol(entry.symbol);
+    if !sym.is_name_undefined()
+        || sym.is_name_locked()
+        || sym.category != symbol_category::NO_CATEGORY
+    {
+        return None;
+    }
+    let ct = sym.dtype.as_ref()?;
+    let composite = matches!(
+        ct.get_metatype(),
+        type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION
+    );
+    let field = v.get_type().get_ptr_to().is_some_and(|to| {
+        !matches!(
+            to.get_metatype(),
+            type_metatype::TYPE_VOID | type_metatype::TYPE_UNKNOWN
+        ) && to.get_size() < ct.get_size()
+    });
+    if composite && field {
+        return None;
+    }
+    let pointer = ct.get_metatype() == type_metatype::TYPE_PTR
+        || ct
+            .get_array_base()
+            .is_some_and(|at| at.get_metatype() == type_metatype::TYPE_PTR);
+    let scalar = !composite && ct.get_metatype() != type_metatype::TYPE_ARRAY;
+    Some(Addressed {
+        sym: entry.symbol,
+        high: fd.vbank().get(off)?.get_high()?,
+        pointer,
+        scalar,
+    })
+}
+
+/// Every piece of library evidence in `fd`, by local or stack object, with the
+/// local each object's first reference is and whether the target is a scalar
+/// object.
+fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Evidence>)> {
+    let mut found: BTreeMap<Target, (HighVariableId, bool, Vec<Evidence>)> = BTreeMap::new();
+    let shown = fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_libcnames::LibcNames>()
+        .0;
+    let mut note = |target: Target, high: HighVariableId, scalar: bool, e: Evidence| {
+        found
+            .entry(target)
+            .or_insert_with(|| (high, scalar, Vec::new()))
+            .2
+            .push(e);
+    };
+    for i in 0..fd.num_calls() {
+        let fc = fd.get_call_specs(i);
+        let Some(names) = fd.get_arch().callee_library_names(fc.get_entry_address()) else {
+            continue;
+        };
+        if !fc.proto().is_input_locked() {
+            continue;
+        }
+        let op = fc.get_op();
+        let filler = fills(fc.get_name());
+        let sizes: Vec<Option<i32>> = (0..fc.proto().num_params())
+            .map(|j| fc.proto().get_param(j).map(|p| p.get_size()))
+            .collect();
+        let Some(o) = fd.obank().get(op) else {
+            continue;
+        };
+        let at = (o.get_addr().clone(), o.get_time());
+        let out = o.get_out();
+        let args: Vec<Option<VarnodeId>> = (1..o.num_input()).map(|slot| o.get_in(slot)).collect();
+        if let (Some(ret), Some(out)) = (names.ret, out) {
+            let vn = folded_into(fd, out);
+            if let Some(high) = local_of(fd, vn) {
+                note(
+                    Target::Local(high),
+                    high,
+                    false,
+                    (RET, at.clone(), -1, ret, shown),
+                );
+            }
+        }
+        for (j, name) in names.params.iter().enumerate() {
+            let (Some(Some(arg)), Some(Some(size))) = (args.get(j), sizes.get(j)) else {
+                continue;
+            };
+            if name.is_empty() || fd.vbank().get(*arg).map(|v| v.get_size()) != Some(*size) {
+                continue;
+            }
+            let kind = if is_role(name) { ROLE } else { ARG };
+            let vn = folded_from(fd, *arg);
+            if let Some(high) = local_of(fd, vn) {
+                note(
+                    Target::Local(high),
+                    high,
+                    false,
+                    (kind, at.clone(), j as i32, name, shown),
+                );
+            } else if let Some(obj) = addressed_object(fd, vn).filter(|_| !filler) {
+                if let Some(name) = pointee_name(name, obj.pointer) {
+                    note(
+                        Target::Object(obj.sym),
+                        obj.high,
+                        obj.scalar,
+                        (kind, at.clone(), j as i32, name, shown),
+                    );
+                }
+            }
+        }
+    }
+    if fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_contextnames::ContextNames>()
+        .0
+    {
+        let mut context: BTreeMap<HighVariableId, Vec<Evidence>> = BTreeMap::new();
+        crate::kuna_contextnames::evidence(fd, &mut context);
+        for (high, evidence) in context {
+            found
+                .entry(Target::Local(high))
+                .or_insert_with(|| (high, false, Vec::new()))
+                .2
+                .extend(evidence);
+        }
+    }
+    found
+}
+
+/// The evidence that names a local: printed evidence before evidence only a
+/// directive may use, then the strongest kind, then the earliest call, then
+/// the lowest slot. Results that disagree name nothing, and nor do role names
+/// that disagree, nor, on a `scalar` object, argument names that disagree;
+/// `usable` drops a name the printed code cannot hold (a type name, a
+/// keyword).
+fn decide(
+    mut found: Vec<Evidence>,
+    scalar: bool,
+    usable: &dyn Fn(&str) -> bool,
+) -> Option<Evidence> {
+    found.retain(|e| usable(e.3));
+    let agree: &[u8] = if scalar {
+        &[RET, ARG, ROLE]
+    } else {
+        &[RET, ROLE]
+    };
+    for &kind in agree {
+        let names: BTreeSet<&str> = found.iter().filter(|e| e.0 == kind).map(|e| e.3).collect();
+        if names.len() > 1 {
+            found.retain(|e| e.0 != kind);
+        }
+    }
+    found.into_iter().min_by(|a, b| {
+        b.4.cmp(&a.4)
+            .then(a.0.cmp(&b.0))
+            .then_with(|| a.1.cmp(&b.1))
+            .then(a.2.cmp(&b.2))
+    })
+}
+
+/// `name` and its numbered spellings, `name`, `name_2`, `name_3`, ...
+fn spelling(name: &str, k: usize) -> String {
+    if k <= 1 {
+        name.to_string()
+    } else {
+        format!("{name}_{k}")
+    }
+}
+
+/// Is `candidate` one of `name`'s spellings?
+fn spells(candidate: &str, name: &str) -> bool {
+    candidate == name
+        || candidate
+            .strip_prefix(name)
+            .and_then(|rest| rest.strip_prefix('_'))
+            .is_some_and(|k| !k.starts_with('0') && k.parse::<usize>().is_ok_and(|k| k >= 2))
+}
+
+/// C and Rust keywords, and the C names a declaration may not shadow.
+const RESERVED: &[&str] = &[
+    "Self", "_Bool", "_Complex", "abstract", "as", "async", "auto", "await", "become", "bool",
+    "box", "break", "case", "char", "const", "continue", "crate", "default", "do", "double", "dyn",
+    "else", "enum", "extern", "false", "final", "float", "fn", "for", "goto", "if", "impl", "in",
+    "inline", "int", "let", "long", "loop", "macro", "main", "match", "mod", "move", "mut",
+    "override", "priv", "pub", "ref", "register", "restrict", "return", "self", "short", "signed",
+    "sizeof", "static", "struct", "super", "switch", "trait", "true", "try", "type", "typedef",
+    "typeof", "union", "unsafe", "unsigned", "unsized", "use", "virtual", "void", "volatile",
+    "where", "while", "yield",
+];
+
+/// May a local be named `name`: not a keyword, and not a type the printed
+/// code could mention (`tm`, `FILE`, a DWARF typedef).
+fn usable(fd: &Funcdata, name: &str) -> bool {
+    RESERVED.binary_search(&name).is_err()
+        && fd
+            .get_arch()
+            .types()
+            .is_none_or(|types| !matches!(types.find_by_name(name), Ok(Some(_))))
+}
+
+/// A numbered local that may print a library name: the local, the library
+/// name, and the evidence's call and slot (the order clashes are numbered in).
+#[derive(Clone, Debug)]
+pub struct Candidate {
+    target: Target,
+    high: HighVariableId,
+    base: &'static str,
+    at: (Address, u32),
+    slot: i32,
+    shown: bool,
+}
+
+/// A library name a numbered local answers to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LibraryAlias {
+    /// The local.
+    pub high: HighVariableId,
+    /// The default name it is numbered under (`v3`): what a replay record and
+    /// a directive identify it by.
+    pub number: String,
+    /// The library name.
+    pub alias: String,
+    /// Whether the output prints it (`option libcnames`). When it does not, a
+    /// directive naming the library name still reaches the local.
+    pub shown: bool,
+}
+
+/// The library evidence of every local, decided before the naming walk: when
+/// the option is on, or when a directive may name a local by its library name
+/// (a naming record is being taken or replayed).
+pub fn candidates(fd: &mut Funcdata) -> Vec<Candidate> {
+    let arch = fd.get_arch();
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_libcnames::LibcNames>()
+        .0
+        && !arch
+            .kuna_options
+            .get::<crate::kuna_contextnames::ContextNames>()
+            .0
+        && !fd.kuna_record_names()
+        && fd.kuna_prior_names().is_empty()
+    {
+        return Vec::new();
+    }
+    let found = evidence(fd);
+    let mut out: Vec<Candidate> = found
+        .into_iter()
+        .filter_map(|(target, (high, scalar, found))| {
+            decide(found, scalar, &|name| usable(fd, name)).map(|(_, at, slot, base, shown)| {
+                Candidate {
+                    target,
+                    high,
+                    base,
+                    at,
+                    slot,
+                    shown,
+                }
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| {
+        a.at.cmp(&b.at)
+            .then(a.slot.cmp(&b.slot))
+            .then(a.high.cmp(&b.high))
+    });
+    out
+}
+
+/// Give each candidate still printed under its number its library name, after
+/// the walk has numbered every local and recorded that numbering. Every
+/// spelling is unique against every name a variable or the scope holds, every
+/// global the program names, the callees and the function itself; under a
+/// carried record a local keeps the spelling it printed, and a spelling a
+/// rename took or vacated, or another local printed, goes to no one else.
+pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
+    let angr = fd.get_arch().name_style_angr;
+    let prior = fd.kuna_prior_names().clone();
+    let replay = !prior.is_empty();
+    let mut taken: BTreeSet<String> = fd
+        .high_bank()
+        .iter()
+        .filter_map(|(_, h)| h.kuna_name().map(str::to_string))
+        .collect();
+    for i in 0..fd.num_calls() {
+        taken.insert(fd.get_call_specs(i).get_name().to_string());
+    }
+    taken.insert(fd.get_display_name().to_string());
+    taken.extend(prior.renames.keys().cloned());
+    taken.extend(prior.renames.values().cloned());
+    taken.extend(prior.vacated_names.iter().cloned());
+    let printed_before: BTreeSet<String> = prior.aliases.values().cloned().collect();
+    let globals = fd.get_arch().global_name_scope();
+    let free = |fd: &Funcdata, taken: &BTreeSet<String>, name: &str| {
+        !taken.contains(name)
+            && usable(fd, name)
+            && fd
+                .get_scope_local()
+                .is_none_or(|lm| !lm.local_name_used(name))
+            && globals.as_ref().is_none_or(|g| !g.has_symbol_name(name))
+    };
+    let mut out: Vec<LibraryAlias> = Vec::new();
+    for c in candidates {
+        let number = match c.target {
+            Target::Local(high) => fd
+                .high_bank()
+                .get(high)
+                .and_then(|h| h.kuna_name())
+                .map(str::to_string),
+            Target::Object(sym) => fd
+                .get_scope_local()
+                .and_then(|lm| lm.database().try_symbol(sym))
+                .filter(|s| !s.is_name_undefined())
+                .map(|s| s.name.clone()),
+        };
+        let Some(number) = number else { continue };
+        let Some(index) = crate::kuna_stablenames::default_name_index(&number, angr) else {
+            continue;
+        };
+        if out.iter().any(|a| a.number == number) || chosen(fd, &prior, &number) {
+            continue;
+        }
+        let before = match c.target {
+            Target::Local(high) => crate::kuna_stablenames::best(fd, high).unwrap_or(index),
+            Target::Object(_) => index,
+        };
+        let alias = match prior.aliases.get(&before) {
+            Some(before) if spells(before, c.base) => {
+                Some(before.clone()).filter(|s| free(fd, &taken, s))
+            }
+            _ => (1..)
+                .map(|k| spelling(c.base, k))
+                .find(|s| free(fd, &taken, s) && !(replay && printed_before.contains(s))),
+        };
+        let Some(alias) = alias else { continue };
+        taken.insert(alias.clone());
+        out.push(LibraryAlias {
+            high: c.high,
+            number,
+            alias,
+            shown: c.shown,
+        });
+    }
+    if out.iter().any(|a| a.shown) {
+        let rename: BTreeMap<String, String> = out
+            .iter()
+            .filter(|a| a.shown)
+            .map(|a| (a.number.clone(), a.alias.clone()))
+            .collect();
+        let highs: Vec<HighVariableId> = fd.high_bank().iter().map(|(id, _)| id).collect();
+        for high in highs {
+            let alias = fd
+                .high_bank()
+                .get(high)
+                .and_then(|h| h.kuna_name())
+                .and_then(|n| rename.get(n))
+                .cloned();
+            if let (Some(alias), Some(h)) = (alias, fd.high_bank_mut().get_mut(high)) {
+                h.set_kuna_name(alias);
+            }
+        }
+    }
+    fd.set_kuna_library_aliases(out);
+}
+
+/// Did a directive or the binary choose `name`, though it is shaped like a
+/// number (`name fd v9`, a DWARF local `v1`): a rename gave it, or a
+/// name-locked Symbol of the scope holds it. Such a local keeps it.
+fn chosen(fd: &Funcdata, prior: &crate::kuna_stablenames::PriorNames, name: &str) -> bool {
+    prior.renames.values().any(|given| given == name)
+        || prior.given.contains(name)
+        || fd.get_scope_local().is_some_and(|lm| {
+            lm.query_by_name(name)
+                .into_iter()
+                .any(|sym| lm.database().symbol(sym).is_name_locked())
+        })
+}
+
+/// The name a local is printed under, translated to the number a directive
+/// replay identifies it by: `fd` reads as the `v3` it was numbered, whether or
+/// not the output shows the library name. `None` when no library name is
+/// `name`.
+pub fn number_for(fd: &Funcdata, name: &str) -> Option<String> {
+    fd.kuna_library_aliases()
+        .iter()
+        .find(|a| a.alias == name)
+        .map(|a| a.number.clone())
+}
+
+/// The number a local printed under its library name answers to; `None` for
+/// every other local.
+pub fn shown_number(fd: &Funcdata, high: HighVariableId) -> Option<&str> {
+    fd.kuna_library_aliases()
+        .iter()
+        .find(|a| a.high == high && a.shown)
+        .map(|a| a.number.as_str())
+}
+
+crate::kuna_flag!(
+    /// (kuna `libcnames`) Name locals from the library calls they meet.
+    /// See [`crate::kuna_libcnames`].
+    LibcNames,
+    "libcnames",
+    "library-call local names",
+    unset: false,
+    shipped: true
+);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn role_names_are_sorted_for_lookup() {
+        assert!(ROLE_NAMES.windows(2).all(|w| w[0] < w[1]));
+    }
+
+    #[test]
+    fn spellings_number_from_two() {
+        assert_eq!(spelling("fd", 1), "fd");
+        assert_eq!(spelling("fd", 2), "fd_2");
+        assert!(spells("fd", "fd") && spells("fd_2", "fd") && spells("fd_13", "fd"));
+        for other in ["fd_1", "fd_02", "fd_", "fdx", "fd_x", "f"] {
+            assert!(!spells(other, "fd"), "{other}");
+        }
+    }
+
+    #[test]
+    fn pointer_and_filler_names_are_sorted_for_lookup() {
+        assert!(POINTER_NAMES.windows(2).all(|w| w[0] < w[1]));
+        assert!(FILLERS.windows(2).all(|w| w[0] < w[1]));
+    }
+
+    #[test]
+    fn a_pointer_parameter_names_the_object_it_points_at() {
+        for (name, object) in [
+            ("lpBuffer", "Buffer"),
+            ("lpNumberOfBytesRead", "NumberOfBytesRead"),
+            ("lpflOldProtect", "flOldProtect"),
+            ("phModule", "hModule"),
+            ("ppvData", "pvData"),
+            ("pbDebuggerPresent", "bDebuggerPresent"),
+            ("buf", "buf"),
+            ("stat_loc", "stat_loc"),
+            ("path", "path"),
+            ("pid", "pid"),
+            ("pmatch", "pmatch"),
+        ] {
+            assert_eq!(pointee_name(name, false), Some(object), "{name}");
+        }
+        for name in ["ptr", "p", "iptr", "termios_p", "Ptr", "pvarg", "psz"] {
+            assert_eq!(pointee_name(name, false), None, "{name}");
+        }
+        assert_eq!(pointee_name("ptr", true), Some("ptr"));
+        assert_eq!(pointee_name("endptr", true), Some("endptr"));
+    }
+
+    #[test]
+    fn a_fill_call_is_known_by_every_spelling() {
+        for callee in [
+            "memset",
+            "_memset",
+            "__memset_chk",
+            "bzero",
+            "explicit_bzero",
+            "__explicit_bzero_chk",
+        ] {
+            assert!(fills(callee), "{callee}");
+        }
+        for callee in ["memcpy", "sigfillset", "fill", "memset_s_x"] {
+            assert!(!fills(callee), "{callee}");
+        }
+    }
+
+    #[test]
+    fn reserved_names_are_sorted_for_lookup() {
+        assert!(RESERVED.windows(2).all(|w| w[0] < w[1]));
+    }
+
+    #[test]
+    fn a_return_value_outranks_an_argument_and_the_earliest_call_wins() {
+        let at = |o: u64| (Address::new_invalid(), o as u32);
+        let any = |_: &str| true;
+        let e = decide(
+            vec![(ARG, at(1), 0, "size", true), (RET, at(5), -1, "len", true)],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "len");
+        let e = decide(
+            vec![(ARG, at(7), 0, "fd", true), (ARG, at(3), 2, "stream", true)],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "stream");
+    }
+
+    #[test]
+    fn disagreeing_role_names_or_results_name_nothing() {
+        let at = |o: u64| (Address::new_invalid(), o as u32);
+        let any = |_: &str| true;
+        assert!(
+            decide(
+                vec![
+                    (ROLE, at(1), 0, "dest", true),
+                    (ROLE, at(2), 1, "src", true)
+                ],
+                false,
+                &any
+            )
+            .is_none()
+        );
+        let e = decide(
+            vec![
+                (ROLE, at(1), 0, "s1", true),
+                (ROLE, at(2), 1, "s2", true),
+                (ARG, at(3), 0, "s", true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "s");
+        let e = decide(
+            vec![
+                (ROLE, at(1), 0, "dest", true),
+                (ROLE, at(4), 0, "dest", true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "dest");
+        assert!(
+            decide(
+                vec![(RET, at(1), -1, "len", true), (RET, at(2), -1, "pid", true)],
+                false,
+                &any
+            )
+            .is_none()
+        );
+        let e = decide(
+            vec![
+                (RET, at(1), -1, "len", true),
+                (RET, at(2), -1, "pid", true),
+                (ARG, at(3), 0, "n", true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "n");
+    }
+
+    #[test]
+    fn a_scalar_object_two_arguments_name_two_ways_is_not_named_by_them() {
+        let at = |o: u64| (Address::new_invalid(), o as u32);
+        let any = |_: &str| true;
+        let shared = vec![
+            (ARG, at(1), 1, "buf", true),
+            (ARG, at(2), 4, "optlen", true),
+        ];
+        assert_eq!(decide(shared.clone(), false, &any).unwrap().3, "buf");
+        assert!(decide(shared, true, &any).is_none());
+        let e = decide(
+            vec![
+                (ARG, at(1), 1, "stat_loc", true),
+                (ARG, at(2), 0, "stat_loc", true),
+            ],
+            true,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "stat_loc");
+        let e = decide(
+            vec![
+                (ARG, at(1), 1, "buf", true),
+                (ARG, at(2), 4, "optlen", true),
+                (ROLE, at(3), 0, "dest", true),
+            ],
+            true,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "dest");
+    }
+
+    #[test]
+    fn an_unusable_name_gives_way_to_the_next_evidence() {
+        let at = |o: u64| (Address::new_invalid(), o as u32);
+        let not_tm = |name: &str| name != "tm";
+        let e = decide(
+            vec![(RET, at(1), -1, "tm", true), (ARG, at(2), 0, "tp", true)],
+            false,
+            &not_tm,
+        )
+        .unwrap();
+        assert_eq!(e.3, "tp");
+        assert!(decide(vec![(RET, at(1), -1, "tm", true)], false, &not_tm).is_none());
+    }
+
+    #[test]
+    fn a_loop_counter_outranks_library_evidence_and_printed_evidence_comes_first() {
+        let at = |o: u64| (Address::new_invalid(), o as u32);
+        let any = |_: &str| true;
+        let e = decide(
+            vec![
+                (ARG, at(1), 2, "nbytes", true),
+                (LOOP, at(5), -1, "i", true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "i");
+        let e = decide(
+            vec![
+                (RET, at(1), -1, "fd", false),
+                (RESULT, at(9), -1, "result", true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "result");
+    }
+}

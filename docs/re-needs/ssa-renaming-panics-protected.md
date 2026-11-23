@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp/src/p3_dataflow/heritage.rs]
+touches: [crates/unlace-decomp/src/p3_dataflow/heritage.rs]
 scope: small
 regression_of: null
 pr: null

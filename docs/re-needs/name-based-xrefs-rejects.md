@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli/src/xrefs.rs, decompiler/crates/unlace-analysis/src/listing/xrefs.rs]
+touches: [crates/unlace-cli/src/xrefs.rs, crates/unlace-analysis/src/listing/xrefs.rs]
 scope: small
 regression_of: null
 pr: "441"

@@ -61,12 +61,15 @@ jobs:
           rustup toolchain install stable --profile minimal --component rustfmt
           rustup default stable
 
-      - name: rustfmt (edition 2024 style, decompiler/rustfmt.toml)
-        run: cd decompiler && cargo fmt --all --check
+      - name: rustfmt (edition 2024 style, rustfmt.toml)
+        run: cargo fmt --all --check
 
-      # scripts/check_test_layout.py plus the scripts/tests unit tests.
+      # The test-layout and module-layering checks plus the scripts/tests unit tests.
       - name: Python tooling unit tests
-        run: make test-tools
+        run: |
+          python3 scripts/check_test_layout.py
+          python3 scripts/check_layers.py
+          PYTHONPATH=$PWD python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
       - name: actionlint (workflows, with shellcheck on their scripts)
         run: |
@@ -87,15 +90,16 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: decompiler
           key: clippy
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # Only these three crates are clean. The rest of the workspace has about 2000 warn-level
-      # findings and about 490 `disallowed_types` errors (HashMap/HashSet, decompiler/clippy.toml),
+      # findings and about 490 `disallowed_types` errors (HashMap/HashSet, clippy.toml),
       # mostly in unlace-decomp, so a workspace-wide clippy would fail until those are fixed.
+      # One invocation: a crate an earlier `--no-deps` run checked only as a dependency
+      # is fresh to a later run, which then passes without linting it.
       - name: Lint the CLI and the base and numeric libraries (-D warnings)
-        run: make lint
+        run: cargo clippy --release -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings
 
   gates:
     name: parity gates
@@ -124,12 +128,11 @@ jobs:
       # crowd main's out of the repository's cache quota.
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: decompiler
           key: gates
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build binaries
-        run: make binaries
+        run: cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
 
       # The .sla files depend only on the spec sources and the SLEIGH compiler (slacomp and
       # the crates it builds from), so they are reused until one of those changes.
@@ -138,11 +141,11 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'decompiler/Cargo.lock', 'decompiler/crates/unlace-slacomp/**', 'decompiler/crates/unlace-sleigh/**', 'decompiler/crates/unlace-base/**', 'decompiler/crates/unlace-num/**') }}
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
       - name: Compile the SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
-        run: make specs
+        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
 
       - name: Save the compiled SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
@@ -152,9 +155,8 @@ jobs:
           key: ${{ steps.sla.outputs.cache-primary-key }}
 
       # `.sla` files are gitignored build artifacts and EVERY datatest decodes
-      # through them. `make test` would bootstrap them on demand, but asserting
-      # the tree is complete here turns a partial spec build into a clear
-      # failure instead of a confusing corpus error.
+      # through them. Asserting the tree is complete here turns a partial spec
+      # build into a clear failure instead of a confusing corpus error.
       - name: Verify the compiled spec tree is complete
         run: |
           want=$(find specs -name '*.slaspec' | wc -l)
@@ -165,24 +167,24 @@ jobs:
             exit 1
           fi
 
-      - name: make test -- datatest corpus vs docs/baseline.json
-        run: make test
+      # tests/datatests vs docs/baseline.json and tests/stages vs docs/baseline-stages.json,
+      # through `unlace test` and the decomp_test_dbg built above (crates/unlace-cli/tests/parity.rs).
+      # The workspace suite runs the same two tests; this job carries them on every PR.
+      - name: parity -- datatest and stage corpora vs their baselines
+        run: cargo test --release -p unlace-cli --test parity
 
-      - name: make test-stages -- stage corpus vs docs/baseline-stages.json
-        run: make test-stages
-
-      - name: make check-spec
-        run: make check-spec
+      - name: spec anchors and phase-folder ownership (tools/check_spec.py)
+        run: python3 tools/check_spec.py
 
       # The RE-friction loop's regression corpus (docs/re-pipeline.md). Every gap the loop
       # closes leaves the acceptance probe that proved the fix in tests/cli/; running them
       # here is what stops a closed need from silently re-opening. Needs no dataset -- every
       # case targets an in-repo fixture -- and an empty corpus passes.
-      - name: make test-cli
-        run: make test-cli
+      - name: tests/cli probes
+        run: PYTHONPATH=$PWD python3 -m scripts.repipe.clitests
 
       - name: unlace catalog --check
-        run: ./decompiler/target/release/unlace catalog --check
+        run: ./target/release/unlace catalog --check
 
       # Shared-counter drift and ElementId collisions. Both are shapes that every
       # other gate passes cleanly: a stale hard-coded settable count only fails
@@ -204,9 +206,9 @@ jobs:
       # Free: it reuses the release binary this job already built.
       - name: docs/options.md is the generator's bytes
         run: |
-          ./decompiler/target/release/unlace catalog --markdown > /tmp/options.generated.md
+          ./target/release/unlace catalog --markdown > /tmp/options.generated.md
           if ! diff -u docs/options.md /tmp/options.generated.md; then
-            echo "::error file=docs/options.md::stale -- regenerate with 'decompiler/target/release/unlace catalog --markdown > docs/options.md'"
+            echo "::error file=docs/options.md::stale -- regenerate with 'target/release/unlace catalog --markdown > docs/options.md'"
             exit 1
           fi
 
@@ -217,12 +219,11 @@ jobs:
       # leaks, ghidra-vs-CLI diff ratio, query traffic). Lives in the workspace
       # suite too, but that job is skipped on internal PRs -- and a regression in
       # the GUI path is exactly what these pins exist to catch pre-merge. Cheap:
-      # release profile over the deps `make binaries` already built (~2 min
+      # release profile over the deps the binaries step already built (~2 min
       # compile, seconds of runtime). `--include-ignored` picks up the heavier
       # sort/grep breadth test that the dev-profile workspace run skips.
       - name: ghidra-sim differential harness (unlace-ghidra, release)
         run: |
-          cd decompiler
           cargo test -p unlace-ghidra --release -- --include-ignored --nocapture
 
       # Node 22: the web suites below are written for (and only run on) a
@@ -300,7 +301,6 @@ jobs:
       # cache-on-failure: one failing build step must not throw away the dependency build.
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: decompiler
           key: rust-test-nextest
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
@@ -315,11 +315,11 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'decompiler/Cargo.lock', 'decompiler/crates/unlace-slacomp/**', 'decompiler/crates/unlace-sleigh/**', 'decompiler/crates/unlace-base/**', 'decompiler/crates/unlace-num/**') }}
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
       - name: Compile the SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
-        run: make specs
+        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
 
       - name: Save the compiled SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
@@ -334,10 +334,10 @@ jobs:
       - name: Build and archive the workspace tests
         run: |
           df -h .
-          cd decompiler && cargo nextest archive --workspace \
+          cargo nextest archive --workspace \
             ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }} \
-            --archive-file ../nextest-archive.tar.zst
-          ls -la ../nextest-archive.tar.zst
+            --archive-file nextest-archive.tar.zst
+          ls -la nextest-archive.tar.zst
 
       - uses: actions/upload-artifact@v4
         with:
@@ -348,15 +348,15 @@ jobs:
 
       - name: Doc tests
         run: |
-          cd decompiler && cargo test --doc --workspace \
+          cargo test --doc --workspace \
             ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }}
 
       - name: Workspace build disk usage
         if: always()
         run: |
           df -h .
-          if [ -d decompiler/target ]; then
-            du -sh decompiler/target
+          if [ -d target ]; then
+            du -sh target
           fi
 
   rust-test:
@@ -389,7 +389,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'decompiler/Cargo.lock', 'decompiler/crates/unlace-slacomp/**', 'decompiler/crates/unlace-sleigh/**', 'decompiler/crates/unlace-base/**', 'decompiler/crates/unlace-num/**') }}
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
       # Missing or unusable required processor specs fail the tests.
       - name: Verify the compiled spec tree is complete
@@ -406,11 +406,11 @@ jobs:
         with:
           name: nextest-archive
 
-      # --extract-to . puts the binaries in decompiler/target, the path the build job
+      # --extract-to . puts the binaries in target, the path the build job
       # compiled into every test that names a binary with env!("CARGO_BIN_EXE_...").
       - name: cargo nextest run (partition ${{ matrix.partition }}/3)
         run: |
-          cd decompiler && cargo nextest run --archive-file ../nextest-archive.tar.zst \
+          cargo nextest run --archive-file nextest-archive.tar.zst \
             --workspace-remap . --extract-to . --profile ci --partition count:${{ matrix.partition }}/3
 
       # The inputs a failing round trip compiled and decompiled (scratch C, shared
@@ -421,7 +421,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-scratch-${{ matrix.partition }}
-          path: decompiler/target/tmp
+          path: target/tmp
           retention-days: 3
           if-no-files-found: ignore
 
@@ -430,6 +430,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: junit-${{ matrix.partition }}
-          path: decompiler/target/nextest/ci/junit.xml
+          path: target/nextest/ci/junit.xml
           retention-days: 14
           if-no-files-found: ignore

@@ -39,7 +39,7 @@ per-decompiler scheduling regime, not part of the model.
 ## Source layout (the phases on disk)
 
 The decompiler source is **physically organized by phase**: every module file under
-`decompiler/crates/unlace-decomp/src/` lives in a phase-named folder (the folder name carries the phase code `pN` so it greps against this doc and the registry, plus a plain word so the tree reads to a newcomer). Module *names* stay flat (`unlace_decomp::flow`) via re-exports in
+`crates/unlace-decomp/src/` lives in a phase-named folder (the folder name carries the phase code `pN` so it greps against this doc and the registry, plus a plain word so the tree reads to a newcomer). Module *names* stay flat (`unlace_decomp::flow`) via re-exports in
 `lib.rs`, so the layout is documentation, not an API change. The live group→phase
 registry is `phases.toml`.
 

@@ -23,7 +23,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/copyrun_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/copyrun_x86_64</com>
   <com>option copyrun off</com>
   <com>read symbols</com>
   <com>load function copy_struct</com>
@@ -42,7 +42,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/copyrun_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/copyrun_x86_64</com>
   <com>read symbols</com>
   <com>load function copy_struct</com>
   <com>decompile</com>
@@ -60,14 +60,14 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/copyrun_i386</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/copyrun_i386</com>
   <com>option copyrun off</com>
   <com>read symbols</com>
   <com>load function copy_struct</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/copyrun_i386</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/copyrun_i386</com>
   <com>read symbols</com>
   <com>load function copy_struct</com>
   <com>decompile</com>

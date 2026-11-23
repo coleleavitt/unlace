@@ -7,7 +7,7 @@
 # Levels 2-4 (one live tester, one live builder, a real round) are in docs/re-pipeline.md
 # and cost real money; they are deliberately NOT run from here.
 #
-# FOUR FALSE-GREEN CANARIES, in the spirit of `make test-ghidra`'s two. Each of these would
+# FOUR FALSE-GREEN CANARIES, in the spirit of `cargo test --release -p unlace-ghidra -- --include-ignored`'s two. Each of these would
 # otherwise let a silently broken run report success:
 #   - the two-arm gate must find at least one REPRODUCING probe (a broken runner would
 #     "pass" everything by failing everything);
@@ -196,9 +196,7 @@ git init -q -b main "$LAUNCH_REPO"
 git -C "$LAUNCH_REPO" config user.email smoke@example.invalid
 git -C "$LAUNCH_REPO" config user.name smoke
 printf 'base\n' > "$LAUNCH_REPO/tracked"
-printf 'binaries:\n\t@:\n' > "$LAUNCH_REPO/Makefile"
 git -C "$LAUNCH_REPO" add tracked
-git -C "$LAUNCH_REPO" add Makefile
 git -C "$LAUNCH_REPO" commit -qm base
 run_prepare() {
   KUNA_REPO="$LAUNCH_REPO" KUNA_PY="$PY" PIPELINE_STATE_DIRNAME=.state \
@@ -832,7 +830,7 @@ head_ "L1  sandbox actually hides the dataset"
 if command -v bwrap >/dev/null 2>&1; then
   N="$(bwrap --dev-bind / / --tmpfs "$DATASET" -- ls "$DATASET" 2>/dev/null | wc -l)"
   [ "$N" = "0" ] && { ok "dataset is empty inside the namespace"; SAW_SANDBOX=1; } || bad "dataset still visible ($N entries)"
-  bwrap --dev-bind / / --tmpfs "$DATASET" -- "$REPO/decompiler/target/release/unlace" --version >/dev/null 2>&1 \
+  bwrap --dev-bind / / --tmpfs "$DATASET" -- "$REPO/target/release/unlace" --version >/dev/null 2>&1 \
     && ok "kuna still runs inside the namespace" || bad "kuna broken inside the namespace"
 else
   bad "bwrap missing -- containment is prompt-only and this canary must not be skipped silently"

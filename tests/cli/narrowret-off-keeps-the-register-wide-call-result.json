@@ -18,11 +18,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/narrowret_thumb_O2.o",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/narrowret_thumb_O2.o",
     "binary_sha256": "b8883c3cd09411e52fde1c923b78a462cb26b36e37ea75bcccc20aab952d4bd5",
     "binary_size": 1964,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/narrowret_thumb_O2.o",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/narrowret_thumb_O2.o",
     "selector": "count_above",
     "selector_kind": "name"
   },

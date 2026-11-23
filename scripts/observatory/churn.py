@@ -9,7 +9,7 @@ from pathlib import Path
 from scripts.observatory import common, gitstats
 
 WINDOW_DAYS = (30, 90, 365)
-AREAS = ("decompiler", "scripts", "tools", "integrations", "docs", "tests")
+AREAS = ("crates", "scripts", "tools", "integrations", "docs", "tests")
 _EMPTY = {"added": 0, "removed": 0, "commits": 0, "agentCommits": 0}
 
 
@@ -17,10 +17,10 @@ def _classify(path: str):
     parts = path.split("/")
     if parts[0] not in AREAS:
         return None
-    crate = parts[2] if path.startswith("decompiler/crates/") and len(parts) > 3 else None
+    crate = parts[1] if path.startswith("crates/") and len(parts) > 2 else None
     phase = None
-    if crate == "unlace-decomp" and path.startswith("decompiler/crates/unlace-decomp/src/") and len(parts) > 5:
-        top = parts[4]
+    if crate == "unlace-decomp" and path.startswith("crates/unlace-decomp/src/") and len(parts) > 4:
+        top = parts[3]
         if top[0] == "p" and top[1:2].isdigit():
             phase = f"P{top[1]}"
         elif top in ("substrate", "infra"):

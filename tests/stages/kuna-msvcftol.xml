@@ -32,7 +32,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ftol_i386.obj</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ftol_i386.obj</com>
   <com>read symbols</com>
   <com>load function ftol_conv</com>
   <com>decompile</com>

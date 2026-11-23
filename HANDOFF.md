@@ -23,7 +23,7 @@ Nothing is running: no agents, no builds. All work is committed and pushed.
 - Moved off upstream; rebrand; upstream sync; README/NOTICE.
 - CI: fast separate jobs (tidy/rustfmt, clippy, parity gates), the workspace suite under
   cargo-llvm-cov with a Repowise coverage upload, the `.sla` cache, a conflict-label job;
-  CodSpeed with 9 benchmarks (`decompiler/crates/unlace-bench`).
+  CodSpeed with 9 benchmarks (`crates/unlace-bench`).
 - Landed or ported all 61 former upstream PRs (57 merged, 2 superseded, #41's useful parts ported
   onto `itaniumeh`, 3 ObjC PRs rewritten onto main's ObjC code).
 - Exception handling: `itaniumeh` gained ARM EHABI (`.ARM.exidx`/`.ARM.extab`), type names from
@@ -84,16 +84,26 @@ tidy/clippy/parity are green, then the next one.
 
 ### Hooks and pass-to-pass edges
 1. Land #120 and #119, then `arch/hooks-13` and `arch/p2p-5`.
-2. Remaining middle -> pass call edges are tied to option/state types and fall to step 5/6:
-   `architecture` -> callmechanisms / narrowext / octeoneffects / syscallregs / goreg / jumpassist /
-   segmentize / prefersplit / modelrules (constructors of per-arch state stored on Architecture);
-   `heritage` -> indexaliasguard; `jumptable` -> constselectjump.
-3. **Decisions needed:**
-   - `architecture -> universalaction`: `default_pass_hooks()` reads the driver's `PASS_HOOKS`.
-     Inverting needs the driver to install the hook table (e.g. a `OnceLock`) before any
-     `ArchContext` exists, including in unit tests that call `ArchContext::new` directly.
-   - `kuna_assert` (middle) -> `kuna_phases`: `check_layers.py` pins `kuna_phases` to the driver
-     band on purpose; it has no upward deps, so re-banding it to middle would clear the edge.
+2. Middle -> pass edges after `arch/hooks-14` (which cleared jumptable -> constselectjump /
+   jumpassist, architecture -> goreg / prefersplit, context -> prefersplit / narrowext / syscallregs,
+   kuna_loadoptions -> goreg; their calls go through KunaHooks):
+   - Held only by option types (clear when the option registry moves them to the knowledge
+     plane; the calls already go through hooks): architecture -> syscallregs (`SyscallRegsMode`),
+     narrowext (`NarrowExtMode`); heritage -> indexaliasguard (`IndexAliasGuard`, `LEVEL_*`).
+   - octeoneffects (architecture, context): the mode is being registered by the optreg track;
+     after that, move `Effect`/`Kind`/`UPSTREAM` down and hook `userop_ids`.
+   - Step 6 (per-arch or per-function state with behaviour; a hook signature would have to name
+     the pass type): architecture/context -> callmechanisms (`Mechanisms`, funcdata `State`,
+     plus `CallMechanismMode`), jumpassist (`JumpAssists`), segmentize (`SegmentDef`);
+     architecture and fspec -> modelrules (`ModelRule` on `ParamListStandard`); heritage ->
+     prefersplit (`PreferSplitManager`).
+3. **Decided and done (`arch/hooks-14`):**
+   - `architecture -> universalaction`: the driver installs the hook table at link time.
+     `kuna_passhooks::default_pass_hooks()` calls an `extern "Rust"` symbol that
+     `universalaction` defines (`#[no_mangle]`), so unit tests and embedders need no setup
+     call; the universal action tree is built through the `universal_action` hook.
+   - `kuna_phases` is in the middle band (`check_layers.py`), clearing `kuna_assert -> kuna_phases`
+     and `architecture -> kuna_phases`.
 4. About 160 remaining middle edges are type references to per-function / per-arch pass state on
    `Funcdata` / `ArchContext` / `Architecture`: that is step 6.
 
@@ -112,7 +122,7 @@ tidy/clippy/parity are green, then the next one.
   landed commits had no run. Branch `ci/fast-tests` fixed the failures (a raw-image object view
   built from the file instead of the mapped bytes; five tests pinned to output that later landings
   changed on purpose), moved the suite to cargo-nextest (one archive build, three partitions,
-  `decompiler/.config/nextest.toml`), gave each main commit its own concurrency group, and moved
+  `.config/nextest.toml`), gave each main commit its own concurrency group, and moved
   coverage plus the slowest tests to the scheduled `coverage.yml`.
 - Known follow-ups:
   - `kuna_phases::tests::option_values_live_value_present_for_129` pins 137 options with a live
@@ -144,7 +154,7 @@ Closed today as done: #7, #11-#15, #22, #35.
 
 - Gate: `cargo check --workspace`, build the binaries, `cargo clippy` on touched crates,
   `cargo fmt --all --check`, `unlace catalog --check`, `python3 scripts/check_layers.py`,
-  `make check-spec`. No local test suites unless asked; CI runs them.
+  `python3 tools/check_spec.py`. No local test suites unless asked; CI runs them.
 - Build env: `export MAKEFLAGS="-j --jobserver-auth=fifo:/run/user/$(id -u)/unlace-jobserver.fifo"`
   and never set `CARGO_BUILD_JOBS` (it bypasses the shared jobserver). Heavy runs through
   `tools/hooks/unlace-slot`. Never export `RUSTFLAGS`.

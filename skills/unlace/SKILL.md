@@ -7,7 +7,7 @@ description: Use the unlace CLI to recover searchable C and assembly, trace prog
 
 unlace provides fast, flexible, source-like decompilation through a CLI on PATH, not an
 MCP server. It needs no connection and saves no analysis state between invocations.
-In a checkout, the built CLI is `decompiler/target/release/unlace`.
+In a checkout, the built CLI is `target/release/unlace`.
 
 Decompile once for the chosen scope, then reuse the output with `rg`, file reads, and
 byte offsets. These examples focus on CTF reversing.

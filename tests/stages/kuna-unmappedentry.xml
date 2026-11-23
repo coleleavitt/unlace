@@ -21,7 +21,7 @@
 
     The end-to-end proof (no phantom entry) needs a real object and lives in
     the cargo gate
-    `decompiler/crates/unlace-console/tests/verify_unmappedentry.rs`, over the
+    `crates/unlace-console/tests/verify_unmappedentry.rs`, over the
     `unmapped_call_x86_64` fixture: the same overlapping-call shape reduced to
     22 bytes of .text.
 

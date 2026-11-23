@@ -40,11 +40,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/scalar_call_results_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/scalar_call_results_x86_64",
     "binary_sha256": "eb55c947094a55d641bc18b2a0f16dc137a7c464a47b9b37cdce2e014e30b5c3",
     "binary_size": 16032,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/scalar_call_results_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/scalar_call_results_x86_64",
     "selector": "narrow_bool",
     "selector_kind": "name"
   },

@@ -20,7 +20,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/katavm_level1_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/katavm_level1_x86_64</com>
   <com>read symbols</com>
   <com>load function sub_12d0</com>
   <com>decompile</com>

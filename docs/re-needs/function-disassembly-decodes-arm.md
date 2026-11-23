@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli/src/litpool.rs, decompiler/crates/unlace-cli/src/disassemble.rs, decompiler/crates/unlace-console/src/engine.rs]
+touches: [crates/unlace-cli/src/litpool.rs, crates/unlace-cli/src/disassemble.rs, crates/unlace-console/src/engine.rs]
 scope: small
 regression_of: null
 pr: 435
@@ -114,7 +114,7 @@ _none recorded_
 
 builder b-r4-function-disasse r4: CLOSED. `unlace disassemble` now folds a word its
 own listed instructions read at a fixed address, and none of them branch to, into
-a `.word 0x...` data row (`decompiler/crates/unlace-cli/src/litpool.rs`, fed by
+a `.word 0x...` data row (`crates/unlace-cli/src/litpool.rs`, fed by
 `ConsoleProgram::add_fixed_refs_at`). Evidence stays inside the listed range, so
 listing the word alone still decodes it raw. Acceptance PASSES; promoted to
 `tests/cli/function-disassembly-decodes-arm.json`, re-pointed at the in-repo

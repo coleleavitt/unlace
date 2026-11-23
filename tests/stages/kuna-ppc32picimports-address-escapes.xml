@@ -5,14 +5,14 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-literal.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ppc32-pic-literal.elf</com>
   <com>read symbols</com>
   <com>option ppc32picimports on</com>
   <com>load function check2</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-resolver.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ppc32-pic-resolver.elf</com>
   <com>option voidtailreturn off</com>
   <com>read symbols</com>
   <com>option ppc32picimports on</com>
@@ -20,7 +20,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-store-halfword.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ppc32-pic-store-halfword.elf</com>
   <com>option voidtailreturn off</com>
   <com>read symbols</com>
   <com>option ppc32picimports on</com>

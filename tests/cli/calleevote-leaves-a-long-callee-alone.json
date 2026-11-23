@@ -14,11 +14,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_long_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/calleevote_long_x86_64",
     "binary_sha256": "4a5459e4ffd5fe36c2d20d9300ac8174b4ddafb4209432c76051370a1c113d9c",
     "binary_size": 16104,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_long_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/calleevote_long_x86_64",
     "selector": "scan_long",
     "selector_kind": "name"
   },

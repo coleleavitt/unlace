@@ -40,6 +40,7 @@ SRC = "crates/unlace-decomp/src"
 MIDDLE_SRC = "crates/unlace-middle/src"
 # The lift band's own crate, scanned the same way.
 LIFT_SRC = "crates/unlace-lift/src"
+STRUCTURE_SRC = "crates/unlace-structure/src"
 ALLOWLIST = "scripts/layers-allowlist.txt"
 TOKEN = re.compile(r"\w+|::|\S")
 WORD = re.compile(r"\w+")
@@ -206,7 +207,7 @@ def band(node: str, modules: dict[str, str]) -> int:
 
 
 def upward_edges(root: Path) -> set[tuple[str, str]]:
-    roots = [root / SRC] + [root / s for s in (MIDDLE_SRC, LIFT_SRC) if (root / s).is_dir()]
+    roots = [root / SRC] + [root / s for s in (MIDDLE_SRC, LIFT_SRC, STRUCTURE_SRC) if (root / s).is_dir()]
     files = [(src, p) for src in roots for p in sorted(src.glob("*/**/*.rs"))
              if not is_test_file(p.relative_to(src))]
     modules = {}

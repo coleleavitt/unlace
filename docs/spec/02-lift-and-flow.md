@@ -2995,7 +2995,7 @@ a distinct default destination.
 
 Flow-time `jumptable.rs (JumpTable::switch_over)` initially chooses the
 most-targeted out-edge as default only when at least two rows share it.
-Before structuring, `crates/unlace-decomp/src/p8_structure/blockaction.rs
+Before structuring, `crates/unlace-structure/src/p8_structure/blockaction.rs
 (ActionBlockStructure)` calls `funcdata_block.rs (Funcdata::install_switch_defaults)`
 to mark the selected default edge in the basic-block graph, from which each
 structured `CaseOrder` receives its default classification.

@@ -56,14 +56,14 @@ for name, text in chapters():
         # substrate/dtype.rs cross-referenced from the types chapter) does not.
         if not os.path.isdir(os.path.join(ROOT, a)):
             continue
-        for src_root in ("crates/unlace-decomp/src", "crates/unlace-middle/src", "crates/unlace-lift/src", "crates/unlace-analysis/src"):
+        for src_root in ("crates/unlace-decomp/src", "crates/unlace-middle/src", "crates/unlace-lift/src", "crates/unlace-structure/src", "crates/unlace-analysis/src"):
             if a == src_root or a.startswith(src_root + "/"):
                 rel = a[len(src_root):].strip("/")
                 top = rel.split("/")[0] if rel else "*"
                 owned.setdefault((src_root, top), []).append(name)
 
 # --- 2. folder coverage ------------------------------------------------------
-for src_root in ("crates/unlace-decomp/src", "crates/unlace-middle/src", "crates/unlace-lift/src", "crates/unlace-analysis/src"):
+for src_root in ("crates/unlace-decomp/src", "crates/unlace-middle/src", "crates/unlace-lift/src", "crates/unlace-structure/src", "crates/unlace-analysis/src"):
     full = os.path.join(ROOT, src_root)
     whole_crate_owners = owned.get((src_root, "*"), [])
     for entry in sorted(os.listdir(full)):

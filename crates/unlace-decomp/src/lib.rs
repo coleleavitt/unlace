@@ -63,8 +63,6 @@ mod p3_dataflow;
 mod p4_calls;
 mod p5_types;
 mod p6_variables;
-mod p7_regions;
-mod p8_structure;
 mod p9_emit;
 
 pub use infra::*;
@@ -73,13 +71,13 @@ pub use p3_dataflow::*;
 pub use p4_calls::*;
 pub use p5_types::*;
 pub use p6_variables::*;
-pub use p7_regions::*;
-pub use p8_structure::*;
 pub use p9_emit::*;
 #[doc(hidden)]
 pub use unlace_lift::*;
 #[doc(hidden)]
 pub use unlace_middle::*;
+#[doc(hidden)]
+pub use unlace_structure::*;
 
 /// The `Funcdata`/`Datatype` extension traits whose methods were inherent before they moved
 /// out of the IR module; `use unlace_decomp::prelude::*;` brings every one into scope.

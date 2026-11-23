@@ -113,21 +113,25 @@ into the knowledge plane), and the loader/environment options PR after it.
    `Funcdata` / `ArchContext` / `Architecture`: that is step 6.
 
 ### Later crate-split steps (not started)
-- **Step 6 (in progress):** move the kuna pass tables off `Funcdata` into typed per-function
-  slots (each with a flag for whether it survives `clear()`). The slot store is
-  `substrate/kuna_funcstate.rs` (`FuncState`, `kuna_func_state!`, `Funcdata::kuna_state[_mut]`);
-  a pass's accessors move with its table into an `impl Funcdata` block in the pass module, so
-  callers keep their method names (former `pub(crate)` fields are read with `x()` and written
-  with `x_mut()`). Done (#132, #134, #136, #138 and slotptr/stablenames/stackstruct/storereach/
-  varsources): no `funcdata -> *` line is left in `scripts/layers-allowlist.txt`. `UnitRetype`
-  and `StorageSource` are plain data that core `Funcdata` code builds, so they moved down into
-  `funcdata.rs` (re-exported from their pass modules). `kuna_go_receiver` and `go_string_input`
-  still name `p0_knowledge` types (same band, no edge). `modelrules` (with its
-  helper `kuna_aggregateabi`) and `prefersplit` are Ghidra-core modules whose only `crate::` deps are
-  middle-band, so `check_layers.py` now places them in the middle band (`MODULE_BAND`), which
-  clears `architecture/fspec -> modelrules` and `heritage -> prefersplit`; `kuna_dex` keeps its
-  own `dex_entry` slot and installs through the `callmechanisms_install_at_entry` hook. Left: the
-  arch/context edges (callmechanisms `Mechanisms`, jumpassist, segmentize).
+- **Step 6 (done):** the kuna pass tables moved off `Funcdata` into typed per-function slots
+  (`substrate/kuna_funcstate.rs`: `FuncState`, `kuna_func_state!`, `Funcdata::kuna_state[_mut]`,
+  each with a keep-across-`clear()` flag), and the architecture-wide ones (call mechanisms, jump
+  assists, segment definitions) into `substrate/kuna_archstate.rs` (`ArchState`, `ArchStates`,
+  held by `Architecture` and cloned into every `ArchContext`; installed through pass hooks while
+  the specs load). A pass's accessors moved with its table into an `impl Funcdata` /
+  `impl Architecture` / `impl ArchContext` block in the pass module, so callers kept their method
+  names (former `pub(crate)` fields are read with `x()` and written with `x_mut()`). PRs #132,
+  #134, #136, #138, #139, #142 and the arch-state PR. `UnitRetype` and `StorageSource` are plain
+  data core `Funcdata` code builds, so they moved down into `funcdata.rs` (re-exported from their
+  pass modules). `modelrules` (+ `kuna_aggregateabi`) and `prefersplit` are Ghidra-core modules
+  with middle-only deps, so `check_layers.py` puts them in the middle band. No `funcdata -> *`
+  line and none of the step-6 arch/context/heritage/fspec/dex edges are left in
+  `scripts/layers-allowlist.txt`. `kuna_go_receiver` and `go_string_input` still name
+  `p0_knowledge` types (same band, no edge).
+  - **Step-9 follow-up:** an inherent `impl Funcdata` (or `Architecture`/`ArchContext`) block
+    must live in the crate that defines the type, so when the middle band becomes its own crate
+    the accessor blocks in pass modules have to become extension traits (the `FuncdataCastExt`
+    pattern in `lib.rs`) or free functions. The slot types themselves can stay in the passes.
 - **Step 8:** `#[inline]` half done (arch/inline-8): 301 small middle-band functions (substrate,
   p0_knowledge, infra) that p1-p9 code calls at least 5 times (codegraph `edges` kind `calls`), each a
   field read or a one-line wrapper of at most 4 body lines, no loops or searches; plus the

@@ -424,10 +424,10 @@ pub struct Architecture {
     /// analysis commit from `AnalysisOutput::eh_call_sites`. Empty without it.
     pub eh_table: Rc<crate::kuna_itaniumeh::EhTable>,
 
-    /// (kuna) The compiled `<segmentop>` definitions by address-space index
-    /// (C++ `userops.segmentop`), built at the end of boot.  See
-    /// [`kuna_segmentize`](crate::kuna_segmentize).
-    segment_defs: Vec<Option<Rc<crate::kuna_segmentize::SegmentDef>>>,
+    /// (kuna) The kuna passes' architecture-wide tables ([`crate::kuna_archstate`]): the
+    /// compiled `<segmentop>` definitions, call mechanisms and jump assists, built while the
+    /// specs load and shared with every per-function context.
+    pub(crate) kuna_states: crate::kuna_archstate::ArchStates,
     /// (kuna `fpuemu`) The loader found 8087-emulator code in the image, which
     /// `auto` decodes by.
     pub fpu_emu_evidence: bool,
@@ -931,13 +931,10 @@ pub struct Architecture {
     pub string_manager: Rc<std::cell::RefCell<crate::stringmanage::StringManagerUnicode>>,
     /// P-code injection manager (C++ `pcodeinjectlib`).  SLEIGH-backed.
     pub pcodeinjectlib: PcodeInjectLibrarySleigh,
-    call_mechanisms: Rc<crate::kuna_callmechanisms::Mechanisms>,
     /// (kuna) Did the loader validate PPC64 ELFv1 function descriptors?  A FACT,
     /// not an option: written once at `load file` and the thing `option
     /// callmechanisms auto` tests.  The XML `<binaryimage>` bootstrap never sets it.
     pub image_elfv1_toc: bool,
-    /// (kuna `jumpassist`) The compiled `<jumpassist>` scripts.
-    jump_assists: Rc<crate::kuna_jumpassist::JumpAssists>,
     /// (kuna `dexmodel`) The loaded DEX files, when the image is one (or an
     /// APK holding several).
     pub dex: Vec<Rc<crate::kuna_dex::DexModel>>,
@@ -1306,7 +1303,7 @@ impl Architecture {
 
             fpu_emu_evidence: false,
             mz_dgroup: None,
-            segment_defs: Vec::new(),
+            kuna_states: Default::default(),
             image_os_userland: false, // (kuna) a load-time fact; set by the console's `load file`
             image_linux_elf: false,   // (kuna) a load-time fact; set by the console's `load file`
             image_elf: false,         // (kuna) a load-time fact; set by the console's `load file`
@@ -1441,9 +1438,7 @@ impl Architecture {
                 crate::stringmanage::StringManagerUnicode::new(2048),
             )),
             pcodeinjectlib: PcodeInjectLibrarySleigh::new(inject_tempbase),
-            call_mechanisms: Rc::default(),
             image_elfv1_toc: false, // (kuna) a load-time fact; set by the console's `load file`
-            jump_assists: Rc::default(),
             dex: Vec::new(),
             commentdb: CommentDatabase::new(),
             // C++ ctor leaves types/print/defaultfp null; init() fills them.
@@ -2067,16 +2062,13 @@ impl Architecture {
         let manage = self.translate.manager_rc();
         let mut ctx = ArchContext::new_shared(manage);
         ctx.kuna_options = self.kuna_options.clone();
-        ctx.call_mechanisms = Rc::clone(&self.call_mechanisms);
-        ctx.segment_ops = self.segment_defs.clone();
-        ctx.call_mechanism_effects = self
-            .kuna_options
-            .get::<crate::kuna_callmechanisms::CallMechanismMode>()
-            .fires(self.image_elfv1_toc); // callmechanisms
-        ctx.call_mechanism_reload_only = self
-            .kuna_options
-            .get::<crate::kuna_callmechanisms::CallMechanismMode>()
-            == crate::kuna_callmechanisms::CallMechanismMode::Auto;
+        ctx.kuna_states = self.kuna_states.clone();
+        let (effects, reload_only) = (crate::architecture::default_pass_hooks()
+            .callmechanisms_effects)(
+            &self.kuna_options, self.image_elfv1_toc
+        );
+        ctx.call_mechanism_effects = effects; // callmechanisms
+        ctx.call_mechanism_reload_only = reload_only;
         ctx.dex = entry.and_then(|addr| {
             self.dex_models()
                 .iter()
@@ -2089,13 +2081,6 @@ impl Architecture {
                 .0
                 && ctx.dex.is_some(),
         )); // javatry
-        if self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::JumpAssist>()
-            .0
-        {
-            ctx.jump_assists = Rc::clone(&self.jump_assists); // jumpassist
-        }
         ctx.min_laned_register_size = self.get_minimum_laned_register_size();
         // Carry the laned-register table so the per-function Funcdata reaches
         // `glb->getLanedRegister` (C++ `Architecture::lanerecords`); cheap clones
@@ -2898,15 +2883,6 @@ impl Architecture {
             .resolve_constant(spc, val, sz, point, full_encoding)
     }
 
-    /// (kuna `segmentize`) The live segment definition for the space with index
-    /// `i`, or `None` when the option is off or the space has none.
-    fn segment_def(&self, i: int4) -> Option<&Rc<crate::kuna_segmentize::SegmentDef>> {
-        usize::try_from(i)
-            .ok()
-            .and_then(|i| self.segment_defs.get(i))
-            .and_then(|s| s.as_ref())
-    }
-
     /// Compile each registered `<segmentop>` into a [`SegmentDef`] and apply
     /// the option (the kuna half of C++ `initializeSegments`; the resolvers it
     /// installs live in the per-function snapshot).  A segment op whose snippet
@@ -2914,31 +2890,15 @@ impl Architecture {
     ///
     /// [`SegmentDef`]: crate::kuna_segmentize::SegmentDef
     fn initialize_segments(&mut self) -> KunaResult<()> {
-        let mut defs: Vec<Option<Rc<crate::kuna_segmentize::SegmentDef>>> = Vec::new();
-        for i in 0..self.userops.num_segment_ops() {
-            let Some(op) = self.userops.get_segment_op(i) else {
-                continue;
-            };
-            let Some(seg) = op.as_segment() else { continue };
-            let Some(tpl) = self.pcodeinjectlib.get_tpl(seg.inject_id) else {
-                continue;
-            };
-            let payload = self.pcodeinjectlib.get_payload(seg.inject_id);
-            let def = crate::kuna_segmentize::SegmentDef::build(
-                seg,
-                op.get_index(),
-                payload,
-                tpl,
-                self,
-                self.translate.manager_rc(),
-                &self.opbehaviors,
-            )?;
-            while defs.len() <= i as usize {
-                defs.push(None);
-            }
-            defs[i as usize] = Some(Rc::new(def));
-        }
-        self.segment_defs = defs;
+        let mut states = std::mem::take(&mut self.kuna_states);
+        let built = (crate::architecture::default_pass_hooks().segmentize_build)(
+            self,
+            self.translate.manager_rc(),
+            &self.opbehaviors,
+            &mut states,
+        );
+        self.kuna_states = states;
+        built?;
         self.apply_segmentize();
         Ok(())
     }
@@ -2948,7 +2908,7 @@ impl Architecture {
     /// `cacheAddrSpaceProperties` -> `markNearPointers`) and the far-pointer
     /// data organization of the default data space (C++ `TypeFactory::setupSizes`).
     pub fn apply_segmentize(&mut self) {
-        if self.segment_defs.iter().all(Option::is_none) {
+        if !self.has_segment_defs() {
             return;
         }
         for spc in self.infer_ptr_spaces.clone() {
@@ -3493,15 +3453,12 @@ impl Architecture {
             Some(sleigh) => lib.parse_inject_all(sleigh.base()),
             None => Ok(()),
         };
-        if parse_res.is_ok() {
-            self.call_mechanisms =
-                Rc::new(crate::kuna_callmechanisms::Mechanisms::from_library(&lib));
-            self.jump_assists = Rc::new(crate::kuna_jumpassist::JumpAssists::from_library(
-                &self.userops,
-                &lib,
-            ));
-        }
         self.pcodeinjectlib = lib;
+        if parse_res.is_ok() {
+            let hooks = crate::architecture::default_pass_hooks();
+            (hooks.callmechanisms_load)(self);
+            (hooks.jumpassist_load)(self);
+        }
         parse_res
     }
 
@@ -5026,7 +4983,7 @@ impl Architecture {
         }
         model.set_name(&name);
         let (entry_inject, return_inject) =
-            crate::p4_calls::kuna_callmechanisms::compiled_ids(&self.pcodeinjectlib, &name);
+            (crate::architecture::default_pass_hooks().callmechanisms_compiled_ids)(self, &name);
         model.set_inject_ids(entry_inject, return_inject);
         let strategy = attr_str(proto, "strategy").unwrap_or_default();
         model.build_param_list(&strategy)?;
@@ -5946,14 +5903,18 @@ impl Architecture {
         // the whole inject library (callfixup + callotherfixup) is compiled
         // together by parseInject — the MIPS `setISAMode` fixup that makes the
         // dead ISA-mode-switch CALLOTHER injectable.
-        crate::p4_calls::kuna_callmechanisms::register(
-            self.cspec_xml
-                .as_deref()
-                .map(std::str::from_utf8)
-                .transpose()
-                .map_err(|_| KunaError::lowlevel("Compiler specification is not UTF-8"))?,
-            self.translate.manager_rc().as_ref(),
-            &mut self.pcodeinjectlib,
+        let cspec = self
+            .cspec_xml
+            .as_deref()
+            .map(std::str::from_utf8)
+            .transpose()
+            .map_err(|_| KunaError::lowlevel("Compiler specification is not UTF-8"))?
+            .map(str::to_owned);
+        let manager = self.translate.manager_rc();
+        (crate::architecture::default_pass_hooks().callmechanisms_register)(
+            cspec.as_deref(),
+            manager.as_ref(),
+            self,
         )?;
         self.init_userops_and_fixups()?;
         // (kuna) Eagerly register the string-copy builtins (C++ lazy

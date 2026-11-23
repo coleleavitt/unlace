@@ -281,6 +281,24 @@ declare_hooks! {
     callmechanisms_requires_reflow: fn(&crate::fspec::FuncProto, &crate::fspec::FuncProto) -> bool;
     /// `kuna_callmechanisms::failed`: installing a call mechanism failed, so the pipeline stops.
     callmechanisms_failed: fn(&Funcdata) -> bool;
+    /// `kuna_callmechanisms`: a context's `(call_mechanism_effects, call_mechanism_reload_only)`
+    /// from the options and the image's ELFv1 TOC fact.
+    callmechanisms_effects: fn(&crate::kuna_optionset::OptionSet, bool) -> (bool, bool);
+    /// `kuna_callmechanisms`: compile the call mechanisms out of the loaded inject library.
+    callmechanisms_load: fn(&mut Architecture);
+    /// `kuna_callmechanisms::compiled_ids` for a prototype model's name.
+    callmechanisms_compiled_ids: fn(&Architecture, &str) -> (i32, i32);
+    /// `kuna_callmechanisms::register`: register the compiler spec's prototype p-code.
+    callmechanisms_register: fn(Option<&str>, &AddrSpaceManager, &mut Architecture) -> KunaResult<()>;
+    /// `kuna_jumpassist`: compile the jump assists out of the loaded inject library.
+    jumpassist_load: fn(&mut Architecture);
+    /// `kuna_segmentize`: compile the registered segment operations into the states.
+    segmentize_build: fn(
+        &Architecture,
+        Rc<AddrSpaceManager>,
+        &[Option<Rc<dyn unlace_num::opbehavior::OpBehavior>>],
+        &mut crate::kuna_archstate::ArchStates,
+    ) -> KunaResult<()>;
     /// `kuna_callmechanisms::install_at_entry`: straight-line p-code at the start of a block.
     callmechanisms_install_at_entry:
         fn(&mut Funcdata, BlockId, &[crate::kuna_emittedop::Operation]) -> KunaResult<()>;

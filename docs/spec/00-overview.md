@@ -3715,7 +3715,11 @@ and an agent writes:
   the table is a type in the pass's module, `Funcdata` holds one slot per such type
   (created with `Default` on first use), and `Funcdata::clear` drops each slot whose
   `FuncState::KEEP_ACROSS_CLEAR` is false, so a restart starts those tables over
-  exactly as resetting the old field did.
+  exactly as resetting the old field did. Architecture-wide pass tables (call
+  mechanisms, jump assists, segment operations) live in an
+  `ArchStates` (`crates/unlace-decomp/src/substrate/kuna_archstate.rs (ArchState, ArchStates)`):
+  the pass installs its shared value on `Architecture` while the specs load (through a
+  pass hook), and each per-function `ArchContext` holds a clone that shares it.
   The handler declaration generates both the dispatch and its name allowlist;
   adding a handler cannot leave those two out of sync. Catalog metadata remains
   independent, so `unlace catalog --check` compares the documented options against

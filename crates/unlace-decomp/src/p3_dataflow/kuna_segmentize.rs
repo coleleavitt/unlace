@@ -277,4 +277,84 @@ fn target_through_segment(fd: &crate::funcdata::Funcdata, indop: crate::context:
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.segmentize_table_leaves_image = Some(table_leaves_image);
+    hooks.segmentize_build = Some(build_all);
+}
+
+/// The compiled `<segmentop>` definitions by address-space index (C++ `userops.segmentop`),
+/// kept in the architecture's [`ArchStates`](crate::kuna_archstate::ArchStates) and shared with
+/// every per-function context.
+struct SegmentDefs(Vec<Option<Rc<SegmentDef>>>);
+crate::kuna_arch_state!(SegmentDefs);
+
+/// Compile each registered `<segmentop>` into a [`SegmentDef`] (the kuna half of C++
+/// `initializeSegments`). A segment op whose snippet has no local template (ghidra mode) is left
+/// out.
+fn build_all(
+    arch: &crate::architecture::Architecture,
+    manager: Rc<AddrSpaceManager>,
+    behaviors: &[Option<Rc<dyn OpBehavior>>],
+    states: &mut crate::kuna_archstate::ArchStates,
+) -> KunaResult<()> {
+    let mut defs: Vec<Option<Rc<SegmentDef>>> = Vec::new();
+    for i in 0..arch.userops.num_segment_ops() {
+        let Some(op) = arch.userops.get_segment_op(i) else {
+            continue;
+        };
+        let Some(seg) = op.as_segment() else { continue };
+        let Some(tpl) = arch.pcodeinjectlib.get_tpl(seg.inject_id) else {
+            continue;
+        };
+        let payload = arch.pcodeinjectlib.get_payload(seg.inject_id);
+        let def = SegmentDef::build(
+            seg,
+            op.get_index(),
+            payload,
+            tpl,
+            arch,
+            Rc::clone(&manager),
+            behaviors,
+        )?;
+        while defs.len() <= i as usize {
+            defs.push(None);
+        }
+        defs[i as usize] = Some(Rc::new(def));
+    }
+    states.set(Rc::new(SegmentDefs(defs)));
+    Ok(())
+}
+
+/// The definition at address-space index `i`, if any.
+fn segment_at(defs: Option<&SegmentDefs>, i: int4) -> Option<&Rc<SegmentDef>> {
+    let i = usize::try_from(i).ok()?;
+    defs?.0.get(i)?.as_ref()
+}
+
+impl crate::architecture::Architecture {
+    /// (kuna `segmentize`) The live segment definition for the space with index
+    /// `i`, or `None` when the space has none.
+    pub(crate) fn segment_def(&self, i: int4) -> Option<&Rc<SegmentDef>> {
+        segment_at(self.kuna_states.get::<SegmentDefs>(), i)
+    }
+
+    /// (kuna `segmentize`) Does any address space have a segment definition?
+    pub(crate) fn has_segment_defs(&self) -> bool {
+        self.kuna_states
+            .get::<SegmentDefs>()
+            .is_some_and(|defs| defs.0.iter().any(Option::is_some))
+    }
+}
+
+impl crate::context::ArchContext {
+    /// Number of segment operations supported (C++ `userops.numSegmentOps`).
+    pub fn num_segment_ops(&self) -> int4 {
+        self.kuna_states
+            .get::<SegmentDefs>()
+            .map_or(0, |defs| defs.0.len() as int4)
+    }
+
+    /// The segment operation for the space with index `i` (C++
+    /// `userops.getSegmentOp`).
+    pub fn get_segment_op(&self, i: int4) -> Option<&Rc<SegmentDef>> {
+        segment_at(self.kuna_states.get::<SegmentDefs>(), i)
+    }
 }

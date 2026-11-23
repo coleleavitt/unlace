@@ -550,9 +550,7 @@ crate::kuna_func_state!(EntrySlot, keep_across_clear: false);
 /// payload `ActionConstbase` injects upstream).
 pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
     if data.get_arch().dex.is_none()
-        || data
-            .kuna_state::<EntrySlot>()
-            .0
+        || data.kuna_state::<EntrySlot>().0
         || data.bblocks_get_size() == 0
     {
         return Ok(());

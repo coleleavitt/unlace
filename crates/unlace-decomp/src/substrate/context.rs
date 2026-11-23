@@ -983,8 +983,8 @@ pub struct ArchContext {
     /// The Octeon atomic, reservation and ordering operations the language
     /// declares, resolved under [`Self::octeon_effects`]. Under `off` only a
     /// load-linked or store-conditional left without its upstream fixup (ghidra
-    /// mode) remains; see `kuna_octeoneffects::userop_ids`.
-    pub octeon_memory_userops: Vec<(u32, crate::kuna_octeoneffects::Effect)>,
+    /// mode) remains; see `kuna_octeonops::userop_ids`.
+    pub octeon_memory_userops: Vec<(u32, crate::kuna_octeonops::Effect)>,
     /// (kuna) The processor's segment operations by address-space index (C++
     /// `userops.segmentop`); empty when the spec declares none.
     pub segment_ops: Vec<Option<Rc<crate::kuna_segmentize::SegmentDef>>>,

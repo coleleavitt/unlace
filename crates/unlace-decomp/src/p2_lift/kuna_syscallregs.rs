@@ -106,63 +106,7 @@ const BLOCK_WALK_LIMIT: usize = 256;
 /// `a0`..`a3`.
 const MIPS_UNKNOWN_ARGS: usize = 4;
 
-/// (kuna) When the system call gets its register effects: `syscallregs
-/// off|auto|on`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SyscallRegsMode {
-    /// The vendored model: no register inputs, no output.
-    #[default]
-    Off,
-    /// Only on an image the loader identified as an operating system's
-    /// user-space program.
-    Auto,
-    /// On any image.
-    On,
-}
-
-impl SyscallRegsMode {
-    /// The option token for this mode.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            SyscallRegsMode::Off => "off",
-            SyscallRegsMode::Auto => "auto",
-            SyscallRegsMode::On => "on",
-        }
-    }
-
-    /// Does the pass act on an image with this loader fact?
-    pub fn fires(self, image_os_userland: bool) -> bool {
-        match self {
-            SyscallRegsMode::Off => false,
-            SyscallRegsMode::Auto => image_os_userland,
-            SyscallRegsMode::On => true,
-        }
-    }
-}
-
-/// (kuna) Parse `option syscallregs off|auto|on`; the caller writes the live
-/// field.
-pub struct OptionSyscallRegs;
-
-impl OptionSyscallRegs {
-    /// The option name.
-    pub const NAME: &'static str = "syscallregs";
-
-    /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(SyscallRegsMode, String)> {
-        let mode = match p1 {
-            "off" => SyscallRegsMode::Off,
-            "auto" => SyscallRegsMode::Auto,
-            "on" => SyscallRegsMode::On,
-            other => {
-                return Err(KunaError::parse(format!(
-                    "Unknown syscallregs value: {other} (expected off|auto|on)"
-                )));
-            }
-        };
-        Ok((mode, format!("System-call register effects set to {p1}")))
-    }
-}
+pub use crate::kuna_coreoptions::{OptionSyscallRegs, SyscallRegsMode};
 
 pub use crate::context::SyscallFamily;
 
@@ -672,23 +616,6 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.syscallregs_is_error_flag = Some(is_error_flag);
     hooks.syscallregs_reads_as_argument = Some(reads_as_argument);
     hooks.syscallregs_userop_ids = Some(userop_ids);
-}
-
-impl crate::kuna_optionset::KunaOption for SyscallRegsMode {
-    const NAME: &'static str = "syscallregs";
-    crate::kuna_option_id!();
-
-    fn unset() -> Self {
-        SyscallRegsMode::Off
-    }
-
-    fn shipped() -> Self {
-        SyscallRegsMode::Auto
-    }
-
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
-        OptionSyscallRegs.apply(value)
-    }
 }
 
 #[cfg(test)]

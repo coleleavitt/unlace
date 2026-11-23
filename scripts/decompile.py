@@ -1,7 +1,7 @@
 """Thin library shim: ``decompile(binary, target, ...)`` for the pipeline.
 
 The **user-facing CLI** that used to live here was ported to the Rust ``unlace``
-binary (``unlace decompile <binary> <func> ...``); see ``decompiler/crates/unlace-cli``.
+binary (``unlace decompile <binary> <func> ...``); see ``crates/unlace-cli``.
 The Rust binary is the one project paradigm now.
 
 What remains here is **only the library function** the still-Python feature
@@ -85,7 +85,7 @@ def decompile(
         bin_path = str(paths.decomp_dbg())
     if not os.path.exists(bin_path):
         raise DecompileError(
-            "decomp_dbg not built at %s -- run `make binaries`" % bin_path
+            "decomp_dbg not built at %s -- run `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`" % bin_path
         )
 
     specs = str(paths.specs_dir()) if sleighpath is None else os.path.abspath(str(sleighpath))

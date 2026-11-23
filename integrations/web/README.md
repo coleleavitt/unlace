@@ -25,7 +25,7 @@ flat, monospace throughout, ink + paper + the mark's red.
 
 ```bash
 # 1. Build the .sla specs once (they are gitignored build artifacts).
-make specs
+target/release/slacomp -a specs
 
 # 2. Build the wasm and assemble a self-contained static site into dist/.
 integrations/web/build.sh
@@ -64,8 +64,8 @@ function listing, decompilation, and project export. The JavaScript glue request
 ## Hosted on GitHub Pages
 
 `.github/workflows/pages.yml` builds this bundle and publishes it to GitHub Pages on every
-push to `main` that touches `integrations/web/`, `decompiler/`, or `specs/` (and on manual
-dispatch). The workflow builds the SLEIGH specs (`make specs`), runs `build.sh` and the
+push to `main` that touches `integrations/web/`, `crates/`, or `specs/` (and on manual
+dispatch). The workflow builds the SLEIGH specs (`slacomp -a specs`), runs `build.sh` and the
 tests, then `split-sites.sh`, which divides `dist/` into the two sites:
 
 - **`decompile.run`** — `dist-run/`: the decompiler at the root, with the wasm, specs,
@@ -123,7 +123,7 @@ python3 -m http.server 8000 --directory integrations/web
 | `test/` | Automated gates (below) + committed ELF/Mach-O fixtures. |
 | `dist/`, `dist-run/` | Assembled output (gitignored — regenerate with `build.sh`, then `split-sites.sh`). |
 
-The wasm module itself is the `unlace-wasm` crate (`decompiler/crates/unlace-wasm`), a thin
+The wasm module itself is the `unlace-wasm` crate (`crates/unlace-wasm`), a thin
 front-end over the `unlace-console` in-process path. It builds natively too — that native
 build is the parity oracle for the tests.
 
@@ -133,8 +133,8 @@ All run under Node. A through H need no browser; I and J drive headless Chrome a
 **locally only** (CI does not run them; each skips, exit 0, without Chrome):
 
 ```bash
-# 0. Prereqs: `make specs`, then `integrations/web/build.sh`, and a native
-#    unlace_wasm:  (cd decompiler && cargo build --release -p unlace-wasm)
+# 0. Prereqs: `target/release/slacomp -a specs`, then `integrations/web/build.sh`, and a native
+#    unlace_wasm:  (cargo build --release -p unlace-wasm)
 
 # A. WASI parity — the wasm runs under Node's node:wasi and its output is
 #    byte-identical to the native unlace_wasm build (the port is faithful).
@@ -175,7 +175,7 @@ node integrations/web/test/decompile-collab-cases.mjs
 node integrations/web/test/decompile-collab-sync.mjs
 node integrations/web/test/decompile-collab-fuzz.mjs [--runs 2000] [--seed 1]
 
-# G2. Exported sessions replayed by the native CLI (skips without decompiler/target/release/unlace).
+# G2. Exported sessions replayed by the native CLI (skips without target/release/unlace).
 node integrations/web/test/decompile-replay.mjs
 
 # H. The decompiler page's commands through the real Worker (inspect, read, xrefs, strings, --assert).

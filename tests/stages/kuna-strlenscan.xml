@@ -13,7 +13,7 @@
     was, ahead of a store or a call that follows, and is not merged across a
     join.
 
-    The bytes are functions of decompiler/crates/unlace-analysis/tests/fixtures/
+    The bytes are functions of crates/unlace-analysis/tests/fixtures/
     strlenscan.c built by Ubuntu 20.04's gcc 9.4 at -O1 (x86-64 SysV): name_len,
     last_char and weighted_len (lengths), len_then_clear and len_then_wipe (a
     length read after a store and after a call that change the string),

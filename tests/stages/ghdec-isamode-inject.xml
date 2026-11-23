@@ -41,7 +41,7 @@
 
     The XML wrapper only supplies the harness architecture; the pass clears it and
     loads the real linked ARM Thumb fixture (built in the dev container, see
-    decompiler/crates/unlace-analysis/tests/fixtures/arm_thumb_switch_le32.c).  Its
+    crates/unlace-analysis/tests/fixtures/arm_thumb_switch_le32.c).  Its
     `dispatch` compiles to `tbb [pc,r0]` with eight table-reachable case blocks,
     four of them holding a pair of `bl`s, the exact shape of the decbench cases.
     Before the fix its emitted C carried eight `setISAMode(1);` statements.
@@ -53,7 +53,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_thumb_switch_le32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arm_thumb_switch_le32</com>
   <com>read symbols</com>
   <com>load function dispatch</com>
   <com>decompile</com>

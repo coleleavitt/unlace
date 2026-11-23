@@ -7,8 +7,8 @@ from pathlib import Path
 
 from scripts.observatory import common
 
-CRATES_PREFIX = "decompiler/crates/"
-DECOMP_SRC = "decompiler/crates/unlace-decomp/src/"
+CRATES_PREFIX = "crates/"
+DECOMP_SRC = "crates/unlace-decomp/src/"
 
 
 def _bucket(path: str):

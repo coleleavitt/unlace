@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/calleescratchbody_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/calleescratchbody_x86_64",
     "binary_sha256": "64a463c8d9b2f57b4bc6595d16ade2b992e2ad03fb61b2edf437738a377fa0cf",
     "binary_size": 4768,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/calleescratchbody_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/calleescratchbody_x86_64",
     "selector": "f",
     "selector_kind": "name"
   },

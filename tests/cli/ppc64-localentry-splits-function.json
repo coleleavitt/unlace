@@ -15,11 +15,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/plt_ppc64le",
     "binary_sha256": "b096b4098c64e6a8be6386d85fd2c1386fa646295247bcedabad2efea40e9a28",
     "binary_size": 70144,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/plt_ppc64le",
     "selector": "__do_global_ctors_aux",
     "selector_kind": "name"
   },

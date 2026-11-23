@@ -9,10 +9,9 @@ zip's `KunaDecompiler/os/linux_x86_64/` and `Application.getOSFile("KunaDecompil
 From the kuna repo root:
 
 ```bash
-cd decompiler
 cargo build --release -p unlace-ghidra
-cp target/release/unlace_ghidra ../integrations/ghidra/KunaDecompiler/os/linux_x86_64/
-chmod +x ../integrations/ghidra/KunaDecompiler/os/linux_x86_64/unlace_ghidra
+cp target/release/unlace_ghidra integrations/ghidra/KunaDecompiler/os/linux_x86_64/
+chmod +x integrations/ghidra/KunaDecompiler/os/linux_x86_64/unlace_ghidra
 ```
 
 If you skip this step the extension still builds and installs, but the plugin will show

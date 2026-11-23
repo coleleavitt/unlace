@@ -17,18 +17,18 @@ complete and honest.
 - angr test method: `{{TEST_NAME}}`
 - Binary: `{{BINARY}}`
 - Function selector: `{{SELECTOR}}`   (arch override: `{{ARCH}}`)
-- Feature slug: `{{SLUG}}`  → new module `kuna_{{SLUG}}.rs` inside its owning phase folder under `decompiler/crates/unlace-decomp/src/` (e.g. `p2_lift/kuna_{{SLUG}}.rs`), option name `{{SLUG}}` (pick a clean option name if `{{SLUG}}` is awkward), test `tests/stages/ghangr-{{SLUG}}.xml`, bundle `docs/features/{{SLUG}}/`.
+- Feature slug: `{{SLUG}}`  → new module `kuna_{{SLUG}}.rs` inside its owning phase folder under `crates/unlace-decomp/src/` (e.g. `p2_lift/kuna_{{SLUG}}.rs`), option name `{{SLUG}}` (pick a clean option name if `{{SLUG}}` is awkward), test `tests/stages/ghangr-{{SLUG}}.xml`, bundle `docs/features/{{SLUG}}/`.
 
 ## Environment (already set for this worktree)
 
 - kuna python: `{{KUNA_PY}}`  (has the angr-driving pipeline deps, NO angr itself)
 - The pipeline is run from the repo root: `{{KUNA_PY}} -m scripts.pipeline.compare ...` (it
   shells out to the angr venv).
-- The Rust `unlace` CLI is `decompiler/target/release/unlace` — use it for `unlace catalog ...`
+- The Rust `unlace` CLI is `target/release/unlace` — use it for `unlace catalog ...`
   and `unlace test ...`.
 - `KUNA_ROOT`, `KUNA_DECOMP_DBG`, `KUNA_DECOMP_TEST`, `KUNA_SPECS` point at THIS worktree's tree
-  and binaries (specs `.sla` are reused from the main tree — do **not** run `make specs`).
-- Build with `make binaries` (cargo; the first build of the worktree is slowest, then incremental).
+  and binaries (specs `.sla` are reused from the main tree — do **not** run `target/release/slacomp -a specs`).
+- Build with `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli` (cargo; the first build of the worktree is slowest, then incremental).
 
 ## Heartbeat (do this so the pipeline can observe you)
 
@@ -40,7 +40,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
 ## Hard rules
 
 1. **Exactly one feature.** No drive-by refactors. New logic goes in
-   `decompiler/crates/unlace-decomp/src/<phase folder>/kuna_{{SLUG}}.rs` (wire it into
+   `crates/unlace-decomp/src/<phase folder>/kuna_{{SLUG}}.rs` (wire it into
    `lib.rs` the way the existing `kuna_*` modules are).
    Edits to the ported core files are allowed ONLY where an anchor demands it (registering the
    action/option, a flag on the architecture struct); keep them minimal, mark each with a
@@ -60,11 +60,11 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
    inert elsewhere, and its row names the target first. `docs/option-surface-study.md` has
    the decision record.
    **For a feature, the option must be LLM-discoverable.** Add a `settableTable` row in
-   `decompiler/crates/unlace-decomp/phases.toml` with EVERY field populated, especially:
+   `crates/unlace-decomp/phases.toml` with EVERY field populated, especially:
    `source_decompiler="angr"`, `inspiration="{{TEST_NAME}}; <angr pass/class>; {{SELECTOR}}"`,
    `change_kind` ∈ correctness-fix|presentation-default|structure-recovery|opt-in-tool, plus `summary` (WHAT), — plus `tier` (transform if it restructures/duplicates/removes/inserts code; core if near-always-better rendering; analysis for prep passes) and `symptoms` (2–5 output-shaped phrases an LLM would grep for).
    `use_when` (the angr-vs-kuna symptom = WHEN), `example` (HOW). Register the option in
-   `decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs` (so it appears in `KUNA_OPTION_NAMES`).
+   `crates/unlace-decomp/src/p0_knowledge/options.rs` (so it appears in `KUNA_OPTION_NAMES`).
 5. **If an existing option already covers this gap** (check `unlace catalog --json`), do NOT
    duplicate it. Record that finding in `docs/features/{{SLUG}}/record.json`, set state `--status failed
    --note "covered by <option>"`, and stop without a PR.
@@ -86,7 +86,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
 - Read `AGENTS.md`, `docs/phases.md`, `docs/history.md`, `docs/options.md`,
   `tests/stages/README.md`, and the **loweredswitch** feature as the canonical template:
   `git log --oneline | grep loweredswitch`, then read
-  `decompiler/crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs`, its anchors in `coreaction*.rs` /
+  `crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs`, its anchors in `coreaction*.rs` /
   `universalaction.rs` / `options.rs` / `architecture.rs` / `phases.toml`, and
   `tests/stages/ghangr-loweredswitch.xml`.
 - Reproduce the gap: `{{KUNA_PY}} -m scripts.pipeline.compare --entry {{TEST_NAME}}` (read both
@@ -124,17 +124,17 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   `options.rs`, and add the `settableTable` row (rule 4). Gate the action to early-return when the
   flag is off so default output is byte-identical.
 - **Bump the hard-coded catalog counts** (adding an option changes them in THREE places; missing one
-  fails `make rust-test`/`make test-stages` opaquely): the count asserts in
+  fails `cargo nextest run --workspace --exclude unlace-wasm --profile ci`/`cargo test --release -p unlace-cli --test parity stage_tests` opaquely): the count asserts in
   `src/p0_knowledge/kuna_phases/tests.rs`; the count asserts AND the `tests/fixtures/phase_catalog.json`
-  fixture in `decompiler/crates/unlace-decomp/tests/catalog_bytecompat.rs` (regenerate the fixture with the
+  fixture in `crates/unlace-decomp/tests/catalog_bytecompat.rs` (regenerate the fixture with the
   console recapture documented in that file's header); and the `tests/stages/kuna-catalog.xml` stringmatch
   counts (bump whichever bucket your `source_decompiler`/`change_kind` lands in).
 
 ### 4. build + test
-- `make binaries`. Then write `tests/stages/ghangr-{{SLUG}}.xml`: for a feature, a two-pass `decompilertest` — pass 1 with
+- `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`. Then write `tests/stages/ghangr-{{SLUG}}.xml`: for a feature, a two-pass `decompilertest` — pass 1 with
   `option {{SLUG}} off` asserting the *bug* (current kuna rendering), pass 2 at default asserting the *fix*
   (angr-like rendering); for a fix (rule 4), one pass asserting the fixed rendering and the absence of the bug. Use a self-contained bytechunk or the testcase binary's bytes; map/name neighbour symbols.
-- `make test-stages` must pass. Regenerate the stage baseline:
+- `cargo test --release -p unlace-cli --test parity stage_tests` must pass. Regenerate the stage baseline:
   `unlace test --datatests --datatests-dir tests/stages --save-baseline docs/baseline-stages.json`.
 - **Measure speed (always — Hard rule 6).** With the feature working, time the target off vs on:
   `{{KUNA_PY}} -m scripts.pipeline.timeit --option {{SLUG}} --binary {{BINARY}} --selector {{SELECTOR}} --repeat 5`
@@ -159,11 +159,11 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
 ### 6. gates (all must be green before committing)
 - `unlace catalog --check`  → "catalog OK"
 - `unlace test --all --baseline docs/baseline.json`  → PARITY OK
-- `make test-stages`  → all pass
-- Regenerate `docs/options.md`: `unlace catalog --markdown > docs/options.md` (freshness-fenced by `make rust-test`)
+- `cargo test --release -p unlace-cli --test parity stage_tests`  → all pass
+- Regenerate `docs/options.md`: `unlace catalog --markdown > docs/options.md` (freshness-fenced by `cargo nextest run --workspace --exclude unlace-wasm --profile ci`)
 
 ### 7. docs + record
-- `docs/spec/`: update the chapter owning the phase you changed (find it via its `Anchors:` block); run `make check-spec`.
+- `docs/spec/`: update the chapter owning the phase you changed (find it via its `Anchors:` block); run `python3 tools/check_spec.py`.
 - Finalise `docs/features/{{SLUG}}/record.json`: `{ "opportunity": "{{OPPORTUNITY_ID}}", "test_name", "binary",
   "selector", "func_addr", "angr_version", "option", "flag", "element_id", "change_kind", "source_decompiler":"angr",
   "inspiration", "default_on": bool, "ablation_changed": N, "parity": "OK",

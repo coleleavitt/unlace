@@ -13,7 +13,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_probestack_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/rust_probestack_x86_64</com>
   <com>option rustprobestack off</com>
   <com>read symbols</com>
   <com>parse line extern uint4 probe_page(uint4 x);</com>
@@ -29,7 +29,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_probestack_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/rust_probestack_x86_64</com>
   <com>option rustprobestack auto</com>
   <com>read symbols</com>
   <com>parse line extern uint4 probe_page(uint4 x);</com>
@@ -89,7 +89,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_probestack_buffer_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/rust_probestack_buffer_x86_64</com>
   <com>option rustprobestack auto</com>
   <com>read symbols</com>
   <com>parse line extern uint4 probe_buffer(uint4 x);</com>

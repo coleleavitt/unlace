@@ -42,7 +42,7 @@ the most likely way to waste this session.**
 
 The need is a missing or broken *capability*: a subcommand that does not exist, JSON that is
 not emitted, an error that is silently swallowed, a flag that is missing. It lives in
-`decompiler/crates/unlace-cli/`, `unlace-console/` or `unlace-analysis/`.
+`crates/unlace-cli/`, `unlace-console/` or `unlace-analysis/`.
 
 **It does NOT change emitted C, so it does NOT need a `phases.toml` option row.** The rule in
 `CLAUDE.md` is "a judgement call ships behind a named option; a fix does not" — a new
@@ -113,7 +113,7 @@ read symbols
 load function main
 <your command>
 quit
-'      | SLEIGHHOME=$PWD/specs decompiler/target/release/decomp_dbg
+'      | SLEIGHHOME=$PWD/specs target/release/decomp_dbg
    ```
    If that works, your job is plumbing, not engine work.
 2. **It answers `engine integration not yet ported`.** The command is a registered stub —
@@ -175,7 +175,7 @@ On abort: `... --status failed --note "<one line why>"`.
   launcher-owned base instead.
 - **Never `git stash`.** `refs/stash` is one stack shared by every worktree and work has
   already been lost that way. To A/B something, `cp` the file aside.
-- **Never `make specs`** in a worktree. The main tree's compiled `.sla` are already
+- **Never `target/release/slacomp -a specs`** in a worktree. The main tree's compiled `.sla` are already
   symlinked into `specs/` for you, and `KUNA_SPECS`/`SLEIGHHOME` are set.
 - The debug profile is already pinned to no-debug-info and `target/debug` is cleaned on exit;
   a worktree otherwise costs 20–30 GB and has filled this machine mid-run.
@@ -204,11 +204,10 @@ implement it.
 All of these green, on the **rebased** tree, before you merge:
 
 ```
-make test            # PARITY OK 675/675 — NEVER re-pin docs/baseline.json
-make test-stages     # PARITY OK
-make rust-test       # the long pole; on an internal-branch PR CI SKIPS it, so you are the gate
-make check-spec
-decompiler/target/release/unlace catalog --check    # catalog OK
+cargo test --release -p unlace-cli --test parity   # datatests PARITY OK 675/675 + stages PARITY OK — NEVER re-pin a baseline
+cargo nextest run --workspace --exclude unlace-wasm --profile ci       # the long pole; on an internal-branch PR CI SKIPS it, so you are the gate
+python3 tools/check_spec.py
+target/release/unlace catalog --check    # catalog OK
 {{KUNA_PY}} -m scripts.repipe.verify --need {{SLUG}} --json   # acceptance must be PASS
 ```
 
@@ -222,7 +221,7 @@ green log they could not read. Put the completion marker on the gate's own comma
 bound every wait:
 
 ```
-( make rust-test > /tmp/{{WORKER_ID}}.rust.log 2>&1; echo $? > /tmp/{{WORKER_ID}}.rust.rc ) &
+( cargo nextest run --workspace --exclude unlace-wasm --profile ci > /tmp/{{WORKER_ID}}.rust.log 2>&1; echo $? > /tmp/{{WORKER_ID}}.rust.rc ) &
 for i in $(seq 1 60); do [ -s /tmp/{{WORKER_ID}}.rust.rc ] && break; sleep 30; done
 ```
 

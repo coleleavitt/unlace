@@ -88,9 +88,8 @@ Manual equivalents and the dev-checkout path are in the sections below.
 by hand, from the repo root:
 
 ```bash
-cd decompiler
 cargo build --release -p unlace-ghidra
-cp target/release/unlace_ghidra ../integrations/ghidra/KunaDecompiler/os/linux_x86_64/
+cp target/release/unlace_ghidra integrations/ghidra/KunaDecompiler/os/linux_x86_64/
 ```
 
 The binary is a gitignored build artifact; it must be present under
@@ -127,7 +126,7 @@ No zip needed — inject this directory as an external module when launching Ghi
 added to the launcher's VM args (e.g. the Eclipse/VSCode launch configuration created
 by `gradle prepDev` / the VSCode integration), with the extension's Java compiled into
 the project. During development you can skip copying the binary and instead pass
-`-Dkuna.decompiler.exe=/abs/path/to/kuna/decompiler/target/release/unlace_ghidra`.
+`-Dkuna.decompiler.exe=/abs/path/to/kuna/target/release/unlace_ghidra`.
 
 ## Enable the plugin
 
@@ -184,7 +183,7 @@ a release install.
 
 ## Use with PyGhidra (headless / scripting)
 
-Build the backend once (`cd decompiler && cargo build --release -p unlace-ghidra`), install
+Build the backend once (`cargo build --release -p unlace-ghidra`), install
 pyghidra (`pip install "$GHIDRA_INSTALL_DIR"/Ghidra/Features/PyGhidra/pypkg/dist/pyghidra-*.whl`,
 or `pip install pyghidra`), and set `GHIDRA_INSTALL_DIR`. Then pick one of two ways to make
 Ghidra use kuna.
@@ -235,5 +234,5 @@ delete the copy to revert):
 ```bash
 PLAT=mac_arm_64   # or linux_x86_64 | mac_x86_64 | linux_arm_64 (see build.sh)
 DROP="$GHIDRA_INSTALL_DIR/Ghidra/Features/Decompiler/build/os/$PLAT"
-mkdir -p "$DROP" && cp decompiler/target/release/unlace_ghidra "$DROP/decompile"
+mkdir -p "$DROP" && cp target/release/unlace_ghidra "$DROP/decompile"
 ```

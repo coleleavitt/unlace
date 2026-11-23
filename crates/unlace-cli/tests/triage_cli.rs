@@ -1,0 +1,654 @@
+//! CLI end-to-end gate for the **triage** surface of `unlace functions` /
+//! `unlace decompile-all`: `--filter`, `--min-size`/`--max-size`,
+//! `--reachable-from`, `--sort`/`--limit`, and `--summary`.
+//!
+//! The load-bearing property is the one the RE loop recorded as a blocker
+//! ("unfiltered whole-binary JSON is impractically large for triage"): a caller
+//! must be able to narrow the RUN, not the output, and must be able to orient
+//! itself first with a call that cannot emit a megabyte. So the assertions are
+//! about what the commands SELECT and what they COST, not about pseudocode.
+//!
+//! `fauxware` is the fixture because its call graph is the textbook shape:
+//! `_start` reaches `main` only through the address it hands
+//! `__libc_start_main`, and `main` reaches `authenticate`/`accepted`/`rejected`
+//! and nothing else. A reachability query that gets either of those wrong is
+//! visibly wrong here.
+//!
+//! Integration tests require the built processor specs under `specs/`.
+
+use std::path::PathBuf;
+use std::process::Command;
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap()
+}
+
+fn fauxware() -> String {
+    repo_root()
+        .join("crates/unlace-analysis/tests/fixtures/fauxware")
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+fn specs() -> String {
+    repo_root().join("specs").to_str().unwrap().to_string()
+}
+
+fn run_kuna(args: &[&str]) -> (String, String, i32) {
+    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .args(args)
+        .env("SLEIGHHOME", specs())
+        .output()
+        .expect("failed to spawn the kuna binary");
+    (
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+        out.status.code().unwrap_or(-1),
+    )
+}
+
+/// Every `0x…\t<name>` row of a plain `unlace functions` listing, as `(addr, name)`.
+fn listing_rows(stdout: &str) -> Vec<(u64, String)> {
+    stdout
+        .lines()
+        .filter(|l| l.starts_with("0x"))
+        .filter_map(|l| {
+            let mut f = l.split('\t');
+            let addr = u64::from_str_radix(f.next()?.trim_start_matches("0x"), 16).ok()?;
+            Some((addr, f.next()?.to_string()))
+        })
+        .collect()
+}
+
+fn listing_names(stdout: &str) -> Vec<String> {
+    listing_rows(stdout)
+        .into_iter()
+        .map(|(_, name)| name)
+        .collect()
+}
+
+fn json_field(stdout: &str, pointer: &str) -> Option<u64> {
+    let document: serde_json::Value = serde_json::from_str(stdout).expect("valid CLI JSON");
+    document
+        .pointer(pointer)
+        .and_then(serde_json::Value::as_u64)
+}
+
+fn json_sizes(stdout: &str) -> Vec<u64> {
+    let document: serde_json::Value = serde_json::from_str(stdout).expect("valid CLI JSON");
+    document
+        .get("functions")
+        .and_then(serde_json::Value::as_array)
+        .expect("function array")
+        .iter()
+        .map(|function| {
+            function
+                .get("size")
+                .and_then(serde_json::Value::as_u64)
+                .expect("numeric function size")
+        })
+        .collect()
+}
+
+/// `--filter` is a regex over the name, and it matches aliases too — every
+/// fauxware entry carries a generated `sub_<addr>` alias, so a caller that only
+/// knows the generated spelling still selects the function.
+#[test]
+fn filter_selects_by_name_regex() {
+    let (out, err, code) = run_kuna(&["functions", &fauxware(), "--filter", "auth|accept|reject"]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(
+        listing_names(&out),
+        vec!["authenticate", "accepted", "rejected"]
+    );
+
+    let (aliased, _, code) = run_kuna(&["functions", &fauxware(), "--filter", "^sub_400664$"]);
+    assert_eq!(code, 0);
+    assert_eq!(
+        listing_names(&aliased),
+        vec!["authenticate"],
+        "an alias selects too"
+    );
+
+    // A filter that matches nothing is an ANSWER, not a discovery failure: the
+    // zero-discovery verdict must stay attached to discovery.
+    let (empty, _, code) = run_kuna(&["functions", &fauxware(), "--filter", "no_such_symbol"]);
+    assert_eq!(code, 0, "an empty selection is not a failed run");
+    assert!(listing_rows(&empty).is_empty());
+}
+
+#[test]
+fn a_malformed_filter_is_a_usage_error() {
+    let (_, err, code) = run_kuna(&["functions", &fauxware(), "--filter", "["]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("invalid --filter regex"), "{err}");
+}
+
+/// `--min-size` / `--max-size` bound the inventory extent, and an inverted pair
+/// is rejected before the binary is even loaded.
+#[test]
+fn size_bounds_are_inclusive_and_ordered() {
+    let (out, err, code) = run_kuna(&["functions", &fauxware(), "--min-size", "100", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    let sizes = json_sizes(&out);
+    assert!(
+        !sizes.is_empty(),
+        "the fixture must exercise the lower bound"
+    );
+    assert!(sizes.iter().all(|&s| s >= 100), "{out}");
+    assert!(json_field(&out, "/count").unwrap() < json_field(&out, "/total").unwrap());
+
+    let (bounded, _, code) = run_kuna(&[
+        "functions",
+        &fauxware(),
+        "--min-size",
+        "32",
+        "--max-size",
+        "44",
+        "--json",
+    ]);
+    assert_eq!(code, 0);
+    let sizes = json_sizes(&bounded);
+    assert!(!sizes.is_empty(), "the fixture must exercise both bounds");
+    assert!(sizes.iter().all(|&s| (32..=44).contains(&s)), "{bounded}");
+
+    let (_, err, code) = run_kuna(&[
+        "functions",
+        &fauxware(),
+        "--min-size",
+        "100",
+        "--max-size",
+        "10",
+    ]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("greater than --max-size"), "{err}");
+}
+
+/// `--sort size` leads with the biggest (the triage order) and `--limit` caps
+/// AFTER the sort, so "the three biggest functions" is one call.
+#[test]
+fn sort_and_limit_answer_the_three_biggest_question() {
+    let (out, err, code) = run_kuna(&[
+        "functions",
+        &fauxware(),
+        "--sort",
+        "size",
+        "--limit",
+        "3",
+        "--json",
+    ]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(json_field(&out, "/count"), Some(3));
+    assert_eq!(
+        json_field(&out, "/total"),
+        Some(21),
+        "the count before narrowing"
+    );
+    let sizes = json_sizes(&out);
+    assert_eq!(sizes.len(), 3, "{out}");
+    assert!(
+        sizes.windows(2).all(|w| w[0] >= w[1]),
+        "largest first: {sizes:?}"
+    );
+    assert!(out.contains("\"name\": \"main\""), "{out}");
+
+    let (by_name, _, code) = run_kuna(&["functions", &fauxware(), "--sort", "name"]);
+    assert_eq!(code, 0);
+    let names = listing_names(&by_name);
+    let mut sorted = names.clone();
+    sorted.sort();
+    assert_eq!(names, sorted);
+
+    let (_, err, code) = run_kuna(&["functions", &fauxware(), "--sort", "entropy"]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("unknown --sort key"), "{err}");
+}
+
+/// The call-graph question. `main` reaches exactly its own callees; `_start`
+/// reaches `main` only through the address it hands `__libc_start_main`, which
+/// is why an address-taken function pointer has to count as an edge.
+#[test]
+fn reachable_from_walks_the_call_graph() {
+    let (out, err, code) = run_kuna(&["functions", &fauxware(), "--reachable-from", "main"]);
+    assert_eq!(code, 0, "{err}");
+    let reached = listing_names(&out);
+    for want in [
+        "main",
+        "authenticate",
+        "accepted",
+        "rejected",
+        "strcmp",
+        "puts",
+    ] {
+        assert!(
+            reached.iter().any(|n| n == want),
+            "{want} missing from {reached:?}"
+        );
+    }
+    for unwanted in ["_start", "_init", "__libc_csu_init", "frame_dummy"] {
+        assert!(
+            !reached.iter().any(|n| n == unwanted),
+            "{unwanted} is not reachable from main: {reached:?}"
+        );
+    }
+    assert!(
+        reached.len() < 21,
+        "the query narrowed nothing: {reached:?}"
+    );
+
+    let (from_start, _, code) = run_kuna(&["functions", &fauxware(), "--reachable-from", "_start"]);
+    assert_eq!(code, 0);
+    assert!(
+        listing_names(&from_start).iter().any(|n| n == "main"),
+        "the entry point reaches main through the pointer it passes __libc_start_main"
+    );
+
+    // An address operand resolves the same way a name does.
+    let (by_addr, _, code) = run_kuna(&["functions", &fauxware(), "--reachable-from", "0x40071d"]);
+    assert_eq!(code, 0);
+    assert_eq!(listing_names(&by_addr), reached);
+
+    let (_, err, code) = run_kuna(&["functions", &fauxware(), "--reachable-from", "no_such_fn"]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("no function named"), "{err}");
+}
+
+/// `--summary` names the program's own entry function beside the image entry:
+/// on a stripped MinGW PE the entry is the CRT startup and `main` is the function
+/// `pemain` recovers from `__tmainCRTStartup`.
+#[test]
+fn summary_reports_the_pe_user_entry() {
+    let bin = repo_root()
+        .join("crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let (out, err, code) = run_kuna(&["functions", &bin, "--summary", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    let main = out.split("\"main\":").nth(1).expect("a main field");
+    assert!(main.contains("\"name\": \"main\""), "{out}");
+    assert!(main.contains("\"address_hex\": \"0x140001592\""), "{out}");
+
+    let (text, _, code) = run_kuna(&["functions", &bin, "--summary"]);
+    assert_eq!(code, 0);
+    assert!(text.contains("main\t0x140001592\tmain"), "{text}");
+}
+
+/// `--summary` answers "where do I start" in a few hundred bytes: the entry
+/// point, its reach, the unreferenced count, the size histogram, and the largest
+/// functions — without emitting an inventory at all.
+#[test]
+fn summary_orients_without_emitting_the_inventory() {
+    let (out, err, code) = run_kuna(&["functions", &fauxware(), "--summary", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    for key in [
+        "\"summary\"",
+        "\"entry\"",
+        "\"reachable_from_entry\"",
+        "\"no_callers\"",
+        "\"size_buckets\"",
+        "\"largest\"",
+        "\"code_bytes\"",
+    ] {
+        assert!(out.contains(key), "{key} missing from {out}");
+    }
+    assert!(
+        out.contains("\"name\": \"_start\""),
+        "the ELF entry point: {out}"
+    );
+    assert!(
+        out.contains("\"name\": \"main\""),
+        "main is the largest function: {out}"
+    );
+    assert_eq!(json_field(&out, "/total"), Some(21));
+    assert!(
+        !out.contains("\"code\":"),
+        "a summary never carries pseudocode: {out}"
+    );
+
+    let (full, _, code) = run_kuna(&["functions", &fauxware(), "--json"]);
+    assert_eq!(code, 0);
+    assert!(
+        out.len() < full.len(),
+        "the summary ({} B) must be cheaper than the inventory ({} B)",
+        out.len(),
+        full.len()
+    );
+
+    // `--limit` sizes the `largest` list.
+    let (capped, _, code) = run_kuna(&[
+        "functions",
+        &fauxware(),
+        "--summary",
+        "--json",
+        "--limit",
+        "2",
+    ]);
+    assert_eq!(code, 0);
+    assert_eq!(
+        capped.matches("\"address_hex\":").count(),
+        4,
+        "entry + main + 2 largest: {capped}"
+    );
+
+    let (text, _, code) = run_kuna(&["functions", &fauxware(), "--summary"]);
+    assert_eq!(code, 0);
+    assert!(text.contains("size buckets:"), "{text}");
+    assert!(text.contains("reachable from entry"), "{text}");
+}
+
+/// The point of the whole feature: `decompile-all` narrows the RUN, so a
+/// selected batch is both far smaller and far cheaper than the whole binary.
+#[test]
+fn decompile_all_narrows_the_run_not_the_output() {
+    let (out, err, code) = run_kuna(&[
+        "decompile-all",
+        &fauxware(),
+        "--json",
+        "--reachable-from",
+        "main",
+        "--sort",
+        "size",
+        "--limit",
+        "2",
+    ]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(json_field(&out, "/count"), Some(2));
+    // `total` is the pre-narrowing target count, so a capped answer can never be
+    // mistaken for the whole program.
+    assert!(json_field(&out, "/total").unwrap() > 2, "{out}");
+    assert!(out.contains("\"name\": \"main\""), "{out}");
+    assert!(out.contains("\"name\": \"authenticate\""), "{out}");
+    assert!(!out.contains("\"name\": \"_start\""), "{out}");
+
+    let (whole, _, code) = run_kuna(&["decompile-all", &fauxware(), "--json"]);
+    assert_eq!(code, 0);
+    assert!(
+        out.len() * 2 < whole.len(),
+        "narrowed {} B vs whole-binary {} B",
+        out.len(),
+        whole.len()
+    );
+    // An UNNARROWED run is untouched, `total` included: the decbench backend and
+    // `unlace decompile --json` read that document.
+    assert!(
+        !whole.contains("\"total\":"),
+        "unfiltered documents keep their schema"
+    );
+
+    let (filtered, _, code) = run_kuna(&[
+        "decompile-all",
+        &fauxware(),
+        "--json",
+        "--filter",
+        "^authenticate$",
+    ]);
+    assert_eq!(code, 0);
+    assert_eq!(json_field(&filtered, "/count"), Some(1));
+    assert!(
+        filtered.contains("\"code\":"),
+        "a narrowed run still decompiles: {filtered}"
+    );
+}
+
+/// An ARM `e_entry` and a symbol `st_value` both carry the Thumb mode bit while
+/// the inventory records the even entry, so the summary and `--reachable-from`
+/// have to resolve an odd address THROUGH the inventory or answer nothing at all.
+#[test]
+fn an_arm_thumb_entry_resolves_to_its_even_address() {
+    let arm = repo_root()
+        .join("crates/unlace-analysis/tests/fixtures/entrymain_arm")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let (out, err, code) = run_kuna(&["functions", &arm, "--summary", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        out.contains("\"address_hex\": \"0x3dc\""),
+        "the even entry: {out}"
+    );
+    let reachable = json_field(&out, "/summary/reachable_from_entry");
+    assert!(
+        reachable.is_some_and(|n| n > 0),
+        "the entry must reach something: {out}"
+    );
+
+    let (odd, _, code) = run_kuna(&["functions", &arm, "--reachable-from", "0x3dd"]);
+    assert_eq!(code, 0);
+    let (even, _, _) = run_kuna(&["functions", &arm, "--reachable-from", "0x3dc"]);
+    assert_eq!(
+        listing_names(&odd),
+        listing_names(&even),
+        "both spellings, one answer"
+    );
+    assert!(!listing_rows(&odd).is_empty(), "{odd}");
+}
+
+/// A Mach-O `LC_MAIN` states its entry as a `__TEXT`-relative FILE OFFSET where
+/// every other format states a VMA, so the summary reported `0x5b0` -- an address
+/// that names no function, which then made `reachable_from_entry` null and left
+/// the one orientation field an agent starts from useless.
+#[test]
+fn a_macho_lc_main_entry_is_reported_as_a_vma() {
+    let macho = repo_root()
+        .join("crates/unlace-analysis/tests/fixtures/macho_stripped_main")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let (out, err, code) = run_kuna(&["functions", &macho, "--summary", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        out.contains("\"address_hex\": \"0x1000005b0\""),
+        "__TEXT.vmaddr + entryoff: {out}"
+    );
+    assert!(
+        !out.contains("\"address_hex\": \"0x5b0\""),
+        "the raw entryoff must be gone: {out}"
+    );
+    assert!(
+        out.contains("\"name\": \"main\""),
+        "the entry names a function: {out}"
+    );
+    let reachable = json_field(&out, "/summary/reachable_from_entry");
+    assert!(
+        reachable.is_some_and(|n| n > 0),
+        "the entry must reach something: {out}"
+    );
+}
+
+/// `--summary` builds a call graph, which re-parses the image outside the engine
+/// load -- and that raw parse used to skip the Mach-O fat-header peel the load
+/// applies, so `functions --json` returned an inventory for a UNIVERSAL binary
+/// while `functions --summary --json` exited 1 with "Unsupported file format"
+/// (crackmes.one 5ab77f5633c5d40ad448c29b). The summary must count the same
+/// functions the plain inventory does, and `--slice` must steer it.
+#[test]
+fn a_universal_macho_summarizes_the_slice_the_inventory_loaded() {
+    let fat = repo_root()
+        .join("crates/unlace-analysis/tests/fixtures/macho_fat")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let (plain, err, code) = run_kuna(&["functions", &fat, "--json"]);
+    assert_eq!(code, 0, "{err}");
+    let inventory = json_field(&plain, "/count").expect("the plain inventory reports a count");
+
+    let (out, err, code) = run_kuna(&["functions", &fat, "--summary", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(!err.contains("Unsupported file format"), "{err}");
+    assert_eq!(
+        json_field(&out, "/count"),
+        Some(inventory),
+        "the summary counts what the inventory found: {out}"
+    );
+    assert!(
+        out.contains("\"address_hex\": \"0x1000005b0\""),
+        "the x86-64 slice's _main: {out}"
+    );
+    assert!(
+        json_field(&out, "/summary/reachable_from_entry").is_some_and(|n| n > 0),
+        "the entry must reach something: {out}"
+    );
+
+    // `--slice` is live on this path, not merely non-fatal: the arm64 slice
+    // states its own `_main` at a different address.
+    let (arm64, err, code) =
+        run_kuna(&["functions", &fat, "--summary", "--json", "--slice", "arm64"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        arm64.contains("\"address_hex\": \"0x10000056c\""),
+        "the arm64 slice's _main: {arm64}"
+    );
+}
+
+/// The summary's entry came from a raw `std::fs::read`, so an image that only
+/// parses after the loader's header repairs — a corrupt ELF section table, an
+/// oversized PE data-directory count, a trashed DOS `e_magic` — reported
+/// `entry: null` and `reachable_from_entry: null` while the inventory beside it
+/// listed functions. Read through the same repaired view the loader uses and the
+/// field is answered, and the repair is named in `warnings`.
+#[test]
+fn a_repaired_header_still_reports_the_summary_entry() {
+    for (name, entry, warning) in [
+        (
+            "corruptshdr_i386",
+            "0x8048054",
+            "ELF section table unusable",
+        ),
+        (
+            "pe_datadircount_i386.exe",
+            "0x401000",
+            "PE NumberOfRvaAndSizes is 1531532893",
+        ),
+        (
+            "pe_dosmagic_i386.exe",
+            "0x401000",
+            "PE DOS header e_magic is 0x5a15, not MZ",
+        ),
+    ] {
+        let image = repo_root()
+            .join("crates/unlace-analysis/tests/fixtures")
+            .join(name)
+            .to_str()
+            .unwrap()
+            .to_string();
+        let (out, err, code) = run_kuna(&["functions", &image, "--summary", "--json"]);
+        assert_eq!(code, 0, "{name}: {err}");
+        assert!(
+            out.contains(entry),
+            "{name}: the entry must be reported: {out}"
+        );
+        assert!(
+            json_field(&out, "/summary/reachable_from_entry").is_some_and(|n| n > 0),
+            "{name}: and it must reach something: {out}"
+        );
+        let warnings = out
+            .split("\"warnings\": [")
+            .nth(1)
+            .and_then(|w| w.split(']').next());
+        assert!(
+            warnings.is_some_and(|w| w.contains(warning)),
+            "{name}: the repair must be named in `warnings`: {out}"
+        );
+        assert!(
+            err.contains(&format!("[kuna] {warning}")),
+            "{name}: and on stderr: {err}"
+        );
+    }
+}
+
+/// A well-formed image has nothing to warn about, and says so with an empty array.
+#[test]
+fn a_well_formed_image_summarizes_with_no_warnings() {
+    let (out, err, code) = run_kuna(&["functions", &fauxware(), "--summary", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("\"warnings\": []"), "{out}");
+}
+
+/// The zero-discovery verdict belongs to DISCOVERY. A narrowed run on an image
+/// that yielded nothing must still fail loudly — the packer diagnosis is the one
+/// thing the caller can act on, and a filter must not be able to swallow it.
+#[test]
+fn a_narrowed_run_on_a_packed_image_still_fails_loudly() {
+    let packed = repo_root()
+        .join("crates/unlace-analysis/tests/fixtures/upx_packed_x86_64")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let (out, err, code) = run_kuna(&["functions", &packed, "--filter", "main", "--json"]);
+    assert_eq!(code, 1, "{err}");
+    assert!(out.contains("UPX-packed"), "{out}");
+    assert!(err.contains("unlace unpack"), "{err}");
+
+    let (summary, _, code) = run_kuna(&["functions", &packed, "--summary", "--json"]);
+    assert_eq!(code, 1, "a summary of nothing is still a failed run");
+    assert!(summary.contains("UPX-packed"), "{summary}");
+}
+
+/// The triage flags belong to the two surfaces that act on them. Offering them
+/// where they are ignored would be worse than not offering them.
+#[test]
+fn triage_flags_are_not_offered_where_they_do_nothing() {
+    let (_, err, code) = run_kuna(&["decompile-project", &fauxware(), "--filter", "main"]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("unknown option --filter"), "{err}");
+}
+
+/// An inventory made only of import pointer slots is a total discovery failure
+/// wearing a healthy listing's clothes.
+///
+/// The all-data PE with an import table (`pe_dataimports_i386.exe`, the reduced
+/// NEOLite crackme of RE-need `function-inventory-silently-lists`) enumerates
+/// three imported names and not one body, so `decompile-all` named the cause
+/// while `functions` answered `count: 3`, `error: null`, exit 0 on the same
+/// file. Both halves matter: the names must survive — an agent reads the import
+/// list to find out what the packed image will call — and the run must still say
+/// it found no code.
+#[test]
+fn an_inventory_of_only_imports_is_still_a_failed_run() {
+    let imports_only = repo_root()
+        .join("crates/unlace-analysis/tests/fixtures/pe_dataimports_i386.exe")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let (out, err, code) = run_kuna(&["functions", &imports_only, "--json"]);
+    assert_eq!(code, 1, "{err}");
+    assert_eq!(
+        json_field(&out, "/count"),
+        Some(3),
+        "the import names must survive: {out}"
+    );
+    for name in ["GetProcAddress", "GetModuleHandleA", "LoadLibraryA"] {
+        assert!(out.contains(name), "{name} must still be listed: {out}");
+    }
+    assert!(out.contains("no functions discovered"), "{out}");
+    assert!(
+        out.contains("0x402001"),
+        "the diagnosis names the entry: {out}"
+    );
+    assert!(
+        err.contains("--define-function"),
+        "and what to do about it: {err}"
+    );
+
+    // The orientation surface reads the same verdict off the same inventory.
+    let (summary, err, code) = run_kuna(&["functions", &imports_only, "--summary", "--json"]);
+    assert_eq!(code, 1, "a summary of nothing is still a failed run: {err}");
+    assert!(summary.contains("no functions discovered"), "{summary}");
+
+    // And a declaration is still what closes it: one body is enough.
+    let (declared, err, code) = run_kuna(&[
+        "functions",
+        &imports_only,
+        "--json",
+        "--define-function",
+        "0x402001-0x40200c=entry",
+    ]);
+    assert_eq!(code, 0, "a declared body is a discovered body: {err}");
+    assert_eq!(json_field(&declared, "/count"), Some(4), "{declared}");
+    assert!(declared.contains("\"error\": null"), "{declared}");
+}

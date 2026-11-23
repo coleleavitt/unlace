@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli]
+touches: [crates/unlace-cli]
 scope: small
 regression_of: null
 pr: null
@@ -137,7 +137,7 @@ MEASURED ON b9029a8f, release binaries:
        function, typedef, prototype, data, param, return,
        name, type, comment, flow, readonly, volatile
    The rejection is a real closed-set rejection, emitted at
-       decompiler/crates/unlace-cli/src/assertdecl.rs:319
+       crates/unlace-cli/src/assertdecl.rs:319
    as: --assert {raw}: unknown directive {other} (want one of ...). So the symptom reproduces exactly as filed and exit 2 is the parser, not a downstream failure.
 
 2. NO ADJACENT MECHANISM SUPPLIES BYTE CONTENT. I searched the whole 176-option catalog for overlay / patch / selfmod / self-mod / smc / byte content. It returned 15 apparent hits and ALL FIFTEEN ARE FALSE POSITIVES -- every one is the substring "patch" inside DISPATCH in jump-table prose (V850 jmp reg, lowered-switch cascade, CMOV dispatch, image-base-relative tables, the MSVC Duff's-device tables). There is no overlay option. DO NOT RE-RUN THAT GREP; it is answered.

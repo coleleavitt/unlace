@@ -366,7 +366,7 @@ script, the precedent set by `returndup`, `truthycond`, `branchflip`, `foldcallr
 
 ## Execution
 
-One PR per bucket slice, each gated by the four gates plus `make test-cli`:
+One PR per bucket slice, each gated by the four gates plus `PYTHONPATH=. python3 -m scripts.repipe.clitests`:
 
 1. P4 argument/return recovery fixes (REMOVE)
 2. P3 dataflow and heritage fixes (REMOVE)

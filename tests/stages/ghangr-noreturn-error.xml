@@ -23,7 +23,7 @@
     (there is no Listing to consume). The end-to-end behavior - an error(2,...) wrapper
     concluded no-return, its caller truncated, and an error(0,...) wrapper left
     returning - is proven by the cross-crate gate
-    `decompiler/crates/unlace-console/tests/verify_noreturn_error.rs` against a real
+    `crates/unlace-console/tests/verify_noreturn_error.rs` against a real
     x86-64 fixture (`noreturn_error_x86_64`), the same way `noreturn_propagate` is
     proven by `verify_noreturn_propagate.rs`.
 

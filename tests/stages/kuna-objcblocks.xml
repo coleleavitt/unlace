@@ -38,14 +38,14 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_blocks_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_objc_blocks_arm64</com>
   <com>option objc off</com>
   <com>read symbols</com>
   <com>load addr 0x100000930</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_blocks_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_objc_blocks_arm64</com>
   <com>option objc on</com>
   <com>read symbols</com>
   <com>load addr 0x100000930</com>

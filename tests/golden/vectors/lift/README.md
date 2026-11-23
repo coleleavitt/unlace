@@ -42,7 +42,7 @@ previous AArch64 digest on the previous sources.
 ## Regeneration
 
 ```bash
-make binaries        # rebuild decomp_dbg after any C++ change
+cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli        # rebuild decomp_dbg after any C++ change
 ~/.virtualenvs/kuna/bin/python tools/rust-port/gen_lift.py
 ```
 

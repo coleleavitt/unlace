@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis, decompiler/crates/unlace-cli]
+touches: [crates/unlace-analysis, crates/unlace-cli]
 scope: small
 regression_of: null
 pr: null
@@ -61,11 +61,11 @@ Find where a stripped Windows program starts.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe",
     "binary_sha256": "981f4d8e9bba6b4bb039d91253f54e6f068d7513930e1f0ab5979b5bf7fa6cad",
     "binary_size": 39424,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe"
   }
 }
 ```
@@ -107,11 +107,11 @@ Find where a stripped Windows program starts.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe",
     "binary_sha256": "981f4d8e9bba6b4bb039d91253f54e6f068d7513930e1f0ab5979b5bf7fa6cad",
     "binary_size": 39424,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe"
   }
 }
 ```

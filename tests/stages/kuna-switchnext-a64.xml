@@ -2,7 +2,7 @@
 <binaryimage arch="AARCH64:LE:64:v8A:default">
 <!--
     A byte-masked compact jump table that is its function's last, assembled
-    from decompiler/crates/unlace-analysis/tests/fixtures/switchnext_aarch64.s
+    from crates/unlace-analysis/tests/fixtures/switchnext_aarch64.s
     (the .text and .rodata of switchnext_aarch64).
 
     `name_of` indexes tab_names (3 halfwords at 0x110dc) with `x0 & 0xff`,

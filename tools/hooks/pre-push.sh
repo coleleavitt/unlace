@@ -23,7 +23,8 @@ br="$(git rev-parse --abbrev-ref HEAD)"
 case "$br" in main|HEAD) exit 0;; esac
 ROOT="$(git rev-parse --show-toplevel)"; NAME="$(basename "$ROOT")"; TAG="${NAME#unlace-wt-}"
 TD="${CARGO_TARGET_DIR:-$(dirname "$ROOT")/unlace-target/$TAG}"
-[ -L "$ROOT/decompiler/target" ] && TD="$(readlink -f "$ROOT/decompiler/target")"
+[ -L "$ROOT/decompiler/target" ] && TD="$(readlink -f "$ROOT/decompiler/target")"   # a worktree made before the workspace moved to the root
+[ -L "$ROOT/target" ] && TD="$(readlink -f "$ROOT/target")"
 tree="$(git rev-parse HEAD^{tree})"
 if [ -f "$TD/.ci-gates-pass" ] && grep -qx "$tree" "$TD/.ci-gates-pass"; then echo "ci gates already passed for this tree"; exit 0; fi
 exec "$here/unlace-ci-gates.sh" parity

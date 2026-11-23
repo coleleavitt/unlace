@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis/src/loader]
+touches: [crates/unlace-analysis/src/loader]
 scope: small
 regression_of: null
 pr: null
@@ -80,11 +80,11 @@ Load through program headers, optionally overriding corrupt section metadata, an
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/corruptshdr_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/corruptshdr_i386",
     "binary_sha256": "1c969d3da25e1b7a3426aa2fec04497d919c532e4ce97e17a624257cfc62eb27",
     "binary_size": 107,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/corruptshdr_i386",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/corruptshdr_i386",
     "selector": null,
     "selector_kind": "none"
   },

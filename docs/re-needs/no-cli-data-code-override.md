@@ -11,7 +11,7 @@ instances: 1
 rounds: [2]
 first_seen_round: 2
 attempts: 1
-touches: [decompiler/crates/unlace-cli/src, decompiler/crates/unlace-console/src/ifacedecomp.rs]
+touches: [crates/unlace-cli/src, crates/unlace-console/src/ifacedecomp.rs]
 scope: large
 pr: "391"
 closed_in_round: 2
@@ -63,11 +63,11 @@ Refutation below.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
     "binary_sha256": "1c9ad3b67437c7e85ac53d0755609c5b5e015225796a98c0287de5f2cb3d382e",
     "binary_size": 15800,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
     "selector": "sample",
     "selector_kind": "name"
   },

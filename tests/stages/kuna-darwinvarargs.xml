@@ -33,12 +33,12 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/darwinvarargs_macho_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/darwinvarargs_macho_arm64</com>
   <com>load function _check</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/darwinvarargs_aarch64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/darwinvarargs_aarch64</com>
   <com>load function check</com>
   <com>decompile</com>
   <com>print C</com>

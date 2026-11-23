@@ -1,0 +1,55 @@
+//! S5 -- Value & type facts: the type system + type inference.
+//!
+//! Stage-aligned module group; declared flatly at the crate root via re-export in
+//! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
+
+pub mod bitfield;
+pub mod constseq;
+pub mod coreaction_infertypes;
+pub mod double;
+pub mod funcdata_resolveflow;
+pub mod funcdata_union;
+pub mod kuna_aggregatefields;
+pub mod kuna_boolbyte; // (kuna) type a byte that is only ever a truth value as bool
+pub mod kuna_borrowcompare; // (kuna) a branchless two-word borrow compare folds to one double-precision compare
+pub mod kuna_calltargettype; // (kuna) an indirect call's target takes the function-pointer type the call states
+pub mod kuna_charbyte; // (kuna) keep char for a byte loaded through a char pointer
+pub mod kuna_charptr; // (kuna) commit a pointer used only on characters to char *
+pub mod kuna_codescalar;
+pub mod kuna_elemptr; // (kuna) a pointer used only as an array of one element type is T *
+pub mod kuna_fatstr; // (kuna) length-carried (ptr,len) string literals (docs/multilang.md W3/W4)
+pub mod kuna_fieldtype; // (kuna) a synthesized field some access holds as a pointer is declared as that pointer
+pub mod kuna_floatbits; // (kuna) a helper that only works on a float's bits keeps the float
+pub mod kuna_floatglobals; // (kuna) a global the program only moves through float registers is a float
+pub mod kuna_floatreg; // (kuna) a value returned in a float register is a float
+pub mod kuna_gonewtype; // (kuna) type a runtime.newobject result from its descriptor argument (docs/multilang.md, Go pack)
+pub mod kuna_indexrescale;
+pub mod kuna_inferfuncentry;
+pub mod kuna_kalloctype; // (kuna) a typed allocation returns the struct its kalloc_type view describes
+pub mod kuna_libcfit; // (kuna) a libc aggregate vote declines where the caller reads past its end
+pub mod kuna_memsetsequence;
+pub mod kuna_objcrettype; // (kuna) an Objective-C message send typed and resolved by its receiver
+pub mod kuna_pebnames; // (kuna) type the Windows TEB segment base so PEB/TEB field reads are named
+pub mod kuna_ptrdepth;
+pub mod kuna_ptrfromuse; // (kuna) type a dereferenced-only function input as a pointer
+pub mod kuna_rodatastring;
+pub mod kuna_roundingops; // (kuna) a rounding user op p-code has no operator for is float in, float out
+pub mod kuna_sitetypelock; // (kuna) per-call-site output type lock: a client-asserted call-result type that survives to the declaration
+pub(crate) mod kuna_stackwordtypes;
+pub mod kuna_storetype; // (kuna) a global typed from the values stored into it
+pub mod kuna_structheadless; // (kuna) a closed function's parameter read only past its start is a record
+pub mod kuna_structmerge; // (kuna) merge a synthesized record with the claims of a sibling reader
+pub mod kuna_structsynth; // (kuna) synthesize a struct type from a pointer parameter's constant-offset dereferences
+pub mod kuna_swiftmetaresult; // (kuna `swifttypes`) type a Swift metadata accessor call's result
+pub mod kuna_swiftstr; // (kuna) Swift two-word string literals
+pub mod kuna_thumbfuncptr;
+pub mod kuna_tlsnames; // (kuna) static TLS variables at their thread-pointer offsets
+pub mod kuna_typevote;
+pub mod kuna_valuewitness; // (kuna) a Swift value witness table load through metadata is typed
+pub mod kuna_varargfloat; // (kuna) a variadic argument in a floating-point register is a double
+pub mod kuna_vtabletypes; // (kuna) typed C++ vtables: a virtual call through a named slot of its class
+pub mod kuna_zextreturn; // (kuna) a return the convention zero-extends only when unsigned is unsigned
+pub mod prefersplit;
+pub mod typeop;
+pub mod unionresolve;
+pub mod unionresolve_run; // (kuna) structured values kept whole until their fields can be named

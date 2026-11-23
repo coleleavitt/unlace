@@ -5,13 +5,13 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/mapped_flow_boundary_32.elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/mapped_flow_boundary_32.elf</com>
   <com>read symbols</com>
   <com>load addr 0x10000</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/mapped_flow_straddle_32.elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/mapped_flow_straddle_32.elf</com>
   <com>read symbols</com>
   <com>load addr 0x10000</com>
   <com>decompile</com>

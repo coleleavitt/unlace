@@ -36,7 +36,7 @@
     ptrace` is the operator's declaration; the callee is named (`sub_8049027`
     never appears) and carries the parked signature.
 
-    Source: decompiler/crates/unlace-analysis/tests/fixtures/declaredlibcproto_i386.s
+    Source: crates/unlace-analysis/tests/fixtures/declaredlibcproto_i386.s
 -->
 <bytechunk space="ram" offset="0x8049000">
 31db31f66804a004086a00536a02e81400000083c41001c64383fb0376e689f3

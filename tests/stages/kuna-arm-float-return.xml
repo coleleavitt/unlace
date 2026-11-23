@@ -41,7 +41,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armfloatreturn_armhf.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/armfloatreturn_armhf.o</com>
   <com>option armfloatreturn off</com>
   <com>read symbols</com>
   <com>lo fu scale</com>
@@ -75,14 +75,14 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
   <com>option armfloatreturn off</com>
   <com>read symbols</com>
   <com>lo fu rd</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armfloatreturn_armhf.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/armfloatreturn_armhf.o</com>
   <com>option armfloatreturn on</com>
   <com>option armfloatargs off</com>
   <com>read symbols</com>
@@ -117,7 +117,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
   <com>option armfloatreturn on</com>
   <com>option armfloatargs off</com>
   <com>read symbols</com>

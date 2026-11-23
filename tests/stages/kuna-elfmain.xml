@@ -50,7 +50,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/stripped_dynamic_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/stripped_dynamic_x86_64</com>
   <com>option elfmain off</com>
   <com>option structsynth off</com>
   <com>read symbols</com>
@@ -58,20 +58,20 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/stripped_dynamic_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/stripped_dynamic_x86_64</com>
   <com>read symbols</com>
   <com>load function main</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elfmainextra_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/elfmainextra_x86_64</com>
   <com>option elfmain off</com>
   <com>read symbols</com>
   <com>load function sub_1026</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elfmainextra_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/elfmainextra_x86_64</com>
   <com>read symbols</com>
   <com>load function main</com>
   <com>decompile</com>

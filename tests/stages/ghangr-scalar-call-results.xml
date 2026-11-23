@@ -12,7 +12,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/scalar_call_results_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/scalar_call_results_x86_64</com>
   <com>read symbols</com>
   <com>map prototype narrow_bool bool narrow_bool(bool skip,uint8 value);</com>
   <com>option outlang rust</com>

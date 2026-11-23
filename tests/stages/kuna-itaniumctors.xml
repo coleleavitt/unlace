@@ -28,7 +28,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/itaniumctors_O0_x86_64.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/itaniumctors_O0_x86_64.so</com>
   <com>option itaniumeh off</com>
   <com>option listing on</com>
   <com>option itaniumrtti off</com>
@@ -40,7 +40,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/itaniumctors_O0_x86_64.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/itaniumctors_O0_x86_64.so</com>
   <com>option itaniumeh off</com>
   <com>option listing on</com>
   <com>option itaniumrtti on</com>
@@ -52,7 +52,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/itaniumctors_O2_x86_64.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/itaniumctors_O2_x86_64.so</com>
   <com>option itaniumeh off</com>
   <com>option listing on</com>
   <com>option itaniumrtti on</com>
@@ -61,7 +61,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/itaniumctors_wrap_O2_x86_64.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/itaniumctors_wrap_O2_x86_64.so</com>
   <com>option itaniumeh off</com>
   <com>option listing on</com>
   <com>option itaniumrtti on</com>

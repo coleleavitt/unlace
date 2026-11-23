@@ -75,7 +75,7 @@ function build() {
     <h2>Group rollup</h2>
     <section class="card"><table class="grid" id="rollup"></table></section>`);
   const scope = document.getElementById("scope");
-  for (const area of ["decompiler", ...churn.areas.filter((a) => a !== "decompiler"), "(everything)"]) {
+  for (const area of ["crates", ...churn.areas.filter((a) => a !== "crates"), "(everything)"]) {
     scope.insertAdjacentHTML("beforeend", `<option>${esc(area)}</option>`);
   }
   document.getElementById("ramp").style.background =
@@ -88,7 +88,7 @@ function build() {
 }
 
 function groupKey(file, scope) {
-  if (scope === "decompiler") {
+  if (scope === "crates") {
     if (file.crate === "unlace-decomp") return `unlace-decomp / ${file.phase || "(crate root)"}`;
     return file.crate || "(workspace files)";
   }

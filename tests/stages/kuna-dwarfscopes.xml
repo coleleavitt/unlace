@@ -23,20 +23,20 @@ c3
 <script>
   <com>option dwarfscopes off</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfscopes_gcc_O0_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfscopes_gcc_O0_x86_64</com>
   <com>read symbols</com>
   <com>load function checksum</com>
   <com>decompile</com>
   <com>print C</com>
   <com>option dwarfscopes on</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfscopes_gcc_O0_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfscopes_gcc_O0_x86_64</com>
   <com>read symbols</com>
   <com>load function checksum</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfscopes_clang_O0_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfscopes_clang_O0_x86_64</com>
   <com>read symbols</com>
   <com>load function checksum</com>
   <com>decompile</com>

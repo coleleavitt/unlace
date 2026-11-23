@@ -32,7 +32,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/armveneeralias_le32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/armveneeralias_le32</com>
   <com>read symbols</com>
   <com>load function answer</com>
   <com>decompile</com>
@@ -44,7 +44,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elfaliasclash_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/elfaliasclash_x86_64</com>
   <com>read symbols</com>
   <com>load function shared</com>
   <com>decompile</com>

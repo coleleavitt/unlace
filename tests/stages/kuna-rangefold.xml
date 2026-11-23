@@ -10,7 +10,7 @@
     Stage / sub-stage: P3 "simplification-quiescence".  The P0 assertion
     `option rangefold on|off` decides the fold; on is the default.
 
-    The bytes are decompiler/crates/unlace-analysis/tests/fixtures/rangefold.c
+    The bytes are crates/unlace-analysis/tests/fixtures/rangefold.c
     built by gcc 15.3 at -O0 -fno-pie -no-pie -nostartfiles (x86-64 SysV):
     nested (`if (x < 10) { if (x > 20) ... }`), masked (`x & 0xff` under
     `x < 16`) and digit (a test of `c > '9'` inside `c >= '0' && c <= '9'`).

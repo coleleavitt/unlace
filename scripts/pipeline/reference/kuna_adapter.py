@@ -54,7 +54,7 @@ class KunaReference(ReferenceDecompiler):
             res.error = "binary not found: %s" % binary
             return res
         if not self.available():
-            res.error = ("kuna engine not built at %s -- run `make binaries`"
+            res.error = ("kuna engine not built at %s -- run `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`"
                          % self._binary_path())
             return res
 

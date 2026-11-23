@@ -29,7 +29,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/pltlocal_aarch64.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/pltlocal_aarch64.so</com>
   <com>read symbols</com>
   <com>map prototype 0x10344 void timer_helper(void *timer,unsigned long cookie,unsigned int lo,unsigned int hi)</com>
   <com>load addr 0x10308</com>

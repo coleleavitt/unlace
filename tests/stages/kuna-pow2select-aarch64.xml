@@ -11,7 +11,7 @@
     Stage / sub-stage: P3 "simplification-quiescence", option
     `pow2select on|off`.
 
-    The bytes are the .text of decompiler/crates/unlace-analysis/tests/fixtures/
+    The bytes are the .text of crates/unlace-analysis/tests/fixtures/
     pow2select.c built by clang 22.1 for aarch64-linux-gnu at -O2 (an object file),
     placed at 0x100000.  near4 selects `-(-x & 7)` for x < -4 only, which is
     not a remainder for x in -4..-1, and keeps its select.  Pass 1 is the

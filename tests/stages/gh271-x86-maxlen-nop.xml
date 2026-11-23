@@ -21,7 +21,7 @@
     Fix (kuna GH-271): instruction bytes past the buffer read as 0, the
     deterministic equivalent of the masked-off garbage C++ reads.  The start-byte
     guard is untouched, so a genuinely over-length encoding still errors (pinned
-    by decompiler/crates/unlace-sleigh/tests/x86_maxlen_nop_regression.rs).
+    by crates/unlace-sleigh/tests/x86_maxlen_nop_regression.rs).
 
     Bytes at 0x1000, a shrink-wrapped void f(...) matching the reported shape:
         1000  48 39 0e              CMP  qword ptr [RSI],RCX   ; guard, before

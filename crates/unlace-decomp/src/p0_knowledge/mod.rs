@@ -1,0 +1,89 @@
+//! P0 -- Knowledge & configuration plane: symbol DB, options, overrides, the stage registry.
+//!
+//! Stage-aligned module group; declared flatly at the crate root via re-export in
+//! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
+
+pub mod database;
+pub mod kuna_analysisgates;
+pub mod kuna_assert;
+mod kuna_option_dispatch;
+pub mod kuna_phases;
+pub mod kuna_restartlog;
+pub mod modes;
+pub mod options;
+pub mod overrides;
+// (kuna) i386-PIE PLT-stub decode option gate (angr test_decompiling_nl_i386_pie).
+pub mod kuna_ppc32picimports;
+// (kuna) x86-64 IFUNC (IRELATIVE) PLT-stub naming option gate (load-time, env-bridged).
+pub mod kuna_ifuncfpret;
+// (kuna) arm64e Mach-O AppleSilicon spec selection option gate (load-time, env-bridged).
+pub mod kuna_macho_arm64e;
+// (kuna) PowerPC APU-note language selection option gate (load-time, env-bridged).
+pub mod kuna_ppcapu;
+// (kuna) Relocatable-object analysis-fact rebase option gate (load-time, env-bridged).
+// (kuna) Linked-image dynamic-relocation application option gate (load-time, env-bridged).
+pub mod kuna_debuglink;
+// (kuna) Apple firmware container / kernel-collection entry selection (load-time,
+// env-bridged).
+pub mod kuna_kernelcache;
+pub mod kuna_kernelcacheboot;
+// (kuna) PE chained-`UNWIND_INFO` `.pdata` entry suppression option gate
+// (load-time, env-bridged).
+// (kuna) x86-64 PE REX-prefixed tail-jump import-thunk rejection option gate
+// (load-time, env-bridged).
+// (kuna) The source-language image fact (SourceLang) and its `sourcelang`
+// override (load-time, env-bridged).
+pub mod kuna_sourcelang;
+// (kuna) Swift symbol demangling gate (load-time, env-bridged).
+// (kuna) The Objective-C instance-layout gate's load-time half (env-bridged).
+pub mod kuna_objcivars;
+// (kuna) The Objective-C SDK header directory (`objcsdk`, load-time, env-bridged).
+pub mod kuna_objcsdk;
+// (kuna) dyld shared cache image selection + cross-image naming gates
+// (load-time, env-bridged).
+pub mod kuna_dyldcache;
+// (kuna) Mach-O export-trie naming gate (load-time, env-bridged).
+pub mod kuna_exporttrie;
+// (kuna) The Go runtime-type harvest gate (load-time, env-bridged).
+// (kuna) golang cspec auto-selection + the .abi0 stack-ABI model binding
+// (load-time, env-bridged).
+pub mod kuna_cil;
+pub mod kuna_goabi;
+// (kuna) Discriminant-value naming for recovered variant parts (load-time,
+// env-bridged; the first VariantLayout consumer).
+pub mod kuna_gopointermethod;
+pub mod kuna_gostringinput;
+pub mod kuna_gotypes;
+// (kuna) Language facets: what a C-shaped type means in the source language
+// (the VariantLayout-style side table on the type factory).
+pub mod kuna_langfacet;
+// (kuna) PE import-by-ordinal naming from built-in export tables (load-time,
+// env-bridged).
+// (kuna) DWARF aggregate-layout import option gate (load-time, env-bridged).
+// (kuna) Named libc/POSIX aggregate types in the prototype tables option gate
+// (load-time, env-bridged).
+pub mod kuna_libctypes;
+pub mod kuna_loadoptions;
+// (kuna) The prebuilt type library a load reads (`typelib`).
+pub mod kuna_typelib;
+// (kuna) DWARF variant-part (discriminated-union) import option gate
+// (load-time, env-bridged) plus the recovered-layout side table.
+pub mod kuna_dwarfvariants;
+// (kuna) DWARF full-depth type-resolution option gate (load-time, env-bridged).
+// (kuna) Degenerate-symbol-name repair option gate (load-time, env-bridged).
+pub mod kuna_symbolnamerepair;
+// (kuna) Symbol-name character sanitizer + option gate (load-time, env-bridged).
+pub mod kuna_symbolnamechars;
+pub mod kuna_uefiprotocols; // (kuna `uefi`) the interface instances an EFI module installs
+// (kuna) Symbol-name scope-path resource bound (load-time, env-bridged): the
+// ceiling on how many Scopes one qualified symbol name may nest.
+pub mod kuna_symbolnamebound;
+// (kuna) MSVC `__real@` FP-constant COMDAT recovery option gate (load-time, env-bridged).
+// (kuna) `<eval_current_prototype>`: the compiler spec's model for evaluating the
+// current function's own unknown prototype (register-parameter recovery).
+pub mod kuna_evalcurrentproto;
+// (kuna `dexmodel`) The DEX format, and the constant pool and register payloads
+// a DEX image supplies to the Dalvik spec.
+pub mod kuna_dex;
+
+pub(crate) mod kuna_wrappedstackmap;

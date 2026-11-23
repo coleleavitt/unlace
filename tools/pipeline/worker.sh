@@ -187,8 +187,8 @@ fi
 
 # --- 2. env: kuna tooling targets THIS worktree; specs reuse the main .sla --
 export KUNA_ROOT="$WT"
-export KUNA_DECOMP_DBG="$WT/decompiler/target/release/decomp_dbg"
-export KUNA_DECOMP_TEST="$WT/decompiler/target/release/decomp_test_dbg"
+export KUNA_DECOMP_DBG="$WT/target/release/decomp_dbg"
+export KUNA_DECOMP_TEST="$WT/target/release/decomp_test_dbg"
 export KUNA_SPECS="$REPO/specs"          # reuse the main tree's already-compiled .sla
 export SLEIGHHOME="$REPO/specs"
 export KUNA_PIPELINE_ANGR_PYTHON="${KUNA_PIPELINE_ANGR_PYTHON:-$HOME/.virtualenvs/decbench/bin/python}"
@@ -200,13 +200,13 @@ export KUNA_PIPELINE_ANGR_PYTHON="${KUNA_PIPELINE_ANGR_PYTHON:-$HOME/.virtualenv
 #    so debug info is off and target/debug is removed on EVERY exit path (success, timeout,
 #    crash) via the trap -- not only on the happy path.
 export CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0
-cleanup_target() { rm -rf "$WT/decompiler/target/debug" 2>/dev/null; }
+cleanup_target() { rm -rf "$WT/target/debug" 2>/dev/null; }
 trap cleanup_target EXIT
 # 2. KUNA_SPECS/SLEIGHHOME do NOT reach the cargo workspace suite: ~22 targets resolve
 #    <repo>/specs relative to their own crate and fail with "Could not find .sla file". The
 #    .sla are gitignored artifacts inside the TRACKED specs/Ghidra tree, so they are linked
 #    file by file -- symlinking the directory just nests a dead link inside it, and
-#    `make specs` must never run in a worktree.
+#    `target/release/slacomp -a specs` must never run in a worktree.
 link_specs() {
   local n=0 rel
   while IFS= read -r sla; do
@@ -218,12 +218,12 @@ link_specs() {
 }
 SLA_N="$(link_specs)"
 log "linked $SLA_N compiled .sla into the worktree"
-[ "$SLA_N" = "0" ] && log "WARNING: no .sla in $REPO/specs -- run \`make specs\` in the MAIN tree first"
+[ "$SLA_N" = "0" ] && log "WARNING: no .sla in $REPO/specs -- run \`target/release/slacomp -a specs\` in the MAIN tree first"
 
 # --- 3. initial build so the worker's analyze phase has working binaries ----
 log "building binaries in worktree (initial)"
 "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --phase setup >>"$LOG" 2>&1
-( cd "$WT" && make binaries ) >>"$LOG" 2>&1 || {
+( cd "$WT" && cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli ) >>"$LOG" 2>&1 || {
   log "initial build failed"
   "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "initial build failed"
   exit 1
@@ -431,7 +431,7 @@ print(w.get("phase") or "unknown")' 2>/dev/null || echo unknown)"
     if git -C "$WT" commit -q \
          -m "[AUTOMATED] WIP UNFINISHED, DO NOT MERGE: $SLUG stopped in phase $WT_PHASE" \
          -m "Crash-preservation snapshot written by tools/pipeline/worker.sh, not by the builder. The session ended before finishing: $NOTE" \
-         -m "NOTHING HERE IS VERIFIED. No build, no make test / test-stages / rust-test / check-spec, no counters --fix, no mergecheck, no acceptance probe. Raw material for a resuming builder, never a reviewable change." \
+         -m "NOTHING HERE IS VERIFIED. No build, no cargo test -p unlace-cli --test parity datatests / test-stages / rust-test / check-spec, no counters --fix, no mergecheck, no acceptance probe. Raw material for a resuming builder, never a reviewable change." \
          >>"$LOG" 2>&1; then
       log "preserved uncommitted work as WIP commit $(git -C "$WT" rev-parse --short HEAD) on $BRANCH"
     else

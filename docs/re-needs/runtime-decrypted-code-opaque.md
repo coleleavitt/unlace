@@ -14,7 +14,7 @@ rounds: [1, 2]
 first_seen_round: 1
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: large
 regression_of: null
 pr: null
@@ -134,6 +134,6 @@ _not yet refuted_
   the indirect call to be typed. RECORDED RISK: a builder may reasonably argue this bar is not
   reachable by a decompiler and propose a weaker one; that argument belongs in a proposal PR with
   evidence, not in a silent probe rewrite.
-- round 2 wave 20 (captain): `touches` LEFT as filed (`[decompiler/crates/unlace-decomp]`). I have measured evidence of the
+- round 2 wave 20 (captain): `touches` LEFT as filed (`[crates/unlace-decomp]`). I have measured evidence of the
   symptom but none of the owning module, and a confidently-wrong `touches` would misdirect a
   builder and mis-scope its leases. The builder should set it from its own root-cause work.

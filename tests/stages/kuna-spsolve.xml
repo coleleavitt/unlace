@@ -37,7 +37,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/spsolve_elf_i386</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/spsolve_elf_i386</com>
   <com>option spsolve off</com>
   <com>option calleeretpurge off</com>
   <com>read symbols</com>
@@ -51,7 +51,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/spsolve_elf_i386</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/spsolve_elf_i386</com>
   <com>option calleeretpurge off</com>
   <com>read symbols</com>
   <com>load function caller_sret</com>

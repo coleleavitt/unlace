@@ -53,6 +53,11 @@ pub(crate) fn spanned(spans: &[(usize, usize)], start: usize) -> bool {
     spans.iter().any(|&(lo, hi)| lo <= start && start < hi)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.revisitrefine_spanned = Some(spanned);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

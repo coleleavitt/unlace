@@ -127,6 +127,11 @@ pub fn stack_section_split(active: &ParamActive, start: int4, stop: int4) -> Opt
     None
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.varargstackargs_stack_section_split = Some(stack_section_split);
+}
+
 #[cfg(test)]
 #[path = "kuna_varargstackargs/tests.rs"]
 mod tests;

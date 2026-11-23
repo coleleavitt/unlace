@@ -1819,9 +1819,11 @@ fn eligible_callees(
         {
             continue;
         }
-        if crate::p4_calls::kuna_protoorder::stated_key(&entry)
-            .is_some_and(|key| arch.kuna_protoorder_types.contains_key(&key))
-        {
+        if crate::p4_calls::kuna_protoorder::stated_key(&entry).is_some_and(|key| {
+            arch.kuna_tables
+                .get::<crate::kuna_protoorder::CalleeTypes>()
+                .contains_key(&key)
+        }) {
             continue;
         }
         entries.push(entry);
@@ -1874,7 +1876,10 @@ fn bootstrap_split_callees(
     if entries.is_empty() {
         return;
     }
-    let prior = std::mem::take(&mut arch.kuna_protoorder_types);
+    let prior = std::mem::take(
+        arch.kuna_tables
+            .get_mut::<crate::kuna_protoorder::CalleeTypes>(),
+    );
     let mut recovered = Vec::new();
     for entry in entries {
         if *budget == 0 || deadline_passed() {
@@ -1885,7 +1890,9 @@ fn bootstrap_split_callees(
             recovered.push((entry, stated, calls));
         }
     }
-    arch.kuna_protoorder_types = prior;
+    *arch
+        .kuna_tables
+        .get_mut::<crate::kuna_protoorder::CalleeTypes>() = prior;
     let mut any_stated = false;
     let cyclic = contract_cycles(&root_entry, &recovered);
     for (entry, stated, _) in recovered {
@@ -1895,7 +1902,9 @@ fn bootstrap_split_callees(
             continue;
         };
         if !cyclic.contains(&key) {
-            arch.kuna_protoorder_types.insert(key, stated);
+            arch.kuna_tables
+                .get_mut::<crate::kuna_protoorder::CalleeTypes>()
+                .insert(key, stated);
             any_stated = true;
         }
     }
@@ -1966,7 +1975,10 @@ fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
     if entries.is_empty() {
         return;
     }
-    let prior = std::mem::take(&mut arch.kuna_protoorder_types);
+    let prior = std::mem::take(
+        arch.kuna_tables
+            .get_mut::<crate::kuna_protoorder::CalleeTypes>(),
+    );
     let mut stated = Vec::new();
     for entry in entries.into_iter().take(MAX_TAIL_CONTRACTS) {
         if deadline_passed() {
@@ -1984,8 +1996,12 @@ fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
             }
         }
     }
-    arch.kuna_protoorder_types = prior;
-    arch.kuna_protoorder_types.extend(stated);
+    *arch
+        .kuna_tables
+        .get_mut::<crate::kuna_protoorder::CalleeTypes>() = prior;
+    arch.kuna_tables
+        .get_mut::<crate::kuna_protoorder::CalleeTypes>()
+        .extend(stated);
 }
 
 /// (kuna `gottailcall`, single-function drive) Decompile `entry`, a known
@@ -1999,7 +2015,10 @@ fn recover_got_callee(
     if deadline_passed() {
         return None;
     }
-    let prior = std::mem::take(&mut arch.kuna_protoorder_types);
+    let prior = std::mem::take(
+        arch.kuna_tables
+            .get_mut::<crate::kuna_protoorder::CalleeTypes>(),
+    );
     let got = recover_one_contract(
         arch,
         &prior,
@@ -2007,11 +2026,15 @@ fn recover_got_callee(
         Some(MAX_TAIL_CALLEE_INSTRUCTIONS),
         true,
     );
-    arch.kuna_protoorder_types = prior;
+    *arch
+        .kuna_tables
+        .get_mut::<crate::kuna_protoorder::CalleeTypes>() = prior;
     let (stated, _, callee) = got?;
     if let (Some(types), Some(key)) = (stated, crate::p4_calls::kuna_protoorder::stated_key(entry))
     {
-        arch.kuna_protoorder_types.insert(key, types);
+        arch.kuna_tables
+            .get_mut::<crate::kuna_protoorder::CalleeTypes>()
+            .insert(key, types);
     }
     callee
 }
@@ -2039,7 +2062,9 @@ fn recover_one_contract(
     Vec<Address>,
     Option<crate::kuna_gottailcall::Callee>,
 )> {
-    arch.kuna_protoorder_types = prior.clone();
+    *arch
+        .kuna_tables
+        .get_mut::<crate::kuna_protoorder::CalleeTypes>() = prior.clone();
     let saved_deadline = arch.kuna_fn_deadline;
     let saved_action = arch.allacts.get_current_name().to_string();
     let saved_max_instructions = arch.max_instructions;
@@ -2073,8 +2098,12 @@ fn recover_one_contract(
             callee.get_func_proto(),
             crate::p4_calls::kuna_protoorder::ProtoOrderMode::Types,
         );
-        let stated = crate::p4_calls::kuna_protoorder::stated_key(entry)
-            .and_then(|key| arch.kuna_protoorder_types.get(&key).cloned());
+        let stated = crate::p4_calls::kuna_protoorder::stated_key(entry).and_then(|key| {
+            arch.kuna_tables
+                .get::<crate::kuna_protoorder::CalleeTypes>()
+                .get(&key)
+                .cloned()
+        });
         let got = if file_got {
             crate::kuna_gottailcall::callable_by_recovery(arch, entry, &callee)
         } else {

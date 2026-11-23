@@ -24,3 +24,15 @@ fn a_state_reads_as_none_until_set_and_a_clone_shares_it() {
     assert!(states.get::<Table>().is_none());
     assert!(copy.get::<Table>().is_some());
 }
+
+#[derive(Default)]
+struct Ledger(Vec<u32>);
+crate::kuna_arch_table!(Ledger);
+
+#[test]
+fn a_table_starts_at_its_default_and_keeps_writes() {
+    let mut tables = ArchTables::default();
+    assert!(tables.get::<Ledger>().0.is_empty());
+    tables.get_mut::<Ledger>().0.push(4);
+    assert_eq!(tables.get::<Ledger>().0, vec![4]);
+}

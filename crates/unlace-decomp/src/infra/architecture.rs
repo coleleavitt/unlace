@@ -428,6 +428,9 @@ pub struct Architecture {
     /// compiled `<segmentop>` definitions, call mechanisms and jump assists, built while the
     /// specs load and shared with every per-function context.
     pub(crate) kuna_states: crate::kuna_archstate::ArchStates,
+    /// (kuna) The kuna passes' run-wide ledgers and caches ([`crate::kuna_archstate::ArchTables`]),
+    /// one per table type, created on first use.
+    pub kuna_tables: crate::kuna_archstate::ArchTables,
     /// (kuna `fpuemu`) The loader found 8087-emulator code in the image, which
     /// `auto` decodes by.
     pub fpu_emu_evidence: bool,
@@ -582,44 +585,12 @@ pub struct Architecture {
     /// ([`ActionContext::deadline`](crate::action::ActionContext)).  Always
     /// `None` when no budget is set.
     pub kuna_fn_deadline: Option<std::time::Instant>,
-    /// (kuna `rustabi`) Per-image cache of the callee-body probe
-    /// ([`crate::kuna_rustabi::probe_callee_return_writes`]), keyed by the
-    /// callee's `(space index, entry offset)`.  Each distinct function body is
-    /// decoded at most once for the whole run, which is what keeps the probe off
-    /// the critical path of a whole-binary `decompile-all`.  Stays empty unless
-    /// `option rustabi` is live.
-    pub kuna_callee_write_cache: std::collections::HashMap<
-        (int4, uintb),
-        std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
-    >,
     /// (kuna `calleeretpurge`) Per-image cache of each direct callee's decoded
     /// return purge, keyed by `(space index, entry offset)`.
     pub kuna_callee_purge_cache: std::collections::HashMap<(int4, uintb), Option<int4>>,
     /// (kuna `importvote`) The direct call sites of each PLT import, by stub
     /// `(space index, offset)`, committed by the analysis tier.
     pub kuna_import_sites: Rc<std::collections::HashMap<(int4, u64), Vec<u64>>>,
-    /// (kuna `bejoin evidence`) Per-image cache of the wide-return proof
-    /// ([`crate::kuna_bejoin::seed_wide_returns`]): the model's pair, each
-    /// function's verdict, keyed by its `(space index, entry offset)` so a
-    /// function and every caller of it read the same one, and the instructions
-    /// the walks decoded.
-    pub kuna_wide: crate::kuna_bejoin::WideCache,
-    /// Immutable whole-image caller proof, published before any function renders.
-    pub kuna_callwide: crate::p4_calls::kuna_callwide::ProofSlot,
-    /// (kuna `calleedeadarg`) Per-image cache of the callee entry-liveness probe
-    /// ([`crate::kuna_calleedeadarg::probe_callee_entry_dead`]), keyed by the
-    /// callee's `(space index, entry offset)`.  Each distinct function body is
-    /// decoded at most once for the whole run, which is what keeps the probe off
-    /// the critical path of a whole-binary `decompile-all`.  Stays empty unless
-    /// `option calleedeadarg` is live.
-    pub kuna_callee_dead_cache: std::collections::HashMap<
-        (int4, uintb),
-        std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>,
-    >,
-    pub kuna_callee_memory_cache: std::collections::HashMap<
-        (int4, uintb),
-        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
-    >,
     /// (kuna `swiftcall`) Per-image cache of whether a callee's body leaves
     /// `swiftself` unread ([`crate::kuna_swiftcall::seed_self_readers`]).
     pub kuna_swift_self_first_cache: std::collections::HashMap<(int4, uintb), bool>,
@@ -629,22 +600,6 @@ pub struct Architecture {
     pub kuna_swift_self_reads: std::collections::BTreeMap<(int4, uintb), bool>,
     /// (kuna `swiftcall`) The same for `swiftasync`.
     pub kuna_swift_async_reads: std::collections::BTreeMap<(int4, uintb), bool>,
-    /// (kuna `argclobber`) Per-image cache of the forwarding resolution
-    /// ([`crate::kuna_calleedeadarg::resolve_forward_transfer`]) — what a value
-    /// the caller leaves in a register can reach once the callee at `(space
-    /// index, entry offset)` has it, following its direct calls.  Stays empty
-    /// unless `option argclobber` is live with a prototype parked.
-    pub kuna_callee_forward_cache: std::collections::HashMap<
-        (int4, uintb),
-        std::rc::Rc<crate::kuna_calleedeadarg::ForwardTransfer>,
-    >,
-    /// (kuna `protoorder types`) The recovered parameter types each callee stated
-    /// for the callers decompiled after it, keyed by `(space index, entry
-    /// offset)`.  Copied per function by `seed_protoorder_types`.
-    pub kuna_protoorder_types: std::collections::HashMap<
-        (int4, uintb),
-        std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
-    >,
     /// (kuna `protoorder`) A batch drive with no callee-first order behind it
     /// (a narrowed `decompile-all`, `unlace decompile --json`) states its tail
     /// callees first as a single-function drive does.  Driver state, not an
@@ -678,40 +633,6 @@ pub struct Architecture {
     /// that caller states nothing.
     pub kuna_custom_reg_calls:
         std::collections::HashMap<uintb, std::collections::BTreeSet<(uintb, uintb)>>,
-    /// (kuna) Each x86-32 callee's stack effect read off its own code; see
-    /// [`crate::kuna_calleepurge`].
-    pub kuna_callee_purge: RefCell<crate::kuna_calleepurge::Cache>,
-    /// (kuna `callbacktype`) The whole-binary run's record of the constants
-    /// declared callback slots carried.
-    pub kuna_callbacktype: crate::kuna_callbacktype::Ledger,
-    /// (kuna `calleevote`) The whole-binary run's record of call arguments and
-    /// what the callers stated.
-    pub kuna_calleevote: crate::kuna_calleevote::Ledger,
-    /// (kuna `narrowargs callers`) The whole-binary run's record of what each
-    /// call passes in its argument registers, and the parameters it narrows.
-    pub kuna_callerargs: crate::kuna_callerargs::Ledger,
-    /// (kuna `callrettype`) The recovered return value each callee stated for
-    /// the callers decompiled after it.  Copied per function by
-    /// [`crate::kuna_callrettype::seed`].
-    pub kuna_callret_types: crate::kuna_callrettype::StatedReturns,
-    /// (kuna `narrowret`) The narrow value each callee returns zero-extended,
-    /// for the callers decompiled after it.  Copied per function by
-    /// [`crate::kuna_narrowret::seed`].
-    pub kuna_narrowret: crate::kuna_narrowret::NarrowReturns,
-    /// (kuna `callrettype`) The (caller, callee) pairs whose statement the
-    /// caller's finished variables contradicted ([`crate::kuna_callrettype::refuse`]).
-    pub kuna_callret_refused: std::collections::HashSet<crate::kuna_callrettype::Refusal>,
-    /// (kuna `voidret`) The void functions a caller reads a result from, and the
-    /// storage each is decompiled again to return in.
-    pub kuna_voidret: crate::kuna_voidret::Ledger,
-    /// (kuna `gottailcall`) What a callee-first run filed for one-destination
-    /// tail calls, and the callers waiting to be decompiled again.
-    pub kuna_gottailcall: crate::kuna_gottailcall::Ledger,
-    /// (kuna `elemptr`) What each function of a batch said about each global,
-    /// and the globals each must not type because another disagrees.
-    pub kuna_elemptr: crate::kuna_elemptr::Ledger,
-    /// (kuna `storetype`) The globals a batch stored typed values into.
-    pub kuna_storetype: crate::kuna_storetype::Ledger,
     /// (ghidra-mode, Phase 4) Name recommendations staged for the NEXT
     /// decompile drive — `(name, storage addr, usepoint, size)`, taken (and
     /// cleared) by `decompile_func_full_with_override_dyn` and seeded into the
@@ -1304,6 +1225,7 @@ impl Architecture {
             fpu_emu_evidence: false,
             mz_dgroup: None,
             kuna_states: Default::default(),
+            kuna_tables: Default::default(),
             image_os_userland: false, // (kuna) a load-time fact; set by the console's `load file`
             image_linux_elf: false,   // (kuna) a load-time fact; set by the console's `load file`
             image_elf: false,         // (kuna) a load-time fact; set by the console's `load file`
@@ -1349,18 +1271,11 @@ impl Architecture {
             cortexmpriv_inject: None, // (kuna) set by init_userops_and_fixups when the language declares the user-op
             kuna_fn_budget: None,     // (kuna) decompile-all watchdog: no budget by default
             kuna_fn_deadline: None,   // (kuna) set per drive from kuna_fn_budget
-            kuna_callee_write_cache: std::collections::HashMap::new(),
             kuna_callee_purge_cache: std::collections::HashMap::new(),
             kuna_import_sites: Rc::new(std::collections::HashMap::new()),
-            kuna_wide: crate::kuna_bejoin::WideCache::default(),
-            kuna_callwide: crate::p4_calls::kuna_callwide::ProofSlot::default(),
-            kuna_callee_dead_cache: std::collections::HashMap::new(),
-            kuna_callee_memory_cache: std::collections::HashMap::new(),
             kuna_swift_self_first_cache: std::collections::HashMap::new(),
             kuna_swift_self_reads: std::collections::BTreeMap::new(),
             kuna_swift_async_reads: std::collections::BTreeMap::new(),
-            kuna_callee_forward_cache: std::collections::HashMap::new(),
-            kuna_protoorder_types: std::collections::HashMap::new(),
             kuna_tail_callee_batch: false,
             kuna_vfp_variadic: RefCell::new(None),
             kuna_callee_reginputs: RefCell::new(std::collections::HashMap::new()),
@@ -1368,17 +1283,6 @@ impl Architecture {
             kuna_custom_reg_models: Rc::new(std::collections::HashMap::new()),
             kuna_custom_reg_reads: std::collections::HashMap::new(),
             kuna_custom_reg_calls: std::collections::HashMap::new(),
-            kuna_callee_purge: RefCell::new(crate::kuna_calleepurge::Cache::default()),
-            kuna_callbacktype: crate::kuna_callbacktype::Ledger::default(),
-            kuna_calleevote: crate::kuna_calleevote::Ledger::default(),
-            kuna_callerargs: crate::kuna_callerargs::Ledger::default(),
-            kuna_callret_types: std::collections::HashMap::new(),
-            kuna_narrowret: std::collections::HashMap::new(),
-            kuna_callret_refused: std::collections::HashSet::new(),
-            kuna_voidret: Default::default(),
-            kuna_gottailcall: Default::default(),
-            kuna_elemptr: crate::kuna_elemptr::Ledger::default(),
-            kuna_storetype: crate::kuna_storetype::Ledger::default(),
             kuna_pending_name_recs: Vec::new(), // (ghidra Phase 4) staged per drive
             kuna_pending_dyn_recs: Vec::new(),  // (ghidra Phase 4) staged per drive
             kuna_pending_proto_model: None,     // (ghidra Phase 4) staged per drive
@@ -1509,7 +1413,9 @@ impl Architecture {
         (self.pass_hooks().fpuemu_apply)(self);
         (self.pass_hooks().mzdgroup_apply)(self);
 
-        self.kuna_callwide.clear();
+        self.kuna_tables
+            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .clear();
 
         self.analyze_for_loops = true;
         self.readonlypropagate = false;
@@ -1708,7 +1614,9 @@ impl Architecture {
 
     /// Mutably borrow the disassembly engine.
     pub fn translate_mut(&mut self) -> &mut dyn EngineTranslate {
-        self.kuna_callwide.clear();
+        self.kuna_tables
+            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .clear();
         &mut *self.translate
     }
 
@@ -1842,7 +1750,10 @@ impl Architecture {
         if let Some(remote) = &self.remote_scope {
             remote.clear();
         }
-        self.kuna_callee_purge.get_mut().forget_walks();
+        self.kuna_tables
+            .get_mut::<crate::kuna_calleepurge::CacheCell>()
+            .get_mut()
+            .forget_walks();
         self.types.clear_noncore();
         self.commentdb.clear();
         self.string_manager.borrow_mut().base.clear();
@@ -3849,7 +3760,9 @@ impl Architecture {
     /// `Sleigh::set_loader`, matching the C++ `restoreFromSpec` handing the
     /// loader to the translator.
     pub fn set_loader(&mut self, loader: Box<dyn unlace_sleigh::loadimage::LoadImage>) {
-        self.kuna_callwide.clear();
+        self.kuna_tables
+            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .clear();
         self.translate.set_loader(loader);
     }
 
@@ -3877,7 +3790,9 @@ impl Architecture {
         &self,
         f: impl FnOnce(&mut dyn unlace_sleigh::globalcontext::ContextDatabase) -> R,
     ) -> R {
-        self.kuna_callwide.revoke();
+        self.kuna_tables
+            .get::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .revoke();
         // The engine boundary exposes the object-safe `with_context_db_dyn` (a
         // `&mut dyn FnMut`, so it survives the `Box<dyn EngineTranslate>` trait
         // object); adapt the generic, value-returning closure over it.  The
@@ -3975,7 +3890,9 @@ impl Architecture {
             .get(name)
             .is_some_and(|old| Rc::ptr_eq(old, &model))
         {
-            self.kuna_callwide.clear();
+            self.kuna_tables
+                .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+                .clear();
         }
         self.declared_proto_models.insert(name.to_string(), model);
     }
@@ -3994,7 +3911,9 @@ impl Architecture {
                 .get(&(space.get_index(), addr.get_offset()))
                 .is_some_and(|old| Rc::ptr_eq(old, &model))
             {
-                self.kuna_callwide.clear();
+                self.kuna_tables
+                    .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+                    .clear();
             }
             self.declared_proto_models_at
                 .insert((space.get_index(), addr.get_offset()), model);
@@ -4008,7 +3927,9 @@ impl Architecture {
             .get(model.get_name())
             .is_some_and(|old| Rc::ptr_eq(old, &model))
         {
-            self.kuna_callwide.clear();
+            self.kuna_tables
+                .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+                .clear();
         }
         self.proto_models
             .insert(model.get_name().to_string(), model);
@@ -4022,7 +3943,9 @@ impl Architecture {
             .as_ref()
             .is_some_and(|old| Rc::ptr_eq(old, &model))
         {
-            self.kuna_callwide.clear();
+            self.kuna_tables
+                .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+                .clear();
         }
         self.defaultfp = Some(model);
     }
@@ -4278,7 +4201,9 @@ impl Architecture {
     /// alongside it.  Otherwise a name-only default model is registered so the
     /// engine still has a non-null `defaultfp`.
     pub fn build_default_proto(&mut self) {
-        self.kuna_callwide.clear();
+        self.kuna_tables
+            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .clear();
         // One parse of the cspec document feeds all three readers below: the
         // top-level <returnaddress> (C++ `Architecture::decodeReturnAddress`,
         // architecture.cc:902), the <default_proto> model, and the named models.
@@ -4344,7 +4269,9 @@ impl Architecture {
     /// from `SleighArchitecture::build_spec_file`) and hands it here before
     /// [`init_post_engine`](Architecture::init_post_engine).
     pub fn set_cspec_xml(&mut self, xml: Vec<u8>) {
-        self.kuna_callwide.clear();
+        self.kuna_tables
+            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .clear();
         self.cspec_xml = Some(xml);
     }
 
@@ -6038,7 +5965,9 @@ impl ArchOptionContext for Architecture {
     }
     fn set_flow_options(&mut self, val: uint4) {
         if self.flowoptions != val {
-            self.kuna_callwide.clear();
+            self.kuna_tables
+                .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+                .clear();
         }
         self.flowoptions = val;
     }
@@ -6067,7 +5996,9 @@ impl ArchOptionContext for Architecture {
 
     // --- prototype models (C++ defaultfp / evalfp_current) -----------------
     fn set_default_extra_pop(&mut self, expop: int4) {
-        self.kuna_callwide.clear();
+        self.kuna_tables
+            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .clear();
         // C++ `glb->defaultfp->setExtraPop(expop)` (+ eval-model spreads).
         // The registry holds the model behind `Rc`; mutate the shared model
         // (and keep the registry entry pointing at the same data via the same
@@ -6085,7 +6016,9 @@ impl ArchOptionContext for Architecture {
         // C++ `OptionExtraPop::apply`: queryFunction(name), then
         // `getFuncProto().setExtraPop(expop)`; parked on the symbol like inline.
         let sid = self.query_global_function(name)?;
-        self.kuna_callwide.clear();
+        self.kuna_tables
+            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .clear();
         self.symboltab.set_function_extra_pop(sid, expop);
         Ok(())
     }
@@ -6111,7 +6044,9 @@ impl ArchOptionContext for Architecture {
                     .as_ref()
                     .is_some_and(|old| Rc::ptr_eq(old, &model))
                 {
-                    self.kuna_callwide.clear();
+                    self.kuna_tables
+                        .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+                        .clear();
                 }
                 self.evalfp_current = Some(model);
                 Ok(())
@@ -6126,14 +6061,18 @@ impl ArchOptionContext for Architecture {
         // The FunctionSymbol's lazily-built Funcdata/FuncProto is W5; the inline flag
         // is parked on the symbol (read back by FlowInfo::queryCall at flow time).
         let sid = self.query_global_function(name)?;
-        self.kuna_callwide.clear();
+        self.kuna_tables
+            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .clear();
         self.symboltab.set_function_inline(sid, val);
         Ok(())
     }
     fn set_function_no_return(&mut self, name: &str, val: bool) -> KunaResult<()> {
         // C++ `OptionNoReturn::apply`: same shape as OptionInline, but setNoReturn.
         let sid = self.query_global_function(name)?;
-        self.kuna_callwide.clear();
+        self.kuna_tables
+            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .clear();
         self.symboltab.set_function_no_return(sid, val);
         Ok(())
     }

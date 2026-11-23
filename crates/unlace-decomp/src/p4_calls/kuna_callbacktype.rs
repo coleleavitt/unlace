@@ -744,7 +744,12 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
     let other_use = other_uses(fd, &found, &accounted);
     let reads = return_reads(fd);
     let calls = direct_calls(fd);
-    let own = if arch.kuna_callbacktype.own.contains_key(&me) {
+    let own = if arch
+        .kuna_tables
+        .get::<crate::kuna_callbacktype::Ledger>()
+        .own
+        .contains_key(&me)
+    {
         None
     } else {
         let proto = fd.get_func_proto();
@@ -783,7 +788,9 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
             printed: printed_sig(proto),
         })
     };
-    let ledger = &mut arch.kuna_callbacktype;
+    let ledger = arch
+        .kuna_tables
+        .get_mut::<crate::kuna_callbacktype::Ledger>();
     let mut row = CallerFacts {
         facts: found,
         other_use,
@@ -1752,7 +1759,12 @@ pub fn park(
     name: &str,
     image: ImageFacts,
 ) -> Result<PrototypePieces, Decline> {
-    let Some(row) = arch.kuna_callbacktype.decided().remove(&entry.get_offset()) else {
+    let Some(row) = arch
+        .kuna_tables
+        .get::<crate::kuna_callbacktype::Ledger>()
+        .decided()
+        .remove(&entry.get_offset())
+    else {
         return Err(Decline::NotATarget);
     };
     if !image.is_target {
@@ -1773,7 +1785,8 @@ pub fn park(
     }
     let key = key_of(entry).ok_or(Decline::StorageUnderivable)?;
     let own = arch
-        .kuna_callbacktype
+        .kuna_tables
+        .get::<crate::kuna_callbacktype::Ledger>()
         .own
         .get(&key)
         .cloned()
@@ -1796,7 +1809,8 @@ pub fn park(
         return Err(why);
     }
     if arch
-        .kuna_callbacktype
+        .kuna_tables
+        .get::<crate::kuna_callbacktype::Ledger>()
         .reads_of(entry.get_offset())
         .any(|read| declared_out.is_none_or(|declared| !contains(declared, read)))
     {
@@ -1805,7 +1819,7 @@ pub fn park(
     if image.called_directly {
         let returns = row.sig.ret != Ty::Void;
         let callers = image.callers.as_deref();
-        let ledger = &arch.kuna_callbacktype;
+        let ledger = arch.kuna_tables.get::<crate::kuna_callbacktype::Ledger>();
         if let Some(why) =
             ledger.direct_calls_disagree(entry.get_offset(), callers, pieces.intypes.len(), returns)
         {
@@ -1832,9 +1846,16 @@ pub fn park(
     // statement and `calleevote`'s decision would otherwise still type the
     // parameters, and a parked callback that calls another reads both.
     if let Some(key) = crate::kuna_protoorder::stated_key(entry) {
-        arch.kuna_protoorder_types.remove(&key);
-        arch.kuna_calleevote.forget(key);
-        arch.kuna_calleevote.own.remove(&key);
+        arch.kuna_tables
+            .get_mut::<crate::kuna_protoorder::CalleeTypes>()
+            .remove(&key);
+        arch.kuna_tables
+            .get_mut::<crate::kuna_calleevote::Ledger>()
+            .forget(key);
+        arch.kuna_tables
+            .get_mut::<crate::kuna_calleevote::Ledger>()
+            .own
+            .remove(&key);
     }
     Ok(pieces)
 }
@@ -1855,6 +1876,8 @@ impl crate::kuna_optionset::KunaOption for CallbackTypeMode {
         Ok(crate::kuna_callbacktype::OptionCallbackType.apply(value)?)
     }
 }
+
+crate::kuna_arch_table!(Ledger);
 
 #[cfg(test)]
 mod tests;

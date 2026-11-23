@@ -391,14 +391,26 @@ fn walk_options(arch: &Architecture) -> u8 {
 fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) {
     let off = entry.get_offset();
     let options = walk_options(arch);
-    if arch.kuna_callee_purge.borrow().tracked != Some(options) {
-        let mut cache = arch.kuna_callee_purge.borrow_mut();
+    if arch
+        .kuna_tables
+        .get::<crate::kuna_calleepurge::CacheCell>()
+        .borrow()
+        .tracked
+        != Some(options)
+    {
+        let mut cache = arch
+            .kuna_tables
+            .get::<crate::kuna_calleepurge::CacheCell>()
+            .borrow_mut();
         cache.tracked = Some(options);
         cache.whole.clear();
         cache.cut.clear();
     }
     {
-        let cache = arch.kuna_callee_purge.borrow();
+        let cache = arch
+            .kuna_tables
+            .get::<crate::kuna_calleepurge::CacheCell>()
+            .borrow();
         if let Some(&(hit, need)) = cache.whole.get(&off).filter(|(_, need)| *need <= depth) {
             return (hit, need);
         }
@@ -419,7 +431,10 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
     } else {
         walk(arch, entry, depth).unwrap_or((UNKNOWN, 0))
     };
-    let mut cache = arch.kuna_callee_purge.borrow_mut();
+    let mut cache = arch
+        .kuna_tables
+        .get::<crate::kuna_calleepurge::CacheCell>()
+        .borrow_mut();
     if found.1 <= depth {
         cache.whole.insert(off, found);
     } else {
@@ -433,7 +448,13 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
 /// is otherwise unknown. Cached with the walks.
 fn slot_effect(arch: &Architecture, slot: &Address) -> Summary {
     let key = (slot.get_offset(), CUT);
-    if let Some(&hit) = arch.kuna_callee_purge.borrow().cut.get(&key) {
+    if let Some(&hit) = arch
+        .kuna_tables
+        .get::<crate::kuna_calleepurge::CacheCell>()
+        .borrow()
+        .cut
+        .get(&key)
+    {
         return hit;
     }
     let found = if crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, slot) {
@@ -444,13 +465,23 @@ fn slot_effect(arch: &Architecture, slot: &Address) -> Summary {
     } else {
         UNKNOWN
     };
-    arch.kuna_callee_purge.borrow_mut().cut.insert(key, found);
+    arch.kuna_tables
+        .get::<crate::kuna_calleepurge::CacheCell>()
+        .borrow_mut()
+        .cut
+        .insert(key, found);
     found
 }
 
 /// The instruction at `at`, decoded once for every walk that reaches it.
 fn decode(arch: &Architecture, space: &Rc<AddrSpace>, at: uintb) -> Option<Decoded> {
-    if let Some(hit) = arch.kuna_callee_purge.borrow().decoded.get(&at) {
+    if let Some(hit) = arch
+        .kuna_tables
+        .get::<crate::kuna_calleepurge::CacheCell>()
+        .borrow()
+        .decoded
+        .get(&at)
+    {
         return Some(hit.clone());
     }
     let mut collect = Collect::default();
@@ -459,7 +490,10 @@ fn decode(arch: &Architecture, space: &Rc<AddrSpace>, at: uintb) -> Option<Decod
         .one_instruction(&mut collect, &Address::new(space.clone(), at))
         .ok()?;
     let found: Decoded = Rc::new((collect.0, len.max(1) as uintb));
-    let mut cache = arch.kuna_callee_purge.borrow_mut();
+    let mut cache = arch
+        .kuna_tables
+        .get::<crate::kuna_calleepurge::CacheCell>()
+        .borrow_mut();
     if cache.decoded.len() >= DECODED {
         cache.decoded.clear();
     }
@@ -1281,6 +1315,11 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
         need,
     ))
 }
+
+/// (kuna) Each x86-32 callee's stack effect read off its own code, shared through `&Architecture`;
+/// an [`ArchTable`](crate::kuna_archstate::ArchTable).
+pub type CacheCell = std::cell::RefCell<Cache>;
+crate::kuna_arch_table!(CacheCell);
 
 #[cfg(test)]
 mod tests;

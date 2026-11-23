@@ -142,8 +142,6 @@ pub struct State {
     applied: std::collections::HashMap<crate::context::OpId, i32>,
     entry: Option<i32>,
     pub failure: Option<String>,
-    /// (kuna `dexmodel`) The DEX `uponentry` copies are in.
-    pub dex_entry: bool,
 }
 
 crate::kuna_func_state!(State, keep_across_clear: false);
@@ -718,6 +716,7 @@ impl Mechanisms {
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.callmechanisms_requires_reflow = Some(requires_reflow);
     hooks.callmechanisms_failed = Some(failed);
+    hooks.callmechanisms_install_at_entry = Some(install_at_entry);
 }
 
 impl crate::kuna_optionset::KunaOption for CallMechanismMode {

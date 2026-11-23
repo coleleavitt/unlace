@@ -280,6 +280,9 @@ declare_hooks! {
     callmechanisms_requires_reflow: fn(&crate::fspec::FuncProto, &crate::fspec::FuncProto) -> bool;
     /// `kuna_callmechanisms::failed`: installing a call mechanism failed, so the pipeline stops.
     callmechanisms_failed: fn(&Funcdata) -> bool;
+    /// `kuna_callmechanisms::install_at_entry`: straight-line p-code at the start of a block.
+    callmechanisms_install_at_entry:
+        fn(&mut Funcdata, BlockId, &[crate::kuna_emittedop::Operation]) -> KunaResult<()>;
     /// `kuna_dynamiclocals::bind`.
     dynamiclocals_bind: fn(&mut Funcdata, VarnodeId, &SymbolEntry) -> KunaResult<bool>;
     /// `kuna_highslice_guard::matches`.

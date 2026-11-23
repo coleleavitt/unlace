@@ -4279,3 +4279,57 @@ bounded walk and does not prove all dynamic execution paths.
 When raw-pcode receives an odd ARM32 code pointer, its private decode context
 starts in Thumb mode at the corresponding even byte address. The mode seed is
 scoped to that query and leaves the loaded program's context unchanged.
+
+## 0.10 Maturity levels
+
+Hex-Rays gives its microcode a *maturity* (`MMAT_GENERATED` … `MMAT_LVARS`) that only
+rises, so every pass knows what earlier passes have finished. The engine here is
+Ghidra's single IR rewritten to a fixpoint (§0.6), and the Band-B passes have no
+boundary between them, so maturity is not a property of the IR. It is a record of
+**how far the scheduler has got through one pass of the `universal` restart
+group** over this function. Facts become *settled* at fixed points of the tree, where
+the actions that could still change them never run again in that pass.
+
+**Levels**, in tree order. Each is reached when the node named in the second column
+*completes*:
+
+| Level | Reached after | What is settled from here on, for this pass |
+|---|---|---|
+| `raw` | nothing yet: the function was just built (flow is followed before the tree, §0.6), or cleared for a restart | — |
+| `lifted` | `start` | the ops are lifted and the block graph is built; the tree follows no new flow (only a restart re-follows) |
+| `calls-linked` | `funclink`, or `funclink_outonly` in the variants that keep only outputs (`noproto`, e.g. `jumptable`) | every CALL has its call spec, with its trials, and nothing adds a call spec later in the pass |
+| `band-b` | `fullloop` (its fixed point) | heritage has reached every space and builds no more SSA; parameter and return recovery (`activeparam`, `returnrecovery`, `activereturn`) is final; type inference (`infertypes`) runs no more. The P3–P5 point of the embedder hooks |
+| `cleaned-up` | the `cleanup` rule pool | the clean-up rewrites are done |
+| `merged` | `copymarker` | HighVariables exist and are merged; the P6 point |
+| `structured` | the final `blockstructure` | the structured block tree exists (later passes refine it); the P7 point |
+| `prototype-fixed` | `inputprototype` | the function's own prototype (inputs, and the output from `outputprototype` before it) is fixed |
+| `casts` | `setcasts` | casts are inserted |
+| `complete` | `stop` | the pass is over |
+
+Two facts are not levels, because the engine already tracks them exactly and
+they are not tied to one node: **ssa**, "heritage has run at least once"
+(the heritage pass counter is non-zero; before it, passes see the pre-SSA
+window), and **high-variables**, "HighVariables are assigned" (set by
+`assignhigh`). A query for either reads that state directly.
+
+**Not monotone across restarts.** A level only rises within one pass. A restart
+drops it back to `raw`: the in-tree restart calls `Funcdata::clear`, and the
+outer re-flow of `run_pipeline` (§0.6) clears or rebuilds the `Funcdata`, and
+the level is per-function state that does not survive a clear. A pass abandoned
+for an early restart (`earlyrestart`), or cut by the per-function deadline, does
+not reach the levels after the point where it stopped. A paused pass (the callee
+contract's pause in `activeparam`) resumes at the same action and keeps its level.
+
+**Reduced root variants.** A variant is a filter over the same tree (§0.6), so a
+level is reached only when its node survives the filter. Levels can be skipped (`normalize` has no
+`merge` group, so it never reaches `merged`), but the order never changes. The jump-table sub-query (§2.3) runs on its own partial `Funcdata`, so
+its levels never touch the function being decompiled.
+
+**Use.** A pass asks `fd.is_settled(fact)` for a fact, or `fd.maturity()` for the
+level. A pass that relies on an earlier phase states it with
+`debug_assert_settled!(fd, Fact)`, which checks only in debug builds and only for
+a function driven through the full `decompile` root (`run_pipeline`). A unit test
+that applies one action to a hand-built `Funcdata`, or a reduced variant, is not
+held to the tree's order. The level is reported by the console's `phase status`.
+Marking a level changes no analysis: it is a record of where the scheduler is, not
+a new decision.

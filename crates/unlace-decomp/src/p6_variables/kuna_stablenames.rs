@@ -594,14 +594,8 @@ pub fn relabel(fd: &mut Funcdata, high: HighVariableId, name: &str) {
 }
 
 /// A retype carried to the next decompile as the type of the whole printed
-/// variable ([`unit_retype`]); `infer` when type inference has to read it
-/// ([`reaches_inference`]); `from` the type the variable was printed with.
-#[derive(Clone, Debug)]
-pub struct UnitRetype {
-    pub ct: std::rc::Rc<crate::dtype::Datatype>,
-    pub infer: bool,
-    pub from: std::rc::Rc<crate::dtype::Datatype>,
-}
+/// variable ([`unit_retype`]); defined next to the directive symbols that carry it.
+pub use crate::funcdata::UnitRetype;
 
 /// The unit retype of a `from` variable to `to`, when it keeps the width and
 /// kind ([`retypes_as_unit`]).
@@ -1104,6 +1098,36 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
     }
     next.renames = renamed;
     next
+}
+
+/// (kuna `--assert`) The previous decompile's default numbering, seeded by the drive when a
+/// directive batch is replayed (`prior`), and the numbering the naming pass handed out, by
+/// instance identity (`snapshot`). Kept across `Funcdata::clear`.
+#[derive(Default)]
+struct NamesSlot {
+    prior: PriorNames,
+    snapshot: Vec<(String, Keys)>,
+}
+crate::kuna_func_state!(NamesSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `--assert`) The previous decompile's default numbering to keep.
+    pub fn kuna_prior_names(&self) -> &PriorNames {
+        &self.kuna_state::<NamesSlot>().prior
+    }
+
+    pub fn seed_prior_names(&mut self, prior: PriorNames) {
+        self.kuna_state_mut::<NamesSlot>().prior = prior;
+    }
+
+    /// The numbering the naming pass recorded (empty unless asked to).
+    pub fn kuna_name_snapshot(&self) -> &[(String, Keys)] {
+        &self.kuna_state::<NamesSlot>().snapshot
+    }
+
+    pub fn set_kuna_name_snapshot(&mut self, snapshot: Vec<(String, Keys)>) {
+        self.kuna_state_mut::<NamesSlot>().snapshot = snapshot;
+    }
 }
 
 #[cfg(test)]

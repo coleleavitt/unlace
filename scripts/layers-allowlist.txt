@@ -88,11 +88,6 @@ fspec -> kuna_registerslots
 fspec -> kuna_spsolve
 fspec -> modelrules
 fspec -> remote_provider
-funcdata -> kuna_slotptr
-funcdata -> kuna_stablenames
-funcdata -> kuna_stackstruct
-funcdata -> kuna_storereach
-funcdata -> kuna_varsources
 heritage -> kuna_calloverlap
 heritage -> kuna_globalcallranges
 heritage -> kuna_loadguardreads

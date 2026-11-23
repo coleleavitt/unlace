@@ -283,5 +283,24 @@ pub fn admit(ty: &Datatype, size: int4) -> Result<(), Decline> {
     }
 }
 
+/// (kuna `slotptr`) What each `restructure_varnode` pass saw stored into, and touched in, the
+/// stack frame; read only by `extract_variables`. Reset by `Funcdata::clear`: the evidence names
+/// ops by SeqNum, which a rebuilt op bank reissues.
+#[derive(Default)]
+struct EvidenceSlot(std::cell::RefCell<SlotEvidence>);
+crate::kuna_func_state!(EvidenceSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `slotptr`) Fold one pass's stack-store evidence into the running record.
+    pub fn with_slot_evidence(&self, f: impl FnOnce(&mut SlotEvidence)) {
+        f(&mut self.kuna_state::<EvidenceSlot>().0.borrow_mut());
+    }
+
+    /// (kuna `slotptr`) The stack-store evidence every pass recorded.
+    pub fn slot_evidence(&self) -> std::cell::Ref<'_, SlotEvidence> {
+        self.kuna_state::<EvidenceSlot>().0.borrow()
+    }
+}
+
 #[cfg(test)]
 mod tests;

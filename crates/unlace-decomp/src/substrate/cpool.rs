@@ -193,6 +193,7 @@ impl CPoolRecord {
     }
 
     /// Get the type of record (C++ `getTag`).
+    #[inline]
     pub fn get_tag(&self) -> uint4 {
         self.tag
     }

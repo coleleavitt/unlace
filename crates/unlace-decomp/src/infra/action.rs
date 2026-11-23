@@ -171,6 +171,7 @@ pub struct ActionGroupList {
 
 impl ActionGroupList {
     /// An empty grouplist.
+    #[inline]
     pub fn new() -> ActionGroupList {
         ActionGroupList {
             list: BTreeMap::new(),
@@ -192,6 +193,7 @@ impl ActionGroupList {
     }
 
     /// Check if `this` contains a given group (C++ `ActionGroupList::contains`).
+    #[inline]
     pub fn contains(&self, nm: &str) -> bool {
         self.list.contains_key(nm)
     }
@@ -388,10 +390,12 @@ pub trait Action {
     }
 
     /// Get the Action's name (C++ `getName`).
+    #[inline]
     fn get_name(&self) -> &str {
         &self.base().name
     }
     /// Get the Action's group (C++ `getGroup`).
+    #[inline]
     fn get_group(&self) -> &str {
         &self.base().basegroup
     }
@@ -622,6 +626,7 @@ const LOOKAHEAD_RUN: usize = 64;
 
 impl ActionContext {
     /// A fresh context.
+    #[inline]
     pub fn new() -> ActionContext {
         ActionContext::default()
     }

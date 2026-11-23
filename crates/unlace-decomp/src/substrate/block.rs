@@ -458,6 +458,7 @@ impl FlowBlock {
     }
 
     /// Construct a block with the given subtype payload.
+    #[inline]
     pub fn new_kind(kind: BlockKind) -> FlowBlock {
         FlowBlock {
             kind,
@@ -485,6 +486,7 @@ impl FlowBlock {
     }
 
     /// Get the index assigned to \b this block (C++ `getIndex`).
+    #[inline]
     pub fn get_index(&self) -> int4 {
         self.index
     }
@@ -493,10 +495,12 @@ impl FlowBlock {
         self.index = i;
     }
     /// Get the parent FlowBlock of \b this (C++ `getParent`).
+    #[inline]
     pub fn get_parent(&self) -> Option<BlockId> {
         self.parent
     }
     /// Get the immediate dominator FlowBlock (C++ `getImmedDom`).
+    #[inline]
     pub fn get_immed_dom(&self) -> Option<BlockId> {
         self.immed_dom
     }
@@ -507,6 +511,7 @@ impl FlowBlock {
     /// The block a `BlockCopy` mirrors (C++ `BlockCopy::copy`, the underlying
     /// FlowBlock — a *bblocks* [`BlockId`] when produced by the cross-arena
     /// `build_copy_from`).  `None` for non-Copy nodes.
+    #[inline]
     pub fn get_copy(&self) -> Option<BlockId> {
         match &self.kind {
             BlockKind::Copy { copy } => *copy,
@@ -516,6 +521,7 @@ impl FlowBlock {
     /// The unstructured-branch target of a `BlockIf` (C++ `BlockIf::getGotoTarget`),
     /// or `None` (also for non-If nodes).  When set, the if has only the
     /// condition component and emits a `goto` instead of a braced body.
+    #[inline]
     pub fn get_if_goto_target(&self) -> Option<BlockId> {
         match &self.kind {
             BlockKind::If { gototarget, .. } => *gototarget,
@@ -523,6 +529,7 @@ impl FlowBlock {
         }
     }
     /// The unstructured-branch type of a `BlockIf` (C++ `BlockIf::getGotoType`).
+    #[inline]
     pub fn get_if_goto_type(&self) -> uint4 {
         match &self.kind {
             BlockKind::If { gototype, .. } => *gototype,
@@ -531,6 +538,7 @@ impl FlowBlock {
     }
     /// The iterate op of a `BlockWhileDo` (C++ `BlockWhileDo::getIterateOp`), or
     /// `None`.  When set, the while-do is emitted as a `for` loop.
+    #[inline]
     pub fn get_iterate_op(&self) -> Option<crate::context::OpId> {
         match &self.kind {
             BlockKind::WhileDo { iterate_op, .. } => *iterate_op,
@@ -571,6 +579,7 @@ impl FlowBlock {
     }
     /// The unstructured-branch target of a `BlockGoto` (C++
     /// `BlockGoto::getGotoTarget`), or `None` (also for non-Goto nodes).
+    #[inline]
     pub fn get_goto_target(&self) -> Option<BlockId> {
         match &self.kind {
             BlockKind::Goto { gototarget, .. } => *gototarget,
@@ -579,6 +588,7 @@ impl FlowBlock {
     }
     /// The unstructured-branch type of a `BlockGoto` (C++
     /// `BlockGoto::getGotoType`).
+    #[inline]
     pub fn get_goto_type(&self) -> uint4 {
         match &self.kind {
             BlockKind::Goto { gototype, .. } => *gototype,
@@ -586,6 +596,7 @@ impl FlowBlock {
         }
     }
     /// Set the number of times this block has been visited (C++ `setVisitCount`).
+    #[inline]
     pub fn set_visit_count(&mut self, i: int4) {
         self.visitcount = i;
     }
@@ -595,10 +606,12 @@ impl FlowBlock {
     }
 
     /// Get the subtype payload.
+    #[inline]
     pub fn kind(&self) -> &BlockKind {
         &self.kind
     }
     /// Get a mutable handle on the subtype payload.
+    #[inline]
     pub fn kind_mut(&mut self) -> &mut BlockKind {
         &mut self.kind
     }
@@ -649,38 +662,46 @@ impl FlowBlock {
     // --- edge query accessors (C++ inline, block.hh) -----------------------
 
     /// Get the number of out edges (C++ `sizeOut`).
+    #[inline]
     pub fn size_out(&self) -> int4 {
         self.outofthis.len() as int4
     }
     /// Get the number of in edges (C++ `sizeIn`).
+    #[inline]
     pub fn size_in(&self) -> int4 {
         self.intothis.len() as int4
     }
     /// Get the i-th output FlowBlock (C++ `getOut`).
+    #[inline]
     pub fn get_out(&self, i: int4) -> BlockId {
         self.outofthis[i as usize]
             .point
             .expect("getOut: unresolved edge")
     }
     /// Get the input index of the i-th output FlowBlock (C++ `getOutRevIndex`).
+    #[inline]
     pub fn get_out_rev_index(&self, i: int4) -> int4 {
         self.outofthis[i as usize].reverse_index
     }
     /// Get the i-th input FlowBlock (C++ `getIn`).
+    #[inline]
     pub fn get_in(&self, i: int4) -> BlockId {
         self.intothis[i as usize]
             .point
             .expect("getIn: unresolved edge")
     }
     /// Get the output index of the i-th input FlowBlock (C++ `getInRevIndex`).
+    #[inline]
     pub fn get_in_rev_index(&self, i: int4) -> int4 {
         self.intothis[i as usize].reverse_index
     }
     /// Get the \b false output FlowBlock (C++ `getFalseOut`).
+    #[inline]
     pub fn get_false_out(&self) -> BlockId {
         self.get_out(0)
     }
     /// Get the \b true output FlowBlock (C++ `getTrueOut`).
+    #[inline]
     pub fn get_true_out(&self) -> BlockId {
         self.get_out(1)
     }
@@ -746,11 +767,13 @@ impl FlowBlock {
         (self.outofthis[i as usize].label & edge_flags::f_loop_edge) != 0
     }
     /// Is the i-th out edge the switch default edge (C++ `isDefaultBranch`).
+    #[inline]
     pub fn is_default_branch(&self, i: int4) -> bool {
         (self.outofthis[i as usize].label & edge_flags::f_defaultswitch_edge) != 0
     }
     /// Can \b this and the i-th output be merged into a BlockIf/BlockList
     /// (C++ `isDecisionOut`).
+    #[inline]
     pub fn is_decision_out(&self, i: int4) -> bool {
         (self.outofthis[i as usize].label
             & (edge_flags::f_irreducible | edge_flags::f_back_edge | edge_flags::f_goto_edge))
@@ -782,11 +805,13 @@ impl FlowBlock {
             == 0
     }
     /// Is the i-th incoming edge unstructured (C++ `isGotoIn`).
+    #[inline]
     pub fn is_goto_in(&self, i: int4) -> bool {
         (self.intothis[i as usize].label & (edge_flags::f_irreducible | edge_flags::f_goto_edge))
             != 0
     }
     /// Is the i-th outgoing edge unstructured (C++ `isGotoOut`).
+    #[inline]
     pub fn is_goto_out(&self, i: int4) -> bool {
         (self.outofthis[i as usize].label & (edge_flags::f_irreducible | edge_flags::f_goto_edge))
             != 0
@@ -796,10 +821,12 @@ impl FlowBlock {
         (self.intothis[i as usize].label & edge_flags::f_tree_edge) != 0
     }
     /// Is the i-th incoming edge a \e back edge (C++ `isBackEdgeIn`).
+    #[inline]
     pub fn is_back_edge_in(&self, i: int4) -> bool {
         (self.intothis[i as usize].label & edge_flags::f_back_edge) != 0
     }
     /// Is the i-th outgoing edge a \e back edge (C++ `isBackEdgeOut`).
+    #[inline]
     pub fn is_back_edge_out(&self, i: int4) -> bool {
         (self.outofthis[i as usize].label & edge_flags::f_back_edge) != 0
     }
@@ -815,10 +842,12 @@ impl FlowBlock {
     // --- block flag predicates (C++ inline, block.hh:291-340) --------------
 
     /// Return \b true if \b this block has been marked (C++ `isMark`).
+    #[inline]
     pub fn is_mark(&self) -> bool {
         (self.flags & block_flags::f_mark) != 0
     }
     /// Mark \b this block (C++ `setMark`).
+    #[inline]
     pub fn set_mark(&mut self) {
         self.flags |= block_flags::f_mark;
     }
@@ -851,11 +880,13 @@ impl FlowBlock {
         (self.flags & block_flags::f_label_bumpup) != 0
     }
     /// Is \b this the target of an unstructured goto (C++ `isUnstructuredTarget`).
+    #[inline]
     pub fn is_unstructured_target(&self) -> bool {
         (self.flags & block_flags::f_unstructured_targ) != 0
     }
     /// Is there an unstructured goto to \b this block's interior
     /// (C++ `isInteriorGotoTarget`).
+    #[inline]
     pub fn is_interior_goto_target(&self) -> bool {
         (self.flags & block_flags::f_interior_gotoin) != 0
     }
@@ -865,10 +896,12 @@ impl FlowBlock {
         (self.flags & block_flags::f_interior_gotoout) != 0
     }
     /// Is the entry point of the function (C++ `isEntryPoint`).
+    #[inline]
     pub fn is_entry_point(&self) -> bool {
         (self.flags & block_flags::f_entry_point) != 0
     }
     /// Is \b this a switch block (C++ `isSwitchOut`).
+    #[inline]
     pub fn is_switch_out(&self) -> bool {
         (self.flags & block_flags::f_switch_out) != 0
     }
@@ -897,20 +930,24 @@ impl FlowBlock {
     // --- BlockGraph component accessors (C++ block.hh:389-391) -------------
 
     /// Get the list of component FlowBlock objects (C++ `getList`).
+    #[inline]
     pub fn get_list(&self) -> &[BlockId] {
         &self.list
     }
     /// Get the number of components (C++ `getSize`).
+    #[inline]
     pub fn get_size(&self) -> int4 {
         self.list.len() as int4
     }
     /// Get the i-th component (C++ `getBlock`).
+    #[inline]
     pub fn get_block(&self, i: int4) -> BlockId {
         self.list[i as usize]
     }
 
     /// Borrow the switch case descriptions (C++ `BlockSwitch::caseblocks`); empty
     /// for non-switch blocks.
+    #[inline]
     pub fn switch_caseblocks(&self) -> &[CaseOrder] {
         match &self.kind {
             BlockKind::Switch { caseblocks, .. } => caseblocks,
@@ -928,6 +965,7 @@ impl FlowBlock {
 
     /// The `Funcdata::jumpvec` slot of this switch's [`JumpTable`](crate::jumptable::JumpTable)
     /// (C++ `BlockSwitch::jump`); `None` for non-switch blocks.
+    #[inline]
     pub fn switch_jt_index(&self) -> Option<usize> {
         match &self.kind {
             BlockKind::Switch { jt_index, .. } => Some(*jt_index),
@@ -1032,6 +1070,7 @@ pub struct BlockGraph {
 
 impl BlockGraph {
     /// Construct an empty graph.
+    #[inline]
     pub fn new() -> BlockGraph {
         BlockGraph {
             arena: BlockArena::with_key(),
@@ -1040,10 +1079,12 @@ impl BlockGraph {
     }
 
     /// Borrow a block (panics on stale handle, per ADR 0001).
+    #[inline]
     pub fn block(&self, id: BlockId) -> &FlowBlock {
         &self.arena[id]
     }
     /// Mutably borrow a block.
+    #[inline]
     pub fn block_mut(&mut self, id: BlockId) -> &mut FlowBlock {
         &mut self.arena[id]
     }
@@ -2224,6 +2265,7 @@ impl BlockGraph {
 
     /// Add a directed edge between component FlowBlocks
     /// (C++ `BlockGraph::addEdge`, `block.cc:1442`).
+    #[inline]
     pub fn add_edge(&mut self, begin: BlockId, end: BlockId) {
         self.add_in_edge(end, begin, 0);
     }

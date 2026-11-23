@@ -956,6 +956,7 @@ impl Datatype {
     /// Preserved verbatim from the W3 skeleton (many W3 callers build skeletal
     /// types this way).  Mirrors `TypeBase(int4 s,type_metatype m) :
     /// Datatype(s,-1,m)` (type.hh:393): alignment `-1`.
+    #[inline]
     pub fn new(size: int4, metatype: type_metatype) -> Datatype {
         Datatype::new_with_align(size, -1, metatype)
     }
@@ -1424,6 +1425,7 @@ impl Datatype {
 
     /// Get the element data-type (C++ `TypeArray::getBase`).  `None` for
     /// non-arrays.
+    #[inline]
     pub fn get_array_base(&self) -> Option<Rc<Datatype>> {
         match &self.kind {
             DatatypeKind::Array { arrayof, .. } => Some(Rc::clone(arrayof)),
@@ -1433,6 +1435,7 @@ impl Datatype {
 
     /// Get the number of elements (C++ `TypeArray::numElements`).  `None` for
     /// non-arrays.
+    #[inline]
     pub fn num_elements(&self) -> Option<int4> {
         match &self.kind {
             DatatypeKind::Array { arraysize, .. } => Some(*arraysize),
@@ -1444,6 +1447,7 @@ impl Datatype {
 
     /// Get the parent data-type to which this pointer is offset (C++
     /// `TypePointerRel::getParent`).  `None` for non-relative-pointers.
+    #[inline]
     pub fn get_rel_parent(&self) -> Option<Rc<Datatype>> {
         match &self.kind {
             DatatypeKind::PointerRel { parent, .. } => Some(Self::completed_record(parent)),
@@ -1453,6 +1457,7 @@ impl Datatype {
 
     /// Get offset of this relative pointer in \e byte units (C++
     /// `TypePointerRel::getByteOffset`).  `None` for non-relative-pointers.
+    #[inline]
     pub fn get_byte_offset(&self) -> Option<int4> {
         match &self.kind {
             DatatypeKind::PointerRel { offset, .. } => Some(*offset),
@@ -5266,6 +5271,7 @@ impl TypeFactoryImpl {
 
     /// Set the maximum base-type size before `getBase` builds an unknown-byte
     /// array (the C++ `glb->max_basetype_size`).
+    #[inline]
     pub fn set_max_basetype_size(&self, sz: int4) {
         self.max_basetype_size.set(sz);
     }
@@ -5413,6 +5419,7 @@ impl TypeFactoryImpl {
         self.size_of_wchar.set(s);
     }
     /// Set the default int size (C++ `decodeDataOrganization`'s `<integer_size>`).
+    #[inline]
     pub fn set_size_of_int(&self, s: int4) {
         self.size_of_int.set(s);
     }
@@ -5434,14 +5441,17 @@ impl TypeFactoryImpl {
         self.size_of_short.set(s);
     }
     /// (kuna) Set the default long long size (cspec `<long_long_size>`).
+    #[inline]
     pub fn set_size_of_long_long(&self, s: int4) {
         self.size_of_long_long.set(s);
     }
     /// (kuna) Set the default float size (cspec `<float_size>`).
+    #[inline]
     pub fn set_size_of_float(&self, s: int4) {
         self.size_of_float.set(s);
     }
     /// (kuna) Set the default double size (cspec `<double_size>`).
+    #[inline]
     pub fn set_size_of_double(&self, s: int4) {
         self.size_of_double.set(s);
     }
@@ -7607,18 +7617,21 @@ impl TypeFactory for TypeFactoryImpl {
         self.primitive_align_size(size)
     }
 
+    #[inline]
     fn get_type_void(&self) -> KunaResult<Rc<Datatype>> {
         self.get_type_void_impl()
     }
     fn get_base_no_char(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> {
         self.get_base_no_char_impl(s, m)
     }
+    #[inline]
     fn get_base(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> {
         self.get_base_impl(s, m)
     }
     fn get_base_named(&self, s: int4, m: type_metatype, n: &str) -> KunaResult<Rc<Datatype>> {
         self.get_base_named_impl(s, m, n)
     }
+    #[inline]
     fn get_type_char(&self, s: int4) -> KunaResult<Rc<Datatype>> {
         self.get_type_char_sized(s)
     }
@@ -7685,6 +7698,7 @@ impl TypeFactory for TypeFactoryImpl {
         self.has_volatile_types.get()
     }
 
+    #[inline]
     fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: uint4) -> KunaResult<Rc<Datatype>> {
         self.get_type_pointer_impl(s, pt, ws)
     }
@@ -7728,9 +7742,11 @@ impl TypeFactory for TypeFactoryImpl {
         self.get_type_pointer_with_space_impl(ptr_to, spc, nm)
     }
 
+    #[inline]
     fn get_type_array(&self, as_: int4, ao: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
         self.get_type_array_impl(as_, ao)
     }
+    #[inline]
     fn get_type_struct(&self, n: &str) -> KunaResult<Rc<Datatype>> {
         self.get_type_struct_impl(n, false)
     }
@@ -7790,6 +7806,7 @@ impl TypeFactory for TypeFactoryImpl {
         self.get_exact_piece_impl(ct, offset, size)
     }
 
+    #[inline]
     fn find_by_name(&self, n: &str) -> KunaResult<Option<Rc<Datatype>>> {
         Ok(self.find_by_name_impl(n))
     }
@@ -7896,6 +7913,7 @@ impl TypeFactory for TypeFactoryImpl {
     fn kuna_is_ambiguous_go_type(&self, name: &str) -> bool {
         self.go_ambiguous_types.borrow().contains(name)
     }
+    #[inline]
     fn kuna_lang_facet(&self, name: &str) -> Option<crate::kuna_langfacet::LangFacet> {
         self.lang_facets.borrow().get(name).cloned()
     }

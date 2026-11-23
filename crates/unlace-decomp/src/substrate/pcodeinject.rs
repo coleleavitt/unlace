@@ -149,11 +149,13 @@ impl InjectParameter {
     }
 
     /// Get the parameter name (C++ `getName`).
+    #[inline]
     pub fn get_name(&self) -> &[u8] {
         &self.name
     }
 
     /// Get the assigned index (C++ `getIndex`).
+    #[inline]
     pub fn get_index(&self) -> int4 {
         self.index
     }
@@ -376,21 +378,25 @@ impl InjectPayloadCore {
     }
 
     /// Return the number of input parameters (C++ `sizeInput`).
+    #[inline]
     pub fn size_input(&self) -> int4 {
         self.inputlist.len() as int4
     }
 
     /// Return the number of output parameters (C++ `sizeOutput`).
+    #[inline]
     pub fn size_output(&self) -> int4 {
         self.output.len() as int4
     }
 
     /// Get the i-th input parameter (C++ `getInput`).
+    #[inline]
     pub fn get_input(&self, i: int4) -> &InjectParameter {
         &self.inputlist[i as usize]
     }
 
     /// Get the i-th output parameter (C++ `getOutput`).
+    #[inline]
     pub fn get_output(&self, i: int4) -> &InjectParameter {
         &self.output[i as usize]
     }
@@ -401,6 +407,7 @@ impl InjectPayloadCore {
     }
 
     /// Return the type of injection (C++ `getType`).
+    #[inline]
     pub fn get_type(&self) -> int4 {
         self.ptype
     }

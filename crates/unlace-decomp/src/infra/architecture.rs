@@ -1486,6 +1486,7 @@ impl Architecture {
     /// (`docs/divergences.md`).
     /// (kuna) The effective source language for this image: the per-run
     /// `option sourcelang` override when one is set, else the detected fact.
+    #[inline]
     pub fn source_lang(&self) -> crate::kuna_sourcelang::SourceLang {
         self.kuna_options
             .get::<crate::kuna_sourcelang::SourceLangForced>()
@@ -1696,6 +1697,7 @@ impl Architecture {
     /// Borrow the address-space manager (C++ `this` viewed as an
     /// `AddrSpaceManager`); forwarded to the owned `Sleigh` engine's
     /// `SleighBase`.
+    #[inline]
     pub fn manage(&self) -> &AddrSpaceManager {
         self.translate.manager()
     }
@@ -1704,6 +1706,7 @@ impl Architecture {
     /// [`EngineTranslate`] boundary.  External callers reach the `Translate` /
     /// `RegisterLookup` surface directly; those needing the concrete standalone
     /// engine downcast via [`EngineTranslate::as_sleigh`].
+    #[inline]
     pub fn translate(&self) -> &dyn EngineTranslate {
         &*self.translate
     }
@@ -1762,6 +1765,7 @@ impl Architecture {
     }
 
     /// Get a string describing this architecture (C++ `getDescription`).
+    #[inline]
     pub fn get_description(&self) -> &str {
         &self.archid
     }
@@ -3789,12 +3793,14 @@ impl Architecture {
     }
 
     /// Borrow the data-type factory (C++ `glb->types`).
+    #[inline]
     pub fn types(&self) -> &dyn TypeFactory {
         &*self.types
     }
 
     /// Borrow the concrete type factory (when the `TypeFactoryImpl`-specific
     /// builders, e.g. `set_core_type`, are needed by the init pipeline).
+    #[inline]
     pub fn types_impl(&self) -> &TypeFactoryImpl {
         &self.types
     }
@@ -3806,6 +3812,7 @@ impl Architecture {
     }
 
     /// Borrow the c-language printer (C++ `glb->print`).
+    #[inline]
     pub fn print(&self) -> &PrintC {
         &self.print
     }
@@ -3938,6 +3945,7 @@ impl Architecture {
 
     /// Resolve a register by name to its storage (C++
     /// `glb->translate->getRegister(name)`); used by `set track`.
+    #[inline]
     pub fn get_register_varnode(&self, nm: &[u8]) -> KunaResult<unlace_num::pcoderaw::VarnodeData> {
         self.translate.get_register_varnode(nm)
     }
@@ -3985,6 +3993,7 @@ impl Architecture {
 
     /// The default prototype model (C++ `glb->defaultfp`).  `None` until a
     /// cspec is parsed / [`build_default_proto`](Architecture::build_default_proto).
+    #[inline]
     pub fn default_fp(&self) -> Option<&Rc<ProtoModel>> {
         self.defaultfp.as_ref()
     }
@@ -6521,6 +6530,7 @@ impl GoLayout {
     }
 
     /// The layout a toolchain version implies.
+    #[inline]
     pub fn from_version(maj: u16, min: u16) -> GoLayout {
         GoLayout {
             gobuf_words: if (maj, min) >= (1, 25) { 6 } else { 7 },
@@ -6529,6 +6539,7 @@ impl GoLayout {
     }
 
     /// `runtime.gobuf`'s byte size under this layout.
+    #[inline]
     pub fn gobuf_size(self) -> int4 {
         self.gobuf_words * 8
     }

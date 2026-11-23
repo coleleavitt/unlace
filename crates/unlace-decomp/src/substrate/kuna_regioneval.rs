@@ -7,10 +7,12 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::op::PcodeOp;
 
+#[inline]
 pub(crate) fn op(data: &Funcdata, id: OpId) -> Option<&PcodeOp> {
     data.obank().get(id)
 }
 
+#[inline]
 pub(crate) fn size(data: &Funcdata, v: VarnodeId) -> Option<i32> {
     data.vbank().get(v).map(|n| n.get_size())
 }

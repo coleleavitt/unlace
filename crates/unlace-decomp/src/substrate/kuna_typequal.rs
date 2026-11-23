@@ -21,6 +21,7 @@ impl DatatypeQualExt for Datatype {
         self.qualifiers
     }
 
+    #[inline]
     fn qualified_base(&self) -> Option<&Rc<Datatype>> {
         self.qualified_base.as_ref()
     }
@@ -85,6 +86,7 @@ pub(crate) fn unqualified_shape(mut ty: &Datatype) -> &Datatype {
     ty
 }
 
+#[inline]
 pub fn is_volatile(ty: &Datatype) -> bool {
     effective_qualifiers(ty) & VOLATILE != 0
 }

@@ -537,6 +537,7 @@ impl PcodeOp {
     }
 
     /// Set the output Varnode (C++ `setOutput`).
+    #[inline]
     pub fn set_output(&mut self, vn: Option<VarnodeId>) {
         self.output = vn;
     }
@@ -545,18 +546,22 @@ impl PcodeOp {
         self.inrefs[slot as usize] = None;
     }
     /// Set a specific input Varnode (C++ `setInput`).
+    #[inline]
     pub fn set_input(&mut self, vn: Option<VarnodeId>, slot: int4) {
         self.inrefs[slot as usize] = vn;
     }
     /// Set specific boolean attribute(s) (C++ `setFlag`).
+    #[inline]
     pub fn set_flag(&mut self, fl: uint4) {
         self.flags |= fl;
     }
     /// Clear specific boolean attribute(s) (C++ `clearFlag`).
+    #[inline]
     pub fn clear_flag(&mut self, fl: uint4) {
         self.flags &= !fl;
     }
     /// Set a specific additional boolean attribute (C++ `setAdditionalFlag`).
+    #[inline]
     pub fn set_additional_flag(&mut self, fl: uint4) {
         self.addlflags |= fl;
     }
@@ -613,10 +618,12 @@ impl PcodeOp {
     // --- Public accessors (C++ inline getters) ------------------------------
 
     /// Get the number of inputs to this op (C++ `numInput`).
+    #[inline]
     pub fn num_input(&self) -> int4 {
         self.inrefs.len() as int4
     }
     /// Get the output Varnode of this op or `None` (C++ `getOut`).
+    #[inline]
     pub fn get_out(&self) -> Option<VarnodeId> {
         self.output
     }
@@ -624,22 +631,27 @@ impl PcodeOp {
     /// `None` (a null input); an out-of-range slot is also `None` (matching the
     /// `Option` contract — callers that peek `getIn(1)` on an op before confirming
     /// it has two inputs, e.g. `RuleExpandLoad`, must not panic).
+    #[inline]
     pub fn get_in(&self, slot: int4) -> Option<VarnodeId> {
         self.inrefs.get(slot as usize).copied().flatten()
     }
     /// Get the parent basic block (C++ `getParent`).  STUB(W3-block).
+    #[inline]
     pub fn get_parent(&self) -> Option<crate::context::BlockId> {
         self.parent
     }
     /// Get the instruction address associated with this op (C++ `getAddr`).
+    #[inline]
     pub fn get_addr(&self) -> &Address {
         self.start.get_addr()
     }
     /// Get the time index indicating when this op was created (C++ `getTime`).
+    #[inline]
     pub fn get_time(&self) -> uintm {
         self.start.get_time()
     }
     /// Get the sequence number associated with this op (C++ `getSeqNum`).
+    #[inline]
     pub fn get_seq_num(&self) -> &SeqNum {
         &self.start
     }
@@ -648,6 +660,7 @@ impl PcodeOp {
         self.flags
     }
     /// Get all additional boolean attributes (mirrors `addlflags`).
+    #[inline]
     pub fn get_addlflags(&self) -> uint4 {
         self.addlflags
     }
@@ -688,6 +701,7 @@ impl PcodeOp {
     }
 
     /// Return `true` if this op is dead (C++ `isDead`).
+    #[inline]
     pub fn is_dead(&self) -> bool {
         (self.flags & pcodeop_flags::dead) != 0
     }
@@ -696,6 +710,7 @@ impl PcodeOp {
         self.output.is_some()
     }
     /// Return `true` if this op indicates call semantics (C++ `isCall`).
+    #[inline]
     pub fn is_call(&self) -> bool {
         (self.flags & pcodeop_flags::call) != 0
     }
@@ -705,29 +720,35 @@ impl PcodeOp {
         (self.flags & (pcodeop_flags::call | pcodeop_flags::has_callspec)) == pcodeop_flags::call
     }
     /// Return `true` if a special SSA form op (C++ `isMarker`).
+    #[inline]
     pub fn is_marker(&self) -> bool {
         (self.flags & pcodeop_flags::marker) != 0
     }
     /// Return `true` if op creates a varnode indirectly (C++ `isIndirectCreation`).
+    #[inline]
     pub fn is_indirect_creation(&self) -> bool {
         (self.flags & pcodeop_flags::indirect_creation) != 0
     }
     /// Return `true` if this INDIRECT is caused by STORE (C++ `isIndirectStore`).
+    #[inline]
     pub fn is_indirect_store(&self) -> bool {
         (self.flags & pcodeop_flags::indirect_store) != 0
     }
     /// Return `true` if this op is not directly represented in C output
     /// (C++ `notPrinted`).
+    #[inline]
     pub fn not_printed(&self) -> bool {
         (self.flags
             & (pcodeop_flags::marker | pcodeop_flags::nonprinting | pcodeop_flags::noreturn))
             != 0
     }
     /// Return `true` if this op produces a boolean output (C++ `isBoolOutput`).
+    #[inline]
     pub fn is_bool_output(&self) -> bool {
         (self.flags & pcodeop_flags::booloutput) != 0
     }
     /// Return `true` if this op is a branch (C++ `isBranch`).
+    #[inline]
     pub fn is_branch(&self) -> bool {
         (self.flags & pcodeop_flags::branch) != 0
     }
@@ -741,6 +762,7 @@ impl PcodeOp {
     }
     /// Return `true` if this op flips the true/false meaning of its branching
     /// (C++ `isBooleanFlip`).
+    #[inline]
     pub fn is_boolean_flip(&self) -> bool {
         (self.flags & pcodeop_flags::boolean_flip) != 0
     }
@@ -754,10 +776,12 @@ impl PcodeOp {
         (self.flags & pcodeop_flags::coderef) != 0
     }
     /// Return `true` if this starts an instruction (C++ `isInstructionStart`).
+    #[inline]
     pub fn is_instruction_start(&self) -> bool {
         (self.flags & pcodeop_flags::startmark) != 0
     }
     /// Return `true` if this starts a basic block (C++ `isBlockStart`).
+    #[inline]
     pub fn is_block_start(&self) -> bool {
         (self.flags & pcodeop_flags::startbasic) != 0
     }
@@ -766,10 +790,12 @@ impl PcodeOp {
         (self.addlflags & pcodeop_addlflags::modified) != 0
     }
     /// Return `true` if this op has been marked (C++ `isMark`).
+    #[inline]
     pub fn is_mark(&self) -> bool {
         (self.flags & pcodeop_flags::mark) != 0
     }
     /// Set the mark on this op (C++ `setMark`).
+    #[inline]
     pub fn set_mark(&mut self) {
         self.flags |= pcodeop_flags::mark;
     }
@@ -778,6 +804,7 @@ impl PcodeOp {
         (self.addlflags & pcodeop_addlflags::warning) != 0
     }
     /// Clear any mark on this op (C++ `clearMark`).
+    #[inline]
     pub fn clear_mark(&mut self) {
         self.flags &= !pcodeop_flags::mark;
     }
@@ -794,6 +821,7 @@ impl PcodeOp {
         self.flags &= !pcodeop_flags::indirect_source;
     }
     /// Return `true` if this produces/consumes ptrs (C++ `isPtrFlow`).
+    #[inline]
     pub fn is_ptr_flow(&self) -> bool {
         (self.flags & pcodeop_flags::ptrflow) != 0
     }
@@ -806,6 +834,7 @@ impl PcodeOp {
         (self.addlflags & pcodeop_addlflags::special_prop) != 0
     }
     /// Return `true` if this needs special printing (C++ `doesSpecialPrinting`).
+    #[inline]
     pub fn does_special_printing(&self) -> bool {
         (self.addlflags & pcodeop_addlflags::special_print) != 0
     }
@@ -835,6 +864,7 @@ impl PcodeOp {
     }
     /// (kuna) Was this comparison canonicalized from a LESSEQUAL
     /// (C++ `isCanonicalLessequal`).
+    #[inline]
     pub fn is_canonical_lessequal(&self) -> bool {
         (self.addlflags & pcodeop_addlflags::canonical_lessequal) != 0
     }
@@ -864,6 +894,7 @@ impl PcodeOp {
         self.addlflags |= pcodeop_addlflags::concat_root;
     }
     /// Is this a \e return form COPY (C++ `isReturnCopy`).
+    #[inline]
     pub fn is_return_copy(&self) -> bool {
         (self.flags & pcodeop_flags::return_copy) != 0
     }
@@ -885,6 +916,7 @@ impl PcodeOp {
     }
     /// Return `true` if this LOADs or STOREs from a dynamic spacebase pointer
     /// (C++ `usesSpacebasePtr`).
+    #[inline]
     pub fn uses_spacebase_ptr(&self) -> bool {
         (self.flags & pcodeop_flags::spacebase_ptr) != 0
     }
@@ -936,6 +968,7 @@ impl PcodeOp {
     /// STUB(W3-block): only the not-yet-ported block wave (and the in-module
     /// test) consume these, so they are unused in the op crate alone.
     #[allow(dead_code)]
+    #[inline]
     pub(crate) fn basic_neighbours(&self) -> (Option<OpId>, Option<OpId>) {
         self.links.get(ListKind::Basic)
     }
@@ -1455,10 +1488,12 @@ impl PieceNode {
         }
     }
     /// Return `true` if this node is a leaf of the tree structure (C++ `isLeaf`).
+    #[inline]
     pub fn is_leaf(&self) -> bool {
         self.leaf
     }
     /// Get the byte offset of this node into the data-type (C++ `getTypeOffset`).
+    #[inline]
     pub fn get_type_offset(&self) -> int4 {
         self.type_offset
     }
@@ -1736,6 +1771,7 @@ impl PcodeOpBank {
         self.uniqid = val;
     }
     /// Get the unique-id counter (C++ `getUniqId`).
+    #[inline]
     pub fn get_uniq_id(&self) -> uintm {
         self.uniqid
     }
@@ -1949,6 +1985,7 @@ impl PcodeOpBank {
     }
 
     /// Find a PcodeOp by sequence number (C++ `findOp`, `op.cc:1129`).
+    #[inline]
     pub fn find_op(&self, num: &SeqNum) -> Option<OpId> {
         self.optree.get(num).copied()
     }
@@ -2080,11 +2117,13 @@ impl PcodeOpBank {
     }
 
     /// Iterate the alive list in order (C++ `beginAlive`..`endAlive`).
+    #[inline]
     pub fn iter_alive(&self) -> impl Iterator<Item = OpId> + '_ {
         self.alivelist.iter(&self.arena, ListKind::Insert)
     }
 
     /// Iterate the dead list in order (C++ `beginDead`..`endDead`).
+    #[inline]
     pub fn iter_dead(&self) -> impl Iterator<Item = OpId> + '_ {
         self.deadlist.iter(&self.arena, ListKind::Insert)
     }

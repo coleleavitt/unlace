@@ -302,7 +302,10 @@ fn query(args: &XrefArgs) -> Result<String, String> {
     let seeds = unlace_analysis::listing::xrefs::discovery_seeds(
         &file,
         &inventory,
-        prog.arch().analysis_funcstart_patterns,
+        prog.arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0,
     );
     // The operand resolves to an address BEFORE the walk so the walk can be
     // pointed at it: a function whose only inbound edge is an indirect call

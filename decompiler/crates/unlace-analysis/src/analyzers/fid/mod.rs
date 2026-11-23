@@ -117,7 +117,9 @@ impl AnalysisPass for FidPass {
 
         let chunks = ctx
             .arch
-            .analysis_funcchunks
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Funcchunks>()
+            .0
             .then(|| crate::listing::kuna_funcchunks::ChunkModel::build(listing));
         for (&entry, _) in listing.functions() {
             let Ok(quad) = fingerprint_function_in(listing, ctx.arch, entry, chunks.as_ref())
@@ -167,7 +169,9 @@ pub fn fingerprint_function(
     entry: u64,
 ) -> Result<FidHashQuad, &'static str> {
     let chunks = arch
-        .analysis_funcchunks
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Funcchunks>()
+        .0
         .then(|| crate::listing::kuna_funcchunks::ChunkModel::build(listing));
     fingerprint_function_in(listing, arch, entry, chunks.as_ref())
 }

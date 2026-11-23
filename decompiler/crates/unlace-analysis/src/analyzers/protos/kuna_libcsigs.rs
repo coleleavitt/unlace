@@ -5382,7 +5382,10 @@ impl AnalysisPass for LibcSigsPass {
             types,
             word_size,
             super::L,
-            ctx.arch.analysis_nameladder,
+            ctx.arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
+                .0,
         );
         seed_resolved_prototypes(&mut out, &resolved, LIBC_EXT, types, word_size, super::L);
         let complex_max = crate::analyzers::dwarf::kuna_dwarfcomplex::max_size(
@@ -5425,7 +5428,10 @@ impl AnalysisPass for LibcSigsPass {
             types,
             word_size,
             super::L,
-            ctx.arch.analysis_nameladder,
+            ctx.arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
+                .0,
         );
         seed_resolved_prototypes(&mut out, &resolved, &complex, types, word_size, super::L);
         let arm = ctx.arch.archid.starts_with("ARM:");
@@ -5447,7 +5453,10 @@ impl AnalysisPass for LibcSigsPass {
                     types,
                     word_size,
                     super::L,
-                    ctx.arch.analysis_nameladder,
+                    ctx.arch
+                        .kuna_options
+                        .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
+                        .0,
                 );
                 seed_resolved_prototypes(
                     &mut libm,

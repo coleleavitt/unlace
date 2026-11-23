@@ -218,7 +218,12 @@ pub fn vote(arch: &Architecture, stub: &Address) -> Option<ImportVote> {
 /// drive seeds the `protoorder` statements. A no-op unless `importvote` is on
 /// and the analysis tier recorded call sites.
 pub fn seed(arch: &mut Architecture, data: &Funcdata) {
-    if !arch.analysis_importvote || arch.kuna_import_sites.is_empty() {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_importvote::Importvote>()
+        .0
+        || arch.kuna_import_sites.is_empty()
+    {
         return;
     }
     let returns: Vec<Address> = data
@@ -290,3 +295,12 @@ fn statement(arch: &Architecture, v: ImportVote) -> Option<RecoveredTypes> {
         callers_vote: true,
     })
 }
+
+crate::kuna_flag!(
+    /// (kuna) State an undeclared import's call-site vote (option `importvote`).
+    Importvote,
+    "importvote",
+    "Undeclared import call-site vote",
+    unset: false,
+    shipped: true
+);

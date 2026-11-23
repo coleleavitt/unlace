@@ -65,13 +65,20 @@ pub fn analyze(
         return DosExits::default();
     }
     let sites = exit_sites(arch, translate, code_space, listing);
-    let noreturn = if sites.is_empty() || !arch.analysis_noreturn_propagate {
+    let noreturn = if sites.is_empty()
+        || !arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::NoreturnPropagate>()
+            .0
+    {
         Vec::new()
     } else {
         crate::analyzers::noreturn_propagate::propagate_exits(
             listing,
             &sites,
-            arch.analysis_noreturn_reach,
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::NoreturnReach>()
+                .0,
         )
     };
     DosExits { sites, noreturn }

@@ -374,7 +374,11 @@ pub(crate) fn summary(arch: &Architecture, entry: &Address, depth: u8) -> Summar
 /// walk loses, and the gates of the no-return names that end its paths.
 fn walk_options(arch: &Architecture) -> u8 {
     u8::from(arch.kuna_calleeargs)
-        | u8::from(arch.analysis_noreturn_known) << 1
+        | u8::from(
+            arch.kuna_options
+                .get::<crate::kuna_analysisgates::NoreturnKnown>()
+                .0,
+        ) << 1
         | u8::from(
             arch.kuna_options.get::<crate::kuna_gobounds::GoBounds>().0
                 && arch.source_lang().is_go(),

@@ -318,7 +318,14 @@ impl AnalysisPass for StringLiteralPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let slots = kuna_ptrslot::PointerSlots::new(ctx.file);
-        let mut strings = scan_strings(ctx.file, self.min_len, ctx.arch.analysis_codestrings);
+        let mut strings = scan_strings(
+            ctx.file,
+            self.min_len,
+            ctx.arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Codestrings>()
+                .0,
+        );
         strings.retain(|fact| !slots.holds_address(fact.addr));
         AnalysisOutput {
             strings,

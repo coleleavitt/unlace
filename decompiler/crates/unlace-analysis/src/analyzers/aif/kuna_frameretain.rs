@@ -54,7 +54,11 @@ pub(crate) fn prior_inventory(
     let walked: BTreeSet<u64> = base.functions().map(|(&entry, _)| entry).collect();
     let mut entries = walked.clone();
     if arch.analysis_aif.enabled() {
-        let pointers = if arch.analysis_ptrentry {
+        let pointers = if arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Ptrentry>()
+            .0
+        {
             super::kuna_ptrentry::pointer_entry_seeds(
                 file,
                 base,

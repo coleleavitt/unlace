@@ -2600,7 +2600,10 @@ fn decompile_func_full_with_objects_inner(
         if let Some(expop) = arch.symboltab.function_extra_pop_across_scopes(&entry_addr) {
             fd.get_func_proto_mut().set_extra_pop(expop);
         }
-        let go_string_input = if arch.analysis_godwarfsig
+        let go_string_input = if arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::Godwarfsig>()
+            .0
             && arch.image_linux_elf
             && arch.archid == "x86:LE:64:default:golang"
             && arch.source_lang_detected.is_go()
@@ -2626,7 +2629,10 @@ fn decompile_func_full_with_objects_inner(
             && recovered_proto.is_some()
             && mapped_params.is_empty()
             && staged_proto_model.is_none()
-            && arch.analysis_godwarfsig
+            && arch
+                .kuna_options
+                .get::<crate::kuna_analysisgates::Godwarfsig>()
+                .0
         {
             fd.kuna_go_receiver = arch
                 .symboltab

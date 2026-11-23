@@ -39,7 +39,7 @@ fn build_fd(mode: GoWriteBarrierMode, lang: SourceLang) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.go_write_barrier = mode.as_u8();
+    ctx.kuna_options.set(mode);
     ctx.source_lang = lang;
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());

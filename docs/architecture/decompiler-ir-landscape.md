@@ -42,7 +42,9 @@ loader (unlace-analysis here; Ghidra's Java side)
   simple and composable.
 - The cost: every rule can touch everything, so types, calls, dataflow and variables depend on each
   other. That was the ~300k-line cycle measured in `notes/crate-architecture.md`, and why the split
-  keeps P3–P6 together as one `unlace-bandb` crate: it is a single fixpoint by design.
+  keeps P3–P6's cyclic core together as one crate: it is a single fixpoint by design. Step 10 measured
+  the cycle inside P3–P6: 81 modules (116k lines, all four phases) form it; the other 168 modules
+  below it or unrelated to it moved to `unlace-bandb-base` without inverting an edge.
 
 ## Binary Ninja (a ladder of IRs)
 
@@ -128,14 +130,16 @@ now (rustc_middle + providers style; lines of src/*.rs incl. in-tree tests, 2026
    │                       FuncState/ArchStates slots, KunaHooks table   (like rustc_middle)
    ├─ unlace-lift          43k   P1–P2   (SLEIGH p-code → Funcdata)
    ├─ unlace-structure     29k   P7–P8
-   ├─ unlace-bandb        249k   P3–P6   the fixpoint stays one crate, as the algorithm intends
+   ├─ unlace-bandb-base    84k   P3–P6   the modules outside the fixpoint's cycle (step 10)
+   ├─ unlace-bandb        165k   P3–P6   the cyclic core stays one crate, as the algorithm intends
    └─ unlace-emit          74k   P9
 unlace-decomp            18k   driver: schedule, option dispatch, fills the hooks table; facade
-                               re-exports the five crates below it
+                               re-exports the crates below it
 ```
 
 - The real boundaries are lifting (in), structuring and emitting (out), and the IR underneath. The
-  middle fixpoint is one unit by design; splitting it further fights the algorithm.
+  middle fixpoint is one unit by design; splitting its cycle fights the algorithm, while the acyclic
+  modules around it split off for free.
 - Binary Ninja splits that middle only because it lowers through separate IR levels. This engine
   does not, and Ghidra's ruleset assumes it does not.
 - Hex-Rays' maturity levels are the idea to borrow inside `bandb` later: mark what each phase has

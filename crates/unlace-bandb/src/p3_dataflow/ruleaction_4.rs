@@ -413,7 +413,7 @@ impl Rule for RuleStoreVarnode {
         let offoff =
             unlace_base::space::AddrSpace::address_to_byte(offoff, baseoff.get_word_size());
         let addr = Address::new(Rc::clone(&baseoff), offoff);
-        if !super::kuna_storecopyeffects::can_materialize(data, op, &addr, size) {
+        if !crate::kuna_storecopyeffects::can_materialize(data, op, &addr, size) {
             return 0;
         }
         crate::kuna_stackparamviews::record_store(data, &addr, size);
@@ -440,7 +440,7 @@ impl Rule for RuleStoreVarnode {
         if store_unmapped {
             data.scope_local_mark_not_mapped(&baseoff, offoff, size, false);
         }
-        super::kuna_storecopyeffects::collapse(data, op);
+        crate::kuna_storecopyeffects::collapse(data, op);
         1
     }
 }

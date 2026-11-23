@@ -3,87 +3,39 @@
 //! Stage-aligned module group; declared flatly at the crate root via re-export in
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
-pub mod condconst;
-pub mod condexe;
 pub mod coreaction_early;
-pub mod kuna_addcarrychain;
-pub mod kuna_alloca; // (kuna) a dynamic stack allocation becomes alloca(size)
-pub mod kuna_arraystride;
-pub mod kuna_bitidioms;
-pub mod kuna_booleanmask;
 mod kuna_calleeflags;
 pub mod kuna_calleehomes;
 pub mod kuna_calleememory;
-pub mod kuna_cancelbytearithmetic;
-pub mod kuna_cmpmerge;
-pub mod kuna_compareform;
-mod kuna_constantbytes;
-pub mod kuna_constspaceload;
-pub mod kuna_copyrun;
-pub mod kuna_deadcascade;
-pub mod kuna_devectorize;
-pub mod kuna_flagcompare;
-pub mod kuna_floatnegation;
-pub mod kuna_floatnegpiece;
-pub mod kuna_floatquiet;
 pub mod kuna_globalarrayanchor;
 pub mod kuna_globalcallranges;
 pub mod kuna_globalcallstore;
 pub mod kuna_globalfieldstore;
 pub mod kuna_globalorderkeep;
-pub mod kuna_globalstorekeep;
-pub mod kuna_haltloopguard;
 pub mod kuna_indexaliasguard;
-pub mod kuna_indirectanchor; // (kuna) an op inserted after a guard INDIRECT anchors to the op it speaks for
-pub mod kuna_inputrefinement;
-pub mod kuna_inputtile;
-pub mod kuna_intfloatround;
-pub mod kuna_latecse;
+#[cfg(test)]
+mod kuna_indirectanchor_tests;
 pub mod kuna_leafmemory;
-pub mod kuna_loopcounterstore;
-pub mod kuna_mba; // (kuna `mba`) linear mixed boolean-arithmetic simplification
-pub mod kuna_memoryguard;
-pub mod kuna_mulblob; // (kuna) keep a widened multiply operand a value, not an aggregate
-pub mod kuna_multiregargs;
 pub mod kuna_narrowload; // (kuna) a narrow LOAD keeps its own width
-pub mod kuna_octeoneffects;
-pub mod kuna_opaquearms;
 pub mod kuna_opaquedomain;
 pub mod kuna_opaqueglobals;
-pub mod kuna_opaqueimplied;
 pub mod kuna_opaquepredicate;
-pub mod kuna_ovlesssimplify;
 pub mod kuna_pairrefine;
-pub mod kuna_partialglobalload;
-pub mod kuna_persistcalls;
-pub mod kuna_pointeestorekeep;
-pub mod kuna_prunedssa;
-pub mod kuna_rangefold;
 pub mod kuna_regnarrow;
-pub mod kuna_renamereads;
 pub mod kuna_repframecopy;
-pub mod kuna_repstring;
-pub mod kuna_selectdiv;
-pub mod kuna_simdlane;
-pub mod kuna_spillstoreguard;
-pub mod kuna_splitstorekeep;
 pub mod kuna_stackbytecopy;
 pub mod kuna_stackeffects;
-pub mod kuna_stackreadscope;
 pub mod kuna_stackstoreguard;
-pub mod kuna_storecopyeffects;
-pub mod kuna_strlenscan;
-pub mod kuna_tiedstorekeep;
-pub mod kuna_volatileload;
-pub mod kuna_wideslice;
-pub mod kuna_wrapsplit;
-pub mod kuna_x87truncate;
+#[cfg(test)]
+mod kuna_storecopyeffects_tests;
 pub mod ruleaction_1;
-pub mod ruleaction_2;
 pub mod ruleaction_3;
 pub mod ruleaction_4;
 pub mod ruleaction_5;
 pub mod ruleaction_6;
-pub mod ruleaction_7;
+#[cfg(test)]
+mod ruleaction_7_ptrflow_tests;
+#[cfg(test)]
+mod ruleaction_7_tests;
 pub mod ruleaction_8;
 pub mod subflow;

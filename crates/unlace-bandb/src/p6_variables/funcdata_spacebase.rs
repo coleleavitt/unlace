@@ -684,7 +684,7 @@ impl FuncdataSpacebaseExt for Funcdata {
 
         super::kuna_callarrayextent::coalesce_delay_slot_init(self, &mut state, &space);
         super::kuna_callarrayextent::coalesce(self, &mut state, &space);
-        super::kuna_arraysize::gather(self, &mut state, &space);
+        crate::kuna_arraysize::gather(self, &mut state, &space);
 
         let reach_checks = match self.get_arch().types_rc() {
             Some(t) => crate::kuna_storereach::prepare_hints(self, &mut state, &space, t.as_ref()),
@@ -1404,7 +1404,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
                     None => continue,
                 }
             }
-            super::kuna_wrappedstackaggregate::map(
+            crate::kuna_wrappedstackaggregate::map(
                 self,
                 space,
                 offset,

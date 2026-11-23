@@ -282,6 +282,7 @@ the positional rule; outside Objective-C images the option is inert.
 
 ```yaml
 Anchors:
+  - crates/unlace-bandb-base/src/p4_calls
   - crates/unlace-bandb/src/p4_calls
   - crates/unlace-middle/src/p4_calls
 ```
@@ -605,7 +606,7 @@ raises a hard error; an unassignable *output* is only survivable where the
 caller opted into `ignore_output_error`, which degrades the return to `void`.
 
 Explicit input storage participates in assignment before default slots are chosen
-(`crates/unlace-bandb/src/p4_calls/kuna_inputstorage.rs (assign)`).
+(`crates/unlace-bandb-base/src/p4_calls/kuna_inputstorage.rs (assign)`).
 An overridden argument consumes its stated physical storage, including register
 aliases and the components of joined storage, instead of consuming its former
 model-assigned slot. Remaining arguments and synthetic return pointers use the
@@ -817,7 +818,7 @@ registers and the outgoing stack area in **one** section, a stack trial
 the argument is dropped; whatever computed it then dies to dead-code
 elimination, so the destination of a `scanf` is not merely unprinted but
 unwritten. (kuna) The variadic stack-section split
-(`crates/unlace-bandb/src/p4_calls/kuna_varargstackargs.rs`, always on) cuts such a
+(`crates/unlace-bandb-base/src/p4_calls/kuna_varargstackargs.rs`, always on) cuts such a
 section in two at its first stack trial, so the register prefix and the stack
 tail are scored independently and the ABI's hole stops being evidence about the
 stack argument. The cut also keeps step 4's hole-filling promotion inside the
@@ -834,7 +835,7 @@ That leaves the variadic callee nothing declares: XNU's `panic`, `IOLog`, a
 program's own logger. Its prototype is unlocked, so the split never happens and
 `panic("... @%s:%d")` loses the two arguments the caller stored at `[sp]` and
 `[sp+8]`. On an Apple AArch64 image
-`crates/unlace-bandb/src/p4_calls/kuna_darwinvarargs.rs` (always on,
+`crates/unlace-bandb-base/src/p4_calls/kuna_darwinvarargs.rs` (always on,
 part of the same rule) reads the callee's own answer. Apple's `va_start` is the
 address of the first stack argument, which is the stack pointer at the call: the
 callee forms it (`add x8, x29, #0x10` over a frame of `0x10` below the pointer)
@@ -888,7 +889,7 @@ in the image, so its body is the only evidence there is. The Wayland
 behind a three-register hole, one past `maxchain` — and kuna rendered it as
 `void sub_6500(long a0)` whose first statement branches on a local nothing ever
 assigned. (kuna) The own-input gap tolerance
-(`crates/unlace-bandb/src/p4_calls/kuna_inputparamgap.rs`, always on) stops a gap
+(`crates/unlace-bandb-base/src/p4_calls/kuna_inputparamgap.rs`, always on) stops a gap
 slot from ending the chain when the `ParamActive` is the one
 `ActionInputPrototype` built, so the active trials past the hole survive and step
 4's own promotion fills the interior with the unreferenced trials
@@ -941,7 +942,7 @@ that trial never had by reading `r9` at the call — which resolves to the
 *caller's* untouched incoming `r9`. kuna emitted
 `EVP_DigestFinal_ex(v3,v9,v7,a3,1)`: five arguments, of which the fourth is the
 reader's own parameter and therefore looks load-bearing. (kuna) The call-site
-gap veto (`crates/unlace-bandb/src/p4_calls/kuna_stackarggap.rs`, always on)
+gap veto (`crates/unlace-bandb-base/src/p4_calls/kuna_stackarggap.rs`, always on)
 sets `seenchain` at such a slot, so the chain ends there, the stack trial behind
 it is deactivated with everything else past the cut, and the hole is never
 filled. This is the same conclusion step 4 already draws one slot to the right,
@@ -974,7 +975,7 @@ argument *values*: after constant propagation a size argument is a constant
 Varnode, not the register the ABI passes it in — so the storage each argument
 occupied survives only if something records it. (kuna) The call-site
 argument-list reconciliation
-(`crates/unlace-bandb/src/p4_calls/kuna_calleearity.rs`, always on)
+(`crates/unlace-bandb-base/src/p4_calls/kuna_calleearity.rs`, always on)
 records exactly that, on the call spec, and uses it for one thing: when the same
 callee is called more than once in the function, a call whose list is not yet
 written is reconciled against a sibling whose list already is.
@@ -1003,7 +1004,7 @@ argument, while the small arm passes the register live-in
 above. Flow order reaches the small arm's call spec first, so at the moment it
 finalizes its witness is still `input_active` and has recovered nothing yet.
 (kuna) The forward retry
-(`crates/unlace-bandb/src/p4_calls/kuna_calleearityfwd.rs`, always on)
+(`crates/unlace-bandb-base/src/p4_calls/kuna_calleearityfwd.rs`, always on)
 closes that direction. Reordering the finalization would be the obvious way and is the wrong
 one: `check_call_double_use` asks whether *another* call spec is still
 `input_active` while scoring a trial, so deferring a spec past its neighbours'
@@ -1442,7 +1443,7 @@ the DWARF pass's recovered `DW_TAG_subprogram` signature lands (01 §1.4) and
 where the library-prototype table lands for a named libc function. The
 function's own `map param <i>` locks are folded into that prototype's explicit
 input storage before it is locked
-(`crates/unlace-bandb/src/p4_calls/kuna_inputstorage.rs
+(`crates/unlace-bandb-base/src/p4_calls/kuna_inputstorage.rs
 (merge_mapped)`), so its remaining arguments are laid out around them exactly as
 for a callee declared with `map param <func>::<i>`. The locks are then set on
 the locked prototype by slot index once more, which is what still carries a
@@ -1605,7 +1606,7 @@ at the match (01 §1.4).
   recovered no argument, nothing read `ST0`, and the expression that computed
   the operand was dead-code eliminated. A model of their own,
   `__kuna_x87unary`, is registered after the spec's named models on x86-32
-  (`crates/unlace-bandb/src/p4_calls/kuna_x87intrinsic.rs
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_x87intrinsic.rs
   (prototype_xml)`): one floating-point input and one output in `ST0`,
   `extrapop` 4, the `__cdecl` unaffected set. A shared model cannot take the
   `ST0` input without inventing it on every other callee (§2,
@@ -1828,7 +1829,7 @@ at the match (01 §1.4).
   (`x86win.cspec`'s `__stdcall`, and with it `__thiscall`/`__fastcall` callees
   the image does not declare), a direct call whose prototype states no extrapop
   can take the one its callee's own code proves before the INDIRECT is chosen
-  (`crates/unlace-bandb/src/p4_calls/kuna_calleepurge.rs
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_calleepurge.rs
   (callee_extra_pop)`). Flow asks for it as it builds the call spec, because
   only flow holds the instruction decoder. The callee's p-code is walked from
   its entry along every path, through fall-through and direct branches, so a
@@ -1891,7 +1892,7 @@ at the match (01 §1.4).
   every call and nothing checks it. In a loaded ELF image
   (`Architecture::image_elf`, a load-time fact) `option spsolve` (default on)
   checks it first
-  (`crates/unlace-bandb/src/p4_calls/kuna_spsolve.rs (settle)`).
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_spsolve.rs (settle)`).
   Two kinds of call break the constant. A callee that pops more than its
   return address: a function returning an aggregate pops the hidden result
   pointer with `ret 4`, and a `stdcall` or `fastcall` callee pops its
@@ -2008,7 +2009,7 @@ below.
 (kuna) **A variadic argument in the return register.** The guard skips a range
 the call's own output covers exactly (chapter 03), so a variadic call that
 passes an argument in the register it returns in lost that argument.
-`crates/unlace-bandb/src/p4_calls/kuna_varargretreg.rs
+`crates/unlace-bandb-base/src/p4_calls/kuna_varargretreg.rs
 (argument_in_own_output)` decides when the input trial is registered anyway. It
 appends one variadic argument to the call's declared pieces, a `double` when the
 range lies in a floating-point entry of the model and an integer of the range's
@@ -2065,7 +2066,7 @@ classified:
 
   (kuna) The MSVC frame cookie is scored like any other stack trial and
   leaves the argument lists afterwards
-  (`crates/unlace-bandb/src/p4_calls/kuna_stackcookie.rs
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_stackcookie.rs
   (shed_frame_cookies)`). An x86-32 MSVC function with an EH frame pushes the
   cookie below its saved registers (`mov eax,[___security_cookie]; xor
   eax,esp; push eax`) and links the registration record above it into
@@ -2109,7 +2110,7 @@ classified:
   constant 0 (below), dead-code elimination then reaps whatever computed the
   argument. That is visible as deleted basic blocks, not merely as a shorter
   argument list. (kuna) The caller-relative Varnode address is the one probed
-  (`crates/unlace-bandb/src/p4_calls/kuna_callsitestackargs.rs`, always on).
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_callsitestackargs.rs`, always on).
 
   **Direct accesses alias only their bytes** (always on, kuna): a gathered
   pointer that is the stack-pointer input plus constants, through copies and
@@ -2138,7 +2139,7 @@ classified:
   x86-32 under a model that leaves extrapop unknown (`x86win.cspec`), a direct
   call whose callee's own code can be read takes its stack arguments from what
   that code touches
-  (`crates/unlace-bandb/src/p4_calls/kuna_calleestackargs.rs
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_calleestackargs.rs
   (callee_stack_arg_bytes)`). The walk that proves the callee's pop (chapter
   text above, `kuna_calleepurge.rs (callee_arg_bytes)`) also records the
   highest byte at or above the first argument slot that a load or store
@@ -2186,7 +2187,7 @@ classified:
   pop right after a push is a move (`push 3; pop ebx`, MSVC `/O1`'s
   `mov ebx,3`), not the epilogue, and the run goes on past it. A move into
   FS memory ends the run as well
-  (`crates/unlace-bandb/src/p4_calls/kuna_calleepurge.rs
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_calleepurge.rs
   (stores_through)`): `mov fs:[0],ecx` unlinks an MSVC SEH frame, and the
   `pop ecx` that follows it frees the frame's own slot (the `/GS` cookie or
   a local) before the callee-saved registers are restored. A pop into FS
@@ -2322,7 +2323,7 @@ classified:
   to be spilled by the caller — and that spill is a second descendant of exactly
   the Varnode the trial is scoring. The argument is then dropped, and the
   producer with it. (kuna) `spillargtrial` (default-off,
-  `crates/unlace-bandb/src/p4_calls/kuna_spillargtrial.rs`) narrows
+  `crates/unlace-bandb-base/src/p4_calls/kuna_spillargtrial.rs`) narrows
   the STORE arm: at `reload` a store stops rejecting when it writes the walked
   Varnode's own value — operand 2, never the pointer — into a caller-frame slot
   *and* a later LOAD reads that slot back at the same width, which is a genuine
@@ -2367,7 +2368,7 @@ classified:
   the two instructions before it plainly load its argument registers.
 
   (kuna) The self-cancelling-operand test
-  (`crates/unlace-bandb/src/p4_calls/kuna_zeroidiomuse.rs`, always
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_zeroidiomuse.rs`, always
   on) skips such an op entirely — neither a rejection nor a step the walk continues through —
   when it is an `INT_XOR` or `INT_SUB` whose two operands are the same value.
   `INT_XOR(v,v)` is `0` whatever `v` is, so nothing downstream of it can observe
@@ -2397,7 +2398,7 @@ classified:
   on three parameters.
 
   (kuna) The mutually-exclusive-path test
-  (`crates/unlace-bandb/src/p4_calls/kuna_exclusivearguse.rs`, always on) skips a
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_exclusivearguse.rs`, always on) skips a
   `CPUI_LOAD`/`CPUI_STORE` descendant when the matched op is a `CALL`/`CALLIND`,
   the walked Varnode is the **address** operand of the access rather than the
   stored datum, the walked Varnode is **defined in a block that both the
@@ -2434,7 +2435,7 @@ classified:
   family's own design notes warn against.
 
   (kuna) The mutually-exclusive call/return test
-  (`crates/unlace-bandb/src/p4_calls/kuna_exclusivecallret.rs (applies, skips_use)`,
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_exclusivecallret.rs (applies, skips_use)`,
   always on) applies the same mutual-exclusion argument to a call and a return. GCC
   compiles `return a(x) ? b(x) : x` with a tail call to `b`, so on e500 the same
   scalar is the tail call's argument on one arm and the function's return on the
@@ -2460,7 +2461,7 @@ classified:
   depend on the use being scored, so it is decided once per walk.
 
   (kuna) The shared-push rule
-  (`crates/unlace-bandb/src/p4_calls/kuna_sharedpush.rs (declared_arm_shares)`,
+  (`crates/unlace-bandb-base/src/p4_calls/kuna_sharedpush.rs (declared_arm_shares)`,
   always on) covers a stack argument that MSVC pushes once above a branch because
   both arms need it: `push 0x14; jz L; call [malloc]; jmp M; L: call _emalloc;
   M: pop ecx`. Both calls are entered with the same stack pointer and read the
@@ -2870,7 +2871,7 @@ fixed arguments sort to the front first (`ParamActive::sort_fixed_position`).
 ### Status-only Go channel receive
 
 `kuna_gochanrecv`
-(`crates/unlace-bandb/src/p4_calls/kuna_gochanrecv.rs`)
+(`crates/unlace-bandb-base/src/p4_calls/kuna_gochanrecv.rs`)
 uses the address-scoped `godwarfsig` proof from §1 for a direct blocking
 receive. The exact amd64 Go stack-guard hot path preserves the full RAX
 channel handle, provides an aligned private eight-byte destination in RBX,
@@ -3050,7 +3051,7 @@ INDIRECT landed between the guards and their CALL, the backward walk stopped
 there, every output trial was marked no-use, and the call lost its return value
 while its INDIRECT creation stayed behind as a local the emitted C reads and never
 assigns. The (kuna) anchor
-(`crates/unlace-bandb/src/p3_dataflow/kuna_indirectanchor.rs (anchor_of)`)
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_indirectanchor.rs (anchor_of)`)
 completes the redirect.
 The shape that reaches it is `RulePullsubIndirect` pulling a SUBPIECE through the
 guard INDIRECT of a frame slot whose upper half is read after the call. A `prev`
@@ -4157,7 +4158,7 @@ Register-space parents (`r3:r4` is not a named register, `EDX:EAX` is not
 contiguous) are unaffected.
 
 The sole-use check has one narrow terminating-path exception, the (kuna)
-no-return tolerance (`crates/unlace-bandb/src/p4_calls/kuna_noreturnretuse.rs
+no-return tolerance (`crates/unlace-bandb-base/src/p4_calls/kuna_noreturnretuse.rs
 (call_cannot_reach_return)`, always on). When the use being matched is a RETURN, a candidate
 return register may also feed a CALL/CALLIND whose immediately following and
 block-final op is an artificial halt marked no-return. That call consumes the same
@@ -4278,7 +4279,7 @@ are scratch too, but nothing reads them after a call expecting a value, and
 they stay unknown effects.
 
 (ida) One record kuna adds that the vendored specs leave implicit: the **x86
-direction flag** (`crates/unlace-bandb/src/p4_calls/kuna_dfunaffected.rs`).
+direction flag** (`crates/unlace-bandb-base/src/p4_calls/kuna_dfunaffected.rs`).
 Every x86 string instruction scales its pointer step by `1 − 2·DF`, and SLEIGH
 lowers that faithfully, so the flag reaches emitted output as a live variable and
 a `(uint8)df * -2 + 1` stride on every inlined `strcmp`/`memcpy`. The flag is not
@@ -4368,7 +4369,7 @@ emits a `SUBPIECE` whose output is wider than its input. Such a site fails the
 restriction and restarts, and the restart builds the call with its inputs
 locked, so nothing narrows them. Success
 commits the new input/output lists directly. For a locked variadic prototype,
-`crates/unlace-bandb/src/p4_calls/kuna_varargtransfer.rs
+`crates/unlace-bandb-base/src/p4_calls/kuna_varargtransfer.rs
 (pending_trials)` preserves existing trials outside the fixed parameters before
 `commit_new_inputs` rebuilds the fixed head. Their existing Varnodes, widths and
 scoring flags survive, with slots remapped and model-entry associations cleared
@@ -4541,7 +4542,7 @@ and all — into the function's Override store keyed by the call address
 (`crates/unlace-middle/src/p0_knowledge/overrides.rs
 (FuncProtoOverride::prototype)`). It then tries `late_restriction`, the same
 in-place merge as above. A locked output in join storage requires a
-restart unless the call already defines that exact address and full size (`crates/unlace-bandb/src/p4_calls/kuna_joincalloutput.rs
+restart unless the call already defines that exact address and full size (`crates/unlace-bandb-base/src/p4_calls/kuna_joincalloutput.rs
 (needs_reflow)`). The late output transfer compares physical addresses and
 cannot rebuild a joined result from a surviving call output or INDIRECT
 creation in just one component register. Accepting that transfer can discard
@@ -4622,7 +4623,7 @@ an index printed `(unsigned long)(unsigned int)x`, and a narrow LoongArch value
 printed as `CONCAT44(v1,fi(k))` with an unassigned `v1`.
 
 `narrowext` replaces the spec's answer with the convention's
-(`crates/unlace-bandb/src/p4_calls/kuna_narrowext.rs`). The value must
+(`crates/unlace-bandb-base/src/p4_calls/kuna_narrowext.rs`). The value must
 sit in the least significant bytes of a register entry (not a join, not a
 floating-point entry, not the stack) and its type must state its sign: a signed
 integer or enum is sign-extended, an unsigned one, an unsigned enum or a `bool`
@@ -4995,7 +4996,7 @@ which zeroes the register before the call and tests it after. Two more models
 describe them, derived when the compiler spec is read from its own default
 model on any language with those registers (x20/x21 at eight bytes, AArch64;
 R13/R12, x86-64) unless the spec declares models of the same names
-(`crates/unlace-bandb/src/p4_calls/kuna_swiftcall.rs (derive_model)`,
+(`crates/unlace-bandb-base/src/p4_calls/kuna_swiftcall.rs (derive_model)`,
 the way a spec with no `__thiscall` gets one cloned off its default), so a
 vendored spec stays as Ghidra ships it and a spec a Ghidra host sends carries
 them too. `__swiftcall` is the C model with one more input entry ahead of the
@@ -5101,7 +5102,7 @@ string it appends to; under the C model the call dropped it. An imported free
 function is recorded in `no_self` as a defined one is.
 
 The error register has two moments the dataflow names
-(`crates/unlace-bandb/src/p4_calls/kuna_swifterror.rs`, an action
+(`crates/unlace-bandb-base/src/p4_calls/kuna_swifterror.rs`, an action
 after `ActionFuncLink` has given every call its model and before heritage):
 after a call under a throwing model, an op defines the register with the
 opaque `swift_error()`, so the caller's test reads the call's error as a call
@@ -5184,7 +5185,7 @@ scratch register the indirect jump goes through is not
 runs the stripped `swift_async_elf` with `swiftcall` off and on.
 
 Two call-site rules read the image's Swift registers
-(`crates/unlace-bandb/src/p4_calls/kuna_swiftcall.rs`,
+(`crates/unlace-bandb-base/src/p4_calls/kuna_swiftcall.rs`,
 `ArchContext::swift_abi`, present only when the pass bound the convention).
 A call whose block writes zero to the whole error register as its last write
 before the call — a constant copy, the register `xor`ed with itself, or the
@@ -5363,12 +5364,12 @@ the stack pointer the same way but also reads the stack, and a run of pops (MSVC
 `/O1` cleanup) cannot be told from a `pop ebp` epilogue locally, so only an
 `add esp,k` is read and a pop cleanup is declined. So is one followed by another
 bare `add esp` before the next call, branch or return
-(`crates/unlace-bandb/src/p4_calls/kuna_msvcbyval.rs (split_cleanup)`):
+(`crates/unlace-bandb-base/src/p4_calls/kuna_msvcbyval.rs (split_cleanup)`):
 the cleanup may be split (`add esp,8; add esp,4`), and its first half is not
 all of it. At the end of
 `ActionDefaultParams`, once every call has its prototype and its pop, each call
 to a parked declaration whose prototype is still the open one is read this way
-(`crates/unlace-bandb/src/p4_calls/kuna_msvcbyval.rs (size_slots)`):
+(`crates/unlace-bandb-base/src/p4_calls/kuna_msvcbyval.rs (size_slots)`):
 the call takes the full declaration, the class an `undefined` of the slot's width
 (an `undefined1` array past 8 bytes), locked under the call's own `__cdecl`
 model, before `ActionFuncLink` reads it. The size is the call site's, not the
@@ -5421,7 +5422,7 @@ model aligns the 8-byte parameter to a boundary the stack does not use.
 **The object.** A slot whose address the caller forms during the walk is an
 object as well as an argument, so `ActionRestrictLocal` leaves it mapped instead
 of marking it as the call's parameter storage
-(`crates/unlace-bandb/src/p4_calls/kuna_msvcbyval.rs (keeps_slot_mapped)`),
+(`crates/unlace-bandb-base/src/p4_calls/kuna_msvcbyval.rs (keeps_slot_mapped)`),
 and whatever fills it through that address prints as the same local the call is
 passed. The walk also finds the call that builds the object: for an earlier
 call whose MSVC name makes it a `__thiscall` constructor (`??0`), the latest
@@ -5433,7 +5434,7 @@ when it is the start of the class's slot while the slot is still unreserved
 further back, that call builds the argument. `Heritage::guardCalls` (§4.3,
 *Effect lists*) then gives the builder a `killedbycall` effect on every range
 inside the slot instead of `unknown_effect`
-(`crates/unlace-bandb/src/p4_calls/kuna_msvcbyval.rs (constructed_ranges, constructs)`):
+(`crates/unlace-bandb-base/src/p4_calls/kuna_msvcbyval.rs (constructed_ranges, constructs)`):
 the slot's value after the call is one the call creates, not one it may modify,
 so the `ecx` value `push ecx` stored to reserve the slot is dead, and the
 function no longer gains `ecx` as a parameter it only pushed. `Build` becomes
@@ -5503,7 +5504,7 @@ save/restore window to the RETURN untouched, its trial passes ancestor realism
 (the movement is real, just not a return value), and §4.2's
 `build_return_output` dutifully emits `return CONCAT44(...)` with a
 double-width return type. The extension is a one-line gate at the join point:
-`crates/unlace-bandb/src/p4_calls/kuna_returnpair.rs
+`crates/unlace-bandb-base/src/p4_calls/kuna_returnpair.rs
 (keep_single_return)`, read in `coreaction_protos.rs
 (ActionReturnRecovery::build_return_output)` — when `option returnpair single`
 is set, a gathered multi-register return is truncated to its first
@@ -5547,7 +5548,7 @@ straight-line blocks to one block ending in a CBRANCH, two out-edges, and a
 CBRANCH on the same condition as that block or its complement
 (`BooleanExpressionMatch`), i.e. `ConditionalExecution::verify` short of its
 op-removability test
-(`crates/unlace-bandb/src/p4_calls/kuna_condexeret.rs
+(`crates/unlace-bandb-base/src/p4_calls/kuna_condexeret.rs
 (threadable_block)`) — a second walk runs from the same RETURN
 (`kuna_condexeret.rs (remember)`). That walk is put in *collect* mode
 (`funcdata_varnode.rs (AncestorRealistic::collect_inputs)`): a non-directwrite
@@ -5623,12 +5624,12 @@ MULTIEQUAL through exactly one in-edge fixes the merge's branch for that
 execution: the edge leads back through straight-line blocks to one out-edge of
 the init block, and the merge tests the same condition or its complement.
 `ConditionalExecution::forced_out_block`
-(`crates/unlace-bandb/src/p3_dataflow/condexe.rs
+(`crates/unlace-bandb-base/src/p3_dataflow/condexe.rs
 (ConditionalExecution::forced_out_block)`) names the out block, using the
 control-flow tests of `ConditionalExecution::verify` without its
 op-removability test. The MULTIEQUAL's output carries the merge and that out
 block, and so does every value computed from it inside the merge block
-(`crates/unlace-bandb/src/p4_calls/kuna_condexeretuse.rs (carried)`).
+(`crates/unlace-bandb-base/src/p4_calls/kuna_condexeretuse.rs (carried)`).
 A use of such a value outside the merge block is skipped when the forced out
 block cannot reach it (`kuna_condexeretuse.rs (cannot_arrive)`). The
 reachability walk follows only the forced out-edge at any other such merge it
@@ -5830,7 +5831,7 @@ were gone. On AArch64 the high half was sometimes the one kept, returning `b`
 alone in place of the whole value.
 
 The moves are still in the IR when return recovery builds the pair, so it
-records then (`crates/unlace-bandb/src/p4_calls/kuna_retinputhalf.rs`,
+records then (`crates/unlace-bandb-base/src/p4_calls/kuna_retinputhalf.rs`,
 `note_moved_back_returns`) each used output register whose value at some RETURN
 walks back through moves, phis and non-creating indirects to its own input by way
 of another register. The repair skips the placement test for a recorded register
@@ -6611,7 +6612,7 @@ in the `Override` store and the call spec records the count). The call is then
 offered the same trials past its declared arguments that it is offered without
 the override, they are scored the same way, and the calls around it see the same
 competition. Two steps in
-`crates/unlace-bandb/src/p4_calls/kuna_formattail.rs` finish the
+`crates/unlace-bandb-base/src/p4_calls/kuna_formattail.rs` finish the
 call. When it finalizes, `keep_declared_trials` marks every declared
 (fixed-position) trial active and used, because `fillinMap`'s positional rules
 can end a list at a gap the ABI makes on purpose: a ninth `double` goes on the
@@ -8053,7 +8054,7 @@ because its value is the resolver. The pairs reach the engine as
 `Architecture::plt_local`. When flow builds the call spec of a direct call
 (`crates/unlace-lift/src/p2_lift/flow.rs (build_call_specs)`), a stub
 in that table whose definition is a known function and which declares no
-prototype of its own (`crates/unlace-bandb/src/p4_calls/kuna_pltlocal.rs
+prototype of its own (`crates/unlace-bandb-base/src/p4_calls/kuna_pltlocal.rs
 (definition)`) has its `FuncCallSpecs` built at the definition's entry. The
 printed name and the flow effects (no-return, inline, call-fixup injection)
 are still queried at the stub, so the call reads exactly as before, and a
@@ -8224,7 +8225,7 @@ the scrubbed build's `xmm0`. An AArch64 object built in the test covers `keep`,
 ### (kuna) `cachereturn` — a function that returns its cache cell
 
 (kuna) `cachereturn` (default **on**, Swift images only,
-`crates/unlace-bandb/src/p4_calls/kuna_cachereturn.rs`) takes a
+`crates/unlace-bandb-base/src/p4_calls/kuna_cachereturn.rs`) takes a
 return trial that `ancestorOpUse` refuses because the value is a memory cell's
 contents on every path:
 
@@ -8444,7 +8445,7 @@ callee starts, so the printed call compiles back to the same instructions.
 ### (kuna) `varargsharedfloat` — a variadic double that also feeds an earlier argument
 
 (kuna) `varargsharedfloat` (default off,
-`crates/unlace-bandb/src/p4_calls/kuna_varargsharedfloat.rs
+`crates/unlace-bandb-base/src/p4_calls/kuna_varargsharedfloat.rs
 (feeds_earlier_argument)`) keeps a 32-bit PowerPC variadic double whose value
 also feeds an earlier argument of the same call. `int a9(double x) { return
 sumi(2, x * 2, x); }` with `sumi(int, ...)` compiles at clang -O0 to
@@ -9546,7 +9547,7 @@ fill, so in `scvtf d0,w0; ..; fmadd d0,..` the returned zero is `scvtf`'s.
 A `float` in `s0` was already narrowed by the dead-code trim of a zero-extended
 return, but its masks are 64 bits wide and cannot narrow 16 bytes to 8.
 
-The rule (`crates/unlace-bandb/src/p4_calls/kuna_zerofillreturn.rs`,
+The rule (`crates/unlace-bandb-base/src/p4_calls/kuna_zerofillreturn.rs`,
 always on) works in
 two steps. Right after flow, before heritage, the driver
 (`crates/unlace-decomp/src/infra/decompile_drive.rs`) calls `seed`,
@@ -10517,11 +10518,11 @@ uninitialized ten-byte local, or a payload phi. The operation and register ident
 remain explicit. Empty-return evidence is captured before this rewrite. Injected
 operations and operands outside the complete ten-byte stack-register bank retain
 their original inputs. Implementation:
-`crates/unlace-bandb/src/p4_calls/kuna_x87free.rs`.
+`crates/unlace-bandb-base/src/p4_calls/kuna_x87free.rs`.
 
 **(kuna) The x87 stack depth at each return — `option x87depth`, default on, `crates/unlace-bandb/src/p4_calls/kuna_x87depth.rs (facts)`.** The must-empty analysis above needs an explicit FFREE; the common gcc shape has none. A function that calls a float-returning helper only for its side effect pops the result with `fstp %st(0)`, and since SLEIGH models ST0–ST7 as fixed registers moved by copy shifts, with no stack top and no shift at a call, ST0 at the `ret` holds whatever the pops moved down: return recovery then returns an undefined `long double`. Before SSA the pass walks each block's raw ops in order and counts the depth: the `ST7 = ST6` copy that opens a push adds one, the `ST6 = ST7` copy that closes a pop removes one, and a pop or any other read of ST(i) needs a depth above i. The other shift copies and the `tmp = ST7` of the `fdec` rotation (`fld m64`) are not reads. The System V i386 convention supplies the rest: the stack is empty at entry and at every call, and each call leaves an unknown 0 or 1 values. Reads after a call bound its unknown from below, the next call and every join with a known depth pin it, and a join of two calls' results relates the two unknowns (a union-find with offsets, the difference-constraint system IDA's x87 solver builds for its LP). A return whose depth is determined and 0 is added to the must-empty returns, so the same rule retires the ST0 trial when every ordinary return agrees. An MMX access to the bank, a tag-word write, a negative depth, a call with a non-empty stack, or a conflict at a join gives no answer, and a return whose depth still depends on an unconstrained call is left alone. `callerreads` asks the same question from the caller's side (`kuna_x87depth.rs (call_leaves)`): it walks a call site's code from the return address to the next call, and when that pins the callee's effect to 0 the push shift that reads ST0 there is not a read of a returned value. Every call to one direct callee shares one unknown, as IDA's solver ties them, so a read after one call settles all of them. Where the solved depth contradicts a declared type, `ActionPrototypeWarnings` adds IDA's warnings (`kuna_x87depth.rs (warn)`): a function whose output is locked to a non-float type but that returns at depth 1 on every path (`WARN_MUST_RET_FP`), and a call whose callee's output is locked to a non-float type but that is proven to leave a value. Exercised by `tests/stages/kuna-x87depth.xml` and `tests/stages/kuna-x87depth-warn.xml`.
 
-**(kuna) The System V register save area of a variadic function — `option varargsave`, default off, `crates/unlace-bandb/src/p4_calls/kuna_varargsave.rs (strip)`.** A variadic x86-64 function spills each argument register its named parameters do not use into a register save area (`rdi..r9` at `base+8*i`, then `test al,al` around a block that stores `xmm0..xmm7` at `base+48+16*j`) and builds a `va_list` from it. Each store reads an argument register, so input recovery gave a printf wrapper fourteen parameters and an `if (al)` of xmm copies. At `ActionStart`, before heritage, the pass matches the exact layout: in the entry block a run of saves at stride 8 ending at `r9` (a named register spilled elsewhere, as at `-O0`, is not part of it), a branch around a block that saves a suffix of `xmm0..7` at stride 16 from `base+48`, and in the join block the four `va_list` stores whose values agree with the run: `gp_offset` = 8 per named integer register, `fp_offset` = 48 + 16 per named vector register (clang writes both as one 8-byte store), the overflow area, and the save area's address as `reg_save_area`. Raw ops before heritage are not linked to their writers and every instruction reuses the same temporaries, so each block is walked in order and each write is resolved when it happens to "a register's entry value plus a constant", a constant, or unknown; the entry block's final register state seeds the blocks after it, and a raw CALL's 8-byte stack-pointer drop is added back. The pass declines when the function reads its own save area — the area's address reaching anything but the `reg_save_area` store, staying in a register past the join block, or any other load or store addressing the area — because an inlined `va_arg` needs the stores; gcc then keeps `gp_offset` in a register and splits the loop, so there is no `va_arg` operation left to name. On a match the save stores are destroyed, the branch condition is set so the vector block is unreachable, the `gp_offset` store becomes `va_start(&ap)` (builtin `BUILTIN_VA_START`, input typed `__va_list_tag *`), the other three `va_list` stores are destroyed, and the prototype is marked `...`: `void log_msg(char *a0,...) { va_start(v1); __vfprintf_chk(stderr,1,a0,v1); }`. The `va_list` local prints as a `char` array, because the open-range mapping takes no pointee type from a user-op argument. `vastart` (below, default on) folds the same prologue later in P4 from the `va_list` field writes and is the default mechanism; `varargsave` is its opt-in fallback. With both on, `varargsave` runs first and `vastart` finds nothing left. Exercised by `tests/stages/kuna-varargsave.xml`.
+**(kuna) The System V register save area of a variadic function — `option varargsave`, default off, `crates/unlace-bandb-base/src/p4_calls/kuna_varargsave.rs (strip)`.** A variadic x86-64 function spills each argument register its named parameters do not use into a register save area (`rdi..r9` at `base+8*i`, then `test al,al` around a block that stores `xmm0..xmm7` at `base+48+16*j`) and builds a `va_list` from it. Each store reads an argument register, so input recovery gave a printf wrapper fourteen parameters and an `if (al)` of xmm copies. At `ActionStart`, before heritage, the pass matches the exact layout: in the entry block a run of saves at stride 8 ending at `r9` (a named register spilled elsewhere, as at `-O0`, is not part of it), a branch around a block that saves a suffix of `xmm0..7` at stride 16 from `base+48`, and in the join block the four `va_list` stores whose values agree with the run: `gp_offset` = 8 per named integer register, `fp_offset` = 48 + 16 per named vector register (clang writes both as one 8-byte store), the overflow area, and the save area's address as `reg_save_area`. Raw ops before heritage are not linked to their writers and every instruction reuses the same temporaries, so each block is walked in order and each write is resolved when it happens to "a register's entry value plus a constant", a constant, or unknown; the entry block's final register state seeds the blocks after it, and a raw CALL's 8-byte stack-pointer drop is added back. The pass declines when the function reads its own save area — the area's address reaching anything but the `reg_save_area` store, staying in a register past the join block, or any other load or store addressing the area — because an inlined `va_arg` needs the stores; gcc then keeps `gp_offset` in a register and splits the loop, so there is no `va_arg` operation left to name. On a match the save stores are destroyed, the branch condition is set so the vector block is unreachable, the `gp_offset` store becomes `va_start(&ap)` (builtin `BUILTIN_VA_START`, input typed `__va_list_tag *`), the other three `va_list` stores are destroyed, and the prototype is marked `...`: `void log_msg(char *a0,...) { va_start(v1); __vfprintf_chk(stderr,1,a0,v1); }`. The `va_list` local prints as a `char` array, because the open-range mapping takes no pointee type from a user-op argument. `vastart` (below, default on) folds the same prologue later in P4 from the `va_list` field writes and is the default mechanism; `varargsave` is its opt-in fallback. With both on, `varargsave` runs first and `vastart` finds nothing left. Exercised by `tests/stages/kuna-varargsave.xml`.
 
 ### Qualified register declarations bind to an entry (`kuna_qualifiedstorage.rs`, `kuna_qualifiedcall.rs`)
 
@@ -10561,7 +10562,7 @@ symbol's call-fixup injection is kept, and its no-return flag is carried under
 (library, loader and DWARF prototypes) keep the code-type lookup unchanged:
 incomplete debug-information pieces must not replace a result read by the
 caller with a locked void return. The sole type-only exception
-(`crates/unlace-bandb/src/p4_calls/kuna_gotimportproto.rs (binds_type_only)`,
+(`crates/unlace-bandb-base/src/p4_calls/kuna_gotimportproto.rs (binds_type_only)`,
 always on) is an entry identified by the MIPS ELF loader's external-symbol GOT: its
 concrete, non-void declaration supplies the imported call's argument and return
 storage, because a preserved incoming argument register cannot establish an
@@ -10573,7 +10574,7 @@ behavior. The construction lives in
 
 **(kuna) Go boolean-return narrowing** (`option gobool off|auto|always`,
 default auto,
-`crates/unlace-bandb/src/p4_calls/kuna_gobool.rs
+`crates/unlace-bandb-base/src/p4_calls/kuna_gobool.rs
 (RuleGoBoolReturn)`). Go's ABI materializes a `bool` result as 0/1 in the LOW
 BYTE of the return register and leaves the upper bytes unspecified: the
 compiler emits a bare `SETcc` with no zeroing `XOR`, so the lifted value is
@@ -10600,7 +10601,7 @@ stage-test bytechunk); `off` keeps the faithful concatenation. Pinned by
 
 ### (kuna) The SysV x86-64 vector calling convention — `option vectorabi`, default on
 
-`crates/unlace-bandb/src/p4_calls/kuna_vectorabi.rs (model)`. The
+`crates/unlace-bandb-base/src/p4_calls/kuna_vectorabi.rs (model)`. The
 vendored `x86-64-gcc.cspec` describes XMM0-7 only as 8-byte float slots
 (`XMMn_Qa`), so a `__m128`, `__m256` or `__m512` argument, or any XMM
 parameter wider than 8 bytes, had no entry. It read as an uninitialized local,

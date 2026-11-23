@@ -14,6 +14,7 @@ unlace-sleigh.workspace = true
 unlace-middle.workspace = true
 unlace-lift.workspace = true
 unlace-structure.workspace = true
+unlace-bandb-base.workspace = true
 unlace-bandb.workspace = true
 thiserror.workspace = true
 smallvec.workspace = true

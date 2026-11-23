@@ -99,7 +99,7 @@ pub fn arguments(data: &Funcdata, fc: &FuncCallSpecs) -> Vec<ParameterPieces> {
         let call = data.obank().get(fc.get_op())?;
         let vn = call.get_in(active.get_trial(index).get_slot())?;
         let (value, width) = constant_value(data, vn, 0)?;
-        let format = super::kuna_formatwitness::pointed_readonly_format(
+        let format = crate::kuna_formatwitness::pointed_readonly_format(
             data,
             value,
             width,

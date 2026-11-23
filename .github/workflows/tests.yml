@@ -413,6 +413,18 @@ jobs:
           cd decompiler && cargo nextest run --archive-file ../nextest-archive.tar.zst \
             --workspace-remap . --extract-to . --profile ci --partition count:${{ matrix.partition }}/3
 
+      # The inputs a failing round trip compiled and decompiled (scratch C, shared
+      # objects, projects), for reproducing a failure that only the runner's
+      # compilers or load show.
+      - name: Upload the test scratch files
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-scratch-${{ matrix.partition }}
+          path: decompiler/target/tmp
+          retention-days: 3
+          if-no-files-found: ignore
+
       - name: Upload the JUnit report
         if: always()
         uses: actions/upload-artifact@v4

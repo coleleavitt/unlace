@@ -2704,5 +2704,10 @@ impl ModelRule {
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.modelrules_register_ids = Some(register_ids);
+}
+
 #[cfg(test)]
 mod tests;

@@ -57,6 +57,7 @@ use crate::funcdata_facing::FuncdataFacingExt;
 use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::funcdata_union::FuncdataUnionExt;
+use crate::kuna_stackviews::FuncdataStackviewsExt;
 use std::cell::RefCell;
 use std::rc::Rc;
 

@@ -47,6 +47,8 @@
 //! is cast, which prints as a reinterpretation of its bits; an untyped read of
 //! read-only memory passed there takes the float type.
 
+use crate::kuna_callrettype::FuncdataCallrettypeExt;
+use crate::kuna_voidret::FuncdataVoidretExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;

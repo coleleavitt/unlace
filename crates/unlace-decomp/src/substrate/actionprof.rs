@@ -72,10 +72,12 @@ thread_local! {
 
 /// A timing frame must close on its originating thread, including on unwind.
 #[must_use]
-pub(crate) struct ActionFrame(PhantomData<Rc<()>>);
+#[doc(hidden)]
+pub struct ActionFrame(PhantomData<Rc<()>>);
 
 impl ActionFrame {
-    pub(crate) fn new(name: &str) -> Self {
+    #[doc(hidden)]
+    pub fn new(name: &str) -> Self {
         enter(name);
         Self(PhantomData)
     }

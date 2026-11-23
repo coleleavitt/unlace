@@ -88,4 +88,4 @@ pub mod kuna_evalcurrentproto;
 // a DEX image supplies to the Dalvik spec.
 pub mod kuna_dex;
 
-pub(crate) mod kuna_wrappedstackmap;
+pub mod kuna_wrappedstackmap;

@@ -8,6 +8,7 @@
 //! its option-off arm.
 
 use super::*;
+use crate::kuna_passthrough::FuncdataPassthroughExt;
 
 use crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead;
 use std::rc::Rc;

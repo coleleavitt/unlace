@@ -96,7 +96,8 @@ const ORDER: Effect = Effect::new(Kind::Order, 0, false, 0);
 
 /// A cache-block zero clears a whole block, not a value of any width, so its
 /// address stays untyped.
-pub(crate) const OPERATIONS: &[(&str, Effect)] = &[
+#[doc(hidden)]
+pub const OPERATIONS: &[(&str, Effect)] = &[
     ("octeon_fetch_add32", Effect::new(Kind::Update, 4, true, 4)),
     ("octeon_fetch_add64", Effect::new(Kind::Update, 8, true, 8)),
     ("octeon_exchange32", Effect::new(Kind::Update, 4, true, 4)),

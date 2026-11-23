@@ -1246,8 +1246,25 @@ struct SummariesSlot(
 );
 crate::kuna_func_state!(SummariesSlot, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
-    pub(crate) fn callee_memory(
+/// The `kuna_calleememory` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataCalleememoryExt {
+    fn callee_memory(
+        &self,
+    ) -> &std::collections::HashMap<
+        (unlace_base::types::int4, unlace_base::types::uintb),
+        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+    >;
+    fn callee_memory_mut(
+        &mut self,
+    ) -> &mut std::collections::HashMap<
+        (unlace_base::types::int4, unlace_base::types::uintb),
+        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+    >;
+}
+
+impl FuncdataCalleememoryExt for crate::funcdata::Funcdata {
+    fn callee_memory(
         &self,
     ) -> &std::collections::HashMap<
         (unlace_base::types::int4, unlace_base::types::uintb),
@@ -1255,8 +1272,7 @@ impl crate::funcdata::Funcdata {
     > {
         &self.kuna_state::<SummariesSlot>().0
     }
-
-    pub(crate) fn callee_memory_mut(
+    fn callee_memory_mut(
         &mut self,
     ) -> &mut std::collections::HashMap<
         (unlace_base::types::int4, unlace_base::types::uintb),

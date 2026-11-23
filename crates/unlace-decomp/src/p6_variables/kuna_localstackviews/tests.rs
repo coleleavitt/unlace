@@ -1,6 +1,7 @@
 use super::*;
 use crate::context::ArchContext;
 use crate::fspec::ParameterPieces;
+use crate::kuna_localstackviews::FuncdataLocalstackviewsExt;
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, addrspace_flags,
     spacetype,

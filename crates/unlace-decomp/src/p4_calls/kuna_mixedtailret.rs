@@ -60,6 +60,8 @@
 //! function returns a value. It is inert wherever `passthrough` is (no callee
 //! decompiled first, `--option passthrough off`).
 
+use crate::kuna_passthrough::FuncdataPassthroughExt;
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::spacetype;

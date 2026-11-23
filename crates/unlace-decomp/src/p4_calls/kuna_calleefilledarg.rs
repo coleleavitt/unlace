@@ -83,6 +83,7 @@
 
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
+use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
 
 /// Before `fillinMap`, hand `call`'s trials the callee's entry-liveness probe
 /// and mark every register trial the caller scored definitely-not-used that

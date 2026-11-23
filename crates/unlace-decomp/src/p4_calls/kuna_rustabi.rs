@@ -1317,10 +1317,27 @@ struct CalleeWritesSlot(
 );
 crate::kuna_func_state!(CalleeWritesSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_rustabi` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataRustabiExt {
     /// (kuna `rustabi`) Record what a probe of `entry`'s body proved about the
     /// registers it writes.
-    pub fn kuna_set_callee_ret_writes(
+    fn kuna_set_callee_ret_writes(
+        &mut self,
+        entry: &unlace_base::address::Address,
+        writes: std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
+    );
+    /// (kuna `rustabi`) The recorded probe of `entry`'s body, if one was taken.
+    fn kuna_callee_ret_writes(
+        &self,
+        entry: &unlace_base::address::Address,
+    ) -> Option<&crate::kuna_rustabi::CalleeReturnWrites>;
+}
+
+impl FuncdataRustabiExt for crate::funcdata::Funcdata {
+    /// (kuna `rustabi`) Record what a probe of `entry`'s body proved about the
+    /// registers it writes.
+    fn kuna_set_callee_ret_writes(
         &mut self,
         entry: &unlace_base::address::Address,
         writes: std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
@@ -1331,9 +1348,8 @@ impl crate::funcdata::Funcdata {
                 .insert((sp.get_index(), entry.get_offset()), writes);
         }
     }
-
     /// (kuna `rustabi`) The recorded probe of `entry`'s body, if one was taken.
-    pub fn kuna_callee_ret_writes(
+    fn kuna_callee_ret_writes(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::kuna_rustabi::CalleeReturnWrites> {

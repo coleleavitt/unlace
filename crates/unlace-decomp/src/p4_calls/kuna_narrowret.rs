@@ -775,18 +775,46 @@ struct ReadsSlot(
 );
 crate::kuna_func_state!(ReadsSlot, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_narrowret` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataNarrowretExt {
     /// (kuna `narrowret`) Record the narrow value the callee filed under `key` returns.
-    pub fn kuna_set_narrowret(
+    fn kuna_set_narrowret(
+        &mut self,
+        key: (unlace_base::types::int4, unlace_base::types::uintb),
+        stated: std::rc::Rc<crate::kuna_narrowret::NarrowReturn>,
+    );
+    /// (kuna `narrowret`) The narrow value the callee filed under `key` returns.
+    fn kuna_narrowret(
+        &self,
+        key: (unlace_base::types::int4, unlace_base::types::uintb),
+    ) -> Option<&crate::kuna_narrowret::NarrowReturn>;
+    /// (kuna `narrowret`) Note what this function read of the output of the
+    /// CALL `op` before `narrowret` narrowed it.
+    fn kuna_note_narrowret_read(
+        &mut self,
+        op: crate::context::OpId,
+        before: crate::kuna_narrowret::ReadBefore,
+    );
+    /// (kuna `narrowret`) What this function read of the output of the CALL
+    /// `op` before `narrowret` narrowed it, if it did.
+    fn kuna_narrowret_read(
+        &self,
+        op: crate::context::OpId,
+    ) -> Option<&crate::kuna_narrowret::ReadBefore>;
+}
+
+impl FuncdataNarrowretExt for crate::funcdata::Funcdata {
+    /// (kuna `narrowret`) Record the narrow value the callee filed under `key` returns.
+    fn kuna_set_narrowret(
         &mut self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
         stated: std::rc::Rc<crate::kuna_narrowret::NarrowReturn>,
     ) {
         self.kuna_state_mut::<ReturnsSlot>().0.insert(key, stated);
     }
-
     /// (kuna `narrowret`) The narrow value the callee filed under `key` returns.
-    pub fn kuna_narrowret(
+    fn kuna_narrowret(
         &self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
     ) -> Option<&crate::kuna_narrowret::NarrowReturn> {
@@ -795,20 +823,18 @@ impl crate::funcdata::Funcdata {
             .get(&key)
             .map(|r| r.as_ref())
     }
-
     /// (kuna `narrowret`) Note what this function read of the output of the
     /// CALL `op` before `narrowret` narrowed it.
-    pub fn kuna_note_narrowret_read(
+    fn kuna_note_narrowret_read(
         &mut self,
         op: crate::context::OpId,
         before: crate::kuna_narrowret::ReadBefore,
     ) {
         self.kuna_state_mut::<ReadsSlot>().0.insert(op, before);
     }
-
     /// (kuna `narrowret`) What this function read of the output of the CALL
     /// `op` before `narrowret` narrowed it, if it did.
-    pub fn kuna_narrowret_read(
+    fn kuna_narrowret_read(
         &self,
         op: crate::context::OpId,
     ) -> Option<&crate::kuna_narrowret::ReadBefore> {

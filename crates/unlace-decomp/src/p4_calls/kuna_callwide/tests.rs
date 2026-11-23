@@ -1,4 +1,5 @@
 use super::*;
+use crate::kuna_callwide::FuncdataCallwideExt;
 
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::{

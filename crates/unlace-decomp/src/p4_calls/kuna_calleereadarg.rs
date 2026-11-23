@@ -96,6 +96,8 @@
 //! is a leftover. No more than two such entries may stand in a row, the chain
 //! upstream's positional rule tolerates.
 
+use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 use std::collections::HashSet;
 
 use unlace_base::address::Address;

@@ -308,7 +308,8 @@ impl ActionBase {
 
     /// Reset for a new function (C++ `Action::reset`): status back to start and
     /// clear the warning-given latch.
-    pub(crate) fn reset_base(&mut self) {
+    #[doc(hidden)]
+    pub fn reset_base(&mut self) {
         self.status = statusflags::status_start;
         self.flags &= !ruleflags::rule_warnings_given;
     }
@@ -1576,7 +1577,8 @@ impl ActionPool {
 /// (kuna `deadwaves`) Add `ops` and the definition and readers of each of
 /// `vns` that still exist to a wave. The other readers of a shared effect
 /// annotation are guards of the same call or store, not neighbours.
-pub(crate) fn add_wave_ops(
+#[doc(hidden)]
+pub fn add_wave_ops(
     data: &Funcdata,
     wave: &mut crate::kuna_fasthash::FxHashSet<OpId>,
     ops: &[OpId],

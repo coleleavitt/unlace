@@ -527,13 +527,35 @@ pub fn describe(fd: &Funcdata) -> String {
 struct ObjectsSlot(Vec<crate::kuna_stackobjects::StackObject>);
 crate::kuna_func_state!(ObjectsSlot, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
-    pub(crate) fn stack_objects(&self) -> &Vec<crate::kuna_stackobjects::StackObject> {
+/// The `kuna_stackobjects` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataStackobjectsExt {
+    fn stack_objects(&self) -> &Vec<crate::kuna_stackobjects::StackObject>;
+    fn stack_objects_mut(&mut self) -> &mut Vec<crate::kuna_stackobjects::StackObject>;
+    fn stack_object_bound_uses(
+        &self,
+    ) -> &std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)>;
+    fn stack_object_bound_uses_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)>;
+}
+
+impl FuncdataStackobjectsExt for crate::funcdata::Funcdata {
+    fn stack_objects(&self) -> &Vec<crate::kuna_stackobjects::StackObject> {
         &self.kuna_state::<ObjectsSlot>().0
     }
-
-    pub(crate) fn stack_objects_mut(&mut self) -> &mut Vec<crate::kuna_stackobjects::StackObject> {
+    fn stack_objects_mut(&mut self) -> &mut Vec<crate::kuna_stackobjects::StackObject> {
         &mut self.kuna_state_mut::<ObjectsSlot>().0
+    }
+    fn stack_object_bound_uses(
+        &self,
+    ) -> &std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)> {
+        &self.kuna_state::<BoundUsesSlot>().0
+    }
+    fn stack_object_bound_uses_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)> {
+        &mut self.kuna_state_mut::<BoundUsesSlot>().0
     }
 }
 
@@ -541,20 +563,6 @@ impl crate::funcdata::Funcdata {
 #[derive(Default)]
 struct BoundUsesSlot(std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)>);
 crate::kuna_func_state!(BoundUsesSlot, keep_across_clear: false);
-
-impl crate::funcdata::Funcdata {
-    pub(crate) fn stack_object_bound_uses(
-        &self,
-    ) -> &std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)> {
-        &self.kuna_state::<BoundUsesSlot>().0
-    }
-
-    pub(crate) fn stack_object_bound_uses_mut(
-        &mut self,
-    ) -> &mut std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)> {
-        &mut self.kuna_state_mut::<BoundUsesSlot>().0
-    }
-}
 
 #[cfg(test)]
 mod tests;

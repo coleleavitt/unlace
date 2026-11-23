@@ -919,8 +919,8 @@ pub struct Datatype {
     /// creating an owning recursive Rc cycle. This cell is installed before
     /// interning, so dependency ordering remains stable.
     record_completion: Option<Rc<RefCell<std::rc::Weak<Datatype>>>>,
-    pub(crate) qualified_base: Option<Rc<Datatype>>,
-    pub(crate) qualifiers: u8,
+    pub qualified_base: Option<Rc<Datatype>>,
+    pub qualifiers: u8,
 }
 
 impl Datatype {
@@ -2027,7 +2027,8 @@ impl Datatype {
     /// Borrow a `TypeEnum`'s `namemap`, used where the C++ casts `&op` to
     /// `TypeEnum *`.  `None` if not an enum.  `pub(crate)` for the enum body
     /// rendering in [`crate::printc`] (`doc_type_definitions`).
-    pub(crate) fn as_enum_namemap(&self) -> Option<&std::collections::BTreeMap<u64, String>> {
+    #[doc(hidden)]
+    pub fn as_enum_namemap(&self) -> Option<&std::collections::BTreeMap<u64, String>> {
         match &self.kind {
             DatatypeKind::Enum { namemap } => Some(namemap),
             _ => None,
@@ -3198,7 +3199,8 @@ impl Datatype {
     /// `true` (C++ `TypePointer::testForArraySlack`, type.cc:1131-1142).
     ///
     /// A static helper on the pointed-to data-type and the out-of-bounds offset.
-    pub(crate) fn test_for_array_slack(dt: &Datatype, off: int8) -> KunaResult<bool> {
+    #[doc(hidden)]
+    pub fn test_for_array_slack(dt: &Datatype, off: int8) -> KunaResult<bool> {
         if dt.get_metatype() == type_metatype::TYPE_ARRAY {
             return Ok(true);
         }

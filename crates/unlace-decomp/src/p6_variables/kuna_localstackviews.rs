@@ -947,14 +947,18 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 
 crate::kuna_func_state!(crate::kuna_localstackviews::LocalStackViews, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
-    pub(crate) fn local_stack_views(&self) -> &crate::kuna_localstackviews::LocalStackViews {
+/// The `kuna_localstackviews` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataLocalstackviewsExt {
+    fn local_stack_views(&self) -> &crate::kuna_localstackviews::LocalStackViews;
+    fn local_stack_views_mut(&mut self) -> &mut crate::kuna_localstackviews::LocalStackViews;
+}
+
+impl FuncdataLocalstackviewsExt for crate::funcdata::Funcdata {
+    fn local_stack_views(&self) -> &crate::kuna_localstackviews::LocalStackViews {
         self.kuna_state::<crate::kuna_localstackviews::LocalStackViews>()
     }
-
-    pub(crate) fn local_stack_views_mut(
-        &mut self,
-    ) -> &mut crate::kuna_localstackviews::LocalStackViews {
+    fn local_stack_views_mut(&mut self) -> &mut crate::kuna_localstackviews::LocalStackViews {
         self.kuna_state_mut::<crate::kuna_localstackviews::LocalStackViews>()
     }
 }

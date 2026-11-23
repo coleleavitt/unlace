@@ -1811,18 +1811,24 @@ fn moved_from(fd: &Funcdata, vn: VarnodeId) -> VarnodeId {
 struct ChecksSlot(std::cell::RefCell<crate::p6_variables::kuna_storereach::ReachChecks>);
 crate::kuna_func_state!(ChecksSlot, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_storereach` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataStorereachExt {
     /// (kuna `stackstoreguard`) Record what this pass says the final layout
     /// must satisfy.
-    pub(crate) fn note_store_reach_checks(
-        &self,
-        checks: crate::p6_variables::kuna_storereach::ReachChecks,
-    ) {
+    fn note_store_reach_checks(&self, checks: crate::p6_variables::kuna_storereach::ReachChecks);
+    /// (kuna `stackstoreguard`) What the latest pass recorded.
+    fn store_reach_checks(&self) -> crate::p6_variables::kuna_storereach::ReachChecks;
+}
+
+impl FuncdataStorereachExt for crate::funcdata::Funcdata {
+    /// (kuna `stackstoreguard`) Record what this pass says the final layout
+    /// must satisfy.
+    fn note_store_reach_checks(&self, checks: crate::p6_variables::kuna_storereach::ReachChecks) {
         *self.kuna_state::<ChecksSlot>().0.borrow_mut() = checks;
     }
-
     /// (kuna `stackstoreguard`) What the latest pass recorded.
-    pub(crate) fn store_reach_checks(&self) -> crate::p6_variables::kuna_storereach::ReachChecks {
+    fn store_reach_checks(&self) -> crate::p6_variables::kuna_storereach::ReachChecks {
         self.kuna_state::<ChecksSlot>().0.borrow().clone()
     }
 }

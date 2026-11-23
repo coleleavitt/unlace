@@ -2000,8 +2000,10 @@ mod tests {
         use super::*;
         use std::collections::BTreeMap;
 
-        pub(super) type Map = BTreeMap<int4, CoverBlock>;
-        pub(super) type Hit<'a> = &'a mut dyn FnMut(int4, &CoverBlock) -> bool;
+        #[doc(hidden)]
+        pub type Map = BTreeMap<int4, CoverBlock>;
+        #[doc(hidden)]
+        pub type Hit<'a> = &'a mut dyn FnMut(int4, &CoverBlock) -> bool;
 
         fn stop_is_multiequal(cb: &CoverBlock) -> bool {
             matches!(
@@ -2038,7 +2040,8 @@ mod tests {
             preds && (0..ctx.size_in(bl)).any(|j| recurse(m, ctx, ctx.get_in(bl, j), hit))
         }
 
-        pub(super) fn add_ref(
+        #[doc(hidden)]
+        pub fn add_ref(
             m: &mut Map,
             ctx: &dyn CoverContext,
             op: OpId,
@@ -2081,7 +2084,8 @@ mod tests {
             preds.into_iter().any(|p| recurse(m, ctx, p, hit))
         }
 
-        pub(super) fn rebuild(ctx: &dyn CoverContext, vn: crate::context::VarnodeId) -> Map {
+        #[doc(hidden)]
+        pub fn rebuild(ctx: &dyn CoverContext, vn: crate::context::VarnodeId) -> Map {
             let mut m = Map::new();
             let at = match ctx.def_point(vn) {
                 (Some(def), _) => Some(def),
@@ -2106,7 +2110,8 @@ mod tests {
             m
         }
 
-        pub(super) fn walk_op_set(m: &Map, set: &PcodeOpSet, addr: &Address, stores: bool) -> bool {
+        #[doc(hidden)]
+        pub fn walk_op_set(m: &Map, set: &PcodeOpSet, addr: &Address, stores: bool) -> bool {
             if set.op_list.is_empty() {
                 return false;
             }

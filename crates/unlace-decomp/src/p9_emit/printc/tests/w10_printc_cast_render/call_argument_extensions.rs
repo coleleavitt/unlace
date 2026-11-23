@@ -1,5 +1,6 @@
 //! Typed call boundaries preserve zero extensions removed by subvariable flow.
 use super::*;
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 
 fn argument(
     source: Rc<Datatype>,

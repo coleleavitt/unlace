@@ -1066,17 +1066,28 @@ fn meets_an_address_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
 struct InputsSlot(Option<std::rc::Rc<crate::kuna_calleevote::CallerTypes>>);
 crate::kuna_func_state!(InputsSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_calleevote` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataCalleevoteExt {
     /// (kuna `calleevote`) Record what this function's callers pass for its inputs.
-    pub fn kuna_set_calleevote_inputs(
+    fn kuna_set_calleevote_inputs(
+        &mut self,
+        stated: Option<std::rc::Rc<crate::kuna_calleevote::CallerTypes>>,
+    );
+    /// (kuna `calleevote`) What this function's callers pass for its inputs.
+    fn kuna_calleevote_inputs(&self) -> Option<&crate::kuna_calleevote::CallerTypes>;
+}
+
+impl FuncdataCalleevoteExt for crate::funcdata::Funcdata {
+    /// (kuna `calleevote`) Record what this function's callers pass for its inputs.
+    fn kuna_set_calleevote_inputs(
         &mut self,
         stated: Option<std::rc::Rc<crate::kuna_calleevote::CallerTypes>>,
     ) {
         self.kuna_state_mut::<InputsSlot>().0 = stated;
     }
-
     /// (kuna `calleevote`) What this function's callers pass for its inputs.
-    pub fn kuna_calleevote_inputs(&self) -> Option<&crate::kuna_calleevote::CallerTypes> {
+    fn kuna_calleevote_inputs(&self) -> Option<&crate::kuna_calleevote::CallerTypes> {
         self.kuna_state::<InputsSlot>().0.as_deref()
     }
 }

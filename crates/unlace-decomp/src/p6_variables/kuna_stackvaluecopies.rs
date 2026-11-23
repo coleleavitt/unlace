@@ -1,5 +1,6 @@
 //! Generated frame unions describe storage, not standalone scalar snapshots.
 
+use crate::kuna_stackobjects::FuncdataStackobjectsExt;
 use std::rc::Rc;
 
 use crate::context::VarnodeId;

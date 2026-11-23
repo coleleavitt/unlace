@@ -1,5 +1,6 @@
 //! Preserve caller stack storage across a complete, memory-write-free helper.
 
+use crate::kuna_rustabi::FuncdataRustabiExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;

@@ -18,6 +18,7 @@
 
 use crate::funcdata_spacebase::FuncdataAliasExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::kuna_entryreads::FuncdataEntryreadsExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -2591,10 +2592,28 @@ struct TypesSlot(
 );
 crate::kuna_func_state!(TypesSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_protoorder` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataProtoorderExt {
     /// (kuna `protoorder types`) Record the types a callee's own recovery stated
     /// for the function entered at `entry`.
-    pub fn kuna_set_protoorder_types(
+    fn kuna_set_protoorder_types(
+        &mut self,
+        entry: &unlace_base::address::Address,
+        stated: std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
+    );
+    /// (kuna `protoorder types`) The types a callee's own recovery stated for
+    /// the function entered at `entry`, if any were stated.
+    fn kuna_protoorder_types(
+        &self,
+        entry: &unlace_base::address::Address,
+    ) -> Option<&crate::kuna_protoorder::RecoveredTypes>;
+}
+
+impl FuncdataProtoorderExt for crate::funcdata::Funcdata {
+    /// (kuna `protoorder types`) Record the types a callee's own recovery stated
+    /// for the function entered at `entry`.
+    fn kuna_set_protoorder_types(
         &mut self,
         entry: &unlace_base::address::Address,
         stated: std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
@@ -2605,10 +2624,9 @@ impl crate::funcdata::Funcdata {
                 .insert((sp.get_index(), entry.get_offset()), stated);
         }
     }
-
     /// (kuna `protoorder types`) The types a callee's own recovery stated for
     /// the function entered at `entry`, if any were stated.
-    pub fn kuna_protoorder_types(
+    fn kuna_protoorder_types(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::kuna_protoorder::RecoveredTypes> {

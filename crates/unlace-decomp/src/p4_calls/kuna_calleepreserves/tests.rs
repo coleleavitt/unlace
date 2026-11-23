@@ -6,6 +6,7 @@
 //! `tests/stages/kuna-calleepreserves.xml` and `tests/cli/get-pc-helper-loses.json`.
 
 use super::*;
+use crate::kuna_rustabi::FuncdataRustabiExt;
 
 use std::rc::Rc;
 

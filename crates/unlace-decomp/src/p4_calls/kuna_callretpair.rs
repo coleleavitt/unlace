@@ -109,6 +109,8 @@
 //! own return trial is a read kuna has not yet decided is real (an x86-64
 //! `RDX` a next call only appears to take as an argument is one).
 
+use crate::kuna_rustabi::FuncdataRustabiExt;
+use crate::kuna_voidret::FuncdataVoidretExt;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;

@@ -12,6 +12,7 @@
 //! `tests/cli/main-returns-invented-cookie.json`.
 
 use super::*;
+use crate::kuna_rustabi::FuncdataRustabiExt;
 
 use std::rc::Rc;
 

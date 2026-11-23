@@ -600,19 +600,28 @@ pub fn trace() -> bool {
 struct NarrowSlot(Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>);
 crate::kuna_func_state!(NarrowSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_callerargs` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataCallerargsExt {
     /// (kuna `narrowargs callers`) Record the parameters every caller passes narrow.
-    pub fn kuna_set_callerargs(
+    fn kuna_set_callerargs(
+        &mut self,
+        stated: Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>,
+    );
+    /// (kuna `narrowargs callers`) The parameters every caller passes narrow.
+    fn kuna_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>;
+}
+
+impl FuncdataCallerargsExt for crate::funcdata::Funcdata {
+    /// (kuna `narrowargs callers`) Record the parameters every caller passes narrow.
+    fn kuna_set_callerargs(
         &mut self,
         stated: Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>,
     ) {
         self.kuna_state_mut::<NarrowSlot>().0 = stated;
     }
-
     /// (kuna `narrowargs callers`) The parameters every caller passes narrow.
-    pub fn kuna_callerargs(
-        &self,
-    ) -> Option<&std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>> {
+    fn kuna_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>> {
         self.kuna_state::<NarrowSlot>().0.as_ref()
     }
 }

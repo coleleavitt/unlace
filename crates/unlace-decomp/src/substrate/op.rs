@@ -969,17 +969,20 @@ impl PcodeOp {
     /// test) consume these, so they are unused in the op crate alone.
     #[allow(dead_code)]
     #[inline]
-    pub(crate) fn basic_neighbours(&self) -> (Option<OpId>, Option<OpId>) {
+    #[doc(hidden)]
+    pub fn basic_neighbours(&self) -> (Option<OpId>, Option<OpId>) {
         self.links.get(ListKind::Basic)
     }
     /// Set the predecessor link in the parent basic-block list (STUB(W3-block)).
     #[allow(dead_code)]
-    pub(crate) fn set_basic_prev(&mut self, v: Option<OpId>) {
+    #[doc(hidden)]
+    pub fn set_basic_prev(&mut self, v: Option<OpId>) {
         self.links.set_prev(ListKind::Basic, v);
     }
     /// Set the successor link in the parent basic-block list (STUB(W3-block)).
     #[allow(dead_code)]
-    pub(crate) fn set_basic_next(&mut self, v: Option<OpId>) {
+    #[doc(hidden)]
+    pub fn set_basic_next(&mut self, v: Option<OpId>) {
         self.links.set_next(ListKind::Basic, v);
     }
 

@@ -8,22 +8,26 @@ use crate::funcdata::Funcdata;
 use crate::op::PcodeOp;
 
 #[inline]
-pub(crate) fn op(data: &Funcdata, id: OpId) -> Option<&PcodeOp> {
+#[doc(hidden)]
+pub fn op(data: &Funcdata, id: OpId) -> Option<&PcodeOp> {
     data.obank().get(id)
 }
 
 #[inline]
-pub(crate) fn size(data: &Funcdata, v: VarnodeId) -> Option<i32> {
+#[doc(hidden)]
+pub fn size(data: &Funcdata, v: VarnodeId) -> Option<i32> {
     data.vbank().get(v).map(|n| n.get_size())
 }
 
-pub(crate) fn constant(data: &Funcdata, v: VarnodeId) -> Option<u64> {
+#[doc(hidden)]
+pub fn constant(data: &Funcdata, v: VarnodeId) -> Option<u64> {
     let n = data.vbank().get(v)?;
     n.is_constant().then(|| n.get_offset())
 }
 
 /// `v`'s value when it is a constant or a chain of COPYs of one.
-pub(crate) fn copied_constant(data: &Funcdata, mut v: VarnodeId) -> Option<u64> {
+#[doc(hidden)]
+pub fn copied_constant(data: &Funcdata, mut v: VarnodeId) -> Option<u64> {
     for _ in 0..8 {
         if let Some(k) = constant(data, v) {
             return Some(k);
@@ -37,7 +41,8 @@ pub(crate) fn copied_constant(data: &Funcdata, mut v: VarnodeId) -> Option<u64> 
     None
 }
 
-pub(crate) fn mask(width: i32) -> u64 {
+#[doc(hidden)]
+pub fn mask(width: i32) -> u64 {
     if width >= 8 {
         u64::MAX
     } else {
@@ -46,7 +51,8 @@ pub(crate) fn mask(width: i32) -> u64 {
 }
 
 /// The successors a CBRANCH block takes when its condition is true and false.
-pub(crate) fn taken(data: &Funcdata, b: BlockId) -> Option<(BlockId, BlockId)> {
+#[doc(hidden)]
+pub fn taken(data: &Funcdata, b: BlockId) -> Option<(BlockId, BlockId)> {
     let fb = data.bblocks_ref().block(b);
     if fb.size_out() != 2 {
         return None;
@@ -65,7 +71,8 @@ pub(crate) fn taken(data: &Funcdata, b: BlockId) -> Option<(BlockId, BlockId)> {
 
 /// The value of `v` with each `(leaf, value)` of `env` substituted, following
 /// only ops defined in `region`; `None` when `v` reads anything else.
-pub(crate) fn eval(
+#[doc(hidden)]
+pub fn eval(
     data: &Funcdata,
     v: VarnodeId,
     env: &[(VarnodeId, u64)],

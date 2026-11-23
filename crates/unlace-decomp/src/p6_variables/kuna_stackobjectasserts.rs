@@ -1,6 +1,9 @@
 //! Native-use assertions for logical objects over shared physical frame storage.
 
 use crate::funcdata_union::FuncdataUnionExt;
+use crate::kuna_stackobjects::FuncdataStackobjectsExt;
+use crate::kuna_stackviews::FuncdataStackviewsExt;
+use crate::unionresolve::FuncdataUnionresolveExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
@@ -529,14 +532,20 @@ pub(crate) fn seed_writes(
 struct AssertionsSlot(Vec<crate::kuna_stackobjectasserts::ObjectAssertion>);
 crate::kuna_func_state!(AssertionsSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
-    pub(crate) fn stack_object_assertions(
-        &self,
-    ) -> &Vec<crate::kuna_stackobjectasserts::ObjectAssertion> {
+/// The `kuna_stackobjectasserts` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataStackobjectassertsExt {
+    fn stack_object_assertions(&self) -> &Vec<crate::kuna_stackobjectasserts::ObjectAssertion>;
+    fn stack_object_assertions_mut(
+        &mut self,
+    ) -> &mut Vec<crate::kuna_stackobjectasserts::ObjectAssertion>;
+}
+
+impl FuncdataStackobjectassertsExt for crate::funcdata::Funcdata {
+    fn stack_object_assertions(&self) -> &Vec<crate::kuna_stackobjectasserts::ObjectAssertion> {
         &self.kuna_state::<AssertionsSlot>().0
     }
-
-    pub(crate) fn stack_object_assertions_mut(
+    fn stack_object_assertions_mut(
         &mut self,
     ) -> &mut Vec<crate::kuna_stackobjectasserts::ObjectAssertion> {
         &mut self.kuna_state_mut::<AssertionsSlot>().0

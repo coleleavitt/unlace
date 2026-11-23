@@ -20,7 +20,8 @@ const PROBE_STRIDE: u32 = 256;
 /// (unlace decompile-all watchdog) Has the running drive's per-function budget
 /// run out? For a long walk inside one pass, which no action or heritage loop
 /// boundary interrupts, to give up early.
-pub(crate) fn deadline_passed() -> bool {
+#[doc(hidden)]
+pub fn deadline_passed() -> bool {
     FN_DEADLINE.with(|d| d.get().is_some_and(budget_spent))
 }
 
@@ -29,7 +30,8 @@ pub(crate) fn deadline_passed() -> bool {
 /// [`PROBE_STRIDE`]th call reads it, and once one has seen the budget spent
 /// every call answers `true` at once until the drive ends. It names no site;
 /// the loop that drives the walk does.
-pub(crate) fn budget_probe() -> bool {
+#[doc(hidden)]
+pub fn budget_probe() -> bool {
     if FN_SPENT.with(std::cell::Cell::get) {
         return true;
     }
@@ -46,7 +48,8 @@ pub(crate) fn budget_probe() -> bool {
 }
 
 /// [`deadline_passed`], naming `site` (see [`note_budget_site`]) when it has.
-pub(crate) fn deadline_passed_in(site: &str) -> bool {
+#[doc(hidden)]
+pub fn deadline_passed_in(site: &str) -> bool {
     let passed = deadline_passed();
     if passed {
         note_budget_site(|| site.to_string());
@@ -57,7 +60,8 @@ pub(crate) fn deadline_passed_in(site: &str) -> bool {
 /// (unlace decompile-all watchdog) Name `site` as where the running drive's
 /// budget ran out, unless a probe already named one: the first probe to see
 /// the expiry is the innermost polled loop, which the per-function error names.
-pub(crate) fn note_budget_site(site: impl FnOnce() -> String) {
+#[doc(hidden)]
+pub fn note_budget_site(site: impl FnOnce() -> String) {
     FN_BUDGET_SITE.with(|s| {
         let mut s = s.borrow_mut();
         if s.is_none() {
@@ -76,21 +80,25 @@ pub(crate) fn note_budget_site(site: impl FnOnce() -> String) {
 }
 
 /// The site [`note_budget_site`] named for the running drive, if any.
-pub(crate) fn budget_site() -> Option<String> {
+#[doc(hidden)]
+pub fn budget_site() -> Option<String> {
     FN_BUDGET_SITE.with(|s| s.borrow().clone())
 }
 
 /// The indirect jump whose table the drive is recovering ([`JumpTableScope`]).
-pub(crate) fn jump_table_at() -> Option<u64> {
+#[doc(hidden)]
+pub fn jump_table_at() -> Option<u64> {
     FN_TABLE_AT.with(std::cell::Cell::get)
 }
 
 /// (unlace decompile-all watchdog) Marks the drive as recovering the jump table
 /// of the indirect jump at an address until dropped, for [`note_budget_site`].
-pub(crate) struct JumpTableScope(Option<u64>);
+#[doc(hidden)]
+pub struct JumpTableScope(Option<u64>);
 
 impl JumpTableScope {
-    pub(crate) fn enter(at: u64) -> Self {
+    #[doc(hidden)]
+    pub fn enter(at: u64) -> Self {
         JumpTableScope(FN_TABLE_AT.with(|t| t.replace(Some(at))))
     }
 }
@@ -104,7 +112,8 @@ impl Drop for JumpTableScope {
 /// (unlace decompile-all watchdog) The one test every cooperative probe makes:
 /// the clock passed `deadline`, or the drive went over its memory limit
 /// ([`crate::kuna_fnmemory::over`]).
-pub(crate) fn budget_spent(deadline: std::time::Instant) -> bool {
+#[doc(hidden)]
+pub fn budget_spent(deadline: std::time::Instant) -> bool {
     let now = std::time::Instant::now();
     now >= deadline || crate::kuna_fnmemory::over(now)
 }
@@ -112,10 +121,12 @@ pub(crate) fn budget_spent(deadline: std::time::Instant) -> bool {
 /// Publishes a drive's deadline to [`deadline_passed`], with no budget site
 /// named yet and no [`budget_probe`] spent, and restores the ones before it
 /// when the drive ends.
-pub(crate) struct DeadlineScope(Option<std::time::Instant>, Option<String>, bool);
+#[doc(hidden)]
+pub struct DeadlineScope(Option<std::time::Instant>, Option<String>, bool);
 
 impl DeadlineScope {
-    pub(crate) fn enter(deadline: Option<std::time::Instant>) -> Self {
+    #[doc(hidden)]
+    pub fn enter(deadline: Option<std::time::Instant>) -> Self {
         DeadlineScope(
             FN_DEADLINE.with(|d| d.replace(deadline)),
             FN_BUDGET_SITE.with(|s| s.borrow_mut().take()),

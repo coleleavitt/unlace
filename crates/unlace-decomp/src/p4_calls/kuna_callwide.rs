@@ -545,15 +545,24 @@ pub fn publish_mips(
 struct LedgerSlot(Option<std::rc::Rc<crate::p4_calls::kuna_callwide::Ledger>>);
 crate::kuna_func_state!(LedgerSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
-    pub(crate) fn kuna_set_callwide(
+/// The `kuna_callwide` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataCallwideExt {
+    fn kuna_set_callwide(
+        &mut self,
+        proof: Option<std::rc::Rc<crate::p4_calls::kuna_callwide::Ledger>>,
+    );
+    fn kuna_callwide(&self) -> Option<&crate::p4_calls::kuna_callwide::Ledger>;
+}
+
+impl FuncdataCallwideExt for crate::funcdata::Funcdata {
+    fn kuna_set_callwide(
         &mut self,
         proof: Option<std::rc::Rc<crate::p4_calls::kuna_callwide::Ledger>>,
     ) {
         self.kuna_state_mut::<LedgerSlot>().0 = proof;
     }
-
-    pub(crate) fn kuna_callwide(&self) -> Option<&crate::p4_calls::kuna_callwide::Ledger> {
+    fn kuna_callwide(&self) -> Option<&crate::p4_calls::kuna_callwide::Ledger> {
         self.kuna_state::<LedgerSlot>().0.as_deref()
     }
 }

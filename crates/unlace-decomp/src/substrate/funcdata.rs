@@ -99,7 +99,8 @@ pub mod funcdata_flags {
 /// [`std::cmp::Reverse`] so the derived [`Ord`] yields the descending-size
 /// ordering of the C++ `return (size > op2.size)`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct LanedKey {
+#[doc(hidden)]
+pub struct LanedKey {
     /// `space->getIndex()` (C++ first comparison key).
     space_index: int4,
     /// `offset` (C++ second comparison key).
@@ -111,7 +112,8 @@ pub(crate) struct LanedKey {
 impl LanedKey {
     /// Build the key from a storage `(addr, size)`, mirroring how the C++ fills a
     /// `VarnodeData{space, offset, size}` before inserting into `lanedMap`.
-    pub(crate) fn new(addr: &Address, size: int4) -> LanedKey {
+    #[doc(hidden)]
+    pub fn new(addr: &Address, size: int4) -> LanedKey {
         let space_index = addr.get_space().map(|s| s.get_index() as int4).unwrap_or(0);
         LanedKey {
             space_index,
@@ -178,16 +180,16 @@ pub struct DirectiveSymbol {
 pub struct Funcdata {
     /// (kuna `switchextent`) The tables of the functions after this one, once
     /// a table that is the function's last asked for them.
-    pub(crate) kuna_later_tables: Option<std::rc::Rc<Vec<u64>>>,
+    pub kuna_later_tables: Option<std::rc::Rc<Vec<u64>>>,
     /// (kuna `switchextent`) The table whose sanity check asked the flow for
     /// [`Self::kuna_later_tables`], shared with the jump-table partial.
-    pub(crate) kuna_later_wanted: std::rc::Rc<std::cell::Cell<Option<u64>>>,
-    pub(crate) kuna_x87_empty_returns: Vec<Address>,
+    pub kuna_later_wanted: std::rc::Rc<std::cell::Cell<Option<u64>>>,
+    pub kuna_x87_empty_returns: Vec<Address>,
     /// (kuna `x87depth`) Returns proven to leave one value on the x87 stack.
-    pub(crate) kuna_x87_float_returns: Vec<Address>,
+    pub kuna_x87_float_returns: Vec<Address>,
     /// (kuna `x87depth`) Calls proven to leave one value on the x87 stack.
-    pub(crate) kuna_x87_float_calls: Vec<Address>,
-    pub(crate) kuna_fpu_trunc_views: Vec<OpId>,
+    pub kuna_x87_float_calls: Vec<Address>,
+    pub kuna_fpu_trunc_views: Vec<OpId>,
     /// Boolean properties associated with \b this function (C++ `flags`)
     flags: uint4,
     /// Creation index of first Varnode created after start of cleanup
@@ -371,10 +373,10 @@ pub struct Funcdata {
     /// as `op_heritage`); `None` until first use, built lazily by
     /// [`Self::ensure_covermerge`].  `pub(crate)` so the `funcdata_merge` bridge
     /// module can take/replace it.
-    pub(crate) covermerge: Option<crate::merge::Merge>,
+    pub covermerge: Option<crate::merge::Merge>,
     /// (kuna perf) The block table every Cover walk shares while a merge pass
     /// runs ([`Self::with_covermerge`]), which edits ops but never blocks.
-    pub(crate) cover_blocks: Option<BlockTable>,
+    pub cover_blocks: Option<BlockTable>,
     /// Revision of the call/store set and its basic-block positions.
     affecting_ops_revision: u64,
     /// Overrides of data-flow, prototypes, etc. that are local to \b this function
@@ -383,8 +385,8 @@ pub struct Funcdata {
     /// and `FlowInfo` reads `hasFlowOverride()`/`getFlowOverride(addr)` from it at
     /// flow time (`flow.cc:43,434`).
     localoverride: crate::overrides::Override,
-    pub(crate) stack_parameter_store_extents: std::collections::BTreeMap<u64, i32>,
-    pub(crate) stack_alias_holds: Option<std::collections::BTreeSet<VarnodeId>>,
+    pub stack_parameter_store_extents: std::collections::BTreeMap<u64, i32>,
+    pub stack_alias_holds: Option<std::collections::BTreeSet<VarnodeId>>,
     /// Warning/header comments produced during flow analysis (C++
     /// `Funcdata::warning`/`warningHeader` push directly into
     /// `glb->commentdb`; `funcdata.cc:119,135`).
@@ -418,15 +420,15 @@ pub struct Funcdata {
     /// this instead.
     kuna_infertypes_settled: bool,
     /// Scheduled constant-pointer pass count for the opt-in array-base guard.
-    pub(crate) kuna_global_array_anchor_passes: Option<u8>,
+    pub kuna_global_array_anchor_passes: Option<u8>,
     /// (kuna `regnarrow`) How many `fullloop` passes narrowed register-local webs.
-    pub(crate) kuna_regnarrow_runs: u8,
+    pub kuna_regnarrow_runs: u8,
     /// (kuna `regnarrow`) The narrow values those passes created.
-    pub(crate) kuna_regnarrow_values: std::collections::BTreeSet<VarnodeId>,
+    pub kuna_regnarrow_values: std::collections::BTreeSet<VarnodeId>,
     /// (kuna `regsigned`) The sign-extended narrow values those passes created.
-    pub(crate) kuna_regsigned_values: std::collections::BTreeSet<VarnodeId>,
+    pub kuna_regsigned_values: std::collections::BTreeSet<VarnodeId>,
     /// (kuna `regnarrow`) Seeds whose web the flow could not rebuild.
-    pub(crate) kuna_regnarrow_failed: std::collections::BTreeSet<VarnodeId>,
+    pub kuna_regnarrow_failed: std::collections::BTreeSet<VarnodeId>,
     /// (kuna `calltargettype`) The function-pointer type each indirect call
     /// states, for a call whose target is cast at the call: the cast names it.
     kuna_call_target_types: std::collections::HashMap<OpId, std::rc::Rc<crate::dtype::Datatype>>,
@@ -441,7 +443,7 @@ pub struct Funcdata {
     kuna_pipeline_failure: Option<String>,
     /// The \e fspec handles this function's call-spec annotations registered
     /// in the fspec-space side table, released when the function is dropped.
-    pub(crate) kuna_fspec_handles: Vec<unlace_base::types::uintb>,
+    pub kuna_fspec_handles: Vec<unlace_base::types::uintb>,
     /// (kuna) The flow overrides `FlowInfo::process` asked for and
     /// [`Self::override_flow`] refused, as `(instruction, flow type, reason)`.
     ///
@@ -462,7 +464,7 @@ pub struct Funcdata {
     kuna_directive_symbols: Vec<DirectiveSymbol>,
     /// One past the last default index the naming pass handed out.
     kuna_default_name_end: int4,
-    /// Whether the naming pass records [`Self::kuna_name_snapshot`].
+    /// Whether the naming pass records [`kuna_name_snapshot`](crate::kuna_stablenames::FuncdataStablenamesExt::kuna_name_snapshot).
     kuna_record_names: bool,
     /// The local each replayed rename or retype reached, by the name the
     /// previous decompile printed it under; see
@@ -474,10 +476,10 @@ pub struct Funcdata {
     /// into `<localdb>` and referenced by `<high symref>` / `<vardecl symref>`
     /// but never enter the analysis scope, so the wire encode cannot perturb
     /// the emitted C.  Empty outside the ghidra-mode encode.
-    pub(crate) kuna_wire_symbols: Vec<crate::database::WireSymbol>,
-    pub(crate) kuna_wrapped_wire_storage: std::collections::BTreeMap<uint8, (Address, int4)>,
+    pub kuna_wire_symbols: Vec<crate::database::WireSymbol>,
+    pub kuna_wrapped_wire_storage: std::collections::BTreeMap<uint8, (Address, int4)>,
     /// Index into [`Self::kuna_wire_symbols`] per HighVariable.
-    pub(crate) kuna_wire_symbol_for_high:
+    pub kuna_wire_symbol_for_high:
         std::collections::BTreeMap<crate::context::HighVariableId, usize>,
     /// (kuna `calleeretpurge`) Per direct-call-target extrapop read off the
     /// callee's own `ret imm16`, keyed by `(space index, entry offset)`.
@@ -576,7 +578,7 @@ pub struct Funcdata {
     /// ([`crate::kuna_bejoin::join_order`]), so its calls' pairs are joined that
     /// way too.
     kuna_pairs_first_low: bool,
-    pub(crate) kuna_go_receiver: Option<crate::kuna_gopointermethod::Receiver>,
+    pub kuna_go_receiver: Option<crate::kuna_gopointermethod::Receiver>,
     go_string_input: Option<Box<crate::kuna_gostringinput::GoStringInput>>,
     /// (kuna `swiftcall`) The direct callees whose body reads `swiftself`.
     kuna_swift_self_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
@@ -1354,14 +1356,16 @@ impl Funcdata {
         &self.kuna_callret_returned
     }
 
-    pub(crate) fn set_go_string_input(
+    #[doc(hidden)]
+    pub fn set_go_string_input(
         &mut self,
         formal: Option<crate::kuna_gostringinput::GoStringInput>,
     ) {
         self.go_string_input = formal.map(Box::new);
     }
 
-    pub(crate) fn go_string_input(&self) -> Option<&crate::kuna_gostringinput::GoStringInput> {
+    #[doc(hidden)]
+    pub fn go_string_input(&self) -> Option<&crate::kuna_gostringinput::GoStringInput> {
         self.go_string_input.as_deref()
     }
 
@@ -1699,7 +1703,8 @@ impl Funcdata {
     }
 
     /// Every call specification, in `qlst` order.
-    pub(crate) fn call_specs(&self) -> &[FuncCallSpecs] {
+    #[doc(hidden)]
+    pub fn call_specs(&self) -> &[FuncCallSpecs] {
         &self.qlst
     }
 
@@ -1948,7 +1953,8 @@ impl Funcdata {
 
     /// (kuna `calleeprotostack`) Whether heritage saw the stack base captured
     /// a second time by the same register.
-    pub(crate) fn rebound_frame_base_seen(&self) -> bool {
+    #[doc(hidden)]
+    pub fn rebound_frame_base_seen(&self) -> bool {
         self.heritage.rebound_frame_base_seen()
     }
 
@@ -2083,29 +2089,34 @@ impl Funcdata {
         !self.stack_store_guard_withdrawn.get()
     }
 
-    pub(crate) fn note_stack_byte_copy_op(&mut self, op: OpId) {
+    #[doc(hidden)]
+    pub fn note_stack_byte_copy_op(&mut self, op: OpId) {
         self.stack_byte_copy_ops.insert(op);
     }
 
-    pub(crate) fn is_stack_byte_copy_op(&self, op: OpId) -> bool {
+    #[doc(hidden)]
+    pub fn is_stack_byte_copy_op(&self, op: OpId) -> bool {
         self.stack_byte_copy_ops.contains(&op)
     }
 
     /// (kuna `stackstoreguard`) Record a STORE heritage guarded a written
     /// stack range against, and the INDIRECT it placed.
-    pub(crate) fn note_indexed_guard_store(&self, store: OpId, indirect: OpId) {
+    #[doc(hidden)]
+    pub fn note_indexed_guard_store(&self, store: OpId, indirect: OpId) {
         self.indexed_guard_stores.borrow_mut().insert(store);
         self.indexed_guard_indirects.borrow_mut().insert(indirect);
     }
 
     /// (kuna `stackstoreguard`) The INDIRECTs heritage placed for those STOREs.
-    pub(crate) fn indexed_guard_indirects(&self) -> std::collections::BTreeSet<OpId> {
+    #[doc(hidden)]
+    pub fn indexed_guard_indirects(&self) -> std::collections::BTreeSet<OpId> {
         self.indexed_guard_indirects.borrow().clone()
     }
 
     /// (kuna `stackstoreguard`) Add the stack ranges a layout pass found only
     /// the guard keeps, and return every one found since the analysis began.
-    pub(crate) fn note_guard_only(
+    #[doc(hidden)]
+    pub fn note_guard_only(
         &self,
         ranges: Vec<(unlace_base::types::intb, unlace_base::types::intb)>,
     ) -> Vec<(unlace_base::types::intb, unlace_base::types::intb)> {
@@ -2119,7 +2130,8 @@ impl Funcdata {
     /// (kuna `stackstoreguard`) The STOREs heritage guarded written stack
     /// ranges against.
     #[inline]
-    pub(crate) fn indexed_guard_stores(&self) -> std::collections::BTreeSet<OpId> {
+    #[doc(hidden)]
+    pub fn indexed_guard_stores(&self) -> std::collections::BTreeSet<OpId> {
         self.indexed_guard_stores.borrow().clone()
     }
 
@@ -2150,29 +2162,34 @@ impl Funcdata {
 
     /// (kuna `deadcascade`) Set whether dead-op removal in the running pool
     /// pass cascades.
-    pub(crate) fn set_dead_cascade_now(&mut self, on: bool) {
+    #[doc(hidden)]
+    pub fn set_dead_cascade_now(&mut self, on: bool) {
         self.dead_cascade_now = on;
     }
 
     /// (kuna `deadcascade`) Does dead-op removal in the running pool pass
     /// cascade?
-    pub(crate) fn dead_cascade_now(&self) -> bool {
+    #[doc(hidden)]
+    pub fn dead_cascade_now(&self) -> bool {
         self.dead_cascade_now
     }
 
     /// (kuna `deadwaves`) Start recording dead-op removals for a pool pass.
-    pub(crate) fn start_dead_wave_log(&mut self) {
+    #[doc(hidden)]
+    pub fn start_dead_wave_log(&mut self) {
         self.dead_wave_log = Some((Vec::new(), Vec::new()));
     }
 
     /// (kuna `deadwaves`) Stop recording and hand back what was recorded.
-    pub(crate) fn take_dead_wave_log(&mut self) -> (Vec<OpId>, Vec<VarnodeId>) {
+    #[doc(hidden)]
+    pub fn take_dead_wave_log(&mut self) -> (Vec<OpId>, Vec<VarnodeId>) {
         self.dead_wave_log.take().unwrap_or_default()
     }
 
     /// (kuna `deadwaves`) Where the running log ends, for
     /// [`dead_wave_log_since`](Funcdata::dead_wave_log_since).
-    pub(crate) fn dead_wave_log_mark(&self) -> (usize, usize) {
+    #[doc(hidden)]
+    pub fn dead_wave_log_mark(&self) -> (usize, usize) {
         self.dead_wave_log
             .as_ref()
             .map_or((0, 0), |log| (log.0.len(), log.1.len()))
@@ -2180,7 +2197,8 @@ impl Funcdata {
 
     /// (kuna `deadwaves`) The removals logged after `mark`, and the Varnodes
     /// they read.
-    pub(crate) fn dead_wave_log_since(&self, mark: (usize, usize)) -> (&[OpId], &[VarnodeId]) {
+    #[doc(hidden)]
+    pub fn dead_wave_log_since(&self, mark: (usize, usize)) -> (&[OpId], &[VarnodeId]) {
         match self.dead_wave_log.as_ref() {
             Some(log) => (
                 log.0.get(mark.0..).unwrap_or(&[]),
@@ -2192,7 +2210,8 @@ impl Funcdata {
 
     /// (kuna `deadwaves`) Record that dead-op removal is taking out `op`, and
     /// the Varnodes it reads, before it is destroyed.
-    pub(crate) fn note_dead_removal(&mut self, op: OpId) {
+    #[doc(hidden)]
+    pub fn note_dead_removal(&mut self, op: OpId) {
         let Some(log) = self.dead_wave_log.as_mut() else {
             return;
         };
@@ -2206,7 +2225,8 @@ impl Funcdata {
     /// (kuna `copywaves`) Record that `op`'s input `old` is being replaced by
     /// `new`: the op and each Varnode it touches, its inputs, the one replaced,
     /// the one replacing it and its output.
-    pub(crate) fn note_wave_input_change(&mut self, op: OpId, old: VarnodeId, new: VarnodeId) {
+    #[doc(hidden)]
+    pub fn note_wave_input_change(&mut self, op: OpId, old: VarnodeId, new: VarnodeId) {
         let Some(log) = self.dead_wave_log.as_mut() else {
             return;
         };
@@ -2824,7 +2844,8 @@ impl Funcdata {
     /// `Funcdata::checkForLanedRegister`'s `lanedMap[storage] = lanedRegister`).
     /// The key carries the C++ `VarnodeData` ordering; the value keeps the
     /// `(addr, size)` so the access map can be replayed.
-    pub(crate) fn laned_map_insert(
+    #[doc(hidden)]
+    pub fn laned_map_insert(
         &mut self,
         key: LanedKey,
         addr: Address,
@@ -2970,7 +2991,8 @@ impl Funcdata {
         self.kuna_infertypes_settled
     }
     /// (kuna `calltargettype`) Forget every recorded call target type, keeping the field calls.
-    pub(crate) fn kuna_clear_call_target_type_map(&mut self) {
+    #[doc(hidden)]
+    pub fn kuna_clear_call_target_type_map(&mut self) {
         self.kuna_call_target_types.clear();
     }
     /// (kuna `calltargettype`) Record the type the indirect call `op` states.
@@ -3171,7 +3193,8 @@ impl Funcdata {
         self.kuna_extend_storage_sources(destination, sliced);
     }
 
-    pub(crate) fn kuna_extend_storage_sources(
+    #[doc(hidden)]
+    pub fn kuna_extend_storage_sources(
         &mut self,
         destination: VarnodeId,
         sources: impl IntoIterator<Item = StorageSource>,
@@ -3232,18 +3255,21 @@ impl Funcdata {
         }
     }
 
-    pub(crate) fn kuna_forget_storage_sources(&mut self, vn: VarnodeId) {
+    #[doc(hidden)]
+    pub fn kuna_forget_storage_sources(&mut self, vn: VarnodeId) {
         self.kuna_storage_sources.remove(&vn);
         self.kuna_call_transport.remove(&vn);
         self.kuna_call_transport_projections.remove(&vn);
     }
 
     #[inline]
-    pub(crate) fn kuna_was_call_transport(&self, vn: VarnodeId) -> bool {
+    #[doc(hidden)]
+    pub fn kuna_was_call_transport(&self, vn: VarnodeId) -> bool {
         self.kuna_call_transport.contains(&vn)
     }
 
-    pub(crate) fn kuna_mark_call_transport(&mut self, vn: VarnodeId) {
+    #[doc(hidden)]
+    pub fn kuna_mark_call_transport(&mut self, vn: VarnodeId) {
         if self.glb.name_style_angr && self.vbank.get(vn).is_some() {
             self.kuna_call_transport.insert(vn);
             if let Some(size) = self.vbank.get(vn).map(|v| v.get_size()) {
@@ -3252,16 +3278,19 @@ impl Funcdata {
         }
     }
 
-    pub(crate) fn kuna_forget_call_transport(&mut self, vn: VarnodeId) {
+    #[doc(hidden)]
+    pub fn kuna_forget_call_transport(&mut self, vn: VarnodeId) {
         self.kuna_call_transport.remove(&vn);
         self.kuna_call_transport_projections.remove(&vn);
     }
 
-    pub(crate) fn kuna_call_transport_projection_size(&self, vn: VarnodeId) -> Option<int4> {
+    #[doc(hidden)]
+    pub fn kuna_call_transport_projection_size(&self, vn: VarnodeId) -> Option<int4> {
         self.kuna_call_transport_projections.get(&vn).copied()
     }
 
-    pub(crate) fn kuna_mark_call_transport_projection(&mut self, vn: VarnodeId, size: int4) {
+    #[doc(hidden)]
+    pub fn kuna_mark_call_transport_projection(&mut self, vn: VarnodeId, size: int4) {
         self.kuna_call_transport_projections
             .entry(vn)
             .and_modify(|current| *current = (*current).max(size))
@@ -3306,7 +3335,8 @@ impl Funcdata {
         }
     }
 
-    pub(crate) fn kuna_mark_meaningful_storage_write(&mut self, vn: VarnodeId) {
+    #[doc(hidden)]
+    pub fn kuna_mark_meaningful_storage_write(&mut self, vn: VarnodeId) {
         let Some(value) = self.vbank.get(vn) else {
             return;
         };
@@ -3334,7 +3364,8 @@ impl Funcdata {
         }
     }
 
-    pub(crate) fn kuna_storage_write_has_local_use(&self, vn: VarnodeId, size: int4) -> bool {
+    #[doc(hidden)]
+    pub fn kuna_storage_write_has_local_use(&self, vn: VarnodeId, size: int4) -> bool {
         let Some(value) = self.vbank.get(vn) else {
             return false;
         };
@@ -3381,11 +3412,8 @@ impl Funcdata {
         })
     }
 
-    pub(crate) fn kuna_rekey_storage_sources(
-        &mut self,
-        original: VarnodeId,
-        destination: VarnodeId,
-    ) {
+    #[doc(hidden)]
+    pub fn kuna_rekey_storage_sources(&mut self, original: VarnodeId, destination: VarnodeId) {
         if original != destination {
             if let Some(size) = self.kuna_call_transport_projections.remove(&original) {
                 self.kuna_mark_call_transport_projection(destination, size);
@@ -3429,7 +3457,8 @@ impl Funcdata {
     /// half while mutating the `vbank` half.
     ///
     /// `pub(crate)` so only the funcdata_op/funcdata_varnode ports reach it.
-    pub(crate) fn banks_mut(&mut self) -> (&mut VarnodeBank, &mut PcodeOpBank) {
+    #[doc(hidden)]
+    pub fn banks_mut(&mut self) -> (&mut VarnodeBank, &mut PcodeOpBank) {
         // Disjoint borrows of two distinct fields: the borrow checker accepts
         // this single split, where two separate `&mut self` accessors would not.
         (&mut self.vbank, &mut self.obank)
@@ -3485,7 +3514,8 @@ impl Funcdata {
     }
     /// The root graph node of `sblocks`.
     #[inline]
-    pub(crate) fn sblocks_root(&self) -> BlockId {
+    #[doc(hidden)]
+    pub fn sblocks_root(&self) -> BlockId {
         self.sblocks
             .root
             .expect("Funcdata: sblocks root not constructed (internal invariant)")
@@ -3513,7 +3543,8 @@ impl Funcdata {
     /// [`BlockGraph::build_copy_from`] can mirror the topology.  The
     /// [`CollapseStructure`](crate::blockaction::CollapseStructure) engine then
     /// runs over the seeded `sblocks` (driven by `ActionBlockStructure`).
-    pub(crate) fn seed_sblocks_copy(&mut self) {
+    #[doc(hidden)]
+    pub fn seed_sblocks_copy(&mut self) {
         let sroot = self.sblocks.root.expect("sblocks root");
         let broot = self.bblocks.root.expect("bblocks root");
         // C++ `buildCopy` writes `(*iter)->copymap = copyblock` back into each
@@ -3532,7 +3563,8 @@ impl Funcdata {
     /// this resets it to a clean seed before `CollapseStructure` runs.  Replaces
     /// `sblocks` with a fresh empty `BlockGraph` (the half-structured arena is
     /// dropped) and re-runs [`seed_sblocks_copy`](Self::seed_sblocks_copy).
-    pub(crate) fn reseed_sblocks_copy(&mut self) {
+    #[doc(hidden)]
+    pub fn reseed_sblocks_copy(&mut self) {
         let mut sb = BlockGraph::new();
         let sroot = sb.arena.insert(FlowBlock::new_kind(BlockKind::Graph));
         sb.root = Some(sroot);
@@ -3561,11 +3593,13 @@ impl Funcdata {
     }
     /// Mutable access to the jump-table vector (for the recovery chain and the
     /// `clear_jump_tables`/`structure_reset` sweeps).
-    pub(crate) fn jumpvec_mut(&mut self) -> &mut Vec<crate::jumptable::JumpTable> {
+    #[doc(hidden)]
+    pub fn jumpvec_mut(&mut self) -> &mut Vec<crate::jumptable::JumpTable> {
         &mut self.jumpvec
     }
     /// Immutable slice of the jump-table vector (recovery-chain read accessor).
-    pub(crate) fn jumpvec_slice(&self) -> &[crate::jumptable::JumpTable] {
+    #[doc(hidden)]
+    pub fn jumpvec_slice(&self) -> &[crate::jumptable::JumpTable] {
         &self.jumpvec
     }
 
@@ -3649,7 +3683,8 @@ impl Funcdata {
     /// Consumed by [`Funcdata::set_varnode_properties`] as the `usepoint` of the
     /// global `queryProperties` look-up, and by `linkSymbol`'s
     /// `query_container_for_link` (the local-scope usepoint-scoped Symbol query).
-    pub(crate) fn vn_use_point(&self, vn: VarnodeId) -> Address {
+    #[doc(hidden)]
+    pub fn vn_use_point(&self, vn: VarnodeId) -> Address {
         let v = self.vbank().get(vn).expect("vn_use_point: stale vn");
         if v.is_written() {
             if let Some(op) = v.get_def() {
@@ -3673,7 +3708,8 @@ impl Funcdata {
     /// `(SymbolId, entry-base-offset, entry-size)`.  Returns `None` when the
     /// Varnode is not mapped into the local scope (no containing entry).  Used by
     /// `RulePieceStructure`/`PieceNode::isLeaf` to compare two Varnodes' entries.
-    pub(crate) fn vn_container_entry_key(
+    #[doc(hidden)]
+    pub fn vn_container_entry_key(
         &self,
         vn: VarnodeId,
     ) -> Option<(crate::database::SymbolId, unlace_base::types::uintb, int4)> {
@@ -3783,7 +3819,8 @@ impl Funcdata {
 
     /// The cover half of [`set_varnode_properties`](Funcdata::set_varnode_properties):
     /// allocate `vn`'s cover once high-level analysis is on.
-    pub(crate) fn ensure_varnode_cover(&mut self, vn: VarnodeId) {
+    #[doc(hidden)]
+    pub fn ensure_varnode_cover(&mut self, vn: VarnodeId) {
         // C++ `if (vn->cover == 0) { if (isHighOn()) vn->calcCover(); }`
         // (funcdata_varnode.cc:42).  This ALLOCATES the Varnode's Cover object (and
         // sets `coverdirty`) the first time `setVarnodeProperties` runs on a
@@ -3834,15 +3871,18 @@ impl Funcdata {
     // links + order) and the block arena (the BasicData head/tail/len).  The op
     // membership links are the third intrusive list of ADR 0001.
 
-    pub(crate) fn affecting_ops_revision(&self) -> u64 {
+    #[doc(hidden)]
+    pub fn affecting_ops_revision(&self) -> u64 {
         self.affecting_ops_revision
     }
 
-    pub(crate) fn affecting_ops_changed(&mut self) {
+    #[doc(hidden)]
+    pub fn affecting_ops_changed(&mut self) {
         self.affecting_ops_revision = self.affecting_ops_revision.wrapping_add(1);
     }
 
-    pub(crate) fn op_is_call_or_store(&self, op: OpId) -> bool {
+    #[doc(hidden)]
+    pub fn op_is_call_or_store(&self, op: OpId) -> bool {
         self.obank.get(op).is_some_and(|o| {
             o.is_call()
                 || o.get_opcode()
@@ -4660,24 +4700,28 @@ impl Funcdata {
     // -----------------------------------------------------------------------
 
     /// `bl->getIndex()` (the bridge's `op_parent_index`/`varnode_def_point`).
-    pub(crate) fn block_index_pub(&self, bl: BlockId) -> int4 {
+    #[doc(hidden)]
+    pub fn block_index_pub(&self, bl: BlockId) -> int4 {
         self.bblocks.block(bl).get_index()
     }
 
     /// `(block_index, CoverPoint)` of `op` for the merge cover tests.
     #[inline]
-    pub(crate) fn op_cover_point_pub(&self, op: OpId) -> CoverPoint {
+    #[doc(hidden)]
+    pub fn op_cover_point_pub(&self, op: OpId) -> CoverPoint {
         self.op_cover_point(op)
     }
 
     /// `((BlockBasic*)bl)->getStop()` (the MULTIEQUAL trim insert point).
-    pub(crate) fn block_stop_addr(&self, bl: BlockId) -> Address {
+    #[doc(hidden)]
+    pub fn block_stop_addr(&self, bl: BlockId) -> Address {
         crate::block::block_get_stop(&self.bblocks.arena, bl)
     }
 
     /// C++ `Varnode::copyShadow` (`varnode.cc:996`): `a` and `b` are the same
     /// value through a COPY chain.
-    pub(crate) fn varnode_copy_shadow(&self, a: VarnodeId, b: VarnodeId) -> bool {
+    #[doc(hidden)]
+    pub fn varnode_copy_shadow(&self, a: VarnodeId, b: VarnodeId) -> bool {
         if a == b {
             return true;
         }
@@ -4908,12 +4952,8 @@ impl Funcdata {
     /// / `b` contain the other (as a value) via a SUBPIECE or CONCAT chain at the
     /// given relative byte offset.  Used by `Merge::inflateTest` /
     /// `HighIntersectTest::blockIntersection` to allow partial-shadow overlaps.
-    pub(crate) fn varnode_partial_copy_shadow(
-        &self,
-        a: VarnodeId,
-        b: VarnodeId,
-        rel_off: int4,
-    ) -> bool {
+    #[doc(hidden)]
+    pub fn varnode_partial_copy_shadow(&self, a: VarnodeId, b: VarnodeId, rel_off: int4) -> bool {
         let sa = match self.vbank.get(a) {
             Some(v) => v.get_size(),
             None => return false,
@@ -4964,7 +5004,8 @@ impl Funcdata {
 
     /// C++ `Varnode::characterizeOverlap` (`varnode.cc:155`): 0 = no overlap,
     /// 1 = partial, 2 = identical storage range.
-    pub(crate) fn varnode_characterize_overlap(&self, a: VarnodeId, b: VarnodeId) -> int4 {
+    #[doc(hidden)]
+    pub fn varnode_characterize_overlap(&self, a: VarnodeId, b: VarnodeId) -> int4 {
         let (va, vb) = match (self.vbank.get(a), self.vbank.get(b)) {
             (Some(va), Some(vb)) => (va, vb),
             _ => return 0,
@@ -4990,7 +5031,8 @@ impl Funcdata {
     /// into a fresh unique, returning the new (unattached) COPY op.  The union
     /// `needsResolution` arm is the conservative default (no union types in the
     /// merged tree).
-    pub(crate) fn build_copy_trim_op(
+    #[doc(hidden)]
+    pub fn build_copy_trim_op(
         &mut self,
         in_vn: VarnodeId,
         addr: Address,
@@ -5033,7 +5075,8 @@ impl Funcdata {
 
     /// C++ `Merge::trimOpOutput` (`merge.cc:656`): bump the op's output forward
     /// through a new COPY so its Cover shrinks to a single point.
-    pub(crate) fn do_trim_op_output(&mut self, op: OpId) -> KunaResult<()> {
+    #[doc(hidden)]
+    pub fn do_trim_op_output(&mut self, op: OpId) -> KunaResult<()> {
         let code = self
             .obank
             .get(op)
@@ -5070,7 +5113,8 @@ impl Funcdata {
 
     /// C++ `data.opMarkNonPrinting` (the merge copymarker suppression).  The
     /// non-printing bit is consumed by the printer; wired through the addl-flag.
-    pub(crate) fn op_mark_non_printing_pub(&mut self, op: OpId) {
+    #[doc(hidden)]
+    pub fn op_mark_non_printing_pub(&mut self, op: OpId) {
         if let Some(o) = self.obank_mut().get_mut(op) {
             o.set_flag(crate::op::pcodeop_flags::nonprinting);
         }
@@ -5080,7 +5124,8 @@ impl Funcdata {
     /// `special_print` additional flag.  The bitfield transforms mark the
     /// INSERT (and its terminating STORE) so the printer renders them with the
     /// dedicated `pushBitfield` path rather than the raw operator.
-    pub(crate) fn op_mark_special_print(&mut self, op: OpId) {
+    #[doc(hidden)]
+    pub fn op_mark_special_print(&mut self, op: OpId) {
         if let Some(o) = self.obank_mut().get_mut(op) {
             o.set_additional_flag(crate::op::pcodeop_addlflags::special_print);
         }
@@ -5097,7 +5142,8 @@ impl Funcdata {
     /// never compare equal, so `mergeAdjacent` could never tie an op's input to
     /// its output.  Falls back to a fresh unknown only when no TypeFactory is
     /// attached (hand-built fixtures) or the op-code's dispatch errors.
-    pub(crate) fn op_output_type_local_pub(&self, op: OpId) -> Rc<Datatype> {
+    #[doc(hidden)]
+    pub fn op_output_type_local_pub(&self, op: OpId) -> Rc<Datatype> {
         let (sz, opc) = match self.obank.get(op) {
             Some(o) => {
                 let sz = o
@@ -5123,7 +5169,8 @@ impl Funcdata {
     }
 
     /// `op->inputTypeLocal(slot)` — see `op_output_type_local_pub`.
-    pub(crate) fn op_input_type_local_pub(&self, op: OpId, slot: int4) -> Rc<Datatype> {
+    #[doc(hidden)]
+    pub fn op_input_type_local_pub(&self, op: OpId, slot: int4) -> Rc<Datatype> {
         let (sz, opc) = match self.obank.get(op) {
             Some(o) => {
                 let sz = o
@@ -5152,7 +5199,8 @@ impl Funcdata {
     /// (`merge.cc:503-505`) — the cover of a single read, used by
     /// `Merge::eliminateIntersect` to decide whether the read crosses an
     /// intervening write at the same storage address.
-    pub(crate) fn build_single_read_cover(&self, vn: VarnodeId, op: OpId) -> Cover {
+    #[doc(hidden)]
+    pub fn build_single_read_cover(&self, vn: VarnodeId, op: OpId) -> Cover {
         // The `addRefPoint` extends the cover from `vn`'s def to the reading op so
         // intervening writes at the same storage address fall inside it; omitting it
         // collapses the cover to the def point and no intersection is ever found
@@ -5174,7 +5222,8 @@ impl Funcdata {
     /// redundant and `markRedundantCopies` deletes a load-bearing restore from
     /// the emitted C (the same omission `build_single_read_cover` records as
     /// LOSS-229).
-    pub(crate) fn build_copy_pair_range(&self, dom_op: OpId, sub_op: OpId) -> Cover {
+    #[doc(hidden)]
+    pub fn build_copy_pair_range(&self, dom_op: OpId, sub_op: OpId) -> Cover {
         let mut range = Cover::new();
         let ctx = FuncdataCoverCtx::new(self);
         if let Some(dom_out) = self.obank.get(dom_op).and_then(|o| o.get_out()) {
@@ -5190,7 +5239,8 @@ impl Funcdata {
     /// (kuna) Does the `checkCopyPair` range of `dom_op` and `sub_op`
     /// ([`Self::build_copy_pair_range`]) contain a point `writes` lists for its
     /// block?  The walk stops at the first one.
-    pub(crate) fn copy_pair_crossed(
+    #[doc(hidden)]
+    pub fn copy_pair_crossed(
         &self,
         dom_op: OpId,
         sub_op: OpId,
@@ -5219,7 +5269,8 @@ impl Funcdata {
     /// private fields from another module).  `which` selects tied (`false`) vs
     /// input (`true`).
     #[inline]
-    pub(crate) fn high_tied_or_input_varnode(
+    #[doc(hidden)]
+    pub fn high_tied_or_input_varnode(
         &self,
         high: crate::context::HighVariableId,
         input: bool,
@@ -5242,7 +5293,8 @@ impl Funcdata {
     /// Drive the bank-level `HighVariable::merge` across the field split,
     /// returning the deferred `vn->setHigh` writes for the caller to replay once
     /// the read-view borrow is released (the merge never reads `vn->high`).
-    pub(crate) fn bank_merge_with_log(
+    #[doc(hidden)]
+    pub fn bank_merge_with_log(
         &mut self,
         high1: crate::context::HighVariableId,
         high2: crate::context::HighVariableId,
@@ -5283,10 +5335,8 @@ impl Funcdata {
 
     /// C++ `Merge::snipReads` insert-point (`merge.cc:454-466`).  Reached by
     /// `snipReads`/`eliminateIntersect` (not on the `mergeMarker` path).
-    pub(crate) fn do_snip_reads_insert_point(
-        &self,
-        vn: VarnodeId,
-    ) -> (BlockId, Address, Option<OpId>) {
+    #[doc(hidden)]
+    pub fn do_snip_reads_insert_point(&self, vn: VarnodeId) -> (BlockId, Address, Option<OpId>) {
         let v = self
             .vbank
             .get(vn)
@@ -5330,7 +5380,8 @@ impl Funcdata {
     /// non-intersecting ones are `totalReplace`d and destroyed.  Faithful to the
     /// C++; the `needsResolution` union arm is the conservative default (no union
     /// types in the merged tree).
-    pub(crate) fn build_dominant_copy_impl(
+    #[doc(hidden)]
+    pub fn build_dominant_copy_impl(
         &mut self,
         high: crate::context::HighVariableId,
         copy: &[OpId],
@@ -5503,11 +5554,8 @@ impl Funcdata {
 
     /// `outVn->getHigh()->remove(outVn)` across the bank field split (the high
     /// loses one member; its cover is marked dirty).
-    pub(crate) fn high_remove_member(
-        &mut self,
-        high: crate::context::HighVariableId,
-        vn: VarnodeId,
-    ) {
+    #[doc(hidden)]
+    pub fn high_remove_member(&mut self, high: crate::context::HighVariableId, vn: VarnodeId) {
         let has_symbol_entry = false; // no symbol entries in the merged tree
         let Funcdata {
             high_bank,
@@ -5587,7 +5635,8 @@ impl Funcdata {
 
 /// Read-only graph view for the [`Cover`] def/use walk (the cross-arena reads
 /// `Cover::rebuild` makes off the held `Varnode *`/`PcodeOp *`/`FlowBlock *`).
-pub(crate) struct FuncdataCoverCtx<'a> {
+#[doc(hidden)]
+pub struct FuncdataCoverCtx<'a> {
     fd: &'a Funcdata,
     own: BlockTable,
     shared: Option<&'a BlockTable>,
@@ -5595,10 +5644,12 @@ pub(crate) struct FuncdataCoverCtx<'a> {
 
 /// The first basic block in list order with each block index, built on first
 /// use by [`FuncdataCoverCtx`].
-pub(crate) type BlockTable = std::cell::OnceCell<Vec<Option<BlockId>>>;
+#[doc(hidden)]
+pub type BlockTable = std::cell::OnceCell<Vec<Option<BlockId>>>;
 
 impl<'a> FuncdataCoverCtx<'a> {
-    pub(crate) fn new(fd: &'a Funcdata) -> Self {
+    #[doc(hidden)]
+    pub fn new(fd: &'a Funcdata) -> Self {
         FuncdataCoverCtx {
             fd,
             own: BlockTable::new(),
@@ -5608,7 +5659,8 @@ impl<'a> FuncdataCoverCtx<'a> {
 
     /// A view keeping its block table in `table`, for a run of Cover walks over
     /// blocks that do not change between them.
-    pub(crate) fn sharing(fd: &'a Funcdata, table: &'a BlockTable) -> Self {
+    #[doc(hidden)]
+    pub fn sharing(fd: &'a Funcdata, table: &'a BlockTable) -> Self {
         FuncdataCoverCtx {
             fd,
             own: BlockTable::new(),
@@ -5707,7 +5759,8 @@ impl Funcdata {
     ///
     /// Returns a re-borrowing closure runner: the caller's `f` gets the mutable
     /// high bank plus a `HighContext` view of the other fields.
-    pub(crate) fn with_high_split<R>(
+    #[doc(hidden)]
+    pub fn with_high_split<R>(
         &mut self,
         f: impl FnOnce(&mut crate::variable::HighVariableBank, &dyn HighContext) -> R,
     ) -> R {
@@ -6117,7 +6170,8 @@ impl Funcdata {
     /// propagate across the phi and mislabel the merged variable — so the
     /// client refuses such a site rather than lock it. High-independent: it
     /// reads the def-use graph, which is in SSA form by type-recovery time.
-    pub(crate) fn site_value_is_pure(&self, out: VarnodeId) -> bool {
+    #[doc(hidden)]
+    pub fn site_value_is_pure(&self, out: VarnodeId) -> bool {
         use std::collections::HashSet;
         // Forward value-carrier set: `out` and everything a COPY/INDIRECT/phi
         // forwards its value to.
@@ -6183,7 +6237,8 @@ impl Funcdata {
 /// when it is wider than the lock, or does not reach `lock_vn` through only
 /// same-value edges ([`derives_from_banks`]). Shared by the two `HighContext`
 /// bank views so `get_type_representative` can demote a dishonest site lock.
-pub(crate) fn high_has_foreign_member_banks(
+#[doc(hidden)]
+pub fn high_has_foreign_member_banks(
     vbank: &VarnodeBank,
     obank: &PcodeOpBank,
     insts: &[VarnodeId],
@@ -6260,7 +6315,8 @@ fn derives_from_banks(
     res
 }
 
-pub(crate) struct HighReadView<'a> {
+#[doc(hidden)]
+pub struct HighReadView<'a> {
     vbank: &'a VarnodeBank,
     obank: &'a PcodeOpBank,
 }
@@ -6268,7 +6324,8 @@ pub(crate) struct HighReadView<'a> {
 impl<'a> HighReadView<'a> {
     /// Build the read view from the two banks (the `funcdata_merge` bridge uses
     /// this for the bank-merge field-split, mirroring [`Funcdata::with_high_split`]).
-    pub(crate) fn new(vbank: &'a VarnodeBank, obank: &'a PcodeOpBank) -> HighReadView<'a> {
+    #[doc(hidden)]
+    pub fn new(vbank: &'a VarnodeBank, obank: &'a PcodeOpBank) -> HighReadView<'a> {
         HighReadView { vbank, obank }
     }
 }

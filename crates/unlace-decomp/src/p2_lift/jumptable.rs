@@ -1715,7 +1715,8 @@ fn eval_guard_expr(
 ///
 /// The op-coupled wrapper lives in `jumptable.rs` (not `rangeutil.rs`) because it
 /// reads the function IR (`Funcdata`), which is above the value-set layer.
-pub(crate) fn circlerange_pull_back(
+#[doc(hidden)]
+pub fn circlerange_pull_back(
     fd: &Funcdata,
     rng: &mut CircleRange,
     op: OpId,
@@ -5992,11 +5993,11 @@ impl Ord for IndexPair {
 /// to model the indirect jump as a \e switch.
 pub struct JumpTable {
     /// Maximum ADDs or SUBs to normalize (C++ `JumpTable::maxaddsub`).
-    pub(crate) maxaddsub: uint4,
+    pub maxaddsub: uint4,
     /// Maximum shifts to normalize (C++ `JumpTable::maxleftright`).
-    pub(crate) maxleftright: uint4,
+    pub maxleftright: uint4,
     /// Maximum extensions to normalize (C++ `JumpTable::maxext`).
-    pub(crate) maxext: uint4,
+    pub maxext: uint4,
     /// Current model of how the jump table is implemented in code.
     jmodel: Option<Box<dyn JumpModel>>,
     /// Initial jump table model, which may be incomplete (C++ `origmodel`).
@@ -6163,18 +6164,21 @@ impl JumpTable {
 
     /// (kuna) Stage this recovered table again: later flow re-entered the
     /// code before it, so its target may now be one of several constants.
-    pub(crate) fn kuna_retry_flow(&mut self) {
+    #[doc(hidden)]
+    pub fn kuna_retry_flow(&mut self) {
         self.partial_table = true;
         self.reentered = true;
     }
     /// (kuna) Has flow extended or staged this table again for re-entry? Such a
     /// table is followed many times, so flow follows each destination once.
-    pub(crate) fn kuna_is_reentered(&self) -> bool {
+    #[doc(hidden)]
+    pub fn kuna_is_reentered(&self) -> bool {
         self.reentered
     }
     /// (kuna) The synthetic return destination, when the model proved the
     /// dispatch can also jump to the caller's return address.
-    pub(crate) fn kuna_return_default(&self) -> Option<&Address> {
+    #[doc(hidden)]
+    pub fn kuna_return_default(&self) -> Option<&Address> {
         self.jmodel
             .as_ref()
             .filter(|model| model.kuna_returns_to_caller())
@@ -6182,7 +6186,8 @@ impl JumpTable {
     }
     /// (kuna) Forget the synthetic return destination; the remaining constant
     /// targets keep their model.
-    pub(crate) fn kuna_drop_return_default(&mut self) {
+    #[doc(hidden)]
+    pub fn kuna_drop_return_default(&mut self) {
         if self.kuna_return_default().is_none() {
             return;
         }
@@ -6193,15 +6198,13 @@ impl JumpTable {
     }
     /// (kuna) Is this a re-entry retry of a table whose followed targets must
     /// survive a failed second stage?
-    pub(crate) fn kuna_keeps_recovered_targets(&self) -> bool {
+    #[doc(hidden)]
+    pub fn kuna_keeps_recovered_targets(&self) -> bool {
         self.reentered && self.partial_table && !self.addresstable.is_empty()
     }
     /// Add an exact edge-local target without running another partial decompile.
-    pub(crate) fn kuna_extend_flow_target(
-        &mut self,
-        target: Address,
-        limit: usize,
-    ) -> Option<bool> {
+    #[doc(hidden)]
+    pub fn kuna_extend_flow_target(&mut self, target: Address, limit: usize) -> Option<bool> {
         if self.is_override()
             || self.addresstable.is_empty()
             || !(crate::architecture::default_pass_hooks().constselectjump_destination_is_local)(
@@ -6238,10 +6241,12 @@ impl JumpTable {
         Some(true)
     }
 
-    pub(crate) fn kuna_target_encoding(&self) -> Option<(i32, u64)> {
+    #[doc(hidden)]
+    pub fn kuna_target_encoding(&self) -> Option<(i32, u64)> {
         self.target_encoding
     }
-    pub(crate) fn kuna_set_target_encoding(&mut self, encoding: Option<(i32, u64)>) {
+    #[doc(hidden)]
+    pub fn kuna_set_target_encoding(&mut self, encoding: Option<(i32, u64)>) {
         if self.target_encoding.is_none() {
             self.target_encoding = encoding;
         }

@@ -69,6 +69,7 @@
 //! widens the dead-boundary test for the common body whose decode is cut at a
 //! nested call before it can prove one.
 
+use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
 use unlace_base::address::Address;
 use unlace_base::marshal::ElementId;
 use unlace_base::types::int4;

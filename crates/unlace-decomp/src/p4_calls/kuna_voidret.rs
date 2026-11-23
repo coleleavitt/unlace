@@ -22,6 +22,8 @@
 //! until no new function is due, then decompiles again each reader of a
 //! function redone after it.
 
+use crate::kuna_callrettype::FuncdataCallrettypeExt;
+use crate::kuna_narrowret::FuncdataNarrowretExt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_base::address::Address;
@@ -2791,9 +2793,27 @@ struct CalleeReturnsSlot(
 );
 crate::kuna_func_state!(CalleeReturnsSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_voidret` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataVoidretExt {
     /// (kuna `voidret`) Record what each callee's last decompile recovered it returns.
-    pub fn kuna_set_callee_returns(
+    fn kuna_set_callee_returns(
+        &mut self,
+        returns: std::collections::BTreeMap<
+            (unlace_base::types::int4, unlace_base::types::uintb),
+            crate::kuna_voidret::Returns,
+        >,
+    );
+    /// (kuna `voidret`) What the callee at `key` was last recovered to return.
+    fn kuna_callee_returns(
+        &self,
+        key: (unlace_base::types::int4, unlace_base::types::uintb),
+    ) -> Option<crate::kuna_voidret::Returns>;
+}
+
+impl FuncdataVoidretExt for crate::funcdata::Funcdata {
+    /// (kuna `voidret`) Record what each callee's last decompile recovered it returns.
+    fn kuna_set_callee_returns(
         &mut self,
         returns: std::collections::BTreeMap<
             (unlace_base::types::int4, unlace_base::types::uintb),
@@ -2802,9 +2822,8 @@ impl crate::funcdata::Funcdata {
     ) {
         self.kuna_state_mut::<CalleeReturnsSlot>().0 = returns;
     }
-
     /// (kuna `voidret`) What the callee at `key` was last recovered to return.
-    pub fn kuna_callee_returns(
+    fn kuna_callee_returns(
         &self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
     ) -> Option<crate::kuna_voidret::Returns> {

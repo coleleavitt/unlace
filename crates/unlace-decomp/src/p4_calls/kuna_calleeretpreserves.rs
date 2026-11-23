@@ -120,6 +120,7 @@
 //! register the ABI says carries the answer, and it only ever keeps a value the
 //! caller computed.
 
+use crate::kuna_rustabi::FuncdataRustabiExt;
 use unlace_base::address::Address;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;

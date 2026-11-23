@@ -94,6 +94,7 @@
 //! It fires only against a decoded body that contradicts the convention, and
 //! only in the direction of keeping a value the caller computed.
 
+use crate::kuna_rustabi::FuncdataRustabiExt;
 use unlace_base::address::Address;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;

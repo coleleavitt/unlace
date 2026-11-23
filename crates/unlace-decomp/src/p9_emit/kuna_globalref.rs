@@ -28,6 +28,7 @@
 //! the declared object's pointer is not exactly the conversion the cast
 //! performed.
 
+use crate::kuna_elemptr::FuncdataElemptrExt;
 use std::collections::{BTreeMap, HashSet};
 use std::rc::Rc;
 

@@ -5,6 +5,11 @@
 
 mod kuna_varrefs;
 
+use crate::kuna_elfmaindecl::FuncdataElfmaindeclExt;
+use crate::kuna_inputhints::FuncdataInputhintsExt;
+use crate::kuna_libcnames::FuncdataLibcnamesExt;
+use crate::kuna_ppc32piccalls::FuncdataPpc32piccallsExt;
+use crate::kuna_stablenames::FuncdataStablenamesExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;

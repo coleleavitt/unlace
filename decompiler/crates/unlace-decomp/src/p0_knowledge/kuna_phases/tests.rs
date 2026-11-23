@@ -973,7 +973,8 @@ fn option_values_live_value_present_for_129() {
     // `kuna_live_value`, like `narrowargs`/`protoorder`.
     // Recounted after merging upstream/main (2026-11-22): the fork's live-field rows plus upstream's.
     // +1 for `oslog` (live_field = os_log_args).
-    assert_eq!(with_live, 137);
+    // 137 -> 138: `spsolve` (#70) added a live_field row without the bump.
+    assert_eq!(with_live, 138);
 }
 
 #[test]

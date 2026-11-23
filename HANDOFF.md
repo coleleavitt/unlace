@@ -132,13 +132,15 @@ into the knowledge plane), and the loader/environment options PR after it.
     must live in the crate that defines the type, so when the middle band becomes its own crate
     the accessor blocks in pass modules have to become extension traits (the `FuncdataCastExt`
     pattern in `lib.rs`) or free functions. The slot types themselves can stay in the passes.
-- **Step 8:** `#[inline]` half done (arch/inline-8): 301 small middle-band functions (substrate,
-  p0_knowledge, infra) that p1-p9 code calls at least 5 times (codegraph `edges` kind `calls`), each a
-  field read or a one-line wrapper of at most 4 body lines, no loops or searches; plus the
-  `FuncStates` slot readers and the `kuna_func_state!` / `kuna_option_id!` `id()` functions. Functions
-  that already had `#[inline]`/`#[inline(always)]` were left as they were. Not done: the benchmark half
-  (`decompile-all` CPU time on 3 binaries, best of 3) needs release builds, so it was skipped under
-  the no-compile rule; the lead runs it once before step 9.
+- **Step 8:** done. `#[inline]` on 301 small middle-band functions (substrate, p0_knowledge, infra)
+  that p1-p9 code calls at least 5 times, each a field read or a one-line wrapper, plus the
+  `FuncStates` slot readers and the generated `id()` functions (#141). Benchmark after step 9:
+  `decompile-all` CPU time on tests/bug-repro grep, sort and libselinux.so.1, release, best of 3,
+  against 7afdf46521 (the single crate before the day's refactor). The split build was +4.9% (grep
+  +8.7%): about half was the .sla cache hashing every spec source at each start, half calls that no
+  longer inline across the new crate boundaries. Fixed by a stamp file in the cache (sizes and
+  mtimes; no source read while unchanged) and `lto = "thin"` in `[profile.release]`: 10.28 s
+  against 10.39 s, and the C output of all three is byte-identical to 7afdf46521's.
 - **Step 9:** the physical split, one crate per PR, bottom-up via `git mv` + re-exports:
   `unlace-middle` (~105k), then lift, structure, bandb, emit; `unlace-decomp` stays the driver +
   facade. Only after steps 5, 6 and 8 (splitting earlier makes builds worse; see the plan).

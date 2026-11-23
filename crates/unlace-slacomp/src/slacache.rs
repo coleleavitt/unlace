@@ -9,6 +9,11 @@
 //!   against the including file's directory, as the compiler does), and the compiler's own
 //!   fingerprint (`build.rs`: the slacomp, sleigh, base and num sources). The cached file is
 //!   `<cache>/<lang>-<key>.sla`.
+//! - **Stamp.** Hashing every source on each start costs more than the decompile of a small
+//!   binary, so the key is also recorded in `<cache>/<lang>-<path hash>.stamp` with each
+//!   source's path, size and modification time. While every listed source still has the
+//!   recorded size and time, the recorded key is used without reading any source; otherwise the
+//!   key is recomputed and the stamp rewritten. Within one process the answer is memoized.
 //! - **Location.** `$UNLACE_SLA_CACHE`, else `$XDG_CACHE_HOME/unlace/sla`, else
 //!   `$HOME/.cache/unlace/sla`, else `<tmp>/unlace-sla`. Deleting it is always safe.
 //! - **Concurrency.** An image is written to a unique temporary file in the cache directory and
@@ -19,10 +24,11 @@
 //!   `--sleighpath` directory of prebuilt images, or an in-tree build). A `.sla` with no
 //!   `.slaspec` beside it is always used as is.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::SystemTime;
 
 use crate::slgh_compile::SleighCompile;
@@ -107,6 +113,73 @@ pub fn cache_key(slaspec: &Path) -> String {
     format!("{hash:016x}{second:016x}")
 }
 
+/// A source's size and modification time in nanoseconds, the stamp's change test.
+fn signature(path: &Path) -> Option<(u64, u128)> {
+    let meta = fs::metadata(path).ok()?;
+    let nanos = meta
+        .modified()
+        .ok()?
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()?
+        .as_nanos();
+    Some((meta.len(), nanos))
+}
+
+fn stamp_path(dir: &Path, stem: &str, slaspec: &Path) -> PathBuf {
+    let full = fs::canonicalize(slaspec).unwrap_or_else(|_| slaspec.to_path_buf());
+    let id = fnv(FNV_OFFSET, full.to_string_lossy().as_bytes());
+    dir.join(format!("{stem}-{id:016x}.stamp"))
+}
+
+/// The key a current stamp records for `slaspec`, if every source it lists is unchanged.
+fn stamped_key(stamp: &Path) -> Option<String> {
+    let text = fs::read_to_string(stamp).ok()?;
+    let mut lines = text.lines();
+    let (fingerprint, key) = lines.next()?.split_once('\t')?;
+    if fingerprint != COMPILER_FINGERPRINT {
+        return None;
+    }
+    for line in lines {
+        let mut fields = line.splitn(3, '\t');
+        let len: u64 = fields.next()?.parse().ok()?;
+        let nanos: u128 = fields.next()?.parse().ok()?;
+        let path = Path::new(fields.next()?);
+        if signature(path) != Some((len, nanos)) {
+            return None;
+        }
+    }
+    Some(key.to_owned())
+}
+
+/// Record `key` and the current signature of every source of `slaspec` (best effort).
+fn write_stamp(stamp: &Path, slaspec: &Path, key: &str) {
+    let mut text = format!("{COMPILER_FINGERPRINT}\t{key}\n");
+    for file in sources(slaspec) {
+        let Some((len, nanos)) = signature(&file) else {
+            return;
+        };
+        let full = fs::canonicalize(&file).unwrap_or(file);
+        text.push_str(&format!("{len}\t{nanos}\t{}\n", full.to_string_lossy()));
+    }
+    let temp = stamp.with_extension(format!("stamp.{}.tmp", std::process::id()));
+    if fs::write(&temp, text).is_ok() && fs::rename(&temp, stamp).is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+}
+
+/// [`cache_key`], answered from the stamp when the sources are unchanged.
+fn current_key(dir: &Path, stem: &str, slaspec: &Path) -> String {
+    let stamp = stamp_path(dir, stem, slaspec);
+    if let Some(key) = stamped_key(&stamp) {
+        return key;
+    }
+    let key = cache_key(slaspec);
+    if fs::create_dir_all(dir).is_ok() {
+        write_stamp(&stamp, slaspec, &key);
+    }
+    key
+}
+
 fn mtime(path: &Path) -> Option<SystemTime> {
     fs::metadata(path).and_then(|m| m.modified()).ok()
 }
@@ -140,7 +213,7 @@ pub fn compile_cached_in(dir: &Path, slaspec: &Path) -> io::Result<PathBuf> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "slaspec has no file name"))?
         .to_string_lossy()
         .into_owned();
-    let target = dir.join(format!("{stem}-{}.sla", cache_key(slaspec)));
+    let target = dir.join(format!("{stem}-{}.sla", current_key(dir, &stem, slaspec)));
     if target.is_file() {
         return Ok(target);
     }
@@ -169,7 +242,25 @@ pub fn compile_cached_in(dir: &Path, slaspec: &Path) -> io::Result<PathBuf> {
 /// The `.sla` to load for `sla` (a path such as `specs/.../x86-64.sla`): a current prebuilt
 /// image at that path, else the cached image compiled from the sibling `.slaspec`.
 pub fn sla_path(sla: impl AsRef<Path>) -> io::Result<PathBuf> {
+    static RESOLVED: Mutex<Option<HashMap<PathBuf, PathBuf>>> = Mutex::new(None);
     let sla = sla.as_ref();
+    if let Some(found) = RESOLVED
+        .lock()
+        .ok()
+        .and_then(|map| map.as_ref()?.get(sla).cloned())
+        .filter(|found| found.is_file())
+    {
+        return Ok(found);
+    }
+    let found = resolve(sla)?;
+    if let Ok(mut map) = RESOLVED.lock() {
+        map.get_or_insert_with(HashMap::new)
+            .insert(sla.to_path_buf(), found.clone());
+    }
+    Ok(found)
+}
+
+fn resolve(sla: &Path) -> io::Result<PathBuf> {
     let slaspec = sla.with_extension("slaspec");
     if !slaspec.is_file() {
         return if sla.is_file() {

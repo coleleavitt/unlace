@@ -51,3 +51,8 @@ disallowed_types = "deny"
 opt-level = 1
 debug-assertions = true
 overflow-checks = true
+
+# Thin LTO: since the crate split, calls between the decompiler crates inline only through LTO.
+# Without it, decompile-all on grep/sort/libselinux ran 3-4% slower than the single crate did.
+[profile.release]
+lto = "thin"

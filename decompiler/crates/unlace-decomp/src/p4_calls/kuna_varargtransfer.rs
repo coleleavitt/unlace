@@ -37,3 +37,8 @@ pub(crate) fn pending_trials(data: &Funcdata, fc: &FuncCallSpecs) -> Vec<(ParamT
         })
         .collect()
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.varargtransfer_pending_trials = Some(pending_trials);
+}

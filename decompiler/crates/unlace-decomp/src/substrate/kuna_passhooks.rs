@@ -25,6 +25,7 @@ use crate::database::SymbolEntry;
 use crate::dtype::Datatype;
 use crate::fspec::{FuncCallSpecs, FuncProto, ParamTrial};
 use crate::funcdata::Funcdata;
+use crate::jumptable::LoadTable;
 use crate::kuna_fasthash::FxHashMap;
 use crate::varmap::{AliasChecker, LinkEntryInfo};
 
@@ -242,4 +243,26 @@ declare_hooks! {
     wrapsplit_wrap_floor: fn(u64) -> u64;
     /// `kuna_wrapsplit::wrap_refinement`.
     wrapsplit_wrap_refinement: fn(int4, int4) -> Vec<int4>;
+    /// `flow::next_fspec_handle`.
+    flow_next_fspec_handle: fn() -> unlace_base::types::uintb;
+    /// `kuna_callmechanisms::requires_reflow`.
+    callmechanisms_requires_reflow: fn(&crate::fspec::FuncProto, &crate::fspec::FuncProto) -> bool;
+    /// `kuna_dynamiclocals::bind`.
+    dynamiclocals_bind: fn(&mut Funcdata, VarnodeId, &SymbolEntry) -> KunaResult<bool>;
+    /// `kuna_highslice_guard::matches`.
+    highslice_guard_matches: fn(&Funcdata, OpId, OpId) -> bool;
+    /// `kuna_joincalloutput::needs_reflow`.
+    joincalloutput_needs_reflow: fn(&Funcdata, &FuncCallSpecs, &FuncProto) -> bool;
+    /// `kuna_octeoneffects::input_type`.
+    octeoneffects_input_type: fn(&Funcdata, OpId, int4) -> Option<Rc<Datatype>>;
+    /// `kuna_octeoneffects::output_type`.
+    octeoneffects_output_type: fn(&Funcdata, OpId) -> Option<Rc<Datatype>>;
+    /// `kuna_segmentize::table_leaves_image`.
+    segmentize_table_leaves_image: fn(&Funcdata, OpId, &[Address]) -> bool;
+    /// `kuna_switchextent::table_read`.
+    switchextent_table_read: fn(&Funcdata, OpId) -> Option<(u64, u64, VarnodeId)>;
+    /// `kuna_switchtrim::trimmed_rows`.
+    switchtrim_trimmed_rows: fn(&Funcdata, &[Address], &[LoadTable], Option<&Vec<int4>>) -> usize;
+    /// `kuna_varargtransfer::pending_trials`.
+    varargtransfer_pending_trials: fn(&Funcdata, &FuncCallSpecs) -> Vec<(ParamTrial, VarnodeId)>;
 }

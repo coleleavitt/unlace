@@ -394,3 +394,21 @@ total 10.39 -> 10.28 s, output still byte-identical.
   and lifting heritage/merge/jumptable out of middle. Only if step 0's numbers justify it.
 - Unit tests in the band crates that reach a driver-provided hook panic ("not linked into this test", 1141 on
   38ede1720c); they need the driver's hook table installed in the test or a move to the driver crate.
+
+### Step 0, measured after the split (2026-11-23)
+
+Rebuild of the `unlace` binary (`cargo build -p unlace-cli`, dev profile, opt-level 1, warm target
+dir, rustc-rdr-main with `CARGO_UNSTABLE_PUBLIC_API_HASH`) after a one-line private edit, best of 2,
+against 7afdf46521 (the single crate before the day's refactor), on an idle 24-core machine:
+
+| edit in | before | after | speed-up | peak RSS |
+|---|---|---|---|---|
+| emit (`p9_emit/printc.rs`) | 15.5 s | 7.5 s | 2.1x | 2.8 -> 0.9 GB |
+| structure (`p8_structure/blockaction.rs`) | 15.6 s | 6.8 s | 2.3x | 2.8 -> 0.9 GB |
+| bandb (`p5_types/coreaction_infertypes.rs`) | 15.6 s | 11.1 s | 1.4x | 2.8 -> 1.5 GB |
+| middle (`substrate/funcdata.rs`) | 16.4 s | 9.3 s | 1.8x | 2.8 -> 0.9 GB |
+
+A private edit in middle no longer rebuilds the crates above it (the public-API hash is unchanged),
+which is why even middle edits got faster. bandb, at 249k lines, gains least; splitting it (step 10)
+is where the remaining incremental time is. Cold dev build of `unlace-cli`: about 3 minutes either
+way.

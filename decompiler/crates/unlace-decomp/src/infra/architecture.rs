@@ -2699,6 +2699,12 @@ struct SymbolSnapshots {
 /// snapshot, shared rather than copied per function.
 type CalleeProtoSnapshot = Rc<Vec<(int4, uintb, crate::fspec::PrototypePieces)>>;
 
+/// The pass hooks every [`ArchContext`] starts with: the default pipeline's, composed with the
+/// universal action tree it schedules ([`crate::kuna_passhooks`]).
+pub fn default_pass_hooks() -> &'static crate::kuna_passhooks::KunaHooks {
+    &crate::universalaction::PASS_HOOKS
+}
+
 impl Architecture {
     /// Construct an `Architecture` over an already-initialized disassembly
     /// engine (C++ `Architecture::Architecture` + the `restoreFromSpec` subsystem

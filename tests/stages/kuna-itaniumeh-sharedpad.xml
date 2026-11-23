@@ -23,7 +23,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/itaniumeh/eh4_x86_64.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/itaniumeh/eh4_x86_64.elf</com>
   <com>option itaniumeh on</com>
   <com>read symbols</com>
   <com>load function probe</com>

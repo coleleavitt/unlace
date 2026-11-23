@@ -620,7 +620,7 @@ made every read explicit, so this action sits in the fullloop tail beside the
 other edge strippers and uses the same `remove_branch` +
 `remove_unreachable_blocks` pair.
 
-The matcher (`decompiler/crates/unlace-decomp/src/infra/idiom.rs
+The matcher (`decompiler/crates/unlace-decomp/src/substrate/idiom.rs
 (match_guarded_cold_call_phi)`) refuses unless ALL of: every predecessor of
 the arm is a CBRANCH-terminated guard whose condition derives from a global
 flag (a `ram`-storage read or a LOAD through a constant pointer — the

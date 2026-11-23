@@ -5,7 +5,12 @@ use crate::{context::VarnodeId, funcdata::Funcdata};
 /// A same-width copy/displacement chain must reach a particular stack pointer.
 /// Unknown inputs, phi merges, and values killed by another call are declined.
 pub(crate) fn carries_stack_address(data: &Funcdata, vn: VarnodeId) -> bool {
-    if !data.get_arch().stack_addr_arg_trial {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_stackaddrargtrial::StackAddrArgTrial>()
+        .0
+    {
         return false;
     }
     let Some(sp) = stack_pointer_storage(data) else {
@@ -32,6 +37,15 @@ pub(crate) fn trial_is_protected(
         && trial.has_stack_address()
         && trial.get_entry().is_some_and(|i| entries[i].is_exclusion())
 }
+
+crate::kuna_flag!(
+    /// Opt-in stack-address evidence for call input trials.
+    StackAddrArgTrial,
+    "stackaddrargtrial",
+    "Stack-address input trials",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 mod tests {

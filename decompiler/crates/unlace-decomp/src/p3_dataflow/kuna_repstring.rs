@@ -125,7 +125,12 @@ impl Action for ActionRepString {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().rep_string {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_repstring::RepString>()
+            .0
+        {
             return 0;
         }
         let heads: Vec<BlockId> = (0..data.bblocks_get_size())
@@ -1076,3 +1081,14 @@ pub(crate) fn output_type(data: &Funcdata, op_id: OpId) -> Option<Rc<Datatype>> 
         .get_base(width, type_metatype::TYPE_INT)
         .ok()
 }
+
+crate::kuna_flag!(
+    /// (kuna) Collapse an x86 `rep movs`/`rep stos`/`repz cmpsb` loop into a
+    /// copy, fill or compare builtin (option `repstring`).  See
+    /// [`crate::p3_dataflow::kuna_repstring`].
+    RepString,
+    "repstring",
+    "rep movs/stos/cmps loops as copy, fill and compare builtins",
+    unset: false,
+    shipped: true
+);

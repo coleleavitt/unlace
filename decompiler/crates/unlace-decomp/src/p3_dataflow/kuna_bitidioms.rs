@@ -380,7 +380,12 @@ impl Rule for RuleBitIdioms {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().bit_idioms {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_bitidioms::BitIdioms>()
+            .0
+        {
             return 0;
         }
         let Some(o) = data.obank().get(op) else {
@@ -507,7 +512,12 @@ impl Rule for RuleIntAbs {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().bit_idioms {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_bitidioms::BitIdioms>()
+            .0
+        {
             return 0;
         }
         let Some(o) = data.obank().get(op) else {
@@ -929,7 +939,12 @@ impl crate::action::Action for ActionBitScanLoop {
         data: &mut Funcdata,
         _ctx: &mut crate::action::ActionContext,
     ) -> crate::action::ApplyResult {
-        if !data.get_arch().bit_idioms {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_bitidioms::BitIdioms>()
+            .0
+        {
             return 0;
         }
         let heads: Vec<BlockId> = (0..data.bblocks_get_size())
@@ -948,3 +963,13 @@ impl crate::action::Action for ActionBitScanLoop {
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `bitidioms`) Fold shift/OR byte swaps and rotates into `bswap` /
+    /// `rotl` (see [`crate::kuna_bitidioms`]).
+    BitIdioms,
+    "bitidioms",
+    "Byte-swap and rotate idioms",
+    unset: false,
+    shipped: true
+);

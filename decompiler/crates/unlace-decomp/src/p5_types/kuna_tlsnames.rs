@@ -237,6 +237,15 @@ impl Action for ActionTlsNames {
     }
 }
 
+crate::kuna_flag!(
+    /// (kuna) Gate the static-TLS naming (`tlsnames`); default on.
+    Tlsnames,
+    "tlsnames",
+    "Gate the static-TLS naming (`tlsnames`); default on.",
+    unset: false,
+    shipped: true
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

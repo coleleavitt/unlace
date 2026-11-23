@@ -83,7 +83,12 @@ fn descriptor_slot(name: &str) -> Option<int4> {
 /// Register a per-site output type lock for every qualifying Go allocator
 /// call (option `gonewtype`).  Idempotent.
 pub fn contribute(data: &mut Funcdata) {
-    if !data.get_arch().go_new_type {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_gonewtype::GoNewType>()
+        .0
+    {
         return;
     }
     let mut sites: Vec<(Address, Rc<Datatype>)> = Vec::new();
@@ -191,6 +196,17 @@ fn descriptor_offset(data: &Funcdata, vn: crate::context::VarnodeId) -> Option<u
     let src = data.vbank().get(d.get_in(0)?)?;
     src.is_constant().then(|| src.get_offset())
 }
+
+crate::kuna_flag!(
+    /// (kuna) `option gonewtype`: type a `runtime.newobject` result from its
+    /// descriptor argument through the per-call-site output type lock.
+    /// Default on (structurally inert off Go images).
+    GoNewType,
+    "gonewtype",
+    "Go newobject result typing",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 #[path = "kuna_gonewtype/tests.rs"]

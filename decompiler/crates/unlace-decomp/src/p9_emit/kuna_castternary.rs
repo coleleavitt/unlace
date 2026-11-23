@@ -377,6 +377,18 @@ fn is_int(t: &Datatype) -> bool {
         && int_range(t).is_some()
 }
 
+crate::kuna_flag!(
+    /// (kuna `castternary`) Leave out an integer widening on an arm of an
+    /// `iteregion` conditional when the conditional converts the arm to that same
+    /// type itself (its type under the usual arithmetic conversions is the cast's
+    /// target with and without the cast).  See [`crate::kuna_castternary`].
+    CastTernary,
+    "castternary",
+    "conditional-arm cast elision",
+    unset: false,
+    shipped: true
+);
+
 #[cfg(test)]
 #[path = "kuna_castternary/tests.rs"]
 mod tests;

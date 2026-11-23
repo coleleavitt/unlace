@@ -23,7 +23,12 @@ use crate::funcdata::Funcdata;
 /// interior of a group that runs past its Symbol. Returns how many Symbols were
 /// added.
 pub fn persist(arch: &mut Architecture, fd: &Funcdata) -> usize {
-    if !arch.mapglobalsyms || (fd.new_globals().is_empty() && fd.global_covers().is_empty()) {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_mapglobalsyms::Mapglobalsyms>()
+        .0
+        || (fd.new_globals().is_empty() && fd.global_covers().is_empty())
+    {
         return 0;
     }
     let Some(global) = arch.symboltab.get_global_scope() else {
@@ -77,3 +82,14 @@ pub fn persist(arch: &mut Architecture, fd: &Funcdata) -> usize {
     }
     added
 }
+
+crate::kuna_flag!(
+    /// (kuna `mapglobalsyms`) Keep the data Symbol `Funcdata::mapGlobals`
+    /// creates for unnamed global storage in the global scope, so later
+    /// functions see it; default **off**.
+    Mapglobalsyms,
+    "mapglobalsyms",
+    "Global scope keeps the data Symbols mapGlobals creates",
+    unset: false,
+    shipped: false
+);

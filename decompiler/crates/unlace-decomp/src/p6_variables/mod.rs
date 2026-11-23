@@ -69,5 +69,5 @@ pub mod varmap;
 
 pub(crate) mod kuna_wrappedstackaggregate;
 
-pub(crate) mod kuna_callarrayextent;
+pub mod kuna_callarrayextent;
 pub(crate) mod kuna_stackstruct;

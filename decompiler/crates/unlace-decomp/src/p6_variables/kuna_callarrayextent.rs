@@ -398,7 +398,12 @@ pub(super) fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, spac
 
 /// Preserve shared storage up to the next address-taken base or the local frame end.
 pub(super) fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
-    if !fd.get_arch().call_array_extent {
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_callarrayextent::CallArrayExtent>()
+        .0
+    {
         return;
     }
     let Some(types) = fd.get_arch().types_rc() else {
@@ -531,6 +536,15 @@ pub(super) fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace
         state.add_range_pub(common_offset, Some(array), 0, RangeType::Fixed, -1);
     }
 }
+
+crate::kuna_flag!(
+    /// Opt-in frame-bounded arrays for call-escaped integer storage.
+    CallArrayExtent,
+    "callarrayextent",
+    "Call-escaped frame array extent",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 mod tests;

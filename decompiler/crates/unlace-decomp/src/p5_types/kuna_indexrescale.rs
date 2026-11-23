@@ -296,7 +296,12 @@ impl Action for ActionIndexRescale {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().index_rescale {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_indexrescale::IndexRescale>()
+            .0
+        {
             return 0;
         }
         let ops: Vec<OpId> = data.obank().iter_alive().collect();
@@ -331,3 +336,12 @@ impl Action for ActionIndexRescale {
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `indexrescale`) A byte offset into an array becomes an element index.
+    IndexRescale,
+    "indexrescale",
+    "Byte offsets rescaled to element indexes",
+    unset: false,
+    shipped: true
+);

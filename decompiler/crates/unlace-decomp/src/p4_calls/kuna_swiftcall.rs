@@ -1131,6 +1131,18 @@ pub fn derive_model(
     out
 }
 
+crate::kuna_flag!(
+    /// (kuna) Gate the Swift calling-convention arm of the metadata pass
+    /// (`swiftcall`): methods, initializers and accessors bound to the
+    /// `__swiftcall` model with their `self` named and typed. Default-on;
+    /// inert unless `swiftmetadata` is on.
+    Swiftcall,
+    "swiftcall",
+    "Swift calling convention on methods and witnesses",
+    unset: true,
+    shipped: true
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

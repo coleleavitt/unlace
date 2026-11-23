@@ -817,7 +817,7 @@ fn is_loop_latch(data: &Funcdata, bb: BlockId) -> bool {
 /// Precompute both admission rules' verdicts for every `BlockBasic` in the function.
 /// A loop's test block ([`is_loop_latch`]) is never admitted.
 ///
-/// `max_stmts` is the `Architecture::cond_fold` policy cap: **0 means the option is
+/// `max_stmts` is the registered option `CondFold`'s policy cap: **0 means the option is
 /// off**, in which case this returns empty sets without touching the graph, so the
 /// whole feature costs nothing (and every gate disjunct is dead).  It is the
 /// printed-width budget for **both** rules — the level moves what either rule will
@@ -872,11 +872,34 @@ pub fn compute_condfold_sets(data: &Funcdata, max_stmts: int4) -> CondFoldSets {
 // Option parse (`condfold off|on|wide`).
 //===========================================================================
 
+/// The `condfold` setting: the statement cap of a folded condition prefix (0 = off).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CondFold(pub int4);
+
+impl crate::kuna_optionset::KunaOption for CondFold {
+    const NAME: &'static str = "condfold";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        CondFold(0)
+    }
+
+    fn shipped() -> Self {
+        CondFold(MAX_PREFIX_STMTS_ANGR)
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        OptionCondFold
+            .apply(value)
+            .map(|(v, msg)| (CondFold(v), msg))
+    }
+}
+
 /// The `condfold off|on|wide` ArchOption (angr Phoenix `MultiStatementExpression`
 /// short-circuit relaxation).
 ///
 /// The parsed value is the **shared printed-width budget** (both rules), stored in
-/// `Architecture::cond_fold`; it doubles as the on/off sentinel for the whole option:
+/// the registered option `CondFold`; it doubles as the on/off sentinel for the whole option:
 ///
 /// | value  | budget | meaning |
 /// |--------|--------|---------|

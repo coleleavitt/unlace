@@ -144,8 +144,8 @@ declare_hooks! {
     retsplitglobal_is_global_store: fn(bool, bool, bool, bool) -> bool;
     /// `kuna_retsplitglobal::split_is_declined`.
     retsplitglobal_split_is_declined: fn(bool, usize) -> bool;
-    /// `kuna_retsplitlimit::split_is_declined`.
-    retsplitlimit_split_is_declined: fn(Option<u64>, usize, usize) -> bool;
+    /// `kuna_retsplitlimit::split_is_declined` under the run's `retsplitlimit` option.
+    retsplitlimit_split_is_declined: fn(&crate::kuna_optionset::OptionSet, usize, usize) -> bool;
     /// `kuna_rettriangle::is_triangle_join`.
     rettriangle_is_triangle_join: fn(&Funcdata, BlockId) -> bool;
     /// `kuna_armfloatargs::stated_singles`.

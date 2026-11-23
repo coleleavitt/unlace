@@ -762,10 +762,6 @@ pub struct Architecture {
     /// a 72-store epilogue is not cloned into each predecessor (option
     /// `retsplitglobal`).  See [`crate::p8_structure::kuna_retsplitglobal`].
     pub ret_split_global: bool,
-    /// (kuna) The most ops `ActionReturnSplit` may clone out of one return block,
-    /// `None` for no limit (option `retsplitlimit`).  See
-    /// [`crate::p8_structure::kuna_retsplitlimit`].
-    pub ret_split_limit: Option<u64>,
     /// Opt-in stack-address evidence for call input trials.
     pub stack_addr_arg_trial: bool,
     /// (kuna) `option calleefilledarg`: an unfilled argument register an
@@ -1080,16 +1076,6 @@ pub struct Architecture {
     /// (`Heritage::guardStores`), i.e. upstream.  See
     /// [`crate::p3_dataflow::kuna_indexaliasguard`] (option `indexaliasguard`).
     pub index_alias_guard: int4,
-    /// (kuna) How far the open range at an indexed stack base reaches past
-    /// upstream's four elements: `0` = upstream, `1` = to the known-bits bound
-    /// of its indices, `2` = also over contiguous write-only slots. See
-    /// [`crate::p6_variables::kuna_arrayextent`] (option `arrayextent`).
-    pub array_extent: int4,
-    /// (kuna) End an escaped stack buffer at the byte count its calls state:
-    /// `0` = upstream's gap, `1` = library call lengths, `2` = also constant
-    /// call arguments. See [`crate::p6_variables::kuna_arraysize`] (option
-    /// `arraysize`).
-    pub array_size: int4,
     /// Opt-in frame-bounded arrays for call-escaped integer storage.
     pub call_array_extent: bool,
     /// (kuna `stackstruct`) Lay out an address-taken frame record as one
@@ -1241,14 +1227,6 @@ pub struct Architecture {
     /// (kuna) `outline` region spec, empty when off.  See
     /// [`crate::p8_structure::kuna_outline`].
     pub outline_spec: String,
-    pub cond_fold: int4,
-    /// (kuna) `condstmts` statement cap for folded condition operands; negative =
-    /// off.  See [`crate::p8_structure::kuna_condstmts`].
-    pub cond_stmts: int4,
-    /// (kuna `gotoreduce`) angr SAILR goto-reduction: which small return tails are
-    /// duplicated into a `goto` source so the cross-edge becomes a structured early
-    /// return (call-free tails at `return`, also tails with a call at `on`).
-    pub goto_reduce: crate::p8_structure::kuna_gotoreduce::GotoReduceMode,
     /// (kuna) angr `IfElseFlattener`: drop the `else` arm of a 3-component `if`
     /// whose true-clause is statement-terminating, re-parenting the else body as
     /// the `if`'s follower (`flatten_ifelse`).
@@ -2862,7 +2840,6 @@ impl Architecture {
             opaque_globals: false,
             kuna_opaque_globals: None,
             ret_split_global: false,
-            ret_split_limit: None,
             stack_addr_arg_trial: false,
             callee_filled_arg: false, // (kuna) option calleefilledarg; reset_defaults sets the shipped default
             be_join: crate::kuna_bejoin::BeJoinMode::Off, // (kuna) option bejoin; reset_defaults sets the shipped default
@@ -2947,8 +2924,6 @@ impl Architecture {
             index_alias_guard: 0, // (kuna) option indexaliasguard; reset_defaults sets the shipped default
             call_array_extent: false,
             stack_struct: false,
-            array_extent: 0, // (kuna) option arrayextent; reset_defaults sets the shipped default
-            array_size: 0,   // (kuna) option arraysize; reset_defaults sets the shipped default
             devectorize_reduction: false, // (kuna) option devectorize (opt-in default-off)
             strlen_scan: false, // (kuna) option strlenscan; reset_defaults sets the shipped default
 
@@ -2969,9 +2944,6 @@ impl Architecture {
             region_loop_refine: false,
             region_edge_order: false,
             outline_spec: String::new(),
-            cond_fold: 0,
-            cond_stmts: -1,
-            goto_reduce: crate::p8_structure::kuna_gotoreduce::GotoReduceMode::Off,
             flatten_ifelse: false,
             revert_cross_jumps: false,
             dedup_ite_tail: false,
@@ -3321,7 +3293,6 @@ impl Architecture {
         self.va_start = true;
         self.switch_guard_merge = true;
         self.ret_split_global = true; // (kuna) DIV-PENDING default-on: a shared RETURN block that stores to GLOBALS is not the bare epilogue `ActionReturnSplit::isSplittable` assumes, so it is no longer cloned into every predecessor. One-directional (it can only decline a split) and byte-identical (0/675) on the datatest corpus; restore the upstream predicate with `option retsplitglobal off`
-        self.ret_split_limit = Some(crate::p8_structure::kuna_retsplitlimit::DEFAULT_LIMIT); // (kuna) GH-1034 default-on: a return block whose split would clone more than 2^20 ops keeps its gotos
         self.stack_addr_arg_trial = false;
         self.callee_filled_arg = true; // (kuna) option calleefilledarg default-on: at an objc_msgSend$<sel> selector stub, a definitely-unused argument register the stub writes before reading is no parameter slot, so the positional rule does not end the list there; inert outside Objective-C (0/675)
         self.be_join = crate::kuna_bejoin::BeJoinMode::Callers; // (kuna) option bejoin default `callers` (#904): a big-endian or AVR pair joins high word first, as the ABI returns it, only where the instructions prove one wide value (a sign or zero extension, a product's halves made apart, two adjacent loads, a proven callee's pair) or a caller reads the second register after the call; `evidence` drops the callers, `on` is the instruction-shape guess, which also reads an int over the high half of a 64-bit temporary as that long long
@@ -3390,17 +3361,12 @@ impl Architecture {
         self.index_alias_guard = crate::p3_dataflow::kuna_indexaliasguard::LEVEL_GLOBAL; // (kuna) DIV-147 restored upstream Heritage::guardLoads (heritage.cc:1570), which kuna shipped behind a hard-coded highPtrPossible == false; default `global` adds guardStores' INDIRECT on a global at each STORE into its space and a LOAD guard COPY of a global at each LOAD that may read it (0/675 datatest); `load` drops both, `off` drops all, `full` adds upstream guardStores
         self.call_array_extent = false;
         self.stack_struct = false;
-        self.array_extent = crate::p6_variables::kuna_arrayextent::LEVEL_ON; // (kuna) GH-867 default-on: an indexed stack array covers the slots its known-bits bound reaches and, unbounded, the contiguous write-only slots after it (0/675 datatest)
-        self.array_size = crate::p6_variables::kuna_arraysize::LEVEL_ON; // (kuna) option arraysize default-on: an escaped stack buffer ends at the byte count a library call states for it when that count lies within the alignment padding below the gap (0/675 datatest)
         self.region_structure = true; // (kuna) DIV-12 default-on (region-based Phoenix/SAILR structurer; primary structuring path, falls back to CollapseStructure on irreducible code)
         self.loop_continue = true;
         self.post_increment = true;
         self.region_loop_refine = true; // (kuna) DIV-13 default-on (region structurer multi-exit/irreducible loop-successor refinement; 0/675 ablation)
         self.region_edge_order = false; // (kuna) SAILR P2 default-OFF opt-in (H2 post-dominator + dominance-tiered edge-virtualization ordering; only reorders which goto is chosen when virtualizing, so OFF is byte-identical)
         self.outline_spec = String::new(); // (kuna) default-OFF opt-in (excise a supplied single-entry region into a synthesized pseudofunction call; destructive, and inert with no region supplied)
-        self.cond_stmts = crate::p8_structure::kuna_condstmts::DEFAULT_CAP; // (kuna) condstmts default-on: a folded condition operand prints at most 3 statements before its test (0/675 ablation)
-        self.cond_fold = crate::p8_structure::kuna_condfold::MAX_PREFIX_STMTS_ANGR; // (kuna) default `on` (angr Phoenix MultiStatementExpression short-circuit relaxation, capped by condstmts' comma budget; a loop's test block is never folded); 0/675 datatest assertions
-        self.goto_reduce = crate::p8_structure::kuna_gotoreduce::GotoReduceMode::On; // (kuna) gotoreduce default `on`: call-free return tails and return tails with a call (angr SAILR ReturnDuplicator/ReturnDuplicatorLow; 0/675 ablation)
         self.flatten_ifelse = true; // (kuna) DIV-13 default-on (angr IfElseFlattener; 0/675 ablation)
         self.revert_cross_jumps = true; // (kuna) DIV-13 default-on (angr SAILR CrossJumpReverter; 0/675 ablation)
         self.dedup_ite_tail = true; // (kuna) DIV-13 default-on (angr structurer ITE region-dedup — merge duplicated if/else tails; 0/675 ablation)
@@ -4300,7 +4266,6 @@ impl Architecture {
                 self.kuna_opaque_globals.is_none() && self.kuna_float_scan.is_some();
         }
         ctx.ret_split_global = self.ret_split_global; // retsplitglobal
-        ctx.ret_split_limit = self.ret_split_limit; // retsplitlimit
         // (kuna) resolve the byte-shuffle user-op ids ONCE per program, so the
         // rule can name a CALLOTHER through the ArchSeam (the boundary
         // ArchContext carries no userop table).
@@ -4392,8 +4357,6 @@ impl Architecture {
         ctx.index_alias_guard = self.index_alias_guard; // indexaliasguard
         ctx.call_array_extent = self.call_array_extent;
         ctx.stack_struct = self.stack_struct;
-        ctx.array_extent = self.array_extent; // arrayextent
-        ctx.array_size = self.array_size; // arraysize
         ctx.stack_alias_deadstore = self.stack_alias_deadstore; // stackalias
         ctx.stack_views = self.stack_views;
         ctx.libc_names = self.libc_names; // libcnames
@@ -4458,9 +4421,6 @@ impl Architecture {
         ctx.lowered_switch_linear = self.lowered_switch_linear; // loweredswitch linear|all
         ctx.lowered_switch_tree = self.lowered_switch_tree; // loweredswitch tree|all
         ctx.lowered_switch_bits = self.lowered_switch_bits; // loweredswitchbits
-        ctx.cond_fold = self.cond_fold; // condfold
-        ctx.cond_stmts = self.cond_stmts; // condstmts
-        ctx.goto_reduce = self.goto_reduce; // gotoreduce
         ctx.flatten_ifelse = self.flatten_ifelse; // ifelseflatten
         ctx.revert_cross_jumps = self.revert_cross_jumps; // crossjumprevert
         ctx.dedup_ite_tail = self.dedup_ite_tail; // dedupitetail

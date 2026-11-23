@@ -45,7 +45,7 @@ pub const MAX_REATTEMPTS: usize = 2;
 /// starts, plus (once implied flags exist) every block printing more than the cap.
 pub fn complex_blocks(data: &Funcdata) -> BTreeSet<BlockId> {
     let mut out = BTreeSet::new();
-    let cap = data.get_arch().cond_stmts;
+    let cap = data.get_arch().kuna_options.get::<CondStmts>().0;
     if cap < 0 {
         return out;
     }
@@ -73,7 +73,7 @@ fn is_overlong(data: &Funcdata, bb: BlockId, cap: int4) -> bool {
 /// Record every block the existing structure prints over the cap in a
 /// comma-printed position.  Only meaningful once implied flags exist.
 pub fn record_hits(data: &mut Funcdata) {
-    let cap = data.get_arch().cond_stmts;
+    let cap = data.get_arch().kuna_options.get::<CondStmts>().0;
     if cap < 0 || !data.is_high_on() || data.sblocks_get_size() == 0 {
         return;
     }
@@ -133,6 +133,29 @@ pub fn condfold_budget(cond_fold: int4, cond_stmts: int4) -> int4 {
         return cond_fold;
     }
     cond_fold.min(cond_stmts.saturating_add(1))
+}
+
+/// The `condstmts` setting: the statements a folded condition operand may print (-1 = off).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CondStmts(pub int4);
+
+impl crate::kuna_optionset::KunaOption for CondStmts {
+    const NAME: &'static str = "condstmts";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        CondStmts(-1)
+    }
+
+    fn shipped() -> Self {
+        CondStmts(DEFAULT_CAP)
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        OptionCondStmts
+            .apply(value)
+            .map(|(v, msg)| (CondStmts(v), msg))
+    }
 }
 
 /// The `condstmts off|N` ArchOption; the parsed value is `-1` for `off`.

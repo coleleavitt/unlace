@@ -8,8 +8,6 @@ architecture -> kuna_arithhelpers
 architecture -> kuna_armconstantshift
 architecture -> kuna_armfloatargs
 architecture -> kuna_armfloatreturn
-architecture -> kuna_arrayextent
-architecture -> kuna_arraysize
 architecture -> kuna_avxintrin
 architecture -> kuna_bejoin
 architecture -> kuna_bejoinpass
@@ -27,8 +25,6 @@ architecture -> kuna_callrettype
 architecture -> kuna_callwide
 architecture -> kuna_castwiden
 architecture -> kuna_chkstkdarwin
-architecture -> kuna_condfold
-architecture -> kuna_condstmts
 architecture -> kuna_cortexmpriv
 architecture -> kuna_cppsig
 architecture -> kuna_deadcascade
@@ -44,7 +40,6 @@ architecture -> kuna_formatstring
 architecture -> kuna_fpuemu
 architecture -> kuna_gobool
 architecture -> kuna_goreg
-architecture -> kuna_gotoreduce
 architecture -> kuna_gottailcall
 architecture -> kuna_hooks
 architecture -> kuna_indexaliasguard
@@ -72,7 +67,6 @@ architecture -> kuna_protomerge
 architecture -> kuna_protoorder
 architecture -> kuna_ptrauthtrap
 architecture -> kuna_registerslots
-architecture -> kuna_retsplitlimit
 architecture -> kuna_retsysreg
 architecture -> kuna_roundingops
 architecture -> kuna_rustabi
@@ -118,7 +112,6 @@ context -> kuna_calloverlap
 context -> kuna_callresultuse
 context -> kuna_deadcascade
 context -> kuna_floatglobals
-context -> kuna_gotoreduce
 context -> kuna_itaniumeh
 context -> kuna_jumpassist
 context -> kuna_kalloctype

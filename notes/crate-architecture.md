@@ -1,6 +1,7 @@
 # unlace-decomp crate architecture: evidence and proposal
 
-Research only. No code was changed and no builds were run. Upstream tree: `kuna-wt-up` at `2b96e74e8`.
+Sections 1-7 are the original research (no code changed, no builds run); section 8 records what
+landed. Upstream tree: `kuna-wt-up` at `2b96e74e8`.
 LSP checks ran on the main checkout (branch `all`), which has the same module layout. All kuna line numbers
 below are upstream (`kuna-wt-up`) lines unless marked `[all]`.
 
@@ -332,3 +333,64 @@ split: an option PR no longer edits the three most conflicted files.
 - Sustained churn on architecture.rs/context.rs while step 5 is in flight.
 - Upstream's acceptance: the plan touches the maintainer's core layout, so steps 1-2 and a written proposal
   should go first, before any large move.
+
+## 8. Outcome (2026-11-23)
+
+Steps 1, 2 and 4-9 landed on coleleavitt/unlace; the workspace now has six decompiler crates. Step 3 (the dev
+dylib) was not needed: step 0 was never run, and the split plus thin LTO recovered the speed without it.
+
+**Crates** (lines of `src/**/*.rs`, in-tree unit tests included, at 38ede1720c):
+
+| crate | lines | holds |
+|---|---|---|
+| `unlace-middle` | 168k | IR (`substrate/`), `Architecture`/`ArchContext`, types, fspec, heritage, merge, jumptable, option registry, state slots, `KunaHooks` |
+| `unlace-lift` | 43k | P1-P2 |
+| `unlace-structure` | 29k | P7-P8 |
+| `unlace-bandb` | 249k | P3-P6, one fixpoint |
+| `unlace-emit` | 74k | P9 |
+| `unlace-decomp` | 18k | driver: `universal_sched`, option dispatch, `PASS_HOOKS`, facade re-exports |
+
+**What each step became:**
+- Step 1, layering ratchet: `scripts/check_layers.py` + `scripts/layers-allowlist.txt` (#36). The allowlist
+  reached zero entries in #164, before the physical split.
+- Step 2, budget clock: `substrate/kuna_budget.rs` (#37).
+- Step 4, extension traits: #38, then the pass methods on `Funcdata` (#149) and `OutLang`'s emit methods as
+  `OutLangExt` (#165).
+- Step 5, option registry: `KunaOption`/`OptionSet` in `substrate/kuna_optionset.rs` (5a, #99), then options
+  moved off `Architecture`/`ArchContext` phase by phase (5b-5p: #101-#103, #107, #109, #114, #117, #121, #126,
+  #133, #135, #137).
+- Step 6, typed slots, as three `TypeId`-indexed tables in `unlace-middle`:
+  - `FuncStates` (`substrate/kuna_funcstate.rs`): per-function side tables on `Funcdata`, created with
+    `Default` on first use, dropped by `Funcdata::clear` unless `KEEP_ACROSS_CLEAR` (#132, #134, #136, #138,
+    #139).
+  - `ArchStates` (`substrate/kuna_archstate.rs`): per-architecture tables filled while the specs load, shared
+    (`Rc`) by every `ArchContext` (#144).
+  - `ArchTables`: the mutable run-wide ledgers and caches `Architecture` keeps across functions (#151, #159,
+    #163).
+  - Each type gets a dense index from `state_index(TypeId)` (a global map with a thread-local cache), so a pass
+    crate can store a type alias or a std type it does not own, and lookups are a vector index.
+- Step 7, hooks: `KunaHooks` (`substrate/kuna_passhooks.rs`), filled by each band's `provide` and installed by
+  the driver (#100, #104-#113, #115, #118, #120, #128, #129, #153). An unfilled hook panics with its name.
+- Reclassified into the middle band instead of moved or hooked, because their own dependencies were already
+  middle-only: `engine_translate`, `inject_sleigh`, `kuna_emulatefunction`, `kuna_decodekit`,
+  `remote_provider`, `stringmanage` (#146); `modelrules`, `prefersplit` (#142); `kuna_phases` (#128);
+  `cpool`, `capability`, `idiom`, `comment`, `rangeutil` (#112); `userop`, `pcodeinject`, `actionprof`
+  (#118); shared pass helpers and pass-owned types (#116, #119, #120, #148, #155, #160).
+- Step 8, `#[inline]` on the small middle accessors (#141).
+- Step 9, the moves: 9a `unlace-middle` (#167), 9b `unlace-lift` (#175), 9c `unlace-structure` (#177),
+  9d `unlace-bandb` (#178), 9e `unlace-emit` (#179), each after prep PRs (#145, #147, #150, #154, #156, #168-#171).
+
+**Runtime (#183).** Against 7afdf46521, the single crate before the refactor, release `decompile-all` was 4.9%
+slower after the split (grep +8.7%), with byte-identical output. About half came from the `.sla` cache (#180)
+hashing every spec source on each start, and half from calls that stopped inlining across the new crate
+boundaries. Fixed with a per-spec stamp file (size + mtime of each source, the key memoized per process) and
+`[profile.release] lto = "thin"`: grep 4.58 s -> 4.41 s, sort 2.25 -> 2.34 s, libselinux.so.1 3.56 -> 3.53 s,
+total 10.39 -> 10.28 s, output still byte-identical.
+
+**Left:**
+- Step 0: the build-time measurement (`cargo build --timings`, `-Zself-profile` for an edit in each band)
+  was never taken, so the incremental-rebuild gain is estimated in section 5, not measured.
+- Step 10: splitting `unlace-bandb` (249k, the largest crate) into calls / types / dataflow+vars through hooks,
+  and lifting heritage/merge/jumptable out of middle. Only if step 0's numbers justify it.
+- Unit tests in the band crates that reach a driver-provided hook panic ("not linked into this test", 1141 on
+  38ede1720c); they need the driver's hook table installed in the test or a move to the driver crate.

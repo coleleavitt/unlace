@@ -2,8 +2,9 @@
 
 Every decompiler has the same broad pipeline. The big design decision is the middle: one IR
 rewritten in place until nothing changes (Ghidra, and so this engine), or a ladder of IRs, each its
-own layer (Binary Ninja, Hex-Rays, angr). That choice is why `unlace_decomp` is one big cycle today.
-The plan that follows from it is in `notes/crate-architecture.md`.
+own layer (Binary Ninja, Hex-Rays, angr). That choice is why `unlace_decomp` was one big cycle,
+and why the split that followed (`notes/crate-architecture.md`, section 8) kept the middle fixpoint
+in one crate.
 
 ## The common pipeline
 
@@ -40,8 +41,8 @@ loader (unlace-analysis here; Ghidra's Java side)
 - The good: lifting is pure data (SLEIGH), so new architectures are cheap. One IR keeps the rules
   simple and composable.
 - The cost: every rule can touch everything, so types, calls, dataflow and variables depend on each
-  other. That is the ~300k-line cycle measured in `notes/crate-architecture.md`, and why the plan
-  keeps P3–P6 together as one `bandb` crate: it is a single fixpoint by design.
+  other. That was the ~300k-line cycle measured in `notes/crate-architecture.md`, and why the split
+  keeps P3–P6 together as one `unlace-bandb` crate: it is a single fixpoint by design.
 
 ## Binary Ninja (a ladder of IRs)
 
@@ -116,19 +117,21 @@ It reuses a compiler's IR and pass manager.
 ## What this means for the split
 
 ```
-today (Ghidra-style, one crate, one cycle)
+before the split (Ghidra-style, one crate, one cycle)
 └─ unlace_decomp 479k
    ├─ substrate (IR) ⇄ p4 calls ⇄ p5 types ⇄ p6 vars ⇄ p3 dataflow   ← one fixpoint
    ├─ infra (scheduler) ⇄ every phase
    └─ p9 emit, p8 structure, p2 lift (mostly downstream, with some back-edges)
 
-target (rustc_middle + providers / Hex-Rays maturity style)
-└─ *-middle      IR + types + prototype model + options registry + hooks   (like rustc_middle)
-   ├─ *-lift          P1–P2   (SLEIGH p-code → Funcdata)
-   ├─ *-bandb         P3–P6   the fixpoint stays one crate, as the algorithm intends
-   │  └─ *-emit       P9
-   └─ *-structure     P7–P8
-*-decomp = driver: schedule, option dispatch, fills the hooks table; facade re-exports
+now (rustc_middle + providers style; lines of src/*.rs incl. in-tree tests, 2026-11-23)
+└─ unlace-middle     168k  IR, types, prototype model, Architecture, option registry,
+   │                       FuncState/ArchStates slots, KunaHooks table   (like rustc_middle)
+   ├─ unlace-lift          43k   P1–P2   (SLEIGH p-code → Funcdata)
+   ├─ unlace-structure     29k   P7–P8
+   ├─ unlace-bandb        249k   P3–P6   the fixpoint stays one crate, as the algorithm intends
+   └─ unlace-emit          74k   P9
+unlace-decomp            18k   driver: schedule, option dispatch, fills the hooks table; facade
+                               re-exports the five crates below it
 ```
 
 - The real boundaries are lifting (in), structuring and emitting (out), and the IR underneath. The

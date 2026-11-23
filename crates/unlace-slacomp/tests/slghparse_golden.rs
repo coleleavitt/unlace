@@ -617,7 +617,7 @@ fn parse_to_trace(spec: &Path) -> String {
 fn check_golden(name: &str, spec_rel: &str) {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
-        .nth(3)
+        .nth(2)
         .unwrap()
         .to_path_buf();
     let spec = repo_root.join(spec_rel);

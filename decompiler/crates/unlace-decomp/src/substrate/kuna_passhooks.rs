@@ -7,6 +7,10 @@
 //! `provide(&mut KunaHookSlots)` function, and the driver composes them once
 //! (`universalaction::PASS_HOOKS`). This is rustc's `rustc_middle::hooks`.
 //!
+//! The driver installs that table at link time: it defines the symbol
+//! [`default_pass_hooks`] calls, so no IR module names the driver and every binary or test that
+//! links the crate gets the table without a setup call.
+//!
 //! [`KunaHookSlots::finish`] refuses a table with an empty slot, so the first
 //! `ArchContext` of a run checks that every hook is provided.
 
@@ -23,6 +27,7 @@ use unlace_base::xml::Element;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
+use crate::action::Action;
 use crate::architecture::{Architecture, GoLayout, HelperAbi, Regs, Storage, VarargFloats};
 use crate::context::{ArchContext, BlockId, HighVariableId, OpId, VarnodeId};
 use crate::database::SymbolEntry;
@@ -43,6 +48,17 @@ use crate::rangeutil::CircleRange;
 use crate::variable::HighIntersectTest;
 use crate::varmap::{AliasChecker, LinkEntryInfo, MapState, RangeHint};
 use crate::varnode::VarnodeBank;
+
+unsafe extern "Rust" {
+    /// The default pipeline's hook table, defined by the driver (`universalaction`).
+    safe fn __unlace_default_pass_hooks() -> &'static KunaHooks;
+}
+
+/// The pass hooks every [`ArchContext`] starts with: the default pipeline's, composed with the
+/// universal action tree it schedules.
+pub fn default_pass_hooks() -> &'static KunaHooks {
+    __unlace_default_pass_hooks()
+}
 
 macro_rules! declare_hooks {
     ($($(#[$attr:meta])* $name:ident: $ty:ty;)*) => {
@@ -487,4 +503,7 @@ declare_hooks! {
     loweredswitchvalue_head_compare_operand: fn(&Funcdata, BlockId, OpId, &Address, int4) -> Option<HeadOperand>;
     /// `kuna_bejoin::wide_pair`.
     bejoin_wide_pair: fn(&ProtoModel, &AddrSpaceManager) -> Option<WidePair>;
+    /// The universal action tree for the architecture: its stack space and embedder hooks
+    /// (`universalaction::build_universal_action_hooked`).
+    universal_action: fn(&Architecture) -> Box<dyn Action>;
 }

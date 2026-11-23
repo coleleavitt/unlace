@@ -42,7 +42,6 @@ architecture -> kuna_nullable_reloc
 architecture -> kuna_objcrettype
 architecture -> kuna_octeoneffects
 architecture -> kuna_opaqueglobals
-architecture -> kuna_phases
 architecture -> kuna_ppc32piccalls
 architecture -> kuna_protoorder
 architecture -> kuna_ptrauthtrap
@@ -70,7 +69,6 @@ architecture -> printc
 architecture -> printlanguage
 architecture -> remote_provider
 architecture -> stringmanage
-architecture -> universalaction
 context -> kuna_callmechanisms
 context -> kuna_callresultuse
 context -> kuna_deadcascade
@@ -161,7 +159,6 @@ heritage -> prefersplit
 jumptable -> kuna_constselectjump
 jumptable -> kuna_emulatefunction
 jumptable -> kuna_jumpassist
-kuna_assert -> kuna_phases
 kuna_bytehonest -> printc
 kuna_callrettype -> kuna_globalref
 kuna_calltargettype -> printc

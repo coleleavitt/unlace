@@ -2409,11 +2409,7 @@ pub enum HelperAbi {
     Arm { big_endian: bool },
 }
 
-/// The pass hooks every [`ArchContext`] starts with: the default pipeline's, composed with the
-/// universal action tree it schedules ([`crate::kuna_passhooks`]).
-pub fn default_pass_hooks() -> &'static crate::kuna_passhooks::KunaHooks {
-    &crate::universalaction::PASS_HOOKS
-}
+pub use crate::kuna_passhooks::default_pass_hooks;
 
 impl Architecture {
     /// The pass hooks this architecture's contexts start with ([`crate::kuna_passhooks`]).
@@ -7446,20 +7442,8 @@ impl Architecture {
 
     /// Install the universal tree, built with the registered hooks.
     fn build_universal(&mut self) {
-        let stackspace = self.manage().get_stack_space().cloned();
-        let stackspace_index = stackspace.as_ref().map(|s| s.get_index());
-        let truncated = self
-            .manage()
-            .get_default_data_space()
-            .is_some_and(|s| s.is_truncated());
-        self.allacts
-            .set_universal(crate::universalaction::build_universal_action_hooked(
-                stackspace,
-                stackspace_index,
-                Vec::new(),
-                truncated,
-                &self.hooks,
-            ));
+        let universal = (self.pass_hooks().universal_action)(self);
+        self.allacts.set_universal(universal);
     }
 
     /// Rebuild the universal tree after a hook registration and re-derive the

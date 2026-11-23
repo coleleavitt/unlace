@@ -159,10 +159,35 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p4_calls::kuna_condexeretuse::provide(&mut slots);
     crate::p2_lift::kuna_loweredswitchvalue::provide(&mut slots);
     crate::p4_calls::kuna_bejoin::provide(&mut slots);
+    slots.universal_action = Some(universal_action);
     slots
         .finish()
         .unwrap_or_else(|missing| panic!("pass hooks with no provider: {}", missing.join(", ")))
 });
+
+/// The IR's handle on [`PASS_HOOKS`] ([`crate::kuna_passhooks::default_pass_hooks`]): defined
+/// here so the driver supplies the table at link time.
+#[unsafe(no_mangle)]
+pub fn __unlace_default_pass_hooks() -> &'static KunaHooks {
+    &PASS_HOOKS
+}
+
+/// The universal action tree over the architecture's stack space and embedder hooks.
+fn universal_action(arch: &crate::architecture::Architecture) -> Box<dyn Action> {
+    let stackspace = arch.manage().get_stack_space().cloned();
+    let stackspace_index = stackspace.as_ref().map(|s| s.get_index());
+    let truncated = arch
+        .manage()
+        .get_default_data_space()
+        .is_some_and(|s| s.is_truncated());
+    build_universal_action_hooked(
+        stackspace,
+        stackspace_index,
+        Vec::new(),
+        truncated,
+        arch.hooks(),
+    )
+}
 
 // =============================================================================
 // SchedNode — the declarative schedule (ADR 0005)

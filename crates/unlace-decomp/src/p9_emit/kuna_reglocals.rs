@@ -24,6 +24,7 @@ use crate::architecture::Architecture;
 use crate::context::HighVariableId;
 use crate::funcdata::Funcdata;
 use crate::kuna_funcreport::VarInfo;
+use crate::printc::ArchPrintExt;
 use crate::printc::{DeclaredLocal, PrintC};
 
 /// Is `high` a frame object: bound to a stack Symbol, stack storage only (or

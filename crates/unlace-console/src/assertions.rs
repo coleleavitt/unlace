@@ -99,6 +99,7 @@ use unlace_decomp::funcdata::Funcdata;
 
 use crate::engine::{ConsoleProgram, EntryLookupError, EntrySelector};
 use crate::grammar::DataOrg;
+use unlace_decomp::printc::ArchPrintExt;
 
 /// One parsed assertion.  `raw` is the caller's own text, echoed back in the
 /// [`Outcome`] so a report row is greppable against the command line that made

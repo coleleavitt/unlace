@@ -43,6 +43,7 @@ use unlace_decomp::prettyprint::ids::{ATTRIB_OPREF, ATTRIB_VARREF};
 use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
+use unlace_decomp::printc::ArchPrintExt;
 use unlace_num::pcoderaw::{ATTRIB_CODE, ELEM_SPACEID};
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;

@@ -69,6 +69,7 @@ use crate::protocol::{
 use crate::provider::GhidraRemoteFetch;
 use crate::provider::SharedClient;
 use crate::translate::{GhidraTranslate, build_registry};
+use unlace_decomp::printc::ArchPrintExt;
 
 /// One registered program: the kuna analog of an `ArchitectureGhidra` slot
 /// in the global `archlist` (ghidra_process.cc:76,176-201).

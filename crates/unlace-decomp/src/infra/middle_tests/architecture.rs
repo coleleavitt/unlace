@@ -22,6 +22,7 @@ use crate::options::BraceStyle;
 use crate::options::NamespaceStrategy;
 use crate::options::OptionDatabase;
 use crate::options::split_datatype;
+use crate::printc::ArchPrintExt;
 use crate::printc::PrintC;
 use crate::userop::UserOpManage;
 use std::cell::RefCell;

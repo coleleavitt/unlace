@@ -18,6 +18,7 @@ use unlace_decomp::options::{ArchOptionContext, OptionDatabase, register_option_
 use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::xml_arch::{XmlArchitecture, XmlArchitectureCapability};
 
+use unlace_decomp::printc::ArchPrintExt;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;

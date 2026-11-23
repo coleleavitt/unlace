@@ -355,7 +355,7 @@ fn empty_registry_changes_neither_tree_nor_output() {
 
     let (mut xarch, entry) = fixture();
     let arch = xarch.sleigh_mut().base_mut().expect("Architecture base");
-    assert!(arch.hooks().is_empty());
+    assert!(arch.kuna_tables.get::<HookRegistry>().is_empty());
     let first = decompile(arch, &entry);
     let second = decompile(arch, &entry);
     assert_eq!(first, second);

@@ -300,6 +300,7 @@ fn run_full(stem: &str, which: usize) -> Result<(XmlArchitecture, Funcdata), Str
 }
 
 use unlace_decomp::decompile_drive::print_c;
+use unlace_decomp::printc::ArchPrintExt;
 
 #[test]
 #[ignore]

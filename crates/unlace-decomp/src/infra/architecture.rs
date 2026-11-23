@@ -67,7 +67,6 @@ use crate::inject_sleigh::PcodeInjectLibrarySleigh;
 use crate::options::{
     ArchOptionContext, BraceCategory, NamespaceStrategy, OptionDatabase, split_datatype,
 };
-use crate::printc::PrintC;
 use crate::userop::UserOpManage;
 
 // ---------------------------------------------------------------------------
@@ -749,8 +748,6 @@ pub struct Architecture {
     pub options: OptionDatabase,
     /// Actions that can be applied in this architecture (C++ `allacts`).
     pub allacts: ActionDatabase,
-    /// (kuna) Embedder rules and phase callbacks the universal tree is built with.
-    hooks: crate::kuna_hooks::HookRegistry,
     /// (kuna) Per-program restart-trigger side table (C++ file-static
     /// `restartTable`, owned here per `docs/rust-port/README.md` — one log per loaded
     /// program; survives `Funcdata::clear()` because it lives outside the
@@ -789,7 +786,7 @@ pub struct Architecture {
     /// keeps the `&self` setters (`setup_sizes`, `set_core_type`, …) working.
     types: Rc<TypeFactoryImpl>,
     /// The c-language printer (C++ `print`, the active `PrintLanguage*`).
-    print: PrintC,
+    print: Box<dyn crate::kuna_printhandle::PrintHandle>,
     /// Registered prototype models (C++ `protoModels`, name -> `ProtoModel*`).
     /// A `BTreeMap` (ADR 0002) for deterministic iteration matching the C++
     /// `map<string,ProtoModel*>` ordered traversal in `parseCompilerConfig`.
@@ -921,10 +918,6 @@ pub struct Architecture {
     /// where `modify_spaces` applies them. `None` until that bootstrap step has
     /// run; an empty list is a valid, complete recipe for most languages.
     decode_truncations: Option<Arc<[(String, u32)]>>,
-    /// (kuna) Every language the bootstrap's `.ldefs` scan found, by id: what
-    /// decides whether a FID database built for another language applies here.
-    /// Empty for an `Architecture` that was not bootstrapped from `.ldefs`.
-    language_families: Arc<[(String, crate::kuna_langfamily::LanguageFamily)]>,
 }
 
 /// One active decompile drive, from [`Architecture::kuna_drive_scope`].
@@ -954,28 +947,6 @@ impl Architecture {
     /// `modify_spaces` applies them.
     pub fn set_decode_truncations(&mut self, truncations: Vec<(String, u32)>) {
         self.decode_truncations = Some(Arc::from(truncations));
-    }
-
-    /// (kuna) Record the `.ldefs` languages the bootstrap scanned.
-    pub fn set_language_families(
-        &mut self,
-        families: Arc<[(String, crate::kuna_langfamily::LanguageFamily)]>,
-    ) {
-        self.language_families = families;
-    }
-
-    /// (kuna) The scanned `.ldefs` facts for language `id`, `None` when no
-    /// scanned `.ldefs` defines it.
-    pub fn language_family(&self, id: &str) -> Option<&crate::kuna_langfamily::LanguageFamily> {
-        self.language_families
-            .iter()
-            .find(|(known, _)| known == id)
-            .map(|(_, family)| family)
-    }
-
-    /// (kuna) Whether the bootstrap recorded any `.ldefs` languages.
-    pub fn has_language_families(&self) -> bool {
-        !self.language_families.is_empty()
     }
 
     /// (kuna) The instructions for rebuilding a decode-equivalent engine on
@@ -1097,7 +1068,6 @@ impl Architecture {
 
             decode_sla: None,
             decode_truncations: None,
-            language_families: Arc::from([]),
 
             trim_recurse_max: 0,
             max_implied_ref: 0,
@@ -1225,7 +1195,6 @@ impl Architecture {
             remote_scope: None,
             options: OptionDatabase::new(),
             allacts: ActionDatabase::new(),
-            hooks: crate::kuna_hooks::HookRegistry::default(),
             restart_log: crate::kuna_restartlog::RestartLog::new(),
             userops: UserOpManage::new(),
             // sleigh_arch.cc:250: stringManager = new StringManagerUnicode(this,2048)
@@ -1238,7 +1207,7 @@ impl Architecture {
             commentdb: CommentDatabase::new(),
             // C++ ctor leaves types/print/defaultfp null; init() fills them.
             types: Rc::new(TypeFactoryImpl::new()),
-            print: PrintC::new(),
+            print: (crate::architecture::default_pass_hooks().printer_new)(),
             proto_models: std::collections::BTreeMap::new(),
             declared_proto_models: std::collections::BTreeMap::new(),
             declared_proto_models_at: std::collections::BTreeMap::new(),
@@ -1476,8 +1445,7 @@ impl Architecture {
         self.load_options_mut().ppc32picimports = crate::kuna_ppc32picimports::Mode::Off;
         crate::kuna_ppc32picimports::Mode::Off.set_env();
         self.reset_defaults();
-        self.print.context = crate::printlanguage::PrintContext::new();
-        self.print.reset_wire_option_defaults();
+        self.print.reset_wire_defaults();
     }
 
     // -----------------------------------------------------------------------
@@ -1621,8 +1589,7 @@ impl Architecture {
     /// query is filtered by this; `0` means no comment types display and no
     /// query fires.
     pub fn printer_comment_filter(&self) -> u32 {
-        let ctx = &self.print.context;
-        ctx.header_comment() | ctx.instruction_comment()
+        self.print.comment_filter()
     }
 
     /// (kuna, Phase 3) The ghidra-mode flushNative reset, in the upstream order
@@ -2121,8 +2088,7 @@ impl Architecture {
         ctx.kuna_custom_reg_callers = Rc::clone(&self.kuna_custom_reg_callers);
         ctx.kuna_custom_reg_models = Rc::clone(&self.kuna_custom_reg_models);
 
-        ctx.do_while_continue = self.print.out_lang().profile().forms.do_while
-            != crate::kuna_lang::DoWhileForm::RustLoopBreakIf;
+        ctx.do_while_continue = (self.pass_hooks().lang_do_while_continue)(self.print.out_lang());
         ctx.kuna_options.set(crate::kuna_coreoptions::PostIncrement(
             self.kuna_options
                 .get::<crate::kuna_coreoptions::PostIncrement>()
@@ -3290,12 +3256,12 @@ impl Architecture {
     /// own `<callotherfixup>` wins, exactly as it does for the vendored
     /// `setISAMode` fixups.
     fn register_cortexmpriv_fixup(&mut self) -> KunaResult<()> {
-        use crate::kuna_cortexmpriv as fixup;
+        use crate::kuna_specnames as names;
         if let Some(injectid) = self.register_manual_fixup(
-            fixup::USEROP_NAME,
-            fixup::OUTPUT_NAME,
+            names::CORTEXMPRIV_USEROP,
+            names::CORTEXMPRIV_OUTPUT,
             &[],
-            fixup::SNIPPET,
+            names::CORTEXMPRIV_SNIPPET,
             false,
         )? {
             self.cortexmpriv_inject = Some(injectid);
@@ -3539,10 +3505,11 @@ impl Architecture {
         Rc::clone(&self.types)
     }
 
-    /// Borrow the c-language printer (C++ `glb->print`).
+    /// Borrow the output-language printer (C++ `glb->print`); the concrete C printer is
+    /// `printc::ArchPrintExt::print`.
     #[inline]
-    pub fn print(&self) -> &PrintC {
-        &self.print
+    pub fn printer(&self) -> &dyn crate::kuna_printhandle::PrintHandle {
+        &*self.print
     }
 
     /// (kuna) Borrow the per-program restart-trigger log (read by the `restarts`
@@ -3557,10 +3524,20 @@ impl Architecture {
         &mut self.restart_log
     }
 
-    /// Mutably borrow the c-language printer (drives `docFunction` + the print
-    /// option setters).
-    pub fn print_mut(&mut self) -> &mut PrintC {
-        &mut self.print
+    /// Mutably borrow the output-language printer (the print option setters).
+    pub fn printer_mut(&mut self) -> &mut dyn crate::kuna_printhandle::PrintHandle {
+        &mut *self.print
+    }
+
+    /// Lend the printer out, leaving a default one in its place (`printc::ArchPrintExt::with_print`).
+    pub fn take_printer(&mut self) -> Box<dyn crate::kuna_printhandle::PrintHandle> {
+        let stand_in = (self.pass_hooks().printer_default)();
+        std::mem::replace(&mut self.print, stand_in)
+    }
+
+    /// Put a lent printer back.
+    pub fn put_printer(&mut self, print: Box<dyn crate::kuna_printhandle::PrintHandle>) {
+        self.print = print;
     }
 
     /// (kuna outlang) Select the output language by name, rejecting one no
@@ -3578,30 +3555,6 @@ impl Architecture {
         })?;
         self.print.set_name(lang.print_name());
         Ok(())
-    }
-
-    /// Run `render` with the printer moved out of `self` (a fresh default stands
-    /// in meanwhile), so it can drive `PrintC::doc_function_full(fd, &self)`,
-    /// which needs an immutable borrow of the rest of the architecture
-    /// (register-name lookup) while it mutates the printer, then move it back.
-    ///
-    /// The printer goes back on every exit. A panic in `render` returns it
-    /// cleared of the partial document ([`PrintC::clear`], C++ `docFunction`'s
-    /// `catch { clear(); throw; }`) with the printing modifiers it had before
-    /// `render`, then resumes unwinding, so a caller that contains the panic
-    /// renders every later function with the printer the run configured, not
-    /// the default.
-    pub fn with_print<R>(&mut self, render: impl FnOnce(&mut PrintC, &Architecture) -> R) -> R {
-        let mut print = std::mem::take(&mut self.print);
-        let mods = print.context.mods();
-        let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(&mut print, self)));
-        if result.is_err() {
-            print.clear();
-            print.context.set_mods(mods);
-        }
-        self.print = print;
-        result.unwrap_or_else(|payload| std::panic::resume_unwind(payload))
     }
 
     /// Install the load image (C++ `glb->loader`; owned inside the engine in
@@ -5524,7 +5477,7 @@ impl Architecture {
         state: crate::action::RuleState,
         rule: Box<dyn crate::action::Rule>,
     ) -> KunaResult<()> {
-        self.hooks.add_rule(after_group, state, rule)?;
+        (self.pass_hooks().hooks_add_rule)(&mut self.kuna_tables, after_group, state, rule)?;
         self.rebuild_hooked_actions()
     }
 
@@ -5535,13 +5488,8 @@ impl Architecture {
         phase: crate::kuna_phases::KunaPhase,
         callback: impl FnMut(&mut Funcdata) + 'static,
     ) -> KunaResult<()> {
-        self.hooks.on_phase(phase, Box::new(callback))?;
+        (self.pass_hooks().hooks_on_phase)(&mut self.kuna_tables, phase, Box::new(callback))?;
         self.rebuild_hooked_actions()
-    }
-
-    /// (kuna) The registered embedder hooks.
-    pub fn hooks(&self) -> &crate::kuna_hooks::HookRegistry {
-        &self.hooks
     }
 
     /// Register the p-code OpBehavior table (C++ `Architecture::buildInstructions`,

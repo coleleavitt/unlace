@@ -4,6 +4,7 @@ use crate::common;
 use common::process;
 use object::Object;
 use std::process::Command;
+use unlace_decomp::printc::ArchPrintExt;
 
 #[test]
 fn pe32_named_float_member_preserves_bits() {

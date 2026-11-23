@@ -58,16 +58,11 @@
 
 use unlace_base::types::int4;
 
-/// The vendored ARM user-op this fixup targets (`ARM.sinc:165`).
-pub const USEROP_NAME: &[u8] = b"isCurrentModePrivileged";
+pub use crate::kuna_specnames::CORTEXMPRIV_USEROP as USEROP_NAME;
 
-/// The fixup's single output operand, named in [`SNIPPET`].
-pub const OUTPUT_NAME: &[u8] = b"res";
+pub use crate::kuna_specnames::CORTEXMPRIV_OUTPUT as OUTPUT_NAME;
 
-/// The body: report privileged. The operand carries no declared size, so the
-/// injector binds it to the real CALLOTHER output varnode (the `b:1` temporary
-/// every guarded constructor writes).
-pub const SNIPPET: &[u8] = b"res = 1:1;\n";
+pub use crate::kuna_specnames::CORTEXMPRIV_SNIPPET as SNIPPET;
 
 /// Whether `injectid` is the payload this module registered, given the id parked
 /// on the architecture at bootstrap. Used by the consumption gate so that

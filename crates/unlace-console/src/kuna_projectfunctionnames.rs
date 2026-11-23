@@ -1,4 +1,5 @@
 //! Project C definitions use the existing global symbol spelling of their callers.
+use unlace_decomp::printc::ArchPrintExt;
 use unlace_decomp::{architecture::Architecture, funcdata::Funcdata};
 
 pub(crate) fn identifier(name: &str) -> bool {

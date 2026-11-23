@@ -26,6 +26,7 @@ use std::collections::HashMap;
 
 use crate::architecture::Architecture;
 use crate::funcdata::Funcdata;
+use crate::printc::ArchPrintExt;
 
 /// Is `dt` a one-byte integer or `bool`?  Such a declaration says no more than
 /// `undefined1` does: the type system's byte types are its default for any

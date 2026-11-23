@@ -85,3 +85,14 @@ pub const SWIFT_MODELS: [(&str, bool, bool); 4] = [
     (SWIFTASYNCCALL, false, true),
     (SWIFTASYNCCALL_THROWS, true, true),
 ];
+
+/// `cortexmpriv`: The vendored ARM user-op this fixup targets (`ARM.sinc:165`).
+pub const CORTEXMPRIV_USEROP: &[u8] = b"isCurrentModePrivileged";
+
+/// `cortexmpriv`: The fixup's single output operand, named in [`CORTEXMPRIV_SNIPPET`].
+pub const CORTEXMPRIV_OUTPUT: &[u8] = b"res";
+
+/// `cortexmpriv`: The body: report privileged. The operand carries no declared size, so the
+/// injector binds it to the real CALLOTHER output varnode (the `b:1` temporary
+/// every guarded constructor writes).
+pub const CORTEXMPRIV_SNIPPET: &[u8] = b"res = 1:1;\n";

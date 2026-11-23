@@ -560,5 +560,15 @@ pub static LANG_C: LangProfile = LangProfile {
     fn_attributes: &[],
 };
 
+/// Does `lang` continue a bottom-tested loop (anything but Rust's `loop { ...; if !c { break; } }`)?
+fn do_while_continue(lang: OutLang) -> bool {
+    lang.profile().forms.do_while != DoWhileForm::RustLoopBreakIf
+}
+
+/// Fill this module's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.lang_do_while_continue = Some(do_while_continue);
+}
+
 #[cfg(test)]
 mod tests;

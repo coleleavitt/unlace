@@ -77,6 +77,7 @@ use unlace_decomp::kuna_phases::{
     kuna_surface_by_index, lookup_group, lookup_settable, lookup_subphase, lookup_surface,
 };
 use unlace_decomp::kuna_regionid::KunaRegionIdentifier;
+use unlace_decomp::printc::ArchPrintExt;
 
 /// The named pipeline variants built by `ActionDatabase::buildDefaultGroups`
 /// (C++ `PIPELINE_VARIANTS`).

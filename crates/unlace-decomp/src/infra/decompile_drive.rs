@@ -3464,6 +3464,7 @@ pub fn print_c_recompile_prelude(arch: &Architecture) -> String {
 
 use crate::kuna_funcreport::signed_space_offset;
 pub use crate::kuna_funcreport::{TypeInfo, VarInfo};
+use crate::printc::ArchPrintExt;
 
 /// The composite/enum/typedef definitions `fd`'s printed C names, in
 /// definition-before-use order ([`crate::kuna_structdefs::referenced_types`]).

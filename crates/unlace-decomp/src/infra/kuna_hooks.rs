@@ -224,3 +224,32 @@ impl Action for ActionPhaseHook {
         0
     }
 }
+
+crate::kuna_arch_table!(HookRegistry);
+
+/// Register `rule` on the architecture's registry ([`HookRegistry::add_rule`]).
+fn add_rule_to(
+    tables: &mut crate::kuna_archstate::ArchTables,
+    after_group: &str,
+    state: RuleState,
+    rule: Box<dyn Rule>,
+) -> KunaResult<()> {
+    tables
+        .get_mut::<HookRegistry>()
+        .add_rule(after_group, state, rule)
+}
+
+/// Register `callback` on the architecture's registry ([`HookRegistry::on_phase`]).
+fn on_phase_of(
+    tables: &mut crate::kuna_archstate::ArchTables,
+    phase: KunaPhase,
+    callback: PhaseCallback,
+) -> KunaResult<()> {
+    tables.get_mut::<HookRegistry>().on_phase(phase, callback)
+}
+
+/// Fill this module's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.hooks_add_rule = Some(add_rule_to);
+    hooks.hooks_on_phase = Some(on_phase_of);
+}

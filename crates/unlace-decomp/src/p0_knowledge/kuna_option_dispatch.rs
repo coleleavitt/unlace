@@ -8,6 +8,7 @@ use unlace_base::types::uint4;
 
 use crate::architecture::Architecture;
 use crate::options::on_or_off;
+use crate::printc::ArchPrintExt;
 
 macro_rules! kuna_options {
     ($this:ident, $value:ident; $($name:literal => $apply:expr_2021),* $(,)?) => {

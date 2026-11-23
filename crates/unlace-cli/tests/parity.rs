@@ -33,32 +33,50 @@ fn harness() -> PathBuf {
     harness
 }
 
-/// Run `unlace test --datatests` over `corpus` against `baseline` and require
-/// `PARITY OK` from the same build of the harness.
-fn parity(corpus: &str, baseline: &str) {
-    let root = repo_root();
-    let specs = root.join("specs");
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .current_dir(&root)
-        .env("KUNA_ROOT", &root)
+fn unlace_test(root: &Path, corpus: &Path) -> Command {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
+    cmd.current_dir(root)
+        .env("KUNA_ROOT", root)
         .arg("test")
         .arg("--datatests")
         .arg("--binary")
         .arg(harness())
         .arg("--sleighpath")
-        .arg(&specs)
+        .arg(root.join("specs"))
         .arg("--datatests-dir")
-        .arg(root.join(corpus))
+        .arg(corpus);
+    cmd
+}
+
+/// `unlace` names a harness built from other sources on stderr; an empty corpus
+/// asks it in a second instead of after a whole corpus.
+fn assert_fresh_harness(stderr: &str) {
+    assert!(
+        !stderr.contains("is a different build"),
+        "decomp_test_dbg is stale: rebuild it with `cargo build -p unlace-harness`\n{stderr}"
+    );
+}
+
+/// Run `unlace test --datatests` over `corpus` against `baseline` and require
+/// `PARITY OK` from the same build of the harness.
+fn parity(corpus: &str, baseline: &str) {
+    let root = repo_root();
+    let empty = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("parity-empty-{}", corpus.replace('/', "-")));
+    std::fs::create_dir_all(&empty).expect("create the empty probe corpus");
+    let probe = unlace_test(&root, &empty)
+        .output()
+        .expect("run unlace test");
+    assert_fresh_harness(&String::from_utf8_lossy(&probe.stderr));
+
+    let out = unlace_test(&root, &root.join(corpus))
         .arg("--baseline")
         .arg(root.join(baseline))
         .output()
         .expect("run unlace test");
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        !stderr.contains("is a different build"),
-        "decomp_test_dbg is stale: rebuild it with `cargo build -p unlace-harness`\n{stderr}"
-    );
+    assert_fresh_harness(&stderr);
     assert!(
         out.status.success() && stdout.lines().any(|l| l.contains("PARITY OK")),
         "{corpus} vs {baseline}: exit {:?}\n{stdout}\n{stderr}",

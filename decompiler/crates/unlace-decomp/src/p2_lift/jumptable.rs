@@ -3242,7 +3242,11 @@ impl JumpBasicModel {
             // (kuna) GH-9191: the basic model could not bound the table.  When
             // `option switchmodbound on`, look for a modulo/and-mask bound on the
             // LOAD-table index and re-bound the table to [0, N).
-            if fd.get_arch().switch_modulo_bound
+            if fd
+                .get_arch()
+                .kuna_options
+                .get::<crate::jumptable::SwitchModuloBound>()
+                .0
                 && self.kuna_try_modulo_bound_table(fd, maxtablesize)
             {
                 self.mark_foldable_guards(fd);
@@ -3253,7 +3257,12 @@ impl JumpBasicModel {
             // guard the guard analysis could not turn into a bound (e.g. a GCC
             // `sub LOW; ja DEFAULT` dispatch with the index spilled to the stack)
             // and re-bound the table to [0, N).
-            if fd.get_arch().switch_guard_bound && self.kuna_try_guard_bound_table(fd, maxtablesize)
+            if fd
+                .get_arch()
+                .kuna_options
+                .get::<crate::jumptable::SwitchGuardBound>()
+                .0
+                && self.kuna_try_guard_bound_table(fd, maxtablesize)
             {
                 self.mark_foldable_guards(fd);
                 return Ok(true);
@@ -3264,7 +3273,11 @@ impl JumpBasicModel {
             // collapsed to the final `base + offset` add and the index guard never
             // bounded the table.  Rebuild the meld as a clean single path down to
             // the guarded load index and re-run findNormalized.
-            if fd.get_arch().switch_shared_case
+            if fd
+                .get_arch()
+                .kuna_options
+                .get::<crate::jumptable::SwitchSharedCase>()
+                .0
                 && self.kuna_try_loop_carried_guard_table(fd, indop, matchsize, maxtablesize)?
             {
                 self.mark_foldable_guards(fd);
@@ -3295,7 +3308,11 @@ impl JumpBasicModel {
             // (kuna `switchtrim`) A table `switchextent` leaves unbounded (a
             // function's last table) is trimmed where its layout ends.
             if unbounded
-                && fd.get_arch().switch_trim
+                && fd
+                    .get_arch()
+                    .kuna_options
+                    .get::<crate::jumptable::SwitchTrim>()
+                    .0
                 && self.kuna_try_trimmed_table(fd, maxtablesize)
             {
                 return Ok(true);
@@ -7641,6 +7658,52 @@ impl JumpTable {
         Ok(())
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna GH-9191) Bound a modulo/and-mask LOAD-table jumptable index
+    /// (C++ `switch_modulo_bound`).
+    SwitchModuloBound,
+    "switchmodbound",
+    "Switch modulo/and-mask index bound",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna, angr `test_decompiling_missing_function_call`) Bound a LOAD-table
+    /// jumptable index by an out-of-band CBRANCH range guard the basic model's
+    /// guard analysis could not turn into a bound (C++ `switch_guard_bound`).
+    SwitchGuardBound,
+    "switchguardbound",
+    "Switch CBRANCH-guard index bound",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna, angr `test_switch_case_shared_case_nodes_b2sum_digest`) Recover a
+    /// GCC PIC relative-offset jump table whose base register is a loop-carried
+    /// MULTIEQUAL (the `lea .rodata` table base is set before a getopt-style loop
+    /// while the `BRANCHIND` is inside it).  The path-meld collapses to the final
+    /// `base+offset` add, so the CBRANCH range guard on the load index never
+    /// bounds it; this rebuilds the meld as a clean single path down to the
+    /// guarded index so the table resolves (C++ `switch_shared_case`).
+    SwitchSharedCase,
+    "switchsharedcase",
+    "Switch loop-carried-guard table",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna) Recover an unbounded single-LOAD jump table by reading until its
+    /// layout ends (option `switchtrim`).  See [`crate::p2_lift::kuna_switchtrim`].
+    SwitchTrim,
+    "switchtrim",
+    "Unguarded jump-table recovery with layout trimming",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests;

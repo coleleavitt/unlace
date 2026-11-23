@@ -137,7 +137,11 @@ impl Action for ActionGoBounds {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().go_bounds
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_gobounds::GoBounds>()
+            .0
             || !data.get_arch().source_lang.is_go()
             || data.num_calls() == 0
         {
@@ -177,6 +181,15 @@ impl Action for ActionGoBounds {
         0
     }
 }
+
+crate::kuna_flag!(
+    /// Fold Go compiler bounds/division panic arms (option gobounds).
+    GoBounds,
+    "gobounds",
+    "Go compiler-check folding",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

@@ -393,6 +393,19 @@ pub fn kuna_is_frame_teardown_tail_call(
     kuna_teardown_restores_saves(saved, restored)
 }
 
+crate::kuna_flag!(
+    /// (kuna `tailcallframe`) Recover a direct `jmp` whose target is NOT a known
+    /// function as a tail call when the instructions immediately before it tear
+    /// down exactly the frame the entry block built — the callback-only callee no
+    /// discovery oracle reaches (`option tailcallframe`).  See
+    /// [`crate::p2_lift::kuna_tailcallframe`].
+    TailCallFrame,
+    "tailcallframe",
+    "Frame-teardown tail-call recovery",
+    unset: false,
+    shipped: true
+);
+
 #[cfg(test)]
 #[path = "kuna_tailcallframe/tests.rs"]
 mod tests;

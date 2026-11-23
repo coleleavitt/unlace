@@ -159,6 +159,19 @@ pub fn kuna_streams_reconverge(
     target.wrapping_add(len as u64) == curaddr.wrapping_add(step as u64)
 }
 
+crate::kuna_flag!(
+    /// (kuna `overlapbranch`) Truncate a conditional branch's fall-through when the
+    /// branch's own target lies strictly inside that fall-through instruction's
+    /// encoding — the anti-disassembly junk-lead-byte idiom, where the fall-through
+    /// decode swallows the real instruction boundary and desynchronises the stream
+    /// (`option overlapbranch`).
+    OverlapBranch,
+    "overlapbranch",
+    "Overlapping-branch fall-through truncation",
+    unset: false,
+    shipped: true
+);
+
 #[cfg(test)]
 #[path = "kuna_overlapbranch/tests.rs"]
 mod tests;

@@ -41,7 +41,7 @@
 //! `selectguards`/`varnodeIndex` state).  It is invoked from `recoverModel()`
 //! only after the normal model — and the modulo/and-mask and CBRANCH-guard
 //! extensions — fail to bound the table.  Only the gate
-//! (`Architecture::switch_shared_case`, default off) is owned here.
+//! (the registered option `SwitchSharedCase`, default off) is owned here.
 //!
 //! The option ships **default-on** (DIV-14; per-test opt-outs keep the corpus byte-identical): rebuilding the
 //! meld and reading the relative-offset table at a base recovered heuristically
@@ -74,7 +74,7 @@ pub const ELEM_SWITCHSHAREDCASE: ElementId = ElementId::new("switchsharedcase", 
 pub struct SwitchSharedCaseOption {
     /// True if a loop-carried-base PIC relative-offset jump table is recovered by
     /// rebuilding the meld to its guarded load index (C++
-    /// `Architecture::switch_shared_case`).
+    /// the registered option `SwitchSharedCase`).
     pub enabled: bool,
 }
 

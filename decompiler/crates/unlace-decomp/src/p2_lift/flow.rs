@@ -686,7 +686,7 @@ pub trait FlowEnvironment {
     }
 
     /// (kuna `overlapbranch`) Is the overlapping-branch truncation enabled
-    /// (`option overlapbranch`, `Architecture::overlap_branch`)?  When on,
+    /// (`option overlapbranch`, the registered option `OverlapBranch`)?  When on,
     /// `process_instruction` truncates a conditional branch's fall-through
     /// instruction when the branch's own target lies strictly inside that
     /// instruction's encoding (the anti-disassembly junk-byte idiom), instead of

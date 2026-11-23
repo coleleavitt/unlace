@@ -51,7 +51,7 @@ use unlace_num::opcodes::OpCode;
 pub struct SparcStructRetOption {
     /// True if the SPARC struct-return `unimp` after a call falls through
     /// instead of becoming a non-returning CALLIND
-    /// (C++ `Architecture::sparc_struct_return`).
+    /// (C++ the registered option `SparcStructReturn`).
     pub enabled: bool,
 }
 
@@ -143,6 +143,16 @@ where
     }
     None
 }
+
+crate::kuna_flag!(
+    /// (kuna GH-6882) Let a SPARC struct-return post-call `unimp` fall through
+    /// (C++ `sparc_struct_return`).
+    SparcStructReturn,
+    "sparcstructret",
+    "SPARC struct-return tail recovery",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 #[path = "kuna_sparcstructret/tests.rs"]

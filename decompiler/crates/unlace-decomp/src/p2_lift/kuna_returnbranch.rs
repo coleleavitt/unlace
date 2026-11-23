@@ -255,7 +255,11 @@ pub(crate) fn computed_target(
     let Some(ret) = data.obank().get(target) else {
         return false;
     };
-    if !data.get_arch().return_branch
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_returnbranch::ReturnBranch>()
+        .0
         || ret.code() != OpCode::CPUI_RETURN
         || ret.get_halt_type() != 0
     {
@@ -339,6 +343,16 @@ pub(crate) fn target_on_edge(
     prefix.input(dispatch, 0)
 }
 
+crate::kuna_flag!(
+    /// (kuna `returnbranch`) Flow a RETURN with a proven constant target as an
+    /// indirect branch; see [`crate::context::ArchContext::return_branch`].
+    ReturnBranch,
+    "returnbranch",
+    "Computed jumps through the return register",
+    unset: false,
+    shipped: true
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -404,7 +418,8 @@ mod tests {
             let code = behavior.get_opcode();
             arch.opbehaviors[code as usize] = Some(behavior);
         }
-        arch.return_branch = !off;
+        arch.kuna_options
+            .set(crate::kuna_returnbranch::ReturnBranch(!off));
         if tracked {
             let loc = unlace_num::pcoderaw::VarnodeData {
                 space: Some(ram.clone()),

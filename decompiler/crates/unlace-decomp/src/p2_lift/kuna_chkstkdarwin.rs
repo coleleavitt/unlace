@@ -212,5 +212,10 @@ impl Action for ActionChkstkDarwin {
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.chkstkdarwin_applies_to = Some(applies_to);
+}
+
 #[cfg(test)]
 mod tests;

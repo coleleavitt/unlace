@@ -380,3 +380,11 @@ fn rebuild(arch: &ArchContext, proto: &FuncProto) -> Option<Rc<FuncProto>> {
     soft.set_output_lock(true);
     Some(Rc::new(soft))
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.typedcallabi_caller_extends_from = Some(caller_extends_from);
+    hooks.typedcallabi_image_evidence = Some(image_evidence);
+    hooks.typedcallabi_soft_model = Some(soft_model);
+    hooks.typedcallabi_without_fpu = Some(without_fpu);
+}

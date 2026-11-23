@@ -119,3 +119,8 @@ pub fn parked_output(arch: &ArchContext, pieces: &PrototypePieces) -> Option<Par
         flags: 0,
     })
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.vfpvariadic_applies = Some(applies);
+}

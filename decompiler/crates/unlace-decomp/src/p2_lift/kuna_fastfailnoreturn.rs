@@ -177,6 +177,11 @@ where
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.fastfailnoreturn_archid_is_windows = Some(archid_is_windows);
+}
+
 #[cfg(test)]
 #[path = "kuna_fastfailnoreturn/tests.rs"]
 mod tests;

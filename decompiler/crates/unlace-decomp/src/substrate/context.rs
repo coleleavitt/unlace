@@ -2168,7 +2168,7 @@ impl ArchContext {
     /// read-only propagation off. A plain `false` when the range list is empty,
     /// which is every non-object path.
     pub fn litpool_const_contains(&self, offset: u64, size: u32) -> bool {
-        crate::kuna_litpoolconst::contains(&self.litpool_const, offset, size)
+        (self.pass_hooks.litpoolconst_contains)(&self.litpool_const, offset, size)
     }
 
     /// Whether the volatile-read op's output must be held (C++
@@ -2750,7 +2750,7 @@ impl ArchContext {
                 continue;
             }
             let entry_addr = Address::new(std::rc::Rc::clone(space), e.first);
-            if let Some(mut proto) = crate::kuna_qualifiedcall::prototype(self, &entry_addr) {
+            if let Some(mut proto) = (self.pass_hooks.qualifiedcall_prototype)(self, &entry_addr) {
                 if e.func_inject_id >= 0 {
                     proto.set_inject_id(e.func_inject_id);
                 }

@@ -18,12 +18,14 @@ use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4, uintb};
 
 use unlace_base::error::KunaResult;
+use unlace_base::xml::Element;
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::context::{BlockId, HighVariableId, OpId, VarnodeId};
+use crate::architecture::Architecture;
+use crate::context::{ArchContext, BlockId, HighVariableId, OpId, VarnodeId};
 use crate::database::SymbolEntry;
 use crate::dtype::Datatype;
-use crate::fspec::{FuncCallSpecs, FuncProto, ParamTrial};
+use crate::fspec::{FuncCallSpecs, FuncProto, ParamTrial, ProtoModel, PrototypePieces};
 use crate::funcdata::Funcdata;
 use crate::jumptable::LoadTable;
 use crate::kuna_fasthash::FxHashMap;
@@ -285,4 +287,42 @@ declare_hooks! {
     tiedphitrim_intersects: fn(&[(VarnodeId, Address)], &mut dyn MergeContext, &mut HighIntersectTest, HighVariableId, HighVariableId) -> bool;
     /// `kuna_tiedphitrim::tied_slots`.
     tiedphitrim_tied_slots: fn(&mut dyn MergeContext, OpId) -> Option<(Vec<int4>, Address)>;
+    /// `kuna_armfloatargs::applies`.
+    armfloatargs_applies: fn(&Architecture) -> bool;
+    /// `kuna_armfloatreturn::applies`.
+    armfloatreturn_applies: fn(&Architecture) -> bool;
+    /// `kuna_armfloatreturn::base_pcs_helper`.
+    armfloatreturn_base_pcs_helper: fn(&str) -> bool;
+    /// `kuna_armfloatreturn::model`.
+    armfloatreturn_model: fn(&Rc<ProtoModel>, &AddrSpaceManager, bool) -> Rc<ProtoModel>;
+    /// `kuna_avxintrin::element_kind`.
+    avxintrin_element_kind: fn(&str) -> u8;
+    /// `kuna_avxintrin::intrinsic`.
+    avxintrin_intrinsic: fn(&str, i32) -> Option<(String, Vec<usize>)>;
+    /// `kuna_chkstkdarwin::applies_to`.
+    chkstkdarwin_applies_to: fn(&str) -> bool;
+    /// `kuna_fastfailnoreturn::archid_is_windows`.
+    fastfailnoreturn_archid_is_windows: fn(&str) -> bool;
+    /// `kuna_litpoolconst::contains`.
+    litpoolconst_contains: fn(&[(u64, u64)], u64, u32) -> bool;
+    /// `kuna_protomerge::merge`.
+    protomerge_merge: fn(&PrototypePieces, PrototypePieces) -> PrototypePieces;
+    /// `kuna_qualifiedcall::prototype`.
+    qualifiedcall_prototype: fn(&ArchContext, &Address) -> Option<FuncProto>;
+    /// `kuna_spsolve::applies`.
+    spsolve_applies: fn(&Architecture) -> bool;
+    /// `kuna_stackparamalign::decode`.
+    stackparamalign_decode: fn(&Element, &AddrSpace, i32, i32) -> KunaResult<u32>;
+    /// `kuna_typedcallabi::caller_extends_from`.
+    typedcallabi_caller_extends_from: fn(&Architecture) -> i32;
+    /// `kuna_typedcallabi::image_evidence`.
+    typedcallabi_image_evidence: fn(&Architecture) -> Option<bool>;
+    /// `kuna_typedcallabi::soft_model`.
+    typedcallabi_soft_model: fn(&Architecture, Option<bool>) -> Option<Rc<ProtoModel>>;
+    /// `kuna_typedcallabi::without_fpu`.
+    typedcallabi_without_fpu: fn(&Architecture) -> bool;
+    /// `kuna_vectorabi::model`.
+    vectorabi_model: fn(&Rc<ProtoModel>, &AddrSpaceManager) -> Rc<ProtoModel>;
+    /// `kuna_vfpvariadic::applies`.
+    vfpvariadic_applies: fn(&Architecture) -> bool;
 }

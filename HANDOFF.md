@@ -266,6 +266,53 @@ prelude), item 6 (#150, `pub(crate)` -> `#[doc(hidden)] pub` in middle files exc
   `MemoryOps::{clear,collect}` (`kuna_persistcalls`) and `LiveCalls::needs` (`kuna_prunedssa`), all called by
   `heritage`; `OutLang::{profile,abi,speller}` (`kuna_lang`), called by `Architecture::build_arch_handle`.
 
+**Blockers for the next crates (scanned 2026-11-23 on a9bf77cef1, before the unlace-middle move).** The scan
+(`check_layers.py`'s path resolver plus a regex pass over impl blocks, method calls, macros and build paths; no
+rustc MIR, since building it means compiling) found:
+- *Fix with or right after unlace-middle (from step 6's slot work):*
+  - E0117, 23 sites: `kuna_arch_table!`/`kuna_arch_state!` implement middle's `ArchTable`/`ArchState` for type
+    aliases of std containers, which is a foreign trait on a foreign type once the traits are in unlace-middle.
+    lift: `ImageChip`, `ParkedSites`, `ImageVarargAbi`, `ImageDgroup`, `BugSites`, `Relocations`, `PicImports`;
+    bandb: `CalleeMemoryCache`, `CalleeDeadCache`, `CalleeForwardCache`, `CacheCell`, `StatedReturns`, `Refusals`,
+    `ByvalDecls`, `Builders`, `NarrowReturns`, `CalleeTypes`, `CalleeWriteCache`, `KallocTypes`,
+    `RefCell<ShardHook>`; emit: `IntegerFormatters`, `WriterProfiles`, `WriterMethods`. Fix: one local newtype per
+    table (`pub struct XTable(pub Alias)`, `Default` + `Deref`/`DerefMut`), call sites name the newtype and wrap
+    assignments. `kuna_func_state!` is only used on local types.
+  - E0116, 3 inherent impls on middle types: `kuna_segmentize` (`impl Architecture { segment_def,
+    has_segment_defs }`, `impl ArchContext { num_segment_ops, get_segment_op }`) and `kuna_varargsave`
+    (`impl Regs`). The segmentize methods are also hidden middle -> bandb calls (`Architecture::resolve_constant`,
+    `apply_segmentize`, `ArchContext::resolve_constant`): move `SegmentDef` and the accessors down, or hook them.
+  - Hidden middle -> driver call: `Architecture::apply_overrides` (architecture.rs:1387) calls
+    `set_kuna_option`, which `kuna_option_dispatch` defines as an inherent `impl Architecture` (known, item 2).
+- *unlace-lift (p1, p2):* no E0116/E0117 and no hidden upward method calls beyond the shared items above.
+  - `pub(crate)`: 62 items + 2 fields to make `#[doc(hidden)] pub` (same mechanical rule as middle).
+  - Tests reaching up: `p2_lift/kuna_int3pad/tests.rs` uses `printc` (move the test to unlace-decomp).
+  - Build paths: `kuna_langfamily` tests read `CARGO_MANIFEST_DIR/../../specs` (same depth in crates/unlace-lift,
+    no change); `kuna_noreturn_externmatch` tests read `CARGO_MANIFEST_DIR/../../../specs`, one `..` too many
+    since the layout move (already wrong today); its `include_str!("../../../unlace-analysis/data/...")` keeps its
+    depth. 29 `#[path = "x/tests.rs"]` siblings move with their files.
+  - The lift crate's own test binary needs the `__unlace_default_pass_hooks` stub too (item 4 applies to every
+    split crate whose tests link unlace-middle without the driver).
+- *unlace-structure (p7, p8):* no E0116/E0117, no hidden upward calls.
+  - `pub(crate)`: 34 items. Test reaching up: `p7_regions/kuna_msvcstackguard/tests.rs` -> `funcdata_spacebase`
+    (bandb). 5 `#[path]` test siblings. Hook-symbol stub for its tests.
+- *unlace-bandb (p3-p6):* the E0116/E0117 items above.
+  - `pub(crate)`: 466 items + 22 fields. Tests reaching up: `kuna_indexaliasguard` and `kuna_indirectonly/tests.rs`
+    -> `kuna_option_dispatch` (`KUNA_OPTION_NAMES`), `kuna_langabi/tests.rs` -> `kuna_lang`,
+    `kuna_structsynth/tests.rs` -> `coreaction_render`. 71 `#[path]` test siblings plus `kuna_bejoin/evidence.rs`.
+- *unlace-emit (p9):* E0117 on the three rust-fmt tables above; `OutLangExt` (#165) and `ArchPrintExt` (#164) are
+  local traits, fine. `pub(crate)`: 389 items + 36 fields. 19 `#[path]` test siblings.
+- *Driver (unlace-decomp) after each move:* it names pass modules through folder paths about 230 times
+  (`crate::p4_calls::kuna_protoorder` 19, `crate::p4_calls::kuna_callwide` 6, `crate::p8_structure::...`,
+  mostly `universalaction`'s `provide` registrations and `decompile_drive`), and emit names structure/bandb/lift
+  folders 25 times (`crate::p8_structure::kuna_switchmerge` 8, `kuna_iteregion` 4, ...). Rewrite to the flat
+  `crate::<module>` form before each move, as #145 did for middle.
+- *Macros:* only middle's `#[macro_export]` macros cross bands (`kuna_flag!`, `kuna_option_id!`,
+  `kuna_func_state!`, `kuna_arch_table!`, `kuna_arch_state!`); their `$crate::` paths all point into middle, so
+  callers reach them through each crate's `pub use unlace_middle::*` glob.
+- Not checked: method calls whose name is shared with std or with three or more impls (the scan cannot attribute
+  them without MIR). Run codegraph's `mir_calls` on the split branch once compiling is allowed.
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

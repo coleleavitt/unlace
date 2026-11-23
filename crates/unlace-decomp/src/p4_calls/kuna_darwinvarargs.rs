@@ -82,7 +82,7 @@ const MAX_PROBE_INSTRUCTIONS: usize = 24;
 pub fn applies(arch: &Architecture) -> bool {
     arch.archid.starts_with("AARCH64:")
         && (arch.archid.contains("AppleSilicon")
-            || arch
+            || *arch
                 .kuna_tables
                 .get::<crate::kuna_formatstring::ImageVarargAbi>()
                 == Some(VarargAbi::Nothing))

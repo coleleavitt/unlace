@@ -846,6 +846,13 @@ pub struct AnalysisOutput {
     /// [`crate::formatstring::kuna_fmtstatic::FormatStringStaticPass`], which
     /// requires the Listing; empty otherwise. See [`FormatSiteFact`].
     pub format_sites: Vec<FormatSiteFact>,
+    /// (kuna) The prototype of one call instruction, by the instruction's
+    /// address: what a pass that read the call's arguments knows beyond its
+    /// callee's prototype (`unlace_decomp::kuna_callsiteproto`).
+    pub call_prototypes: Vec<(u64, unlace_decomp::fspec::PrototypePieces)>,
+    /// (kuna `uefi`) The protocol and PPI interface instances an EFI module
+    /// installs.
+    pub uefi_installs: Vec<unlace_decomp::kuna_uefiprotocols::InstalledInterface>,
     /// (kuna `libctypes glibc`) The published glibc x86-64 field layouts went
     /// into THIS image's named aggregates.
     ///
@@ -1015,6 +1022,9 @@ impl AnalysisOutput {
         self.format_sites
             .iter_mut()
             .for_each(|f| fix_proto(&mut f.pieces));
+        self.call_prototypes
+            .iter_mut()
+            .for_each(|(_, p)| fix_proto(p));
         let helpers = &mut self.swift_helpers;
         helpers.symbols.iter_mut().for_each(|s| {
             if s.kind == SymKind::Data {
@@ -1246,6 +1256,8 @@ impl AnalysisOutput {
             .msvc_builders
             .extend(other.cpp_sig.msvc_builders);
         self.format_sites.extend(other.format_sites);
+        self.call_prototypes.extend(other.call_prototypes);
+        self.uefi_installs.extend(other.uefi_installs);
         self.libctypes_glibc |= other.libctypes_glibc;
         self.libctypes_refused |= other.libctypes_refused;
         if other.typelib.is_some() {

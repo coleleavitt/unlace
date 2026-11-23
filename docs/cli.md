@@ -4311,12 +4311,25 @@ and `--json` reports volumes, modules (file, GUID, name, FFS type, size) and the
 sections it could not decode. EFI 1.1 standard compression sections and
 EDK2 Tiano GUID-defined sections are decoded (`firmware/tiano.rs`, a port of
 EDK2's `Decompress.c`; a standard section that fails as EFI 1.1 is retried as
-Tiano, which some vendors store there). Each module is then an ordinary EFI image for the other subcommands.
+Tiano, which some vendors store there). Each module is then an ordinary EFI image for the other subcommands. A pad file (the free
+space EDK2 leaves in front of an aligned file) does not end a volume.
+
+Beside the modules `unlace unpack` writes `kuna-uefi.index`, which the `uefi`
+pass reads when a module of that directory is loaded: each module's FFS file
+type (a PEIM and a standalone-MM module are entered differently from a DXE
+driver) and, with `--protocols`, every protocol and PPI interface each module
+installs. `--protocols` loads every module once (about 20 s for an OVMF image
+on a development build); afterwards a `LocateProtocol` or `LocatePpi` in one
+module carries a comment naming the module that installs the interface:
 
 ```sh
 $ unlace unpack OVMF.fd --list | tail -2
 SECURITY_CORE          DF1CCEF6-F301-4A63-9661-FC6030DCC880    45824  SecMain.efi
-107 modules in 5 volumes
+122 modules in 5 volumes
+$ unlace unpack OVMF.fd -o fv --protocols >/dev/null
+$ unlace decompile fv/StatusCodeHandlerPei.efi _ModuleEntryPoint | grep -B1 LocatePpi
+                    /* gEfiPeiRscHandlerPpiGuid is installed by ReportStatusCodeRouterPei.efi (EFI_PEI_RSC_HANDLER_PPI at 0x829a90: Register=0x8297ff, Unregister=0x8298c8) */
+  (*(*v2)->LocatePpi)(v2,&gEfiPeiRscHandlerPpiGuid,0,NULL,&v6);
 ```
 
 ### A dyld shared cache

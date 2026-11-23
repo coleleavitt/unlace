@@ -2028,6 +2028,12 @@ pub struct Architecture {
     /// ([`crate::p2_lift::kuna_calleeoverride`]).
     pub kuna_callee_overrides:
         std::collections::BTreeMap<Address, std::collections::BTreeMap<Address, Address>>,
+    /// (kuna) Loader-stated prototypes of single call instructions, by the
+    /// instruction's address ([`crate::p2_lift::kuna_callsiteproto`]).
+    pub kuna_callsite_protos: std::collections::BTreeMap<u64, crate::fspec::PrototypePieces>,
+    /// (kuna `uefi`) The interface instances the EFI module installs
+    /// ([`crate::kuna_uefiprotocols`]).
+    pub kuna_uefi_installs: Vec<crate::kuna_uefiprotocols::InstalledInterface>,
     /// (kuna `formatstring`) Which variadic arguments the target passes exactly
     /// as named ones, which bounds what a closed printf/scanf override may
     /// declare. A FACT, written once at `load file` from the image's container;
@@ -3142,6 +3148,8 @@ impl Architecture {
             elfmain_main_decl: None,
             format_override_callpoints: std::collections::BTreeSet::new(),
             kuna_callee_overrides: std::collections::BTreeMap::new(),
+            kuna_callsite_protos: std::collections::BTreeMap::new(),
+            kuna_uefi_installs: Vec::new(),
             format_vararg_abi: None, // (kuna) a load-time fact; set by the console's `load file`
             kuna_darwin_variadic_cache: std::collections::HashMap::new(),
             analysis_listing: false,

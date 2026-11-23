@@ -46,6 +46,7 @@ pub trait KunaOption: Any + Clone {
 #[macro_export]
 macro_rules! kuna_option_id {
     () => {
+        #[inline]
         fn id() -> $crate::kuna_optionset::OptionId {
             static ID: std::sync::OnceLock<$crate::kuna_optionset::OptionId> =
                 std::sync::OnceLock::new();

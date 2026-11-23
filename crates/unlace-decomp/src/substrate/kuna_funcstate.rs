@@ -48,6 +48,7 @@ macro_rules! kuna_func_state {
         impl $crate::kuna_funcstate::FuncState for $ty {
             const KEEP_ACROSS_CLEAR: bool = $keep;
 
+            #[inline]
             fn id() -> $crate::kuna_funcstate::StateId {
                 static ID: std::sync::OnceLock<$crate::kuna_funcstate::StateId> =
                     std::sync::OnceLock::new();
@@ -74,6 +75,7 @@ impl FuncStates {
             .get_or_init(|| (0..MAX_STATES).map(|_| OnceCell::new()).collect())
     }
 
+    #[inline]
     fn slot<S: FuncState>(&self) -> &OnceCell<Slot> {
         &self.table()[S::id().0]
     }
@@ -86,6 +88,7 @@ impl FuncStates {
     }
 
     /// The state of `S`, created with its default on first use.
+    #[inline]
     pub fn get<S: FuncState>(&self) -> &S {
         self.slot::<S>()
             .get_or_init(Self::fill::<S>)

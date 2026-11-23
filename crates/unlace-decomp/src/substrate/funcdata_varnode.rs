@@ -629,6 +629,7 @@ impl Funcdata {
     ///
     /// The attached output receives its high variable and lane-storage record
     /// when those analyses are active, followed by scope-derived properties.
+    #[inline]
     pub fn new_varnode_out(&mut self, s: int4, m: &Address, op: OpId) -> KunaResult<VarnodeId> {
         self.varnode_out(s, m, op, true)
     }
@@ -683,12 +684,14 @@ impl Funcdata {
     /// The `vbank.createDefUnique(s,ct,op)` drives `xref`; same split-borrow as
     /// [`new_varnode_out`](Funcdata::new_varnode_out).  No `localmap` match (the
     /// unique space never carries symbols), matching the C++.
+    #[inline]
     pub fn new_unique_out(&mut self, s: int4, op: OpId) -> KunaResult<VarnodeId> {
         self.unique_out(s, op, true)
     }
 
     /// [`new_unique_out`](Funcdata::new_unique_out) for a simplification rule: the
     /// output is not recorded as lane-divisible storage.
+    #[inline]
     pub fn new_unique_out_unlaned(&mut self, s: int4, op: OpId) -> KunaResult<VarnodeId> {
         self.unique_out(s, op, false)
     }
@@ -1221,6 +1224,7 @@ impl Funcdata {
 
     /// Find the input Varnode with the given size and storage address
     /// (C++ `Funcdata::findVarnodeInput` → `vbank.findInput`, `funcdata.hh:333`).
+    #[inline]
     pub fn find_varnode_input(&self, s: int4, loc: &Address) -> Option<VarnodeId> {
         self.vbank().find_input(s, loc)
     }
@@ -4013,6 +4017,7 @@ pub(crate) fn op_iop_encode(op: OpId) -> uintb {
 /// only way the iop constant is consumed: to re-identify the *same* op.  Used by
 /// [`TransformVar::create_replacement`](crate::transform) for the `constant_iop`
 /// placeholder.
+#[inline]
 pub(crate) fn op_iop_decode(val: uintb) -> OpId {
     OpId::from(slotmap::KeyData::from_ffi(val))
 }

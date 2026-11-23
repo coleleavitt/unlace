@@ -67,11 +67,13 @@ impl TypeOp {
     }
 
     /// Get the op-code value (C++ `TypeOp::getOpcode`).
+    #[inline]
     pub fn get_opcode(&self) -> OpCode {
         self.opcode
     }
 
     /// Get the properties associated with the op-code (C++ `TypeOp::getFlags`).
+    #[inline]
     pub fn get_flags(&self) -> uint4 {
         self.flags
     }
@@ -1210,6 +1212,7 @@ impl ArchContext {
     ///
     /// Used by hand-built test fixtures; the real path shares the engine's
     /// manager through [`Self::new_shared`].
+    #[inline]
     pub fn new(manage: AddrSpaceManager) -> ArchContext {
         ArchContext::new_shared(Rc::new(manage))
     }
@@ -1491,6 +1494,7 @@ impl ArchContext {
         loader.borrow_mut().load_fill(buf, addr)
     }
 
+    #[inline]
     pub fn types(&self) -> Option<&dyn crate::dtype::TypeFactory> {
         self.types
             .as_deref()
@@ -1520,11 +1524,13 @@ impl ArchContext {
     /// Clone the shared data-type factory `Rc` (so a caller can hold a type
     /// factory handle across a `&mut Funcdata`/`&mut ScopeLocal` borrow that
     /// would otherwise alias the `&self` arch read).
+    #[inline]
     pub fn types_rc(&self) -> Option<Rc<crate::dtype::TypeFactoryImpl>> {
         self.types.clone()
     }
 
     /// The default prototype model (C++ `glb->defaultfp`), or `None`.
+    #[inline]
     pub fn default_fp(&self) -> Option<&Rc<crate::fspec::ProtoModel>> {
         self.defaultfp.as_ref()
     }
@@ -1609,6 +1615,7 @@ impl ArchContext {
     /// `evalfp_called ?: defaultfp`).  The merged arch-handle carries no distinct
     /// `evalfp_called` field; absent that it is the same as `defaultfp`, which is
     /// the C++ fallback the `?:` would take anyway.
+    #[inline]
     pub fn eval_fp_called(&self) -> Option<&Rc<crate::fspec::ProtoModel>> {
         self.defaultfp.as_ref()
     }
@@ -1618,6 +1625,7 @@ impl ArchContext {
     ///
     /// Drives `PcodeOp::collapse` (`RuleCollapseConstants`).  `None` for
     /// hand-built fixtures (empty table) or op-codes with no registered behavior.
+    #[inline]
     pub fn op_behavior(
         &self,
         opc: unlace_num::opcodes::OpCode,
@@ -1627,6 +1635,7 @@ impl ArchContext {
 
     /// Borrow the address-space manager (C++ `glb` viewed as an
     /// `AddrSpaceManager`).
+    #[inline]
     pub fn manage(&self) -> &AddrSpaceManager {
         &self.manage
     }
@@ -1640,6 +1649,7 @@ impl ArchContext {
     /// global-mapped Varnode picks up `mapped | addrtied | persist` (and any
     /// `readonly`/`volatile` on the range) here, so `ActionDeadCode` keeps its
     /// store alive.
+    #[inline]
     pub fn query_global_properties(&self, addr: &Address, size: int4, usepoint: &Address) -> uint4 {
         match self.effective_global_query(addr) {
             Some(gq) => gq.query_properties(addr, size, usepoint),
@@ -1648,6 +1658,7 @@ impl ArchContext {
     }
 
     /// Memory-range properties without a covering symbol's inherited flags.
+    #[inline]
     pub(crate) fn query_global_range_properties(&self, addr: &Address) -> uint4 {
         self.effective_global_query(addr)
             .map_or(0, |gq| gq.get_property(addr))
@@ -1657,6 +1668,7 @@ impl ArchContext {
     /// against. In remote mode this is the merged cache accumulated while
     /// resolving the function; standalone mode reads the frozen per-function
     /// Database snapshot.
+    #[inline]
     pub fn global_name_scope(&self) -> Option<Rc<GlobalQuery>> {
         self.remote_scope
             .as_ref()

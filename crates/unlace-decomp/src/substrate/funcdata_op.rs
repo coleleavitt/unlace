@@ -127,6 +127,7 @@ impl Funcdata {
     /// through the W6 `inst[]` boundary (`w6_type_op`).  Convenience for in-crate
     /// callers that do not carry a resolved [`TypeOp`] (e.g. the stack-pointer
     /// flow LOAD->COPY / spurious-add rewrites in `coreaction_stackptr`).
+    #[inline]
     pub(crate) fn op_set_opcode_code(&mut self, op: OpId, opc: OpCode) {
         self.op_set_opcode(op, Self::w6_type_op(opc));
     }
@@ -338,6 +339,7 @@ impl Funcdata {
     /// [`banks_mut`](Funcdata::banks_mut) supplies; `set_def` returns the kept
     /// varnode id (`vn` after a possible xref-unification), which the C++ assigns
     /// back to `vn` before `op->setOutput(vn)`.
+    #[inline]
     pub fn op_set_output(&mut self, op: OpId, vn: VarnodeId) -> KunaResult<()> {
         self.attach_output(op, vn, true)
     }
@@ -650,6 +652,7 @@ impl Funcdata {
     ///
     /// `return obank.create(inputs,pc);` — the `uniqid`→`SeqNum::uniq`
     /// allocation lives in [`create_at`](crate::op::PcodeOpBank::create_at).
+    #[inline]
     pub fn new_op(&mut self, inputs: int4, pc: unlace_base::address::Address) -> OpId {
         self.obank_mut().create_at(inputs, pc)
     }
@@ -2542,6 +2545,7 @@ impl Funcdata {
     /// Insert the op into the dead list immediately after `prev`
     /// (C++ `Funcdata::opDeadInsertAfter`, `funcdata.hh` inline → `op.cc`
     /// `insertAfterDead`).  Both must be dead.
+    #[inline]
     pub fn op_dead_insert_after(&mut self, op: OpId, prev: OpId) {
         self.obank_mut().insert_after_dead(op, prev);
     }

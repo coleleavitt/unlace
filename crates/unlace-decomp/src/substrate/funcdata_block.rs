@@ -3965,6 +3965,7 @@ impl Funcdata {
 
     /// The root graph node of `bblocks` (public-within-crate wrapper so the
     /// funcdata_block methods can reach it without re-deriving).
+    #[inline]
     pub(crate) fn bblocks_root_pub(&self) -> BlockId {
         self.bblocks_ref()
             .root

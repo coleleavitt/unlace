@@ -427,6 +427,7 @@ impl Override {
     }
 
     /// Has the late `/GS` recognizer seeded this exact call site?
+    #[inline]
     pub fn is_msvc_cookie_call(&self, addr: &Address) -> bool {
         self.msvc_cookie_calls.contains(addr)
     }
@@ -454,6 +455,7 @@ impl Override {
     }
 
     /// (kuna `sitetypelock`) Does any call point hold an output type lock?
+    #[inline]
     pub fn has_output_typelocks(&self) -> bool {
         !self.outputtypelock.is_empty()
     }

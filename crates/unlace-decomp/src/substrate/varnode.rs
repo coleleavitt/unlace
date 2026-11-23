@@ -640,21 +640,25 @@ impl Varnode {
     // --- Accessors (C++ inline getters) -----------------------------------
 
     /// Get the storage Address (C++ `getAddr`).
+    #[inline]
     pub fn get_addr(&self) -> &Address {
         &self.loc
     }
     /// Get the AddrSpace storing this Varnode (C++ `getSpace`).  Panics on the
     /// null/sentinel address (C++ would dereference an invalid pointer).
+    #[inline]
     pub fn get_space(&self) -> &Rc<AddrSpace> {
         self.loc
             .get_space()
             .expect("Varnode::getSpace on invalid address (C++ UB)")
     }
     /// Get the offset within the space (C++ `getOffset`).
+    #[inline]
     pub fn get_offset(&self) -> uintb {
         self.loc.get_offset()
     }
     /// Get the number of bytes this Varnode stores (C++ `getSize`).
+    #[inline]
     pub fn get_size(&self) -> int4 {
         self.size
     }
@@ -663,10 +667,12 @@ impl Varnode {
         self.mergegroup
     }
     /// Get the defining op id, or `None` (C++ `getDef`).
+    #[inline]
     pub fn get_def(&self) -> Option<OpId> {
         self.def
     }
     /// Get all boolean attributes (C++ `getFlags`).
+    #[inline]
     pub fn get_flags(&self) -> uint4 {
         self.flags
     }
@@ -676,6 +682,7 @@ impl Varnode {
         self.addlflags
     }
     /// Get the Datatype (C++ `getType`).
+    #[inline]
     pub fn get_type(&self) -> &Rc<Datatype> {
         self.type_
             .get_or_init(|| Rc::new(Datatype::new(self.size, type_metatype::TYPE_UNKNOWN)))
@@ -686,12 +693,14 @@ impl Varnode {
     /// is a deferred W8 surface, so when the type does not need resolution this is
     /// exactly `getType()` — faithful for the pointer/array/struct corpus (no
     /// unions). // STUB(W8 union findResolve)
+    #[inline]
     pub fn get_type_read_facing(&self, _op: OpId) -> &Rc<Datatype> {
         self.get_type()
     }
     /// C++ `Varnode::getTypeDefFacing()` (varnode.cc:645).  The def-facing analogue
     /// of [`get_type_read_facing`]; identical when the type does not need union
     /// resolution. // STUB(W8 union findResolve)
+    #[inline]
     pub fn get_type_def_facing(&self) -> &Rc<Datatype> {
         self.get_type()
     }
@@ -712,15 +721,18 @@ impl Varnode {
         None
     }
     /// Set the temporary Datatype used during type propagation (C++ `setTempType`).
+    #[inline]
     pub fn set_temp_type(&mut self, t: Rc<Datatype>) {
         self.temp_type = Some(t);
     }
     /// Get the temporary Datatype used during type propagation (C++ `getTempType`).
     /// `None` if no propagation pass has seeded a temp type yet.
+    #[inline]
     pub fn get_temp_type(&self) -> Option<&Rc<Datatype>> {
         self.temp_type.as_ref()
     }
     /// Get the creation index (C++ `getCreateIndex`).
+    #[inline]
     pub fn get_create_index(&self) -> uint4 {
         self.create_index
     }
@@ -729,26 +741,32 @@ impl Varnode {
         self.descend.iter().copied()
     }
     /// Number of descendants.
+    #[inline]
     pub fn num_descend(&self) -> usize {
         self.descend.len()
     }
     /// Get the mask of consumed bits (C++ `getConsume`).
+    #[inline]
     pub fn get_consume(&self) -> uintb {
         self.consumed
     }
     /// Set the mask of consumed bits (C++ `setConsume`).
+    #[inline]
     pub fn set_consume(&mut self, val: uintb) {
         self.consumed = val;
     }
     /// Get the mask of bits known to be zero (C++ `getNZMask`).
+    #[inline]
     pub fn get_nz_mask(&self) -> uintb {
         self.nzm
     }
     /// Set the non-zero mask (C++ writes `vn->nzm` directly during `calcNZMask`).
+    #[inline]
     pub fn set_nz_mask(&mut self, nzm: uintb) {
         self.nzm = nzm;
     }
     /// The high-level variable id, if any (C++ `getHigh`, sans the throw).
+    #[inline]
     pub fn get_high(&self) -> Option<HighVariableId> {
         self.high
     }
@@ -756,6 +774,7 @@ impl Varnode {
     /// C++ `getCover` returns the raw `cover` pointer; the lazy `updateCover`
     /// rebuild is driven separately by [`Funcdata`] (it needs the op/block graph
     /// — see [`Varnode::cover_rebuild`]).
+    #[inline]
     pub fn cover(&self) -> Option<&Cover> {
         self.cover.as_ref()
     }
@@ -789,12 +808,14 @@ impl Varnode {
     }
     /// Mark this Varnode as holding a spacebase (stack-pointer) value (C++
     /// `Varnode::setFlags(Varnode::spacebase)`, set by `Funcdata::spacebase`).
+    #[inline]
     pub fn set_spacebase(&mut self) {
         self.set_flags(varnode_flags::spacebase);
     }
     /// Set the given property bits (C++ `Varnode::setFlags`).  Public surface for
     /// `Funcdata::syncVarnodesWithSymbol`, which paints `mapped`/`addrtied`/
     /// `nolocalalias`/`addrforce` from the resolved Symbol.
+    #[inline]
     pub fn set_flags_pub(&mut self, fl: uint4) {
         self.set_flags(fl);
     }
@@ -867,6 +888,7 @@ impl Varnode {
         self.addlflags &= !addl_flags::vacconsume;
     }
     /// (kuna) Does a load of a global this value was stored to read the value?
+    #[inline]
     pub fn is_global_load(&self) -> bool {
         (self.addlflags & addl_flags::global_load) != 0
     }
@@ -892,26 +914,32 @@ impl Varnode {
     // --- Boolean attribute predicates (C++ inline is*/has*) ---------------
 
     /// C++ `isAnnotation`.
+    #[inline]
     pub fn is_annotation(&self) -> bool {
         (self.flags & varnode_flags::annotation) != 0
     }
     /// C++ `isImplied`.
+    #[inline]
     pub fn is_implied(&self) -> bool {
         (self.flags & varnode_flags::implied) != 0
     }
     /// C++ `isExplicit`.
+    #[inline]
     pub fn is_explicit(&self) -> bool {
         (self.flags & varnode_flags::explict) != 0
     }
     /// C++ `isConstant`.
+    #[inline]
     pub fn is_constant(&self) -> bool {
         (self.flags & varnode_flags::constant) != 0
     }
     /// C++ `isFree`: not in SSA form (neither written nor input).
+    #[inline]
     pub fn is_free(&self) -> bool {
         (self.flags & (varnode_flags::written | varnode_flags::input)) == 0
     }
     /// C++ `isInput`.
+    #[inline]
     pub fn is_input(&self) -> bool {
         (self.flags & varnode_flags::input) != 0
     }
@@ -932,14 +960,17 @@ impl Varnode {
         (self.flags & (varnode_flags::readonly | varnode_flags::volatil)) != 0
     }
     /// C++ `isReadOnly`.
+    #[inline]
     pub fn is_read_only(&self) -> bool {
         (self.flags & varnode_flags::readonly) != 0
     }
     /// C++ `isVolatile`.
+    #[inline]
     pub fn is_volatile(&self) -> bool {
         (self.flags & varnode_flags::volatil) != 0
     }
     /// C++ `isPersist`.
+    #[inline]
     pub fn is_persist(&self) -> bool {
         (self.flags & varnode_flags::persist) != 0
     }
@@ -948,15 +979,18 @@ impl Varnode {
         (self.flags & varnode_flags::directwrite) != 0
     }
     /// C++ `isAddrTied`.
+    #[inline]
     pub fn is_addr_tied(&self) -> bool {
         (self.flags & (varnode_flags::addrtied | varnode_flags::insert))
             == (varnode_flags::addrtied | varnode_flags::insert)
     }
     /// C++ `isAddrForce`.
+    #[inline]
     pub fn is_addr_force(&self) -> bool {
         (self.flags & varnode_flags::addrforce) != 0
     }
     /// C++ `isAutoLive`.
+    #[inline]
     pub fn is_auto_live(&self) -> bool {
         (self.flags & (varnode_flags::addrforce | varnode_flags::autolive_hold)) != 0
     }
@@ -970,6 +1004,7 @@ impl Varnode {
     }
     /// The owning Symbol of the bound dynamic SymbolEntry (C++ `getSymbolEntry()`
     /// presence test), or `None` if unbound.
+    #[inline]
     pub fn kuna_symbol_entry(&self) -> Option<crate::database::SymbolId> {
         self.kuna_symbol_entry
     }
@@ -981,10 +1016,12 @@ impl Varnode {
         self.flags |= varnode_flags::mapped;
     }
     /// C++ `isUnaffected`.
+    #[inline]
     pub fn is_unaffected(&self) -> bool {
         (self.flags & varnode_flags::unaffected) != 0
     }
     /// C++ `isSpacebase`.
+    #[inline]
     pub fn is_spacebase(&self) -> bool {
         (self.flags & varnode_flags::spacebase) != 0
     }
@@ -993,6 +1030,7 @@ impl Varnode {
         (self.flags & varnode_flags::return_address) != 0
     }
     /// C++ `isProtoPartial`.
+    #[inline]
     pub fn is_proto_partial(&self) -> bool {
         (self.flags & varnode_flags::proto_partial) != 0
     }
@@ -1000,6 +1038,7 @@ impl Varnode {
     pub fn is_ptr_check(&self) -> bool {
         (self.addlflags & addl_flags::ptrcheck) != 0
     }
+    #[inline]
     pub(crate) fn is_synthetic_literal(&self) -> bool {
         self.addlflags & addl_flags::synthetic_literal != 0
     }
@@ -1011,6 +1050,7 @@ impl Varnode {
         }
     }
     /// C++ `isPtrFlow`.
+    #[inline]
     pub fn is_ptr_flow(&self) -> bool {
         (self.addlflags & addl_flags::ptrflow) != 0
     }
@@ -1019,18 +1059,22 @@ impl Varnode {
         (self.addlflags & addl_flags::spacebase_placeholder) != 0
     }
     /// C++ `hasNoLocalAlias`.
+    #[inline]
     pub fn has_no_local_alias(&self) -> bool {
         (self.flags & varnode_flags::nolocalalias) != 0
     }
     /// C++ `isMark`.
+    #[inline]
     pub fn is_mark(&self) -> bool {
         (self.flags & varnode_flags::mark) != 0
     }
     /// C++ `isActiveHeritage`.
+    #[inline]
     pub fn is_active_heritage(&self) -> bool {
         (self.addlflags & addl_flags::activeheritage) != 0
     }
     /// C++ `isStackStore`.
+    #[inline]
     pub fn is_stack_store(&self) -> bool {
         (self.addlflags & addl_flags::stack_store) != 0
     }
@@ -1057,10 +1101,12 @@ impl Varnode {
             == varnode_flags::indirect_creation
     }
     /// C++ `isPrecisLo`.
+    #[inline]
     pub fn is_precis_lo(&self) -> bool {
         (self.flags & varnode_flags::precislo) != 0
     }
     /// C++ `isPrecisHi`.
+    #[inline]
     pub fn is_precis_hi(&self) -> bool {
         (self.flags & varnode_flags::precishi) != 0
     }
@@ -1069,6 +1115,7 @@ impl Varnode {
         (self.flags & varnode_flags::incidental_copy) != 0
     }
     /// C++ `isWriteMask`.
+    #[inline]
     pub fn is_write_mask(&self) -> bool {
         (self.addlflags & addl_flags::writemask) != 0
     }
@@ -1081,6 +1128,7 @@ impl Varnode {
         (self.addlflags & addl_flags::longprint) != 0
     }
     /// C++ `isWritten`.
+    #[inline]
     pub fn is_written(&self) -> bool {
         (self.flags & varnode_flags::written) != 0
     }
@@ -1102,11 +1150,13 @@ impl Varnode {
         self.loc.get_offset() == val
     }
     /// C++ `isHeritageKnown`.
+    #[inline]
     pub fn is_heritage_known(&self) -> bool {
         (self.flags & (varnode_flags::insert | varnode_flags::constant | varnode_flags::annotation))
             != 0
     }
     /// C++ `isTypeLock`.
+    #[inline]
     pub fn is_type_lock(&self) -> bool {
         (self.flags & varnode_flags::typelock) != 0
     }
@@ -1118,6 +1168,7 @@ impl Varnode {
     // --- Public flag mutators (C++ inline set*/clear*) --------------------
 
     /// C++ `setActiveHeritage`.
+    #[inline]
     pub fn set_active_heritage(&mut self) {
         self.addlflags |= addl_flags::activeheritage;
     }
@@ -1126,14 +1177,17 @@ impl Varnode {
         self.addlflags &= !addl_flags::activeheritage;
     }
     /// C++ `setMark`.
+    #[inline]
     pub fn set_mark(&mut self) {
         self.flags |= varnode_flags::mark;
     }
     /// C++ `clearMark`.
+    #[inline]
     pub fn clear_mark(&mut self) {
         self.flags &= !varnode_flags::mark;
     }
     /// C++ `setDirectWrite`.
+    #[inline]
     pub fn set_direct_write(&mut self) {
         self.flags |= varnode_flags::directwrite;
     }
@@ -1174,6 +1228,7 @@ impl Varnode {
         self.addlflags &= !addl_flags::spacebase_placeholder;
     }
     /// C++ `setWriteMask`.
+    #[inline]
     pub fn set_write_mask(&mut self) {
         self.addlflags |= addl_flags::writemask;
     }
@@ -1182,6 +1237,7 @@ impl Varnode {
         self.addlflags &= !addl_flags::writemask;
     }
     /// C++ `setProtoPartial`.
+    #[inline]
     pub fn set_proto_partial(&mut self) {
         self.flags |= varnode_flags::proto_partial;
     }
@@ -1210,6 +1266,7 @@ impl Varnode {
         self.addlflags |= addl_flags::has_implied_field;
     }
     /// C++ `setStackStore`.
+    #[inline]
     pub fn set_stack_store(&mut self) {
         self.addlflags |= addl_flags::stack_store;
     }
@@ -1305,6 +1362,7 @@ impl Varnode {
         self.set_flags(varnode_flags::input | varnode_flags::coverdirty);
     }
     /// C++ `setAddrForce`.
+    #[inline]
     pub fn set_addr_force(&mut self) {
         self.set_flags(varnode_flags::addrforce);
     }
@@ -1313,14 +1371,17 @@ impl Varnode {
         self.clear_flags(varnode_flags::addrforce);
     }
     /// C++ `setImplied`.
+    #[inline]
     pub fn set_implied(&mut self) {
         self.set_flags(varnode_flags::implied);
     }
     /// C++ `clearImplied`.
+    #[inline]
     pub fn clear_implied(&mut self) {
         self.clear_flags(varnode_flags::implied);
     }
     /// C++ `setExplicit`.
+    #[inline]
     pub fn set_explicit(&mut self) {
         self.set_flags(varnode_flags::explict);
     }
@@ -1329,6 +1390,7 @@ impl Varnode {
         self.clear_flags(varnode_flags::explict);
     }
     /// C++ `setPrecisLo`.
+    #[inline]
     pub fn set_precis_lo(&mut self) {
         self.set_flags(varnode_flags::precislo);
     }
@@ -1337,6 +1399,7 @@ impl Varnode {
         self.clear_flags(varnode_flags::precislo);
     }
     /// C++ `setPrecisHi`.
+    #[inline]
     pub fn set_precis_hi(&mut self) {
         self.set_flags(varnode_flags::precishi);
     }
@@ -1703,6 +1766,7 @@ impl VarnodeBank {
     }
 
     /// Number of Varnodes (C++ `numVarnodes`).
+    #[inline]
     pub fn num_varnodes(&self) -> int4 {
         self.loc_tree.len() as int4
     }
@@ -1972,6 +2036,7 @@ impl VarnodeBank {
     // --- descend manipulation routed through the bank ---------------------
 
     /// Add `op` to `vn`'s descend list (C++ `vn->addDescend(op)`).
+    #[inline]
     pub fn add_descend(&mut self, vn: VarnodeId, op: OpId) -> KunaResult<()> {
         self.arena[vn].add_descend(op)
     }
@@ -1987,6 +2052,7 @@ impl VarnodeBank {
     // --- Iteration & lookup ----------------------------------------------
 
     /// Iterate all varnode ids in location order (C++ `beginLoc()`..`endLoc()`).
+    #[inline]
     pub fn iter_loc(&self) -> impl Iterator<Item = VarnodeId> + '_ {
         self.loc_tree.values().copied()
     }

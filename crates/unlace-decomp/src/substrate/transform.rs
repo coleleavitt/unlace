@@ -203,6 +203,7 @@ impl TransformVar {
     }
 
     /// Get the original Varnode \b this placeholder models (C++ `getOriginal`).
+    #[inline]
     pub fn get_original(&self) -> Option<VarnodeId> {
         self.vn
     }
@@ -320,6 +321,7 @@ impl LanedRegister {
 
     /// Construct from a whole size and a lane-size bit mask
     /// (C++ `LanedRegister(int4,uint4)`).
+    #[inline]
     pub fn with_mask(sz: int4, mask: uint4) -> LanedRegister {
         LanedRegister {
             whole_size: sz,
@@ -519,6 +521,7 @@ impl LaneDescription {
     }
 
     /// Get the size of the i-th lane (C++ `getSize`).
+    #[inline]
     pub fn get_size(&self, i: int4) -> int4 {
         self.lane_size[i as usize]
     }
@@ -660,6 +663,7 @@ impl TransformManager {
     // -- placeholder accessors (the index-based pointer dereference) ----------
 
     /// Borrow the placeholder var addressed by `r`.
+    #[inline]
     pub fn var(&self, r: TVarRef) -> &TransformVar {
         match r {
             TVarRef::Piece { key, idx } => &self.piece_map[&key][idx],
@@ -1101,6 +1105,7 @@ impl TransformManager {
 
     /// Mark given variable as input to given op (C++
     /// `TransformManager::opSetInput`, transform.hh:219).
+    #[inline]
     pub fn op_set_input(&mut self, rop: TOpRef, rvn: TVarRef, slot: int4) {
         self.new_ops[rop.0].input[slot as usize] = Some(rvn);
     }

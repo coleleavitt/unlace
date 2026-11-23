@@ -412,25 +412,25 @@ fn promote(fd: &mut Funcdata, early: bool) {
         invalidate(fd);
         return;
     }
-    for (&id, publication) in &fd.local_stack_views().pending {
-        let covered = fd
-            .local_stack_views()
-            .footprints
-            .iter()
-            .any(|(&(at, size), views)| {
+    let state = fd.local_stack_views();
+    let accepted: Vec<_> = state
+        .pending
+        .iter()
+        .filter(|(_, publication)| {
+            let covered = state.footprints.iter().any(|(&(at, size), views)| {
                 views.iter().filter(|ty| nominal(ty)).count() >= 2
                     && contains(at, size, publication.start, publication.pointee.get_size())
             });
-        if covered
-            || fd
-                .local_stack_views()
-                .footprints
-                .contains_key(&(publication.start, publication.pointee.get_size()))
-        {
-            fd.local_stack_views_mut()
-                .publications
-                .insert(id, publication.clone());
-        }
+            covered
+                || state
+                    .footprints
+                    .contains_key(&(publication.start, publication.pointee.get_size()))
+        })
+        .map(|(&id, publication)| (id, publication.clone()))
+        .collect();
+    let state = fd.local_stack_views_mut();
+    for (id, publication) in accepted {
+        state.publications.insert(id, publication);
     }
     if fd.local_stack_views().publications.len() > MAX_RECORDS {
         invalidate(fd);

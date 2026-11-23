@@ -343,6 +343,7 @@ pub struct UserPcodeOp {
 
 impl UserPcodeOp {
     /// C++ `UnspecializedPcodeOp(const string&,Architecture*,int4)`.
+    #[inline]
     pub fn new_unspecialized(nm: &[u8], ind: int4) -> UserPcodeOp {
         UserPcodeOp {
             base: UserOpBase::new(nm, userop_type::unspecialized, ind),

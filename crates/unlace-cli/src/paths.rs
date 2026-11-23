@@ -12,7 +12,8 @@
 //! * **a repo checkout** — `unlace` is built to
 //!   `<root>/target/[<triple>/]<profile>/unlace`, so the repo root is the
 //!   directory holding that `target` and the workspace's `crates/`, and `specs/`
-//!   sits under it;
+//!   sits under it (or, when the target dir lives outside the checkout, the
+//!   checkout the binary was built from, if it still exists);
 //! * **an extracted directory** — a `specs/` tree beside or inside the directory
 //!   holding `unlace`. There is no repo root there, so nothing may be derived from
 //!   one: popping three parents off it lands on a path that exists nowhere.
@@ -65,13 +66,26 @@ fn in_tree_root(dir: &Path) -> Option<PathBuf> {
     None
 }
 
+/// The checkout this binary was built from, when it still is one: a build whose
+/// target dir lives outside the checkout (`CARGO_TARGET_DIR`, a `target` symlink
+/// that `current_exe` resolves) has no in-tree path back to it.
+fn build_root() -> Option<PathBuf> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    root.join("crates")
+        .join("unlace-cli")
+        .join("Cargo.toml")
+        .is_file()
+        .then(|| root.canonicalize().unwrap_or(root))
+}
+
 /// A directory holding a SLEIGH tree (`Ghidra/Processors/...`).
 fn is_spec_tree(dir: &Path) -> bool {
     dir.join("Ghidra").join("Processors").is_dir()
 }
 
 /// Where `specs_dir()` looks when neither `KUNA_SPECS` nor `KUNA_ROOT` pins it:
-/// the checkout's `specs/`, then the two places a release archive's separately
+/// the checkout's `specs/` (the one holding the binary, else the one it was built
+/// from), then the two places a release archive's separately
 /// downloaded `specs/` tree lands (inside the extracted directory, or beside it),
 /// then the current directory's.
 fn specs_search_dirs() -> Vec<PathBuf> {
@@ -83,6 +97,9 @@ fn specs_search_dirs() -> Vec<PathBuf> {
     };
     if let Some(dir) = exe_dir() {
         if let Some(root) = in_tree_root(&dir) {
+            push(root.join("specs"));
+        }
+        if let Some(root) = build_root() {
             push(root.join("specs"));
         }
         push(dir.join("specs"));

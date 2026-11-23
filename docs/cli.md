@@ -113,7 +113,8 @@ this order when nothing pins it:
   directory — `%LOCALAPPDATA%\kuna`, `~/Library/Caches/kuna`, or
   `$XDG_CACHE_HOME/kuna` (default `~/.cache/kuna`) — falling back to the system
   temp directory;
-- **a repo checkout**: the repo's `specs/`, above `target/<profile>/`;
+- **a repo checkout**: the repo's `specs/`, above `target/<profile>/`, or the `specs/` of the
+  checkout the binary was built from when its target dir lives elsewhere (`CARGO_TARGET_DIR`);
 - **beside the binary**: a `specs/` directory inside or next to the one holding
   `unlace`, then one in the current directory.
 

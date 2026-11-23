@@ -103,47 +103,7 @@ pub(crate) fn readable(ct: &Datatype, size: int4) -> bool {
         )
 }
 
-/// Does the access carry a floating-point value its own unknown type does not
-/// say: written by a float operation or a copy of a float, or read by a float
-/// operation?  An integer `T` would make C convert the value instead of moving
-/// its bits.
-pub(crate) fn carries_float(fd: &Funcdata, vn: VarnodeId, op: OpId) -> bool {
-    use unlace_num::opcodes::OpCode;
-    let Some(v) = fd.vbank().get(vn) else {
-        return false;
-    };
-    let Some(o) = fd.obank().get(op) else {
-        return false;
-    };
-    if v.get_def() == Some(op) {
-        let input_float = o
-            .get_in(0)
-            .and_then(|i| fd.vbank().get(i))
-            .is_some_and(|i| i.get_type().get_metatype() == type_metatype::TYPE_FLOAT);
-        return match o.code() {
-            OpCode::CPUI_COPY => input_float,
-            c => {
-                crate::kuna_ptrfromuse::is_float_op(c)
-                    && !matches!(
-                        c,
-                        OpCode::CPUI_FLOAT_EQUAL
-                            | OpCode::CPUI_FLOAT_NOTEQUAL
-                            | OpCode::CPUI_FLOAT_LESS
-                            | OpCode::CPUI_FLOAT_LESSEQUAL
-                            | OpCode::CPUI_FLOAT_NAN
-                            | OpCode::CPUI_FLOAT_TRUNC
-                    )
-            }
-        };
-    }
-    match o.code() {
-        OpCode::CPUI_COPY => o
-            .get_out()
-            .and_then(|out| fd.vbank().get(out))
-            .is_some_and(|out| out.get_type().get_metatype() == type_metatype::TYPE_FLOAT),
-        c => crate::kuna_ptrfromuse::is_float_op(c) && c != OpCode::CPUI_FLOAT_INT2FLOAT,
-    }
-}
+pub(crate) use crate::kuna_ptrfromuse::carries_float;
 
 impl Piece {
     /// Plan the access of `size` bytes at `off` inside `container`, the type the

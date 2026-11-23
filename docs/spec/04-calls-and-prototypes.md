@@ -1468,7 +1468,7 @@ that machinery.
 `Architecture::fid_prototypes` holds those entries) is the one parked
 prototype the drive checks after the fact, because a fingerprint match is
 evidence and not identity
-(`crates/unlace-decomp/src/p4_calls/kuna_fidproto.rs
+(`crates/unlace-decomp/src/p9_emit/kuna_fidproto.rs
 (reads_undeclared_parameter)`). The function is decompiled against it like any
 other; in the finished function, an input Varnode that still has a reader, lies
 in storage the model can pass a parameter in and overlaps no declared

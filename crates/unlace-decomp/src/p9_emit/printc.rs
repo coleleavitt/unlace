@@ -15419,7 +15419,7 @@ fn import_slot_address(
         || v.get_size() as u32 != space.get_addr_size()
         || reader.get_out() == Some(vn)
         || integer_only_operator(reader.code())
-        || !holds_loaded_value(fd, vn, 8)
+        || !crate::kuna_objcrettype::holds_loaded_value(fd, vn, 8)
     {
         return None;
     }
@@ -15446,31 +15446,6 @@ fn integer_only_operator(code: OpCode) -> bool {
             | OpCode::CPUI_INT_REM
             | OpCode::CPUI_INT_SREM
     )
-}
-
-/// Is `vn` the slot's value at entry, carried only across calls (`INDIRECT`)
-/// and joins (`MULTIEQUAL`), never a value the function stored into it?
-pub(crate) fn holds_loaded_value(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
-    let Some(v) = fd.vbank().get(vn) else {
-        return false;
-    };
-    let Some(def) = v.get_def().filter(|_| v.is_written()) else {
-        return true;
-    };
-    let Some(o) = fd.obank().get(def) else {
-        return false;
-    };
-    depth > 0
-        && match o.code() {
-            OpCode::CPUI_INDIRECT => o
-                .get_in(0)
-                .is_some_and(|i| holds_loaded_value(fd, i, depth - 1)),
-            OpCode::CPUI_MULTIEQUAL => (0..o.num_input()).all(|k| {
-                o.get_in(k)
-                    .is_some_and(|i| i == vn || holds_loaded_value(fd, i, depth - 1))
-            }),
-            _ => false,
-        }
 }
 
 /// Does a printed op other than a `LOAD` through `vn` (directly or through

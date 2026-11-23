@@ -3668,5 +3668,11 @@ impl ValueSetGraph for IrValueSetGraph<'_> {
     }
 }
 
+/// Is `off` inside one of the sorted, inclusive `ranges`?
+pub fn in_ranges(ranges: &[(u64, u64)], off: u64) -> bool {
+    let idx = ranges.partition_point(|&(lo, _)| lo <= off);
+    idx > 0 && ranges[idx - 1].1 >= off
+}
+
 #[cfg(test)]
 mod tests;

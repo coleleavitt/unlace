@@ -146,7 +146,7 @@ fn accesses(fd: &Funcdata, space: &Rc<AddrSpace>, lo: intb, hi: intb) -> Vec<Acc
             && def
                 .iter()
                 .chain(reader_ops.iter())
-                .any(|o| crate::kuna_partialaccess::carries_float(fd, vn, *o));
+                .any(|o| crate::kuna_ptrfromuse::carries_float(fd, vn, *o));
         out.push(Access {
             off,
             size: v.get_size(),

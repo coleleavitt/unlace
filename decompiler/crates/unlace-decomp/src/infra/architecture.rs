@@ -268,6 +268,9 @@ pub struct Architecture {
     /// ID string uniquely describing this architecture (C++ `archid`).
     pub archid: String,
 
+    /// The registered kuna options' current values.
+    pub kuna_options: crate::kuna_optionset::OptionSet,
+
     /// File input explicitly selected ARM/Thumb state; metadata must not repaint TMode.
     pub input_arm_isa_override: bool,
 
@@ -2751,6 +2754,7 @@ impl Architecture {
 
         let mut arch = Architecture {
             archid: archid.to_string(),
+            kuna_options: crate::kuna_optionset::OptionSet::new(),
             input_arm_isa_override: false,
             arm_inventory_modes: Vec::new(),
             loader_entry_tracks: std::collections::BTreeMap::new(),
@@ -3319,6 +3323,7 @@ impl Architecture {
     }
 
     pub fn reset_defaults_internal(&mut self) {
+        self.kuna_options.reset_shipped();
         self.trim_recurse_max = 5;
         self.max_implied_ref = 2; // 2 is best, in specific cases a higher number might be good
         self.max_term_duplication = 2; // 2 and 3 (4) are reasonable
@@ -4174,6 +4179,7 @@ impl Architecture {
     fn build_arch_handle_for_entry(&self, entry: Option<&Address>) -> ArchHandle {
         let manage = self.translate.manager_rc();
         let mut ctx = ArchContext::new_shared(manage);
+        ctx.kuna_options = self.kuna_options.clone();
         ctx.call_mechanisms = Rc::clone(&self.call_mechanisms);
         ctx.segment_ops = self.segment_defs.clone();
         ctx.call_mechanism_effects = self.call_mechanism_mode.fires(self.image_elfv1_toc); // callmechanisms

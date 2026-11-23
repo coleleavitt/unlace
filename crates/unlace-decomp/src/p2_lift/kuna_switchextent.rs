@@ -140,16 +140,7 @@ pub fn enum_calls<'a>(
     })
 }
 
-/// The jump tables of one function's extent.
-#[derive(Default)]
-pub struct ExtentTables {
-    /// The table of every computed jump the fold proves reads one, sorted.
-    pub tables: Vec<u64>,
-    /// The tables indexed by a Swift enum's case, with the enum's case count:
-    /// `swift_getEnumCaseMultiPayload` returns a case of the enum whose
-    /// metadata it is given, so such a table has exactly that many entries.
-    pub cases: BTreeMap<u64, u64>,
-}
+pub use crate::kuna_funcslots::ExtentTables;
 
 /// The tables the computed jumps in `[entry, end)` dispatch through, from a
 /// linear decode with `translate` over `image` when the flow holds one;
@@ -623,23 +614,4 @@ fn constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.switchextent_table_read = Some(table_read);
-}
-
-/// (kuna `switchextent`) The jump tables the function's extent dispatches through, and those a Swift enum's case indexes, once a flow with a computed jump decoded it; kept across `Funcdata::clear`.
-#[derive(Default)]
-struct ExtentSlot(Option<std::rc::Rc<crate::kuna_switchextent::ExtentTables>>);
-crate::kuna_func_state!(ExtentSlot, keep_across_clear: true);
-
-impl crate::funcdata::Funcdata {
-    pub(crate) fn kuna_extent_tables(
-        &self,
-    ) -> &Option<std::rc::Rc<crate::kuna_switchextent::ExtentTables>> {
-        &self.kuna_state::<ExtentSlot>().0
-    }
-
-    pub(crate) fn kuna_extent_tables_mut(
-        &mut self,
-    ) -> &mut Option<std::rc::Rc<crate::kuna_switchextent::ExtentTables>> {
-        &mut self.kuna_state_mut::<ExtentSlot>().0
-    }
 }

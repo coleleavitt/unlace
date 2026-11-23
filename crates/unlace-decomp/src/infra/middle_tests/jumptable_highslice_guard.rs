@@ -1,4 +1,108 @@
-use super::*;
+//! Tests moved out of `jumptable` because they read higher-band modules. They live in the
+//! driver so the middle band can become its own crate (unlace-middle).
+
+#![allow(unused_imports, dead_code)]
+
+use crate::block::BlockKind;
+use crate::block::block_get_start;
+use crate::context::ArchContext;
+use crate::context::BlockId;
+use crate::context::OpId;
+use crate::context::TypeOp;
+use crate::context::VarnodeId;
+use crate::dtype::Datatype;
+use crate::dtype::type_metatype;
+use crate::funcdata::Funcdata;
+use crate::jumptable::*;
+use crate::kuna_emulatefunction::EmulateFunction;
+use crate::op::pcodeop_flags;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::rc::Rc;
+use unlace_base::address::Address;
+use unlace_base::address::calc_mask;
+use unlace_base::address::count_leading_zeros;
+use unlace_base::address::coveringmask;
+use unlace_base::address::mostsigbit_set;
+use unlace_base::error::KunaError;
+use unlace_base::error::KunaResult;
+use unlace_base::marshal::ATTRIB_FORMAT;
+use unlace_base::marshal::ATTRIB_SIZE;
+use unlace_base::marshal::AttributeId;
+use unlace_base::marshal::Decoder;
+use unlace_base::marshal::ElementId;
+use unlace_base::marshal::Encoder;
+use unlace_base::marshal::PackedDecode;
+use unlace_base::marshal::PackedEncode;
+use unlace_base::space::AddrSpace;
+use unlace_base::space::AddrSpaceManager;
+use unlace_base::space::ConstantSpace;
+use unlace_base::space::UniqueSpace;
+use unlace_base::space::addrspace_flags;
+use unlace_base::space::spacetype;
+use unlace_base::types::Wrap;
+use unlace_base::types::int4;
+use unlace_base::types::uint4;
+use unlace_base::types::uint8;
+use unlace_base::types::uintb;
+use unlace_num::opcodes::OpCode;
+use unlace_num::pcoderaw::VarnodeData;
+
+fn build_manager() -> AddrSpaceManager {
+    let mut m = AddrSpaceManager::new();
+    m.insert_space(Rc::new(ConstantSpace::new())).unwrap();
+    m.insert_space(Rc::new(UniqueSpace::new(1, 0, false)))
+        .unwrap();
+    m.insert_space(Rc::new(AddrSpace::new(
+        spacetype::IPTR_PROCESSOR,
+        "ram",
+        false,
+        8,
+        1,
+        2,
+        addrspace_flags::hasphysical,
+        1,
+        1,
+    )))
+    .unwrap();
+    m.set_default_code_space(2).unwrap();
+    m
+}
+
+fn ram_space(fd: &Funcdata) -> Rc<AddrSpace> {
+    Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap())
+}
+
+fn opcode_flags(opc: OpCode) -> unlace_base::types::uint4 {
+    match opc {
+        OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => {
+            pcodeop_flags::branch
+        }
+        _ => 0,
+    }
+}
+
+fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
+    let ram = ram_space(fd);
+    let op = fd.new_op(inputs, Address::new(ram, off));
+    fd.obank_mut()
+        .change_opcode(op, TypeOp::new(opc, opcode_flags(opc), format!("{opc:?}")));
+    op
+}
+
+/// Create a function-input Varnode (input varnodes may be read by multiple ops;
+/// a *free* varnode can have only one descendant, mirroring the C++ rule).
+fn mk_input(fd: &mut Funcdata, off: u64) -> VarnodeId {
+    let ram = ram_space(fd);
+    let vn = fd.new_varnode(4, &Address::new(ram, off), None);
+    fd.vbank_mut()
+        .set_input(vn, &mut |_: &mut crate::varnode::VarnodeBank,
+                             _: VarnodeId,
+                             _: VarnodeId| {
+            Ok(())
+        })
+        .unwrap()
+}
 
 fn pair(size: i32, output_size: i32, offset: u64, amount: u64) -> (Funcdata, OpId, OpId) {
     pair_with_gate(size, output_size, offset, amount, true)

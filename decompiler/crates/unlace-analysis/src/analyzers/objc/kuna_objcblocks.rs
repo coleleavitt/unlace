@@ -9,7 +9,7 @@
 //! stored to a frame slot, the invoke and descriptor addresses stored 16 and 24
 //! bytes after it. [`stack_blocks`] finds those stores in arm64 code (the
 //! `adrp`/`ldr` of the isa's GOT slot, the `adrp`/`add` of the two addresses,
-//! `str`/`stp` to `sp`), names the invoke after its creator
+//! `str`/`stp` to `sp`) and in x86-64 code (`x86.rs`), names the invoke after its creator
 //! (`-[Runner maker:]_block_invoke`) and types it from the descriptor's
 //! signature, the way Hex-Rays reads the creator's microcode for the same stores.
 
@@ -22,6 +22,8 @@ use unlace_decomp::fspec::PrototypePieces;
 use super::encoding::{TypeCtx, decode_ivar_type, split_method};
 use super::sections::MachoImage;
 use crate::pass::{AnalysisOutput, FidMatch, LocalFact, SymFact, SymKind, TypedDataFact};
+
+mod x86;
 
 /// `Block_layout.flags` bit: the descriptor has copy/dispose helpers.
 const BLOCK_HAS_COPY_DISPOSE: u32 = 1 << 25;
@@ -122,7 +124,78 @@ struct Scan<'a> {
     isa_slots: &'a [u64],
 }
 
-impl Scan<'_> {
+impl<'a> Scan<'a> {
+    fn new(read_ptr: &'a dyn Fn(u64) -> Option<u64>, isa_slots: &'a [u64]) -> Scan<'a> {
+        Scan {
+            regs: [None; 32],
+            fregs: [None; 32],
+            stores: Vec::new(),
+            pending: Vec::new(),
+            done: Vec::new(),
+            cells: Vec::new(),
+            depth: 0,
+            last_ret: 0,
+            read_ptr,
+            isa_slots,
+        }
+    }
+
+    /// End the function being scanned: its literals with an invoke and its
+    /// `__block` cells are found, and the register and frame state starts over.
+    fn flush(&mut self, sites: &mut Vec<Site>, cells: &mut Vec<ByrefCell>) {
+        let finished = self.done.drain(..).chain(self.pending.drain(..));
+        for mut site in finished {
+            if site.invoke == 0 {
+                continue;
+            }
+            site.captures.sort_by_key(|s| s.off);
+            sites.push(site);
+        }
+        for &(frame, _, depth) in &self.cells {
+            let at = |o: u64| self.stores.iter().find(|s| s.off == frame.wrapping_add(o));
+            let (flags, size) = match (at(16), at(20)) {
+                (
+                    Some(Store {
+                        width: 8,
+                        held: Some(Held::Imm(v)),
+                        ..
+                    }),
+                    _,
+                ) => ((*v & 0xFFFF_FFFF) as u32, (*v >> 32) as u32),
+                (
+                    Some(Store {
+                        width: 4,
+                        held: Some(Held::Imm(f)),
+                        ..
+                    }),
+                    Some(Store {
+                        width: 4,
+                        held: Some(Held::Imm(s)),
+                        ..
+                    }),
+                ) => (*f as u32, *s as u32),
+                _ => continue,
+            };
+            let value_at = if flags & BLOCK_HAS_COPY_DISPOSE != 0 {
+                40
+            } else {
+                24
+            };
+            cells.push(ByrefCell {
+                frame,
+                depth,
+                flags,
+                size,
+                value: at(value_at).copied(),
+            });
+        }
+        self.cells.clear();
+        self.stores.clear();
+        self.regs = [None; 32];
+        self.fregs = [None; 32];
+        self.depth = 0;
+    }
+
     fn held(&self, r: usize) -> Option<Held> {
         if r == 31 {
             Some(Held::Stack(0))
@@ -147,6 +220,11 @@ impl Scan<'_> {
         } else {
             self.regs[rt]
         };
+        self.store_held(pc, off, width, float, held);
+    }
+
+    /// Record one frame store of `held` and fill in the literals it lands in.
+    fn store_held(&mut self, pc: u64, off: u64, width: u8, float: bool, held: Option<Held>) {
         self.stores.retain(|s| s.off != off);
         let store = Store {
             off,
@@ -346,82 +424,18 @@ fn stack_block_sites(
     let mut sites = Vec::new();
     let mut cells = Vec::new();
     for &(base, data) in text {
-        let mut scan = Scan {
-            regs: [None; 32],
-            fregs: [None; 32],
-            stores: Vec::new(),
-            pending: Vec::new(),
-            done: Vec::new(),
-            cells: Vec::new(),
-            depth: 0,
-            last_ret: 0,
-            read_ptr,
-            isa_slots,
-        };
-        let flush = |scan: &mut Scan, sites: &mut Vec<Site>, cells: &mut Vec<ByrefCell>| {
-            let finished = scan.done.drain(..).chain(scan.pending.drain(..));
-            for mut site in finished {
-                if site.invoke == 0 {
-                    continue;
-                }
-                site.captures.sort_by_key(|s| s.off);
-                sites.push(site);
-            }
-            for &(frame, _, depth) in &scan.cells {
-                let at = |o: u64| scan.stores.iter().find(|s| s.off == frame.wrapping_add(o));
-                let (flags, size) = match (at(16), at(20)) {
-                    (
-                        Some(Store {
-                            width: 8,
-                            held: Some(Held::Imm(v)),
-                            ..
-                        }),
-                        _,
-                    ) => ((*v & 0xFFFF_FFFF) as u32, (*v >> 32) as u32),
-                    (
-                        Some(Store {
-                            width: 4,
-                            held: Some(Held::Imm(f)),
-                            ..
-                        }),
-                        Some(Store {
-                            width: 4,
-                            held: Some(Held::Imm(s)),
-                            ..
-                        }),
-                    ) => (*f as u32, *s as u32),
-                    _ => continue,
-                };
-                let value_at = if flags & BLOCK_HAS_COPY_DISPOSE != 0 {
-                    40
-                } else {
-                    24
-                };
-                cells.push(ByrefCell {
-                    frame,
-                    depth,
-                    flags,
-                    size,
-                    value: at(value_at).copied(),
-                });
-            }
-            scan.cells.clear();
-            scan.stores.clear();
-            scan.regs = [None; 32];
-            scan.fregs = [None; 32];
-            scan.depth = 0;
-        };
+        let mut scan = Scan::new(read_ptr, isa_slots);
         for (i, c) in data.chunks_exact(4).enumerate() {
             let w = u32::from_le_bytes([c[0], c[1], c[2], c[3]]);
             let pc = base + 4 * i as u64;
             if w == 0xD65F_03C0 {
-                flush(&mut scan, &mut sites, &mut cells);
+                scan.flush(&mut sites, &mut cells);
                 scan.last_ret = pc;
             } else {
                 scan.step(pc, w);
             }
         }
-        flush(&mut scan, &mut sites, &mut cells);
+        scan.flush(&mut sites, &mut cells);
     }
     (sites, cells)
 }
@@ -727,6 +741,24 @@ pub fn emit(img: &MachoImage, file: &object::File, tctx: &TypeCtx, out: &mut Ana
     }
 }
 
+/// Whether the image lists its function starts (`LC_FUNCTION_STARTS`): the
+/// code between two starts is then one function.
+fn lists_function_starts(file: &object::File) -> bool {
+    let object::File::MachO64(macho) = file else {
+        return false;
+    };
+    let Ok(mut commands) = macho.macho_load_commands() else {
+        return false;
+    };
+    while let Ok(Some(command)) = commands.next() {
+        if command.cmd() == object::macho::LC_FUNCTION_STARTS {
+            let table = command.data::<object::macho::LinkeditDataCommand<object::Endianness>>();
+            return table.is_ok_and(|t| t.datasize.get(macho.endian()) > 0);
+        }
+    }
+    false
+}
+
 /// Name every stack block's invoke function after the function that builds it
 /// and type it from the block descriptor's signature, its captures from the
 /// copy helper and the creator's stores, a `__block` cell from the frame it
@@ -739,7 +771,11 @@ pub fn stack_blocks(
     creators: &[(u64, String)],
     out: &mut AnalysisOutput,
 ) {
-    if file.architecture() != object::Architecture::Aarch64 {
+    let arch = file.architecture();
+    if !matches!(
+        arch,
+        object::Architecture::Aarch64 | object::Architecture::X86_64
+    ) {
         return;
     }
     let ps = img.ptr_size();
@@ -776,16 +812,32 @@ pub fn stack_blocks(
     let mut creators: Vec<(u64, String)> = creators.to_vec();
     creators.sort();
     let read_ptr = |va: u64| img.read_ptr(va);
-    let (mut sites, cells) = stack_block_sites(&read_ptr, &text, &isa_slots);
+    let in_text = |a: u64| {
+        text.iter()
+            .any(|(base, data)| a >= *base && a < base + data.len() as u64)
+    };
+    let (mut sites, cells) = match arch {
+        object::Architecture::X86_64 => {
+            let mut bounds = crate::analyzers::entry::macho_function_starts(file, bytes);
+            bounds.extend(creators.iter().map(|(a, _)| *a));
+            bounds.sort_unstable();
+            bounds.dedup();
+            x86::sites(
+                &read_ptr,
+                &in_text,
+                &text,
+                &isa_slots,
+                &bounds,
+                lists_function_starts(file),
+            )
+        }
+        _ => stack_block_sites(&read_ptr, &text, &isa_slots),
+    };
     sites.sort_by_key(|s| s.pc);
     let mut layout = None;
     let mut per_creator: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
     let mut named: std::collections::HashSet<u64> = std::collections::HashSet::new();
     let mut locals: Vec<LocalFact> = Vec::new();
-    let in_text = |a: u64| {
-        text.iter()
-            .any(|(base, data)| a >= *base && a < base + data.len() as u64)
-    };
     for site in &mut sites {
         // The invoke is code and the descriptor is not; a site that reads
         // otherwise was built from stale registers. The linker folds identical
@@ -847,6 +899,9 @@ pub fn stack_blocks(
             site.descriptor
                 .and_then(|d| img.rebase_ptr(d.wrapping_add(16))),
         ) {
+            (true, Some(copy)) if arch == object::Architecture::X86_64 => {
+                x86::copy_helper_kinds(img, copy, &runtime)
+            }
             (true, Some(copy)) => copy_helper_kinds(img, copy, &runtime),
             _ => Vec::new(),
         };

@@ -7256,6 +7256,46 @@ every other binary's pass list is byte-identical to before the pass existed):
     runs both fixtures with the options off and on; `unlace-cli`'s
     `xrefs_objc_resolved` test asks both directions.
 
+    Classes the image only imports come from the SDK headers `objcsdk` names
+    (`decompiler/crates/unlace-analysis/src/analyzers/objc/kuna_objcsdk.rs (read)`,
+    `decompiler/crates/unlace-analysis/src/analyzers/objc/mod.rs (add_sdk_classes)`).
+    Each `@interface` gives its class a superclass and the methods and
+    properties it declares (a category's are merged into its class;
+    `@property (class)` is a class method), each with its declared result when
+    that is `instancetype` or a class pointer. The table takes the classes the
+    image imports (an undefined `_OBJC_CLASS_$_<name>`) or subclasses, closed
+    over their superclasses, and declares an opaque record for each of them
+    and for every class one of their methods returns, so a result typed by one
+    is `NSURL *` without an interned layout. A method of such a class has no
+    IMP: it names the callee (`+[NSNumber numberWithLongLong:]`) and is never
+    retargeted. The engine adds the class receivers the loader binds: a
+    `machodataslots` data import slot named `_OBJC_CLASS_$_<name>`
+    (`decompiler/crates/unlace-console/src/engine.rs (commit_analysis_output)`)
+    is a class receiver while it holds the value the loader put there (the
+    same test as `importdata`'s `&<import>`). A receiver is followed by its
+    value (`decompiler/crates/unlace-decomp/src/p5_types/kuna_objcrettype.rs (class_value)`):
+    through copies and casts, a value a call leaves alone (`INDIRECT`), a join
+    whose inputs all name the same class (an input that leads back to the join
+    adds nothing), and the runtime functions that return their argument
+    (`objc_opt_self`, `objc_retain`, `objc_autorelease` and the
+    autoreleased-return claims), so Swift's
+    `[objc_opt_self(&OBJC_CLASS_$_NSBundle) mainBundle]` resolves. Besides the
+    linked frameworks, an SDK root's `usr/include/objc` is read for the root
+    class `NSObject`. Under `objcrettype` a class send then types its result
+    from the declaration along the chain (`instancetype` is the receiver class,
+    a class pointer that class), or, undeclared, from a factory selector whose
+    leading noun, before `With`, is the class name's tail case-insensitively
+    (`numberWithInt:` on `NSNumber`, `stringWithFormat:` on
+    `NSMutableString`); an instance send takes its declared result the same
+    way. `objc_msgSendSuper2(&super, sel)` is looked up from the superclass of
+    the sending method's class (its label `-[Foo bar]` names it), `[super
+    init…]` returns that class, and a super send is never retargeted either,
+    since its first argument is the `objc_super`. On a 390-function sample of
+    a 72 MB iOS app this resolves 88 more sends (64 to 152) and types 13 more
+    locals as class pointers (108 to 121); `tests/stages/kuna-objcsdksend.xml`
+    runs a fixture that sends to an imported class with `objcresolve` and
+    `objcrettype` off and on.
+
   - **By-value aggregates and global blocks**
     (`decompiler/crates/unlace-analysis/src/analyzers/objc/encoding.rs (struct_leaves)`,
     `decompiler/crates/unlace-analysis/src/analyzers/objc/kuna_objcblocks.rs (emit)`,
@@ -7267,10 +7307,49 @@ every other binary's pass list is byte-identical to before the pass existed):
     encoding spells through the same `struct_type` the stub returns use, with
     the member names an ivar encoding quotes (`"origin"{CGPoint="x"d"y"d}`,
     nested structs flattened to `x, y, width, height`) and the CoreGraphics
-    table for a method encoding that quotes none, and `[n T]` as an array; an
-    unnamed struct (`{?=ii}`) or a union stays opaque. The IMP then reads
+    table for a method encoding that quotes none, and `[n T]` as an array. The
+    IMP then reads
     `-[Shape setFrame:](Shape *self, SEL _cmd, CGRect arg1)` with `arg1` placed
-    by the model (`d0..d3`). A global block literal — `isa =
+    by the model (`d0..d3`).
+    The record is laid out as the C compiler lays it out
+    (`decompiler/crates/unlace-analysis/src/analyzers/objc/encoding.rs (record_layout)`):
+    each member at its natural alignment, a nested struct placed as a unit
+    before its fields are listed in the parent (`{Outer=C{Inner=Cq}C}` is 32
+    bytes with fields at 0, 8, 16 and 24), the whole padded to its widest
+    member. A union (`(Word=qf)`) is built the same way with every member at
+    offset zero and is one field where it sits in a struct. A zero-length array
+    member (`[0C]`) takes no room. The encoding gives a bit-field its width and
+    not its declared type (`b3`), so a run of adjacent bit-fields is one
+    unsigned field over the bytes the run packs into, starting at the next free
+    byte, and the record is aligned as for `unsigned int`, or `unsigned long
+    long` once the run passes 32 bits: `{Flags=b3b5S}` is 4 bytes, not the 12
+    of one word per bit-field. A struct or union with no name (`{?=qiIq}`, the
+    spelling of `CMTime` and of every typedef'd anonymous struct) is named from
+    its member codes, `struct_qiIq`, or from a hash of them when they are long
+    or hold punctuation, with quoted member names left out, so an ivar's and a
+    method's spelling of one layout are one type. A flattened field name that
+    is already taken is prefixed with the name of the member it came from
+    (`duration_value`). `{Name}` spells no layout: it is the incomplete record
+    of that name, so `^{Name}` is a `Name *`, and a method that passes or
+    returns one by value gets no prototype, as does one whose record holds
+    itself, has no member, has a member that does not decode (`{?=[4]}`, a
+    SIMD matrix), or passes the bounds (32 levels of records and arrays, 4096
+    fields, 1 MiB). A refused layout is remembered by name and not retried. An
+    array argument (`[10Q]`) is the pointer C passes. With the record built,
+    the convention's own rules place it, nothing in the decoder: on Apple
+    arm64 a homogeneous floating-point aggregate of up to four members travels
+    in `d0..d3`, any other record of up to 16 bytes in `x` registers, a larger
+    one as a pointer to the caller's copy, and a return past 16 bytes through
+    `x8` (`void -[Shape transform](CGAffineTransform *rethidden, Shape *self,
+    SEL _cmd)`); on System V x86-64 a record past two eightbytes is on the
+    stack and its return through `rdi`. Before this a union or an unnamed
+    struct by value decoded to void and the method lost its prototype and its
+    typed `self` (`long -[Shape word:](void *a0, unsigned long a1, long a2)`
+    reading `((long *)a0)[0x12]`; now `long -[Shape word:](Shape *self, SEL
+    _cmd, Word arg1)` returning `self->total + arg1.field_0`); of the distinct
+    method encodings in an iOS 16.4 dyld cache that pass or return a record by
+    value, 29% spell one of the two.
+    A global block literal — `isa =
     _NSConcreteGlobalBlock, flags, reserved, invoke, descriptor` in `__const`,
     found by the isa slot's bind name — is typed `Block_layout`
     (`block_literal_<addr>`), its invoke is named `block_invoke_<addr>` and,
@@ -7302,10 +7381,51 @@ every other binary's pass list is byte-identical to before the pass existed):
     (`LocalFact`s the decompile seeds like DWARF locals): the literal is
     `block` (`block_2`, …) and each cell `cell_<k>`, so the build reads
     `block.block.invoke = …; block.capture_1 = &cell_1; cell_1.forwarding = block.capture_1;`
-    — Hex-Rays' `Block_layout_<ea>` frame members. x86-64 creators and a
-    capture's signedness are not modelled. The stage tests
+    — Hex-Rays' `Block_layout_<ea>` frame members. A capture's signedness is
+    not modelled. The stage tests
     `tests/stages/kuna-objcstructs.xml` and `tests/stages/kuna-objcblocks.xml`
     run `macho_objc_structs_arm64` and `macho_objc_blocks_arm64`.
+
+    On an x86-64 Mach-O the same recovery reads x86-64 creators
+    (`decompiler/crates/unlace-analysis/src/analyzers/objc/kuna_objcblocks/x86.rs (sites)`,
+    on with `objc` on that target and never run on another): the isa is
+    `mov r, [rip + slot]` of the `_NSConcreteStackBlock` GOT slot, the invoke
+    and descriptor are `lea r, [rip + addr]`, the flags a 32-bit immediate
+    moved through a register (or two `mov dword` stores), and the stores go
+    through `rbp`, `rsp` or a register holding a frame address. Instructions
+    there have no fixed width, so the scan does not walk the whole text: it
+    first finds every four bytes that, read as a `rip`-relative displacement,
+    land on the isa slot, and decodes only the functions those lie in, from
+    their start (the image's function starts and every label that can name a
+    creator). The decoder (`x86.rs (decode)`) gives every 64-bit-mode
+    instruction its length (legacy, REX and VEX prefixes, the one-byte, `0F`,
+    `0F 38` and `0F 3A` maps); bytes that are no instruction (EVEX, an opcode
+    invalid in 64-bit mode, a jump table in the text) are stepped over one at a
+    time with the state cleared. The scan models the handful a literal is
+    built from: `mov` between registers, to and from the frame and of an
+    immediate, `lea`, `xor r, r`, the SSE/AVX stores (`movsd` a `double`,
+    `movss` a `float`, `movaps`/`movups`/`movdqa` 16 bytes),
+    `push`/`pop`/`add`/`sub rsp`/`leave` for the frame depth. Every other
+    instruction clears the registers it may write (never fewer than it does
+    write), a call clears the caller-saved ones, and `ret` or an unconditional
+    jump clears everything but the frame registers and gives the code after it
+    the `rsp` and `rbp` the function body had before its epilogue. Frame
+    offsets are kept relative to `rsp` at entry, so a literal at `[rbp - 0x68]`
+    under `push rbp; mov rbp, rsp` is the local at `stack - 0x70`. The copy
+    helper is read the same way (`x86.rs (copy_helper_kinds)`): the capture is
+    the last `mov r, [r + off]` into `rdi` at an `objc_retain` /
+    `objc_retainBlock` or into `rsi` at a `_Block_object_assign` (its flags in
+    `edx`), whether the call is direct, a tail jump, or through the GOT (`call
+    [rip + slot]`). Naming, the descriptor, the captured layout and the typed
+    locals are the shared code above; only a label at or after the function's
+    start names its creator. An image with no `LC_FUNCTION_STARTS` has only its
+    labels and exports for starts, so there the code after a `ret`, a jump
+    through a slot or a jump out of `__text` may be another function's: a block
+    built past one has no known creator, is named
+    `block_<invoke>_block_invoke`, and types no frame; its invoke is typed all
+    the same. `tests/stages/kuna-objcblocksx86.xml` runs
+    `macho_objc_blocks_x86_64` and `macho_objc_blocks2_x86_64` with `objc` off
+    and on.
 
   - **A dyld shared cache image**
     (`decompiler/crates/unlace-analysis/src/analyzers/objc/kuna_objccache.rs (CacheReader)`,

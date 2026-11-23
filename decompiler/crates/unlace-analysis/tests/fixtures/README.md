@@ -1917,6 +1917,59 @@ With `--option objc on`: `(self->frame).width * (self->frame).height`,
 `-[Shape setFrame:](Shape *self, objc_selector *_cmd, CGRect arg1)`,
 `self->counts[arg1 & 3]`, `long block_invoke_10000071c(Block_layout *block, long arg1)`.
 
+### `macho_objc_structabi_arm64` — aggregates passed and returned by value
+
+`macho_objc_structabi_arm64` (arm64, ~50 KB) is the fixture for
+`tests/stages/kuna-objcstructabi.xml`: `macho_objc_structabi.m` has a root
+class `Shape` whose methods pass and return aggregates by value: a homogeneous
+floating-point aggregate (`CGRect`, `UIEdgeInsets`), an integer pair
+(`_NSRange`), aggregates past 16 bytes as an argument and as a return
+(`CGAffineTransform`, and `Mixed` with a `[4d]` member), a union
+(`(Word=qf)`), bit-fields (`{Flags=b3b5S}`), an unnamed struct (`{?=ii}`) and a
+pointer to a struct. Same recipe as `macho_objc_structs_arm64`:
+
+```bash
+clang -target arm64-apple-macos11 -fobjc-arc -O1 -c macho_objc_structabi.m -o m.o
+LLD=$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/host: //p')/bin/gcc-ld/ld64.lld
+"$LLD" -arch arm64 -platform_version macos 11.0 11.0 -fixup_chains \
+       -undefined dynamic_lookup -x -e _main -o macho_objc_structabi_arm64 m.o
+```
+
+**Pinned VMAs:** `-[Shape setFrame:]`@`0x100000640`, `-[Shape frame]`@`0x100000658`,
+`-[Shape range]`@`0x100000664`, `-[Shape setRange:scale:]`@`0x100000670`,
+`-[Shape inset:by:]`@`0x100000680`, `-[Shape transform]`@`0x100000690`,
+`-[Shape setTransform:tag:]`@`0x1000006a4`, `-[Shape mixed]`@`0x1000006bc`,
+`-[Shape weigh:at:]`@`0x1000006d0`, `-[Shape word:]`@`0x1000006f0`,
+`-[Shape flags:]`@`0x1000006fc`, `-[Shape span:]`@`0x100000708`,
+`-[Shape width:]`@`0x100000714`.
+
+### `macho_objc_blocks_x86_64`, `macho_objc_blocks2_x86_64` — blocks built by x86-64 creators
+
+The x86-64 builds of `macho_objc_blocks.m` and `macho_objc_blocks2.m` (a creator of three blocks, a nested block, a global block) (17 KB
+each, SHA-256 `9cba8e3ad3c5eff655dffe240d603b31871286aca53171dcd7bf1cf62cea47fa`
+and `68370224f1cf8b2c5d7462ecdaccd792dd51307aea7ded9291e004e279656d29`), the
+fixtures for `tests/stages/kuna-objcblocksx86.xml`. A creator loads the isa
+with `mov r, [rip + slot]`, takes the invoke and descriptor with `lea`, moves
+the flags through a register as a 32-bit immediate and stores all of them
+through `rbp`; `-[Chain build:]` keeps the isa in `r12` across its sends; the
+copy helper calls `objc_retain` through the GOT and tail-jumps to
+`_Block_object_assign`. Linked without `-fixup_chains`, so the images carry
+`LC_DYLD_INFO_ONLY` binds like an x86-64 macOS 11 image (clang and LLD 22.1.8):
+
+```bash
+clang -target x86_64-apple-macos11 -fobjc-arc -O2 -c macho_objc_blocks.m -o m.o
+ld64.lld -arch x86_64 -platform_version macos 11.0 11.0 \
+       -undefined dynamic_lookup -x -e _main -o macho_objc_blocks_x86_64 m.o
+```
+
+**Pinned VMAs** (`macho_objc_blocks_x86_64`): `-[Runner maker:]`@`0x1000008e0`
+(invoke@`0x100000940`), `-[Runner tally:scale:]`@`0x100000960`
+(invoke@`0x100000a20`, copy helper@`0x100000a70`), `_NSConcreteStackBlock`
+slot@`0x100002008`. (`macho_objc_blocks2_x86_64`): `-[Chain build:]`@`0x100000890`
+(invokes @`0x100000980`, `0x100000990`, `0x1000009a0`; copy helper @`0x1000009b0`),
+`_sum`@`0x1000009d0` (invoke @`0x100000a20`, nested @`0x100000a70`),
+`_pick`@`0x100000a90` (global invoke @`0x100000ab0`).
+
 ### `macho_objc_blocks_arm64` — stack blocks, captures, a `__block` cell
 
 `macho_objc_blocks_arm64` (arm64, ~50 KB) is the fixture for
@@ -2203,6 +2256,27 @@ llvm-strip --strip-all -o macho_swift_strcmp_arm64 strcmp
 
 **Pinned VMAs** (the unstripped `strcmp` symbol table): `strcmp.model(_:)`
 (`$s6strcmp5modelySiSSF`)@`0x100000778` ("iPod5,1", "iPhone3,1", "iPad2,1").
+
+### `macho_objcsdksend_arm64` — sends to an imported class (`objcresolve`, `objcsdk`)
+
+`macho_objcsdksend_arm64` (arm64, ~50 KB, from `macho_objcsdksend.c`) loads the
+`__got` slot of `_OBJC_CLASS_$_KNumber`, a class it only imports, and sends it
+`numberWithLongLong:` and `numberWithInt:`, then `stringValue` to the first
+result, through lld's `objc_msgSend$<sel>` stubs; `send_via_self` and
+`send_joined` reach the class through `objc_opt_self` and a two-path join. `objc_sdk_sends/KNumber.h` is
+a hand-written header declaring `KNumber : KValue : KObject` for `objcsdk`
+(`tests/stages/kuna-objcsdksend.xml`). Built with clang 22 and `ld64.lld`:
+
+```bash
+clang -target arm64-apple-macos11 -O1 -c macho_objcsdksend.c -o m.o
+ld64.lld -arch arm64 -platform_version macos 11.0 11.0 -undefined dynamic_lookup \
+         -e _main -o macho_objcsdksend_arm64 m.o
+llvm-strip -x macho_objcsdksend_arm64
+```
+
+**Pinned VMAs:** `_send_to_import`@`0x100000600`, `_send_via_self`@`0x100000660`,
+`_send_joined`@`0x1000006ac`; `__got` slot
+`OBJC_CLASS_$_KNumber`@`0x100004008`.
 
 ### `swift_metadata_elf` — a stripped Swift executable (`swiftmetadata`)
 

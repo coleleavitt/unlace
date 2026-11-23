@@ -15383,7 +15383,7 @@ fn integer_only_operator(code: OpCode) -> bool {
 
 /// Is `vn` the slot's value at entry, carried only across calls (`INDIRECT`)
 /// and joins (`MULTIEQUAL`), never a value the function stored into it?
-fn holds_loaded_value(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
+pub(crate) fn holds_loaded_value(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
     let Some(v) = fd.vbank().get(vn) else {
         return false;
     };

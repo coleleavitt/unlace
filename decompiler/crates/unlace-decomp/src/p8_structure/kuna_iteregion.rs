@@ -136,7 +136,12 @@ impl Action for ActionIteRegion {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option iteregion on|off`, carried on the Architecture boundary.
         // Default-OFF (a runtime choice) ⇒ nothing marked ⇒ byte-identical output.
-        if !data.get_arch().iteregion {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_iteregion::Iteregion>()
+            .0
+        {
             return 0;
         }
         if data.sblocks_get_size() == 0 {
@@ -434,3 +439,31 @@ crate::kuna_flag!(
     unset: false,
     shipped: false
 );
+
+/// (kuna) angr `ITERegionConverter`: rewrite a two-arm assignment *diamond*
+/// (`if (c) v = A; else v = B;`, both arms a single COPY to the same
+/// variable, converging on one tail) to a `?:` ternary (`v = c ? A : B;`).
+/// A deliberate **runtime choice** (`iteregion`, opt-in default-off): the
+/// rewrite matches the source only when the source used a ternary — common in
+/// format/print/flag code (`flags ? "%s," : "%s"`) — and diverges when the
+/// source used explicit if/else, so an agent flips it per function.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Iteregion(pub bool);
+
+impl crate::kuna_optionset::KunaOption for Iteregion {
+    const NAME: &'static str = "iteregion";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        Iteregion(false)
+    }
+
+    fn shipped() -> Self {
+        Iteregion(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p8_structure::kuna_iteregion::OptionIteRegion.apply(value)?;
+        Ok((Iteregion(v), msg))
+    }
+}

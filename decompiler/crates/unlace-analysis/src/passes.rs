@@ -784,8 +784,12 @@ fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPa
         // walks. `full` runs it too — the decompile-time loop then covers only
         // the sites it declined.
         (
-            arch.analysis_formatstring.resolves_at_load(&arch.archid)
-                || (arch.analysis_formatstring
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
+                .resolves_at_load(&arch.archid)
+                || (arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
                     != unlace_decomp::kuna_formatstring::FormatStringMode::Off
                     && unlace_decomp::kuna_armfloatargs::applies(arch)),
             Box::new(crate::formatstring::kuna_fmtstatic::FormatStringStaticPass),
@@ -1361,7 +1365,12 @@ pub fn run_listing_consumers_replaying_observed(
                                 continue;
                             }
                         }
-                        if arch.analysis_aif.enabled() && frame_aif.is_none() {
+                        if arch
+                            .kuna_options
+                            .get::<unlace_decomp::kuna_aif::AifMode>()
+                            .enabled()
+                            && frame_aif.is_none()
+                        {
                             let probe = translate.context_scope();
                             if let Some(scope) = &probe {
                                 let _ = scope.protect_variable(b"TMode");
@@ -1672,7 +1681,10 @@ pub fn run_listing_consumers_replaying_observed(
         .kuna_options
         .get::<unlace_decomp::kuna_analysisgates::Listing>()
         .0
-        && arch.analysis_aif.enabled()
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .enabled()
     {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let mut aif_out = AnalysisOutput::default();
@@ -2327,7 +2339,8 @@ mod tests {
         arch.analysis_fid = false;
         arch.kuna_options
             .set(unlace_decomp::kuna_analysisgates::Itaniumrtti(true));
-        arch.analysis_formatstring = unlace_decomp::kuna_formatstring::FormatStringMode::Off;
+        arch.kuna_options
+            .set(unlace_decomp::kuna_formatstring::FormatStringMode::Off);
 
         let schedule: Vec<(&str, bool)> = listing_consumer_passes(&arch)
             .into_iter()
@@ -2357,7 +2370,7 @@ mod tests {
             ("AARCH64:LE:64:v8A:default", Full, true),
         ] {
             arch.archid = archid.to_string();
-            arch.analysis_formatstring = mode;
+            arch.kuna_options.set(mode);
             let enabled = listing_consumer_passes(&arch)
                 .into_iter()
                 .find(|(_, pass)| pass.id() == "formatstring")

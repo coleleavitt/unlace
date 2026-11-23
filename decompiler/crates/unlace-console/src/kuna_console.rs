@@ -283,15 +283,28 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 "pair"
             }
         }
-        "nulterminator" => on_off(conf.nul_terminator),
+        "nulterminator" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_nulterminator::NulTerminator>()
+                .0,
+        ),
         "retsplitglobal" => on_off(conf.ret_split_global),
         // (kuna `protoorder`) Three-valued, so it reports its own token.
-        "protoorder" => conf.protoorder.as_str(),
+        "protoorder" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
+            .as_str(),
         // (kuna `calleevote`) Three-valued, so it reports its own token.
-        "calleevote" => conf.calleevote.as_str(),
+        "calleevote" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_calleevote::CalleeVoteMode>()
+            .as_str(),
         // (kuna `callbacktype`) A mode over an enum field like its two
         // neighbours, so it reports its own token rather than a `live_field`.
-        "callbacktype" => conf.callbacktype.as_str(),
+        "callbacktype" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+            .as_str(),
         // (kuna `calleereginputs`) Three-valued (off|on|custom), reported from
         // its two engine flags.
         "calleereginputs" => {
@@ -318,7 +331,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .get::<unlace_decomp::kuna_linuxsyscall::LinuxSyscallMode>()
             .as_str(),
         // (kuna `callmechanisms`) Three-valued, so it reports its own token.
-        "callmechanisms" => conf.call_mechanism_mode.as_str(),
+        "callmechanisms" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_callmechanisms::CallMechanismMode>()
+            .as_str(),
         // (kuna `rustabi`) Three-valued, so it reports its own token.
         "rustabi" => unlace_decomp::kuna_rustabi::RustAbiMode::from_u8(conf.rust_abi).as_str(),
         // (kuna `fatstr`) Three-valued, so it reports its own token.
@@ -370,7 +386,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .kuna_options
             .get::<unlace_decomp::kuna_bejoinpass::BeJoinPassMode>()
             .as_str(),
-        "octeoneffects" => conf.octeon_effects.as_str(),
+        "octeoneffects" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_octeoneffects::OcteonEffectsMode>()
+            .as_str(),
         "sparcstructret" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_sparcstructret::SparcStructReturn>()
@@ -526,7 +545,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // like the analysis-pass gates, so the live flag is authoritative.
         // (kuna `cppsig`) Three-valued, so it reports its own token rather than
         // on/off.
-        "cppsig" => conf.analysis_cppsig.as_str(),
+        "cppsig" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_cppsig::CppSigMode>()
+            .as_str(),
         "addrtable" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
@@ -587,7 +609,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .0,
         ),
         // (kuna `aif`) Four-valued, so it reports its own token.
-        "aif" => conf.analysis_aif.as_str(),
+        "aif" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .as_str(),
 
         "objectview" => on_off(
             conf.kuna_options
@@ -604,7 +629,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
                 .0,
         ),
-        "esprom" => conf.esprom.as_str(),
+        "esprom" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_esprom::EspRom>()
+            .as_str(),
         "armconstshift" => conf
             .kuna_options
             .get::<unlace_decomp::kuna_armconstantshift::ConstShiftMode>()

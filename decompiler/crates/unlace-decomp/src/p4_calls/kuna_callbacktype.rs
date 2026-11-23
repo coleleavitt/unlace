@@ -1839,5 +1839,22 @@ pub fn park(
     Ok(pieces)
 }
 
+impl crate::kuna_optionset::KunaOption for CallbackTypeMode {
+    const NAME: &'static str = "callbacktype";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        crate::kuna_callbacktype::CallbackTypeMode::Off
+    }
+
+    fn shipped() -> Self {
+        crate::kuna_callbacktype::CallbackTypeMode::On
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(crate::kuna_callbacktype::OptionCallbackType.apply(value)?)
+    }
+}
+
 #[cfg(test)]
 mod tests;

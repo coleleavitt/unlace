@@ -1077,7 +1077,8 @@ fn replay_worker_arm_frames(prog: &mut ConsoleProgram, args: &Args) -> Result<()
 /// run does not synthesize structures.
 pub(crate) fn synth_base(prog: &ConsoleProgram) -> Option<shard::Replay> {
     prog.arch()
-        .struct_synth
+        .kuna_options
+        .get::<unlace_decomp::kuna_structsynth::StructSynthMode>()
         .fires()
         .then(|| shard::Replay::probe(prog.arch().types()))
 }
@@ -1503,7 +1504,14 @@ fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
             declared,
         });
     }
-    if explicit && prog.arch().protoorder.is_on() && !whole {
+    if explicit
+        && prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
+            .is_on()
+        && !whole
+    {
         eprintln!(
             "note: --option protoorder: {} of this binary's entries selected; a callee \
              outside the selection is not decompiled, so it states nothing",
@@ -1607,8 +1615,13 @@ pub(crate) fn callee_first_decision(
     whole: bool,
 ) -> (bool, bool) {
     let explicit = args.options.iter().any(|(name, _)| name == "protoorder");
-    let on =
-        prog.arch().protoorder.is_on() && selected > 1 && (explicit || (whole && !args.raw_image));
+    let on = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
+        .is_on()
+        && selected > 1
+        && (explicit || (whole && !args.raw_image));
     (on, explicit)
 }
 

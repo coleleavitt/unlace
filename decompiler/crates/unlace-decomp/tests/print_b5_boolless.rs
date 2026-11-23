@@ -291,8 +291,10 @@ fn run_full(stem: &str, which: usize) -> Result<(XmlArchitecture, Funcdata), Str
     // (kuna) These tests pin boolless's upstream-parity shape; earlyreturn is default-on
     // (DIV-23) and fires on boolless, so disable it here to match the datatest opt-out
     // (`option earlyreturn off` in tests/datatests/boolless.xml).
-    arch.early_return = false;
-    arch.switch_return = false; // (kuna) also opt out of switchreturn (DIV-25 default-on)
+    arch.kuna_options
+        .set(unlace_decomp::kuna_earlyreturn::EarlyReturn(false));
+    arch.kuna_options
+        .set(unlace_decomp::kuna_switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
     let fd = decompile_func(arch, &name, entry, 0).map_err(|e| format!("decompile: {e}"))?;
     Ok((xarch, fd))
 }

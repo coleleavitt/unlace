@@ -189,7 +189,15 @@ fn returns_value(
             Evidence::No
         }
         Some(Some(_)) => Evidence::Yes,
-        Some(None) if data.get_arch().pass_through => Evidence::No,
+        Some(None)
+            if data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_passthrough::PassThrough>()
+                .0 =>
+        {
+            Evidence::No
+        }
         _ => Evidence::Unknown,
     }
 }
@@ -334,7 +342,11 @@ fn in_x0(data: &Funcdata, addr: &Address) -> bool {
 /// in the function itself (`fnstsw ax` on one arm, a call's `ax` on the other)
 /// is not, and keeps the strict reading.  Off with the option.
 pub fn call_result_root(data: &Funcdata, root: VarnodeId) -> bool {
-    data.get_arch().call_result_use != CallResultUse::Off && walk_call_results(data, root).is_some()
+    data.get_arch()
+        .kuna_options
+        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        != CallResultUse::Off
+        && walk_call_results(data, root).is_some()
 }
 
 /// Does every definition behind `root` end at a call result [`scores_def`]
@@ -433,7 +445,12 @@ fn first_result_register(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// cbz x0,L; ...; L: ret` is `long h(long a) { long r = g(a); if (r) *p = 1;
 /// return r; }` and `void h(long a) { if (g(a)) *p = 1; }` alike.
 pub fn scoring_return(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool {
-    if data.get_arch().call_result_use != CallResultUse::All {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        != CallResultUse::All
+    {
         return false;
     }
     let Some(ret) = data
@@ -481,7 +498,11 @@ fn every_return_hands_back_a_call_result(data: &Funcdata, slot: int4) -> bool {
 /// a call produced and the function went on to hand around is a value, not
 /// a register two callees happened to share.
 pub fn scoring_argument(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool {
-    if data.get_arch().call_result_use == CallResultUse::Off
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        == CallResultUse::Off
         || !data
             .obank()
             .get(opmatch)
@@ -520,7 +541,12 @@ pub fn yield_to_own_value(
     active: &mut crate::fspec::ParamActive,
     return_ops: &[OpId],
 ) {
-    if data.get_arch().call_result_use == CallResultUse::Off {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        == CallResultUse::Off
+    {
         return;
     }
     let live: Vec<OpId> = return_ops
@@ -568,7 +594,11 @@ pub fn yield_to_own_value(
 /// a first call ([`first_call_input`]), or a trial `voidret` already planted
 /// there.
 pub fn plant(data: &mut Funcdata) {
-    if data.get_arch().call_result_use == CallResultUse::Off
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        == CallResultUse::Off
         || data.get_active_output().is_none()
         || data.get_func_proto().is_output_locked()
         || data.num_calls() == 0
@@ -606,7 +636,11 @@ pub fn settle_planted(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
         return;
     }
     let slot = active.get_trial(i).get_slot();
-    let keep = data.get_arch().call_result_use == CallResultUse::All
+    let keep = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        == CallResultUse::All
         && every_return_hands_back_a_call_result(data, slot);
     if keep {
         active.get_trial_mut(i).mark_active();
@@ -662,6 +696,23 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.callresultuse_scores_trial = Some(scores_trial);
     hooks.callresultuse_scoring_argument = Some(scoring_argument);
     hooks.callresultuse_scoring_return = Some(scoring_return);
+}
+
+impl crate::kuna_optionset::KunaOption for CallResultUse {
+    const NAME: &'static str = "callresultuse";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        crate::p4_calls::kuna_callresultuse::CallResultUse::Off
+    }
+
+    fn shipped() -> Self {
+        crate::p4_calls::kuna_callresultuse::CallResultUse::Off
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(crate::p4_calls::kuna_callresultuse::OptionCallResultUse.apply(value)?)
+    }
 }
 
 #[cfg(test)]

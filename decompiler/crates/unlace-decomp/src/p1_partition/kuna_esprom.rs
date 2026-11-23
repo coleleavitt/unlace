@@ -124,3 +124,20 @@ pub fn parse_esprom(p1: &str) -> KunaResult<(EspRom, String)> {
         ),
     ))
 }
+
+impl crate::kuna_optionset::KunaOption for EspRom {
+    const NAME: &'static str = "esprom";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        crate::kuna_esprom::EspRom::Auto
+    }
+
+    fn shipped() -> Self {
+        crate::kuna_esprom::EspRom::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(crate::kuna_esprom::parse_esprom(value)?)
+    }
+}

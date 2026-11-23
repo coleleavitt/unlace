@@ -82,7 +82,11 @@ fn section_kind(flags: u32) -> &'static str {
 
 /// The chip in force: the option's, or under `auto` the loaded image's.
 fn chip_in_force(prog: &ConsoleProgram) -> Option<EspChip> {
-    match prog.arch().esprom {
+    match prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_esprom::EspRom>()
+    {
         EspRom::Auto => prog.arch().esp_image_chip,
         value => value.chip(),
     }

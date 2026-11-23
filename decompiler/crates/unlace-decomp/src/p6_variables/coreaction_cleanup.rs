@@ -764,7 +764,11 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
             // output fall through to the implied path so the printer inlines the
             // call expression at its use (angr "call return variable folding").
             // Option off => byte-identical upstream (always explicit).
-            if !(data.get_arch().fold_call_returns
+            if !(data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_callretfold::FoldCallReturns>()
+                .0
                 && crate::kuna_callretfold::call_output_foldable(data, vn))
             {
                 return -1;
@@ -942,7 +946,11 @@ impl OpStackElement {
 /// value stays explicit when its duplicated expression contains a foldable
 /// call, so the call is evaluated once rather than at every sink.
 fn process_multiplier(data: &mut Funcdata, vn: crate::context::VarnodeId, max: int4) {
-    if data.get_arch().fold_call_returns
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_callretfold::FoldCallReturns>()
+        .0
         && crate::kuna_callretfold::expression_contains_foldable_call(data, vn)
     {
         let m = data
@@ -1776,7 +1784,11 @@ fn check_implied_cover(
     // The descendants-first walk of `ActionMarkImplied` has classified that
     // chain by now, so the real landing statement is derivable: re-run the span
     // guard over the whole distance the call would move.
-    if data.get_arch().fold_call_returns
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_callretfold::FoldCallReturns>()
+        .0
         && data.obank().get(def).map(|o| o.is_call()).unwrap_or(false)
         && !crate::kuna_callretfold::fold_print_point_is_order_safe(data, vn)
     {
@@ -1813,7 +1825,11 @@ fn check_implied_cover(
     // `foldcallret` let it through `base_explicit`, and what it collides with is
     // usually the call's own INDIRECT effect on an operand -- see
     // `kuna_foldcallretphi` for why that collision is not a reason to refuse.
-    let self_effect_ok = data.get_arch().fold_call_returns
+    let self_effect_ok = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_callretfold::FoldCallReturns>()
+        .0
         && data.obank().get(def).map(|o| o.is_call()).unwrap_or(false)
         && crate::kuna_callretfold::call_output_foldable(data, vn);
     let use_op = if self_effect_ok {
@@ -2038,7 +2054,12 @@ impl Action for ActionMarkIndirectOnly {
         // stub this action shipped as before the port: `indirectonly` then has
         // no writer and both of its readers — `HighVariable::has_name` and
         // `Merge::merge_test_adjacent` — take the more-variables branch.
-        if data.get_arch().mark_indirect_only {
+        if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_indirectonly::MarkIndirectOnly>()
+            .0
+        {
             crate::kuna_indirectonly::mark_indirect_only(data);
         }
         0
@@ -3647,7 +3668,12 @@ impl Action for ActionSetCasts {
         // bridge live in `crate::coreaction_casts` (`Funcdata::action_set_casts`).
         // The C++ `return 0` (full completion) is reproduced regardless of how
         // many casts were inserted; `count` accumulates inside the driver.
-        if data.get_arch().cast_object {
+        if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_castobject::CastObject>()
+            .0
+        {
             crate::kuna_castobject::reconcile(data);
         }
         let _count = (data.hooks().action_set_casts)(data);

@@ -3941,7 +3941,10 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // per-call-site overrides are computed at the deferred commit point and
         // applied only when the gate asks for the static half (`static` on x86,
         // `full` everywhere).
-        "formatstring" => arch.analysis_formatstring.resolves_at_load(&arch.archid),
+        "formatstring" => arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
+            .resolves_at_load(&arch.archid),
         // (kuna) The built-in Win32 API signatures — the Windows half of the
         // `.gdt` stand-in, seeded onto IMPORTED API names only and keyed by entry
         // address. Facts computed at LOAD, COMMITTED only when this gate is on, so
@@ -4117,7 +4120,10 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         }
         // (kuna `cppsig`) The whole-pass gate; WHICH certainty tier survives is a
         // second decision, made on the mode in `commit_analysis_output`.
-        "cppsig" => arch.analysis_cppsig.enabled(),
+        "cppsig" => arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_cppsig::CppSigMode>()
+            .enabled(),
         // Explicit (NOT the fail-open `_ => true` default): the source-line pass is
         // default-OFF (it changes the output), so it must be registered here to be
         // gated by the `analysis_dwarf_lines` flag rather than running by default.
@@ -4185,7 +4191,10 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::Itaniumrtti>()
                 .0
         }
-        "aif" => arch.analysis_aif.enabled(),
+        "aif" => arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .enabled(),
         // (kuna, GH-299) The AIF bracketed-candidate reject has no fact stream of
         // its own -- it shapes the `aif` accept list inside `run_aif`, which the
         // `aif` arm above already gates. Registered here so the fail-open
@@ -6965,7 +6974,10 @@ fn commit_analysis_output(
     //     selects WHICH certainty tiers survive: `proven` only the prototypes the
     //     mangling entails, `inferred` those plus the class-evidence inferences,
     //     `off` neither.
-    let cppsig_mode = prog.arch().analysis_cppsig;
+    let cppsig_mode = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_cppsig::CppSigMode>();
     let (msvc_byval, msvc_builders) = if cppsig_mode.enabled() {
         (
             std::mem::take(&mut out.cpp_sig.msvc_byval),

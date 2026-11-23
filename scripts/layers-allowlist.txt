@@ -3,7 +3,6 @@ action -> actionprof
 architecture -> engine_translate
 architecture -> flow
 architecture -> inject_sleigh
-architecture -> kuna_aif
 architecture -> kuna_arithhelpers
 architecture -> kuna_bejoin
 architecture -> kuna_callbacktype
@@ -14,11 +13,9 @@ architecture -> kuna_calleereginputs
 architecture -> kuna_calleevote
 architecture -> kuna_callerargs
 architecture -> kuna_callmechanisms
-architecture -> kuna_callresultuse
 architecture -> kuna_callrettype
 architecture -> kuna_callwide
 architecture -> kuna_cortexmpriv
-architecture -> kuna_cppsig
 architecture -> kuna_deadcascade
 architecture -> kuna_decodekit
 architecture -> kuna_elemptr
@@ -82,7 +79,6 @@ architecture -> stringmanage
 architecture -> universalaction
 architecture -> userop
 context -> kuna_callmechanisms
-context -> kuna_callresultuse
 context -> kuna_deadcascade
 context -> kuna_floatglobals
 context -> kuna_itaniumeh

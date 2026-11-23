@@ -66,7 +66,7 @@
 //! function restarted, and a value stored through a typed pointer keeps its own
 //! sign ([`keeps_stored_sign`]).
 //!
-//! Gated by [`ArchContext::elem_ptr`](crate::context::ArchContext) (option
+//! Gated by [the registered option `ElemPtr`](crate::context::ArchContext) (option
 //! `elemptr on|off`); with the option off nothing here is reachable.
 
 use crate::funcdata_facing::FuncdataFacingExt;
@@ -305,7 +305,12 @@ pub fn element_pointer(
     cur: &Rc<Datatype>,
     cache: &mut Cache,
 ) -> Option<Rc<Datatype>> {
-    if !data.get_arch().elem_ptr {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_elemptr::ElemPtr>()
+        .0
+    {
         return None;
     }
     note_direct_storage(data, vn, cache);
@@ -475,7 +480,14 @@ pub fn keeps_stored_sign(
     newtype: &Datatype,
     cur: &Datatype,
 ) -> bool {
-    if !data.get_arch().elem_ptr || inslot != 1 || outslot != 2 {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_elemptr::ElemPtr>()
+        .0
+        || inslot != 1
+        || outslot != 2
+    {
         return false;
     }
     let int = |t: &Datatype| {
@@ -2467,7 +2479,7 @@ const FAMILY_CAP: usize = 64;
 /// State for the callers decompiled after it what `data`, entered at `entry`,
 /// gave element pointers ([`Stated`]).
 pub fn state(arch: &mut crate::architecture::Architecture, entry: &Address, data: &Funcdata) {
-    if !arch.elem_ptr {
+    if !arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0 {
         return;
     }
     let Some(key) = entry
@@ -2507,7 +2519,12 @@ pub fn state(arch: &mut crate::architecture::Architecture, entry: &Address, data
 /// gave its type?  A `char *` constant then prints as its address: the reader
 /// indexes the bytes and may read past a zero byte a literal would end at.
 pub fn reaches_element_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
-    if !data.get_arch().elem_ptr {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_elemptr::ElemPtr>()
+        .0
+    {
         return false;
     }
     let why = element_source(data, vn);
@@ -3028,7 +3045,7 @@ pub struct Ledger {
 /// function), not one whose functions are decompiled as if alone.
 pub fn start(arch: &mut crate::architecture::Architecture, objects: bool) {
     arch.kuna_elemptr = Ledger {
-        recording: arch.elem_ptr,
+        recording: arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0,
         no_objects: !objects,
         ..Ledger::default()
     };
@@ -3052,7 +3069,7 @@ pub fn stop(arch: &mut crate::architecture::Architecture) {
 
 /// Hand a function the objects it must not type.
 pub fn seed(arch: &crate::architecture::Architecture, data: &mut Funcdata) {
-    if !arch.elem_ptr {
+    if !arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0 {
         return;
     }
     let ledger = &arch.kuna_elemptr;
@@ -3307,6 +3324,30 @@ fn sign_extend(v: uintb, size: int4) -> intb {
     let bits = (size * 8) as u32;
     let shift = 64 - bits;
     ((v << shift) as intb) >> shift
+}
+
+/// (kuna `elemptr`) Declare a pointer-width value used only as an array of
+/// one element type as a pointer to that element; option `elemptr on|off`.
+/// The rule lives in [`kuna_elemptr`](crate::p5_types::kuna_elemptr).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ElemPtr(pub bool);
+
+impl crate::kuna_optionset::KunaOption for ElemPtr {
+    const NAME: &'static str = "elemptr";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ElemPtr(false)
+    }
+
+    fn shipped() -> Self {
+        ElemPtr(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p5_types::kuna_elemptr::OptionElemPtr.apply(value)?;
+        Ok((ElemPtr(v), msg))
+    }
 }
 
 #[cfg(test)]

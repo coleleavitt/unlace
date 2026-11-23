@@ -636,7 +636,7 @@ fn option_values_live_value_present_for_129() {
                             | "narrowargs"
                             // (kuna) `structsynth` takes a MODE (`off|param|nest`),
                             // for the same reason.  Its live value is
-                            // `Architecture::struct_synth`.
+                            // the registered option `StructSynthMode`.
                             | "structsynth"
                             // (kuna) `structmerge` takes a MODE
                             // (`off|siblings`) over an enum field, for the same
@@ -651,15 +651,15 @@ fn option_values_live_value_present_for_129() {
                             // (kuna) `protoorder` takes a MODE
                             // (`off|types|cycles|lock`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::protoorder`.
+                            // the registered option `ProtoOrderMode`.
                             | "protoorder"
                             // (kuna) `calleevote` takes a MODE
                             // (`off|types|fields`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::calleevote`.
+                            // the registered option `CalleeVoteMode`.
                             | "calleevote"
                             // (kuna) `callbacktype` is an enum field the same
-                            // way; its live value is `Architecture::callbacktype`.
+                            // way; its live value is the registered option `CallbackTypeMode`.
                             | "callbacktype"
                             // (kuna `calleereginputs`) three-valued
                             // (`off|on|custom`), so its live value is read
@@ -702,7 +702,7 @@ fn option_values_live_value_present_for_129() {
                             // (kuna) `callmechanisms` takes a MODE
                             // (`off|auto|on`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::call_mechanism_mode`.
+                            // the registered option `CallMechanismMode`.
                             | "callmechanisms"
                             // (kuna) `bejoin` takes a MODE (`off|evidence|on`)
                             // over an enum field, for the same reason.  Its live
@@ -713,7 +713,7 @@ fn option_values_live_value_present_for_129() {
                             | "bejoinpass"
                             // (kuna) `octeoneffects` likewise
                             // (`off|atomic|ordered`); its live value is
-                            // `Architecture::octeon_effects`.
+                            // the registered option `OcteonEffectsMode`.
                             | "octeoneffects"
                             | "bytearrayc"
                             // (kuna) `structdefs` is a PrintC option: its live

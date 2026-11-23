@@ -114,7 +114,7 @@ impl OptionIndirectOnly {
     pub const NAME: &'static str = "indirectonly";
 
     /// Parse `on|off` and return the resolved flag + confirmation message.  The
-    /// caller writes the flag into `Architecture::mark_indirect_only`.
+    /// caller writes the flag into the registered option `MarkIndirectOnly`.
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
@@ -122,6 +122,32 @@ impl OptionIndirectOnly {
             val,
             format!("Marking of indirect-only inputs turned {prop}"),
         ))
+    }
+}
+
+/// (kuna) Run `Funcdata::markIndirectOnly` in `ActionMarkIndirectOnly`
+/// instead of the inert stub, so an illegal input read only through
+/// INDIRECTs is flagged `indirectonly` (`mark_indirect_only`, option
+/// `indirectonly`, opt-in default-off: the merge it unlocks can fabricate
+/// a store into an escaped frame slot).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MarkIndirectOnly(pub bool);
+
+impl crate::kuna_optionset::KunaOption for MarkIndirectOnly {
+    const NAME: &'static str = "indirectonly";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        MarkIndirectOnly(false)
+    }
+
+    fn shipped() -> Self {
+        MarkIndirectOnly(false)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::kuna_indirectonly::OptionIndirectOnly.apply(value)?;
+        Ok((MarkIndirectOnly(v), msg))
     }
 }
 

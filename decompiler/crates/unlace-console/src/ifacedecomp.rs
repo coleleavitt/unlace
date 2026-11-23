@@ -2622,7 +2622,11 @@ decomp_command!(
             //  * ghidra mode stages name/dynamic/prototype-model recommendations that
             //    the drive takes; a follow that ran while they were still parked is
             //    not the same follow.
-            let same_config = !prog.arch().analysis_formatstring.loop_pass()
+            let same_config = !prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
+                .loop_pass()
                 && prog.arch().kuna_fn_budget.is_none()
                 && prog.arch().kuna_pending_name_recs.is_empty()
                 && prog.arch().kuna_pending_dyn_recs.is_empty()

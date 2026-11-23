@@ -53,7 +53,11 @@ pub(crate) fn prior_inventory(
     let base = rebuilt.as_ref().unwrap_or(listing);
     let walked: BTreeSet<u64> = base.functions().map(|(&entry, _)| entry).collect();
     let mut entries = walked.clone();
-    if arch.analysis_aif.enabled() {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_aif::AifMode>()
+        .enabled()
+    {
         let pointers = if arch
             .kuna_options
             .get::<unlace_decomp::kuna_analysisgates::Ptrentry>()

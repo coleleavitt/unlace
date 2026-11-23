@@ -4054,7 +4054,11 @@ impl PrintC {
         // does by construction.  Shares `option dedupvardecls` with the rendered-line
         // collapse it generalises.  Returns the `sym->getType()` override for a
         // surviving declaration whose group disagreed on the type.
-        let symbol_decl_type = if arch.dedup_var_decls {
+        let symbol_decl_type = if arch
+            .kuna_options
+            .get::<crate::kuna_dedupvardecls::DedupVarDecls>()
+            .0
+        {
             self.collapse_symbol_decls(fd, arch, &mut decls)
         } else {
             std::collections::HashMap::new()
@@ -4062,7 +4066,11 @@ impl PrintC {
         // Run the rendered-line collapse before unique spellings make genuinely
         // distinct declarations differ by construction.  It is lossless only
         // within one object: a shared name is not evidence of shared identity.
-        if arch.dedup_var_decls {
+        if arch
+            .kuna_options
+            .get::<crate::kuna_dedupvardecls::DedupVarDecls>()
+            .0
+        {
             let mut dedup = crate::kuna_dedupvardecls::DeclDedup::new();
             let mut collapsed = Vec::new();
             decls.retain(|(high, name)| {
@@ -4811,7 +4819,9 @@ impl PrintC {
                 crate::p8_structure::kuna_gotonext::goto_rewrites(
                     fd.sblocks_ref(),
                     sroot,
-                    arch.recover_loop_break,
+                    arch.kuna_options
+                        .get::<crate::kuna_loopbreak_recovery::RecoverLoopBreak>()
+                        .0,
                     &self.switch_plans,
                 )
             } else {
@@ -13436,7 +13446,8 @@ impl PrintC {
                             // (kuna `elemptr`) A table indexed by a computed value
                             // prints as a literal only when the index cannot run
                             // past it.
-                            let bound = if arch.elem_ptr {
+                            let bound = if arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0
+                            {
                                 crate::kuna_elemptr::literal_index_bound(fd, op, vn)
                             } else {
                                 None

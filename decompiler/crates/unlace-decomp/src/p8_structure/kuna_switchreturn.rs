@@ -111,7 +111,12 @@ impl Action for ActionSwitchReturn {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option switchreturn on|off`, carried on the Architecture boundary.
-        if !data.get_arch().switch_return {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_switchreturn::SwitchReturn>()
+            .0
+        {
             return 0;
         }
         let changes = data.switchreturn_apply(MAX_SWITCHRETURN_SPLITS, MAX_SWITCHRETURN_INEDGES);
@@ -147,5 +152,31 @@ impl OptionSwitchReturn {
             val,
             format!("Switch const-case return hoisting turned {prop}"),
         ))
+    }
+}
+
+/// (kuna) The direct continuation of `early_return`: the same per-edge const peel, but
+/// with a wider in-edge cap so a WIDE multi-way switch-phi return
+/// (`switch (x) { case A: v = K0; break; … } return v;` with more cases than
+/// earlyreturn's 16-in-edge limit) is peeled to per-case `return K`
+/// (`switch_return`, opt-in default-off).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SwitchReturn(pub bool);
+
+impl crate::kuna_optionset::KunaOption for SwitchReturn {
+    const NAME: &'static str = "switchreturn";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        SwitchReturn(false)
+    }
+
+    fn shipped() -> Self {
+        SwitchReturn(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p8_structure::kuna_switchreturn::OptionSwitchReturn.apply(value)?;
+        Ok((SwitchReturn(v), msg))
     }
 }

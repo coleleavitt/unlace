@@ -41,7 +41,7 @@ impl OptionCacheReturn {
     pub const NAME: &'static str = "cachereturn";
 
     /// Resolve the flag and its confirmation message; the caller writes it into
-    /// `Architecture::cache_return`.
+    /// the registered option `CacheReturn`.
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
@@ -65,7 +65,11 @@ pub fn returns_cached(
     addr: &Address,
     size: int4,
 ) -> bool {
-    if !data.get_arch().cache_return
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_cachereturn::CacheReturn>()
+        .0
         || !data.get_arch().source_lang.is_swift()
         || data.get_func_proto().is_output_locked()
         || !data
@@ -304,6 +308,30 @@ fn constant(data: &Funcdata, vn: VarnodeId, depth: usize) -> Option<u64> {
             Some(l.wrapping_add(r) & mask)
         }
         _ => None,
+    }
+}
+
+/// (kuna) A return register that holds one memory cell's value on every
+/// path is the return value (option `cachereturn`).  See
+/// [`crate::p4_calls::kuna_cachereturn`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct CacheReturn(pub bool);
+
+impl crate::kuna_optionset::KunaOption for CacheReturn {
+    const NAME: &'static str = "cachereturn";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        CacheReturn(true)
+    }
+
+    fn shipped() -> Self {
+        CacheReturn(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p4_calls::kuna_cachereturn::OptionCacheReturn.apply(value)?;
+        Ok((CacheReturn(v), msg))
     }
 }
 

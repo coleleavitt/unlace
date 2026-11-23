@@ -82,7 +82,7 @@ impl OptionCastObject {
     pub const NAME: &'static str = "castobject";
 
     /// Resolve the flag and its confirmation message; the caller writes it into
-    /// `Architecture::cast_object`.
+    /// the registered option `CastObject`.
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
@@ -531,6 +531,30 @@ pub fn reconcile(fd: &mut Funcdata) {
         if let (Some((sym, _)), Some(lm)) = (sym, fd.get_scope_local_mut()) {
             let _ = lm.retype_symbol(sym, t);
         }
+    }
+}
+
+/// (kuna) A frame object whose address only fills declared `T *` parameters
+/// is declared `T` (option `castobject`).  See
+/// [`crate::p6_variables::kuna_castobject`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct CastObject(pub bool);
+
+impl crate::kuna_optionset::KunaOption for CastObject {
+    const NAME: &'static str = "castobject";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        CastObject(true)
+    }
+
+    fn shipped() -> Self {
+        CastObject(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p6_variables::kuna_castobject::OptionCastObject.apply(value)?;
+        Ok((CastObject(v), msg))
     }
 }
 

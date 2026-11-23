@@ -773,7 +773,12 @@ fn build_localtypes(data: &mut Funcdata) {
     if float_bits.types_a_return() {
         data.kuna_note_float_bits_return();
     }
-    if data.get_arch().elem_ptr {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_elemptr::ElemPtr>()
+        .0
+    {
         data.kuna_elemptr_begin_pass();
     }
     for vn in order {

@@ -48,7 +48,7 @@
 //! # Gating
 //!
 //! The decision is a P0 assertion: `option loopbreak_recovery on|off`
-//! (`Architecture::recover_loop_break`).  `ActionFinalStructure` calls
+//! (the registered option `RecoverLoopBreak`).  `ActionFinalStructure` calls
 //! [`kuna_scope_break`] between `finalizePrinting` and `markUnstructured` only
 //! when the flag is set.  kuna ships it **DIV-7 default-on** (the ablation over
 //! the 675-assertion datatest corpus plus the cargo golden suite is clean, and
@@ -228,10 +228,34 @@ impl OptionLoopBreakRecovery {
     pub const NAME: &'static str = "loopbreak_recovery";
 
     /// Parse `on|off`; returns the resolved flag plus a confirmation message.
-    /// The caller writes the flag into `Architecture::recover_loop_break`.
+    /// The caller writes the flag into the registered option `RecoverLoopBreak`.
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Loop break/continue recovery turned {prop}")))
+    }
+}
+
+/// (kuna) Lower loop-exit `goto <successor>` edges to structured `break;`
+/// (a port of Ghidra `BlockGraph::scopeBreak`; option `loopbreak_recovery`,
+/// DIV-10 default-on).
+#[derive(Clone, Debug, PartialEq)]
+pub struct RecoverLoopBreak(pub bool);
+
+impl crate::kuna_optionset::KunaOption for RecoverLoopBreak {
+    const NAME: &'static str = "loopbreak_recovery";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        RecoverLoopBreak(false)
+    }
+
+    fn shipped() -> Self {
+        RecoverLoopBreak(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::kuna_loopbreak_recovery::OptionLoopBreakRecovery.apply(value)?;
+        Ok((RecoverLoopBreak(v), msg))
     }
 }

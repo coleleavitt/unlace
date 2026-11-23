@@ -143,10 +143,26 @@ fn kuna_anchor_flags_default_to_div_values() {
             .get::<crate::p8_structure::kuna_gotoreduce::GotoReduceMode>(),
         crate::p8_structure::kuna_gotoreduce::GotoReduceMode::On
     );
-    assert!(arch.flatten_ifelse);
-    assert!(arch.revert_cross_jumps);
-    assert!(arch.dedup_ite_tail);
-    assert!(arch.fold_call_returns);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_ifelseflatten::FlattenIfelse>()
+            .0
+    );
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_crossjumpreverter::RevertCrossJumps>()
+            .0
+    );
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_dedupitetail::DedupIteTail>()
+            .0
+    );
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_callretfold::FoldCallReturns>()
+            .0
+    );
     // (kuna) foldcallretphi default-on (docs/features/foldcallretphi/flip.md).
     assert!(arch.kuna_options.get::<crate::blockaction::BranchFlip>().0);
     // (kuna) DIV-14 default-on sweep: 3 more flags default-on (2 of them REMOVE
@@ -221,7 +237,10 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
             .get::<crate::kuna_analysisgates::Listing>()
             .0
     );
-    assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Off);
+    assert_eq!(
+        arch.kuna_options.get::<crate::kuna_aif::AifMode>(),
+        crate::kuna_aif::AifMode::Off
+    );
     assert!(
         !arch
             .kuna_options
@@ -250,7 +269,10 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
             .get::<crate::kuna_analysisgates::Listing>()
             .0
     );
-    assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Strict);
+    assert_eq!(
+        arch.kuna_options.get::<crate::kuna_aif::AifMode>(),
+        crate::kuna_aif::AifMode::Strict
+    );
     assert!(
         arch.kuna_options
             .get::<crate::kuna_analysisgates::FastFuncdisc>()
@@ -296,7 +318,10 @@ fn apply_mode_reliable_is_a_no_op() {
             .get::<crate::kuna_analysisgates::Listing>()
             .0
     );
-    assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Off);
+    assert_eq!(
+        arch.kuna_options.get::<crate::kuna_aif::AifMode>(),
+        crate::kuna_aif::AifMode::Off
+    );
     assert!(arch.duplicate_shared_returns); // DIV-54 shipped default survives
 }
 
@@ -307,7 +332,7 @@ fn apply_mode_fast_replaces_exhaustive_with_bounded_discovery() {
         .set(crate::kuna_analysisgates::Listing(true));
     arch.kuna_options
         .set(crate::kuna_analysisgates::FuncstartPatterns(true));
-    arch.analysis_aif = crate::kuna_aif::AifMode::Strict;
+    arch.kuna_options.set(crate::kuna_aif::AifMode::Strict);
 
     arch.apply_mode("fast").expect("fast mode applies");
 
@@ -323,7 +348,10 @@ fn apply_mode_fast_replaces_exhaustive_with_bounded_discovery() {
             .get::<crate::kuna_analysisgates::FuncstartPatterns>()
             .0
     );
-    assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Off);
+    assert_eq!(
+        arch.kuna_options.get::<crate::kuna_aif::AifMode>(),
+        crate::kuna_aif::AifMode::Off
+    );
     assert!(
         arch.kuna_options
             .get::<crate::kuna_analysisgates::FastFuncdisc>()

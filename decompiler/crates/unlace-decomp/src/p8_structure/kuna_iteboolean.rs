@@ -157,7 +157,12 @@ impl Action for ActionIteBoolean {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option iteboolean on|off`, carried on the Architecture
         // boundary.  Off => nothing marked => byte-identical output.
-        if !data.get_arch().iteboolean {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_iteboolean::Iteboolean>()
+            .0
+        {
             return 0;
         }
         if data.sblocks_get_size() == 0 {
@@ -355,5 +360,33 @@ impl OptionIteBoolean {
             val,
             format!("Short-circuit 0/1 select -> boolean assignment re-rolling turned {prop}"),
         ))
+    }
+}
+
+/// (kuna) `iteboolean`: re-roll a short-circuit `0`/`1` select diamond — a
+/// 3-component `if` whose condition is a folded `&&`/`||` chain and whose two
+/// arms COPY the constants `1`/`0` to the same variable — into a single
+/// boolean assignment (`x = a && b;`).  P3 `RuleConditionalMove` cannot fold
+/// it: the constant arm has 2+ predecessors, so upstream (faithfully) bails.
+/// A runtime choice like [`iteregion`](Self::iteregion): the source may have
+/// written the explicit `if/else`, which compiles identically.  Print-only.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Iteboolean(pub bool);
+
+impl crate::kuna_optionset::KunaOption for Iteboolean {
+    const NAME: &'static str = "iteboolean";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        Iteboolean(false)
+    }
+
+    fn shipped() -> Self {
+        Iteboolean(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p8_structure::kuna_iteboolean::OptionIteBoolean.apply(value)?;
+        Ok((Iteboolean(v), msg))
     }
 }

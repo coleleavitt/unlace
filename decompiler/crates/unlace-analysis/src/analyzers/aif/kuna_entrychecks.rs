@@ -42,8 +42,12 @@ pub(crate) fn run(
             prior,
             translate,
             Rc::clone(&code_space),
-            arch.analysis_aif.strict(),
-            arch.analysis_aif.corroborate(),
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .strict(),
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .corroborate(),
             bracket,
             poolslide,
             Some(&mut straight_line),
@@ -55,8 +59,12 @@ pub(crate) fn run(
             translate,
             Rc::clone(&code_space),
             listing.exec_ranges(),
-            arch.analysis_aif.strict(),
-            arch.analysis_aif.corroborate(),
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .strict(),
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .corroborate(),
             bracket,
             poolslide,
             memo,

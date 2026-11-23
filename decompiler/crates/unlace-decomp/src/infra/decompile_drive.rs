@@ -432,7 +432,10 @@ impl FlowEnvironment for ArchFlowEnv {
         }
         if let Some(id) = op.get_inject_id() {
             if arch.octeon_upstream_inject.contains(&(id as int4)) {
-                return arch.octeon_effects == crate::kuna_octeoneffects::OcteonEffectsMode::Off;
+                return arch
+                    .kuna_options
+                    .get::<crate::kuna_octeoneffects::OcteonEffectsMode>()
+                    == crate::kuna_octeoneffects::OcteonEffectsMode::Off;
             }
         }
         if !arch
@@ -1837,7 +1840,13 @@ fn bootstrap_split_callees(
     candidates: Vec<Address>,
     budget: &mut usize,
 ) {
-    if !arch.protoorder.is_on() || root.num_calls() == 0 || !arch.has_split_records() {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_protoorder::ProtoOrderMode>()
+        .is_on()
+        || root.num_calls() == 0
+        || !arch.has_split_records()
+    {
         return;
     }
     if *budget == 0 {
@@ -1904,7 +1913,12 @@ const MAX_TAIL_CALLEE_INSTRUCTIONS: u32 = 512;
 /// callees of at most [`MAX_TAIL_CALLEE_INSTRUCTIONS`] instructions are tried.
 /// Inert under `protoorder off`.
 fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
-    if !arch.protoorder.is_on() || root.num_calls() == 0 {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_protoorder::ProtoOrderMode>()
+        .is_on()
+        || root.num_calls() == 0
+    {
         return;
     }
     let returns: Vec<Address> = root
@@ -2700,7 +2714,10 @@ fn decompile_func_full_with_objects_inner(
         fd.kuna_set_callee_contract_armed(
             purpose == DrivePurpose::SingleFunction
                 && CONTRACT_DEPTH.with(|d| d.get()) == 0
-                && arch.protoorder.is_on()
+                && arch
+                    .kuna_options
+                    .get::<crate::kuna_protoorder::ProtoOrderMode>()
+                    .is_on()
                 && arch.has_split_records(),
         );
         // (kuna `importvote`) An undeclared import a tail call reaches takes

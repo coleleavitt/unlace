@@ -861,11 +861,6 @@ pub struct ArchContext {
     /// `Architecture::name_style_ghidra`.  Wins over `name_style_angr` in
     /// [`Self::kuna_name_style`].
     pub name_style_ghidra: bool,
-    /// (kuna) Collapse local-variable declarations whose fully-rendered line is
-    /// identical (the scalar analogue of the composite-symbol decl collapse).  Read
-    /// by [`PrintC::emit_local_var_decls`](crate::printc); `option dedupvardecls`,
-    /// default-off (angr-inspired, S9).
-    pub dedup_var_decls: bool,
     /// (kuna) The image's Objective-C class table, from the ObjC analysis.
     pub kuna_objc_classes: Rc<crate::kuna_objcrettype::ObjcClassTable>,
     /// (kuna `xnutables`) The struct each kalloc_type view allocates, by view address.
@@ -879,9 +874,6 @@ pub struct ArchContext {
     pub guarded_loop: bool,
     /// Fold comparisons proven constant for every input (`opaquepredicate`).
     pub opaque_predicate: bool,
-    /// (kuna `callresultuse`) An unknown callee's result read by the next
-    /// call or the RETURN is that call's result.
-    pub call_result_use: crate::p4_calls::kuna_callresultuse::CallResultUse,
     /// (kuna `opaquepredicate globals`) The writable data nothing may write,
     /// once the scan has run; read by
     /// [`constant_read`](crate::kuna_opaqueglobals::constant_read).
@@ -965,11 +957,6 @@ pub struct ArchContext {
     /// C output; read by [`kuna_castarith`](crate::p9_emit::kuna_castarith).
     pub cast_index: bool,
 
-    /// (kuna `elemptr`) Declare a pointer used only as an array of one element
-    /// type as that pointer; option `elemptr on|off`.  Copied from
-    /// [`Architecture::elem_ptr`](crate::architecture::Architecture).  The rule
-    /// lives in [`kuna_elemptr`](crate::p5_types::kuna_elemptr).
-    pub elem_ptr: bool,
     /// (kuna `elemptr`) The sections a program's data objects live in, sorted and
     /// inclusive; the `globalref` ranges, copied from the Architecture.
     pub elem_ptr_ranges: std::rc::Rc<Vec<(u64, u64)>>,
@@ -982,41 +969,12 @@ pub struct ArchContext {
     /// (C++ `recover_lowered_switch`, default-on).  Read by the
     /// [`crate::kuna_loweredswitch`] detect/install actions.
     pub recover_lowered_switch: bool,
-    /// (kuna) an unread zero element right after an open stack character array
-    /// is its terminator (`nulterminator`).  Read by
-    /// [`Funcdata::gather_varnodes`](crate::funcdata_spacebase) for
-    /// [`crate::p6_variables::kuna_nulterminator::close_at_terminator`].
-    pub nul_terminator: bool,
-    /// (kuna) a stack pointer walk's one-past-the-end bound is expressed on the
-    /// walked buffer, which is recovered as one array (`endptrbound`).  Read by
-    /// [`crate::p6_variables::kuna_endptrbound::gather_walks`].
-    pub end_ptr_bound: bool,
-    /// (kuna) a frame object whose address only fills declared `T *` parameters
-    /// is declared `T` (`castobject`).  Read by
-    /// [`crate::p6_variables::kuna_castobject::declare_out_params`].
-    pub cast_object: bool,
     /// (kuna `msvcbyval`) The declarations with a by-value class of unstated
     /// size, by entry; snapshotted from the architecture at `build_arch_handle`.
     pub msvc_byval_decls: Rc<crate::p4_calls::kuna_msvcbyval::ByvalDecls>,
     /// (kuna `msvcbyval`) The entries an MSVC name declares as building an
     /// object at an address they are handed.
     pub msvc_builders: Rc<crate::p4_calls::kuna_msvcbyval::Builders>,
-    /// (kuna) drop a trailing register argument a previous call's clobber put
-    /// there (`argclobber`).  Read by
-    /// [`crate::p4_calls::kuna_argclobber::drop_clobber_tail_arg`]; off by
-    /// default, so the fixture seam carries `false`.
-    pub arg_clobber: bool,
-    /// (kuna) a register forwarded untouched to a callee whose recovered
-    /// prototype reads it becomes a parameter (`passthrough`).  Read by
-    /// [`crate::p4_calls::kuna_passthrough`]; it needs a prototype `protoorder`
-    /// parked, which no fixture has, so the seam carries the shipped default.
-    pub pass_through: bool,
-    /// (kuna) `mixedtailret`: a value returned beside a claimed tail-call
-    /// result is returned too.  Read by [`crate::p4_calls::kuna_mixedtailret`].
-    pub mixed_tail_ret: bool,
-    /// (kuna) `cachereturn`: a return register holding one memory cell's value
-    /// on every path is returned.  Read by [`crate::p4_calls::kuna_cachereturn`].
-    pub cache_return: bool,
     /// (kuna) `armfloatreturn` is on and the image states the ARM VFP calling
     /// convention.  Read by [`crate::p4_calls::kuna_armfloatreturn`].
     pub arm_float_return: bool,
@@ -1090,58 +1048,17 @@ pub struct ArchContext {
     /// (`regsigned`). Read by [`crate::kuna_regnarrow`].
     pub narrow_signed: bool,
 
-    /// (kuna) predicate strength for tolerating a caller-save spill among a
-    /// trial Varnode's descendants (`spillargtrial`): `0` = upstream, every
-    /// `CPUI_STORE` rejects, `1` = tolerate a store that is one half of a
-    /// spill/reload pair, `2` = tolerate any caller-frame store of the value.
-    /// Read by [`Funcdata::only_op_use`](crate::funcdata::Funcdata) through
-    /// [`crate::p4_calls::kuna_spillargtrial::store_is_caller_save_spill`].
-    pub spill_arg_trial: int4,
     /// Operation-specific typed views over shared physical frame storage.
     pub stack_views: bool,
 
     /// (kuna) `implweight` — terms times uses an expression may print inline; 0 = off.
     pub impl_weight: int4,
-    /// (kuna) region-based (Phoenix/SAILR) structurer: structure the CFG by
-    /// walking the [`KunaRegionIdentifier`](crate::p7_regions::kuna_regionid)
-    /// region tree and matching Phoenix acyclic schemas instead of running
-    /// Ghidra's `CollapseStructure` (`region_structure`, DIV-12 default-on: the
-    /// primary structuring path; falls back to `CollapseStructure` on irreducible code).
-    /// Read by [`ActionBlockStructure`](crate::blockaction::ActionBlockStructure).
-    pub region_structure: bool,
-    /// (kuna) source-layout tie-break for `ruleBlockIfNoExit`'s clause arm
-    /// (`guard_arm`, option `guardarm`, opt-in default-off).  When set and BOTH
-    /// out-arms are eligible clauses, the earlier-addressed arm becomes the `if`
-    /// clause instead of out-index 0.  Read by
-    /// [`ActionBlockStructure`](crate::blockaction::ActionBlockStructure).
-    pub guard_arm: bool,
-    /// (kuna) defer a live loop head in the deferred `ruleBlockIfNoExit` scan
-    /// (`loop_cond_hoist`, option `loopcondhoist`, opt-in default-off) so
-    /// `ruleBlockWhileDo` keeps the loop's head test.  Read by
-    /// [`ActionBlockStructure`](crate::blockaction::ActionBlockStructure).
-    pub loop_cond_hoist: bool,
     /// (kuna `loopcontinue`) The output language's do-while runs its test on
     /// `continue;`: C `do..while` and Go's `for` post statement do, Rust's
     /// `loop { ..; if !(c) { break; } }` restarts the body instead.
     pub do_while_continue: bool,
     /// (kuna `postinc`) A pointer step after its dereference prints as `*p++`.
     pub post_increment: bool,
-    /// (kuna) short-circuit condition folding across a COMPLEX sibling block
-    /// (`cond_fold`, option `condfold`, opt-in default-off).  When set, the
-    /// short-circuit schema of BOTH structurers accepts a *complex* sibling
-    /// condition block when it fits the level's printed-width budget AND either
-    /// admission rule takes it — Rule A, a `BlockCopy` of one branch-free,
-    /// comment-free `BlockBasic` with at most one statement-root call; or Rule B, the
-    /// statement-shape allowlist, which also admits a nested `BlockCondition` so a
-    /// guard cascade can fold.  The absorbed statements then render inside the
-    /// `&&`/`||` operand as a C comma expression (angr Phoenix's
-    /// `MultiStatementExpression`).  Read by
-    /// [`crate::p8_structure::kuna_condfold::compute_condfold_sets`] at both
-    /// precompute sites.  The value is the shared printed-width budget, which
-    /// doubles as the option's on/off sentinel: `0` = off, `5` = `on` (angr
-    /// parity), `9` = `wide`.
-    /// (kuna) `outline` region spec (empty = off), option `outline`.
-    pub outline_spec: String,
     /// (kuna) The loader identified the image as a Linux ELF: the fact
     /// `option linuxsyscall auto` acts on.
     pub image_linux_elf: bool,
@@ -1153,8 +1070,6 @@ pub struct ArchContext {
     /// left out, so a spec-declared model always wins.  Read by
     /// [`ActionX64Syscall`](crate::p2_lift::kuna_x64syscall::ActionX64Syscall).
     pub x64_syscall_userops: Vec<unlace_base::types::uint4>,
-    /// (kuna `octeoneffects`) Which Octeon user operations guard memory.
-    pub octeon_effects: crate::kuna_octeoneffects::OcteonEffectsMode,
     /// The Octeon atomic, reservation and ordering operations the language
     /// declares, resolved under [`Self::octeon_effects`]. Under `off` only a
     /// load-linked or store-conditional left without its upstream fixup (ghidra
@@ -1182,10 +1097,6 @@ pub struct ArchContext {
     /// (kuna) `option tlsnames`: the executable's static TLS block, when the
     /// loader found one.
     pub tls_layout: Option<std::rc::Rc<crate::p5_types::kuna_tlsnames::TlsLayout>>,
-    /// (kuna) `option structsynth`: over which bases may
-    /// [`ActionStructSynth`](crate::p5_types::kuna_structsynth::ActionStructSynth)
-    /// synthesize a structure from constant-offset dereferences?
-    pub struct_synth: crate::p5_types::kuna_structsynth::StructSynthMode,
     /// (kuna `structsynth`) The engine Architecture's `--jobs` worker ledger hook,
     /// shared: `None` outside a worker.
     pub struct_synth_shard: Option<crate::p5_types::kuna_structsynth::shard::ShardHandle>,
@@ -1197,40 +1108,10 @@ pub struct ArchContext {
     pub lowered_switch_linear: bool,
     /// (kuna) `loweredswitch tree|all` — compare trees re-roll from 2 to 64 cases.
     pub lowered_switch_tree: bool,
-    /// (kuna) angr `IfElseFlattener`: drop the `else` arm of a terminating-if
-    /// 3-component `if` (`flatten_ifelse`, opt-in default-off).  Read by
-    /// [`crate::p8_structure::kuna_ifelseflatten`]'s `ActionIfElseFlatten`.
-    pub flatten_ifelse: bool,
-    /// (kuna) angr SAILR `CrossJumpReverter`: duplicate a small *non-return*
-    /// cross-jump tail into the `goto` source (`revert_cross_jumps`, opt-in
-    /// default-off).  Read by
-    /// [`crate::p8_structure::kuna_crossjumpreverter`]'s `ActionCrossJumpReverter`.
-    pub revert_cross_jumps: bool,
-    /// (kuna) angr structurer ITE region-dedup: merge a duplicated `if/else` tail
-    /// (shared prefix/suffix across both arms) by hoisting the shared blocks out of
-    /// the `if` — the inverse of the SAILR duplication passes (`dedup_ite_tail`,
-    /// opt-in default-off).  Read by
-    /// [`crate::p8_structure::kuna_dedupitetail`]'s `ActionDedupIteTail`.
-    pub dedup_ite_tail: bool,
-    /// (kuna) angr `ITERegionConverter`: rewrite a two-arm assignment *diamond*
-    /// (`if (c) v = A; else v = B;`) to a `?:` ternary (`v = c ? A : B;`)
-    /// (`iteregion`, opt-in default-off — a **runtime choice**: matches source only
-    /// when the source used a ternary).  Read by
-    /// [`crate::p8_structure::kuna_iteregion`]'s `ActionIteRegion`.
-    pub iteregion: bool,
-    /// (kuna) `iteboolean`: re-roll a short-circuit `0`/`1` select diamond into a
-    /// single boolean assignment (`x = a && b;`) — see `Architecture::iteboolean`.
-    /// Read by [`crate::p8_structure::kuna_iteboolean`]'s `ActionIteBoolean`.
-    pub iteboolean: bool,
     /// (kuna) `rettriangle`: decline a `returndup` split at the join of a
     /// one-block `if` -- see `Architecture::returndup_triangle`.  Read by
     /// `Funcdata::returndup_apply`.
     pub returndup_triangle: bool,
-    /// (kuna) `paramcopyhoist`: anchor an unmodified incoming parameter's trim COPY
-    /// in the entry block rather than at the MULTIEQUAL slot's predecessor tail —
-    /// see `Architecture::param_copy_hoist`.  Read by
-    /// [`crate::p6_variables::kuna_paramcopyhoist`]'s `hoist_target`.
-    pub param_copy_hoist: bool,
     /// (kuna) angr SAILR gotoless `ReturnDuplicatorHigh`: duplicate a shared
     /// **bare-epilogue** RETURN block into each predecessor but one so a
     /// `if (c) { body; return X; } return Y;` guard shape structures as per-predecessor
@@ -1240,28 +1121,6 @@ pub struct ArchContext {
     /// (kuna) `returndup calls` — also split a cross-jumped call tail per
     /// predecessor ([`crate::p8_structure::kuna_returndupcalls`]).
     pub duplicate_call_returns: bool,
-    /// (kuna) hoist a leading const-guard into an early return by peeling only the
-    /// CONSTANT arm of a mixed return phi (`early_return`, opt-in default-off).  Read by
-    /// [`crate::p8_structure::kuna_earlyreturn`]'s `ActionEarlyReturn`.
-    pub early_return: bool,
-    /// (kuna) continuation of `early_return` to the WIDE multi-way switch-phi return: peel
-    /// each constant case arm to per-case `return K` past earlyreturn's 16-in-edge cap
-    /// (`switch_return`, opt-in default-off).  Read by
-    /// [`crate::p8_structure::kuna_switchreturn`]'s `ActionSwitchReturn`.
-    pub switch_return: bool,
-    /// (kuna) lower loop-exit `goto <successor>` edges to structured `break;`
-    /// (a port of Ghidra `BlockGraph::scopeBreak`, DIV-10 default-on).  Read by
-    /// [`ActionFinalStructure`](crate::blockaction::ActionFinalStructure) to gate
-    /// [`crate::kuna_loopbreak_recovery::kuna_scope_break`].
-    pub recover_loop_break: bool,
-    /// (kuna) fold an order-safe single-use call return into its use site
-    /// (`fold_call_returns`, DIV-14 default-on).  Read by `base_explicit`
-    /// (`ActionMarkExplicit`) via [`crate::kuna_callretfold::call_output_foldable`].
-    pub fold_call_returns: bool,
-    /// (kuna) Run `Funcdata::markIndirectOnly` instead of the inert stub
-    /// (option `indirectonly`, opt-in default-off).  Read by
-    /// `ActionMarkIndirectOnly`.
-    pub mark_indirect_only: bool,
     /// AArch64 integer division returns zero for a zero divisor.
     pub go_keep_divide_checks: bool,
     /// Attempt conversion of `whiledo` loops to `for` loops (C++
@@ -1547,7 +1406,6 @@ impl ArchContext {
             name_style_ghidra: false,
             // (kuna) default-off opt-in; the real value is copied from the engine
             // Architecture in `build_arch_handle` (`option dedupvardecls`).
-            dedup_var_decls: false,
             kuna_objc_classes: Rc::new(Default::default()),
             kuna_kalloc_types: Rc::new(Default::default()),
             // (kuna) DIV-2 default-on (GH-558): resetDefaults sets present_lessequal=true.
@@ -1561,7 +1419,6 @@ impl ArchContext {
             opaque_globals: None,
             opaque_globals_pending: false,
             opaque_globals_wanted: std::cell::Cell::new(false),
-            call_result_use: crate::p4_calls::kuna_callresultuse::CallResultUse::Off,
             ret_split_global: false, // retsplitglobal (the ArchSeam carries the real default)
             simd_shuffle_userops: Vec::new(),
             x87_float_to_int_userops: Vec::new(),
@@ -1575,7 +1432,6 @@ impl ArchContext {
             float_globals: None, // (kuna) option floatglobals
             float_globals_pending: false,
             float_globals_wanted: std::cell::Cell::new(false),
-            struct_synth: crate::p5_types::kuna_structsynth::StructSynthMode::Locals, // (kuna) option structsynth, default `locals`; the real value is copied from the engine Architecture in `build_arch_handle`
             struct_synth_shard: None,
             field_type: false, // (kuna) option fieldtype, copied from Architecture
             unknown_byte_is_char: false, // (kuna) realtypes + C output
@@ -1583,24 +1439,19 @@ impl ArchContext {
             int_promotion: true, // (kuna) LangCaps::integer_promotion (C)
             cast_arith: false, // (kuna) option castarith
             cast_index: false, // (kuna) option castindex
-            elem_ptr: false,   // (kuna) option elemptr, copied from Architecture
             elem_ptr_ranges: std::rc::Rc::new(Vec::new()), // (kuna) elemptr
             libctypes: false,  // (kuna) option libctypes, copied from Architecture
             recover_lowered_switch: false, // loweredswitch
-            nul_terminator: false,
             // endptrbound only re-expresses an address the walk already compares
             // against, so the fixture seam carries the real default.
-            end_ptr_bound: true,
             // castobject only re-types a slot whose readers agree, so the fixture
             // seam carries the shipped default.
-            cast_object: true,
             msvc_byval_decls: Rc::new(Default::default()),
             msvc_builders: Rc::new(Default::default()),
             // argclobber only drops a trailing argument the callee's own
             // recovered prototype says it never reads, and declines outright
             // when there is no callee to ask, so the fixture seam carries the
             // shipped default.
-            arg_clobber: true,       // (kuna) option argclobber (default on)
             arm_float_args: false,   // (kuna) option armfloatargs (default off)
             arm_float_return: false, // (kuna) option armfloatreturn (default off)
             arm_base_model: None,
@@ -1613,11 +1464,8 @@ impl ArchContext {
             caller_extends_returns_from: i32::MAX,
             vararg_floats: Default::default(),
             narrow_ext: crate::kuna_narrowext::Rules::default(),
-            pass_through: true,    // (kuna) option passthrough (default on)
-            mixed_tail_ret: false, // (kuna) option mixedtailret (default off)
 
             vtable_types: false,
-            cache_return: true, // (kuna) option cachereturn (default on)
             readonly_calls: Some(crate::p3_dataflow::heritage::READONLY_CROSS_PRODUCT),
             persist_calls: Some(crate::p3_dataflow::heritage::PERSIST_CROSS_PRODUCT),
             kuna_custom_reg_callers: Rc::default(),
@@ -1627,20 +1475,14 @@ impl ArchContext {
             pair_params: true,
             narrow_ret: true,
             narrow_signed: false,
-            spill_arg_trial: 0, // spillargtrial (0 = upstream: every STORE rejects)
             stack_views: false, // stackviews (opt-in)
 
             impl_weight: 0, // implweight (live value copied from the Architecture)
-            region_structure: false, // regionstructure (opt-in default-off)
-            guard_arm: false, // guardarm (opt-in default-off)
             do_while_continue: true,
             post_increment: false,
-            loop_cond_hoist: false,      // loopcondhoist (opt-in default-off)
-            outline_spec: String::new(), // outline (opt-in default-off; empty = off)
             image_linux_elf: false,
             x64_syscall_memory_target: false,
             x64_syscall_userops: Vec::new(),
-            octeon_effects: crate::kuna_octeoneffects::OcteonEffectsMode::Off,
             octeon_memory_userops: Vec::new(),
             segment_ops: Vec::new(),
             syscall_regs: false,
@@ -1651,20 +1493,9 @@ impl ArchContext {
             tls_layout: None,
             lowered_switch_linear: false,    // loweredswitch linear|all
             lowered_switch_tree: false,      // loweredswitch tree|all
-            flatten_ifelse: false,           // ifelseflatten (opt-in default-off)
-            revert_cross_jumps: false,       // crossjumprevert (opt-in default-off)
-            dedup_ite_tail: false,           // dedupitetail (opt-in default-off)
-            iteregion: false,                // iteregion (opt-in default-off, runtime-choice)
-            iteboolean: false,               // iteboolean (0/1 select -> boolean assignment)
-            param_copy_hoist: false, // paramcopyhoist (parameter copy-shadow -> entry block)
             returndup_triangle: false, // rettriangle (one-block-if join, copied from the Architecture)
             duplicate_shared_returns: false, // returndup (opt-in default-off)
             duplicate_call_returns: false, // returndup calls
-            early_return: false,       // earlyreturn (opt-in default-off)
-            switch_return: false,      // switchreturn (opt-in default-off)
-            recover_loop_break: false, // loopbreak_recovery (opt-in default-off)
-            fold_call_returns: false, // foldcallret (Architecture::reset_defaults sets the shipped default: on)
-            mark_indirect_only: false, // indirectonly (opt-in default-off)
 
             go_keep_divide_checks: false,
             // C++ Architecture default: analyze_for_loops = true (architecture.cc).

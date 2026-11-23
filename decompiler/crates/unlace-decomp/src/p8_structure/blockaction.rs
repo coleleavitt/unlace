@@ -4127,7 +4127,13 @@ impl Action for ActionBlockStructure {
         // which knows to keep a dispatch out of `&&`/`||` and to make its handler
         // the `if` clause.
         let java_try = !crate::kuna_javatry::dispatch_blocks(data).is_empty();
-        if data.get_arch().region_structure && !java_try {
+        if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::region_structurer::RegionStructure>()
+            .0
+            && !java_try
+        {
             match crate::p8_structure::region_structurer::run_region_structurer(data, ctx.deadline)
             {
                 Ok((true, flips)) => {
@@ -4173,8 +4179,16 @@ impl Action for ActionBlockStructure {
         // block start address (trace only).
         let mut exitleaf_facts = crate::p8_structure::kuna_ifnoexit::ExitLeafFacts::default();
         let dbg_ifne = crate::p8_structure::kuna_ifnoexit::trace_enabled();
-        let guard_arm = data.get_arch().guard_arm;
-        let loop_cond_hoist = data.get_arch().loop_cond_hoist;
+        let guard_arm = data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_ifnoexit::GuardArm>()
+            .0;
+        let loop_cond_hoist = data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_ifnoexit::LoopCondHoist>()
+            .0;
         exitleaf_facts.java_handlers = crate::kuna_javatry::dispatch_targets(data);
         exitleaf_facts.java_dispatch = crate::kuna_javatry::dispatch_blocks(data)
             .into_iter()
@@ -4346,7 +4360,12 @@ impl Action for ActionFinalStructure {
         // `loopbreak_recovery` P0 assertion (`recover_loop_break`, opt-in
         // default-off); must run BEFORE `markUnstructured` so a converted break's
         // target is no longer marked as an unstructured goto label.  (kuna)
-        if data.get_arch().recover_loop_break {
+        if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_loopbreak_recovery::RecoverLoopBreak>()
+            .0
+        {
             let sroot = data.sblocks_root();
             crate::kuna_loopbreak_recovery::kuna_scope_break(data.sblocks_mut(), sroot);
         }

@@ -30,7 +30,7 @@ impl OptionDedupVarDecls {
     pub const NAME: &'static str = "dedupvardecls";
 
     /// Parse + validate the `on`/`off` value and return the resolved flag plus the
-    /// confirmation message (the caller flips `Architecture::dedup_var_decls`).
+    /// confirmation message (the caller flips the registered option `DedupVarDecls`).
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
@@ -89,7 +89,7 @@ impl DeclIdentity {
 /// Tracks the declarations already emitted so a repeat of one object's line can be
 /// suppressed.
 ///
-/// Used by `emit_local_var_decls` only when `Architecture::dedup_var_decls` is set.
+/// Used by `emit_local_var_decls` only when the registered option `DedupVarDecls` is set.
 #[derive(Debug, Default)]
 pub struct DeclDedup {
     #[expect(
@@ -208,6 +208,31 @@ impl DeclDedup {
                 None
             }
         }
+    }
+}
+
+/// (kuna) Collapse local-variable declarations whose fully-rendered line is
+/// identical (the scalar analogue of the composite-symbol decl collapse), so a
+/// stack slot mapped onto many same-named HighVariables is declared once
+/// (`option dedupvardecls`; angr-inspired, S9).
+#[derive(Clone, Debug, PartialEq)]
+pub struct DedupVarDecls(pub bool);
+
+impl crate::kuna_optionset::KunaOption for DedupVarDecls {
+    const NAME: &'static str = "dedupvardecls";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        DedupVarDecls(false)
+    }
+
+    fn shipped() -> Self {
+        DedupVarDecls(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::kuna_dedupvardecls::OptionDedupVarDecls.apply(value)?;
+        Ok((DedupVarDecls(v), msg))
     }
 }
 

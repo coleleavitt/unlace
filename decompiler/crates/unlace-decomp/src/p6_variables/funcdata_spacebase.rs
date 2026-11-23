@@ -728,7 +728,12 @@ impl FuncdataSpacebaseExt for Funcdata {
             crate::kuna_endptrbound::coalesce_hints(&mut state, &endptr_walks, &space, t.as_ref());
         }
 
-        if self.get_arch().cast_object {
+        if self
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_castobject::CastObject>()
+            .0
+        {
             let declared = crate::kuna_castobject::declare_out_params(self, &mut state, &space);
             self.record_cast_objects(declared);
         }
@@ -1210,7 +1215,13 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
                     } else {
                         0
                     };
-                    if is_const && self.get_arch().nul_terminator {
+                    if is_const
+                        && self
+                            .get_arch()
+                            .kuna_options
+                            .get::<crate::kuna_nulterminator::NulTerminator>()
+                            .0
+                    {
                         let zero = in0
                             .and_then(|iv| self.vbank().get(iv).map(|x| x.get_offset() == 0))
                             .unwrap_or(false);

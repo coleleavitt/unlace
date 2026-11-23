@@ -150,6 +150,30 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.nulterminator_close_at_terminator = Some(close_at_terminator);
 }
 
+/// (kuna) An unread zero element right after an open stack character
+/// array is that array's terminator, and the array ends after it (option
+/// `nulterminator`).  See [`crate::p6_variables::kuna_nulterminator`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct NulTerminator(pub bool);
+
+impl crate::kuna_optionset::KunaOption for NulTerminator {
+    const NAME: &'static str = "nulterminator";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        NulTerminator(false)
+    }
+
+    fn shipped() -> Self {
+        NulTerminator(false)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p6_variables::kuna_nulterminator::OptionNulTerminator.apply(value)?;
+        Ok((NulTerminator(v), msg))
+    }
+}
+
 #[cfg(test)]
 #[path = "kuna_nulterminator/tests.rs"]
 mod tests;

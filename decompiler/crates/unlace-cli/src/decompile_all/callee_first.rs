@@ -54,7 +54,11 @@ pub(crate) fn decompile_callee_first(
     landed: &mut dyn FnMut(&FuncResult),
 ) -> Vec<FuncResult> {
     super::arm_fn_budgets(prog, args);
-    let cycles = prog.arch().protoorder.states_in_cycles();
+    let cycles = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
+        .states_in_cycles();
     let graph = CallGraph::build(prog, &args.binary, args.slice_pref());
     let plan = match &graph {
         Ok(graph) => callee_first_plan(graph, &targets, cycles),
@@ -71,18 +75,39 @@ pub(crate) fn decompile_callee_first(
     // (kuna `calleevote`, `callbacktype`) Both ask the image the same question
     // -- whose address does it put somewhere nobody can list? -- so the walk is
     // done once for whichever of them is on.
-    let wants_open = prog.arch().calleevote.is_on() || prog.arch().callbacktype.is_on();
+    let wants_open = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_calleevote::CalleeVoteMode>()
+        .is_on()
+        || prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+            .is_on();
     let open = match &graph {
         Ok(graph) if wants_open => Some(graph.open_entries(&args.binary, args.slice_pref())),
         _ => None,
     };
     let expected = match (&graph, &open) {
-        (Ok(graph), Some(open)) if prog.arch().calleevote.is_on() => {
+        (Ok(graph), Some(open))
+            if prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_calleevote::CalleeVoteMode>()
+                .is_on() =>
+        {
             Some(open_callee_votes(prog, graph, open, &targets))
         }
         _ => None,
     };
-    if prog.arch().callbacktype.is_on() && open.is_some() {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+        .is_on()
+        && open.is_some()
+    {
         let ledger = &mut prog.arch_mut().kuna_callbacktype;
         *ledger = unlace_decomp::kuna_callbacktype::Ledger::default();
         ledger.recording = true;
@@ -102,7 +127,13 @@ pub(crate) fn decompile_callee_first(
         _ => None,
     };
     let callback_refs = match (&graph, &open) {
-        (Ok(graph), Some(_)) if prog.arch().callbacktype.is_on() => {
+        (Ok(graph), Some(_))
+            if prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+                .is_on() =>
+        {
             Some(graph.callback_refs(targets.iter().filter_map(|t| vote_key(t).map(|k| k.1))))
         }
         _ => None,
@@ -155,7 +186,11 @@ pub(crate) fn decompile_callee_first(
     converge_callee_first(prog, &targets, &plan, &base, &mut slots);
     prog.arch_mut().kuna_callbacktype.recording = false;
     if let (Some(refs), Some(open)) = (&callback_refs, &open)
-        && prog.arch().callbacktype.is_on()
+        && prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+            .is_on()
     {
         callback_park_round(prog, refs, open, &targets, &plan, &base, &mut slots);
     }
@@ -879,7 +914,12 @@ fn converge_callee_first(
     base: &unlace_console::project::DecompileOptions,
     slots: &mut ResultStore,
 ) {
-    if prog.arch().protoorder == unlace_decomp::kuna_protoorder::ProtoOrderMode::Lock {
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
+        == unlace_decomp::kuna_protoorder::ProtoOrderMode::Lock
+    {
         return;
     }
     let stale = unlace_console::project::superseded_struct_names(prog);

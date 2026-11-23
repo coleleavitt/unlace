@@ -719,6 +719,23 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.callmechanisms_requires_reflow = Some(requires_reflow);
 }
 
+impl crate::kuna_optionset::KunaOption for CallMechanismMode {
+    const NAME: &'static str = "callmechanisms";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        crate::kuna_callmechanisms::CallMechanismMode::Off
+    }
+
+    fn shipped() -> Self {
+        crate::kuna_callmechanisms::CallMechanismMode::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(crate::kuna_callmechanisms::OptionCallMechanisms.apply(value)?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

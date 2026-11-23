@@ -188,40 +188,6 @@ pub(crate) fn zext_trimmed_arg(data: &Funcdata, op: OpId, slot: int4) -> bool {
     }) && callee_reads_wider(data, op, slot, size)
 }
 
-/// Did narrowing the call input `vn` to the logical value under `mask` drop only
-/// bits known to be zero?  Then the binary passed that value zero-extended.
-pub(crate) fn drops_only_zero_bits(data: &Funcdata, vn: VarnodeId, mask: u64) -> bool {
-    mask & 1 != 0
-        && data
-            .vbank()
-            .get(vn)
-            .is_some_and(|v| v.get_nz_mask() & !mask == 0)
-}
-
-/// Record on the call's spec that input `slot` of `op` was just trimmed, and
-/// whether the trim dropped only known-zero bits.
-pub(crate) fn note_trimmed_arg(data: &mut Funcdata, op: OpId, slot: int4, zext: bool) {
-    let Some(o) = data.obank().get(op) else {
-        return;
-    };
-    if !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
-        return;
-    }
-    let ninputs = o.num_input();
-    let Some(size) = o
-        .get_in(slot)
-        .and_then(|v| data.vbank().get(v))
-        .map(|v| v.get_size())
-    else {
-        return;
-    };
-    let Some(i) = data.get_call_specs_index(op) else {
-        return;
-    };
-    data.get_call_specs_mut(i)
-        .note_trimmed_input(slot, size, ninputs, zext);
-}
-
 /// Retype an argument that already prints as a truncating cast (`(char)v2`) to
 /// `ct`, so it reads `(unsigned char)v2` rather than stacking a second cast.  Only
 /// when every read of it is a call argument, each of which wants the same type.

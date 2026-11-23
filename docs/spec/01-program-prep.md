@@ -10014,7 +10014,7 @@ cleared), and the commit keeps it OFF the symbol, in
 other prototype for it — no operator declaration, nothing another stream parked
 (a DWARF `main` is decompiled against DWARF alone) — it lays the declaration out
 under the default calling convention
-(`crates/unlace-decomp/src/p1_partition/kuna_elfmaindecl.rs (Runtime)`), locks
+(`crates/unlace-decomp/src/p4_calls/kuna_elfmaindecl.rs (Runtime)`), locks
 only its `int` return (the inputs stay unlocked), and seeds the function with
 the storage, name and type of `argc`, `argv` and `envp`
 (`crates/unlace-decomp/src/infra/decompile_drive.rs (decompile_func_full_with_objects)`).
@@ -10025,11 +10025,11 @@ through the registers it would otherwise have recovered as the return:
 `protoorder_cyclestruct_x86_64` prints `look(v2)` where the option-off output has
 `look(v3,v2)` and the source `look(&leaf)`. Every such case found agrees with
 the source. The seed itself is consulted only through one question,
-`crates/unlace-decomp/src/p1_partition/kuna_elfmaindecl.rs (read_slots)`: are the
+`crates/unlace-decomp/src/p4_calls/kuna_elfmaindecl.rs (read_slots)`: are the
 function inputs the body reads, in any storage the convention passes a parameter
 in, exactly the first k runtime slots? When they are, type inference gives each
 such input its runtime type
-(`crates/unlace-decomp/src/p1_partition/kuna_elfmaindecl.rs (input_type)`, at the
+(`crates/unlace-decomp/src/p4_calls/kuna_elfmaindecl.rs (input_type)`, at the
 same unlocked seam `calleevote` votes through in `build_localtypes`); the type
 holds through propagation (`propagate_type_edge` does not overwrite it) and record
 synthesis gives way to it (`kuna_structsynth.rs (accepts)` refuses a runtime
@@ -10039,7 +10039,7 @@ call treat the input as they treat any recovered parameter. And
 runtime name (`param_name`). The whole declaration is therefore applied in the one
 decompile the function was getting anyway.
 
-`crates/unlace-decomp/src/p1_partition/kuna_elfmaindecl.rs (settled)` checks the
+`crates/unlace-decomp/src/p4_calls/kuna_elfmaindecl.rs (settled)` checks the
 finished function: its parameters must be no parameter at all where the body reads
 no runtime argument, or exactly the first k runtime slots, each named. Otherwise —
 a `main` that reads `argv` but not `argc` (the recovery fills the unread slot

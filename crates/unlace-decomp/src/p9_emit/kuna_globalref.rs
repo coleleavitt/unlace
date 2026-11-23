@@ -478,11 +478,7 @@ impl Refusal {
     }
 }
 
-/// Is `off` inside one of the sorted, inclusive `ranges`?
-pub fn in_ranges(ranges: &[(u64, u64)], off: u64) -> bool {
-    let idx = ranges.partition_point(|&(lo, _)| lo <= off);
-    idx > 0 && ranges[idx - 1].1 >= off
-}
+pub use crate::rangeutil::in_ranges;
 
 fn overlaps(d: &Direct, off: u64, size: u64) -> bool {
     d.start < off.saturating_add(size) && off < d.start.saturating_add(d.size)

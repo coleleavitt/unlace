@@ -105,7 +105,7 @@ pub(crate) fn note_trim(data: &mut Funcdata, op: OpId, before: VarnodeId, mask: 
         return;
     }
     let marked = o.get_addlflags() & kuna_narrowret != 0;
-    let zero = crate::kuna_truncarg::drops_only_zero_bits(data, before, mask);
+    let zero = crate::subflow::drops_only_zero_bits(data, before, mask);
     let whole = data.vbank().get(before).map(|v| v.get_size()) == return_register_width(data);
     let Some(o) = data.obank_mut().get_mut(op) else {
         return;

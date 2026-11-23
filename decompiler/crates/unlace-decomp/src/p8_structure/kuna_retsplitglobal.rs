@@ -157,6 +157,12 @@ pub fn split_is_declined(gate: bool, stores: usize) -> bool {
     gate && stores > MAX_CLONED_GLOBAL_STORES
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.retsplitglobal_is_global_store = Some(is_global_store);
+    hooks.retsplitglobal_split_is_declined = Some(split_is_declined);
+}
+
 #[cfg(test)]
 #[path = "kuna_retsplitglobal/tests.rs"]
 mod tests;

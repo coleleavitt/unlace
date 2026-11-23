@@ -112,6 +112,11 @@ pub fn anchor_of(data: &Funcdata, prev: OpId) -> Option<OpId> {
     alive.then_some(targ)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.indirectanchor_anchor_of = Some(anchor_of);
+}
+
 #[cfg(test)]
 #[path = "kuna_indirectanchor/tests.rs"]
 mod tests;

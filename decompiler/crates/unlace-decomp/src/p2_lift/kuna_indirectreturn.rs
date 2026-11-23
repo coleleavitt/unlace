@@ -207,6 +207,11 @@ fn reached(
     Some(found)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.indirectreturn_target_encoding = Some(target_encoding);
+}
+
 #[cfg(test)]
 fn reentered_since(
     data: &Funcdata,

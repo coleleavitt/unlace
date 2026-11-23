@@ -332,6 +332,11 @@ pub fn store_is_caller_save_spill(data: &Funcdata, store_op: OpId, vn: VarnodeId
     has_later_reload(data, base, offset, size, store_addr)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.spillargtrial_store_is_caller_save_spill = Some(store_is_caller_save_spill);
+}
+
 #[cfg(test)]
 mod frame_tests;
 

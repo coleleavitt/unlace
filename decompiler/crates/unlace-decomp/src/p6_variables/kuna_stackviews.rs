@@ -878,3 +878,8 @@ pub(crate) fn pointer_origin(fd: &Funcdata, mut id: crate::context::VarnodeId) -
     }
     false
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackviews_enabled = Some(enabled);
+}

@@ -599,7 +599,7 @@ impl<'a> AddTreeState<'a> {
             None => return,
         };
         if let Some(in_type) = in_type {
-            let new_type = crate::coreaction_infertypes::propagate_type_pub(
+            let new_type = (self.data.hooks().coreaction_infertypes_propagate_type_pub)(
                 self.data, in_type, op, vn, out, 0, -1,
             );
             if let Some(nt) = new_type {

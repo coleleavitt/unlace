@@ -96,7 +96,7 @@ impl Funcdata {
         // `ProtoStoreSymbol::setInput` when a parameter's storage is not owned by
         // any scope (e.g. a register).
         let restricted_usepoint = &self.get_address().clone() + -1;
-        let stack_views = crate::kuna_stackviews::enabled(self);
+        let stack_views = (self.hooks().stackviews_enabled)(self);
         for (i, name, ty, addr) in specs {
             let rup = restricted_usepoint.clone();
             if let Some(lm) = self.get_scope_local_mut() {
@@ -1360,7 +1360,7 @@ impl Funcdata {
         // resolves the same container the prior call did.
         let sb_usepoint = Address::new_invalid();
         let local_hit =
-            crate::kuna_stackparamviews::backing_for_address(self, &addr, 1).or_else(|| {
+            (self.hooks().stackparamviews_backing_for_address)(self, &addr, 1).or_else(|| {
                 self.get_scope_local()
                     .and_then(|lm| lm.query_container_for_link(&addr, &sb_usepoint))
             });
@@ -2466,7 +2466,7 @@ impl Funcdata {
             let curtrial = fc.active_input().get_trial_for_input_varnode(j);
             // (kuna `calleereginputs`) A register the other callee reads is that
             // call's own argument, so this use is not explained away by it.
-            if crate::p4_calls::kuna_calleereginputs::reads_register(
+            if (self.hooks().calleereginputs_reads_register)(
                 fc,
                 curtrial.get_address(),
                 curtrial.get_size(),
@@ -2485,7 +2485,7 @@ impl Funcdata {
             return true;
         }
         // (kuna) `sharedpush`: see [`crate::p4_calls::kuna_sharedpush`].
-        crate::p4_calls::kuna_sharedpush::declared_arm_shares(self, opmatch, op, vn, trial)
+        (self.hooks().sharedpush_declared_arm_shares)(self, opmatch, op, vn, trial)
     }
 
     /// Test if the given Varnode seems to only be used by `opmatch` as a
@@ -2549,11 +2549,10 @@ impl Funcdata {
             .set_mark();
         varlist.push((invn, main_flags, None));
         let active_output = self.get_active_output().is_some();
-        let forced_return = crate::p4_calls::kuna_voidret::scoring_return(self, opmatch)
-            || crate::p4_calls::kuna_callresultuse::scoring_return(self, opmatch, invn);
-        let result_argument =
-            crate::p4_calls::kuna_callresultuse::scoring_argument(self, opmatch, invn);
-        let call_return = crate::p4_calls::kuna_exclusivecallret::applies(self, opmatch, trial);
+        let forced_return = (self.hooks().voidret_scoring_return)(self, opmatch)
+            || (self.hooks().callresultuse_scoring_return)(self, opmatch, invn);
+        let result_argument = (self.hooks().callresultuse_scoring_argument)(self, opmatch, invn);
+        let call_return = (self.hooks().exclusivecallret_applies)(self, opmatch, trial);
         let mut reached_match = false;
         let mut i = 0;
         while i < varlist.len() {
@@ -2575,12 +2574,12 @@ impl Funcdata {
                 // whatever the value is, so it neither observes the
                 // Varnode nor carries it onward.  See
                 // [`crate::p4_calls::kuna_zeroidiomuse`].
-                if crate::p4_calls::kuna_zeroidiomuse::op_discards_operand(self, op) {
+                if (self.hooks().zeroidiomuse_op_discards_operand)(self, op) {
                     continue;
                 }
                 // (kuna) `voidret` — a forced return value may also be stored
                 // and branched on.  See [`crate::p4_calls::kuna_voidret::returned_use`].
-                if forced_return && crate::p4_calls::kuna_voidret::returned_use(self, op, vn) {
+                if forced_return && (self.hooks().voidret_returned_use)(self, op, vn) {
                     continue;
                 }
                 let o = match self.obank().get(op) {
@@ -2597,9 +2596,7 @@ impl Funcdata {
                 let mut cur_flags = base_flags;
                 // (kuna) `exclusivecallret` — see [`crate::p4_calls::kuna_exclusivecallret`].
                 if call_return
-                    && crate::p4_calls::kuna_exclusivecallret::skips_use(
-                        self, opmatch, op, invn, vn,
-                    )
+                    && (self.hooks().exclusivecallret_skips_use)(self, opmatch, op, invn, vn)
                 {
                     continue;
                 }
@@ -2614,7 +2611,7 @@ impl Funcdata {
                         // reads is not the value being scored, so the walk skips the
                         // op outright.  See
                         // [`crate::p4_calls::kuna_exclusivearguse`].
-                        if crate::p4_calls::kuna_exclusivearguse::access_cannot_reach_call(
+                        if (self.hooks().exclusivearguse_access_cannot_reach_call)(
                             self, opmatch, op, vn,
                         ) {
                             continue;
@@ -2628,14 +2625,12 @@ impl Funcdata {
                         // [`crate::p4_calls::kuna_spillargtrial`].  `exclusivearguse`
                         // covers the disjoint case where the trial Varnode is the
                         // store's ADDRESS on a path that cannot reach the call.
-                        if crate::p4_calls::kuna_exclusivearguse::access_cannot_reach_call(
+                        if (self.hooks().exclusivearguse_access_cannot_reach_call)(
                             self, opmatch, op, vn,
                         ) {
                             continue;
                         }
-                        if !crate::p4_calls::kuna_spillargtrial::store_is_caller_save_spill(
-                            self, op, vn,
-                        ) {
+                        if !(self.hooks().spillargtrial_store_is_caller_save_spill)(self, op, vn) {
                             res = false;
                         }
                     }
@@ -2645,9 +2640,8 @@ impl Funcdata {
                         // that ends in a no-return halt can never reach the RETURN
                         // being matched, so it does not compete.  See
                         // [`crate::p4_calls::kuna_noreturnretuse`].
-                        if crate::p4_calls::kuna_noreturnretuse::call_cannot_reach_return(
-                            self, opmatch, op,
-                        ) {
+                        if (self.hooks().noreturnretuse_call_cannot_reach_return)(self, opmatch, op)
+                        {
                             continue;
                         }
                         if self.check_call_double_use(opmatch, op, vn, cur_flags, trial) {
@@ -2671,7 +2665,7 @@ impl Funcdata {
                     // call's argument.  See
                     // [`crate::p2_lift::kuna_syscallregs::reads_as_argument`].
                     OpCode::CPUI_CALLOTHER
-                        if crate::p2_lift::kuna_syscallregs::reads_as_argument(self, op, vn) =>
+                        if (self.hooks().syscallregs_reads_as_argument)(self, op, vn) =>
                     {
                         if self.obank().get(opmatch).map(|m| m.code()) != Some(OpCode::CPUI_RETURN)
                         {
@@ -2729,9 +2723,7 @@ impl Funcdata {
                         }
                     }
                     OpCode::CPUI_SUBPIECE => {
-                        if crate::p3_dataflow::kuna_multiregargs::subpiece_drops_reached_piece(
-                            self, op, vn,
-                        ) {
+                        if (self.hooks().multiregargs_subpiece_drops_reached_piece)(self, op, vn) {
                             continue;
                         }
                         let in1_off = o
@@ -2821,7 +2813,7 @@ impl Funcdata {
         main_flags: unlace_base::types::uint4,
     ) -> bool {
         let mut memo = AncestorMemo {
-            call_result_root: crate::p4_calls::kuna_callresultuse::scores_trial(self, invn, op),
+            call_result_root: (self.hooks().callresultuse_scores_trial)(self, invn, op),
             ..AncestorMemo::default()
         };
         self.ancestor_op_use_in(&mut memo, maxlevel, invn, op, trial, offset, main_flags)
@@ -2844,7 +2836,7 @@ impl Funcdata {
     ) -> (bool, u64) {
         let mut memo = AncestorMemo {
             every_path,
-            call_result_root: crate::p4_calls::kuna_callresultuse::scores_trial(self, invn, op),
+            call_result_root: (self.hooks().callresultuse_scores_trial)(self, invn, op),
             ..AncestorMemo::default()
         };
         let used = self
@@ -3843,7 +3835,7 @@ impl AncestorRealistic {
             // (kuna syscallregs) the error flag a system call leaves is the
             // kernel's clobber, like a register value through a call.
             OpCode::CPUI_CALLOTHER
-                if self.trial_killed_by_call && crate::kuna_syscallregs::is_error_flag(fd, op) =>
+                if self.trial_killed_by_call && (fd.hooks().syscallregs_is_error_flag)(fd, op) =>
             {
                 AncestorCmd::PopFail
             }

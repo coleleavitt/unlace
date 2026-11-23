@@ -138,13 +138,54 @@ fn run(mode: Mode) -> Run {
         .expect("bootstrap fixture with built processor specs");
 
     prog.arch_mut().set_kuna_option("fid", "strict").unwrap();
-    assert!(prog.arch().analysis_fid && prog.arch().analysis_fid_strict);
+    assert!(
+        prog.arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Fid>()
+            .on
+            && prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .strict
+    );
     prog.arch_mut().set_kuna_option("fid", "on").unwrap();
-    assert!(prog.arch().analysis_fid && !prog.arch().analysis_fid_strict);
+    assert!(
+        prog.arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Fid>()
+            .on
+            && !prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .strict
+    );
     assert!(prog.arch_mut().set_kuna_option("fid", "bogus").is_err());
-    assert!(prog.arch().analysis_fid && !prog.arch().analysis_fid_strict);
+    assert!(
+        prog.arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Fid>()
+            .on
+            && !prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .strict
+    );
     prog.arch_mut().set_kuna_option("fid", "off").unwrap();
-    assert!(!prog.arch().analysis_fid && !prog.arch().analysis_fid_strict);
+    assert!(
+        !prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Fid>()
+            .on
+            && !prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .strict
+    );
 
     // Live-CLI ordering: the `option` lines precede `read symbols` (the deferred
     // commit). Set the flags on the live arch BEFORE committing so the deferred

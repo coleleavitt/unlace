@@ -860,7 +860,11 @@ impl FlowEnvironment for ArchFlowEnv {
         // function entry, incl. a PLT thunk?) and the self-entry check is
         // `dest == fd.getAddress()`.
         let arch = self.arch();
-        if !arch.tail_call_jumps {
+        if !arch
+            .kuna_options
+            .get::<crate::kuna_tailcalljump::TailCallJump>()
+            .jumps
+        {
             // Fast-path the default-off gate without touching the IR.
             return false;
         }
@@ -869,7 +873,9 @@ impl FlowEnvironment for ArchFlowEnv {
         crate::kuna_tailcalljump::kuna_is_tail_call_branch(
             fd,
             op,
-            arch.tail_call_jumps,
+            arch.kuna_options
+                .get::<crate::kuna_tailcalljump::TailCallJump>()
+                .jumps,
             dest_is_known_function,
             dest_is_self,
         )
@@ -887,7 +893,9 @@ impl FlowEnvironment for ArchFlowEnv {
         let tail_call = crate::kuna_tailcalljump::kuna_is_tail_call_table(
             fd,
             op,
-            arch.tail_call_tables,
+            arch.kuna_options
+                .get::<crate::kuna_tailcalljump::TailCallJump>()
+                .tables,
             self.query_call(dest).is_some(),
             dest == fd.get_address(),
             dest_outside_extent,

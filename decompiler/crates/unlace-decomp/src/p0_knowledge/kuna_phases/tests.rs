@@ -619,20 +619,20 @@ fn option_values_live_value_present_for_129() {
                             // is the registered option `PtrFromUseMode`.
                             | "ptrfromuse"
                             // (kuna) `readonlycalls` takes `off|on|<n>`, a guard
-                            // count; its live value is `Architecture::readonly_calls`.
+                            // count; its live value is the registered option `ReadonlyCalls`.
                             | "readonlycalls"
                             // (kuna) `persistcalls` takes `off|on|<n>`, a guard
-                            // count; its live value is `Architecture::persist_calls`.
+                            // count; its live value is the registered option `PersistCalls`.
                             | "persistcalls"
                             // (kuna) `deadcascade` takes `off|on|<n>`, a pass
-                            // count; its live value is `Architecture::dead_cascade`.
+                            // count; its live value is the registered option `DeadCascade`.
                             | "deadcascade"
                             // (kuna) `retsplitlimit` takes `off|<n>`, an op count;
                             // its live value is the registered option `RetSplitLimit`.
                             | "retsplitlimit"
                             // (kuna) `narrowargs` takes `off|on|callers`; its
-                            // live value is the pair `Architecture::narrow_args`
-                            // and `Architecture::narrow_args_callers`.
+                            // live value is the registered option
+                            // `NarrowArgs`.
                             | "narrowargs"
                             // (kuna) `structsynth` takes a MODE (`off|param|nest`),
                             // for the same reason.  Its live value is
@@ -688,7 +688,7 @@ fn option_values_live_value_present_for_129() {
                             // (kuna) `narrowext` takes a MODE
                             // (`off|abi|compiler`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::narrow_ext`.
+                            // the registered option `NarrowExtMode`.
                             | "narrowext"
                             // (kuna) `syscallregs` takes a MODE
                             // (`off|auto|on`) over an enum field, for the

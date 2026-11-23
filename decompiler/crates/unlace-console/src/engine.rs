@@ -3880,7 +3880,10 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                     .kuna_options
                     .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
                     .0
-                && arch.analysis_armframes
+                && arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+                    .inventory
         }
         "noreturn_known" => {
             arch.kuna_options
@@ -4006,12 +4009,19 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::EhFrameFull>()
                 .0
         }
-        "itaniumeh" => arch.itanium_eh,
+        "itaniumeh" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_itaniumeh::ItaniumEh>()
+                .on
+        }
         "ehnote" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Ehnote>()
                 .0
-                && !arch.itanium_eh
+                && !arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_itaniumeh::ItaniumEh>()
+                    .on
         }
         // (kuna) Mach-O `__unwind_info` function-start discovery — facts computed
         // at LOAD, COMMITTED only when this gate is on. Default-off (output-
@@ -4138,8 +4148,16 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::DwarfLines>()
                 .0
         }
-        "cvftrace" => arch.analysis_cvftrace,
-        "cvftrace_lines" => arch.analysis_cvftrace_lines,
+        "cvftrace" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .names
+        }
+        "cvftrace_lines" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .lines
+        }
         "addrtable" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
@@ -4174,7 +4192,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::NoreturnPropagate>()
                 .0
         }
-        "fid" => arch.analysis_fid,
+        "fid" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .on
+        }
         "flirt" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_coreoptions::Flirt>()
@@ -4285,8 +4307,16 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // output-changing (renders CFString constants as `CFSTR("...")` typed
         // `CFStringRef`). Registered here so `off` really skips it; `off`
         // renders the entry exactly as before.
-        "cfstrings" => arch.analysis_cfstrings,
-        "iokitclasses" => arch.analysis_iokitclasses,
+        "cfstrings" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::CfStrings>()
+                .pass
+        }
+        "iokitclasses" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::IokitClasses>()
+                .names
+        }
         "xnutables" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Xnutables>()
@@ -7002,7 +7032,12 @@ fn commit_analysis_output(
     };
     // (kuna `iokitclasses on`) The IOKit classes are typed like the Itanium
     // ones, whether or not `vtabletypes` types those.
-    let iokit = if prog.arch().analysis_iokittypes {
+    let iokit = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::IokitClasses>()
+        .types
+    {
         std::mem::take(&mut out.iokit_cxx)
     } else {
         Default::default()

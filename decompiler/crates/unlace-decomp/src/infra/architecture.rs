@@ -418,15 +418,6 @@ pub struct Architecture {
     /// (kuna `callerreads`) Every direct call the Listing walked, as `(callee
     /// entry, address the call returns to)`, sorted. Empty without the Listing.
     pub kuna_call_returns: Vec<(u64, u64)>,
-    /// (kuna `itaniumeh`) Give each call covered by a `.gcc_except_table`
-    /// call-site record an exceptional edge to its landing pad.
-    pub itanium_eh: bool,
-    /// (kuna `itaniumeh catch`) Only pads with a catch clause get an edge.
-    pub itanium_eh_catch_only: bool,
-    /// (kuna `lanefuse`) Re-fuse per-lane vector p-code (`kuna_lanefuse`).
-    pub lane_fuse: bool,
-    /// (kuna `lanefuse all`) Also fuse legacy-SSE integer and two-lane double runs.
-    pub lane_fuse_all: bool,
     /// (kuna `vectorabi`) The widened models, built once per default model.
     pub vector_models:
         std::cell::RefCell<Vec<(Rc<crate::fspec::ProtoModel>, Rc<crate::fspec::ProtoModel>)>>,
@@ -435,15 +426,6 @@ pub struct Architecture {
     /// (kuna `itaniumeh`) The image's Itanium call-site table, installed by the
     /// analysis commit from `AnalysisOutput::eh_call_sites`. Empty without it.
     pub eh_table: Rc<crate::kuna_itaniumeh::EhTable>,
-
-    /// (kuna `calleereginputs`) Does an x86-32 call take `__thiscall` or
-    /// `__fastcall` from the registers its callee reads?
-    pub callee_reginputs: bool,
-    /// (kuna `calleereginputs custom`) Also recover a callee-saved register
-    /// (EBX, ESI, EDI) as a custom argument where the callee reads it and
-    /// every direct call site in the image sets it; see
-    /// [`crate::p4_calls::kuna_calleereginputs`].
-    pub callee_reginputs_custom: bool,
 
     /// (kuna) The compiled `<segmentop>` definitions by address-space index
     /// (C++ `userops.segmentop`), built at the end of boot.  See
@@ -514,30 +496,10 @@ pub struct Architecture {
     /// (kuna `xnutables`) The struct each kalloc_type view allocates, by view
     /// address, handed over by the XNU table analysis; empty elsewhere.
     pub kuna_kalloc_types: Rc<crate::kuna_kalloctype::KallocTypes>,
-    /// (kuna tee-O2 tail-jumps) Recover a direct `jmp` to another function's
-    /// entry (e.g. `jmp setlocale@plt`) as a tail call (CALL + RETURN) instead of
-    /// flowing into the callee (`option tailcalljump on|direct`).
-    pub tail_call_jumps: bool,
-    /// (kuna `tailcalljump on`) Also recover a computed jump whose only
-    /// destination is another function's entry (a veneer) as a tail call, when
-    /// the destination lies outside a declared extent or the callee's stated
-    /// prototype loses nothing.  Off under `option tailcalljump direct|off`.
-    pub tail_call_tables: bool,
-    /// (kuna) `loweredswitch linear|all`: a linear chain of equality tests with
-    /// no binary-search split re-rolls into a switch too.
-    pub lowered_switch_linear: bool,
-    /// (kuna) `loweredswitch tree|all`: a binary-search compare tree re-rolls
-    /// from 2 to 64 cases instead of 3 to 16.
-    pub lowered_switch_tree: bool,
     /// Mapped ELF x86 flow recovery: load-time container/target eligibility;
     /// XML, raw, and remote images abstain.
     pub mapped_flow_boundary_image: bool,
 
-    /// Fold comparisons proven constant for every input (option `opaquepredicate`).
-    pub opaque_predicate: bool,
-    /// (kuna `opaquepredicate globals`) Read a global the whole program never
-    /// writes as its initial value (`kuna_opaqueglobals`).
-    pub opaque_globals: bool,
     /// (kuna `opaquepredicate globals`) The scan's answer, once a function
     /// asked for it.
     pub kuna_opaque_globals: Option<Rc<crate::kuna_opaqueglobals::UnwrittenGlobals>>,
@@ -588,15 +550,8 @@ pub struct Architecture {
     /// verdict and the catalog `current` reports the option, not the image.
     pub source_lang_forced: Option<crate::kuna_sourcelang::SourceLang>,
 
-    /// (kuna `deadcascade`) After this many passes of one run of a rule pool
-    /// (`None` = never), dead-op removal also removes the dead chain of joins
-    /// and guards behind the removed op (`p3_dataflow/kuna_deadcascade.rs`).
-    pub dead_cascade: Option<u32>,
     /// Operation-specific typed views over shared physical frame storage.
     pub stack_views: bool,
-    /// (kuna) Reconstruct a compiler-lowered comparison cascade into a switch
-    /// (C++ `recover_lowered_switch`).
-    pub recover_lowered_switch: bool,
     /// (kuna `msvcbyval`) The MSVC declarations with one by-value class of
     /// unstated size, by entry `(space index, offset)`; filled by the analysis
     /// commit while `msvcsig` applies.
@@ -628,44 +583,11 @@ pub struct Architecture {
     /// decompile shows whether the option applies. See
     /// [`crate::p4_calls::kuna_armfloatreturn::park_float_library_prototypes`].
     pub arm_float_library_prototypes: Vec<(Option<Address>, crate::fspec::PrototypePieces)>,
-    /// (kuna) Extend a narrow integer argument or return value as the ABI states
-    /// (option `narrowext`).  See [`crate::p4_calls::kuna_narrowext`].
-    pub narrow_ext: crate::kuna_narrowext::NarrowExtMode,
 
     /// (kuna `fdeflowbound`) Every single-function unwind-table extent
     /// `[start, end)`, sorted, committed by the analysis tier.
     pub kuna_fde_extents: Rc<Vec<(u64, u64)>>,
-    /// (kuna) Give a call no guard over read-only memory once a pass would build
-    /// this many such guards, `None` to keep them all (option `readonlycalls`).
-    pub readonly_calls: Option<u64>,
-    /// (kuna) Guard a persistent global only at the calls next to its accesses
-    /// once a pass would build this many guards, `None` to keep them all
-    /// (option `persistcalls`).
-    pub persist_calls: Option<u64>,
-    /// (kuna) Declare a register parameter whose consumed bits fit a narrower
-    /// low part at that width (option `narrowargs`).  See
-    /// [`crate::p4_calls::kuna_narrowargs`].
-    pub narrow_args: bool,
-    /// (kuna) Also declare a 32-bit ARM register parameter narrow when every
-    /// caller passes a narrow value (option `narrowargs callers`).  See
-    /// [`crate::p4_calls::kuna_callerargs`].
-    pub narrow_args_callers: bool,
 
-    /// (kuna) An expression read more than `max_implied_ref` times still prints
-    /// inline when its terms times its uses is at most this; 0 = off (option
-    /// `implweight`).
-    pub impl_weight: int4,
-    /// (kuna) angr SAILR gotoless `ReturnDuplicatorHigh`: duplicate a shared
-    /// **bare-epilogue** RETURN block (only MULTIEQUAL/COPY/RETURN, no side effects)
-    /// into each predecessor but one, so the classic
-    /// `if (c) { body; return X; } return Y;` guard shape structures as
-    /// per-predecessor early returns instead of one comma-folded exit — the gotoless
-    /// complement to `ActionReturnSplit` (the goto-driven `ReturnDuplicatorLow`)
-    /// (`duplicate_shared_returns`, DIV-54 default-on, superseding the DIV-18 revert).
-    pub duplicate_shared_returns: bool,
-    /// (kuna) `returndup calls`: also split a block that ends in one call and a
-    /// return once per predecessor when the call's arguments are merged values.
-    pub duplicate_call_returns: bool,
     /// (kuna) `rettriangle`: decline a `duplicate_shared_returns` split whose
     /// shared RETURN block is the join of a one-block `if`.  Read by
     /// [`crate::p8_structure::kuna_rettriangle::is_triangle_join`].
@@ -907,17 +829,6 @@ pub struct Architecture {
     /// default `auto`.
     pub analysis_typelib: crate::kuna_typelib::TypeLib,
 
-    /// (kuna) Paint the ARM mode of code a stripped image proves through control
-    /// flow where the walk's own `blx` writes left the other mode (`flowmode`);
-    /// default **off**, which leaves the context database as the walk left it.
-    pub analysis_flowmode: bool,
-    /// (kuna) `flowmode aftercall`: the proof also continues after an
-    /// unconditional call whose callee it proves to return; default **off**.
-    pub analysis_flowmode_aftercall: bool,
-
-    /// Validated A32 inventory frames; full recovery also admits Thumb and xrefs.
-    pub analysis_armframes: bool,
-    pub analysis_armframes_full: bool,
     /// Caller-local PPC32 PIC import proof, applied during flow following.
     pub analysis_ppc32picimports: crate::kuna_ppc32picimports::Mode,
     /// (kuna) The load-time options this program was loaded with: the ones in
@@ -959,12 +870,6 @@ pub struct Architecture {
     ///
     /// [`NameChars::Safe`]: crate::kuna_symbolnamechars::NameChars::Safe
     pub analysis_symbolnamechars: crate::kuna_symbolnamechars::NameChars,
-
-    /// (kuna `cvftrace`) Name routines from a Compaq Visual Fortran PE32 `.trace`
-    /// section; default **on** (inert without one).
-    pub analysis_cvftrace: bool,
-    /// (kuna `cvftrace lines`) Also comment each statement's `file:line`; default off.
-    pub analysis_cvftrace_lines: bool,
 
     /// (kuna `msvcsig`) The entries, as `(space index, offset)`, whose MSVC
     /// prototype the analysis commit locked onto the FunctionSymbol. A call
@@ -1047,19 +952,6 @@ pub struct Architecture {
     /// (`unlace_analysis::kernelbug`); flow renders each trap as `BUG()` or
     /// `__WARN(file,line)` ([`crate::kuna_kernelbug`]). Empty on every other image.
     pub kernel_bug_sites: Vec<crate::kuna_kernelbug::KernelBugSite>,
-    /// (kuna) Gate the FID fingerprint matcher (`fid`), a Listing/xref consumer;
-    /// default **off**. The kuna analog of Ghidra's FID identification analyzer:
-    /// over the built Listing it fingerprints each function with the byte-exact
-    /// operand-masked FNV-1a64 hash and looks the full hash up in a kuna `.fid`
-    /// database (named by the `kuna_fid_db` env var), renaming a matched
-    /// `FUN_*`/`sub_*` placeholder back to its library name — the capability that
-    /// re-identifies a function in a STRIPPED binary (e.g. `sub_4017c0` →
-    /// `kuna_crc32`). Reads the Listing (`--option listing on` builds it) and is a
-    /// no-op without the Listing AND without a configured DB. Default-off, real-ELF
-    /// path only ⇒ every parity gate is byte-identical.
-    pub analysis_fid: bool,
-    /// Require matching specific hash and instruction count for FID renames.
-    pub analysis_fid_strict: bool,
 
     /// (kuna) Check FID matches against callee names, several rounds, tiny-stub guard (`fidcallees`). Default on.
     pub analysis_fidcallees: bool,
@@ -1082,24 +974,9 @@ pub struct Architecture {
     /// function's own decompile with them ahead of the console's.
     pub loader_param_locks:
         std::collections::BTreeMap<Address, Vec<(int4, String, crate::fspec::ParameterPieces)>>,
-    /// (kuna) Gate the Mach-O `__cfstring` constant-string recovery pass
-    /// (`cfstrings`); default **on** (renders CFString constants as
-    /// `CFSTR("...")` typed `CFStringRef`). Mach-O-only pass.
-    pub analysis_cfstrings: bool,
-    /// (kuna `cfstrings annotate`) Follow each rendered `CFSTR("...")` with a
-    /// comment naming its `__cfstring` entry address. Default **off**.
-    pub cfstrings_annotate: bool,
     /// (kuna `cfstrings`) The `__cfstring` entry addresses the commit seeded, so
     /// the printer renders a literal at one of them as `CFSTR("...")`.
     pub cfstring_entries: std::collections::BTreeSet<u64>,
-    /// (kuna) `iokitclasses`: IOKit class and vtable recovery on an XNU kernel
-    /// or kext (a commit-gated analysis pass, default on).
-    pub analysis_iokitclasses: bool,
-    /// (kuna `iokitclasses on`) Type the recovered IOKit classes like Itanium
-    /// vtables (a sized `C` whose first field is `C_vtbl *vtable`) and give
-    /// each virtual member, constructor and destructor a `C *this` input
-    /// hint; see [`crate::kuna_vtabletypes`]. Off under `iokitclasses names`.
-    pub analysis_iokittypes: bool,
     /// (kuna `iokitclasses on`) The `this` input hints, by function entry.
     pub kuna_this_hints:
         std::collections::BTreeMap<Address, Rc<Vec<crate::kuna_inputhints::InputHint>>>,
@@ -1546,15 +1423,9 @@ impl Architecture {
             kuna_float_scan_batch: false,
             kuna_settle_caller_reads: false,
             kuna_call_returns: Vec::new(),
-            itanium_eh: false,
-            itanium_eh_catch_only: false,
-            lane_fuse: false,
-            lane_fuse_all: false,
             vector_models: std::cell::RefCell::new(Vec::new()),
             vector_userop_kinds: std::cell::OnceCell::new(),
             eh_table: Rc::new(crate::kuna_itaniumeh::EhTable::default()),
-            callee_reginputs: true, // (kuna) option calleereginputs; default on, inert off x86-32 Windows
-            callee_reginputs_custom: false, // (kuna) option calleereginputs `custom`; reset_defaults sets the shipped default
 
             fpu_emu: 0, // (kuna) option fpuemu; reset_defaults sets the shipped default (auto)
             fpu_emu_evidence: false,
@@ -1576,14 +1447,8 @@ impl Architecture {
             kuna_objc_retargets: Default::default(),
             kuna_objc_site_pieces: Default::default(),
             kuna_kalloc_types: Rc::new(Default::default()),
-            tail_call_jumps: false,
-            tail_call_tables: false, // (kuna) option tailcalljump; reset_defaults sets the shipped default
             mapped_flow_boundary_image: false,
-            lowered_switch_linear: false, // (kuna) option loweredswitch linear|all
-            lowered_switch_tree: false,   // (kuna) option loweredswitch tree|all
 
-            opaque_predicate: false,
-            opaque_globals: false,
             kuna_opaque_globals: None,
             ret_split_global: false,
             octeon_upstream_inject: Vec::new(), // (kuna) set by init_userops_and_fixups on an Octeon language
@@ -1604,26 +1469,16 @@ impl Architecture {
             go_chanrecv_status_sites: Default::default(),
             source_lang_forced: None, // (kuna) option sourcelang; reset_defaults restores auto
 
-            dead_cascade: Some(crate::p3_dataflow::kuna_deadcascade::DEFAULT_PASSES),
             stack_views: false,
-            recover_lowered_switch: false,
             msvc_byval_decls: Rc::new(Default::default()),
             msvc_builders: Rc::new(Default::default()),
             arm_float_args: false, // (kuna) option armfloatargs
             arm_widened_models: std::cell::RefCell::new(Vec::new()),
             arm_float_library_prototypes: Vec::new(),
             arm_float_return: false, // (kuna) option armfloatreturn
-            narrow_ext: crate::kuna_narrowext::NarrowExtMode::Off, // (kuna) option narrowext; reset_defaults sets the shipped default
 
             kuna_fde_extents: Rc::new(Vec::new()),
-            readonly_calls: Some(crate::p3_dataflow::heritage::READONLY_CROSS_PRODUCT),
-            persist_calls: Some(crate::p3_dataflow::heritage::PERSIST_CROSS_PRODUCT),
-            narrow_args: true,
-            narrow_args_callers: true,
 
-            impl_weight: 0, // (kuna) option implweight; reset_defaults sets the shipped default
-            duplicate_shared_returns: false,
-            duplicate_call_returns: false,
             returndup_triangle: false, // (kuna) option rettriangle; reset_defaults sets the shipped default
 
             name_style_angr: false,
@@ -1680,11 +1535,7 @@ impl Architecture {
             analysis_dwarfscopes: true,
             esp_image_chip: None,
             analysis_typelib: crate::kuna_typelib::TypeLib::Auto,
-            analysis_flowmode: false,
-            analysis_flowmode_aftercall: false,
 
-            analysis_armframes: true,
-            analysis_armframes_full: false,
             analysis_ppc32picimports: Default::default(),
             ppc32_pic_imports: Default::default(),
             analysis_ifuncfpret: true, // (kuna) option ifuncfpret, default on (x86-64 IRELATIVE slots only)
@@ -1693,9 +1544,6 @@ impl Architecture {
             analysis_debuglink: true,
             analysis_goabi: false, // (kuna) option goabi; reset_defaults sets the shipped default (auto)
             analysis_symbolnamechars: crate::kuna_symbolnamechars::NameChars::Off,
-
-            analysis_cvftrace: false,
-            analysis_cvftrace_lines: false,
 
             msvcsig_import_slots: std::collections::BTreeSet::new(),
             format_call_overrides: std::collections::BTreeMap::new(),
@@ -1713,8 +1561,6 @@ impl Architecture {
             error_noreturn_callsites: Vec::new(),
             dos_exit_sites: Vec::new(),
             kernel_bug_sites: Vec::new(),
-            analysis_fid: false,
-            analysis_fid_strict: false,
 
             analysis_fidcallees: true,
 
@@ -1722,11 +1568,7 @@ impl Architecture {
 
             analysis_objcivars: true,
             loader_param_locks: std::collections::BTreeMap::new(),
-            analysis_cfstrings: false,
-            cfstrings_annotate: false,
             cfstring_entries: std::collections::BTreeSet::new(),
-            analysis_iokitclasses: false,
-            analysis_iokittypes: false,
             kuna_this_hints: std::collections::BTreeMap::new(),
             blob_entries: Rc::default(),
             loader_proto_models: Rc::default(),
@@ -1812,44 +1654,21 @@ impl Architecture {
         (self.pass_hooks().mzdgroup_apply)(self);
         self.field_type = false; // (kuna) option fieldtype default-off: the flip moves which record the layout ledger shares between readers (fields-only layout precision .8713 -> .8693); docs/features/fieldtype/default-on-evaluation.md
 
-        self.tail_call_jumps = true; // (kuna) DIV-13 default-on (angr tail-call recovery; per-test opt-out on Long double #1/#2)
-        self.tail_call_tables = true; // (kuna) GH-781 default `tailcalljump on`: a veneer whose one destination is another function's entry is a tail call when the destination is outside a declared extent, or the callee's prototype is stated and its return value (if any) reaches a stated output. 0/675 byte-identical on the datatest corpus; `option tailcalljump direct` restores the flow into the destination
-
         self.ret_split_global = true; // (kuna) DIV-PENDING default-on: a shared RETURN block that stores to GLOBALS is not the bare epilogue `ActionReturnSplit::isSplittable` assumes, so it is no longer cloned into every predecessor. One-directional (it can only decline a split) and byte-identical (0/675) on the datatest corpus; restore the upstream predicate with `option retsplitglobal off`
         self.call_wide = false;
         self.kuna_callwide.clear();
         self.source_lang_forced = None; // (kuna) option sourcelang default auto; the detected fact survives resets
 
-        self.dead_cascade = Some(crate::p3_dataflow::kuna_deadcascade::DEFAULT_PASSES);
         self.stack_views = false;
 
-        self.recover_lowered_switch = true; // (kuna) default-on (angr port)
-        self.lowered_switch_linear = false; // (kuna) `loweredswitch linear` is opt-in: a linear chain also reads as a hand-written if/else-if
-        self.lowered_switch_tree = false; // (kuna) `loweredswitch tree` is opt-in: the 16-case cap is the structurer's fail-safe
-
-        self.readonly_calls = Some(crate::p3_dataflow::heritage::READONLY_CROSS_PRODUCT);
-        self.persist_calls = Some(crate::p3_dataflow::heritage::PERSIST_CROSS_PRODUCT);
-        self.narrow_args_callers = true; // (kuna) option narrowargs default `callers`: also narrow a 32-bit ARM parameter every caller of a closed function passes narrow, one of them extending it itself
-        self.narrow_args = true; // (kuna) option narrowargs default-on: a register parameter whose uses read only its low 1, 2 or 4 bytes is declared that wide, and a callee's stated narrow parameter caps how much of the argument its callers consume (0/675 datatests)
         self.returndup_triangle = false; // (kuna) option rettriangle default-off: decbench sample O0 -163 GED / +56 perfect, O2 +60 GED / +1 perfect; on in the aggressive preset
-        self.duplicate_shared_returns = true; // (kuna) DIV-54 default-on, superseding the DIV-18 revert (angr SAILR gotoless ReturnDuplicatorHigh). The -976 GED-perfect regression that reverted it was measured before #137 added the const-return gate (`returndup_is_const_ret`); re-ablated on 52,862 decbench functions the selective pass is +417 GED-perfect / -7,756 aggregate GED, net-positive in every one of nine tested partitions. Per-test opt-out (`option returndup off`) on the datatests it changes keeps the corpus byte-identical.
-        self.duplicate_call_returns = false; // (kuna) `returndup calls` is opt-in: the merged call is often the source's own ternary argument
         self.name_style_angr = true; // (kuna) default-on: angr-style default naming
         self.ctypes = false; // (kuna) DIV-75: default-OFF in the catalog because the datatest corpus pins `int4`/`float8` spellings in 42 assertions; ON in the `aggressive` and `fast` presets and at every `auto` size, so valid C is the default RENDERING everywhere a real binary is decompiled
 
-        self.impl_weight = 0; // (kuna) option implweight
-
         self.float_globals = true; // (kuna) option floatglobals default-on
 
-        self.itanium_eh = true;
-        self.itanium_eh_catch_only = false;
-        self.lane_fuse = true;
-        self.lane_fuse_all = false;
         self.arm_float_args = true; // (kuna) option armfloatargs: default-ON with armfloatreturn; inert unless the ELF states the VFP procedure-call standard
-        self.narrow_ext = crate::kuna_narrowext::NarrowExtMode::Abi; // (kuna) option narrowext default `abi`: a narrow integer argument or return value is extended as the RISC-V and LoongArch procedure-call standards state
         self.arm_float_return = true; // (kuna) option armfloatreturn: default-ON; inert unless the ELF states the VFP procedure-call standard
-        self.callee_reginputs = true; // (kuna) option calleereginputs default-on: only x86-32 Windows (x86win.cspec) decodes a callee; 0/675 datatest assertions move
-        self.callee_reginputs_custom = crate::p4_calls::kuna_calleereginputs::CUSTOM_DEFAULT; // (kuna) option calleereginputs `custom`: callee-saved EBX/ESI/EDI custom args; see the module and docs/spec chapter 04
         self.analyze_for_loops = true;
         self.readonlypropagate = false;
         self.nan_ignore_all = false;
@@ -1897,8 +1716,6 @@ impl Architecture {
         // (kuna) Go pclntab functions out of the fast inventory walk -- default-ON.
         // (kuna) ARM flow-proven decode-mode paints -- default-OFF (GH-780): the
         // proof trusts a fall-through the compiler may leave unreachable.
-        self.analysis_flowmode = false;
-        self.analysis_flowmode_aftercall = false;
         // (kuna) PIC base-register folding in the xref index -- default-ON. It is
         // a query surface only (no p-code, no emitted C), so no parity gate can
         // observe it; it only ever ADDS an edge, and only one it can prove.
@@ -1919,8 +1736,6 @@ impl Architecture {
 
         // (kuna) `.pdata` RUNTIME_FUNCTION-interior entry suppression — default-ON.
         // (kuna) PDB-procedure-interior entry suppression — default-ON.
-        self.analysis_armframes = true;
-        self.analysis_armframes_full = false;
         self.analysis_ppc32picimports = if self.load_options_from_env {
             crate::kuna_ppc32picimports::Mode::loaded()
         } else {
@@ -1930,17 +1745,12 @@ impl Architecture {
         self.analysis_debuglink = true; // (kuna) separate debug files, default-ON: only a stripped ELF with a findable companion changes
         self.analysis_goabi = true; // (kuna) option goabi default auto: a Go image takes the vendored golang cspec
         self.analysis_symbolnamechars = crate::kuna_symbolnamechars::NameChars::Safe; // (kuna) DIV-94: symbol-name sanitizing defaults to `safe` -- the structural set only, a measured no-op on every name a real toolchain emits
-        self.analysis_cvftrace = true;
-        self.analysis_cvftrace_lines = false;
 
         // (kuna) DIV: demangled C++ signatures default to the PROVEN tier — only
         // the prototypes the mangling entails (ctor/dtor/cv-qualified member/
         // unqualified global), measured at precision 1.0000 on google/leveldb.
         // Real-object path only, so every parity gate is byte-identical.
         self.lazy_entry_starts = Rc::default();
-
-        self.analysis_fid = false; // FID fingerprint matcher consumer default-off
-        self.analysis_fid_strict = false;
 
         self.analysis_fidcallees = true;
         // (kuna, GH-299) AIF bracketed-candidate reject -- default-ON; inert without `aif`.
@@ -1949,10 +1759,6 @@ impl Architecture {
 
         self.analysis_flirtsites = true;
         self.analysis_objcivars = true; // (kuna) ObjC instance structs + typed self + ivar offset fold; inert unless objc is on
-        self.analysis_iokitclasses = true; // (kuna) IOKit class recovery, XNU images only
-        self.analysis_iokittypes = true;
-        self.analysis_cfstrings = true; // (kuna) Mach-O __cfstring constant-string recovery default-on: Mach-O-only and real-binary-path only, so the XML datatest corpus never runs it (0/675); on an 80 MB third-party arm64 iOS app one decompile is within noise (min 2.324 s off, 2.359 s on, medians 2.442 / 2.372 over 6 interleaved runs)
-        self.cfstrings_annotate = false;
         self.macho_arm64e = true; // arm64e Apple-Silicon spec selection (arm64e Mach-O only)
     }
 
@@ -2600,8 +2406,10 @@ impl Architecture {
                 .0
                 && self.print.out_lang() == crate::kuna_lang::OutLang::C,
         ));
-        ctx.opaque_predicate = self.opaque_predicate;
-        if self.opaque_predicate && self.opaque_globals {
+        let opaque = self
+            .kuna_options
+            .get::<crate::kuna_coreoptions::OpaquePredicate>();
+        if opaque.on && opaque.globals {
             ctx.opaque_globals = self.kuna_opaque_globals.clone();
             ctx.opaque_globals_pending =
                 self.kuna_opaque_globals.is_none() && self.kuna_float_scan.is_some();
@@ -2678,7 +2486,6 @@ impl Architecture {
         )); // (kuna) castindex
         ctx.elem_ptr_ranges = std::rc::Rc::clone(&self.globalref_ranges); // (kuna) elemptr
         ctx.libctypes = self.analysis_libctypes; // (kuna) libctypes (kuna_libcfit)
-        ctx.recover_lowered_switch = self.recover_lowered_switch; // loweredswitch
         ctx.msvc_byval_decls = Rc::clone(&self.msvc_byval_decls);
         ctx.msvc_builders = Rc::clone(&self.msvc_builders);
 
@@ -2687,16 +2494,12 @@ impl Architecture {
             .get::<crate::kuna_coreoptions::Vtabletypes>()
             .0
             || !self.kuna_this_hints.is_empty();
-        ctx.readonly_calls = self.readonly_calls;
-        ctx.persist_calls = self.persist_calls;
         // (kuna `calleereginputs custom`) a function's own evaluation sees the
         // same per-callee models its callers' flow does.
         ctx.kuna_custom_reg_callers = Rc::clone(&self.kuna_custom_reg_callers);
         ctx.kuna_custom_reg_models = Rc::clone(&self.kuna_custom_reg_models);
-        ctx.narrow_args = self.narrow_args; // narrowargs
         ctx.stack_views = self.stack_views;
 
-        ctx.impl_weight = self.impl_weight; // implweight
         ctx.do_while_continue = self.print.out_lang().profile().forms.do_while
             != crate::kuna_lang::DoWhileForm::RustLoopBreakIf;
         ctx.kuna_options.set(crate::kuna_coreoptions::PostIncrement(
@@ -2734,10 +2537,6 @@ impl Architecture {
             .filter(|u| u.get_inject_id().is_none())
             .map(|u| vec![u.get_index() as unlace_base::types::uint4])
             .unwrap_or_default();
-        ctx.lowered_switch_linear = self.lowered_switch_linear; // loweredswitch linear|all
-        ctx.lowered_switch_tree = self.lowered_switch_tree; // loweredswitch tree|all
-        ctx.duplicate_shared_returns = self.duplicate_shared_returns; // returndup
-        ctx.duplicate_call_returns = self.duplicate_call_returns; // returndup calls
         ctx.returndup_triangle = self.returndup_triangle; // rettriangle (one-block-if join)
         ctx.go_keep_divide_checks = self.archid.starts_with("AARCH64:");
         // (kuna) carry the whiledo->for reroll gate (C++ `glb->analyze_for_loops`)
@@ -2784,7 +2583,6 @@ impl Architecture {
         // (`option unrolledguard`) so `FlowInfo::collectEdges` reaches it.
         // (kuna) carry the shared-partial gate (`option jtsharepartial`) so
         // `Funcdata::stage_jump_table` reaches it.
-        ctx.dead_cascade = self.dead_cascade;
         ctx.loader = Some(self.translate.loader_rc());
         // Carry the read-only-propagation switch (C++ `glb->readonlypropagate`,
         // flipped by `option readonly`) so `ActionVarnodeProps` reaches it to gate
@@ -2794,16 +2592,22 @@ impl Architecture {
         // slots so `ActionVarnodeProps` folds those loads with global read-only
         // propagation still off. `Rc` clone: the list is built once at load.
         ctx.dynreloc_const = Rc::clone(&self.dynreloc_const);
-        ctx.eh_table = self.itanium_eh.then(|| Rc::clone(&self.eh_table));
-        ctx.itanium_eh_catch_only = self.itanium_eh_catch_only;
+        ctx.eh_table = self
+            .kuna_options
+            .get::<crate::kuna_itaniumeh::ItaniumEh>()
+            .on
+            .then(|| Rc::clone(&self.eh_table));
         ctx.kuna_options.set(crate::kuna_coreoptions::VexZeroUpper(
             self.kuna_options
                 .get::<crate::kuna_coreoptions::VexZeroUpper>()
                 .0
                 && self.archid.starts_with("x86:LE:64"),
         ));
-        ctx.lane_fuse = self.lane_fuse && self.archid.starts_with("x86:LE:64");
-        ctx.lane_fuse_all = self.lane_fuse_all;
+        let lane_fuse = self.kuna_options.get::<crate::kuna_coreoptions::LaneFuse>();
+        ctx.kuna_options.set(crate::kuna_coreoptions::LaneFuse {
+            on: lane_fuse.on && self.archid.starts_with("x86:LE:64"),
+            all: lane_fuse.all,
+        });
         ctx.vector_fp = if self
             .kuna_options
             .get::<crate::kuna_coreoptions::VectorAbi>()

@@ -7,14 +7,12 @@ architecture -> kuna_callbacktype
 architecture -> kuna_calleedeadarg
 architecture -> kuna_calleememory
 architecture -> kuna_calleepurge
-architecture -> kuna_calleereginputs
 architecture -> kuna_calleevote
 architecture -> kuna_callerargs
 architecture -> kuna_callmechanisms
 architecture -> kuna_callrettype
 architecture -> kuna_callwide
 architecture -> kuna_cortexmpriv
-architecture -> kuna_deadcascade
 architecture -> kuna_decodekit
 architecture -> kuna_elemptr
 architecture -> kuna_esprom
@@ -73,7 +71,6 @@ architecture -> remote_provider
 architecture -> stringmanage
 architecture -> universalaction
 context -> kuna_callmechanisms
-context -> kuna_deadcascade
 context -> kuna_floatglobals
 context -> kuna_itaniumeh
 context -> kuna_jumpassist

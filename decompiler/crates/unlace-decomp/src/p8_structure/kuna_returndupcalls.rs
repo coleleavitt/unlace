@@ -136,7 +136,12 @@ impl Action for ActionReturnDupCalls {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().duplicate_call_returns {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_returndup::ReturnDup>()
+            .calls
+        {
             return 0;
         }
         let root = data.bblocks_root_pub();

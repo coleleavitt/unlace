@@ -119,7 +119,11 @@ fn kuna_anchor_flags_default_to_div_values() {
             .get::<crate::kuna_arraystride::RecoverArrayStride>()
             .0
     );
-    assert!(arch.recover_lowered_switch);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
+            .enabled()
+    );
     assert!(arch.name_style_angr);
     assert!(
         arch.kuna_options
@@ -134,8 +138,16 @@ fn kuna_anchor_flags_default_to_div_values() {
     );
     // (kuna) DIV-13 default-on sweep: the 10 angr structuring/switch flags are now
     // default-on (per-test opt-out keeps the datatest/stage corpora at parity).
-    assert!(arch.tail_call_jumps);
-    assert!(arch.tail_call_tables);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_tailcalljump::TailCallJump>()
+            .jumps
+    );
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_tailcalljump::TailCallJump>()
+            .tables
+    );
     assert!(
         arch.kuna_options
             .get::<crate::jumptable::SwitchMultiPred>()
@@ -298,7 +310,11 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     );
     // Listed by the preset even though DIV-54 makes it a shipped default, so the
     // preset re-enables it after an earlier `--option returndup off`.
-    assert!(arch.duplicate_shared_returns);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_returndup::ReturnDup>()
+            .shared
+    );
     assert!(
         arch.kuna_options
             .get::<crate::kuna_sparcstructret::SparcStructReturn>()
@@ -335,7 +351,11 @@ fn apply_mode_reliable_is_a_no_op() {
         arch.kuna_options.get::<crate::kuna_aif::AifMode>(),
         crate::kuna_aif::AifMode::Off
     );
-    assert!(arch.duplicate_shared_returns); // DIV-54 shipped default survives
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_returndup::ReturnDup>()
+            .shared
+    ); // DIV-54 shipped default survives
 }
 
 #[test]

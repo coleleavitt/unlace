@@ -121,7 +121,13 @@ pub(crate) fn decompile_callee_first(
         ..Default::default()
     };
     let callers = match &graph {
-        Ok(graph) if prog.arch().narrow_args_callers => {
+        Ok(graph)
+            if prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_narrowargs::NarrowArgs>()
+                .callers =>
+        {
             graph.arm_closed_sites(&args.binary, args.slice_pref())
         }
         _ => None,

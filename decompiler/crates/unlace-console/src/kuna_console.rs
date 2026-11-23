@@ -234,7 +234,14 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_globalarrayanchor::GlobalArrayAnchor>()
                 .0,
         ),
-        "opaquepredicate" if conf.opaque_predicate && conf.opaque_globals => "globals",
+        "opaquepredicate"
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::OpaquePredicate>()
+                .globals =>
+        {
+            "globals"
+        }
 
         "bitidioms" => on_off(
             conf.kuna_options
@@ -281,7 +288,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_switchguardmerge::SwitchGuardMerge>()
                 .0,
         ),
-        "opaquepredicate" => on_off(conf.opaque_predicate),
+        "opaquepredicate" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::OpaquePredicate>()
+                .on,
+        ),
         "memsetrecover" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_memsetsequence::MemsetRecover>()
@@ -328,9 +339,17 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // (kuna `calleereginputs`) Three-valued (off|on|custom), reported from
         // its two engine flags.
         "calleereginputs" => {
-            if conf.callee_reginputs_custom {
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_calleereginputs::CalleeRegInputs>()
+                .custom
+            {
                 "custom"
-            } else if conf.callee_reginputs {
+            } else if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_calleereginputs::CalleeRegInputs>()
+                .on
+            {
                 "on"
             } else {
                 "off"
@@ -342,7 +361,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .get::<unlace_decomp::kuna_castwiden::CastWidenMode>()
             .as_str(),
         // (kuna `narrowext`) Three-valued, so it reports its own token.
-        "narrowext" => conf.narrow_ext.as_str(),
+        "narrowext" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_narrowext::NarrowExtMode>()
+            .as_str(),
         // (kuna `syscallregs`) Three-valued, so it reports its own token.
         "syscallregs" => conf.syscall_regs.as_str(),
         // (kuna `linuxsyscall`) Three-valued, so it reports its own token.
@@ -594,18 +616,34 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .0,
         ),
         "fid" => {
-            if !conf.analysis_fid {
+            if !conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .on
+            {
                 "off"
-            } else if conf.analysis_fid_strict {
+            } else if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .strict
+            {
                 "strict"
             } else {
                 "on"
             }
         }
         "armframes" => {
-            if !conf.analysis_armframes {
+            if !conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+                .inventory
+            {
                 "off"
-            } else if conf.analysis_armframes_full {
+            } else if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+                .full
+            {
                 "on"
             } else {
                 "inventory"
@@ -622,12 +660,26 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .0,
         ),
         // (kuna `flowmode`) Valued `on|aftercall|off`, so it reports its own token.
-        "flowmode" => match (conf.analysis_flowmode, conf.analysis_flowmode_aftercall) {
+        "flowmode" => match (
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::FlowMode>()
+                .on,
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::FlowMode>()
+                .after_call,
+        ) {
             (false, _) => "off",
             (true, false) => "on",
             (true, true) => "aftercall",
         },
-        "cvftrace" => match (conf.analysis_cvftrace, conf.analysis_cvftrace_lines) {
+        "cvftrace" => match (
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .names,
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .lines,
+        ) {
             (false, _) => "off",
             (true, false) => "on",
             (true, true) => "lines",

@@ -2478,7 +2478,13 @@ truncating the fall-through here"
                 stat.seqnum = seq;
             }
             self.op_mark_start_instruction(firstop);
-            if self.data.get_arch().lane_fuse {
+            if self
+                .data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_coreoptions::LaneFuse>()
+                .on
+            {
                 let mut ops = Vec::new();
                 let mut cursor = Some(firstop);
                 while let Some(op) = cursor {
@@ -2505,7 +2511,12 @@ truncating the fall-through here"
                     has_lanes && self.data.get_arch().loader_fill(&mut head, curaddr).is_ok();
                 if has_lanes {
                     let vex = fetched && matches!(head[0], 0xc4 | 0xc5 | 0x62)
-                        || self.data.get_arch().lane_fuse_all;
+                        || self
+                            .data
+                            .get_arch()
+                            .kuna_options
+                            .get::<crate::kuna_coreoptions::LaneFuse>()
+                            .all;
                     if !self.data.kuna_vector_code
                         && crate::kuna_lanefuse::has_vector_run(&self.data, &ops)
                     {
@@ -2559,7 +2570,12 @@ truncating the fall-through here"
                 // `try` without their own edge. `itaniumeh catch` keeps only the
                 // pads with a catch clause.
                 let call = (!self.is_flow_for_inline()
-                    && (!self.data.get_arch().itanium_eh_catch_only
+                    && (!self
+                        .data
+                        .get_arch()
+                        .kuna_options
+                        .get::<crate::kuna_itaniumeh::ItaniumEh>()
+                        .catch_only
                         || site
                             .clauses
                             .iter()

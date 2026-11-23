@@ -844,8 +844,6 @@ pub struct ArchContext {
     /// (kuna `xnutables`) The struct each kalloc_type view allocates, by view address.
     pub kuna_kalloc_types: Rc<crate::kuna_kalloctype::KallocTypes>,
 
-    /// Fold comparisons proven constant for every input (`opaquepredicate`).
-    pub opaque_predicate: bool,
     /// (kuna `opaquepredicate globals`) The writable data nothing may write,
     /// once the scan has run; read by
     /// [`constant_read`](crate::kuna_opaqueglobals::constant_read).
@@ -916,10 +914,6 @@ pub struct ArchContext {
     /// read by [`kuna_libcfit`](crate::p5_types::kuna_libcfit), which holds a
     /// named libc pointer vote to what the caller does through it.
     pub libctypes: bool,
-    /// (kuna) reconstruct a compiler-lowered comparison cascade into a switch
-    /// (C++ `recover_lowered_switch`, default-on).  Read by the
-    /// [`crate::kuna_loweredswitch`] detect/install actions.
-    pub recover_lowered_switch: bool,
     /// (kuna `msvcbyval`) The declarations with a by-value class of unstated
     /// size, by entry; snapshotted from the architecture at `build_arch_handle`.
     pub msvc_byval_decls: Rc<crate::p4_calls::kuna_msvcbyval::ByvalDecls>,
@@ -969,28 +963,16 @@ pub struct ArchContext {
     /// (kuna `vtabletypes`) A call made direct by an indirect-call override
     /// does not take the register that carried its target as an argument.
     pub vtable_types: bool,
-    /// (kuna) `readonlycalls`, read by `Heritage::guard_calls`: the guard count
-    /// at which a pass leaves read-only ranges unguarded, `None` when off.
-    pub readonly_calls: Option<u64>,
-    /// (kuna) `persistcalls`, read by `Heritage::guard_calls`: the guard count at
-    /// which a pass guards a persistent global only next to its accesses, `None`
-    /// when off.
-    pub persist_calls: Option<u64>,
     /// (kuna `calleereginputs custom`) Per-callee-entry input-register key, and
     /// the model for each key: so a function's own evaluation prints the same
     /// custom register parameters its callers pass. Copied from the global
     /// architecture per function; empty unless the whole-image rule decided one.
     pub kuna_custom_reg_callers: Rc<std::collections::HashMap<u64, u16>>,
     pub kuna_custom_reg_models: Rc<std::collections::HashMap<u16, Rc<crate::fspec::ProtoModel>>>,
-    /// (kuna) narrow a register parameter to the low part its uses consume
-    /// (`narrowargs`). Read by [`crate::kuna_narrowargs`].
-    pub narrow_args: bool,
 
     /// Operation-specific typed views over shared physical frame storage.
     pub stack_views: bool,
 
-    /// (kuna) `implweight` — terms times uses an expression may print inline; 0 = off.
-    pub impl_weight: int4,
     /// (kuna `loopcontinue`) The output language's do-while runs its test on
     /// `continue;`: C `do..while` and Go's `for` post statement do, Rust's
     /// `loop { ..; if !(c) { break; } }` restarts the body instead.
@@ -1040,23 +1022,10 @@ pub struct ArchContext {
     /// pointer declared as that pointer?  See
     /// [`kuna_fieldtype`](crate::p5_types::kuna_fieldtype).
     pub field_type: bool,
-    /// (kuna) `loweredswitch linear|all` — linear equality chains re-roll too.
-    pub lowered_switch_linear: bool,
-    /// (kuna) `loweredswitch tree|all` — compare trees re-roll from 2 to 64 cases.
-    pub lowered_switch_tree: bool,
     /// (kuna) `rettriangle`: decline a `returndup` split at the join of a
     /// one-block `if` -- see `Architecture::returndup_triangle`.  Read by
     /// `Funcdata::returndup_apply`.
     pub returndup_triangle: bool,
-    /// (kuna) angr SAILR gotoless `ReturnDuplicatorHigh`: duplicate a shared
-    /// **bare-epilogue** RETURN block into each predecessor but one so a
-    /// `if (c) { body; return X; } return Y;` guard shape structures as per-predecessor
-    /// early returns (`duplicate_shared_returns`, opt-in default-off).  Read by
-    /// [`crate::p8_structure::kuna_returndup`]'s `ActionReturnDup`.
-    pub duplicate_shared_returns: bool,
-    /// (kuna) `returndup calls` — also split a cross-jumped call tail per
-    /// predecessor ([`crate::p8_structure::kuna_returndupcalls`]).
-    pub duplicate_call_returns: bool,
     /// AArch64 integer division returns zero for a zero divisor.
     pub go_keep_divide_checks: bool,
     /// Attempt conversion of `whiledo` loops to `for` loops (C++
@@ -1106,10 +1075,6 @@ pub struct ArchContext {
     pub lazy_entry_starts: Rc<Vec<u64>>,
     /// (kuna) `Architecture::kuna_fde_extents`.
     pub kuna_fde_extents: Rc<Vec<(u64, u64)>>,
-    /// (kuna `deadcascade`) After this many passes of one run of a rule pool
-    /// (`None` = never), dead-op removal also removes the dead chain behind the
-    /// removed op; shared from the real architecture. Read by `ActionPool`.
-    pub dead_cascade: Option<u32>,
     /// The program load image (C++ `Architecture::loader`), shared from the
     /// engine through `build_arch_handle`.  Read by jump-table emulation
     /// (`EmulateFunction::executeLoad` -> `get_load_image_value`) to fetch the
@@ -1134,12 +1099,6 @@ pub struct ArchContext {
     /// (kuna `itaniumeh`) The image's Itanium call-site table when the option is
     /// on; `None` otherwise (see [`crate::kuna_itaniumeh`]).
     pub eh_table: Option<Rc<crate::kuna_itaniumeh::EhTable>>,
-    /// (kuna `itaniumeh catch`) Only pads with a catch clause get an edge.
-    pub itanium_eh_catch_only: bool,
-    /// (kuna `lanefuse`) See [`crate::kuna_lanefuse`].
-    pub lane_fuse: bool,
-    /// (kuna `lanefuse all`) See [`crate::kuna_lanefuse`].
-    pub lane_fuse_all: bool,
     /// (kuna `vectorabi`) The vector user-ops (AVX SLEIGH ops with an intrinsic
     /// name, and the `lanefuse` built-ins) with their element kind; their
     /// operands and results take the Intel vector types.
@@ -1335,7 +1294,6 @@ impl ArchContext {
             // hand-built fixtures (no `build_arch_handle`) get `false`, so a rule
             // registered `enabled=false` is inert there — matching the gate-off
             // unit tests.
-            opaque_predicate: false,
             opaque_globals: None,
             opaque_globals_pending: false,
             opaque_globals_wanted: std::cell::Cell::new(false),
@@ -1356,7 +1314,6 @@ impl ArchContext {
             int_promotion: true, // (kuna) LangCaps::integer_promotion (C)
             elem_ptr_ranges: std::rc::Rc::new(Vec::new()), // (kuna) elemptr
             libctypes: false,  // (kuna) option libctypes, copied from Architecture
-            recover_lowered_switch: false, // loweredswitch
             // endptrbound only re-expresses an address the walk already compares
             // against, so the fixture seam carries the real default.
             // castobject only re-types a slot whose readers agree, so the fixture
@@ -1381,14 +1338,10 @@ impl ArchContext {
             narrow_ext: crate::kuna_narrowext::Rules::default(),
 
             vtable_types: false,
-            readonly_calls: Some(crate::p3_dataflow::heritage::READONLY_CROSS_PRODUCT),
-            persist_calls: Some(crate::p3_dataflow::heritage::PERSIST_CROSS_PRODUCT),
             kuna_custom_reg_callers: Rc::default(),
             kuna_custom_reg_models: Rc::default(),
-            narrow_args: true,
             stack_views: false, // stackviews (opt-in)
 
-            impl_weight: 0, // implweight (live value copied from the Architecture)
             do_while_continue: true,
             image_linux_elf: false,
             x64_syscall_memory_target: false,
@@ -1401,11 +1354,7 @@ impl ArchContext {
             windows_cspec: false,
             image_windows_user: false,
             tls_layout: None,
-            lowered_switch_linear: false,    // loweredswitch linear|all
-            lowered_switch_tree: false,      // loweredswitch tree|all
             returndup_triangle: false, // rettriangle (one-block-if join, copied from the Architecture)
-            duplicate_shared_returns: false, // returndup (opt-in default-off)
-            duplicate_call_returns: false, // returndup calls
 
             go_keep_divide_checks: false,
             // C++ Architecture default: analyze_for_loops = true (architecture.cc).
@@ -1422,7 +1371,6 @@ impl ArchContext {
             funcptr_align: 0,
             lazy_entry_starts: Rc::default(),
             kuna_fde_extents: Rc::new(Vec::new()),
-            dead_cascade: Some(crate::p3_dataflow::kuna_deadcascade::DEFAULT_PASSES),
             loader: None,
             // C++ Architecture default: readonlypropagate = false (resetDefaults);
             // `option readonly` flips it before the per-function build_arch_handle.
@@ -1431,9 +1379,6 @@ impl ArchContext {
             // installs them (see `Architecture::dynreloc_const`).
             dynreloc_const: Rc::new(Vec::new()),
             eh_table: None,
-            itanium_eh_catch_only: false,
-            lane_fuse: false,
-            lane_fuse_all: false,
             vector_userops: Rc::new(Vec::new()),
             vector_fp: None,
             // (kuna) No executable read-only ranges until a real object load

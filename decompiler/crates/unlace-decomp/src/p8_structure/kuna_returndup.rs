@@ -127,7 +127,12 @@ impl Action for ActionReturnDup {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option returndup on|off`, carried on the Architecture boundary.
-        if !data.get_arch().duplicate_shared_returns {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_returndup::ReturnDup>()
+            .shared
+        {
             return 0;
         }
         // The whole split loop (reuse of the existing `return_split_is_splittable`
@@ -175,5 +180,37 @@ impl OptionReturnDup {
             false,
             format!("Shared bare-epilogue return duplication turned {prop}"),
         ))
+    }
+}
+
+/// (kuna `returndup`) Duplicate shared bare epilogues (`shared`), and call
+/// tails too (`calls`, [`crate::p8_structure::kuna_returndupcalls`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReturnDup {
+    pub shared: bool,
+    pub calls: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for ReturnDup {
+    const NAME: &'static str = "returndup";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ReturnDup {
+            shared: false,
+            calls: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        ReturnDup {
+            shared: true,
+            calls: false,
+        }
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        let (shared, calls, msg) = OptionReturnDup.apply(value)?;
+        Ok((ReturnDup { shared, calls }, msg))
     }
 }

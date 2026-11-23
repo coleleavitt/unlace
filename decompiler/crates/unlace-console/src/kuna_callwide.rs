@@ -257,7 +257,9 @@ mod tests {
         prog.arch_mut()
             .kuna_options
             .set(unlace_decomp::kuna_analysisgates::Dwarf(true));
-        prog.arch_mut().narrow_ext = unlace_decomp::kuna_narrowext::NarrowExtMode::Compiler;
+        prog.arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_narrowext::NarrowExtMode::Compiler);
         prog.commit_pending_analysis().unwrap();
         let producer = prog
             .resolve_entry(&EntrySelector::Name("produce_sum".into()))
@@ -320,7 +322,9 @@ mod tests {
         prog.arch_mut()
             .kuna_options
             .set(unlace_decomp::kuna_analysisgates::Dwarf(true));
-        prog.arch_mut().narrow_ext = unlace_decomp::kuna_narrowext::NarrowExtMode::Compiler;
+        prog.arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_narrowext::NarrowExtMode::Compiler);
         prog.commit_pending_analysis().unwrap();
         let caller = prog
             .resolve_entry(&EntrySelector::Name("caller64".into()))
@@ -402,7 +406,7 @@ mod tests {
             prog.arch_mut()
                 .kuna_options
                 .set(unlace_decomp::kuna_analysisgates::Dwarf(true));
-            prog.arch_mut().narrow_ext = mode;
+            prog.arch_mut().kuna_options.set(mode);
             prog.commit_pending_analysis().unwrap();
             let caller = prog
                 .resolve_entry(&EntrySelector::Name("caller64".into()))

@@ -187,3 +187,148 @@ crate::kuna_flag!(
     unset: false,
     shipped: true
 );
+
+/// (kuna `deadcascade`) After this many passes of one run of a rule pool
+/// (`None` = never), dead-op removal also removes the dead chain behind the
+/// removed op.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DeadCascade(pub Option<u32>);
+
+/// The default pass of a pool run from which removal cascades: a run that has
+/// gone this long is almost always taking dead chains apart one link a pass.
+pub const DEAD_CASCADE_PASSES: u32 = 32;
+
+impl crate::kuna_optionset::KunaOption for DeadCascade {
+    const NAME: &'static str = "deadcascade";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        DeadCascade(Some(DEAD_CASCADE_PASSES))
+    }
+
+    fn shipped() -> Self {
+        DeadCascade(Some(DEAD_CASCADE_PASSES))
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let field = value.trim();
+        Ok(match field {
+            "off" => (
+                DeadCascade(None),
+                "Dead-op removal takes one link of a dead chain per pass".to_string(),
+            ),
+            "on" => (
+                DeadCascade(Some(0)),
+                "Dead-op removal takes a dead chain of joins and guards out at once".to_string(),
+            ),
+            _ => {
+                let n = field
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|_| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit()))
+                    .ok_or_else(|| {
+                        unlace_base::error::KunaError::parse(
+                            "Must specify off, on or a decimal pass count",
+                        )
+                    })?;
+                (
+                    DeadCascade(Some(n)),
+                    format!(
+                        "Dead-op removal takes a dead chain of joins and guards out at once once a pool run has made {n} passes"
+                    ),
+                )
+            }
+        })
+    }
+}
+
+/// (kuna `lanefuse`) Re-fuse per-lane vector p-code (`on`), and legacy-SSE
+/// integer and two-lane double runs too (`all`).  A function's context holds
+/// `on` already resolved against the image (x86-64 only).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LaneFuse {
+    pub on: bool,
+    pub all: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for LaneFuse {
+    const NAME: &'static str = "lanefuse";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        LaneFuse {
+            on: false,
+            all: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        LaneFuse {
+            on: true,
+            all: false,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (on, all) = match value.trim().to_ascii_lowercase().as_str() {
+            "all" => (true, true),
+            _ => (crate::options::on_or_off(value)?, false),
+        };
+        let state = if all {
+            "all"
+        } else if on {
+            "on"
+        } else {
+            "off"
+        };
+        Ok((
+            LaneFuse { on, all },
+            format!("Per-lane vector p-code re-fused into one intrinsic turned {state}"),
+        ))
+    }
+}
+
+/// (kuna `opaquepredicate`) Fold comparisons proven constant (`on`), reading
+/// a global the program never writes as its initial value too (`globals`,
+/// [`crate::kuna_opaqueglobals`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OpaquePredicate {
+    pub on: bool,
+    pub globals: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for OpaquePredicate {
+    const NAME: &'static str = "opaquepredicate";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        OpaquePredicate {
+            on: false,
+            globals: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        OpaquePredicate {
+            on: false,
+            globals: false,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (on, globals) = match value {
+            "off" => (false, false),
+            "on" => (true, false),
+            "globals" => (true, true),
+            other => {
+                return Err(unlace_base::error::KunaError::parse(format!(
+                    "opaquepredicate: expected off, on or globals, got {other}"
+                )));
+            }
+        };
+        Ok((
+            OpaquePredicate { on, globals },
+            format!("Constant-comparison folding set to {value}"),
+        ))
+    }
+}

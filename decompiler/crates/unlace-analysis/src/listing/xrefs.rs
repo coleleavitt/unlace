@@ -1103,7 +1103,15 @@ fn descend(
             .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
             .0
         && file.architecture() == object::Architecture::Arm;
-    let prologues = preserve_bodies && arch.analysis_armframes && arch.analysis_armframes_full;
+    let prologues = preserve_bodies
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+            .inventory
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+            .full;
     let mut st = State::new(&seed_set, measure || preserve_bodies);
 
     // Reused across every decode in the walk (see [`FullCapture`]).

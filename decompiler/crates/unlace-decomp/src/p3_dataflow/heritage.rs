@@ -5952,7 +5952,12 @@ impl Heritage {
     /// below it every call keeps upstream's guard, whose chain the printer
     /// reads as a barrier.
     fn readonly_cross_product(&self, fd: &crate::funcdata::Funcdata) -> bool {
-        let Some(threshold) = fd.get_arch().readonly_calls else {
+        let Some(threshold) = fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::heritage::ReadonlyCalls>()
+            .0
+        else {
             return false;
         };
         let calls = fd.num_calls().max(0) as u64;
@@ -6003,7 +6008,12 @@ impl Heritage {
     /// The product of the calls and the pass's new ranges in the default data
     /// space must reach the option's threshold.
     fn persist_cross_product(&self, fd: &crate::funcdata::Funcdata) -> bool {
-        let Some(threshold) = fd.get_arch().persist_calls else {
+        let Some(threshold) = fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::heritage::PersistCalls>()
+            .0
+        else {
             return false;
         };
         if fd.get_override().persist_calls_off() {
@@ -7200,6 +7210,89 @@ pub struct Guard {
     pub(crate) size: unlace_base::types::int4,
     pub(crate) writes: Vec<crate::context::VarnodeId>,
     pub(crate) loads: Vec<crate::context::OpId>,
+}
+
+/// Parse a `readonlycalls`/`persistcalls` value: `off`, `on` (one guard) or
+/// a decimal guard count.
+fn parse_guard_threshold(value: &str) -> KunaResult<Option<u64>> {
+    let field = value.trim();
+    match field {
+        "off" => Ok(None),
+        "on" => Ok(Some(1)),
+        _ => field
+            .parse::<u64>()
+            .ok()
+            .filter(|_| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit()))
+            .map(Some)
+            .ok_or_else(|| {
+                unlace_base::error::KunaError::parse(
+                    "Must specify off, on or a decimal guard count",
+                )
+            }),
+    }
+}
+
+/// (kuna `readonlycalls`) Give a call no guard over read-only memory once a
+/// pass would build this many such guards; `None` keeps them all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReadonlyCalls(pub Option<u64>);
+
+impl crate::kuna_optionset::KunaOption for ReadonlyCalls {
+    const NAME: &'static str = "readonlycalls";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ReadonlyCalls(Some(READONLY_CROSS_PRODUCT))
+    }
+
+    fn shipped() -> Self {
+        ReadonlyCalls(Some(READONLY_CROSS_PRODUCT))
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        let val = parse_guard_threshold(value)?;
+        let msg = match val {
+            None => "Unguarded read-only memory at calls turned off".to_string(),
+            Some(1) if value.trim() == "on" => {
+                "Read-only memory is unguarded at every call".to_string()
+            }
+            Some(n) => format!("Read-only memory is unguarded at calls from {n} guards"),
+        };
+        Ok((ReadonlyCalls(val), msg))
+    }
+}
+
+/// (kuna `persistcalls`) Guard a persistent global only at the calls next to
+/// its accesses once a pass would build this many guards; `None` keeps them
+/// all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PersistCalls(pub Option<u64>);
+
+impl crate::kuna_optionset::KunaOption for PersistCalls {
+    const NAME: &'static str = "persistcalls";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        PersistCalls(Some(PERSIST_CROSS_PRODUCT))
+    }
+
+    fn shipped() -> Self {
+        PersistCalls(Some(PERSIST_CROSS_PRODUCT))
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        let val = parse_guard_threshold(value)?;
+        let msg = match val {
+            None => "Persistent globals are guarded at every call".to_string(),
+            Some(1) if value.trim() == "on" => {
+                "Persistent globals are guarded only next to their accesses".to_string()
+            }
+            Some(n) => format!(
+                "Persistent globals are guarded only next to their accesses from {n} guards"
+            ),
+        };
+        Ok((PersistCalls(val), msg))
+    }
 }
 
 #[cfg(test)]

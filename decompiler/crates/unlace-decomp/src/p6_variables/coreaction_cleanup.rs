@@ -1131,7 +1131,11 @@ impl Action for ActionMarkExplicit {
         // (kuna `implweight`) Under a weight limit an expression with more readers
         // than `max_implied_ref` is still a candidate; process_multiplier then caps
         // its terms at weight / readers.
-        let weight = data.get_arch().impl_weight;
+        let weight = data
+            .get_arch()
+            .kuna_options
+            .get::<crate::coreaction_cleanup::ImplWeight>()
+            .0;
         let maxref = if weight > 0 {
             data.get_arch().max_implied_ref.max(weight)
         } else {
@@ -3708,6 +3712,45 @@ pub fn merge_actions() -> Vec<Box<dyn Action>> {
         ActionNameVars::boxed("merge"),
         ActionSetCasts::boxed("casts"),
     ]
+}
+
+/// (kuna `implweight`) An expression read more than `max_implied_ref` times
+/// still prints inline when its terms times its uses is at most this; 0 = off.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ImplWeight(pub int4);
+
+impl crate::kuna_optionset::KunaOption for ImplWeight {
+    const NAME: &'static str = "implweight";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ImplWeight(0)
+    }
+
+    fn shipped() -> Self {
+        ImplWeight(0)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let field = value.trim();
+        if field == "off" {
+            return Ok((
+                ImplWeight(0),
+                "Implied-expression weight limit turned off".to_string(),
+            ));
+        }
+        match field.parse::<int4>() {
+            Ok(n) if (2..=64).contains(&n) => Ok((
+                ImplWeight(n),
+                format!(
+                    "An expression prints inline while its terms times its uses is at most {n}"
+                ),
+            )),
+            _ => Err(unlace_base::error::KunaError::parse(
+                "Must specify off or a weight from 2 to 64",
+            )),
+        }
+    }
 }
 
 #[cfg(test)]

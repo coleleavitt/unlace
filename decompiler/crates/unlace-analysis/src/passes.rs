@@ -769,7 +769,12 @@ fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPa
                 .0,
             Box::new(crate::noreturn_propagate::NoReturnPropagatePass),
         ),
-        (arch.analysis_fid, Box::new(crate::fid::FidPass)),
+        (
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .on,
+            Box::new(crate::fid::FidPass),
+        ),
         // (kuna `itaniumrtti`) Constructor/destructor names from vptr stores: the
         // vtable half runs at load, this half needs the Listing's data edges.
         (
@@ -1216,7 +1221,10 @@ pub fn run_listing_consumers_replaying_observed(
             .kuna_options
             .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
             .0
-        && arch.analysis_armframes
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+            .inventory
     {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let memo = std::rc::Rc::new(crate::listing::kuna_decodememo::DecodeMemo::new(
@@ -2341,7 +2349,11 @@ mod tests {
             .set(unlace_decomp::kuna_analysisgates::NoreturnDisc(false));
         arch.kuna_options
             .set(unlace_decomp::kuna_analysisgates::NoreturnPropagate(true));
-        arch.analysis_fid = false;
+        arch.kuna_options
+            .set(unlace_decomp::kuna_analysisgates::Fid {
+                on: false,
+                strict: false,
+            });
         arch.kuna_options
             .set(unlace_decomp::kuna_analysisgates::Itaniumrtti(true));
         arch.kuna_options

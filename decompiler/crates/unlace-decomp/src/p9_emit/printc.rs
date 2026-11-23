@@ -15225,7 +15225,13 @@ impl PrintC {
         if self.out_lang == crate::kuna_lang::OutLang::C
             && arch.cfstring_entries.contains(&stringaddr.get_offset())
         {
-            s = crate::kuna_cfstr::wrap(&s, stringaddr.get_offset(), arch.cfstrings_annotate);
+            s = crate::kuna_cfstr::wrap(
+                &s,
+                stringaddr.get_offset(),
+                arch.kuna_options
+                    .get::<crate::kuna_analysisgates::CfStrings>()
+                    .annotate,
+            );
         }
         self.push_atom(&Atom::with_op_vn(
             s,

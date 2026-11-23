@@ -274,7 +274,14 @@ pub fn function_xrefs(prog: &ConsoleProgram, file: &object::File, entry: u64) ->
         .map(|(name, vma, _)| (vma, name))
         .collect();
     let inventory: Vec<u64> = names.keys().copied().collect();
-    let seeds = xr::discovery_seeds(file, &inventory, prog.arch().analysis_funcstart_patterns);
+    let seeds = xr::discovery_seeds(
+        file,
+        &inventory,
+        prog.arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .0,
+    );
     let index = xr::build_with_focus(file, prog.arch(), prog.arch().translate(), &seeds, &[entry]);
     let name_of = |vma: u64| names.get(&vma).or_else(|| data.get(&vma)).cloned();
     let mut out = FunctionXrefs::default();
@@ -463,7 +470,14 @@ impl UseWalk {
             .map(|(name, vma, _)| (vma, name))
             .collect();
         let inventory: Vec<u64> = names.keys().copied().collect();
-        let seeds = xr::discovery_seeds(file, &inventory, prog.arch().analysis_funcstart_patterns);
+        let seeds = xr::discovery_seeds(
+            file,
+            &inventory,
+            prog.arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+                .0,
+        );
         let index = xr::build(file, prog.arch(), prog.arch().translate(), &seeds);
         let code = file
             .sections()

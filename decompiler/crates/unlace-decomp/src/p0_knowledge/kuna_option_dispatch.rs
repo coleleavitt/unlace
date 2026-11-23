@@ -654,7 +654,7 @@ kuna_options! { self, p1;
         self.lane_fuse_all = all;
         Ok(format!("Per-lane vector p-code re-fused into one intrinsic turned {}", if all { "all" } else if on { "on" } else { "off" }))
     },
-    "strcodelen" => on_off!(analysis_strcodelen, "code-side Rust &str lengths"),
+    "strcodelen" => registered!(crate::kuna_analysisgates::Strcodelen),
     "mba" => registered!(crate::kuna_mba::Mba),
     "avxintrinsics" => registered!(crate::printc::AvxIntrinsics),
     "x87depth" => registered!(crate::kuna_x87depth::X87Depth),
@@ -717,11 +717,11 @@ kuna_options! { self, p1;
         self.dedup_var_decls = val;
         Ok(msg)
     },
-    "noreturn_known" => on_off!(analysis_noreturn_known, "No-return-known analysis pass"),
-    "libgccsigs" => on_off!(analysis_libgccsigs, "libgcc __divdi3 and __stack_chk_fail_local contracts"),
-    "gotypeglobals" => on_off!(analysis_go_type_globals, "Go type-descriptor globals"),
+    "noreturn_known" => registered!(crate::kuna_analysisgates::NoreturnKnown),
+    "libgccsigs" => registered!(crate::kuna_analysisgates::Libgccsigs),
+    "gotypeglobals" => registered!(crate::kuna_analysisgates::GoTypeGlobals),
 
-    "arm64evcall" => on_off!(analysis_arm64evcall, "arm64e virtual-call resolution"),
+    "arm64evcall" => registered!(crate::kuna_analysisgates::Arm64evcall),
     "libctypes" => {
         use crate::kuna_libctypes::LibcTypesLayout;
         let layout = match p1.trim().to_ascii_lowercase().as_str() {
@@ -748,21 +748,21 @@ kuna_options! { self, p1;
         ))
     },
     "tlsnames" => registered!(crate::kuna_tlsnames::Tlsnames),
-    "uefi" => on_off!(analysis_uefi, "Gate the UEFI module markup pass (`uefi`); default on."),
-    "cortexmscs" => on_off!(analysis_cortexmscs, "Cortex-M System Control Space globals"),
-    "strings" => on_off!(analysis_strings, "String-literal analysis pass"),
+    "uefi" => registered!(crate::kuna_analysisgates::Uefi),
+    "cortexmscs" => registered!(crate::kuna_analysisgates::Cortexmscs),
+    "strings" => registered!(crate::kuna_analysisgates::Strings),
     "widestrings" => {
-        on_off!(analysis_widestrings, "UTF-16LE width of the string-literal pass")
+        registered!(crate::kuna_analysisgates::Widestrings)
     },
     "widestrings32" => {
-        on_off!(analysis_widestrings32, "UTF-32 width of the string-literal pass")
+        registered!(crate::kuna_analysisgates::Widestrings32)
     },
-    "entry_disc" => on_off!(analysis_entry_disc, "Entry-discovery analysis pass"),
+    "entry_disc" => registered!(crate::kuna_analysisgates::EntryDisc),
     "x86listingswitch" => {
-        on_off!(analysis_x86listingswitch, "Bounded i386 switch successors in the discovery Listing")
+        registered!(crate::kuna_analysisgates::X86listingswitch)
     },
     "addrtakenentry" => {
-        on_off!(analysis_addrtakenentry, "Address-taken code function entries")
+        registered!(crate::kuna_analysisgates::Addrtakenentry)
     },
     "flowmode" => {
         let (on, after_call) = match p1.trim().to_ascii_lowercase().as_str() {
@@ -787,28 +787,28 @@ kuna_options! { self, p1;
         ))
     },
     "elfmain" => {
-        on_off!(analysis_elfmain, "ELF libc-start main naming + prototype")
+        registered!(crate::kuna_analysisgates::Elfmain)
     },
     "eh_frame_full" => {
-        on_off!(analysis_eh_frame_full, ".eh_frame LSDA landing-pad discovery")
+        registered!(crate::kuna_analysisgates::EhFrameFull)
     },
     "unwindstarts" => {
-        on_off!(analysis_unwindstarts, "Mach-O __unwind_info function-start discovery")
+        registered!(crate::kuna_analysisgates::Unwindstarts)
     },
     "exporttrie" => {
         let val = on_or_off(p1)?;
         crate::kuna_exporttrie::set_exporttrie_env(val);
         Ok(format!("Mach-O export-trie naming turned {}", if val { "on" } else { "off" }))
     },
-    "machobinds" => on_off!(analysis_machobinds, "Mach-O bound-slot import naming"),
+    "machobinds" => registered!(crate::kuna_analysisgates::Machobinds),
     "machoehframe" => {
-        on_off!(analysis_machoehframe, "Mach-O __eh_frame FDE function-start discovery")
+        registered!(crate::kuna_analysisgates::Machoehframe)
     },
-    "ehcold" => on_off!(analysis_ehcold, "Exception-cleanup .cold fragment suppression"),
-    "importvote" => on_off!(analysis_importvote, "Undeclared import call-site vote"),
-    "ehnote" => on_off!(analysis_ehnote, "Hidden landing-pad note"),
+    "ehcold" => registered!(crate::kuna_analysisgates::Ehcold),
+    "importvote" => registered!(crate::kuna_importvote::Importvote),
+    "ehnote" => registered!(crate::kuna_analysisgates::Ehnote),
     "funcstart_patterns" => {
-        on_off!(analysis_funcstart_patterns, "Full byte-pattern function-start pass")
+        registered!(crate::kuna_analysisgates::FuncstartPatterns)
     },
     "armframes" => {
         let (inventory, full) = if p1 == "inventory" {
@@ -822,18 +822,15 @@ kuna_options! { self, p1;
         Ok(format!("Validated ARM frame recovery set to {p1}"))
     },
     "cortexmvectors" => {
-        on_off!(analysis_cortexmvectors, "Widened ARM Cortex-M vector-table signature")
+        registered!(crate::kuna_analysisgates::Cortexmvectors)
     },
     "ptrentry" => {
-        on_off!(analysis_ptrentry, "Pointer-referenced ARM function entries")
+        registered!(crate::kuna_analysisgates::Ptrentry)
     },
     "poolentry" => {
-        on_off!(
-            analysis_poolentry,
-            "ARM literal-pool inference (entry recall + AIF phantom suppression)"
-        )
+        registered!(crate::kuna_analysisgates::Poolentry)
     },
-    "armwalkmode" => on_off!(analysis_armwalkmode, "ARM decode mode carried along the Listing walk"),
+    "armwalkmode" => registered!(crate::kuna_analysisgates::Armwalkmode),
     "ppc32picimports" => {
         let mode = crate::kuna_ppc32picimports::Mode::parse(p1)
             .ok_or_else(|| KunaError::parse("Expected ppc32picimports off|on|abi"))?;
@@ -906,7 +903,7 @@ kuna_options! { self, p1;
         crate::kuna_symbolnamechars::set_symbolnamechars_env(mode);
         Ok(format!("symbol-name character sanitizing set to {}", mode.as_str()))
     },
-    "dwarf" => on_off!(analysis_dwarf, "DWARF recovery analysis pass"),
+    "dwarf" => registered!(crate::kuna_analysisgates::Dwarf),
     "cvftrace" => {
         let (names, lines) = match p1.trim().to_ascii_lowercase().as_str() {
             "on" | "1" | "true" => (true, false),
@@ -930,16 +927,16 @@ kuna_options! { self, p1;
         ))
     },
     "dwarf_lines" => {
-        on_off!(analysis_dwarf_lines, "DWARF .debug_line source-line comment pass")
+        registered!(crate::kuna_analysisgates::DwarfLines)
     },
-    "dwarfnocall" => on_off!(analysis_dwarfnocall, "DWARF nocall parameter drop"),
-    "godwarfsig" => on_off!(analysis_godwarfsig, "Go DWARF scalar and pointer signatures"),
+    "dwarfnocall" => registered!(crate::kuna_analysisgates::Dwarfnocall),
+    "godwarfsig" => registered!(crate::kuna_analysisgates::Godwarfsig),
     "cppsig" => {
         let (mode, msg) = crate::kuna_cppsig::parse_cppsig_mode(p1)?;
         self.analysis_cppsig = mode;
         Ok(msg)
     },
-    "dwarfglobaltypes" => on_off!(analysis_dwarfglobaltypes, "DWARF global types"),
+    "dwarfglobaltypes" => registered!(crate::kuna_analysisgates::Dwarfglobaltypes),
     "dwarfscopes" => {
         let val = on_or_off(p1)?;
         self.analysis_dwarfscopes = val;
@@ -947,36 +944,33 @@ kuna_options! { self, p1;
         unsafe { std::env::set_var("KUNA_DWARFSCOPES", if val { "on" } else { "off" }) };
         Ok(format!("DWARF lexical-block and location-list locals turned {}", if val { "on" } else { "off" }))
     },
-    "addrtable" => on_off!(analysis_addrtable, "Address-table analysis pass"),
-    "operand_refs" => on_off!(analysis_operand_refs, "Scalar/operand reference-markup pass"),
+    "addrtable" => registered!(crate::kuna_analysisgates::Addrtable),
+    "operand_refs" => registered!(crate::kuna_analysisgates::OperandRefs),
     "formatstring" => {
         let (mode, msg) = crate::kuna_formatstring::parse_formatstring_mode(p1)?;
         self.analysis_formatstring = mode;
         Ok(msg)
     },
-    "formatcallees" => on_off!(analysis_format_callees, "format-string typing of undeclared format functions"),
-    "listing" => on_off!(analysis_listing, "Listing/xref disassembly tier"),
+    "formatcallees" => registered!(crate::kuna_analysisgates::FormatCallees),
+    "listing" => registered!(crate::kuna_analysisgates::Listing),
     "fast_funcdisc" => {
-        on_off!(analysis_fast_funcdisc, "Fast whole-project function discovery")
+        registered!(crate::kuna_analysisgates::FastFuncdisc)
     },
-    "lazyfuncs" => on_off!(
-        analysis_lazyfuncs,
-        "Materialize Function objects on demand instead of one per entry"
-    ),
+    "lazyfuncs" => registered!(crate::kuna_analysisgates::Lazyfuncs),
     "mapglobalsyms" => {
         registered!(crate::kuna_mapglobalsyms::Mapglobalsyms)
     },
     "objectview" => {
-        on_off!(analysis_objectview, "Object-file analysis passes on TE and raw images")
+        registered!(crate::kuna_analysisgates::Objectview)
     },
     "noreturn_disc" => {
-        on_off!(analysis_noreturn_disc, "Discovered-no-return Listing consumer")
+        registered!(crate::kuna_analysisgates::NoreturnDisc)
     },
     "noreturn_propagate" => {
-        on_off!(analysis_noreturn_propagate, "No-return propagation Listing consumer")
+        registered!(crate::kuna_analysisgates::NoreturnPropagate)
     },
     "noreturn_reach" => {
-        on_off!(analysis_noreturn_reach, "CFG-reachability no-return rule (Ghidra targetOnlyCallsNoReturn)")
+        registered!(crate::kuna_analysisgates::NoreturnReach)
     },
     "fid" => {
         let (enabled, strict) = match p1 {
@@ -990,9 +984,9 @@ kuna_options! { self, p1;
         let state = if strict { "strict" } else if enabled { "on" } else { "off" };
         Ok(format!("FID fingerprint matcher set to {state}"))
     },
-    "rtti" => on_off!(analysis_rtti, "MSVC RTTI / vftable class-name recovery pass"),
+    "rtti" => registered!(crate::kuna_analysisgates::Rtti),
     "itaniumrtti" => {
-        on_off!(analysis_itaniumrtti, "Itanium (GCC/Clang) RTTI / vtable recovery pass")
+        registered!(crate::kuna_analysisgates::Itaniumrtti)
     },
     "vtabletypes" => on_off!(analysis_vtabletypes, "typed C++ vtables and vtable slot folding"),
     "aif" => {
@@ -1006,29 +1000,29 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "aifpoolslide" => {
-        on_off!(analysis_aifpoolslide, "AIF literal-pool candidate slide (GH-299)")
+        registered!(crate::kuna_analysisgates::Aifpoolslide)
     },
     "tailcallentry" => {
-        on_off!(analysis_tailcallentry, "Tail-call function-entry recovery Listing consumer")
+        registered!(crate::kuna_analysisgates::Tailcallentry)
     },
     "funcchunks" => {
-        on_off!(analysis_funcchunks, "Function chunk bodies (main chunk + shared tails)")
+        registered!(crate::kuna_analysisgates::Funcchunks)
     },
     "globalwidth" => {
-        on_off!(analysis_globalwidth, "Data-object typing from access width")
+        registered!(crate::kuna_analysisgates::Globalwidth)
     },
     "aifdataveto" => {
-        on_off!(analysis_aifdataveto, "AIF data read/write veto")
+        registered!(crate::kuna_analysisgates::Aifdataveto)
     },
     "incrementalwalk" => {
-        on_off!(analysis_incrementalwalk, "Incremental Listing walk for callback roots")
+        registered!(crate::kuna_analysisgates::Incrementalwalk)
     },
 
     "tailcallentryall" => {
-        on_off!(analysis_tailcallentryall, "Tail-call function-entry recovery on non-ARM targets")
+        registered!(crate::kuna_analysisgates::Tailcallentryall)
     },
     "nameladder" => {
-        on_off!(analysis_nameladder, "Prototype/no-return name lookup ladder")
+        registered!(crate::kuna_analysisgates::Nameladder)
     },
     "flirt" => {
         on_off!(analysis_flirt, "FLIRT signature matching")
@@ -1037,18 +1031,18 @@ kuna_options! { self, p1;
         registered!(crate::kuna_fidproto::Fidproto)
     },
     "codestrings" => {
-        on_off!(analysis_codestrings, "Code-section string acceptance rule")
+        registered!(crate::kuna_analysisgates::Codestrings)
     },
     "protomerge" => {
         on_off!(analysis_protomerge, "Slot-by-slot merge of load-time prototypes")
     },
 
-    "calltable" => on_off!(analysis_calltable, "Call-table recovery and the call-table vs switch vote"),
-    "stubbinds" => on_off!(analysis_stubbinds, "Stripped Mach-O stubs named from their slot's chained bind"),
-    "thunknames" => on_off!(analysis_thunknames, "Placeholder jump thunks named j_<target>"),
-    "objc" => on_off!(analysis_objc, "Mach-O Objective-C metadata recovery pass"),
-    "panicloc" => on_off!(analysis_panicloc, "Rust panic Location record pass"),
-    "swiftmetadata" => on_off!(analysis_swiftmetadata, "Swift runtime-metadata recovery pass"),
+    "calltable" => registered!(crate::kuna_analysisgates::Calltable),
+    "stubbinds" => registered!(crate::kuna_analysisgates::Stubbinds),
+    "thunknames" => registered!(crate::kuna_analysisgates::Thunknames),
+    "objc" => registered!(crate::kuna_analysisgates::Objc),
+    "panicloc" => registered!(crate::kuna_analysisgates::Panicloc),
+    "swiftmetadata" => registered!(crate::kuna_analysisgates::Swiftmetadata),
     "cfstrings" => {
         let (pass, annotate) = match p1 {
             "annotate" => (true, true),
@@ -1059,9 +1053,9 @@ kuna_options! { self, p1;
         let state = if annotate { "on, annotated" } else if pass { "on" } else { "off" };
         Ok(format!("Mach-O __cfstring constant-string recovery pass turned {state}"))
     },
-    "blobs" => on_off!(analysis_blobs, "Embedded image and archive data symbols"),
-    "swifttypes" => on_off!(analysis_swifttypes, "Swift type layouts from static metadata"),
-    "swifthelpers" => on_off!(analysis_swifthelpers, "Swift instantiation helpers and lazy witness table accessors"),
+    "blobs" => registered!(crate::kuna_analysisgates::Blobs),
+    "swifttypes" => registered!(crate::kuna_analysisgates::Swifttypes),
+    "swifthelpers" => registered!(crate::kuna_analysisgates::Swifthelpers),
     "objcivars" => {
         let val = on_or_off(p1)?;
         self.analysis_objcivars = val;
@@ -1069,8 +1063,8 @@ kuna_options! { self, p1;
         crate::kuna_objcivars::set_objcivars_env(val);
         Ok(format!("Objective-C instance layouts turned {}", if val { "on" } else { "off" }))
     },
-    "swiftobjcthunk" => on_off!(analysis_swiftobjcthunk, "Swift vtable slot names from @objc thunks"),
-    "valuewitness" => on_off!(analysis_valuewitness, "Swift value witness functions and tables"),
+    "swiftobjcthunk" => registered!(crate::kuna_analysisgates::Swiftobjcthunk),
+    "valuewitness" => registered!(crate::kuna_valuewitness::Valuewitness),
     "objcsdk" => {
         let path = crate::kuna_objcsdk::parse_option_value(p1).map_err(KunaError::parse)?;
         crate::kuna_objcsdk::set_objcsdk_env(path.as_deref().and_then(|p| p.to_str()));
@@ -1095,17 +1089,17 @@ kuna_options! { self, p1;
         self.analysis_iokittypes = types;
         Ok(format!("IOKit class and vtable recovery set to {p1}"))
     },
-    "xnutables" => on_off!(analysis_xnutables, "XNU kalloc_type / external-method / pointer-slot naming"),
-    "osclassinfo" => on_off!(analysis_osclassinfo, "DriverKit __osclassinfo class records"),
+    "xnutables" => registered!(crate::kuna_analysisgates::Xnutables),
+    "osclassinfo" => registered!(crate::kuna_analysisgates::Osclassinfo),
     "swiftcall" => registered!(crate::kuna_swiftcall::Swiftcall),
-    "swiftruntime" => on_off!(analysis_swiftruntime, "Swift runtime prototypes"),
+    "swiftruntime" => registered!(crate::kuna_analysisgates::Swiftruntime),
     "typelib" => {
         let choice = crate::kuna_typelib::TypeLib::parse(p1).map_err(KunaError::parse)?;
         let msg = format!("Type library set to {}", choice.as_str());
         self.analysis_typelib = choice;
         Ok(msg)
     },
-    "pdb" => on_off!(analysis_pdb, "PE PDB metadata recovery pass"),
+    "pdb" => registered!(crate::kuna_analysisgates::Pdb),
     "macho-arm64e" => {
         let val = on_or_off(p1)?;
         self.macho_arm64e = val;

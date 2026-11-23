@@ -43,7 +43,11 @@ const ENUM_TABLE_SIZE: u64 = 112;
 /// The vote for `vn`, or `None` when it is not a witness table load.
 pub fn output_vote(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
     let arch = data.get_arch();
-    if !arch.analysis_valuewitness {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_valuewitness::Valuewitness>()
+        .0
+    {
         return None;
     }
     let v = data.vbank().get(vn)?;
@@ -72,7 +76,12 @@ pub fn output_vote(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
 /// 16-byte header (the value witness table before it, the field offsets and
 /// generic arguments after it), which the header's layout does not describe.
 pub fn keeps_offset(data: &Funcdata, op: OpId, slot: i32) -> bool {
-    if !data.get_arch().analysis_valuewitness {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_valuewitness::Valuewitness>()
+        .0
+    {
         return false;
     }
     let Some(o) = data.obank().get(op) else {
@@ -97,7 +106,11 @@ pub fn keeps_offset(data: &Funcdata, op: OpId, slot: i32) -> bool {
 /// out: the sum points at a field offset or generic argument, not at another
 /// metadata record, so the pointer type does not propagate to it.
 pub fn outside_header(data: &Funcdata, op: OpId, slot: i32, ptr: &Rc<Datatype>) -> bool {
-    if !data.get_arch().analysis_valuewitness
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_valuewitness::Valuewitness>()
+        .0
         || !ptr.get_ptr_to().is_some_and(|t| t.get_name() == METADATA)
     {
         return false;
@@ -168,7 +181,11 @@ fn table_read(data: &Funcdata, op: OpId, vn: VarnodeId) -> Option<u64> {
 /// The tables' layouts when the Swift metadata pass interned them, the
 /// value witness table's and the enum one's.
 pub fn tables(arch: &crate::context::ArchContext) -> Option<(Rc<Datatype>, Option<Rc<Datatype>>)> {
-    if !arch.analysis_valuewitness {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_valuewitness::Valuewitness>()
+        .0
+    {
         return None;
     }
     let types = arch.types()?;
@@ -416,3 +433,16 @@ fn written_before<'a>(
     }
     None
 }
+
+crate::kuna_flag!(
+    /// (kuna) Gate the value-witness arm of the metadata pass
+    /// (`valuewitness`): each local struct's and enum's value witness
+    /// functions named and prototyped, and a load of a value's witness table
+    /// through its metadata typed `swift.value_witness_table *`. Default-on;
+    /// inert unless `swiftmetadata` is on.
+    Valuewitness,
+    "valuewitness",
+    "Swift value witness functions and tables",
+    unset: true,
+    shipped: true
+);

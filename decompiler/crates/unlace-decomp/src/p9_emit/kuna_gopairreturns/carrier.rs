@@ -171,7 +171,10 @@ impl PrintC {
         op: OpId,
         target: &Rc<Datatype>,
     ) -> bool {
-        if !arch.analysis_godwarfsig
+        if !arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::Godwarfsig>()
+            .0
             || target.get_metatype() != type_metatype::TYPE_STRUCT
             || !arch.archid.starts_with("x86:LE:64:")
         {

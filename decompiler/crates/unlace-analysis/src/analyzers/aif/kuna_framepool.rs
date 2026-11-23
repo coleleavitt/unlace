@@ -12,7 +12,11 @@ pub(super) fn policy(
         corroborate: arch.analysis_aif.corroborate(),
         bracket: None,
         noppad: false,
-        poolslide: arch.analysis_aifpoolslide.then_some((arch, code_space)),
+        poolslide: arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
+            .0
+            .then_some((arch, code_space)),
     }
 }
 

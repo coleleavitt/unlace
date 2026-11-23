@@ -32,7 +32,10 @@ fn decompile(
     )
     .unwrap();
     assert_eq!(program.arch().rustc_stable_version, Some((1, 93, 1)));
-    program.arch_mut().analysis_listing = true;
+    program
+        .arch_mut()
+        .kuna_options
+        .set(unlace_decomp::kuna_analysisgates::Listing(true));
     program.arch_mut().kuna_options.set(if enabled {
         RustFmtMode::All
     } else {

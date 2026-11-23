@@ -9259,7 +9259,11 @@ impl PrintC {
         op: OpId,
         implied: bool,
     ) {
-        if arch.analysis_godwarfsig {
+        if arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::Godwarfsig>()
+            .0
+        {
             if let Some(operation) = fd.obank().get(op) {
                 if let (Some(input), Some(output)) = (operation.get_in(0), operation.get_out()) {
                     if self.push_pair_carrier(fd, arch, input, op, &fd.vn_type_def_facing(output)) {
@@ -10482,7 +10486,11 @@ impl PrintC {
     /// (`getHiddenThisSlot`) is the C++ method-invocation hook (always -1 here —
     /// the C++ `int4 skip = -1;` for the direct case, no C++ method format yet).
     fn op_call_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
-        if !arch.analysis_godwarfsig {
+        if !arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::Godwarfsig>()
+            .0
+        {
             self.op_call_raw_ir(fd, arch, op);
             return;
         }
@@ -16240,7 +16248,11 @@ impl RealTypeCtx {
             model: crate::kuna_ctypes::CDataModel::from_types(&*arch.types()),
             c_type_definition: false,
             go_package: None,
-            go_pair_types: (lang == crate::kuna_lang::OutLang::Go && arch.analysis_godwarfsig)
+            go_pair_types: (lang == crate::kuna_lang::OutLang::Go
+                && arch
+                    .kuna_options
+                    .get::<crate::kuna_analysisgates::Godwarfsig>()
+                    .0)
                 .then(|| arch.types_rc()),
         }
     }

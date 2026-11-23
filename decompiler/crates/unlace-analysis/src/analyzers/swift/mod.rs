@@ -155,9 +155,15 @@ impl AnalysisPass for SwiftMetadataPass {
         let records = namer.claim_records();
         let witnesses = ctx
             .arch
-            .analysis_valuewitness
+            .kuna_options
+            .get::<unlace_decomp::kuna_valuewitness::Valuewitness>()
+            .0
             .then(|| kuna_swiftwitness::claim(&reader, &md, ctx.file.architecture(), &namer));
-        let helpers = (ctx.arch.analysis_valuewitness
+        let helpers = (ctx
+            .arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_valuewitness::Valuewitness>()
+            .0
             && ctx.file.architecture() == object::Architecture::Aarch64)
             .then(|| {
                 let entries = crate::analyzers::entry::collect_entries(ctx.file, ctx.bytes);
@@ -171,7 +177,17 @@ impl AnalysisPass for SwiftMetadataPass {
             .filter_map(|c| Some((c.accessor?, c.num_cases)))
             .collect();
         out.swift_enum_cases.sort_unstable();
-        if ctx.arch.analysis_swifttypes || ctx.arch.analysis_swifthelpers {
+        if ctx
+            .arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+            .0
+            || ctx
+                .arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Swifthelpers>()
+                .0
+        {
             let mut types = kuna_swifttypes::Types::new(
                 &md,
                 &reader,
@@ -181,10 +197,20 @@ impl AnalysisPass for SwiftMetadataPass {
                 ctx.file.architecture(),
                 ctx.file.format() == object::BinaryFormat::MachO,
             );
-            if ctx.arch.analysis_swifthelpers {
+            if ctx
+                .arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Swifthelpers>()
+                .0
+            {
                 kuna_swifthelpers::emit(&types, ctx.file, &mut out);
             }
-            if ctx.arch.analysis_swifttypes {
+            if ctx
+                .arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+                .0
+            {
                 types.locate_all();
                 let regs = kuna_swifttypes::Registers::for_arch(ctx.file.architecture());
                 types.emit(regs.as_ref(), &mut out);

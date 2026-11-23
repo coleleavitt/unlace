@@ -331,7 +331,10 @@ fn prove_inner(data: &Funcdata, engine: &Architecture) -> Option<BTreeMap<u64, C
                         return None;
                     };
                     let mut import = engine.ppc32_pic_imports.get(&slot)?.clone();
-                    import.no_return &= engine.analysis_noreturn_known;
+                    import.no_return &= engine
+                        .kuna_options
+                        .get::<crate::kuna_analysisgates::NoreturnKnown>()
+                        .0;
                     let tail = o.code() == OpCode::CPUI_BRANCHIND;
                     if tail && !import.no_return {
                         return None;

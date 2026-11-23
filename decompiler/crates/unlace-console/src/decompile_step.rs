@@ -160,7 +160,11 @@ pub fn decompile_one_prefollowed(
     // (kuna `lazyfuncs`) Materialize the targets this lift read and re-run; each round
     // creates at least one `Function`, so the finite entry set bounds the loop.  The
     // previous `Funcdata` is dropped first so the extra pass does not double the peak.
-    if arch.analysis_lazyfuncs {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Lazyfuncs>()
+        .0
+    {
         for _ in 0..4 {
             if crate::kuna_lazyfuncs::materialize_callees(arch, &first.result) == 0 {
                 break;

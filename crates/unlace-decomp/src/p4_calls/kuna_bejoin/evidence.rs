@@ -89,6 +89,7 @@
 //! object file leaves).
 
 pub use crate::heritage::WidePair;
+use crate::kuna_bejoin::FuncdataBejoinExt;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
@@ -118,7 +119,13 @@ const MAX_PATH_INSNS: usize = 512;
 /// A storage location: space index, offset, size.
 type Key = (int4, u64, u32);
 
-impl WidePair {
+/// The `evidence` pass's methods on [`WidePair`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait WidePairEvidenceExt {
+    fn key(loc: &(Address, int4)) -> Option<Key>;
+}
+
+impl WidePairEvidenceExt for WidePair {
     fn key(loc: &(Address, int4)) -> Option<Key> {
         Some((
             loc.0.get_space()?.get_index(),

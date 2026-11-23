@@ -227,18 +227,24 @@ pub fn settled(fd: &Funcdata) -> bool {
 struct RuntimeSlot(Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>);
 crate::kuna_func_state!(RuntimeSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_elfmaindecl` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataElfmaindeclExt {
     /// (kuna `elfmain`) Give this function's inputs the C runtime's `main`
     /// declaration, as far as its own analysis recovers them.
-    pub fn kuna_set_elfmain(
-        &mut self,
-        runtime: Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>,
-    ) {
+    fn kuna_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>);
+    /// (kuna `elfmain`) The C runtime's `main` declaration for this function.
+    fn kuna_elfmain(&self) -> Option<&crate::kuna_elfmaindecl::Runtime>;
+}
+
+impl FuncdataElfmaindeclExt for crate::funcdata::Funcdata {
+    /// (kuna `elfmain`) Give this function's inputs the C runtime's `main`
+    /// declaration, as far as its own analysis recovers them.
+    fn kuna_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>) {
         self.kuna_state_mut::<RuntimeSlot>().0 = runtime;
     }
-
     /// (kuna `elfmain`) The C runtime's `main` declaration for this function.
-    pub fn kuna_elfmain(&self) -> Option<&crate::kuna_elfmaindecl::Runtime> {
+    fn kuna_elfmain(&self) -> Option<&crate::kuna_elfmaindecl::Runtime> {
         self.kuna_state::<RuntimeSlot>().0.as_deref()
     }
 }

@@ -46,6 +46,7 @@
 //! as its first pushed argument instead, so a call whose last push stores the
 //! object keeps the default.
 
+use crate::kuna_entryreads::FuncdataEntryreadsExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;

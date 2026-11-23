@@ -15,6 +15,7 @@
 //! callers' dead-code pass treats as consumed, so a value forwarded to it is
 //! narrowed in the caller too.
 
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;

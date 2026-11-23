@@ -226,16 +226,26 @@ pub fn observe_instruction(data: &mut Funcdata, ops: &[OpId]) {
 
 crate::kuna_func_state!(PushedRegisters, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_retpushedhalf` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataRetpushedhalfExt {
     /// (kuna `retpushedhalf`) The flow build's record of registers this function
     /// only ever pushed, for appending to.
-    pub fn kuna_pushed_registers_mut(&mut self) -> &mut crate::kuna_retpushedhalf::PushedRegisters {
-        self.kuna_state_mut::<PushedRegisters>()
-    }
-
+    fn kuna_pushed_registers_mut(&mut self) -> &mut crate::kuna_retpushedhalf::PushedRegisters;
     /// (kuna `retpushedhalf`) The flow build's record of registers this function
     /// only ever pushed.
-    pub fn kuna_pushed_registers(&self) -> &crate::kuna_retpushedhalf::PushedRegisters {
+    fn kuna_pushed_registers(&self) -> &crate::kuna_retpushedhalf::PushedRegisters;
+}
+
+impl FuncdataRetpushedhalfExt for crate::funcdata::Funcdata {
+    /// (kuna `retpushedhalf`) The flow build's record of registers this function
+    /// only ever pushed, for appending to.
+    fn kuna_pushed_registers_mut(&mut self) -> &mut crate::kuna_retpushedhalf::PushedRegisters {
+        self.kuna_state_mut::<PushedRegisters>()
+    }
+    /// (kuna `retpushedhalf`) The flow build's record of registers this function
+    /// only ever pushed.
+    fn kuna_pushed_registers(&self) -> &crate::kuna_retpushedhalf::PushedRegisters {
         self.kuna_state::<PushedRegisters>()
     }
 }

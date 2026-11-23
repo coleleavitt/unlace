@@ -8,6 +8,7 @@ mod fixture;
 
 use std::sync::{Mutex, MutexGuard};
 use unlace_decomp::kuna_ppc32picimports::{ENV, Mode};
+use unlace_decomp::prelude::FuncdataPpc32piccallsExt;
 
 static ENVIRONMENT: Mutex<()> = Mutex::new(());
 

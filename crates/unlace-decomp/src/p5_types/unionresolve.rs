@@ -1441,8 +1441,25 @@ struct UnionMapSlot(
 );
 crate::kuna_func_state!(UnionMapSlot, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
-    pub(crate) fn union_map(
+/// The `unionresolve` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataUnionresolveExt {
+    fn union_map(
+        &self,
+    ) -> &std::collections::BTreeMap<
+        crate::unionresolve::ResolveEdge,
+        crate::unionresolve::ResolvedUnion,
+    >;
+    fn union_map_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeMap<
+        crate::unionresolve::ResolveEdge,
+        crate::unionresolve::ResolvedUnion,
+    >;
+}
+
+impl FuncdataUnionresolveExt for crate::funcdata::Funcdata {
+    fn union_map(
         &self,
     ) -> &std::collections::BTreeMap<
         crate::unionresolve::ResolveEdge,
@@ -1450,8 +1467,7 @@ impl crate::funcdata::Funcdata {
     > {
         &self.kuna_state::<UnionMapSlot>().0
     }
-
-    pub(crate) fn union_map_mut(
+    fn union_map_mut(
         &mut self,
     ) -> &mut std::collections::BTreeMap<
         crate::unionresolve::ResolveEdge,

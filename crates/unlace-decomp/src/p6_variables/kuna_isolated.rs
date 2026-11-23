@@ -9,6 +9,7 @@
 //! after the merges have run. Those two are carried here by storage and
 //! width, and the merge reads the carried set beside the Symbols.
 
+use crate::kuna_stablenames::FuncdataStablenamesExt;
 use std::collections::BTreeSet;
 
 use unlace_base::address::Address;

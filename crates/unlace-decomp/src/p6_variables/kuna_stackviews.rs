@@ -7,6 +7,7 @@
 //! select members; no claim that an old pointer stopped aliasing is needed.
 
 use crate::funcdata_union::FuncdataUnionExt;
+use crate::unionresolve::FuncdataUnionresolveExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
@@ -899,15 +900,25 @@ struct WriteViewsSlot(
 );
 crate::kuna_func_state!(WriteViewsSlot, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
-    pub(crate) fn stack_write_views(
+/// The `kuna_stackviews` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataStackviewsExt {
+    fn stack_write_views(
+        &self,
+    ) -> &std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>;
+    fn stack_write_views_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>;
+}
+
+impl FuncdataStackviewsExt for crate::funcdata::Funcdata {
+    fn stack_write_views(
         &self,
     ) -> &std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>
     {
         &self.kuna_state::<WriteViewsSlot>().0
     }
-
-    pub(crate) fn stack_write_views_mut(
+    fn stack_write_views_mut(
         &mut self,
     ) -> &mut std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>
     {

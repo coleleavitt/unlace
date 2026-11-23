@@ -89,6 +89,7 @@
 //! does nothing is worse than an error.
 
 use std::rc::Rc;
+use unlace_decomp::prelude::FuncdataLibcnamesExt;
 
 use unlace_base::address::Address;
 use unlace_base::types::{int4, uint4};

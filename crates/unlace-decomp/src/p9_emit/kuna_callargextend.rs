@@ -1,5 +1,6 @@
 //! Match primitive Go and Rust arguments to the emitted callee's integer type.
 
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 use std::rc::Rc;
 
 use crate::architecture::Architecture;

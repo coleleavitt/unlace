@@ -7,6 +7,7 @@
 //! `tests/stages/kuna-retpushedhalf.xml`.
 
 use super::*;
+use crate::kuna_retpushedhalf::FuncdataRetpushedhalfExt;
 
 use std::rc::Rc;
 

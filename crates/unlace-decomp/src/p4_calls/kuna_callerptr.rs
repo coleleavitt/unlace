@@ -21,6 +21,7 @@
 //! value, a load or store the pointee does not cover, a family member that is
 //! declared, global or frame memory).
 
+use crate::kuna_calleevote::FuncdataCalleevoteExt;
 use crate::kuna_fasthash::FxHashSet;
 use std::collections::VecDeque;
 use std::rc::Rc;

@@ -290,14 +290,22 @@ pub fn admit(ty: &Datatype, size: int4) -> Result<(), Decline> {
 struct EvidenceSlot(std::cell::RefCell<SlotEvidence>);
 crate::kuna_func_state!(EvidenceSlot, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_slotptr` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataSlotptrExt {
     /// (kuna `slotptr`) Fold one pass's stack-store evidence into the running record.
-    pub fn with_slot_evidence(&self, f: impl FnOnce(&mut SlotEvidence)) {
+    fn with_slot_evidence(&self, f: impl FnOnce(&mut SlotEvidence));
+    /// (kuna `slotptr`) The stack-store evidence every pass recorded.
+    fn slot_evidence(&self) -> std::cell::Ref<'_, SlotEvidence>;
+}
+
+impl FuncdataSlotptrExt for crate::funcdata::Funcdata {
+    /// (kuna `slotptr`) Fold one pass's stack-store evidence into the running record.
+    fn with_slot_evidence(&self, f: impl FnOnce(&mut SlotEvidence)) {
         f(&mut self.kuna_state::<EvidenceSlot>().0.borrow_mut());
     }
-
     /// (kuna `slotptr`) The stack-store evidence every pass recorded.
-    pub fn slot_evidence(&self) -> std::cell::Ref<'_, SlotEvidence> {
+    fn slot_evidence(&self) -> std::cell::Ref<'_, SlotEvidence> {
         self.kuna_state::<EvidenceSlot>().0.borrow()
     }
 }

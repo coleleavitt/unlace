@@ -87,14 +87,46 @@ pub use substrate::*;
 /// out of the IR module; `use unlace_decomp::prelude::*;` brings every one into scope.
 pub mod prelude {
     pub use crate::coreaction_casts::FuncdataCastExt;
+    pub use crate::evidence::WidePairEvidenceExt;
     pub use crate::funcdata_facing::FuncdataFacingExt;
     pub use crate::funcdata_merge::FuncdataMergeExt;
     pub use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
     pub use crate::funcdata_spacebase::FuncdataAliasExt;
     pub use crate::funcdata_spacebase::FuncdataSpacebaseExt;
     pub use crate::funcdata_union::FuncdataUnionExt;
+    pub use crate::kuna_atomicxadd::FuncdataAtomicxaddExt;
+    pub use crate::kuna_bejoin::FuncdataBejoinExt;
+    pub use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
+    pub use crate::kuna_calleememory::FuncdataCalleememoryExt;
+    pub use crate::kuna_calleevote::FuncdataCalleevoteExt;
+    pub use crate::kuna_callerargs::FuncdataCallerargsExt;
+    pub use crate::kuna_callrettype::FuncdataCallrettypeExt;
+    pub use crate::kuna_calltargettype::FuncdataCalltargettypeExt;
     pub use crate::kuna_calltransport::FuncdataCallTransportExt;
+    pub use crate::kuna_callwide::FuncdataCallwideExt;
+    pub use crate::kuna_elemptr::FuncdataElemptrExt;
+    pub use crate::kuna_elfmaindecl::FuncdataElfmaindeclExt;
+    pub use crate::kuna_entryreads::FuncdataEntryreadsExt;
+    pub use crate::kuna_inputhints::FuncdataInputhintsExt;
+    pub use crate::kuna_libcnames::FuncdataLibcnamesExt;
+    pub use crate::kuna_localstackviews::FuncdataLocalstackviewsExt;
+    pub use crate::kuna_narrowret::FuncdataNarrowretExt;
+    pub use crate::kuna_passthrough::FuncdataPassthroughExt;
+    pub use crate::kuna_ppc32piccalls::FuncdataPpc32piccallsExt;
+    pub use crate::kuna_protoorder::FuncdataProtoorderExt;
+    pub use crate::kuna_retpushedhalf::FuncdataRetpushedhalfExt;
+    pub use crate::kuna_rustabi::FuncdataRustabiExt;
+    pub use crate::kuna_slotptr::FuncdataSlotptrExt;
+    pub use crate::kuna_stablenames::FuncdataStablenamesExt;
+    pub use crate::kuna_stackobjectasserts::FuncdataStackobjectassertsExt;
+    pub use crate::kuna_stackobjects::FuncdataStackobjectsExt;
+    pub use crate::kuna_stackreadscope::FuncdataStackreadscopeExt;
+    pub use crate::kuna_stackstruct::FuncdataStackstructExt;
+    pub use crate::kuna_stackviews::FuncdataStackviewsExt;
+    pub use crate::kuna_storereach::FuncdataStorereachExt;
     pub use crate::kuna_typequal::DatatypeQualExt;
+    pub use crate::kuna_voidret::FuncdataVoidretExt;
+    pub use crate::unionresolve::FuncdataUnionresolveExt;
 }
 
 pub(crate) use p9_emit::kuna_indirectargs;

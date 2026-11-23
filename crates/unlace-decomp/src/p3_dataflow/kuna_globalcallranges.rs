@@ -1,5 +1,6 @@
 //! Exact caller-side memory intervals of a completely decoded leaf callee.
 
+use crate::kuna_calleememory::FuncdataCalleememoryExt;
 use slotmap::SecondaryMap;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;

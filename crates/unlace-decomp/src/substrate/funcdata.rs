@@ -462,7 +462,7 @@ pub struct Funcdata {
     kuna_directive_symbols: Vec<DirectiveSymbol>,
     /// One past the last default index the naming pass handed out.
     kuna_default_name_end: int4,
-    /// Whether the naming pass records [`Self::kuna_name_snapshot`].
+    /// Whether the naming pass records [`kuna_name_snapshot`](crate::kuna_stablenames::FuncdataStablenamesExt::kuna_name_snapshot).
     kuna_record_names: bool,
     /// The local each replayed rename or retype reached, by the name the
     /// previous decompile printed it under; see

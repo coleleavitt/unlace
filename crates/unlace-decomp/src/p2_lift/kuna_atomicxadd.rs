@@ -150,14 +150,18 @@ fn instruction(fd: &Funcdata, ops: &[OpId]) -> Option<Instruction> {
 struct XaddsSlot(Vec<crate::p2_lift::kuna_atomicxadd::Instruction>);
 crate::kuna_func_state!(XaddsSlot, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
-    pub(crate) fn kuna_atomic_xadds(&self) -> &Vec<crate::p2_lift::kuna_atomicxadd::Instruction> {
+/// The `kuna_atomicxadd` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataAtomicxaddExt {
+    fn kuna_atomic_xadds(&self) -> &Vec<crate::p2_lift::kuna_atomicxadd::Instruction>;
+    fn kuna_atomic_xadds_mut(&mut self) -> &mut Vec<crate::p2_lift::kuna_atomicxadd::Instruction>;
+}
+
+impl FuncdataAtomicxaddExt for crate::funcdata::Funcdata {
+    fn kuna_atomic_xadds(&self) -> &Vec<crate::p2_lift::kuna_atomicxadd::Instruction> {
         &self.kuna_state::<XaddsSlot>().0
     }
-
-    pub(crate) fn kuna_atomic_xadds_mut(
-        &mut self,
-    ) -> &mut Vec<crate::p2_lift::kuna_atomicxadd::Instruction> {
+    fn kuna_atomic_xadds_mut(&mut self) -> &mut Vec<crate::p2_lift::kuna_atomicxadd::Instruction> {
         &mut self.kuna_state_mut::<XaddsSlot>().0
     }
 }

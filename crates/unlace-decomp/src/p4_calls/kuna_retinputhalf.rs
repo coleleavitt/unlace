@@ -124,6 +124,7 @@
 //!
 //! Gated by `option retinputhalf on|off`.
 
+use crate::kuna_retpushedhalf::FuncdataRetpushedhalfExt;
 use unlace_base::address::Address;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;

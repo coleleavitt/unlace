@@ -41,6 +41,7 @@
 //!
 //! Without a carried record the pass numbers in sequence, exactly as before.
 
+use crate::kuna_libcnames::FuncdataLibcnamesExt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_base::address::Address;
@@ -1110,22 +1111,30 @@ struct NamesSlot {
 }
 crate::kuna_func_state!(NamesSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_stablenames` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataStablenamesExt {
     /// (kuna `--assert`) The previous decompile's default numbering to keep.
-    pub fn kuna_prior_names(&self) -> &PriorNames {
+    fn kuna_prior_names(&self) -> &PriorNames;
+    fn seed_prior_names(&mut self, prior: PriorNames);
+    /// The numbering the naming pass recorded (empty unless asked to).
+    fn kuna_name_snapshot(&self) -> &[(String, Keys)];
+    fn set_kuna_name_snapshot(&mut self, snapshot: Vec<(String, Keys)>);
+}
+
+impl FuncdataStablenamesExt for crate::funcdata::Funcdata {
+    /// (kuna `--assert`) The previous decompile's default numbering to keep.
+    fn kuna_prior_names(&self) -> &PriorNames {
         &self.kuna_state::<NamesSlot>().prior
     }
-
-    pub fn seed_prior_names(&mut self, prior: PriorNames) {
+    fn seed_prior_names(&mut self, prior: PriorNames) {
         self.kuna_state_mut::<NamesSlot>().prior = prior;
     }
-
     /// The numbering the naming pass recorded (empty unless asked to).
-    pub fn kuna_name_snapshot(&self) -> &[(String, Keys)] {
+    fn kuna_name_snapshot(&self) -> &[(String, Keys)] {
         &self.kuna_state::<NamesSlot>().snapshot
     }
-
-    pub fn set_kuna_name_snapshot(&mut self, snapshot: Vec<(String, Keys)>) {
+    fn set_kuna_name_snapshot(&mut self, snapshot: Vec<(String, Keys)>) {
         self.kuna_state_mut::<NamesSlot>().snapshot = snapshot;
     }
 }

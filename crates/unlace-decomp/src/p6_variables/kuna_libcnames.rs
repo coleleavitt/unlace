@@ -45,6 +45,7 @@
 //! returned local) under `option contextnames`; evidence an option prints is
 //! preferred to evidence only a directive may use.
 
+use crate::kuna_stablenames::FuncdataStablenamesExt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_base::address::Address;
@@ -694,13 +695,20 @@ crate::kuna_flag!(
 struct AliasSlot(Vec<crate::kuna_libcnames::LibraryAlias>);
 crate::kuna_func_state!(AliasSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_libcnames` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataLibcnamesExt {
     /// (kuna `libcnames`) The library names the naming pass gave numbered locals.
-    pub fn kuna_library_aliases(&self) -> &[crate::kuna_libcnames::LibraryAlias] {
+    fn kuna_library_aliases(&self) -> &[crate::kuna_libcnames::LibraryAlias];
+    fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::kuna_libcnames::LibraryAlias>);
+}
+
+impl FuncdataLibcnamesExt for crate::funcdata::Funcdata {
+    /// (kuna `libcnames`) The library names the naming pass gave numbered locals.
+    fn kuna_library_aliases(&self) -> &[crate::kuna_libcnames::LibraryAlias] {
         &self.kuna_state::<AliasSlot>().0
     }
-
-    pub fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::kuna_libcnames::LibraryAlias>) {
+    fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::kuna_libcnames::LibraryAlias>) {
         self.kuna_state_mut::<AliasSlot>().0 = aliases;
     }
 }

@@ -1,6 +1,8 @@
 //! Incoming parameter values and later objects share frame storage, not variable identity.
 
 use crate::funcdata_union::FuncdataUnionExt;
+use crate::kuna_stackobjects::FuncdataStackobjectsExt;
+use crate::kuna_stackviews::FuncdataStackviewsExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 

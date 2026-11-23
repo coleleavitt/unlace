@@ -2,6 +2,7 @@
 
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
+use crate::kuna_stackreadscope::FuncdataStackreadscopeExt;
 use crate::p3_dataflow::kuna_stackreadscope::MachineRead;
 use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;

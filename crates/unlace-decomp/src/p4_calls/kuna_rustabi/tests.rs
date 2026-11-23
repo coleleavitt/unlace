@@ -8,6 +8,7 @@
 //! `unlace-console/tests/verify_rustabi_pair.rs`.
 
 use super::*;
+use crate::kuna_rustabi::FuncdataRustabiExt;
 
 use std::rc::Rc;
 

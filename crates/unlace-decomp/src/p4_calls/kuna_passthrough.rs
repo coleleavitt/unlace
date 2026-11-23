@@ -136,6 +136,11 @@
 //! vadd.f32 s0,s16,s16; pop {r4,pc}` returns `s0`, not `f`'s leftover `r0`.
 
 pub use crate::fspec::NeutralScope;
+use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
+use crate::kuna_entryreads::FuncdataEntryreadsExt;
+use crate::kuna_narrowret::FuncdataNarrowretExt;
+use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::kuna_rustabi::FuncdataRustabiExt;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::ElementId;
@@ -2187,19 +2192,28 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 struct ClaimsSlot(Vec<crate::p4_calls::kuna_passthrough::PassThroughClaim>);
 crate::kuna_func_state!(ClaimsSlot, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_passthrough` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataPassthroughExt {
     /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
-    pub fn kuna_set_passthrough_claims(
+    fn kuna_set_passthrough_claims(
+        &mut self,
+        claims: Vec<crate::p4_calls::kuna_passthrough::PassThroughClaim>,
+    );
+    /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
+    fn kuna_passthrough_claims(&self) -> &[crate::p4_calls::kuna_passthrough::PassThroughClaim];
+}
+
+impl FuncdataPassthroughExt for crate::funcdata::Funcdata {
+    /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
+    fn kuna_set_passthrough_claims(
         &mut self,
         claims: Vec<crate::p4_calls::kuna_passthrough::PassThroughClaim>,
     ) {
         self.kuna_state_mut::<ClaimsSlot>().0 = claims;
     }
-
     /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
-    pub fn kuna_passthrough_claims(
-        &self,
-    ) -> &[crate::p4_calls::kuna_passthrough::PassThroughClaim] {
+    fn kuna_passthrough_claims(&self) -> &[crate::p4_calls::kuna_passthrough::PassThroughClaim] {
         &self.kuna_state::<ClaimsSlot>().0
     }
 }

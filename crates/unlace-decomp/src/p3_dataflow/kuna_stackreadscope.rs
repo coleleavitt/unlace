@@ -153,14 +153,20 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 
 crate::kuna_func_state!(crate::p3_dataflow::kuna_stackreadscope::ReadScopes, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
-    pub(crate) fn kuna_guarded_reads(
-        &self,
-    ) -> &crate::p3_dataflow::kuna_stackreadscope::ReadScopes {
+/// The `kuna_stackreadscope` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataStackreadscopeExt {
+    fn kuna_guarded_reads(&self) -> &crate::p3_dataflow::kuna_stackreadscope::ReadScopes;
+    fn kuna_guarded_reads_mut(
+        &mut self,
+    ) -> &mut crate::p3_dataflow::kuna_stackreadscope::ReadScopes;
+}
+
+impl FuncdataStackreadscopeExt for crate::funcdata::Funcdata {
+    fn kuna_guarded_reads(&self) -> &crate::p3_dataflow::kuna_stackreadscope::ReadScopes {
         self.kuna_state::<crate::p3_dataflow::kuna_stackreadscope::ReadScopes>()
     }
-
-    pub(crate) fn kuna_guarded_reads_mut(
+    fn kuna_guarded_reads_mut(
         &mut self,
     ) -> &mut crate::p3_dataflow::kuna_stackreadscope::ReadScopes {
         self.kuna_state_mut::<crate::p3_dataflow::kuna_stackreadscope::ReadScopes>()

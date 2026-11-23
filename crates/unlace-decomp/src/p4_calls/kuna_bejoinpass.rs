@@ -46,6 +46,7 @@
 //! mode of `bejoin` (`evidence`, `callers`); `off` leaves both sides to their
 //! own verdicts.
 
+use crate::kuna_bejoin::FuncdataBejoinExt;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;

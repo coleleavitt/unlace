@@ -50,6 +50,29 @@ pub const LEVEL_ON: int4 = 2;
 /// starts with, however many alias bases or guards share its start.
 const MAX_FOLLOW: int4 = 256;
 
+/// The `arrayextent` level (0 = off).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArrayExtent(pub int4);
+
+impl crate::kuna_optionset::KunaOption for ArrayExtent {
+    const NAME: &'static str = "arrayextent";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ArrayExtent(0)
+    }
+
+    fn shipped() -> Self {
+        ArrayExtent(LEVEL_ON)
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        OptionArrayExtent
+            .apply(value)
+            .map(|(v, msg)| (ArrayExtent(v), msg))
+    }
+}
+
 /// `option arrayextent off|bound|on`.
 pub struct OptionArrayExtent;
 
@@ -58,7 +81,7 @@ impl OptionArrayExtent {
     pub const NAME: &'static str = "arrayextent";
 
     /// Parse the level and its confirmation message; the caller writes it into
-    /// `Architecture::array_extent`.
+    /// the registered option `ArrayExtent`.
     pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
         match p1 {
             "off" => Ok((

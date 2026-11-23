@@ -23,6 +23,14 @@ macro_rules! kuna_options {
                         Ok(format!(concat!($label, " turned {}"), if val { "on" } else { "off" }))
                     }};
                 }
+                macro_rules! registered {
+                    ($option:ty) => {{
+                        let (val, msg) =
+                            <$option as crate::kuna_optionset::KunaOption>::parse($value)?;
+                        $this.kuna_options.set(val);
+                        Ok(msg)
+                    }};
+                }
                 match name {
                     $($name => $apply,)*
                     other => Err(KunaError::parse(format!("Unknown kuna option: {other}"))),
@@ -134,12 +142,7 @@ kuna_options! { self, p1;
         self.ret_split_global = val;
         Ok(msg)
     },
-    "retsplitlimit" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_retsplitlimit::OptionRetSplitLimit.apply(p1)?;
-        self.ret_split_limit = val;
-        Ok(msg)
-    },
+    "retsplitlimit" => registered!(crate::p8_structure::kuna_retsplitlimit::RetSplitLimit),
     "v850indirectbranch" => on_off!(v850_indirect_branch, "V850 indirect-branch reclassification"),
     "ptrauthtrap" => on_off!(ptrauth_trap, "arm64e pointer-auth failure-check removal"),
     "relronoreturn" => on_off!(relro_noreturn, "Flow-time no-return call through a relocated read-only slot"),
@@ -147,16 +150,8 @@ kuna_options! { self, p1;
     "calleeretpurge" => on_off!(callee_ret_purge, "Callee `ret imm16` extrapop"),
     "stackexitanchor" => on_off!(stack_exit_anchor, "Stack-solver return anchor"),
     "fdeflowbound" => on_off!(fde_flow_bound, "Unwind-extent fall-through bound"),
-    "int3pad" => {
-        let (mode, msg) = crate::kuna_int3pad::OptionInt3Pad.apply(p1)?;
-        self.int3_pad = mode;
-        Ok(msg)
-    },
-    "x64syscall" => {
-        let (mode, msg) = crate::kuna_x64syscall::OptionX64Syscall.apply(p1)?;
-        self.x64_syscall = mode;
-        Ok(msg)
-    },
+    "int3pad" => registered!(crate::kuna_int3pad::Int3PadMode),
+    "x64syscall" => registered!(crate::kuna_x64syscall::X64SyscallMode),
     "fpuemu" => {
         let (mode, msg) = crate::kuna_fpuemu::parse_fpuemu_mode(p1).map_err(KunaError::parse)?;
         self.fpu_emu = mode.as_u8();
@@ -173,26 +168,14 @@ kuna_options! { self, p1;
         self.syscall_regs = mode;
         Ok(msg)
     },
-    "pebnames" => {
-        let (mode, msg) = crate::kuna_pebnames::OptionPebNames.apply(p1)?;
-        self.peb_names = mode;
-        Ok(msg)
-    },
+    "pebnames" => registered!(crate::kuna_pebnames::PebNamesMode),
     "structsynth" => {
         let (mode, msg) = crate::kuna_structsynth::OptionStructSynth.apply(p1)?;
         self.struct_synth = mode;
         Ok(msg)
     },
-    "structmerge" => {
-        let (mode, msg) = crate::kuna_structmerge::OptionStructMerge.apply(p1)?;
-        self.struct_merge = mode;
-        Ok(msg)
-    },
-    "structheadless" => {
-        let (mode, msg) = crate::kuna_structheadless::OptionStructHeadless.apply(p1)?;
-        self.struct_headless = mode;
-        Ok(msg)
-    },
+    "structmerge" => registered!(crate::kuna_structmerge::StructMergeMode),
+    "structheadless" => registered!(crate::kuna_structheadless::StructHeadlessMode),
     "fieldtype" => {
         let (val, msg) = crate::kuna_fieldtype::OptionFieldType.apply(p1)?;
         self.field_type = val;
@@ -217,11 +200,7 @@ kuna_options! { self, p1;
     "funcboundflow" => on_off!(funcbound_flow, "Fall-through bound at function entries"),
     "overlapbranch" => on_off!(overlap_branch, "Overlapping-branch fall-through truncation"),
     "cleanupcode" => on_off!(remove_cleanup_code, "Rust drop/deallocate call removal"),
-    "linuxsyscall" => {
-        let (mode, msg) = crate::kuna_linuxsyscall::OptionLinuxSyscall.apply(p1)?;
-        self.linux_syscall = mode;
-        Ok(msg)
-    },
+    "linuxsyscall" => registered!(crate::kuna_linuxsyscall::LinuxSyscallMode),
     "msvcstrappend" => on_off!(msvc_str_append, "MSVC std::string inlined append collapsing"),
     "switchselector" => on_off!(switch_selector_guard, "Lowered-switch in-function-selector restriction"),
     "stackaddrargtrial" => on_off!(stack_addr_arg_trial, "Stack-address input trials"),
@@ -272,16 +251,8 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "gonewtype" => on_off!(go_new_type, "Go newobject result typing"),
-    "rustprobestack" => {
-        let (mode, msg) = crate::kuna_rustprobestack::parse_mode(p1).map_err(KunaError::parse)?;
-        self.rust_probestack = mode;
-        Ok(msg)
-    },
-    "gomorestack" => {
-        let (mode, msg) = crate::kuna_gomorestack::parse_gomorestack_mode(p1).map_err(KunaError::parse)?;
-        self.go_morestack = mode.as_u8();
-        Ok(msg)
-    },
+    "rustprobestack" => registered!(crate::kuna_rustprobestack::RustProbestackMode),
+    "gomorestack" => registered!(crate::kuna_gomorestack::GoMorestackMode),
     "goabi" => {
         let on = crate::kuna_goabi::parse_goabi(p1).map_err(KunaError::parse)?;
         self.load_options_mut().goabi = on;
@@ -289,11 +260,7 @@ kuna_options! { self, p1;
         self.analysis_goabi = on;
         Ok(format!("Golang compiler-spec selection turned {}", if on { "auto" } else { "off" }))
     },
-    "gowritebarrier" => {
-        let (mode, msg) = crate::kuna_gowritebarrier::parse_gowritebarrier_mode(p1).map_err(KunaError::parse)?;
-        self.go_write_barrier = mode.as_u8();
-        Ok(msg)
-    },
+    "gowritebarrier" => registered!(crate::kuna_gowritebarrier::GoWriteBarrierMode),
     "sourcelang" => {
         let forced = crate::kuna_sourcelang::parse_option_value(p1).map_err(KunaError::parse)?;
         self.load_options_mut().sourcelang = forced;
@@ -358,11 +325,7 @@ kuna_options! { self, p1;
     },
     "switchmodbound" => on_off!(switch_modulo_bound, "Switch modulo/and-mask index bound"),
     "switchextent" => on_off!(switch_extent, "Unchecked jump table ends at the function's next table"),
-    "constselectjump" => {
-        let (mode, msg) = crate::kuna_constselectjump::OptionConstSelectJump.apply(p1)?;
-        self.const_select_jump = mode;
-        Ok(msg)
-    },
+    "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
     "switchguardbound" => on_off!(switch_guard_bound, "Switch CBRANCH-guard index bound"),
     "highsliceguard" => on_off!(highslice_guard, "High-byte slice jump-table guard"),
     "switchsharedcase" => on_off!(switch_shared_case, "Switch loop-carried-guard table"),
@@ -499,17 +462,8 @@ kuna_options! { self, p1;
     },
     "callarrayextent" => on_off!(call_array_extent, "Call-escaped frame array extent"),
     "stackstruct" => on_off!(stack_struct, "Address-taken frame record layout"),
-    "arrayextent" => {
-        let (val, msg) =
-            crate::p6_variables::kuna_arrayextent::OptionArrayExtent.apply(p1)?;
-        self.array_extent = val;
-        Ok(msg)
-    },
-    "arraysize" => {
-        let (val, msg) = crate::p6_variables::kuna_arraysize::OptionArraySize.apply(p1)?;
-        self.array_size = val;
-        Ok(msg)
-    },
+    "arrayextent" => registered!(crate::p6_variables::kuna_arrayextent::ArrayExtent),
+    "arraysize" => registered!(crate::p6_variables::kuna_arraysize::ArraySize),
     "devectorize" => on_off!(devectorize_reduction, "Vectorized reduction re-roll"),
     "strlenscan" => on_off!(strlen_scan, "inline repnz scasb string length as strlen"),
     "repstring" => on_off!(rep_string, "rep movs/stos/cmps loops as copy, fill and compare builtins"),
@@ -548,12 +502,7 @@ kuna_options! { self, p1;
         self.outline_spec = val;
         Ok(msg)
     },
-    "condfold" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_condfold::OptionCondFold.apply(p1)?;
-        self.cond_fold = val;
-        Ok(msg)
-    },
+    "condfold" => registered!(crate::p8_structure::kuna_condfold::CondFold),
     "implweight" => {
         let field = p1.trim();
         if field == "off" {
@@ -568,18 +517,8 @@ kuna_options! { self, p1;
             _ => Err(KunaError::parse("Must specify off or a weight from 2 to 64")),
         }
     },
-    "condstmts" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_condstmts::OptionCondStmts.apply(p1)?;
-        self.cond_stmts = val;
-        Ok(msg)
-    },
-    "gotoreduce" => {
-        let (mode, msg) =
-            crate::p8_structure::kuna_gotoreduce::OptionGotoReduce.apply(p1)?;
-        self.goto_reduce = mode;
-        Ok(msg)
-    },
+    "condstmts" => registered!(crate::p8_structure::kuna_condstmts::CondStmts),
+    "gotoreduce" => registered!(crate::p8_structure::kuna_gotoreduce::GotoReduceMode),
     "ifelseflatten" => {
         let (val, msg) =
             crate::p8_structure::kuna_ifelseflatten::OptionIfElseFlatten.apply(p1)?;
@@ -767,12 +706,7 @@ kuna_options! { self, p1;
     "charbyte" => on_off!(char_byte, "char-pointer byte typing"),
     "castarith" => on_off!(cast_arith, "pointer arithmetic in pointer terms"),
     "castindex" => on_off!(cast_index, "variable indexes and pointer differences in pointer terms"),
-    "ptrfromuse" => {
-        let (val, msg) =
-            crate::p5_types::kuna_ptrfromuse::OptionPtrFromUse.apply(p1)?;
-        self.ptr_from_use = val;
-        Ok(msg)
-    },
+    "ptrfromuse" => registered!(crate::p5_types::kuna_ptrfromuse::PtrFromUseMode),
     "charptr" => on_off!(char_ptr, "character-pointer evidence"),
     "cstringconst" => on_off!(cstring_const, "string-literal rendering of constants inside a string-literal section"),
     "elemptr" => {

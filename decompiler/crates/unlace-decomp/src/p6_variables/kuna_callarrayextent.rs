@@ -286,7 +286,12 @@ fn joined_parent_end(
 /// the two-word initialization when both zero stores reach that call, it
 /// receives the first word's address, and neither word is read directly.
 pub(super) fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
-    if fd.get_arch().array_extent < super::kuna_arrayextent::LEVEL_ON
+    if fd
+        .get_arch()
+        .kuna_options
+        .get::<super::kuna_arrayextent::ArrayExtent>()
+        .0
+        < super::kuna_arrayextent::LEVEL_ON
         || space.get_addr_size() != 4
         || !space.is_big_endian()
         || !fd

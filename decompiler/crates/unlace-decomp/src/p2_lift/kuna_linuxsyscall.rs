@@ -107,7 +107,8 @@
 //! operating system is behind it, and a BSD `int 0x80` takes its arguments from
 //! the stack. `on` acts on any x86 image (shellcode, a raw dump). The resolved
 //! answer is the live flag
-//! [`ArchContext::linux_syscall`](crate::context::ArchContext).
+//! [`LinuxSyscallMode::fires`] over
+//! [`ArchContext::image_linux_elf`](crate::context::ArchContext).
 
 use std::rc::Rc;
 
@@ -132,6 +133,23 @@ pub enum LinuxSyscallMode {
     Auto,
     /// On any x86 image.
     On,
+}
+
+impl crate::kuna_optionset::KunaOption for LinuxSyscallMode {
+    const NAME: &'static str = "linuxsyscall";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        LinuxSyscallMode::Off
+    }
+
+    fn shipped() -> Self {
+        LinuxSyscallMode::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionLinuxSyscall.apply(value)
+    }
 }
 
 impl LinuxSyscallMode {
@@ -876,7 +894,9 @@ impl Action for ActionLinuxSyscall {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().linux_syscall || data.num_calls() == 0 {
+        let arch = data.get_arch();
+        let mode = arch.kuna_options.get::<LinuxSyscallMode>();
+        if !mode.fires(arch.image_linux_elf) || data.num_calls() == 0 {
             return 0;
         }
         let Some(abi) = resolve_abi(data) else {

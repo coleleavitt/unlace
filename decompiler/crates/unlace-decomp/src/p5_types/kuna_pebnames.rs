@@ -107,6 +107,23 @@ pub enum PebNamesMode {
     On,
 }
 
+impl crate::kuna_optionset::KunaOption for PebNamesMode {
+    const NAME: &'static str = "pebnames";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        PebNamesMode::Off
+    }
+
+    fn shipped() -> Self {
+        PebNamesMode::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionPebNames.apply(value)
+    }
+}
+
 impl PebNamesMode {
     /// Does the pass act for an image with this compiler spec and container fact?
     pub fn fires(self, windows_cspec: bool, image_windows_user: bool) -> bool {
@@ -560,7 +577,12 @@ impl Action for ActionPebNames {
             let ours = !lm.symbol_isolated(sym) && ty.is_some_and(|t| is_teb_pointer(&t, layout));
             Some((sym, ours))
         });
-        let wanted = data.get_arch().peb_names && {
+        let arch = data.get_arch();
+        let fires = arch
+            .kuna_options
+            .get::<PebNamesMode>()
+            .fires(arch.windows_cspec, arch.image_windows_user);
+        let wanted = fires && {
             let (read, stored_through) = segment_use(data, &reg, size);
             read && !stored_through
         };

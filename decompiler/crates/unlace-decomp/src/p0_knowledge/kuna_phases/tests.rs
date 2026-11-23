@@ -573,7 +573,7 @@ fn option_values_live_value_present_for_129() {
                             | "mapglobalsyms"
                             | "condfold"
                             // (kuna) `condstmts` takes `off` or an INTEGER cap;
-                            // its live value is `Architecture::cond_stmts`.
+                            // its live value is the registered option `CondStmts`.
                             | "condstmts"
                             | "stackguard"
                             | "msvcstackguard"
@@ -616,7 +616,7 @@ fn option_values_live_value_present_for_129() {
                             // the codegen live reader (a bool
                             // `live_true`/`live_false` pair) cannot express --
                             // the same reason `pebnames` is here. Its live value
-                            // is `Architecture::ptr_from_use`.
+                            // is the registered option `PtrFromUseMode`.
                             | "ptrfromuse"
                             // (kuna) `readonlycalls` takes `off|on|<n>`, a guard
                             // count; its live value is `Architecture::readonly_calls`.
@@ -628,7 +628,7 @@ fn option_values_live_value_present_for_129() {
                             // count; its live value is `Architecture::dead_cascade`.
                             | "deadcascade"
                             // (kuna) `retsplitlimit` takes `off|<n>`, an op count;
-                            // its live value is `Architecture::ret_split_limit`.
+                            // its live value is the registered option `RetSplitLimit`.
                             | "retsplitlimit"
                             // (kuna) `narrowargs` takes `off|on|callers`; its
                             // live value is the pair `Architecture::narrow_args`
@@ -641,12 +641,12 @@ fn option_values_live_value_present_for_129() {
                             // (kuna) `structmerge` takes a MODE
                             // (`off|siblings`) over an enum field, for the same
                             // reason.  Its live value is
-                            // `Architecture::struct_merge`.
+                            // the registered option `StructMergeMode`.
                             | "structmerge"
                             // (kuna) `structheadless` takes a MODE
                             // (`off|closed`) over an enum field, for the same
                             // reason.  Its live value is
-                            // `Architecture::struct_headless`.
+                            // the registered option `StructHeadlessMode`.
                             | "structheadless"
                             // (kuna) `protoorder` takes a MODE
                             // (`off|types|cycles|lock`) over an enum field, for the
@@ -679,7 +679,7 @@ fn option_values_live_value_present_for_129() {
                             // (kuna) `constselectjump` takes a MODE
                             // (`off|reentry|on`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::const_select_jump`.
+                            // the registered option `ConstSelectMode`.
                             | "constselectjump"
                             // (kuna) `declorder` takes a MODE (`natural|name`)
                             // over an enum field, for the same reason.  Its live
@@ -697,7 +697,7 @@ fn option_values_live_value_present_for_129() {
                             | "syscallregs"
                             // (kuna) `linuxsyscall` takes the same MODE
                             // (`off|auto|on`) over an enum field; its live
-                            // value is `Architecture::linux_syscall`.
+                            // value is the registered option `LinuxSyscallMode`.
                             | "linuxsyscall"
                             // (kuna) `callmechanisms` takes a MODE
                             // (`off|auto|on`) over an enum field, for the
@@ -729,11 +729,11 @@ fn option_values_live_value_present_for_129() {
                             | "indexaliasguard"
                             // (kuna) `arrayextent` takes a MODE
                             // (`off|bound|on`) over an int field; its live
-                            // value is `Architecture::array_extent`.
+                            // value is the registered option `ArrayExtent`.
                             | "arrayextent"
                             // (kuna) `arraysize` takes a MODE (`off|on|calls`)
                             // over an int field; its live value is
-                            // `Architecture::array_size`.
+                            // the registered option `ArraySize`.
                             | "arraysize"
                             | "spillargtrial"
                             | "paramcopyhoist"
@@ -743,7 +743,7 @@ fn option_values_live_value_present_for_129() {
                             // (kuna) `gomorestack` takes a MODE
                             // (`off|auto|always`) over a u8 field, the
                             // rustabi shape; its live value is
-                            // `Architecture::go_morestack`.
+                            // the registered option `GoMorestackMode`.
                             | "gomorestack"
                             | "rustprobestack"
                             | "rustfmt"
@@ -754,7 +754,7 @@ fn option_values_live_value_present_for_129() {
                             // live value is `Architecture::fpu_emu`.
                             | "fpuemu"
                             // (kuna) `gowritebarrier`: the same MODE shape;
-                            // its live value is `Architecture::go_write_barrier`.
+                            // its live value is the registered option `GoWriteBarrierMode`.
                             | "gowritebarrier"
                             // (kuna) `impliedrefs`/`termdup` take an INTEGER
                             // (`2|3|4|<n>`), which the codegen live reader (a

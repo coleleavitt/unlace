@@ -848,11 +848,6 @@ pub struct ArchContext {
     pub fat_str: u8,
     /// (kuna) `option swiftstr` mode; read by [`crate::p5_types::kuna_swiftstr`].
     pub swift_str: u8,
-    /// (kuna) `option gomorestack` mode; read by
-    /// [`crate::p2_lift::kuna_gomorestack`].  Copied from the engine
-    /// `Architecture` in `build_arch_handle`.
-    pub go_morestack: u8,
-    pub rust_probestack: crate::kuna_rustprobestack::RustProbestackMode,
     /// (kuna) `option chkstkdarwin` on an AArch64 language; read by
     /// [`crate::p2_lift::kuna_chkstkdarwin`].  Copied from the engine
     /// `Architecture` in `build_arch_handle`.
@@ -866,10 +861,6 @@ pub struct ArchContext {
     /// (kuna) `option gobool` mode; read by [`crate::p4_calls::kuna_gobool`].
     /// Copied from the engine `Architecture` in `build_arch_handle`.
     pub go_bool: u8,
-    /// (kuna) `option gowritebarrier` mode; read by
-    /// [`crate::p2_lift::kuna_gowritebarrier`].  Copied from the engine
-    /// `Architecture` in `build_arch_handle`.
-    pub go_write_barrier: u8,
     /// (kuna) `option gonewtype`; read by [`crate::p5_types::kuna_gonewtype`].
     /// Copied from the engine `Architecture` in `build_arch_handle`.
     pub go_new_type: bool,
@@ -955,8 +946,6 @@ pub struct ArchContext {
     /// [`Funcdata::return_split_is_splittable`](crate::funcdata::Funcdata),
     /// the predicate both `ActionReturnSplit` and `ActionReturnDup` consult.
     pub ret_split_global: bool,
-    /// (kuna) `retsplitlimit`, read by `Funcdata::return_split_apply`.
-    pub ret_split_limit: Option<u64>,
 
     /// (kuna) CALLOTHER user-op ids the architecture registered under a byte
     /// shuffle name ([`SHUFFLE_USEROP_NAMES`](crate::kuna_simdlane::SHUFFLE_USEROP_NAMES)),
@@ -1048,12 +1037,6 @@ pub struct ArchContext {
     /// C output; read by [`kuna_castarith`](crate::p9_emit::kuna_castarith).
     pub cast_index: bool,
 
-    /// (kuna `ptrfromuse`) Type a function input whose only memory role is to be a
-    /// LOAD/STORE base as a pointer; mirrors
-    /// [`Architecture::ptr_from_use`](crate::architecture::Architecture).  Read by
-    /// `ActionInferTypes::buildLocaltypes` (`coreaction_infertypes`); the mechanism
-    /// lives in [`kuna_ptrfromuse`](crate::p5_types::kuna_ptrfromuse).
-    pub ptr_from_use: crate::p5_types::kuna_ptrfromuse::PtrFromUseMode,
     /// (kuna `charptr`) Commit a pointer used only on characters to `char *`;
     /// option `charptr on|off`.  Copied from
     /// [`Architecture::char_ptr`](crate::architecture::Architecture).  The rule
@@ -1222,14 +1205,6 @@ pub struct ArchContext {
     /// Levels in [`crate::p3_dataflow::kuna_indexaliasguard`]; read by
     /// [`Heritage::guard`](crate::p3_dataflow::heritage::Heritage).
     pub index_alias_guard: int4,
-    /// (kuna) `option arrayextent off|bound|on`: how far the open range at an
-    /// indexed stack base reaches past upstream's four elements. Levels in
-    /// [`crate::p6_variables::kuna_arrayextent`]; read by `gather_open`.
-    pub array_extent: int4,
-    /// (kuna) `option arraysize off|on|calls`: end an escaped stack buffer at
-    /// the byte count its calls state. Levels in
-    /// [`crate::p6_variables::kuna_arraysize`]; read by `restructure`.
-    pub array_size: int4,
     /// Keep physical frame writes live when conservative stack aliasing is requested.
     pub stack_alias_deadstore: bool,
     /// Operation-specific typed views over shared physical frame storage.
@@ -1335,19 +1310,13 @@ pub struct ArchContext {
     /// pre-SSA op graph.  Read by
     /// [`ActionRemoveCleanupCode`](crate::p2_lift::kuna_cleanupcode::ActionRemoveCleanupCode).
     pub remove_cleanup_code: bool,
-    /// (kuna) `option linuxsyscall`: rewrite a 32-bit Linux `int 0x80` from an
-    /// indirect call through the `swi` userop into a named call on the syscall
-    /// the number in `EAX` selects.  Read by
-    /// [`ActionLinuxSyscall`](crate::p2_lift::kuna_linuxsyscall::ActionLinuxSyscall).
-    pub linux_syscall: bool,
+    /// (kuna) The loader identified the image as a Linux ELF: the fact
+    /// `option linuxsyscall auto` acts on.
+    pub image_linux_elf: bool,
     /// (kuna) `option msvcstrappend`: collapse inlined MSVC `std::string`
     /// appends into one call.  Read by
     /// [`ActionMsvcStrAppend`](crate::p2_lift::kuna_msvcstrappend::ActionMsvcStrAppend).
     pub msvc_str_append: bool,
-    /// (kuna) `option x64syscall`: what register effects the x86-64 `SYSCALL`
-    /// user-op carries.  Read by
-    /// [`ActionX64Syscall`](crate::p2_lift::kuna_x64syscall::ActionX64Syscall).
-    pub x64_syscall: crate::p2_lift::kuna_x64syscall::X64SyscallMode,
     /// Exact GCC AMD64 target supporting the ordinary SysV stack model.
     pub x64_syscall_memory_target: bool,
     /// (kuna) The user-op indices the `SYSCALL` constructor emits, resolved once
@@ -1377,10 +1346,11 @@ pub struct ArchContext {
     /// (kuna) The family's system-call user-op ids, minus any a compiler spec
     /// specialized with its own `<callotherfixup>`.
     pub syscall_regs_userops: Vec<unlace_base::types::uint4>,
-    /// (kuna) `option pebnames`, resolved against the compiler spec and the
-    /// loader's user-mode-PE fact: does
-    /// [`ActionPebNames`](crate::p5_types::kuna_pebnames::ActionPebNames) act?
-    pub peb_names: bool,
+    /// (kuna) The compiler spec is a Windows one: a fact `option pebnames` acts on.
+    pub windows_cspec: bool,
+    /// (kuna) The loader identified a Windows user-mode PE: the fact
+    /// `option pebnames auto` acts on.
+    pub image_windows_user: bool,
     /// (kuna) `option tlsnames`: the executable's static TLS block, when the
     /// loader found one.
     pub tls_layout: Option<std::rc::Rc<crate::p5_types::kuna_tlsnames::TlsLayout>>,
@@ -1391,12 +1361,6 @@ pub struct ArchContext {
     /// (kuna `structsynth`) The engine Architecture's `--jobs` worker ledger hook,
     /// shared: `None` outside a worker.
     pub struct_synth_shard: Option<crate::p5_types::kuna_structsynth::shard::ShardHandle>,
-    /// (kuna) `option structmerge`: may a synthesized record take in the claims
-    /// of a sibling reader of the same record?
-    pub struct_merge: crate::p5_types::kuna_structmerge::StructMergeMode,
-    /// (kuna) `option structheadless`: may a closed function's parameter be a
-    /// record read only past its start?
-    pub struct_headless: crate::p5_types::kuna_structheadless::StructHeadlessMode,
     /// (kuna) `option fieldtype`: is a synthesized field some access holds as a
     /// pointer declared as that pointer?  See
     /// [`kuna_fieldtype`](crate::p5_types::kuna_fieldtype).
@@ -1411,13 +1375,6 @@ pub struct ArchContext {
     pub lowered_switch_tree: bool,
     /// (kuna) `loweredswitchbits` — a switch lowered to bit tests re-rolls.
     pub lowered_switch_bits: bool,
-    pub cond_fold: int4,
-    /// (kuna) `condstmts`: most statements a folded condition operand may print
-    /// before its test; negative = off.  See [`crate::p8_structure::kuna_condstmts`].
-    pub cond_stmts: int4,
-    /// (kuna `gotoreduce`) Which small return tails are duplicated into a `goto`
-    /// source.  See [`crate::p8_structure::kuna_gotoreduce`].
-    pub goto_reduce: crate::p8_structure::kuna_gotoreduce::GotoReduceMode,
     /// (kuna) angr `IfElseFlattener`: drop the `else` arm of a terminating-if
     /// 3-component `if` (`flatten_ifelse`, opt-in default-off).  Read by
     /// [`crate::p8_structure::kuna_ifelseflatten`]'s `ActionIfElseFlatten`.
@@ -1563,9 +1520,6 @@ pub struct ArchContext {
     /// sorted, so the run-on cut (`kuna_switchrunon`) sees the same functions
     /// with the option on.
     pub lazy_entry_starts: Rc<Vec<u64>>,
-    /// (kuna) Recover a `BRANCHIND` whose destination is a select over constant
-    /// addresses (`option constselectjump`, `p2_lift/kuna_constselectjump.rs`).
-    pub const_select_jump: crate::kuna_constselectjump::ConstSelectMode,
     /// (kuna) Bound a LOAD-table jumptable by an out-of-band CBRANCH range guard
     /// when the basic model's guard analysis could not (C++
     /// `Architecture::switch_guard_bound`, flipped by `option switchguardbound`,
@@ -1850,18 +1804,11 @@ impl ArchContext {
             // from the engine Architecture in `build_arch_handle`.
             fat_str: 1,
             swift_str: 1,
-            // (kuna) `option gomorestack` default auto; the real value is
-            // copied from the engine Architecture in `build_arch_handle`.
-            go_morestack: 1,
-            rust_probestack: crate::kuna_rustprobestack::RustProbestackMode::Off,
             chkstk_darwin: false,
             sp_solve: false,
             type_vote: false,
             // (kuna) `option gobool` default auto; copied the same way.
             go_bool: 1,
-            // (kuna) `option gowritebarrier` default auto; the real value is
-            // copied from the engine Architecture in `build_arch_handle`.
-            go_write_barrier: 1,
             // (kuna) `option gonewtype` default on; copied the same way.
             go_new_type: true,
             swift_metadata_results: false,
@@ -1902,7 +1849,6 @@ impl ArchContext {
             opaque_globals_wanted: std::cell::Cell::new(false),
             call_result_use: crate::p4_calls::kuna_callresultuse::CallResultUse::Off,
             ret_split_global: false, // retsplitglobal (the ArchSeam carries the real default)
-            ret_split_limit: None,   // retsplitlimit (the ArchSeam carries the real default)
             simd_shuffle_userops: Vec::new(),
             x87_float_to_int_userops: Vec::new(),
             x87_integer_userops: Vec::new(),
@@ -1920,8 +1866,6 @@ impl ArchContext {
             float_globals_wanted: std::cell::Cell::new(false),
             struct_synth: crate::p5_types::kuna_structsynth::StructSynthMode::Locals, // (kuna) option structsynth, default `locals`; the real value is copied from the engine Architecture in `build_arch_handle`
             struct_synth_shard: None,
-            struct_merge: crate::p5_types::kuna_structmerge::StructMergeMode::Off, // (kuna) option structmerge, default `off`; the real value is copied from the engine Architecture in `build_arch_handle`
-            struct_headless: crate::p5_types::kuna_structheadless::StructHeadlessMode::Off, // (kuna) option structheadless, default `off`; the real value is copied from the engine Architecture in `build_arch_handle`
             field_type: false, // (kuna) option fieldtype, copied from Architecture
             bool_byte: true,   // (kuna) option boolbyte (default on)
             unknown_byte_is_char: false, // (kuna) realtypes + C output
@@ -1930,12 +1874,11 @@ impl ArchContext {
             char_byte: true,   // (kuna) option charbyte
             cast_arith: false, // (kuna) option castarith
             cast_index: false, // (kuna) option castindex
-            ptr_from_use: crate::p5_types::kuna_ptrfromuse::PtrFromUseMode::Void, // (kuna) option ptrfromuse (default void)
-            char_ptr: false,             // (kuna) option charptr (default off)
+            char_ptr: false,   // (kuna) option charptr (default off)
             analysis_valuewitness: true, // (kuna) option valuewitness
-            elem_ptr: false,             // (kuna) option elemptr, copied from Architecture
+            elem_ptr: false,   // (kuna) option elemptr, copied from Architecture
             elem_ptr_ranges: std::rc::Rc::new(Vec::new()), // (kuna) elemptr
-            libctypes: false,            // (kuna) option libctypes, copied from Architecture
+            libctypes: false,  // (kuna) option libctypes, copied from Architecture
             recover_lowered_switch: false, // loweredswitch
             nul_terminator: false,
             // endptrbound only re-expresses an address the walk already compares
@@ -1983,8 +1926,6 @@ impl ArchContext {
             index_alias_guard: 2, // indexaliasguard (global; Architecture::reset_defaults sets the shipped default)
             call_array_extent: false,
             stack_struct: false,
-            array_extent: 0, // arrayextent (Architecture::reset_defaults sets the shipped default)
-            array_size: 0,   // arraysize (Architecture::reset_defaults sets the shipped default)
             stack_alias_deadstore: false,
             stack_views: false, // stackviews (opt-in)
             libc_names: false,  // libcnames; set from the Architecture
@@ -2013,9 +1954,8 @@ impl ArchContext {
             region_edge_order: false,    // regionedgeorder (opt-in default-off)
             outline_spec: String::new(), // outline (opt-in default-off; empty = off)
             remove_cleanup_code: true, // cleanupcode (DIV-81 default-on; inert on a non-Rust binary)
-            linux_syscall: false, // linuxsyscall (the mode resolves against the Linux-ELF fact in build_arch_handle)
+            image_linux_elf: false,
             msvc_str_append: false, // msvcstrappend (opt-in default-off)
-            x64_syscall: crate::p2_lift::kuna_x64syscall::X64SyscallMode::Off, // x64syscall (Architecture::reset_defaults sets the shipped default: on)
             x64_syscall_memory_target: false,
             x64_syscall_userops: Vec::new(),
             octeon_effects: crate::kuna_octeoneffects::OcteonEffectsMode::Off,
@@ -2024,15 +1964,13 @@ impl ArchContext {
             syscall_regs: false,
             syscall_regs_family: None,
             syscall_regs_userops: Vec::new(),
-            peb_names: false,
+            windows_cspec: false,
+            image_windows_user: false,
             tls_layout: None,
             switch_selector_guard: false, // switchselector (opt-in default-off)
             lowered_switch_linear: false, // loweredswitch linear|all
             lowered_switch_tree: false,   // loweredswitch tree|all
             lowered_switch_bits: false, // loweredswitchbits (live value copied from the Architecture)
-            cond_fold: 0,               // condfold (opt-in default-off; 0 = off)
-            cond_stmts: -1,             // condstmts (-1 = off)
-            goto_reduce: crate::p8_structure::kuna_gotoreduce::GotoReduceMode::Off, // gotoreduce
             flatten_ifelse: false,      // ifelseflatten (opt-in default-off)
             revert_cross_jumps: false,  // crossjumprevert (opt-in default-off)
             dedup_ite_tail: false,      // dedupitetail (opt-in default-off)
@@ -2071,7 +2009,6 @@ impl ArchContext {
             switch_modulo_bound: false, // (kuna) GH-9191 default off (upstream byte-identical)
             switch_extent: false, // (kuna) option switchextent; the real architecture carries the shipped default
             lazy_entry_starts: Rc::default(),
-            const_select_jump: crate::kuna_constselectjump::ConstSelectMode::Off, // (kuna) constant-select indirect branch; reset_defaults sets the shipped default
             highslice_guard: false,
             switch_guard_bound: false, // (kuna) angr opt-in default off (upstream byte-identical)
             switch_shared_case: false, // (kuna) angr opt-in default off (upstream byte-identical)

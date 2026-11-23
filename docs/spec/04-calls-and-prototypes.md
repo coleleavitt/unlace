@@ -618,7 +618,7 @@ placements remain the caller's asserted contract. An impossible automatic
 placement raises a parameter-assignment error.
 
 The rules themselves live in
-`crates/unlace-middle/src/p4_calls/modelrules.rs (ModelRule,
+`crates/unlace-middle/src/spec/modelrules.rs (ModelRule,
 AssignAction, DatatypeFilter, QualifierFilter)`. A `ModelRule` is a data-type
 filter (size bounds, a metatype, or a homogeneous float aggregate of up to 4
 primitives), an optional prototype qualifier (varargs position range, absolute
@@ -745,7 +745,7 @@ and trailing padding. Zero join pieces represent unspecified padding without
 inventing a physical register dependency; heritage discards writes to them.
 This form is restricted
 to output resources. The opt-in implementation is in
-`crates/unlace-middle/src/p4_calls/kuna_aggregateabi.rs`. N32 preserves even f20..f30 and N64 preserves
+`crates/unlace-middle/src/spec/kuna_aggregateabi.rs`. N32 preserves even f20..f30 and N64 preserves
 f24..f31; other FPRs and v0/v1 are call-clobbered. Original GCC 7.3 and 4.7
 fixtures cover both hard-float ABIs without a compiler dependency in CI.
 The selected Octeon compiler ID also supplies the floating-point convention to

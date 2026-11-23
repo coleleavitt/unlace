@@ -7,6 +7,8 @@ Anchors:
   - crates/unlace-middle/src/p0_knowledge
   - crates/unlace-decomp/src/infra
   - crates/unlace-middle/src/infra
+  - crates/unlace-middle/src/engine
+  - crates/unlace-middle/src/spec
   - crates/unlace-cli/src
   - crates/unlace-console/src
   - crates/unlace-ghidra/src
@@ -751,7 +753,7 @@ Four front-ends drive one engine assembly:
   asking "does this language happen to have register X?" rather than resolving
   a name the host itself supplied — must go through the probe seam
   (`crates/unlace-base/src/space.rs (RegisterLookup)`'s
-  `probe_register` and `crates/unlace-middle/src/infra/engine_translate.rs
+  `probe_register` and `crates/unlace-middle/src/engine/engine_translate.rs
   (EngineTranslate)`'s `probe_register_varnode`) instead of the exact lookup.
   Both default to the exact lookup's `Ok`-to-`Some`, so the standalone Sleigh
   path is unchanged; the ghidra translator overrides them to answer from the
@@ -769,7 +771,7 @@ Four front-ends drive one engine assembly:
   the two template consumers
   (`crates/unlace-decomp/src/infra/decompile_drive.rs (emit_inject)`)
   fall through to a second translator seam
-  (`crates/unlace-middle/src/infra/engine_translate.rs
+  (`crates/unlace-middle/src/engine/engine_translate.rs
   (EngineTranslate)`'s `fetch_inject_pcode`). The ghidra translator answers it
   with a getPcodeInject query carrying the live injection context — base
   address, call address, and the sized input/output operand lists, with the

@@ -10254,7 +10254,7 @@ than a second parse of the file; an empty `ContextPainter`, since a per-address
 decode mode is not carried by a context snapshot; every address of every
 executable range mapped by some segment; and enough executable bytes (8 MiB) to
 pay for the engine builds. Each lane then builds its own bare `Sleigh` from an
-`EngineRecipe` (`crates/unlace-middle/src/infra/kuna_decodekit.rs`) over
+`EngineRecipe` (`crates/unlace-middle/src/engine/kuna_decodekit.rs`) over
 the shared bytes, with the parent's context values copied in by value
 (`crates/unlace-sleigh/src/kuna_ctxsnapshot.rs`) and `allow_context_set`
 off. Before anything is spawned, one such engine re-decodes 1,024 sampled seeds

@@ -512,7 +512,7 @@ dependency cycle; a trait object owned in `unlace-decomp` is not.
 - [x] `SharedClient` design (the re-entrant provider→query pattern) +
       `GhidraLoadImage` (`load_fill` = `getBytes`) — `unlace-ghidra/src/provider.rs`.
 - [x] `EngineTranslate` trait seam on `Architecture` (`translate: Box<dyn EngineTranslate>`,
-      `infra/engine_translate.rs`) — behavior-preserving; only `Sleigh` implements it today.
+      `unlace-middle/src/engine/engine_translate.rs`) — behavior-preserving; only `Sleigh` implements it today.
 - [x] `GhidraTranslate` port (getPcode per instruction, register caches, user-op probe
       loop) — `unlace-ghidra/src/translate.rs`. `ContextGhidra` is a `ContextInternal`
       stub (empty tracked sets; the query-backed `getTrackedRegisters` is Phase 3).

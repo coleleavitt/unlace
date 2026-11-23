@@ -7,4 +7,3 @@ pub mod heritage;
 pub mod kuna_calloverlap;
 pub mod kuna_loadguardreads;
 pub mod kuna_revisitrefine;
-pub mod kuna_segmentize;

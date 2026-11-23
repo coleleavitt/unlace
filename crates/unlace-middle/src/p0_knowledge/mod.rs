@@ -13,6 +13,7 @@ pub mod kuna_restartlog;
 pub mod modes;
 pub mod options;
 pub mod overrides;
+pub mod stringmanage;
 // (kuna) i386-PIE PLT-stub decode option gate (angr test_decompiling_nl_i386_pie).
 pub mod kuna_ppc32picimports;
 // (kuna) x86-64 IFUNC (IRELATIVE) PLT-stub naming option gate (load-time, env-bridged).

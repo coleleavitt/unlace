@@ -26,16 +26,14 @@ FOLDER_BAND = {
     "p7_regions": "structure", "p8_structure": "structure",
     "p3_dataflow": "bandb", "p4_calls": "bandb", "p5_types": "bandb", "p6_variables": "bandb",
     "p9_emit": "emit", "infra": "driver",
+    "engine": "middle", "spec": "middle",
 }
 MODULE_BAND = {
     "kuna_option_dispatch": "driver",
     "action": "middle", "architecture": "middle", "kuna_fasthash": "middle",
-    "typeop": "middle", "fspec": "middle", "variable": "middle", "cover": "middle", "varmap": "middle",
-    "dynamic": "middle", "heritage": "middle", "merge": "middle", "jumptable": "middle",
-    "modelrules": "middle", "kuna_aggregateabi": "middle", "prefersplit": "middle",
-    "engine_translate": "middle", "inject_sleigh": "middle", "kuna_emulatefunction": "middle",
-    "kuna_decodekit": "middle", "remote_provider": "middle", "stringmanage": "middle",
-    "kuna_calloverlap": "middle", "kuna_loadguardreads": "middle", "kuna_revisitrefine": "middle", "kuna_segmentize": "middle",
+    "fspec": "middle", "varmap": "middle", "heritage": "middle", "merge": "middle", "jumptable": "middle",
+    "remote_provider": "middle",
+    "kuna_calloverlap": "middle", "kuna_loadguardreads": "middle", "kuna_revisitrefine": "middle",
 }
 SRC = "crates/unlace-decomp/src"
 # The middle band's own crate (crate-split step 9): same folder layout, scanned with SRC as one tree.

@@ -393,11 +393,16 @@ scheduler's progress, with no behaviour change: `unlace-middle`'s `kuna_maturity
 complete, facts, `is_settled`, `debug_assert_settled!`), marked on ten schedule nodes by the
 driver, reset by a restart, reported by `phase status` (spec §0.10).
 
+**Middle layout (2026-11-23).** The modules reclassified into middle left the phase folders that
+did not describe them: the IR-level `typeop`, `variable`, `cover`, `dynamic` went to `substrate/`, `stringmanage`
+to `p0_knowledge/`, the SLEIGH engine seam (`engine_translate`, `kuna_decodekit`, `inject_sleigh`,
+`kuna_emulatefunction`) to a new `engine/`, and the spec-declared models (`modelrules`, `kuna_aggregateabi`,
+`prefersplit`, `kuna_segmentize`) to a new `spec/`. Middle's phase folders keep only the phase machinery
+every band shares (`jumptable`, `heritage` and its three guard helpers, `fspec`, `merge`, `varmap`); `p5_types/`
+and `p9_emit/` are gone from middle.
+
 **Left** (as of 2026-11-23; step 0 is measured and step 10 done, both below; the hook-panicking band-crate
 unit tests were fixed in #185, which installs the real pass hooks in each band crate's tests):
-- Tidy `unlace-middle`'s layout: the modules reclassified into middle (#112, #118, #142, #146) still sit in
-  phase folders (`p2_lift/`, `p3_dataflow/`, `p4_calls/`, `p5_types/`, `p9_emit/`) that don't describe
-  them; move them to `substrate/`, `infra/` or a new topic folder, no behaviour change.
 - Maturity follow-ups: replace ad-hoc "has phase X run" checks (heritage counters, calls-recovered,
   high-level and structured flags) with `is_settled`/the level where exactly equivalent, add
   `debug_assert_settled!` where a pass silently relies on an earlier phase, and show the level in

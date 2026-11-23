@@ -3657,3 +3657,19 @@ never comes back, right before the block its other path enters with twelve more
 bytes reserved. Source and build line in `spsolve_elf_i386.s` (GCC 15.3.0,
 GNU ld 2.45.1; SHA-256 `fb21f698b5b6c97467f8c9c07febb23e3767e06cdb803fb9a9b6fde0d679737f`).
 Used by `tests/stages/kuna-spsolve.xml`.
+
+### `ehcatch_*.so` — C++ catch handlers behind `.eh_frame` and `.ARM.exidx`
+
+Three builds of `ehcatch.cc` (clang 22.1.8 `-O2 -fPIC -fexceptions`, `ld.lld -shared`;
+the recipe is in the source): `ehcatch_x86_64.so` (4,664 bytes, SHA-256
+`2d2cc2545c88a4999f91cff680b07b03562bac4ecf8855457fcd63ac0c4f98dc`),
+`ehcatch_arm.so` (3,404 bytes, `armv7a-linux-gnueabihf`, SHA-256
+`33f210700eea757667fefacd758658fb609467151ef4b92dfea46ff03e9a9ff1`) and
+`ehcatch_thumb_stripped.so` (2,284 bytes, the same target with `-mthumb`, then
+`llvm-strip`, SHA-256
+`bd861c63e25985927c38fa33a5b7b1667072f14b8f3861ec9b57fb76c6f55a2b`). `guarded`
+catches an `int`; `sorted` catches a hidden-visibility class `Odd`, which only its
+`type_info` name string names, and then everything; the static `twice` has no
+symbol in the stripped build, where `.ARM.exidx` alone states its start. Used by
+`tests/stages/kuna-itaniumeh-arm.xml` and the `entry::kuna_itaniumeh` /
+`entry::kuna_armexidx` unit tests.

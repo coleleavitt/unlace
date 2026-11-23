@@ -94,6 +94,7 @@ pub mod kuna_entrymainproto;
 pub mod kuna_machomain;
 pub mod kuna_unwindinfo;
 // (kuna `machoehframe`) Mach-O `__eh_frame` FDE function starts.
+pub mod kuna_armexidx;
 pub mod kuna_coldentry;
 pub mod kuna_cortexmvectors;
 pub mod kuna_ehcold;
@@ -202,6 +203,9 @@ impl AnalysisPass for EntryDiscoveryPass {
         // non-ARM arch); see `cortexm_thumb_paints`.
         out.context_paints
             .extend(cortexm_thumb_paints(ctx.file, false));
+        // ARM EHABI: the `.ARM.exidx` functions known to be Thumb.
+        out.context_paints
+            .extend(kuna_armexidx::thumb_paints(ctx.file));
         // Ghidra-faithful names for the dynamic INIT/FINI entries (oracle 2 only),
         // restricted to the VMAs that actually survived into `out.entries` (a named
         // entry already covered by a funcsym is filtered out above, so its name is
@@ -549,6 +553,9 @@ fn collect_entries_with_pe_mode(file: &object::File, bytes: &[u8], pe_arm: bool)
             // (see `cortexm_vector_entries` / `cortexm_vector_table`).
             if file.architecture() == object::Architecture::Arm {
                 cand.extend(cortexm_vector_entries(file, false));
+                // Oracle 3 on ARM32: the `.ARM.exidx` function starts, the EHABI
+                // counterpart of the FDE `pcBegin`s (an ARM ELF has no `.eh_frame`).
+                cand.extend(kuna_armexidx::starts(file));
             }
         }
         // PE: entry (AddressOfEntryPoint+ImageBase), `.pdata` RUNTIME_FUNCTION

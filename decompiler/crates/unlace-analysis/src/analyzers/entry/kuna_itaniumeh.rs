@@ -1,15 +1,16 @@
 //! (kuna `itaniumeh`) The Itanium call-site table, decoded for the decompiler.
 //!
-//! For every `.eh_frame` FDE with an LSDA, each `.gcc_except_table` call-site
-//! record that has a landing pad becomes an [`EhCallSite`]: the covered range,
-//! the pad, and the pad's clauses from the action chain (cleanup, `catch (T)`
-//! by `typeinfo` symbol, `catch (...)`, exception specification). The selector
+//! For every LSDA (from an `.eh_frame` FDE, or on ARM32 from an `.ARM.extab`
+//! entry), each call-site record that has a landing pad becomes an
+//! [`EhCallSite`]: the covered range, the pad, and the pad's clauses from the
+//! action chain (cleanup, `catch (T)` named from the `typeinfo` symbol or its
+//! name string, `catch (...)`, exception specification). The selector
 //! value of a clause is its action filter, which is what the pad compares the
 //! selector register against. Flow consumes the table (`p2_lift/kuna_itaniumeh.rs`).
 
 use std::collections::HashMap;
 
-use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
+use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable, SectionKind};
 use unlace_decomp::kuna_itaniumeh::{EhCallSite, EhClause};
 
 use super::{DW_EH_PE_OMIT, Lsda, decode_lsda, encoded_size, for_each_fde_lsda, read_sleb128};
@@ -36,55 +37,118 @@ impl AnalysisPass for ItaniumEhPass {
     }
 }
 
-/// Every call-site record with a landing pad, with its clauses.
+/// Every call-site record with a landing pad, with its clauses. An LSDA is
+/// reached through an `.eh_frame` FDE or, on ARM32, through the generic-model
+/// `.ARM.extab` entry an `.ARM.exidx` entry names, and is read from whichever
+/// section holds it.
 pub fn collect_call_sites(file: &object::File) -> Vec<EhCallSite> {
     let mut out = Vec::new();
-    let Some(gcc) = file.section_by_name(".gcc_except_table") else {
-        return out;
-    };
-    let gcc_vma = gcc.address();
-    let Ok(gcc_data) = gcc.data() else {
-        return out;
-    };
     let ptr_size = if file.is_64() { 8 } else { 4 };
+    let mut lsdas = Vec::new();
+    for_each_fde_lsda(file, ptr_size, &mut |pc_begin, lsda| {
+        lsdas.push((pc_begin, lsda))
+    });
+    lsdas.extend(
+        super::kuna_armexidx::scan(file)
+            .into_iter()
+            .filter_map(|e| Some((e.start, e.lsda?))),
+    );
+    if lsdas.is_empty() {
+        return out;
+    }
+    let image = Image::new(file);
     let names = TypeNames::new(file);
-    for_each_fde_lsda(file, ptr_size, &mut |pc_begin, lsda_ptr| {
-        let Some(lsda) = decode_lsda(
-            gcc_data,
-            gcc_vma,
-            lsda_ptr,
-            pc_begin,
-            ptr_size,
-            file.is_little_endian(),
-        ) else {
-            return;
+    for (pc_begin, lsda_ptr) in lsdas {
+        let Some((vma, data)) = image.section(lsda_ptr) else {
+            continue;
+        };
+        let Some(lsda) = decode_lsda(data, vma, lsda_ptr, pc_begin, ptr_size, image.le) else {
+            continue;
         };
         for cs in lsda
             .call_sites
             .iter()
             .filter(|cs| cs.pad != 0 && cs.len != 0)
         {
-            let clauses = clauses(gcc_data, gcc_vma, &lsda, cs.action, ptr_size, &names);
             out.push(EhCallSite {
                 start: cs.start,
                 end: cs.start + cs.len,
                 pad: cs.pad,
-                clauses,
+                clauses: clauses(&image, vma, data, &lsda, cs.action, &names),
             });
         }
-    });
+    }
     out.sort_by_key(|s| (s.start, s.end));
     out.dedup();
     out
 }
 
+/// The allocated sections of the image, for reads by address.
+struct Image<'a> {
+    sections: Vec<(u64, &'a [u8])>,
+    ptr_size: usize,
+    le: bool,
+    arm: bool,
+}
+
+impl<'a> Image<'a> {
+    fn new(file: &'a object::File<'a>) -> Self {
+        let mut sections: Vec<(u64, &'a [u8])> = file
+            .sections()
+            .filter(|s| {
+                !matches!(
+                    s.kind(),
+                    SectionKind::Metadata | SectionKind::Other | SectionKind::Debug
+                )
+            })
+            .filter_map(|s| Some((s.address(), s.data().ok()?)))
+            .filter(|(vma, data)| *vma != 0 && !data.is_empty())
+            .collect();
+        sections.sort_by_key(|s| s.0);
+        Image {
+            sections,
+            ptr_size: if file.is_64() { 8 } else { 4 },
+            le: file.is_little_endian(),
+            arm: file.architecture() == object::Architecture::Arm,
+        }
+    }
+
+    /// The section holding `vma`, as `(section address, bytes)`.
+    fn section(&self, vma: u64) -> Option<(u64, &'a [u8])> {
+        let i = self
+            .sections
+            .partition_point(|s| s.0 <= vma)
+            .checked_sub(1)?;
+        let (base, data) = self.sections[i];
+        (vma - base < data.len() as u64).then_some((base, data))
+    }
+
+    fn pointer(&self, vma: u64) -> Option<u64> {
+        let (base, data) = self.section(vma)?;
+        let off = usize::try_from(vma - base).ok()?;
+        let raw = data.get(off..off.checked_add(self.ptr_size)?)?;
+        Some(if self.ptr_size == 8 {
+            super::read_u64(raw, self.le)
+        } else {
+            super::read_u32(raw, self.le) as u64
+        })
+    }
+
+    fn c_string(&self, vma: u64) -> Option<&'a str> {
+        let (base, data) = self.section(vma)?;
+        let rest = data.get(usize::try_from(vma - base).ok()?..)?;
+        let len = rest.iter().take(4096).position(|&b| b == 0)?;
+        std::str::from_utf8(&rest[..len]).ok()
+    }
+}
+
 /// The clauses of the action chain starting at 1-based `action` (0 = cleanup).
 fn clauses(
-    gcc: &[u8],
-    gcc_vma: u64,
+    image: &Image,
+    vma: u64,
+    data: &[u8],
     lsda: &Lsda,
     action: u64,
-    ptr_size: usize,
     names: &TypeNames,
 ) -> Vec<EhClause> {
     if action == 0 {
@@ -93,10 +157,10 @@ fn clauses(
     let mut out = Vec::new();
     let mut p = lsda.action_table + (action as usize - 1);
     for _ in 0..64 {
-        let Some((filter, np)) = read_sleb128(gcc, p) else {
+        let Some((filter, np)) = read_sleb128(data, p) else {
             break;
         };
-        let Some((disp, _)) = read_sleb128(gcc, np) else {
+        let Some((disp, _)) = read_sleb128(data, np) else {
             break;
         };
         let clause = match filter {
@@ -104,12 +168,12 @@ fn clauses(
             f if f < 0 => EhClause::Filter { selector: f },
             f => match lsda
                 .ttype
-                .and_then(|(enc, end)| type_entry(gcc, gcc_vma, enc, end, f as usize, ptr_size))
+                .and_then(|(enc, end)| type_entry(image, vma, data, enc, end, f as usize, names))
             {
                 Some(0) => EhClause::CatchAll { selector: f },
                 Some(ti) => EhClause::Catch {
                     selector: f,
-                    type_name: names.type_name(ti),
+                    type_name: names.type_name(image, ti),
                 },
                 None => EhClause::Catch {
                     selector: f,
@@ -129,22 +193,30 @@ fn clauses(
 }
 
 /// The type-table entry `filter` (counted back from the table's end): the
-/// address of the `typeinfo`, or of its GOT-style slot when the encoding is
-/// indirect (`TypeNames` resolves both). 0 is `catch (...)`.
+/// address of the `typeinfo`, or of its pointer slot (marked [`INDIRECT`]).
+/// 0 is `catch (...)`. An entry a dynamic relocation fills is its own slot. An
+/// ARM32 `absptr` entry is an `R_ARM_TARGET2` word: a self-relative offset to
+/// the slot (Linux) or to the object (bare metal, which [`TypeNames`] also
+/// tries).
 fn type_entry(
-    gcc: &[u8],
-    gcc_vma: u64,
+    image: &Image,
+    vma: u64,
+    data: &[u8],
     enc: u8,
     end: usize,
     filter: usize,
-    ptr_size: usize,
+    names: &TypeNames,
 ) -> Option<u64> {
     if enc == DW_EH_PE_OMIT {
         return None;
     }
-    let size = encoded_size(enc, ptr_size, &[]);
-    let off = end.checked_sub(filter * size)?;
-    let raw = gcc.get(off..off + size)?;
+    let size = encoded_size(enc, image.ptr_size, &[]);
+    let off = end.checked_sub(filter.checked_mul(size)?)?;
+    let raw = data.get(off..off.checked_add(size)?)?;
+    let place = vma + off as u64;
+    if names.slot.contains_key(&place) || names.slot_target.contains_key(&place) {
+        return Some(place | INDIRECT);
+    }
     let mut v = 0u64;
     for (i, b) in raw.iter().enumerate() {
         v |= (*b as u64) << (8 * i);
@@ -152,11 +224,15 @@ fn type_entry(
     if v == 0 {
         return Some(0);
     }
+    if image.arm && enc & 0x7f == 0 && size == 4 {
+        let target = place.wrapping_add(v as u32 as i32 as i64 as u64) & 0xffff_ffff;
+        return Some(target | INDIRECT);
+    }
     if enc & 0x0f == 0x0b && size == 4 {
         v = v as u32 as i32 as i64 as u64;
     }
     if enc & 0x70 == 0x10 {
-        v = v.wrapping_add(gcc_vma + off as u64);
+        v = v.wrapping_add(place);
     }
     Some(v | if enc & 0x80 != 0 { INDIRECT } else { 0 })
 }
@@ -164,59 +240,97 @@ fn type_entry(
 /// Marks a type-table value as the address of a pointer slot.
 const INDIRECT: u64 = 1 << 63;
 
-/// Symbol names by address and by relocated slot, for naming `typeinfo`s.
+/// What the image says about its `std::type_info` objects.
 struct TypeNames {
+    /// Address -> `_ZTI` symbol defined there.
     at: HashMap<u64, String>,
+    /// Slot -> the symbol a dynamic relocation binds there.
     slot: HashMap<u64, String>,
+    /// Slot -> the address a symbol-less dynamic relocation writes there.
+    slot_target: HashMap<u64, u64>,
 }
 
 impl TypeNames {
     fn new(file: &object::File) -> TypeNames {
         let mut at = HashMap::new();
         for sym in file.symbols().chain(file.dynamic_symbols()) {
-            if let Ok(name) = sym.name() {
-                if name.starts_with("_ZTI") && sym.address() != 0 {
-                    at.insert(sym.address(), name.to_string());
-                }
+            if let Ok(name) = sym.name()
+                && name.starts_with("_ZTI")
+                && sym.address() != 0
+            {
+                at.insert(sym.address(), name.to_string());
             }
         }
         let mut slot = HashMap::new();
-        if let (Some(relocs), Some(dynsym)) =
-            (file.dynamic_relocations(), file.dynamic_symbol_table())
-        {
+        let mut slot_target = HashMap::new();
+        if let Some(relocs) = file.dynamic_relocations() {
+            let dynsym = file.dynamic_symbol_table();
             for (off, r) in relocs {
                 match r.target() {
                     object::RelocationTarget::Symbol(idx) => {
                         if let Some(name) = dynsym
-                            .symbol_by_index(idx)
-                            .ok()
+                            .as_ref()
+                            .and_then(|t| t.symbol_by_index(idx).ok())
                             .and_then(|s| s.name().ok().map(str::to_string))
                         {
                             slot.insert(off, name);
                         }
                     }
-                    object::RelocationTarget::Absolute => {
-                        if let Some(name) = at.get(&(r.addend() as u64)).cloned() {
-                            slot.insert(off, name);
-                        }
+                    object::RelocationTarget::Absolute if !r.has_implicit_addend() => {
+                        slot_target.insert(off, r.addend() as u64);
                     }
                     _ => {}
                 }
             }
         }
-        TypeNames { at, slot }
+        TypeNames {
+            at,
+            slot,
+            slot_target,
+        }
     }
 
-    fn type_name(&self, v: u64) -> Option<String> {
-        let addr = v & !INDIRECT;
-        let sym = if v & INDIRECT != 0 {
-            self.slot.get(&addr).or_else(|| self.at.get(&addr))
-        } else {
-            self.at.get(&addr)
-        }?;
-        let d = crate::demangle::demangle_raw(sym)?;
-        d.strip_prefix("typeinfo for ").map(str::to_string)
+    /// The pointer the loader leaves in `slot`.
+    fn slot_value(&self, image: &Image, slot: u64) -> Option<u64> {
+        self.slot_target
+            .get(&slot)
+            .copied()
+            .or_else(|| image.pointer(slot))
+            .filter(|&v| v != 0)
     }
+
+    /// The type a `type_info` object at `object` describes: its `_ZTI`
+    /// symbol, else its own name string (its second word), which survives
+    /// stripping.
+    fn object_type(&self, image: &Image, object: u64) -> Option<String> {
+        if let Some(sym) = self.at.get(&object) {
+            return symbol_type(sym);
+        }
+        let name = self.slot_value(image, object + image.ptr_size as u64)?;
+        crate::demangle::demangle_typeinfo_name(image.c_string(name)?)
+    }
+
+    fn type_name(&self, image: &Image, v: u64) -> Option<String> {
+        let addr = v & !INDIRECT;
+        if v & INDIRECT != 0 {
+            if let Some(sym) = self.slot.get(&addr) {
+                return symbol_type(sym);
+            }
+            if let Some(t) = self
+                .slot_value(image, addr)
+                .and_then(|o| self.object_type(image, o))
+            {
+                return Some(t);
+            }
+        }
+        self.object_type(image, addr)
+    }
+}
+
+/// `std::runtime_error` for `_ZTISt13runtime_error`.
+fn symbol_type(sym: &str) -> Option<String> {
+    let d = crate::demangle::demangle_raw(sym)?;
+    d.strip_prefix("typeinfo for ").map(str::to_string)
 }
 
 /// (kuna `ehnote`) A header note on every function whose landing pads flow does
@@ -253,6 +367,7 @@ pub fn eh_notes(file: &object::File) -> Vec<crate::pass::CommentFact> {
         return out;
     };
     let ptr_size = if file.is_64() { 8 } else { 4 };
+    let image = Image::new(file);
     let names = TypeNames::new(file);
     super::for_each_fde_lsda_classified(file, ptr_size, &mut |pc_begin, lsda_ptr, personality| {
         if !personality.reads_itanium_lsda() {
@@ -286,7 +401,7 @@ pub fn eh_notes(file: &object::File) -> Vec<crate::pass::CommentFact> {
         let mut filters = 0usize;
         let mut catches: Vec<String> = Vec::new();
         for cs in &sites {
-            for clause in clauses(gcc_data, gcc_vma, &lsda, cs.action, ptr_size, &names) {
+            for clause in clauses(&image, gcc_vma, gcc_data, &lsda, cs.action, &names) {
                 let name = match clause {
                     EhClause::Cleanup => {
                         cleanup += 1;
@@ -342,6 +457,75 @@ pub fn eh_notes(file: &object::File) -> Vec<crate::pass::CommentFact> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn clause_names(name: &str) -> Vec<(u64, u64, u64, Vec<String>)> {
+        let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
+        let bytes = std::fs::read(path).expect("fixture");
+        let file = object::File::parse(&*bytes).expect("elf");
+        collect_call_sites(&file)
+            .into_iter()
+            .map(|s| {
+                let names = s
+                    .clauses
+                    .iter()
+                    .map(|c| match c {
+                        EhClause::Cleanup => "cleanup".to_string(),
+                        EhClause::Catch { type_name, .. } => {
+                            type_name.clone().unwrap_or_else(|| "?".into())
+                        }
+                        EhClause::CatchAll { .. } => "...".to_string(),
+                        EhClause::Filter { .. } => "throw()".to_string(),
+                    })
+                    .collect();
+                (s.start, s.end, s.pad, names)
+            })
+            .collect()
+    }
+
+    fn site(start: u64, end: u64, pad: u64, names: &[&str]) -> (u64, u64, u64, Vec<String>) {
+        (
+            start,
+            end,
+            pad,
+            names.iter().map(|n| n.to_string()).collect(),
+        )
+    }
+
+    /// `Odd` has hidden visibility, so only its `type_info` name string names it.
+    #[test]
+    fn x86_64_lsda_names_a_hidden_class_from_its_name_string() {
+        assert_eq!(
+            clause_names("ehcatch_x86_64.so"),
+            [
+                site(0x1607, 0x160c, 0x1610, &["int"]),
+                site(0x1637, 0x163c, 0x1641, &["Odd", "..."])
+            ]
+        );
+    }
+
+    /// The LSDAs sit in `.ARM.extab`, reached through `.ARM.exidx`; the type
+    /// entries are `R_ARM_TARGET2` words.
+    #[test]
+    fn arm_extab_lsda_resolves_target2_type_entries() {
+        assert_eq!(
+            clause_names("ehcatch_arm.so"),
+            [
+                site(0x103b8, 0x103bc, 0x103c4, &["int"]),
+                site(0x103e0, 0x103e4, 0x103f0, &["Odd", "..."])
+            ]
+        );
+    }
+
+    #[test]
+    fn stripped_thumb_lsda_counts_from_the_even_function_start() {
+        assert_eq!(
+            clause_names("ehcatch_thumb_stripped.so"),
+            [
+                site(0x103b2, 0x103b6, 0x103ba, &["int"]),
+                site(0x103cc, 0x103d0, 0x103d8, &["Odd", "..."])
+            ]
+        );
+    }
 
     #[test]
     fn notes_name_the_hidden_pads() {

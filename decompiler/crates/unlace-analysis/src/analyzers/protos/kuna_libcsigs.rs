@@ -24,7 +24,9 @@
 //!   *proves* them ABI-identical to the standard names they replace;
 //! * the FORTIFY `*_chk` family from GCC's own builtin types, checked with
 //!   `__builtin_types_compatible_p`;
-//! * `__stack_chk_fail{,_local}` from glibc `debug/stack_chk_fail{,_local}.c` (`void (void)`).
+//! * `__stack_chk_fail{,_local}` from glibc `debug/stack_chk_fail{,_local}.c` (`void (void)`);
+//! * the C++ exception runtime (`__cxa_begin_catch`, `__cxa_throw`, `_Unwind_Resume`, ...)
+//!   from libstdc++'s `<cxxabi.h>` and GCC's `<unwind.h>`, every pointer as `void *`.
 //!
 //! A declaration whose every slot is not width-stable is **rejected**, not
 //! approximated: `off_t`/`time_t`/`long long`/`char` parameters have no honest
@@ -536,6 +538,79 @@ pub(super) const LIBC_EXT: &[(&str, Sig)] = &[
                 Ty::CharPtr,
                 Ty::VoidPtr,
             ],
+            vararg: -1,
+        },
+    ),
+    // the Itanium C++ ABI exception runtime (`<cxxabi.h>`, `<unwind.h>`)
+    (
+        "__cxa_allocate_exception",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::Size],
+            vararg: -1,
+        },
+    ),
+    (
+        "__cxa_begin_catch",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__cxa_end_catch",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "__cxa_end_cleanup",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "__cxa_free_exception",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__cxa_get_exception_ptr",
+        Sig {
+            ret: Ty::VoidPtr,
+            params: &[Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "__cxa_rethrow",
+        Sig {
+            ret: Ty::Void,
+            params: &[],
+            vararg: -1,
+        },
+    ),
+    (
+        "__cxa_throw",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr, Ty::VoidPtr, Ty::VoidPtr],
+            vararg: -1,
+        },
+    ),
+    (
+        "_Unwind_Resume",
+        Sig {
+            ret: Ty::Void,
+            params: &[Ty::VoidPtr],
             vararg: -1,
         },
     ),

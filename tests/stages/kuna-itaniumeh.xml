@@ -11,7 +11,7 @@
     catcher is void and only the on pass prints __cxa_begin_catch.
     Asserts #3-#7 and #9-#10 are the on pass: each landing pad prints as a
     try region, the pads read eh_exception() and eh_selector(), the pad comment
-    names the catch types, a single typed clause is catch (T &), and calls
+    names the catch types, the header lists the caught types (#9, #12), and calls
     unwinding to one pad share its try. #8 proves a cleanup pad
     does not hand the selector register to the destructor call.
 -->
@@ -48,11 +48,12 @@
 <stringmatch name="itaniumeh #2: off drops the catch bodies (all three matches are the on pass's)" min="3" max="3">__cxa_begin_catch</stringmatch>
 <stringmatch name="itaniumeh #3: on prints each landing pad as a try region (catcher two, cleanup one, typed one)" min="4" max="4">try \{</stringmatch>
 <stringmatch name="itaniumeh #4: on tests the selector at the catch pads (catcher, typed)" min="2" max="2">if \(eh_selector\(\) == 1\)</stringmatch>
-<stringmatch name="itaniumeh #5: on passes the exception to __cxa_begin_catch" min="2" max="2">__cxa_begin_catch\(eh_exception\(\)\)</stringmatch>
+<stringmatch name="itaniumeh #5: on passes the exception to __cxa_begin_catch" min="3" max="3">__cxa_begin_catch\(eh_exception\(\)\)</stringmatch>
 <stringmatch name="itaniumeh #6: on names the catch clauses by selector" min="1" max="1">landing pad: catch \(std::runtime_error\) when selector == 1; catch \(\.\.\.\) when selector == 2</stringmatch>
 <stringmatch name="itaniumeh #7: on resumes unwinding from the cleanup pads and the unmatched selector" min="3" max="3">_Unwind_Resume\(eh_exception\(\)\)</stringmatch>
 <stringmatch name="itaniumeh #8: the destructor keeps its one argument on both paths (one off, two on)" min="3" max="3">release\(&amp;v\d+\);</stringmatch>
-<stringmatch name="itaniumeh #9: a pad with one typed clause is catch (T &amp;)" min="1" max="1">\} catch \(std::runtime_error &amp;\) \{</stringmatch>
+<stringmatch name="itaniumeh #9: the header names the caught types in handler order" min="1" max="1">\} catch \(std::runtime_error\) \{</stringmatch>
+<stringmatch name="itaniumeh #12: a typed clause and a catch-all share one header" min="1" max="1">\} catch \(std::runtime_error \| \.\.\.\) \{</stringmatch>
 <stringmatch name="itaniumeh #10: the second call of cleanup prints once per pass (inside the one try when on)" min="2" max="2">risky\(a0 \+ 1\);</stringmatch>
 <stringmatch name="itaniumeh #11: no exceptional edge prints as a bare if" min="0" max="0">if \(!?eh_unwinding</stringmatch>
 </decompilertest>

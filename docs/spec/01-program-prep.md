@@ -4464,7 +4464,12 @@ moves.
   (`seed_declared_libc_prototype`) is refused on ARM the same way. The signatures
   themselves are reduced from the platform's own C declarations (`gcc -aux-info`
   over the standard headers, GCC's builtin types for the FORTIFY `_chk` entry
-  points, the `<stdio.h>` `__REDIRECT` for the `__isoc99_*` aliases), never written
+  points, the `<stdio.h>` `__REDIRECT` for the `__isoc99_*` aliases, and
+  `<cxxabi.h>`/`<unwind.h>` for the nine C++ exception-runtime entry points a
+  landing pad calls: `__cxa_begin_catch`, `__cxa_end_catch`, `__cxa_throw`,
+  `__cxa_rethrow`, `__cxa_allocate_exception`, `__cxa_free_exception`,
+  `__cxa_get_exception_ptr`, `_Unwind_Resume` and ARM's `__cxa_end_cleanup`,
+  every pointer as `void *`), never written
   from memory, and any declaration with a slot whose width is not stable across
   ILP32/LP64 — `off_t`, `time_t`, `long long`, a `char` parameter — is **rejected
   rather than approximated**, because a wrong prototype is worse than a missing one:
@@ -6493,6 +6498,27 @@ moves.
   Each blob's first address is also recorded for constant-pointer recovery
   (chapter 05, `blobs`). `unlace blobs` runs the same scan as an inventory, with
   the functions that reference each file.
+- **ARM EHABI unwind index** (ARM32 ELF only;
+  `decompiler/crates/unlace-analysis/src/analyzers/entry/kuna_armexidx.rs (scan)`):
+  an ARM32 ELF carries no `.eh_frame`. Its unwinder searches `.ARM.exidx`, a
+  table of 8-byte entries sorted by address: word 0 is a prel31 offset to a
+  function's first instruction, word 1 is `1` (`EXIDX_CANTUNWIND`), an inline
+  compact description (bit 31 set), or a prel31 offset to an `.ARM.extab`
+  entry. In the generic model that entry starts with a prel31 offset to its
+  personality routine (bit 31 clear), then one word-aligned run of unwind
+  opcodes whose first byte counts the additional words, then the LSDA that
+  `itaniumeh` decodes (chapter 02). Every entry that can unwind is a function
+  start, bounded by the next entry's start, and joins the entry-discovery
+  oracles (the `.eh_frame` FDE oracle's counterpart). A `CANTUNWIND` entry only
+  bounds its predecessor: the linker writes one at the end of each code
+  section. Bit 0 of a start is the Thumb bit, but a table whose relocations were
+  made against section symbols leaves it clear on Thumb code, so the
+  instruction set is decided per start: Thumb when the bit is set or the
+  address is not a multiple of four; otherwise A32 when nothing in the image is
+  known to be Thumb, Thumb when something is and no sized function symbol has
+  an even address, and **left out** when the image holds both, because a start
+  decoded in the wrong set is a function of garbage. A Thumb start paints
+  `TMode=1` over its own `[start, next start)` range.
 - **x87 intrinsics** (`x87intrinsics`, always on, i386 only;
   `decompiler/crates/unlace-analysis/src/analyzers/protos/kuna_x87intrinsics.rs
   (X87IntrinsicPass)`): binds the MSVC one-operand x87 math intrinsics to the
@@ -9080,7 +9106,10 @@ fuses the feasible subset of Ghidra's `EntryPointAnalyzer`,
 (2) `DT_INIT`/`DT_FINI` and the `INIT_ARRAY`/`FINI_ARRAY` pointer tables, carrying
 Ghidra-faithful names (`_INIT_<i>`/`_FINI_<i>`/`_DT_INIT`/`_DT_FINI`) through the
 `entry_names` overlay; (3) every `.eh_frame` FDE's `pcBegin` — the highest-value
-oracle on C/C++ binaries, since unwind data survives stripping; (4) the
+oracle on C/C++ binaries, since unwind data survives stripping — and on ARM32,
+which has no `.eh_frame`, the `.ARM.exidx` function starts whose instruction
+set is decided (`kuna_armexidx.rs (starts)`, the unwind-index bullet in the
+analysis-pass list); (4) the
 `_start`→`main` libc-start idiom (x86-64 PC-relative `lea rdi`, the
 AArch64/ARM/RISC-V PIE form that loads `main` indirectly through an
 `R_*_RELATIVE`-relocated GOT slot, and — for the non-PIE ARM form, which carries

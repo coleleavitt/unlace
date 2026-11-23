@@ -4457,8 +4457,10 @@ only for MSVC x64. Its design is a helper call on each control-flow edge where
 the exception state changes, which the structurer then reads. This option
 applies that design to the Itanium call-site table.
 
-**The table.** The analysis pass decodes every `.eh_frame` FDE's LSDA in
-`.gcc_except_table`. The header and call-site records are decoded as for
+**The table.** The analysis pass decodes every LSDA, reached through an
+`.eh_frame` FDE or, on ARM32, through the generic-model `.ARM.extab` entry an
+`.ARM.exidx` entry names (chapter 01, ARM EHABI unwind index), and read from
+whichever section holds it. The header and call-site records are decoded as for
 `eh_frame_full`, but the walk also reads the action table and the type table.
 A call-site record with a landing pad becomes one `EhCallSite`: the covered
 range (relative to the FDE start), the pad (relative to `LPStart`) and the
@@ -4467,8 +4469,12 @@ pad's clauses, in action-chain order. A clause is one of four kinds:
 - filter 0: a cleanup;
 - a positive filter: a `catch (T)`, named from the type-table entry. A pcrel
   entry, an absolute entry and an indirect entry through a relocated slot all
-  resolve. A typeinfo symbol `_ZTI…` demangles to the type. An entry of 0 is
-  `catch (...)`;
+  resolve, and so does an entry a dynamic relocation fills, which is read as
+  its own slot. On ARM32 an `absptr` entry is an `R_ARM_TARGET2` word, read
+  as a self-relative offset to a GOT slot (Linux) or to the object (bare
+  metal). A typeinfo symbol `_ZTI…` demangles to the type; without one, the
+  `std::type_info` object's own name string (its second word, which survives
+  stripping) is demangled as a type name. An entry of 0 is `catch (...)`;
 - a negative filter: an exception specification.
 
 The positive filter is also the selector value the pad's own code compares
@@ -4479,7 +4485,9 @@ AArch64 and r0/r1 on ARM.
 **Flow.** In `FlowInfo::process_instruction`:
 
 - A CALL or CALLIND in an instruction inside a covered range is followed, in
-  the same instruction, by `t = eh_unwinding(); CBRANCH pad, t`. The CBRANCH is
+  the same instruction, by `t = eh_unwinding(); CBRANCH pad, t`. Clang starts
+  a range at the call's argument set-up, so an instruction of the range that
+  holds no call leaves the pad for the call that follows. The CBRANCH is
   an ordinary branch, so the pad is decoded and becomes a successor block.
 - A no-return halt that `check_for_flow_modification` plants after a covered
   call goes after the CBRANCH (`unwind_edge_end`). This keeps the edge when
@@ -4491,9 +4499,16 @@ AArch64 and r0/r1 on ARM.
   cleanup's calls.
 - The pad gets an instruction comment that lists its clauses, for example
   `landing pad: catch (std::runtime_error) when selector == 1; catch (...) when selector == 2`.
+- Only the unwinder enters a landing pad, so a call whose fall-through
+  address is one does not return: the walk plants the no-return halt there
+  with the warning `itaniumeh: the call's fall-through is an exception landing
+  pad`, as `funcboundflow` does at the next function's entry. This ends a
+  clang terminate pad (`mov rdi,rax; call __clang_call_terminate`) whose
+  callee a stripped image does not name.
 
-The three helpers are builtin user-ops (`BUILTIN_EH_UNWINDING` returns
-`bool`). They have no side effects, so they live only as long as something
+The three helpers are builtin user-ops (`eh_unwinding` returns `bool`,
+`eh_exception` a `void *` and `eh_selector` a signed integer,
+`coreaction_infertypes.rs`). They have no side effects, so they live only as long as something
 reads them. The result is structured C, not a `try` statement:
 
 ```c
@@ -4526,7 +4541,10 @@ on one P-core) `off` takes 102.87 G instructions, `catch` 103.35 G (+0.5%) and
 is_eh_if, eh_pad_start)`). An `if` whose condition is the `eh_unwinding()`
 CBRANCH prints as `try { <condition-block statements> } catch (..) { <pad> }`:
 
-- when its true branch starts at a landing pad, that branch is the handler;
+- when its true branch starts at a landing pad, that branch is the handler.
+  An `else` branch, the normal path, prints inside the `try`: printed after
+  the `catch` it would read as code the handler falls into. The same holds
+  when the `else` branch is the pad and the true branch the normal path;
 - when the structurer negated it (`if (!eh_unwinding()) { normal }`, whose
   normal path never falls through) and the rest of the enclosing list starts
   at the pad, the normal path prints inside the `try` and the rest of the list
@@ -4539,16 +4557,22 @@ CBRANCH prints as `try { <condition-block statements> } catch (..) { <pad> }`:
   (`eh_open_pad`, compared with the CBRANCH target) prints as its plain
   statements: the calls of one try region share it.
 
-The header is `catch (T &)` when the pad has exactly one typed clause, and
-`catch (...)` otherwise. With several clauses the selector tests stay in the
-handler (`if (eh_selector() == 1)`) and the pad comment maps each selector to
-its type.
+The header lists the pad's caught types in handler order, joined by ` | `:
+`catch (std::runtime_error | ...)`, with `...` for a catch-all or a type no
+name resolves. A cleanup or an exception specification is not a handler and
+is left out; a pad with neither type nor catch-all prints `catch (...)`. With
+several clauses the selector tests stay in the handler
+(`if (eh_selector() == 1)`) and the pad comment maps each selector to its
+type.
 
-**Limits.** SjLj and ARM EHABI tables are not
-read. Pinned by
+**Limits.** SjLj tables are not read. Pinned by
 `tests/stages/kuna-itaniumeh.xml` (two passes over the `itaniumeh/eh_x86_64.elf`
-fixture), `tests/stages/kuna-itaniumeh-cold.xml` (the partitioned build) and
-`tests/stages/kuna-itaniumeh-a64.xml` (AArch64, x0/x1).
+fixture), `tests/stages/kuna-itaniumeh-cold.xml` (the partitioned build),
+`tests/stages/kuna-itaniumeh-a64.xml` (AArch64, x0/x1),
+`tests/stages/kuna-itaniumeh-arm.xml` (ARM32 and stripped Thumb EHABI tables,
+a type named only by its `type_info` string) and
+`tests/stages/kuna-itaniumeh-clang.xml` (clang ranges that start before the
+call, the multi-clause header).
 
 ## 2.13 VEX zero-upper writes and per-lane vector p-code
 

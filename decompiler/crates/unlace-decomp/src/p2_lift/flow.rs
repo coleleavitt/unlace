@@ -2441,6 +2441,7 @@ truncating the fall-through here"
 
         self.overlap_cbranch_target = None; // (kuna overlapbranch) per-instruction
         let mut ends_in_call = false;
+        let mut call_before_pad = false;
         if let Some(firstop) = first_new {
             // (kuna retpushedhalf) The push/pop stack-maintenance shape is only
             // visible here: copy propagation later collapses the store and the
@@ -2454,6 +2455,11 @@ truncating the fall-through here"
                 super::kuna_atomicxadd::observe(&mut self.data, &insn_ops);
             }
             ends_in_call = self.pool_bound && self.ends_in_unconditional_call(&insn_ops);
+            call_before_pad = !self.is_flow_for_inline()
+                && eh_table
+                    .as_deref()
+                    .is_some_and(|t| t.is_pad((curaddr + step as i64).get_offset()))
+                && self.ends_in_unconditional_call(&insn_ops);
             let seq = self
                 .data
                 .obank()
@@ -2539,27 +2545,30 @@ truncating the fall-through here"
                 // pad, and later calls that unwind to it print inside the same
                 // `try` without their own edge. `itaniumeh catch` keeps only the
                 // pads with a catch clause.
-                if !self.is_flow_for_inline()
-                    && self.eh_records_seen.insert(site.pad)
+                let call = (!self.is_flow_for_inline()
                     && (!self.data.get_arch().itanium_eh_catch_only
                         || site
                             .clauses
                             .iter()
-                            .any(|c| *c != crate::kuna_itaniumeh::EhClause::Cleanup))
-                {
-                    let pad = Address::new(
-                        curaddr.get_space().expect("eh: code space").clone(),
-                        site.pad,
-                    );
+                            .any(|c| *c != crate::kuna_itaniumeh::EhClause::Cleanup)))
+                .then(|| {
                     let mut cursor = Some(firstop);
                     while let Some(op) = cursor {
                         cursor = self.dead_next(op);
                         let code = self.data.obank().get(op).map(|o| o.code());
                         if matches!(code, Some(OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)) {
-                            crate::kuna_itaniumeh::insert_unwind_edge(&mut self.data, op, &pad)?;
-                            break;
+                            return Some(op);
                         }
                     }
+                    None
+                })
+                .flatten();
+                if let Some(op) = call.filter(|_| self.eh_records_seen.insert(site.pad)) {
+                    let pad = Address::new(
+                        curaddr.get_space().expect("eh: code space").clone(),
+                        site.pad,
+                    );
+                    crate::kuna_itaniumeh::insert_unwind_edge(&mut self.data, op, &pad)?;
                 }
             }
             if flowoverride != crate::overrides::flow_type::NONE {
@@ -2659,6 +2668,15 @@ truncating the fall-through here"
                 self.artificial_halt(curaddr, pcodeop_flags::noreturn)?;
                 self.data.warning(
                     "funcboundflow: the call's fall-through is this function's literal pool; truncating flow here",
+                    curaddr,
+                );
+                isfallthru = false;
+            } else if call_before_pad {
+                // (kuna itaniumeh) Only the unwinder enters a landing pad, so a
+                // call whose fall-through is one does not return.
+                self.artificial_halt(curaddr, pcodeop_flags::noreturn)?;
+                self.data.warning(
+                    "itaniumeh: the call's fall-through is an exception landing pad; truncating flow here",
                     curaddr,
                 );
                 isfallthru = false;

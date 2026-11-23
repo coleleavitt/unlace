@@ -17,6 +17,7 @@ pub mod kuna_bitcast;
 pub mod kuna_braceelide;
 pub mod kuna_bytearrayc;
 pub(crate) mod kuna_bytearrayslice;
+pub mod kuna_bytehonest;
 pub(crate) mod kuna_callargextend;
 pub mod kuna_callerstack;
 pub(crate) mod kuna_callresult;
@@ -127,7 +128,12 @@ pub mod kuna_callprototypes;
 pub(crate) mod kuna_gostorevalue;
 
 pub(crate) mod kuna_constantshift;
+pub mod kuna_fidproto; // (kuna) the prototype a .fid record carries, and its check against the body
+pub mod kuna_reglocals;
 
 pub mod kuna_widenedadd;
 
 pub mod kuna_returnselector;
+pub mod kuna_slotreport; // (kuna) a frame slot a printed local lives in is reported as that local
+pub mod kuna_slotsplit; // (kuna) a frame row a narrower printed declaration lives inside is split at it
+pub mod kuna_stackobjectinfo;

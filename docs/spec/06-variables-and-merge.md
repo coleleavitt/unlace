@@ -1505,7 +1505,7 @@ the right choice for the emitted C. On a machine-readable surface it is the wron
 one: it asserts an element type the recovery never established, where the
 program's own type may as well be `_Bool`, `unsigned char`, a one-byte enum or one
 byte of a struct nobody split.
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_bytehonest.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_bytehonest.rs
 (exported_type_name)` reports the width instead — `undefined1`, the spelling
 Ghidra uses for the same fact and the analogue of IDA's `_BYTE`. The predicate
 (`is_uncommitted_byte`) reads the datatype's own metatype and size, never its
@@ -1582,7 +1582,7 @@ them had a row: a consumer could not read their types, and decbench's
 index, then stack offset, then instruction-address overlap, scored every
 register-resident DWARF local as a miss. `extract_variables` appends a fourth
 section,
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_reglocals.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_reglocals.rs
 (register_locals)`: the declarations the printer emitted for the function
 (`printc.rs (DeclaredLocal)`), in declaration order, minus every declaration whose
 printed name a parameter or frame row already carries and every one that is
@@ -1644,7 +1644,7 @@ stack Symbol, so it is spelled by width: `local_c undefined4`. At -O0 the value
 in such a slot is usually a printed local that merged a register with its
 spill, declared `char *v1; // r0 | stack - 0xc`. The filler row keeps its frame name, offset and size and takes the
 type the C declares there, from
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_slotreport.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_slotreport.rs
 (covering_type)`. The candidates are the printer's declarations for the
 function (the same `DeclaredLocal` list and naming check `reglocals` uses)
 whose declared type is as wide as the slot and one of whose storage homes
@@ -1702,7 +1702,7 @@ what follows it) reaches the rows as one `undefinedN`: `local_18 undefined12`
 although the C declares `double v1; // stack - 0x18 | ...` at its start. Such
 a row is cut at the homes of the printed
 declarations lying wholly inside it, from
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_slotsplit.rs
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_slotsplit.rs
 (split_rows)`. The homes are the `DeclaredSlots` index `slotreport` builds
 (`kuna_slotreport.rs (homes_within)`): a declaration's stack homes at its
 declared width, over its high and the highs declared through it. Each declared
@@ -4022,7 +4022,7 @@ varnode. Explicit retypes still lock the datatype. This distinction matters for
 wide integer temporaries represented internally by a fallback byte-array type:
 naming the operand does not declare that it is an aggregate in memory.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackobjectinfo.rs` exports
+`decompiler/crates/unlace-decomp/src/p9_emit/kuna_stackobjectinfo.rs` exports
 logical selectors, asserted names, signed frame ranges, defined/uncertain state
 and declared native uses without exposing analysis-local identifiers. CLI results
 carry these records through batch workers. `--no-vars` suppresses their extraction;

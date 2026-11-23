@@ -12,7 +12,6 @@ pub mod funcdata_merge;
 pub mod funcdata_spacebase;
 pub mod kuna_arrayextent;
 pub mod kuna_arraysize;
-pub mod kuna_bytehonest;
 pub mod kuna_calleepop;
 pub mod kuna_calleepopframe;
 pub mod kuna_calleepopslot;
@@ -39,18 +38,14 @@ pub mod kuna_nulterminator;
 pub mod kuna_paramcopyhoist;
 pub mod kuna_pointeevalue;
 pub mod kuna_registerepochs;
-pub mod kuna_reglocals;
 pub(crate) mod kuna_savedregisterspills;
 pub mod kuna_slotptr;
-pub mod kuna_slotreport; // (kuna) a frame slot a printed local lives in is reported as that local
-pub mod kuna_slotsplit; // (kuna) a frame row a narrower printed declaration lives inside is split at it
 pub mod kuna_stablenames;
 pub mod kuna_stackalias;
 pub mod kuna_stackexitanchor; // (kuna) the epilogue settles the last unknown call's purge
 pub(crate) mod kuna_stackloadcover;
 pub mod kuna_stackobjectalias;
 pub mod kuna_stackobjectasserts;
-pub mod kuna_stackobjectinfo;
 pub mod kuna_stackobjects;
 pub mod kuna_stackparamviews;
 pub mod kuna_stackranges;

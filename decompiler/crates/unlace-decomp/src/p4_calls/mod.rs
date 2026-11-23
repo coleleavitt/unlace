@@ -51,7 +51,6 @@ pub mod kuna_directalias; // (kuna) a direct access at a known stack offset alia
 pub mod kuna_entryreads; // (kuna) the incoming registers a function's own body reads
 pub mod kuna_exclusivearguse; // (kuna) a dereference on the other arm of a branch does not compete with a call on this one
 pub mod kuna_exclusivecallret; // (kuna) a call and a return on mutually exclusive arms do not compete
-pub mod kuna_fidproto; // (kuna) the prototype a .fid record carries, and its check against the body
 pub mod kuna_formattail; // (kuna) a resolved format call keeps an open tail through trial scoring
 pub mod kuna_formatwitness; // (kuna) equal constant formats can witness a partial call's arity
 pub mod kuna_gobool; // (kuna) Go boolean-return stale-high narrowing (docs/multilang.md W4)

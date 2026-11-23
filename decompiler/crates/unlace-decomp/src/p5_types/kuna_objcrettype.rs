@@ -229,7 +229,7 @@ fn class_value(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>) -> Cla
         && !v.is_constant()
         && let Some(class) = table.class_slot_at.get(&v.get_offset())
     {
-        return if crate::printc::holds_loaded_value(data, vn, 8) {
+        return if holds_loaded_value(data, vn, 8) {
             Known(class.clone())
         } else {
             Unknown
@@ -509,6 +509,31 @@ pub fn resolved_sends(data: &Funcdata) -> Vec<ResolvedSend> {
         .filter_map(|i| resolve_send(data, data.get_call_specs(i).get_op()))
         .filter(|r| r.imp != 0)
         .collect()
+}
+
+/// Is `vn` the slot's value at entry, carried only across calls (`INDIRECT`)
+/// and joins (`MULTIEQUAL`), never a value the function stored into it?
+pub(crate) fn holds_loaded_value(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
+    let Some(v) = fd.vbank().get(vn) else {
+        return false;
+    };
+    let Some(def) = v.get_def().filter(|_| v.is_written()) else {
+        return true;
+    };
+    let Some(o) = fd.obank().get(def) else {
+        return false;
+    };
+    depth > 0
+        && match o.code() {
+            OpCode::CPUI_INDIRECT => o
+                .get_in(0)
+                .is_some_and(|i| holds_loaded_value(fd, i, depth - 1)),
+            OpCode::CPUI_MULTIEQUAL => (0..o.num_input()).all(|k| {
+                o.get_in(k)
+                    .is_some_and(|i| i == vn || holds_loaded_value(fd, i, depth - 1))
+            }),
+            _ => false,
+        }
 }
 
 #[cfg(test)]

@@ -854,6 +854,20 @@ pub const PERSIST_CROSS_PRODUCT: u64 = 1 << 16;
 // Heritage (heritage.hh:207)
 // =============================================================================
 
+/// (kuna `globalcallranges`) The exact caller-side memory intervals resolved for each call
+/// of a completely decoded leaf callee, cached for one heritage pass
+/// (`p3_dataflow/kuna_globalcallranges.rs`).
+#[derive(Debug, Default)]
+pub struct GlobalCallRanges {
+    pub resolved: slotmap::SecondaryMap<crate::context::OpId, Option<Vec<(u64, u64)>>>,
+}
+
+impl GlobalCallRanges {
+    pub fn clear(&mut self) {
+        self.resolved.clear();
+    }
+}
+
 /// Manage the construction of Static Single Assignment (SSA) form (C++
 /// `Heritage`).
 ///
@@ -929,7 +943,8 @@ pub struct Heritage {
     protostack_alias: Option<Option<crate::varmap::AliasChecker>>,
     /// Positive evidence of nested frame setup, retained across passes.
     protostack_frame_reload: Option<bool>,
-    global_call_ranges: super::kuna_globalcallranges::Calls,
+    /// (kuna `globalcallranges`) The caller-side intervals resolved per call this pass.
+    global_call_ranges: GlobalCallRanges,
     /// (kuna `readonlycalls`) Whether this pass leaves read-only ranges
     /// unguarded at calls ([`Heritage::readonly_cross_product`]).
     readonly_unguarded: bool,
@@ -2015,7 +2030,13 @@ impl Heritage {
                     ))
                     || (fd.hooks().calleememory_preserves)(fd, fc, addr, size)
                     || ((fl & varnode_flags::persist) != 0
-                        && self.global_call_ranges.preserves(fd, fc, addr, size)))
+                        && (fd.hooks().globalcallranges_preserves)(
+                            &mut self.global_call_ranges,
+                            fd,
+                            fc,
+                            addr,
+                            size,
+                        )))
             {
                 effecttype = effect_type::UNAFFECTED;
             }

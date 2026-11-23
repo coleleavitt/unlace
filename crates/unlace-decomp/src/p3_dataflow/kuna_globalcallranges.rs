@@ -10,58 +10,54 @@ use crate::context::{OpId, VarnodeId};
 use crate::fspec::{FuncCallSpecs, OFFSET_UNKNOWN};
 use crate::funcdata::Funcdata;
 
-#[derive(Debug, Default)]
-pub(super) struct Calls {
-    resolved: SecondaryMap<OpId, Option<Vec<(u64, u64)>>>,
+/// Does the leaf callee of `call` provably leave `address`/`size` alone?
+pub(crate) fn preserves(
+    calls: &mut crate::heritage::GlobalCallRanges,
+    fd: &Funcdata,
+    call: &FuncCallSpecs,
+    address: &Address,
+    size: i32,
+) -> bool {
+    let Some(space) = address.get_space() else {
+        return false;
+    };
+    if fd.callee_memory().is_empty()
+        || space.get_type() != spacetype::IPTR_PROCESSOR
+        || space.get_word_size() != 1
+        || size <= 0
+        || fd
+            .get_arch()
+            .manage()
+            .get_default_data_space()
+            .map(|s| s.get_index())
+            != Some(space.get_index())
+    {
+        return false;
+    }
+    let Some(end) = address.get_offset().checked_add(size as u64) else {
+        return false;
+    };
+    if end - 1 > space.get_highest() {
+        return false;
+    }
+    let op = call.get_op();
+    if !calls.resolved.contains_key(op) {
+        calls.resolved.insert(op, resolve(fd, call));
+    }
+    calls
+        .resolved
+        .get(op)
+        .and_then(|ranges| ranges.as_ref())
+        .is_some_and(|ranges| {
+            ranges
+                .iter()
+                .all(|&(first, last)| end <= first || last <= address.get_offset())
+        })
 }
 
-impl Calls {
-    pub(super) fn clear(&mut self) {
-        self.resolved.clear();
-    }
-
-    pub(super) fn preserves(
-        &mut self,
-        fd: &Funcdata,
-        call: &FuncCallSpecs,
-        address: &Address,
-        size: i32,
-    ) -> bool {
-        let Some(space) = address.get_space() else {
-            return false;
-        };
-        if fd.callee_memory().is_empty()
-            || space.get_type() != spacetype::IPTR_PROCESSOR
-            || space.get_word_size() != 1
-            || size <= 0
-            || fd
-                .get_arch()
-                .manage()
-                .get_default_data_space()
-                .map(|s| s.get_index())
-                != Some(space.get_index())
-        {
-            return false;
-        }
-        let Some(end) = address.get_offset().checked_add(size as u64) else {
-            return false;
-        };
-        if end - 1 > space.get_highest() {
-            return false;
-        }
-        let op = call.get_op();
-        if !self.resolved.contains_key(op) {
-            self.resolved.insert(op, resolve(fd, call));
-        }
-        self.resolved
-            .get(op)
-            .and_then(|ranges| ranges.as_ref())
-            .is_some_and(|ranges| {
-                ranges
-                    .iter()
-                    .all(|&(first, last)| end <= first || last <= address.get_offset())
-            })
-    }
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.globalcallranges_preserves = Some(preserves);
 }
 
 pub(super) fn should_seed(fd: &Funcdata) -> bool {

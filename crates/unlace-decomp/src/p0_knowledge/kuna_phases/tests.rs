@@ -9,7 +9,7 @@ use super::*;
 
 #[test]
 fn catalog_matches_implemented_options() {
-    use crate::options::KUNA_OPTION_NAMES;
+    use crate::kuna_option_dispatch::KUNA_OPTION_NAMES;
     use std::collections::BTreeSet;
 
     let registered: BTreeSet<_> = KUNA_OPTION_NAMES.iter().copied().collect();

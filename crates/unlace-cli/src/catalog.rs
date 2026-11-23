@@ -3,14 +3,14 @@
 //! The linked engine supplies static JSON by default; an explicit console
 //! override keeps external queries. This module renders a table, indented JSON
 //! or the generated Markdown manual. Validation compares the catalog with
-//! [`unlace_decomp::options::KUNA_OPTION_NAMES`] to reject missing or stale rows.
+//! [`unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES`] to reject missing or stale rows.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 use unlace_console::kuna_buildstamp;
+use unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES;
 use unlace_decomp::kuna_phases::{emit_catalog_json, emit_catalog_json_one, emit_catalog_markdown};
-use unlace_decomp::options::KUNA_OPTION_NAMES;
 
 use crate::jsonfmt::{Json, dumps_indent2, extract_json_span, parse};
 use crate::paths;

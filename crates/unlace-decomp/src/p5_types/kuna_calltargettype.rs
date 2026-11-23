@@ -102,9 +102,7 @@ pub struct FieldDecl {
     pub declaration: Option<String>,
 }
 
-/// Carries `calltargettype` to the DWARF type mapper, which runs at `load file`
-/// before any option is applied; the CLI exports it ahead of the load.
-pub const CALLTARGETTYPE_ENV: &str = "KUNA_CALLTARGETTYPE";
+pub use crate::kuna_loadoptions::CALLTARGETTYPE_ENV;
 
 /// Does the DWARF mapper give a pointer to a `DW_TAG_subroutine_type` its
 /// prototype rather than a `void` pointee.

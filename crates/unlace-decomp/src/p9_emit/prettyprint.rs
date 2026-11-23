@@ -119,15 +119,10 @@ pub mod ids {
     // cross-file: defined in funcdata.cc / type.cc / variable.cc (not yet
     // ported).  Mirrored with the *exact* upstream numeric id so the markup
     // encoding is byte-identical; collapses to a re-export once those land.
+    pub use crate::dtype::{ELEM_BITFIELD, ELEM_FIELD, ELEM_TYPE};
     /// Marshaling element `<function>` (funcdata.cc:23, id 116), re-exported
     /// from the `Funcdata::encode` port (same numeric id).
     pub use crate::funcdata_encode::ELEM_FUNCTION;
-    /// Marshaling element `<type>` (type.cc:67, id 60, cross-file).
-    pub const ELEM_TYPE: ElementId = ElementId::new("type", 60);
-    /// Marshaling element `<field>` (type.cc:56, id 49, cross-file).
-    pub const ELEM_FIELD: ElementId = ElementId::new("field", 49);
-    /// Marshaling element `<bitfield>` (type.cc:74, id 289, cross-file).
-    pub const ELEM_BITFIELD: ElementId = ElementId::new("bitfield", 289);
     /// Marshaling attribute "symref" (variable.cc:25, id 68), re-exported from
     /// the `HighVariable::encode` port (same numeric id).
     pub use crate::variable::ATTRIB_SYMREF;

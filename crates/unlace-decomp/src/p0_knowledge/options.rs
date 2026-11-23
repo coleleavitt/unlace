@@ -165,8 +165,6 @@ pub const ELEM_READONLY: ElementId = ElementId::new("readonly", 151);
 /// the upstream `OptionDatabase::new` map.
 pub const ELEM_HIDEEXTENSIONS: ElementId = ElementId::new("hideextensions", 4090);
 
-pub use super::kuna_option_dispatch::KUNA_OPTION_NAMES;
-
 // ---------------------------------------------------------------------------
 // Typed enums for the option-parsing knobs whose target subsystem is W5+.
 //

@@ -2828,7 +2828,7 @@ impl Funcdata {
 
     /// [`ancestor_op_use`](Self::ancestor_op_use), or with `every_path` the
     /// upstream walk with no memo, and the number of steps it took.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     #[allow(clippy::too_many_arguments)]
     #[doc(hidden)]
     pub fn ancestor_op_use_counted(
@@ -2876,7 +2876,7 @@ impl Funcdata {
         if let Some(found) = key.and_then(|k| memo.recall(self, k, maxlevel)) {
             return found;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             memo.steps += 1;
         }
@@ -3220,9 +3220,9 @@ struct AncestorMemo {
     /// path, so a CALL output or creation ends a path as a use.
     call_result_root: bool,
     unused: crate::kuna_fasthash::FxHashMap<AncestorKey, UnusedAbove>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     every_path: bool,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     steps: u64,
 }
 
@@ -3239,7 +3239,7 @@ impl AncestorMemo {
     /// A step's key, or `None` when no MULTIEQUAL is on the path (one path
     /// reaches the step) or the path is too deep to track.
     fn key(&self, vn: VarnodeId, offset: int4, flags: uint4) -> Option<AncestorKey> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if self.every_path {
             return None;
         }
@@ -4049,9 +4049,6 @@ pub struct Reach {
 }
 
 #[cfg(test)]
-mod ancestor_tests;
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use std::rc::Rc;
@@ -4112,19 +4109,6 @@ mod tests {
         |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> { Ok(()) }
     }
 
-    fn append_test_op(
-        fd: &mut Funcdata,
-        block: crate::context::BlockId,
-        offset: u64,
-        opcode: OpCode,
-        flags: uint4,
-    ) -> OpId {
-        let op = fd.new_op(0, Address::new(ram(fd), offset));
-        fd.op_set_opcode(op, TypeOp::new(opcode, flags, format!("{opcode:?}")));
-        fd.op_insert_end(op, block);
-        op
-    }
-
     // --- creation factories: bank-state outcomes -------------------------
 
     #[test]
@@ -4136,42 +4120,6 @@ mod tests {
         assert_eq!(v.get_offset(), 0x1234);
         assert_eq!(v.get_size(), 4);
         assert_eq!(fd.num_varnodes(), 1);
-    }
-
-    #[test]
-    fn synthetic_import_literals_survive_all_constructors_and_clones() {
-        let mut context = ArchContext::new(build_manager());
-        context.nullable_literal_values = Rc::new([0x402000].into_iter().collect());
-        let ram = context.manage().get_space_by_name("ram").unwrap().clone();
-        let address = Address::new(ram.clone(), 0x1000);
-        let mut fd = Funcdata::new(
-            "literal",
-            "literal",
-            Rc::new(context),
-            address,
-            0x10000000,
-            0x40,
-        )
-        .unwrap();
-        let constant_address = fd.get_arch().get_constant(0x402000);
-        let a = fd.new_constant(8, 0x402000);
-        let b = fd.new_varnode(8, &constant_address, None);
-        let c = fd.new_code_ref(&Address::new(ram, 0x402000));
-        for original in [a, b, c] {
-            assert!(fd.vbank().get(original).unwrap().is_synthetic_literal());
-            let cloned = fd.clone_varnode(original);
-            assert!(fd.vbank().get(cloned).unwrap().is_synthetic_literal());
-            let mut other = build_fd();
-            let cloned = other.clone_varnode_from(&fd, original);
-            assert!(other.vbank().get(cloned).unwrap().is_synthetic_literal());
-        }
-        let ordinary = fd.new_constant(8, 0x403000);
-        assert!(!fd.vbank().get(ordinary).unwrap().is_synthetic_literal());
-        fd.vbank_mut()
-            .get_mut(c)
-            .unwrap()
-            .set_synthetic_literal(false);
-        assert!(!fd.vbank().get(c).unwrap().is_synthetic_literal());
     }
 
     #[test]
@@ -4445,60 +4393,6 @@ mod tests {
     }
 
     #[test]
-    fn total_replace_rewires_all_reads() {
-        let mut fd = build_fd();
-        let r = ram(&fd);
-        let (vn, _d1) = make_written(&mut fd, 0x10, 4);
-        let (newvn, _d2) = make_written(&mut fd, 0x20, 4);
-        // Two reader ops reading vn in slot 0.
-        let mut readers = Vec::new();
-        for i in 0..2 {
-            let pc = Address::new(Rc::clone(&r), 0x1000 + i * 4);
-            let op = fd.obank_mut().create_at(1, pc);
-            fd.obank_mut()
-                .change_opcode(op, TypeOp::new(OpCode::CPUI_COPY, 0, "COPY"));
-            fd.vbank_mut().add_descend(vn, op).unwrap();
-            fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), 0);
-            readers.push(op);
-        }
-        assert_eq!(fd.vbank().get(vn).unwrap().num_descend(), 2);
-        assert_eq!(fd.vbank().get(newvn).unwrap().num_descend(), 0);
-
-        fd.total_replace(vn, newvn).unwrap();
-
-        // All readers now read newvn; vn has no descendants left.
-        for &op in &readers {
-            assert_eq!(fd.obank().get(op).unwrap().get_in(0), Some(newvn));
-        }
-        assert_eq!(fd.vbank().get(vn).unwrap().num_descend(), 0);
-        assert_eq!(fd.vbank().get(newvn).unwrap().num_descend(), 2);
-    }
-
-    #[test]
-    fn storage_sources_survive_replacements_clones_and_source_deletion() {
-        let mut fd = build_fd();
-        let original = fd.new_varnode(4, &Address::new(ram(&fd), 0x80), None);
-        let first = fd.new_unique(4, None);
-        fd.total_replace(original, first).unwrap();
-        fd.delete_varnode(original).unwrap();
-        let second = fd.new_unique(4, None);
-        fd.total_replace(first, second).unwrap();
-        let cloned = fd.clone_varnode(second);
-        for vn in [first, second, cloned] {
-            let sources = fd.kuna_storage_sources(vn);
-            assert_eq!(sources.len(), 1);
-            assert_eq!(sources[0].address.get_offset(), 0x80);
-            assert_eq!(sources[0].size, 4);
-        }
-        fd.delete_varnode(first).unwrap();
-        assert!(fd.kuna_storage_sources(first).is_empty());
-        let reused = fd.new_unique(4, None);
-        assert!(fd.kuna_storage_sources(reused).is_empty());
-        fd.clear();
-        assert!(fd.kuna_storage_sources(second).is_empty());
-    }
-
-    #[test]
     fn storage_sources_skip_constants_and_unspecified_width_changes() {
         let mut fd = build_fd();
         let original = fd.new_varnode(4, &Address::new(ram(&fd), 0x80), None);
@@ -4533,71 +4427,6 @@ mod tests {
         let replacement = fd.new_unique(4, None);
         fd.total_replace(original, replacement).unwrap();
         assert!(fd.kuna_storage_sources(replacement).is_empty());
-    }
-
-    #[test]
-    fn storage_sources_slice_each_home_from_its_significance_offset() {
-        let mut fd = build_fd();
-        let little = fd.new_varnode(8, &Address::new(ram(&fd), 0x80), None);
-        let big_space = Rc::new(AddrSpace::new(
-            spacetype::IPTR_PROCESSOR,
-            "bigreg",
-            true,
-            8,
-            1,
-            5,
-            addrspace_flags::hasphysical,
-            1,
-            1,
-        ));
-        let big = fd.new_varnode(8, &Address::new(big_space, 0x100), None);
-        let temp = fd.new_unique(8, None);
-        fd.kuna_inherit_storage(temp, little);
-        fd.kuna_inherit_storage(temp, big);
-        fd.kuna_inherit_storage(temp, little);
-        assert_eq!(fd.kuna_storage_sources(temp).len(), 2);
-        let slice = fd.new_unique(2, None);
-        fd.kuna_inherit_storage_slice(slice, temp, 1, 2);
-        let sources = fd.kuna_storage_sources(slice);
-        assert_eq!(sources.len(), 2);
-        assert_eq!(sources[0].address.get_offset(), 0x81);
-        assert_eq!(sources[1].address.get_offset(), 0x105);
-        assert!(sources.iter().all(|source| source.size == 2));
-    }
-
-    #[test]
-    fn removed_extensions_preserve_low_byte_homes_without_arithmetic_origins() {
-        for opcode in [
-            OpCode::CPUI_INT_ZEXT,
-            OpCode::CPUI_INT_SEXT,
-            OpCode::CPUI_INT_ADD,
-        ] {
-            let mut fd = build_fd();
-            let memory = ram(&fd);
-            let size = if opcode == OpCode::CPUI_INT_ADD { 4 } else { 1 };
-            let input = fd.new_unique(size, None);
-            let op = fd.new_op(
-                if opcode == OpCode::CPUI_INT_ADD { 2 } else { 1 },
-                Address::new(memory.clone(), 0x1000),
-            );
-            fd.op_set_opcode_code(op, opcode);
-            fd.new_varnode_out(4, &Address::new(memory, 0x80), op)
-                .unwrap();
-            fd.op_set_input(op, input, 0).unwrap();
-            if opcode == OpCode::CPUI_INT_ADD {
-                let constant = fd.new_constant(size, 1);
-                fd.op_set_input(op, constant, 1).unwrap();
-            }
-            fd.op_destroy(op);
-            let sources = fd.kuna_storage_sources(input);
-            if opcode == OpCode::CPUI_INT_ADD {
-                assert!(sources.is_empty());
-            } else {
-                assert_eq!(sources.len(), 1);
-                assert_eq!(sources[0].address.get_offset(), 0x80);
-                assert_eq!(sources[0].size, 1);
-            }
-        }
     }
 
     #[test]

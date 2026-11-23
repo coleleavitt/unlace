@@ -660,11 +660,13 @@ impl ActionContext {
 
 /// A group of [`Action`]s applied in sequence (C++ `ActionGroup`).
 pub struct ActionGroup {
-    base: ActionBase,
+    #[doc(hidden)]
+    pub base: ActionBase,
     /// List of actions to perform in the group (C++ `list`).
     list: Vec<Box<dyn Action>>,
     /// Index of the action currently being applied (C++ `state` iterator).
-    state: usize,
+    #[doc(hidden)]
+    pub state: usize,
 }
 
 impl ActionGroup {

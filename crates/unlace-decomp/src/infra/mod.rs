@@ -4,6 +4,8 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod analyzesigs;
+#[cfg(test)]
+mod bandb_tests;
 pub mod callgraph;
 pub mod decompile_drive;
 pub mod graph;

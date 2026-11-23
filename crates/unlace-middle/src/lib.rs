@@ -29,3 +29,14 @@ pub use p5_types::*;
 pub use p6_variables::*;
 pub use p9_emit::*;
 pub use substrate::*;
+
+/// The pass hooks this crate's own modules provide: each module's `provide`, in the driver's
+/// order. The driver composes the crates' tables into the default pipeline's
+/// (`unlace_decomp::PASS_HOOKS`); a crate's unit tests compose the crates at or below it.
+pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
+    crate::kuna_segmentize::provide(slots);
+    crate::kuna_avxintrin::provide(slots);
+    crate::kuna_revisitrefine::provide(slots);
+    crate::kuna_calloverlap::provide(slots);
+    crate::modelrules::provide(slots);
+}

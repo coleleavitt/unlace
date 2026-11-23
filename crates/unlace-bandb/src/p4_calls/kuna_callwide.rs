@@ -27,19 +27,24 @@ pub struct CodeRegion {
 /// An address/model proof containing no live IR identities. Only a completed
 /// preflight may publish it; a restarted drive merely copies this same value.
 pub struct Ledger {
-    live: Cell<bool>,
-    model: Rc<ProtoModel>,
-    pair: WidePair,
-    entries: BTreeSet<(int4, u64)>,
-    declarations: BTreeSet<u64>,
+    #[doc(hidden)]
+    pub live: Cell<bool>,
+    #[doc(hidden)]
+    pub model: Rc<ProtoModel>,
+    #[doc(hidden)]
+    pub pair: WidePair,
+    #[doc(hidden)]
+    pub entries: BTreeSet<(int4, u64)>,
+    #[doc(hidden)]
+    pub declarations: BTreeSet<u64>,
 }
 
 /// Revokes existing Funcdata views when its architecture replaces or clears a proof.
 #[derive(Default)]
-pub struct ProofSlot(Option<Rc<Ledger>>);
+pub struct ProofSlot(#[doc(hidden)] pub Option<Rc<Ledger>>);
 
 /// A pre-render verdict retained while its explicit contracts are bound.
-pub struct Verdict(Rc<Ledger>);
+pub struct Verdict(#[doc(hidden)] pub Rc<Ledger>);
 
 /// Project-only ABI metadata; no recovered parameter names or virtual storage escape.
 #[derive(Clone, Debug, PartialEq, Eq)]

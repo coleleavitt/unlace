@@ -4300,10 +4300,12 @@ pub struct ProtoModel {
     extrapop: int4,
     /// Resource model for input parameters (C++ `input`); `None` until
     /// `build_param_list`.
-    input: Option<ParamListStandard>,
+    #[doc(hidden)]
+    pub input: Option<ParamListStandard>,
     /// Resource model for output parameters (C++ `output`); `None` until
     /// `build_param_list`.
-    output: Option<ParamListStandard>,
+    #[doc(hidden)]
+    pub output: Option<ParamListStandard>,
     /// `true` if `self` is a copy of another model (C++ `compatModel != 0`),
     /// recording the identity of the alias parent.  The C++ holds a
     /// `const ProtoModel *`; the kuna port carries the alias parent's identity
@@ -5754,7 +5756,8 @@ pub struct FuncProto {
     /// Extra bytes popped from stack (C++ `extrapop`).
     extrapop: int4,
     /// Boolean properties (C++ `flags`).
-    flags: uint4,
+    #[doc(hidden)]
+    pub flags: uint4,
     /// Side-effects associated with non-parameter storage (C++ `effectlist`).
     effectlist: Vec<EffectRecord>,
     /// Locations that may contain trash values (C++ `likelytrash`).

@@ -3903,31 +3903,6 @@ mod tests {
         }
     }
 
-    /// The marking/name/cast actions are stubbed (HighVariable/symbol/cast bridge
-    /// absent): each `apply` runs cleanly and signals no change.
-    #[test]
-    fn stubbed_marking_actions_apply_as_noop() {
-        let mut fd = build_fd();
-        let mut ctx = ActionContext::new();
-        let mut acts: Vec<Box<dyn Action>> = vec![
-            ActionMarkExplicit::boxed("merge"),
-            ActionMarkImplied::boxed("merge"),
-            ActionHideShadow::boxed("merge"),
-            ActionNameVars::boxed("merge"),
-            ActionSetCasts::boxed("casts"),
-        ];
-        for act in &mut acts {
-            let r = act.apply(&mut fd, &mut ctx);
-            assert_eq!(r, 0, "{} stub returns 0", act.get_name());
-            assert_eq!(
-                act.base().count,
-                0,
-                "{} stub makes no change",
-                act.get_name()
-            );
-        }
-    }
-
     /// The W8 schedule helper enumerates all fourteen leaves in C++ schedule
     /// order, in the schedule's group strings (`"merge"` except `setcasts`).
     #[test]

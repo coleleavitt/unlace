@@ -2,3 +2,4 @@
 //! lift band can become its own crate (unlace-lift) without a dev-dependency back on the passes.
 
 mod int3pad;
+mod kuna_noreturn_externmatch_hooks;

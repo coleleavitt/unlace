@@ -1,9 +1,26 @@
-//! Unit tests for the no-use memo of `ancestor_op_use`: it answers as the
-//! upstream walk over every path does, trial flags included, and visits each
-//! Varnode a bounded number of times through MULTIEQUALs with many inputs.
+//! Tests moved out of `funcdata_varnode` because they reach pass hooks a higher crate
+//! provides. They live in the driver, which links every hook.
 
-use std::rc::Rc;
+#![allow(unused_imports, dead_code)]
 
+/// The imports of `funcdata_varnode` itself, as a glob so the tests' own imports win.
+mod module_scope {
+    pub(super) use crate::context::{OpId, VarnodeId};
+    pub(super) use crate::dtype::{Datatype, type_metatype};
+    pub(super) use crate::fspec::effect_type;
+    pub(super) use crate::funcdata::Funcdata;
+    pub(super) use crate::varnode::{DefOpInfo, varnode_flags};
+    pub(super) use unlace_base::address::Address;
+    pub(super) use unlace_base::error::{KunaError, KunaResult};
+    pub(super) use unlace_base::space::{AddrSpace, spacetype};
+    pub(super) use unlace_base::types::{Wrap, int4, uint1, uint4, uintb, uintm};
+    pub(super) use unlace_num::opcodes::OpCode;
+}
+use crate::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
+use crate::fspec::ParamTrial;
+use crate::funcdata::Funcdata;
+use crate::funcdata_varnode::*;
+use module_scope::*;
 use unlace_base::address::Address;
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
@@ -11,9 +28,11 @@ use unlace_base::space::{
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use crate::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
-use crate::fspec::ParamTrial;
-use crate::funcdata::Funcdata;
+// Unit tests for the no-use memo of `ancestor_op_use`: it answers as the
+// upstream walk over every path does, trial flags included, and visits each
+// Varnode a bounded number of times through MULTIEQUALs with many inputs.
+
+use std::rc::Rc;
 
 fn build_fd() -> Funcdata {
     let mut m = AddrSpaceManager::new();
@@ -215,40 +234,6 @@ fn random_graph(rng: &mut Rng) -> (Ir, Vec<OpId>, VarnodeId, OpId) {
     (ir, phis.iter().map(|&(o, _)| o).collect(), root, call)
 }
 
-#[test]
-fn the_memo_answers_as_the_walk_over_every_path_does() {
-    let mut differ = Vec::new();
-    let (mut saved, mut used, mut rem) = (0, 0, 0);
-    for seed in 1..=3000u64 {
-        let mut rng = Rng(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1);
-        let (mut ir, phis, root, call) = random_graph(&mut rng);
-        for maxlevel in 1..=7 {
-            let walk = ir.score(true, maxlevel, root, call);
-            let memo = ir.score(false, maxlevel, root, call);
-            if (walk.0, walk.1) != (memo.0, memo.1) {
-                differ.push((seed, maxlevel, walk.0, walk.1, memo.0, memo.1));
-            }
-            saved += usize::from(memo.2 < walk.2);
-            used += usize::from(walk.0);
-            rem += usize::from(walk.1);
-        }
-        for o in phis {
-            assert!(
-                !ir.fd.obank().get(o).unwrap().is_mark(),
-                "seed {seed}: a MULTIEQUAL stayed marked"
-            );
-        }
-    }
-    assert!(
-        differ.is_empty(),
-        "memo differs from the full walk (seed, level, walk, memo): {differ:?}"
-    );
-    assert!(
-        saved > 1000 && used > 1000 && rem > 100,
-        "saved {saved}, used {used}, rem {rem}"
-    );
-}
-
 /// Four layers of 40 MULTIEQUALs, each reading every output of the layer
 /// under it: the full walk tries 40^4 paths to the leaves, the memo each
 /// Varnode once.
@@ -273,87 +258,6 @@ fn lattice(good_leaf: Option<usize>) -> (Ir, VarnodeId, OpId) {
     ir.set(top, &below);
     let call = ir.call(root);
     (ir, root, call)
-}
-
-#[test]
-fn a_lattice_of_wide_multiequals_is_walked_once_per_varnode() {
-    let (mut ir, root, call) = lattice(None);
-    let (used, _, steps) = ir.score(false, 5, root, call);
-    assert!(!used);
-    assert!(steps <= 4 * 40 + 1, "{steps} steps");
-    let (mut ir, root, call) = lattice(Some(39));
-    let (used, _, steps) = ir.score(false, 5, root, call);
-    assert!(used, "the one leaf only the call reads is found");
-    assert!(steps <= 4 * 40 + 1, "{steps} steps");
-    let (used, _, _) = ir.score(false, 4, root, call);
-    assert!(!used, "the leaf is past the level bound");
-}
-
-/// `r = phi(z.hi, c)`, `z = phi(piece(c, x))`, `c = y.lo`, `y = phi(z)`, with
-/// `x` read only by the call. Through `z.hi` the walk reaches `c` with `z`
-/// marked and finds nothing, since `z` is then read at offset 4 (`c`, not
-/// `x`); reached straight from `r`, `c` leads back to `z` at offset 0 and on to
-/// `x`. The first answer is cut by `z`, so it must not answer the second.
-#[test]
-fn a_no_use_cut_by_a_marked_multiequal_is_not_reused_once_it_is_unmarked() {
-    let mut ir = Ir::new();
-    let x = ir.leaf(0x20_000, 4, false);
-    let z = ir.op(OpCode::CPUI_MULTIEQUAL, 1);
-    let zv = ir.out(z, 0x10_000, 8);
-    let y = ir.op(OpCode::CPUI_MULTIEQUAL, 1);
-    let yv = ir.out(y, 0x11_000, 8);
-    ir.set(y, &[zv]);
-    let zero = ir.fd.new_constant(4, 0);
-    let lo = ir.op(OpCode::CPUI_SUBPIECE, 2);
-    ir.set(lo, &[yv, zero]);
-    let c = ir.out(lo, 0x11_000, 4);
-    let piece = ir.op(OpCode::CPUI_PIECE, 2);
-    ir.set(piece, &[c, x]);
-    let pv = ir.out(piece, 0x12_000, 8);
-    ir.set(z, &[pv]);
-    let four = ir.fd.new_constant(4, 4);
-    let hi = ir.op(OpCode::CPUI_SUBPIECE, 2);
-    ir.set(hi, &[zv, four]);
-    let zhi = ir.out(hi, 0x10_004, 4);
-    let r = ir.op(OpCode::CPUI_MULTIEQUAL, 2);
-    let rv = ir.out(r, 0x13_000, 4);
-    ir.set(r, &[zhi, c]);
-    let call = ir.call(rv);
-    for maxlevel in 1..=8 {
-        let walk = ir.score(true, maxlevel, rv, call);
-        let memo = ir.score(false, maxlevel, rv, call);
-        assert_eq!(walk.0, maxlevel >= 6, "level {maxlevel}");
-        assert_eq!(memo.0, walk.0, "level {maxlevel}");
-    }
-}
-
-/// A value `v` that a RETURN also reads, behind an INDIRECT and straight
-/// under a MULTIEQUAL. While return recovery runs, the RETURN read only
-/// competes with the call when the walk came through the INDIRECT, so `v`
-/// is no use with the `indirect` flag and a use without it. The no-use
-/// answer reached with the flag must not answer the step without it.
-#[test]
-fn a_no_use_reached_through_an_indirect_does_not_answer_the_plain_step() {
-    let mut ir = Ir::new();
-    ir.fd.init_active_output();
-    let v = ir.leaf(0x20_000, 4, false);
-    let zero = ir.fd.new_constant(4, 0);
-    let ret = ir.op(OpCode::CPUI_RETURN, 2);
-    ir.set(ret, &[zero, v]);
-    let iop = ir.fd.new_constant(8, 0);
-    let ind = ir.op(OpCode::CPUI_INDIRECT, 2);
-    ir.set(ind, &[v, iop]);
-    let iv = ir.out(ind, 0x21_000, 4);
-    let phi = ir.op(OpCode::CPUI_MULTIEQUAL, 2);
-    let root = ir.out(phi, 0x22_000, 4);
-    ir.set(phi, &[iv, v]);
-    let call = ir.call(root);
-    for maxlevel in 1..=4 {
-        let walk = ir.score(true, maxlevel, root, call);
-        let memo = ir.score(false, maxlevel, root, call);
-        assert_eq!(walk.0, maxlevel >= 2, "level {maxlevel}");
-        assert_eq!(memo.0, walk.0, "level {maxlevel}");
-    }
 }
 
 /// Random graphs as in [`random_graph`], plus INDIRECTs, COPYs to unique
@@ -455,6 +359,121 @@ fn rich_graph(rng: &mut Rng) -> (Ir, Vec<OpId>, Vec<VarnodeId>, OpId) {
         ir.set(o, &[k, r]);
     }
     (ir, phis.iter().map(|&(o, _)| o).collect(), roots, call)
+}
+
+#[test]
+fn the_memo_answers_as_the_walk_over_every_path_does() {
+    let mut differ = Vec::new();
+    let (mut saved, mut used, mut rem) = (0, 0, 0);
+    for seed in 1..=3000u64 {
+        let mut rng = Rng(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1);
+        let (mut ir, phis, root, call) = random_graph(&mut rng);
+        for maxlevel in 1..=7 {
+            let walk = ir.score(true, maxlevel, root, call);
+            let memo = ir.score(false, maxlevel, root, call);
+            if (walk.0, walk.1) != (memo.0, memo.1) {
+                differ.push((seed, maxlevel, walk.0, walk.1, memo.0, memo.1));
+            }
+            saved += usize::from(memo.2 < walk.2);
+            used += usize::from(walk.0);
+            rem += usize::from(walk.1);
+        }
+        for o in phis {
+            assert!(
+                !ir.fd.obank().get(o).unwrap().is_mark(),
+                "seed {seed}: a MULTIEQUAL stayed marked"
+            );
+        }
+    }
+    assert!(
+        differ.is_empty(),
+        "memo differs from the full walk (seed, level, walk, memo): {differ:?}"
+    );
+    assert!(
+        saved > 1000 && used > 1000 && rem > 100,
+        "saved {saved}, used {used}, rem {rem}"
+    );
+}
+
+#[test]
+fn a_lattice_of_wide_multiequals_is_walked_once_per_varnode() {
+    let (mut ir, root, call) = lattice(None);
+    let (used, _, steps) = ir.score(false, 5, root, call);
+    assert!(!used);
+    assert!(steps <= 4 * 40 + 1, "{steps} steps");
+    let (mut ir, root, call) = lattice(Some(39));
+    let (used, _, steps) = ir.score(false, 5, root, call);
+    assert!(used, "the one leaf only the call reads is found");
+    assert!(steps <= 4 * 40 + 1, "{steps} steps");
+    let (used, _, _) = ir.score(false, 4, root, call);
+    assert!(!used, "the leaf is past the level bound");
+}
+
+/// `r = phi(z.hi, c)`, `z = phi(piece(c, x))`, `c = y.lo`, `y = phi(z)`, with
+/// `x` read only by the call. Through `z.hi` the walk reaches `c` with `z`
+/// marked and finds nothing, since `z` is then read at offset 4 (`c`, not
+/// `x`); reached straight from `r`, `c` leads back to `z` at offset 0 and on to
+/// `x`. The first answer is cut by `z`, so it must not answer the second.
+#[test]
+fn a_no_use_cut_by_a_marked_multiequal_is_not_reused_once_it_is_unmarked() {
+    let mut ir = Ir::new();
+    let x = ir.leaf(0x20_000, 4, false);
+    let z = ir.op(OpCode::CPUI_MULTIEQUAL, 1);
+    let zv = ir.out(z, 0x10_000, 8);
+    let y = ir.op(OpCode::CPUI_MULTIEQUAL, 1);
+    let yv = ir.out(y, 0x11_000, 8);
+    ir.set(y, &[zv]);
+    let zero = ir.fd.new_constant(4, 0);
+    let lo = ir.op(OpCode::CPUI_SUBPIECE, 2);
+    ir.set(lo, &[yv, zero]);
+    let c = ir.out(lo, 0x11_000, 4);
+    let piece = ir.op(OpCode::CPUI_PIECE, 2);
+    ir.set(piece, &[c, x]);
+    let pv = ir.out(piece, 0x12_000, 8);
+    ir.set(z, &[pv]);
+    let four = ir.fd.new_constant(4, 4);
+    let hi = ir.op(OpCode::CPUI_SUBPIECE, 2);
+    ir.set(hi, &[zv, four]);
+    let zhi = ir.out(hi, 0x10_004, 4);
+    let r = ir.op(OpCode::CPUI_MULTIEQUAL, 2);
+    let rv = ir.out(r, 0x13_000, 4);
+    ir.set(r, &[zhi, c]);
+    let call = ir.call(rv);
+    for maxlevel in 1..=8 {
+        let walk = ir.score(true, maxlevel, rv, call);
+        let memo = ir.score(false, maxlevel, rv, call);
+        assert_eq!(walk.0, maxlevel >= 6, "level {maxlevel}");
+        assert_eq!(memo.0, walk.0, "level {maxlevel}");
+    }
+}
+
+/// A value `v` that a RETURN also reads, behind an INDIRECT and straight
+/// under a MULTIEQUAL. While return recovery runs, the RETURN read only
+/// competes with the call when the walk came through the INDIRECT, so `v`
+/// is no use with the `indirect` flag and a use without it. The no-use
+/// answer reached with the flag must not answer the step without it.
+#[test]
+fn a_no_use_reached_through_an_indirect_does_not_answer_the_plain_step() {
+    let mut ir = Ir::new();
+    ir.fd.init_active_output();
+    let v = ir.leaf(0x20_000, 4, false);
+    let zero = ir.fd.new_constant(4, 0);
+    let ret = ir.op(OpCode::CPUI_RETURN, 2);
+    ir.set(ret, &[zero, v]);
+    let iop = ir.fd.new_constant(8, 0);
+    let ind = ir.op(OpCode::CPUI_INDIRECT, 2);
+    ir.set(ind, &[v, iop]);
+    let iv = ir.out(ind, 0x21_000, 4);
+    let phi = ir.op(OpCode::CPUI_MULTIEQUAL, 2);
+    let root = ir.out(phi, 0x22_000, 4);
+    ir.set(phi, &[iv, v]);
+    let call = ir.call(root);
+    for maxlevel in 1..=4 {
+        let walk = ir.score(true, maxlevel, root, call);
+        let memo = ir.score(false, maxlevel, root, call);
+        assert_eq!(walk.0, maxlevel >= 2, "level {maxlevel}");
+        assert_eq!(memo.0, walk.0, "level {maxlevel}");
+    }
 }
 
 #[test]

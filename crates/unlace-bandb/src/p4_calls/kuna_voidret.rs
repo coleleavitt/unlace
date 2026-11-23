@@ -2825,6 +2825,3 @@ impl FuncdataVoidretExt for crate::funcdata::Funcdata {
 }
 
 crate::kuna_arch_table!(Ledger);
-
-#[cfg(test)]
-mod tests;

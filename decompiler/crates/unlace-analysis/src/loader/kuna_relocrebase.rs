@@ -77,7 +77,7 @@
 use std::collections::HashMap;
 
 use object::read::{Object, ObjectSection, ObjectSymbol};
-use object::{RelocationKind, RelocationTarget, SectionIndex, SymbolSection};
+use object::{RelocationKind, RelocationTarget, SectionFlags, SectionIndex, SymbolSection};
 
 use crate::loader::reloc_object::{self, RelocLayout};
 use crate::pass::AnalysisOutput;
@@ -114,8 +114,8 @@ pub fn rebased_view(file: &object::File, bytes: &[u8]) -> Option<RebasedView> {
 
     let mut out = bytes.to_vec();
     splice_laid_sections(file, &layout, &mut out);
-    relocate_unlaid_sections(file, &layout, &mut out);
-    patch_section_addresses(file, &layout, &mut out)?;
+    let inflated = relocate_unlaid_sections(file, &layout, &mut out);
+    patch_section_addresses(file, &layout, &inflated, &mut out)?;
 
     let mut ranges: Vec<(u64, u64)> = layout
         .sections
@@ -182,47 +182,109 @@ fn splice_laid_sections(file: &object::File, layout: &RelocLayout, out: &mut [u8
 /// `.debug_*` tables above all. Without this a `.o`'s `DW_AT_low_pc` reads 0 and
 /// every `DW_FORM_strp` resolves to `.debug_str`+0, so the DWARF pass names one
 /// phantom function after whatever string happens to sit at offset 0.
-fn relocate_unlaid_sections(file: &object::File, layout: &RelocLayout, out: &mut [u8]) {
+///
+/// An ELF section stored compressed (`SHF_COMPRESSED`, which Gentoo's toolchain
+/// and `-gz` emit) is inflated first: its relocation offsets address the
+/// uncompressed bytes, and patching the compressed stream in place corrupts it.
+/// The relocated bytes are appended to `out`, and the returned list tells
+/// [`patch_elf`] which section headers to point at them.
+fn relocate_unlaid_sections(
+    file: &object::File,
+    layout: &RelocLayout,
+    out: &mut Vec<u8>,
+) -> Vec<Inflated> {
+    let mut inflated = Vec::new();
     for sec in file.sections() {
         if layout.section_vma.contains_key(&sec.index()) {
             continue; // already spliced with the loader's relocated bytes
         }
+        if is_gabi_compressed(&sec) {
+            if sec.relocations().next().is_none() {
+                continue;
+            }
+            let Ok(data) = sec.uncompressed_data() else {
+                continue;
+            };
+            let mut data = data.into_owned();
+            apply_relocations(file, layout, &sec, &mut data);
+            let at = out.len().next_multiple_of(8);
+            out.resize(at, 0);
+            out.extend_from_slice(&data);
+            inflated.push(Inflated {
+                index: sec.index(),
+                offset: at as u64,
+                size: data.len() as u64,
+            });
+            continue;
+        }
         let Some((sec_off, sec_len)) = sec.file_range() else {
             continue;
         };
-        for (offset, reloc) in sec.relocations() {
-            let nbytes = (reloc.size() / 8) as usize;
-            if nbytes != 4 && nbytes != 8 {
-                continue;
-            }
-            if offset.saturating_add(nbytes as u64) > sec_len {
-                continue;
-            }
-            let at = (sec_off + offset) as usize;
-            if at + nbytes > out.len() {
-                continue;
-            }
-            let Some(s) = resolve_target(file, layout, &reloc) else {
-                continue;
-            };
-            let order = Order::of(file);
-            let a = reloc.addend() as i128
-                + if reloc.has_implicit_addend() {
-                    order.signed(&out[at..at + nbytes])
-                } else {
-                    0
-                };
-            // A non-laid-out section has no load VMA, so `P` is its own
-            // section-relative position — the same convention `S = 0` uses for a
-            // debug-to-debug reference.
-            let p = offset as i128;
-            let value: i128 = match reloc.kind() {
-                RelocationKind::Absolute => s as i128 + a,
-                RelocationKind::Relative | RelocationKind::PltRelative => s as i128 + a - p,
-                _ => continue,
-            };
-            order.write(&mut out[at..at + nbytes], value as u64);
+        let (Ok(lo), Ok(len)) = (usize::try_from(sec_off), usize::try_from(sec_len)) else {
+            continue;
+        };
+        let hi = lo.saturating_add(len).min(out.len());
+        let Some(buf) = out.get_mut(lo..hi) else {
+            continue;
+        };
+        apply_relocations(file, layout, &sec, buf);
+    }
+    inflated
+}
+
+/// A non-laid-out section rewritten uncompressed at the end of the image.
+struct Inflated {
+    index: SectionIndex,
+    offset: u64,
+    size: u64,
+}
+
+/// Does `sec` carry the gABI `SHF_COMPRESSED` flag (a `Chdr` then zlib or zstd)?
+/// The older GNU `.zdebug_*` form is recognised by name, so rewriting its header
+/// would not stop a reader from inflating it again; it is left as it was.
+fn is_gabi_compressed(sec: &object::Section) -> bool {
+    matches!(sec.flags(), SectionFlags::Elf { sh_flags } if sh_flags & u64::from(object::elf::SHF_COMPRESSED) != 0)
+}
+
+/// Apply `sec`'s relocations to `buf`, its contents. A relocation whose field
+/// falls outside `buf` is skipped.
+fn apply_relocations(
+    file: &object::File,
+    layout: &RelocLayout,
+    sec: &object::Section,
+    buf: &mut [u8],
+) {
+    let order = Order::of(file);
+    for (offset, reloc) in sec.relocations() {
+        let nbytes = (reloc.size() / 8) as usize;
+        if nbytes != 4 && nbytes != 8 {
+            continue;
         }
+        let Some(field) = usize::try_from(offset)
+            .ok()
+            .and_then(|at| buf.get_mut(at..at.checked_add(nbytes)?))
+        else {
+            continue;
+        };
+        let Some(s) = resolve_target(file, layout, &reloc) else {
+            continue;
+        };
+        let a = reloc.addend() as i128
+            + if reloc.has_implicit_addend() {
+                order.signed(field)
+            } else {
+                0
+            };
+        // A non-laid-out section has no load VMA, so `P` is its own
+        // section-relative position — the same convention `S = 0` uses for a
+        // debug-to-debug reference.
+        let p = offset as i128;
+        let value: i128 = match reloc.kind() {
+            RelocationKind::Absolute => s as i128 + a,
+            RelocationKind::Relative | RelocationKind::PltRelative => s as i128 + a - p,
+            _ => continue,
+        };
+        order.write(field, value as u64);
     }
 }
 
@@ -309,17 +371,19 @@ impl Order {
 }
 
 /// Write each laid-out section's load VMA into its header address field, the laid
-/// size of each section the layout shortened into its size field, and (ELF only)
+/// size of each section the layout shortened into its size field, (ELF only) the
+/// new extent of each section [`relocate_unlaid_sections`] inflated, and (ELF only)
 /// shift each defined symbol's `st_value` by its section's VMA. Returns
 /// `None` for a header shape this cannot patch, so the caller falls back to the
 /// unrebased view rather than emitting a half-patched image.
 fn patch_section_addresses(
     file: &object::File,
     layout: &RelocLayout,
+    inflated: &[Inflated],
     out: &mut [u8],
 ) -> Option<()> {
     match file.format() {
-        object::BinaryFormat::Elf => patch_elf(file, layout, out),
+        object::BinaryFormat::Elf => patch_elf(file, layout, inflated, out),
         object::BinaryFormat::Coff => patch_coff(layout, out),
         _ => None,
     }
@@ -328,17 +392,26 @@ fn patch_section_addresses(
 /// The fixed offsets of the ELF header/section-header/symbol fields this patcher
 /// writes, resolved for one ELF class.
 struct ElfShape {
+    /// `sh_flags`'s offset inside a section header.
+    sh_flags: usize,
     /// `sh_addr`'s offset inside a section header.
     sh_addr: usize,
+    /// `sh_offset`'s offset inside a section header.
+    sh_offset: usize,
     /// `sh_size`'s offset inside a section header.
     sh_size: usize,
     /// `st_value`'s offset inside a symbol table entry.
     st_value: usize,
-    /// Width of both fields (4 on ELF32, 8 on ELF64).
+    /// Width of every field (4 on ELF32, 8 on ELF64).
     width: usize,
 }
 
-fn patch_elf(file: &object::File, layout: &RelocLayout, out: &mut [u8]) -> Option<()> {
+fn patch_elf(
+    file: &object::File,
+    layout: &RelocLayout,
+    inflated: &[Inflated],
+    out: &mut [u8],
+) -> Option<()> {
     if out.len() < 64 || out[..4] != [0x7f, b'E', b'L', b'F'] {
         return None;
     }
@@ -354,14 +427,18 @@ fn patch_elf(file: &object::File, layout: &RelocLayout, out: &mut [u8]) -> Optio
     };
     let shape = if is64 {
         ElfShape {
+            sh_flags: 8,
             sh_addr: 16,
+            sh_offset: 24,
             sh_size: 32,
             st_value: 8,
             width: 8,
         }
     } else {
         ElfShape {
+            sh_flags: 8,
             sh_addr: 12,
+            sh_offset: 16,
             sh_size: 20,
             st_value: 4,
             width: 4,
@@ -404,6 +481,26 @@ fn patch_elf(file: &object::File, layout: &RelocLayout, out: &mut [u8]) -> Optio
         }
         let at = shoff + i * e_shentsize + shape.sh_size;
         order.write(out.get_mut(at..at + shape.width)?, size);
+    }
+
+    // An inflated section now sits uncompressed at the end of the image.
+    let limit = if is64 { u64::MAX } else { u64::from(u32::MAX) };
+    for item in inflated {
+        let SectionIndex(i) = item.index;
+        if i >= e_shnum || item.offset.checked_add(item.size)? > limit {
+            return None;
+        }
+        let header = shoff + i * e_shentsize;
+        let flags = order.read(out, header + shape.sh_flags, shape.width)?;
+        let compressed = u64::from(object::elf::SHF_COMPRESSED);
+        for (field, value) in [
+            (shape.sh_flags, flags & !compressed),
+            (shape.sh_offset, item.offset),
+            (shape.sh_size, item.size),
+        ] {
+            let at = header + field;
+            order.write(out.get_mut(at..at + shape.width)?, value);
+        }
     }
 
     // (4) st_value <- section VMA + st_value, for every symbol defined in a
@@ -727,6 +824,24 @@ mod tests {
             .data()
             .unwrap();
         assert_ne!(raw, patched, ".debug_info relocations applied");
+    }
+
+    /// A `.debug_info` stored compressed (`SHF_COMPRESSED`, zstd here) reads
+    /// back, relocated and uncompressed, exactly as the plain object's does.
+    #[test]
+    fn compressed_debug_sections_are_inflated_then_relocated() {
+        let _serial = serial();
+        let debug_info = |name: &str| {
+            let bytes = fixture(name);
+            let file = object::File::parse(&*bytes).expect("parse");
+            let view = rebased_view(&file, &bytes).expect("synthetically laid out");
+            let rebased = object::File::parse(&*view.bytes).expect("patched image still parses");
+            let sec = rebased.section_by_name(".debug_info").expect(".debug_info");
+            assert!(!is_gabi_compressed(&sec), "{name}: stored uncompressed");
+            sec.data().unwrap().to_vec()
+        };
+        let plain = debug_info("ptx.o");
+        assert_eq!(debug_info("ptx_zstd.o"), plain);
     }
 
     /// A COFF `.obj` takes the same treatment through its `VirtualAddress` field.

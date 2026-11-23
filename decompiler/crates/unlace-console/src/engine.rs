@@ -4942,6 +4942,11 @@ pub(crate) fn bootstrap_raw_image(
         })
     };
     let base_bytes = address_to_byte(base, "base")?;
+    let mapped_bytes = match &bytes {
+        RawBytes::Whole(bytes) => Some(bytes.clone()),
+        RawBytes::Module(module) => Some(module.bytes.clone()),
+        RawBytes::File | RawBytes::Segmented(_) => None,
+    };
     match bytes {
         RawBytes::Whole(bytes) => {
             raw.build_loader_from_bytes(Rc::clone(&code_space), base, bytes, Vec::new())
@@ -5061,11 +5066,13 @@ pub(crate) fn bootstrap_raw_image(
             .first()
             .map_or(image_base, Address::get_offset);
         let language = prog.arch.arch_id().to_string();
-        let view = std::fs::read(path).ok().and_then(|bytes| {
-            unlace_analysis::loader::kuna_objectview::raw_as_elf(
-                &bytes, image_base, entry, &language,
-            )
-        });
+        let view = mapped_bytes
+            .or_else(|| std::fs::read(path).ok())
+            .and_then(|bytes| {
+                unlace_analysis::loader::kuna_objectview::raw_as_elf(
+                    &bytes, image_base, entry, &language,
+                )
+            });
         prog.set_object_view(path, view);
     }
     Ok(prog)

@@ -18,7 +18,8 @@
 //!   TE keeps (base relocations, debug) are copied across.
 //! - **Raw → ELF.** One `PT_LOAD` and one `.text` section (`SHF_ALLOC |
 //!   SHF_WRITE | SHF_EXECINSTR`, the read-write-execute block Ghidra's raw
-//!   importer makes) covering the file at the caller's base, with the machine,
+//!   importer makes) covering the mapped bytes at the caller's base (the
+//!   container's image, not the file, when a loader strips a header), with the machine,
 //!   class and byte order of the selected SLEIGH language and the first entry
 //!   as `e_entry`.
 

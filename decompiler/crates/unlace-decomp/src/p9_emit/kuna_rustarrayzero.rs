@@ -44,3 +44,12 @@ impl PrintC {
         true
     }
 }
+
+crate::kuna_flag!(
+    /// The `rustarrayzero` option.
+    RustArrayZero,
+    "rustarrayzero",
+    "Rust byte-array zero values",
+    unset: false,
+    shipped: false
+);

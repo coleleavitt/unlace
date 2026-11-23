@@ -1232,7 +1232,7 @@ impl Rule for RuleMbaSimplify {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().mba {
+        if !data.get_arch().kuna_options.get::<crate::kuna_mba::Mba>().0 {
             return 0;
         }
         let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {
@@ -1267,6 +1267,15 @@ impl Rule for RuleMbaSimplify {
         1
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `mba`) Simplify linear mixed boolean-arithmetic expressions.
+    Mba,
+    "mba",
+    "Linear MBA simplification",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 mod tests {

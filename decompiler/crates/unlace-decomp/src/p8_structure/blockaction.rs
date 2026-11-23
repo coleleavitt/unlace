@@ -4010,7 +4010,7 @@ impl Action for ActionPreferComplement {
 /// the same dual-arena flip machinery; the only difference is the accepted flip
 /// class — it rewrites the *equality-to-zero / negated* guard
 /// (`split_flip_in_place_test == 1`) that `preferComplement` leaves alone.  Gated
-/// off the per-function `ArchContext::branch_flip` flag (option
+/// off the per-function the registered option `BranchFlip` flag (option
 /// `branchflip`, default-off); a no-op unless the flag is set.  Each flip is
 /// logged via [`Funcdata::warning`] at the guard's CBRANCH.
 pub struct ActionBranchFlip {
@@ -4049,7 +4049,12 @@ impl Action for ActionBranchFlip {
         // Gate: per-function `branch_flip` flag (option `branchflip`, default-off).
         // Carried into the `ArchContext` by `build_arch_handle`; absent => no-op so
         // the 675-datatest parity and the default rendering are untouched.
-        if !data.get_arch().branch_flip {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::blockaction::BranchFlip>()
+            .0
+        {
             return 0;
         }
         match data.branch_flip_complement(self.allow_op_mods) {
@@ -4497,6 +4502,19 @@ impl Action for ActionReturnSplit {
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) Flip negated-guard if/else branches for linearity: when an
+    /// `if (x == 0) {A} else {B}` (equality-to-zero / negated guard) can be flipped
+    /// in place, rewrite it to the positive `if (x) {B} else {A}` so the common
+    /// path reads top-to-bottom (angr-style `if (x)` vs `if (x == 0)`).  Default
+    /// OFF (option `branchflip`); read by `ActionBranchFlip` (S8).
+    BranchFlip,
+    "branchflip",
+    "Negated-guard branch flipping for linearity",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests;

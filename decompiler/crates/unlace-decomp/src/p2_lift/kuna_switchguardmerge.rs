@@ -331,7 +331,12 @@ impl Action for ActionSwitchGuardMerge {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().switch_guard_merge {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_switchguardmerge::SwitchGuardMerge>()
+            .0
+        {
             return 0;
         }
         for i in 0..data.num_jump_tables() {
@@ -390,3 +395,12 @@ impl Action for ActionSwitchGuardMerge {
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `switchguardmerge`) Merge an equality guard into its switch.
+    SwitchGuardMerge,
+    "switchguardmerge",
+    "Equality guards merged into their switch",
+    unset: false,
+    shipped: true
+);

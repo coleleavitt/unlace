@@ -32,7 +32,12 @@ use crate::funcdata::Funcdata;
 /// Record `(call, value)` for the last call before each return on every path:
 /// the stack pointer after `call` equals the input one plus `value`.
 pub fn record(data: &mut Funcdata, sb_addr: &Address) {
-    if !data.get_arch().stack_exit_anchor {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_stackexitanchor::StackExitAnchor>()
+        .0
+    {
         return;
     }
     let mut last: HashMap<BlockId, (u32, OpId)> = HashMap::new();
@@ -126,3 +131,13 @@ fn sp_add(data: &Funcdata, op: &crate::op::PcodeOp, sb_addr: &Address) -> Option
         _ => None,
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) Tie each return's stack pointer to the entry one in the stack
+    /// solver (option `stackexitanchor`).
+    StackExitAnchor,
+    "stackexitanchor",
+    "Stack-solver return anchor",
+    unset: false,
+    shipped: true
+);

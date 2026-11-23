@@ -113,7 +113,11 @@ fn is_number(data: &Funcdata, v: Option<VarnodeId>) -> bool {
 /// decompiled after it.  A statement from an earlier decompile of the same
 /// function is replaced or, when this one states nothing, forgotten.
 pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
-    if !arch.call_ret_type {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_callrettype::CallRetType>()
+        .0
+    {
         return;
     }
     let Some(k) = key(entry) else { return };
@@ -227,7 +231,12 @@ pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
 /// never reads its own statement: at a call to itself that is what an earlier
 /// decompile of this same function said.
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
-    if !arch.call_ret_type || arch.kuna_callret_types.is_empty() {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_callrettype::CallRetType>()
+        .0
+        || arch.kuna_callret_types.is_empty()
+    {
         return;
     }
     let own = key(data.get_address());
@@ -1027,3 +1036,14 @@ fn declared_param_type(data: &Funcdata, call: OpId, slot: int4) -> Option<Rc<Dat
     }
     param.get_type().cloned()
 }
+
+crate::kuna_flag!(
+    /// (kuna `callrettype`) A call's output takes the return type its callee's
+    /// own recovery stated earlier in a callee-first run.  See
+    /// [`crate::kuna_callrettype`].
+    CallRetType,
+    "callrettype",
+    "callee-stated call return types",
+    unset: false,
+    shipped: true
+);

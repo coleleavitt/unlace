@@ -125,7 +125,13 @@ impl Action for ActionStrlenScan {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !self.enabled && !data.get_arch().strlen_scan {
+        if !self.enabled
+            && !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_strlenscan::StrlenScan>()
+                .0
+        {
             return 0;
         }
         let heads: Vec<BlockId> = (0..data.bblocks_get_size())
@@ -600,6 +606,16 @@ fn rewrite(data: &mut Funcdata, s: &Scan) -> unlace_base::error::KunaResult<()> 
     data.remove_branch(s.body, to_head)?;
     Ok(())
 }
+
+crate::kuna_flag!(
+    /// (kuna) Collapse an inline `repnz scasb` string length into `strlen`
+    /// (option `strlenscan`).  See [`crate::p3_dataflow::kuna_strlenscan`].
+    StrlenScan,
+    "strlenscan",
+    "inline repnz scasb string length as strlen",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 #[path = "kuna_strlenscan/tests.rs"]

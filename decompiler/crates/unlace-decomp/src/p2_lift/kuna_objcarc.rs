@@ -133,6 +133,18 @@ where
     Ok(())
 }
 
+crate::kuna_flag!(
+    /// (kuna `objcarc`) Install the Objective-C ARC call-fixups
+    /// (`p2_lift/kuna_objcarc.rs`): retain/autorelease pass-throughs become
+    /// copies, releases vanish, `objc_storeStrong` is its store. Default on;
+    /// read by the analysis-tier call-fixup installer like `msvc_ftol`.
+    ObjcArc,
+    "objcarc",
+    "Objective-C ARC call hiding",
+    unset: false,
+    shipped: true
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -53,7 +53,11 @@ pub(crate) fn plan_arm_register_lsl(
     if count_v.is_constant() || lhs_v.get_size() != 4 || out_v.get_size() != 4 {
         return None;
     }
-    let guarded = arch.arm_shift_guard && count_v.get_nz_mask() >= 32;
+    let guarded = arch
+        .kuna_options
+        .get::<crate::kuna_armregistershift::ArmShiftGuard>()
+        .0
+        && count_v.get_nz_mask() >= 32;
     if guarded && !(operand_is_repeatable(fd, lhs, 16) && operand_is_repeatable(fd, count, 16)) {
         return None;
     }
@@ -191,6 +195,17 @@ fn operand_is_repeatable(fd: &Funcdata, vn: VarnodeId, depth: u8) -> bool {
     }
     true
 }
+
+crate::kuna_flag!(
+    /// (kuna `armshiftguard`) Print `count < 32u ? x << count : 0` around a
+    /// variable ARM LSL whose count is not proven below 32 (on), or the plain
+    /// shift (off).
+    ArmShiftGuard,
+    "armshiftguard",
+    "ARM register-count shift range guard",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests;

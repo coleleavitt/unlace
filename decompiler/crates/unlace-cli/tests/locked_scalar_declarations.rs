@@ -253,7 +253,8 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
         );
     }
     let arch = data.conf.as_mut().unwrap().arch_mut();
-    arch.realtypes = true;
+    arch.kuna_options
+        .set(unlace_decomp::printc::Realtypes(true));
     arch.ctypes = true;
     let body = arch.with_print(|printer, arch| printer.doc_function_full(fd, arch));
     assert!(body.contains("float v1;"), "locked type was lost:\n{body}");

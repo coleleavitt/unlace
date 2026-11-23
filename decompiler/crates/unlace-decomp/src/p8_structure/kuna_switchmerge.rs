@@ -850,3 +850,14 @@ pub(crate) fn switch_plans(fd: &Funcdata, root: BlockId, facts: &PrintFacts<'_>)
     merge_range_splits(fd, facts, root, &mut out);
     out
 }
+
+crate::kuna_flag!(
+    /// (kuna `switchmerge`) Print a C `switch` whose `default:` arm is only
+    /// another switch on the same selector as one `switch`, and leave out the
+    /// labels of arms that jump to the code `default:` runs.
+    Switchmerge,
+    "switchmerge",
+    "nested-switch merge and default-hole folding",
+    unset: false,
+    shipped: true
+);

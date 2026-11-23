@@ -468,7 +468,11 @@ pub struct ResolvedSend {
 /// The method the send at `op` reaches when its receiver's class is known.
 pub fn resolve_send(data: &Funcdata, op: OpId) -> Option<ResolvedSend> {
     let arch = data.get_arch();
-    if !arch.objc_resolve {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_objcrettype::ObjcResolve>()
+        .0
+    {
         return None;
     }
     let fc = data.get_call_specs(data.get_call_specs_index(op)?);
@@ -523,6 +527,16 @@ crate::kuna_flag!(
     ObjcRettype,
     "objcrettype",
     "Objective-C message result typed by its receiver",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna `objcresolve`) Render a message send whose receiver's class is
+    /// known as the method it reaches (`-[Foo bar:]`). Default on.
+    ObjcResolve,
+    "objcresolve",
+    "Objective-C message send resolved to its method",
     unset: false,
     shipped: true
 );

@@ -174,7 +174,12 @@ const GUARD_GLOBALS: &[&str] = &["stack_chk_guard", "security_cookie"];
 /// (kuna `canaryglobal`) Is `vn` the unwritten value of a canary global (the
 /// AArch64, ARM, PowerPC and i386-PIC shape, where no TLS slot is involved)?
 fn is_named_guard(vn: VarnodeId, data: &Funcdata) -> bool {
-    if !data.get_arch().canary_global {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_stackguard::CanaryGlobal>()
+        .0
+    {
         return false;
     }
     let Some(v) = data.vbank().get(vn) else {
@@ -772,6 +777,16 @@ crate::kuna_flag!(
     StripStackGuard,
     "stackguard",
     "Stack-guard canary stripping",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna `canaryglobal`) The stack-guard strip also recognises a canary read
+    /// from a global named `__stack_chk_guard` / `__security_cookie`.
+    CanaryGlobal,
+    "canaryglobal",
+    "Stack-guard canary read from a named global",
     unset: false,
     shipped: true
 );

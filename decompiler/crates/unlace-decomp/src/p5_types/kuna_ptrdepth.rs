@@ -29,7 +29,7 @@
 //! instead of running to the ceiling, and a genuine `char **` (`argv`, `envp`)
 //! is left alone.
 //!
-//! Gated by [`Architecture::ptrdepthcap`](crate::architecture::Architecture)
+//! Gated by [the registered option `Ptrdepthcap`](crate::architecture::Architecture)
 //! (option `ptrdepthcap on|off`); inert when off.
 
 use std::rc::Rc;

@@ -122,7 +122,11 @@ pub fn scan(
         preserved: &preserved,
         settled: true,
         named: Some(&named),
-        next_table: arch.switch_extent.then_some(&next_table),
+        next_table: arch
+            .kuna_options
+            .get::<unlace_decomp::jumptable::SwitchExtent>()
+            .0
+            .then_some(&next_table),
     };
     let arm = object::Object::architecture(file) == object::Architecture::Arm;
     let mut calls: BTreeSet<u64> = BTreeSet::new();

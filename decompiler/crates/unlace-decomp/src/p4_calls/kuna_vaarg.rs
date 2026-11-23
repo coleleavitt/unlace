@@ -1684,7 +1684,12 @@ impl Action for ActionVaArg {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().va_arg {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_vaarg::VaArg>()
+            .0
+        {
             return 0;
         }
         let cls = Cls::classify(data);
@@ -1701,3 +1706,12 @@ impl Action for ActionVaArg {
         1
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `vaarg`) The x86-64 va_arg expansion as va_arg(ap, T).
+    VaArg,
+    "vaarg",
+    "va_arg expansion as one call",
+    unset: false,
+    shipped: true
+);

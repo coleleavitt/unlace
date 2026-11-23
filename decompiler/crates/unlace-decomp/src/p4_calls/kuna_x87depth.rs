@@ -474,7 +474,12 @@ fn solve(data: &Funcdata, storage: &Storage) -> Option<DepthFacts> {
 /// typed to return a non-float that leaves a value on the stack at every
 /// return, and a call to a callee typed so that leaves one.
 pub fn warn(data: &mut Funcdata) {
-    if !data.get_arch().x87_depth {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_x87depth::X87Depth>()
+        .0
+    {
         return;
     }
     let float = |t: Option<&std::rc::Rc<crate::dtype::Datatype>>| {
@@ -505,6 +510,16 @@ pub fn warn(data: &mut Funcdata) {
         data.warning(&text, &addr);
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) The x87 stack depth proves ST0 empty at returns (option
+    /// `x87depth`). See [`crate::p4_calls::kuna_x87depth`].
+    X87Depth,
+    "x87depth",
+    "x87 stack depth at returns",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

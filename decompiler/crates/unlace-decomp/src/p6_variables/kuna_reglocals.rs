@@ -21,9 +21,9 @@ use std::rc::Rc;
 use unlace_base::space::AddrSpace;
 
 use crate::context::HighVariableId;
-use crate::decompile_drive::VarInfo;
 use crate::funcdata::Funcdata;
 use crate::infra::architecture::Architecture;
+use crate::kuna_funcreport::VarInfo;
 use crate::printc::{DeclaredLocal, PrintC};
 
 /// Is `high` a frame object: bound to a stack Symbol, stack storage only (or
@@ -64,7 +64,7 @@ fn frame_object(
             off_stack = true;
             continue;
         };
-        let lo = crate::decompile_drive::signed_space_offset(stack, v.get_offset());
+        let lo = crate::kuna_funcreport::signed_space_offset(stack, v.get_offset());
         let hi = lo + i64::from(v.get_size());
         if rows.iter().any(|&(a, b)| a < hi && lo < b) {
             return true;

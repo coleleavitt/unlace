@@ -292,7 +292,7 @@ secondary test:
 - Blocks where the two covers overlap at level 2 are re-examined per instance
   pair, and an overlap is *forgiven* when the two Varnodes are copy shadows —
   provably the same value (`merge.rs (MergeIntersect::test_block_intersection)`,
-  through `crates/unlace-decomp/src/p6_variables/funcdata_merge.rs
+  through `crates/unlace-decomp/src/substrate/funcdata_merge.rs
   (MergeContext for Funcdata)` to `Varnode::copy_shadow`); overlap-group pieces
   are tested at their relative offsets with partial shadows. A partial shadow
   between two constants compares the smaller one with the larger one truncated

@@ -56,3 +56,8 @@ pub fn holds(fd: &Funcdata, high: HighVariableId) -> bool {
                 && isolated.contains(&(v.get_addr().clone(), v.get_size()))
         })
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.isolated_holds = Some(holds);
+}

@@ -8,7 +8,6 @@ pub mod coreaction_stackptr;
 pub mod cover;
 pub mod dynamic;
 pub mod funcdata_facing;
-pub mod funcdata_merge;
 pub mod funcdata_spacebase;
 pub mod kuna_arrayextent;
 pub mod kuna_arraysize;

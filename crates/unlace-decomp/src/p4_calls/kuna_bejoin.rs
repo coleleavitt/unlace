@@ -3246,6 +3246,26 @@ pub(crate) use evidence::{
     seed as seed_wide_returns, wide_pair,
 };
 
+/// (kuna `bejoin evidence`) The wide-return verdicts the driver took for this function and its
+/// callees, kept across `Funcdata::clear`.
+#[derive(Default)]
+struct WideSlot(Option<crate::kuna_bejoin::WideView>);
+crate::kuna_func_state!(WideSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `bejoin evidence`) Hold the wide-return verdicts the driver took
+    /// for this function and its callees.
+    pub fn kuna_set_wide(&mut self, wide: crate::kuna_bejoin::WideView) {
+        self.kuna_state_mut::<WideSlot>().0 = Some(wide);
+    }
+
+    /// (kuna `bejoin evidence`) The wide-return verdicts and the model's pair,
+    /// when the driver took them.
+    pub fn kuna_wide(&self) -> Option<&crate::kuna_bejoin::WideView> {
+        self.kuna_state::<WideSlot>().0.as_ref()
+    }
+}
+
 #[cfg(test)]
 #[path = "kuna_bejoin/tests.rs"]
 mod tests;

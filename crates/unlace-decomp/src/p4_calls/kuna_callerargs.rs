@@ -575,5 +575,28 @@ pub fn trace() -> bool {
     std::env::var("KUNA_CALLERARGS_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
+/// (kuna `narrowargs callers`) The parameters every caller passes narrow; kept across
+/// `Funcdata::clear`.
+#[derive(Default)]
+struct NarrowSlot(Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>);
+crate::kuna_func_state!(NarrowSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `narrowargs callers`) Record the parameters every caller passes narrow.
+    pub fn kuna_set_callerargs(
+        &mut self,
+        stated: Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>,
+    ) {
+        self.kuna_state_mut::<NarrowSlot>().0 = stated;
+    }
+
+    /// (kuna `narrowargs callers`) The parameters every caller passes narrow.
+    pub fn kuna_callerargs(
+        &self,
+    ) -> Option<&std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>> {
+        self.kuna_state::<NarrowSlot>().0.as_ref()
+    }
+}
+
 #[cfg(test)]
 mod tests;

@@ -23,6 +23,14 @@ macro_rules! kuna_options {
                         Ok(format!(concat!($label, " turned {}"), if val { "on" } else { "off" }))
                     }};
                 }
+                macro_rules! registered {
+                    ($option:ty) => {{
+                        let (val, msg) =
+                            <$option as crate::kuna_optionset::KunaOption>::parse($value)?;
+                        $this.kuna_options.set(val);
+                        Ok(msg)
+                    }};
+                }
                 match name {
                     $($name => $apply,)*
                     other => Err(KunaError::parse(format!("Unknown kuna option: {other}"))),
@@ -147,16 +155,8 @@ kuna_options! { self, p1;
     "calleeretpurge" => on_off!(callee_ret_purge, "Callee `ret imm16` extrapop"),
     "stackexitanchor" => on_off!(stack_exit_anchor, "Stack-solver return anchor"),
     "fdeflowbound" => on_off!(fde_flow_bound, "Unwind-extent fall-through bound"),
-    "int3pad" => {
-        let (mode, msg) = crate::kuna_int3pad::OptionInt3Pad.apply(p1)?;
-        self.int3_pad = mode;
-        Ok(msg)
-    },
-    "x64syscall" => {
-        let (mode, msg) = crate::kuna_x64syscall::OptionX64Syscall.apply(p1)?;
-        self.x64_syscall = mode;
-        Ok(msg)
-    },
+    "int3pad" => registered!(crate::kuna_int3pad::Int3PadMode),
+    "x64syscall" => registered!(crate::kuna_x64syscall::X64SyscallMode),
     "fpuemu" => {
         let (mode, msg) = crate::kuna_fpuemu::parse_fpuemu_mode(p1).map_err(KunaError::parse)?;
         self.fpu_emu = mode.as_u8();
@@ -217,11 +217,7 @@ kuna_options! { self, p1;
     "funcboundflow" => on_off!(funcbound_flow, "Fall-through bound at function entries"),
     "overlapbranch" => on_off!(overlap_branch, "Overlapping-branch fall-through truncation"),
     "cleanupcode" => on_off!(remove_cleanup_code, "Rust drop/deallocate call removal"),
-    "linuxsyscall" => {
-        let (mode, msg) = crate::kuna_linuxsyscall::OptionLinuxSyscall.apply(p1)?;
-        self.linux_syscall = mode;
-        Ok(msg)
-    },
+    "linuxsyscall" => registered!(crate::kuna_linuxsyscall::LinuxSyscallMode),
     "msvcstrappend" => on_off!(msvc_str_append, "MSVC std::string inlined append collapsing"),
     "switchselector" => on_off!(switch_selector_guard, "Lowered-switch in-function-selector restriction"),
     "stackaddrargtrial" => on_off!(stack_addr_arg_trial, "Stack-address input trials"),
@@ -272,16 +268,8 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "gonewtype" => on_off!(go_new_type, "Go newobject result typing"),
-    "rustprobestack" => {
-        let (mode, msg) = crate::kuna_rustprobestack::parse_mode(p1).map_err(KunaError::parse)?;
-        self.rust_probestack = mode;
-        Ok(msg)
-    },
-    "gomorestack" => {
-        let (mode, msg) = crate::kuna_gomorestack::parse_gomorestack_mode(p1).map_err(KunaError::parse)?;
-        self.go_morestack = mode.as_u8();
-        Ok(msg)
-    },
+    "rustprobestack" => registered!(crate::kuna_rustprobestack::RustProbestackMode),
+    "gomorestack" => registered!(crate::kuna_gomorestack::GoMorestackMode),
     "goabi" => {
         let on = crate::kuna_goabi::parse_goabi(p1).map_err(KunaError::parse)?;
         self.load_options_mut().goabi = on;
@@ -289,11 +277,7 @@ kuna_options! { self, p1;
         self.analysis_goabi = on;
         Ok(format!("Golang compiler-spec selection turned {}", if on { "auto" } else { "off" }))
     },
-    "gowritebarrier" => {
-        let (mode, msg) = crate::kuna_gowritebarrier::parse_gowritebarrier_mode(p1).map_err(KunaError::parse)?;
-        self.go_write_barrier = mode.as_u8();
-        Ok(msg)
-    },
+    "gowritebarrier" => registered!(crate::kuna_gowritebarrier::GoWriteBarrierMode),
     "sourcelang" => {
         let forced = crate::kuna_sourcelang::parse_option_value(p1).map_err(KunaError::parse)?;
         self.load_options_mut().sourcelang = forced;
@@ -358,11 +342,7 @@ kuna_options! { self, p1;
     },
     "switchmodbound" => on_off!(switch_modulo_bound, "Switch modulo/and-mask index bound"),
     "switchextent" => on_off!(switch_extent, "Unchecked jump table ends at the function's next table"),
-    "constselectjump" => {
-        let (mode, msg) = crate::kuna_constselectjump::OptionConstSelectJump.apply(p1)?;
-        self.const_select_jump = mode;
-        Ok(msg)
-    },
+    "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
     "switchguardbound" => on_off!(switch_guard_bound, "Switch CBRANCH-guard index bound"),
     "highsliceguard" => on_off!(highslice_guard, "High-byte slice jump-table guard"),
     "switchsharedcase" => on_off!(switch_shared_case, "Switch loop-carried-guard table"),

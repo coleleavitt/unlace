@@ -95,6 +95,23 @@ pub enum ConstSelectMode {
     On,
 }
 
+impl crate::kuna_optionset::KunaOption for ConstSelectMode {
+    const NAME: &'static str = "constselectjump";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ConstSelectMode::Off
+    }
+
+    fn shipped() -> Self {
+        ConstSelectMode::Reentry
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionConstSelectJump.apply(value)
+    }
+}
+
 impl ConstSelectMode {
     pub fn as_str(self) -> &'static str {
         match self {

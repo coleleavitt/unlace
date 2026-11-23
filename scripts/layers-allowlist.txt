@@ -32,7 +32,6 @@ architecture -> kuna_castwiden
 architecture -> kuna_chkstkdarwin
 architecture -> kuna_condfold
 architecture -> kuna_condstmts
-architecture -> kuna_constselectjump
 architecture -> kuna_cortexmpriv
 architecture -> kuna_cppsig
 architecture -> kuna_deadcascade
@@ -47,15 +46,12 @@ architecture -> kuna_floatglobals
 architecture -> kuna_formatstring
 architecture -> kuna_fpuemu
 architecture -> kuna_gobool
-architecture -> kuna_gomorestack
 architecture -> kuna_goreg
 architecture -> kuna_gotoreduce
 architecture -> kuna_gottailcall
-architecture -> kuna_gowritebarrier
 architecture -> kuna_hooks
 architecture -> kuna_indexaliasguard
 architecture -> kuna_inputhints
-architecture -> kuna_int3pad
 architecture -> kuna_itaniumeh
 architecture -> kuna_jumpassist
 architecture -> kuna_kalloctype
@@ -63,7 +59,6 @@ architecture -> kuna_kernelbug
 architecture -> kuna_lanefuse
 architecture -> kuna_lang
 architecture -> kuna_langfamily
-architecture -> kuna_linuxsyscall
 architecture -> kuna_msvcbyval
 architecture -> kuna_msvcftol
 architecture -> kuna_mzdgroup
@@ -90,7 +85,6 @@ architecture -> kuna_rustfmt
 architecture -> kuna_rustfmtflags
 architecture -> kuna_rustfmtio
 architecture -> kuna_rustfmtwrite
-architecture -> kuna_rustprobestack
 architecture -> kuna_segmentize
 architecture -> kuna_simdlane
 architecture -> kuna_spsolve
@@ -129,7 +123,6 @@ context -> kuna_bejoinpass
 context -> kuna_callmechanisms
 context -> kuna_calloverlap
 context -> kuna_callresultuse
-context -> kuna_constselectjump
 context -> kuna_deadcascade
 context -> kuna_floatglobals
 context -> kuna_gotoreduce
@@ -146,7 +139,6 @@ context -> kuna_octeoneffects
 context -> kuna_opaqueglobals
 context -> kuna_ptrfromuse
 context -> kuna_qualifiedcall
-context -> kuna_rustprobestack
 context -> kuna_segmentize
 context -> kuna_structheadless
 context -> kuna_structmerge
@@ -156,7 +148,6 @@ context -> kuna_syscallregs
 context -> kuna_tlsnames
 context -> kuna_varargretreg
 context -> kuna_varargsave
-context -> kuna_x64syscall
 context -> kuna_x87emptyreturn
 context -> prefersplit
 context -> remote_provider

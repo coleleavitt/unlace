@@ -846,11 +846,6 @@ pub struct ArchContext {
     pub fat_str: u8,
     /// (kuna) `option swiftstr` mode; read by [`crate::p5_types::kuna_swiftstr`].
     pub swift_str: u8,
-    /// (kuna) `option gomorestack` mode; read by
-    /// [`crate::p2_lift::kuna_gomorestack`].  Copied from the engine
-    /// `Architecture` in `build_arch_handle`.
-    pub go_morestack: u8,
-    pub rust_probestack: crate::kuna_rustprobestack::RustProbestackMode,
     /// (kuna) `option chkstkdarwin` on an AArch64 language; read by
     /// [`crate::p2_lift::kuna_chkstkdarwin`].  Copied from the engine
     /// `Architecture` in `build_arch_handle`.
@@ -864,10 +859,6 @@ pub struct ArchContext {
     /// (kuna) `option gobool` mode; read by [`crate::p4_calls::kuna_gobool`].
     /// Copied from the engine `Architecture` in `build_arch_handle`.
     pub go_bool: u8,
-    /// (kuna) `option gowritebarrier` mode; read by
-    /// [`crate::p2_lift::kuna_gowritebarrier`].  Copied from the engine
-    /// `Architecture` in `build_arch_handle`.
-    pub go_write_barrier: u8,
     /// (kuna) `option gonewtype`; read by [`crate::p5_types::kuna_gonewtype`].
     /// Copied from the engine `Architecture` in `build_arch_handle`.
     pub go_new_type: bool,
@@ -1333,19 +1324,13 @@ pub struct ArchContext {
     /// pre-SSA op graph.  Read by
     /// [`ActionRemoveCleanupCode`](crate::p2_lift::kuna_cleanupcode::ActionRemoveCleanupCode).
     pub remove_cleanup_code: bool,
-    /// (kuna) `option linuxsyscall`: rewrite a 32-bit Linux `int 0x80` from an
-    /// indirect call through the `swi` userop into a named call on the syscall
-    /// the number in `EAX` selects.  Read by
-    /// [`ActionLinuxSyscall`](crate::p2_lift::kuna_linuxsyscall::ActionLinuxSyscall).
-    pub linux_syscall: bool,
+    /// (kuna) The loader identified the image as a Linux ELF: the fact
+    /// `option linuxsyscall auto` acts on.
+    pub image_linux_elf: bool,
     /// (kuna) `option msvcstrappend`: collapse inlined MSVC `std::string`
     /// appends into one call.  Read by
     /// [`ActionMsvcStrAppend`](crate::p2_lift::kuna_msvcstrappend::ActionMsvcStrAppend).
     pub msvc_str_append: bool,
-    /// (kuna) `option x64syscall`: what register effects the x86-64 `SYSCALL`
-    /// user-op carries.  Read by
-    /// [`ActionX64Syscall`](crate::p2_lift::kuna_x64syscall::ActionX64Syscall).
-    pub x64_syscall: crate::p2_lift::kuna_x64syscall::X64SyscallMode,
     /// Exact GCC AMD64 target supporting the ordinary SysV stack model.
     pub x64_syscall_memory_target: bool,
     /// (kuna) The user-op indices the `SYSCALL` constructor emits, resolved once
@@ -1561,9 +1546,6 @@ pub struct ArchContext {
     /// sorted, so the run-on cut (`kuna_switchrunon`) sees the same functions
     /// with the option on.
     pub lazy_entry_starts: Rc<Vec<u64>>,
-    /// (kuna) Recover a `BRANCHIND` whose destination is a select over constant
-    /// addresses (`option constselectjump`, `p2_lift/kuna_constselectjump.rs`).
-    pub const_select_jump: crate::kuna_constselectjump::ConstSelectMode,
     /// (kuna) Bound a LOAD-table jumptable by an out-of-band CBRANCH range guard
     /// when the basic model's guard analysis could not (C++
     /// `Architecture::switch_guard_bound`, flipped by `option switchguardbound`,
@@ -1847,18 +1829,11 @@ impl ArchContext {
             // from the engine Architecture in `build_arch_handle`.
             fat_str: 1,
             swift_str: 1,
-            // (kuna) `option gomorestack` default auto; the real value is
-            // copied from the engine Architecture in `build_arch_handle`.
-            go_morestack: 1,
-            rust_probestack: crate::kuna_rustprobestack::RustProbestackMode::Off,
             chkstk_darwin: false,
             sp_solve: false,
             type_vote: false,
             // (kuna) `option gobool` default auto; copied the same way.
             go_bool: 1,
-            // (kuna) `option gowritebarrier` default auto; the real value is
-            // copied from the engine Architecture in `build_arch_handle`.
-            go_write_barrier: 1,
             // (kuna) `option gonewtype` default on; copied the same way.
             go_new_type: true,
             swift_metadata_results: false,
@@ -2010,9 +1985,8 @@ impl ArchContext {
             region_edge_order: false,    // regionedgeorder (opt-in default-off)
             outline_spec: String::new(), // outline (opt-in default-off; empty = off)
             remove_cleanup_code: true, // cleanupcode (DIV-81 default-on; inert on a non-Rust binary)
-            linux_syscall: false, // linuxsyscall (the mode resolves against the Linux-ELF fact in build_arch_handle)
+            image_linux_elf: false,
             msvc_str_append: false, // msvcstrappend (opt-in default-off)
-            x64_syscall: crate::p2_lift::kuna_x64syscall::X64SyscallMode::Off, // x64syscall (Architecture::reset_defaults sets the shipped default: on)
             x64_syscall_memory_target: false,
             x64_syscall_userops: Vec::new(),
             octeon_effects: crate::kuna_octeoneffects::OcteonEffectsMode::Off,
@@ -2068,7 +2042,6 @@ impl ArchContext {
             switch_modulo_bound: false, // (kuna) GH-9191 default off (upstream byte-identical)
             switch_extent: false, // (kuna) option switchextent; the real architecture carries the shipped default
             lazy_entry_starts: Rc::default(),
-            const_select_jump: crate::kuna_constselectjump::ConstSelectMode::Off, // (kuna) constant-select indirect branch; reset_defaults sets the shipped default
             highslice_guard: false,
             switch_guard_bound: false, // (kuna) angr opt-in default off (upstream byte-identical)
             switch_shared_case: false, // (kuna) angr opt-in default off (upstream byte-identical)

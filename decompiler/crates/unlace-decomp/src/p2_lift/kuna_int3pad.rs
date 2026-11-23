@@ -90,6 +90,23 @@ pub enum Int3PadMode {
     Halt,
 }
 
+impl crate::kuna_optionset::KunaOption for Int3PadMode {
+    const NAME: &'static str = "int3pad";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        Int3PadMode::Off
+    }
+
+    fn shipped() -> Self {
+        Int3PadMode::Warn
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionInt3Pad.apply(value)
+    }
+}
+
 impl Int3PadMode {
     /// Is a warning buffered at a matched site?
     pub fn warns(self) -> bool {

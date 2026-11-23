@@ -194,3 +194,8 @@ pub fn load_crosses_write(data: &Funcdata, vn: VarnodeId) -> bool {
         .filter(|&r| data.obank().get(r).is_some_and(|o| !o.is_dead()))
         .any(|r| written_between(data, vn, r))
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.pointeevalue_keeps_apart = Some(keeps_apart);
+}

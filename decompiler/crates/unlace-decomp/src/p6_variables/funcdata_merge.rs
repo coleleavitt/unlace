@@ -391,6 +391,10 @@ fn copy_pair_writes(
 }
 
 impl MergeContext for Funcdata {
+    fn pass_hooks(&self) -> &'static crate::kuna_passhooks::KunaHooks {
+        self.hooks()
+    }
+
     fn fpu_trunc_views_enabled(&self) -> bool {
         !self.kuna_fpu_trunc_views.is_empty()
     }

@@ -142,6 +142,10 @@ pub type BoundType = int4;
 /// `docs/rust-port/losses.md`); the [`Merge`] routine that calls them transcribes
 /// the surrounding structure verbatim so the body is correct once the hook fills.
 pub trait MergeContext: HighContext {
+    /// The pass hooks the merge calls through ([`crate::kuna_passhooks`]).
+    fn pass_hooks(&self) -> &'static crate::kuna_passhooks::KunaHooks {
+        crate::architecture::default_pass_hooks()
+    }
     fn fpu_trunc_views_enabled(&self) -> bool {
         false
     }
@@ -1316,7 +1320,7 @@ impl Merge {
         }
         self.budget()?;
         if MergeIntersect::intersection(ctx, &mut self.test_cache, high1, high2)
-            || crate::p6_variables::kuna_tiedphitrim::intersects(
+            || (ctx.pass_hooks().tiedphitrim_intersects)(
                 &self.tied_phis,
                 ctx,
                 &mut self.test_cache,
@@ -1368,8 +1372,8 @@ impl Merge {
             for &out in &highstack {
                 self.budget()?;
                 let spec_ok = Self::merge_test_speculative(ctx, out, high)
-                    && !crate::kuna_fputruncviews::keeps_highs_apart(ctx, out, high)
-                    && !crate::kuna_fputruncviews::keeps_root_alone(ctx, out, high);
+                    && !(ctx.pass_hooks().fputruncviews_keeps_highs_apart)(ctx, out, high)
+                    && !(ctx.pass_hooks().fputruncviews_keeps_root_alone)(ctx, out, high);
                 if spec_ok && self.merge(ctx, out, high, true)? {
                     merged_into = true;
                     break;
@@ -1435,7 +1439,7 @@ impl Merge {
             }));
         }
         if tmplist.contains(&high) {
-            if crate::p6_variables::kuna_tiedphitrim::intersects(
+            if (ctx.pass_hooks().tiedphitrim_intersects)(
                 &self.tied_phis,
                 ctx,
                 &mut self.test_cache,
@@ -1454,7 +1458,7 @@ impl Merge {
                     high,
                 }));
             }
-            if crate::p6_variables::kuna_tiedphitrim::intersects(
+            if (ctx.pass_hooks().tiedphitrim_intersects)(
                 &self.tied_phis,
                 ctx,
                 &mut self.test_cache,
@@ -1555,7 +1559,8 @@ impl Merge {
                     continue;
                 }
                 self.budget()?;
-                if opc == OpCode::CPUI_COPY && crate::kuna_fputruncviews::keeps_apart(ctx, op) {
+                if opc == OpCode::CPUI_COPY && (ctx.pass_hooks().fputruncviews_keeps_apart)(ctx, op)
+                {
                     continue;
                 }
                 let vn1 = ctx.op_out(op);
@@ -1570,17 +1575,17 @@ impl Merge {
                         continue;
                     }
                     let vn2 = vn2.unwrap();
-                    if crate::p6_variables::kuna_pointeevalue::keeps_apart(ctx, vn1, vn2)
-                        || crate::p6_variables::kuna_loadorder::keeps_apart(ctx, vn1, vn2)
-                        || crate::p6_variables::kuna_globalorder::keeps_apart(ctx, vn1, vn2)
+                    if (ctx.pass_hooks().pointeevalue_keeps_apart)(ctx, vn1, vn2)
+                        || (ctx.pass_hooks().loadorder_keeps_apart)(ctx, vn1, vn2)
+                        || (ctx.pass_hooks().globalorder_keeps_apart)(ctx, vn1, vn2)
                     {
                         continue;
                     }
                     let h1 = ctx.vn_high(vn1).expect("merge_opcode: vn1 no high");
                     let h2 = ctx.vn_high(vn2).expect("merge_opcode: vn2 no high");
                     if Self::merge_test_required(ctx, h1, h2)
-                        && !crate::kuna_fputruncviews::keeps_highs_apart(ctx, h1, h2)
-                        && !crate::p6_variables::kuna_globalvalue::keeps_apart(ctx, h1, h2)
+                        && !(ctx.pass_hooks().fputruncviews_keeps_highs_apart)(ctx, h1, h2)
+                        && !(ctx.pass_hooks().globalvalue_keeps_apart)(ctx, h1, h2)
                     {
                         self.merge(ctx, h1, h2, false)?; // required merge
                     }
@@ -1688,16 +1693,16 @@ impl Merge {
                 if ctx.vn_def(vn2).is_none() && !ctx.vn_is_input(vn2) {
                     continue;
                 }
-                if crate::p6_variables::kuna_pointeevalue::keeps_apart(ctx, vn1, vn2)
-                    || crate::p6_variables::kuna_loadorder::keeps_apart(ctx, vn1, vn2)
-                    || crate::p6_variables::kuna_globalorder::keeps_apart(ctx, vn1, vn2)
+                if (ctx.pass_hooks().pointeevalue_keeps_apart)(ctx, vn1, vn2)
+                    || (ctx.pass_hooks().loadorder_keeps_apart)(ctx, vn1, vn2)
+                    || (ctx.pass_hooks().globalorder_keeps_apart)(ctx, vn1, vn2)
                 {
                     continue;
                 }
                 let high_in = ctx.vn_high(vn2).expect("merge_adjacent: vn2 no high");
                 if !Self::merge_test_adjacent(ctx, high_out, high_in)
-                    || crate::kuna_fputruncviews::keeps_highs_apart(ctx, high_out, high_in)
-                    || crate::p6_variables::kuna_globalvalue::keeps_apart(ctx, high_out, high_in)
+                    || (ctx.pass_hooks().fputruncviews_keeps_highs_apart)(ctx, high_out, high_in)
+                    || (ctx.pass_hooks().globalvalue_keeps_apart)(ctx, high_out, high_in)
                 {
                     continue;
                 }
@@ -1843,7 +1848,7 @@ impl Merge {
             }
         }
 
-        if let Some((slots, storage)) = crate::p6_variables::kuna_tiedphitrim::tied_slots(ctx, op) {
+        if let Some((slots, storage)) = (ctx.pass_hooks().tiedphitrim_tied_slots)(ctx, op) {
             for slot in slots {
                 self.trim_op_input(ctx, op, slot)?;
             }

@@ -277,12 +277,6 @@ kuna_switchguardmerge -> kuna_strlenscan
 kuna_switchguardrange -> rangeutil
 kuna_varargfloat -> kuna_bitcast
 kuna_zextreturn -> kuna_truncarg
-merge -> kuna_fputruncviews
-merge -> kuna_globalorder
-merge -> kuna_globalvalue
-merge -> kuna_loadorder
-merge -> kuna_pointeevalue
-merge -> kuna_tiedphitrim
 options -> flow
 options -> kuna_lang
 options -> kuna_option_dispatch

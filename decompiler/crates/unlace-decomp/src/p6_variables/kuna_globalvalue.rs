@@ -173,3 +173,8 @@ fn holds_global(ctx: &mut dyn MergeContext, value: HighVariableId, global: HighV
     }
     true
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.globalvalue_keeps_apart = Some(keeps_apart);
+}

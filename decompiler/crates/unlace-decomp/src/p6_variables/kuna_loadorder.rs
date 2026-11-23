@@ -178,3 +178,8 @@ pub fn keeps_apart(ctx: &mut dyn MergeContext, vn1: VarnodeId, vn2: VarnodeId) -
         .into_iter()
         .any(|v| ctx.vn_load_crosses_global_write(v, global))
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.loadorder_keeps_apart = Some(keeps_apart);
+}

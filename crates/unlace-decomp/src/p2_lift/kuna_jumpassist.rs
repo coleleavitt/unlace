@@ -28,7 +28,7 @@ use crate::context::{ArchContext, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::inject_sleigh::{PcodeInjectLibrarySleigh, SleighInjectEngine, SleighPayload};
 use crate::jumptable::{JumpModel, JumpTable, LoadTable, NO_LABEL};
-use crate::kuna_callmechanisms::Operation;
+use crate::kuna_emittedop::Operation;
 use crate::pcodeinject::InjectContext;
 use crate::userop::UserOpManage;
 

@@ -52,7 +52,7 @@ pub(crate) fn unsigned_trim(
     mask: u64,
     size: i32,
 ) -> bool {
-    if !crate::kuna_truncarg::drops_only_zero_bits(data, vn, mask) {
+    if !crate::subflow::drops_only_zero_bits(data, vn, mask) {
         return false;
     }
     let Some((narrow, list)) = narrow_output(data, storage, size) else {
@@ -79,7 +79,7 @@ pub(crate) fn zero_extended_word(
     mask: u64,
     size: i32,
 ) -> bool {
-    if !(1..8).contains(&size) || !crate::kuna_truncarg::drops_only_zero_bits(data, vn, mask) {
+    if !(1..8).contains(&size) || !crate::subflow::drops_only_zero_bits(data, vn, mask) {
         return false;
     }
     let sign = data

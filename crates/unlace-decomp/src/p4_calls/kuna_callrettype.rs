@@ -104,8 +104,7 @@ fn is_number(data: &Funcdata, v: Option<VarnodeId>) -> bool {
         && v.and_then(|v| data.vbank().get(v))
             .filter(|n| n.is_constant())
             .is_some_and(|n| {
-                n.get_offset() != 0
-                    && !crate::p9_emit::kuna_globalref::in_ranges(ranges, n.get_offset())
+                n.get_offset() != 0 && !crate::rangeutil::in_ranges(ranges, n.get_offset())
             })
 }
 

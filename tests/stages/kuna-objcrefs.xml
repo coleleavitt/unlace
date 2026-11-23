@@ -93,7 +93,7 @@ c0035fd6
 <stringmatch name="OBJCREFS #5: on names the stub after its selector" min="1" max="1">objc_msgSend\$count\(a0\)</stringmatch>
 <stringmatch name="OBJCREFS #6: the stub's prototype pins the argument past the selector register" min="1" max="1">objc_msgSend\$greet:\(a0,5\)</stringmatch>
 <stringmatch name="OBJCREFS #7: a chained bind slot is named from its import" min="1" max="1">objc_msgSend\(classRef_Remote,sel</stringmatch>
-<stringmatch name="OBJCREFS #8: the super send's selector slot folds to the selector (objcresolve names the superclass method it reaches)" min="1" max="1">-\[Base greet:\]\(&amp;v1,sel_greet_,\(uint8\)\(uint4\)arg1\)</stringmatch>
+<stringmatch name="OBJCREFS #8: the super send's selector slot folds to the selector" min="1" max="1">-\[Base greet:\]\(&amp;v1,sel_greet_,\(uint8\)\(uint4\)arg1\)</stringmatch>
 <stringmatch name="OBJCREFS #9: the super class slot folds to the class" min="1" max="1">v2 = _OBJC_CLASS_\$_Derived;</stringmatch>
 <stringmatch name="OBJCREFS #10: a classref receiver folds (and objcresolve names the class method it reaches up the chain)" min="1" max="1">\+\[Base tag\]\(\(objc_object \*\)_OBJC_CLASS_\$_Derived\)</stringmatch>
 <stringmatch name="OBJCREFS #11: a plain send's selref folds" min="1" max="1">objc_msgSend\(a0,sel_greet_,2\)</stringmatch>

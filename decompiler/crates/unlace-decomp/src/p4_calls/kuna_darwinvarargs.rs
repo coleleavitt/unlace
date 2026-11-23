@@ -142,8 +142,17 @@ pub fn is_variadic_callee(data: &Funcdata, entry: &Address) -> bool {
 /// an argument, and the gap-filling of `fillinMap` can drop a fixed parameter
 /// beside it. On an Apple target no variadic argument travels in a register, so
 /// every non-fixed register trial is dropped and every fixed one kept.
+///
+/// The runtime's own send entry points are declared `...` but are not C
+/// variadics: past the receiver and the selector they carry the method's
+/// arguments exactly as the method takes them, in registers, so their call
+/// keeps its register tail.
 pub fn keep_stack_tail(fc: &mut FuncCallSpecs, data: &Funcdata) {
-    if data.kuna_darwin_variadic().is_none() || !fc.is_dotdotdot() || !fc.is_input_locked() {
+    if data.kuna_darwin_variadic().is_none()
+        || !fc.is_dotdotdot()
+        || !fc.is_input_locked()
+        || MESSAGE_SENDS.contains(&fc.get_name())
+    {
         return;
     }
     let active = fc.get_active_input();
@@ -165,6 +174,9 @@ pub fn keep_stack_tail(fc: &mut FuncCallSpecs, data: &Funcdata) {
         }
     }
 }
+
+/// The runtime entry points whose `...` is a method's register arguments.
+const MESSAGE_SENDS: [&str; 3] = ["objc_msgSend", "objc_msgSendSuper", "objc_msgSendSuper2"];
 
 /// The stack pointer register's storage `(space, offset, size)`.
 fn stack_pointer(arch: &Architecture) -> Option<(Rc<AddrSpace>, uintb, u32)> {

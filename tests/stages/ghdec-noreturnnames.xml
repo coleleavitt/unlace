@@ -106,8 +106,8 @@ c3
   <com>print C</com>
   <com>quit</com>
 </script>
-<stringmatch name="NORETURNNAMES #1: _Exit ends the flow" min="1" max="1">^\s*_Exit\(\); // no-return$</stringmatch>
-<stringmatch name="NORETURNNAMES #2: thrd_exit ends the flow" min="1" max="1">^\s*thrd_exit\(\); // no-return$</stringmatch>
+<stringmatch name="NORETURNNAMES #1: _Exit ends the flow" min="1" max="1">^\s*_Exit\(a0\); // no-return$</stringmatch>
+<stringmatch name="NORETURNNAMES #2: thrd_exit ends the flow" min="1" max="1">^\s*thrd_exit\(a0\); // no-return$</stringmatch>
 <stringmatch name="NORETURNNAMES #3: std::rethrow_exception ends the flow" min="1" max="1">std::rethrow_exception\(&amp;v1\); // no-return$</stringmatch>
 <stringmatch name="NORETURNNAMES #4: off, _Exit and thrd_exit run to the next entry" min="2" max="2">funcboundflow: fall-through reached the next function entry</stringmatch>
 <stringmatch name="NORETURNNAMES #9: off, replay runs on into its landing pad" min="1" max="1">_Unwind_Resume\(v1\);</stringmatch>

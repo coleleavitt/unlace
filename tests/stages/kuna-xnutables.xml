@@ -18,7 +18,12 @@
     types the allocation Derived * from the view's signature (field_0x18 a
     pointer, field_0x8 data) and the table IOExternalMethodDispatch[4], and
     types the variable-size allocation as its header struct Packet *, and
-    names the __got slot Base::m1_ptr.
+    names the __got slot Base::m1_ptr. The stub at 0xfffffff007a04260 jumps
+    through that slot; `__DATA_CONST` is mapped read-only, so jump-table
+    recovery reads the slot as a one-entry table naming `Base::m1`, and since
+    `Base::m1` states no prototype `tailcalljump` follows the table
+    (`switch(Base::m1_ptr) { case 0xfffffff007a040f0: ... }`) rather than
+    taking a tail call; the slot's name is what #13/#14 check.
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">c0035fd6</bytechunk>
 <symbol space="ram" offset="0x100000" name="harness_stub"/>
@@ -82,6 +87,6 @@
 <stringmatch name="XNUTABLES #10: off leaves a variable-size allocation an untyped word" min="1" max="1">^  \*\(unsigned long \*\)v1 = v1;</stringmatch>
 <stringmatch name="XNUTABLES #11: on names the var view and types its allocation by the header" min="1" max="1">v1 = kalloc_type_var_impl\(kalloc_type_var_view_Packet,0x28,0,0\);</stringmatch>
 <stringmatch name="XNUTABLES #12: on types the variable-size allocation from the header signature" min="1" max="1">^  Packet \*v1; // x0</stringmatch>
-<stringmatch name="XNUTABLES #13: off leaves an unindexed __got slot a bare address" min="1" max="1">\(\*dat_fffffff007a05300\)\(\); // jump-as-call</stringmatch>
-<stringmatch name="XNUTABLES #14: on names the __got slot after the function it holds" min="1" max="1">\(\*Base::m1_ptr\)\(\); // jump-as-call</stringmatch>
+<stringmatch name="XNUTABLES #13: off leaves an unindexed __got slot a bare address" min="1" max="1">switch\(dat_fffffff007a05300\) \{</stringmatch>
+<stringmatch name="XNUTABLES #14: on names the __got slot after the function it holds" min="1" max="1">switch\(Base::m1_ptr\) \{</stringmatch>
 </decompilertest>

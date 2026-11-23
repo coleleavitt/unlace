@@ -859,8 +859,13 @@ At an `objc_msgSend$<sel>` stub, which loads the selector into `x1` itself, the
 caller's stale `x1` became an argument and the gap filling dropped the fixed
 format in `x2`. Apple passes no variadic argument in a register, so every
 fixed-position trial is kept and every other register trial is dropped; the
-stack tail is left as scored. `tests/stages/kuna-darwinvarargs.xml` pins both
-targets.
+stack tail is left as scored. The runtime's send entry points themselves
+(`objc_msgSend`, `objc_msgSendSuper`, `objc_msgSendSuper2`) are declared `...`
+but are no C variadics: past the receiver and selector they carry the method's
+arguments in registers exactly as the method takes them, so a call to one keeps
+its register trials (`[super greet:x]` passes `x` in `w2`).
+`tests/stages/kuna-darwinvarargs.xml` pins both targets, and
+`tests/stages/kuna-objcrefs.xml` the super send.
 
 The same two rules are also what `ActionInputPrototype` runs the function's
 **own** input Varnodes through, and there the premise behind step 4 does not

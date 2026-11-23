@@ -22,8 +22,9 @@
     calls shown they carry their argument and result.
 
     Pass 1 (default, `objcarc on`): the three methods are the work alone -
-    `v1 = objc_msgSend(arg1,sel_count); v2 = objc_msgSend(arg1,sel_inner);
-    return objc_msgSend(v2,sel_count) + v1;`, `self->slot = (Base *)arg1;`.
+    `v1 = objc_msgSend(arg1,sel_count); v2 = (void *)objc_msgSend(arg1,sel_inner);
+    return objc_msgSend(v2,sel_count) + v1;`, `self->slot = (Base *)arg1;`;
+    `v2` is cast to the `void *` receiver `objc_msgSend` is declared with.
     Pass 2 (`objcarc off`): the calls are shown, typed -
     `obj = objc_retainAutoreleasedReturnValue((objc_object *)objc_msgSend(arg1,sel_inner));`.
 -->
@@ -57,7 +58,7 @@ c0035fd6
   <com>quit</com>
 </script>
 <stringmatch name="OBJCARC #1: default hides the retain of the argument" min="1" max="1">objc_retain\(arg1\);</stringmatch>
-<stringmatch name="OBJCARC #2: default keeps the autoreleased return value as the message's result" min="1" max="1">v2 = objc_msgSend\(arg1,sel_inner\);</stringmatch>
+<stringmatch name="OBJCARC #2: default keeps the autoreleased return value as the message's result" min="1" max="1">v2 = \(void \*\)objc_msgSend\(arg1,sel_inner\);</stringmatch>
 <stringmatch name="OBJCARC #3: default drops every release (two in total:, one in make)" min="2" max="2">objc_release\(</stringmatch>
 <stringmatch name="OBJCARC #4: the ivar store is an assignment (storeStrong inlined by -O2, retain/release hidden)" min="1" max="1">self->slot = \(Base \*\)arg1;</stringmatch>
 <stringmatch name="OBJCARC #5: the autorelease-return pass-through is the returned value (a Base * handed back as the id the method declares)" min="1" max="1">return \(objc_object \*\)v1; // tail-call</stringmatch>

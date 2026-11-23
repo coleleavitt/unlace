@@ -32,7 +32,8 @@
     `macho_swift_classnames_fieldmd_arm64` adds a `__swift5_fieldmd` section
     with no record for these classes. Pass 3 (default) runs the Swift pass on
     it, which owns a Swift class's layout and has none to give, so the record
-    stays declared only. Pass 4 (`option sourcelang c`, set before the
+    stays declared only; the engine pointer, passed only as `objc_msgSend`'s
+    `void *` receiver, reads `((void **)self)[1]`. Pass 4 (`option sourcelang c`, set before the
     `load file`) runs no Swift pass, so the ivar list builds the struct under
     the demangled name.
 -->
@@ -71,5 +72,5 @@ c0035fd6
 <stringmatch name="swiftdemangle: the quoted-class ivar pointer names the demangled class" min="2" max="2">main\.Engine \*v2;</stringmatch>
 <stringmatch name="every pass with a layout: the ivars fold through the struct (inherited, pointer, own)" min="2" max="2">v1 = \(self->super\)\.wheels;</stringmatch>
 <stringmatch name="every pass with a layout: the engine pointer reads as a field" min="2" max="2">v2 = self->engine;</stringmatch>
-<stringmatch name="Swift image: the layout is left to the Swift pass, which has none for the class" min="1" max="1">v2 = \(\(unsigned long \*\)self\)\[1\];</stringmatch>
+<stringmatch name="Swift image: the layout is left to the Swift pass, which has none for the class" min="1" max="1">v2 = \(\(void \*\*\)self\)\[1\];</stringmatch>
 </decompilertest>

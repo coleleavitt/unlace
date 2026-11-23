@@ -458,7 +458,7 @@ generated catalog ([docs/options.md](../options.md)); the rows are defined in
 `decompiler/crates/unlace-decomp/phases.toml` and the intentional
 default-divergences are DIV-3/4/13/14 in `docs/history.md`.
 
-> Scope note: `decompiler/crates/unlace-decomp/src/p2_lift/funcdata_resolveflow.rs
+> Scope note: `decompiler/crates/unlace-decomp/src/p5_types/funcdata_resolveflow.rs
 > (Funcdata::resolve_in_flow)` is, despite its name, the union-field
 > `resolveInFlow`/`resolveTruncation` dispatch — type-recovery machinery
 > described in chapter [05 — Types](05-types.md). It lives in this folder only
@@ -1257,7 +1257,7 @@ per site: `override_flow` refuses `branch` on a computed jump, so the only
 switch is the option value.
 
 **(kuna) Tail calls through a GOT slot — part of `tailcalljump` (GH-904),
-`decompiler/crates/unlace-decomp/src/p2_lift/kuna_gottailcall.rs`.**
+`decompiler/crates/unlace-decomp/src/p4_calls/kuna_gottailcall.rs`.**
 A position-independent tail call loads its target from a GOT slot and jumps
 through it: MIPS `lw $t9,%call16(f)($gp); jr $t9`, x86-64 `-fno-plt`
 `jmp *f@GOTPCREL(%rip)`. Jump-table recovery reads the slot, so it is the

@@ -387,7 +387,7 @@ propagating through an opcode with no sound transfer is how type garbage
 spreads. A `TYPE_BOOL` additionally refuses to land on any Varnode whose
 non-zero mask (§5.3) admits values above 1. When the incoming type is a union
 (or pointer-to-union), the edge first resolves a concrete facet via
-`decompiler/crates/unlace-decomp/src/p2_lift/funcdata_resolveflow.rs
+`decompiler/crates/unlace-decomp/src/p5_types/funcdata_resolveflow.rs
 (Funcdata::resolve_in_flow)` (§5.4) — except across MULTIEQUAL/INDIRECT
 markers, where the unresolved union flows on so one phi input cannot lock the
 facet for all of them.
@@ -3787,7 +3787,7 @@ cached per function in the `union_map`
 Resolution triggers wherever a `needs_resolution` type crosses an edge: during
 propagation (§5.2), during cast planning, and in the printer's facing-type
 lookups. The dispatch is
-`decompiler/crates/unlace-decomp/src/p2_lift/funcdata_resolveflow.rs
+`decompiler/crates/unlace-decomp/src/p5_types/funcdata_resolveflow.rs
 (Funcdata::resolve_in_flow)`; its decision rule for the simple case, in order:
 (1) the per-edge cache; (2) an operator-asserted facet — a `map unionfacet`
 DynamicHash symbol, consulted through

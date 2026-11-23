@@ -26,7 +26,7 @@
 
 use std::collections::HashMap;
 
-use crate::decompile_drive::VarInfo;
+use crate::kuna_funcreport::VarInfo;
 use crate::kuna_slotreport::DeclaredSlots;
 
 /// Replace each row of `out` listed in `candidates` (width-only frame rows)

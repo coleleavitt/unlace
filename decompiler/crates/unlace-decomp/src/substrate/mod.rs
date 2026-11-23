@@ -18,6 +18,7 @@ pub(crate) mod kuna_budget;
 pub(crate) mod kuna_checkedarena;
 pub mod kuna_fnmemory;
 pub mod kuna_hostmem;
+pub mod kuna_optionset;
 pub mod op;
 pub mod transform;
 pub mod varnode;

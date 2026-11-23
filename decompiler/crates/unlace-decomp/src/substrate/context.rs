@@ -715,6 +715,8 @@ mod tests;
 /// queries can use the remote scope. [`ArchHandle`] shares this context between
 /// the function and its analysis passes.
 pub struct ArchContext {
+    /// The registered kuna options, copied from the engine.
+    pub kuna_options: crate::kuna_optionset::OptionSet,
     pub x87_empty_storage: Option<crate::p4_calls::kuna_x87emptyreturn::Storage>,
     /// (kuna `x87depth`) Prove ST0 empty at returns from the x87 stack depth.
     pub x87_depth: bool,
@@ -1801,6 +1803,7 @@ impl ArchContext {
             call_mechanism_reload_only: false,
             manage,
             min_laned_register_size: 4,
+            kuna_options: crate::kuna_optionset::OptionSet::new(),
             x87_empty_storage: None,
             x87_depth: false,
             vararg_regs: None,

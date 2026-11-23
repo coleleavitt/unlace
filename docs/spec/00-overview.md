@@ -4003,8 +4003,8 @@ decompilation parity, which remains covered by the output regression suites.
 
 **Embedder hooks** (kuna). Code that links `kuna-decomp` can extend the default
 tree without replacing it, through a registry on the `Architecture`
-(`decompiler/crates/kuna-decomp/src/infra/kuna_hooks.rs (HookRegistry)`,
-reached by `decompiler/crates/kuna-decomp/src/infra/architecture.rs
+(`decompiler/crates/unlace-decomp/src/infra/kuna_hooks.rs (HookRegistry)`,
+reached by `decompiler/crates/unlace-decomp/src/infra/architecture.rs
 (Architecture::add_rule, Architecture::on_phase)`). There is no option and no
 CLI surface for it. `add_rule(after_group, state, rule)` puts a rule directly
 behind the last rule of `after_group`, in the first pool in schedule order

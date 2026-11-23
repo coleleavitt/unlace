@@ -1038,7 +1038,7 @@ both routes provably rejoin at `S`. *Bounds/failure:* exactly one tail block
 in `return` (that is `gotoreduce`'s case) and anything whose
 convergence cannot be proven. Flipped on by DIV-14.
 
-**Past one block** (`decompiler/crates/kuna-decomp/src/p8_structure/kuna_crossjumptail.rs
+**Past one block** (`decompiler/crates/unlace-decomp/src/p8_structure/kuna_crossjumptail.rs
 (ActionCrossJumpTail)`). Cross-jumping also shares runs of several
 statements, `if`s and calls, reached from inside nested arms or from deep in
 a loop body. After `gotosink`, a goto `G` to the leaf `L` that starts a run

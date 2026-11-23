@@ -9,10 +9,10 @@
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 10 }
 
-# The parity gates (crates/unlace-cli/tests/parity.rs) each run a whole corpus through
-# `unlace test --datatests`; the ci profile keeps them, so give them room.
+# The parity gates (crates/unlace-harness/tests/parity.rs) each run a whole corpus through
+# the datatest runner; the ci profile keeps them, so give them room.
 [[profile.default.overrides]]
-filter = 'binary_id(unlace-cli::parity)'
+filter = 'binary_id(unlace-harness::parity)'
 slow-timeout = { period = "300s", terminate-after = 4 }
 
 [profile.ci]

@@ -86,7 +86,7 @@ compares the two designs.
 
 [docs/dev-setup.md](docs/dev-setup.md) has the build recipe, the local gates and the git hooks;
 [CLAUDE.md](CLAUDE.md) has the rules agents follow in this repo. Before a commit:
-`cargo fmt --all --check`, `cargo test -p unlace-cli --test parity` (the datatest and stage
+`cargo fmt --all --check`, `cargo test -p unlace-harness --test parity` (the datatest and stage
 corpora against their baselines) and `python3 tools/check_spec.py`.
 
 ## License

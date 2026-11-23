@@ -60,5 +60,5 @@ positive control. The second file repeats the checks with explicit char-array
 symbols, whose flags otherwise conceal the writable bytes:
 
 ```sh
-unlace test --datatests --datatests-dir tests/cli/fixtures/variadic-secondary-reader
+target/debug/decomp_test_dbg -sleighpath specs -path tests/cli/fixtures/variadic-secondary-reader datatests
 ```

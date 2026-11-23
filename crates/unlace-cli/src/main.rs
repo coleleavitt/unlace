@@ -37,14 +37,12 @@ mod rust_signatures;
 mod skill;
 mod specs;
 mod strings;
-mod test;
 mod unpack;
 mod xrefs;
 
 use std::process::ExitCode;
 
 use crate::args::take_value;
-use test::{Mode, TestArgs};
 
 type CommandHandler = fn(&[String]) -> i32;
 
@@ -64,7 +62,6 @@ const COMMANDS: &[(&str, CommandHandler)] = &[
     ("unpack", unpack::run),
     ("docs", docs::run),
     ("install-skill", |args| args::report(skill::run(args))),
-    ("test", |args| args::report(cmd_test(args))),
     ("catalog", |args| args::report(cmd_catalog(args))),
     ("modes", cmd_modes),
     ("specs", specs::run),
@@ -178,7 +175,6 @@ fn usage() {
          unlace read <binary> [--isa auto|arm|thumb] <name|0xaddr|0xstart-0xend> [--addr] [--bytes N] [--count N] [--json]   # the hexdump view of the same target\n\
          unlace docs [<topic>] [--json] [--all]\n\
          unlace install-skill [--agent claude|codex|opencode|all] [--project | --dir DIR] [--force] [--print]\n\
-         unlace test [--all|--unittests|--datatests] [--name N]... [--baseline F] [--save-baseline F] [--json]\n\
          unlace catalog [--json|--markdown|--check] [--option NAME] [--tier transform|analysis|core]\n\
          unlace modes [--json]\n\
          unlace specs [-a <dir>] [<slaspec>...] [--diff]\n\
@@ -204,101 +200,6 @@ fn apply_engine(engine: Option<&str>) {
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("KUNA_ENGINE", e) };
     }
-}
-
-// --- test --------------------------------------------------------------------
-
-fn cmd_test(argv: &[String]) -> Result<i32, String> {
-    let mut mode = Mode::All;
-    let mut names: Vec<String> = Vec::new();
-    let mut binary: Option<String> = None;
-    let mut engine: Option<String> = None;
-    let mut sleighpath: Option<String> = None;
-    let mut datatests_dir: Option<String> = None;
-    let mut baseline: Option<String> = None;
-    let mut save_baseline: Option<String> = None;
-    let mut json = false;
-
-    let mut i = 0;
-    while i < argv.len() {
-        let a = argv[i].as_str();
-        match a {
-            "--all" => {
-                mode = Mode::All;
-            }
-            "--unittests" => {
-                mode = Mode::Unittests;
-            }
-            "--datatests" => {
-                mode = Mode::Datatests;
-            }
-            "--name" => {
-                names.push(take_value(argv, &mut i, "--name")?);
-            }
-            "--binary" => binary = Some(take_value(argv, &mut i, "--binary")?),
-            "--engine" => engine = Some(take_value(argv, &mut i, "--engine")?),
-            "--sleighpath" => sleighpath = Some(take_value(argv, &mut i, "--sleighpath")?),
-            "--datatests-dir" => datatests_dir = Some(take_value(argv, &mut i, "--datatests-dir")?),
-            "--baseline" => baseline = Some(take_value(argv, &mut i, "--baseline")?),
-            "--save-baseline" => save_baseline = Some(take_value(argv, &mut i, "--save-baseline")?),
-            "--json" => json = true,
-            "-h" | "--help" => {
-                usage_test();
-                return Ok(0);
-            }
-            s if s.starts_with("--") => {
-                return Err(format!("unknown option {s}"));
-            }
-            other => {
-                return Err(format!("unexpected argument {other:?}"));
-            }
-        }
-        i += 1;
-    }
-
-    if !names.is_empty() && mode == Mode::All {
-        return Err("--name requires --unittests or --datatests".into());
-    }
-    apply_engine(engine.as_deref());
-
-    let targs = TestArgs {
-        mode,
-        names,
-        binary,
-        sleighpath,
-        datatests_dir,
-        baseline,
-        save_baseline,
-        json,
-    };
-    Ok(test::run_cmd(&targs))
-}
-
-fn usage_test() {
-    eprintln!(
-        "usage: unlace test [--all|--unittests|--datatests] [--name N].. [--json] \\\n\
-         \x20                [--datatests-dir D] [--baseline F] [--save-baseline F] \\\n\
-         \x20                [--binary B] [--sleighpath D]\n\
-         \n\
-         Run the parity gates.  Unit results are parsed off stderr and datatest\n\
-         results off stdout, and the exit code is nonzero on any failure OR any\n\
-         regression against --baseline.  Default is --all.\n\
-         --name N (repeatable) narrows to named tests and requires --unittests or\n\
-         --datatests.  A name that matches no test, or a datatest corpus with no\n\
-         *.xml files, is a selection error: the tests that exist still run and are\n\
-         reported, the run exits 2, and --save-baseline writes nothing.\n\
-         \n\
-         --datatests-dir D selects the corpus: tests/datatests (the default) or\n\
-         tests/stages (the kuna-owned issue cases); crates/unlace-cli/tests/parity.rs\n\
-         runs both against docs/baseline.json and docs/baseline-stages.json.\n\
-         --baseline F compares against a recorded result; --save-baseline F re-records\n\
-         one.  Re-recording docs/baseline.json to absorb a regression is never\n\
-         sanctioned -- see CLAUDE.md.\n\
-         --json emits {{unit_footer,data_footer,passing,returncode,failures,selection}},\n\
-         plus parity with --baseline; selection is {{complete,errors,data,unit}}, where\n\
-         data is {{corpus,requested,matched,missing}} (file names) and unit is\n\
-         {{requested,matched,missing}}, each null when that half did not run."
-    );
 }
 
 // --- catalog -----------------------------------------------------------------

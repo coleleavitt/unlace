@@ -485,7 +485,7 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
   extension, install into a Ghidra 12.2 release (or `-Dghidra.external.modules=`
   in a dev checkout), enable the plugin, verify the spawned PID is `unlace_ghidra`
   and that the C, click-to-address, and rename round-trip behave.
-- **Regression floors**: the standing gates (`cargo test -p unlace-cli --test parity datatests`, `cargo test -p unlace-cli --test parity stage_tests`,
+- **Regression floors**: the standing gates (`cargo test -p unlace-harness --test parity datatests`, `cargo test -p unlace-harness --test parity stage_tests`,
   `cargo nextest run --workspace --exclude unlace-wasm --profile ci`, now plus the `gates`-job ghidra-sim step) must stay green —
   `unlace-ghidra` is additive and must not perturb the standalone engine.
 
@@ -505,7 +505,7 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
 **Phase 2 — engine bridge (first real C in the GUI). DONE** (PR #135, branch
 `feat/ghidra-mode-phase2`). Full plan + risk assessment + sequencing: the retired
 `docs/rust-port/ghidra-phase2-plan.md` (git history). Each step landed as its own commit
-keeping `cargo test -p unlace-cli --test parity datatests` at 675/675 PARITY OK. One design refinement vs the plan: the
+keeping `cargo test -p unlace-harness --test parity datatests` at 675/675 PARITY OK. One design refinement vs the plan: the
 translator seam is a `Box<dyn EngineTranslate>` **trait**, not an enum — an enum
 variant naming `unlace-ghidra`'s `GhidraTranslate` would be a `unlace-decomp`↔`unlace-ghidra`
 dependency cycle; a trait object owned in `unlace-decomp` is not.

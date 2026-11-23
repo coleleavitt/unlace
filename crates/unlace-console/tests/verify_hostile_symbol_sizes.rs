@@ -34,7 +34,7 @@
 //!
 //! Both parity corpora are symbol-less bytechunks with hand-written `<symbol>`
 //! elements and never construct an `ObjectLoadImage`, so a `.symtab`-gated defect
-//! is invisible to `cargo test -p unlace-cli --test parity datatests` and `cargo test -p unlace-cli --test parity stage_tests` in both directions. The
+//! is invisible to `cargo test -p unlace-harness --test parity datatests` and `cargo test -p unlace-harness --test parity stage_tests` in both directions. The
 //! whole coverage burden is here.
 
 use std::path::PathBuf;

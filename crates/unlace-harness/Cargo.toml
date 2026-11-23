@@ -18,6 +18,7 @@ regex.workspace = true
 
 [dev-dependencies]
 unlace-slacomp.workspace = true
+serde_json = "1"
 
 [lints]
 workspace = true
@@ -30,6 +31,11 @@ workspace = true
 [[bin]]
 name = "decomp_test_dbg"
 path = "src/bin/decomp_test_dbg.rs"
+
+# The datatest and stage-corpus parity gates (tests/parity.rs); UNLACE_BLESS=1 re-records them.
+[[test]]
+name = "parity"
+path = "tests/parity.rs"
 
 [[test]]
 name = "integration"

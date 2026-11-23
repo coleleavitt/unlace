@@ -218,17 +218,17 @@ The artifact checklist (every item, or the gates fail opaquely):
    stringmatch spans both passes' transcript — absent in pass 1 AND present in pass 2.
    Then re-record the stages baseline:
    ```bash
-   target/release/unlace test --datatests --datatests-dir tests/stages --save-baseline docs/baseline-stages.json
+   UNLACE_BLESS=1 cargo test -p unlace-harness --test parity stage_tests
    ```
 6. Regenerate the catalog doc: `target/release/unlace catalog --markdown > docs/options.md`.
 7. Update the owning `docs/spec/` chapter; `python3 tools/check_spec.py`.
 
 ## 4. Verify & ship
 
-**Ablation decides the default.** `unlace test` has no option flag — to measure the flip,
+**Ablation decides the default.** The parity gates take no option flag — to measure the flip,
 temporarily set the option's default to ON (its architecture reset path + the
-`phases.toml` row's `default =`), `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`, then run
-`unlace test --all --baseline docs/baseline.json`; revert the flip if the table below says
+`phases.toml` row's `default =`), then run
+`cargo test --release -p unlace-harness --test parity datatests`; revert the flip if the table below says
 opt-in:
 
 | Ablation (option ON) | Speed (`timeit`) | Ship as |
@@ -250,7 +250,7 @@ python3 -m scripts.pipeline.timeit --record docs/features/<slug>/record.json \
 ```
 
 **The four gates, all green, before commit**:
-`cargo test --release -p unlace-cli --test parity datatests` (**PARITY OK** 675/675) · `cargo test --release -p unlace-cli --test parity stage_tests` (**PARITY OK**) ·
+`cargo test --release -p unlace-harness --test parity datatests` (**PARITY OK** 675/675) · `cargo test --release -p unlace-harness --test parity stage_tests` (**PARITY OK**) ·
 `cargo nextest run --workspace --exclude unlace-wasm --profile ci` · `python3 tools/check_spec.py`. Plus `unlace catalog --check` → `catalog OK`.
 
 **The PR** carries the per-feature bundle `docs/features/<slug>/`:

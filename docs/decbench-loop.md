@@ -211,7 +211,7 @@ The rules that fall out, and that #255 then executed cleanly:
 - **Derive every shared counter from a fresh capture and a green run on the rebased tree,
   never by arithmetic.** "Base + mine + theirs" is how you get `86` when the answer is
   `87`. Re-capture `phase_catalog.json`, re-record `docs/baseline-stages.json`
-  (`unlace test --datatests --datatests-dir tests/stages --save-baseline …`), re-count the
+  (`UNLACE_BLESS=1 cargo test -p unlace-harness --test parity stage_tests`), re-count the
   corpus files, regenerate `docs/options.md`. #255 verified even the byte-identical
   outcomes rather than assuming them.
 - **Diff every keep-both resolution against `main` and assert you removed nothing *and*

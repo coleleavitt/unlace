@@ -24,9 +24,9 @@ complete and honest.
 - kuna python: `{{KUNA_PY}}`  (has the angr-driving pipeline deps, NO angr itself)
 - The pipeline is run from the repo root: `{{KUNA_PY}} -m scripts.pipeline.compare ...` (it
   shells out to the angr venv).
-- The Rust `unlace` CLI is `target/release/unlace` — use it for `unlace catalog ...`
-  and `unlace test ...`.
-- `KUNA_ROOT`, `KUNA_DECOMP_DBG`, `KUNA_DECOMP_TEST`, `KUNA_SPECS` point at THIS worktree's tree
+- The Rust `unlace` CLI is `target/release/unlace` — use it for `unlace catalog ...`.
+  The parity gates are `cargo test --release -p unlace-harness --test parity`.
+- `KUNA_ROOT`, `KUNA_DECOMP_DBG`, `KUNA_SPECS` point at THIS worktree's tree
   and binaries (each `.sla` is compiled from the worktree's `.slaspec` into the `.sla` cache on first use; nothing to build).
 - Build with `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli` (cargo; the first build of the worktree is slowest, then incremental).
 
@@ -45,7 +45,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
    Edits to the ported core files are allowed ONLY where an anchor demands it (registering the
    action/option, a flag on the architecture struct); keep them minimal, mark each with a
    `// (kuna)` comment.
-2. **Never modify `docs/baseline.json`.** The loop must keep `unlace test --all --baseline docs/baseline.json`
+2. **Never modify `docs/baseline.json`.** The loop must keep `cargo test --release -p unlace-harness --test parity datatests`
    at PARITY OK without re-pinning. (You DO regenerate `docs/baseline-stages.json` to add your new stage test.)
 3. **ElementId** in the 4000+ range — grep the existing `kuna_*.rs` sources and `phases.toml`
    for the highest id already used and pick the next free one.
@@ -124,7 +124,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   `options.rs`, and add the `settableTable` row (rule 4). Gate the action to early-return when the
   flag is off so default output is byte-identical.
 - **Bump the hard-coded catalog counts** (adding an option changes them in THREE places; missing one
-  fails `cargo nextest run --workspace --exclude unlace-wasm --profile ci`/`cargo test --release -p unlace-cli --test parity stage_tests` opaquely): the count asserts in
+  fails `cargo nextest run --workspace --exclude unlace-wasm --profile ci`/`cargo test --release -p unlace-harness --test parity stage_tests` opaquely): the count asserts in
   `src/p0_knowledge/kuna_phases/tests.rs`; the count asserts AND the `tests/fixtures/phase_catalog.json`
   fixture in `crates/unlace-decomp/tests/catalog_bytecompat.rs` (regenerate the fixture with the
   console recapture documented in that file's header); and the `tests/stages/kuna-catalog.xml` stringmatch
@@ -134,8 +134,8 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
 - `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`. Then write `tests/stages/ghangr-{{SLUG}}.xml`: for a feature, a two-pass `decompilertest` — pass 1 with
   `option {{SLUG}} off` asserting the *bug* (current kuna rendering), pass 2 at default asserting the *fix*
   (angr-like rendering); for a fix (rule 4), one pass asserting the fixed rendering and the absence of the bug. Use a self-contained bytechunk or the testcase binary's bytes; map/name neighbour symbols.
-- `cargo test --release -p unlace-cli --test parity stage_tests` must pass. Regenerate the stage baseline:
-  `unlace test --datatests --datatests-dir tests/stages --save-baseline docs/baseline-stages.json`.
+- `cargo test --release -p unlace-harness --test parity stage_tests` must pass. Regenerate the stage baseline:
+  `UNLACE_BLESS=1 cargo test --release -p unlace-harness --test parity stage_tests`.
 - **Measure speed (always — Hard rule 6).** With the feature working, time the target off vs on:
   `{{KUNA_PY}} -m scripts.pipeline.timeit --option {{SLUG}} --binary {{BINARY}} --selector {{SELECTOR}} --repeat 5`
   (add `--func-addr <addr>` if name selection is unreliable). Splice the printed JSON
@@ -144,7 +144,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   once it exists and the tool writes them for you.
 
 ### 5. ablation → default decision (gated by speed)
-- Run the full ablation: `unlace test --all --baseline docs/baseline.json`.
+- Run the full ablation: `cargo test --release -p unlace-harness --test parity datatests`.
 - **If 0/675 upstream assertions change with the feature default-ON _and_ the speed gate passes**
   (`speed_within_budget` true, i.e. `speed_delta_pct` ≤ the budget), flip the option default to ON (set the
   flag default in the architecture reset path, `shipped` in the `settableTable` row), say "On by default"
@@ -158,8 +158,8 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
 
 ### 6. gates (all must be green before committing)
 - `unlace catalog --check`  → "catalog OK"
-- `unlace test --all --baseline docs/baseline.json`  → PARITY OK
-- `cargo test --release -p unlace-cli --test parity stage_tests`  → all pass
+- `cargo test --release -p unlace-harness --test parity datatests`  → PARITY OK
+- `cargo test --release -p unlace-harness --test parity stage_tests`  → all pass
 - Regenerate `docs/options.md`: `unlace catalog --markdown > docs/options.md` (freshness-fenced by `cargo nextest run --workspace --exclude unlace-wasm --profile ci`)
 
 ### 7. docs + record

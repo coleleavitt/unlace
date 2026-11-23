@@ -1447,7 +1447,7 @@ benign PE is committed because this environment has no PE linker.
   default is recorded as DIV-40, the corrected fast inventory as DIV-41, and the
   single discovery policy shared by `list`/`decompile`/`project` as DIV-53, in
   `docs/history.md`.
-- The four gates (`cargo test -p unlace-cli --test parity datatests`, `cargo test -p unlace-cli --test parity stage_tests`, `cargo nextest run --workspace --exclude unlace-wasm --profile ci`,
+- The four gates (`cargo test -p unlace-harness --test parity datatests`, `cargo test -p unlace-harness --test parity stage_tests`, `cargo nextest run --workspace --exclude unlace-wasm --profile ci`,
   `python3 tools/check_spec.py`) remain mandatory. Native/WASI parity and browser-glue tests cover
   the additional frontend policy.
 - The Worker keeps mode resolution and every engine entrypoint in the Rust/WASI front-end:

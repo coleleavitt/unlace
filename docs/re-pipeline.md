@@ -256,7 +256,7 @@ Merges are **serialized** behind a `merge` lease. The sequence, after taking it:
 git fetch origin && git rebase origin/main          # rebase FIRST
 python3 -m scripts.repipe.counters --fix            # re-derive; never arithmetic
 python3 -m scripts.repipe.mergecheck --against origin/main
-cargo test --release -p unlace-cli --test parity datatests && cargo test --release -p unlace-cli --test parity stage_tests && cargo nextest run --workspace --exclude unlace-wasm --profile ci && python3 tools/check_spec.py
+cargo test --release -p unlace-harness --test parity datatests && cargo test --release -p unlace-harness --test parity stage_tests && cargo nextest run --workspace --exclude unlace-wasm --profile ci && python3 tools/check_spec.py
 target/release/unlace catalog --check
 python3 -m scripts.repipe.verify --need <id> --json  # acceptance must be PASS
 tools/pipeline/open_pr.sh --merge feat/re-<slug>

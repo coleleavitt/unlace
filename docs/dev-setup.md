@@ -56,7 +56,7 @@ cargo test -p <crate> --lib <filter>           # focused
 cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli   # dev profile
 ```
 
-Heavy runs (decompile-all over a corpus, `cargo test -p unlace-cli --test parity`) go through
+Heavy runs (decompile-all over a corpus, `cargo test -p unlace-harness --test parity`) go through
 `tools/hooks/unlace-slot <cmd>`, which holds one of `UNLACE_SLOTS` (default 6)
 machine-wide slots.
 
@@ -67,7 +67,7 @@ Each gate is one command, run from the repository root on dev binaries:
 ```bash
 cargo fmt --all --check                                  # rustfmt (2024 style, rustfmt.toml)
 cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
-cargo test -p unlace-cli --test parity                   # datatests + stages vs their baselines
+cargo test -p unlace-harness --test parity               # datatests + stages vs their baselines
 python3 tools/check_spec.py                              # docs/spec anchors, phase-folder ownership
 PYTHONPATH=. python3 -m unittest discover -s scripts/tests -p 'test_*.py'   # Python tooling, test layout, layering
 PYTHONPATH=. python3 -m scripts.repipe.clitests          # tests/cli acceptance probes
@@ -77,17 +77,16 @@ cargo clippy -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings
 cargo nextest run --workspace --exclude unlace-wasm --profile ci   # the workspace suite
 ```
 
-The parity target (`crates/unlace-cli/tests/parity.rs`) holds two tests:
+The parity target (`crates/unlace-harness/tests/parity.rs`) holds two tests:
 `datatests_match_the_baseline` runs `tests/datatests` against `docs/baseline.json` (PARITY OK,
 675/675 assertions) and `stage_tests_match_the_baseline` runs `tests/stages` against
-`docs/baseline-stages.json`. Each runs `unlace test --datatests`, the command a person runs,
-and passes only on its `PARITY OK`; on a failure the message carries the report with the
-regressed keys. Filter with a name (`cargo test -p unlace-cli --test parity datatests`). The
-harness binary `decomp_test_dbg` comes from `unlace-harness`, so build it first, as above;
-`cargo nextest run --workspace` builds it. A harness from other sources than the `unlace`
-under test fails the gate. Re-record a baseline only for a sanctioned change:
-`target/debug/unlace test --datatests --save-baseline docs/baseline.json` (stages:
-`--datatests-dir tests/stages --save-baseline docs/baseline-stages.json`).
+`docs/baseline-stages.json`. Each runs its corpus in-process through the harness's datatest
+runner and passes only on PARITY OK; on a failure the message lists the failing assertions,
+the file errors and the regressed keys. Filter with a name (`cargo test -p unlace-harness
+--test parity datatests`). The corpora need the compiled `.sla` files in `specs/`. Re-record a
+baseline only for a sanctioned change, with `UNLACE_BLESS=1` on the same command:
+`UNLACE_BLESS=1 cargo test -p unlace-harness --test parity datatests` (stages: `stage_tests`).
+It refuses while any assertion fails.
 
 Other one-liners: `cargo test --release -p unlace-ghidra -- --include-ignored` (the ghidra-mode
 differential harness with its heavier breadth test), `bash scripts/version.sh` (the version CI
@@ -121,7 +120,7 @@ called whole by the nightly). Its four jobs start together; none waits for anoth
 |---|---|---|
 | `tidy` | `cargo fmt --all --check`, the Python tooling tests (`scripts/check_test_layout.py`, `scripts/check_layers.py`, `scripts/tests`), actionlint with shellcheck over `.github/workflows` | about 1 min |
 | `clippy` | `cargo clippy --release ... -- -D warnings` on unlace-cli, unlace-base and unlace-num (the rest of the workspace is not clippy-clean yet) | about 2 min |
-| `parity gates` | release build, `cargo test --release -p unlace-cli --test parity`, `tools/check_spec.py`, the `tests/cli` probes, `unlace catalog --check`, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
+| `parity gates` | release build, `cargo test --release -p unlace-harness --test parity`, `tools/check_spec.py`, the `tests/cli` probes, `unlace catalog --check`, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
 | `workspace suite (build)` | builds every workspace test binary into a cargo-nextest archive (`cargo nextest archive`), runs the doc tests | about 12 min |
 | `cargo workspace suite (1/3..3/3)` | three jobs, each running a third of the archive (`--partition count:N/3`) under the nextest profile `ci` (`.config/nextest.toml`), which leaves out the slow tests listed there. Both suite jobs are skipped on a PR from a branch of this repository unless it has the `full-ci` label | a few min each |
 

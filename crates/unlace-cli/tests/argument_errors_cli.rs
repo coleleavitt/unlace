@@ -5,7 +5,7 @@ fn rejects_missing_value(prefix: &[&str], flag: &str) {
         .args(prefix)
         .arg(flag)
         .env(
-            "KUNA_DECOMP_TEST",
+            "KUNA_DECOMP_DBG",
             "/nonexistent/kuna-missing-argument-engine",
         )
         .output()
@@ -33,21 +33,6 @@ fn catalog_stops_at_a_missing_flag_value() {
         "--sleighpath",
     ] {
         rejects_missing_value(&["catalog"], flag);
-    }
-}
-
-#[test]
-fn test_runner_stops_before_resolving_an_engine() {
-    for flag in [
-        "--name",
-        "--binary",
-        "--engine",
-        "--sleighpath",
-        "--datatests-dir",
-        "--baseline",
-        "--save-baseline",
-    ] {
-        rejects_missing_value(&["test"], flag);
     }
 }
 
@@ -91,7 +76,7 @@ fn skill_installer_stops_at_a_missing_flag_value() {
 
 #[test]
 fn help_remains_a_successful_command() {
-    for command in ["catalog", "test", "decompile", "install-skill"] {
+    for command in ["catalog", "decompile", "install-skill"] {
         let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([command, "--help"])
             .output()

@@ -293,9 +293,7 @@ const DECODE_ENV: [&str; 6] = [
 /// A `unlace` invocation with this suite's environment hygiene, plus `env`.
 fn kuna_command(env: &[(&str, &str)]) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
-    cmd.env_remove("KUNA_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_TEST")
-        .env_remove("KUNA_SLACOMP");
+    cmd.env_remove("KUNA_DECOMP_DBG").env_remove("KUNA_SLACOMP");
     // A lane fault reports itself in one line; `RUST_BACKTRACE` deliberately
     // turns the runtime's panic block back on, so it must not reach a child
     // whose whole assertion is that the block is absent.
@@ -6394,7 +6392,6 @@ fn jobs_leaves_no_scratch_directory_behind() {
     let bin = fauxware();
     let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
         .args([
             "decompile-all",
@@ -6524,7 +6521,6 @@ fn killing_the_parent_takes_the_workers_and_the_scratch_dir_with_it() {
     let bin = hang_repro();
     let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("KUNA_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_TEST")
         .env_remove("KUNA_SLACOMP")
         .args([
             "decompile-all",

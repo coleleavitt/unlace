@@ -141,12 +141,6 @@ mod asserted_enum_layout;
 #[path = "assert_format_isolate.rs"]
 mod assert_format_isolate;
 
-#[path = "baseline_cli.rs"]
-mod baseline_cli;
-
-#[path = "test_selection_cli.rs"]
-mod test_selection_cli;
-
 #[path = "broken_pipe.rs"]
 mod broken_pipe;
 

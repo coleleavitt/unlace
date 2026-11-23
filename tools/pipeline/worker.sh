@@ -188,7 +188,6 @@ fi
 # --- 2. env: kuna tooling targets THIS worktree --
 export KUNA_ROOT="$WT"
 export KUNA_DECOMP_DBG="$WT/target/release/decomp_dbg"
-export KUNA_DECOMP_TEST="$WT/target/release/decomp_test_dbg"
 export KUNA_SPECS="$WT/specs"
 export SLEIGHHOME="$WT/specs"
 export KUNA_PIPELINE_ANGR_PYTHON="${KUNA_PIPELINE_ANGR_PYTHON:-$HOME/.virtualenvs/decbench/bin/python}"
@@ -416,7 +415,7 @@ print(w.get("phase") or "unknown")' 2>/dev/null || echo unknown)"
     if git -C "$WT" commit -q \
          -m "[AUTOMATED] WIP UNFINISHED, DO NOT MERGE: $SLUG stopped in phase $WT_PHASE" \
          -m "Crash-preservation snapshot written by tools/pipeline/worker.sh, not by the builder. The session ended before finishing: $NOTE" \
-         -m "NOTHING HERE IS VERIFIED. No build, no cargo test -p unlace-cli --test parity datatests / test-stages / rust-test / check-spec, no counters --fix, no mergecheck, no acceptance probe. Raw material for a resuming builder, never a reviewable change." \
+         -m "NOTHING HERE IS VERIFIED. No build, no cargo test -p unlace-harness --test parity datatests / test-stages / rust-test / check-spec, no counters --fix, no mergecheck, no acceptance probe. Raw material for a resuming builder, never a reviewable change." \
          >>"$LOG" 2>&1; then
       log "preserved uncommitted work as WIP commit $(git -C "$WT" rev-parse --short HEAD) on $BRANCH"
     else

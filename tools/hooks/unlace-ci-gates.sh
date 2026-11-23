@@ -100,8 +100,8 @@ if [ "$LEVEL" != fast ]; then
   step test-tools env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.excludesFile GIT_CONFIG_VALUE_0=/dev/null PYTHONPATH="$ROOT" python3 -m unittest discover -s scripts/tests -p 'test_*.py'
   step build build
   step lint lint
-  # tests/datatests and tests/stages vs their baselines (PARITY OK), through the build above.
-  step parity "${SLOT[@]}" cargo test -p unlace-cli --test parity
+  # tests/datatests and tests/stages vs their baselines (PARITY OK), run in-process.
+  step parity "${SLOT[@]}" cargo test -p unlace-harness --test parity
   step check-spec python3 tools/check_spec.py
   step test-cli "${SLOT[@]}" env PYTHONPATH="$ROOT" python3 -m scripts.repipe.clitests
   step catalog-check "$BIN/unlace" catalog --check

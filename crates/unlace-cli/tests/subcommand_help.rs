@@ -89,7 +89,7 @@ fn each_block_names_its_own_subcommand() {
 /// nor a compiled `.sla` — the state an agent meeting the tool is actually in.
 #[test]
 fn help_needs_no_binary_and_no_specs() {
-    for sub in ["decompile", "test", "catalog", "specs", "rust-signatures"] {
+    for sub in ["decompile", "catalog", "specs", "rust-signatures"] {
         let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([sub, "--help"])
             .env_remove("KUNA_SPECS")
@@ -121,17 +121,6 @@ fn the_repaired_blocks_document_their_flags() {
                 "--assert",
                 "--mode",
                 "--language",
-            ],
-        ),
-        (
-            "test",
-            &[
-                "--all",
-                "--unittests",
-                "--datatests",
-                "--baseline",
-                "--save-baseline",
-                "--name",
             ],
         ),
         (
@@ -171,7 +160,6 @@ fn every_json_surface_names_its_root_in_help() {
         ("crypto", "{binary,"),
         ("blobs", "{binary,"),
         ("unpack", "{binary,"),
-        ("test", "{unit_footer,"),
         ("modes", "{modes:["),
         ("docs", "[{topic,"),
         ("catalog", "[{option,"),
@@ -249,7 +237,7 @@ fn catalog_tier_filters_the_json_as_it_filters_the_table() {
 /// option is still exit 2, and `--help` is not a way to smuggle one past.
 #[test]
 fn an_unknown_option_is_still_a_usage_error() {
-    for sub in ["decompile", "test", "catalog"] {
+    for sub in ["decompile", "catalog"] {
         let out = run(&[sub, "--no-such-flag"]);
         assert_eq!(
             out.status.code(),
@@ -320,7 +308,7 @@ fn specs_diff_explains_independent_gates_without_running_a_compiler() {
         "informational",
         "pinned Ghidra",
         "--test compiler_parity",
-        "cargo test -p unlace-cli --test parity",
+        "cargo test -p unlace-harness --test parity",
         "separate",
         "docs/history.md",
         "crates/unlace-slacomp/tests/golden/README.md",

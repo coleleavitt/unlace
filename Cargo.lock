@@ -1142,6 +1142,7 @@ name = "unlace-harness"
 version = "0.1.0"
 dependencies = [
  "regex",
+ "serde_json",
  "unlace-base",
  "unlace-console",
  "unlace-decomp",

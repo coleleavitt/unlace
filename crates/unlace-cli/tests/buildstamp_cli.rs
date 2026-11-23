@@ -61,7 +61,6 @@ fn kuna(args: &[&str], envs: &[(&str, &Path)]) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args(args)
         .env_remove("KUNA_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_TEST")
         .env_remove(PARENT_ENV);
     for (k, v) in envs {
         cmd.env(k, v);
@@ -197,46 +196,4 @@ fn a_catalog_flag_is_named_as_the_binary_selector() {
     assert_eq!(out.status.code(), Some(0), "{stderr}");
     assert!(stderr.contains("chosen by --decomp-dbg"), "{stderr}");
     assert!(!stderr.contains("chosen by KUNA_DECOMP_DBG"), "{stderr}");
-}
-
-/// `decomp_test_dbg` reports unit tests on stderr, the stream the reply shares:
-/// the reply must be stripped before that grammar is parsed.
-#[test]
-fn a_decomp_test_dbg_from_another_build_is_named_and_its_results_still_parse() {
-    let child = stub(
-        "harness",
-        Some(OTHER_BUILD),
-        "printf 'testing : alpha ...\\n  passed.\\n1/1 tests passed.\\n' >&2\n",
-    );
-    let out = kuna(
-        &[
-            "test",
-            "--unittests",
-            "--json",
-            "--binary",
-            child.to_str().unwrap(),
-        ],
-        &[],
-    );
-    let (stdout, stderr) = (text(&out.stdout), text(&out.stderr));
-    let _ = std::fs::remove_file(&child);
-    assert_eq!(out.status.code(), Some(0), "{stderr}");
-    assert!(stdout.contains("\"unit:alpha\""), "{stdout}");
-    assert!(
-        !stdout.contains("warning") && !stdout.contains(REPLY),
-        "{stdout}"
-    );
-    let lines: Vec<&str> = stderr.lines().collect();
-    assert_eq!(lines.len(), 3, "{stderr}");
-    assert_eq!(
-        lines[0],
-        "warning: decomp_test_dbg is a different build from this unlace"
-    );
-    assert!(
-        lines[2].ends_with(&format!(
-            "{OTHER_BUILD} {}, chosen by --binary",
-            child.display()
-        )),
-        "{stderr}"
-    );
 }

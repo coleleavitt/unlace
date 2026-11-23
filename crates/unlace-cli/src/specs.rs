@@ -17,7 +17,7 @@ against pinned Ghidra outputs:
 
 The decompiler's behavioral parity gate is separate; it does not establish
 compiler output equality:
-  cargo test -p unlace-cli --test parity
+  cargo test -p unlace-harness --test parity
 
 The historical live C++ differential is not bundled. See docs/history.md and
 crates/unlace-slacomp/tests/golden/README.md for provenance.";

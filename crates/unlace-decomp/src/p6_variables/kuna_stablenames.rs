@@ -1038,6 +1038,8 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.stablenames_variable_groups = Some(variable_groups);
 }
 
+crate::kuna_arch_table!(PriorNames);
+
 #[cfg(test)]
 mod tests {
     use super::*;

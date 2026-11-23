@@ -66,7 +66,10 @@ pub(crate) fn commit(
                 Rc::new(vec![hint]),
             );
         }
-        prog.arch_mut().kuna_this_hints = hints;
+        prog.arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_inputhints::ThisHints>()
+            .0 = hints;
     }
 
     for (func, class) in &facts.allocs {

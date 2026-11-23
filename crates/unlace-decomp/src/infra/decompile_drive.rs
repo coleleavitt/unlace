@@ -716,7 +716,11 @@ impl FlowEnvironment for ArchFlowEnv {
             }
             named += 1;
         }
-        if !arch.kuna_this_hints.is_empty()
+        if !arch
+            .kuna_tables
+            .get::<crate::kuna_inputhints::ThisHints>()
+            .0
+            .is_empty()
             && let Some(method) = shared_method(
                 targets
                     .iter()
@@ -836,11 +840,19 @@ impl FlowEnvironment for ArchFlowEnv {
         op: crate::context::OpId,
     ) -> Option<(crate::context::OpId, crate::kuna_kernelbug::KernelBugSite)> {
         let arch = self.arch();
-        if arch.kernel_bug_sites.is_empty() {
+        if arch
+            .kuna_tables
+            .get::<crate::kuna_kernelbug::BugSites>()
+            .is_empty()
+        {
             return None;
         }
         let addr = fd.obank().get(op)?.get_addr().get_offset();
-        let site = crate::kuna_kernelbug::site_at(&arch.kernel_bug_sites, addr)?.clone();
+        let site = crate::kuna_kernelbug::site_at(
+            arch.kuna_tables.get::<crate::kuna_kernelbug::BugSites>(),
+            addr,
+        )?
+        .clone();
         let index = |name| {
             arch.userops
                 .get_op_by_name(name)
@@ -853,7 +865,13 @@ impl FlowEnvironment for ArchFlowEnv {
     }
 
     fn kernel_bug_trap_at(&self, addr: u64) -> bool {
-        crate::kuna_kernelbug::site_at(&self.arch().kernel_bug_sites, addr).is_some()
+        crate::kuna_kernelbug::site_at(
+            self.arch()
+                .kuna_tables
+                .get::<crate::kuna_kernelbug::BugSites>(),
+            addr,
+        )
+        .is_some()
     }
 
     fn is_tail_call_branch(&self, fd: &Funcdata, op: crate::context::OpId, dest: &Address) -> bool {
@@ -1430,7 +1448,11 @@ fn publish_flow(arch: &mut Architecture, mut data: Funcdata) -> KunaResult<Funcd
     // program-wide comment database.
     let func_addr = data.get_address().clone();
     if arch.kuna_drive_publishes() {
-        if !arch.ppc32_pic_imports.is_empty() {
+        if !arch
+            .kuna_tables
+            .get::<crate::kuna_ppc32piccalls::PicImports>()
+            .is_empty()
+        {
             crate::kuna_ppc32piccalls::clear_stale_warnings(&mut arch.commentdb, &func_addr);
         }
         if arch.mapped_flow_boundary_image {
@@ -2073,7 +2095,10 @@ fn recover_one_contract(
     let staged_dyn = std::mem::take(&mut arch.kuna_pending_dyn_recs);
     let staged_model = arch.kuna_pending_proto_model.take();
     let saved_record_names = arch.kuna_record_names;
-    let saved_prior_names = std::mem::take(&mut arch.kuna_prior_names);
+    let saved_prior_names = std::mem::take(
+        arch.kuna_tables
+            .get_mut::<crate::kuna_stablenames::PriorNames>(),
+    );
     let saved_format_sites = std::mem::take(&mut arch.format_override_callpoints);
     let saved_readonly = arch.readonlypropagate;
     let name = format!("sub_{:x}", entry.get_offset());
@@ -2120,7 +2145,9 @@ fn recover_one_contract(
     arch.kuna_pending_dyn_recs = staged_dyn;
     arch.kuna_pending_proto_model = staged_model;
     arch.kuna_record_names = saved_record_names;
-    arch.kuna_prior_names = saved_prior_names;
+    *arch
+        .kuna_tables
+        .get_mut::<crate::kuna_stablenames::PriorNames>() = saved_prior_names;
     arch.format_override_callpoints = saved_format_sites;
     arch.readonlypropagate = saved_readonly;
     result.ok().flatten()
@@ -2490,7 +2517,10 @@ fn decompile_func_full_with_objects_inner(
     let staged_name_recs = std::mem::take(&mut arch.kuna_pending_name_recs);
     let staged_dyn_recs = std::mem::take(&mut arch.kuna_pending_dyn_recs);
     let staged_proto_model = arch.kuna_pending_proto_model.take();
-    let prior_names = arch.kuna_prior_names.clone();
+    let prior_names = arch
+        .kuna_tables
+        .get::<crate::kuna_stablenames::PriorNames>()
+        .clone();
     let record_names = arch.kuna_record_names;
     // (kuna `elfmain`) The C runtime's declaration for this function when it is
     // an executable's own symbol-named `main` that no other stream declares.
@@ -2522,7 +2552,12 @@ fn decompile_func_full_with_objects_inner(
             _ => mapped_params.to_vec(),
         };
     let mapped_params = mapped_params.as_slice();
-    let input_hints = arch.loader_input_hints.get(&funcaddr).cloned();
+    let input_hints = arch
+        .kuna_tables
+        .get::<crate::kuna_inputhints::LoaderHints>()
+        .0
+        .get(&funcaddr)
+        .cloned();
     // (kuna `fid`) Is the prototype parked on this function a `.fid` record's?
     let fid_declared =
         pending_proto.is_none() && arch.fid_prototypes.contains(&funcaddr.get_offset());
@@ -2699,7 +2734,13 @@ fn decompile_func_full_with_objects_inner(
                     } else if mapped_params.is_empty() {
                         // (kuna `iokitclasses on`) A class member's `this`, typed without
                         // locking the signature it is the only known part of.
-                        fd.kuna_set_input_hints(arch.kuna_this_hints.get(&entry_addr).cloned());
+                        fd.kuna_set_input_hints(
+                            arch.kuna_tables
+                                .get::<crate::kuna_inputhints::ThisHints>()
+                                .0
+                                .get(&entry_addr)
+                                .cloned(),
+                        );
                     }
                 }
             }

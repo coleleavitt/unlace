@@ -141,3 +141,8 @@ impl crate::kuna_optionset::KunaOption for EspRom {
         Ok(crate::kuna_esprom::parse_esprom(value)?)
     }
 }
+
+/// (kuna `esprom`) The ESP chip the loaded image was built for; an
+/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+pub type ImageChip = Option<EspChip>;
+crate::kuna_arch_table!(ImageChip);

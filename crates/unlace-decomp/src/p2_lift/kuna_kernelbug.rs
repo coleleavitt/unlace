@@ -158,6 +158,11 @@ pub fn rewrite(
     Ok(())
 }
 
+/// (kuna `kernelbug`) The kernel BUG sites the loader found; an
+/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+pub type BugSites = Vec<KernelBugSite>;
+crate::kuna_arch_table!(BugSites);
+
 #[cfg(test)]
 #[path = "kuna_kernelbug/tests.rs"]
 mod tests;

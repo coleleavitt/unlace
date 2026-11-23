@@ -79,50 +79,44 @@ const CALL: u8 = 9;
 
 type Event = (usize, u32, u8, OpId);
 
-impl MemoryOps {
-    pub(crate) fn clear(&mut self) {
-        self.space = None;
-        self.loads.clear();
-        self.stores.clear();
-        self.returns.clear();
+/// Collect the space's loads, stores and returns into `memory`, once per space.
+fn collect(memory: &mut MemoryOps, fd: &Funcdata, space: i32) {
+    if memory.space == Some(space) {
+        return;
     }
-
-    fn collect(&mut self, fd: &Funcdata, space: i32) {
-        if self.space == Some(space) {
-            return;
-        }
-        self.space = Some(space);
-        self.loads.clear();
-        self.stores.clear();
-        self.returns = fd
-            .obank()
-            .iter_code(OpCode::CPUI_RETURN)
-            .filter(|&op| fd.obank().get(op).is_some_and(|o| !o.is_dead()))
-            .collect();
-        let manage = fd.get_arch().manage();
-        for (code, out) in [
-            (OpCode::CPUI_LOAD, &mut self.loads),
-            (OpCode::CPUI_STORE, &mut self.stores),
-        ] {
-            for op in fd.obank().iter_code(code) {
-                let Some(o) = fd.obank().get(op) else {
-                    continue;
-                };
-                if o.is_dead() || o.uses_spacebase_ptr() {
-                    continue;
-                }
-                let into = o
-                    .get_in(0)
-                    .and_then(|v| fd.vbank().get(v))
-                    .and_then(|v| manage.get_space(v.get_addr().get_offset() as i32))
-                    .is_some_and(|s| s.get_index() == space);
-                if into {
-                    out.push(op);
-                }
+    memory.space = Some(space);
+    memory.loads.clear();
+    memory.stores.clear();
+    memory.returns = fd
+        .obank()
+        .iter_code(OpCode::CPUI_RETURN)
+        .filter(|&op| fd.obank().get(op).is_some_and(|o| !o.is_dead()))
+        .collect();
+    let manage = fd.get_arch().manage();
+    for (code, out) in [
+        (OpCode::CPUI_LOAD, &mut memory.loads),
+        (OpCode::CPUI_STORE, &mut memory.stores),
+    ] {
+        for op in fd.obank().iter_code(code) {
+            let Some(o) = fd.obank().get(op) else {
+                continue;
+            };
+            if o.is_dead() || o.uses_spacebase_ptr() {
+                continue;
+            }
+            let into = o
+                .get_in(0)
+                .and_then(|v| fd.vbank().get(v))
+                .and_then(|v| manage.get_space(v.get_addr().get_offset() as i32))
+                .is_some_and(|s| s.get_index() == space);
+            if into {
+                out.push(op);
             }
         }
-        self.stores.extend(crate::kuna_memoryguard::memory_ops(fd));
     }
+    memory
+        .stores
+        .extend(crate::kuna_memoryguard::memory_ops(fd));
 }
 
 /// Does the range `addr` with properties `fl` take sparse call guards: it is
@@ -325,7 +319,7 @@ pub(crate) fn keep(
     full: &[OpId],
     partial: &[OpId],
 ) -> (FxHashSet<OpId>, FxHashSet<OpId>) {
-    memory.collect(fd, space);
+    collect(memory, fd, space);
     let mut events: Vec<Event> = Vec::with_capacity(
         calls.len() + read.len() + memory.loads.len() + memory.stores.len() + memory.returns.len(),
     );

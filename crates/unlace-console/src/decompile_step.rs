@@ -207,7 +207,11 @@ fn decompile_one_prefollowed_once(
     // callpoint wins, exactly as a hand-typed `override prototype` outranks a
     // discovered one below.
     let parked: Vec<ParkedFormatSite> = if formatstring_mode.statik() {
-        match arch.format_call_overrides.get(&entry.get_offset()) {
+        match arch
+            .kuna_tables
+            .get::<unlace_decomp::kuna_formatstring::ParkedSites>()
+            .get(&entry.get_offset())
+        {
             Some(sites) if entry.get_space().is_some() => sites
                 .iter()
                 .filter(|s| {

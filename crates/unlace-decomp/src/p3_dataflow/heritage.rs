@@ -7244,6 +7244,23 @@ pub struct LiveCalls {
     pub keep: crate::kuna_fasthash::FxHashSet<crate::context::OpId>,
 }
 
+impl LiveCalls {
+    /// Can a read of the range follow `call`?
+    pub fn needs(&self, call: crate::context::OpId) -> bool {
+        self.keep.contains(&call)
+    }
+}
+
+impl MemoryOps {
+    /// Forget the collected space; the next `kuna_persistcalls` query collects again.
+    pub fn clear(&mut self) {
+        self.space = None;
+        self.loads.clear();
+        self.stores.clear();
+        self.returns.clear();
+    }
+}
+
 /// The bytes `[lo, last]` each indexed STORE may write by its pointer's own
 /// bound (`kuna_storereach.rs (store_window)`), computed once per heritage pass.
 pub type StoreBounds = std::collections::HashMap<crate::context::OpId, Option<(u64, u64)>>;

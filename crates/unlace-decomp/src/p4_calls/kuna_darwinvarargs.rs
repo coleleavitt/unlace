@@ -82,7 +82,10 @@ const MAX_PROBE_INSTRUCTIONS: usize = 24;
 pub fn applies(arch: &Architecture) -> bool {
     arch.archid.starts_with("AARCH64:")
         && (arch.archid.contains("AppleSilicon")
-            || arch.format_vararg_abi == Some(VarargAbi::Nothing))
+            || arch
+                .kuna_tables
+                .get::<crate::kuna_formatstring::ImageVarargAbi>()
+                == Some(VarargAbi::Nothing))
 }
 
 /// Record, for every direct call in `data`, whether its callee runs Apple's

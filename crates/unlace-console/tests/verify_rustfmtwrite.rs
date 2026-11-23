@@ -147,7 +147,10 @@ fn layout_language_and_complete_method_identity_bound_recovery() {
                                     unlace_decomp::kuna_sourcelang::SourceLang::C,
                                 )))
                         }
-                        3 => arch.rust_string_writer_methods.clear(),
+                        3 => arch
+                            .kuna_tables
+                            .get_mut::<unlace_decomp::kuna_rustfmtwrite::WriterMethods>()
+                            .clear(),
                         index => {
                             let missing = [
                                 WriterMethod::DropString,
@@ -155,7 +158,8 @@ fn layout_language_and_complete_method_identity_bound_recovery() {
                                 WriterMethod::WriteChar,
                                 WriterMethod::WriteFmt,
                             ][index - 4];
-                            arch.rust_string_writer_methods
+                            arch.kuna_tables
+                                .get_mut::<unlace_decomp::kuna_rustfmtwrite::WriterMethods>()
                                 .retain(|_, method| *method != missing);
                         }
                     }

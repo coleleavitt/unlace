@@ -297,6 +297,8 @@ declare_hooks! {
     /// `kuna_globalcallranges::preserves`: does a completely decoded leaf callee leave the range alone?
     globalcallranges_preserves:
         fn(&mut crate::heritage::GlobalCallRanges, &Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
+    /// `kuna_inputhints`: did a pass give any method's `this` input hints?
+    inputhints_has_this_hints: fn(&crate::kuna_archstate::ArchTables) -> bool;
     /// `kuna_calleepurge`: forget the x86-32 callee walks (the host's facts changed).
     calleepurge_forget_walks: fn(&mut crate::kuna_archstate::ArchTables);
     /// `kuna_jumpassist`: compile the jump assists out of the loaded inject library.

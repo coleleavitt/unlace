@@ -5767,7 +5767,10 @@ pub(crate) fn bootstrap_mz_bytes(
                 &space,
                 &image,
             );
-            program.arch_mut().mz_dgroup =
+            *program
+                .arch_mut()
+                .kuna_tables
+                .get_mut::<unlace_decomp::kuna_mzdgroup::ImageDgroup>() =
                 startup.map(|startup| unlace_decomp::kuna_mzdgroup::MzDataSegment {
                     ds: startup.ds,
                     start: image.base,
@@ -5930,7 +5933,10 @@ pub(crate) fn bootstrap_esp_image(
     let litpool_const =
         unlace_decomp::kuna_litpoolconst::code_const_ranges(&program.sections(), &[]);
     program.arch_mut().litpool_const = Rc::new(litpool_const);
-    program.arch_mut().esp_image_chip = image.chip;
+    *program
+        .arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_esprom::ImageChip>() = image.chip;
     program.image_metadata = Some(metadata);
     Ok(program)
 }
@@ -6577,11 +6583,24 @@ pub(crate) fn bootstrap_object(
                     .then_some((address, formatter.primitive))
             })
             .collect();
-        sleigh.base_mut().unwrap().rust_integer_formatters = formatters;
+        *sleigh
+            .base_mut()
+            .unwrap()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>() = formatters;
         sleigh.base_mut().unwrap().rust_str_display_formatters = metadata.strings;
-        sleigh.base_mut().unwrap().rust_string_writer_methods = metadata.writers.methods;
+        *sleigh
+            .base_mut()
+            .unwrap()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_rustfmtwrite::WriterMethods>() =
+            metadata.writers.methods;
         sleigh.base_mut().unwrap().rust_fmt_write_relro = metadata.writers.relro;
-        sleigh.base_mut().unwrap().rust_io_writer_profiles = metadata.io_writers;
+        *sleigh
+            .base_mut()
+            .unwrap()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_rustfmtio::WriterProfiles>() = metadata.io_writers;
     }
     // (kuna `pebnames`) The same kind of one-bit image fact: is this a Windows
     // GUI/console PE, whose segment base holds a user-mode TEB?  `option pebnames
@@ -6628,7 +6647,11 @@ pub(crate) fn bootstrap_object(
         &sleigh.base().unwrap().archid,
         Some(image_family),
     );
-    sleigh.base_mut().unwrap().format_vararg_abi = Some(vararg_abi);
+    *sleigh
+        .base_mut()
+        .unwrap()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_formatstring::ImageVarargAbi>() = Some(vararg_abi);
 
     // Hand the loader to the engine (the C++ `loader` back-pointer the decode
     // reads on load_fill).
@@ -6823,7 +6846,9 @@ fn commit_input_hints(
     }
     for (entry, list) in hints {
         prog.arch_mut()
-            .loader_input_hints
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_inputhints::LoaderHints>()
+            .0
             .entry(entry)
             .or_insert_with(|| Rc::new(list));
     }
@@ -6862,7 +6887,10 @@ fn commit_analysis_output(
         out.entries.retain(|e| !cases.contains(e));
     }
     for slot in std::mem::take(&mut out.ppc32_pic_slots) {
-        prog.arch_mut().ppc32_pic_imports.insert(slot.address, slot);
+        prog.arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
+            .insert(slot.address, slot);
     }
     let cpp = std::mem::take(&mut out.cpp_dwarf);
     unlace_analysis::dwarf::merge_cpp_symbols(&mut out.symbols, cpp.symbols);
@@ -7631,7 +7659,10 @@ fn commit_analysis_output(
         let mut sites = out.kernel_bugs.clone();
         sites.sort_by_key(|s| s.addr);
         sites.dedup_by_key(|s| s.addr);
-        prog.arch_mut().kernel_bug_sites = sites;
+        *prog
+            .arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_kernelbug::BugSites>() = sites;
     }
 
     // (kuna `poolextents`) Park the ARM32 literal-pool extents the Listing's
@@ -7669,7 +7700,10 @@ fn commit_analysis_output(
             sites.sort_by_key(|s| s.callpoint);
             sites.dedup_by_key(|s| s.callpoint);
         }
-        prog.arch_mut().format_call_overrides = parked;
+        *prog
+            .arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_formatstring::ParkedSites>() = parked;
     }
 
     // (kuna) Park the prototypes a pass stated for single call instructions

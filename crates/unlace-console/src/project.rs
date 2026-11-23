@@ -919,7 +919,10 @@ pub fn decompile_pulled(
                             unlace_decomp::kuna_stackobjectasserts::specs(&fd).to_vec();
                         let carried_params =
                             crate::kuna_paramasserts::carried(&fd, &seed.mapped_params);
-                        prog.arch_mut().kuna_prior_names =
+                        *prog
+                            .arch_mut()
+                            .kuna_tables
+                            .get_mut::<unlace_decomp::kuna_stablenames::PriorNames>() =
                             unlace_decomp::kuna_stablenames::carry(&fd);
                         let second = crate::decompile_step::decompile_one(
                             prog.arch_mut(),
@@ -939,7 +942,11 @@ pub fn decompile_pulled(
                             &seed.proto_overrides,
                         )
                         .result;
-                        prog.arch_mut().kuna_prior_names = Default::default();
+                        *prog
+                            .arch_mut()
+                            .kuna_tables
+                            .get_mut::<unlace_decomp::kuna_stablenames::PriorNames>() =
+                            Default::default();
                         replayed = expected;
                         second
                     }

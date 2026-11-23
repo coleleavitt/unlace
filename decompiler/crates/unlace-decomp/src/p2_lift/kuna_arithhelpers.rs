@@ -40,12 +40,7 @@ use unlace_base::error::KunaResult;
 /// (`unlace_analysis::analyzers::callfixup`) skips them under `option arithhelpers off`.
 pub const FIXUP_PREFIX: &str = "kuna_arithhelper_";
 
-/// The helper calling convention of a language, or `None` when it has none here.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum HelperAbi {
-    X86,
-    Arm { big_endian: bool },
-}
+pub use crate::architecture::HelperAbi;
 
 const X86_REGISTERS: [&str; 5] = ["EAX", "EDX", "ECX", "EBX", "ESP"];
 const ARM_REGISTERS: [&str; 6] = ["r0", "r1", "r2", "r3", "lr", "cpsr"];
@@ -54,7 +49,7 @@ const ARM_REGISTERS: [&str; 6] = ["r0", "r1", "r2", "r3", "lr", "cpsr"];
 /// x86-64 language also resolves `EAX`..`ESP` as sub-registers, so the 4-byte
 /// code space is what excludes it.
 pub fn helper_abi(
-    resolve_register: impl Fn(&[u8]) -> bool,
+    resolve_register: &dyn Fn(&[u8]) -> bool,
     code_space_addr_size: i32,
     big_endian: bool,
 ) -> Option<HelperAbi> {
@@ -231,10 +226,10 @@ pub fn payload_xml(abi: HelperAbi) -> Vec<String> {
 }
 
 /// Parse each of [`payload_xml`]'s elements and hand it to `register`.
-pub fn decode_payloads<F>(abi: HelperAbi, mut register: F) -> KunaResult<()>
-where
-    F: FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
-{
+pub fn decode_payloads(
+    abi: HelperAbi,
+    register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
+) -> KunaResult<()> {
     use unlace_base::xml::DocumentStorage;
     for xml in payload_xml(abi) {
         let mut store = DocumentStorage::new();
@@ -242,6 +237,12 @@ where
         register(&root)?;
     }
     Ok(())
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.arithhelpers_decode_payloads = Some(decode_payloads);
+    hooks.arithhelpers_helper_abi = Some(helper_abi);
 }
 
 crate::kuna_flag!(

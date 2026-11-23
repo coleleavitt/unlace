@@ -214,6 +214,8 @@
 //! `docs/features/argclobber/` holds the six programs and the corpus
 //! measurement that bounds the rule.
 
+use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::ElementId;

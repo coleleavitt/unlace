@@ -1,5 +1,6 @@
 //! Declared pointer contracts at address uses, including escaped frame views.
 
+use crate::kuna_stackobjects::FuncdataStackobjectsExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;

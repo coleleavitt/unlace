@@ -3382,18 +3382,91 @@ struct ElemptrSlot {
 }
 crate::kuna_func_state!(ElemptrSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_elemptr` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataElemptrExt {
     /// (kuna `elemptr`) Set the globals and tables this function must not type.
-    pub fn kuna_set_elemptr_blocked(
+    fn kuna_set_elemptr_blocked(
+        &mut self,
+        blocked: Option<std::rc::Rc<std::collections::BTreeSet<crate::kuna_elemptr::Obj>>>,
+    );
+    /// (kuna `elemptr`) Set the element signs this function adopts: the ones
+    /// the batch decided for it, and the ones evidence has settled so far.
+    fn kuna_set_elemptr_adopt(
+        &mut self,
+        adopt: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
+        settled: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
+    );
+    /// (kuna `elemptr`) The element shape and sign (`true` signed) this
+    /// function reads `obj`'s elements at, when the batch decided it.
+    fn kuna_elemptr_adopted(&self, obj: crate::kuna_elemptr::Obj) -> Option<(String, bool)>;
+    /// (kuna `elemptr`) Is `obj` one this function must not type?
+    fn kuna_elemptr_blocked(&self, obj: crate::kuna_elemptr::Obj) -> bool;
+    /// (kuna `elemptr`) Set whether this function may type globals and tables.
+    fn kuna_set_elemptr_objects(&mut self, on: bool);
+    /// (kuna `elemptr`) May this function type globals and tables?
+    fn kuna_elemptr_objects(&self) -> bool;
+    /// (kuna `elemptr`) Record what the callee entered at `entry` stated.
+    fn kuna_set_elemptr_stated(
+        &mut self,
+        entry: &unlace_base::address::Address,
+        stated: std::rc::Rc<crate::kuna_elemptr::Stated>,
+    );
+    /// (kuna `elemptr`) What the callee entered at `entry` stated, if anything.
+    fn kuna_elemptr_stated(
+        &self,
+        entry: &unlace_base::address::Address,
+    ) -> Option<&crate::kuna_elemptr::Stated>;
+    /// (kuna `elemptr`) What this function's last type pass said about `obj`.
+    fn kuna_elemptr_verdict(
+        &self,
+        obj: crate::kuna_elemptr::Obj,
+    ) -> Option<crate::kuna_elemptr::GlobalVerdict>;
+    /// (kuna `elemptr`) Forget what the previous type pass said: the verdicts
+    /// and typed tables describe the pass whose types the function keeps.
+    fn kuna_elemptr_begin_pass(&self);
+    /// (kuna `elemptr`) This pass gave `vn` an element pointer.
+    fn kuna_elemptr_note_typed(&self, vn: crate::context::VarnodeId);
+    /// (kuna `elemptr`) Did this pass give `vn` an element pointer?
+    fn kuna_elemptr_typed(&self, vn: crate::context::VarnodeId) -> bool;
+    /// (kuna `elemptr`) Fold one walk's verdict about `obj` in.
+    fn kuna_elemptr_note(
+        &self,
+        obj: crate::kuna_elemptr::Obj,
+        verdict: crate::kuna_elemptr::GlobalVerdict,
+    );
+    /// (kuna `elemptr`) Note a constant address a walk typed as an element pointer.
+    fn kuna_elemptr_note_constant(&self, addr: u64);
+    /// (kuna `elemptr`) Did a walk type the constant address `addr`?
+    fn kuna_elemptr_typed_constant(&self, addr: u64) -> bool;
+    /// (kuna `elemptr`) What an earlier pass of this decompile did with the
+    /// parameter or call return `key`: `Some(false)` typed it, `Some(true)` it
+    /// is blocked.
+    fn kuna_elemptr_input(&self, key: crate::kuna_elemptr::InputKey) -> Option<bool>;
+    /// (kuna `elemptr`) A pass typed the parameter or call return `key`.
+    fn kuna_elemptr_note_input(&self, key: crate::kuna_elemptr::InputKey);
+    /// (kuna `elemptr`) A later pass found `key`, typed by an earlier one, to be
+    /// the index of another base: block it and ask for a restart.
+    fn kuna_elemptr_dispute_input(&self, key: crate::kuna_elemptr::InputKey);
+    /// (kuna `elemptr`) Was a candidate disputed since the last call?
+    fn kuna_elemptr_take_disputed(&self) -> bool;
+    /// (kuna `elemptr`) What this function's walks said about each global.
+    fn kuna_elemptr_verdicts(
+        &self,
+    ) -> std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict>;
+}
+
+impl FuncdataElemptrExt for crate::funcdata::Funcdata {
+    /// (kuna `elemptr`) Set the globals and tables this function must not type.
+    fn kuna_set_elemptr_blocked(
         &mut self,
         blocked: Option<std::rc::Rc<std::collections::BTreeSet<crate::kuna_elemptr::Obj>>>,
     ) {
         self.kuna_state_mut::<ElemptrSlot>().blocked = blocked;
     }
-
     /// (kuna `elemptr`) Set the element signs this function adopts: the ones
     /// the batch decided for it, and the ones evidence has settled so far.
-    pub fn kuna_set_elemptr_adopt(
+    fn kuna_set_elemptr_adopt(
         &mut self,
         adopt: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
         settled: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
@@ -3402,36 +3475,31 @@ impl crate::funcdata::Funcdata {
         slot.adopt = adopt;
         slot.settled = settled;
     }
-
     /// (kuna `elemptr`) The element shape and sign (`true` signed) this
     /// function reads `obj`'s elements at, when the batch decided it.
-    pub fn kuna_elemptr_adopted(&self, obj: crate::kuna_elemptr::Obj) -> Option<(String, bool)> {
+    fn kuna_elemptr_adopted(&self, obj: crate::kuna_elemptr::Obj) -> Option<(String, bool)> {
         let slot = self.kuna_state::<ElemptrSlot>();
         [&slot.adopt, &slot.settled]
             .into_iter()
             .find_map(|m| m.as_ref().and_then(|a| a.get(&obj).cloned()))
     }
-
     /// (kuna `elemptr`) Is `obj` one this function must not type?
-    pub fn kuna_elemptr_blocked(&self, obj: crate::kuna_elemptr::Obj) -> bool {
+    fn kuna_elemptr_blocked(&self, obj: crate::kuna_elemptr::Obj) -> bool {
         self.kuna_state::<ElemptrSlot>()
             .blocked
             .as_ref()
             .is_some_and(|b| b.contains(&obj))
     }
-
     /// (kuna `elemptr`) Set whether this function may type globals and tables.
-    pub fn kuna_set_elemptr_objects(&mut self, on: bool) {
+    fn kuna_set_elemptr_objects(&mut self, on: bool) {
         self.kuna_state_mut::<ElemptrSlot>().no_objects = !on;
     }
-
     /// (kuna `elemptr`) May this function type globals and tables?
-    pub fn kuna_elemptr_objects(&self) -> bool {
+    fn kuna_elemptr_objects(&self) -> bool {
         !self.kuna_state::<ElemptrSlot>().no_objects
     }
-
     /// (kuna `elemptr`) Record what the callee entered at `entry` stated.
-    pub fn kuna_set_elemptr_stated(
+    fn kuna_set_elemptr_stated(
         &mut self,
         entry: &unlace_base::address::Address,
         stated: std::rc::Rc<crate::kuna_elemptr::Stated>,
@@ -3442,9 +3510,8 @@ impl crate::funcdata::Funcdata {
                 .insert((sp.get_index(), entry.get_offset()), stated);
         }
     }
-
     /// (kuna `elemptr`) What the callee entered at `entry` stated, if anything.
-    pub fn kuna_elemptr_stated(
+    fn kuna_elemptr_stated(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::kuna_elemptr::Stated> {
@@ -3457,9 +3524,8 @@ impl crate::funcdata::Funcdata {
             .get(&(sp.get_index(), entry.get_offset()))
             .map(|r| r.as_ref())
     }
-
     /// (kuna `elemptr`) What this function's last type pass said about `obj`.
-    pub fn kuna_elemptr_verdict(
+    fn kuna_elemptr_verdict(
         &self,
         obj: crate::kuna_elemptr::Obj,
     ) -> Option<crate::kuna_elemptr::GlobalVerdict> {
@@ -3469,34 +3535,30 @@ impl crate::funcdata::Funcdata {
             .get(&obj)
             .cloned()
     }
-
     /// (kuna `elemptr`) Forget what the previous type pass said: the verdicts
     /// and typed tables describe the pass whose types the function keeps.
-    pub fn kuna_elemptr_begin_pass(&self) {
+    fn kuna_elemptr_begin_pass(&self) {
         let slot = self.kuna_state::<ElemptrSlot>();
         slot.verdicts.borrow_mut().clear();
         slot.constants.borrow_mut().clear();
         slot.typed.borrow_mut().clear();
     }
-
     /// (kuna `elemptr`) This pass gave `vn` an element pointer.
-    pub fn kuna_elemptr_note_typed(&self, vn: crate::context::VarnodeId) {
+    fn kuna_elemptr_note_typed(&self, vn: crate::context::VarnodeId) {
         self.kuna_state::<ElemptrSlot>()
             .typed
             .borrow_mut()
             .insert(vn);
     }
-
     /// (kuna `elemptr`) Did this pass give `vn` an element pointer?
-    pub fn kuna_elemptr_typed(&self, vn: crate::context::VarnodeId) -> bool {
+    fn kuna_elemptr_typed(&self, vn: crate::context::VarnodeId) -> bool {
         self.kuna_state::<ElemptrSlot>()
             .typed
             .borrow()
             .contains(&vn)
     }
-
     /// (kuna `elemptr`) Fold one walk's verdict about `obj` in.
-    pub fn kuna_elemptr_note(
+    fn kuna_elemptr_note(
         &self,
         obj: crate::kuna_elemptr::Obj,
         verdict: crate::kuna_elemptr::GlobalVerdict,
@@ -3508,58 +3570,51 @@ impl crate::funcdata::Funcdata {
         };
         m.insert(obj, merged);
     }
-
     /// (kuna `elemptr`) Note a constant address a walk typed as an element pointer.
-    pub fn kuna_elemptr_note_constant(&self, addr: u64) {
+    fn kuna_elemptr_note_constant(&self, addr: u64) {
         self.kuna_state::<ElemptrSlot>()
             .constants
             .borrow_mut()
             .insert(addr);
     }
-
     /// (kuna `elemptr`) Did a walk type the constant address `addr`?
-    pub fn kuna_elemptr_typed_constant(&self, addr: u64) -> bool {
+    fn kuna_elemptr_typed_constant(&self, addr: u64) -> bool {
         self.kuna_state::<ElemptrSlot>()
             .constants
             .borrow()
             .contains(&addr)
     }
-
     /// (kuna `elemptr`) What an earlier pass of this decompile did with the
     /// parameter or call return `key`: `Some(false)` typed it, `Some(true)` it
     /// is blocked.
-    pub fn kuna_elemptr_input(&self, key: crate::kuna_elemptr::InputKey) -> Option<bool> {
+    fn kuna_elemptr_input(&self, key: crate::kuna_elemptr::InputKey) -> Option<bool> {
         self.kuna_state::<ElemptrSlot>()
             .inputs
             .borrow()
             .get(&key)
             .copied()
     }
-
     /// (kuna `elemptr`) A pass typed the parameter or call return `key`.
-    pub fn kuna_elemptr_note_input(&self, key: crate::kuna_elemptr::InputKey) {
+    fn kuna_elemptr_note_input(&self, key: crate::kuna_elemptr::InputKey) {
         self.kuna_state::<ElemptrSlot>()
             .inputs
             .borrow_mut()
             .entry(key)
             .or_insert(false);
     }
-
     /// (kuna `elemptr`) A later pass found `key`, typed by an earlier one, to be
     /// the index of another base: block it and ask for a restart.
-    pub fn kuna_elemptr_dispute_input(&self, key: crate::kuna_elemptr::InputKey) {
+    fn kuna_elemptr_dispute_input(&self, key: crate::kuna_elemptr::InputKey) {
         let slot = self.kuna_state::<ElemptrSlot>();
         slot.inputs.borrow_mut().insert(key, true);
         slot.disputed.set(true);
     }
-
     /// (kuna `elemptr`) Was a candidate disputed since the last call?
-    pub fn kuna_elemptr_take_disputed(&self) -> bool {
+    fn kuna_elemptr_take_disputed(&self) -> bool {
         self.kuna_state::<ElemptrSlot>().disputed.replace(false)
     }
-
     /// (kuna `elemptr`) What this function's walks said about each global.
-    pub fn kuna_elemptr_verdicts(
+    fn kuna_elemptr_verdicts(
         &self,
     ) -> std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict>
     {

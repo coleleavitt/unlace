@@ -54,6 +54,8 @@
 //! function returns in another storage class ([`yield_to_own_value`]), keeps
 //! the strict reading in every mode.
 
+use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;

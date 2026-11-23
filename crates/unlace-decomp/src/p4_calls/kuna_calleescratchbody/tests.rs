@@ -7,6 +7,7 @@
 //! lives in `tests/stages/kuna-calleescratchbody.xml`.
 
 use super::*;
+use crate::kuna_rustabi::FuncdataRustabiExt;
 
 use std::rc::Rc;
 

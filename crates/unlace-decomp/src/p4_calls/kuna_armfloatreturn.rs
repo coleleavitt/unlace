@@ -1,4 +1,6 @@
 //! Preserve full VFP parameter/return storage when the ARM container states that ABI.
+use crate::kuna_passthrough::FuncdataPassthroughExt;
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 use crate::{
     context::VarnodeId,
     dtype::{type_class, type_metatype},

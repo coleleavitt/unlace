@@ -29,6 +29,7 @@
 //! get nothing.
 
 use crate::funcdata_facing::FuncdataFacingExt;
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 use std::rc::Rc;
 
 use unlace_base::types::{int4, uint4};

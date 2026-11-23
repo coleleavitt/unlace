@@ -19,6 +19,7 @@
 //! `op->getTime()` / `op->code()` / `op->numInput()` / `op->getIn()` /
 //! `op->isMarker()` exactly as the C++ does through the `PcodeOp *`.
 
+use crate::unionresolve::FuncdataUnionresolveExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;

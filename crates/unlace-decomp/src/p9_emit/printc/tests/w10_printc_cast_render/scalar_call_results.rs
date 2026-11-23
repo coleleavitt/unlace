@@ -1,6 +1,8 @@
 //! Calls retain the low result bytes of their emitted callee's wider integer.
 use super::*;
+use crate::kuna_callrettype::FuncdataCallrettypeExt;
 use crate::kuna_callrettype::StatedReturn;
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 
 fn call(
     source: Rc<Datatype>,

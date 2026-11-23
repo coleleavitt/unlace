@@ -37,6 +37,7 @@
 //! `float_held_as_bits`, and in a register the call only left behind through
 //! [`held_bits_token`].
 
+use crate::kuna_callrettype::FuncdataCallrettypeExt;
 use std::collections::HashSet;
 use std::rc::Rc;
 

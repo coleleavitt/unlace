@@ -19,6 +19,7 @@
 //! shared `Rc<AddrSpace>` and `VarnodeId` arena ids, and reaches the type
 //! factory through `glb.types()` (W6).  `uintb` is `u64` with wrapping ops.
 
+use crate::kuna_storereach::FuncdataStorereachExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;

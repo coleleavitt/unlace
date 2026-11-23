@@ -1,6 +1,7 @@
 //! One typed atomic addition whose new value is the entire Go return body.
 
 use crate::funcdata_facing::FuncdataFacingExt;
+use crate::kuna_atomicxadd::FuncdataAtomicxaddExt;
 use std::collections::HashSet;
 
 use crate::architecture::Architecture;

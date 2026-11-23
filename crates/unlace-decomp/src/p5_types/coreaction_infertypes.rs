@@ -42,6 +42,7 @@
 
 use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+use crate::kuna_elemptr::FuncdataElemptrExt;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};

@@ -62,6 +62,7 @@
 //! separate highs. Required merges and isolation use those exact identities.
 
 use std::rc::Rc;
+use unlace_decomp::prelude::FuncdataLibcnamesExt;
 
 use unlace_base::address::Address;
 use unlace_base::space::spacetype::{IPTR_CONSTANT, IPTR_INTERNAL, IPTR_JOIN, IPTR_SPACEBASE};

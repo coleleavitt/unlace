@@ -80,6 +80,7 @@ pub(crate) use crate::fspec::next_fspec_handle;
 pub use crate::funcdata_block::JtPipelineFn;
 pub use crate::funcdata_block::VisitStat;
 pub use crate::funcdata_block::VisitedMap;
+use crate::kuna_ppc32piccalls::FuncdataPpc32piccallsExt;
 use std::collections::BTreeMap;
 use unlace_base::address::{Address, SeqNum};
 use unlace_base::error::{KunaError, KunaResult};

@@ -71,6 +71,7 @@
 //! Inert unless both `calleearity` and `calleearitylive` are on: this completes
 //! that rule rather than adding a second one.
 
+use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
 use unlace_base::address::Address;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;

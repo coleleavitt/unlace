@@ -3252,16 +3252,26 @@ pub(crate) use evidence::{
 struct WideSlot(Option<crate::kuna_bejoin::WideView>);
 crate::kuna_func_state!(WideSlot, keep_across_clear: true);
 
-impl crate::funcdata::Funcdata {
+/// The `kuna_bejoin` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataBejoinExt {
     /// (kuna `bejoin evidence`) Hold the wide-return verdicts the driver took
     /// for this function and its callees.
-    pub fn kuna_set_wide(&mut self, wide: crate::kuna_bejoin::WideView) {
-        self.kuna_state_mut::<WideSlot>().0 = Some(wide);
-    }
-
+    fn kuna_set_wide(&mut self, wide: crate::kuna_bejoin::WideView);
     /// (kuna `bejoin evidence`) The wide-return verdicts and the model's pair,
     /// when the driver took them.
-    pub fn kuna_wide(&self) -> Option<&crate::kuna_bejoin::WideView> {
+    fn kuna_wide(&self) -> Option<&crate::kuna_bejoin::WideView>;
+}
+
+impl FuncdataBejoinExt for crate::funcdata::Funcdata {
+    /// (kuna `bejoin evidence`) Hold the wide-return verdicts the driver took
+    /// for this function and its callees.
+    fn kuna_set_wide(&mut self, wide: crate::kuna_bejoin::WideView) {
+        self.kuna_state_mut::<WideSlot>().0 = Some(wide);
+    }
+    /// (kuna `bejoin evidence`) The wide-return verdicts and the model's pair,
+    /// when the driver took them.
+    fn kuna_wide(&self) -> Option<&crate::kuna_bejoin::WideView> {
         self.kuna_state::<WideSlot>().0.as_ref()
     }
 }

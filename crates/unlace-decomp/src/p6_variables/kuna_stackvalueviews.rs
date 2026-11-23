@@ -1,6 +1,7 @@
 //! Coalesced register instances keep the scalar view of their shared frame symbol.
 
 use crate::funcdata_union::FuncdataUnionExt;
+use crate::kuna_stackviews::FuncdataStackviewsExt;
 use std::rc::Rc;
 
 use crate::dtype::{TypeFactory, type_metatype};

@@ -1,5 +1,6 @@
 use super::*;
 use crate::context::{ArchContext, TypeOp};
+use crate::kuna_atomicxadd::FuncdataAtomicxaddExt;
 use crate::kuna_sourcelang::SourceLang;
 use std::rc::Rc;
 use unlace_base::address::Address;

@@ -1,6 +1,8 @@
 //! Scalar VFP input recovery from typed reads and proven callee contracts.
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags};
+use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
+use crate::kuna_protoorder::FuncdataProtoorderExt;
 use crate::{
     context::VarnodeId,
     dtype::{Datatype, type_class, type_metatype},

@@ -469,23 +469,32 @@ pub(crate) fn clear_stale_warnings(db: &mut crate::architecture::CommentDatabase
 struct BindingsSlot(std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding>);
 crate::kuna_func_state!(BindingsSlot, keep_across_clear: false);
 
-impl crate::funcdata::Funcdata {
-    pub(crate) fn ppc32_pic_calls(
+/// The `kuna_ppc32piccalls` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// live in a lower crate.
+pub trait FuncdataPpc32piccallsExt {
+    fn ppc32_pic_calls(
+        &self,
+    ) -> &std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding>;
+    fn ppc32_pic_calls_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding>;
+    /// The caller-local PPC32 import calls this entry's flow applied.
+    fn ppc32_import_calls(&self) -> impl Iterator<Item = &crate::kuna_ppc32piccalls::CallBinding>;
+}
+
+impl FuncdataPpc32piccallsExt for crate::funcdata::Funcdata {
+    fn ppc32_pic_calls(
         &self,
     ) -> &std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding> {
         &self.kuna_state::<BindingsSlot>().0
     }
-
-    pub(crate) fn ppc32_pic_calls_mut(
+    fn ppc32_pic_calls_mut(
         &mut self,
     ) -> &mut std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding> {
         &mut self.kuna_state_mut::<BindingsSlot>().0
     }
-
     /// The caller-local PPC32 import calls this entry's flow applied.
-    pub fn ppc32_import_calls(
-        &self,
-    ) -> impl Iterator<Item = &crate::kuna_ppc32piccalls::CallBinding> {
+    fn ppc32_import_calls(&self) -> impl Iterator<Item = &crate::kuna_ppc32piccalls::CallBinding> {
         self.ppc32_pic_calls().values()
     }
 }

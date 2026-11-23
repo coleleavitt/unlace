@@ -99,6 +99,7 @@
 //! enumerates the full merge-group set in C++ schedule order for the W8 assembler.
 
 use crate::funcdata_merge::FuncdataMergeExt;
+use crate::kuna_stablenames::FuncdataStablenamesExt;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 

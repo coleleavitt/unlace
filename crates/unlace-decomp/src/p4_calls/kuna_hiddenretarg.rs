@@ -55,6 +55,7 @@
 //! (tricore's `a4`) or living on the stack (SPARC's `[sp+64]`) is left alone.
 //! Default-**on**; `off` restores the upstream scoring.
 
+use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;

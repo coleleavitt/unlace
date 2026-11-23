@@ -10,6 +10,7 @@
 //! [`KunaHookSlots::finish`] refuses a table with an empty slot, so the first
 //! `ArchContext` of a run checks that every hook is provided.
 
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -18,11 +19,12 @@ use unlace_base::types::{int4, uint4, uintb};
 
 use unlace_base::error::KunaResult;
 
-use crate::context::{OpId, VarnodeId};
+use crate::context::{BlockId, OpId, VarnodeId};
 use crate::database::SymbolEntry;
 use crate::dtype::Datatype;
+use crate::fspec::{FuncCallSpecs, ParamTrial};
 use crate::funcdata::Funcdata;
-use crate::varmap::AliasChecker;
+use crate::varmap::{AliasChecker, LinkEntryInfo};
 
 macro_rules! declare_hooks {
     ($($(#[$attr:meta])* $name:ident: $ty:ty;)*) => {
@@ -88,4 +90,60 @@ declare_hooks! {
     force_facing_type: fn(&mut Funcdata, Rc<Datatype>, int4, OpId, int4) -> KunaResult<()>;
     /// `Funcdata::inheritUnionField` (`funcdata_union`).
     inherit_union_field: fn(&mut Funcdata, &Datatype, OpId, int4, OpId, int4) -> int4;
+    /// `kuna_calleereginputs::reads_register`.
+    calleereginputs_reads_register: fn(&FuncCallSpecs, &Address, int4) -> bool;
+    /// `kuna_callresultuse::scores_trial`.
+    callresultuse_scores_trial: fn(&Funcdata, VarnodeId, OpId) -> bool;
+    /// `kuna_callresultuse::scoring_argument`.
+    callresultuse_scoring_argument: fn(&Funcdata, OpId, VarnodeId) -> bool;
+    /// `kuna_callresultuse::scoring_return`.
+    callresultuse_scoring_return: fn(&Funcdata, OpId, VarnodeId) -> bool;
+    /// `kuna_exclusivearguse::access_cannot_reach_call`.
+    exclusivearguse_access_cannot_reach_call: fn(&Funcdata, OpId, OpId, VarnodeId) -> bool;
+    /// `kuna_exclusivecallret::applies`.
+    exclusivecallret_applies: fn(&Funcdata, OpId, &ParamTrial) -> bool;
+    /// `kuna_exclusivecallret::skips_use`.
+    exclusivecallret_skips_use: fn(&Funcdata, OpId, OpId, VarnodeId, VarnodeId) -> bool;
+    /// `kuna_multiregargs::subpiece_drops_reached_piece`.
+    multiregargs_subpiece_drops_reached_piece: fn(&Funcdata, OpId, VarnodeId) -> bool;
+    /// `kuna_noreturnretuse::call_cannot_reach_return`.
+    noreturnretuse_call_cannot_reach_return: fn(&Funcdata, OpId, OpId) -> bool;
+    /// `kuna_sharedpush::declared_arm_shares`.
+    sharedpush_declared_arm_shares: fn(&Funcdata, OpId, OpId, VarnodeId, &ParamTrial) -> bool;
+    /// `kuna_spillargtrial::store_is_caller_save_spill`.
+    spillargtrial_store_is_caller_save_spill: fn(&Funcdata, OpId, VarnodeId) -> bool;
+    /// `kuna_stackparamviews::backing_for_address`.
+    stackparamviews_backing_for_address: fn(&Funcdata, &Address, i32) -> Option<LinkEntryInfo>;
+    /// `kuna_stackviews::enabled`.
+    stackviews_enabled: fn(&Funcdata) -> bool;
+    /// `kuna_syscallregs::is_error_flag`.
+    syscallregs_is_error_flag: fn(&Funcdata, OpId) -> bool;
+    /// `kuna_syscallregs::reads_as_argument`.
+    syscallregs_reads_as_argument: fn(&Funcdata, OpId, VarnodeId) -> bool;
+    /// `kuna_voidret::returned_use`.
+    voidret_returned_use: fn(&Funcdata, OpId, VarnodeId) -> bool;
+    /// `kuna_voidret::scoring_return`.
+    voidret_scoring_return: fn(&Funcdata, OpId) -> bool;
+    /// `kuna_zeroidiomuse::op_discards_operand`.
+    zeroidiomuse_op_discards_operand: fn(&Funcdata, OpId) -> bool;
+    /// `coreaction_infertypes::propagate_type_pub`.
+    coreaction_infertypes_propagate_type_pub: fn(&mut Funcdata, Rc<Datatype>, OpId, VarnodeId, VarnodeId, int4, int4) -> Option<Rc<Datatype>>;
+    /// `kuna_clonephiorder::order_global_phis`.
+    clonephiorder_order_global_phis: fn(&Funcdata, &mut [OpId]);
+    /// `kuna_indirectanchor::anchor_of`.
+    indirectanchor_anchor_of: fn(&Funcdata, OpId) -> Option<OpId>;
+    /// `kuna_indirectreturn::target_encoding`.
+    indirectreturn_target_encoding: fn(&Funcdata, OpId) -> Option<(i32, u64)>;
+    /// `kuna_loweredswitchexact::raw_install_keeps_values`.
+    loweredswitchexact_raw_install_keeps_values: fn(&Funcdata, BlockId, &[BlockId]) -> bool;
+    /// `kuna_orchain::shortcircuit_shared_targets`.
+    orchain_shortcircuit_shared_targets: fn(&Funcdata) -> BTreeSet<BlockId>;
+    /// `kuna_retsplitglobal::is_global_store`.
+    retsplitglobal_is_global_store: fn(bool, bool, bool, bool) -> bool;
+    /// `kuna_retsplitglobal::split_is_declined`.
+    retsplitglobal_split_is_declined: fn(bool, usize) -> bool;
+    /// `kuna_retsplitlimit::split_is_declined`.
+    retsplitlimit_split_is_declined: fn(Option<u64>, usize, usize) -> bool;
+    /// `kuna_rettriangle::is_triangle_join`.
+    rettriangle_is_triangle_join: fn(&Funcdata, BlockId) -> bool;
 }

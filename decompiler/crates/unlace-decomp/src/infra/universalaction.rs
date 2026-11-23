@@ -51,6 +51,28 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::kuna_calltransport::provide(&mut slots);
     crate::funcdata_facing::provide(&mut slots);
     crate::funcdata_union::provide(&mut slots);
+    crate::p4_calls::kuna_calleereginputs::provide(&mut slots);
+    crate::p4_calls::kuna_callresultuse::provide(&mut slots);
+    crate::p4_calls::kuna_exclusivearguse::provide(&mut slots);
+    crate::p4_calls::kuna_exclusivecallret::provide(&mut slots);
+    crate::p3_dataflow::kuna_multiregargs::provide(&mut slots);
+    crate::p4_calls::kuna_noreturnretuse::provide(&mut slots);
+    crate::p4_calls::kuna_sharedpush::provide(&mut slots);
+    crate::p4_calls::kuna_spillargtrial::provide(&mut slots);
+    crate::p6_variables::kuna_stackparamviews::provide(&mut slots);
+    crate::p6_variables::kuna_stackviews::provide(&mut slots);
+    crate::p2_lift::kuna_syscallregs::provide(&mut slots);
+    crate::p4_calls::kuna_voidret::provide(&mut slots);
+    crate::p4_calls::kuna_zeroidiomuse::provide(&mut slots);
+    crate::p5_types::coreaction_infertypes::provide(&mut slots);
+    crate::p8_structure::kuna_clonephiorder::provide(&mut slots);
+    crate::p3_dataflow::kuna_indirectanchor::provide(&mut slots);
+    crate::p2_lift::kuna_indirectreturn::provide(&mut slots);
+    crate::p2_lift::kuna_loweredswitchexact::provide(&mut slots);
+    crate::p8_structure::kuna_orchain::provide(&mut slots);
+    crate::p8_structure::kuna_retsplitglobal::provide(&mut slots);
+    crate::p8_structure::kuna_retsplitlimit::provide(&mut slots);
+    crate::p8_structure::kuna_rettriangle::provide(&mut slots);
     slots
         .finish()
         .unwrap_or_else(|missing| panic!("pass hooks with no provider: {}", missing.join(", ")))

@@ -21,25 +21,28 @@ const PAGE: u64 = 256;
 
 /// What the exception tables of one image say.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub(super) struct Landing {
+#[doc(hidden)]
+pub struct Landing {
     /// The landing pads, sorted.
-    pub(super) pads: Vec<u64>,
+    pub pads: Vec<u64>,
     /// The entries of the functions whose exception data does not decode,
     /// sorted.
-    pub(super) unknown: Vec<u64>,
+    pub unknown: Vec<u64>,
     /// The image has landing pads this reader cannot place.
-    pub(super) blind: bool,
+    pub blind: bool,
 }
 
 impl Landing {
     /// Does a landing pad start in `[lo, hi)`?
-    pub(super) fn pad_in(&self, lo: u64, hi: u64) -> bool {
+    #[doc(hidden)]
+    pub fn pad_in(&self, lo: u64, hi: u64) -> bool {
         any_in(&self.pads, lo, hi)
     }
 
     /// Does a function whose exception data does not decode start in
     /// `[lo, hi)`?
-    pub(super) fn unknown_in(&self, lo: u64, hi: u64) -> bool {
+    #[doc(hidden)]
+    pub fn unknown_in(&self, lo: u64, hi: u64) -> bool {
         any_in(&self.unknown, lo, hi)
     }
 }
@@ -402,7 +405,8 @@ fn exidx(
 /// section, `named` or `sjlj`) is blind when its tables do not parse, declare
 /// more call sites than the budget, are not there (no `.eh_frame` or
 /// `.ARM.exidx`), or it unwinds by `setjmp`.
-pub(super) fn read(
+#[doc(hidden)]
+pub fn read(
     sections: Option<&[(String, u64, u64)]>,
     named: bool,
     sjlj: bool,

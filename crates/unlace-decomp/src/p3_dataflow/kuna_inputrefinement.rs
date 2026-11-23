@@ -4,10 +4,8 @@ use unlace_base::types::int4;
 
 /// Kuna variant of upstream `Heritage::remove13Refinement`: preserve a 1+3 or
 /// 3+1 junction only when joining it would straddle a known input.
-pub(crate) fn coalesce(
-    refine: &mut [int4],
-    straddles_input: &mut dyn FnMut(usize, usize, usize) -> bool,
-) {
+#[doc(hidden)]
+pub fn coalesce(refine: &mut [int4], straddles_input: &mut dyn FnMut(usize, usize, usize) -> bool) {
     if refine.is_empty() {
         return;
     }
@@ -31,7 +29,8 @@ pub(crate) fn coalesce(
     }
 }
 
-pub(crate) fn span_straddles_join(
+#[doc(hidden)]
+pub fn span_straddles_join(
     span: (usize, usize),
     start: usize,
     junction: usize,

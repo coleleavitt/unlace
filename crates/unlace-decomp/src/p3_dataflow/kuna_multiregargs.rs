@@ -7,7 +7,8 @@ use unlace_base::space::{AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 use unlace_num::pcoderaw::VarnodeData;
 
-pub(super) fn input_partition(
+#[doc(hidden)]
+pub fn input_partition(
     proto: &FuncProto,
     manager: &AddrSpaceManager,
     addr: &Address,
@@ -93,7 +94,8 @@ pub(super) fn input_partition(
 
 /// Whether `op` truncates `vn`, a PIECE output that an `onlyOpUse` walk
 /// reached through exactly one input, to bytes outside that input.
-pub(crate) fn subpiece_drops_reached_piece(
+#[doc(hidden)]
+pub fn subpiece_drops_reached_piece(
     fd: &crate::funcdata::Funcdata,
     op: crate::context::OpId,
     vn: crate::context::VarnodeId,
@@ -162,7 +164,8 @@ mod tests {
         prototype_ranges(big, "register", &ranges)
     }
 
-    pub(super) fn prototype_ranges(
+    #[doc(hidden)]
+    pub fn prototype_ranges(
         big: bool,
         name: &str,
         ranges: &[(u64, int4)],

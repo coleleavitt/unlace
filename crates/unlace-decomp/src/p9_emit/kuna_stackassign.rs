@@ -8,7 +8,8 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct Assignment {
+#[doc(hidden)]
+pub struct Assignment {
     pub output: VarnodeId,
     pub operand: Option<VarnodeId>,
     pub raw_constant: bool,
@@ -19,7 +20,8 @@ pub(crate) struct Assignment {
     pub pointer_size: i32,
 }
 
-pub(crate) fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
+#[doc(hidden)]
+pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
     if !fd
         .get_arch()
         .kuna_options
@@ -252,7 +254,8 @@ fn scalar(datatype: &Datatype) -> bool {
 
 /// Follow implied representation-only wrappers to the original memory read.
 /// Numeric conversions and computations must still be evaluated as scalars.
-pub(super) fn loaded_bytes(fd: &Funcdata, mut input: VarnodeId) -> Option<(VarnodeId, OpId, i32)> {
+#[doc(hidden)]
+pub fn loaded_bytes(fd: &Funcdata, mut input: VarnodeId) -> Option<(VarnodeId, OpId, i32)> {
     let size = fd.vbank().get(input)?.get_size();
     for _ in 0..32 {
         let value = fd.vbank().get(input)?;
@@ -271,7 +274,8 @@ pub(super) fn loaded_bytes(fd: &Funcdata, mut input: VarnodeId) -> Option<(Varno
 }
 
 /// A LOAD can itself define the frame member after SSA coalescing.
-pub(super) fn load_pointer(fd: &Funcdata, definition: OpId) -> Option<(VarnodeId, OpId, i32)> {
+#[doc(hidden)]
+pub fn load_pointer(fd: &Funcdata, definition: OpId) -> Option<(VarnodeId, OpId, i32)> {
     let operation = fd.obank().get(definition)?;
     if operation.code() != OpCode::CPUI_LOAD || fd.vbank().get(operation.get_out()?)?.is_volatile()
     {
@@ -298,7 +302,8 @@ pub(super) fn load_pointer(fd: &Funcdata, definition: OpId) -> Option<(VarnodeId
 
 /// The memmove source operand: implied pointer CASTs are peeled, and the
 /// `unsigned char *` conversion is requested only for a non-pointer expression.
-pub(super) fn memmove_source(
+#[doc(hidden)]
+pub fn memmove_source(
     fd: &Funcdata,
     mut pointer: VarnodeId,
     mut reader: OpId,

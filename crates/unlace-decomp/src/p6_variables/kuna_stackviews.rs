@@ -25,13 +25,15 @@ use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 use crate::varmap::{MapState, SHARED_STORAGE};
 
 #[derive(Clone)]
-pub(crate) struct StorageView {
+#[doc(hidden)]
+pub struct StorageView {
     pub backing: Rc<Datatype>,
     pub offset: i32,
 }
 
 /// Reused narrow parameter slots require physical backing even in default mode.
-pub(crate) fn enabled(fd: &Funcdata) -> bool {
+#[doc(hidden)]
+pub fn enabled(fd: &Funcdata) -> bool {
     fd.get_arch()
         .kuna_options
         .get::<crate::kuna_coreoptions::StackViews>()
@@ -54,7 +56,8 @@ impl OptionStackViews {
     }
 }
 
-pub(crate) fn declared_view(fd: &Funcdata, call: OpId, slot: i32) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn declared_view(fd: &Funcdata, call: OpId, slot: i32) -> Option<Rc<Datatype>> {
     crate::kuna_stackuses::declared_view(fd, call, slot)
 }
 
@@ -801,7 +804,8 @@ pub fn access_type(
     )
 }
 
-pub(crate) fn scalar_piece(
+#[doc(hidden)]
+pub fn scalar_piece(
     factory: &dyn TypeFactory,
     ty: Rc<Datatype>,
     offset: i32,
@@ -830,7 +834,8 @@ fn contains(start: u64, size: i32, at: u64, width: i32) -> bool {
 
 /// Reinterpreting packed integer bytes as a pointer is not address provenance.
 /// Follow value copies to a literal or an actual address expression.
-pub(crate) fn pointer_origin(fd: &Funcdata, mut id: crate::context::VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn pointer_origin(fd: &Funcdata, mut id: crate::context::VarnodeId) -> bool {
     for _ in 0..32 {
         let Some(v) = fd.vbank().get(id) else {
             return false;

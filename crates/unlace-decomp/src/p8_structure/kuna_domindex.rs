@@ -7,12 +7,14 @@ use crate::kuna_regiongraph::{KunaIncrementalDominators, KunaNodeId, KunaRegionG
 
 const ABSENT: u32 = u32::MAX;
 
-pub(super) struct DominanceIndex {
+#[doc(hidden)]
+pub struct DominanceIndex {
     intervals: Vec<(u32, u32)>,
 }
 
 impl DominanceIndex {
-    pub(super) fn new(doms: &KunaIncrementalDominators, graph: &KunaRegionGraph) -> Self {
+    #[doc(hidden)]
+    pub fn new(doms: &KunaIncrementalDominators, graph: &KunaRegionGraph) -> Self {
         let mut nodes = Vec::new();
         graph.get_nodes(&mut nodes);
         let slots = nodes
@@ -53,7 +55,8 @@ impl DominanceIndex {
         Self { intervals }
     }
 
-    pub(super) fn dominates(&self, dominator: KunaNodeId, node: KunaNodeId) -> bool {
+    #[doc(hidden)]
+    pub fn dominates(&self, dominator: KunaNodeId, node: KunaNodeId) -> bool {
         if dominator == node {
             return true;
         }

@@ -85,7 +85,8 @@ pub const CUSTOM_DEFAULT: bool = false;
 pub const CUSTOM: [(&str, u8); 3] = [("EBX", 1), ("ESI", 2), ("EDI", 4)];
 
 /// The spec model a callee's register inputs select.
-pub(crate) fn model_name(inputs: u8) -> Option<&'static str> {
+#[doc(hidden)]
+pub fn model_name(inputs: u8) -> Option<&'static str> {
     if inputs & ECX == 0 || inputs & FOREIGN != 0 {
         return None;
     }
@@ -637,7 +638,8 @@ impl PcodeEmit for Collect {
 }
 
 /// The tracked registers and the stack pointer, as storage.
-pub(crate) struct Regs {
+#[doc(hidden)]
+pub struct Regs {
     pub tracked: Vec<VarnodeData>,
     pub sp: VarnodeData,
 }
@@ -686,7 +688,8 @@ fn absorbs(opc: OpCode, v: &VarnodeData) -> bool {
 
 /// What one instruction's p-code does to the line.
 #[derive(Debug, Default, PartialEq, Eq)]
-pub(crate) struct Step {
+#[doc(hidden)]
+pub struct Step {
     pub read: u8,
     /// Per tracked register, the bytes written so far (bit `i` = byte `i`).
     pub written: [u8; 6],
@@ -697,7 +700,8 @@ pub(crate) struct Step {
 }
 
 /// Summarize one instruction's p-code against the registers already `written`.
-pub(crate) fn step(
+#[doc(hidden)]
+pub fn step(
     ops: &[(OpCode, Option<VarnodeData>, Vec<VarnodeData>)],
     regs: &Regs,
     written: [u8; 6],

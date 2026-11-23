@@ -6,7 +6,8 @@ use crate::architecture::Architecture;
 use crate::funcdata::Funcdata;
 use crate::printlanguage::NamespaceStrategy;
 
-pub(crate) fn prefix(
+#[doc(hidden)]
+pub fn prefix(
     fd: &Funcdata,
     arch: &Architecture,
     target: &Address,

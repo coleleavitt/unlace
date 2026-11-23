@@ -9,7 +9,8 @@ use crate::kuna_stackobjectasserts::{ObjectAssertion, UseAnchor};
 use crate::varmap::LinkEntryInfo;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) fn create(
+#[doc(hidden)]
+pub fn create(
     fd: &mut Funcdata,
     assertion: &ObjectAssertion,
     use_: &UseAnchor,
@@ -114,7 +115,8 @@ pub(crate) fn create(
     Some(alias)
 }
 
-pub(crate) fn matches(
+#[doc(hidden)]
+pub fn matches(
     fd: &Funcdata,
     input: VarnodeId,
     assertion: &ObjectAssertion,

@@ -4,7 +4,8 @@ use crate::context::OpId;
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) fn nonprinting(fd: &Funcdata, id: OpId) -> bool {
+#[doc(hidden)]
+pub fn nonprinting(fd: &Funcdata, id: OpId) -> bool {
     if !crate::kuna_stackviews::enabled(fd) {
         return false;
     }

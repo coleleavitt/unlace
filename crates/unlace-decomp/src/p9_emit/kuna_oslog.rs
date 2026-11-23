@@ -36,13 +36,15 @@ const MAX_WALK: usize = 256;
 const MAX_BLOCK_OPS: usize = 1 << 16;
 
 /// One decoded buffer item.
-pub(crate) enum Item {
+#[doc(hidden)]
+pub enum Item {
     Value(VarnodeId),
     Constant { value: u64, size: i32 },
 }
 
 /// What the printer does at one call.
-pub(crate) struct Plan {
+#[doc(hidden)]
+pub struct Plan {
     /// `&<name>` for the dso argument.
     pub dso: Option<String>,
     /// The fixed inputs printed before the items (`in[1..=fixed]`).
@@ -87,7 +89,8 @@ fn callee_shape(fd: &Funcdata, call: OpId) -> Option<Shape> {
 
 /// The decode at `call`, or `None` when the call is not an os_log entry point or
 /// nothing about it can be shown better.
-pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, call: OpId) -> Option<Plan> {
+#[doc(hidden)]
+pub fn recover(fd: &Funcdata, arch: &Architecture, call: OpId) -> Option<Plan> {
     if !arch.kuna_options.get::<crate::kuna_oslog::OsLogArgs>().0 {
         return None;
     }
@@ -114,7 +117,8 @@ pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, call: OpId) -> Option<
 }
 
 /// The buffer-filling statements of every decoded call in `fd`.
-pub(crate) fn hidden_ops(fd: &Funcdata, arch: &Architecture) -> BTreeSet<OpId> {
+#[doc(hidden)]
+pub fn hidden_ops(fd: &Funcdata, arch: &Architecture) -> BTreeSet<OpId> {
     let mut hidden = BTreeSet::new();
     if !arch.kuna_options.get::<crate::kuna_oslog::OsLogArgs>().0 {
         return hidden;

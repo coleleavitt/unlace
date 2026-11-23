@@ -27,7 +27,8 @@ const MAX_DECLARATION_BYTES: usize = 1_048_576;
 
 type Cell = (i32, u64);
 
-pub(super) enum Authority {
+#[doc(hidden)]
+pub enum Authority {
     SealedMips,
 }
 
@@ -877,7 +878,8 @@ impl Image<'_> {
 
 /// Complete all candidates before publishing any fact. Budget exhaustion keeps
 /// the entire image ordinary rather than retaining a traversal-order prefix.
-pub(super) fn prove(
+#[doc(hidden)]
+pub fn prove(
     arch: &Architecture,
     regions: &[CodeRegion],
     functions: &[(u64, u64)],

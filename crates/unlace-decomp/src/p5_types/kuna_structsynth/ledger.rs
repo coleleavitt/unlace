@@ -130,7 +130,8 @@ use unlace_base::types::int4;
 use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 
 /// The highest `struct_N` the ledger will probe.
-pub(super) const MAX_LEDGER_SLOTS: u32 = 1024;
+#[doc(hidden)]
+pub const MAX_LEDGER_SLOTS: u32 = 1024;
 
 /// How far a pointer chain is followed when a field type is spelled.
 const MAX_POINTEE_DEPTH: u32 = 3;
@@ -141,7 +142,8 @@ const MAX_POINTEE_DEPTH: u32 = 3;
 const FIELD_PREFIX: &str = "field_0x";
 
 /// How a field that points at its own structure is spelled in a [`FieldKey`].
-pub(super) const SELF_KEY: &str = "SELF";
+#[doc(hidden)]
+pub const SELF_KEY: &str = "SELF";
 
 /// How many times as many fields a container may claim as the layout it answers.
 ///
@@ -205,7 +207,8 @@ const MIN_UNTYPED_CLAIMS: usize = 3;
 /// offset 0 is a pointer, and the body then prints
 /// `field_0x0 = (void *)0x3f80000000000000`.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub(crate) struct FieldKey {
+#[doc(hidden)]
+pub struct FieldKey {
     /// Byte offset inside the structure.
     pub offset: int4,
     /// Width of the access that minted it.
@@ -249,7 +252,8 @@ fn type_key(ct: &Datatype) -> String {
 /// A synthesized structure reduced to what the dedup decision needs: its size
 /// and its claimed fields, in offset order.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub(crate) struct Layout {
+#[doc(hidden)]
+pub struct Layout {
     /// The structure's size in bytes, holes and tail rounding included.
     pub size: int4,
     /// Claimed fields, ascending by offset.
@@ -258,7 +262,8 @@ pub(crate) struct Layout {
 
 impl Layout {
     /// Does this layout contain every claim `other` makes, field for field?
-    pub(super) fn subsumes(&self, other: &Layout) -> bool {
+    #[doc(hidden)]
+    pub fn subsumes(&self, other: &Layout) -> bool {
         if self.size < other.size {
             return false;
         }
@@ -318,7 +323,8 @@ impl Layout {
     /// answered by more than its own shape, no structure answers with a member
     /// in the reader's alignment padding, and a reader with no typed pointer is
     /// never answered by a structure that claims anything past its last field.
-    pub(crate) fn answers_for(&self, other: &Layout) -> bool {
+    #[doc(hidden)]
+    pub fn answers_for(&self, other: &Layout) -> bool {
         if !self.subsumes(other) {
             return false;
         }
@@ -407,7 +413,8 @@ fn key_of(f: &TypeField) -> Option<FieldKey> {
 /// member named anything else says the name `struct_N` is held by a type that
 /// came from somewhere else -- a DWARF record, a parsed header -- and such a
 /// type is never handed out as the answer to an access pattern.
-pub(crate) fn layout_of(ct: &Datatype) -> Option<Layout> {
+#[doc(hidden)]
+pub fn layout_of(ct: &Datatype) -> Option<Layout> {
     if ct.get_metatype() != type_metatype::TYPE_STRUCT {
         return None;
     }
@@ -431,7 +438,8 @@ pub(crate) fn layout_of(ct: &Datatype) -> Option<Layout> {
 
 /// The same reading for a field list that has not been completed yet, the
 /// fields at `selfs` pointing at the structure they will belong to.
-pub(crate) fn layout_of_fields(fields: &[TypeField], size: int4, selfs: &[int4]) -> Layout {
+#[doc(hidden)]
+pub fn layout_of_fields(fields: &[TypeField], size: int4, selfs: &[int4]) -> Layout {
     Layout {
         size,
         fields: fields.iter().filter_map(|f| field_key(f, selfs)).collect(),
@@ -449,7 +457,8 @@ fn field_key(f: &TypeField, selfs: &[int4]) -> Option<FieldKey> {
 /// One member of a structure as a body sees it: where it starts, how many bytes
 /// it covers, and the field it claims (`None` for filler).
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub(crate) struct Member {
+#[doc(hidden)]
+pub struct Member {
     /// Byte offset inside the structure.
     pub offset: int4,
     /// Bytes covered.
@@ -459,12 +468,14 @@ pub(crate) struct Member {
 }
 
 impl Member {
-    pub(super) fn of(f: &TypeField) -> Member {
+    #[doc(hidden)]
+    pub fn of(f: &TypeField) -> Member {
         Member::of_with(f, &[])
     }
 
     /// [`Member::of`], with a field at one of `selfs` claimed as a self pointer.
-    pub(crate) fn of_with(f: &TypeField, selfs: &[int4]) -> Member {
+    #[doc(hidden)]
+    pub fn of_with(f: &TypeField, selfs: &[int4]) -> Member {
         Member {
             offset: f.offset,
             size: f.field_type.get_size(),
@@ -474,7 +485,8 @@ impl Member {
 }
 
 /// Every member of a completed structure, filler included.
-pub(super) fn members_of(ct: &Datatype) -> Vec<Member> {
+#[doc(hidden)]
+pub fn members_of(ct: &Datatype) -> Vec<Member> {
     (0..ct.num_depend())
         .filter_map(|i| ct.get_field(i))
         .map(|f| {
@@ -490,7 +502,8 @@ pub(super) fn members_of(ct: &Datatype) -> Vec<Member> {
 
 /// Does `held` lay exactly the members `own` does over every byte range in
 /// `unclaimed`? See "Unclaimed bytes" in the module documentation.
-pub(crate) fn keeps_unclaimed(held: &[Member], own: &[Member], unclaimed: &[(int4, int4)]) -> bool {
+#[doc(hidden)]
+pub fn keeps_unclaimed(held: &[Member], own: &[Member], unclaimed: &[(int4, int4)]) -> bool {
     let over = |members: &[Member], lo: int4, hi: int4| -> Vec<Member> {
         members
             .iter()
@@ -547,7 +560,8 @@ fn entries(
 }
 
 /// Does some other entry say strictly more than entry `i`?
-pub(super) fn is_superseded(layouts: &[&Layout], i: usize) -> bool {
+#[doc(hidden)]
+pub fn is_superseded(layouts: &[&Layout], i: usize) -> bool {
     layouts
         .iter()
         .enumerate()
@@ -568,11 +582,8 @@ pub(super) fn is_superseded(layouts: &[&Layout], i: usize) -> bool {
 /// would give a name that entry supersedes the moment it exists. A new name is
 /// therefore minted only when nothing held answers at all. `fits` is the
 /// per-reader veto of [`keeps_unclaimed`].
-pub(super) fn best_of(
-    layouts: &[&Layout],
-    want: &Layout,
-    fits: impl Fn(usize) -> bool,
-) -> Option<usize> {
+#[doc(hidden)]
+pub fn best_of(layouts: &[&Layout], want: &Layout, fits: impl Fn(usize) -> bool) -> Option<usize> {
     let mut answering: Vec<usize> = (0..layouts.len())
         .filter(|&i| layouts[i].answers_for(want) && fits(i))
         .collect();
@@ -590,7 +601,8 @@ pub(super) fn best_of(
 /// times it, and an entry that supersedes one of those is at most
 /// [`MAX_SIZE_GROWTH`] times larger again. Nothing outside the window can change
 /// the answer.
-pub(super) fn lookup_window(size: int4) -> std::ops::RangeInclusive<i64> {
+#[doc(hidden)]
+pub fn lookup_window(size: int4) -> std::ops::RangeInclusive<i64> {
     let lo = i64::from(size);
     let growth = MAX_SIZE_GROWTH as i64;
     lo..=lo.saturating_mul(growth).saturating_mul(growth)
@@ -608,7 +620,8 @@ pub(super) fn lookup_window(size: int4) -> std::ops::RangeInclusive<i64> {
 /// `find_add` rejects a second, different definition of a held name with a hard
 /// `Err`, so the mint declines rather than propagating and the caller keeps the
 /// parameter untyped.
-pub(crate) fn lookup_or_mint(
+#[doc(hidden)]
+pub fn lookup_or_mint(
     types: &dyn TypeFactory,
     fields: Vec<TypeField>,
     size: int4,
@@ -667,7 +680,8 @@ fn merge_window(size: int4) -> std::ops::RangeInclusive<i64> {
 /// Complete `struct <name>` from `fields`, the fields at `selfs` retyped as a
 /// pointer to the structure itself. A completed structure is a fresh `Rc`, so
 /// such a pointer names the incomplete shell the members are installed on.
-pub(super) fn mint(
+#[doc(hidden)]
+pub fn mint(
     types: &dyn TypeFactory,
     name: &str,
     mut fields: Vec<TypeField>,
@@ -691,7 +705,8 @@ pub fn is_minted(ct: &Datatype) -> bool {
 }
 
 /// The number `N` of a structure this pass minted, or `None` for any other type.
-pub(super) fn minted_number(ct: &Datatype) -> Option<u32> {
+#[doc(hidden)]
+pub fn minted_number(ct: &Datatype) -> Option<u32> {
     let n = ct.get_name().strip_prefix("struct_")?;
     if n.is_empty() || !n.bytes().all(|c| c.is_ascii_digit()) || layout_of(ct).is_none() {
         return None;

@@ -920,7 +920,8 @@ impl Rule for RulePtrArith {
 
 /// C++ `RulePtrArith::evaluatePointerExpression(op, slot)` (ruleaction.cc:6596).
 /// Return command code: 0 = take no action, 1 = push needed, 2 = ready to convert.
-pub(crate) fn evaluate_pointer_expression(data: &Funcdata, op: OpId, slot: int4) -> int4 {
+#[doc(hidden)]
+pub fn evaluate_pointer_expression(data: &Funcdata, op: OpId, slot: int4) -> int4 {
     let mut res = 1; // Assume we are going to push
     let mut count = 0; // Count descendants
     let ptr_base = match data.obank().get(op).and_then(|o| o.get_in(slot)) {

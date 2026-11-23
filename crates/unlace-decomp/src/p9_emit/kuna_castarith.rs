@@ -55,7 +55,8 @@ use crate::funcdata::Funcdata;
 
 /// Why an `INT_ADD` keeps its integer form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Leave {
+#[doc(hidden)]
+pub enum Leave {
     NoPointer,
     NonConstant,
     OutNotPointer,
@@ -92,7 +93,8 @@ pub(crate) enum Leave {
 
 /// How the `PTRADD` reaches a `T *` base.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Base {
+#[doc(hidden)]
+pub enum Base {
     /// The base already points at exactly `T`.
     Direct,
     /// A new `(T *)` cast over the base.
@@ -106,7 +108,8 @@ pub(crate) enum Base {
 
 /// The `PTRADD` an `INT_ADD` becomes.
 #[derive(Debug, Clone)]
-pub(crate) struct Plan {
+#[doc(hidden)]
+pub struct Plan {
     ptr_slot: int4,
     index: i64,
     elem: int4,
@@ -603,7 +606,8 @@ enum SumUse {
 }
 
 /// Decide whether the `INT_ADD` `op` becomes pointer arithmetic.
-pub(crate) fn plan(data: &mut Funcdata, op: OpId) -> Result<Plan, Leave> {
+#[doc(hidden)]
+pub fn plan(data: &mut Funcdata, op: OpId) -> Result<Plan, Leave> {
     let (out, ins) = {
         let o = data.obank().get(op).ok_or(Leave::NoPointer)?;
         if o.code() != OpCode::CPUI_INT_ADD || o.num_input() != 2 {
@@ -698,7 +702,8 @@ pub(crate) fn plan(data: &mut Funcdata, op: OpId) -> Result<Plan, Leave> {
 }
 
 /// Rewrite the `INT_ADD` `op` as the `PTRADD` `plan` describes.
-pub(crate) fn apply(data: &mut Funcdata, op: OpId, plan: &Plan) -> Option<()> {
+#[doc(hidden)]
+pub fn apply(data: &mut Funcdata, op: OpId, plan: &Plan) -> Option<()> {
     let (base_vn, addr, out) = {
         let o = data.obank().get(op)?;
         (o.get_in(plan.ptr_slot)?, o.get_addr().clone(), o.get_out()?)
@@ -739,7 +744,8 @@ pub(crate) fn apply(data: &mut Funcdata, op: OpId, plan: &Plan) -> Option<()> {
 }
 
 /// Turn a qualifying `INT_ADD` into pointer arithmetic; `true` if it did.
-pub(crate) fn rewrite(data: &mut Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn rewrite(data: &mut Funcdata, op: OpId) -> bool {
     match plan(data, op) {
         Ok(p) => apply(data, op, &p).is_some(),
         Err(_) => false,
@@ -970,7 +976,8 @@ fn bytes_taken(
 
 /// The `PTRADD` an `INT_ADD` of a pointer and a variable index becomes.
 #[derive(Debug, Clone)]
-pub(crate) struct IndexPlan {
+#[doc(hidden)]
+pub struct IndexPlan {
     ptr_slot: int4,
     index: VarnodeId,
     by: Option<OpId>,
@@ -983,7 +990,8 @@ pub(crate) struct IndexPlan {
 /// subscript (`castindex`).  The element is chosen exactly as for a constant
 /// offset; the index is the variable when the element is one byte, or the `x`
 /// of an implied `x * sizeof(T)` the add alone reads.
-pub(crate) fn plan_index(
+#[doc(hidden)]
+pub fn plan_index(
     data: &mut Funcdata,
     strat: &CastStrategyC,
     op: OpId,
@@ -1072,7 +1080,8 @@ pub(crate) fn plan_index(
 
 /// Rewrite the `INT_ADD` `op` as the subscript `plan` describes, dropping the
 /// scaling op it no longer reads.
-pub(crate) fn apply_index(data: &mut Funcdata, op: OpId, plan: &IndexPlan) -> Option<()> {
+#[doc(hidden)]
+pub fn apply_index(data: &mut Funcdata, op: OpId, plan: &IndexPlan) -> Option<()> {
     let (base_vn, addr, out) = {
         let o = data.obank().get(op)?;
         (o.get_in(plan.ptr_slot)?, o.get_addr().clone(), o.get_out()?)
@@ -1111,7 +1120,8 @@ pub(crate) fn apply_index(data: &mut Funcdata, op: OpId, plan: &IndexPlan) -> Op
 }
 
 /// Turn a pointer plus a variable index into a subscript; `true` if it did.
-pub(crate) fn rewrite_index(data: &mut Funcdata, strat: &CastStrategyC, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn rewrite_index(data: &mut Funcdata, strat: &CastStrategyC, op: OpId) -> bool {
     match plan_index(data, strat, op) {
         Ok(p) => apply_index(data, op, &p).is_some(),
         Err(_) => false,
@@ -1158,7 +1168,8 @@ fn operand_saved(data: &mut Funcdata, vn: VarnodeId, op: OpId, long: &Rc<Datatyp
 /// cast both operands to.  The cast pass then leaves both operands as they are,
 /// and casts the result from the returned token, that signed integer, exactly as
 /// it cast the integer form's.
-pub(crate) fn pointer_difference(data: &mut Funcdata, op: OpId) -> Result<Rc<Datatype>, Leave> {
+#[doc(hidden)]
+pub fn pointer_difference(data: &mut Funcdata, op: OpId) -> Result<Rc<Datatype>, Leave> {
     let (out, a, b) = {
         let o = data.obank().get(op).ok_or(Leave::DiffNotPointers)?;
         if o.code() != OpCode::CPUI_INT_SUB || o.num_input() != 2 {

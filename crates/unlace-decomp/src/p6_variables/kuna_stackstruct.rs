@@ -520,7 +520,8 @@ fn measure(
 
 /// Replace the hints of every recognized frame record with one fixed hint of
 /// its synthesized structure.
-pub(super) fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
+#[doc(hidden)]
+pub fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     if !fd
         .get_arch()
         .kuna_options

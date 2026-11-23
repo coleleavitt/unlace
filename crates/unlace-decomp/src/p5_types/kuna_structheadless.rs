@@ -117,7 +117,8 @@ impl OptionStructHeadless {
 /// parameter of a function whose callers are all known direct calls, under
 /// `closed`, that did not take the type those callers pass?  A caller's `char **`
 /// read only at `argv[1]` and `argv[2]` is the vector, not a record past its start.
-pub(crate) fn admits(data: &Funcdata, base: VarnodeId, ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn admits(data: &Funcdata, base: VarnodeId, ct: &Datatype) -> bool {
     data.get_arch()
         .kuna_options
         .get::<StructHeadlessMode>()
@@ -134,11 +135,8 @@ pub(crate) fn admits(data: &Funcdata, base: VarnodeId, ct: &Datatype) -> bool {
 /// group past its start, and `tail`'s `main` hands `getopt_long` the `char **argv`
 /// it passes to a function reading only `argv[1]` and `argv[2]`; either callee's
 /// own record would otherwise retype the variable.
-pub(crate) fn yields_to_a_declared_pointer(
-    data: &Funcdata,
-    vn: VarnodeId,
-    vote: &Datatype,
-) -> bool {
+#[doc(hidden)]
+pub fn yields_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId, vote: &Datatype) -> bool {
     if !data
         .get_arch()
         .kuna_options
@@ -192,7 +190,8 @@ pub(crate) fn yields_to_a_declared_pointer(
 /// `long`. The fallback is what such a callee states when it declines the
 /// record. It stands in for a headless record only: any other refused record
 /// is one `off` refuses too, where the vote says nothing.
-pub(crate) fn bare_pointer_for(data: &Funcdata, vote: &Datatype) -> Option<std::rc::Rc<Datatype>> {
+#[doc(hidden)]
+pub fn bare_pointer_for(data: &Funcdata, vote: &Datatype) -> Option<std::rc::Rc<Datatype>> {
     if !data
         .get_arch()
         .kuna_options
@@ -209,7 +208,8 @@ pub(crate) fn bare_pointer_for(data: &Funcdata, vote: &Datatype) -> Option<std::
 
 /// Is `ct` a pointer to something -- a named record, a `char`, a `char *` --
 /// that no synthesized record may replace?
-pub(crate) fn gives_a_pointee(ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn gives_a_pointee(ct: &Datatype) -> bool {
     ct.get_ptr_to().is_some_and(|p| {
         !matches!(
             p.get_metatype(),
@@ -225,11 +225,8 @@ pub(crate) fn gives_a_pointee(ct: &Datatype) -> bool {
 /// integer: `tar`'s `wsnode_remove` copies `ws_head` as a word, and
 /// `wordsplit_varexp`, which walks the list from it, took its record at the
 /// call it makes and lost `int8 *` for `int8`.
-pub(crate) fn types_a_pointer_as_a_word(
-    data: &Funcdata,
-    vote: &Datatype,
-    member: &Datatype,
-) -> bool {
+#[doc(hidden)]
+pub fn types_a_pointer_as_a_word(data: &Funcdata, vote: &Datatype, member: &Datatype) -> bool {
     data.get_arch()
         .kuna_options
         .get::<StructHeadlessMode>()
@@ -254,9 +251,8 @@ fn minted_word(vote: &Datatype, member: &Datatype, ptr_size: unlace_base::types:
 
 /// Do these offsets read as a record past its start: two or more, none of them
 /// zero?
-pub(crate) fn is_headless<'a>(
-    mut offsets: impl Iterator<Item = &'a unlace_base::types::intb>,
-) -> bool {
+#[doc(hidden)]
+pub fn is_headless<'a>(mut offsets: impl Iterator<Item = &'a unlace_base::types::intb>) -> bool {
     let mut n = 0;
     offsets.all(|o| {
         n += 1;

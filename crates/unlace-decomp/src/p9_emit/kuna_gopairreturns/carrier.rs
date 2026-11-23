@@ -51,7 +51,8 @@ fn carrier(fd: &Funcdata, mut value: VarnodeId) -> Option<Carrier> {
     None
 }
 
-pub(crate) fn is_zero_word_carrier(fd: &Funcdata, value: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn is_zero_word_carrier(fd: &Funcdata, value: VarnodeId) -> bool {
     let Some(Carrier::ZeroExtend(input, _)) = carrier(fd, value) else {
         return false;
     };
@@ -163,7 +164,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn push_pair_carrier(
+    #[doc(hidden)]
+    pub fn push_pair_carrier(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

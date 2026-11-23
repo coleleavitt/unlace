@@ -18,7 +18,8 @@ use unlace_num::opcodes::OpCode;
 
 /// One argument of a rewritten call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Arg {
+#[doc(hidden)]
+pub enum Arg {
     /// An operand of the user op, printed as it would be under the SLEIGH name.
     Vn(VarnodeId),
     /// An immediate the intrinsic takes, printed in decimal.
@@ -27,18 +28,15 @@ pub(crate) enum Arg {
 
 /// The intrinsic a user op prints as.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Intrinsic {
+#[doc(hidden)]
+pub struct Intrinsic {
     pub name: &'static str,
     pub args: Vec<Arg>,
 }
 
 /// The ACLE spelling of the CALLOTHER `op` whose user op is named `name`.
-pub(crate) fn intrinsic(
-    fd: &Funcdata,
-    arch: &Architecture,
-    op: OpId,
-    name: &[u8],
-) -> Option<Intrinsic> {
+#[doc(hidden)]
+pub fn intrinsic(fd: &Funcdata, arch: &Architecture, op: OpId, name: &[u8]) -> Option<Intrinsic> {
     if !arch
         .kuna_options
         .get::<crate::kuna_memtag::AcleIntrinsics>()

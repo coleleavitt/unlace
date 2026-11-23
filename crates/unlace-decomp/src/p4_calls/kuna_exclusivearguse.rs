@@ -101,7 +101,8 @@ const ADDRESS_SLOT: i32 = 1;
 
 /// Cap on blocks visited by one reachability walk; exceeding it declines (keeps
 /// the upstream rejection) rather than paying for a big CFG at every trial.
-pub(crate) const MAX_VISIT: usize = 4096;
+#[doc(hidden)]
+pub const MAX_VISIT: usize = 4096;
 
 /// Whether the `CPUI_LOAD`/`CPUI_STORE` at `op` may be skipped while scoring the
 /// input trial matched at `opmatch`.
@@ -141,7 +142,8 @@ pub fn access_cannot_reach_call(data: &Funcdata, opmatch: OpId, op: OpId, vn: Va
 
 /// The block holding `vn`'s defining op, if it has one. A function input, a
 /// constant and a free Varnode all answer `None` and decline the rule.
-pub(crate) fn def_block(data: &Funcdata, vn: VarnodeId) -> Option<BlockId> {
+#[doc(hidden)]
+pub fn def_block(data: &Funcdata, vn: VarnodeId) -> Option<BlockId> {
     let def = data.vbank().get(vn)?.get_def()?;
     data.obank().get(def)?.get_parent()
 }
@@ -154,7 +156,8 @@ fn is_predecessor(data: &Funcdata, pred: BlockId, bl: BlockId) -> bool {
 
 /// Is `target` reachable from `from` by following CFG out-edges? Declines (true,
 /// the conservative answer for the caller) once [`MAX_VISIT`] blocks are seen.
-pub(crate) fn reaches(data: &Funcdata, from: BlockId, target: BlockId) -> bool {
+#[doc(hidden)]
+pub fn reaches(data: &Funcdata, from: BlockId, target: BlockId) -> bool {
     let graph = data.bblocks_ref();
     let mut seen: HashSet<BlockId> = HashSet::new();
     let mut stack: Vec<BlockId> = vec![from];

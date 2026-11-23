@@ -32,7 +32,8 @@ fn pointer_pair(ty: &Datatype) -> bool {
 }
 
 impl PrintC {
-    pub(crate) fn push_go_zero_record_return(
+    #[doc(hidden)]
+    pub fn push_go_zero_record_return(
         &mut self,
         fd: &Funcdata,
         value: VarnodeId,

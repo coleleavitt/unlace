@@ -7,7 +7,8 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::int4;
 
-pub(super) fn enabled(
+#[doc(hidden)]
+pub fn enabled(
     fd: &crate::funcdata::Funcdata,
     addr: &Address,
     writes: &[crate::context::VarnodeId],
@@ -23,7 +24,8 @@ pub(super) fn enabled(
 /// Does a recorded byte store into `spc`, or another stack access, have a
 /// pointer that does not resolve to stack offsets? The layout cannot keep such
 /// a frame's guarded slots in one local, so the frame is not guarded.
-pub(super) fn frame_unresolved(
+#[doc(hidden)]
+pub fn frame_unresolved(
     fd: &crate::funcdata::Funcdata,
     spc: &Rc<unlace_base::space::AddrSpace>,
     store_guard: &[crate::heritage::LoadGuard],
@@ -50,7 +52,8 @@ pub(super) fn frame_unresolved(
 /// stack range at `addr`? The range must have a write that is not an
 /// INDIRECT or MULTIEQUAL; an input-only range (a stack parameter) is left
 /// to the existing policy.
-pub(super) fn indexed_enabled(
+#[doc(hidden)]
+pub fn indexed_enabled(
     fd: &crate::funcdata::Funcdata,
     addr: &Address,
     writes: &[crate::context::VarnodeId],
@@ -90,7 +93,8 @@ fn store_bound(
 /// inferred window. Otherwise, cover four elements from the greater of the
 /// pointer base and inferred minimum, clipped to the inferred maximum. A range
 /// entirely before the base retains its original start.
-pub(super) fn window_overlaps(
+#[doc(hidden)]
+pub fn window_overlaps(
     guard: &crate::heritage::LoadGuard,
     store_size: int4,
     bound: Option<(u64, u64)>,
@@ -126,7 +130,8 @@ pub(super) fn window_overlaps(
 /// The live indexed stack STOREs into `spc` (any width) that may write
 /// `[addr, addr + size)`, other than those in `skip` and those through
 /// dynamically allocated stack.
-pub(super) fn indexed_stores(
+#[doc(hidden)]
+pub fn indexed_stores(
     fd: &crate::funcdata::Funcdata,
     store_guard: &[crate::heritage::LoadGuard],
     bounds: &mut StoreBounds,
@@ -163,7 +168,8 @@ pub(super) fn indexed_stores(
 
 /// Remove each `(INDIRECT, STORE)` guard whose STORE's analyzed window turned
 /// out not to reach the INDIRECT's range.
-pub(super) fn prune_indexed(
+#[doc(hidden)]
+pub fn prune_indexed(
     fd: &mut crate::funcdata::Funcdata,
     store_guard: &[crate::heritage::LoadGuard],
     bounds: &mut StoreBounds,
@@ -244,7 +250,8 @@ fn constant_write(fd: &crate::funcdata::Funcdata, mut vn: crate::context::Varnod
 /// piece that some read uses as one multi-byte value: that piece would print
 /// as a separate local the store never reaches. Byte reads may still narrow,
 /// since a byte piece prints as an element of the array the store indexes.
-pub(super) fn keeps_store_indirect_whole(
+#[doc(hidden)]
+pub fn keeps_store_indirect_whole(
     fd: &crate::funcdata::Funcdata,
     vn: crate::context::VarnodeId,
     store: crate::context::OpId,

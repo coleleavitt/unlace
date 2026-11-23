@@ -53,7 +53,8 @@ const LIMIT: usize = 128;
 
 /// The inputs and returned values the rule types as floats in one pass.
 #[derive(Default)]
-pub(crate) struct Plan {
+#[doc(hidden)]
+pub struct Plan {
     floats: Vec<VarnodeId>,
     returns: bool,
 }
@@ -61,7 +62,8 @@ pub(crate) struct Plan {
 impl Plan {
     /// The plan for `data`'s current IR, empty when no input arrives in a
     /// float-class register.
-    pub(crate) fn of(data: &Funcdata) -> Plan {
+    #[doc(hidden)]
+    pub fn of(data: &Funcdata) -> Plan {
         let proto = data.get_func_proto();
         if !proto.has_model() || proto.is_input_locked() {
             return Plan::default();
@@ -113,18 +115,15 @@ impl Plan {
     }
 
     /// Does the plan type a value the function returns?
-    pub(crate) fn types_a_return(&self) -> bool {
+    #[doc(hidden)]
+    pub fn types_a_return(&self) -> bool {
         self.returns
     }
 
     /// The float the plan gives `vn`, where the fold says no more than an
     /// integer or raw bytes.
-    pub(crate) fn vote(
-        &self,
-        data: &Funcdata,
-        vn: VarnodeId,
-        ct: &Rc<Datatype>,
-    ) -> Option<Rc<Datatype>> {
+    #[doc(hidden)]
+    pub fn vote(&self, data: &Funcdata, vn: VarnodeId, ct: &Rc<Datatype>) -> Option<Rc<Datatype>> {
         if self.floats.binary_search(&vn).is_err()
             || !matches!(
                 ct.get_metatype(),
@@ -149,10 +148,8 @@ impl Plan {
 /// is what the call left in the register, which `voidret` does not count
 /// against the float (`kuna_voidret.rs (elsewhere_than_return)`): betaflight's
 /// `bl fabsf; vcmpe.f32 s0, s15; .. pop {r4, pc}` returns the `r0` the call left.
-pub(crate) fn held_bits_token(
-    data: &mut Funcdata,
-    op: crate::context::OpId,
-) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn held_bits_token(data: &mut Funcdata, op: crate::context::OpId) -> Option<Rc<Datatype>> {
     let (outvn, float) = {
         let fc = data.get_call_specs(data.get_call_specs_index(op)?);
         if fc.proto().is_output_locked() {
@@ -410,7 +407,8 @@ const DOUBLE_FIELDS: [u64; 7] = [
 /// value: a zero compares equal to the other zero, a NaN to nothing, a
 /// denormal to zero where the FPU flushes them, and `0.1`, the shortest
 /// spelling of `0.1f`, is another double, while the binary compares bits.
-pub(crate) fn compares_as_a_float(data: &Funcdata, c: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn compares_as_a_float(data: &Funcdata, c: VarnodeId) -> bool {
     let Some(node) = data.vbank().get(c).filter(|n| n.is_constant()) else {
         return false;
     };

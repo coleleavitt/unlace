@@ -116,7 +116,8 @@ pub const CAPABILITY_IS_DEFAULT: bool = true;
 // in source order; keeping them positional makes the `tokens::*` table a
 // line-for-line transcription of the printc.cc table.
 #[allow(clippy::too_many_arguments)]
-pub(crate) const fn op_token(
+#[doc(hidden)]
+pub const fn op_token(
     print1: &'static str,
     print2: &'static str,
     stage: int4,
@@ -1620,7 +1621,8 @@ impl Emit for PrintEmit {
 /// `prettyprint::BraceStyle` the [`Emit`] driver consumes.  Both are the same
 /// 3-variant `same_line`/`next_line`/`skip_line` enum (printc.hh:252-255 vs
 /// emit.hh); the conversion is the identity mapping.
-pub(crate) fn to_emit_brace(style: BraceStyle) -> EmitBraceStyle {
+#[doc(hidden)]
+pub fn to_emit_brace(style: BraceStyle) -> EmitBraceStyle {
     match style {
         BraceStyle::SameLine => EmitBraceStyle::SameLine,
         BraceStyle::NextLine => EmitBraceStyle::NextLine,
@@ -1673,7 +1675,7 @@ pub struct PrintC {
     /// swaps in the packed clang [`EmitMarkup`] for the ghidra-mode `decompileAt`
     /// `<function>` document.  A concrete enum (not `Box<dyn Emit>`), so the
     /// ~260 `self.emit.<method>()` sites stay static (see [`PrintEmit`]).
-    pub(crate) emit: PrintEmit,
+    pub emit: PrintEmit,
     /// The `option maxlinewidth` line size for plain-text output; `None` (the
     /// kuna default) prints each statement on one line.
     plain_line_size: Option<int4>,
@@ -1738,19 +1740,19 @@ pub struct PrintC {
     /// (`long` is 8 bytes) needed to relabel residual `TYPE_UNKNOWN` (`xunknownN`)
     /// types as real C types.  Refreshed at the top of [`doc_function_full`] from
     /// the live `arch`; `OFF` until then (so an out-of-band print never relabels).
-    pub(crate) rt_ctx: RealTypeCtx,
+    pub rt_ctx: RealTypeCtx,
     /// (kuna outlang) The output language this document renders into.  Selects
     /// the surface vocabulary and capability record every language-varying site
     /// reads (`crate::kuna_lang`).  Refreshed per document alongside `rt_ctx`;
     /// `OutLang::C` until then, so an out-of-band print is never non-C.
-    pub(crate) out_lang: crate::kuna_lang::OutLang,
+    pub out_lang: crate::kuna_lang::OutLang,
     /// (kuna warnstyle, DIV-39) Warning slugs collected under `warn_inline` by
     /// [`emit_comment_group`](PrintC::emit_comment_group) /
     /// [`emit_comment_func_header`](PrintC::emit_comment_func_header), flushed
     /// as one `// slug, slug` end-of-line comment by
     /// [`flush_eol_warnings`](PrintC::flush_eol_warnings) at the owning line's
     /// last token (statement `;`, `if (cond) {` header, prototype, ...).
-    pub(crate) eol_warns: Vec<(
+    pub eol_warns: Vec<(
         String,
         std::rc::Rc<unlace_base::space::AddrSpace>,
         u64,
@@ -1763,7 +1765,7 @@ pub struct PrintC {
     local_name_overrides: std::collections::HashMap<crate::context::HighVariableId, String>,
     indirect_input_aliases: std::collections::HashSet<crate::context::HighVariableId>,
     signature_param_names: std::collections::HashMap<i32, String>,
-    pub(crate) go_suppressed_labels: std::collections::HashSet<BlockId>,
+    pub go_suppressed_labels: std::collections::HashSet<BlockId>,
     /// (kuna `oslog`) Statements that only fill a decoded os_log buffer.
     oslog_hidden: std::collections::BTreeSet<OpId>,
     /// Strict subpieces suppressed in favor of their overlap group's unique
@@ -2461,7 +2463,8 @@ impl PrintC {
     /// (C++ passes the `PcodeOp *`): `opref = op->getTime()`, the `<ast>`
     /// `<seqnum uniq>`. Gated on the markup back-end or an explicitly requested
     /// plain statement sidecar, so the ordinary plain-text path does no lookup.
-    pub(crate) fn op_markup(&self, fd: &Funcdata, op: OpId) -> MarkupRef {
+    #[doc(hidden)]
+    pub fn op_markup(&self, fd: &Funcdata, op: OpId) -> MarkupRef {
         if !self.emit.emits_markup() && !self.emit.captures_plain_statement_provenance() {
             return MarkupRef::none();
         }
@@ -4913,7 +4916,8 @@ impl PrintC {
 
     /// Dispatch one structured block to its emitter (C++ the virtual
     /// `FlowBlock::emit(PrintLanguage*)` -> `PrintC::emitBlock*`).
-    pub(crate) fn emit_block(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
+    #[doc(hidden)]
+    pub fn emit_block(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         use crate::block::BlockType;
         match fd.sblocks_ref().block(blk).get_type() {
             BlockType::Copy => self.emit_block_copy(fd, arch, blk),
@@ -5040,7 +5044,8 @@ impl PrintC {
     /// address, keeping a `goto`/target pair always consistent.  A duplicated
     /// leaf takes the suffixed name [`assign_label_names`](PrintC::assign_label_names)
     /// gave it.
-    pub(crate) fn block_label_name(&self, fd: &Funcdata, bl: BlockId) -> String {
+    #[doc(hidden)]
+    pub fn block_label_name(&self, fd: &Funcdata, bl: BlockId) -> String {
         if !self.label_names.is_empty() {
             if let Some(name) = fd
                 .sblocks_ref()
@@ -5110,7 +5115,8 @@ impl PrintC {
     /// enclosing loop emitter prints it above the loop head instead (so a
     /// loop-head label never lands inside the loop condition).  The block does not
     /// have to be a basic block; `get_front_leaf` finds the entry `t_copy` leaf.
-    pub(crate) fn emit_any_label_statement(&mut self, fd: &Funcdata, bl: BlockId) {
+    #[doc(hidden)]
+    pub fn emit_any_label_statement(&mut self, fd: &Funcdata, bl: BlockId) {
         // Label printed by someone else.
         if fd.sblocks_ref().block(bl).is_label_bump_up() {
             return;
@@ -5221,7 +5227,8 @@ impl PrintC {
     /// the `if (cond)` header (brace / goto / elided forms), the loop header
     /// brace, the ternary statement, and the function prototype.  No-op when
     /// nothing was collected.
-    pub(crate) fn flush_eol_warnings(&mut self) {
+    #[doc(hidden)]
+    pub fn flush_eol_warnings(&mut self) {
         if self.eol_warns.is_empty() {
             return;
         }
@@ -5274,7 +5281,8 @@ impl PrintC {
     /// node `bl`.  Used where statements from several basic blocks land on one
     /// line (the `if (cond)` header) and a normal in-line comment would otherwise
     /// print mid-line — here it forces the pending `else if` brace.
-    pub(crate) fn emit_comment_block_tree(&mut self, fd: &Funcdata, bl: BlockId) {
+    #[doc(hidden)]
+    pub fn emit_comment_block_tree(&mut self, fd: &Funcdata, bl: BlockId) {
         use crate::block::BlockType;
         match fd.sblocks_ref().block(bl).get_type() {
             // BlockCopy: descend to the underlying bblocks BlockBasic.
@@ -5948,7 +5956,8 @@ impl PrintC {
     /// skipped, exactly mirroring its filter), and no comment positioned in the
     /// block (a comment renders as its own line).  Copy-leaf-only also rules
     /// out a nested `if` body, so eliding can never capture a dangling else.
-    pub(crate) fn if_body_elides(&mut self, fd: &Funcdata, body: BlockId) -> bool {
+    #[doc(hidden)]
+    pub fn if_body_elides(&mut self, fd: &Funcdata, body: BlockId) -> bool {
         use crate::block::BlockType;
         // (kuna outlang) braceelide (DIV-38) drops the braces from a
         // single-statement body; a language that requires block braces must
@@ -6107,12 +6116,8 @@ impl PrintC {
 
     /// (kuna `javatry`) `emit_block_ls` for a list holding a `try` dispatch: the
     /// `try` takes the statements it protects from the elements after it.
-    pub(super) fn emit_block_ls_java_try(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        list: &[BlockId],
-    ) {
+    #[doc(hidden)]
+    pub fn emit_block_ls_java_try(&mut self, fd: &Funcdata, arch: &Architecture, list: &[BlockId]) {
         // A nested list prints as its elements in place; flattened, a dispatch
         // sees every statement that follows it.
         let mut flat: Vec<BlockId> = Vec::with_capacity(list.len());
@@ -6514,7 +6519,8 @@ impl PrintC {
 
     /// C++ `PrintC::emitSwitchCase` (printc.cc:3278): emit the `case N:` /
     /// `default:` label(s) for one case arm.
-    pub(crate) fn emit_switch_case(
+    #[doc(hidden)]
+    pub fn emit_switch_case(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -6553,7 +6559,8 @@ impl PrintC {
 
     /// How many labels a non-default case arm prints: one per jump-table index
     /// that targets its block.
-    pub(crate) fn switch_case_label_count(
+    #[doc(hidden)]
+    pub fn switch_case_label_count(
         &self,
         fd: &Funcdata,
         blk: BlockId,
@@ -6575,7 +6582,8 @@ impl PrintC {
     /// The `i`th label of a non-default case arm as the value, byte size and
     /// signedness it prints with. Both output languages print labels from this,
     /// so a label always names the value the printed selector holds.
-    pub(crate) fn switch_case_label(
+    #[doc(hidden)]
+    pub fn switch_case_label(
         &self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -6599,7 +6607,8 @@ impl PrintC {
     /// [`switch_case_label`](PrintC::switch_case_label) gives them for
     /// `0..switch_case_label_count`, reading the table once instead of once per
     /// label.
-    pub(crate) fn switch_case_labels(
+    #[doc(hidden)]
+    pub fn switch_case_labels(
         &self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -6692,7 +6701,8 @@ impl PrintC {
     /// (kuna `switchmerge`) Does the switch header block `head` print no
     /// statement before its `switch`?  Mirrors the skips of
     /// [`emit_basic_block_ops`](PrintC::emit_basic_block_ops) in `NO_BRANCH` mode.
-    pub(crate) fn header_prints_nothing(&self, fd: &Funcdata, head: BlockId) -> bool {
+    #[doc(hidden)]
+    pub fn header_prints_nothing(&self, fd: &Funcdata, head: BlockId) -> bool {
         let graph = fd.sblocks_ref();
         let mut head = head;
         while graph.block(head).get_type() == crate::block::BlockType::MultiGoto
@@ -6708,7 +6718,8 @@ impl PrintC {
 
     /// (kuna `switchmerge`) Does the basic block `bb` print no statement
     /// besides its branch?
-    pub(crate) fn ops_print_nothing(&self, fd: &Funcdata, bb: BlockId) -> bool {
+    #[doc(hidden)]
+    pub fn ops_print_nothing(&self, fd: &Funcdata, bb: BlockId) -> bool {
         let mut cur = fd.bb_op_head(bb);
         while let Some(inst) = cur {
             cur = fd.bb_op_next(inst);
@@ -6731,7 +6742,8 @@ impl PrintC {
 
     /// (kuna `switchmerge`) The label values the non-default arms of `sw` print,
     /// with their byte size and signedness.
-    pub(crate) fn switch_label_set(
+    #[doc(hidden)]
+    pub fn switch_label_set(
         &self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -6821,20 +6833,23 @@ impl PrintC {
 
     /// First op of a case block (C++ `FlowBlock::firstOp` → front-leaf basic
     /// block's first op), used only for case-label markup tagging.
-    pub(crate) fn case_first_op(&self, fd: &Funcdata, caseblk: BlockId) -> Option<OpId> {
+    #[doc(hidden)]
+    pub fn case_first_op(&self, fd: &Funcdata, caseblk: BlockId) -> Option<OpId> {
         let front = fd.sblocks_ref().get_front_leaf(caseblk)?;
         let bb = fd.sblocks_ref().sub_block(front, 0)?;
         fd.bb_op_head(bb)
     }
 
     /// Any op tag in a case block (fallback for markup when the block is empty).
-    pub(crate) fn any_op(&self, fd: &Funcdata, caseblk: BlockId) -> Option<OpId> {
+    #[doc(hidden)]
+    pub fn any_op(&self, fd: &Funcdata, caseblk: BlockId) -> Option<OpId> {
         self.case_first_op(fd, caseblk)
     }
 
     /// The byte-size of the switch variable (C++ `getSwitchType()` size), used to
     /// format the case-label constant.  Resolved from the BRANCHIND's `in0`.
-    pub(crate) fn switch_var_size(&self, fd: &Funcdata, blk: BlockId) -> int4 {
+    #[doc(hidden)]
+    pub fn switch_var_size(&self, fd: &Funcdata, blk: BlockId) -> int4 {
         let jt_index = match fd.sblocks_ref().block(blk).switch_jt_index() {
             Some(j) => j,
             None => return 4,
@@ -7215,7 +7230,8 @@ impl PrintC {
     /// `continue` statement for an unstructured branch.  The destination label is
     /// the target block's reverse-post index (`LAB_<index>` — full address-based
     /// label naming is the label/naming layer).
-    pub(crate) fn emit_goto_statement(
+    #[doc(hidden)]
+    pub fn emit_goto_statement(
         &mut self,
         fd: &Funcdata,
         _src: BlockId,
@@ -7567,7 +7583,8 @@ impl PrintC {
 
     /// C++ `PrintC::emitExpression` (printc.cc:2544): if the op has an output,
     /// open an assignment to it, then push the op's expression and recurse.
-    pub(crate) fn emit_expression_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
+    #[doc(hidden)]
+    pub fn emit_expression_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         if self.rt_ctx.go_pair_types.is_some() && self.emit_go_pair_assignment(fd, arch, op) {
             return;
         }
@@ -7689,7 +7706,8 @@ impl PrintC {
     /// else `None` at the top of an expression (printc.cc:2579 passes `(PcodeOp *)0`).
     /// Only `opIntSext`/`opIntZext` consume it (the extension-cast-implied test,
     /// printc.cc:806-830); every other override ignores it.
-    pub(crate) fn op_push_ir(
+    #[doc(hidden)]
+    pub fn op_push_ir(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -10360,7 +10378,8 @@ impl PrintC {
         }
     }
 
-    pub(crate) fn push_cast_open(&mut self, ct: &std::rc::Rc<crate::dtype::Datatype>, op: OpId) {
+    #[doc(hidden)]
+    pub fn push_cast_open(&mut self, ct: &std::rc::Rc<crate::dtype::Datatype>, op: OpId) {
         match self.lang().forms.cast {
             crate::kuna_lang::CastForm::GoConversion => {
                 self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
@@ -10378,7 +10397,8 @@ impl PrintC {
     }
 
     /// Close a conversion opened by [`push_cast_open`], after the operand.
-    pub(crate) fn push_cast_close(&mut self, ct: &std::rc::Rc<crate::dtype::Datatype>) {
+    #[doc(hidden)]
+    pub fn push_cast_close(&mut self, ct: &std::rc::Rc<crate::dtype::Datatype>) {
         if self.lang().forms.cast == crate::kuna_lang::CastForm::PostfixAs {
             self.push_cast_type(ct);
         }
@@ -10403,7 +10423,8 @@ impl PrintC {
         ));
     }
 
-    pub(crate) fn output_brace(&self, style: BraceStyle) -> crate::prettyprint::BraceStyle {
+    #[doc(hidden)]
+    pub fn output_brace(&self, style: BraceStyle) -> crate::prettyprint::BraceStyle {
         if self.out_lang == crate::kuna_lang::OutLang::Go {
             crate::prettyprint::BraceStyle::SameLineRequired
         } else {
@@ -10411,12 +10432,14 @@ impl PrintC {
         }
     }
 
-    pub(crate) fn remember_go_parameter(&mut self, index: i32, name: &str) {
+    #[doc(hidden)]
+    pub fn remember_go_parameter(&mut self, index: i32, name: &str) {
         self.signature_param_names
             .insert(index, crate::kuna_langgo::identifier(name));
     }
 
-    pub(crate) fn go_loop_temporary(&self, index: i32) -> String {
+    #[doc(hidden)]
+    pub fn go_loop_temporary(&self, index: i32) -> String {
         let mut name = format!("_kuna_first_{index}");
         while self.declared_locals.iter().any(|v| v.name == name)
             || self.signature_param_names.values().any(|v| v == &name)
@@ -10595,7 +10618,8 @@ impl PrintC {
         }
     }
 
-    pub(crate) fn op_call_raw_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
+    #[doc(hidden)]
+    pub fn op_call_raw_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         if self.out_lang == crate::kuna_lang::OutLang::Rust
             && arch
                 .kuna_options
@@ -11228,13 +11252,8 @@ impl PrintC {
     /// *implied* written Varnode expands its defining op's expression inline; an
     /// *explicit* (or input/free) Varnode becomes a leaf atom.  Resolved
     /// directly (depth-first) rather than via the lazy nodepend queue.
-    pub(crate) fn push_vn_ir(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        vn: VarnodeId,
-        op: OpId,
-    ) {
+    #[doc(hidden)]
+    pub fn push_vn_ir(&mut self, fd: &Funcdata, arch: &Architecture, vn: VarnodeId, op: OpId) {
         if let Some(transfer) = crate::kuna_bitcast::stack_float_input(fd, op, vn) {
             self.op_bit_transfer_ir(fd, arch, op, transfer);
             return;
@@ -11242,13 +11261,8 @@ impl PrintC {
         self.push_vn_ir_body(fd, arch, vn, op);
     }
 
-    pub(crate) fn push_vn_ir_body(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        vn: VarnodeId,
-        op: OpId,
-    ) {
+    #[doc(hidden)]
+    pub fn push_vn_ir_body(&mut self, fd: &Funcdata, arch: &Architecture, vn: VarnodeId, op: OpId) {
         let (implied, has_field, def) = {
             let v = match fd.vbank().get(vn) {
                 Some(v) => v,
@@ -11359,7 +11373,8 @@ impl PrintC {
     /// `print_store_value`) for the recursive descent into `vn`'s defining op, then
     /// restore.  In the direct-recursion RPN engine the mods live on `self.context`
     /// (the C++ stashes them on the deferred `nodepend` entry).
-    pub(crate) fn push_vn_ir_m(
+    #[doc(hidden)]
+    pub fn push_vn_ir_m(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -13417,7 +13432,8 @@ impl PrintC {
     /// `PrintC` leaf-naming (`pushVnExplicit`/`pushUnnamedLocation`, printc.cc:
     /// 1900-2017): annotation -> constant -> SymbolEntry -> register name ->
     /// kuna `dat_<addr>` global -> `Space<hex>` fallback.
-    pub(crate) fn push_vn_explicit_ir(
+    #[doc(hidden)]
+    pub fn push_vn_explicit_ir(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -14825,7 +14841,8 @@ impl PrintC {
         }
     }
 
-    pub(crate) fn push_constant_ir(&mut self, val: uintb, sz: int4, op: OpId) {
+    #[doc(hidden)]
+    pub fn push_constant_ir(&mut self, val: uintb, sz: int4, op: OpId) {
         self.push_constant_ir_fmt(val, sz, op, display_format::NONE);
     }
 
@@ -14849,7 +14866,8 @@ impl PrintC {
     /// signed convert/equate constant renders `-512` / `-0xbb8` / `-0333` /
     /// `-0b...` rather than its full unsigned bit pattern.  `force_char` short-
     /// circuits the sign (printc.cc:1381), preserving the `L\'a\'` char convert.
-    pub(crate) fn push_constant_ir_fmt_sign(
+    #[doc(hidden)]
+    pub fn push_constant_ir_fmt_sign(
         &mut self,
         val: uintb,
         sz: int4,
@@ -15876,7 +15894,8 @@ fn array_decl_parts(
 /// (printc.cc:265/314) plus `buildTypeStack` (printc.cc:143) -- moved to
 /// `CSpeller::declarator` (`p9_emit/kuna_langc.rs`) when the output-language seam
 /// landed. A language whose types are pure prefixes returns an empty `back`.
-pub(crate) fn declarator_parts(
+#[doc(hidden)]
+pub fn declarator_parts(
     ct: &std::rc::Rc<crate::dtype::Datatype>,
     rt: RealTypeCtx,
 ) -> (String, String) {
@@ -15928,7 +15947,8 @@ pub struct DeclaredLocal {
 /// `[A-Za-z0-9_]` becomes `_`, and a leading digit gains a `_` prefix.
 /// Borrowed unchanged when already valid (the caller emits a
 /// `/* renamed from "…" */` comment when it changed).
-pub(crate) fn sanitize_type_name(name: &str) -> std::borrow::Cow<'_, str> {
+#[doc(hidden)]
+pub fn sanitize_type_name(name: &str) -> std::borrow::Cow<'_, str> {
     let ok_char = |c: char| c.is_ascii_alphanumeric() || c == '_';
     let clean = !name.is_empty()
         && name.chars().all(ok_char)
@@ -15947,9 +15967,8 @@ pub(crate) fn sanitize_type_name(name: &str) -> std::borrow::Cow<'_, str> {
 }
 
 /// The name declared in the type-definition block, shared by its uses.
-pub(crate) fn c_type_definition_name(
-    ct: &crate::dtype::Datatype,
-) -> Option<std::borrow::Cow<'_, str>> {
+#[doc(hidden)]
+pub fn c_type_definition_name(ct: &crate::dtype::Datatype) -> Option<std::borrow::Cow<'_, str>> {
     use crate::dtype::DatatypeKind;
     if ct.is_core_type() || ct.get_name().is_empty() || ct.has_stripped() {
         return None;
@@ -16044,7 +16063,8 @@ fn unsigned_c_int_of_size(size: int4) -> &'static str {
 /// best-effort as `<type> <name> : <bits>;` with padding suppressed (their
 /// byte coverage overlaps the gap computation).  Unions carry no padding.
 /// Returns `""` for a non-composite kind.
-pub(crate) fn compose_type_body(
+#[doc(hidden)]
+pub fn compose_type_body(
     ct: &std::rc::Rc<crate::dtype::Datatype>,
     name: &str,
     rt: RealTypeCtx,
@@ -16113,7 +16133,8 @@ pub(crate) fn compose_type_body(
 /// (sign-extended by the enum's byte size); the `TYPE_UINT` form prints hex.
 /// An empty namemap falls back to a plain integer typedef (an empty `enum {}`
 /// is not valid C).
-pub(crate) fn compose_enum_body(ct: &std::rc::Rc<crate::dtype::Datatype>, name: &str) -> String {
+#[doc(hidden)]
+pub fn compose_enum_body(ct: &std::rc::Rc<crate::dtype::Datatype>, name: &str) -> String {
     use crate::dtype::type_metatype;
     let Some(nmap) = ct.as_enum_namemap() else {
         return String::new();
@@ -16148,7 +16169,8 @@ pub(crate) fn compose_enum_body(ct: &std::rc::Rc<crate::dtype::Datatype>, name: 
 /// (kuna) Render ONE typedef — `typedef <declarator around name>;` — of the
 /// typedef's immediate base type (`get_typedef()`), via the C-declarator
 /// builder (so `typedef char *mystr;` and array typedefs lay out correctly).
-pub(crate) fn compose_typedef_line(
+#[doc(hidden)]
+pub fn compose_typedef_line(
     base: &std::rc::Rc<crate::dtype::Datatype>,
     name: &str,
     rt: RealTypeCtx,
@@ -16165,7 +16187,8 @@ pub(crate) fn compose_typedef_line(
 /// shape + divergence notes): pass 1 emits the struct/union forward-declaration
 /// block, pass 2 the bodies (struct/union/enum/typedef) in dependency order.
 /// Pure over the input slice for unit-testability.
-pub(crate) fn render_type_definitions(
+#[doc(hidden)]
+pub fn render_type_definitions(
     deporder: &[std::rc::Rc<crate::dtype::Datatype>],
     rt: RealTypeCtx,
 ) -> String {
@@ -16288,7 +16311,8 @@ fn type_name_for_decl(
 /// An alias for [`crate::kuna_langtypes::SpellCtx`], which is where it moved when
 /// the output-language seam landed: it now also carries the output language, so
 /// the free-function declarator family reaches its speller with no new threading.
-pub(crate) type RealTypeCtx = crate::kuna_langtypes::SpellCtx;
+#[doc(hidden)]
+pub type RealTypeCtx = crate::kuna_langtypes::SpellCtx;
 
 impl RealTypeCtx {
     fn for_function(fd: &Funcdata, arch: &Architecture, lang: crate::kuna_lang::OutLang) -> Self {
@@ -16307,7 +16331,8 @@ impl RealTypeCtx {
     /// out of the architecture for the duration of emission (`with_print`), so
     /// the architecture's copy is a placeholder while this runs. The printer owns
     /// the selection.
-    pub(crate) fn from_arch(arch: &Architecture, lang: crate::kuna_lang::OutLang) -> RealTypeCtx {
+    #[doc(hidden)]
+    pub fn from_arch(arch: &Architecture, lang: crate::kuna_lang::OutLang) -> RealTypeCtx {
         RealTypeCtx {
             lang,
             enabled: arch.kuna_options.get::<crate::printc::Realtypes>().0,
@@ -16499,7 +16524,8 @@ fn kuna_global_naming(spc: &std::rc::Rc<unlace_base::space::AddrSpace>) -> bool 
 /// (kuna) `kunaGlobalDataName(Address)` — `dat_<hex offset>`; ghidra-mode
 /// (`name_style_ghidra`) prints the Ghidra GUI convention `DAT_%08x` instead
 /// (what Java's `isDynamicSymbolName` recognizes as dynamic).
-pub(crate) fn kuna_global_data_name(style: crate::database::KunaNameStyle, off: u64) -> String {
+#[doc(hidden)]
+pub fn kuna_global_data_name(style: crate::database::KunaNameStyle, off: u64) -> String {
     if style == crate::database::KunaNameStyle::Ghidra {
         return format!("DAT_{off:08x}");
     }
@@ -16647,13 +16673,15 @@ fn kuna_storage_location_name(loc: &unlace_base::address::Address) -> Option<Str
 /// A stable per-op key for the `Atom.op` / `ReversePolish.op` slot (the C++
 /// `PcodeOp *`).  The driver only needs a non-null marker here; use the op's
 /// slotmap index bits.  (Round-trips through `usize`; only identity matters.)
-pub(crate) fn op_key(op: OpId) -> crate::printlanguage::IrKey {
+#[doc(hidden)]
+pub fn op_key(op: OpId) -> crate::printlanguage::IrKey {
     use slotmap::Key;
     op.data().as_ffi()
 }
 
 /// A stable per-varnode key for the `Atom` varnode slot (the C++ `Varnode *`).
-pub(crate) fn vn_key(vn: VarnodeId) -> crate::printlanguage::IrKey {
+#[doc(hidden)]
+pub fn vn_key(vn: VarnodeId) -> crate::printlanguage::IrKey {
     use slotmap::Key;
     vn.data().as_ffi()
 }
@@ -17457,7 +17485,8 @@ fn lowered_switch_label_form(
 /// local high's declaration: the `kuna_declhightype` type representative when
 /// the high has no Symbol of its own, else the declaration (storage)
 /// representative.
-pub(crate) fn decl_type_representative(
+#[doc(hidden)]
+pub fn decl_type_representative(
     fd: &Funcdata,
     _arch: &Architecture,
     high: crate::context::HighVariableId,
@@ -17570,7 +17599,8 @@ fn locked_scalar_local_type(
 
 /// The type the printed C declares the variable `vid` belongs to: a parameter's
 /// prototype type, or a local's declaration type. `None` for an expression.
-pub(crate) fn declared_variable_type(
+#[doc(hidden)]
+pub fn declared_variable_type(
     fd: &Funcdata,
     vid: crate::context::VarnodeId,
 ) -> Option<std::rc::Rc<crate::dtype::Datatype>> {

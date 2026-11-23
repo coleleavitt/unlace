@@ -39,7 +39,8 @@ type Piece = (BlockId, Option<bool>);
 
 /// A `java_try` dispatch, read as a `try` statement.
 #[derive(Debug)]
-pub(super) struct TryShape {
+#[doc(hidden)]
+pub struct TryShape {
     /// The block holding the first dispatch; its other statements print first.
     cond: BlockId,
     catches: Vec<(u64, Part)>,
@@ -123,12 +124,8 @@ fn pure_dispatch(fd: &Funcdata, blk: BlockId) -> bool {
 
 /// Does the statement rooted at `op` execute an instruction inside `handler`'s
 /// ranges? The statement holds `op` and the ops whose outputs it inlines.
-pub(super) fn statement_in_range(
-    fd: &Funcdata,
-    table: &CatchTable,
-    handler: u64,
-    op: OpId,
-) -> bool {
+#[doc(hidden)]
+pub fn statement_in_range(fd: &Funcdata, table: &CatchTable, handler: u64, op: OpId) -> bool {
     let mut stack = vec![op];
     let mut seen = 0;
     while let Some(cur) = stack.pop() {
@@ -159,7 +156,8 @@ pub(super) fn statement_in_range(
 impl PrintC {
     /// The `try` statement the BlockIf `blk` opens, with the enclosing list's
     /// `siblings` after it.
-    pub(super) fn java_try_shape(
+    #[doc(hidden)]
+    pub fn java_try_shape(
         &self,
         fd: &Funcdata,
         blk: BlockId,
@@ -240,7 +238,8 @@ impl PrintC {
     }
 
     /// Does `shape` print from the BlockIf alone, without the list around it?
-    pub(super) fn java_try_standalone(shape: &TryShape) -> bool {
+    #[doc(hidden)]
+    pub fn java_try_standalone(shape: &TryShape) -> bool {
         matches!(shape.body, Part::Block(_))
             && shape
                 .catches
@@ -331,7 +330,8 @@ impl PrintC {
 
     /// Print the `try` statement `shape`; returns how many of `siblings` it
     /// printed.
-    pub(super) fn emit_java_try(
+    #[doc(hidden)]
+    pub fn emit_java_try(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -519,7 +519,8 @@ impl PrintC {
 
     /// Does `op` in the basic block `bb` pass the ranges a straddling block
     /// prints under?
-    pub(super) fn java_visible(&self, fd: &Funcdata, bb: BlockId, op: OpId) -> bool {
+    #[doc(hidden)]
+    pub fn java_visible(&self, fd: &Funcdata, bb: BlockId, op: OpId) -> bool {
         let (Some(list), Some(table)) =
             (self.java_block_filters.get(&bb), self.java_catches.as_ref())
         else {

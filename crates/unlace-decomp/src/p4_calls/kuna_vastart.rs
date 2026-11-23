@@ -179,7 +179,8 @@ fn find(data: &Funcdata) -> Option<VaStart> {
 /// The input that carries the last named argument: the prototype's parameter
 /// `named - 1` when it lists that many, else (no named float argument) the
 /// SysV integer argument register `gp / 8 - 1` (a 4- or 8-byte input).
-pub(crate) fn last_named(data: &Funcdata, named: int4, gp: int4) -> Option<VarnodeId> {
+#[doc(hidden)]
+pub fn last_named(data: &Funcdata, named: int4, gp: int4) -> Option<VarnodeId> {
     let proto = data.get_func_proto();
     if named == 0 {
         return None;

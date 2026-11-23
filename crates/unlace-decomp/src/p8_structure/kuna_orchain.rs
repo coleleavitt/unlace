@@ -78,7 +78,8 @@ pub const ELEM_ORCHAIN: ElementId = ElementId::new("orchain", 4136);
 /// The blocks that are the **shared out-target** of at least one short-circuit fold
 /// `CollapseStructure::rule_block_or` would perform on this CFG — i.e. the blocks a
 /// `returndup` split must leave shared.  See the module header for the predicate.
-pub(crate) fn shortcircuit_shared_targets(data: &Funcdata) -> BTreeSet<BlockId> {
+#[doc(hidden)]
+pub fn shortcircuit_shared_targets(data: &Funcdata) -> BTreeSet<BlockId> {
     let mut shared: BTreeSet<BlockId> = BTreeSet::new();
     let nbb = data.bblocks_get_size();
     if nbb < 3 {

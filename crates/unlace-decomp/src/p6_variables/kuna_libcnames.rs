@@ -113,14 +113,17 @@ const FOLD_DEPTH: usize = 4;
 /// counter ([`crate::kuna_contextnames`]), a library argument named for what
 /// it is, a role name, and the value the function returns.
 const RET: u8 = 0;
-pub(crate) const LOOP: u8 = 1;
+#[doc(hidden)]
+pub const LOOP: u8 = 1;
 const ARG: u8 = 2;
 const ROLE: u8 = 3;
-pub(crate) const RESULT: u8 = 4;
+#[doc(hidden)]
+pub const RESULT: u8 = 4;
 
 /// One piece of evidence for a local: its kind, the operation (instruction,
 /// creation time), the slot, the name, and whether the output prints it.
-pub(crate) type Evidence = (u8, (Address, u32), i32, &'static str, bool);
+#[doc(hidden)]
+pub type Evidence = (u8, (Address, u32), i32, &'static str, bool);
 
 fn is_role(name: &str) -> bool {
     ROLE_NAMES.binary_search(&name).is_ok()
@@ -148,7 +151,8 @@ fn folded_into(fd: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
 
 /// The value an argument `vn` prints as: through the implied copies and casts
 /// that write it (`call((T)x)`), else itself.
-pub(crate) fn folded_from(fd: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
+#[doc(hidden)]
+pub fn folded_from(fd: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
     for _ in 0..FOLD_DEPTH {
         let Some(v) = fd.vbank().get(vn) else { break };
         if !(v.is_implied() && v.is_written()) {
@@ -169,7 +173,8 @@ pub(crate) fn folded_from(fd: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
 /// The local `vn` is an instance of, when it is one this pass may name: a
 /// printed, unmerged-by-speculation variable that is not a function input,
 /// a global or a constant.
-pub(crate) fn local_of(fd: &mut Funcdata, vn: VarnodeId) -> Option<HighVariableId> {
+#[doc(hidden)]
+pub fn local_of(fd: &mut Funcdata, vn: VarnodeId) -> Option<HighVariableId> {
     let v = fd.vbank().get(vn)?;
     if v.is_constant() || v.is_input() || v.is_persist() || v.is_implied() || v.is_free() {
         return None;

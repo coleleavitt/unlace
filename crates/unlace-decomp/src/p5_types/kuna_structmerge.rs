@@ -282,7 +282,8 @@ fn plan(
 /// reach, in the order the ledger probes them. The partner is the one sharing
 /// the most claims, then the smallest, then the first minted -- a total order,
 /// so the answer does not depend on how the factory happens to store them.
-pub(crate) fn merge(
+#[doc(hidden)]
+pub fn merge(
     types: &dyn TypeFactory,
     candidates: &[(Rc<Datatype>, Layout)],
     want: &Layout,
@@ -352,7 +353,8 @@ pub(crate) fn merge(
 /// The union was accepted and the factory still refused to complete it, so the
 /// reader falls back to a record of its own claims. One `structmerge:` line on
 /// stderr under `KUNA_STRUCTMERGE_TRACE=1`.
-pub(crate) fn trace_mint_failed(name: &str, want: &Layout) {
+#[doc(hidden)]
+pub fn trace_mint_failed(name: &str, want: &Layout) {
     if std::env::var_os("KUNA_STRUCTMERGE_TRACE").is_none() {
         return;
     }

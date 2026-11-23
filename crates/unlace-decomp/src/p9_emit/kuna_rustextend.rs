@@ -2,7 +2,8 @@
 
 use crate::dtype::{Datatype, type_metatype};
 
-pub(crate) fn signed_text_input(input: &Datatype, output: &Datatype) -> Option<&'static str> {
+#[doc(hidden)]
+pub fn signed_text_input(input: &Datatype, output: &Datatype) -> Option<&'static str> {
     if input.get_metatype() != type_metatype::TYPE_INT
         || !input.is_char_print()
         || !input.is_core_type()

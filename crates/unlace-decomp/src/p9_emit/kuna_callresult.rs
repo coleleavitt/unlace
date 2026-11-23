@@ -53,14 +53,16 @@ fn low_storage(source: &Address, source_size: i32, target: &Address, target_size
     target.get_offset() == low
 }
 
-pub(crate) struct CallResultPlan {
+#[doc(hidden)]
+pub struct CallResultPlan {
     pub target: Rc<Datatype>,
     cast_type: Rc<Datatype>,
     boolean: bool,
 }
 
 impl PrintC {
-    pub(crate) fn call_result_plan(
+    #[doc(hidden)]
+    pub fn call_result_plan(
         &self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -133,7 +135,8 @@ impl PrintC {
         })
     }
 
-    pub(crate) fn push_call_result_open(
+    #[doc(hidden)]
+    pub fn push_call_result_open(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -151,7 +154,8 @@ impl PrintC {
         Some(plan)
     }
 
-    pub(crate) fn push_call_result_close(&mut self, plan: Option<CallResultPlan>, op: OpId) {
+    #[doc(hidden)]
+    pub fn push_call_result_close(&mut self, plan: Option<CallResultPlan>, op: OpId) {
         let Some(plan) = plan else {
             return;
         };

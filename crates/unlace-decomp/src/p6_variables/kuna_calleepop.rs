@@ -86,7 +86,8 @@ pub const RETURN_ADDRESS_ONLY: int4 = 4;
 
 /// Most argument bytes a single call is credited with, so a malformed frame
 /// cannot walk the whole stack.
-pub(crate) const MAX_ARG_BYTES: int4 = 256;
+#[doc(hidden)]
+pub const MAX_ARG_BYTES: int4 = 256;
 
 /// The bytes the call instruction at `call_addr` itself stored: its return
 /// address (two bytes for an x86 16-bit near call, four for a far call or an
@@ -136,7 +137,8 @@ pub fn return_address_bytes(
 /// imports were never marked up (a raw `.text` blob) has
 /// no imported callees by this test, which leaves the whole function at
 /// upstream's answer.
-pub(crate) fn is_imported(data: &Funcdata, entry: &Address) -> bool {
+#[doc(hidden)]
+pub fn is_imported(data: &Funcdata, entry: &Address) -> bool {
     // A call whose target was never resolved carries the invalid Address, whose
     // space pointer is the sentinel — the property query would dereference it.
     let size = match entry.get_space() {
@@ -160,7 +162,8 @@ pub(crate) fn is_imported(data: &Funcdata, entry: &Address) -> bool {
 /// The bound matters in the other direction too: a mid-function `pop reg` also
 /// raises the stack pointer, and restoring one saved register does not account
 /// for a multi-argument run.
-pub(crate) fn caller_cleans_up(
+#[doc(hidden)]
+pub fn caller_cleans_up(
     data: &Funcdata,
     spacebase: &Address,
     call_out: VarnodeId,
@@ -171,7 +174,8 @@ pub(crate) fn caller_cleans_up(
 
 /// The highest stack-pointer value, relative to `call_out`, that the caller
 /// reaches after the call (see [`caller_cleans_up`]); 0 when it never rises.
-pub(crate) fn caller_raise(data: &Funcdata, spacebase: &Address, call_out: VarnodeId) -> int4 {
+#[doc(hidden)]
+pub fn caller_raise(data: &Funcdata, spacebase: &Address, call_out: VarnodeId) -> int4 {
     let step = match data.vbank().get(call_out).map(|v| v.get_size()) {
         Some(s) if s > 0 => s,
         _ => return 0,
@@ -218,11 +222,8 @@ pub(crate) fn caller_raise(data: &Funcdata, spacebase: &Address, call_out: Varno
 /// stack pointer.  `c` is not necessarily negative: the additive normalization
 /// re-bases a run of pushes onto whichever earlier Varnode survived, so a call
 /// preceded by an `add esp,#k` cleanup lands at a positive offset from it.
-pub(crate) fn decompose(
-    data: &Funcdata,
-    spacebase: &Address,
-    vn: VarnodeId,
-) -> Option<(VarnodeId, int4)> {
+#[doc(hidden)]
+pub fn decompose(data: &Funcdata, spacebase: &Address, vn: VarnodeId) -> Option<(VarnodeId, int4)> {
     let op = data.vbank().get(vn)?.get_def()?;
     let o = data.obank().get(op)?;
     if o.code() != OpCode::CPUI_INT_ADD {
@@ -241,7 +242,8 @@ pub(crate) fn decompose(
 
 /// The spacebase reference defined as `INT_ADD(base, #off)`, if the function
 /// has one.
-pub(crate) fn child_at(
+#[doc(hidden)]
+pub fn child_at(
     data: &Funcdata,
     spacebase: &Address,
     base: VarnodeId,
@@ -273,7 +275,8 @@ pub(crate) fn child_at(
 ///
 /// A slot with no STORE through it is neither (a bare frame allocation), and
 /// ends the run the same way a save does.
-pub(crate) fn is_argument_push(data: &Funcdata, slot: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn is_argument_push(data: &Funcdata, slot: VarnodeId) -> bool {
     let descend: Vec<_> = match data.vbank().get(slot) {
         Some(v) => v.descend_iter().collect(),
         None => return false,
@@ -302,14 +305,16 @@ pub(crate) fn is_argument_push(data: &Funcdata, slot: VarnodeId) -> bool {
 }
 
 /// Is `vn` a reference to the stack pointer itself?
-pub(crate) fn at_address(data: &Funcdata, vn: Option<VarnodeId>, spacebase: &Address) -> bool {
+#[doc(hidden)]
+pub fn at_address(data: &Funcdata, vn: Option<VarnodeId>, spacebase: &Address) -> bool {
     vn.and_then(|v| data.vbank().get(v))
         .map(|v| crate::coreaction_stackptr::addr_eq(v.get_addr(), spacebase))
         .unwrap_or(false)
 }
 
 /// The signed value of a constant Varnode, sign-extended from its own size.
-pub(crate) fn const_signed(data: &Funcdata, vn: Option<VarnodeId>) -> Option<int4> {
+#[doc(hidden)]
+pub fn const_signed(data: &Funcdata, vn: Option<VarnodeId>) -> Option<int4> {
     let v = vn.and_then(|v| data.vbank().get(v))?;
     if !v.is_constant() {
         return None;

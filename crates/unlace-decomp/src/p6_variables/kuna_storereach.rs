@@ -115,7 +115,8 @@ impl<T: Clone> Walk<T> {
 
 /// What the latest layout pass asks of the final layout.
 #[derive(Clone, Default)]
-pub(crate) struct ReachChecks {
+#[doc(hidden)]
+pub struct ReachChecks {
     /// `(base, end)`: the bytes a guarded store may write from `base`, to the
     /// end of its bounded reach or, for an unbounded piece, the top of the frame.
     reaches: Vec<(intb, intb)>,
@@ -127,7 +128,8 @@ pub(crate) struct ReachChecks {
 /// and let the open range at every guarded store's base absorb what starts
 /// inside a slot it absorbed. Returns what the final layout must satisfy for
 /// the guard to stand (`withdraw_spoiled_guard`).
-pub(crate) fn prepare_hints(
+#[doc(hidden)]
+pub fn prepare_hints(
     fd: &Funcdata,
     state: &mut MapState,
     space: &Rc<AddrSpace>,
@@ -722,7 +724,8 @@ fn through_walk_step(fd: &Funcdata, vn: VarnodeId, depth: u32, walk: &Walk<bool>
 /// other), that local can hold the reach (`holds_reach`), and every guarded
 /// store piece in a float reach is one local that is read only as a float: an
 /// integer read of a float local prints as a cast, which converts its value.
-pub(crate) fn withdraw_spoiled_guard(fd: &Funcdata) -> bool {
+#[doc(hidden)]
+pub fn withdraw_spoiled_guard(fd: &Funcdata) -> bool {
     if !fd.stack_store_guard() {
         return false;
     }
@@ -1248,7 +1251,8 @@ fn has_byte_store(fd: &Funcdata) -> bool {
 /// Does the pointer of one of the byte `stores`, or of another LOAD or STORE
 /// in the frame, come from the stack base along a path `pointer_pieces` cannot
 /// resolve, or choose between stack addresses too far apart to fold?
-pub(crate) fn frame_unresolved(fd: &Funcdata, space: &Rc<AddrSpace>, stores: &[OpId]) -> bool {
+#[doc(hidden)]
+pub fn frame_unresolved(fd: &Funcdata, space: &Rc<AddrSpace>, stores: &[OpId]) -> bool {
     let Some(sb) = fd.find_spacebase_input(space) else {
         return false;
     };
@@ -1335,7 +1339,8 @@ fn guard_effects(fd: &Funcdata, space: &Rc<AddrSpace>) -> GuardEffects {
 
 /// Does an op other than an INDIRECT or MULTIEQUAL read `vn`, or the value of
 /// one that carries it on? Undecided past 256 values, which counts as yes.
-pub(crate) fn is_read(fd: &Funcdata, vn: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn is_read(fd: &Funcdata, vn: VarnodeId) -> bool {
     let mut seen = BTreeSet::new();
     let mut work = vec![vn];
     while let Some(v) = work.pop() {
@@ -1446,7 +1451,8 @@ fn store_reach(pieces: &[(intb, Option<intb>)]) -> Option<(Vec<intb>, Option<(in
 /// A phi of different stack addresses gives one such piece per address.
 /// Each value is walked once (`Walk`); past the watchdog deadline the walk
 /// gives `None`.
-pub(crate) fn pointer_pieces(
+#[doc(hidden)]
+pub fn pointer_pieces(
     fd: &Funcdata,
     vn: VarnodeId,
     sb: VarnodeId,
@@ -1654,11 +1660,8 @@ fn index_bound_at(fd: &Funcdata, vn: VarnodeId, depth: u32) -> Option<uintb> {
 /// The stack bytes `[lo, last]`, as offsets in `space`, an indexed STORE of
 /// any width may write: its pointer is the stack base plus constants plus
 /// indices that `index_bound` bounds, at one address or a choice of close ones.
-pub(crate) fn store_window(
-    fd: &Funcdata,
-    store: OpId,
-    space: &Rc<AddrSpace>,
-) -> Option<(uintb, uintb)> {
+#[doc(hidden)]
+pub fn store_window(fd: &Funcdata, store: OpId, space: &Rc<AddrSpace>) -> Option<(uintb, uintb)> {
     let sb = fd.find_spacebase_input(space)?;
     let op = fd
         .obank()

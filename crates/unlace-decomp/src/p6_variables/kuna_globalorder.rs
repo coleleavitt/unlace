@@ -126,7 +126,8 @@ pub fn write_moves(data: &Funcdata, copy: OpId, source: VarnodeId) -> bool {
     false
 }
 
-pub(crate) fn value_definition(data: &Funcdata, mut source: VarnodeId) -> Option<OpId> {
+#[doc(hidden)]
+pub fn value_definition(data: &Funcdata, mut source: VarnodeId) -> Option<OpId> {
     let mut depth = 0;
     loop {
         let Some(v) = data.vbank().get(source) else {

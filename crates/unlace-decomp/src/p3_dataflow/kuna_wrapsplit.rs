@@ -22,20 +22,23 @@ use unlace_base::types::int4;
 
 /// The number of bytes of `[offset, offset + size)` up to and including the
 /// space's `highest` offset, when the range runs past it.
-pub(crate) fn wrap_cut(offset: u64, size: int4, highest: u64) -> Option<int4> {
+#[doc(hidden)]
+pub fn wrap_cut(offset: u64, size: int4, highest: u64) -> Option<int4> {
     let room = highest.checked_sub(offset)?.checked_add(1)?;
     (size > 1 && room < size as u64).then_some(room as int4)
 }
 
 /// Every Varnode that runs past `highest`, the top of its space, starts at or
 /// above this offset: a Varnode holds at most `int4::MAX` bytes.
-pub(crate) fn wrap_floor(highest: u64) -> u64 {
+#[doc(hidden)]
+pub fn wrap_floor(highest: u64) -> u64 {
     highest.saturating_sub(int4::MAX as u64)
 }
 
 /// The refinement array that splits a `size`-byte Varnode after `cut` bytes,
 /// in the form `Heritage::refinement` hands to the refine helpers.
-pub(crate) fn wrap_refinement(size: int4, cut: int4) -> Vec<int4> {
+#[doc(hidden)]
+pub fn wrap_refinement(size: int4, cut: int4) -> Vec<int4> {
     let mut refine = vec![0; size as usize];
     refine[0] = cut;
     refine[cut as usize] = size - cut;

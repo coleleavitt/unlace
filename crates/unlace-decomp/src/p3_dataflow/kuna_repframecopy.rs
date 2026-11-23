@@ -50,10 +50,12 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
 /// The most elements a move may copy and still be expanded.
-pub(crate) const MAX_ELEMENTS: u64 = 16;
+#[doc(hidden)]
+pub const MAX_ELEMENTS: u64 = 16;
 
 /// The most bytes a move may copy and still be expanded.
-pub(crate) const MAX_BYTES: u64 = 64;
+#[doc(hidden)]
+pub const MAX_BYTES: u64 = 64;
 
 /// The stack pointer width of the one target, x86-32. On x86-64 the copy
 /// leaves `RCX` zero and `RSI` at the source's end, which the System V
@@ -1041,7 +1043,8 @@ fn expand(fd: &mut Funcdata, rep: &RepMove) -> unlace_base::error::KunaResult<()
 
 /// Expand every frame `rep movs` with a small known count, right after the
 /// first heritage pass; the number expanded.
-pub(crate) fn expand_all(fd: &mut Funcdata) -> i32 {
+#[doc(hidden)]
+pub fn expand_all(fd: &mut Funcdata) -> i32 {
     expand_with(fd, true)
 }
 

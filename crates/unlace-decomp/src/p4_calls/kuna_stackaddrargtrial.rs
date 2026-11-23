@@ -4,7 +4,8 @@ use crate::{context::VarnodeId, funcdata::Funcdata};
 
 /// A same-width copy/displacement chain must reach a particular stack pointer.
 /// Unknown inputs, phi merges, and values killed by another call are declined.
-pub(crate) fn carries_stack_address(data: &Funcdata, vn: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn carries_stack_address(data: &Funcdata, vn: VarnodeId) -> bool {
     if !data
         .get_arch()
         .kuna_options
@@ -27,7 +28,8 @@ pub(crate) fn carries_stack_address(data: &Funcdata, vn: VarnodeId) -> bool {
 
 /// Preserve proven register pointers across the inactive-prefix length heuristic.
 /// The existing ABI hole-filling loop supplies earlier register positions.
-pub(crate) fn trial_is_protected(
+#[doc(hidden)]
+pub fn trial_is_protected(
     active: &crate::fspec::ParamActive,
     trial: &crate::fspec::ParamTrial,
     entries: &[crate::fspec::ParamEntry],

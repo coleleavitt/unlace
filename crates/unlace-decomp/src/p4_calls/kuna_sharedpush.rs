@@ -63,7 +63,8 @@ const MAX_VALUES: usize = 256;
 
 /// Whether `op`'s read of `vn` as a declared parameter leaves the stack trial
 /// matched at `opmatch` a parameter too.
-pub(crate) fn declared_arm_shares(
+#[doc(hidden)]
+pub fn declared_arm_shares(
     data: &Funcdata,
     opmatch: OpId,
     op: OpId,

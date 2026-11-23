@@ -72,7 +72,8 @@ fn integer_arguments(format: &[u8]) -> Option<Vec<bool>> {
 
 /// Assign the full format's integer arguments through the call's variadic ABI,
 /// rather than treating a conversion count as a count of every register class.
-pub(crate) fn arguments(data: &Funcdata, fc: &FuncCallSpecs) -> Vec<ParameterPieces> {
+#[doc(hidden)]
+pub fn arguments(data: &Funcdata, fc: &FuncCallSpecs) -> Vec<ParameterPieces> {
     let resolve = || -> Option<Vec<ParameterPieces>> {
         if !fc.is_dotdotdot()
             || !fc.proto().is_input_locked()
@@ -142,7 +143,8 @@ pub(crate) fn arguments(data: &Funcdata, fc: &FuncCallSpecs) -> Vec<ParameterPie
 
 /// Prove the consumed bytes through bounded copies and integer expressions.
 /// Realistic movement alone can include a PIECE with undeclared upper bytes.
-pub(super) fn defined_bytes(
+#[doc(hidden)]
+pub fn defined_bytes(
     data: &Funcdata,
     vn: VarnodeId,
     offset: int4,
@@ -265,12 +267,8 @@ pub(super) fn defined_bytes(
 /// Keep a defined existing register trial consumed by the format, at the
 /// format's promoted width. Earlier consumed slots must also be defined, so
 /// filling a parameter gap cannot introduce an unknown value.
-pub(crate) fn activate_trial(
-    data: &mut Funcdata,
-    idx: int4,
-    i: int4,
-    args: &[ParameterPieces],
-) -> bool {
+#[doc(hidden)]
+pub fn activate_trial(data: &mut Funcdata, idx: int4, i: int4, args: &[ParameterPieces]) -> bool {
     if args.is_empty() {
         return false;
     }

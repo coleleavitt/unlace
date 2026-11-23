@@ -148,12 +148,13 @@ impl OptionCastWiden {
 
 /// What an arithmetic op prints differently.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct Plan {
+#[doc(hidden)]
+pub struct Plan {
     /// The widening one operand keeps no cast for.
-    pub(crate) drop: Option<OpId>,
+    pub drop: Option<OpId>,
     /// The constant other operand, printed with the suffix that types it as the
     /// widening's target (`true`: `UL`, else `L`).
-    pub(crate) suffix: Option<(VarnodeId, bool)>,
+    pub suffix: Option<(VarnodeId, bool)>,
 }
 
 /// A widening an operand prints as a cast.
@@ -187,7 +188,8 @@ fn is_arith(code: OpCode) -> bool {
 }
 
 /// An integer C converts arithmetically: not `bool`, not an enum.
-pub(crate) fn plain_int(t: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn plain_int(t: &Datatype) -> bool {
     matches!(
         t.get_metatype(),
         type_metatype::TYPE_INT | type_metatype::TYPE_UINT
@@ -198,13 +200,8 @@ pub(crate) fn plain_int(t: &Datatype) -> bool {
 
 /// What the arithmetic op `r` prints differently (uncached; see
 /// [`ImpliedCasts::widen_plan`]).
-pub(crate) fn plan(
-    ic: &ImpliedCasts,
-    p: &dyn PrintedForms,
-    fd: &Funcdata,
-    r: OpId,
-    depth: u32,
-) -> Plan {
+#[doc(hidden)]
+pub fn plan(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, r: OpId, depth: u32) -> Plan {
     let Some(o) = fd.obank().get(r) else {
         return Plan::default();
     };
@@ -435,7 +432,8 @@ fn widening(
 /// The promoted types (a set of `INT`/`UINT`/`LONG`/`ULONG`) the operand `vn`
 /// has in C as printed where `reader` reads it, when the text says.  A widening
 /// read by `reader` is taken as printed with its cast.
-pub(crate) fn operand_set(
+#[doc(hidden)]
+pub fn operand_set(
     ic: &ImpliedCasts,
     p: &dyn PrintedForms,
     fd: &Funcdata,
@@ -551,12 +549,8 @@ fn expr_set(
 /// Does the widening `ext` extend an operand that prints as a C integer narrower
 /// than its output, the way C extends that type (`castimplied`'s destinations
 /// under `castwiden`)?
-pub(crate) fn narrow_operand(
-    ic: &ImpliedCasts,
-    p: &dyn PrintedForms,
-    fd: &Funcdata,
-    ext: OpId,
-) -> bool {
+#[doc(hidden)]
+pub fn narrow_operand(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, ext: OpId) -> bool {
     let Some(d) = fd.obank().get(ext) else {
         return false;
     };
@@ -585,7 +579,8 @@ pub(crate) fn narrow_operand(
 }
 
 /// The type of the object a `STORE` writes, as its printed pointer states it.
-pub(crate) fn store_pointee(
+#[doc(hidden)]
+pub fn store_pointee(
     ic: &ImpliedCasts,
     p: &dyn PrintedForms,
     fd: &Funcdata,

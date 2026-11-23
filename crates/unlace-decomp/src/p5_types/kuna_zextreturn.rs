@@ -45,7 +45,8 @@ use crate::op::pcodeop_addlflags::kuna_zextreturn;
 /// or where the function's callers compute with up to four bytes of the
 /// register ([`read_width`])? `storage` is a non-constant input of a RETURN,
 /// which names the register.
-pub(crate) fn unsigned_trim(
+#[doc(hidden)]
+pub fn unsigned_trim(
     data: &Funcdata,
     vn: VarnodeId,
     storage: VarnodeId,
@@ -72,7 +73,8 @@ pub(crate) fn unsigned_trim(
 /// narrow type where the binary computes in 64 bits. The RETURN must then keep
 /// the whole register. Such a trim that no caller has yet computed with wider
 /// is noted on `data`, so that `voidret` can ask the callers.
-pub(crate) fn zero_extended_word(
+#[doc(hidden)]
+pub fn zero_extended_word(
     data: &mut Funcdata,
     vn: VarnodeId,
     storage: VarnodeId,
@@ -116,7 +118,8 @@ fn read_width(data: &Funcdata, narrow: &Address, size: i32) -> Option<i32> {
 }
 
 /// Does `[addr, addr+width)` hold `[narrow, narrow+size)` and more?
-pub(crate) fn wider_over(addr: &Address, width: i32, narrow: &Address, size: i32) -> bool {
+#[doc(hidden)]
+pub fn wider_over(addr: &Address, width: i32, narrow: &Address, size: i32) -> bool {
     let (Some(a), Some(n)) = (addr.get_space(), narrow.get_space()) else {
         return false;
     };
@@ -154,7 +157,8 @@ fn narrow_output(
 }
 
 /// Record on the RETURN `op`, just trimmed, whether the trim was [`unsigned_trim`].
-pub(crate) fn note_trimmed_return(data: &mut Funcdata, op: OpId, unsigned: bool) {
+#[doc(hidden)]
+pub fn note_trimmed_return(data: &mut Funcdata, op: OpId, unsigned: bool) {
     let Some(o) = data.obank_mut().get_mut(op) else {
         return;
     };
@@ -173,7 +177,8 @@ pub(crate) fn note_trimmed_return(data: &mut Funcdata, op: OpId, unsigned: bool)
 /// Also when the function keeps the whole register for callers that compute
 /// with it ([`zero_extended_word`]) and `vn`, returned in it, is a word its
 /// upper half leaves zero.
-pub(crate) fn unsigned_return_vote(
+#[doc(hidden)]
+pub fn unsigned_return_vote(
     data: &Funcdata,
     vn: VarnodeId,
     ct: &Rc<Datatype>,

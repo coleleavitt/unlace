@@ -160,7 +160,8 @@ fn is_register(addr: &Address) -> bool {
 /// argument: its low byte read on entry, with `last`, the final register of its
 /// storage class, left unread? A register the callee only pushes for its next
 /// call, with nothing reading the slot back, is not read.
-pub(crate) fn reads_as_argument(
+#[doc(hidden)]
+pub fn reads_as_argument(
     live: &CalleeEntryDead,
     addr: &Address,
     size: int4,
@@ -363,7 +364,8 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
 /// the call's final list already uses: the entries after a leading run of used
 /// ones, up to the last the callee reads, through at most [`MAX_HOLES`] entries
 /// in a row it does not.
-pub(crate) fn extension<'a>(row: &'a [Option<Slot>], used: &HashSet<int4>) -> Vec<&'a Slot> {
+#[doc(hidden)]
+pub fn extension<'a>(row: &'a [Option<Slot>], used: &HashSet<int4>) -> Vec<&'a Slot> {
     let is_used = |e: &Option<Slot>| e.as_ref().is_some_and(|s| used.contains(&s.index));
     let k = row.iter().take_while(|e| is_used(e)).count();
     if row[k..].iter().any(is_used) {

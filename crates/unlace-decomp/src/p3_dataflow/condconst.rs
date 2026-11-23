@@ -1122,7 +1122,8 @@ fn last_op_of(data: &Funcdata, bl: BlockId) -> Option<OpId> {
 /// Drive the whole conditional-constant propagation pass (C++
 /// `ActionConditionalConst::apply`, `coreaction.cc:4748`).  Returns the number of
 /// rewrites made (the C++ `count` at exit).
-pub(crate) fn condconst_apply(data: &mut Funcdata) -> int4 {
+#[doc(hidden)]
+pub fn condconst_apply(data: &mut Funcdata) -> int4 {
     let mut count: int4 = 0;
     let mut use_multiequal = true;
     // Determining if conditional constants should apply to MULTIEQUAL operations

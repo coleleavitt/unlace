@@ -1076,7 +1076,8 @@ pub fn split_double_input(data: &Funcdata, vn: VarnodeId) -> bool {
 
 /// Every read of `vn` ends in a 4-byte SUBPIECE, directly or through a CAST,
 /// COPY or a right shift by 32 that only such reads consume.
-pub(crate) fn halves_only(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
+#[doc(hidden)]
+pub fn halves_only(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
     let Some(value) = data.vbank().get(vn) else {
         return false;
     };

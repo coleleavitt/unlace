@@ -5,7 +5,8 @@ use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) fn scalar_bits(fd: &Funcdata, high: HighVariableId) -> bool {
+#[doc(hidden)]
+pub fn scalar_bits(fd: &Funcdata, high: HighVariableId) -> bool {
     let Some(h) = fd.high_bank().get(high) else {
         return false;
     };

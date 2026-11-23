@@ -7,7 +7,8 @@ use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 use unlace_num::opcodes::OpCode;
 
-pub(super) fn target(
+#[doc(hidden)]
+pub fn target(
     fd: &Funcdata,
     op: OpId,
     printed: impl FnOnce() -> Option<Rc<Datatype>>,
@@ -89,7 +90,8 @@ pub(super) fn target(
 }
 
 /// A null pointer copied into integer storage prints as the integer `0`.
-pub(super) fn null_source(fd: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn null_source(fd: &Funcdata, op: OpId) -> bool {
     fd.obank()
         .get(op)
         .filter(|operation| operation.code() == OpCode::CPUI_COPY)

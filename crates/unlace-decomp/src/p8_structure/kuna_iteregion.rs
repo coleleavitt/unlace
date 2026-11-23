@@ -248,7 +248,8 @@ pub fn match_ite_assignment(data: &Funcdata, n: BlockId) -> Option<IteAssignMatc
 /// one-component `Ls`/`Graph` wrapper (a structured arm is usually a list of one).
 /// `None` if `id` (or its sole child) is not a clean, unlabelled `Copy`/`Basic`
 /// leaf.
-pub(crate) fn leaf_bblock(data: &Funcdata, id: BlockId) -> Option<BlockId> {
+#[doc(hidden)]
+pub fn leaf_bblock(data: &Funcdata, id: BlockId) -> Option<BlockId> {
     let g = data.sblocks_ref();
     let blk = g.block(id);
     match blk.get_type() {
@@ -360,7 +361,8 @@ fn single_assign_arm(data: &Funcdata, id: BlockId) -> Option<(OpId, VarnodeId)> 
 /// of its own — e.g. the `INT_NOTEQUAL` feeding a `CBRANCH`, or a folded RHS).  A
 /// [`CPUI_CBRANCH`] (no output) *is* kept.  Skipping implied ops is what makes a
 /// bare `if (a != 0)` condition block count as one statement (the CBRANCH), not two.
-pub(crate) fn printed_ops(data: &Funcdata, bb: BlockId) -> Vec<OpId> {
+#[doc(hidden)]
+pub fn printed_ops(data: &Funcdata, bb: BlockId) -> Vec<OpId> {
     let mut out = Vec::new();
     let mut op = data.bb_op_head(bb);
     while let Some(o) = op {
@@ -388,7 +390,8 @@ pub(crate) fn printed_ops(data: &Funcdata, bb: BlockId) -> Vec<OpId> {
 
 /// Do two varnodes render as the **same variable** — same storage space, offset,
 /// and size?  (The two post-SSA COPY outputs of a merged diamond share storage.)
-pub(crate) fn same_storage(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn same_storage(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
     let (ra, rb) = match (data.vbank().get(a), data.vbank().get(b)) {
         (Some(x), Some(y)) => (x, y),
         _ => return false,

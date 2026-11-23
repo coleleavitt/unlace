@@ -19,27 +19,31 @@ use super::{
 
 const HOME: i64 = -40;
 
-pub(crate) enum Out {
+#[doc(hidden)]
+pub enum Out {
     Unique(int4),
     At(Rc<AddrSpace>, u64, int4),
 }
 
-pub(crate) struct Fx {
-    pub(crate) fd: Funcdata,
+#[doc(hidden)]
+pub struct Fx {
+    pub fd: Funcdata,
     block: BlockId,
-    pub(crate) reg: Rc<AddrSpace>,
+    pub reg: Rc<AddrSpace>,
     other: Rc<AddrSpace>,
-    pub(crate) stack: Rc<AddrSpace>,
+    pub stack: Rc<AddrSpace>,
     sp: VarnodeId,
     pc: u64,
 }
 
 impl Fx {
-    pub(crate) fn new() -> Self {
+    #[doc(hidden)]
+    pub fn new() -> Self {
         Self::with_return_address(Some((0, 8)))
     }
 
-    pub(crate) fn with_stack_views() -> Self {
+    #[doc(hidden)]
+    pub fn with_stack_views() -> Self {
         Self::with_options(Some((0, 8)), true)
     }
 
@@ -106,11 +110,13 @@ impl Fx {
         }
     }
 
-    pub(crate) fn constant(&mut self, size: int4, value: u64) -> VarnodeId {
+    #[doc(hidden)]
+    pub fn constant(&mut self, size: int4, value: u64) -> VarnodeId {
         self.fd.new_constant(size, value)
     }
 
-    pub(crate) fn emit(
+    #[doc(hidden)]
+    pub fn emit(
         &mut self,
         code: OpCode,
         inputs: &[VarnodeId],
@@ -135,7 +141,8 @@ impl Fx {
         (op, output)
     }
 
-    pub(crate) fn frame_pointer(&mut self, offset: i64) -> VarnodeId {
+    #[doc(hidden)]
+    pub fn frame_pointer(&mut self, offset: i64) -> VarnodeId {
         let amount = self.constant(8, offset as u64);
         let sp = self.sp;
         self.emit(OpCode::CPUI_INT_ADD, &[sp, amount], Some(Out::Unique(8)))
@@ -143,7 +150,8 @@ impl Fx {
             .unwrap()
     }
 
-    pub(crate) fn marker(&mut self) -> OpId {
+    #[doc(hidden)]
+    pub fn marker(&mut self) -> OpId {
         let value = self.constant(8, 0);
         self.emit(OpCode::CPUI_COPY, &[value], Some(Out::Unique(8)))
             .0
@@ -188,7 +196,8 @@ fn locked_home_call(fx: &mut Fx, stack_base: u64, variadic: bool) -> FuncCallSpe
     locked_home_call_on(fx, op, stack_base, variadic)
 }
 
-pub(crate) fn locked_home_call_on(
+#[doc(hidden)]
+pub fn locked_home_call_on(
     fx: &mut Fx,
     op: OpId,
     stack_base: u64,
@@ -240,7 +249,8 @@ fn call_with_proto(fx: &mut Fx, proto: &FuncProto) -> FuncCallSpecs {
     call
 }
 
-pub(crate) fn call_with_r8_argument(
+#[doc(hidden)]
+pub fn call_with_r8_argument(
     fx: &mut Fx,
     first_actual: VarnodeId,
     stack_base: u64,

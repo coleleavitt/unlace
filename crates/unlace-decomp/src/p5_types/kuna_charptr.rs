@@ -101,7 +101,8 @@ const HOP_CAP: usize = 10;
 /// What the walk found.  Kept per kind so the `KUNA_CHARPTR_CENSUS` dump can
 /// report which evidence a candidate rests on, and which use refused it.
 #[derive(Default)]
-pub(crate) struct Evidence {
+#[doc(hidden)]
+pub struct Evidence {
     /// Reaches a call argument the callee DECLARES `char *`.
     pub libc: u32,
     /// ...and that call is a `formatstring`-resolved `%s` conversion.
@@ -625,7 +626,8 @@ fn defined_by_string_constant(data: &Funcdata, vn: VarnodeId) -> bool {
 /// already recovered at that address?  The resolution is
 /// `ActionConstantPtr::isPointer`'s (`coreaction.cc:1167`), and the answer is
 /// the covering global symbol's own data-type.
-pub(crate) fn constant_is_string(data: &Funcdata, op: OpId, cvn: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn constant_is_string(data: &Funcdata, op: OpId, cvn: VarnodeId) -> bool {
     let Some(v) = data.vbank().get(cvn) else {
         return false;
     };
@@ -634,7 +636,8 @@ pub(crate) fn constant_is_string(data: &Funcdata, op: OpId, cvn: VarnodeId) -> b
 
 /// [`constant_is_string`] for a constant value `off` of `size` bytes read at
 /// `op` rather than a constant Varnode.
-pub(crate) fn value_is_string(data: &Funcdata, op: OpId, off: uintb, size: int4) -> bool {
+#[doc(hidden)]
+pub fn value_is_string(data: &Funcdata, op: OpId, off: uintb, size: int4) -> bool {
     let glb = data.get_arch();
     let Some(spc) = glb.manage().get_default_data_space().map(Rc::clone) else {
         return false;

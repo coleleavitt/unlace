@@ -187,13 +187,13 @@ pub struct CalleeMemory {
 }
 
 impl CalleeMemory {
-    pub(super) fn uses_frame_return(&self) -> bool {
+    #[doc(hidden)]
+    pub fn uses_frame_return(&self) -> bool {
         self.frame_return_read
     }
 
-    pub(super) fn global_accesses(
-        &self,
-    ) -> Option<impl Iterator<Item = (i32, u64, u32, i64, u32)> + '_> {
+    #[doc(hidden)]
+    pub fn global_accesses(&self) -> Option<impl Iterator<Item = (i32, u64, u32, i64, u32)> + '_> {
         if !self.complete
             || self.global_ineligible
             || self
@@ -271,10 +271,11 @@ fn note_partial_pointer_clobber(summary: &mut CalleeMemory, state: &State, outpu
 }
 
 #[derive(Clone)]
-pub(super) struct RawOp {
-    pub(super) code: OpCode,
-    pub(super) out: Option<VarnodeData>,
-    pub(super) inputs: Vec<VarnodeData>,
+#[doc(hidden)]
+pub struct RawOp {
+    pub code: OpCode,
+    pub out: Option<VarnodeData>,
+    pub inputs: Vec<VarnodeData>,
 }
 
 #[derive(Default)]
@@ -982,7 +983,8 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 }
 
 #[cfg(test)]
-pub(crate) fn test_call_summary_is_usable(
+#[doc(hidden)]
+pub fn test_call_summary_is_usable(
     fd: &Funcdata,
     id: crate::context::OpId,
     start: u64,
@@ -995,7 +997,8 @@ pub(crate) fn test_call_summary_is_usable(
 }
 
 /// Only complete body evidence can narrow the frame's call-write guard.
-pub(crate) fn preserves(fd: &Funcdata, call: &FuncCallSpecs, address: &Address, size: i32) -> bool {
+#[doc(hidden)]
+pub fn preserves(fd: &Funcdata, call: &FuncCallSpecs, address: &Address, size: i32) -> bool {
     if !fd
         .get_arch()
         .kuna_options
@@ -1018,20 +1021,16 @@ pub(crate) fn preserves(fd: &Funcdata, call: &FuncCallSpecs, address: &Address, 
 }
 
 /// Unknown code, aliases, returned pointers and escaped pointers remain observers.
-pub(crate) fn unobserved(
-    fd: &Funcdata,
-    id: OpId,
-    start: u64,
-    size: i32,
-    wanted: u32,
-) -> Option<u32> {
+#[doc(hidden)]
+pub fn unobserved(fd: &Funcdata, id: OpId, start: u64, size: i32, wanted: u32) -> Option<u32> {
     unobserved_inner(fd, id, start, size, wanted, true)
 }
 
 /// Prove that a call does not observe a frame range without discharging any
 /// deferred callee-home pointer stores. This bounds the home proof to one
 /// callsite and prevents recursive summary walks.
-pub(crate) fn unobserved_strict(
+#[doc(hidden)]
+pub fn unobserved_strict(
     fd: &Funcdata,
     id: OpId,
     start: u64,

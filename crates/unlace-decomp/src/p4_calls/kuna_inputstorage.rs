@@ -140,7 +140,8 @@ fn allocate(
     }
 }
 
-pub(crate) fn assign(
+#[doc(hidden)]
+pub fn assign(
     input: &ParamListStandard,
     proto: &PrototypePieces,
     types: &dyn TypeFactory,
@@ -259,7 +260,8 @@ pub(crate) fn assign(
 }
 
 /// Local console maps and qualified declarations share the same assignment path.
-pub(crate) fn merge_mapped<'a>(
+#[doc(hidden)]
+pub fn merge_mapped<'a>(
     prototype: Option<&'a PrototypePieces>,
     mapped: &[(i32, String, ParameterPieces)],
 ) -> Option<Cow<'a, PrototypePieces>> {

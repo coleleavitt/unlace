@@ -186,7 +186,8 @@ fn pattern(fd: &Funcdata, arch: &Architecture, branch: OpId) -> Option<(OpId, bo
 }
 
 impl PrintC {
-    pub(crate) fn emit_rust_option_condition(
+    #[doc(hidden)]
+    pub fn emit_rust_option_condition(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

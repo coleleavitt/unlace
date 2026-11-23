@@ -9,14 +9,16 @@ use crate::funcdata::Funcdata;
 use crate::kuna_namespaces::plain_scope;
 use crate::printlanguage::NamespaceStrategy;
 
-pub(crate) struct ProvenScopes {
-    pub(crate) target_inner: Vec<String>,
-    pub(crate) caller: ScopeId,
+#[doc(hidden)]
+pub struct ProvenScopes {
+    pub target_inner: Vec<String>,
+    pub caller: ScopeId,
     target_ids: Vec<ScopeId>,
 }
 
 /// Require the live and detached symbol views to name the same whole function.
-pub(crate) fn proven_scopes(
+#[doc(hidden)]
+pub fn proven_scopes(
     fd: &Funcdata,
     arch: &Architecture,
     target: &Address,

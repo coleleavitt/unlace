@@ -42,7 +42,8 @@ use crate::funcdata::Funcdata;
 /// whose edge is a real goto, and every `BlockMultiGoto` virtual edge.  Targets
 /// are recorded as given (the block the carrier names), matching how the passes
 /// address the flag they clear.
-pub(crate) fn referenced_goto_targets(
+#[doc(hidden)]
+pub fn referenced_goto_targets(
     graph: &BlockGraph,
     root: BlockId,
 ) -> std::collections::BTreeSet<BlockId> {
@@ -92,7 +93,8 @@ pub(crate) fn referenced_goto_targets(
 /// label printed.  That asymmetry is deliberate: a label no `goto` reaches is
 /// legal C, a `goto` with no label is not, and tightening the clear would
 /// remove statements rather than fix a label.
-pub(crate) fn release_converted_labels(data: &mut Funcdata, converted: &[BlockId]) {
+#[doc(hidden)]
+pub fn release_converted_labels(data: &mut Funcdata, converted: &[BlockId]) {
     if converted.is_empty() {
         return;
     }

@@ -564,7 +564,8 @@ fn edge_value(data: &Funcdata, branch: OpId, edge: usize) -> bool {
 }
 
 /// Merge every branch with the bare second test that one of its successors is.
-pub(crate) fn branchmerge_apply(data: &mut Funcdata) -> int4 {
+#[doc(hidden)]
+pub fn branchmerge_apply(data: &mut Funcdata) -> int4 {
     let mut count = 0;
     for i in 0..data.bblocks_get_size() {
         let bl = data.bblocks_get_block(i);

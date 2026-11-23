@@ -10,7 +10,8 @@ use unlace_num::opcodes::OpCode;
 #[cfg(test)]
 use crate::kuna_stackreadscope::{mark_stack_read, record_propagated_read};
 
-pub(crate) fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> Option<BlockId> {
+#[doc(hidden)]
+pub fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> Option<BlockId> {
     let value = data.vbank().get(vn)?;
     if value.get_space().get_type() != spacetype::IPTR_SPACEBASE
         || !value.is_addr_tied()

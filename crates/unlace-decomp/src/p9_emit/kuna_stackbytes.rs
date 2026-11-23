@@ -9,7 +9,8 @@ use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
 #[derive(Clone, Copy)]
-pub(crate) enum Byte {
+#[doc(hidden)]
+pub enum Byte {
     Constant(u8),
     Value {
         source: VarnodeId,
@@ -18,12 +19,14 @@ pub(crate) enum Byte {
     },
 }
 
-pub(crate) struct Range {
+#[doc(hidden)]
+pub struct Range {
     pub offset: i32,
     pub bytes: Vec<Byte>,
 }
 
-pub(crate) struct Assignment {
+#[doc(hidden)]
+pub struct Assignment {
     pub output: VarnodeId,
     pub name: String,
     pub offset: i32,
@@ -31,7 +34,8 @@ pub(crate) struct Assignment {
     pub ranges: Vec<Range>,
 }
 
-pub(crate) fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
+#[doc(hidden)]
+pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
     macro_rules! reject {
         ($($arg:tt)*) => {{
             return None;
@@ -276,7 +280,8 @@ fn is_default_data_value(fd: &Funcdata, value: VarnodeId) -> bool {
         .is_some_and(|space| value.get_space().get_index() == space.get_index())
 }
 
-pub(crate) fn safe_global_source(
+#[doc(hidden)]
+pub fn safe_global_source(
     fd: &Funcdata,
     value: VarnodeId,
     use_op: OpId,
@@ -296,7 +301,8 @@ pub(crate) fn safe_global_source(
     Some(value)
 }
 
-pub(crate) fn safe_load_op(fd: &Funcdata, value: VarnodeId, use_op: OpId) -> Option<OpId> {
+#[doc(hidden)]
+pub fn safe_load_op(fd: &Funcdata, value: VarnodeId, use_op: OpId) -> Option<OpId> {
     let mut current = value;
     for _ in 0..=32 {
         let current_value = fd.vbank().get(current)?;

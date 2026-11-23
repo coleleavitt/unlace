@@ -3,7 +3,8 @@
 use crate::architecture::Architecture;
 use unlace_base::address::Address;
 
-pub(crate) fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
+#[doc(hidden)]
+pub fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
     if arch
         .remote_scope
         .as_ref()
@@ -59,7 +60,8 @@ pub(crate) fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
 /// Under `noreturn_known`, a direct call at `call` (falling through to
 /// `fallthrough`) to a `<prefix>__<entry>` proxy stub is no-return when it is the
 /// last instruction of its sized function (`kuna_noreturn_externmatch.rs`).
-pub(crate) fn is_proxy_no_return_at(
+#[doc(hidden)]
+pub fn is_proxy_no_return_at(
     arch: &Architecture,
     entry: &Address,
     call: &Address,

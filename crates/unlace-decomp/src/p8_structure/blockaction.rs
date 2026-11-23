@@ -2159,7 +2159,8 @@ impl<'a> CollapseStructure<'a> {
     /// complex regardless of how trivial its front `BlockBasic` is — that is
     /// what forces the valid `while(true){...; if (cond) break;}` overflow
     /// syntax instead of inlining statements into the `while(...)` parens.
-    pub(crate) fn is_complex(&self, bl: BlockId) -> bool {
+    #[doc(hidden)]
+    pub fn is_complex(&self, bl: BlockId) -> bool {
         let mut bl = bl;
         loop {
             // (kuna, `option condfold`) a node produced by a condfold-relaxed fold

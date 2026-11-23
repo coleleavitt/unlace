@@ -559,7 +559,8 @@ fn trace(fd: &Funcdata, base: VarnodeId, offset: intb, stored: &StoredResults) -
 /// A count whose call returns how many bytes it stored, when the function
 /// writes one terminator byte at that result (`n = readlink(p, buf, len);
 /// buf[n] = 0;`), is one byte more.
-pub(super) fn gather(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
+#[doc(hidden)]
+pub fn gather(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     let level = fd.get_arch().kuna_options.get::<ArraySize>().0;
     if level == LEVEL_OFF {
         return;

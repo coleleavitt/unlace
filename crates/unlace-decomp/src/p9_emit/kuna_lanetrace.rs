@@ -17,7 +17,8 @@ use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 /// The Varnodes a trace from `root` that reached `reached` read: `root`,
 /// every Varnode reached, and every input and output of the ops defining and
 /// reading them.
-pub(crate) fn footprint(
+#[doc(hidden)]
+pub fn footprint(
     data: &Funcdata,
     root: VarnodeId,
     reached: impl IntoIterator<Item = VarnodeId>,
@@ -45,7 +46,8 @@ pub(crate) fn footprint(
 /// when a split follows it: nothing changes the IR between splits, so it is the
 /// footprint the trace read.
 #[derive(Default)]
-pub(crate) struct FailedTraces {
+#[doc(hidden)]
+pub struct FailedTraces {
     failed: FxHashSet<VarnodeId>,
     pending: Vec<(VarnodeId, usize, usize)>,
     reached: Vec<VarnodeId>,
@@ -54,22 +56,26 @@ pub(crate) struct FailedTraces {
 
 impl FailedTraces {
     /// Would a trace from `root` fail as it did before?
-    pub(crate) fn holds(&self, root: VarnodeId) -> bool {
+    #[doc(hidden)]
+    pub fn holds(&self, root: VarnodeId) -> bool {
         self.failed.contains(&root)
     }
 
     /// Where the Varnodes the next root's traces reach start.
-    pub(crate) fn start(&self) -> usize {
+    #[doc(hidden)]
+    pub fn start(&self) -> usize {
         self.reached.len()
     }
 
     /// A trace reached `reached`.
-    pub(crate) fn reach(&mut self, reached: impl IntoIterator<Item = VarnodeId>) {
+    #[doc(hidden)]
+    pub fn reach(&mut self, reached: impl IntoIterator<Item = VarnodeId>) {
         self.reached.extend(reached);
     }
 
     /// Every trace from `root` failed, reaching what was recorded since `start`.
-    pub(crate) fn fail(&mut self, root: VarnodeId, start: usize) {
+    #[doc(hidden)]
+    pub fn fail(&mut self, root: VarnodeId, start: usize) {
         self.failed.insert(root);
         self.pending.push((root, start, self.reached.len()));
     }
@@ -78,7 +84,8 @@ impl FailedTraces {
     /// be applied as a split. Index the failures since the last split by
     /// `footprint_of(root, reached)`, then forget every failure that read a
     /// Varnode in the split's own footprint.
-    pub(crate) fn split(
+    #[doc(hidden)]
+    pub fn split(
         &mut self,
         root: VarnodeId,
         start: usize,

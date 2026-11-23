@@ -20,7 +20,7 @@ pub mod kuna_calleearitylive; // (kuna) extend a partial argument list when the 
 pub mod kuna_calleearityscratch; // (kuna) let a caller-scratch register bound that cut run
 pub mod kuna_calleedeadarg;
 pub mod kuna_calleefilledarg; // (kuna) a register the callee loads itself is no slot, and no evidence about the slots after it
-pub(crate) mod kuna_calleenoreturn;
+pub mod kuna_calleenoreturn;
 pub mod kuna_calleepreserves; // (kuna) the decoded callee's writes narrow the cspec killedbycall set
 pub mod kuna_calleeprotostack; // (kuna) a declared callee's prototype states its stack contract
 pub mod kuna_calleepurge; // (kuna) an x86-32 callee's stack purge read off its RET
@@ -57,7 +57,7 @@ pub mod kuna_helperrole;
 pub mod kuna_hiddenretarg; // (kuna) a value left in the hidden-return register is no argument a callee cannot take
 pub mod kuna_importvote; // (kuna) an undeclared import takes what its other call sites pass
 pub mod kuna_inputparamgap; // (kuna) an unused-argument-register run must not veto a later live-in
-pub(crate) mod kuna_joincalloutput;
+pub mod kuna_joincalloutput;
 pub mod kuna_langabi; // (kuna) the ABI seam: per-language `extern` rendering
 pub mod kuna_mixedtailret; // (kuna) a value returned beside a claimed tail-call result is returned too
 pub mod kuna_msvcbyval; // (kuna) an MSVC __cdecl import's by-value class argument sized at the call site
@@ -105,11 +105,11 @@ pub mod kuna_zerocallregs; // (kuna) a register a -fzero-call-used-regs epilogue
 pub mod kuna_zerofillreturn; // (kuna) the zero a narrow write leaves in a returned q register's upper half is no part of the value
 pub mod kuna_zeroidiomuse; // (kuna) a self-cancelling `xor r,r` is not a competing use of the value it eats
 
-pub(crate) mod kuna_customreturn;
+pub mod kuna_customreturn;
 pub mod kuna_floatregister;
 pub mod kuna_inputhints; // (kuna) unlocked names and types for recovered inputs
-pub(crate) mod kuna_inputstorage;
-pub(crate) mod kuna_stackparamalign;
+pub mod kuna_inputstorage;
+pub mod kuna_stackparamalign;
 pub mod kuna_swiftcall; // (kuna) Swift calls that may throw, and stale swiftself arguments
 pub mod kuna_swifterror; // (kuna) the Swift error register named after a throwing call and before a throwing return
 pub mod kuna_swiftinfer; // (kuna) the Swift convention of functions the metadata did not bind
@@ -118,7 +118,7 @@ pub mod kuna_x87free;
 
 pub mod kuna_callmechanisms;
 pub mod kuna_elfmaindecl; // (kuna) an executable's own main declared from its unlocked analysis
-pub(crate) mod kuna_registerslots;
+pub mod kuna_registerslots;
 
 pub mod kuna_gotimportproto;
 pub mod kuna_gottailcall; // (kuna) a one-destination computed jump to a function is a tail call when the call loses nothing

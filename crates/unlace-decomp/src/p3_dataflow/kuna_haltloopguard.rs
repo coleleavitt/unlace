@@ -35,7 +35,8 @@ use crate::varnode::varnode_flags;
 /// The entry block of each strongly connected component of the basic-block
 /// graph reached from the function's start block that holds a cycle and has no
 /// edge out of it: the block through which a depth-first walk entered it.
-pub(crate) fn exitless_loops(fd: &Funcdata) -> Vec<BlockId> {
+#[doc(hidden)]
+pub fn exitless_loops(fd: &Funcdata) -> Vec<BlockId> {
     let g = fd.bblocks_ref();
     let Some(root) = g.root else {
         return Vec::new();
@@ -118,7 +119,8 @@ pub(crate) fn exitless_loops(fd: &Funcdata) -> Vec<BlockId> {
 /// Record each loop entry in `heads` as a block whose entry [`mark`] keeps the
 /// range at `addr` alive at, when the range is persistent (`fl`) and the
 /// function stores to it.
-pub(crate) fn guard(
+#[doc(hidden)]
+pub fn guard(
     fd: &Funcdata,
     heads: &[BlockId],
     fl: uint4,
@@ -151,7 +153,8 @@ pub(crate) fn guard(
 /// writes it joins rather than marked itself: the block holding it may do
 /// nothing once dead code is gone, and removing that block drops it. An input
 /// the function never wrote needs nothing.
-pub(crate) fn mark(fd: &mut Funcdata, reaching: &[VarnodeId]) {
+#[doc(hidden)]
+pub fn mark(fd: &mut Funcdata, reaching: &[VarnodeId]) {
     let mut seen: FxHashSet<VarnodeId> = FxHashSet::default();
     let mut work: Vec<VarnodeId> = reaching.to_vec();
     while let Some(vn) = work.pop() {

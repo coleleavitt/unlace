@@ -59,7 +59,8 @@ fn in_register(arch: &Architecture, slot: &dyn ProtoParameter, name: &[u8], widt
     })
 }
 
-pub(crate) fn seed(arch: &Architecture, data: &mut Funcdata) {
+#[doc(hidden)]
+pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     let Some((index, site, mut proto)) = contract(arch, data) else {
         return;
     };

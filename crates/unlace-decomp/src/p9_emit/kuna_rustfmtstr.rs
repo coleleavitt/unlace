@@ -18,7 +18,8 @@ pub fn forwarded_target(address: u64, bytes: &[u8]) -> Option<u64> {
         .checked_add_signed(i64::from(displacement))
 }
 
-pub(crate) fn recover(
+#[doc(hidden)]
+pub fn recover(
     fd: &Funcdata,
     arch: &Architecture,
     call: OpId,

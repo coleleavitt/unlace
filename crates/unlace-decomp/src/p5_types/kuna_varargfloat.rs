@@ -64,7 +64,8 @@ pub fn argument_requirement(
 /// Is the argument `vn` of the call `op` an integer whose bits a cast to a
 /// float would reinterpret?  An implied `CAST` folded into the argument counts
 /// only when its own source is integer bits or already a float.
-pub(crate) fn integer_bits(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn integer_bits(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
     let reinterprets = data.hooks().bitcast_reinterprets_to_float;
     let bits = |v| reinterprets(data, v);
     let Some(node) = data.vbank().get(vn) else {

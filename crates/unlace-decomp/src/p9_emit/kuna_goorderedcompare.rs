@@ -86,7 +86,8 @@ fn matching_guard(fd: &Funcdata, guard: VarnodeId, operands: [VarnodeId; 2]) -> 
 }
 
 /// The right clause contains only tests already implied by the left equality.
-pub(crate) fn redundant_right(
+#[doc(hidden)]
+pub fn redundant_right(
     fd: &Funcdata,
     arch: &Architecture,
     left: BlockId,

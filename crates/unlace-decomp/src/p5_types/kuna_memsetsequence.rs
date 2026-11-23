@@ -308,10 +308,8 @@ fn copy_const_offset(data: &Funcdata, op: OpId) -> uintb {
 /// footprint.  On success `move_ops` is truncated to the contiguous run and
 /// `(fill_byte, total_bytes)` is returned.  Each `WriteNode.slot` carries the
 /// COPY's byte stride.
-pub(crate) fn detect_fill_run(
-    data: &Funcdata,
-    move_ops: &mut Vec<WriteNode>,
-) -> Option<(u8, int4)> {
+#[doc(hidden)]
+pub fn detect_fill_run(data: &Funcdata, move_ops: &mut Vec<WriteNode>) -> Option<(u8, int4)> {
     if move_ops.is_empty() {
         return None;
     }

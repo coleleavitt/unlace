@@ -2,7 +2,8 @@
 
 const FALLBACK_PREFIX: &str = "__kuna_userop_";
 
-pub(crate) fn operator_name(name: Option<&[u8]>, index: u64) -> String {
+#[doc(hidden)]
+pub fn operator_name(name: Option<&[u8]>, index: u64) -> String {
     let name = String::from_utf8_lossy(name.unwrap_or_default());
     if raw_keyword(&name) {
         return format!("r#{name}");
@@ -34,7 +35,8 @@ fn is_ascii_identifier(name: &str) -> bool {
         && chars.all(|c| c == b'_' || c.is_ascii_alphanumeric())
 }
 
-pub(crate) fn raw_keyword(name: &str) -> bool {
+#[doc(hidden)]
+pub fn raw_keyword(name: &str) -> bool {
     matches!(
         name,
         "as" | "async"

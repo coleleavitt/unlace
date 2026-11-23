@@ -96,7 +96,8 @@ fn bitfield_big_endian(data: &Funcdata) -> bool {
 /// The integer type a LOAD or STORE moves when its pointer reaches exactly the
 /// whole bytes of one bitfield: the field's type at that width, as if the field
 /// were a plain member. `None` when the access is anything else.
-pub(crate) fn whole_byte_field_value(
+#[doc(hidden)]
+pub fn whole_byte_field_value(
     tlst: &dyn crate::dtype::TypeFactory,
     pointer: &Datatype,
     size: int4,
@@ -461,7 +462,8 @@ impl BitFieldTransform {
 /// sorted" per the header comment; transcribed in source order (which is the
 /// numeric order of the `OpCode` enum here).  [`RuleBitFieldOut::get_op_list`]
 /// folds this list into its op whitelist.
-pub(crate) const ALLOWED_FINAL_WRITES: &[OpCode] = &[
+#[doc(hidden)]
+pub const ALLOWED_FINAL_WRITES: &[OpCode] = &[
     OpCode::CPUI_COPY,
     OpCode::CPUI_INT_EQUAL,
     OpCode::CPUI_INT_NOTEQUAL,

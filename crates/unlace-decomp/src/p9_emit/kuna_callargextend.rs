@@ -79,7 +79,8 @@ fn target(fd: &Funcdata, op: OpId, slot: i32) -> Option<(Rc<Datatype>, bool)> {
 }
 
 impl PrintC {
-    pub(crate) fn push_extended_call_argument(
+    #[doc(hidden)]
+    pub fn push_extended_call_argument(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

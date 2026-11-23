@@ -94,7 +94,8 @@ fn return_register_width(data: &Funcdata) -> Option<int4> {
 /// the value under `mask`, whether the RETURN still hands back the zero
 /// extension of a narrow value: every trim from the whole register on dropped
 /// only known-zero bits.
-pub(crate) fn note_trim(data: &mut Funcdata, op: OpId, before: VarnodeId, mask: u64) {
+#[doc(hidden)]
+pub fn note_trim(data: &mut Funcdata, op: OpId, before: VarnodeId, mask: u64) {
     if !data
         .get_arch()
         .kuna_options
@@ -522,7 +523,8 @@ pub fn stated_type(
 /// Does the CALL `op` read a callee that states it returns a truth value, in
 /// exactly the storage and width of the call's output?  `boolbyte` counts such
 /// a call as a truth-valued definition of the byte that holds its result.
-pub(crate) fn states_truth(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn states_truth(data: &Funcdata, op: OpId) -> bool {
     if !data
         .get_arch()
         .kuna_options

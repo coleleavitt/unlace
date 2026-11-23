@@ -19,17 +19,20 @@ use crate::printc::PrintEmit;
 
 impl PrintEmit {
     /// Record that a label (`case N:`, `default:`, `name:`) was just printed.
-    pub(crate) fn note_label(&mut self) {
+    #[doc(hidden)]
+    pub fn note_label(&mut self) {
         self.state_mut().dangling_label = true;
     }
 
     /// Whether the last thing printed was a label with no statement after it.
-    pub(crate) fn label_dangling(&self) -> bool {
+    #[doc(hidden)]
+    pub fn label_dangling(&self) -> bool {
         self.state().dangling_label
     }
 
     /// Give a pending label the null statement `;` on its own line.
-    pub(crate) fn settle_dangling_label(&mut self) {
+    #[doc(hidden)]
+    pub fn settle_dangling_label(&mut self) {
         if !std::mem::take(&mut self.state_mut().dangling_label) {
             return;
         }

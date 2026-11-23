@@ -7,7 +7,8 @@ use crate::printc::PrintC;
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 
 impl PrintC {
-    pub(crate) fn push_rust_array_zero(
+    #[doc(hidden)]
+    pub fn push_rust_array_zero(
         &mut self,
         fd: &Funcdata,
         value: VarnodeId,

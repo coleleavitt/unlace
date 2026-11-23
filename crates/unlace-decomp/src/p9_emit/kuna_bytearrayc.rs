@@ -4,14 +4,16 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
-pub(crate) struct Access {
+#[doc(hidden)]
+pub struct Access {
     pub name: String,
     pub offset: i32,
     pub size: i32,
     pub big: bool,
 }
 
-pub(super) fn byte_array(ty: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn byte_array(ty: &Datatype) -> bool {
     ty.get_metatype() == type_metatype::TYPE_ARRAY
         && ty.get_array_base().is_some_and(|elem| {
             elem.get_size() == 1
@@ -28,7 +30,8 @@ pub(super) fn byte_array(ty: &Datatype) -> bool {
 
 /// Refuse wider containers, noninteger values and accesses without a complete
 /// byte-array storage contract. Volatile annotations are never split into bytes.
-pub(crate) fn access(fd: &Funcdata, vn: VarnodeId) -> Option<Access> {
+#[doc(hidden)]
+pub fn access(fd: &Funcdata, vn: VarnodeId) -> Option<Access> {
     let value = fd.vbank().get(vn)?;
     if value.is_constant() || value.is_annotation() || value.is_volatile() {
         return None;
@@ -85,7 +88,8 @@ pub(crate) fn access(fd: &Funcdata, vn: VarnodeId) -> Option<Access> {
     })
 }
 
-pub(crate) fn helper(size: i32, big: bool, store: bool) -> String {
+#[doc(hidden)]
+pub fn helper(size: i32, big: bool, store: bool) -> String {
     format!(
         "kuna_bytearray_{}{}_{}",
         if store { "store" } else { "load" },
@@ -95,7 +99,8 @@ pub(crate) fn helper(size: i32, big: bool, store: bool) -> String {
 }
 
 /// A bit-preserving integer CAST to a byte-array view has no C array cast.
-pub(crate) fn integer_array_cast(fd: &Funcdata, op: OpId) -> Option<VarnodeId> {
+#[doc(hidden)]
+pub fn integer_array_cast(fd: &Funcdata, op: OpId) -> Option<VarnodeId> {
     let operation = fd.obank().get(op)?;
     let out = fd.vbank().get(operation.get_out()?)?;
     let input = operation.get_in(0)?;
@@ -117,7 +122,8 @@ pub(crate) fn integer_array_cast(fd: &Funcdata, op: OpId) -> Option<VarnodeId> {
 
 /// Each width/endian pair has its own guard so separately emitted functions can
 /// be compiled together, including functions that use different transfer widths.
-pub(crate) fn preamble(size: i32, big: bool) -> String {
+#[doc(hidden)]
+pub fn preamble(size: i32, big: bool) -> String {
     let bits = size * 8;
     let endian = if big { "BE" } else { "LE" };
     let guard = format!("KUNA_BYTEARRAY_C_{bits}_{endian}");

@@ -399,11 +399,8 @@ fn collect_canary_slots(
 /// cannot reach an unrelated local; only stack-space members are recorded, so a
 /// copy of the value into a global keeps its store.  Shared with the MSVC `/GS`
 /// sibling, which roots it at the entry-side cookie scramble.
-pub(crate) fn collect_value_slots(
-    inits: &[OpId],
-    data: &Funcdata,
-    slots: &mut Vec<(Address, int4)>,
-) {
+#[doc(hidden)]
+pub fn collect_value_slots(inits: &[OpId], data: &Funcdata, slots: &mut Vec<(Address, int4)>) {
     let mut set: BTreeSet<VarnodeId> = BTreeSet::new();
     let mut work: Vec<VarnodeId> = Vec::new();
     for &op in inits {
@@ -482,7 +479,8 @@ pub(crate) fn collect_value_slots(
 /// store that cannot be tied to a stripped check is never removed; once the
 /// last check is stripped the init store, the LOAD and the TLS-base residue
 /// all die through the stock consume fixpoint.
-pub(crate) fn release_canary_slots(data: &mut Funcdata, slots: &[(Address, int4)]) {
+#[doc(hidden)]
+pub fn release_canary_slots(data: &mut Funcdata, slots: &[(Address, int4)]) {
     for (addr, size) in slots {
         let ids: Vec<VarnodeId> = data.vbank().iter_loc_size_addr(*size, addr).collect();
         for vn in ids {

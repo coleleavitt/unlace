@@ -180,17 +180,24 @@ fn bounded_veneer_without_prototypes_does_not_pass_its_target_register() {
     assert!(!c.contains("halt_missing"), "{c}");
 }
 
+/// The single-function drive decompiles the prototype-less helper first, files
+/// that it takes and returns one value, and takes the tail call
+/// (VENEERTAILCALL #10); `tailcalljump direct` copies its body in (#5).
 #[test]
-fn open_veneer_to_a_helper_without_a_prototype_keeps_its_body() {
+fn open_veneer_to_a_helper_without_a_prototype_tail_calls_it_once_filed() {
+    let script = [
+        "function 0x10000=veneer",
+        "function 0x10010-0x10018=arm_helper",
+        "readonly 0x10008+4",
+    ];
+    let c = decompile(&ldr_bx_veneer(), "arm", &script, &[]);
+    assert!(c.contains("return arm_helper(a0); // tail-call"), "{c}");
+    assert!(!c.contains("return a0 + 1;"), "{c}");
     let c = decompile(
         &ldr_bx_veneer(),
         "arm",
-        &[
-            "function 0x10000=veneer",
-            "function 0x10010-0x10018=arm_helper",
-            "readonly 0x10008+4",
-        ],
-        &[],
+        &script,
+        &["--option", "tailcalljump", "direct"],
     );
     assert!(c.contains("return a0 + 1;"), "{c}");
     assert!(!c.contains("// tail-call"), "{c}");

@@ -22,7 +22,7 @@ fn declared_return_effects_preserve_the_x87_stack_across_consecutive_calls() {
         let path = entry.unwrap().path();
         if matches!(
             path.extension().and_then(|value| value.to_str()),
-            Some("ldefs" | "pspec" | "cspec" | "sla")
+            Some("ldefs" | "pspec" | "cspec" | "slaspec" | "sinc")
         ) {
             std::fs::copy(&path, specs.join(path.file_name().unwrap())).unwrap();
         }
@@ -177,7 +177,7 @@ fn return_payload_stores_and_unique_pointer_temporaries_survive_ssa() {
         let path = entry.unwrap().path();
         if matches!(
             path.extension().and_then(|value| value.to_str()),
-            Some("ldefs" | "pspec" | "cspec" | "sla")
+            Some("ldefs" | "pspec" | "cspec" | "slaspec" | "sinc")
         ) {
             std::fs::copy(&path, specs.join(path.file_name().unwrap())).unwrap();
         }

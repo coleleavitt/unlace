@@ -142,7 +142,11 @@ pub(super) fn inherit_prototypes(
     }
     let space = code_space.get_index();
     let mut models = (*prog.arch().loader_proto_models).clone();
-    let mut abi = prog.arch().loader_swift_abi.as_deref().cloned();
+    let mut abi = prog
+        .arch()
+        .kuna_states
+        .get::<unlace_decomp::kuna_swiftcall::SwiftAbi>()
+        .cloned();
     for &thunk in renamed {
         let Some(target) = jumps
             .get(&thunk)
@@ -184,7 +188,7 @@ pub(super) fn inherit_prototypes(
     }
     prog.arch_mut().loader_proto_models = Rc::new(models);
     if let Some(abi) = abi {
-        prog.arch_mut().loader_swift_abi = Some(Rc::new(abi));
+        prog.arch_mut().kuna_states.set(Rc::new(abi));
     }
 }
 

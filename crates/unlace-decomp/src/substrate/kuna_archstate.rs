@@ -82,6 +82,31 @@ impl ArchStates {
         self.slots[index] = Some(value);
     }
 
+    /// The state of `S` for writing: a fresh default when none is installed, a private copy when
+    /// a context still shares it (`Rc::make_mut`).
+    pub fn make_mut<S: ArchState + Clone + Default>(&mut self) -> &mut S {
+        let index = S::id().0;
+        if self.slots.len() <= index {
+            self.slots.resize(index + 1, None);
+        }
+        let unique = self.slots[index]
+            .as_mut()
+            .is_some_and(|slot| Rc::get_mut(slot).is_some_and(|value| value.is::<S>()));
+        if !unique {
+            let fresh: S = self.slots[index]
+                .as_ref()
+                .and_then(|slot| (**slot).downcast_ref::<S>())
+                .cloned()
+                .unwrap_or_default();
+            let value: Rc<dyn Any> = Rc::new(fresh);
+            self.slots[index] = Some(value);
+        }
+        Rc::get_mut(self.slots[index].as_mut().expect("slot was just filled"))
+            .expect("slot is unshared")
+            .downcast_mut::<S>()
+            .expect("architecture state slot holds its own type")
+    }
+
     /// Drop the state of `S`.
     pub fn remove<S: ArchState>(&mut self) {
         if let Some(slot) = self.slots.get_mut(S::id().0) {

@@ -126,7 +126,8 @@ pub fn granule_fields(
 /// view the call passes allocates, when that view is known.
 pub fn allocated_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<Rc<Datatype>> {
     let arch = data.get_arch();
-    if arch.kuna_kalloc_types.is_empty() {
+    let kalloc = kalloc_types(&arch.kuna_states);
+    if kalloc.is_empty() {
         return None;
     }
     let name = fc.get_name();
@@ -134,9 +135,7 @@ pub fn allocated_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<R
         .iter()
         .find(|(n, returns, _)| *returns && *n == name)?;
     let view = data.obank().get(op)?.get_in(1)?;
-    let v = arch
-        .kuna_kalloc_types
-        .get(&crate::kuna_objcrettype::constant_address(data, view, 0)?)?;
+    let v = kalloc.get(&crate::kuna_objcrettype::constant_address(data, view, 0)?)?;
     let types = arch.types()?;
     let space = arch.manage.get_default_data_space()?;
     let (ptr_size, word) = (space.get_addr_size() as i32, space.get_word_size());
@@ -148,6 +147,14 @@ pub fn allocated_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<R
         view_struct(types, v)?
     };
     types.get_type_pointer(ptr_size, target, word).ok()
+}
+
+crate::kuna_arch_state!(KallocTypes);
+
+/// The image's kalloc_type views, shared through the architecture's states; empty before the
+/// loader commits them.
+pub fn kalloc_types(states: &crate::kuna_archstate::ArchStates) -> Rc<KallocTypes> {
+    states.get_rc::<KallocTypes>().unwrap_or_default()
 }
 
 #[cfg(test)]

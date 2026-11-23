@@ -33,8 +33,8 @@ fn float_globals(fixture: &str) -> BTreeMap<String, u8> {
         .expect("analysis commit succeeds");
     let input = prog
         .arch()
-        .kuna_float_scan
-        .clone()
+        .kuna_states
+        .get_rc::<unlace_decomp::kuna_floatglobals::FloatScan>()
         .expect("a loaded image stashes the scan input");
     let found = unlace_analysis::listing::kuna_floatglobals::scan(prog.arch(), &input);
 

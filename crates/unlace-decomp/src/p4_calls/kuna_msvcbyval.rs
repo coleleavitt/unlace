@@ -122,7 +122,9 @@ fn stack_pointer(data: &Funcdata) -> Option<(Address, int4)> {
 pub fn size_slots(data: &mut Funcdata) {
     data.kuna_set_msvc_byval_sites(Vec::new());
     let arch = data.get_arch().clone();
-    if arch.msvc_byval_decls.is_empty() {
+    let decl_map = byval_decls(&arch.kuna_states);
+    let builder_map = builders(&arch.kuna_states);
+    if decl_map.is_empty() {
         return;
     }
     let Some(sp) = stack_pointer(data) else {
@@ -134,8 +136,8 @@ pub fn size_slots(data: &mut Funcdata) {
     };
     let mut sites = Vec::new();
     for i in 0..data.num_calls() {
-        let Some(decl) = key(data.get_call_specs(i).get_entry_address())
-            .and_then(|k| arch.msvc_byval_decls.get(&k))
+        let Some(decl) =
+            key(data.get_call_specs(i).get_entry_address()).and_then(|k| decl_map.get(&k))
         else {
             continue;
         };
@@ -169,7 +171,7 @@ pub fn size_slots(data: &mut Funcdata) {
         }
         // The class slot starts above the parameters below it, all known-width.
         let lo: int4 = 4 + widths[..decl.at].iter().sum::<int4>();
-        let Some(walk) = walk_back(data, call, &sp, top, lo, &arch.msvc_builders) else {
+        let Some(walk) = walk_back(data, call, &sp, top, lo, &builder_map) else {
             continue;
         };
         // The class slot's size, cross-checked against the cleanup so a padding
@@ -756,6 +758,19 @@ impl crate::funcdata::Funcdata {
     pub fn kuna_msvc_byval_sites(&self) -> &[crate::p4_calls::kuna_msvcbyval::ByvalSite] {
         &self.kuna_state::<SitesSlot>().0
     }
+}
+
+crate::kuna_arch_state!(ByvalDecls);
+crate::kuna_arch_state!(Builders);
+
+/// The image's MSVC by-value declarations, shared through the architecture's states.
+pub fn byval_decls(states: &crate::kuna_archstate::ArchStates) -> std::rc::Rc<ByvalDecls> {
+    states.get_rc::<ByvalDecls>().unwrap_or_default()
+}
+
+/// The image's MSVC-declared builders, shared through the architecture's states.
+pub fn builders(states: &crate::kuna_archstate::ArchStates) -> std::rc::Rc<Builders> {
+    states.get_rc::<Builders>().unwrap_or_default()
 }
 
 #[cfg(test)]

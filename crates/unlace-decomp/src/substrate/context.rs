@@ -839,18 +839,7 @@ pub struct ArchContext {
     /// `Architecture::name_style_ghidra`.  Wins over `name_style_angr` in
     /// [`Self::kuna_name_style`].
     pub name_style_ghidra: bool,
-    /// (kuna) The image's Objective-C class table, from the ObjC analysis.
-    pub kuna_objc_classes: Rc<crate::kuna_objcrettype::ObjcClassTable>,
-    /// (kuna `xnutables`) The struct each kalloc_type view allocates, by view address.
-    pub kuna_kalloc_types: Rc<crate::kuna_kalloctype::KallocTypes>,
 
-    /// (kuna `opaquepredicate globals`) The writable data nothing may write,
-    /// once the scan has run; read by
-    /// [`constant_read`](crate::kuna_opaqueglobals::constant_read).
-    pub opaque_globals: Option<Rc<crate::kuna_opaqueglobals::UnwrittenGlobals>>,
-    /// (kuna `opaquepredicate globals`) The value is on and the scan can run
-    /// but has not.
-    pub opaque_globals_pending: bool,
     /// (kuna `opaquepredicate globals`) A comparison asked while the scan was
     /// pending.
     pub opaque_globals_wanted: std::cell::Cell<bool>,
@@ -879,12 +868,6 @@ pub struct ArchContext {
     pub call_target_c: bool,
     /// (kuna) The output is Java: decide casts as `CastStrategyJava`.
     pub java_casts: bool,
-    /// (kuna `floatglobals`) The globals the program only moves through float
-    /// registers, once the scan has run; read by
-    /// [`float_only`](crate::kuna_floatglobals::float_only).
-    pub float_globals: Option<Rc<crate::kuna_floatglobals::FloatGlobals>>,
-    /// (kuna `floatglobals`) The option is on and the scan can run but has not.
-    pub float_globals_pending: bool,
     /// (kuna `floatglobals`) A vote asked while the scan was pending.
     pub float_globals_wanted: std::cell::Cell<bool>,
     /// (kuna) The printer spells a residual one-byte TYPE_UNKNOWN as C `char`
@@ -909,12 +892,6 @@ pub struct ArchContext {
     /// read by [`kuna_libcfit`](crate::p5_types::kuna_libcfit), which holds a
     /// named libc pointer vote to what the caller does through it.
     pub libctypes: bool,
-    /// (kuna `msvcbyval`) The declarations with a by-value class of unstated
-    /// size, by entry; snapshotted from the architecture at `build_arch_handle`.
-    pub msvc_byval_decls: Rc<crate::p4_calls::kuna_msvcbyval::ByvalDecls>,
-    /// (kuna `msvcbyval`) The entries an MSVC name declares as building an
-    /// object at an address they are handed.
-    pub msvc_builders: Rc<crate::p4_calls::kuna_msvcbyval::Builders>,
     /// (kuna) `armfloatreturn` is on and the image states the ARM VFP calling
     /// convention.  Read by [`crate::p4_calls::kuna_armfloatreturn`].
     pub arm_float_return: bool,
@@ -1001,12 +978,6 @@ pub struct ArchContext {
     /// (kuna) The loader identified a Windows user-mode PE: the fact
     /// `option pebnames auto` acts on.
     pub image_windows_user: bool,
-    /// (kuna) `option tlsnames`: the executable's static TLS block, when the
-    /// loader found one.
-    pub tls_layout: Option<std::rc::Rc<crate::p5_types::kuna_tlsnames::TlsLayout>>,
-    /// (kuna `structsynth`) The engine Architecture's `--jobs` worker ledger hook,
-    /// shared: `None` outside a worker.
-    pub struct_synth_shard: Option<crate::p5_types::kuna_structsynth::shard::ShardHandle>,
     /// AArch64 integer division returns zero for a zero divisor.
     pub go_keep_divide_checks: bool,
     /// Attempt conversion of `whiledo` loops to `for` loops (C++
@@ -1077,9 +1048,6 @@ pub struct ArchContext {
     /// every hand-built fixture and every XML `<binaryimage>` load, which is why
     /// the datatest parity oracle cannot see this field.
     pub dynreloc_const: Rc<Vec<(u64, u64)>>,
-    /// (kuna `itaniumeh`) The image's Itanium call-site table when the option is
-    /// on; `None` otherwise (see [`crate::kuna_itaniumeh`]).
-    pub eh_table: Option<Rc<crate::kuna_itaniumeh::EhTable>>,
     /// (kuna `vectorabi`) The vector user-ops (AVX SLEIGH ops with an intrinsic
     /// name, and the `lanefuse` built-ins) with their element kind; their
     /// operands and results take the Intel vector types.
@@ -1157,8 +1125,6 @@ pub struct ArchContext {
     pub loader_transfer_sites: Rc<std::collections::BTreeSet<Address>>,
     /// MIPS GOT import entries identified by the loader, never ordinary definitions.
     pub loader_mips_imports: Rc<std::collections::BTreeSet<Address>>,
-    pub nullable_relocations:
-        Rc<std::collections::BTreeMap<u64, Vec<crate::kuna_nullable_reloc::NullableRelocation>>>,
     pub nullable_literal_values: Rc<std::collections::BTreeSet<u64>>,
     /// The calling convention each declared callee was declared under, keyed the
     /// same way [`Self::callee_protos`] is.  Snapshotted at `build_arch_handle`
@@ -1179,9 +1145,6 @@ pub struct ArchContext {
     pub bound_proto_models: Rc<
         std::collections::BTreeMap<(int4, unlace_base::types::uintb), Rc<crate::fspec::ProtoModel>>,
     >,
-    /// (kuna `swiftcall`) The Swift registers and the throwing model, when the
-    /// image binds the Swift convention ([`crate::kuna_swiftcall`]).
-    pub swift_abi: Option<Rc<crate::kuna_swiftcall::SwiftAbi>>,
     /// (kuna `swiftmetadata`) Each local Swift enum's case count by its
     /// metadata accessor's entry offset (`p2_lift/kuna_switchextent.rs`).
     pub swift_enum_cases: Rc<std::collections::BTreeMap<u64, u32>>,
@@ -1238,7 +1201,6 @@ impl ArchContext {
             floatformats: Vec::new(),
             callee_proto_models: Vec::new(),
             bound_proto_models: Rc::default(),
-            swift_abi: None,
             swift_enum_cases: Rc::default(),
             virtual_this: None,
             defaultfp: None,
@@ -1267,15 +1229,11 @@ impl ArchContext {
             name_style_ghidra: false,
             // (kuna) default-off opt-in; the real value is copied from the engine
             // Architecture in `build_arch_handle` (`option dedupvardecls`).
-            kuna_objc_classes: Rc::new(Default::default()),
-            kuna_kalloc_types: Rc::new(Default::default()),
             // (kuna) DIV-2 default-on (GH-558): resetDefaults sets present_lessequal=true.
             // (kuna) the real arch overwrites each of these in `build_arch_handle`;
             // hand-built fixtures (no `build_arch_handle`) get `false`, so a rule
             // registered `enabled=false` is inert there — matching the gate-off
             // unit tests.
-            opaque_globals: None,
-            opaque_globals_pending: false,
             opaque_globals_wanted: std::cell::Cell::new(false),
             simd_shuffle_userops: Vec::new(),
             x87_float_to_int_userops: Vec::new(),
@@ -1283,10 +1241,7 @@ impl ArchContext {
             float_rounding_userops: Vec::new(),
             call_target_c: false, // (kuna) option calltargettype, C output
             java_casts: false,
-            float_globals: None, // (kuna) option floatglobals
-            float_globals_pending: false,
             float_globals_wanted: std::cell::Cell::new(false),
-            struct_synth_shard: None,
             unknown_byte_is_char: false, // (kuna) realtypes + C output
             unknown_is_integer: false,   // (kuna) realtypes, or not C output
             int_promotion: true,         // (kuna) LangCaps::integer_promotion (C)
@@ -1296,8 +1251,6 @@ impl ArchContext {
             // against, so the fixture seam carries the real default.
             // castobject only re-types a slot whose readers agree, so the fixture
             // seam carries the shipped default.
-            msvc_byval_decls: Rc::new(Default::default()),
-            msvc_builders: Rc::new(Default::default()),
             // argclobber only drops a trailing argument the callee's own
             // recovered prototype says it never reads, and declines outright
             // when there is no callee to ask, so the fixture seam carries the
@@ -1329,7 +1282,6 @@ impl ArchContext {
             syscall_regs_userops: Vec::new(),
             windows_cspec: false,
             image_windows_user: false,
-            tls_layout: None,
 
             go_keep_divide_checks: false,
             // C++ Architecture default: analyze_for_loops = true (architecture.cc).
@@ -1353,7 +1305,6 @@ impl ArchContext {
             // (kuna) No dynamic-relocation const slots until a real ELF load
             // installs them (see `Architecture::dynreloc_const`).
             dynreloc_const: Rc::new(Vec::new()),
-            eh_table: None,
             vector_userops: Rc::new(Vec::new()),
             vector_fp: None,
             // (kuna) No executable read-only ranges until a real object load
@@ -1380,7 +1331,6 @@ impl ArchContext {
             callee_protos: Rc::new(Vec::new()),
             loader_transfer_sites: Rc::default(),
             loader_mips_imports: Rc::default(),
-            nullable_relocations: Rc::default(),
             nullable_literal_values: Rc::default(),
             // No tracked registers until build_arch_handle snapshots the context DB.
             tracked_sets: unlace_base::partmap::PartMap::default(),

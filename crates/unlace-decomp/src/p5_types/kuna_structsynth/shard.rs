@@ -1176,5 +1176,7 @@ pub fn decode_table(bytes: &[u8]) -> Option<Vec<(String, SynthRequest)>> {
     (r.pos == bytes.len()).then_some(out)
 }
 
+crate::kuna_arch_state!(RefCell<ShardHook>);
+
 #[cfg(test)]
 mod tests;

@@ -3744,8 +3744,9 @@ impl ConsoleProgram {
             .collect();
         seeds.sort_unstable();
         seeds.dedup();
-        self.arch_mut().kuna_float_scan =
-            Some(Rc::new(unlace_decomp::kuna_floatglobals::FloatScan {
+        self.arch_mut()
+            .kuna_states
+            .set(Rc::new(unlace_decomp::kuna_floatglobals::FloatScan {
                 sections,
                 seeds,
             }));
@@ -6443,7 +6444,11 @@ pub(crate) fn bootstrap_object(
         }
     }
     sleigh.base_mut().unwrap().nullable_literal_values = std::rc::Rc::new(literals);
-    sleigh.base_mut().unwrap().nullable_relocations = std::rc::Rc::new(nullable);
+    sleigh
+        .base_mut()
+        .unwrap()
+        .kuna_states
+        .set::<unlace_decomp::kuna_nullable_reloc::Relocations>(std::rc::Rc::new(nullable));
     pending_analysis.extend(object_import_slot_stash(
         !loader.reloc_sections().is_empty(),
         loader.import_slot_ranges(),
@@ -6899,7 +6904,7 @@ fn commit_analysis_output(
     // 0d. (kuna `dwarfglobaltypes`) A DWARF global keeps its declared type:
     //     its untyped sized entry is replaced by the typed one.
     if let Some(layout) = out.tls_layout.take() {
-        prog.arch_mut().tls_layout = Some(Rc::new(layout));
+        prog.arch_mut().kuna_states.set(Rc::new(layout));
     }
     let dwarf_globals = std::mem::take(&mut out.dwarf_typed_globals);
     if prog
@@ -7641,7 +7646,7 @@ fn commit_analysis_output(
         };
         table.exception_reg = reg(exc);
         table.selector_reg = reg(sel);
-        prog.arch_mut().eh_table = std::rc::Rc::new(table);
+        prog.arch_mut().kuna_states.set(std::rc::Rc::new(table));
     }
 
     // (kuna `callerreads`) Park where each direct call returns to. Empty without
@@ -8375,13 +8380,17 @@ fn commit_analysis_output(
                         ))
                     }),
             );
-            prog.arch_mut().kuna_objc_classes = Rc::new(table);
+            prog.arch_mut().kuna_states.set(Rc::new(table));
         }
     }
     // (kuna `xnutables`) The kalloc_type views' structs the engine types a
     // typed allocation's result with.
     if !out.kalloc_types.is_empty() {
-        prog.arch_mut().kuna_kalloc_types = Rc::new(out.kalloc_types.iter().cloned().collect());
+        prog.arch_mut()
+            .kuna_states
+            .set::<unlace_decomp::kuna_kalloctype::KallocTypes>(Rc::new(
+                out.kalloc_types.iter().cloned().collect(),
+            ));
     }
     for mut pieces in out.prototypes {
         if let Some(st) = self_types.get(&pieces.name) {
@@ -8494,14 +8503,20 @@ fn commit_analysis_output(
     let space_index = code_space.get_index();
     for (addr, decl) in msvc_byval {
         if msvc_applied.contains(&addr) {
-            Rc::make_mut(&mut prog.arch_mut().msvc_byval_decls).insert((space_index, addr), decl);
+            prog.arch_mut()
+                .kuna_states
+                .make_mut::<unlace_decomp::kuna_msvcbyval::ByvalDecls>()
+                .insert((space_index, addr), decl);
         }
     }
     for (addr, kind) in msvc_builders {
         let applied =
             kind == unlace_decomp::kuna_msvcbyval::Builder::This || msvc_applied.contains(&addr);
         if applied {
-            Rc::make_mut(&mut prog.arch_mut().msvc_builders).insert((space_index, addr), kind);
+            prog.arch_mut()
+                .kuna_states
+                .make_mut::<unlace_decomp::kuna_msvcbyval::Builders>()
+                .insert((space_index, addr), kind);
         }
     }
 
@@ -8802,35 +8817,35 @@ fn commit_analysis_output(
                     .iter()
                     .map(|&f| (code_space.get_index(), f))
                     .collect();
-                prog.arch_mut().loader_swift_abi =
-                    Some(Rc::new(unlace_decomp::kuna_swiftcall::SwiftAbi {
-                        self_reg,
-                        error_reg,
-                        async_reg,
-                        async_names: out
-                            .swift_types
-                            .async_imports
-                            .iter()
-                            .flat_map(|(n, throws)| {
-                                let bare = n.strip_prefix('_').filter(|b| b.starts_with('$'));
-                                std::iter::once((n.clone(), *throws))
-                                    .chain(bare.map(|b| (b.to_string(), *throws)))
-                            })
-                            .collect(),
-                        async_context: prog
-                            .arch()
-                            .types()
-                            .find_by_name("swift.AsyncContext")
-                            .ok()
-                            .flatten()
-                            .and_then(|t| prog.arch().types().get_type_pointer(8, t, 1).ok()),
-                        throws,
-                        plain,
-                        asynccall,
-                        asynccall_throws,
-                        maybe_self,
-                        no_self,
-                    }));
+                let swift_abi = Rc::new(unlace_decomp::kuna_swiftcall::SwiftAbi {
+                    self_reg,
+                    error_reg,
+                    async_reg,
+                    async_names: out
+                        .swift_types
+                        .async_imports
+                        .iter()
+                        .flat_map(|(n, throws)| {
+                            let bare = n.strip_prefix('_').filter(|b| b.starts_with('$'));
+                            std::iter::once((n.clone(), *throws))
+                                .chain(bare.map(|b| (b.to_string(), *throws)))
+                        })
+                        .collect(),
+                    async_context: prog
+                        .arch()
+                        .types()
+                        .find_by_name("swift.AsyncContext")
+                        .ok()
+                        .flatten()
+                        .and_then(|t| prog.arch().types().get_type_pointer(8, t, 1).ok()),
+                    throws,
+                    plain,
+                    asynccall,
+                    asynccall_throws,
+                    maybe_self,
+                    no_self,
+                });
+                prog.arch_mut().kuna_states.set(swift_abi);
             }
         }
     }

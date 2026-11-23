@@ -77,13 +77,21 @@ pub(crate) fn float_only(data: &Funcdata, addr: &Address, size: int4) -> bool {
     {
         return false;
     }
-    match &glb.float_globals {
+    let on = glb
+        .kuna_options
+        .get::<crate::kuna_coreoptions::FloatGlobalsOn>()
+        .0;
+    match on
+        .then(|| glb.kuna_states.get::<FloatGlobalsFound>())
+        .flatten()
+    {
         Some(found) => {
-            found.get(&addr.get_offset()) == Some(&(size as u8))
+            found.0.get(&addr.get_offset()) == Some(&(size as u8))
                 && crate::kuna_floatreg::moved_as_a_float_here(data, addr, size)
         }
         None => {
-            if glb.float_globals_pending
+            if on
+                && glb.kuna_states.get::<FloatScan>().is_some()
                 && crate::kuna_floatreg::moved_as_a_float_here(data, addr, size)
             {
                 glb.float_globals_wanted.set(true);
@@ -92,3 +100,10 @@ pub(crate) fn float_only(data: &Funcdata, addr: &Address, size: int4) -> bool {
         }
     }
 }
+
+/// The whole-program scan's float globals, once the console took it for the run; an
+/// [`ArchState`](crate::kuna_archstate::ArchState) shared with every function's context.
+#[derive(Debug, Default)]
+pub struct FloatGlobalsFound(pub FloatGlobals);
+crate::kuna_arch_state!(FloatGlobalsFound);
+crate::kuna_arch_state!(FloatScan);

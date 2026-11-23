@@ -2667,8 +2667,8 @@ fn decompile_func_full_with_objects_inner(
         } else {
             match fd
                 .get_arch()
-                .swift_abi
-                .clone()
+                .kuna_states
+                .get_rc::<crate::kuna_swiftcall::SwiftAbi>()
                 .filter(|_| mapped_params.is_empty())
                 .filter(|_| {
                     fd.get_arch()

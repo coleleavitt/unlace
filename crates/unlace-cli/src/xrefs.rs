@@ -1906,7 +1906,11 @@ fn objc_resolved_edges(
         .kuna_options
         .get::<unlace_decomp::kuna_objcrettype::ObjcResolve>()
         .0
-        || prog.arch().kuna_objc_classes.classes.is_empty()
+        || prog
+            .arch()
+            .kuna_states
+            .get::<unlace_decomp::kuna_objcrettype::ObjcClassTable>()
+            .is_none_or(|t| t.classes.is_empty())
     {
         return Vec::new();
     }

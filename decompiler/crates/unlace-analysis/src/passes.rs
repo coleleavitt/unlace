@@ -619,7 +619,6 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // default run is byte-identical and bound to the real-PE path (the XML datatest
     // oracle is untouched). Types/typed-locals/lines are the deferred PR-P2/P3.
     if format == object::BinaryFormat::Pe {
-        passes.push(Box::new(crate::uefi::UefiPass));
         passes.push(Box::new(crate::pdb::PdbPass));
         // S1 PDB-procedure-interior entry suppression (`pdbinterior`): the same
         // `.pdb`'s S_GPROC32/S_LPROC32 code lengths reported on `pdb_bodies`, for
@@ -1794,6 +1793,35 @@ pub fn run_listing_consumers_replaying_observed(
         observer(&file, &listing);
     }
     sanitize_all_names(&mut out);
+    out
+}
+
+/// Run the **deferred** UEFI module markup ([`crate::uefi::UefiPass`]) at the
+/// commit point: it follows the service tables through the code, which it
+/// decodes through the engine `Translate`, and that has the image only after
+/// the load-time list ran. The pass declines every image that is not a PE with
+/// an EFI subsystem.
+pub fn run_uefi(
+    bytes: &[u8],
+    arch: &Architecture,
+    image_path: Option<&std::path::Path>,
+) -> AnalysisOutput {
+    if !crate::uefi::is_efi_image(bytes) {
+        return AnalysisOutput::default();
+    }
+    let Ok(file) = crate::loadimage_object::parse_object(bytes) else {
+        return AnalysisOutput::default();
+    };
+    let ctx = AnalysisCtx {
+        file: &file,
+        bytes,
+        image: None,
+        arch,
+        listing: None,
+        image_path,
+    };
+    let mut out = crate::uefi::UefiPass.run(&ctx);
+    out.sanitize_names(symbolnamechars_mode());
     out
 }
 

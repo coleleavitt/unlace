@@ -85,6 +85,52 @@ fn svd_peripheral_replaces_a_system_control_space_block() {
 }
 
 #[test]
+fn unpack_protocols_indexes_what_each_module_installs() {
+    let fv = common::fixture("uefi_tiano_efi_compressed.fv");
+    let dir = tempfile::tempdir().unwrap();
+    let out_dir = dir.path().to_string_lossy().into_owned();
+    let (_, err, code) = common::run_kuna(&["unpack", &fv, "-o", &out_dir, "--protocols"]);
+    assert_eq!(code, 0, "{err}");
+    let index = std::fs::read_to_string(dir.path().join("kuna-uefi.index")).unwrap();
+    assert!(
+        index.starts_with("kuna-uefi-index 1\nmodule DiskIoDxe.efi 07\n"),
+        "{index}"
+    );
+    let binding = "install DiskIoDxe.efi ab31a01843b41a4da5c00c09261e9f71 1920 EFI_DRIVER_BINDING_PROTOCOL \
+                   Supported=24f Start=aac Stop=5b9";
+    assert!(index.contains(binding), "{index}");
+    let module = dir
+        .path()
+        .join("DiskIoDxe.efi")
+        .to_string_lossy()
+        .into_owned();
+    let (out, err, code) = common::run_kuna(&["decompile", &module, "_ModuleEntryPoint"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        out.contains("gEfiDevicePathUtilitiesProtocolGuid,NULL,&mDevicePathUtilities)"),
+        "{out}"
+    );
+    assert!(
+        !out.contains("installed by"),
+        "nothing in this volume installs the located protocol: {out}"
+    );
+}
+
+/// A call through a service-table member has the member's prototype when the
+/// call is built, so the notify function it is handed is a function and the
+/// function is analyzed once.
+#[test]
+fn a_uefi_service_call_is_built_with_its_prototype() {
+    let module = common::fixture("uefi_diskio_x64.efi");
+    let (out, err, code) = common::run_kuna(&["decompile", &module, "0x9c2"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        out.contains("(*gBS->CreateEvent)(0x200,8,sub_52e,v1,"),
+        "{out}"
+    );
+}
+
+#[test]
 fn intel_hex_with_svd_names_peripherals_and_interrupts() {
     let hex = common::fixture("cortexm3_raw.hex");
     let svd = common::fixture("cortexm3_raw.svd");

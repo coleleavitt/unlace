@@ -2,7 +2,7 @@
 
 ```yaml
 Anchors:
-  - crates/unlace-decomp/src/p7_regions
+  - crates/unlace-structure/src/p7_regions
 ```
 
 This phase computes kuna's S7 artifact: the **region tree** — a nesting of
@@ -31,7 +31,7 @@ DIV-12/DIV-14/DIV-82 in `docs/history.md`.
 collapsing* a graph — merging chains into multi-nodes, replacing whole node
 sets with a single region wrapper — and the decompiler's own `BlockGraph` must
 never be mutated by an analysis. So the phase carries its own substrate:
-`crates/unlace-decomp/src/p7_regions/kuna_regiongraph.rs
+`crates/unlace-structure/src/p7_regions/kuna_regiongraph.rs
 (KunaRegionGraph)`, a mutable digraph in the image of `networkx.DiGraph`, over
 nodes pooled in `kuna_regiongraph.rs (KunaNodePool)`. A node
 (`kuna_regiongraph.rs (KunaRegionNode)`) is one of four kinds: a leaf `Block`
@@ -107,7 +107,7 @@ wrong answer.
 
 ## 7.2 The region identifier (angr)
 
-**The artifact.** `crates/unlace-decomp/src/p7_regions/kuna_regionid.rs
+**The artifact.** `crates/unlace-structure/src/p7_regions/kuna_regionid.rs
 (KunaRegionIdentifier)` collapses the working graph into a nested
 `kuna_regionid.rs (KunaGraphRegion)` tree. A region records its head, its
 internal subgraph, its external successor frontier (plus the
@@ -158,7 +158,7 @@ collapse. For one header, `kuna_regionid.rs
      between that walk and the attempts, so step 1 does not walk the graph
      again for its latching nodes.
    - *Forward walk*. The slice's forward walk runs first, without building
-     the slice (`crates/unlace-decomp/src/p7_regions/kuna_regiongraph.rs
+     the slice (`crates/unlace-structure/src/p7_regions/kuna_regiongraph.rs
      (kuna_slice_visits)`). It stops at the first other live header it visits.
      Pruning keeps every node that walk visits: each visited node is entered
      from a visited node and has a successor that is visited or on the
@@ -265,7 +265,7 @@ check, and the drive reports the budget. Without a budget nothing is polled.
 ## 7.3 kuna passes at the region tier: stackguard (angr)
 
 The folder's one scheduled, output-changing pass:
-`crates/unlace-decomp/src/p7_regions/kuna_stackguard.rs
+`crates/unlace-structure/src/p7_regions/kuna_stackguard.rs
 (ActionStripStackGuard)`, the port of angr's `StackCanarySimplifier`
 (`option stackguard`, [docs/options.md](../options.md); registry row
 P7/`edge-virtualization`, `source_decompiler = "angr"`). Scheduled in
@@ -275,7 +275,7 @@ before `ActionReturnSplit`
 (universal_sched)`).
 
 With `canaryglobal` (default on;
-`crates/unlace-decomp/src/p7_regions/kuna_stackguard.rs (is_named_guard)`)
+`crates/unlace-structure/src/p7_regions/kuna_stackguard.rs (is_named_guard)`)
 a canary source is also an unwritten read of a global named `__stack_chk_guard`
 (`___stack_chk_guard` on Mach-O) or `__security_cookie`, reached directly or
 through the `INDIRECT` a call adds, or a `LOAD` through the import slot that holds
@@ -371,7 +371,7 @@ hence the both-operands-derive rule and the handler-call gate.
 ## 7.4 kuna passes at the region tier: securitycheck (angr)
 
 The folder's second scheduled, output-changing pass:
-`crates/unlace-decomp/src/p7_regions/kuna_securitycheck.rs
+`crates/unlace-structure/src/p7_regions/kuna_securitycheck.rs
 (ActionRemoveSecurityCheck)`, the port of SEFCOM Oxidizer's
 `SecurityCheckRemover` (`option securitycheck`,
 [docs/options.md](../options.md); registry row P7/`edge-virtualization`,
@@ -458,7 +458,7 @@ exists. `tests/stages/oxidizer-securitycheck.xml` pins both directions.
 ## 7.5 kuna passes at the region tier: msvcstackguard (kuna)
 
 The folder's third scheduled, output-changing pass:
-`crates/unlace-decomp/src/p7_regions/kuna_msvcstackguard.rs
+`crates/unlace-structure/src/p7_regions/kuna_msvcstackguard.rs
 (ActionStripMsvcStackGuard)` — the Windows sibling of §7.3 (`option
 msvcstackguard`, [docs/options.md](../options.md); registry row
 P7/`edge-virtualization`, `source_decompiler = "kuna"`, GH-468 finding 3).
@@ -609,7 +609,7 @@ one restart.
 ## 7.5b kuna passes at the region tier: the post-SSA write-barrier arm (kuna)
 
 **(kuna) `option gowritebarrier`, post-SSA arm,
-`crates/unlace-decomp/src/p7_regions/kuna_gowbphi.rs
+`crates/unlace-structure/src/p7_regions/kuna_gowbphi.rs
 (ActionGoWriteBarrierPhi)`.** The pre-SSA one-hop fold (chapter 02, §2.10)
 takes the textbook write-barrier diamond; real Go binaries carry two shapes it
 must refuse — a barrier arm SHARED by several guards, and an arm whose call
@@ -668,9 +668,9 @@ mixes with the C.
 
 **Handoff to chapter 08.** The region tree's consumer is the region
 structurer: when `regionstructure` is on (default since DIV-12),
-`crates/unlace-decomp/src/p8_structure/blockaction.rs
+`crates/unlace-structure/src/p8_structure/blockaction.rs
 (ActionBlockStructure)` routes S8 through
-`crates/unlace-decomp/src/p8_structure/region_structurer.rs
+`crates/unlace-structure/src/p8_structure/region_structurer.rs
 (run_region_structurer)`, which builds and computes a fresh
 `KunaRegionIdentifier` over the real CFG per structuring attempt and consumes
 ONE thing from this phase: when `regionlooprefine` is on, the `cyclic_loops()`
@@ -685,7 +685,7 @@ schemas over this tree, virtualizes edges, and falls back to
 `CollapseStructure` is chapter [08 — Structuring](08-structuring.md).
 
 **Dynamic alloca** (`dynalloca`, default off; kuna;
-`crates/unlace-decomp/src/p7_regions/kuna_dynalloca.rs (RuleDynAlloca)`):
+`crates/unlace-structure/src/p7_regions/kuna_dynalloca.rs (RuleDynAlloca)`):
 a variable-length array or an `alloca` moves the stack pointer by a run-time
 amount (`sub rsp, rax`); once types are in, the new stack pointer value is
 `PTRADD(sp, -n, 1)` off the stack's spacebase input, which printed as
@@ -700,7 +700,7 @@ functions `alloca` declines. Both use `BUILTIN_ALLOCA`.
 
 ## Go compiler checks (`gobounds`)
 
-`crates/unlace-decomp/src/p7_regions/kuna_gobounds.rs
+`crates/unlace-structure/src/p7_regions/kuna_gobounds.rs
 (ActionGoBounds)` runs beside `securitycheck` in the repeating fullloop tail.
 The default-on `gobounds` option is additionally gated on the effective Go source
 language. It recognizes exact runtime names for compiler-generated bounds, slice,

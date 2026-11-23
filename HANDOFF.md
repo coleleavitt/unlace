@@ -345,6 +345,12 @@ hook symbol the same way middle's do; `kuna_int3pad`'s `printc` test moved to `i
 check_layers.py and check_spec.py scan `crates/unlace-lift/src`; spec anchors follow. Lift unit tests that run a
 pass reaching a hook only the driver provides now panic naming the hook (none known; CI will show).
 
+**9c landed (unlace-structure):** `crates/unlace-structure` holds `p7_regions/` and `p8_structure/` (41
+modules, both folders whole, `git mv`); it depends on unlace-middle and unlace-lift and re-exports unlace-lift;
+unlace-decomp re-exports it. Its `lib.rs` carries the `#[cfg(test)]` hook stub. The two leftover `sp_input`
+copies in `kuna_msvcstackguard/tests.rs` (unused there after #173/#174) went with it, so structure's tests no
+longer reach bandb. `check_layers.py` and `check_spec.py` scan the new root.
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

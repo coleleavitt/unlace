@@ -2,7 +2,7 @@
 
 ```yaml
 Anchors:
-  - crates/unlace-decomp/src/p8_structure
+  - crates/unlace-structure/src/p8_structure
 ```
 
 This phase turns the basic-block CFG into a tree of high-level constructs —
@@ -25,7 +25,7 @@ chapter names only the divergence record that flipped a default
 
 Structuring operates on a dedicated arena: `sblocks`, a `BlockCopy` mirror of
 the real basic blocks seeded by
-`crates/unlace-decomp/src/p8_structure/blockaction.rs
+`crates/unlace-structure/src/p8_structure/blockaction.rs
 (ActionBlockStructure)`. Both engines collapse that mirror; neither mutates
 p-code, with one deliberate exception — a branch-condition orientation flip
 (`negateCondition`, needed whenever a schema requires the true edge on the
@@ -40,7 +40,7 @@ assertion §8.1 realizes), `goto-quality` (the option-gated pass family),
 
 ## 8.1 Collapse structuring
 
-The engine is `crates/unlace-decomp/src/p8_structure/blockaction.rs
+The engine is `crates/unlace-structure/src/p8_structure/blockaction.rs
 (CollapseStructure)`, the line-faithful port of Ghidra's structurer
 (parenthetical provenance: `decompiler/cpp/blockaction.{cc,hh}`). The simple
 case: repeatedly scan the live components and collapse the first sub-graph
@@ -244,7 +244,7 @@ any unconditional jump. kuna's `comma_separate` printer modifier *is*
 `MultiStatementExpression`; kuna's `bb_is_complex` *is*
 `_is_single_statement_block`.
 
-`crates/unlace-decomp/src/p8_structure/kuna_condfold.rs` ports exactly
+`crates/unlace-structure/src/p8_structure/kuna_condfold.rs` ports exactly
 that relaxation and nothing else. It widens the single `is_complex(orblock)`
 decline in both engines: a complex sibling is accepted when **either** of two
 admission rules takes it. The predicate is their union — the two rules were
@@ -660,7 +660,7 @@ other exit qualifies, so a catch inside a loop stays in the loop body.
 
 ## 8.2 The region structurer (angr)
 
-`crates/unlace-decomp/src/p8_structure/region_structurer.rs` is the
+`crates/unlace-structure/src/p8_structure/region_structurer.rs` is the
 port of angr's Phoenix/SAILR structurer (parenthetical provenance: angr
 `analyses/decompiler/structuring/{recursive_structurer,phoenix,sailr}.py`),
 grown increment by increment (the archived plan is
@@ -669,7 +669,7 @@ by DIV-12 under `option regionstructure`.
 
 **Input.** `region_structurer.rs (run_region_structurer)` first runs the
 chapter-07 region identifier fresh over the real CFG
-(`crates/unlace-decomp/src/p7_regions/kuna_regionid.rs
+(`crates/unlace-structure/src/p7_regions/kuna_regionid.rs
 (KunaRegionIdentifier)`) and consumes two things from it: the deterministic
 node order (tie-breaking for edge virtualization) and — when
 `regionlooprefine` is on — the `kuna_regionid.rs
@@ -871,7 +871,7 @@ its value into the phi (`RulePropagateCopy` lets a non-constant value into a
 MULTIEQUAL, and the store then dies). The clone's copy of that phi is the store,
 at the start of the clone, after every store the predecessor kept; several such
 stores print in the order the phis are cloned. That order is set by
-`crates/unlace-decomp/src/p8_structure/kuna_clonephiorder.rs (order_global_phis)`,
+`crates/unlace-structure/src/p8_structure/kuna_clonephiorder.rs (order_global_phis)`,
 always on: the phis on globals are cloned after the others and in address
 order, which is how kuna printed most of these stores before the clone kept its
 guards' flag. Block order would be the reverse of heritage's placement
@@ -906,7 +906,7 @@ becomes a structured early return. The option's value says which return tails
 qualify, and each tier is its own pass:
 
 - `return` runs
-  `crates/unlace-decomp/src/p8_structure/kuna_gotoreduce.rs
+  `crates/unlace-structure/src/p8_structure/kuna_gotoreduce.rs
   (ActionGotoReduce)` alone. *Pattern:* a `BlockIf` rendering as
   `if (cond) goto T` where `T` is a single-successor basic-block chain ending
   in `return`. *Transform:* the tail is inlined into the `if` arm
@@ -915,7 +915,7 @@ qualify, and each tier is its own pass:
   ops, and **any** `CALL`/`CALLIND`/`CALLOTHER`/`STORE` in the tail declines
   the match.
 - `on`, the default, runs that pass and then
-  `crates/unlace-decomp/src/p8_structure/kuna_taildup.rs
+  `crates/unlace-structure/src/p8_structure/kuna_taildup.rs
   (ActionTailDup)` for the return tail that *contains a call* — the
   `free(p); return;` epilogue, which the call-free pass rejects and
   `crossjumprevert` (non-return tails only) declines. Two source shapes are
@@ -940,7 +940,7 @@ early returns. Both tiers were flipped on by DIV-14 (changing zero datatests).
 
 ### Releasing a label the duplication passes converted away
 
-`crates/unlace-decomp/src/p8_structure/kuna_gotolabel.rs`. The three
+`crates/unlace-structure/src/p8_structure/kuna_gotolabel.rs`. The three
 passes that turn a `goto` into a duplicated tail (`gotoreduce`'s two passes and
 `crossjumprevert`) each end by clearing `f_unstructured_targ` on the target
 they converted, so a label whose last goto is gone does not linger. That is a
@@ -959,7 +959,7 @@ the printer would otherwise drop but can never remove one.
 
 ### retsplitglobal — a bound on cloning a global-writing epilogue
 
-`crates/unlace-decomp/src/p8_structure/kuna_retsplitglobal.rs`, read by
+`crates/unlace-structure/src/p8_structure/kuna_retsplitglobal.rs`, read by
 `crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::return_split_is_splittable)` — the predicate BOTH return splitters
 consult, upstream `ActionReturnSplit` and kuna's `ActionReturnDup`
@@ -993,7 +993,7 @@ duplication or change what the surviving merged block does. Settable
 
 ### retsplitlimit — a bound on what one return split may clone
 
-`crates/unlace-decomp/src/p8_structure/kuna_retsplitlimit.rs
+`crates/unlace-structure/src/p8_structure/kuna_retsplitlimit.rs
 (split_is_declined)`, read by `crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::return_split_apply)` once a return block's split edges are known.
 *Pattern:* `node_split` clones the whole return block once per split edge, and
@@ -1021,7 +1021,7 @@ block is reached by 673 gotos).
 
 ### crossjumprevert — un-doing compiler cross-jumping (angr `CrossJumpReverter`)
 
-`crates/unlace-decomp/src/p8_structure/kuna_crossjumpreverter.rs
+`crates/unlace-structure/src/p8_structure/kuna_crossjumpreverter.rs
 (ActionCrossJumpReverter)`. *Pattern:* compilers condense identical tail code
 reached from several places into one block (Irreducible Statement
 Condensing), leaving all but one predecessor to arrive by `goto` — a
@@ -1038,7 +1038,7 @@ both routes provably rejoin at `S`. *Bounds/failure:* exactly one tail block
 in `return` (that is `gotoreduce`'s case) and anything whose
 convergence cannot be proven. Flipped on by DIV-14.
 
-**Past one block** (`crates/unlace-decomp/src/p8_structure/kuna_crossjumptail.rs
+**Past one block** (`crates/unlace-structure/src/p8_structure/kuna_crossjumptail.rs
 (ActionCrossJumpTail)`). Cross-jumping also shares runs of several
 statements, `if`s and calls, reached from inside nested arms or from deep in
 a loop body. After `gotosink`, a goto `G` to the leaf `L` that starts a run
@@ -1066,7 +1066,7 @@ with 0/675 datatest assertions moved.
 
 ### ifelseflatten — guard-clause flattening (angr `IfElseFlattener`)
 
-`crates/unlace-decomp/src/p8_structure/kuna_ifelseflatten.rs
+`crates/unlace-structure/src/p8_structure/kuna_ifelseflatten.rs
 (ActionIfElseFlatten)`. *Pattern:* a full 3-component `BlockIf` whose true
 clause is statement-terminating but which still carries an explicit `else` —
 the residue the structurer or fallback could not invert away. *Transform:*
@@ -1085,7 +1085,7 @@ DIV-14.
 
 ### dedupitetail — merging over-duplicated arms (angr ITE region dedup)
 
-`crates/unlace-decomp/src/p8_structure/kuna_dedupitetail.rs
+`crates/unlace-structure/src/p8_structure/kuna_dedupitetail.rs
 (ActionDedupIteTail)`. The **inverse** of the duplication passes: here the
 collapse-based structurer *cloned* a shared continuation into both arms of an
 `if/else` (the compiler emitted two physical copies and structuring kept
@@ -1120,7 +1120,7 @@ this, the goto kept the freed node's id and printing its label panicked.
 
 ### iteregion — `?:` recovery (angr `ITERegionConverter`)
 
-`crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs
+`crates/unlace-structure/src/p8_structure/kuna_iteregion.rs
 (ActionIteRegion)`. *Pattern:* the assignment diamond a source ternary
 compiles to — a 3-component `BlockIf` with no goto, whose condition leaf's
 only printed op is the `CBRANCH` and whose two arms are each a single `COPY`
@@ -1149,7 +1149,7 @@ function.
 
 ### iteboolean — short-circuit `0`/`1` re-rolling (decbench)
 
-`crates/unlace-decomp/src/p8_structure/kuna_iteboolean.rs
+`crates/unlace-structure/src/p8_structure/kuna_iteboolean.rs
 (ActionIteBoolean)`. *Pattern:* the boolean **materialization** diamond a source
 `x = a && b;` compiles to at `-O0` — a 3-component `BlockIf` with no goto whose
 two arms are each a single `COPY` of the constants `1` and `0` (in either order)
@@ -1188,7 +1188,7 @@ compiles to the same bytes — flipped on by DIV-51.
 
 ### itecondlist — matching a diamond whose condition was concatenated (decbench)
 
-`crates/unlace-decomp/src/p8_structure/kuna_itecondlist.rs
+`crates/unlace-structure/src/p8_structure/kuna_itecondlist.rs
 (cond_list_tail)`. Not a pass of its own: a one-predicate widening of the two
 matchers above, shared by both because both bottom out in the same leaf helper.
 
@@ -1238,7 +1238,7 @@ whenever they do (DIV-56), so their options are the only ones that reach it.
 
 ### earlyreturn — per-edge const-guard peeling (angr `ReturnDuplicatorHigh`, narrowed)
 
-`crates/unlace-decomp/src/p8_structure/kuna_earlyreturn.rs
+`crates/unlace-structure/src/p8_structure/kuna_earlyreturn.rs
 (ActionEarlyReturn)`. *Pattern:* the leading argument-validity guard — a
 shared RETURN block computing `v = MULTIEQUAL(#K /*guard arm*/, <var> /*body
 arm*/); return v`, a **mixed** phi that whole-block gates structurally cannot
@@ -1264,7 +1264,7 @@ improved:regressed over 508 binaries).
 
 ### switchreturn — the wide multi-way extension (angr `ReturnDuplicatorHigh`, switch-phi)
 
-`crates/unlace-decomp/src/p8_structure/kuna_switchreturn.rs
+`crates/unlace-structure/src/p8_structure/kuna_switchreturn.rs
 (ActionSwitchReturn)`. *Pattern:* the enum-dispatch switch whose every case
 assigns a constant and breaks to one exit — `v = MULTIEQUAL(#K0, #K1, …);
 return v` with one in-edge per case. `earlyreturn` **already** recovers this
@@ -1285,7 +1285,7 @@ summed GED, 3:0 improved:regressed, zero regressions).
 
 ### loopbreak_recovery — `goto` → `break;` (Ghidra `scopeBreak`, angr-surfaced)
 
-`crates/unlace-decomp/src/p8_structure/kuna_loopbreak_recovery.rs
+`crates/unlace-structure/src/p8_structure/kuna_loopbreak_recovery.rs
 (kuna_scope_break)`. The mechanism is the faithful port of upstream Ghidra's
 `BlockGraph::scopeBreak` — which upstream runs unconditionally but kuna's
 port had left stubbed; the gap was found and the pass registered through the
@@ -1306,7 +1306,7 @@ goto. Flipped on by DIV-10.
 
 ### gotonext — jumps to where control goes anyway (Ghidra `gotoPrints`)
 
-`crates/unlace-decomp/src/p8_structure/kuna_gotonext.rs
+`crates/unlace-structure/src/p8_structure/kuna_gotonext.rs
 (goto_rewrites)`, read by the C printer
 (`crates/unlace-decomp/src/p9_emit/printc.rs (PrintC::emit_function_body)`).
 Upstream prints a `BlockGoto`'s jump only when `BlockGoto::gotoPrints`
@@ -1353,7 +1353,7 @@ both the printing of every jump and the recorded chains.
 
 ### switchmerge — one switch for a search tree of jump tables
 
-`crates/unlace-decomp/src/p8_structure/kuna_switchmerge.rs
+`crates/unlace-structure/src/p8_structure/kuna_switchmerge.rs
 (switch_plans)`, read by the C printer
 (`crates/unlace-decomp/src/p9_emit/printc.rs (PrintC::emit_block_switch_c)`)
 and by the goto census. A compiler lowers a sparse source `switch` into a
@@ -1441,7 +1441,7 @@ never which code runs for it. It applies to the C switch form only.
 
 ### returndup — the whole-block duplicator (angr `ReturnDuplicatorHigh`)
 
-`crates/unlace-decomp/src/p8_structure/kuna_returndup.rs
+`crates/unlace-structure/src/p8_structure/kuna_returndup.rs
 (ActionReturnDup)` is the whole-block gotoless return duplicator: every
 shared bare-epilogue RETURN block passing the splittable filter *and* whose
 whole return value resolves to a constant (`funcdata_block.rs
@@ -1484,7 +1484,7 @@ const/variable diamonds this whole-block gate rejects outright.
 
 ### returndup calls — one call per path for a cross-jumped call tail
 
-`crates/unlace-decomp/src/p8_structure/kuna_returndupcalls.rs
+`crates/unlace-structure/src/p8_structure/kuna_returndupcalls.rs
 (ActionReturnDupCalls)` runs in the `returnsplit` group right after
 `returndup`, only at the value `option returndup calls` (not a default). gcc
 `-Os` cross-jumps the tails of paths that end in the same call: each path sets
@@ -1523,7 +1523,7 @@ constant-return guards plus a trailing return (`iproute2 ip::sci_complete`,
 GED 21 against 0 for the merged form), and `iteboolean` never sees the 0/1
 select diamond either.
 
-`crates/unlace-decomp/src/p8_structure/kuna_orchain.rs
+`crates/unlace-structure/src/p8_structure/kuna_orchain.rs
 (shortcircuit_shared_targets)` is the gate for exactly that shape, and it is a
 gate on the pass above rather than a pass of its own. It replays
 `collapse_conditions` read-only on the **bblocks** CFG before the first split,
@@ -1579,7 +1579,7 @@ written twice, where IDA and Ghidra print the `if`. The common source of the
 shared block is a stack-protected function: once `stackguard` strips the canary
 check, every exit reaches one bare `return 0`. With `option rettriangle on`,
 `Funcdata::returndup_apply` drops such a block from its candidates
-(`crates/unlace-decomp/src/p8_structure/kuna_rettriangle.rs
+(`crates/unlace-structure/src/p8_structure/kuna_rettriangle.rs
 (is_triangle_join)`): exactly two predecessors, one a two-way block whose other
 successor is the second predecessor, which has that block as its only
 predecessor and `R` as its only successor. Every other candidate of the
@@ -1788,7 +1788,7 @@ a caller-side branch, and a purity allowlist so compiler intrinsics such as
 would make the transform generally applicable.
 
 **Loop rotation** (`looprotate`, default on; kuna;
-`crates/unlace-decomp/src/p8_structure/kuna_looprotate.rs (ActionLoopRotate)`,
+`crates/unlace-structure/src/p8_structure/kuna_looprotate.rs (ActionLoopRotate)`,
 in the main loop just before `ActionBlockStructure`): compilers rotate
 `while (c) body` into `if (c) { do body while (c); }`. The action matches, on
 the basic blocks, a guard `G` that branches to the loop's entry side `P` (or
@@ -1850,7 +1850,7 @@ terminal case would make its self-edge internal and drop the inner loop, so
 the outer switch declines until the loop schema has wrapped it.
 
 **Guarded loops** (`guardedloop`, default on, C output only; kuna;
-`crates/unlace-decomp/src/p8_structure/kuna_guardedloop.rs (ActionGuardedLoop)`,
+`crates/unlace-structure/src/p8_structure/kuna_guardedloop.rs (ActionGuardedLoop)`,
 in the block-recovery group after `crossjumptail`): the rotations `looprotate`
 leaves, mostly because the loop test reads memory or a value the body computes,
 print as `if (g) { I; do B while (c); }`. On the final tree, a do-while in an arm

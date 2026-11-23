@@ -588,6 +588,11 @@ pub struct ObjectLoadImage {
     ///
     /// Empty for a non-ELF linked image, and with both gates off.
     dynreloc_const: Vec<(u64, u64)>,
+    /// (kuna `opaquepredicate globals`) `[lo, hi)` of the mapped bytes the
+    /// run-time loader fills with a value this image does not determine
+    /// ([`crate::loader::kuna_dynrelocs::DynRelocs::runtime_written`] and the
+    /// import slots). `None` when the image cannot list them.
+    runtime_written: Option<Vec<(u64, u64)>>,
     /// (kuna) The image's **import pointer slots** as half-open `[lo, hi)` VMA
     /// ranges — the PE Import Address Table words a run-time loader fills with a
     /// resolved import address. [`Self::funcsyms`] carries a `FunctionSymbol` at
@@ -1258,6 +1263,10 @@ impl ObjectLoadImage {
                 applied.insert(w.vma);
             }
         }
+        let runtime_written = dynrelocs.runtime_written.map(|mut slots| {
+            slots.extend(import_slots.iter().copied());
+            slots
+        });
         let dynreloc_const: Vec<(u64, u64)> = dynrelocs
             .const_ranges
             .into_iter()
@@ -1341,6 +1350,7 @@ impl ObjectLoadImage {
             data_objects: crate::loader::kuna_globalref::merged_ranges(data_object_rows),
             const_ranges,
             dynreloc_const,
+            runtime_written,
             import_slots,
             nullable_relocations: Vec::new(),
             function_address_aliases: Vec::new(),
@@ -1547,6 +1557,7 @@ impl ObjectLoadImage {
                         .flat_map(|range| outside(range, &import_slots)),
                 )
                 .collect(),
+            runtime_written: None,
             // A pre-link object has no Import Address Table: its external calls
             // are relocations, resolved by the layout pass. A MIPS object's
             // undefined weak symbols keep GOT entries the run-time loader fills.
@@ -1842,6 +1853,10 @@ impl LoadImage for ObjectLoadImage {
         &self.filename
     }
 
+    fn kuna_runtime_written(&self) -> Option<Vec<(u64, u64)>> {
+        self.runtime_written.clone()
+    }
+
     fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
         let space = addr
             .get_space()
@@ -2024,7 +2039,11 @@ impl LoadImage for ObjectLoadImage {
             r.0 = r.0.wadd(badjust);
             r.1 = r.1.wadd(badjust);
         }
-        for r in &mut self.dynreloc_const {
+        for r in self
+            .dynreloc_const
+            .iter_mut()
+            .chain(self.runtime_written.iter_mut().flatten())
+        {
             r.0 = r.0.wadd(badjust);
             r.1 = r.1.wadd(badjust);
         }

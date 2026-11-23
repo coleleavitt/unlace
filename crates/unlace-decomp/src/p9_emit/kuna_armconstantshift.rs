@@ -72,7 +72,8 @@ impl OptionArmConstShift {
 
 /// Convert before shifting to compute ARM's low 32 bits without signed C UB.
 /// Restore the output's signed type so implied signed consumers keep their sign.
-pub(crate) fn plan_arm_constant_lsl(
+#[doc(hidden)]
+pub fn plan_arm_constant_lsl(
     fd: &Funcdata,
     arch: &Architecture,
     op: OpId,

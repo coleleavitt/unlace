@@ -435,7 +435,8 @@ fn proven_unobserved(fd: &Funcdata, saves: &[Save], stack_space: &Rc<AddrSpace>)
     true
 }
 
-pub(crate) fn restrict_local_saved_lanes(fd: &mut Funcdata) -> i32 {
+#[doc(hidden)]
+pub fn restrict_local_saved_lanes(fd: &mut Funcdata) -> i32 {
     if !fd
         .get_arch()
         .kuna_options
@@ -562,12 +563,14 @@ pub(crate) fn restrict_local_saved_lanes(fd: &mut Funcdata) -> i32 {
     i32::from(!marks.is_empty())
 }
 
-pub(crate) struct ActionRestrictLocalSavedLanes {
+#[doc(hidden)]
+pub struct ActionRestrictLocalSavedLanes {
     base: ActionBase,
 }
 
 impl ActionRestrictLocalSavedLanes {
-    pub(crate) fn boxed() -> Box<dyn Action> {
+    #[doc(hidden)]
+    pub fn boxed() -> Box<dyn Action> {
         Box::new(Self {
             base: ActionBase::new(
                 ruleflags::rule_oneactperfunc,

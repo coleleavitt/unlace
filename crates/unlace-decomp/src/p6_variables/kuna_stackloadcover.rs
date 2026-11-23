@@ -3,7 +3,8 @@
 use crate::context::VarnodeId;
 use crate::funcdata::Funcdata;
 
-pub(crate) fn crosses_write(fd: &Funcdata, id: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn crosses_write(fd: &Funcdata, id: VarnodeId) -> bool {
     if !crate::kuna_stackviews::enabled(fd) {
         return false;
     }

@@ -327,7 +327,8 @@ fn stated_argument_type<'a>(
 /// Is `vn` computed from the stack pointer -- the address of something in the
 /// frame?  `gatherOpen` turns a pointer's pointee at a frame address into a
 /// range hint, so a vote there re-lays the frame rather than typing a value.
-pub(crate) fn addresses_a_frame_object(data: &Funcdata, vn: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn addresses_a_frame_object(data: &Funcdata, vn: VarnodeId) -> bool {
     let mut work = vec![vn];
     let mut seen: Vec<VarnodeId> = Vec::new();
     while let Some(v) = work.pop() {
@@ -505,7 +506,8 @@ fn storage_disagrees(proto: &FuncProto, addr: &Address, size: int4, ct: &Datatyp
 /// reloaded for every call it is passed to and merged through its stack slot's
 /// phi-nodes, so the readers that speak about the same value are spread over
 /// many varnodes.
-pub(crate) fn value_family(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
+#[doc(hidden)]
+pub fn value_family(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
     let joins = |o: &crate::op::PcodeOp| {
         matches!(
             o.code(),
@@ -570,7 +572,8 @@ enum Reading<'a> {
 /// outrank a caller's type `ct` for it?  The refusals a callee's vote meets at
 /// a call site, asked of the callee's own uses, and one more for a character
 /// pointer ([`splits_a_wide_constant`]).
-pub(crate) fn input_refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn input_refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
     class_of(ct).is_none()
         || family_refuses(data, vn, Reading::Input, ct)
         || indexes_a_pointer(data, vn)
@@ -579,7 +582,8 @@ pub(crate) fn input_refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bo
 
 /// (kuna `callerptr`) [`input_refuses`], with the class a call reads the value as
 /// taken from a declared prototype only, never from another callee's recovery.
-pub(crate) fn input_refuses_declared(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn input_refuses_declared(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
     class_of(ct).is_none()
         || family_refuses(data, vn, Reading::DeclaredInput, ct)
         || indexes_a_pointer(data, vn)
@@ -589,7 +593,8 @@ pub(crate) fn input_refuses_declared(data: &Funcdata, vn: VarnodeId, ct: &Dataty
 /// (kuna `callrettype`) Does anything the caller does with the call result
 /// `vn` outrank the callee's stated return type `ct` for it?  The refusals a
 /// callee's vote meets at a call argument, asked of the result's own uses.
-pub(crate) fn output_refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn output_refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
     class_of(ct).is_none() || family_refuses(data, vn, Reading::Input, ct)
 }
 
@@ -611,7 +616,8 @@ fn indexes_a_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
 
 /// (kuna `calleevote`) Is the value `vn` handed to a call whose declared
 /// prototype types that parameter a pointer to something (`pipe (int *)`)?
-pub(crate) fn handed_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn handed_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
     value_family(data, vn).into_iter().any(|v| {
         let Some(node) = data.vbank().get(v) else {
             return false;
@@ -645,7 +651,8 @@ pub(crate) fn handed_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId) -> bo
 
 /// (kuna `calleevote`) Does the function load or store outside the one pointee
 /// of `ct`, or step through more than that one object?
-pub(crate) fn reaches_past_the_pointee(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn reaches_past_the_pointee(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
     let Some(pointee) = ct.get_ptr_to() else {
         return false;
     };
@@ -903,7 +910,8 @@ fn a_float_can_arrive_in(data: &Funcdata, node: &crate::varnode::Varnode) -> boo
 /// the same base and constant offset, at the same width.  A type the vote gives
 /// one of those loads reaches the field it was loaded from, and through it every
 /// other load of that field (`v2 = a0->field_0x0` elsewhere in the function).
-pub(crate) fn with_sibling_loads(data: &Funcdata, family: &[VarnodeId]) -> Vec<VarnodeId> {
+#[doc(hidden)]
+pub fn with_sibling_loads(data: &Funcdata, family: &[VarnodeId]) -> Vec<VarnodeId> {
     let mut out = family.to_vec();
     let place = |mut v: VarnodeId| -> Option<(VarnodeId, uintb)> {
         let mut off: uintb = 0;
@@ -1001,15 +1009,16 @@ pub(crate) fn with_sibling_loads(data: &Funcdata, family: &[VarnodeId]) -> Vec<V
 
 /// A load or store through a pointer, at `at` bytes from where the vote's value
 /// points (plus any multiple of `stride` when the pointer is indexed or stepped).
-pub(crate) struct Access {
-    pub(crate) op: OpId,
-    pub(crate) value: VarnodeId,
-    pub(crate) at: i64,
-    pub(crate) stride: i64,
-    pub(crate) size: int4,
-    pub(crate) store: bool,
+#[doc(hidden)]
+pub struct Access {
+    pub op: OpId,
+    pub value: VarnodeId,
+    pub at: i64,
+    pub stride: i64,
+    pub size: int4,
+    pub store: bool,
     /// The stride includes a scalar merge's unmodeled step.
-    pub(crate) loose: bool,
+    pub loose: bool,
 }
 
 fn gcd(a: i64, b: i64) -> i64 {
@@ -1024,7 +1033,8 @@ fn gcd(a: i64, b: i64) -> i64 {
 /// following constant offsets, indexing and copies, and where every address it
 /// derives points. `None` when there are too many to follow. The final flag
 /// says every index was modeled; unknown grids cannot rule out a whole access.
-pub(crate) fn accesses_through(
+#[doc(hidden)]
+pub fn accesses_through(
     data: &Funcdata,
     family: &[VarnodeId],
 ) -> Option<(Vec<Access>, Vec<(i64, i64)>, bool)> {
@@ -1528,7 +1538,8 @@ fn in_a_float_register(
 
 /// Does the call `call` read its argument `slot` as a float: a declared
 /// parameter of one, or the type the callee's own decompile stated for it?
-pub(crate) fn reads_a_float(data: &Funcdata, call: OpId, slot: int4) -> bool {
+#[doc(hidden)]
+pub fn reads_a_float(data: &Funcdata, call: OpId, slot: int4) -> bool {
     printed_reader_class(data, call, slot) == Some(Class::Float)
 }
 
@@ -1566,7 +1577,8 @@ fn printed_reader_class(data: &Funcdata, call: OpId, slot: int4) -> Option<Class
 /// The width of the float the call `call` reads at argument `slot`: a declared
 /// parameter's, or the type the callee's own decompile stated for its parameter
 /// at that position.  `None` where neither is a float, or no width is known.
-pub(crate) fn float_read_width(data: &Funcdata, call: OpId, slot: int4) -> Option<int4> {
+#[doc(hidden)]
+pub fn float_read_width(data: &Funcdata, call: OpId, slot: int4) -> Option<int4> {
     let float =
         |t: &Datatype| (t.get_metatype() == type_metatype::TYPE_FLOAT).then(|| t.get_size());
     let fc = data.get_call_specs(data.get_call_specs_index(call)?);
@@ -1584,7 +1596,8 @@ pub(crate) fn float_read_width(data: &Funcdata, call: OpId, slot: int4) -> Optio
 
 /// Does the call `call` read its argument `slot` as an integer or a pointer, by
 /// its declaration or the type the callee's own decompile stated?
-pub(crate) fn reads_other_than_a_float(data: &Funcdata, call: OpId, slot: int4) -> bool {
+#[doc(hidden)]
+pub fn reads_other_than_a_float(data: &Funcdata, call: OpId, slot: int4) -> bool {
     matches!(
         printed_reader_class(data, call, slot),
         Some(Class::Integer | Class::Pointer)
@@ -1597,7 +1610,8 @@ pub(crate) fn reads_other_than_a_float(data: &Funcdata, call: OpId, slot: int4) 
 /// that writes `p[1] = p[0] + 1` and returns `*(float *)p` in `s0` printed
 /// `a0[1] = (float)((int)*a0 + 1)`.  `true` when the accesses are too many to
 /// follow.
-pub(crate) fn moves_integers_beside(data: &Funcdata, load: OpId, size: int4) -> bool {
+#[doc(hidden)]
+pub fn moves_integers_beside(data: &Funcdata, load: OpId, size: int4) -> bool {
     let Some(mut base) = data.obank().get(load).and_then(|o| o.get_in(1)) else {
         return false;
     };
@@ -2503,7 +2517,8 @@ pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
 }
 
 /// Is `ct`, or what it points at at any depth, named one of `names`?
-pub(crate) fn names_type(ct: &Rc<Datatype>, names: &[String]) -> bool {
+#[doc(hidden)]
+pub fn names_type(ct: &Rc<Datatype>, names: &[String]) -> bool {
     let mut cur = Rc::clone(ct);
     for _ in 0..8 {
         if names.iter().any(|n| n == cur.get_name()) {

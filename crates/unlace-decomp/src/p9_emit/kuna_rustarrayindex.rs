@@ -9,7 +9,8 @@ use crate::printc::{PrintC, op_key};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 
 impl PrintC {
-    pub(crate) fn push_rust_array_index(
+    #[doc(hidden)]
+    pub fn push_rust_array_index(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

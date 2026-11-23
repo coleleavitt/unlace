@@ -17,22 +17,24 @@ use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
 /// The operands and types needed to emit one guarded variable ARM LSL.
-pub(crate) struct ArmRegisterLslPlan {
-    pub(crate) lhs: VarnodeId,
-    pub(crate) count: VarnodeId,
-    pub(crate) lhs_type: Rc<Datatype>,
-    pub(crate) count_type: Rc<Datatype>,
+#[doc(hidden)]
+pub struct ArmRegisterLslPlan {
+    pub lhs: VarnodeId,
+    pub count: VarnodeId,
+    pub lhs_type: Rc<Datatype>,
+    pub count_type: Rc<Datatype>,
     /// A signed result type when the original p-code output is signed.
     /// Keeping the conditional's arms signed preserves signed consumers such
     /// as `INT_SRIGHT` and `INT_SLESS` after the shift itself is made unsigned.
-    pub(crate) signed_result_type: Option<Rc<Datatype>>,
+    pub signed_result_type: Option<Rc<Datatype>>,
     /// Whether the conditional `< 32u` guard is printed around the shift.
-    pub(crate) guarded: bool,
+    pub guarded: bool,
 }
 
 /// Select a variable ARM `CPUI_INT_LEFT` whose inputs can safely appear twice
 /// in its C conditional expression.
-pub(crate) fn plan_arm_register_lsl(
+#[doc(hidden)]
+pub fn plan_arm_register_lsl(
     fd: &Funcdata,
     arch: &Architecture,
     op: OpId,

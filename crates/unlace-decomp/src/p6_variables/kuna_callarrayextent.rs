@@ -285,7 +285,8 @@ fn joined_parent_end(
 /// SPARC32 lifts a call's delay-slot store at the call's address. Recover
 /// the two-word initialization when both zero stores reach that call, it
 /// receives the first word's address, and neither word is read directly.
-pub(super) fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
+#[doc(hidden)]
+pub fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     if fd
         .get_arch()
         .kuna_options
@@ -397,7 +398,8 @@ pub(super) fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, spac
 }
 
 /// Preserve shared storage up to the next address-taken base or the local frame end.
-pub(super) fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
+#[doc(hidden)]
+pub fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     if !fd
         .get_arch()
         .kuna_options

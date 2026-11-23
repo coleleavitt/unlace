@@ -20,7 +20,8 @@ use crate::funcdata::Funcdata;
 
 /// The type the selector of the `BRANCHIND` `op`, Varnode `vn` behind `vr`,
 /// prints cast to, or `None`.
-pub(crate) fn cast(
+#[doc(hidden)]
+pub fn cast(
     fd: &Funcdata,
     arch: &Architecture,
     strat: &CastStrategyC,

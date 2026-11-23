@@ -176,7 +176,8 @@ pub use crate::kuna_calleefacts::StackArgs;
 /// the scan too: it unlinks the SEH frame (`mov fs:[0],ecx`), and the `pop ecx`
 /// after it frees the frame's own slot. A pop into FS memory (Delphi's
 /// `pop dword ptr fs:[0]`) is read as before, a pop.
-pub(crate) fn caller_cleanup(arch: &Architecture, call_at: &Address) -> u32 {
+#[doc(hidden)]
+pub fn caller_cleanup(arch: &Architecture, call_at: &Address) -> u32 {
     cleanup_scan(arch, call_at, false)
 }
 
@@ -185,7 +186,8 @@ pub(crate) fn caller_cleanup(arch: &Architecture, call_at: &Address) -> u32 {
 /// pushes and this call's together (`push 6; call f; add esp,8`). A run that
 /// starts at or above it is frame teardown (`pop ecx` freeing a slot) or
 /// follows a later callee that popped pushes made before this call.
-pub(crate) fn own_cleanup(arch: &Architecture, call_at: &Address) -> u32 {
+#[doc(hidden)]
+pub fn own_cleanup(arch: &Architecture, call_at: &Address) -> u32 {
     cleanup_scan(arch, call_at, true)
 }
 
@@ -269,7 +271,8 @@ fn stores_through(
 }
 
 /// x86-32 under a default model whose extrapop is unknown.
-pub(crate) fn applies(arch: &Architecture) -> bool {
+#[doc(hidden)]
+pub fn applies(arch: &Architecture) -> bool {
     arch.archid.starts_with("x86:LE:32:")
         && arch.default_fp().map(|m| m.get_extra_pop()) == Some(EXTRAPOP_UNKNOWN)
 }
@@ -357,7 +360,8 @@ const CUT: u8 = u8::MAX;
 
 /// The summary of the function at `entry`, reading nested direct calls
 /// `depth` levels down.
-pub(crate) fn summary(arch: &Architecture, entry: &Address, depth: u8) -> Summary {
+#[doc(hidden)]
+pub fn summary(arch: &Architecture, entry: &Address, depth: u8) -> Summary {
     summary_at(arch, entry, depth).0
 }
 
@@ -540,7 +544,8 @@ impl PcodeEmit for Collect {
 
 /// An entry-relative stack address, as far as the walk can place it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Val {
+#[doc(hidden)]
+pub enum Val {
     /// A stack address between `lo` and `hi` bytes above the entry stack
     /// pointer; `own` when the imprecision comes from the callee's own code
     /// rather than from a call it makes.
@@ -562,7 +567,8 @@ fn bound(b: i64, k: i64) -> i64 {
 }
 
 impl Val {
-    pub(crate) fn exact(o: i64) -> Val {
+    #[doc(hidden)]
+    pub fn exact(o: i64) -> Val {
         Val::Stack {
             lo: o,
             hi: o,
@@ -570,7 +576,8 @@ impl Val {
         }
     }
 
-    pub(crate) fn as_exact(self) -> Option<i64> {
+    #[doc(hidden)]
+    pub fn as_exact(self) -> Option<i64> {
         match self {
             Val::Stack { lo, hi, .. } if lo == hi => Some(lo),
             _ => None,
@@ -687,10 +694,12 @@ fn widen(old: Option<Val>, joined: Option<Val>, is_sp: bool) -> Option<Val> {
 /// ([`State::lost`]) and the stack slots below the return address
 /// ([`slot_bit`]) that may hold a stack address the walk no longer places.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct State(pub [Option<Val>; 8], pub u8, pub u64);
+#[doc(hidden)]
+pub struct State(pub [Option<Val>; 8], pub u8, pub u64);
 
 impl State {
-    pub(crate) fn at_entry() -> State {
+    #[doc(hidden)]
+    pub fn at_entry() -> State {
         let mut r = [None; 8];
         r[SP] = Some(Val::exact(0));
         r[BP] = Some(Val::CallerFrame);
@@ -706,14 +715,16 @@ impl State {
     }
 
     /// Does general register `r` hold a stack address the walk lost?
-    pub(crate) fn lost(&self, r: usize) -> bool {
+    #[doc(hidden)]
+    pub fn lost(&self, r: usize) -> bool {
         self.1 & (1 << r) != 0
     }
 }
 
 /// The bit of the 4-byte stack slot at entry-relative `o`, for the 64 slots
 /// below the return address.
-pub(crate) fn slot_bit(o: i64) -> Option<u64> {
+#[doc(hidden)]
+pub fn slot_bit(o: i64) -> Option<u64> {
     ((-256..0).contains(&o) && o % 4 == 0).then(|| 1u64 << (-o / 4 - 1))
 }
 
@@ -733,7 +744,8 @@ fn slots_in(at: Option<Val>, size: u32) -> u64 {
 }
 
 /// The general registers as the walk recognizes them.
-pub(crate) struct Regs {
+#[doc(hidden)]
+pub struct Regs {
     pub space: i32,
     pub offs: [u64; 8],
 }
@@ -773,7 +785,8 @@ fn konst(v: &VarnodeData) -> Option<i64> {
 
 /// The call an instruction ends in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Call {
+#[doc(hidden)]
+pub enum Call {
     Direct(uintb),
     /// Through a register or memory; the slot when the target was loaded from
     /// a constant address (an import's IAT entry).
@@ -782,7 +795,8 @@ pub(crate) enum Call {
 
 /// What one instruction does to the walk.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Step {
+#[doc(hidden)]
+pub struct Step {
     pub state: State,
     pub targets: Vec<uintb>,
     pub falls_through: bool,
@@ -807,7 +821,8 @@ pub(crate) struct Step {
 
 /// Note an access of `size` bytes at `at`: a stack address wholly below the
 /// first argument is a local; an exact one above it is an argument byte.
-pub(crate) fn touch(at: Option<Val>, size: u32, arg_end: &mut i64, unplaced: &mut bool) {
+#[doc(hidden)]
+pub fn touch(at: Option<Val>, size: u32, arg_end: &mut i64, unplaced: &mut bool) {
     match at {
         None => {}
         Some(Val::Stack { lo, hi, .. }) => {
@@ -825,7 +840,8 @@ pub(crate) fn touch(at: Option<Val>, size: u32, arg_end: &mut i64, unplaced: &mu
 /// Note `v` leaving the walk's sight (stored, or live in a register at a call
 /// or return): an address at or above the return address hands the arguments
 /// on; the caller's frame pointer and a local's address do not.
-pub(crate) fn escape(v: Option<Val>, unplaced: &mut bool) {
+#[doc(hidden)]
+pub fn escape(v: Option<Val>, unplaced: &mut bool) {
     match v {
         Some(Val::Stack { hi, .. }) if hi >= 0 => *unplaced = true,
         Some(Val::Opaque { .. }) => *unplaced = true,
@@ -841,7 +857,8 @@ fn saved_bit(r: usize) -> u8 {
 }
 
 /// Summarize one instruction's p-code from `state`.
-pub(crate) fn step(
+#[doc(hidden)]
+pub fn step(
     ops: &[(OpCode, Option<VarnodeData>, Vec<VarnodeData>)],
     regs: &Regs,
     state: State,
@@ -855,7 +872,8 @@ pub(crate) fn step(
 /// stack address written outside the general registers or into part of one,
 /// including one stored through a pointer the walk cannot place (the caller's
 /// frame pointer excepted, which the CRT's `_NLG_Notify` records).
-pub(crate) fn step_with(
+#[doc(hidden)]
+pub fn step_with(
     ops: &[(OpCode, Option<VarnodeData>, Vec<VarnodeData>)],
     regs: &Regs,
     state: State,

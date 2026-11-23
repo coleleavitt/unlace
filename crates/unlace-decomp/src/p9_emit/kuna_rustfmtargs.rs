@@ -32,7 +32,8 @@ pub struct Plan {
     pub arguments: Vec<Argument>,
 }
 
-pub(crate) enum Writer {
+#[doc(hidden)]
+pub enum Writer {
     String {
         value: VarnodeId,
         pointer_bridge: bool,
@@ -41,7 +42,8 @@ pub(crate) enum Writer {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) enum MacroKind {
+#[doc(hidden)]
+pub enum MacroKind {
     Print(bool),
     Format,
     Panic,
@@ -61,7 +63,8 @@ pub fn formatter_symbols(
         .collect()
 }
 
-pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
+#[doc(hidden)]
+pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
         .get::<crate::kuna_rustfmt::RustFmtMode>()
@@ -79,7 +82,8 @@ pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Pl
     recover_at(fd, arch, id, 1, 2, MacroKind::Print(stderr))
 }
 
-pub(crate) fn recover_at(
+#[doc(hidden)]
+pub fn recover_at(
     fd: &Funcdata,
     arch: &Architecture,
     id: OpId,
@@ -94,7 +98,8 @@ pub(crate) fn recover_at(
 }
 
 /// Decode formatting inputs after the consumer validates its result ABI.
-pub(crate) fn recover_inputs_at(
+#[doc(hidden)]
+pub fn recover_inputs_at(
     fd: &Funcdata,
     arch: &Architecture,
     id: OpId,
@@ -164,7 +169,8 @@ pub(crate) fn recover_inputs_at(
     })
 }
 
-pub(crate) fn primitive_arguments(
+#[doc(hidden)]
+pub fn primitive_arguments(
     fd: &Funcdata,
     arch: &Architecture,
     id: OpId,
@@ -213,12 +219,8 @@ pub(crate) fn primitive_arguments(
     Some((arguments, formatters))
 }
 
-pub(crate) fn stack_cells(
-    fd: &Funcdata,
-    call: OpId,
-    base: i64,
-    words: usize,
-) -> Option<Vec<VarnodeId>> {
+#[doc(hidden)]
+pub fn stack_cells(fd: &Funcdata, call: OpId, base: i64, words: usize) -> Option<Vec<VarnodeId>> {
     let stack = fd.get_arch().manage().get_stack_space()?;
     let mut cells = vec![None; words];
     let end = base.checked_add((words * 8) as i64)?;
@@ -253,7 +255,8 @@ pub(crate) fn stack_cells(
     cells.into_iter().collect()
 }
 
-pub(crate) fn constant_word(fd: &Funcdata, mut id: VarnodeId) -> Option<u64> {
+#[doc(hidden)]
+pub fn constant_word(fd: &Funcdata, mut id: VarnodeId) -> Option<u64> {
     for _ in 0..8 {
         let value = fd.vbank().get(id)?;
         if value.get_size() != 8 {
@@ -278,7 +281,8 @@ pub(crate) fn constant_word(fd: &Funcdata, mut id: VarnodeId) -> Option<u64> {
     None
 }
 
-pub(crate) fn stack_offset(fd: &Funcdata, mut id: VarnodeId) -> Option<i64> {
+#[doc(hidden)]
+pub fn stack_offset(fd: &Funcdata, mut id: VarnodeId) -> Option<i64> {
     let base = fd
         .get_arch()
         .manage()
@@ -320,7 +324,8 @@ pub(crate) fn stack_offset(fd: &Funcdata, mut id: VarnodeId) -> Option<i64> {
     None
 }
 
-pub(crate) fn render_pieces(
+#[doc(hidden)]
+pub fn render_pieces(
     literals: Vec<String>,
     arguments: Vec<Argument>,
     formatters: Vec<Formatter>,

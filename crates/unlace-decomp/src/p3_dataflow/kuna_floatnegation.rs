@@ -217,7 +217,8 @@ fn guarded_complement(data: &Funcdata, root: VarnodeId) -> Option<Complement> {
 
 /// A comparison this module issued: it already decides the unordered case, so `RuleIgnoreNan`
 /// must not drop a separate NaN test against it.
-pub(crate) fn is_exact(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn is_exact(data: &Funcdata, op: OpId) -> bool {
     data.obank()
         .get(op)
         .is_some_and(|op| op.get_addlflags() & kuna_exactfloat != 0)
@@ -313,7 +314,8 @@ fn consumed_directly(data: &Funcdata, vn: VarnodeId) -> bool {
 }
 
 /// `!(NAN(a) || NAN(b) || a <= b)` is exactly `b < a`, including NaNs.
-pub(crate) fn fold_guarded_negate(data: &mut Funcdata, negate: OpId) -> bool {
+#[doc(hidden)]
+pub fn fold_guarded_negate(data: &mut Funcdata, negate: OpId) -> bool {
     let Some(op) = data.obank().get(negate) else {
         return false;
     };
@@ -394,7 +396,8 @@ fn fold_guarded_root(data: &mut Funcdata, root: VarnodeId) -> bool {
 /// Preserve the exact guarded complement before `nanignore` discards its guards.
 ///
 /// Roots are visited outermost first, so `CF || ZF` folds before the `CF` it reads.
-pub(crate) fn fold_nan_consumers(data: &mut Funcdata, nan: OpId) -> bool {
+#[doc(hidden)]
+pub fn fold_nan_consumers(data: &mut Funcdata, nan: OpId) -> bool {
     let Some(out) = data.obank().get(nan).and_then(|op| op.get_out()) else {
         return false;
     };

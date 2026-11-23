@@ -7,14 +7,16 @@ use crate::funcdata::Funcdata;
 use std::rc::Rc;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct WidenedAddPlan {
+#[doc(hidden)]
+pub struct WidenedAddPlan {
     pub lhs: VarnodeId,
     pub rhs: VarnodeId,
     pub unsigned: Rc<Datatype>,
     pub signed: Option<Rc<Datatype>>,
 }
 
-pub(crate) fn plan(
+#[doc(hidden)]
+pub fn plan(
     data: &Funcdata,
     arch: &Architecture,
     id: OpId,

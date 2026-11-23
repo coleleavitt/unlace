@@ -34,7 +34,8 @@ const LOOP_NAMES: [&str; 5] = ["i", "j", "k", "m", "n"];
 const STEP_DEPTH: usize = 4;
 
 /// Add the loop-counter and result evidence of `fd` to `found`.
-pub(crate) fn evidence(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evidence>>) {
+#[doc(hidden)]
+pub fn evidence(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evidence>>) {
     loop_counters(fd, found);
     result(fd, found);
 }

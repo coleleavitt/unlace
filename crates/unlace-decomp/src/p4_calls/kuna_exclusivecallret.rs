@@ -29,7 +29,8 @@ use crate::kuna_exclusivearguse::{MAX_VISIT, def_block, reaches};
 
 /// Whether the trial matched at `opmatch` has the narrow scalar shape the rule
 /// covers. Independent of the use being scored, so it is computed once per walk.
-pub(crate) fn applies(data: &Funcdata, opmatch: OpId, trial: &crate::fspec::ParamTrial) -> bool {
+#[doc(hidden)]
+pub fn applies(data: &Funcdata, opmatch: OpId, trial: &crate::fspec::ParamTrial) -> bool {
     if trial.get_size() != 4
         || !data.get_func_proto().has_model()
         || !data.obank().get(opmatch).is_some_and(|o| {
@@ -57,7 +58,8 @@ pub(crate) fn applies(data: &Funcdata, opmatch: OpId, trial: &crate::fspec::Para
 
 /// Whether `op`'s read of `reader` is a call or return use on a path that cannot
 /// co-execute with the trial matched at `opmatch`, whose root value is `value`.
-pub(crate) fn skips_use(
+#[doc(hidden)]
+pub fn skips_use(
     data: &Funcdata,
     opmatch: OpId,
     op: OpId,

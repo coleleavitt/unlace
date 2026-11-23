@@ -149,7 +149,8 @@ impl PrintC {
         Some(name)
     }
 
-    pub(crate) fn emit_rust_niche_option_condition(
+    #[doc(hidden)]
+    pub fn emit_rust_niche_option_condition(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

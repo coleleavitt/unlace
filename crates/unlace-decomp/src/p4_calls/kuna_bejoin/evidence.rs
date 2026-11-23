@@ -1835,7 +1835,8 @@ impl<'a> Walk<'a> {
 /// Runs in `buildOutputFromTrials` while the unused trials are still present;
 /// `trialvn` holds each trial's INDIRECT creation, by original slot. Returns
 /// `false`, changing nothing, unless the pair is built.
-pub(crate) fn build_high_read(
+#[doc(hidden)]
+pub fn build_high_read(
     fc: &mut FuncCallSpecs,
     data: &mut Funcdata,
     trialvn: &[Option<VarnodeId>],

@@ -44,21 +44,21 @@ use crate::kuna_lang::OutLang;
 #[derive(Clone)]
 pub struct SpellCtx {
     /// The output language, which selects the [`TypeSpeller`].
-    pub(crate) lang: OutLang,
+    pub lang: OutLang,
     /// (kuna `realtypes`) Relabel residual `TYPE_UNKNOWN` bases as real types.
-    pub(crate) enabled: bool,
+    pub enabled: bool,
     /// The data-model fact that `long` is 8 bytes, so an 8-byte unknown reads
     /// `unsigned long` on LP64 and `unsigned long long` on LLP64.
-    pub(crate) long_is_8: bool,
+    pub long_is_8: bool,
     /// (kuna `ctypes`) Spell the NAMED core types (`int4`/`uint1`/`float8`/`code`)
     /// as the target's own type names too, not just the residual unknowns.
-    pub(crate) ctypes: bool,
+    pub ctypes: bool,
     /// (kuna `ctypes`) The target's declared C scalar widths, which is what makes
     /// the spelling per-architecture rather than a guess.
-    pub(crate) model: crate::kuna_ctypes::CDataModel,
-    pub(crate) c_type_definition: bool,
-    pub(crate) go_package: Option<Rc<str>>,
-    pub(crate) go_pair_types: Option<Rc<crate::dtype::TypeFactoryImpl>>,
+    pub model: crate::kuna_ctypes::CDataModel,
+    pub c_type_definition: bool,
+    pub go_package: Option<Rc<str>>,
+    pub go_pair_types: Option<Rc<crate::dtype::TypeFactoryImpl>>,
 }
 
 impl SpellCtx {
@@ -75,7 +75,8 @@ impl SpellCtx {
         go_pair_types: None,
     };
 
-    pub(crate) fn for_type_definition(mut self) -> Self {
+    #[doc(hidden)]
+    pub fn for_type_definition(mut self) -> Self {
         self.c_type_definition = self.lang == OutLang::C;
         self
     }

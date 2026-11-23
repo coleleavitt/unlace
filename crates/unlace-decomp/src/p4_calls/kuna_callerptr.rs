@@ -124,7 +124,8 @@ pub fn pointer_vote(
 /// derives from the value by a literal offset and then masks, shifts, divides
 /// or multiplies refuses it too (`(p + 7) & ~7`, an alignment helper over a
 /// `uintptr_t`).
-pub(crate) fn refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
     crate::kuna_protoorder::input_refuses_declared(data, vn, ct)
         || masks_a_derived_address(data, &crate::kuna_protoorder::value_family(data, vn))
 }

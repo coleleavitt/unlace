@@ -396,7 +396,8 @@ pub struct SplitVarnode {
 
 impl SplitVarnode {
     /// Construct an uninitialized SplitVarnode (C++ default ctor).
-    pub(crate) fn empty() -> SplitVarnode {
+    #[doc(hidden)]
+    pub fn empty() -> SplitVarnode {
         SplitVarnode {
             lo: None,
             hi: None,
@@ -427,7 +428,8 @@ impl SplitVarnode {
     }
 
     /// (Re)initialize as a constant (C++ `initPartial(int4 sz,uintb v)`).
-    pub(crate) fn init_partial_const(&mut self, sz: int4, v: uintb) {
+    #[doc(hidden)]
+    pub fn init_partial_const(&mut self, sz: int4, v: uintb) {
         self.val = v;
         self.wholesize = sz;
         self.lo = None;
@@ -441,7 +443,8 @@ impl SplitVarnode {
     /// `initPartial(int4 sz,Varnode *l,Varnode *h)`).
     ///
     /// `l` is required (the C++ dereferences it); `h` may be null (implied zero).
-    pub(crate) fn init_partial_pieces(
+    #[doc(hidden)]
+    pub fn init_partial_pieces(
         &mut self,
         data: &Funcdata,
         sz: int4,
@@ -1508,7 +1511,8 @@ fn create_shift_op(
 
 /// Check that a double-precision compare op's inputs are compatible (C++
 /// `prepareBoolOp`).
-pub(crate) fn prepare_bool_op(
+#[doc(hidden)]
+pub fn prepare_bool_op(
     data: &Funcdata,
     in1: &mut SplitVarnode,
     in2: &mut SplitVarnode,
@@ -1525,7 +1529,8 @@ pub(crate) fn prepare_bool_op(
 
 /// Rewrite a double-precision boolean op in place, replacing inputs with unified
 /// Varnodes and updating the opcode (C++ `replaceBoolOp`).
-pub(crate) fn replace_bool_op(
+#[doc(hidden)]
+pub fn replace_bool_op(
     data: &mut Funcdata,
     boolop: OpId,
     in1: &mut SplitVarnode,

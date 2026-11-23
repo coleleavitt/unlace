@@ -4,7 +4,8 @@ use crate::fspec::PrototypePieces;
 use std::borrow::Cow;
 use unlace_base::error::KunaResult;
 
-pub(crate) fn input_assignment<'a>(
+#[doc(hidden)]
+pub fn input_assignment<'a>(
     pieces: &'a PrototypePieces,
     types: &dyn TypeFactory,
 ) -> KunaResult<Cow<'a, PrototypePieces>> {

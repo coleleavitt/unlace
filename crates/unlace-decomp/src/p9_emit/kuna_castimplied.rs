@@ -85,7 +85,8 @@ use crate::funcdata::Funcdata;
 use crate::kuna_castwiden::{CastWidenMode, Plan, narrow_operand, plain_int, store_pointee};
 
 /// What the printer knows about how an op prints, which the IR alone does not say.
-pub(crate) trait PrintedForms {
+#[doc(hidden)]
+pub trait PrintedForms {
     /// The text the printer writes for `ty` in a cast or a declaration.
     fn spell(&self, ty: &Rc<Datatype>) -> String;
     /// Does this `INT_SEXT`/`INT_ZEXT` print as a cast (not as `SEXT14(x)`)?
@@ -119,7 +120,8 @@ pub(crate) trait PrintedForms {
 
 /// What is known about the C type of a printed operand.
 #[derive(Debug)]
-pub(crate) enum CType {
+#[doc(hidden)]
+pub enum CType {
     /// The printed text states this type.
     Known(Rc<Datatype>),
     /// Nothing states it; C's type is at most a promotion of the IR's.
@@ -140,7 +142,8 @@ impl CType {
 
 /// The per-function state: the declarations the printer wrote, by spelling.
 #[derive(Debug, Default)]
-pub(crate) struct ImpliedCasts {
+#[doc(hidden)]
+pub struct ImpliedCasts {
     enabled: bool,
     resigned: bool,
     arms: bool,
@@ -159,7 +162,8 @@ impl ImpliedCasts {
     /// `castternary` ([`crate::kuna_castternary`]), `widen` sets `castwiden`
     /// ([`crate::kuna_castwiden`]), `narrow` turns on `castnarrow`
     /// ([`crate::kuna_castnarrow`]).
-    pub(crate) fn begin(
+    #[doc(hidden)]
+    pub fn begin(
         &mut self,
         enabled: bool,
         resigned: bool,
@@ -181,21 +185,25 @@ impl ImpliedCasts {
     }
 
     /// Is `castimplied` or `castnarrow` on, so a printed conversion may go?
-    pub(crate) fn is_enabled(&self) -> bool {
+    #[doc(hidden)]
+    pub fn is_enabled(&self) -> bool {
         self.enabled || self.narrow
     }
 
-    pub(crate) fn arms_enabled(&self) -> bool {
+    #[doc(hidden)]
+    pub fn arms_enabled(&self) -> bool {
         self.arms
     }
 
     /// The conversions `castternary` leaves out of the conditional being printed.
-    pub(crate) fn set_arm_drops(&mut self, ops: Vec<OpId>) {
+    #[doc(hidden)]
+    pub fn set_arm_drops(&mut self, ops: Vec<OpId>) {
         self.arm_drops = ops;
     }
 
     /// Does `castternary` leave out the conversion `op` prints?
-    pub(crate) fn arm_dropped(&self, op: OpId) -> bool {
+    #[doc(hidden)]
+    pub fn arm_dropped(&self, op: OpId) -> bool {
         self.arm_drops.contains(&op)
     }
 
@@ -204,28 +212,26 @@ impl ImpliedCasts {
     }
 
     /// Is `castnarrow` on?
-    pub(crate) fn narrow_on(&self) -> bool {
+    #[doc(hidden)]
+    pub fn narrow_on(&self) -> bool {
         self.narrow
     }
 
     /// Is `castwiden` on?
-    pub(crate) fn widen_on(&self) -> bool {
+    #[doc(hidden)]
+    pub fn widen_on(&self) -> bool {
         self.widen != CastWidenMode::Off
     }
 
     /// Is `castwiden` set to `literal`?
-    pub(crate) fn widen_literal(&self) -> bool {
+    #[doc(hidden)]
+    pub fn widen_literal(&self) -> bool {
         self.widen == CastWidenMode::Literal
     }
 
     /// What the arithmetic op `r` prints differently under `castwiden`.
-    pub(crate) fn widen_plan(
-        &self,
-        p: &dyn PrintedForms,
-        fd: &Funcdata,
-        r: OpId,
-        depth: u32,
-    ) -> Plan {
+    #[doc(hidden)]
+    pub fn widen_plan(&self, p: &dyn PrintedForms, fd: &Funcdata, r: OpId, depth: u32) -> Plan {
         if !self.widen_on() {
             return Plan::default();
         }
@@ -239,7 +245,8 @@ impl ImpliedCasts {
 
     /// Does `castwiden` leave out the widening `op` prints where the arithmetic
     /// `read_op` reads it?
-    pub(crate) fn widen_drops(
+    #[doc(hidden)]
+    pub fn widen_drops(
         &self,
         p: &dyn PrintedForms,
         fd: &Funcdata,
@@ -251,7 +258,8 @@ impl ImpliedCasts {
 
     /// The suffix `castwiden` prints on the constant `vn` read by `op`: `Some(true)`
     /// for `UL`, `Some(false)` for `L`.
-    pub(crate) fn widen_suffix(
+    #[doc(hidden)]
+    pub fn widen_suffix(
         &self,
         p: &dyn PrintedForms,
         fd: &Funcdata,
@@ -268,7 +276,8 @@ impl ImpliedCasts {
     }
 
     /// The printer declared local `high`, named `name`, as `spelling`.
-    pub(crate) fn record_local(&mut self, high: HighVariableId, name: &str, spelling: String) {
+    #[doc(hidden)]
+    pub fn record_local(&mut self, high: HighVariableId, name: &str, spelling: String) {
         if self.tracking() {
             let seen = self
                 .named
@@ -283,7 +292,8 @@ impl ImpliedCasts {
 
     /// The spelling the local or parameter the printer names `name` is declared
     /// with, when one declaration carries that name.
-    pub(crate) fn declared_named(&self, name: &str) -> Option<&str> {
+    #[doc(hidden)]
+    pub fn declared_named(&self, name: &str) -> Option<&str> {
         match self.named.get(name) {
             Some(seen) => seen.as_deref(),
             None => self.params.get(name).map(String::as_str),
@@ -291,14 +301,16 @@ impl ImpliedCasts {
     }
 
     /// The printer declared parameter `name` as `spelling`.
-    pub(crate) fn record_param(&mut self, name: &str, spelling: String) {
+    #[doc(hidden)]
+    pub fn record_param(&mut self, name: &str, spelling: String) {
         if self.tracking() {
             self.params.insert(name.to_string(), spelling);
         }
     }
 
     /// The printer declared the function's return type as `spelling`.
-    pub(crate) fn record_return(&mut self, spelling: String) {
+    #[doc(hidden)]
+    pub fn record_return(&mut self, spelling: String) {
         if self.tracking() {
             self.ret = Some(spelling);
         }
@@ -306,7 +318,8 @@ impl ImpliedCasts {
 
     /// Leave out the cast `op` prints, read by `read_op` (`None` at the top of a
     /// statement)?
-    pub(crate) fn drops(
+    #[doc(hidden)]
+    pub fn drops(
         &self,
         p: &dyn PrintedForms,
         fd: &Funcdata,
@@ -327,7 +340,8 @@ impl ImpliedCasts {
     }
 
     /// The spelling the printer declared the function's return type with.
-    pub(crate) fn return_spelling(&self) -> Option<&str> {
+    #[doc(hidden)]
+    pub fn return_spelling(&self) -> Option<&str> {
         self.ret.as_deref()
     }
 
@@ -476,7 +490,8 @@ impl ImpliedCasts {
     }
 
     /// The C type of `vn` as printed where `reader` reads it.
-    pub(crate) fn operand_type(
+    #[doc(hidden)]
+    pub fn operand_type(
         &self,
         p: &dyn PrintedForms,
         fd: &Funcdata,
@@ -504,7 +519,8 @@ impl ImpliedCasts {
 
     /// The C type of the expression the op `def` prints, whose output has the IR
     /// type `t`, where `reader` (if any) reads it.
-    pub(crate) fn def_type(
+    #[doc(hidden)]
+    pub fn def_type(
         &self,
         p: &dyn PrintedForms,
         fd: &Funcdata,
@@ -640,7 +656,8 @@ impl ImpliedCasts {
     /// spells none of the types kuna holds for `vn` -- a merged variable declared
     /// `int *` whose member here reads as a `long` -- is `Opaque`: the text C
     /// sees is not the IR's type, so nothing can be concluded from the IR.
-    pub(crate) fn explicit_type(
+    #[doc(hidden)]
+    pub fn explicit_type(
         &self,
         p: &dyn PrintedForms,
         fd: &Funcdata,
@@ -742,7 +759,8 @@ impl ImpliedCasts {
 
     /// The spelling of the declaration an explicit `vn` prints as, when that
     /// declaration is exactly `vn`'s own storage.
-    pub(crate) fn declared_spelling(
+    #[doc(hidden)]
+    pub fn declared_spelling(
         &self,
         p: &dyn PrintedForms,
         fd: &Funcdata,
@@ -784,7 +802,8 @@ struct Dest<'a> {
 /// The op that reads the value `vn` carries once `read_op` is known, looking
 /// through implied `COPY`s (which print as their operand), with the varnode that
 /// op reads it as.
-pub(crate) fn through_copies(
+#[doc(hidden)]
+pub fn through_copies(
     fd: &Funcdata,
     read_op: Option<OpId>,
     vn: VarnodeId,
@@ -852,7 +871,8 @@ fn fixes_type(p: &dyn PrintedForms, fd: &Funcdata, r: OpId) -> bool {
 
 /// The declared type of the parameter `arg` fills at the direct call `call`,
 /// when that declaration is one C sees at this call.
-pub(crate) fn trusted_param(fd: &Funcdata, call: OpId, arg: VarnodeId) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn trusted_param(fd: &Funcdata, call: OpId, arg: VarnodeId) -> Option<Rc<Datatype>> {
     let o = fd.obank().get(call)?;
     if o.code() != OpCode::CPUI_CALL {
         return None;
@@ -891,7 +911,8 @@ fn is_int_target(t: &Datatype) -> bool {
 }
 
 /// The values an integer type holds, or `None` for anything else.
-pub(crate) fn int_range(t: &Datatype) -> Option<(i128, i128)> {
+#[doc(hidden)]
+pub fn int_range(t: &Datatype) -> Option<(i128, i128)> {
     if t.is_enum_type() {
         return None;
     }
@@ -909,7 +930,8 @@ pub(crate) fn int_range(t: &Datatype) -> Option<(i128, i128)> {
 }
 
 /// Does converting any value of `src` to `dst` leave it unchanged?
-pub(crate) fn preserves(src: &Datatype, dst: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn preserves(src: &Datatype, dst: &Datatype) -> bool {
     if !is_int_target(dst) {
         return false;
     }

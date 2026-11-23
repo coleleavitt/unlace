@@ -13,28 +13,33 @@ use unlace_base::types::int4;
 /// Bytes keyed by `(space index, offset)`, held as sorted, disjoint,
 /// non-adjacent inclusive runs `(space index, first, last)`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct ByteSet {
+#[doc(hidden)]
+pub struct ByteSet {
     runs: Vec<(int4, u64, u64)>,
     count: usize,
 }
 
 impl ByteSet {
-    pub(super) fn new() -> Self {
+    #[doc(hidden)]
+    pub fn new() -> Self {
         ByteSet::default()
     }
 
     /// How many bytes the set holds.
-    pub(super) fn len(&self) -> usize {
+    #[doc(hidden)]
+    pub fn len(&self) -> usize {
         self.count
     }
 
-    pub(super) fn clear(&mut self) {
+    #[doc(hidden)]
+    pub fn clear(&mut self) {
         self.runs.clear();
         self.count = 0;
     }
 
     /// Drop the spare capacity, for a set kept for the rest of the run.
-    pub(super) fn shrink_to_fit(&mut self) {
+    #[doc(hidden)]
+    pub fn shrink_to_fit(&mut self) {
         self.runs.shrink_to_fit();
     }
 
@@ -44,7 +49,8 @@ impl ByteSet {
             .partition_point(|&(i, first, _)| (i, first) <= (idx, b))
     }
 
-    pub(super) fn contains(&self, &(idx, b): &(int4, u64)) -> bool {
+    #[doc(hidden)]
+    pub fn contains(&self, &(idx, b): &(int4, u64)) -> bool {
         let at = self.after(idx, b);
         at > 0 && {
             let (i, _, last) = self.runs[at - 1];
@@ -53,7 +59,8 @@ impl ByteSet {
     }
 
     /// Add one byte; `true` when it was not already present.
-    pub(super) fn insert(&mut self, (idx, b): (int4, u64)) -> bool {
+    #[doc(hidden)]
+    pub fn insert(&mut self, (idx, b): (int4, u64)) -> bool {
         let at = self.after(idx, b);
         let joins_prev = at > 0 && {
             let (i, _, last) = self.runs[at - 1];
@@ -81,7 +88,8 @@ impl ByteSet {
 
     /// Drop one byte; `true` when it was present.
     #[cfg(test)]
-    pub(super) fn remove(&mut self, &(idx, b): &(int4, u64)) -> bool {
+    #[doc(hidden)]
+    pub fn remove(&mut self, &(idx, b): &(int4, u64)) -> bool {
         if !self.contains(&(idx, b)) {
             return false;
         }
@@ -104,7 +112,8 @@ impl ByteSet {
 
     /// Is every byte of `self` in `other`? A run is covered only by one run
     /// of `other`, since `other`'s runs are maximal.
-    pub(super) fn is_subset(&self, other: &ByteSet) -> bool {
+    #[doc(hidden)]
+    pub fn is_subset(&self, other: &ByteSet) -> bool {
         if self.count > other.count {
             return false;
         }
@@ -169,20 +178,23 @@ impl ByteSet {
     }
 
     /// Move every byte of `other` into `self`, leaving `other` empty.
-    pub(super) fn append(&mut self, other: &mut ByteSet) {
+    #[doc(hidden)]
+    pub fn append(&mut self, other: &mut ByteSet) {
         let taken = std::mem::take(other);
         self.add_runs(&taken);
     }
 
     /// The bytes in `self` or `other`.
-    pub(super) fn union(&self, other: &ByteSet) -> ByteSet {
+    #[doc(hidden)]
+    pub fn union(&self, other: &ByteSet) -> ByteSet {
         let mut out = self.clone();
         out.add_runs(other);
         out
     }
 
     /// The bytes in `self` and not in `other`.
-    pub(super) fn difference(&self, other: &ByteSet) -> ByteSet {
+    #[doc(hidden)]
+    pub fn difference(&self, other: &ByteSet) -> ByteSet {
         let mut runs = Vec::with_capacity(self.runs.len());
         let mut j = 0;
         for &(idx, first, last) in &self.runs {
@@ -210,7 +222,8 @@ impl ByteSet {
     }
 
     /// The bytes in both `self` and `other`.
-    pub(super) fn intersection(&self, other: &ByteSet) -> ByteSet {
+    #[doc(hidden)]
+    pub fn intersection(&self, other: &ByteSet) -> ByteSet {
         let mut runs = Vec::new();
         let (mut i, mut j) = (0, 0);
         while i < self.runs.len() && j < other.runs.len() {
@@ -236,7 +249,8 @@ impl ByteSet {
     }
 
     /// Every byte, in `(space index, offset)` order.
-    pub(super) fn iter(&self) -> impl Iterator<Item = (int4, u64)> + '_ {
+    #[doc(hidden)]
+    pub fn iter(&self) -> impl Iterator<Item = (int4, u64)> + '_ {
         self.runs
             .iter()
             .flat_map(|&(idx, first, last)| (first..=last).map(move |b| (idx, b)))

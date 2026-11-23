@@ -16,7 +16,8 @@ use unlace_num::opcodes::OpCode;
 /// Those admissions decline a page-aligned base with a bias that fits a signed
 /// 16-bit low half: that pair is one split high/low address immediate, and its
 /// high half is no reference to the object that starts there.
-pub(crate) fn preserve_array_base(data: &Funcdata, root: OpId) -> bool {
+#[doc(hidden)]
+pub fn preserve_array_base(data: &Funcdata, root: OpId) -> bool {
     if !data
         .get_arch()
         .kuna_options

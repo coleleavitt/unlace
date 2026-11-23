@@ -9,7 +9,8 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
-pub(crate) fn backing_store(
+#[doc(hidden)]
+pub fn backing_store(
     fd: &Funcdata,
     op: OpId,
     inslot: i32,
@@ -58,7 +59,8 @@ pub(crate) fn backing_store(
         })
 }
 
-pub(crate) fn stored_word(fd: &Funcdata, input: VarnodeId, resolved: Rc<Datatype>) -> Rc<Datatype> {
+#[doc(hidden)]
+pub fn stored_word(fd: &Funcdata, input: VarnodeId, resolved: Rc<Datatype>) -> Rc<Datatype> {
     let Some(factory) = fd.get_arch().types() else {
         return resolved;
     };

@@ -277,7 +277,8 @@ fn loses(arch: &Architecture, data: &Funcdata, callee: Key) -> bool {
 /// `Some(stated)` when a tail call to this function loses nothing: it takes
 /// and returns nothing (`false`), or its statement fixes what it takes and
 /// what it returns (`true`).
-pub(crate) fn callable_by_recovery(
+#[doc(hidden)]
+pub fn callable_by_recovery(
     arch: &mut Architecture,
     entry: &Address,
     data: &Funcdata,
@@ -361,7 +362,8 @@ fn takes_every_input(
 /// a callee-first run does not raise again (`pending`). A redo can refuse a
 /// tail call the first decompile took, and the stale `// tail-call` would
 /// print on the body the redo copies in.
-pub(crate) fn clear_stale_warnings(
+#[doc(hidden)]
+pub fn clear_stale_warnings(
     arch: &mut Architecture,
     entry: &Address,
     pending: &[(uint4, Address, String)],

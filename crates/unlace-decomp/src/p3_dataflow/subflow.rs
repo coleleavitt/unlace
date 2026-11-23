@@ -8288,7 +8288,8 @@ pub fn specs() -> Vec<RuleSpec> {
 
 /// Did narrowing the call input `vn` to the logical value under `mask` drop only
 /// bits known to be zero?  Then the binary passed that value zero-extended.
-pub(crate) fn drops_only_zero_bits(data: &Funcdata, vn: VarnodeId, mask: u64) -> bool {
+#[doc(hidden)]
+pub fn drops_only_zero_bits(data: &Funcdata, vn: VarnodeId, mask: u64) -> bool {
     mask & 1 != 0
         && data
             .vbank()
@@ -8298,7 +8299,8 @@ pub(crate) fn drops_only_zero_bits(data: &Funcdata, vn: VarnodeId, mask: u64) ->
 
 /// Record on the call's spec that input `slot` of `op` was just trimmed, and
 /// whether the trim dropped only known-zero bits.
-pub(crate) fn note_trimmed_arg(data: &mut Funcdata, op: OpId, slot: int4, zext: bool) {
+#[doc(hidden)]
+pub fn note_trimmed_arg(data: &mut Funcdata, op: OpId, slot: int4, zext: bool) {
     let Some(o) = data.obank().get(op) else {
         return;
     };

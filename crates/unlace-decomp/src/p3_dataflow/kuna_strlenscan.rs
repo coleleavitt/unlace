@@ -58,7 +58,8 @@ use crate::op::PcodeOp;
 use crate::userop::BUILTIN_STRLEN;
 
 /// The ops the body may compute besides the LOAD and its branch.
-pub(crate) const PURE: &[OpCode] = &[
+#[doc(hidden)]
+pub const PURE: &[OpCode] = &[
     CPUI_COPY,
     CPUI_INT_ADD,
     CPUI_INT_SUB,

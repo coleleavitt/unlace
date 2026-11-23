@@ -24,7 +24,8 @@ use crate::funcdata::Funcdata;
 
 /// The signed type input `slot` of `op` must be cast to because the expression
 /// there prints as unsigned, or `None`.
-pub(crate) fn cast(data: &mut Funcdata, op: OpId, slot: int4) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn cast(data: &mut Funcdata, op: OpId, slot: int4) -> Option<Rc<Datatype>> {
     let o = data.obank().get(op)?;
     let signed = match o.code() {
         OpCode::CPUI_INT_SEXT | OpCode::CPUI_INT_SRIGHT | OpCode::CPUI_FLOAT_INT2FLOAT => slot == 0,

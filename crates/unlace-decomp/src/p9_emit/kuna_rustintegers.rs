@@ -12,7 +12,8 @@ use crate::printlanguage::{OpToken, ReversePolish, TokenType};
 use unlace_num::opcodes::OpCode;
 
 /// Find the token following a cast through enclosing right-hand expressions.
-pub(crate) fn cast_before_angle(stack: &[ReversePolish]) -> bool {
+#[doc(hidden)]
+pub fn cast_before_angle(stack: &[ReversePolish]) -> bool {
     for entry in stack.iter().rev() {
         match entry.tok.token_type {
             TokenType::Binary if entry.visited == 0 => {
@@ -38,12 +39,8 @@ fn shape(ty: &Datatype) -> Option<(i32, bool)> {
     Some((ty.get_size(), signed))
 }
 
-pub(crate) fn needs_integer_context(
-    fd: &Funcdata,
-    value: VarnodeId,
-    op: OpId,
-    depth: u8,
-) -> Option<bool> {
+#[doc(hidden)]
+pub fn needs_integer_context(fd: &Funcdata, value: VarnodeId, op: OpId, depth: u8) -> Option<bool> {
     if depth == 0 {
         return None;
     }
@@ -83,7 +80,8 @@ pub(crate) fn needs_integer_context(
     }
 }
 
-pub(crate) struct IntegerPlan {
+#[doc(hidden)]
+pub struct IntegerPlan {
     inputs: [VarnodeId; 2],
     target: Rc<Datatype>,
 }
@@ -110,7 +108,8 @@ impl PrintC {
         crate::printc::declared_variable_type(fd, value)
     }
 
-    pub(crate) fn rust_integer_value_type(
+    #[doc(hidden)]
+    pub fn rust_integer_value_type(
         &self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -121,7 +120,8 @@ impl PrintC {
             .unwrap_or_else(|| fd.vn_type_read_facing(value, op))
     }
 
-    pub(crate) fn rust_integer_output_type(
+    #[doc(hidden)]
+    pub fn rust_integer_output_type(
         &self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -131,7 +131,8 @@ impl PrintC {
             .unwrap_or_else(|| fd.vn_type_def_facing(value))
     }
 
-    pub(crate) fn push_rust_integer_as(
+    #[doc(hidden)]
+    pub fn push_rust_integer_as(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -142,7 +143,8 @@ impl PrintC {
         self.push_rust_integer_conversion(fd, arch, value, op, target, false)
     }
 
-    pub(crate) fn push_rust_integer_conversion(
+    #[doc(hidden)]
+    pub fn push_rust_integer_conversion(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -206,7 +208,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn rust_integer_binary_plan(
+    #[doc(hidden)]
+    pub fn rust_integer_binary_plan(
         &self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -245,7 +248,8 @@ impl PrintC {
         needed.then_some(IntegerPlan { inputs, target })
     }
 
-    pub(crate) fn op_rust_integer_binary(
+    #[doc(hidden)]
+    pub fn op_rust_integer_binary(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

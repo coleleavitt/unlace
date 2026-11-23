@@ -110,7 +110,8 @@ impl<'a> FuncdataCastContext<'a> {
 
     /// (kuna) Report a non-constant one-byte TYPE_UNKNOWN as `ty` instead, so the
     /// promotion queries see the type the printer spells it as.
-    pub(crate) fn with_unknown_byte_as(mut self, ty: Rc<Datatype>) -> Self {
+    #[doc(hidden)]
+    pub fn with_unknown_byte_as(mut self, ty: Rc<Datatype>) -> Self {
         self.byte_as = Some(ty);
         self
     }
@@ -135,7 +136,8 @@ impl<'a> FuncdataCastContext<'a> {
 
     /// Intern a `VarnodeId`, returning its opaque handle (stable for the life of
     /// this context).
-    pub(crate) fn vn_ref(&self, vn: VarnodeId) -> VnRef {
+    #[doc(hidden)]
+    pub fn vn_ref(&self, vn: VarnodeId) -> VnRef {
         let mut tab = self.vn_intern.borrow_mut();
         // Linear scan: the per-op cast decision touches a handful of varnodes, so
         // the table stays tiny; this keeps the handle stable without a HashMap
@@ -148,7 +150,8 @@ impl<'a> FuncdataCastContext<'a> {
     }
 
     /// Intern an `OpId`, returning its opaque handle.
-    pub(crate) fn op_ref(&self, op: OpId) -> OpRef {
+    #[doc(hidden)]
+    pub fn op_ref(&self, op: OpId) -> OpRef {
         let mut tab = self.op_intern.borrow_mut();
         if let Some(i) = tab.iter().position(|&k| k == op) {
             return OpRef(i);
@@ -377,7 +380,8 @@ impl CastContext for FuncdataCastContext<'_> {
 /// this stays a pure decision over types (the C++ reaches them through the
 /// Varnode `*`, here they are precomputed).  The promotion-sensitive comparison /
 /// extension arms run their predicates through `ctx`.
-pub(crate) fn get_input_cast(
+#[doc(hidden)]
+pub fn get_input_cast(
     data: &mut Funcdata,
     strat: &CastStrategyC,
     op: OpId,
@@ -1015,11 +1019,8 @@ fn get_input_cast_default(
 /// assign to the result).  Default (typeop.cc:283-287) is `op->outputTypeLocal()`;
 /// the COPY/LOAD overrides flow the read-facing input type, and the INT-arithmetic
 /// overrides defer to `arithmeticOutputStandard`.
-pub(crate) fn get_output_token(
-    data: &mut Funcdata,
-    strat: &CastStrategyC,
-    op: OpId,
-) -> Rc<Datatype> {
+#[doc(hidden)]
+pub fn get_output_token(data: &mut Funcdata, strat: &CastStrategyC, op: OpId) -> Rc<Datatype> {
     let opc = match data.obank().get(op) {
         Some(o) => o.code(),
         None => return output_type_local(data, op),

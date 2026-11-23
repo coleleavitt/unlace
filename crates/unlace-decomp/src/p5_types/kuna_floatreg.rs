@@ -64,7 +64,8 @@ use crate::varnode::Varnode;
 /// The float `vn` is, when the function returns it in a float register and
 /// nothing the function does with it says otherwise; `ct` is the fold's type
 /// for it.
-pub(crate) fn float_register_vote(
+#[doc(hidden)]
+pub fn float_register_vote(
     data: &Funcdata,
     vn: VarnodeId,
     ct: &Rc<Datatype>,
@@ -75,11 +76,8 @@ pub(crate) fn float_register_vote(
 /// The float the function's input `vn` is, when it arrives in a float-class
 /// register of the function's own model, the fold says nothing of it (`ct` is
 /// raw bytes), and [`only_moved_as_a_float`] holds for its value.
-pub(crate) fn float_input_vote(
-    data: &Funcdata,
-    vn: VarnodeId,
-    ct: &Rc<Datatype>,
-) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn float_input_vote(data: &Funcdata, vn: VarnodeId, ct: &Rc<Datatype>) -> Option<Rc<Datatype>> {
     if ct.get_metatype() != type_metatype::TYPE_UNKNOWN {
         return None;
     }
@@ -326,7 +324,8 @@ const MAX_GLOBAL_FAMILY: usize = 4096;
 /// own code is the one view the whole-program scan cannot miss, and a float
 /// taken against it prints a conversion where the machine moves the bits
 /// (`v1 = (long)gd` for a case body that adds to them).
-pub(crate) fn moved_as_a_float_here(data: &Funcdata, addr: &Address, size: int4) -> bool {
+#[doc(hidden)]
+pub fn moved_as_a_float_here(data: &Funcdata, addr: &Address, size: int4) -> bool {
     let key = (addr.get_offset(), size);
     if let Some(known) = MOVED.with(|m| m.borrow().as_ref().and_then(|c| c.get(&key).copied())) {
         return known;
@@ -349,7 +348,8 @@ thread_local! {
 /// Run `f` with [`moved_as_a_float_here`]'s answers kept by global: the walk
 /// reads the function's ops, constants, prototypes and the global scope, which
 /// one type-inference pass only types and never changes.
-pub(crate) fn with_moved_memo<T>(f: impl FnOnce() -> T) -> T {
+#[doc(hidden)]
+pub fn with_moved_memo<T>(f: impl FnOnce() -> T) -> T {
     struct Restore(Option<MovedMemo>);
     impl Drop for Restore {
         fn drop(&mut self) {
@@ -676,7 +676,8 @@ fn in_a_float_entry(list: Option<&ParamListStandard>, node: &Varnode) -> bool {
 /// the read is one a float has.  A literal-pool `movsd dat_2010(%rip),%xmm0`
 /// before `call fy` is the `2.5` the source passed, and an untyped read there
 /// printed as an integer the parameter converts.
-pub(crate) fn argument_vote(
+#[doc(hidden)]
+pub fn argument_vote(
     data: &Funcdata,
     fc: &crate::fspec::FuncCallSpecs,
     op: crate::context::OpId,
@@ -761,7 +762,8 @@ pub(crate) fn argument_vote(
 /// requirement adds prints as one: `vmov s0,r3` hands the bits of an
 /// `unsigned int` to a `float` parameter, which C would convert by value.  A
 /// NaN constant no literal spells gets none.
-pub(crate) fn argument_requirement(
+#[doc(hidden)]
+pub fn argument_requirement(
     data: &Funcdata,
     fc: &crate::fspec::FuncCallSpecs,
     op: crate::context::OpId,
@@ -821,11 +823,8 @@ fn result_of_a_non_float_call(data: &Funcdata, vn: VarnodeId) -> bool {
 /// Does the call `call` pass its argument `slot` in a float-class register of
 /// its model?  Asked of where the argument lives, not of the value handed in:
 /// copy propagation leaves `vmov r0,s0; bl put3` reading `s0`.
-pub(crate) fn passed_in_a_float_register(
-    data: &Funcdata,
-    call: crate::context::OpId,
-    slot: int4,
-) -> bool {
+#[doc(hidden)]
+pub fn passed_in_a_float_register(data: &Funcdata, call: crate::context::OpId, slot: int4) -> bool {
     let Some(fc) = data
         .get_call_specs_index(call)
         .map(|i| data.get_call_specs(i))
@@ -852,7 +851,8 @@ pub(crate) fn passed_in_a_float_register(
 }
 
 /// Does the op `code` produce a float from its inputs?
-pub(crate) fn makes_a_float(code: OpCode) -> bool {
+#[doc(hidden)]
+pub fn makes_a_float(code: OpCode) -> bool {
     matches!(
         code,
         OpCode::CPUI_FLOAT_ADD
@@ -871,7 +871,8 @@ pub(crate) fn makes_a_float(code: OpCode) -> bool {
 }
 
 /// Does the op `code` read its inputs as floats?
-pub(crate) fn reads_a_float(code: OpCode) -> bool {
+#[doc(hidden)]
+pub fn reads_a_float(code: OpCode) -> bool {
     matches!(
         code,
         OpCode::CPUI_FLOAT_ADD
@@ -958,7 +959,8 @@ fn refuses(
 /// all of them when it is refused for one. `if (ready) return packed.f; return
 /// 0.0f;` returns a global on one path and a constant on the other, and the
 /// constant alone would make the global a float.
-pub(crate) fn returned_beside(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
+#[doc(hidden)]
+pub fn returned_beside(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
     let Some(node) = data.vbank().get(vn) else {
         return vec![vn];
     };
@@ -1079,7 +1081,8 @@ fn call_returns_a_float(data: &Funcdata, op: crate::context::OpId) -> bool {
 /// its register makes it -- and the stub returns the jump's result.  Otherwise
 /// the result is untyped and the stub prints `v1 = (float)(*dat_4018)()`,
 /// converting what the target handed back.
-pub(crate) fn jump_result_type(
+#[doc(hidden)]
+pub fn jump_result_type(
     data: &Funcdata,
     op: crate::context::OpId,
     size: int4,
@@ -1120,11 +1123,8 @@ pub(crate) fn jump_result_type(
 /// of one (`d0` over `s0` and `s1`), so a value there is a `float` only when
 /// the function never uses the pair whole: `third()` loads `1.0 / 3.0` into
 /// `d0`, and the `s0` left once the load is folded is not a float.
-pub(crate) fn float_class(
-    data: &Funcdata,
-    list: Option<&ParamListStandard>,
-    node: &Varnode,
-) -> bool {
+#[doc(hidden)]
+pub fn float_class(data: &Funcdata, list: Option<&ParamListStandard>, node: &Varnode) -> bool {
     let Some((l, i)) = list.and_then(|l| {
         l.find_entry(node.get_addr(), node.get_size(), true)
             .map(|i| (l, i))
@@ -1190,7 +1190,8 @@ fn pair_used_whole(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// the function's model (ARM hard-float's `s0`..`s15`) whose pair the
 /// function's code uses whole: `vldr d0, [pc]` loads a `double` whose low half
 /// is all that is left in `s0` once the constant is folded.
-pub(crate) fn note_float_pairs(data: &mut Funcdata) {
+#[doc(hidden)]
+pub fn note_float_pairs(data: &mut Funcdata) {
     let proto = data.get_func_proto();
     if !proto.has_model() {
         return;
@@ -1220,7 +1221,8 @@ pub(crate) fn note_float_pairs(data: &mut Funcdata) {
     }
 }
 
-pub(crate) fn returned_in_a_float_register(data: &Funcdata, vn: VarnodeId, node: &Varnode) -> bool {
+#[doc(hidden)]
+pub fn returned_in_a_float_register(data: &Funcdata, vn: VarnodeId, node: &Varnode) -> bool {
     let proto = data.get_func_proto();
     if !proto.has_model() || proto.is_output_locked() || data.kuna_float_return_withdrawn() {
         return false;
@@ -1238,7 +1240,8 @@ pub(crate) fn returned_in_a_float_register(data: &Funcdata, vn: VarnodeId, node:
 /// and joins the family is made of (a literal-pool load folds to `s0 =
 /// COPY #0x7fc00123`).  `NAN` and `-NAN` are the canonical quiet NaNs; any
 /// other payload, and a signalling NaN, has no spelling.
-pub(crate) fn spells_exactly(data: &Funcdata, vn: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn spells_exactly(data: &Funcdata, vn: VarnodeId) -> bool {
     crate::kuna_protoorder::value_family(data, vn)
         .into_iter()
         .all(|v| {
@@ -1263,7 +1266,8 @@ pub(crate) fn spells_exactly(data: &Funcdata, vn: VarnodeId) -> bool {
 
 /// Does `c`, when it is a constant, print as a float literal that compiles back
 /// to the same bits?
-pub(crate) fn spells(data: &Funcdata, c: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn spells(data: &Funcdata, c: VarnodeId) -> bool {
     let Some(node) = data.vbank().get(c).filter(|n| n.is_constant()) else {
         return true;
     };

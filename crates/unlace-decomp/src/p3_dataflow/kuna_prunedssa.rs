@@ -47,7 +47,8 @@ type Event = (usize, u32, u8, OpId);
 /// May the markers of the range `addr` with properties `fl` be pruned on this
 /// heritage pass: the range is neither persistent nor address-tied, and the
 /// `ActionDeadCode` after this pass may remove from its space?
-pub(crate) fn applies(fl: u32, addr: &Address, pass: int4, deadcode_delay: int4) -> bool {
+#[doc(hidden)]
+pub fn applies(fl: u32, addr: &Address, pass: int4, deadcode_delay: int4) -> bool {
     use crate::varnode::varnode_flags;
     pass >= deadcode_delay
         && (fl & (varnode_flags::addrtied | varnode_flags::persist)) == 0
@@ -55,7 +56,8 @@ pub(crate) fn applies(fl: u32, addr: &Address, pass: int4, deadcode_delay: int4)
 }
 
 /// Do the call guards of the range qualify for [`live_calls`]?
-pub(crate) fn applies_to_calls(fd: &Funcdata, addr: &Address) -> bool {
+#[doc(hidden)]
+pub fn applies_to_calls(fd: &Funcdata, addr: &Address) -> bool {
     fd.num_calls() >= 2
         && addr
             .get_space()
@@ -65,7 +67,8 @@ pub(crate) fn applies_to_calls(fd: &Funcdata, addr: &Address) -> bool {
 /// The calls of `calls` after which a read of the stack range `addr:size` can
 /// follow. `read` are its free reads, `full` the ops writing all of it and
 /// `partial` the ops writing part of it (each reads the rest first).
-pub(crate) fn live_calls(
+#[doc(hidden)]
+pub fn live_calls(
     fd: &Funcdata,
     calls: &[FuncCallSpecs],
     addr: &Address,
@@ -118,12 +121,8 @@ pub(crate) fn live_calls(
 /// Drop from `merges` every join at which the range `addr:size` is not live,
 /// judged from its reads and writes as `Heritage::guard` left them. Returns
 /// whether any join was dropped.
-pub(crate) fn prune_merges(
-    fd: &Funcdata,
-    addr: &Address,
-    size: int4,
-    merges: &mut Vec<BlockId>,
-) -> bool {
+#[doc(hidden)]
+pub fn prune_merges(fd: &Funcdata, addr: &Address, size: int4, merges: &mut Vec<BlockId>) -> bool {
     let joins_prune = addr.get_space().is_some_and(|s| {
         matches!(
             s.get_type(),

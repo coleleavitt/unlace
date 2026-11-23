@@ -408,7 +408,8 @@ impl CalleeEntryDead {
     /// Mark byte `b` of the register file written before every read of it, so
     /// a test can stand up a partial write followed by a wide read.
     #[cfg(test)]
-    pub(crate) fn with_written_byte(mut self, b: u64) -> Self {
+    #[doc(hidden)]
+    pub fn with_written_byte(mut self, b: u64) -> Self {
         self.live_read_bytes.remove(&(self.reg_idx, b));
         self.unpadded_read_bytes.remove(&(self.reg_idx, b));
         self
@@ -629,14 +630,16 @@ impl CalleeEntryDead {
     /// Record one unnameable-transfer terminator, so a consumer of this
     /// evidence can unit-test the forwarding case without a translator.
     #[cfg(test)]
-    pub(crate) fn with_opaque_cut(mut self, written: Vec<(int4, u64)>) -> Self {
+    #[doc(hidden)]
+    pub fn with_opaque_cut(mut self, written: Vec<(int4, u64)>) -> Self {
         self.opaque_cuts.push(written.into_iter().collect());
         self
     }
 
     /// Record one system-call terminator, for the same reason.
     #[cfg(test)]
-    pub(crate) fn with_trap_cut(mut self, written: Vec<(int4, u64)>) -> Self {
+    #[doc(hidden)]
+    pub fn with_trap_cut(mut self, written: Vec<(int4, u64)>) -> Self {
         let cut: ByteSet = written.into_iter().collect();
         self.opaque_cuts.push(cut.clone());
         self.cuts.push(cut.clone());
@@ -646,7 +649,8 @@ impl CalleeEntryDead {
 
     /// Record one direct-call terminator, for the same reason.
     #[cfg(test)]
-    pub(crate) fn with_named_cut(mut self, target: Address, written: Vec<(int4, u64)>) -> Self {
+    #[doc(hidden)]
+    pub fn with_named_cut(mut self, target: Address, written: Vec<(int4, u64)>) -> Self {
         self.named_cuts
             .push((target, written.into_iter().collect()));
         self
@@ -655,7 +659,8 @@ impl CalleeEntryDead {
     /// Build a summary by hand, so a module that only CONSUMES this evidence can
     /// unit-test its own decisions without standing up a translator.
     #[cfg(test)]
-    pub(crate) fn from_parts(
+    #[doc(hidden)]
+    pub fn from_parts(
         reg_idx: int4,
         reads: Vec<(int4, u64, int4)>,
         cuts: Vec<Vec<(int4, u64)>>,
@@ -691,7 +696,8 @@ impl CalleeEntryDead {
 
     /// Turn the read of byte `b` into one that only stored it.
     #[cfg(test)]
-    pub(crate) fn with_stored_byte(mut self, b: u64) -> Self {
+    #[doc(hidden)]
+    pub fn with_stored_byte(mut self, b: u64) -> Self {
         if self.live_read_bytes.remove(&(self.reg_idx, b)) {
             self.unpadded_read_bytes.remove(&(self.reg_idx, b));
             self.stored_read_bytes.insert((self.reg_idx, b));
@@ -702,7 +708,8 @@ impl CalleeEntryDead {
     /// Turn the read of byte `b` into a push nothing read back, so a consumer
     /// can unit-test `pads` without a translator.
     #[cfg(test)]
-    pub(crate) fn with_padded_byte(mut self, b: u64) -> Self {
+    #[doc(hidden)]
+    pub fn with_padded_byte(mut self, b: u64) -> Self {
         self.unpadded_read_bytes.remove(&(self.reg_idx, b));
         self
     }
@@ -710,7 +717,8 @@ impl CalleeEntryDead {
     /// Record that some path met an undecodable instruction, so a consumer
     /// can unit-test its refusal without a translator.
     #[cfg(test)]
-    pub(crate) fn with_undecodable(mut self) -> Self {
+    #[doc(hidden)]
+    pub fn with_undecodable(mut self) -> Self {
         self.undecodable = true;
         self
     }
@@ -1013,7 +1021,8 @@ fn takes(stated: &crate::kuna_protoorder::RecoveredTypes, &(ridx, off, sz): &Reg
 }
 
 /// The entry-liveness probe of `entry`, from the run's cache or taken now.
-pub(crate) fn probe_cached(
+#[doc(hidden)]
+pub fn probe_cached(
     arch: &mut crate::architecture::Architecture,
     entry: &Address,
     reg_idx: int4,
@@ -2038,7 +2047,8 @@ const MAX_LEFTOVER_DEPTH: u32 = 12;
 /// a `PIECE` or `MULTIEQUAL` has to have all of its inputs qualify. Anything
 /// else — a constant, a `LOAD`, arithmetic, or a Varnode that is a function
 /// input — answers `false`, because the caller put it there on purpose.
-pub(crate) fn is_leftover_call_result(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
+#[doc(hidden)]
+pub fn is_leftover_call_result(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
     if depth >= MAX_LEFTOVER_DEPTH {
         return false;
     }

@@ -262,7 +262,8 @@ fn implied(
 
 /// The result of comparison `op` when the conditional branches that dominate
 /// its block leave it only one.
-pub(crate) fn prove(data: &Funcdata, op: OpId) -> Option<bool> {
+#[doc(hidden)]
+pub fn prove(data: &Funcdata, op: OpId) -> Option<bool> {
     let target = read_compare(data, op)?;
     let block = data.obank().get(op)?.get_parent()?;
     let (variable, bound, truth) = match (constant(data, target.a), constant(data, target.b)) {

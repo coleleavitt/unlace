@@ -270,7 +270,8 @@ fn points_at_a_pointer(ct: &Datatype) -> bool {
 /// a different, real type and is untouched: only the literal `go.typedesc`
 /// shell is refused.) Measured on the vet corpus: 19 functions commit a
 /// `go.typedesc *` parameter, every one wrong, with no legitimate use.
-pub(crate) fn is_go_typedesc_pointer(ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn is_go_typedesc_pointer(ct: &Datatype) -> bool {
     ct.get_ptr_to()
         .is_some_and(|p| p.get_name() == "go.typedesc")
 }
@@ -338,7 +339,8 @@ pub fn uncommitted_under(ct: &Datatype, ptr_size: int4, headless: bool) -> bool 
 /// The same type: one factory entry, or the same name and shape all the way
 /// down its pointer chain. A layout comparison alone would equate two records
 /// that merely have the same size.
-pub(crate) fn same_type(a: &Datatype, b: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn same_type(a: &Datatype, b: &Datatype) -> bool {
     if std::ptr::eq(a, b) {
         return true;
     }
@@ -892,7 +894,8 @@ const DERIVED_BUDGET: usize = 2048;
 /// a constant in read-only memory that is not a string literal kuna recovered
 /// (`kuna_charptr::constant_is_string`), or adds the negation of one to
 /// (`p - (long)table`). A walk that runs out of [`DERIVED_BUDGET`] refuses too.
-pub(crate) fn prints_a_table_as_a_literal(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn prints_a_table_as_a_literal(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
     if !ct
         .get_ptr_to()
         .is_some_and(|p| p.get_size() == 1 && p.is_char_print())

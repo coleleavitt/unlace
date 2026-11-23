@@ -10,10 +10,12 @@ use crate::printc::{PrintC, op_key, op_token, tokens};
 use crate::printlanguage::{Atom, OpToken, SyntaxHighlight, TagType, TokenType, modifiers};
 use unlace_num::opcodes::OpCode;
 
-pub(crate) static RAW_ADDRESS: OpToken =
+#[doc(hidden)]
+pub static RAW_ADDRESS: OpToken =
     op_token("&raw mut ", "", 1, 62, false, TokenType::UnaryPrefix, 0, 0);
 
-pub(crate) fn array_place(fd: &Funcdata, base: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn array_place(fd: &Funcdata, base: VarnodeId) -> bool {
     let Some(node) = fd.vbank().get(base).filter(|node| node.is_implied()) else {
         return false;
     };
@@ -66,7 +68,8 @@ pub(crate) fn array_place(fd: &Funcdata, base: VarnodeId) -> bool {
 }
 
 impl PrintC {
-    pub(crate) fn push_rust_array_address_cast(
+    #[doc(hidden)]
+    pub fn push_rust_array_address_cast(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -103,12 +106,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn op_rust_array_address(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        op: OpId,
-    ) -> bool {
+    #[doc(hidden)]
+    pub fn op_rust_array_address(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         if self
             .context
             .is_set(modifiers::PRINT_LOAD_VALUE | modifiers::PRINT_STORE_VALUE)

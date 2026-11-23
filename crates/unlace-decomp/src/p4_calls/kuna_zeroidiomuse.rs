@@ -77,7 +77,8 @@ pub fn op_discards_operand(data: &Funcdata, op: OpId) -> bool {
 }
 
 /// [`same_value`] to the depth `op_discards_operand` uses.
-pub(crate) fn same_value_at(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn same_value_at(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
     same_value(data, a, b, MAX_DEPTH)
 }
 

@@ -248,7 +248,8 @@ impl<'a> Tree<'a> {
 
 /// The result of comparison `op` when it is the same for every value of the
 /// narrow inputs it is computed from.
-pub(crate) fn prove(data: &Funcdata, op: OpId) -> Option<bool> {
+#[doc(hidden)]
+pub fn prove(data: &Funcdata, op: OpId) -> Option<bool> {
     let mut tree = Tree {
         data,
         nodes: Vec::new(),

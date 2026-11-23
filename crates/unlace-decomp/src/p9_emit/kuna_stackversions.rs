@@ -7,7 +7,8 @@ use crate::funcdata::Funcdata;
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) fn prepare(fd: &mut Funcdata) {
+#[doc(hidden)]
+pub fn prepare(fd: &mut Funcdata) {
     if !crate::kuna_stackviews::enabled(fd) {
         return;
     }

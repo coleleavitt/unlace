@@ -82,7 +82,8 @@ use crate::funcdata::Funcdata;
 use unlace_base::address::Address;
 
 /// How many highs in `fd` print each name.
-pub(crate) fn name_counts(fd: &Funcdata) -> HashMap<String, u32> {
+#[doc(hidden)]
+pub fn name_counts(fd: &Funcdata) -> HashMap<String, u32> {
     let mut out: HashMap<String, u32> = HashMap::new();
     for (_, h) in fd.high_bank().iter() {
         if let Some(n) = h.kuna_name() {
@@ -94,7 +95,8 @@ pub(crate) fn name_counts(fd: &Funcdata) -> HashMap<String, u32> {
 
 /// Is `high` a frame local that covers its Symbol whole, with a plain integer
 /// Symbol type of `width`, and the only high printing its name?
-pub(crate) fn whole_slot_local(
+#[doc(hidden)]
+pub fn whole_slot_local(
     fd: &Funcdata,
     high: HighVariableId,
     width: int4,
@@ -121,7 +123,8 @@ pub(crate) fn whole_slot_local(
 /// the member varnodes the evidence walk checks, so it is read through the
 /// naming pass's bind, a dynamic Symbol, and the Symbol containing each
 /// address-tied member.
-pub(crate) fn symbol_type_locked(fd: &Funcdata, high: HighVariableId) -> bool {
+#[doc(hidden)]
+pub fn symbol_type_locked(fd: &Funcdata, high: HighVariableId) -> bool {
     let Some(h) = fd.high_bank().get(high) else {
         return true;
     };
@@ -149,7 +152,8 @@ pub(crate) fn symbol_type_locked(fd: &Funcdata, high: HighVariableId) -> bool {
 /// A reader `signedness` vetoes that this option takes as neutral for a flip to
 /// signed: a same-width conversion to a pointer, or the index of a pointer-width
 /// `PTRADD`.
-pub(crate) fn neutral_reader(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn neutral_reader(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
     let Some(o) = fd.obank().get(op) else {
         return false;
     };
@@ -178,7 +182,8 @@ pub(crate) fn neutral_reader(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
 /// Can `opc` overflow when its operand at `slot` is signed: `+ - *`, unary `-`,
 /// and the shiftee of `<<`?  Over an unsigned operand each of these wraps, which
 /// is defined; over a signed one each is undefined on overflow.
-pub(crate) fn can_overflow(opc: OpCode, slot: int4) -> bool {
+#[doc(hidden)]
+pub fn can_overflow(opc: OpCode, slot: int4) -> bool {
     match opc {
         OpCode::CPUI_INT_ADD
         | OpCode::CPUI_INT_SUB
@@ -196,7 +201,8 @@ pub(crate) fn can_overflow(opc: OpCode, slot: int4) -> bool {
 /// other operand to that type: zero-extended while it is unsigned, sign-extended
 /// once re-declared signed.  Every such constant counts, printed in hex or not,
 /// and so does one inside the expression `other` is printed as.
-pub(crate) fn wide_literal(fd: &Funcdata, other: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn wide_literal(fd: &Funcdata, other: VarnodeId) -> bool {
     let mut work = vec![other];
     let mut seen: HashSet<VarnodeId> = HashSet::new();
     while let Some(vn) = work.pop() {
@@ -246,7 +252,8 @@ pub(crate) fn wide_literal(fd: &Funcdata, other: VarnodeId) -> bool {
 /// a call argument, an assignment or a `return`, where `castimplied` may already
 /// leave it out.  Under another conversion it prints too: a sign change never
 /// preserves the value, so `castimplied` keeps it there.
-pub(crate) fn drops_printed_cast(fd: &Funcdata, casts: &[OpId], newty: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn drops_printed_cast(fd: &Funcdata, casts: &[OpId], newty: &Datatype) -> bool {
     casts.iter().any(|&op| {
         let Some(out) = fd.obank().get(op).and_then(|o| o.get_out()) else {
             return false;

@@ -1657,7 +1657,8 @@ impl RulePtrFlow {
     }
 
     /// Whether the default data space is truncated.
-    pub(crate) fn is_live(data: &Funcdata) -> bool {
+    #[doc(hidden)]
+    pub fn is_live(data: &Funcdata) -> bool {
         data.get_arch()
             .manage()
             .get_default_data_space()

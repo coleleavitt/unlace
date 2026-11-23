@@ -92,7 +92,8 @@ impl ProofSlot {
         self.0 = None;
     }
 
-    pub(crate) fn revoke(&self) {
+    #[doc(hidden)]
+    pub fn revoke(&self) {
         if let Some(proof) = &self.0 {
             proof.live.set(false);
         }

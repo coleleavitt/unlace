@@ -10,7 +10,8 @@ use crate::printlanguage::{Atom, SyntaxHighlight, TagType, modifiers};
 use unlace_num::opcodes::OpCode;
 
 impl PrintC {
-    pub(crate) fn op_rust_ptradd(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
+    #[doc(hidden)]
+    pub fn op_rust_ptradd(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         let Some(operation) = fd.obank().get(op) else {
             return false;
         };

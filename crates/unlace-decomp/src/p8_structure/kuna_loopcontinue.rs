@@ -10,7 +10,8 @@ use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
 use crate::context::BlockId;
 use crate::funcdata::Funcdata;
 
-pub(crate) fn refine_latches(graph: &mut BlockGraph, root: BlockId) {
+#[doc(hidden)]
+pub fn refine_latches(graph: &mut BlockGraph, root: BlockId) {
     let mut edges = Vec::new();
     for i in 0..graph.block(root).get_size() {
         let head = graph.block(root).get_block(i);
@@ -86,7 +87,8 @@ pub(crate) fn refine_latches(graph: &mut BlockGraph, root: BlockId) {
 /// A continue in an infinite loop resumes its first leaf. A conditional loop
 /// resumes the leaf `points` gives it ([`continue_points`]), or resets the
 /// scope when it has none: its continue can evaluate a test or iterator instead.
-pub(crate) fn recover_continues(
+#[doc(hidden)]
+pub fn recover_continues(
     graph: &mut BlockGraph,
     root: BlockId,
     points: &BTreeMap<BlockId, BlockId>,
@@ -124,7 +126,8 @@ pub(crate) fn recover_continues(
 /// iterate statement a `continue;` runs first, and a do-while's last leaf when
 /// that leaf prints nothing but the loop test and the output language's
 /// do-while runs that test on `continue;`.
-pub(crate) fn continue_points(data: &Funcdata, root: BlockId) -> BTreeMap<BlockId, BlockId> {
+#[doc(hidden)]
+pub fn continue_points(data: &Funcdata, root: BlockId) -> BTreeMap<BlockId, BlockId> {
     let graph = data.sblocks_ref();
     let mut points = BTreeMap::new();
     let mut stack = vec![root];

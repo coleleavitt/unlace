@@ -59,7 +59,8 @@ use crate::typeop::type_op_info;
 /// W6 typeop inst table (`getOutputLocal`/`getInputLocal`).  Falls back to a
 /// size-correct `TYPE_UNKNOWN` if the factory query fails (the C++ getBase never
 /// fails for a valid size).
-pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
+#[doc(hidden)]
+pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
     let arch = Rc::clone(data.get_arch());
     let o = data.obank().get(op).expect("output_type_local: stale op");
     let out_size = o
@@ -291,10 +292,8 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
 }
 
 /// The Intel vector type `vn` has when a vector user-op wrote it.
-pub(crate) fn vector_result_type(
-    data: &Funcdata,
-    vn: crate::context::VarnodeId,
-) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn vector_result_type(data: &Funcdata, vn: crate::context::VarnodeId) -> Option<Rc<Datatype>> {
     let mut vn = vn;
     for _ in 0..8 {
         let v = data.vbank().get(vn)?;
@@ -326,7 +325,8 @@ fn vector_userop_type(
     crate::kuna_avxintrin::vector_type(arch.types()?, size, kind)
 }
 
-pub(crate) fn input_type_local(data: &Funcdata, op: OpId, slot: int4) -> Rc<Datatype> {
+#[doc(hidden)]
+pub fn input_type_local(data: &Funcdata, op: OpId, slot: int4) -> Rc<Datatype> {
     input_type_local_with(data, op, slot, true)
 }
 
@@ -334,7 +334,8 @@ pub(crate) fn input_type_local(data: &Funcdata, op: OpId, slot: int4) -> Rc<Data
 /// type a call argument is REQUIRED to have, which is what a cast is measured
 /// against.  A recovered type is a vote about the value, not a declaration the
 /// value must be converted to, so it never emits a cast.
-pub(crate) fn declared_input_type_local(data: &Funcdata, op: OpId, slot: int4) -> Rc<Datatype> {
+#[doc(hidden)]
+pub fn declared_input_type_local(data: &Funcdata, op: OpId, slot: int4) -> Rc<Datatype> {
     input_type_local_with(data, op, slot, false)
 }
 

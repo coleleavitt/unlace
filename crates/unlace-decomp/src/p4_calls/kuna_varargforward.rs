@@ -207,7 +207,8 @@ fn undeclared_bytes(
 
 /// Is `vn` the calling function's own input where it declares a parameter, or
 /// the output of a call whose declared return it is?
-pub(super) fn declared_value(data: &Funcdata, vn: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn declared_value(data: &Funcdata, vn: VarnodeId) -> bool {
     let Some(v) = data.vbank().get(vn) else {
         return false;
     };
@@ -302,7 +303,8 @@ fn format_stops_before(
 /// The constant `vn` holds, with its size: through COPYs, an INT_ADD (an
 /// `adrp`/`add` pair, ARM's `add r0,pc,r0`) and a LOAD from read-only memory (a
 /// literal pool), before the simplification rules have folded them.
-pub(super) fn constant_value(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<(u64, int4)> {
+#[doc(hidden)]
+pub fn constant_value(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<(u64, int4)> {
     let v = data.vbank().get(vn)?;
     let size = v.get_size();
     if v.is_constant() {

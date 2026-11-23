@@ -38,7 +38,8 @@ enum Refusal {
 }
 
 #[derive(Default)]
-pub(crate) struct LocalStackViews {
+#[doc(hidden)]
+pub struct LocalStackViews {
     native: BTreeMap<OpId, NativeWrite>,
     writes: BTreeMap<OpId, (u64, i32)>,
     candidates: BTreeMap<(u64, i32), Vec<Rc<Datatype>>>,
@@ -146,7 +147,8 @@ fn c_identifier(name: &str) -> bool {
 }
 
 /// Record original lifted memory operations; generational OpIds do not match clones.
-pub(crate) fn record_native(fd: &mut Funcdata, id: OpId) {
+#[doc(hidden)]
+pub fn record_native(fd: &mut Funcdata, id: OpId) {
     if !enabled(fd) || fd.local_stack_views().invalid {
         return;
     }
@@ -187,7 +189,8 @@ pub(crate) fn record_native(fd: &mut Funcdata, id: OpId) {
 }
 
 /// Capture actual STORE extent and expose positive ranges before the next heritage.
-pub(crate) fn record_store(fd: &mut Funcdata, op: OpId, address: &Address, size: i32) {
+#[doc(hidden)]
+pub fn record_store(fd: &mut Funcdata, op: OpId, address: &Address, size: i32) {
     if !enabled(fd)
         || fd.local_stack_views().invalid
         || fd
@@ -436,11 +439,13 @@ fn promote(fd: &mut Funcdata, early: bool) {
     }
 }
 
-pub(crate) fn active(fd: &Funcdata) -> bool {
+#[doc(hidden)]
+pub fn active(fd: &Funcdata) -> bool {
     enabled(fd) && !fd.local_stack_views().invalid && !fd.local_stack_views().footprints.is_empty()
 }
 
-pub(crate) fn preserves_range(fd: &Funcdata, address: &Address, size: i32) -> bool {
+#[doc(hidden)]
+pub fn preserves_range(fd: &Funcdata, address: &Address, size: i32) -> bool {
     active(fd)
         && address.get_space().is_some_and(|s| {
             fd.get_arch()
@@ -456,7 +461,8 @@ pub(crate) fn preserves_range(fd: &Funcdata, address: &Address, size: i32) -> bo
 }
 
 /// Preserve the original physical write across memory-SSA marker inputs.
-pub(crate) fn native_store(fd: &Funcdata, value: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn native_store(fd: &Funcdata, value: VarnodeId) -> bool {
     if !active(fd) {
         return false;
     }
@@ -493,7 +499,8 @@ pub(crate) fn native_store(fd: &Funcdata, value: VarnodeId) -> bool {
 }
 
 /// Keep only the captured native publication with its exact declared receiver and frame input.
-pub(crate) fn publication(fd: &Funcdata, value: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn publication(fd: &Funcdata, value: VarnodeId) -> bool {
     if !active(fd) {
         return false;
     }
@@ -515,7 +522,8 @@ pub(crate) fn publication(fd: &Funcdata, value: VarnodeId) -> bool {
             .is_some_and(|ty| Rc::ptr_eq(&ty, &p.pointee))
 }
 
-pub(crate) fn aggregate(fd: &Funcdata, start: u64, size: i32) -> bool {
+#[doc(hidden)]
+pub fn aggregate(fd: &Funcdata, start: u64, size: i32) -> bool {
     active(fd)
         && fd
             .local_stack_views()
@@ -870,7 +878,8 @@ fn stores_fit(fd: &Funcdata, start: u64, size: i32) -> bool {
 }
 
 /// Byte views require one proved scalar extent, or one exact containing native STORE.
-pub(crate) fn backing(fd: &Funcdata, start: u64, size: i32) -> bool {
+#[doc(hidden)]
+pub fn backing(fd: &Funcdata, start: u64, size: i32) -> bool {
     if aggregate(fd, start, size) {
         return true;
     }
@@ -909,7 +918,8 @@ pub(crate) fn backing(fd: &Funcdata, start: u64, size: i32) -> bool {
     })
 }
 
-pub(crate) fn mapped_range(fd: &Funcdata, start: u64, size: i32) -> bool {
+#[doc(hidden)]
+pub fn mapped_range(fd: &Funcdata, start: u64, size: i32) -> bool {
     if !active(fd) {
         return false;
     }
@@ -927,7 +937,8 @@ pub(crate) fn mapped_range(fd: &Funcdata, start: u64, size: i32) -> bool {
         })
 }
 
-pub(crate) fn views(fd: &Funcdata) -> Vec<(u64, Rc<Datatype>)> {
+#[doc(hidden)]
+pub fn views(fd: &Funcdata) -> Vec<(u64, Rc<Datatype>)> {
     if !active(fd) {
         return Vec::new();
     }

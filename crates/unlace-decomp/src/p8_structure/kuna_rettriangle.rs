@@ -35,7 +35,8 @@ use crate::options::on_or_off;
 /// predecessors, one a two-way condition whose other successor is the other
 /// predecessor, which has that condition as its only predecessor and `r` as its
 /// only successor.
-pub(crate) fn is_triangle_join(data: &Funcdata, r: BlockId) -> bool {
+#[doc(hidden)]
+pub fn is_triangle_join(data: &Funcdata, r: BlockId) -> bool {
     let g = data.bblocks_ref();
     let rb = g.block(r);
     if rb.size_in() != 2 {

@@ -6,7 +6,8 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::{AddrSpace, spacetype};
 
-pub(super) fn map(
+#[doc(hidden)]
+pub fn map(
     fd: &mut Funcdata,
     space: &Rc<AddrSpace>,
     offset: u64,

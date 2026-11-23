@@ -6,7 +6,8 @@ use crate::funcdata::Funcdata;
 use crate::printc::PrintC;
 
 impl PrintC {
-    pub(crate) fn push_rust_store_value(
+    #[doc(hidden)]
+    pub fn push_rust_store_value(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

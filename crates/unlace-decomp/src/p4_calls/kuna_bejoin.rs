@@ -234,7 +234,8 @@ pub fn keep_proven_pair(data: &Funcdata, active: &mut ParamActive, return_ops: &
 /// function wrote; with `computed`, not when either holds what a call left
 /// there (an indirect creation, which the output model never joins) or, on
 /// some path, the register's own entry value ([`written_on_every_path`]).
-pub(crate) fn mark_written_pair(
+#[doc(hidden)]
+pub fn mark_written_pair(
     data: &Funcdata,
     active: &mut ParamActive,
     return_ops: &[OpId],
@@ -330,13 +331,15 @@ fn written_on_every_path(data: &Funcdata, vn: VarnodeId) -> bool {
 
 /// Is the function being decompiled proven, under a proof mode, to return its
 /// pair as one wide value ([`evidence::proven`])?
-pub(crate) fn proven_here(data: &Funcdata) -> bool {
+#[doc(hidden)]
+pub fn proven_here(data: &Funcdata) -> bool {
     mode(data).proves() && evidence::proven(data, data.get_address())
 }
 
 /// Is the callee at `entry` proven, under a proof mode, to return its pair as
 /// one wide value: the verdict its calls join their output by?
-pub(crate) fn proven_callee(data: &Funcdata, entry: &Address) -> bool {
+#[doc(hidden)]
+pub fn proven_callee(data: &Funcdata, entry: &Address) -> bool {
     mode(data).proves() && evidence::proven(data, entry)
 }
 
@@ -2976,7 +2979,8 @@ fn ones(size: int4) -> u64 {
 
 /// The value of `vn` when it is a constant or integer arithmetic and logic on
 /// constants alone, within `depth` operations, truncated to its size.
-pub(crate) fn literal_value(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<u64> {
+#[doc(hidden)]
+pub fn literal_value(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<u64> {
     let v = data.vbank().get(vn)?;
     let size = v.get_size();
     let mask = |x: u64, sz: int4| {
@@ -3137,7 +3141,8 @@ fn moves_register_window(data: &Funcdata, copy: OpId) -> bool {
 /// `restore` in its delay slot (`didrestore = 0; ...; if (didrestore == 0)
 /// goto next; return [o7]`), and return recovery settles the prototype before
 /// the rule pool folds it away, so its `%o1` is whatever the call was passed.
-pub(crate) fn never_reached(data: &Funcdata, retop: OpId) -> bool {
+#[doc(hidden)]
+pub fn never_reached(data: &Funcdata, retop: OpId) -> bool {
     let Some(bl) = data.obank().get(retop).and_then(|o| o.get_parent()) else {
         return false;
     };
@@ -3191,7 +3196,8 @@ fn decided(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<u64> {
 /// holding its most significant half -- a pair return recovery joined in the
 /// ABI's order ([`join_order`])? `false` for one register, storage the model
 /// does not list, or a pair joined first register low.
-pub(crate) fn first_register_holds_high(data: &Funcdata, whole: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn first_register_holds_high(data: &Funcdata, whole: VarnodeId) -> bool {
     live(data)
         && pair_halves(data, whole).is_some_and(|(hi, hi_size, lo, lo_size)| {
             data.get_func_proto()

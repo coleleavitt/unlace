@@ -5,7 +5,8 @@ use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct PartialConcat {
+#[doc(hidden)]
+pub struct PartialConcat {
     pub source: VarnodeId,
     pub low: VarnodeId,
     pub size: i32,
@@ -26,7 +27,8 @@ fn scalar(data: &Funcdata, vn: VarnodeId, reader: OpId) -> bool {
 }
 
 /// Match PIECE(SUBPIECE(source, low_size), low) without bypassing a named value.
-pub(crate) fn preserved_prefix(data: &Funcdata, op: OpId) -> Option<PartialConcat> {
+#[doc(hidden)]
+pub fn preserved_prefix(data: &Funcdata, op: OpId) -> Option<PartialConcat> {
     let piece = data.obank().get(op)?;
     if piece.code() != OpCode::CPUI_PIECE || piece.num_input() != 2 {
         return None;

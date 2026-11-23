@@ -136,7 +136,8 @@ impl DeclaredSlots {
     /// An index of the given `(offset, width)` homes, each with its
     /// declarations' names, spellings and pointer-or-float flags.
     #[cfg(test)]
-    pub(crate) fn for_test(entries: &[((i64, i64), &[(&str, Option<&str>, bool)])]) -> Self {
+    #[doc(hidden)]
+    pub fn for_test(entries: &[((i64, i64), &[(&str, Option<&str>, bool)])]) -> Self {
         let slots = entries
             .iter()
             .map(|(home, decls)| {

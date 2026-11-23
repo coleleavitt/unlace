@@ -8,7 +8,8 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
-pub(crate) struct Extraction {
+#[doc(hidden)]
+pub struct Extraction {
     pub input: VarnodeId,
     pub pointer: Rc<Datatype>,
     pub offset: u64,
@@ -47,7 +48,8 @@ fn compatible(source: &Datatype, target: &Datatype, size: i32) -> bool {
         )
 }
 
-pub(crate) fn plan(
+#[doc(hidden)]
+pub fn plan(
     fd: &Funcdata,
     arch: &Architecture,
     op: OpId,

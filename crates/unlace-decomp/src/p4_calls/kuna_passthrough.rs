@@ -415,7 +415,8 @@ fn return_only(proto: &crate::fspec::FuncProto, addr: &Address, size: int4) -> b
 /// register its body saves (gnulib `open_safer(char const *,int,...)` saves only
 /// `rdx`), so the caller's side is what says the tail is optional. An injected
 /// no-op (a MIPS mode switch's `v0 = v0`) is neither read nor write.
-pub(crate) fn set_up_as_variadic(data: &Funcdata, idx: int4) -> bool {
+#[doc(hidden)]
+pub fn set_up_as_variadic(data: &Funcdata, idx: int4) -> bool {
     let fc = data.get_call_specs(idx);
     let proto = fc.proto();
     let mut cur = data.op_previous_op(fc.get_op());
@@ -483,7 +484,8 @@ fn reads_the_vararg_count(data: &Funcdata) -> bool {
 /// [`reads_the_vararg_count`] without a read that only stores the register:
 /// clang's `push %rax` reserves an aligned stack slot, and is no
 /// `test %al,%al`. Read by [`crate::kuna_calleereadarg`].
-pub(crate) fn tests_the_vararg_count(data: &Funcdata) -> bool {
+#[doc(hidden)]
+pub fn tests_the_vararg_count(data: &Funcdata) -> bool {
     vararg_count_read(data, false)
 }
 
@@ -547,7 +549,8 @@ fn is_register(addr: &Address) -> bool {
 }
 
 /// Does any Varnode of the function share a byte with `[addr, addr+size)`?
-pub(crate) fn touched(data: &Funcdata, addr: &Address, size: int4) -> bool {
+#[doc(hidden)]
+pub fn touched(data: &Funcdata, addr: &Address, size: int4) -> bool {
     touched_by(data, addr, size, false)
 }
 
@@ -592,7 +595,8 @@ fn register_touch(
 /// The ARM compiler specs inject the `setISAMode` of every `bx lr` and
 /// `pop {...,pc}` as `r0 = r0` (MIPS: `v0 = v0` at `jr ra`), marked incidental
 /// so parameter recovery walks through it; it moves nothing.
-pub(crate) fn is_injected_noop(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn is_injected_noop(data: &Funcdata, op: OpId) -> bool {
     let Some(o) = data.obank().get(op) else {
         return false;
     };
@@ -610,7 +614,8 @@ pub(crate) fn is_injected_noop(data: &Funcdata, op: OpId) -> bool {
 /// A register no op of the function touches reaches such a call as the
 /// function's own input; at any other call it may be a clobber, or the return
 /// value, of the call before it.
-pub(crate) fn first_calls(data: &Funcdata) -> Vec<OpId> {
+#[doc(hidden)]
+pub fn first_calls(data: &Funcdata) -> Vec<OpId> {
     let n = data.bblocks_get_size();
     let is_call = |op: OpId| {
         data.obank()
@@ -687,7 +692,8 @@ enum ClaimPass {
 }
 
 /// Re-offer untouched input registers after the Go stack-growth spill arm is gone.
-pub(crate) fn claim_after_go_stack_guard(data: &mut Funcdata) {
+#[doc(hidden)]
+pub fn claim_after_go_stack_guard(data: &mut Funcdata) {
     let proto = data.get_func_proto();
     if !data
         .get_arch()
@@ -986,7 +992,8 @@ const RETURN_WALK_BLOCKS: usize = 4;
 /// return register: the last CALL before `ret` in its block, or in the chain of
 /// single predecessors above it. `None` when a join, an indirect call or the
 /// entry comes first.
-pub(crate) fn producing_call(data: &Funcdata, ret: OpId) -> Option<OpId> {
+#[doc(hidden)]
+pub fn producing_call(data: &Funcdata, ret: OpId) -> Option<OpId> {
     let mut cur = data.op_previous_op(ret);
     let mut bl = data.obank().get(ret)?.get_parent()?;
     for _ in 0..RETURN_WALK_BLOCKS {
@@ -1393,7 +1400,8 @@ pub fn keep_tail_return_whole(data: &Funcdata, active: &mut crate::fspec::ParamA
 /// value; and a value that is zero at every RETURN ([`is_zero`]), which is also
 /// what `-fzero-call-used-regs` leaves in every call-used register the function
 /// does not return in (openssh's `call f; ...; pxor %xmm0,%xmm0; ret`).
-pub(crate) fn returns_own_value(
+#[doc(hidden)]
+pub fn returns_own_value(
     data: &Funcdata,
     active: &crate::fspec::ParamActive,
     claimed: &[int4],
@@ -2144,7 +2152,8 @@ pub fn extension(have: &[Address], stated: &[Address], offered: &[Address]) -> V
 
 /// The low `width` bytes of `vn`, as a `SUBPIECE` inserted before `op`: what
 /// `buildInputFromTrials` does for a trial narrower than its Varnode.
-pub(crate) fn truncate_before(
+#[doc(hidden)]
+pub fn truncate_before(
     data: &mut Funcdata,
     vn: VarnodeId,
     width: int4,

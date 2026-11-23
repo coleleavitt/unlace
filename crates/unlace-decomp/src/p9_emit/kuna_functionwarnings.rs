@@ -51,7 +51,8 @@ pub struct Warning {
 }
 
 impl Warning {
-    pub(crate) fn new(address: Option<u64>, text: &str) -> Self {
+    #[doc(hidden)]
+    pub fn new(address: Option<u64>, text: &str) -> Self {
         Self {
             address,
             text: text.to_string(),
@@ -110,7 +111,8 @@ impl Warning {
 }
 
 /// Rebase lines counted in `untrimmed` onto it with its leading newlines removed.
-pub(crate) fn trim_lines(warnings: &mut [Warning], untrimmed: &str) {
+#[doc(hidden)]
+pub fn trim_lines(warnings: &mut [Warning], untrimmed: &str) {
     let skip = untrimmed.len() - untrimmed.trim_start_matches('\n').len();
     for warning in warnings {
         warning.line = warning.line.saturating_sub(skip);

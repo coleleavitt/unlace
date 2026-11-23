@@ -6,13 +6,15 @@ use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct Transfer {
+#[doc(hidden)]
+pub struct Transfer {
     pub input: VarnodeId,
     pub source: Rc<Datatype>,
     pub target: Rc<Datatype>,
 }
 
-pub(crate) fn storage_transfer(fd: &Funcdata, op: OpId) -> Option<Transfer> {
+#[doc(hidden)]
+pub fn storage_transfer(fd: &Funcdata, op: OpId) -> Option<Transfer> {
     let operation = fd.obank().get(op)?;
     if operation.code() != OpCode::CPUI_CAST {
         return None;

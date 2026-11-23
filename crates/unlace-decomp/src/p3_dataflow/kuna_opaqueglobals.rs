@@ -71,7 +71,8 @@ impl UnwrittenGlobals {
 }
 
 /// The value of `vn` when it reads a global no code writes.
-pub(crate) fn constant_read(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
+#[doc(hidden)]
+pub fn constant_read(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
     let glb = data.get_arch();
     let gate = glb
         .kuna_options

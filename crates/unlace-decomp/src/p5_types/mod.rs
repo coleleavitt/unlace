@@ -35,7 +35,7 @@ pub mod kuna_ptrfromuse; // (kuna) type a dereferenced-only function input as a 
 pub mod kuna_rodatastring;
 pub mod kuna_roundingops; // (kuna) a rounding user op p-code has no operator for is float in, float out
 pub mod kuna_sitetypelock; // (kuna) per-call-site output type lock: a client-asserted call-result type that survives to the declaration
-pub(crate) mod kuna_stackwordtypes;
+pub mod kuna_stackwordtypes;
 pub mod kuna_storetype; // (kuna) a global typed from the values stored into it
 pub mod kuna_structheadless; // (kuna) a closed function's parameter read only past its start is a record
 pub mod kuna_structmerge; // (kuna) merge a synthesized record with the claims of a sibling reader

@@ -272,7 +272,8 @@ fn class_value(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>) -> Cla
 
 /// The address a varnode names: a constant, `&sym` as `PTRSUB(0, addr)`, either
 /// through the copies and casts the printer's own passes wrap it in.
-pub(crate) fn constant_address(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<u64> {
+#[doc(hidden)]
+pub fn constant_address(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<u64> {
     let v = data.vbank().get(vn)?;
     if v.is_constant() {
         return Some(v.get_offset());
@@ -522,7 +523,8 @@ pub fn resolved_sends(data: &Funcdata) -> Vec<ResolvedSend> {
 
 /// Is `vn` the slot's value at entry, carried only across calls (`INDIRECT`)
 /// and joins (`MULTIEQUAL`), never a value the function stored into it?
-pub(crate) fn holds_loaded_value(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
+#[doc(hidden)]
+pub fn holds_loaded_value(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
     let Some(v) = fd.vbank().get(vn) else {
         return false;
     };

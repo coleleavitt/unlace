@@ -75,7 +75,8 @@ fn marker_view(
     false
 }
 
-pub(crate) fn recover(fd: &mut Funcdata) -> KunaResult<()> {
+#[doc(hidden)]
+pub fn recover(fd: &mut Funcdata) -> KunaResult<()> {
     let operations: Vec<_> = fd
         .obank()
         .iter_alive()
@@ -331,24 +332,19 @@ pub(crate) fn recover(fd: &mut Funcdata) -> KunaResult<()> {
     Ok(())
 }
 
-pub(crate) fn keeps_apart(ctx: &dyn MergeContext, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn keeps_apart(ctx: &dyn MergeContext, op: OpId) -> bool {
     ctx.fpu_trunc_views_enabled() && ctx.op_is_fpu_trunc_view(op)
 }
 
-pub(crate) fn keeps_highs_apart(
-    ctx: &dyn MergeContext,
-    a: HighVariableId,
-    b: HighVariableId,
-) -> bool {
+#[doc(hidden)]
+pub fn keeps_highs_apart(ctx: &dyn MergeContext, a: HighVariableId, b: HighVariableId) -> bool {
     ctx.fpu_trunc_views_enabled() && ctx.fpu_trunc_view_highs(a, b)
 }
 
 /// A logical integer root never joins an unrelated variable speculatively.
-pub(crate) fn keeps_root_alone(
-    ctx: &dyn MergeContext,
-    a: HighVariableId,
-    b: HighVariableId,
-) -> bool {
+#[doc(hidden)]
+pub fn keeps_root_alone(ctx: &dyn MergeContext, a: HighVariableId, b: HighVariableId) -> bool {
     ctx.fpu_trunc_views_enabled() && (ctx.fpu_trunc_root_high(a) || ctx.fpu_trunc_root_high(b))
 }
 

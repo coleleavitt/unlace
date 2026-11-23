@@ -45,7 +45,8 @@ use unlace_num::opcodes::OpCode;
 
 /// One printed arm: case `index` of the switch `owner`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct PlannedCase {
+#[doc(hidden)]
+pub struct PlannedCase {
     pub owner: BlockId,
     pub index: usize,
     /// The arm prints `default:` in place of its own labels.
@@ -60,7 +61,8 @@ pub(crate) struct PlannedCase {
 }
 
 impl PlannedCase {
-    pub(crate) fn new(owner: BlockId, index: usize) -> Self {
+    #[doc(hidden)]
+    pub fn new(owner: BlockId, index: usize) -> Self {
         PlannedCase {
             owner,
             index,
@@ -72,7 +74,8 @@ impl PlannedCase {
 }
 
 #[derive(Default)]
-pub(crate) struct SwitchPlans {
+#[doc(hidden)]
+pub struct SwitchPlans {
     /// The arms of each switch whose printed arms differ from its own cases.
     pub plans: BTreeMap<BlockId, Vec<PlannedCase>>,
     /// Goto arms left out: (owner switch, case block).
@@ -86,10 +89,12 @@ pub(crate) struct SwitchPlans {
 
 /// The label values one switch's non-default arms print, with the byte size
 /// and signedness every label prints with.
-pub(crate) type LabelSet = (BTreeSet<uintb>, int4, bool);
+#[doc(hidden)]
+pub type LabelSet = (BTreeSet<uintb>, int4, bool);
 
 /// What the printer tells the planner about a switch.
-pub(crate) struct PrintFacts<'a> {
+#[doc(hidden)]
+pub struct PrintFacts<'a> {
     /// Does a switch's header block print no statement before its `switch`?
     pub prints_nothing: &'a dyn Fn(BlockId) -> bool,
     /// The labels a switch prints; `None` when two arms print the same value.
@@ -112,7 +117,8 @@ fn case_of(fd: &Funcdata, e: PlannedCase) -> &CaseOrder {
 
 /// The blocks an arm runs in order, when it is a list or a `BlockGoto` around
 /// one, and whether the list is wrapped in a `BlockGoto`.
-pub(crate) fn arm_list(graph: &BlockGraph, blk: BlockId) -> (&[BlockId], bool) {
+#[doc(hidden)]
+pub fn arm_list(graph: &BlockGraph, blk: BlockId) -> (&[BlockId], bool) {
     let b = graph.block(blk);
     match b.get_type() {
         BlockType::Ls => (b.get_list(), false),
@@ -810,7 +816,8 @@ fn merge_range_splits(fd: &Funcdata, facts: &PrintFacts<'_>, root: BlockId, out:
 }
 
 /// The arm plans for every switch under `root`.
-pub(crate) fn switch_plans(fd: &Funcdata, root: BlockId, facts: &PrintFacts<'_>) -> SwitchPlans {
+#[doc(hidden)]
+pub fn switch_plans(fd: &Funcdata, root: BlockId, facts: &PrintFacts<'_>) -> SwitchPlans {
     let graph = fd.sblocks_ref();
     let mut planner = Planner {
         fd,

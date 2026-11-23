@@ -985,7 +985,8 @@ fn input_storage(data: &Funcdata, vn: VarnodeId, budget: &mut usize) -> Option<(
 
 /// The incoming storage `vn` is a copy, a piece or a reassembly of, when it is
 /// one.
-pub(crate) fn incoming_storage(data: &Funcdata, vn: VarnodeId) -> Option<(Address, i32)> {
+#[doc(hidden)]
+pub fn incoming_storage(data: &Funcdata, vn: VarnodeId) -> Option<(Address, i32)> {
     input_storage(data, vn, &mut 32)
 }
 

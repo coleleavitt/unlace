@@ -46,7 +46,8 @@ fn build_manager() -> AddrSpaceManager {
     m
 }
 
-pub(crate) fn build_fd() -> Funcdata {
+#[doc(hidden)]
+pub fn build_fd() -> Funcdata {
     let manage = build_manager();
     let regspc = Rc::clone(manage.get_space_by_name("register").unwrap());
     let stackspc = Rc::clone(manage.get_stack_space().unwrap());
@@ -64,7 +65,8 @@ pub(crate) fn build_fd() -> Funcdata {
     Funcdata::new("func", "func", glb, entry, 0x1000_0000, 0x40).unwrap()
 }
 
-pub(crate) fn reg_addr(fd: &Funcdata, off: u64) -> Address {
+#[doc(hidden)]
+pub fn reg_addr(fd: &Funcdata, off: u64) -> Address {
     Address::new(
         Rc::clone(
             fd.get_arch()
@@ -76,7 +78,8 @@ pub(crate) fn reg_addr(fd: &Funcdata, off: u64) -> Address {
     )
 }
 
-pub(crate) fn make_sp_in(fd: &mut Funcdata) -> VarnodeId {
+#[doc(hidden)]
+pub fn make_sp_in(fd: &mut Funcdata) -> VarnodeId {
     let vn = fd.new_varnode(SP_SIZE, &reg_addr(fd, SP_OFF), None);
     fd.set_input_varnode(vn).unwrap()
 }

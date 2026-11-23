@@ -2,7 +2,8 @@
 
 use crate::dtype::Datatype;
 
-pub(crate) fn suffix(datatype: &Datatype) -> String {
+#[doc(hidden)]
+pub fn suffix(datatype: &Datatype) -> String {
     if !datatype.get_name().starts_with("stack_views_")
         && !datatype.get_name().starts_with("stack_slice_")
         && !datatype.get_name().starts_with("dwarf_stack_")

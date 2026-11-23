@@ -129,7 +129,8 @@ impl Rule for RuleEarlyRemoval {
 
 impl RuleEarlyRemoval {
     /// Can `op` go: nothing reads its output and nothing else keeps it?
-    pub(crate) fn removable(op: OpId, data: &mut Funcdata) -> bool {
+    #[doc(hidden)]
+    pub fn removable(op: OpId, data: &mut Funcdata) -> bool {
         // Functions automatically consumed
         if data
             .obank()

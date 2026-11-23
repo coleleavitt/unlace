@@ -25,7 +25,8 @@ fn signed(value: u64, size: u32) -> Option<i64> {
     }
 }
 
-pub(crate) fn is_home_slot(offset: i64, size: u32) -> bool {
+#[doc(hidden)]
+pub fn is_home_slot(offset: i64, size: u32) -> bool {
     size > 0
         && offset >= HOME_START
         && offset
@@ -95,7 +96,8 @@ fn verified_home_gap(fd: &Funcdata, call: &FuncCallSpecs) -> Option<Rc<AddrSpace
 /// stack return slot and the locked model starts its sole stack input at byte 40.
 /// The caller-side proof must still place the translated cell in a negative local.
 /// Kuna does not currently expose the cspec `stackshift` as a model property.
-pub(crate) fn caller_home_cell(
+#[doc(hidden)]
+pub fn caller_home_cell(
     fd: &Funcdata,
     call: &FuncCallSpecs,
     offset: i64,
@@ -116,7 +118,8 @@ pub(crate) fn caller_home_cell(
 
 /// Map a callee-frame byte interval through a resolved call stack offset. This
 /// proves physical aliasing only; it does not imply caller ownership.
-pub(crate) fn callee_frame_cell(
+#[doc(hidden)]
+pub fn callee_frame_cell(
     fd: &Funcdata,
     call: &FuncCallSpecs,
     offset: i64,
@@ -269,12 +272,8 @@ fn strict_other_call_unobserved(fd: &Funcdata, id: OpId, start: u64, size: i32) 
 /// Check caller operations for reads, forwarding, or unresolved aliases of a
 /// mapped home cell. Direct calls need complete strict summaries; indirect and
 /// user calls remain barriers.
-pub(crate) fn caller_home_unobserved(
-    fd: &Funcdata,
-    current_call: OpId,
-    start: u64,
-    size: i32,
-) -> bool {
+#[doc(hidden)]
+pub fn caller_home_unobserved(fd: &Funcdata, current_call: OpId, start: u64, size: i32) -> bool {
     if !(1..=16).contains(&size) {
         return false;
     }
@@ -408,4 +407,4 @@ pub(crate) fn caller_home_unobserved(
 
 #[cfg(test)]
 #[path = "kuna_calleehomes/tests.rs"]
-pub(crate) mod tests;
+pub mod tests;

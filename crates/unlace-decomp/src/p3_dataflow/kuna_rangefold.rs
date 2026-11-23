@@ -234,7 +234,8 @@ fn fold_for(data: &Funcdata, facts: &HashMap<VarnodeId, Vec<Fact>>, op: OpId) ->
 }
 
 /// Fold every comparison and mask a dominating branch decides; returns the count.
-pub(crate) fn rangefold_apply(data: &mut Funcdata) -> int4 {
+#[doc(hidden)]
+pub fn rangefold_apply(data: &mut Funcdata) -> int4 {
     let facts = collect_facts(data);
     if facts.is_empty() {
         return 0;

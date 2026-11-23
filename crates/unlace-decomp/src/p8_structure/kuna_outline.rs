@@ -372,7 +372,8 @@ type StoreKey = (i32, uintb, int4);
 
 /// A storage location, carrying the space handle needed to rebuild a varnode.
 #[derive(Clone)]
-pub(crate) struct Store {
+#[doc(hidden)]
+pub struct Store {
     key: StoreKey,
     space: Rc<AddrSpace>,
     offset: uintb,

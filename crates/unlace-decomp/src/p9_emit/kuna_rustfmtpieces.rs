@@ -11,7 +11,8 @@ use crate::varnode::varnode_flags;
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
+#[doc(hidden)]
+pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
         .get::<crate::kuna_rustfmt::RustFmtMode>()

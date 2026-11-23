@@ -34,7 +34,7 @@ use crate::op::pcodeop_flags;
 use crate::varnode::varnode_flags;
 
 #[cfg(test)]
-pub(crate) mod spacebase_tests;
+pub mod spacebase_tests;
 
 /// [`Funcdata`] methods for stack and spacebase recovery.
 pub trait FuncdataSpacebaseExt {
@@ -1760,7 +1760,8 @@ fn proto_boundaries(proto: &crate::fspec::FuncProto) -> Option<crate::varmap::Pr
 /// The live-IR realization of the [`AliasGatherAccess`](crate::varmap::AliasGatherAccess):
 /// `findSpacebaseInput` / `gatherAdditiveBase` / `gatherOffset` over the function's
 /// def/use graph (C++ `AliasChecker`'s Varnode walks, `varmap.cc:736-858`).
-pub(crate) struct FuncdataAliasAccess<'a> {
+#[doc(hidden)]
+pub struct FuncdataAliasAccess<'a> {
     fd: &'a Funcdata,
     /// (kuna) Exempt an `INT_XOR` of the stack pointer from the escape-site
     /// scan.  Set only for the call-site input-trial checker; the local-layout
@@ -1799,7 +1800,8 @@ pub trait FuncdataAliasExt {
 }
 
 /// [`Funcdata`] methods for stack-pointer alias gathering used elsewhere in the crate.
-pub(crate) trait FuncdataAliasCrateExt {
+#[doc(hidden)]
+pub trait FuncdataAliasCrateExt {
     fn alias_gather_access(&self) -> FuncdataAliasAccess<'_>;
     fn build_alias_checker_deferred(&self) -> Option<crate::varmap::AliasChecker>;
     fn scope_local_mark_not_mapped(

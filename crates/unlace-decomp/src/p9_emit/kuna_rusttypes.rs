@@ -46,7 +46,8 @@ pub static RUST_SPELLER: RustSpeller = RustSpeller;
 
 /// The Rust integer name for a `size`-byte value of the given signedness, or
 /// `None` when Rust has no integer of that width.
-pub(crate) fn int_name(size: int4, signed: bool) -> Option<&'static str> {
+#[doc(hidden)]
+pub fn int_name(size: int4, signed: bool) -> Option<&'static str> {
     Some(match (size, signed) {
         (1, true) => "i8",
         (2, true) => "i16",
@@ -132,7 +133,8 @@ impl RustSpeller {
 /// module structure for nothing and produces
 /// `alloc__vec__Vec__resize` where `alloc::vec::Vec::resize` is both valid and
 /// what a Rust reader expects.
-pub(crate) fn sanitize_path(name: &str) -> String {
+#[doc(hidden)]
+pub fn sanitize_path(name: &str) -> String {
     let out = name
         .split("::")
         .map(sanitize)
@@ -146,7 +148,8 @@ pub(crate) fn sanitize_path(name: &str) -> String {
 ///
 /// The full path is not lost: the prototype emitter prints it in a comment
 /// directly above the function.
-pub(crate) fn path_tail(name: &str) -> String {
+#[doc(hidden)]
+pub fn path_tail(name: &str) -> String {
     let tail = name
         .rsplit("::")
         .find(|c| !c.trim().is_empty())
@@ -168,7 +171,8 @@ pub(crate) fn path_tail(name: &str) -> String {
 /// suffix) still collapses to `_`, and a name whose brackets do not balance
 /// falls back to [`sanitize`] whole -- an unbalanced `<` would swallow the rest
 /// of the declaration.
-pub(crate) fn type_path(name: &str) -> String {
+#[doc(hidden)]
+pub fn type_path(name: &str) -> String {
     let keep = |c: char| {
         c.is_ascii_alphanumeric()
             || matches!(
@@ -225,7 +229,8 @@ pub(crate) fn type_path(name: &str) -> String {
 /// output is parsed, so the same latent problem has to be fixed rather than
 /// tolerated. The original is not lost -- the prototype emitter records it in a
 /// comment above the function when the two differ.
-pub(crate) fn sanitize(name: &str) -> String {
+#[doc(hidden)]
+pub fn sanitize(name: &str) -> String {
     let mut out: String = name
         .chars()
         .map(|c| {

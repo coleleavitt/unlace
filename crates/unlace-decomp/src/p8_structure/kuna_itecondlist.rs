@@ -71,7 +71,8 @@ const MAX_LIST_DEPTH: u32 = 16;
 /// A condition-position [`BlockType::Ls`] is descended to its **last** component
 /// — the one the printer renders as the `if` header — so a diamond whose
 /// condition got concatenated with a preceding statement block still matches.
-pub(crate) fn cond_list_tail(data: &Funcdata, id: BlockId) -> BlockId {
+#[doc(hidden)]
+pub fn cond_list_tail(data: &Funcdata, id: BlockId) -> BlockId {
     let mut cur = id;
     for _ in 0..MAX_LIST_DEPTH {
         let g = data.sblocks_ref();

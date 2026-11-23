@@ -132,7 +132,8 @@ pub fn callee_moves_stack(arch: &Architecture, entry: &Address) -> bool {
 /// the trial then stays with `idx` and the upstream test. A call that could
 /// take the value as an argument (an indirect call, one whose window covers the
 /// slot) does not hold it back: there the freed push is its argument.
-pub(crate) fn contested(data: &Funcdata, idx: int4, vn: VarnodeId, held: &mut Contenders) -> bool {
+#[doc(hidden)]
+pub fn contested(data: &Funcdata, idx: int4, vn: VarnodeId, held: &mut Contenders) -> bool {
     let Some(off) = data.vbank().get(vn).map(|v| v.get_offset()) else {
         return false;
     };
@@ -157,7 +158,8 @@ pub(crate) fn contested(data: &Funcdata, idx: int4, vn: VarnodeId, held: &mut Co
 /// scoring its trials or has an input freed, so each input is checked again
 /// where it is used.
 #[derive(Default)]
-pub(crate) struct Contenders {
+#[doc(hidden)]
+pub struct Contenders {
     slots: Option<HashMap<uintb, Slot>>,
 }
 

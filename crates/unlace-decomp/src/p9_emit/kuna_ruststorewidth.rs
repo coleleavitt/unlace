@@ -165,12 +165,8 @@ impl PrintC {
         self.push_vn_ir_m(fd, arch, address, reader, mods);
     }
 
-    pub(crate) fn op_rust_store_width(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        op: OpId,
-    ) -> bool {
+    #[doc(hidden)]
+    pub fn op_rust_store_width(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         let Some(operation) = fd.obank().get(op) else {
             return false;
         };

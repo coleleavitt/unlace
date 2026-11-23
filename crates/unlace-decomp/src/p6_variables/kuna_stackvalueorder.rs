@@ -9,7 +9,8 @@ use unlace_num::opcodes::OpCode;
 const MAX_GUARD_SCAN_BLOCKS: usize = 256;
 const MAX_GUARD_SCAN_OPS: usize = 8192;
 
-pub(crate) fn moves_write(fd: &Funcdata, storage: HighVariableId, value: HighVariableId) -> bool {
+#[doc(hidden)]
+pub fn moves_write(fd: &Funcdata, storage: HighVariableId, value: HighVariableId) -> bool {
     if !crate::kuna_stackviews::enabled(fd) || storage == value {
         return false;
     }

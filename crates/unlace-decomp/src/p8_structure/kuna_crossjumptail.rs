@@ -525,7 +525,8 @@ fn has_exceptional_if(data: &Funcdata, root: BlockId) -> bool {
 }
 
 /// Rewrite gotos into shared runs to a fixpoint; returns how many were rewritten.
-pub(crate) fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
+#[doc(hidden)]
+pub fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
     let arch = data.get_arch();
     let gates = Gates {
         tails: arch

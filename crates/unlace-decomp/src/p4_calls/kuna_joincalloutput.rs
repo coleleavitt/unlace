@@ -4,7 +4,8 @@ use crate::fspec::{FuncCallSpecs, FuncProto};
 use crate::funcdata::Funcdata;
 use unlace_base::space::spacetype;
 
-pub(crate) fn needs_reflow(data: &Funcdata, call: &FuncCallSpecs, proto: &FuncProto) -> bool {
+#[doc(hidden)]
+pub fn needs_reflow(data: &Funcdata, call: &FuncCallSpecs, proto: &FuncProto) -> bool {
     if !proto.is_output_locked() {
         return false;
     }

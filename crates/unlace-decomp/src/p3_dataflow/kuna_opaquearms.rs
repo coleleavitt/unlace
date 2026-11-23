@@ -142,7 +142,8 @@ impl Pairing<'_> {
 
 /// Whether the two arms of conditional branch `op` are equal code that
 /// continues to one block with equal values.
-pub(crate) fn identical(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn identical(data: &Funcdata, op: OpId) -> bool {
     let Some(block) = data.obank().get(op).and_then(|o| o.get_parent()) else {
         return false;
     };

@@ -9,7 +9,8 @@ use crate::funcdata::Funcdata;
 
 use super::kuna_langgo::identifier;
 
-pub(super) struct DirectMethod<'a> {
+#[doc(hidden)]
+pub struct DirectMethod<'a> {
     pub receiver: VarnodeId,
     pub type_name: String,
     pub member: String,
@@ -17,7 +18,8 @@ pub(super) struct DirectMethod<'a> {
 }
 
 impl DirectMethod<'_> {
-    pub(super) fn has_selector_type(&self, ty: &Datatype) -> bool {
+    #[doc(hidden)]
+    pub fn has_selector_type(&self, ty: &Datatype) -> bool {
         ty.get_metatype() == type_metatype::TYPE_PTR
             && ty.get_typedef().is_none()
             && ty.get_ptr_to().is_some_and(|pointee| {
@@ -27,7 +29,8 @@ impl DirectMethod<'_> {
     }
 }
 
-pub(super) fn direct_method<'a>(
+#[doc(hidden)]
+pub fn direct_method<'a>(
     fd: &Funcdata,
     arch: &'a Architecture,
     id: OpId,

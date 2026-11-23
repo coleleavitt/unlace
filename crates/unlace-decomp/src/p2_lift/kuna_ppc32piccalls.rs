@@ -130,7 +130,8 @@ fn load(data: &Funcdata, engine: &Architecture, op: OpId, state: &State) -> Opti
         return None;
     }
     engine
-        .ppc32_pic_imports
+        .kuna_tables
+        .get::<crate::kuna_ppc32piccalls::PicImports>()
         .contains_key(&offset)
         .then_some(Value::Slot(offset))
 }
@@ -201,7 +202,8 @@ fn direct_slot(
         Stub::Absolute(slot) => slot,
     };
     engine
-        .ppc32_pic_imports
+        .kuna_tables
+        .get::<crate::kuna_ppc32piccalls::PicImports>()
         .contains_key(&u64::from(slot))
         .then_some(u64::from(slot))
 }
@@ -255,7 +257,10 @@ pub(crate) fn prove(data: &Funcdata, engine: &Architecture) -> BTreeMap<u64, Cal
 }
 fn prove_inner(data: &Funcdata, engine: &Architecture) -> Option<BTreeMap<u64, CallBinding>> {
     if !engine.analysis_ppc32picimports.scoped()
-        || engine.ppc32_pic_imports.is_empty()
+        || engine
+            .kuna_tables
+            .get::<crate::kuna_ppc32piccalls::PicImports>()
+            .is_empty()
         || !engine.archid.starts_with("PowerPC:")
         || !engine.archid.contains(":32:")
     {
@@ -330,7 +335,11 @@ fn prove_inner(data: &Funcdata, engine: &Architecture) -> Option<BTreeMap<u64, C
                     } else {
                         return None;
                     };
-                    let mut import = engine.ppc32_pic_imports.get(&slot)?.clone();
+                    let mut import = engine
+                        .kuna_tables
+                        .get::<crate::kuna_ppc32piccalls::PicImports>()
+                        .get(&slot)?
+                        .clone();
                     import.no_return &= engine
                         .kuna_options
                         .get::<crate::kuna_analysisgates::NoreturnKnown>()
@@ -498,6 +507,11 @@ impl FuncdataPpc32piccallsExt for crate::funcdata::Funcdata {
         self.ppc32_pic_calls().values()
     }
 }
+
+/// (kuna `ppc32picimports`) The PIC import slots the loader found, by address; an
+/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+pub type PicImports = std::collections::BTreeMap<u64, ImportSlot>;
+crate::kuna_arch_table!(PicImports);
 
 #[cfg(test)]
 mod tests {

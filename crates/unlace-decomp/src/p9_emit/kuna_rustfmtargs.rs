@@ -109,7 +109,10 @@ pub(crate) fn recover_inputs_at(
         || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
         || (arch.rust_display_formatters.is_empty()
-            && arch.rust_integer_formatters.is_empty()
+            && arch
+                .kuna_tables
+                .get::<crate::kuna_rustfmtflags::IntegerFormatters>()
+                .is_empty()
             && arch.rust_str_display_formatters.is_empty())
     {
         return None;
@@ -177,7 +180,12 @@ pub(crate) fn primitive_arguments(
     for index in 0..count {
         let pointer = cells[index * 2];
         let address = constant_word(fd, cells[index * 2 + 1])?;
-        let Some(formatter) = arch.rust_integer_formatters.get(&address).copied() else {
+        let Some(formatter) = arch
+            .kuna_tables
+            .get::<crate::kuna_rustfmtflags::IntegerFormatters>()
+            .get(&address)
+            .copied()
+        else {
             arguments.push(super::kuna_rustfmtstr::recover(
                 fd, arch, id, address, pointer,
             )?);

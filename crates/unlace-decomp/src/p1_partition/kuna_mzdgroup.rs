@@ -43,7 +43,11 @@ pub struct MzDataSegment {
 /// other tracked register keeps its value; a load without the segment is left
 /// untouched.
 pub fn apply(arch: &Architecture) {
-    let Some(seg) = arch.mz_dgroup.as_ref() else {
+    let Some(seg) = arch
+        .kuna_tables
+        .get::<crate::kuna_mzdgroup::ImageDgroup>()
+        .as_ref()
+    else {
         return;
     };
     let Some(space) = arch.manage().get_default_code_space().cloned() else {
@@ -99,3 +103,8 @@ pub fn apply(arch: &Architecture) {
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.mzdgroup_apply = Some(apply);
 }
+
+/// (kuna `mzdgroup`) The data segment an MS-DOS executable's startup loads into DS; an
+/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+pub type ImageDgroup = Option<MzDataSegment>;
+crate::kuna_arch_table!(ImageDgroup);

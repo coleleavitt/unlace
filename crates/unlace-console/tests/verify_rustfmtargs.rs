@@ -53,7 +53,11 @@ fn decompile_fixture(
     });
     if !evidence {
         program.arch_mut().rust_display_formatters.clear();
-        program.arch_mut().rust_integer_formatters.clear();
+        program
+            .arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>()
+            .clear();
     }
     program.commit_pending_analysis().unwrap();
     let language = if rust { "rust-language" } else { "c-language" };

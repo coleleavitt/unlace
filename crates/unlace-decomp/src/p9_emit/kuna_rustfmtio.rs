@@ -78,7 +78,10 @@ pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Pl
         .writers()
         || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
         || arch.rustc_stable_version != Some((1, 93, 1))
-        || arch.rust_io_writer_profiles.is_empty()
+        || arch
+            .kuna_tables
+            .get::<crate::kuna_rustfmtio::WriterProfiles>()
+            .is_empty()
     {
         return None;
     }
@@ -88,7 +91,8 @@ pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Pl
     }
     let spec = fd.get_call_specs(fd.get_call_specs_index(id)?);
     let profile = arch
-        .rust_io_writer_profiles
+        .kuna_tables
+        .get::<crate::kuna_rustfmtio::WriterProfiles>()
         .get(&spec.get_entry_address().get_offset())?;
     let output = fd.vbank().get(call.get_out()?)?;
     if output.get_size() != 8 {
@@ -233,3 +237,8 @@ pub(crate) fn push_writer(
         SyntaxHighlight::type_color,
     ));
 }
+
+/// (kuna `rustfmtio`) The image's `io::Write` writer profiles, by address; an
+/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+pub type WriterProfiles = std::collections::BTreeMap<u64, WriterProfile>;
+crate::kuna_arch_table!(WriterProfiles);

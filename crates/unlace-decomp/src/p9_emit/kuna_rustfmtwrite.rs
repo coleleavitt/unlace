@@ -77,7 +77,10 @@ pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Pl
         .writers()
         || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
-        || arch.rust_string_writer_methods.is_empty()
+        || arch
+            .kuna_tables
+            .get::<crate::kuna_rustfmtwrite::WriterMethods>()
+            .is_empty()
     {
         return None;
     }
@@ -137,7 +140,12 @@ pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Pl
         (4, WriterMethod::WriteChar),
         (5, WriterMethod::WriteFmt),
     ] {
-        if arch.rust_string_writer_methods.get(&words[index]) != Some(&method) {
+        if arch
+            .kuna_tables
+            .get::<crate::kuna_rustfmtwrite::WriterMethods>()
+            .get(&words[index])
+            != Some(&method)
+        {
             return None;
         }
     }
@@ -195,3 +203,8 @@ fn vtable_bytes(fd: &Funcdata, arch: &Architecture, pointer: u64) -> Option<Vec<
         .ok()?;
     Some(bytes)
 }
+
+/// (kuna `rustfmtwrite`) The image's `String` writer methods, by address; an
+/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+pub type WriterMethods = std::collections::BTreeMap<u64, WriterMethod>;
+crate::kuna_arch_table!(WriterMethods);

@@ -87,7 +87,10 @@ fn chip_in_force(prog: &ConsoleProgram) -> Option<EspChip> {
         .kuna_options
         .get::<unlace_decomp::kuna_esprom::EspRom>()
     {
-        EspRom::Auto => prog.arch().esp_image_chip,
+        EspRom::Auto => prog
+            .arch()
+            .kuna_tables
+            .get::<unlace_decomp::kuna_esprom::ImageChip>(),
         value => value.chip(),
     }
 }

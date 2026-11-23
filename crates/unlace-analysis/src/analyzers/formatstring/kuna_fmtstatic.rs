@@ -128,9 +128,12 @@ impl AnalysisPass for FormatStringStaticPass {
         let abi = if arm_args {
             VarargAbi::Named
         } else {
-            ctx.arch.format_vararg_abi.unwrap_or_else(|| {
-                kuna_formatstring::vararg_abi(&ctx.arch.archid, Some(image_family(ctx.bytes)))
-            })
+            ctx.arch
+                .kuna_tables
+                .get::<unlace_decomp::kuna_formatstring::ImageVarargAbi>()
+                .unwrap_or_else(|| {
+                    kuna_formatstring::vararg_abi(&ctx.arch.archid, Some(image_family(ctx.bytes)))
+                })
         };
         if abi == VarargAbi::Nothing {
             return out;

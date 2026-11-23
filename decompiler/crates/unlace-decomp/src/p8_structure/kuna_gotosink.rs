@@ -49,7 +49,7 @@ fn plain_goto(graph: &BlockGraph, id: BlockId) -> Option<BlockId> {
 
 /// Is the `if` `id` an exceptional edge (`eh_unwinding()`, `java_try()`,
 /// `java_throws()`)? The try printers read those as they are, so they never move.
-fn exceptional_if(data: &Funcdata, id: BlockId) -> bool {
+pub(crate) fn exceptional_if(data: &Funcdata, id: BlockId) -> bool {
     use crate::userop::{BUILTIN_EH_UNWINDING, BUILTIN_JAVA_THROWS, BUILTIN_JAVA_TRY};
     use unlace_num::opcodes::OpCode;
     let graph = data.sblocks_ref();

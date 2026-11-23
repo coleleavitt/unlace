@@ -509,6 +509,23 @@ fn apply_once(data: &mut Funcdata, gates: Gates) -> Option<BlockId> {
     Some(leaf)
 }
 
+/// Does the tree under `root` hold an exceptional-edge `if` (`itaniumeh`,
+/// `javatry`)? The try printers read those lists as structuring left them.
+fn has_exceptional_if(data: &Funcdata, root: BlockId) -> bool {
+    let graph = data.sblocks_ref();
+    let mut stack = vec![root];
+    while let Some(id) = stack.pop() {
+        let b = graph.block(id);
+        if b.get_type() == BlockType::If
+            && crate::p8_structure::kuna_gotosink::exceptional_if(data, id)
+        {
+            return true;
+        }
+        stack.extend((0..b.get_size()).map(|i| b.get_block(i)));
+    }
+    false
+}
+
 /// Rewrite gotos into shared runs to a fixpoint; returns how many were rewritten.
 pub(crate) fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
     let arch = data.get_arch();
@@ -522,6 +539,9 @@ pub(crate) fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
         return 0;
     }
     let root = data.sblocks_root();
+    if has_exceptional_if(data, root) {
+        return 0;
+    }
     data.sblocks_mut().kuna_flatten_lists(root);
     let mut targets = Vec::new();
     for _ in 0..64 {

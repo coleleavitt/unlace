@@ -126,7 +126,7 @@ eb574000
 <stringmatch name="RH850 #44: floorf.sw r6, r10 decodes" min="1" max="1">^0x000010a8: floorf\.sw +r6, r10$</stringmatch>
 <stringmatch name="RH850 #45: plain V850 keeps the V850E2 name of system register 11" min="1" max="1">^0x00002000: stsr +SCCFG, r10$</stringmatch>
 <stringmatch name="RH850 #46: no instruction of the listing is undecodable" min="0" max="0">Unable to disassemble|halt_baddata|Bad instruction</stringmatch>
-<stringmatch name="RH850 #47: ROTL by a constant is a rotate" min="1" max="1">return a0 &lt;&lt; 3 \| a0 &gt;&gt; 0x1d;</stringmatch>
+<stringmatch name="RH850 #47: ROTL by a constant is a rotate" min="1" max="1">return rotl\(a0,3\);</stringmatch>
 <stringmatch name="RH850 #48: BINS replaces bits 12 to 23" min="1" max="1">return a1 &amp; 0xff000fff \| \(a0 &amp; 0xfff\) &lt;&lt; 0xc;</stringmatch>
 <stringmatch name="RH850 #49: PUSHSP/POPSP keep r20, r21 and lp out of the body" min="1" max="1">^int4 f_sum\(int4 a0,unsigned int \*a1\)$</stringmatch>
 <stringmatch name="RH850 #50: LOOP is the counted loop's back edge" min="1" max="1">\} while \(a0\);</stringmatch>

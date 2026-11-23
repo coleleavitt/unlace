@@ -5,7 +5,10 @@
 
 pub mod addtreestate;
 pub mod block;
+pub mod capability;
+pub mod comment;
 pub mod context;
+pub mod cpool;
 pub mod dtype;
 pub mod expression;
 pub mod funcdata;
@@ -14,6 +17,7 @@ pub mod funcdata_encode;
 pub mod funcdata_op;
 pub mod funcdata_printraw;
 pub mod funcdata_varnode;
+pub mod idiom;
 pub(crate) mod kuna_budget;
 pub(crate) mod kuna_checkedarena;
 pub mod kuna_fnmemory;
@@ -21,5 +25,6 @@ pub mod kuna_hostmem;
 pub mod kuna_optionset;
 pub mod kuna_passhooks;
 pub mod op;
+pub mod rangeutil;
 pub mod transform;
 pub mod varnode;

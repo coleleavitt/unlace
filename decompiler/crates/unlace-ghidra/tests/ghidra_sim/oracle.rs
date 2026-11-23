@@ -1288,7 +1288,7 @@ impl AnswerSource for SimOracle {
         } else if el == ELEM_COMMAND_GETCOMMENTS.get_id() {
             // Always written, possibly empty (like Java).  A Phase-3 sim can
             // fill this from the analysis CommentFacts via the ported
-            // CommentDatabaseInternal encode (p9_emit/comment.rs).
+            // CommentDatabaseInternal encode (substrate/comment.rs).
             let mut doc = Vec::new();
             {
                 let mut e = PackedEncode::new(&mut doc);

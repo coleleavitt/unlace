@@ -670,10 +670,9 @@ impl ParamEntry {
                 return Ok(res);
             }
         } else {
-            let type_align = super::kuna_stackparamalign::effective_alignment(
-                self.flags,
-                type_align,
-                self.alignment,
+            let type_align = (crate::architecture::default_pass_hooks()
+                .stackparamalign_effective_alignment)(
+                self.flags, type_align, self.alignment
             );
             if type_align > self.alignment {
                 let tmp = (*slotnum * self.alignment) % type_align;
@@ -2890,7 +2889,9 @@ impl ParamListStandard {
             }
             param.addr = cur_entry.get_addr_by_slot(
                 &mut status[grp as usize],
-                crate::kuna_floatregister::storage_size(cur_entry, tp, manager),
+                (crate::architecture::default_pass_hooks().floatregister_storage_size)(
+                    cur_entry, tp, manager,
+                ),
                 tp.get_alignment(),
                 manager,
             )?;
@@ -2972,7 +2973,7 @@ impl ParamListStandard {
     ) -> KunaResult<()> {
         let mut status = vec![0i32; self.numgroup as usize];
         if !proto.input_storage.is_empty() {
-            return super::kuna_inputstorage::assign(
+            return (crate::architecture::default_pass_hooks().inputstorage_assign)(
                 self,
                 proto,
                 typefactory,
@@ -3595,14 +3596,13 @@ impl ParamListStandard {
                     // recovery an unused ARGUMENT REGISTER is an ignored
                     // parameter, not evidence that a later REGISTER the body
                     // reads before writing is not a parameter.
-                    crate::p4_calls::kuna_inputparamgap::trial_is_protected(
+                    (crate::architecture::default_pass_hooks().inputparamgap_trial_is_protected)(
                         active,
                         trial,
                         &self.entry,
-                    ) || crate::p4_calls::kuna_stackaddrargtrial::trial_is_protected(
-                        active,
-                        trial,
-                        &self.entry,
+                    ) || (crate::architecture::default_pass_hooks()
+                        .stackaddrargtrial_trial_is_protected)(
+                        active, trial, &self.entry
                     ),
                     // (kuna) `passthrough`: a register the function hands on
                     // untouched is neither a run of empty slots nor its end.
@@ -3624,7 +3624,7 @@ impl ParamListStandard {
                 // register file -- not a hole to fill on the way to a stack
                 // trial.  See [`crate::p4_calls::kuna_stackarggap`].
                 if crate::p4_calls::kuna_stackarggap::ends_argument_list(active, i, stop, |j| {
-                    crate::p4_calls::kuna_stackarggap::address_is_spacebase(
+                    (crate::architecture::default_pass_hooks().stackarggap_address_is_spacebase)(
                         active.get_trial(j).get_address(),
                     )
                 }) {
@@ -3749,7 +3749,8 @@ impl ParamListStandard {
             .collect();
         let mut sec = 0usize;
         while sec + 1 < trial_start.len() {
-            if let Some(cut) = crate::p4_calls::kuna_varargstackargs::stack_section_split(
+            if let Some(cut) = (crate::architecture::default_pass_hooks()
+                .varargstackargs_stack_section_split)(
                 active,
                 trial_start[sec],
                 trial_start[sec + 1],
@@ -8901,7 +8902,7 @@ impl FuncCallSpecs {
                 // Extend: realOut is contained in oldOut.
                 let overlap = oldaddr.justified_contain(oldsize, &paddr, psize, false);
                 let mut vardata = VarnodeData::default();
-                let (mut opc, stated) = crate::kuna_narrowext::or_model(
+                let (mut opc, stated) = crate::p4_calls::kuna_narrowext::or_model(
                     data.get_arch().narrow_ext.output,
                     self.proto.model().output(),
                     &paddr,
@@ -8935,7 +8936,7 @@ impl FuncCallSpecs {
                     };
                     data.op_insert_after(ext, self.op);
                     if stated {
-                        crate::kuna_narrowext::mark(data, ext);
+                        (data.hooks().narrowext_mark)(data, ext);
                     }
                 } else {
                     // Concatenate extra bytes from something indirectly created.

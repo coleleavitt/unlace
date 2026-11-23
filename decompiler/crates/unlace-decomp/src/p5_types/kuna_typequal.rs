@@ -145,5 +145,10 @@ pub(crate) fn address_type(
     ty.or(known)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.typequal_is_volatile = Some(is_volatile);
+}
+
 #[cfg(test)]
 mod tests;

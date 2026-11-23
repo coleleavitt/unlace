@@ -153,6 +153,11 @@ pub fn trial_is_protected(
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.inputparamgap_trial_is_protected = Some(trial_is_protected);
+}
+
 #[cfg(test)]
 #[path = "kuna_inputparamgap/tests.rs"]
 mod tests;

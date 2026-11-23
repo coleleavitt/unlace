@@ -734,6 +734,7 @@ mod mips_args;
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.syscallregs_is_error_flag_op = Some(is_error_flag_op);
     hooks.syscallregs_is_error_flag = Some(is_error_flag);
     hooks.syscallregs_reads_as_argument = Some(reads_as_argument);
 }

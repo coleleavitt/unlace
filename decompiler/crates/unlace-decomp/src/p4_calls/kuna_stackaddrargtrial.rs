@@ -47,6 +47,11 @@ crate::kuna_flag!(
     shipped: false
 );
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackaddrargtrial_trial_is_protected = Some(trial_is_protected);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

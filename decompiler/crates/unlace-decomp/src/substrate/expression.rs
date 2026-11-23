@@ -1031,8 +1031,8 @@ pub fn functional_equality_level(
     }
     // (kuna syscallregs) each system call's error flag is its own value, (kuna
     // swiftcall) as is each throwing call's error.
-    if crate::kuna_syscallregs::is_error_flag_op(obank, vbank, op1)
-        || crate::kuna_swifterror::is_error_op(obank, vbank, op1)
+    if (crate::architecture::default_pass_hooks().syscallregs_is_error_flag_op)(obank, vbank, op1)
+        || (crate::architecture::default_pass_hooks().swifterror_is_error_op)(obank, vbank, op1)
     {
         return -1;
     }

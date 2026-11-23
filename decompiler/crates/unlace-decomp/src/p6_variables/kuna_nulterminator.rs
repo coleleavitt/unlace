@@ -145,6 +145,11 @@ pub fn close_at_terminator(
     Some(closed)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.nulterminator_close_at_terminator = Some(close_at_terminator);
+}
+
 #[cfg(test)]
 #[path = "kuna_nulterminator/tests.rs"]
 mod tests;

@@ -3,14 +3,14 @@
 
 #![allow(unused_imports, dead_code)]
 
-use crate::kuna_indirectonly::OptionIndirectOnly;
-use crate::kuna_indirectonly::check_indirect_use;
-use crate::kuna_indirectonly::mark_indirect_only;
 use crate::context::ArchContext;
 use crate::context::BlockId;
 use crate::context::OpId;
 use crate::context::VarnodeId;
 use crate::funcdata::Funcdata;
+use crate::kuna_indirectonly::OptionIndirectOnly;
+use crate::kuna_indirectonly::check_indirect_use;
+use crate::kuna_indirectonly::mark_indirect_only;
 use crate::kuna_option_dispatch::KUNA_OPTION_NAMES;
 use crate::op::pcodeop_flags;
 use crate::options::on_or_off;

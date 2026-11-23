@@ -7372,7 +7372,13 @@ both
   — an enum with payloads, an imported value type (`Foundation.Date`), a
   generic instantiation without a known layout, a tuple, an existential — is
   `undefined<n>` over the bytes up to the next field, so the layout is always
-  right and the names are always real; only the field's own type is withheld. Each binding carries a `self` hint
+  right and the names are always real; only the field's own type is withheld. An import stub (a PLT entry or a
+  Mach-O `__stubs` entry, in a code section) whose symbol demangles to a
+  throwing function of another image that is not `async`, a protocol
+  requirement's dispatch thunk included, binds `__swiftcall_throws` with no
+  `self` type: a throwing function calls such imports with the error register
+  holding the zero its own caller passed, reloaded rather than stored, so the
+  zeroing-store rule of 04 §4.4 does not see the call. Each binding carries a `self` hint
   (`AnalysisOutput::swift_types.models` / `input_hints` → the decompile
   drive): the name always, and the type where the layout arm has one — `Class
   *` for an instance member of a class, `swift.class_metadata *` for a class

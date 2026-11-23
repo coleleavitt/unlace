@@ -628,3 +628,23 @@ crate::kuna_flag!(
     unset: false,
     shipped: false
 );
+
+/// (kuna `stackstruct`) Every frame record a `restructure_varnode` pass laid out; later passes
+/// keep it while no access contradicts its bounds. Kept across `Funcdata::clear`.
+#[derive(Default)]
+struct RecordsSlot(std::cell::RefCell<Vec<crate::p6_variables::kuna_stackstruct::StackRecord>>);
+crate::kuna_func_state!(RecordsSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `stackstruct`) The frame records earlier passes laid out.
+    pub fn stack_records(&self) -> Vec<crate::p6_variables::kuna_stackstruct::StackRecord> {
+        self.kuna_state::<RecordsSlot>().0.borrow().clone()
+    }
+
+    /// (kuna `stackstruct`) Remember a frame record, replacing one at the same start.
+    pub fn record_stack_record(&self, r: crate::p6_variables::kuna_stackstruct::StackRecord) {
+        let mut all = self.kuna_state::<RecordsSlot>().0.borrow_mut();
+        all.retain(|o| o.start != r.start);
+        all.push(r);
+    }
+}

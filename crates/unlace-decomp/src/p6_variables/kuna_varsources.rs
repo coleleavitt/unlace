@@ -13,12 +13,7 @@ use crate::architecture::Architecture;
 use crate::context::HighVariableId;
 use crate::funcdata::Funcdata;
 
-#[derive(Debug, Clone)]
-pub struct StorageSource {
-    pub address: Address,
-    pub size: int4,
-    pub write_address: Option<Address>,
-}
+pub use crate::funcdata::StorageSource;
 
 pub type StorageComment = (String, Rc<AddrSpace>, u64);
 

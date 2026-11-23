@@ -1804,3 +1804,25 @@ fn moved_from(fd: &Funcdata, vn: VarnodeId) -> VarnodeId {
     }
     cur
 }
+
+/// (kuna `stackstoreguard`) What the latest `restructure_varnode` pass says the final layout
+/// must satisfy; reset by `Funcdata::clear`.
+#[derive(Default)]
+struct ChecksSlot(std::cell::RefCell<crate::p6_variables::kuna_storereach::ReachChecks>);
+crate::kuna_func_state!(ChecksSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `stackstoreguard`) Record what this pass says the final layout
+    /// must satisfy.
+    pub(crate) fn note_store_reach_checks(
+        &self,
+        checks: crate::p6_variables::kuna_storereach::ReachChecks,
+    ) {
+        *self.kuna_state::<ChecksSlot>().0.borrow_mut() = checks;
+    }
+
+    /// (kuna `stackstoreguard`) What the latest pass recorded.
+    pub(crate) fn store_reach_checks(&self) -> crate::p6_variables::kuna_storereach::ReachChecks {
+        self.kuna_state::<ChecksSlot>().0.borrow().clone()
+    }
+}

@@ -33,6 +33,11 @@ pub(crate) fn trial_is_protected(
         && trial.get_entry().is_some_and(|i| entries[i].is_exclusion())
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackaddrargtrial_trial_is_protected = Some(trial_is_protected);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

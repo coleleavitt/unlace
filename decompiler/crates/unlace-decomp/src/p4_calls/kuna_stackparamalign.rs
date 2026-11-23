@@ -41,6 +41,7 @@ pub(crate) fn effective_alignment(flags: u32, type_alignment: i32, slot_alignmen
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackparamalign_effective_alignment = Some(effective_alignment);
     hooks.stackparamalign_decode = Some(decode);
 }
 

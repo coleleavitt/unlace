@@ -17,3 +17,8 @@ pub fn storage_size(entry: &ParamEntry, datatype: &Datatype, manager: &AddrSpace
         datatype.get_align_size()
     }
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.floatregister_storage_size = Some(storage_size);
+}

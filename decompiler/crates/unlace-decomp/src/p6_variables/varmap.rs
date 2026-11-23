@@ -1956,11 +1956,9 @@ impl ScopeLocal {
             } else if cur.attempt_join(&next) {
                 cur_end = cur_end.max(next_end);
             } else {
-                if let Some(closed) = crate::p6_variables::kuna_nulterminator::close_at_terminator(
-                    &cur,
-                    &next,
-                    state.peek_after_next(),
-                    state,
+                if let Some(closed) = (crate::architecture::default_pass_hooks()
+                    .nulterminator_close_at_terminator)(
+                    &cur, &next, state.peek_after_next(), state
                 ) {
                     let mut fit = closed.clone();
                     if self.adjust_fit(&mut fit) && fit.size == closed.size {

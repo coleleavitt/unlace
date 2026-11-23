@@ -5621,7 +5621,7 @@ impl Heritage {
                             .wrap_offset(v.get_addr().get_offset().wrapping_sub(addr.get_offset()))
                             as usize;
                         let input_span = (input_start, input_start + v.get_size() as usize);
-                        crate::p3_dataflow::kuna_inputrefinement::span_straddles_join(
+                        (fd.hooks().inputrefinement_span_straddles_join)(
                             input_span, start, junction, end,
                         )
                     })
@@ -5684,7 +5684,7 @@ impl Heritage {
         // refinement.  The C++ erases the old range and inserts the partition.
         let flags = self.disjoint.get(idx).flags;
         let flags_at = |cut: usize| {
-            if super::kuna_revisitrefine::spanned(&spans, cut) {
+            if (fd.hooks().revisitrefine_spanned)(&spans, cut) {
                 flags | memrange_flags::retired_markers
             } else {
                 flags

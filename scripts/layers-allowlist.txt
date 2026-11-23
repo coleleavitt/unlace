@@ -119,8 +119,6 @@ database -> remote_provider
 dtype -> bitfield
 dtype -> kuna_typequal
 dtype -> prettyprint
-expression -> kuna_swifterror
-expression -> kuna_syscallregs
 flow -> kuna_armfloatreturn
 flow -> kuna_calleearitybody
 flow -> kuna_calleeprotostack
@@ -132,18 +130,12 @@ fspec -> kuna_calleedeadarg
 fspec -> kuna_calleepurge
 fspec -> kuna_condexeret
 fspec -> kuna_customreturn
-fspec -> kuna_floatregister
-fspec -> kuna_inputparamgap
-fspec -> kuna_inputstorage
 fspec -> kuna_libcnames
 fspec -> kuna_narrowext
 fspec -> kuna_passthrough
 fspec -> kuna_registerslots
 fspec -> kuna_spsolve
-fspec -> kuna_stackaddrargtrial
 fspec -> kuna_stackarggap
-fspec -> kuna_stackparamalign
-fspec -> kuna_varargstackargs
 fspec -> modelrules
 fspec -> remote_provider
 funcdata -> kuna_atomicxadd
@@ -238,7 +230,6 @@ kuna_guardedloop -> kuna_strlenscan
 kuna_javanew -> cpool
 kuna_jumpassist -> kuna_callmechanisms
 kuna_lanefuse -> kuna_avxintrin
-kuna_langfacet -> kuna_typequal
 kuna_loadoptions -> kuna_calltargettype
 kuna_loadoptions -> kuna_goreg
 kuna_looprotate -> kuna_strlenscan
@@ -266,7 +257,6 @@ ruleaction_3 -> cpool
 subflow -> kuna_truncarg
 varmap -> kuna_arrayextent
 varmap -> kuna_arraysize
-varmap -> kuna_nulterminator
 varmap -> kuna_stablenames
 varmap -> remote_provider
 xml_arch -> capability

@@ -306,6 +306,11 @@ fn implied_mask(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>) -> Op
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.narrowext_mark = Some(mark);
+}
+
 #[cfg(test)]
 #[path = "kuna_narrowext/tests.rs"]
 mod tests;

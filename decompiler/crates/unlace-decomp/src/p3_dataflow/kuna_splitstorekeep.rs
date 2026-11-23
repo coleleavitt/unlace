@@ -75,3 +75,8 @@ pub fn keep_store_mark(fd: &mut Funcdata, vn: VarnodeId, pieces: &[VarnodeId]) -
     }
     !pieces.is_empty()
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.splitstorekeep_keep_store_mark = Some(keep_store_mark);
+}

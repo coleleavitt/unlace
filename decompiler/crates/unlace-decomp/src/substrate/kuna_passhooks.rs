@@ -10,20 +10,22 @@
 //! [`KunaHookSlots::finish`] refuses a table with an empty slot, so the first
 //! `ArchContext` of a run checks that every hook is provided.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::AddrSpace;
+use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4, uintb};
 
 use unlace_base::error::KunaResult;
+use unlace_num::pcoderaw::VarnodeData;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::database::SymbolEntry;
 use crate::dtype::Datatype;
-use crate::fspec::{FuncCallSpecs, ParamTrial};
+use crate::fspec::{FuncCallSpecs, FuncProto, ParamTrial};
 use crate::funcdata::Funcdata;
+use crate::kuna_fasthash::FxHashMap;
 use crate::varmap::{AliasChecker, LinkEntryInfo};
 
 macro_rules! declare_hooks {
@@ -146,4 +148,98 @@ declare_hooks! {
     retsplitlimit_split_is_declined: fn(Option<u64>, usize, usize) -> bool;
     /// `kuna_rettriangle::is_triangle_join`.
     rettriangle_is_triangle_join: fn(&Funcdata, BlockId) -> bool;
+    /// `kuna_armfloatargs::stated_singles`.
+    armfloatargs_stated_singles: fn(&Funcdata, &FuncCallSpecs, &Address, i32) -> Vec<Address>;
+    /// `kuna_armfloatreturn::call_input_allowed`.
+    armfloatreturn_call_input_allowed: fn(&Funcdata, &FuncCallSpecs, &Address, i32) -> bool;
+    /// `kuna_calleememory::preserves`.
+    calleememory_preserves: fn(&Funcdata, &FuncCallSpecs, &Address, i32) -> bool;
+    /// `kuna_calleepreserves::callee_preserves_range`.
+    calleepreserves_callee_preserves_range: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
+    /// `kuna_calleeprotostack::above_callee_frame`.
+    calleeprotostack_above_callee_frame: fn(uintb, int4, int4, int4) -> bool;
+    /// `kuna_calleeprotostack::declared_caller_frame_floor`.
+    calleeprotostack_declared_caller_frame_floor: fn(&FuncProto) -> Option<int4>;
+    /// `kuna_calleeprotostack::pointer_input_may_alias`.
+    calleeprotostack_pointer_input_may_alias: fn(&Funcdata, &FuncCallSpecs, uintb, int4) -> bool;
+    /// `kuna_calleeprotostack::rebound_frame_base`.
+    calleeprotostack_rebound_frame_base: fn(&Funcdata) -> bool;
+    /// `kuna_calleeretpreserves::callee_preserved_output_within`.
+    calleeretpreserves_callee_preserved_output_within: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> Option<VarnodeData>;
+    /// `kuna_calleeretpreserves::callee_preserves_return_storage`.
+    calleeretpreserves_callee_preserves_return_storage: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
+    /// `kuna_calleeretpreserves::exact_cookie_preserved_output_within`.
+    calleeretpreserves_exact_cookie_preserved_output_within: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> Option<VarnodeData>;
+    /// `kuna_calleeretpreserves::exact_cookie_preserves_return_storage`.
+    calleeretpreserves_exact_cookie_preserves_return_storage: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
+    /// `kuna_calleeretpreserves::exact_cookie_preserves_unjustified_return_slice`.
+    calleeretpreserves_exact_cookie_preserves_unjustified_return_slice: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
+    /// `kuna_inputtile::new_tiled_input`.
+    inputtile_new_tiled_input: fn(&mut Funcdata, int4, &Address) -> KunaResult<VarnodeId>;
+    /// `kuna_localstackviews::preserves_range`.
+    localstackviews_preserves_range: fn(&Funcdata, &Address, i32) -> bool;
+    /// `kuna_msvcbyval::constructed_ranges`.
+    msvcbyval_constructed_ranges: fn(&Funcdata, &[FuncCallSpecs], &Rc<AddrSpace>) -> Vec<(OpId, uintb, int4)>;
+    /// `kuna_msvcbyval::constructs`.
+    msvcbyval_constructs: fn(&[(OpId, uintb, int4)], OpId, &AddrSpace, uintb, int4) -> bool;
+    /// `kuna_pairrefine::split_pair`.
+    pairrefine_split_pair: fn(&Funcdata, &Address, int4, int4, &[VarnodeId], &[VarnodeId], &[VarnodeId]) -> bool;
+    /// `kuna_pairrefine::straddles_middle`.
+    pairrefine_straddles_middle: fn(&Funcdata, VarnodeId, &Address, int4) -> bool;
+    /// `kuna_passthrough::suppresses_return_trial`.
+    passthrough_suppresses_return_trial: fn(&Funcdata, &Address, int4) -> bool;
+    /// `kuna_registerslots::guard_output`.
+    registerslots_guard_output: fn(&mut Funcdata, &mut FuncCallSpecs, &Address, &Address, i32, &mut Vec<VarnodeId>) -> bool;
+    /// `kuna_registerslots::input_slot`.
+    registerslots_input_slot: fn(&FuncCallSpecs, &Address, &Address, i32) -> Option<(Address, i32)>;
+    /// `kuna_splitstorekeep::keep_store_mark`.
+    splitstorekeep_keep_store_mark: fn(&mut Funcdata, VarnodeId, &[VarnodeId]) -> bool;
+    /// `kuna_stackeffects::enabled_for`.
+    stackeffects_enabled_for: fn(&Funcdata, &Address, i32) -> bool;
+    /// `kuna_stackeffects::unresolved_store`.
+    stackeffects_unresolved_store: fn(&Funcdata, OpId) -> bool;
+    /// `kuna_stackreadscope::mark_guarded_read`.
+    stackreadscope_mark_guarded_read: fn(&mut Funcdata, OpId, &Address, i32);
+    /// `kuna_varargretreg::argument_in_own_output`.
+    varargretreg_argument_in_own_output: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
+    /// `kuna_varargretreg::counted_float_entry`.
+    varargretreg_counted_float_entry: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> Option<Address>;
+    /// `kuna_voidret::planted_overlaps`.
+    voidret_planted_overlaps: fn(&Funcdata, &Address, int4) -> bool;
+    /// `kuna_haltloopguard::exitless_loops`.
+    haltloopguard_exitless_loops: fn(&Funcdata) -> Vec<BlockId>;
+    /// `kuna_haltloopguard::guard`.
+    haltloopguard_guard: fn(&Funcdata, &[BlockId], uint4, &Address, &[VarnodeId], &mut BTreeMap<usize, Vec<Address>>);
+    /// `kuna_haltloopguard::mark`.
+    haltloopguard_mark: fn(&mut Funcdata, &[VarnodeId]);
+    /// `kuna_leafmemory::preserves`.
+    leafmemory_preserves: fn(&Funcdata, &FuncCallSpecs, &Address, i32) -> bool;
+    /// `kuna_memoryguard::guard_memory`.
+    memoryguard_guard_memory: fn(&mut Funcdata, &mut Option<Vec<OpId>>, uint4, &Address, int4, &mut Vec<VarnodeId>);
+    /// `kuna_multiregargs::input_partition`.
+    multiregargs_input_partition: fn(&FuncProto, &AddrSpaceManager, &Address, int4) -> Option<Vec<VarnodeData>>;
+    /// `kuna_renamereads::finish`.
+    renamereads_finish: fn(&mut Funcdata, &mut Vec<(OpId, uint4)>);
+    /// `kuna_renamereads::mark`.
+    renamereads_mark: fn(&mut Funcdata, OpId, uint4, &mut Vec<(OpId, uint4)>);
+    /// `kuna_renamereads::new_indirect`.
+    renamereads_new_indirect: fn(&mut Funcdata, OpId, &Address, int4, uint4, &mut Vec<(OpId, uint4)>, &mut FxHashMap<OpId, VarnodeId>) -> OpId;
+    /// `kuna_renamereads::pending`.
+    renamereads_pending: fn(&Funcdata, OpId) -> bool;
+    /// `kuna_renamereads::storage`.
+    renamereads_storage: fn(&Funcdata, OpId) -> Option<(Address, int4)>;
+    /// `kuna_spillstoreguard::bounds`.
+    spillstoreguard_bounds: fn(&Funcdata, &[OpId]) -> HashMap<OpId, (u64, int4)>;
+    /// `kuna_spillstoreguard::build`.
+    spillstoreguard_build: fn(&mut Funcdata, &Address, int4, &[OpId], &[OpId], &HashMap<OpId, (u64, int4)>, &mut Vec<(OpId, OpId)>, &mut Vec<VarnodeId>);
+    /// `kuna_spillstoreguard::prune`.
+    spillstoreguard_prune: fn(&mut Funcdata, &[(OpId, OpId)]);
+    /// `kuna_spillstoreguard::within_budget`.
+    spillstoreguard_within_budget: fn(&Funcdata, &[OpId], &HashMap<OpId, (u64, int4)>) -> bool;
+    /// `kuna_wrapsplit::wrap_cut`.
+    wrapsplit_wrap_cut: fn(u64, int4, u64) -> Option<int4>;
+    /// `kuna_wrapsplit::wrap_floor`.
+    wrapsplit_wrap_floor: fn(u64) -> u64;
+    /// `kuna_wrapsplit::wrap_refinement`.
+    wrapsplit_wrap_refinement: fn(int4, int4) -> Vec<int4>;
 }

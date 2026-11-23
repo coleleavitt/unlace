@@ -1284,3 +1284,8 @@ pub fn base_inputs(arch: &Architecture, pieces: &mut PrototypePieces) -> bool {
         .collect();
     true
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.armfloatargs_stated_singles = Some(stated_singles);
+}

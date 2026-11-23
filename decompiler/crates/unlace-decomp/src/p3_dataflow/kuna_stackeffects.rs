@@ -23,3 +23,9 @@ pub fn unresolved_store(fd: &Funcdata, op: OpId) -> bool {
         .and_then(|v| fd.vbank().get(v))
         .is_some_and(|v| !v.is_constant())
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackeffects_enabled_for = Some(enabled_for);
+    hooks.stackeffects_unresolved_store = Some(unresolved_store);
+}

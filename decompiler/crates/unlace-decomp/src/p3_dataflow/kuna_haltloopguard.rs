@@ -173,3 +173,10 @@ pub(crate) fn mark(fd: &mut Funcdata, reaching: &[VarnodeId]) {
         }
     }
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.haltloopguard_exitless_loops = Some(exitless_loops);
+    hooks.haltloopguard_guard = Some(guard);
+    hooks.haltloopguard_mark = Some(mark);
+}

@@ -1469,7 +1469,7 @@ that machinery.
 `Architecture::fid_prototypes` holds those entries) is the one parked
 prototype the drive checks after the fact, because a fingerprint match is
 evidence and not identity
-(`crates/unlace-decomp/src/p9_emit/kuna_fidproto.rs
+(`crates/unlace-emit/src/p9_emit/kuna_fidproto.rs
 (reads_undeclared_parameter)`). The function is decompiled against it like any
 other; in the finished function, an input Varnode that still has a reader, lies
 in storage the model can pass a parameter in and overlaps no declared
@@ -1810,7 +1810,7 @@ at the match (01 §1.4).
   models the stack pointer across each call: a known extrapop becomes an
   explicit `INT_ADD sp, #extrapop` after the call; an unknown one becomes an
   INDIRECT, deferring the answer to the stack-pointer flow solver
-  (`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+  (`crates/unlace-emit/src/p9_emit/coreaction_render.rs
   (ActionStackPtrFlow)`, its home by port history) and, per-function, to
   `option extrapop`
   (`crates/unlace-middle/src/p0_knowledge/options.rs
@@ -4208,11 +4208,11 @@ channel exists but nothing is emitted). Failure modes: a genuinely split
 two-register argument is passed as two separate arguments, and a prototype
 whose storage assignment failed degrades silently instead of warning. Two
 S4-grouped passes live outside this folder by port history:
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionDirectWrite)` — the `protorecovery_a` paint of Varnodes reachable from
 legal parameter sources that ancestor realism consumes (the `decompile` root
 enables the INDIRECT-propagating variant, `crates/unlace-middle/src/infra/action.rs
-(build_default_groups)`) — and `crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+(build_default_groups)`) — and `crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionUnjustifiedParams)`, the fullloop-tail repair that re-justifies an
 input recovered off-center in its containing entry.
 
@@ -4336,7 +4336,7 @@ else reads it.
 
 ### De-indirection and the proto-change restart
 
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionDeindirect)` (group `deindirect`, inside stackstall) watches every
 CALLIND whose target Varnode — chased through COPYs — resolves to a known
 function: an external-reference symbol, or a constant converted to a code
@@ -9344,7 +9344,7 @@ as its own return type.
 A caller that refused the statement, or had it withdrawn, and keeps the result
 as the other class converts it the same way
 (`kuna_callrettype.rs (refused_token)`, which `ActionSetCasts` asks for a call's
-output token, `crates/unlace-decomp/src/p9_emit/coreaction_casts.rs
+output token, `crates/unlace-emit/src/p9_emit/coreaction_casts.rs
 (get_output_token)`, where the call's own output type says nothing). The listing
 declares the callee's return whether or not this caller took it, so find -O0's
 `long v1 = sub_eecc(a0,v3)` beside `struct_56 * sub_eecc(..)` was not C, and

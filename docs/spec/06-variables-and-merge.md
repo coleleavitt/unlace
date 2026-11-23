@@ -29,7 +29,7 @@ default-divergences are DIV-3/14 in `docs/history.md`.
 > folder for file-lineage reasons — `ActionRestructureVarnode`,
 > `ActionMappedLocalSync`, `ActionDynamicMapping`, `ActionDynamicSymbols`, and
 > the `ActionStackPtrFlow` wrapper are in
-> `crates/unlace-decomp/src/p9_emit/coreaction_render.rs`, and
+> `crates/unlace-emit/src/p9_emit/coreaction_render.rs`, and
 > `ActionRestrictLocal` is in
 > `crates/unlace-bandb/src/p4_calls/coreaction_protos.rs`. Conversely
 > `crates/unlace-bandb/src/p6_variables/funcdata_facing.rs` (the
@@ -1506,7 +1506,7 @@ the right choice for the emitted C. On a machine-readable surface it is the wron
 one: it asserts an element type the recovery never established, where the
 program's own type may as well be `_Bool`, `unsigned char`, a one-byte enum or one
 byte of a struct nobody split.
-`crates/unlace-decomp/src/p9_emit/kuna_bytehonest.rs
+`crates/unlace-emit/src/p9_emit/kuna_bytehonest.rs
 (exported_type_name)` reports the width instead — `undefined1`, the spelling
 Ghidra uses for the same fact and the analogue of IDA's `_BYTE`. The predicate
 (`is_uncommitted_byte`) reads the datatype's own metatype and size, never its
@@ -1583,7 +1583,7 @@ them had a row: a consumer could not read their types, and decbench's
 index, then stack offset, then instruction-address overlap, scored every
 register-resident DWARF local as a miss. `extract_variables` appends a fourth
 section,
-`crates/unlace-decomp/src/p9_emit/kuna_reglocals.rs
+`crates/unlace-emit/src/p9_emit/kuna_reglocals.rs
 (register_locals)`: the declarations the printer emitted for the function
 (`printc.rs (DeclaredLocal)`), in declaration order, minus every declaration whose
 printed name a parameter or frame row already carries and every one that is
@@ -1645,7 +1645,7 @@ stack Symbol, so it is spelled by width: `local_c undefined4`. At -O0 the value
 in such a slot is usually a printed local that merged a register with its
 spill, declared `char *v1; // r0 | stack - 0xc`. The filler row keeps its frame name, offset and size and takes the
 type the C declares there, from
-`crates/unlace-decomp/src/p9_emit/kuna_slotreport.rs
+`crates/unlace-emit/src/p9_emit/kuna_slotreport.rs
 (covering_type)`. The candidates are the printer's declarations for the
 function (the same `DeclaredLocal` list and naming check `reglocals` uses)
 whose declared type is as wide as the slot and one of whose storage homes
@@ -1703,7 +1703,7 @@ what follows it) reaches the rows as one `undefinedN`: `local_18 undefined12`
 although the C declares `double v1; // stack - 0x18 | ...` at its start. Such
 a row is cut at the homes of the printed
 declarations lying wholly inside it, from
-`crates/unlace-decomp/src/p9_emit/kuna_slotsplit.rs
+`crates/unlace-emit/src/p9_emit/kuna_slotsplit.rs
 (split_rows)`. The homes are the `DeclaredSlots` index `slotreport` builds
 (`kuna_slotreport.rs (homes_within)`): a declaration's stack homes at its
 declared width, over its high and the highs declared through it. Each declared
@@ -1767,7 +1767,7 @@ the end of the home area, the `code *local_res18 [2]` the stock decompiler
 prints, and a spill there that nothing reads is a dead local store.
 
 **RangeHint gathering.** Each `mainloop` pass,
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionRestructureVarnode)` rebuilds the frame layout from scratch:
 `funcdata_spacebase.rs (Funcdata::restructure_varnode)` clears the unlocked
 auto-recovered stack symbols (a stale early-pass symbol must not outvote the
@@ -1846,7 +1846,7 @@ only, data-types) onto the Varnodes. Unmapped locations gain `nolocalalias`
 only when the caller enables alias checking and the local map proves the
 location unaliased. The first restructuring pass disables this check;
 later passes and the final sync enable it. After `fullloop` exits,
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionMappedLocalSync)` runs that final data-type-updating sync once; its
 failure mode is tolerance, not an abort — the layout keeps the conceded
 unknowns (upstream additionally emits a "Could not reconcile some variable
@@ -2844,7 +2844,7 @@ re-binding fail dormant rather than mis-bind. The budget is passed to
 re-computes their hashes with the recorded method, and re-binds on match; an
 IR that simplified differently simply fails to match, and the assertion lies
 dormant rather than mis-attaching. Two scheduled consumers do the binding:
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionDynamicMapping)` inside `mainloop` — the *early* mapping, which pins
 the matched Varnode as mapped storage precisely so copy-propagation cannot
 dissolve the value before anyone sees it — and `(ActionDynamicSymbols)` in the
@@ -3152,7 +3152,7 @@ control but does not cover this escape.
 `crates/unlace-bandb/src/p6_variables/kuna_stackalias.rs`
 (`holds_store`) identifies physical `stack_store` writes in the local frame
 space. With `stackalias on`, `deadcode_apply` in
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs` holds them
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs` holds them
 live before its consumption walk. `ActionVarnodeProps` retains these holds
 instead of clearing and re-seeding them on every iteration; clearing them
 would report a fresh change forever. The option reaches the per-function
@@ -3180,7 +3180,7 @@ option-on body keeps the physical initialization and overwrite.
 
 **(kuna, Ghidra issue GH-9218) The symmetric input-container widening** (always
 on). When parameter recovery widens an unjustified input container
-(`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+(`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionUnjustifiedParams)`), upstream only absorbs earlier inputs that
 overlap the container's *low* end; an input overlapping the *high* end (mc68k
 `link`/`unlk` overlapping stack params) survives to
@@ -4023,7 +4023,7 @@ varnode. Explicit retypes still lock the datatype. This distinction matters for
 wide integer temporaries represented internally by a fallback byte-array type:
 naming the operand does not declare that it is an aggregate in memory.
 
-`crates/unlace-decomp/src/p9_emit/kuna_stackobjectinfo.rs` exports
+`crates/unlace-emit/src/p9_emit/kuna_stackobjectinfo.rs` exports
 logical selectors, asserted names, signed frame ranges, defined/uncertain state
 and declared native uses without exposing analysis-local identifiers. CLI results
 carry these records through batch workers. `--no-vars` suppresses their extraction;

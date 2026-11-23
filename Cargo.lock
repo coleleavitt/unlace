@@ -1097,6 +1097,23 @@ dependencies = [
  "toml",
  "unlace-bandb",
  "unlace-base",
+ "unlace-emit",
+ "unlace-lift",
+ "unlace-middle",
+ "unlace-num",
+ "unlace-sleigh",
+ "unlace-structure",
+]
+
+[[package]]
+name = "unlace-emit"
+version = "0.1.0"
+dependencies = [
+ "slotmap",
+ "smallvec",
+ "thiserror 2.0.18",
+ "unlace-bandb",
+ "unlace-base",
  "unlace-lift",
  "unlace-middle",
  "unlace-num",

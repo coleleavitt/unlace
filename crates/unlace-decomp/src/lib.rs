@@ -39,7 +39,7 @@
 //! - `p6_variables/`  -- P6: variable & storage model (HighVariables, merge, stack layout)
 //! - `p7_regions/`    -- P7: region hierarchy (the angr RegionIdentifier port)
 //! - `p8_structure/`  -- P8: structured AST & goto quality (the structuring engine)
-//! - `p9_emit/`       -- P9: surface rendering & refinement (PrintC, casts, strings, naming)
+//! - `p9_emit/`       -- P9: surface rendering & refinement (PrintC, casts, strings, naming); crates/unlace-emit
 //! - `infra/`         -- orchestration & framework (the schedule, the Action/Rule engine, ...)
 //!
 //! The phase folders are private module groups; the `pub use ::*` re-exports keep
@@ -59,13 +59,13 @@
 
 mod infra;
 mod p0_knowledge;
-mod p9_emit;
 
 pub use infra::*;
 pub use p0_knowledge::*;
-pub use p9_emit::*;
 #[doc(hidden)]
 pub use unlace_bandb::*;
+#[doc(hidden)]
+pub use unlace_emit::*;
 #[doc(hidden)]
 pub use unlace_lift::*;
 #[doc(hidden)]
@@ -118,5 +118,3 @@ pub mod prelude {
     pub use crate::kuna_voidret::FuncdataVoidretExt;
     pub use crate::unionresolve::FuncdataUnionresolveExt;
 }
-
-pub(crate) use p9_emit::kuna_indirectargs;

@@ -578,7 +578,7 @@ target, and each `BlockSwitch` case arm whose edge stayed unstructured.
 Upstream marks a `BlockGoto`'s target only when `gotoPrints()` holds — the
 target is not the block flow reaches next — because upstream's
 `PrintC::emitBlockGoto` suppresses the goto under the same test. kuna's
-printer (`crates/unlace-decomp/src/p9_emit/printc.rs
+printer (`crates/unlace-emit/src/p9_emit/printc.rs
 (PrintC::emit_block_goto)`) emits the trailing goto for every target it has,
 so the mark here is deliberately wider than upstream's: gating it left the
 printed `goto label_X;` unlabelled whenever its target happened to be the
@@ -589,7 +589,7 @@ because dropping a statement is a structuring decision, not a label fix.
 top-level component: an irreducible knot, a multi-entry loop, or a switch whose
 arms could not be folded leaves the root `sblocks` graph holding several
 siblings, and the printer emits them in list order
-(`crates/unlace-decomp/src/p9_emit/printc.rs`, a plain walk of the
+(`crates/unlace-emit/src/p9_emit/printc.rs`, a plain walk of the
 component list). Collapse order is not print order — the collapse appends each
 new composite at the end of the parent's list, so the component that happens to
 collapse last lands last no matter where its code lives in the function. The
@@ -1126,7 +1126,7 @@ compiles to — a 3-component `BlockIf` with no goto, whose condition leaf's
 only printed op is the `CBRANCH` and whose two arms are each a single `COPY`
 to the same storage. *Transform:* **print-only** — set the `kuna_iteregion`
 addl-flag on the matched CBRANCH; the S9 printer
-(`crates/unlace-decomp/src/p9_emit/printc.rs`, via
+(`crates/unlace-emit/src/p9_emit/printc.rs`, via
 `kuna_iteregion.rs (match_ite_assignment)`) re-derives the match and emits
 `v = ( c ) ? A : B;` in place of the `if/else` — the ternary emit is the one
 genuinely new piece (upstream printc has no ternary operator). No p-code is
@@ -1308,7 +1308,7 @@ goto. Flipped on by DIV-10.
 
 `crates/unlace-structure/src/p8_structure/kuna_gotonext.rs
 (goto_rewrites)`, read by the C printer
-(`crates/unlace-decomp/src/p9_emit/printc.rs (PrintC::emit_function_body)`).
+(`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::emit_function_body)`).
 Upstream prints a `BlockGoto`'s jump only when `BlockGoto::gotoPrints`
 holds: the jump's target is not the block that `nextFlowAfter` says runs
 next. kuna's printer printed every such jump, so a switch case falling into
@@ -1355,7 +1355,7 @@ both the printing of every jump and the recorded chains.
 
 `crates/unlace-structure/src/p8_structure/kuna_switchmerge.rs
 (switch_plans)`, read by the C printer
-(`crates/unlace-decomp/src/p9_emit/printc.rs (PrintC::emit_block_switch_c)`)
+(`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::emit_block_switch_c)`)
 and by the goto census. A compiler lowers a sparse source `switch` into a
 search tree of jump tables on one selector: a table's range guard sends the
 values it does not cover to the next table, and the table's holes go to the

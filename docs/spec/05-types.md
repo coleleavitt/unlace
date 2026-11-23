@@ -436,7 +436,7 @@ defines
 (lock_retyped)`, chapter 06), so each of them is a seed and a wall.
 
 **The bounded pass count.** The wrapper
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionInferTypes)` runs the engine once per `mainloop` iteration and counts
 only pass runs where `write_back` reported a change. The counter is capped at
 **7 passes** per (re)start: on the 7th it stops, records
@@ -687,7 +687,7 @@ the argument:
 answers the declared-type query the cast pass reads with `double` when the
 vote exists and the argument's printed type is an integer the emitter
 reinterprets
-(`crates/unlace-decomp/src/p9_emit/kuna_bitcast.rs (reinterprets_to_float)`:
+(`crates/unlace-emit/src/p9_emit/kuna_bitcast.rs (reinterprets_to_float)`:
 a signed, unsigned or undefined integer, but not the result of a call whose
 callee declares nothing it returns).
 The inserted `CAST` prints as the union bit reinterpretation of chapter 09,
@@ -1671,7 +1671,7 @@ an integer call, and a float held in `s0` as an integer, on AArch64 and ARMv7
 hard-float).
 
 **Constant pointers.** The other typerecovery action in `mainloop`,
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionConstantPtr)`, turns bare constants into symbol references. Decision
 rule for the simple case: a constant with a single reader, already typed as a
 pointer (or used where only a pointer makes sense), whose value resolves to a
@@ -1786,11 +1786,11 @@ Three (kuna) escapes hook exactly here; the first two are always on:
   the function: the escape is also declined for a value the function reads as a
   number *anywhere*, which `ActionConstantPtr::apply` collects once per pass from
   the constant snapshot it already takes
-  (`crates/unlace-decomp/src/p9_emit/coreaction_render.rs`).
+  (`crates/unlace-emit/src/p9_emit/coreaction_render.rs`).
 - **(kuna `blobs`)** The embedded-file escape: a constant equal to the first
   address of an embedded image or archive (chapter 01, `blobs`) skips both the
   pointer-lower-bound rejection and the bit-transitions rejection
-  (`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+  (`crates/unlace-emit/src/p9_emit/coreaction_render.rs
   (is_pointer)`). A shared object linked at base zero keeps its read-only data
   in the first page, below the bound every x86 processor spec sets, so the
   function returning a PNG at `0x2d0` printed `return 0x2d0;` whether or not a
@@ -3023,7 +3023,7 @@ program, and a width the processor has no float format for (AArch64 half
 precision) keeps the untyped default. Such a CALLOTHER is a pure function of
 its operand, so dead-code removal deletes it once its result is unused
 instead of keeping it as a call statement (`is_pure_call`, read by
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionDeadCode)`): a vector rounding whose other lanes the function never
 reads prints only the lanes it uses. Two such ops are never merged, and a
 constant operand is not folded. This is a correction, not an option: the ops
@@ -3757,7 +3757,7 @@ feeds the boolean gate in §5.2, sub-variable flow (chapter 03), and dozens of
 simplification rules.
 
 **Consume bits.** The dual analysis, backwards:
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionDeadCode)` — group `deadcode`, classified P5 in
 `crates/unlace-decomp/phases.toml` because its artifact is a bit-level
 fact even though its effect is deletion. Starting from ops whose effects are

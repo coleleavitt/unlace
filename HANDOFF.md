@@ -358,6 +358,13 @@ unlace-structure and re-exports unlace-structure; unlace-decomp re-exports it. I
 `#[doc(hidden)] pub`, and eight intra-doc links to emit modules became plain text. `check_layers.py` and
 `check_spec.py` scan the new root; spec anchors follow. Next: 9e `unlace-emit` (p9).
 
+**9e landed (unlace-emit), step 9 done:** `crates/unlace-emit` holds `p9_emit/` (127 modules, the whole
+folder, `git mv`); it depends on the four lower bands and re-exports unlace-bandb; unlace-decomp re-exports it.
+Its `lib.rs` carries the `#[cfg(test)]` hook stub. unlace-decomp is now the driver and the facade: `infra/`
+(minus the modules middle took), `p0_knowledge/kuna_option_dispatch.rs`, `phases.toml`, the integration tests and
+`infra/middle_tests/` (the lower bands' tests that need the driver). `check_layers.py` and `check_spec.py` scan
+all six source roots; the allowlist is empty.
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

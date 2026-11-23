@@ -2270,7 +2270,7 @@ storage before SSA can combine it with other operations.
 `crates/unlace-lift/src/p2_lift/kuna_indirectreturn.rs (normalize_return_selector)`
 checks a bounded COPY/PHI/low-pointer projection of known destinations and the
 incoming return token. All constant targets must already be represented.
-`crates/unlace-decomp/src/p9_emit/kuna_returnselector.rs (ActionReturnSelector)`
+`crates/unlace-emit/src/p9_emit/kuna_returnselector.rs (ActionReturnSelector)`
 then clones only this selector expression, replacing the caller-return input in
 the clone with a representable sentinel distinct from every real target. Labels
 and guards are recovered first. Other readers of the original values are
@@ -2857,7 +2857,7 @@ x86-64 five switches gain their outliers (`subexpr` `case 0x7e`, `statement`
 
 A table recovered mid-simplification may disagree with fully-simplified
 dataflow, so the model is re-derived late, against the finished function, by
-`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionSwitchNorm)`: for each unlabelled table, `match_model` saves the
 flow-time model and recovers a fresh instance (preferring a variable whose
 range size matches the known table size). The fresh model must account for the
@@ -3242,7 +3242,7 @@ Labels carry a signedness the install records from the compare tree before any
 type is inferred, and over a one- or two-byte selector a label with the sign bit
 set names different values signed and unsigned once C promotes the selector
 (`case 0x81:` never matches a `char`). The printer
-(`crates/unlace-decomp/src/p9_emit/printc.rs (lowered_switch_label_form)`)
+(`crates/unlace-emit/src/p9_emit/printc.rs (lowered_switch_label_form)`)
 prints such labels with the signedness of the selector's declared type when it is
 an integer of the switch size, and otherwise casts the selector to the recorded
 signedness (`switch((unsigned char)a0)`). Measured
@@ -4559,7 +4559,7 @@ on one P-core) `off` takes 102.87 G instructions, `catch` 103.35 G (+0.5%) and
 `on` 128.95 G (+25%). The aggressive preset uses `catch`.
 
 **try/catch in the C output**
-(`crates/unlace-decomp/src/p9_emit/printc.rs (emit_eh_try,
+(`crates/unlace-emit/src/p9_emit/printc.rs (emit_eh_try,
 is_eh_if, eh_pad_start)`). An `if` whose condition is the `eh_unwinding()`
 CBRANCH prints as `try { <condition-block statements> } catch (..) { <pad> }`:
 

@@ -51,7 +51,8 @@ pub struct Record {
 }
 
 impl Record {
-    pub(crate) fn new(fd: &Funcdata) -> Option<Self> {
+    #[doc(hidden)]
+    pub fn new(fd: &Funcdata) -> Option<Self> {
         let proto = fd.get_func_proto();
         let slots = if proto.has_store() {
             proto.num_params().max(0) as usize
@@ -65,7 +66,8 @@ impl Record {
         })
     }
 
-    pub(crate) fn trim_lines(&mut self, untrimmed: &str) {
+    #[doc(hidden)]
+    pub fn trim_lines(&mut self, untrimmed: &str) {
         let skip = untrimmed.len() - untrimmed.trim_start_matches('\n').len();
         for call in &mut self.calls {
             call.position.line = call.position.line.saturating_sub(skip);
@@ -231,14 +233,17 @@ fn site(code: &str, starts: &[usize], edit: &Insertion) -> Result<usize, &'stati
 }
 
 #[derive(Default)]
-pub(crate) struct Declarations(BTreeMap<String, String>);
+#[doc(hidden)]
+pub struct Declarations(BTreeMap<String, String>);
 
 impl Declarations {
-    pub(crate) fn clear(&mut self) {
+    #[doc(hidden)]
+    pub fn clear(&mut self) {
         self.0.clear();
     }
 
-    pub(crate) fn record(&mut self, name: &str, front: &str, back: &str, array: bool) {
+    #[doc(hidden)]
+    pub fn record(&mut self, name: &str, front: &str, back: &str, array: bool) {
         if back.is_empty() && !array {
             self.0.insert(name.to_string(), front.to_string());
         } else {
@@ -246,7 +251,8 @@ impl Declarations {
         }
     }
 
-    pub(crate) fn address(&self, name: &str) -> Option<String> {
+    #[doc(hidden)]
+    pub fn address(&self, name: &str) -> Option<String> {
         self.0.get(name).map(|base| pointer_to(base))
     }
 }
@@ -255,17 +261,20 @@ fn pointer_to(base: &str) -> String {
     format!("{base}{}*", if base.ends_with('*') { "" } else { " " })
 }
 
-pub(crate) trait PrintedPointers {
+#[doc(hidden)]
+pub trait PrintedPointers {
     fn spell(&self, ty: &Rc<Datatype>) -> String;
     fn address(&self, high: HighVariableId) -> Option<(String, String)>;
 }
 
-pub(crate) struct Candidate {
+#[doc(hidden)]
+pub struct Candidate {
     pub address_op: OpId,
     pub call: Call,
 }
 
-pub(crate) fn argument(
+#[doc(hidden)]
+pub fn argument(
     p: &dyn PrintedPointers,
     fd: &Funcdata,
     arch: &crate::architecture::Architecture,
@@ -352,7 +361,8 @@ fn byte_spellings<'a>(
         .chain(factory.into_iter().flatten().map(move |ty| p.spell(&ty)))
 }
 
-pub(crate) fn byte_pointer(ty: &Rc<Datatype>) -> bool {
+#[doc(hidden)]
+pub fn byte_pointer(ty: &Rc<Datatype>) -> bool {
     ty.get_metatype() == type_metatype::TYPE_PTR
         && ty.get_ptr_to().is_some_and(|p| {
             p.get_size() == 1

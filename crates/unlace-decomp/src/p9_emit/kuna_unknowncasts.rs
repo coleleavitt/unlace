@@ -6,7 +6,8 @@ use crate::context::OpId;
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) fn declared_argument(fd: &Funcdata, op: OpId, slot: i32) -> bool {
+#[doc(hidden)]
+pub fn declared_argument(fd: &Funcdata, op: OpId, slot: i32) -> bool {
     match fd.obank().get(op).map(|op| op.code()) {
         Some(OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) if slot > 0 => {
             let Some(index) = fd.get_call_specs_index(op) else {

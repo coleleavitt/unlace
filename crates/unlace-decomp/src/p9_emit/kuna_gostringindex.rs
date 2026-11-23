@@ -6,7 +6,8 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 
-pub(super) struct StringIndex {
+#[doc(hidden)]
+pub struct StringIndex {
     pub data: VarnodeId,
     pub len: VarnodeId,
     pub index: VarnodeId,
@@ -53,7 +54,8 @@ fn is_formal_input(fd: &Funcdata, id: VarnodeId) -> bool {
         })
 }
 
-pub(super) fn prove(fd: &Funcdata, load_id: OpId) -> Option<StringIndex> {
+#[doc(hidden)]
+pub fn prove(fd: &Funcdata, load_id: OpId) -> Option<StringIndex> {
     let formal = fd.go_string_input()?;
     let proto = fd.get_func_proto();
     if !formal.matches(proto) || fd.bblocks_ref().root.is_none() || fd.bblocks_get_size() != 3 {

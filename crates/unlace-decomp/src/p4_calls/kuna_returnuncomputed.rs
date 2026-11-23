@@ -149,7 +149,7 @@ const MAX_NODES: u32 = 4096;
 /// function instead of once per returned register pair.
 ///
 /// Running out of budget answers `false`, not `true`: the answer is read by
-/// [`crate::p4_calls::kuna_protoorder`]'s `recovered_output`, where `true` states
+/// [`crate::kuna_protoorder`]'s `recovered_output`, where `true` states
 /// the callee's return to every caller ahead of it and `false` states nothing at
 /// all, so the unfinished walk has to take the second.
 fn computes_everywhere(
@@ -295,7 +295,7 @@ pub fn every_return_computes(data: &Funcdata) -> bool {
 /// [`every_return_computes`], with a value read out of global memory
 /// (`return stdout;`) counted as computed when `globals`: the program's own
 /// data, not a register or frame slot the caller left behind.  `callrettype`
-/// asks it this way ([`crate::p4_calls::kuna_callrettype`]).
+/// asks it this way ([`crate::kuna_callrettype`]).
 pub fn every_return_computes_with(data: &Funcdata, globals: bool) -> bool {
     for retop in data
         .obank()
@@ -319,10 +319,8 @@ pub fn every_return_computes_with(data: &Funcdata, globals: bool) -> bool {
 
 /// The storage locations `vn` occupies, most significant first: the pieces of
 /// a join, or `vn`'s own storage.
-pub(crate) fn storage_pieces(
-    data: &Funcdata,
-    vn: VarnodeId,
-) -> Option<Vec<(Rc<AddrSpace>, u64, i32)>> {
+#[doc(hidden)]
+pub fn storage_pieces(data: &Funcdata, vn: VarnodeId) -> Option<Vec<(Rc<AddrSpace>, u64, i32)>> {
     let v = data.vbank().get(vn)?;
     let addr = v.get_addr();
     let space = addr.get_space()?;
@@ -346,12 +344,8 @@ fn spans_two_locations(data: &Funcdata, vn: VarnodeId) -> bool {
 /// Where the `width` bytes of `whole` starting `lsb` bytes above its least
 /// significant byte are stored: the return register (or register of a pair) a
 /// half of the returned value sits in. `None` when they straddle two pieces.
-pub(crate) fn slot_storage(
-    data: &Funcdata,
-    whole: VarnodeId,
-    lsb: i32,
-    width: i32,
-) -> Option<Address> {
+#[doc(hidden)]
+pub fn slot_storage(data: &Funcdata, whole: VarnodeId, lsb: i32, width: i32) -> Option<Address> {
     let mut lsb = lsb;
     for (space, off, size) in storage_pieces(data, whole)?.into_iter().rev() {
         if lsb < size {

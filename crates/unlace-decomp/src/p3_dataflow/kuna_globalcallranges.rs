@@ -11,7 +11,8 @@ use crate::fspec::{FuncCallSpecs, OFFSET_UNKNOWN};
 use crate::funcdata::Funcdata;
 
 /// Does the leaf callee of `call` provably leave `address`/`size` alone?
-pub(crate) fn preserves(
+#[doc(hidden)]
+pub fn preserves(
     calls: &mut crate::heritage::GlobalCallRanges,
     fd: &Funcdata,
     call: &FuncCallSpecs,
@@ -60,7 +61,8 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.globalcallranges_preserves = Some(preserves);
 }
 
-pub(super) fn should_seed(fd: &Funcdata) -> bool {
+#[doc(hidden)]
+pub fn should_seed(fd: &Funcdata) -> bool {
     if fd.num_calls() < 16 {
         return false;
     }

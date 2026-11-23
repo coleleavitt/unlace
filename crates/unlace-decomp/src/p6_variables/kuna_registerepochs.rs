@@ -7,7 +7,8 @@ use unlace_num::opcodes::OpCode;
 
 const MAX_WORK: usize = 8192;
 
-pub(crate) fn single_family(fd: &Funcdata, values: &[VarnodeId]) -> bool {
+#[doc(hidden)]
+pub fn single_family(fd: &Funcdata, values: &[VarnodeId]) -> bool {
     if values.len() < 2 {
         return true;
     }

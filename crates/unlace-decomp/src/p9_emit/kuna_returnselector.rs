@@ -52,7 +52,7 @@ impl Action for ActionReturnSelector {
             *data.get_jump_table_mut(i) = table;
         }
         if changed {
-            crate::p9_emit::coreaction_render::ActionDeadCode::boxed("deadcode").apply(data, ctx);
+            crate::coreaction_render::ActionDeadCode::boxed("deadcode").apply(data, ctx);
         }
         0
     }

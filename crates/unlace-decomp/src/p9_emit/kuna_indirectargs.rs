@@ -5,10 +5,8 @@ use crate::fspec::{FuncProto, ProtoParameter};
 use crate::funcdata::Funcdata;
 use std::rc::Rc;
 
-pub(crate) fn indirect_pointee(
-    proto: &FuncProto,
-    param: &dyn ProtoParameter,
-) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn indirect_pointee(proto: &FuncProto, param: &dyn ProtoParameter) -> Option<Rc<Datatype>> {
     if !proto.has_store()
         || !proto.is_input_locked()
         || !param.is_indirect_storage()
@@ -20,7 +18,8 @@ pub(crate) fn indirect_pointee(
     (value.get_metatype() != crate::dtype::type_metatype::TYPE_ARRAY).then_some(value)
 }
 
-pub(crate) fn is_indirect_value(proto: Option<&FuncProto>, slot: i32, size: i32) -> bool {
+#[doc(hidden)]
+pub fn is_indirect_value(proto: Option<&FuncProto>, slot: i32, size: i32) -> bool {
     let Some(proto) = proto.filter(|proto| proto.has_store()) else {
         return false;
     };
@@ -32,11 +31,13 @@ pub(crate) fn is_indirect_value(proto: Option<&FuncProto>, slot: i32, size: i32)
         .is_some_and(|param| param.get_size() == size && indirect_pointee(proto, param).is_some())
 }
 
-pub(crate) fn source_type(proto: &FuncProto, param: &dyn ProtoParameter) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn source_type(proto: &FuncProto, param: &dyn ProtoParameter) -> Option<Rc<Datatype>> {
     indirect_pointee(proto, param).or_else(|| param.get_type().cloned())
 }
 
-pub(crate) fn is_indirect_input(data: &Funcdata, vn: crate::context::VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn is_indirect_input(data: &Funcdata, vn: crate::context::VarnodeId) -> bool {
     let Some(value) = data.vbank().get(vn).filter(|value| value.is_input()) else {
         return false;
     };
@@ -53,13 +54,15 @@ pub(crate) fn is_indirect_input(data: &Funcdata, vn: crate::context::VarnodeId) 
         })
 }
 
-pub(crate) struct MutableInput {
+#[doc(hidden)]
+pub struct MutableInput {
     pub highs: Vec<crate::context::HighVariableId>,
     pub slot: i32,
     pub pointer_type: Rc<Datatype>,
 }
 
-pub(crate) fn mutable_inputs(data: &Funcdata) -> Vec<MutableInput> {
+#[doc(hidden)]
+pub fn mutable_inputs(data: &Funcdata) -> Vec<MutableInput> {
     let proto = data.get_func_proto();
     if !proto.has_store() {
         return Vec::new();

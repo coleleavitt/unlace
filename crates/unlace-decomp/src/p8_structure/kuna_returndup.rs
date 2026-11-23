@@ -156,7 +156,7 @@ impl Action for ActionReturnDup {
 
 /// The `returndup on|off|calls` ArchOption (angr SAILR gotoless
 /// `ReturnDuplicatorHigh` shared-bare-epilogue return duplication; `calls` adds
-/// [`crate::p8_structure::kuna_returndupcalls`]).
+/// [`crate::kuna_returndupcalls`]).
 pub struct OptionReturnDup;
 
 impl OptionReturnDup {
@@ -184,7 +184,7 @@ impl OptionReturnDup {
 }
 
 /// (kuna `returndup`) Duplicate shared bare epilogues (`shared`), and call
-/// tails too (`calls`, [`crate::p8_structure::kuna_returndupcalls`]).
+/// tails too (`calls`, [`crate::kuna_returndupcalls`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReturnDup {
     pub shared: bool,

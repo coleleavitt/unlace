@@ -88,7 +88,7 @@
 //! `condfold` reproduces exactly that relaxation, and **only** that relaxation.  It
 //! widens the single `is_complex(orblock)` decline inside the short-circuit schema of
 //! *both* structurers ([`CollapseStructure::rule_block_or`](crate::blockaction) and
-//! [`RegionStructurer::try_block_or`](crate::p8_structure::region_structurer)): a
+//! [`RegionStructurer::try_block_or`](crate::region_structurer)): a
 //! *complex* sibling is accepted anyway when it satisfies one of the two admission
 //! rules below.  Every other precondition `ruleBlockOr` enforces is untouched.
 //!
@@ -408,7 +408,8 @@ pub const MAX_JOIN_TOTAL_STMTS: int4 = 4;
 /// skips (a mid-block conditional jump or a `BRANCHIND`; angr's
 /// `_build_multistatementexpr_statements` refuses the same shapes, and a `goto` is not
 /// an expression).
-pub(crate) fn printed_shape(data: &Funcdata, ops: &[OpId]) -> Option<PrintedShape> {
+#[doc(hidden)]
+pub fn printed_shape(data: &Funcdata, ops: &[OpId]) -> Option<PrintedShape> {
     let tail = *ops.last()?;
     // The block must end in a conditional branch (this is the `orblock` of a 2-out
     // short-circuit schema; the caller already checked `size_out() == 2`).

@@ -330,7 +330,8 @@ fn classify_use(data: &Funcdata, op: OpId, vn: VarnodeId) -> Use {
 /// Walk the def chain: is every value that can reach `vn` a literal 0/1 or a
 /// comparison result?  This is the def half of the predicate, and the reason a
 /// parity test (`x & 1`, whose mask is also 1) is not read as a flag.
-pub(crate) fn def_is_truth_valued(data: &Funcdata, vn: VarnodeId, depth: usize) -> bool {
+#[doc(hidden)]
+pub fn def_is_truth_valued(data: &Funcdata, vn: VarnodeId, depth: usize) -> bool {
     if depth > HOP_CAP {
         return false;
     }
@@ -551,7 +552,7 @@ fn is_mask_proven(data: &Funcdata, vn: VarnodeId) -> bool {
 crate::kuna_flag!(
     /// (kuna `boolbyte`) Offer `bool` as a `getLocalType` candidate for a byte
     /// whose every read is a truth test.  Implementation:
-    /// [`kuna_boolbyte`](crate::p5_types::kuna_boolbyte).
+    /// [`kuna_boolbyte`](crate::kuna_boolbyte).
     BoolByte,
     "boolbyte",
     "truth-valued byte typing",

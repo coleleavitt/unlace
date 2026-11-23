@@ -6,29 +6,33 @@ use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub(crate) struct MachineRead {
-    pub(crate) block: BlockId,
-    pub(crate) space: i32,
-    pub(crate) offset: u64,
-    pub(crate) size: i32,
+#[doc(hidden)]
+pub struct MachineRead {
+    pub block: BlockId,
+    pub space: i32,
+    pub offset: u64,
+    pub size: i32,
 }
 
 #[derive(Default)]
-pub(crate) struct ReadScopes {
-    pub(crate) lowered: std::collections::HashMap<OpId, MachineRead>,
-    pub(crate) by_call: std::collections::HashMap<OpId, Vec<MachineRead>>,
+#[doc(hidden)]
+pub struct ReadScopes {
+    pub lowered: std::collections::HashMap<OpId, MachineRead>,
+    pub by_call: std::collections::HashMap<OpId, Vec<MachineRead>>,
     /// (kuna `loadguardreads`) The reads of LOAD guards that build no `COPY`.
-    pub(crate) guarded: crate::kuna_fasthash::FxHashSet<MachineRead>,
+    pub guarded: crate::kuna_fasthash::FxHashSet<MachineRead>,
 }
 
 impl ReadScopes {
     /// Every recorded read: lowered stack reads, then LOAD guard reads.
-    pub(crate) fn reads(&self) -> impl Iterator<Item = &MachineRead> + '_ {
+    #[doc(hidden)]
+    pub fn reads(&self) -> impl Iterator<Item = &MachineRead> + '_ {
         self.lowered.values().chain(self.guarded.iter())
     }
 }
 
-pub(crate) fn mark_stack_read(data: &mut Funcdata, op: OpId) {
+#[doc(hidden)]
+pub fn mark_stack_read(data: &mut Funcdata, op: OpId) {
     if data.num_calls() == 0 {
         return;
     }
@@ -61,7 +65,8 @@ pub(crate) fn mark_stack_read(data: &mut Funcdata, op: OpId) {
 
 /// (kuna `loadguardreads`) Record the read a LOAD guard `COPY` of the stack
 /// range `addr`/`size` in front of `load` would have marked.
-pub(crate) fn mark_guarded_read(
+#[doc(hidden)]
+pub fn mark_guarded_read(
     data: &mut Funcdata,
     load: OpId,
     addr: &unlace_base::address::Address,
@@ -89,7 +94,8 @@ pub(crate) fn mark_guarded_read(
 }
 
 #[inline]
-pub(crate) fn record_propagated_read(data: &mut Funcdata, op: OpId, source: VarnodeId) {
+#[doc(hidden)]
+pub fn record_propagated_read(data: &mut Funcdata, op: OpId, source: VarnodeId) {
     let Some(operation) = data.obank().get(op) else {
         return;
     };
@@ -131,7 +137,8 @@ pub(crate) fn record_propagated_read(data: &mut Funcdata, op: OpId, source: Varn
     }
 }
 
-pub(crate) fn record_current_read(data: &mut Funcdata, op: OpId) {
+#[doc(hidden)]
+pub fn record_current_read(data: &mut Funcdata, op: OpId) {
     let Some(operation) = data.obank().get(op) else {
         return;
     };
@@ -151,24 +158,20 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.stackreadscope_mark_guarded_read = Some(mark_guarded_read);
 }
 
-crate::kuna_func_state!(crate::p3_dataflow::kuna_stackreadscope::ReadScopes, keep_across_clear: false);
+crate::kuna_func_state!(crate::kuna_stackreadscope::ReadScopes, keep_across_clear: false);
 
 /// The `kuna_stackreadscope` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStackreadscopeExt {
-    fn kuna_guarded_reads(&self) -> &crate::p3_dataflow::kuna_stackreadscope::ReadScopes;
-    fn kuna_guarded_reads_mut(
-        &mut self,
-    ) -> &mut crate::p3_dataflow::kuna_stackreadscope::ReadScopes;
+    fn kuna_guarded_reads(&self) -> &crate::kuna_stackreadscope::ReadScopes;
+    fn kuna_guarded_reads_mut(&mut self) -> &mut crate::kuna_stackreadscope::ReadScopes;
 }
 
 impl FuncdataStackreadscopeExt for crate::funcdata::Funcdata {
-    fn kuna_guarded_reads(&self) -> &crate::p3_dataflow::kuna_stackreadscope::ReadScopes {
-        self.kuna_state::<crate::p3_dataflow::kuna_stackreadscope::ReadScopes>()
+    fn kuna_guarded_reads(&self) -> &crate::kuna_stackreadscope::ReadScopes {
+        self.kuna_state::<crate::kuna_stackreadscope::ReadScopes>()
     }
-    fn kuna_guarded_reads_mut(
-        &mut self,
-    ) -> &mut crate::p3_dataflow::kuna_stackreadscope::ReadScopes {
-        self.kuna_state_mut::<crate::p3_dataflow::kuna_stackreadscope::ReadScopes>()
+    fn kuna_guarded_reads_mut(&mut self) -> &mut crate::kuna_stackreadscope::ReadScopes {
+        self.kuna_state_mut::<crate::kuna_stackreadscope::ReadScopes>()
     }
 }

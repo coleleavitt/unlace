@@ -22,7 +22,8 @@ pub struct SourcePoint {
 }
 
 impl SourcePoint {
-    pub(crate) fn op(fd: &Funcdata, id: OpId) -> Option<Self> {
+    #[doc(hidden)]
+    pub fn op(fd: &Funcdata, id: OpId) -> Option<Self> {
         let address = fd.obank().get(id)?.get_addr();
         Some(Self {
             space: address.get_space()?.get_index(),
@@ -44,7 +45,7 @@ pub struct ObjectUse {
     pub point: SourcePoint,
     pub slot: i32,
     pub datatype: Rc<Datatype>,
-    pub(crate) op: OpId,
+    pub op: OpId,
 }
 
 #[derive(Clone)]
@@ -445,7 +446,8 @@ pub fn recover(fd: &mut Funcdata) {
     *fd.stack_objects_mut() = objects;
 }
 
-pub(crate) fn finish(fd: &mut Funcdata) {
+#[doc(hidden)]
+pub fn finish(fd: &mut Funcdata) {
     if fd.stack_objects().is_empty() {
         recover(fd);
         return;

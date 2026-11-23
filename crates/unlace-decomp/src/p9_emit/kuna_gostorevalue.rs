@@ -15,7 +15,8 @@ fn integer(ty: &Datatype) -> bool {
 }
 
 impl PrintC {
-    pub(crate) fn push_go_store_value(
+    #[doc(hidden)]
+    pub fn push_go_store_value(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

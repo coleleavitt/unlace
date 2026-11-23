@@ -6,7 +6,8 @@ use crate::context::VarnodeId;
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
-pub(crate) fn needs_cast(fd: &Funcdata, base: VarnodeId, pointer: &Rc<Datatype>) -> bool {
+#[doc(hidden)]
+pub fn needs_cast(fd: &Funcdata, base: VarnodeId, pointer: &Rc<Datatype>) -> bool {
     if !fd
         .get_arch()
         .kuna_options

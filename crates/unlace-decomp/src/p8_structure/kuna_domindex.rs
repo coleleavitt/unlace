@@ -3,16 +3,18 @@
 //! Interval slots are indexed by arena id, so the index is sized by the
 //! largest node id in the graph; P8 snapshots come from a fresh pool.
 
-use crate::p7_regions::kuna_regiongraph::{KunaIncrementalDominators, KunaNodeId, KunaRegionGraph};
+use crate::kuna_regiongraph::{KunaIncrementalDominators, KunaNodeId, KunaRegionGraph};
 
 const ABSENT: u32 = u32::MAX;
 
-pub(super) struct DominanceIndex {
+#[doc(hidden)]
+pub struct DominanceIndex {
     intervals: Vec<(u32, u32)>,
 }
 
 impl DominanceIndex {
-    pub(super) fn new(doms: &KunaIncrementalDominators, graph: &KunaRegionGraph) -> Self {
+    #[doc(hidden)]
+    pub fn new(doms: &KunaIncrementalDominators, graph: &KunaRegionGraph) -> Self {
         let mut nodes = Vec::new();
         graph.get_nodes(&mut nodes);
         let slots = nodes
@@ -53,7 +55,8 @@ impl DominanceIndex {
         Self { intervals }
     }
 
-    pub(super) fn dominates(&self, dominator: KunaNodeId, node: KunaNodeId) -> bool {
+    #[doc(hidden)]
+    pub fn dominates(&self, dominator: KunaNodeId, node: KunaNodeId) -> bool {
         if dominator == node {
             return true;
         }
@@ -73,7 +76,7 @@ impl DominanceIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::p7_regions::kuna_regiongraph::{KunaNodePool, NodeKind};
+    use crate::kuna_regiongraph::{KunaNodePool, NodeKind};
 
     #[test]
     fn deep_chain_uses_an_iterative_traversal() {

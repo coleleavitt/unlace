@@ -49,7 +49,8 @@ fn plain_goto(graph: &BlockGraph, id: BlockId) -> Option<BlockId> {
 
 /// Is the `if` `id` an exceptional edge (`eh_unwinding()`, `java_try()`,
 /// `java_throws()`)? The try printers read those as they are, so they never move.
-pub(crate) fn exceptional_if(data: &Funcdata, id: BlockId) -> bool {
+#[doc(hidden)]
+pub fn exceptional_if(data: &Funcdata, id: BlockId) -> bool {
     use crate::userop::{BUILTIN_EH_UNWINDING, BUILTIN_JAVA_THROWS, BUILTIN_JAVA_TRY};
     use unlace_num::opcodes::OpCode;
     let graph = data.sblocks_ref();
@@ -285,7 +286,8 @@ fn has_exceptional_if(data: &Funcdata, root: BlockId) -> bool {
 }
 
 /// Apply both rewrites to a fixpoint; returns how many fired.
-pub(crate) fn gotosink_apply(data: &mut Funcdata) -> i32 {
+#[doc(hidden)]
+pub fn gotosink_apply(data: &mut Funcdata) -> i32 {
     let root = data.sblocks_root();
     if !has_exceptional_if(data, root) {
         data.sblocks_mut().kuna_flatten_lists(root);
@@ -306,7 +308,7 @@ pub(crate) fn gotosink_apply(data: &mut Funcdata) -> i32 {
         }
     }
     if !released.is_empty() {
-        crate::p8_structure::kuna_gotolabel::release_converted_labels(data, &released);
+        crate::kuna_gotolabel::release_converted_labels(data, &released);
         // A new loop prints its head's label above itself, as ActionFinalStructure
         // arranges for the loops collapse built.
         data.sblocks_mut().mark_label_bump_up(root, false);
@@ -316,7 +318,8 @@ pub(crate) fn gotosink_apply(data: &mut Funcdata) -> i32 {
 
 /// Clear the label of each leaf in `heads` that no plain goto (not a `break`
 /// or `continue`) reaches any more.
-pub(crate) fn release_labels(data: &mut Funcdata, heads: &[BlockId]) {
+#[doc(hidden)]
+pub fn release_labels(data: &mut Funcdata, heads: &[BlockId]) {
     let graph = data.sblocks_ref();
     let mut still = std::collections::BTreeSet::new();
     let mut stack = vec![data.sblocks_root()];

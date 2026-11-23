@@ -47,7 +47,8 @@ fn array_source(
 }
 
 impl PrintC {
-    pub(crate) fn push_rust_array_pointer(
+    #[doc(hidden)]
+    pub fn push_rust_array_pointer(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -83,7 +84,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn push_rust_value_as(
+    #[doc(hidden)]
+    pub fn push_rust_value_as(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

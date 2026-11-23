@@ -22,7 +22,8 @@ use crate::userop::{BUILTIN_MEMCPY, BUILTIN_MEMSET, BUILTIN_STRNCPY, BUILTIN_WCS
 /// Helper holding a data-flow edge and optionally a memory offset being COPYed
 /// into or from (C++ `ArraySequence::WriteNode`).
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct WriteNode {
+#[doc(hidden)]
+pub struct WriteNode {
     /// Offset into the memory region.
     pub offset: u64,
     /// PcodeOp moving into/out of the memory region.
@@ -39,7 +40,8 @@ pub(crate) struct WriteNode {
 
 impl WriteNode {
     /// C++ `WriteNode(uint8 off,PcodeOp *o,int4 sl)`, with the block order cached.
-    pub(crate) fn new(off: u64, op: OpId, slot: int4, order: u32) -> Self {
+    #[doc(hidden)]
+    pub fn new(off: u64, op: OpId, slot: int4, order: u32) -> Self {
         WriteNode {
             offset: off,
             op,
@@ -56,30 +58,34 @@ impl WriteNode {
 /// module can reuse the gathering machinery — see the module-level
 /// *Cross-pack visibility* note (the analogue of the upstream `protected`
 /// widening).
-pub(crate) struct ArraySequence {
+#[doc(hidden)]
+pub struct ArraySequence {
     /// Element data-type.
-    pub(crate) char_type: Rc<Datatype>,
+    pub char_type: Rc<Datatype>,
     /// Number of elements in the final sequence.
-    pub(crate) num_elements: int4,
+    pub num_elements: int4,
     /// COPY/STORE into the array memory region (block-ordered after
     /// `check_interference`).
-    pub(crate) move_ops: Vec<WriteNode>,
+    pub move_ops: Vec<WriteNode>,
     /// Constants collected in a single array.
-    pub(crate) byte_array: Vec<u8>,
+    pub byte_array: Vec<u8>,
 }
 
 impl ArraySequence {
     /// Minimum number of sequential characters to trigger replacement with
     /// CALLOTHER (C++ `ArraySequence::MINIMUM_SEQUENCE_LENGTH = 4`).
-    pub(crate) const MINIMUM_SEQUENCE_LENGTH: int4 = 4;
+    #[doc(hidden)]
+    pub const MINIMUM_SEQUENCE_LENGTH: int4 = 4;
     /// Maximum number of characters in replacement string
     /// (C++ `ArraySequence::MAXIMUM_SEQUENCE_LENGTH = 0x20000`).
-    pub(crate) const MAXIMUM_SEQUENCE_LENGTH: int4 = 0x20000;
+    #[doc(hidden)]
+    pub const MAXIMUM_SEQUENCE_LENGTH: int4 = 0x20000;
 
     /// Initialize the (empty) sequence with the element data-type
     /// (C++ `ArraySequence::ArraySequence`).  `rootOp`/`block` are tracked by the
     /// concrete driver in the Rust port (the base only needs `char_type`).
-    pub(crate) fn new(char_type: Rc<Datatype>) -> Self {
+    #[doc(hidden)]
+    pub fn new(char_type: Rc<Datatype>) -> Self {
         ArraySequence {
             char_type,
             num_elements: 0,
@@ -89,7 +95,8 @@ impl ArraySequence {
     }
 
     /// Return `true` if a sequence was found (C++ `ArraySequence::isValid`).
-    pub(crate) fn is_valid(&self) -> bool {
+    #[doc(hidden)]
+    pub fn is_valid(&self) -> bool {
         self.num_elements != 0
     }
 
@@ -100,7 +107,8 @@ impl ArraySequence {
     /// LOADs, STOREs, and CALLs can interfere.  Walk from after `start_op` up to
     /// `end_op`; any `special`-eval op that is not one of the benign markers
     /// blocks.  Returns `true` if there is no interference.
-    pub(crate) fn interfere_between(data: &Funcdata, start_op: OpId, end_op: OpId) -> bool {
+    #[doc(hidden)]
+    pub fn interfere_between(data: &Funcdata, start_op: OpId, end_op: OpId) -> bool {
         let mut cur = match data.op_next_op(start_op) {
             Some(o) => o,
             None => return true, // C++ would loop until end; a null next can't equal end_op here
@@ -134,7 +142,8 @@ impl ArraySequence {
     /// that window.  `root_op` is supplied by the caller (the concrete driver
     /// holds it).  Returns `false` if the window is shorter than
     /// `MINIMUM_SEQUENCE_LENGTH` or the root op is not present.
-    pub(crate) fn check_interference(&mut self, data: &Funcdata, root_op: OpId) -> bool {
+    #[doc(hidden)]
+    pub fn check_interference(&mut self, data: &Funcdata, root_op: OpId) -> bool {
         // sort(moveOps) by block order
         self.move_ops.sort_by(|a, b| a.order.cmp(&b.order));
         let mut pos = self.move_ops.len();
@@ -195,7 +204,8 @@ impl ArraySequence {
     ///
     /// This is the constant-sequence gathering ORDER reused by
     /// `kuna_memsetsequence`.
-    pub(crate) fn form_byte_array(
+    #[doc(hidden)]
+    pub fn form_byte_array(
         &mut self,
         data: &Funcdata,
         sz: int4,
@@ -263,7 +273,8 @@ impl ArraySequence {
     ///
     /// Interned character-type identity selects narrow or wide string copies;
     /// other element types use memcpy with a byte count.
-    pub(crate) fn select_string_copy_function(&self, data: &Funcdata) -> (uintb, int4) {
+    #[doc(hidden)]
+    pub fn select_string_copy_function(&self, data: &Funcdata) -> (uintb, int4) {
         // Faithful to constseq.cc:161-175: compare `charType` by pointer identity
         // against `types->getTypeChar(getSizeOfChar())` / `getTypeChar(getSizeOfWChar())`.
         // The factory interns its core char types, so `Rc::ptr_eq` is the Rust
@@ -1000,7 +1011,8 @@ impl HeapSequence {
 /// A sequence of COPY ops moving single constant characters into a contiguous
 /// array memory region tied to a (stack) Symbol (C++
 /// `class StringSequence : public ArraySequence`).
-pub(crate) struct StringSequence {
+#[doc(hidden)]
+pub struct StringSequence {
     /// The shared gathering machinery (C++ base `ArraySequence`).
     base: ArraySequence,
     /// The root COPY (C++ `ArraySequence::rootOp`).
@@ -1546,7 +1558,8 @@ impl StringSequence {
     /// ([`detect_fill_run`](crate::kuna_memsetsequence::detect_fill_run)) on the
     /// returned `move_ops` and then [`transform_memset`](Self::transform_memset).
     /// Returns `None` when no containing `ct`-array exists or no run was gathered.
-    pub(crate) fn build_for_fill(
+    #[doc(hidden)]
+    pub fn build_for_fill(
         data: &Funcdata,
         ct: Rc<Datatype>,
         entry: crate::varmap::StringContainerEntry,
@@ -1629,7 +1642,8 @@ impl StringSequence {
     /// detection needs the per-COPY stride) instead of `-1`.  The constant
     /// uniform-byte check is deferred to `detect_fill_run`; here it only gathers
     /// in-block constant COPYs tiling the `ct`-array region.
-    pub(crate) fn collect_fill_run(&mut self, data: &Funcdata, size: int4) -> bool {
+    #[doc(hidden)]
+    pub fn collect_fill_run(&mut self, data: &Funcdata, size: int4) -> bool {
         let end_addr = &self.start_addr + i64::from(size - 1);
         let begin_addr = if self.start_addr != self.root_addr {
             &self.root_addr + (-(self.base.char_type.get_align_size() as i64))
@@ -1707,7 +1721,8 @@ impl StringSequence {
 
     /// Mutable access to the gathered fill run, so the driver can run the
     /// single-value-fill detection (`detect_fill_run`) which truncates the run.
-    pub(crate) fn fill_move_ops_mut(&mut self) -> &mut Vec<WriteNode> {
+    #[doc(hidden)]
+    pub fn fill_move_ops_mut(&mut self) -> &mut Vec<WriteNode> {
         &mut self.base.move_ops
     }
 
@@ -1716,7 +1731,8 @@ impl StringSequence {
     /// [`build_string_copy`](Self::build_string_copy): construct the typed dest
     /// pointer into the array, then a 4-input CALLOTHER with the registered
     /// `BUILTIN_MEMSET` id, the fill value, and the byte count.
-    pub(crate) fn build_memset(
+    #[doc(hidden)]
+    pub fn build_memset(
         &self,
         data: &mut Funcdata,
         fill_value: u8,
@@ -1761,12 +1777,8 @@ impl StringSequence {
 
     /// (kuna GH-9230) `MemsetSequence::transform`: build the memset and tear down
     /// the original COPY run (reusing [`remove_copy_ops`](Self::remove_copy_ops)).
-    pub(crate) fn transform_memset(
-        &self,
-        data: &mut Funcdata,
-        fill_value: u8,
-        fill_count: int4,
-    ) -> bool {
+    #[doc(hidden)]
+    pub fn transform_memset(&self, data: &mut Funcdata, fill_value: u8, fill_count: int4) -> bool {
         let memset_op = match self.build_memset(data, fill_value, fill_count) {
             Some(o) => o,
             None => return false,
@@ -1791,7 +1803,8 @@ impl StringSequence {
     /// `move_ops` must be in block order (the first entry is the CALLOTHER's
     /// insertion point) and `entry`/`root_addr` describe the destination the
     /// inherited `constructTypedPointer` walks.
-    pub(crate) fn from_rodata_run(
+    #[doc(hidden)]
+    pub fn from_rodata_run(
         char_type: Rc<Datatype>,
         entry: crate::varmap::StringContainerEntry,
         root: OpId,
@@ -1817,7 +1830,8 @@ impl StringSequence {
     /// (kuna `rodatastring`) `StringSequence::transform` for a block-copy run:
     /// build the `builtin_strncpy` over the assembled byte array, then reuse the
     /// shared [`remove_copy_ops`](Self::remove_copy_ops) teardown.
-    pub(crate) fn transform_rodata(&self, data: &mut Funcdata) -> bool {
+    #[doc(hidden)]
+    pub fn transform_rodata(&self, data: &mut Funcdata) -> bool {
         let num_bytes = self.base.byte_array.len() as int4;
         let copy_op = match self.build_string_copy_sized(data, num_bytes) {
             Some(o) => o,

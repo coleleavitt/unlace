@@ -46,7 +46,8 @@ fn is_rounding_op(data: &Funcdata, op: OpId) -> Option<()> {
 /// Whether `op` is a rounding user op, a pure function of its operand that
 /// dead-code removal deletes, rather than keeps as a call, once its result is
 /// unused.
-pub(crate) fn is_pure_call(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn is_pure_call(data: &Funcdata, op: OpId) -> bool {
     is_rounding_op(data, op).is_some()
 }
 
@@ -59,14 +60,16 @@ fn float_of(data: &Funcdata, op: OpId, size: int4) -> Option<Rc<Datatype>> {
 }
 
 /// The result type of a rounding user op: a float of its width.
-pub(crate) fn output_type(data: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn output_type(data: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
     let o = data.obank().get(op)?;
     let size = data.vbank().get(o.get_out()?)?.get_size();
     float_of(data, op, size)
 }
 
 /// The operand type of a rounding user op: a float of its width.
-pub(crate) fn input_type(data: &Funcdata, op: OpId, slot: int4) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn input_type(data: &Funcdata, op: OpId, slot: int4) -> Option<Rc<Datatype>> {
     if slot != 1 {
         return None;
     }

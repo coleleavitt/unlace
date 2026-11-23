@@ -42,9 +42,9 @@
 //! the call the value's only use *is* the call.
 //!
 //! This is not the shape the `calleearity` family already covers. All three of
-//! [`calleearity`](crate::p4_calls::kuna_calleearity),
-//! [`calleearityfwd`](crate::p4_calls::kuna_calleearityfwd) and
-//! [`calleearitybody`](crate::p4_calls::kuna_calleearitybody) were built for a
+//! [`calleearity`](crate::kuna_calleearity),
+//! [`calleearityfwd`](crate::kuna_calleearityfwd) and
+//! [`calleearitybody`](crate::kuna_calleearitybody) were built for a
 //! `CBRANCH` use in a block that *dominates* the call (`test rcx,rcx; jz; call`),
 //! and their documentation is explicit that relaxing `only_op_use` for that shape
 //! would fabricate an argument at every guarded call there is. A dominating block
@@ -60,7 +60,7 @@
 //! * the Varnode is the *address* operand of the access, not the stored datum. A
 //!   dereference says the value is a pointer, which is a plausible argument; a
 //!   frame store of the value is the caller-save spill shape and belongs to
-//!   [`spillargtrial`](crate::p4_calls::kuna_spillargtrial), which owns the
+//!   [`spillargtrial`](crate::kuna_spillargtrial), which owns the
 //!   `STORE` value slot;
 //! * the Varnode is **defined in a block that both the access's block and the
 //!   call's block are immediate successors of** — the value was produced for the
@@ -101,7 +101,8 @@ const ADDRESS_SLOT: i32 = 1;
 
 /// Cap on blocks visited by one reachability walk; exceeding it declines (keeps
 /// the upstream rejection) rather than paying for a big CFG at every trial.
-pub(crate) const MAX_VISIT: usize = 4096;
+#[doc(hidden)]
+pub const MAX_VISIT: usize = 4096;
 
 /// Whether the `CPUI_LOAD`/`CPUI_STORE` at `op` may be skipped while scoring the
 /// input trial matched at `opmatch`.
@@ -141,7 +142,8 @@ pub fn access_cannot_reach_call(data: &Funcdata, opmatch: OpId, op: OpId, vn: Va
 
 /// The block holding `vn`'s defining op, if it has one. A function input, a
 /// constant and a free Varnode all answer `None` and decline the rule.
-pub(crate) fn def_block(data: &Funcdata, vn: VarnodeId) -> Option<BlockId> {
+#[doc(hidden)]
+pub fn def_block(data: &Funcdata, vn: VarnodeId) -> Option<BlockId> {
     let def = data.vbank().get(vn)?.get_def()?;
     data.obank().get(def)?.get_parent()
 }
@@ -154,7 +156,8 @@ fn is_predecessor(data: &Funcdata, pred: BlockId, bl: BlockId) -> bool {
 
 /// Is `target` reachable from `from` by following CFG out-edges? Declines (true,
 /// the conservative answer for the caller) once [`MAX_VISIT`] blocks are seen.
-pub(crate) fn reaches(data: &Funcdata, from: BlockId, target: BlockId) -> bool {
+#[doc(hidden)]
+pub fn reaches(data: &Funcdata, from: BlockId, target: BlockId) -> bool {
     let graph = data.bblocks_ref();
     let mut seen: HashSet<BlockId> = HashSet::new();
     let mut stack: Vec<BlockId> = vec![from];

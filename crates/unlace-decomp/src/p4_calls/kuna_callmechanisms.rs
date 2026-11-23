@@ -138,7 +138,7 @@ pub fn compiled_ids(library: &PcodeInjectLibrarySleigh, name: &str) -> (i32, i32
 
 #[derive(Debug, Default)]
 pub struct State {
-    pub(crate) register_slots: bool,
+    pub register_slots: bool,
     applied: std::collections::HashMap<crate::context::OpId, i32>,
     entry: Option<i32>,
     pub failure: Option<String>,
@@ -177,7 +177,7 @@ pub fn evaluation_model(data: &crate::funcdata::Funcdata) -> Option<Rc<crate::fs
     // takes a callee-saved register as a custom argument evaluates its own
     // prototype under the synthesized model, so its printed parameters are the
     // ones its callers pass.
-    if let Some(model) = crate::p4_calls::kuna_calleereginputs::own_register_model(
+    if let Some(model) = crate::kuna_calleereginputs::own_register_model(
         data.get_arch(),
         &data.get_address().clone(),
     ) {

@@ -635,7 +635,8 @@ pub fn indirect_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
 /// The op before `from` in its block that last wrote `(addr, size)`, after
 /// following back through any of `through` (each to its first non-constant
 /// input), or `None` when another op writes it first or nothing does.
-pub(crate) fn defining_op(
+#[doc(hidden)]
+pub fn defining_op(
     data: &Funcdata,
     from: OpId,
     mut addr: Address,

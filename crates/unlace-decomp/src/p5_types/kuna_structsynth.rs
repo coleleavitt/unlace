@@ -582,7 +582,8 @@ fn peel(
 
 /// The pointer root, whether any index is dynamic, and the common known stride.
 /// Every dynamic term must agree; an unknown or conflicting term stays unknown.
-pub(crate) fn peel_base_stride(
+#[doc(hidden)]
+pub fn peel_base_stride(
     data: &Funcdata,
     mut vn: VarnodeId,
 ) -> Option<(VarnodeId, bool, Option<int4>)> {
@@ -641,7 +642,8 @@ const MAX_ACCESS_USES: u32 = 256;
 /// object, so the answer cannot change because the surrounding function grew.
 /// `false` when the family cannot be walked completely or no access is seen:
 /// both mean the object's width policy is unproven.
-pub(crate) fn every_access_through(data: &Funcdata, base: VarnodeId, width: int4) -> bool {
+#[doc(hidden)]
+pub fn every_access_through(data: &Funcdata, base: VarnodeId, width: int4) -> bool {
     let mut seen = crate::kuna_fasthash::FxHashSet::default();
     let mut stack = vec![base];
     let mut steps = 0u32;
@@ -835,7 +837,8 @@ const MAX_LITERAL: int4 = 16;
 
 /// Do these stored bytes read as text?  `None` when they are all zero, which a
 /// record's initializer stores as often as a string's terminator.
-pub(crate) fn bytes_text(bytes: &[u8]) -> Option<bool> {
+#[doc(hidden)]
+pub fn bytes_text(bytes: &[u8]) -> Option<bool> {
     if bytes.iter().all(|&b| b == 0) {
         return None;
     }
@@ -957,7 +960,8 @@ fn address_walks(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
 
 /// Is `ct` a pointer whose pointee is a named aggregate a person or a named-type
 /// pass supplied?  Such a type always wins over a synthesized one.
-pub(crate) fn points_at_named_composite(ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn points_at_named_composite(ct: &Datatype) -> bool {
     let Some(pt) = ct.get_ptr_to() else {
         return false;
     };
@@ -1287,7 +1291,8 @@ fn answer(
 /// (kuna `stackstruct`) The program-wide structure for a frame record's layout,
 /// only when it is exactly `size` bytes: a frame object cannot grow past the
 /// bytes its evidence proved, because the slots after it belong to other locals.
-pub(crate) fn answer_frame(
+#[doc(hidden)]
+pub fn answer_frame(
     data: &Funcdata,
     types: &dyn TypeFactory,
     fields: Vec<TypeField>,
@@ -1361,7 +1366,8 @@ fn is_local_base(data: &Funcdata, base: VarnodeId, e: &Evidence) -> bool {
 /// declaration leave its pointee open?  Single assignment makes that value the
 /// local's only definition; a declared `char *` or `struct stat *` return is
 /// what the pointer is, and only `void *` (an allocator) says nothing.
-pub(crate) fn is_call_return(data: &Funcdata, vn: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn is_call_return(data: &Funcdata, vn: VarnodeId) -> bool {
     let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def()) else {
         return false;
     };
@@ -1403,11 +1409,8 @@ const MAX_COPIES: usize = 64;
 /// `tar`'s `wordsplit_add_segm` keeps a record from `calloc` in the `rax` it
 /// returns its status in, and typing the record would declare the status a
 /// `struct_N *` too.
-pub(crate) fn copies_alone(
-    data: &Funcdata,
-    vn: VarnodeId,
-    rets: &[VarnodeId],
-) -> Option<Vec<VarnodeId>> {
+#[doc(hidden)]
+pub fn copies_alone(data: &Funcdata, vn: VarnodeId, rets: &[VarnodeId]) -> Option<Vec<VarnodeId>> {
     let mut seen = vec![vn];
     let mut i = 0;
     while i < seen.len() {
@@ -1476,7 +1479,8 @@ fn points_past(data: &Funcdata, copies: &[VarnodeId], extent: intb) -> bool {
 }
 
 /// The value every live `RETURN` returns.
-pub(crate) fn returned_values(data: &Funcdata) -> Vec<VarnodeId> {
+#[doc(hidden)]
+pub fn returned_values(data: &Funcdata) -> Vec<VarnodeId> {
     data.obank()
         .iter_code(OpCode::CPUI_RETURN)
         .filter_map(|r| data.obank().get(r))
@@ -1489,11 +1493,8 @@ pub(crate) fn returned_values(data: &Funcdata) -> Vec<VarnodeId> {
 /// A function has one return type, so a value returned on one path types what
 /// every other path returns: a record returned where another path returns a
 /// name or a count declines. A constant zero is the null every pointer can be.
-pub(crate) fn returned_beside_others(
-    data: &Funcdata,
-    copies: &[VarnodeId],
-    rets: &[VarnodeId],
-) -> bool {
+#[doc(hidden)]
+pub fn returned_beside_others(data: &Funcdata, copies: &[VarnodeId], rets: &[VarnodeId]) -> bool {
     if !rets.iter().any(|r| copies.contains(r)) {
         return false;
     }
@@ -1848,7 +1849,7 @@ impl crate::kuna_optionset::KunaOption for StructSynthMode {
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::p5_types::kuna_structsynth::StructSynthMode::Locals
+        crate::kuna_structsynth::StructSynthMode::Locals
     }
 
     fn shipped() -> Self {

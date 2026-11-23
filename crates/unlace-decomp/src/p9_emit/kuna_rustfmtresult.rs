@@ -7,13 +7,15 @@ use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct Plan {
+#[doc(hidden)]
+pub struct Plan {
     pub destination: VarnodeId,
     pub pointer_bridge: bool,
     pub format: kuna_rustfmtargs::Plan,
 }
 
-pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
+#[doc(hidden)]
+pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
         .get::<crate::kuna_rustfmt::RustFmtMode>()
@@ -62,7 +64,8 @@ pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Pl
     })
 }
 
-pub(crate) fn entry_value(fd: &Funcdata, mut id: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn entry_value(fd: &Funcdata, mut id: VarnodeId) -> bool {
     for _ in 0..8 {
         let Some(value) = fd.vbank().get(id) else {
             return false;

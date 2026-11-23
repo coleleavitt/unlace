@@ -6,7 +6,7 @@ use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-use crate::p9_emit::kuna_constantshift::ConstantLslPlan;
+use crate::kuna_constantshift::ConstantLslPlan;
 
 /// (kuna `armconstshift`) Which fixed left shifts of a signed operand print
 /// through an unsigned conversion.
@@ -72,7 +72,8 @@ impl OptionArmConstShift {
 
 /// Convert before shifting to compute ARM's low 32 bits without signed C UB.
 /// Restore the output's signed type so implied signed consumers keep their sign.
-pub(crate) fn plan_arm_constant_lsl(
+#[doc(hidden)]
+pub fn plan_arm_constant_lsl(
     fd: &Funcdata,
     arch: &Architecture,
     op: OpId,

@@ -206,8 +206,8 @@ fn returns_value(
 
 /// Does the callee of `fc` take an argument in `[addr, addr+size)`? Its body
 /// says so when the bounded entry decode covered it
-/// ([`CalleeEntryDead::never_takes`](crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead::never_takes),
-/// [`CalleeEntryDead::proves_input`](crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead::proves_input)),
+/// ([`CalleeEntryDead::never_takes`](crate::kuna_calleedeadarg::CalleeEntryDead::never_takes),
+/// [`CalleeEntryDead::proves_input`](crate::kuna_calleedeadarg::CalleeEntryDead::proves_input)),
 /// and a stated recovery does by the registers it lists.
 fn takes_argument(
     data: &Funcdata,
@@ -346,7 +346,7 @@ fn in_x0(data: &Funcdata, addr: &Address) -> bool {
 pub fn call_result_root(data: &Funcdata, root: VarnodeId) -> bool {
     data.get_arch()
         .kuna_options
-        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        .get::<crate::kuna_callresultuse::CallResultUse>()
         != CallResultUse::Off
         && walk_call_results(data, root).is_some()
 }
@@ -450,7 +450,7 @@ pub fn scoring_return(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool {
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        .get::<crate::kuna_callresultuse::CallResultUse>()
         != CallResultUse::All
     {
         return false;
@@ -503,7 +503,7 @@ pub fn scoring_argument(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        .get::<crate::kuna_callresultuse::CallResultUse>()
         == CallResultUse::Off
         || !data
             .obank()
@@ -528,7 +528,7 @@ pub fn scoring_argument(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool
 /// RETURN: a branch on it, a store of it as the stored value, or another
 /// RETURN? The same uses `voidret` lets a forced return have.
 pub fn returned_use(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    crate::p4_calls::kuna_voidret::returned_use(data, op, vn)
+    crate::kuna_voidret::returned_use(data, op, vn)
 }
 
 /// Mark the active return trials that hold a call result on every path
@@ -546,7 +546,7 @@ pub fn yield_to_own_value(
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        .get::<crate::kuna_callresultuse::CallResultUse>()
         == CallResultUse::Off
     {
         return;
@@ -575,8 +575,7 @@ pub fn yield_to_own_value(
                 })
         })
         .collect();
-    if !mine.is_empty() && crate::p4_calls::kuna_passthrough::returns_own_value(data, active, &mine)
-    {
+    if !mine.is_empty() && crate::kuna_passthrough::returns_own_value(data, active, &mine) {
         for i in mine {
             active.get_trial_mut(i).mark_inactive();
         }
@@ -599,7 +598,7 @@ pub fn plant(data: &mut Funcdata) {
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        .get::<crate::kuna_callresultuse::CallResultUse>()
         == CallResultUse::Off
         || data.get_active_output().is_none()
         || data.get_func_proto().is_output_locked()
@@ -612,12 +611,12 @@ pub fn plant(data: &mut Funcdata) {
     };
     if named(data, &addr, size)
         || first_call_input(data, &addr, size)
-        || crate::p4_calls::kuna_voidret::planted_overlaps(data, &addr, size)
+        || crate::kuna_voidret::planted_overlaps(data, &addr, size)
     {
         return;
     }
-    crate::p4_calls::kuna_voidret::plant_piece(data, addr.clone(), size);
-    if crate::p4_calls::kuna_voidret::planted_overlaps(data, &addr, size) {
+    crate::kuna_voidret::plant_piece(data, addr.clone(), size);
+    if crate::kuna_voidret::planted_overlaps(data, &addr, size) {
         data.kuna_note_callresultuse_planted(addr, size);
     }
 }
@@ -641,7 +640,7 @@ pub fn settle_planted(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
     let keep = data
         .get_arch()
         .kuna_options
-        .get::<crate::p4_calls::kuna_callresultuse::CallResultUse>()
+        .get::<crate::kuna_callresultuse::CallResultUse>()
         == CallResultUse::All
         && every_return_hands_back_a_call_result(data, slot);
     if keep {
@@ -655,7 +654,7 @@ pub fn settle_planted(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
 /// Heritage then visits the range on its own, and the trials it registers
 /// are scored as they always were.
 fn named(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    crate::p4_calls::kuna_passthrough::touched(data, addr, size)
+    crate::kuna_passthrough::touched(data, addr, size)
 }
 
 /// Is `register` a stated input of a call no other call can execute before
@@ -664,7 +663,7 @@ fn named(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// function's parameter handed through; planting a RETURN read there would
 /// turn the claim into a trial of the function's own output.
 fn first_call_input(data: &Funcdata, register: &Address, size: int4) -> bool {
-    let first = crate::p4_calls::kuna_passthrough::first_calls(data);
+    let first = crate::kuna_passthrough::first_calls(data);
     (0..data.num_calls()).any(|idx| {
         let fc = data.get_call_specs(idx);
         first.contains(&fc.get_op())
@@ -705,15 +704,15 @@ impl crate::kuna_optionset::KunaOption for CallResultUse {
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::p4_calls::kuna_callresultuse::CallResultUse::Off
+        crate::kuna_callresultuse::CallResultUse::Off
     }
 
     fn shipped() -> Self {
-        crate::p4_calls::kuna_callresultuse::CallResultUse::Off
+        crate::kuna_callresultuse::CallResultUse::Off
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::p4_calls::kuna_callresultuse::OptionCallResultUse.apply(value)?)
+        Ok(crate::kuna_callresultuse::OptionCallResultUse.apply(value)?)
     }
 }
 

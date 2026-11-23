@@ -10,7 +10,8 @@ use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 use unlace_base::address::calc_mask;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct WrappingPlan {
+#[doc(hidden)]
+pub struct WrappingPlan {
     method: &'static str,
     width: i32,
     signed: bool,
@@ -39,7 +40,8 @@ fn signedness(ty: &Datatype, width: i32) -> Option<bool> {
 }
 
 impl PrintC {
-    pub(crate) fn rust_wrapping_plan(
+    #[doc(hidden)]
+    pub fn rust_wrapping_plan(
         &self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -96,12 +98,8 @@ impl PrintC {
         })
     }
 
-    pub(crate) fn op_rust_wrapping(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        op: OpId,
-    ) -> bool {
+    #[doc(hidden)]
+    pub fn op_rust_wrapping(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         let Some(plan) = self.rust_wrapping_plan(fd, arch, op) else {
             return false;
         };

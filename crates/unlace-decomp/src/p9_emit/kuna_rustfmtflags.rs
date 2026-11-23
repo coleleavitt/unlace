@@ -87,7 +87,8 @@ const WIDTH: u32 = 1 << 27;
 const PRECISION: u32 = 1 << 28;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Options {
+#[doc(hidden)]
+pub struct Options {
     flags: u32,
     width: u16,
     precision: u16,
@@ -104,7 +105,8 @@ impl Default for Options {
 }
 
 impl Options {
-    pub(crate) fn decode(head: u8, mut take: impl FnMut(usize) -> Option<Vec<u8>>) -> Option<Self> {
+    #[doc(hidden)]
+    pub fn decode(head: u8, mut take: impl FnMut(usize) -> Option<Vec<u8>>) -> Option<Self> {
         if head & 0xc0 != 0xc0 || head & 0x30 != 0 {
             return None;
         }
@@ -145,7 +147,8 @@ impl Options {
         })
     }
 
-    pub(crate) fn render(self, kind: Trait) -> Option<String> {
+    #[doc(hidden)]
+    pub fn render(self, kind: Trait) -> Option<String> {
         let flags = self.flags;
         let mut spec = String::new();
         let align = (flags >> 29) & 3;

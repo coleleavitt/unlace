@@ -20,7 +20,8 @@ use crate::funcdata::Funcdata;
 /// The type of value `value` that a store through a pointer to `pointed_to`
 /// must be cast to point at: `value` itself, when it is a float C can name and
 /// the pointee is unknown bytes of the same size that print as an integer.
-pub(crate) fn pointer(
+#[doc(hidden)]
+pub fn pointer(
     data: &Funcdata,
     pointed_to: &Datatype,
     value: &Rc<Datatype>,

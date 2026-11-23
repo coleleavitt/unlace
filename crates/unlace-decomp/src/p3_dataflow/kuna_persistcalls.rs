@@ -123,7 +123,8 @@ fn collect(memory: &mut MemoryOps, fd: &Funcdata, space: i32) {
 /// persistent, writable (read-only memory is `readonlycalls`'), not volatile,
 /// and in the default data space of a function that can restart (not a
 /// jump-table partial)?
-pub(crate) fn applies(fd: &Funcdata, fl: u32, addr: &Address) -> bool {
+#[doc(hidden)]
+pub fn applies(fd: &Funcdata, fl: u32, addr: &Address) -> bool {
     use crate::varnode::varnode_flags;
     !fd.is_jumptable_recovery_on()
         && (fl & varnode_flags::persist) != 0
@@ -143,7 +144,8 @@ pub(crate) fn applies(fd: &Funcdata, fl: u32, addr: &Address) -> bool {
 /// into a join, the first such call met before a definition (`defs`, a kept
 /// call), another join or the entry. A MULTIEQUAL taking one of their values
 /// would hold the value from before the call.
-pub(crate) fn stale_calls(
+#[doc(hidden)]
+pub fn stale_calls(
     fd: &Funcdata,
     calls: &[OpId],
     keep: &FxHashSet<OpId>,
@@ -210,7 +212,8 @@ pub(crate) fn stale_calls(
 /// range (`defs`, a kept call), join or call met is a call left unguarded.
 /// Merging may copy such an input to the global in front of the call, and a
 /// collapse makes it the call's output: either undoes the skipped call.
-pub(crate) fn stale_inputs(
+#[doc(hidden)]
+pub fn stale_inputs(
     fd: &Funcdata,
     calls: &[OpId],
     keep: &FxHashSet<OpId>,
@@ -279,7 +282,8 @@ pub(crate) fn stale_inputs(
 
 /// Restart the function with every persistent global guarded at every call:
 /// a read or a guard removal reached a range across a call it left unguarded.
-pub(crate) fn restart_full(fd: &mut Funcdata) {
+#[doc(hidden)]
+pub fn restart_full(fd: &mut Funcdata) {
     if fd.get_override().persist_calls_off() {
         return;
     }
@@ -290,14 +294,16 @@ pub(crate) fn restart_full(fd: &mut Funcdata) {
 
 /// Take the op and Varnode numbers a skipped guard would have used, so every
 /// later op and Varnode is numbered as with every guard built.
-pub(crate) fn skip_guard(fd: &mut Funcdata) {
+#[doc(hidden)]
+pub fn skip_guard(fd: &mut Funcdata) {
     fd.vbank_mut().reserve_create_index(3);
     fd.obank_mut().reserve_uniq(1);
 }
 
 /// Take the op and Varnode numbers a MULTIEQUAL with `slots` inputs would have
 /// used at a join only skipped guards needed.
-pub(crate) fn skip_join(fd: &mut Funcdata, slots: u32) {
+#[doc(hidden)]
+pub fn skip_join(fd: &mut Funcdata, slots: u32) {
     fd.obank_mut().reserve_uniq(1);
     fd.vbank_mut().reserve_create_index(1 + slots);
 }
@@ -310,7 +316,8 @@ pub(crate) fn skip_join(fd: &mut Funcdata, slots: u32) {
 /// write, a return, a kept guard). `read`
 /// are the range's free reads, `full` and `partial` the ops writing all or part
 /// of it. The second set holds the calls kept for a read, before or after.
-pub(crate) fn keep(
+#[doc(hidden)]
+pub fn keep(
     fd: &Funcdata,
     memory: &mut MemoryOps,
     space: i32,
@@ -491,7 +498,8 @@ fn ground(fd: &Funcdata, n: usize, events: &[Event], keep: &mut FxHashSet<OpId>)
 /// A read heritage links into the range's chain after the pass that guarded it
 /// sees the right value, and a value read there stays apart from the range
 /// past the next call, exactly when this holds.
-pub(crate) fn guarded(fd: &Funcdata, op: OpId, addr: &Address, size: int4) -> bool {
+#[doc(hidden)]
+pub fn guarded(fd: &Funcdata, op: OpId, addr: &Address, size: int4) -> bool {
     walk(fd, op, addr, size, true) && walk(fd, op, addr, size, false)
 }
 
@@ -503,7 +511,8 @@ pub(crate) fn guarded(fd: &Funcdata, op: OpId, addr: &Address, size: int4) -> bo
 /// Varnode reaching past the range (`partial`, a pass that grows it) is never
 /// cleared: refining or revisiting the range rebuilds its value from the
 /// skipped calls' stale inputs.
-pub(crate) fn crosses_skipped(
+#[doc(hidden)]
+pub fn crosses_skipped(
     fd: &Funcdata,
     vn: VarnodeId,
     pruned: &[(int4, u64, int4)],

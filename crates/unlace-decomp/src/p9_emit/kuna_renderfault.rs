@@ -21,7 +21,8 @@ fn armed() -> Option<u64> {
 }
 
 /// Panic when `entry` is the armed address.
-pub(crate) fn check(entry: u64) {
+#[doc(hidden)]
+pub fn check(entry: u64) {
     if armed() == Some(entry) {
         panic!("{RENDER_FAULT_ENV}: injected render panic at {entry:#x}");
     }

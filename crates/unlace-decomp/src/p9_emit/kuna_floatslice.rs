@@ -7,7 +7,8 @@ use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct Slice {
+#[doc(hidden)]
+pub struct Slice {
     pub input: VarnodeId,
     pub source_float: bool,
     pub source_word: Rc<Datatype>,
@@ -15,7 +16,8 @@ pub(crate) struct Slice {
     pub shift: u64,
 }
 
-pub(crate) fn recognize(fd: &Funcdata, op: OpId) -> Option<Slice> {
+#[doc(hidden)]
+pub fn recognize(fd: &Funcdata, op: OpId) -> Option<Slice> {
     let operation = fd.obank().get(op)?;
     if operation.code() != OpCode::CPUI_SUBPIECE {
         return None;

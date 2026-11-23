@@ -1,6 +1,6 @@
 //! S8 shared-run duplication: `crossjumprevert` past one block.
 //!
-//! [`crate::p8_structure::kuna_crossjumpreverter`] duplicates one cross-jump
+//! [`crate::kuna_crossjumpreverter`] duplicates one cross-jump
 //! tail block into a plain `goto`.  Cross-jumping also shares longer runs: a
 //! statement or two, an `if`, a call, reached by `goto` from inside nested
 //! arms, and the latch of a loop, reached from deep in its body.  On the final
@@ -516,9 +516,7 @@ fn has_exceptional_if(data: &Funcdata, root: BlockId) -> bool {
     let mut stack = vec![root];
     while let Some(id) = stack.pop() {
         let b = graph.block(id);
-        if b.get_type() == BlockType::If
-            && crate::p8_structure::kuna_gotosink::exceptional_if(data, id)
-        {
+        if b.get_type() == BlockType::If && crate::kuna_gotosink::exceptional_if(data, id) {
             return true;
         }
         stack.extend((0..b.get_size()).map(|i| b.get_block(i)));
@@ -527,7 +525,8 @@ fn has_exceptional_if(data: &Funcdata, root: BlockId) -> bool {
 }
 
 /// Rewrite gotos into shared runs to a fixpoint; returns how many were rewritten.
-pub(crate) fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
+#[doc(hidden)]
+pub fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
     let arch = data.get_arch();
     let gates = Gates {
         tails: arch
@@ -564,7 +563,7 @@ pub(crate) fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
         }
     }
     if !targets.is_empty() {
-        crate::p8_structure::kuna_gotosink::release_labels(data, &targets);
+        crate::kuna_gotosink::release_labels(data, &targets);
     }
     targets.len() as i32
 }

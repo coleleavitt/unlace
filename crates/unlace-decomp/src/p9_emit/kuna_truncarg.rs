@@ -43,7 +43,8 @@ use crate::funcdata::Funcdata;
 
 /// The cast a narrowed argument in `slot` of the CALL/CALLIND `op` needs so its C
 /// value matches the zero-extended value the binary passes, or `None`.
-pub(crate) fn narrowed_arg_cast(
+#[doc(hidden)]
+pub fn narrowed_arg_cast(
     data: &mut Funcdata,
     strat: &CastStrategyC,
     op: OpId,
@@ -168,7 +169,8 @@ fn callee_reads_wider(data: &Funcdata, op: OpId, slot: int4, size: int4) -> bool
 
 /// Was input `slot` of the call `op` trimmed from a register the binary
 /// zero-extended it into, for a callee that reads that register wider?
-pub(crate) fn zext_trimmed_arg(data: &Funcdata, op: OpId, slot: int4) -> bool {
+#[doc(hidden)]
+pub fn zext_trimmed_arg(data: &Funcdata, op: OpId, slot: int4) -> bool {
     let Some(o) = data.obank().get(op) else {
         return false;
     };

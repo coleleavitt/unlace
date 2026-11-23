@@ -6,12 +6,14 @@ use crate::funcdata::Funcdata;
 use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
-pub(crate) struct Extraction {
+#[doc(hidden)]
+pub struct Extraction {
     pub target: Rc<Datatype>,
     pub shift: u64,
 }
 
-pub(crate) fn plan(
+#[doc(hidden)]
+pub fn plan(
     fd: &Funcdata,
     op: OpId,
     whole: &Datatype,

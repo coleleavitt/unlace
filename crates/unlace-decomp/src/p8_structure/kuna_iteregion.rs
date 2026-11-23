@@ -34,7 +34,7 @@
 //!
 //! Running once after [`ActionFinalStructure`](crate::blockaction::ActionFinalStructure)
 //! (the structured tree is final and goto targets are labelled) — alongside
-//! [`ActionDedupIteTail`](crate::p8_structure::kuna_dedupitetail::ActionDedupIteTail)
+//! [`ActionDedupIteTail`](crate::kuna_dedupitetail::ActionDedupIteTail)
 //! and the other post-structuring rewrites — [`ActionIteRegion`] finds every
 //! narrow, unambiguous assignment diamond and marks it for ternary rendering:
 //!
@@ -248,7 +248,8 @@ pub fn match_ite_assignment(data: &Funcdata, n: BlockId) -> Option<IteAssignMatc
 /// one-component `Ls`/`Graph` wrapper (a structured arm is usually a list of one).
 /// `None` if `id` (or its sole child) is not a clean, unlabelled `Copy`/`Basic`
 /// leaf.
-pub(crate) fn leaf_bblock(data: &Funcdata, id: BlockId) -> Option<BlockId> {
+#[doc(hidden)]
+pub fn leaf_bblock(data: &Funcdata, id: BlockId) -> Option<BlockId> {
     let g = data.sblocks_ref();
     let blk = g.block(id);
     match blk.get_type() {
@@ -279,14 +280,11 @@ pub(crate) fn leaf_bblock(data: &Funcdata, id: BlockId) -> Option<BlockId> {
 ///
 /// A multi-component condition `BlockList` is descended to its last component
 /// first
-/// ([`cond_list_tail`](crate::p8_structure::kuna_itecondlist::cond_list_tail)) — the
+/// ([`cond_list_tail`](crate::kuna_itecondlist::cond_list_tail)) — the
 /// same tolerance across a block boundary, and the reason a chain of diamonds no
 /// longer folds only every other one.
 fn cond_cbranch(data: &Funcdata, id: BlockId) -> Option<OpId> {
-    let bb = leaf_bblock(
-        data,
-        crate::p8_structure::kuna_itecondlist::cond_list_tail(data, id),
-    )?;
+    let bb = leaf_bblock(data, crate::kuna_itecondlist::cond_list_tail(data, id))?;
     let ops = printed_ops(data, bb);
     let op = *ops.last()?;
     if data.obank().get(op)?.code() != OpCode::CPUI_CBRANCH {
@@ -363,7 +361,8 @@ fn single_assign_arm(data: &Funcdata, id: BlockId) -> Option<(OpId, VarnodeId)> 
 /// of its own — e.g. the `INT_NOTEQUAL` feeding a `CBRANCH`, or a folded RHS).  A
 /// [`CPUI_CBRANCH`] (no output) *is* kept.  Skipping implied ops is what makes a
 /// bare `if (a != 0)` condition block count as one statement (the CBRANCH), not two.
-pub(crate) fn printed_ops(data: &Funcdata, bb: BlockId) -> Vec<OpId> {
+#[doc(hidden)]
+pub fn printed_ops(data: &Funcdata, bb: BlockId) -> Vec<OpId> {
     let mut out = Vec::new();
     let mut op = data.bb_op_head(bb);
     while let Some(o) = op {
@@ -391,7 +390,8 @@ pub(crate) fn printed_ops(data: &Funcdata, bb: BlockId) -> Vec<OpId> {
 
 /// Do two varnodes render as the **same variable** — same storage space, offset,
 /// and size?  (The two post-SSA COPY outputs of a merged diamond share storage.)
-pub(crate) fn same_storage(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn same_storage(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
     let (ra, rb) = match (data.vbank().get(a), data.vbank().get(b)) {
         (Some(x), Some(y)) => (x, y),
         _ => return false,
@@ -463,7 +463,7 @@ impl crate::kuna_optionset::KunaOption for Iteregion {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p8_structure::kuna_iteregion::OptionIteRegion.apply(value)?;
+        let (v, msg) = crate::kuna_iteregion::OptionIteRegion.apply(value)?;
         Ok((Iteregion(v), msg))
     }
 }

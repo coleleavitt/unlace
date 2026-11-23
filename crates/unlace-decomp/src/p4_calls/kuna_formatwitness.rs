@@ -1,6 +1,6 @@
 //! P4 matching-format evidence for partial call argument recovery.
 //!
-//! [`kuna_calleearitylive`](crate::p4_calls::kuna_calleearitylive) normally
+//! [`kuna_calleearitylive`](crate::kuna_calleearitylive) normally
 //! requires the callee body to prove a sibling's longer argument list.  That
 //! proof deliberately declines variadic callees, whose register-save prologue
 //! reads every argument register.  A stripped `printf` therefore leaves this
@@ -28,7 +28,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_calleearity::witness_storage;
+use crate::kuna_calleearity::witness_storage;
 
 const MAX_FORMAT: usize = 256;
 
@@ -57,7 +57,8 @@ fn pointer_target(data: &Funcdata, value: u64, size: int4, point: &Address) -> O
 /// How many arguments the printf format that the pointer `value` (a `size`-byte
 /// constant used at `point`) addresses consumes, when it reads as one. A string
 /// without a `%` consumes none.
-pub(crate) fn pointed_format_count(
+#[doc(hidden)]
+pub fn pointed_format_count(
     data: &Funcdata,
     value: u64,
     size: int4,
@@ -72,7 +73,8 @@ pub(crate) fn pointed_format_count(
 
 /// A constant format whose complete bytes, including the terminator, are
 /// immutable in this image. Positive argument evidence requires immutability.
-pub(super) fn pointed_readonly_format(
+#[doc(hidden)]
+pub fn pointed_readonly_format(
     data: &Funcdata,
     value: u64,
     size: int4,
@@ -118,7 +120,8 @@ fn take_digits(bytes: &[u8], mut i: usize) -> usize {
     i
 }
 
-pub(crate) fn printf_argument_count(bytes: &[u8]) -> Option<usize> {
+#[doc(hidden)]
+pub fn printf_argument_count(bytes: &[u8]) -> Option<usize> {
     let mut count = 0usize;
     let mut i = 0usize;
     let mut saw_conversion = false;
@@ -186,7 +189,8 @@ pub(crate) fn printf_argument_count(bytes: &[u8]) -> Option<usize> {
     saw_conversion.then_some(count)
 }
 
-pub(crate) fn best_witness(entry: &Address, op: OpId, data: &Funcdata) -> Vec<(Address, int4)> {
+#[doc(hidden)]
+pub fn best_witness(entry: &Address, op: OpId, data: &Funcdata) -> Vec<(Address, int4)> {
     let Some(format_addr) = constant_pointer(data, op) else {
         return Vec::new();
     };

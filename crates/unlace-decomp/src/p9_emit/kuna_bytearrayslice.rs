@@ -8,11 +8,12 @@ use crate::context::OpId;
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 use crate::funcdata_facing::FuncdataFacingExt;
-use crate::p9_emit::kuna_floatslice::Slice;
+use crate::kuna_floatslice::Slice;
 use unlace_num::opcodes::OpCode;
 
 /// The slice and whether the source needs a word cast before shifting (a pointer does).
-pub(crate) fn recognize(fd: &Funcdata, op: OpId) -> Option<(Slice, bool)> {
+#[doc(hidden)]
+pub fn recognize(fd: &Funcdata, op: OpId) -> Option<(Slice, bool)> {
     let operation = fd.obank().get(op)?;
     if operation.code() != OpCode::CPUI_SUBPIECE {
         return None;

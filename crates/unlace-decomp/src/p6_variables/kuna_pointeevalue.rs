@@ -30,10 +30,10 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::merge::MergeContext;
-use crate::p3_dataflow::kuna_pointeestorekeep::{
+use crate::kuna_pointeestorekeep::{
     WALK_BOUND, loads_stored_global, offsets_address, reads_pointee, written_between,
 };
+use crate::merge::MergeContext;
 use crate::varnode::varnode_flags;
 
 /// Must the HighVariables of `vn1` and `vn2` stay apart because one is a global

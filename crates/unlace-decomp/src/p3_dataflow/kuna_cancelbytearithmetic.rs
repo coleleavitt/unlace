@@ -19,7 +19,8 @@ pub const ELEM_CANCELBYTEARITHMETIC: ElementId = ElementId::new("cancelbytearith
 
 /// A proven cancellation, represented by the one operation that must change.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct ByteArithmeticCancellation {
+#[doc(hidden)]
+pub struct ByteArithmeticCancellation {
     root: OpId,
     preserved: VarnodeId,
 }
@@ -121,7 +122,8 @@ fn matching_negative_term(
 /// `INT_AND` of two run-time values.  Constant masks are bit-field packing, and
 /// direct CALL/LOAD producers may carry effects; all of those decline before
 /// any graph mutation.
-pub(crate) fn find_cancellation(
+#[doc(hidden)]
+pub fn find_cancellation(
     data: &Funcdata,
     subpiece: OpId,
     shift: OpId,
@@ -201,7 +203,8 @@ pub(crate) fn find_cancellation(
 /// Apply a previously validated cancellation without touching the dead input
 /// tree.  Normal dead-code elimination can then retain any effectful ancestors
 /// according to their existing op flags.
-pub(crate) fn apply_cancellation(data: &mut Funcdata, plan: ByteArithmeticCancellation) {
+#[doc(hidden)]
+pub fn apply_cancellation(data: &mut Funcdata, plan: ByteArithmeticCancellation) {
     data.op_set_opcode(plan.root, crate::typeop::type_op_for(OpCode::CPUI_COPY));
     data.op_set_input(plan.root, plan.preserved, 0)
         .expect("cancelbytearithmetic: root input");

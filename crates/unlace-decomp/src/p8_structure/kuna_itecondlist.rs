@@ -3,13 +3,13 @@
 //!
 //! # The structural gap
 //!
-//! [`ActionIteRegion`](crate::p8_structure::kuna_iteregion::ActionIteRegion) and
-//! [`ActionIteBoolean`](crate::p8_structure::kuna_iteboolean::ActionIteBoolean) both
+//! [`ActionIteRegion`](crate::kuna_iteregion::ActionIteRegion) and
+//! [`ActionIteBoolean`](crate::kuna_iteboolean::ActionIteBoolean) both
 //! require the condition component of the 3-component
 //! [`BlockIf`](crate::block::BlockType::If) to bottom out in a single leaf — a lone
 //! `CBRANCH`-terminated basic block, or (for `iteboolean`) a folded
 //! [`BlockCondition`](crate::block::BlockType::Condition).  Their shared helper
-//! [`leaf_bblock`](crate::p8_structure::kuna_iteregion::leaf_bblock) descends a
+//! [`leaf_bblock`](crate::kuna_iteregion::leaf_bblock) descends a
 //! `BlockList` of **one** component but returns `None` for a list of two or more.
 //!
 //! That bail is what makes kuna re-roll only **every other** diamond in a run of
@@ -71,7 +71,8 @@ const MAX_LIST_DEPTH: u32 = 16;
 /// A condition-position [`BlockType::Ls`] is descended to its **last** component
 /// — the one the printer renders as the `if` header — so a diamond whose
 /// condition got concatenated with a preceding statement block still matches.
-pub(crate) fn cond_list_tail(data: &Funcdata, id: BlockId) -> BlockId {
+#[doc(hidden)]
+pub fn cond_list_tail(data: &Funcdata, id: BlockId) -> BlockId {
     let mut cur = id;
     for _ in 0..MAX_LIST_DEPTH {
         let g = data.sblocks_ref();

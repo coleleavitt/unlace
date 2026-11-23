@@ -22,7 +22,8 @@ fn slice(fd: &Funcdata, vn: VarnodeId, offset: u64) -> Option<VarnodeId> {
 }
 
 /// High-word negation or absolute value changes only the original double’s sign bit.
-pub(crate) fn recover(fd: &mut Funcdata, piece: OpId) -> bool {
+#[doc(hidden)]
+pub fn recover(fd: &mut Funcdata, piece: OpId) -> bool {
     let matched = (|| {
         let op = fd.obank().get(piece)?;
         if op.code() != OpCode::CPUI_PIECE || fd.vbank().get(op.get_out()?)?.get_size() != 8 {

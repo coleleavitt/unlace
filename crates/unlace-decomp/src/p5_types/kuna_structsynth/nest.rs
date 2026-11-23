@@ -63,10 +63,12 @@ use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use crate::funcdata::Funcdata;
 
 /// How many records below the parameter a chain of pointer fields is followed.
-pub(super) const MAX_NEST_DEPTH: u32 = 2;
+#[doc(hidden)]
+pub const MAX_NEST_DEPTH: u32 = 2;
 
 /// What every level of one parameter's nesting shares.
-pub(super) struct Nesting<'a> {
+#[doc(hidden)]
+pub struct Nesting<'a> {
     /// Every base's unpruned evidence.
     pub ev: &'a BTreeMap<VarnodeId, Evidence>,
     /// The program's type factory.
@@ -82,7 +84,8 @@ pub(super) struct Nesting<'a> {
 /// `fields` is the record's member list as `fields_for` built it from `rec` and
 /// `size` its size; a nested field takes a pointer to the completed record the
 /// ledger answered, and a self field keeps its type for the ledger to replace.
-pub(super) fn nest_fields(
+#[doc(hidden)]
+pub fn nest_fields(
     data: &mut Funcdata,
     cx: &Nesting,
     rec: &Evidence,

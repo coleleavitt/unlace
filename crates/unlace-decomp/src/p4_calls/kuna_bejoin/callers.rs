@@ -86,7 +86,8 @@ use super::{Entry, Insn, Key, decode, overlaps};
 use crate::architecture::Architecture;
 
 /// How many call sites of one function are read.
-pub(super) const MAX_SITES: usize = 16;
+#[doc(hidden)]
+pub const MAX_SITES: usize = 16;
 
 /// How many instructions the walk after one call site visits.
 const MAX_SITE_INSNS: usize = 256;
@@ -166,7 +167,8 @@ const PAIR_ARG_ROUTINES: [&[u8]; 44] = [
 
 /// The instruction sets whose direct calls the scan recognizes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Isa {
+#[doc(hidden)]
+pub enum Isa {
     Ppc,
     Mips,
     Sparc,
@@ -175,7 +177,8 @@ pub(super) enum Isa {
 
 impl Isa {
     /// The set a language id names, for 32-bit big-endian data.
-    pub(super) fn of(archid: &str) -> Option<Isa> {
+    #[doc(hidden)]
+    pub fn of(archid: &str) -> Option<Isa> {
         let mut parts = archid.split(':');
         let (proc, endian, bits) = (parts.next()?, parts.next()?, parts.next()?);
         if bits != "32" {
@@ -193,7 +196,8 @@ impl Isa {
 
     /// Every `(target, site)` a direct call in `bytes`, loaded at `base`,
     /// encodes, for sites below `base + limit`.
-    pub(super) fn calls(self, base: u64, bytes: &[u8], limit: usize, out: &mut Vec<(u64, u64)>) {
+    #[doc(hidden)]
+    pub fn calls(self, base: u64, bytes: &[u8], limit: usize, out: &mut Vec<(u64, u64)>) {
         let little = matches!(self, Isa::Arm { little: true });
         let word = |i: usize| -> Option<u32> {
             let b: [u8; 4] = bytes.get(i..i + 4)?.try_into().ok()?;
@@ -244,7 +248,8 @@ fn sext(v: u64, bits: u32) -> i64 {
 }
 
 /// PowerPC `bl` and `bla`.
-pub(super) fn ppc(site: u64, w: u32) -> Option<u64> {
+#[doc(hidden)]
+pub fn ppc(site: u64, w: u32) -> Option<u64> {
     let li = sext((w & 0x03ff_fffc) as u64, 26);
     match w & 0xfc00_0003 {
         0x4800_0001 => Some((site as i64).wrapping_add(li) as u64 & M32),
@@ -254,7 +259,8 @@ pub(super) fn ppc(site: u64, w: u32) -> Option<u64> {
 }
 
 /// MIPS `jal` and `bal`.
-pub(super) fn mips(site: u64, w: u32) -> Option<u64> {
+#[doc(hidden)]
+pub fn mips(site: u64, w: u32) -> Option<u64> {
     if w >> 26 == 3 {
         return Some((site.wrapping_add(4) & 0xf000_0000) | (((w & 0x03ff_ffff) as u64) << 2));
     }
@@ -265,12 +271,14 @@ pub(super) fn mips(site: u64, w: u32) -> Option<u64> {
 }
 
 /// SPARC `call`.
-pub(super) fn sparc(site: u64, w: u32) -> Option<u64> {
+#[doc(hidden)]
+pub fn sparc(site: u64, w: u32) -> Option<u64> {
     (w >> 30 == 1).then(|| (site as i64).wrapping_add(sext((w as u64) << 2, 32)) as u64 & M32)
 }
 
 /// ARM `bl` and `blx` (immediate).
-pub(super) fn a32(site: u64, w: u32) -> Option<u64> {
+#[doc(hidden)]
+pub fn a32(site: u64, w: u32) -> Option<u64> {
     let off = sext(((w & 0x00ff_ffff) as u64) << 2, 26);
     if w >> 28 != 0xf && (w >> 24) & 0xf == 0xb {
         return Some((site as i64 + 8 + off) as u64 & M32);
@@ -283,7 +291,8 @@ pub(super) fn a32(site: u64, w: u32) -> Option<u64> {
 }
 
 /// Thumb `bl` and `blx` (immediate), the pair of halfwords `h1`, `h2`.
-pub(super) fn t32(site: u64, h1: u16, h2: u16) -> Option<u64> {
+#[doc(hidden)]
+pub fn t32(site: u64, h1: u16, h2: u16) -> Option<u64> {
     if h1 & 0xf800 != 0xf000 {
         return None;
     }
@@ -570,7 +579,8 @@ struct Facts {
 }
 
 /// The call sites and function extents of one image.
-pub(super) struct Index {
+#[doc(hidden)]
+pub struct Index {
     code: Rc<AddrSpace>,
     /// Does the instruction set have register windows (SPARC)?
     windows: bool,
@@ -599,7 +609,8 @@ pub(super) struct Index {
 impl Index {
     /// Scan the image `arch` decodes; `None` without an instruction set the
     /// scan knows, executable ranges, or symbols.
-    pub(super) fn build(arch: &Architecture) -> Option<Index> {
+    #[doc(hidden)]
+    pub fn build(arch: &Architecture) -> Option<Index> {
         let isa = Isa::of(&arch.archid)?;
         let code = Rc::clone(arch.manage().get_default_code_space()?);
         let ranges: &[(u64, u64)] = &arch.litpool_const;
@@ -769,7 +780,8 @@ impl Index {
     }
 
     /// How many call sites of `target` [`facts`] reads.
-    pub(super) fn site_count(&self, target: u64) -> usize {
+    #[doc(hidden)]
+    pub fn site_count(&self, target: u64) -> usize {
         self.sites(target).take(MAX_SITES).count()
     }
 
@@ -806,7 +818,8 @@ impl Index {
 
 /// What `option bejoin callers` keeps per image.
 #[derive(Default)]
-pub(super) struct Cache {
+#[doc(hidden)]
+pub struct Cache {
     index: Option<Option<Index>>,
     facts: BTreeMap<u64, Facts>,
     scans: BTreeMap<u64, Scan>,
@@ -817,7 +830,8 @@ pub(super) struct Cache {
 
 impl Cache {
     /// How many call sites of the function at `key` its caller evidence reads.
-    pub(super) fn site_count(&mut self, arch: &Architecture, key: Entry) -> usize {
+    #[doc(hidden)]
+    pub fn site_count(&mut self, arch: &Architecture, key: Entry) -> usize {
         if self.index.is_none() {
             self.index = Some(Index::build(arch));
         }
@@ -829,7 +843,8 @@ impl Cache {
 
     /// Does a direct caller of the function at `key` read the first register
     /// `hi` after the call, as [`site_use`] reads the second one?
-    pub(super) fn reads_first(&mut self, arch: &Architecture, hi: Key, key: Entry) -> bool {
+    #[doc(hidden)]
+    pub fn reads_first(&mut self, arch: &Architecture, hi: Key, key: Entry) -> bool {
         if self.index.is_none() {
             self.index = Some(Index::build(arch));
         }
@@ -842,7 +857,7 @@ impl Cache {
         if let Some(&r) = self.first_reads.get(&key.1) {
             return r;
         }
-        if crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, &index.at(key.1)) {
+        if crate::kuna_calleenoreturn::is_no_return(arch, &index.at(key.1)) {
             self.first_reads.insert(key.1, false);
             return false;
         }
@@ -868,12 +883,8 @@ impl Cache {
     /// and the callers whose RETURN hands the pair back (it is proven when one
     /// of them is). Nothing for a function no symbol starts, that never ends
     /// or never writes the register.
-    pub(super) fn evidence(
-        &mut self,
-        arch: &Architecture,
-        lo: Key,
-        key: Entry,
-    ) -> (bool, Vec<Entry>) {
+    #[doc(hidden)]
+    pub fn evidence(&mut self, arch: &Architecture, lo: Key, key: Entry) -> (bool, Vec<Entry>) {
         if self.index.is_none() {
             self.index = Some(Index::build(arch));
         }
@@ -924,7 +935,7 @@ fn facts(
     layouts: &mut BTreeMap<u64, Option<Layout>>,
 ) -> Facts {
     let mut out = Facts::default();
-    if crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, &index.at(callee)) {
+    if crate::kuna_calleenoreturn::is_no_return(arch, &index.at(callee)) {
         return out;
     }
     for site in index.sites(callee).take(MAX_SITES) {
@@ -1693,7 +1704,7 @@ fn scan_function(arch: &Architecture, index: &Index, lo: Key, entry: u64) -> Sca
         return out;
     };
     let base = tracked(arch, index, start);
-    let noreturn = |t: u64| crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, &index.at(t));
+    let noreturn = |t: u64| crate::kuna_calleenoreturn::is_no_return(arch, &index.at(t));
     let mut todo = vec![start];
     let mut seen: BTreeSet<u64> = BTreeSet::new();
     let (mut direct, mut in_window) = (false, false);
@@ -1799,7 +1810,7 @@ fn layout_of(arch: &Architecture, index: &Index, func: (u64, u64)) -> Option<Lay
         return None;
     }
     let base = tracked(arch, index, start);
-    let noreturn = |t: u64| crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, &index.at(t));
+    let noreturn = |t: u64| crate::kuna_calleenoreturn::is_no_return(arch, &index.at(t));
     let mut todo = vec![start];
     let mut seen: BTreeSet<u64> = BTreeSet::new();
     let mut out = Layout::default();

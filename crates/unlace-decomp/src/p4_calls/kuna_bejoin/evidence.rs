@@ -734,7 +734,7 @@ pub fn proven(data: &Funcdata, entry: &Address) -> bool {
     let Some(sp) = entry.get_space() else {
         return false;
     };
-    crate::p4_calls::kuna_callwide::proven(data, entry)
+    crate::kuna_callwide::proven(data, entry)
         || data
             .kuna_wide()
             .is_some_and(|w| w.get((sp.get_index(), entry.get_offset())))
@@ -1287,9 +1287,10 @@ impl<'a> Walk<'a> {
                         {
                             return None;
                         }
-                        if target.as_ref().is_some_and(|t| {
-                            crate::p4_calls::kuna_calleenoreturn::is_no_return(self.arch, t)
-                        }) {
+                        if target
+                            .as_ref()
+                            .is_some_and(|t| crate::kuna_calleenoreturn::is_no_return(self.arch, t))
+                        {
                             self.reads.append(&mut path.reads);
                             return Some(false);
                         }
@@ -1834,7 +1835,8 @@ impl<'a> Walk<'a> {
 /// Runs in `buildOutputFromTrials` while the unused trials are still present;
 /// `trialvn` holds each trial's INDIRECT creation, by original slot. Returns
 /// `false`, changing nothing, unless the pair is built.
-pub(crate) fn build_high_read(
+#[doc(hidden)]
+pub fn build_high_read(
     fc: &mut FuncCallSpecs,
     data: &mut Funcdata,
     trialvn: &[Option<VarnodeId>],

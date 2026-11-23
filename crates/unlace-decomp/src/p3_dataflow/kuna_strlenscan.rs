@@ -58,7 +58,8 @@ use crate::op::PcodeOp;
 use crate::userop::BUILTIN_STRLEN;
 
 /// The ops the body may compute besides the LOAD and its branch.
-pub(crate) const PURE: &[OpCode] = &[
+#[doc(hidden)]
+pub const PURE: &[OpCode] = &[
     CPUI_COPY,
     CPUI_INT_ADD,
     CPUI_INT_SUB,
@@ -466,7 +467,7 @@ fn rewrite(data: &mut Funcdata, s: &Scan) -> unlace_base::error::KunaResult<()> 
 
 crate::kuna_flag!(
     /// (kuna) Collapse an inline `repnz scasb` string length into `strlen`
-    /// (option `strlenscan`).  See [`crate::p3_dataflow::kuna_strlenscan`].
+    /// (option `strlenscan`).  See [`crate::kuna_strlenscan`].
     StrlenScan,
     "strlenscan",
     "inline repnz scasb string length as strlen",

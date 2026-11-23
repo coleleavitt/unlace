@@ -1046,7 +1046,8 @@ fn builtin(data: &Funcdata, op_id: OpId) -> Option<u32> {
 /// The type of a pointer operand of a copy, fill or compare builtin: `void *`,
 /// a pointer to the element of a `builtin_memset16`/`32`/`64`, or `char *` for
 /// a compare, whose constant operand is then printed as the string it is.
-pub(crate) fn input_type(data: &Funcdata, op_id: OpId, slot: int4) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn input_type(data: &Funcdata, op_id: OpId, slot: int4) -> Option<Rc<Datatype>> {
     let id = builtin(data, op_id)?;
     let both = id == BUILTIN_MEMCPY || id == BUILTIN_MEMCMP;
     if slot != 1 && !(slot == 2 && both) {
@@ -1072,7 +1073,8 @@ pub(crate) fn input_type(data: &Funcdata, op_id: OpId, slot: int4) -> Option<Rc<
 }
 
 /// The type of `builtin_memcmp`'s result: a signed integer.
-pub(crate) fn output_type(data: &Funcdata, op_id: OpId) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn output_type(data: &Funcdata, op_id: OpId) -> Option<Rc<Datatype>> {
     if builtin(data, op_id)? != BUILTIN_MEMCMP {
         return None;
     }
@@ -1086,7 +1088,7 @@ pub(crate) fn output_type(data: &Funcdata, op_id: OpId) -> Option<Rc<Datatype>> 
 crate::kuna_flag!(
     /// (kuna) Collapse an x86 `rep movs`/`rep stos`/`repz cmpsb` loop into a
     /// copy, fill or compare builtin (option `repstring`).  See
-    /// [`crate::p3_dataflow::kuna_repstring`].
+    /// [`crate::kuna_repstring`].
     RepString,
     "repstring",
     "rep movs/stos/cmps loops as copy, fill and compare builtins",

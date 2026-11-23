@@ -105,7 +105,8 @@ fn widest_instance(fd: &Funcdata, high: HighVariableId) -> i64 {
 }
 
 /// The declarations of the last document `print` printed, when it printed `fd`.
-pub(crate) fn declarations_of<'a>(print: &'a PrintC, fd: &Funcdata) -> &'a [DeclaredLocal] {
+#[doc(hidden)]
+pub fn declarations_of<'a>(print: &'a PrintC, fd: &Funcdata) -> &'a [DeclaredLocal] {
     if print.declared_entry() != Some(fd.get_address()) {
         return &[];
     }
@@ -113,7 +114,8 @@ pub(crate) fn declarations_of<'a>(print: &'a PrintC, fd: &Funcdata) -> &'a [Decl
 }
 
 /// Does `local` still name a high of `fd` the naming pass gave its base name?
-pub(crate) fn declares_high_of(fd: &Funcdata, local: &DeclaredLocal) -> bool {
+#[doc(hidden)]
+pub fn declares_high_of(fd: &Funcdata, local: &DeclaredLocal) -> bool {
     fd.high_bank().get(local.high).and_then(|h| h.kuna_name()) == Some(local.base.as_str())
 }
 

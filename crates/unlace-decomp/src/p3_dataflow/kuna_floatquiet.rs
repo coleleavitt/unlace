@@ -7,14 +7,16 @@ use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) fn can_elide(data: &Funcdata, input: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn can_elide(data: &Funcdata, input: VarnodeId) -> bool {
     let arch = data.get_arch();
     arch.nan_ignore_all || arch.nan_ignore_compare || known_quiet(data, input, &mut 32)
 }
 
 /// Whether a widening's result reaches a conversion back to its source
 /// format, the identity pair a C compiler may erase despite NaN quieting.
-pub(crate) fn feeds_round_trip(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn feeds_round_trip(data: &Funcdata, op: OpId) -> bool {
     let Some(convert) = data.obank().get(op) else {
         return false;
     };

@@ -25,7 +25,8 @@ use unlace_num::opcodes::OpCode;
 
 /// Is `op` waiting for renaming to fill its read of its own storage?
 #[inline]
-pub(crate) fn pending(fd: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn pending(fd: &Funcdata, op: OpId) -> bool {
     fd.obank()
         .get(op)
         .is_some_and(|o| o.get_addlflags() & kuna_rename_read != 0)
@@ -34,7 +35,8 @@ pub(crate) fn pending(fd: &Funcdata, op: OpId) -> bool {
 /// Mark `op`, whose `n` empty input slots read its output storage, for
 /// renaming. The slots' placeholders keep their creation indices, so every
 /// later Varnode is numbered as upstream numbers it.
-pub(crate) fn mark(fd: &mut Funcdata, op: OpId, n: uint4, pending: &mut Vec<(OpId, uint4)>) {
+#[doc(hidden)]
+pub fn mark(fd: &mut Funcdata, op: OpId, n: uint4, pending: &mut Vec<(OpId, uint4)>) {
     let first = fd.vbank_mut().reserve_create_index(n);
     push(fd, op, first, pending);
 }
@@ -47,7 +49,8 @@ fn push(fd: &mut Funcdata, op: OpId, first: uint4, pending: &mut Vec<(OpId, uint
 }
 
 /// The storage a pending slot of `op` reads: its output's.
-pub(crate) fn storage(fd: &Funcdata, op: OpId) -> Option<(Address, int4)> {
+#[doc(hidden)]
+pub fn storage(fd: &Funcdata, op: OpId) -> Option<(Address, int4)> {
     let out = fd.obank().get(op)?.get_out()?;
     let vn = fd.vbank().get(out)?;
     Some((vn.get_addr().clone(), vn.get_size()))
@@ -57,7 +60,8 @@ pub(crate) fn storage(fd: &Funcdata, op: OpId) -> Option<(Address, int4)> {
 /// `indeffect`, its input left for renaming. The pass's guards of one effect
 /// op share its annotation in `iops`; a reuse still takes the annotation's
 /// creation index.
-pub(crate) fn new_indirect(
+#[doc(hidden)]
+pub fn new_indirect(
     fd: &mut Funcdata,
     indeffect: OpId,
     addr: &Address,
@@ -102,7 +106,8 @@ pub(crate) fn new_indirect(
 /// Clear the marks of the pass's `pending` ops, giving every slot renaming
 /// left empty upstream's placeholder: a free Varnode at the op's storage,
 /// active for heritage except on a MULTIEQUAL.
-pub(crate) fn finish(fd: &mut Funcdata, pending: &mut Vec<(OpId, uint4)>) {
+#[doc(hidden)]
+pub fn finish(fd: &mut Funcdata, pending: &mut Vec<(OpId, uint4)>) {
     for (op, first) in std::mem::take(pending) {
         let Some(o) = fd.obank_mut().get_mut(op) else {
             continue;

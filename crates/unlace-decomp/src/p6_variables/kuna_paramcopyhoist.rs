@@ -339,7 +339,7 @@ fn instance_shadows_root(fd: &Funcdata, vn: VarnodeId, root_vn: VarnodeId) -> bo
 /// MULTIEQUAL slot's predecessor, so a guarded parameter's copy-shadow
 /// (`v6 = a1;`) prints in the entry block like the source's spill instead of
 /// below an earlier guard.  Read by
-/// [`crate::p6_variables::kuna_paramcopyhoist::hoist_target`] from
+/// [`crate::kuna_paramcopyhoist::hoist_target`] from
 /// `Merge::trimOpInput`; guarded by the `buildDominantCopy` Cover test.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParamCopyHoist(pub bool);
@@ -357,8 +357,7 @@ impl crate::kuna_optionset::KunaOption for ParamCopyHoist {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) =
-            crate::p6_variables::kuna_paramcopyhoist::OptionParamCopyHoist.apply(value)?;
+        let (v, msg) = crate::kuna_paramcopyhoist::OptionParamCopyHoist.apply(value)?;
         Ok((ParamCopyHoist(v), msg))
     }
 }

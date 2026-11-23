@@ -12,7 +12,8 @@ use unlace_num::opcodes::OpCode;
 /// A known global range needs effects covering every byte of the new write.
 /// Without them its existing readers and exit values still name the old SSA
 /// version, and dead-code removal can discard the new COPY.
-pub(crate) fn can_materialize(data: &Funcdata, store: OpId, addr: &Address, size: i32) -> bool {
+#[doc(hidden)]
+pub fn can_materialize(data: &Funcdata, store: OpId, addr: &Address, size: i32) -> bool {
     let Some(space) = addr.get_space() else {
         return false;
     };
@@ -64,7 +65,8 @@ pub(crate) fn can_materialize(data: &Funcdata, store: OpId, addr: &Address, size
     true
 }
 
-pub(crate) fn collapse(data: &mut Funcdata, copy: OpId) {
+#[doc(hidden)]
+pub fn collapse(data: &mut Funcdata, copy: OpId) {
     let mut effects = Vec::new();
     let mut prev = data.op_previous_op(copy);
     while let Some(op) = prev {

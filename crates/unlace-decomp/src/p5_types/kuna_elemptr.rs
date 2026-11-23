@@ -3253,7 +3253,8 @@ fn decide_object(obj: Obj, per: &BTreeMap<u64, GlobalVerdict>) -> Decision {
 
 impl Ledger {
     /// Replace what the function entered at `me` said about every object.
-    pub(crate) fn file(&mut self, me: u64, said: BTreeMap<Obj, GlobalVerdict>) {
+    #[doc(hidden)]
+    pub fn file(&mut self, me: u64, said: BTreeMap<Obj, GlobalVerdict>) {
         for per in self.verdicts.values_mut() {
             per.remove(&me);
         }
@@ -3288,7 +3289,8 @@ impl Ledger {
     /// Block every disagreed object for the functions that typed it, hand the
     /// batch's sign to the functions that defaulted to another, and return the
     /// functions whose blocked or adopted set grew.
-    pub(crate) fn disagreements(&mut self) -> BTreeSet<u64> {
+    #[doc(hidden)]
+    pub fn disagreements(&mut self) -> BTreeSet<u64> {
         let mut redo = BTreeSet::new();
         for (&g, per) in &self.verdicts {
             let d = decide_object(g, per);
@@ -3316,19 +3318,22 @@ impl Ledger {
 
     /// The sign the function entered at `me` adopts for `obj`.
     #[cfg(test)]
-    pub(crate) fn adopted(&self, me: u64, obj: Obj) -> Option<bool> {
+    #[doc(hidden)]
+    pub fn adopted(&self, me: u64, obj: Obj) -> Option<bool> {
         self.adopt.get(&me).and_then(|a| a.get(&obj).map(|x| x.1))
     }
 
     /// The sign evidence has settled for `obj` so far.
     #[cfg(test)]
-    pub(crate) fn settled(&self, obj: Obj) -> Option<bool> {
+    #[doc(hidden)]
+    pub fn settled(&self, obj: Obj) -> Option<bool> {
         self.settled.get(&obj).map(|x| x.1)
     }
 
     /// Is `obj` blocked for the function entered at `me`?
     #[cfg(test)]
-    pub(crate) fn is_blocked(&self, me: u64, obj: Obj) -> bool {
+    #[doc(hidden)]
+    pub fn is_blocked(&self, me: u64, obj: Obj) -> bool {
         self.blocked.get(&me).is_some_and(|b| b.contains(&obj))
     }
 }
@@ -3344,7 +3349,7 @@ fn sign_extend(v: uintb, size: int4) -> intb {
 
 /// (kuna `elemptr`) Declare a pointer-width value used only as an array of
 /// one element type as a pointer to that element; option `elemptr on|off`.
-/// The rule lives in [`kuna_elemptr`](crate::p5_types::kuna_elemptr).
+/// The rule lives in [`kuna_elemptr`](crate::kuna_elemptr).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ElemPtr(pub bool);
 
@@ -3361,7 +3366,7 @@ impl crate::kuna_optionset::KunaOption for ElemPtr {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p5_types::kuna_elemptr::OptionElemPtr.apply(value)?;
+        let (v, msg) = crate::kuna_elemptr::OptionElemPtr.apply(value)?;
         Ok((ElemPtr(v), msg))
     }
 }

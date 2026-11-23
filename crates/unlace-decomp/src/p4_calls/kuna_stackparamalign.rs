@@ -6,12 +6,8 @@ use unlace_base::{
     xml::Element,
 };
 
-pub(crate) fn decode(
-    entry: &Element,
-    space: &AddrSpace,
-    alignment: i32,
-    size: i32,
-) -> KunaResult<u32> {
+#[doc(hidden)]
+pub fn decode(entry: &Element, space: &AddrSpace, alignment: i32, size: i32) -> KunaResult<u32> {
     let value = (0..entry.get_num_attributes())
         .find(|&i| entry.get_attribute_name(i) == "stackalign")
         .map(|i| entry.get_attribute_value_at(i));
@@ -31,7 +27,8 @@ pub(crate) fn decode(
     }
 }
 
-pub(crate) fn effective_alignment(flags: u32, type_alignment: i32, slot_alignment: i32) -> i32 {
+#[doc(hidden)]
+pub fn effective_alignment(flags: u32, type_alignment: i32, slot_alignment: i32) -> i32 {
     if flags & IGNORE_TYPE_ALIGN != 0 {
         slot_alignment
     } else {

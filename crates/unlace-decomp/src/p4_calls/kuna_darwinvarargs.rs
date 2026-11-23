@@ -5,7 +5,7 @@
 //!
 //! Apple's arm64 ABI ("Writing ARM64 code for Apple platforms") passes every
 //! variadic argument on the stack, in 8-byte slots from `[sp]`, and never in
-//! `x1`-`x7`. [`varargstackargs`](crate::p4_calls::kuna_varargstackargs) already
+//! `x1`-`x7`. [`varargstackargs`](crate::kuna_varargstackargs) already
 //! scores such a call's stack tail as its own `fillinMap` section, so the empty
 //! registers in front of it stop ending the argument list, but only for a call
 //! whose prototype says `...`. A callee nothing declares, such as XNU's `panic`
@@ -90,7 +90,7 @@ pub fn applies(arch: &Architecture) -> bool {
 
 /// Record, for every direct call in `data`, whether its callee runs Apple's
 /// `va_start`. Taken before the action pipeline for the reason
-/// [`crate::p4_calls::kuna_calleedeadarg::seed_callee_entry_dead`] is: the
+/// [`crate::kuna_calleedeadarg::seed_callee_entry_dead`] is: the
 /// pipeline's `ArchContext` has no translator. Cached per run on the
 /// `Architecture`.
 pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {

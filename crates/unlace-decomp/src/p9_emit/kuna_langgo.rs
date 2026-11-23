@@ -149,7 +149,8 @@ pub static LANG_GO: LangProfile = LangProfile {
     fn_attributes: &[],
 };
 
-pub(crate) fn identifier(name: &str) -> String {
+#[doc(hidden)]
+pub fn identifier(name: &str) -> String {
     let valid = !name.is_empty()
         && !name.starts_with(|c: char| c.is_ascii_digit())
         && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
@@ -237,7 +238,8 @@ pub(crate) fn identifier(name: &str) -> String {
     result
 }
 
-pub(crate) fn path(name: &str) -> String {
+#[doc(hidden)]
+pub fn path(name: &str) -> String {
     name.replace("::", ".")
         .split('.')
         .map(identifier)
@@ -406,7 +408,8 @@ use crate::printc::{PrintC, declarator_parts};
 use crate::printlanguage::modifiers;
 
 impl PrintC {
-    pub(crate) fn emit_prototype_declaration_go(
+    #[doc(hidden)]
+    pub fn emit_prototype_declaration_go(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -511,7 +514,8 @@ impl PrintC {
         self.emit.tag_type(&ty, SyntaxHighlight::TypeColor, markup);
     }
 
-    pub(crate) fn emit_var_decl_go(
+    #[doc(hidden)]
+    pub fn emit_var_decl_go(
         &mut self,
         name: &str,
         ty: &str,
@@ -528,12 +532,8 @@ impl PrintC {
         self.emit.tag_type(&ty, SyntaxHighlight::TypeColor, markup);
     }
 
-    pub(crate) fn emit_block_inf_loop_go(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        blk: BlockId,
-    ) {
+    #[doc(hidden)]
+    pub fn emit_block_inf_loop_go(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         self.context.push_mod();
         self.context
             .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
@@ -549,7 +549,8 @@ impl PrintC {
         self.context.pop_mod();
     }
 
-    pub(crate) fn emit_block_while_go(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
+    #[doc(hidden)]
+    pub fn emit_block_while_go(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         self.context.push_mod();
         self.context
             .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
@@ -638,12 +639,8 @@ impl PrintC {
         self.context.pop_mod();
     }
 
-    pub(crate) fn emit_block_do_while_go(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        blk: BlockId,
-    ) {
+    #[doc(hidden)]
+    pub fn emit_block_do_while_go(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         self.context.push_mod();
         self.context
             .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
@@ -671,12 +668,8 @@ impl PrintC {
         self.context.pop_mod();
     }
 
-    pub(crate) fn emit_block_switch_go(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        blk: BlockId,
-    ) {
+    #[doc(hidden)]
+    pub fn emit_block_switch_go(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         let head = fd.sblocks_ref().block(blk).get_block(0);
         self.context.push_mod();
         self.context
@@ -759,7 +752,8 @@ impl PrintC {
     }
 }
 
-pub(crate) fn escape(output: &mut String, value: i32, quote: char) {
+#[doc(hidden)]
+pub fn escape(output: &mut String, value: i32, quote: char) {
     use std::fmt::Write;
     match value {
         0 => output.push_str("\\x00"),
@@ -793,7 +787,8 @@ use crate::printc::op_key;
 use crate::printlanguage::{Atom, SyntaxHighlight as AtomHighlight, TagType};
 
 impl PrintC {
-    pub(crate) fn emit_go_condition_expression(
+    #[doc(hidden)]
+    pub fn emit_go_condition_expression(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -824,7 +819,8 @@ impl PrintC {
         self.context.pop_mod();
     }
 
-    pub(crate) fn push_go_call(&mut self, name: &str, op: OpId) {
+    #[doc(hidden)]
+    pub fn push_go_call(&mut self, name: &str, op: OpId) {
         self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
         self.push_atom(&Atom::syntax(
             name,
@@ -833,7 +829,8 @@ impl PrintC {
         ));
     }
 
-    pub(crate) fn push_go_pointer_conversion(
+    #[doc(hidden)]
+    pub fn push_go_pointer_conversion(
         &mut self,
         target: &Rc<Datatype>,
         source_pointer: bool,
@@ -851,7 +848,8 @@ impl PrintC {
         }
     }
 
-    pub(crate) fn push_go_string_pointer(
+    #[doc(hidden)]
+    pub fn push_go_string_pointer(
         &mut self,
         literal: &mut String,
         pointer: &Rc<Datatype>,
@@ -871,12 +869,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn push_go_conversion(
-        &mut self,
-        target: &Rc<Datatype>,
-        source: &Rc<Datatype>,
-        op: OpId,
-    ) {
+    #[doc(hidden)]
+    pub fn push_go_conversion(&mut self, target: &Rc<Datatype>, source: &Rc<Datatype>, op: OpId) {
         let pointer = |t: &Datatype| {
             matches!(
                 t.get_metatype(),
@@ -914,7 +908,8 @@ impl PrintC {
         }
     }
 
-    pub(crate) fn op_go_cast(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
+    #[doc(hidden)]
+    pub fn op_go_cast(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         let Some(operation) = fd.obank().get(op) else {
             return;
         };
@@ -925,7 +920,8 @@ impl PrintC {
         self.push_go_value_as(fd, arch, input, op, &target);
     }
 
-    pub(crate) fn go_value_type(
+    #[doc(hidden)]
+    pub fn go_value_type(
         &self,
         fd: &Funcdata,
         _arch: &Architecture,
@@ -989,7 +985,8 @@ impl PrintC {
         (width > 0 && width == to.get_ptr_to()?.get_size()).then_some((referent, def))
     }
 
-    pub(crate) fn op_go_ptradd(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
+    #[doc(hidden)]
+    pub fn op_go_ptradd(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         let Some(operation) = fd.obank().get(op) else {
             return;
         };
@@ -1032,7 +1029,8 @@ impl PrintC {
         self.push_vn_ir_m(fd, arch, scale, op, mods);
     }
 
-    pub(crate) fn op_go_float_nan(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
+    #[doc(hidden)]
+    pub fn op_go_float_nan(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         let Some(input) = fd.obank().get(op).and_then(|operation| operation.get_in(0)) else {
             return false;
         };
@@ -1052,7 +1050,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn op_go_bit_transfer(
+    #[doc(hidden)]
+    pub fn op_go_bit_transfer(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -1106,7 +1105,8 @@ impl PrintC {
 mod tests;
 
 impl PrintC {
-    pub(crate) fn push_go_constant_copy(
+    #[doc(hidden)]
+    pub fn push_go_constant_copy(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -1134,7 +1134,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn push_go_value_as(
+    #[doc(hidden)]
+    pub fn push_go_value_as(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -1177,7 +1178,8 @@ impl PrintC {
         self.push_vn_ir(fd, arch, value, op);
     }
 
-    pub(crate) fn op_go_binary(
+    #[doc(hidden)]
+    pub fn op_go_binary(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

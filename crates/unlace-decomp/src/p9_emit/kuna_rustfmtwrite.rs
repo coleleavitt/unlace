@@ -49,14 +49,16 @@ pub fn writer_symbols(symbols: &[(u64, Option<String>)]) -> BTreeMap<u64, Writer
         .collect()
 }
 
-pub(crate) struct Plan {
+#[doc(hidden)]
+pub struct Plan {
     pub writer: VarnodeId,
     pub pointer_bridge: bool,
     pub result_type: Option<&'static str>,
     pub format: super::kuna_rustfmtargs::Plan,
 }
 
-pub(crate) static WITH_WRITE: OpToken = OpToken {
+#[doc(hidden)]
+pub static WITH_WRITE: OpToken = OpToken {
     print1: "({ use std::fmt::Write as _; ",
     print2: " })",
     stage: 2,
@@ -70,7 +72,8 @@ pub(crate) static WITH_WRITE: OpToken = OpToken {
     left_to_right_only: false,
 };
 
-pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
+#[doc(hidden)]
+pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
         .get::<crate::kuna_rustfmt::RustFmtMode>()

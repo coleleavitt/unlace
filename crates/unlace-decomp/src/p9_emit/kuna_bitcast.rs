@@ -9,7 +9,8 @@ use crate::kuna_voidret::FuncdataVoidretExt;
 use std::rc::Rc;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct Transfer {
+#[doc(hidden)]
+pub struct Transfer {
     pub input: VarnodeId,
     pub target: Rc<Datatype>,
     pub size: i32,
@@ -29,7 +30,8 @@ pub(crate) struct Transfer {
 /// member of a struct or union symbol, whose type is a partial struct or union is declared
 /// `undefinedN` and so is an integer, whatever union field the value resolves to; a `COPY`
 /// side printed as a scalar global has that global's type.
-pub(crate) fn storage_transfer(
+#[doc(hidden)]
+pub fn storage_transfer(
     fd: &Funcdata,
     op: OpId,
     printed: impl Fn(VarnodeId, i32) -> Option<Rc<Datatype>>,
@@ -170,7 +172,8 @@ pub(crate) fn storage_transfer(
 }
 
 /// A low-end integer truncation reads a merged float variable's storage bits.
-pub(crate) fn truncated_float_storage(fd: &Funcdata, op: OpId) -> Option<(Transfer, Rc<Datatype>)> {
+#[doc(hidden)]
+pub fn truncated_float_storage(fd: &Funcdata, op: OpId) -> Option<(Transfer, Rc<Datatype>)> {
     let operation = fd.obank().get(op)?;
     if operation.code() != OpCode::CPUI_SUBPIECE {
         return None;
@@ -227,7 +230,8 @@ pub(crate) fn truncated_float_storage(fd: &Funcdata, op: OpId) -> Option<(Transf
 /// Whether a same-width `CAST` of `input` to a float prints as a reinterpretation
 /// of its bits: the integer side [`storage_transfer`] accepts, judged by the same
 /// printed type.
-pub(crate) fn reinterprets_to_float(fd: &Funcdata, input: VarnodeId) -> bool {
+#[doc(hidden)]
+pub fn reinterprets_to_float(fd: &Funcdata, input: VarnodeId) -> bool {
     let Some(src) = fd.vbank().get(input) else {
         return false;
     };
@@ -244,7 +248,8 @@ pub(crate) fn reinterprets_to_float(fd: &Funcdata, input: VarnodeId) -> bool {
 /// The declared word type of the explicit variable that `op` assigns a float or double
 /// result to: a call whose prototype returns one (its logical width, not the ABI register's),
 /// or a native float op whose output has that width. The assignment then stores the bits.
-pub(crate) fn word_result(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn word_result(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
     if !fd
         .get_arch()
         .kuna_options
@@ -286,7 +291,8 @@ pub(crate) fn word_result(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
 }
 
 /// Explicit word storage keeps its bits when a native float op consumes it.
-pub(crate) fn stack_float_input(fd: &Funcdata, op: OpId, input: VarnodeId) -> Option<Transfer> {
+#[doc(hidden)]
+pub fn stack_float_input(fd: &Funcdata, op: OpId, input: VarnodeId) -> Option<Transfer> {
     if !fd
         .get_arch()
         .kuna_options
@@ -443,7 +449,8 @@ fn read_storage(fd: &Funcdata, op: OpId) -> Option<&crate::varnode::Varnode> {
     fd.vbank().get(cast.get_out()?)
 }
 
-pub(crate) fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Datatype>> {
     let value = fd.vbank().get(id)?;
     if value.is_persist() && !value.is_implied() {
         let usepoint = unlace_base::address::Address::new_invalid();
@@ -511,7 +518,8 @@ pub(crate) fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Da
 }
 
 /// A floating precision conversion remains floating when a byte array covers it.
-pub(crate) fn array_float_conversion(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn array_float_conversion(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
     let operation = fd.obank().get(op)?;
     if operation.code() != OpCode::CPUI_FLOAT_FLOAT2FLOAT {
         return None;

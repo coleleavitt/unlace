@@ -92,7 +92,8 @@ impl ProofSlot {
         self.0 = None;
     }
 
-    pub(crate) fn revoke(&self) {
+    #[doc(hidden)]
+    pub fn revoke(&self) {
         if let Some(proof) = &self.0 {
             proof.live.set(false);
         }
@@ -114,7 +115,7 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
             .proves()
     {
         arch.kuna_tables
-            .get::<crate::p4_calls::kuna_callwide::ProofSlot>()
+            .get::<crate::kuna_callwide::ProofSlot>()
             .0
             .as_ref()
             .filter(|proof| {
@@ -509,7 +510,7 @@ pub fn publish_mips(
     declarations: &[Declaration],
 ) -> usize {
     arch.kuna_tables
-        .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+        .get_mut::<crate::kuna_callwide::ProofSlot>()
         .clear();
     if !arch.kuna_options.get::<CallWide>().0
         || !arch
@@ -538,36 +539,30 @@ pub fn publish_mips(
         proof::Authority::SealedMips,
     );
     arch.kuna_tables
-        .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
+        .get_mut::<crate::kuna_callwide::ProofSlot>()
         .0 = proven;
     arch.kuna_tables
-        .get::<crate::p4_calls::kuna_callwide::ProofSlot>()
+        .get::<crate::kuna_callwide::ProofSlot>()
         .len()
 }
 
 /// (kuna `callwide`) The function's call-width ledger, kept across `Funcdata::clear`.
 #[derive(Default)]
-struct LedgerSlot(Option<std::rc::Rc<crate::p4_calls::kuna_callwide::Ledger>>);
+struct LedgerSlot(Option<std::rc::Rc<crate::kuna_callwide::Ledger>>);
 crate::kuna_func_state!(LedgerSlot, keep_across_clear: true);
 
 /// The `kuna_callwide` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataCallwideExt {
-    fn kuna_set_callwide(
-        &mut self,
-        proof: Option<std::rc::Rc<crate::p4_calls::kuna_callwide::Ledger>>,
-    );
-    fn kuna_callwide(&self) -> Option<&crate::p4_calls::kuna_callwide::Ledger>;
+    fn kuna_set_callwide(&mut self, proof: Option<std::rc::Rc<crate::kuna_callwide::Ledger>>);
+    fn kuna_callwide(&self) -> Option<&crate::kuna_callwide::Ledger>;
 }
 
 impl FuncdataCallwideExt for crate::funcdata::Funcdata {
-    fn kuna_set_callwide(
-        &mut self,
-        proof: Option<std::rc::Rc<crate::p4_calls::kuna_callwide::Ledger>>,
-    ) {
+    fn kuna_set_callwide(&mut self, proof: Option<std::rc::Rc<crate::kuna_callwide::Ledger>>) {
         self.kuna_state_mut::<LedgerSlot>().0 = proof;
     }
-    fn kuna_callwide(&self) -> Option<&crate::p4_calls::kuna_callwide::Ledger> {
+    fn kuna_callwide(&self) -> Option<&crate::kuna_callwide::Ledger> {
         self.kuna_state::<LedgerSlot>().0.as_deref()
     }
 }

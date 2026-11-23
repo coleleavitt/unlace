@@ -43,7 +43,7 @@
 //! **unchanged** as an r-value, which is exactly the relaxation the P3 predicate
 //! cannot safely make.
 //!
-//! Running alongside [`ActionIteRegion`](crate::p8_structure::kuna_iteregion::ActionIteRegion),
+//! Running alongside [`ActionIteRegion`](crate::kuna_iteregion::ActionIteRegion),
 //! [`ActionIteBoolean`] finds every 3-component [`BlockIf`](crate::block::BlockType::If)
 //! with no own goto whose
 //!
@@ -74,7 +74,7 @@
 //!
 //! An explicit `if (c) x = 1; else x = 0;` in the source compiles to the same
 //! object code as `x = c;`, so — exactly like
-//! [`iteregion`](crate::p8_structure::kuna_iteregion) (DIV-17) — the rewrite can
+//! [`iteregion`](crate::kuna_iteregion) (DIV-17) — the rewrite can
 //! diverge from the source.  It is gated by `option iteboolean on|off`; with it off
 //! [`ActionIteBoolean::apply`] early-returns, nothing is marked, and output is
 //! byte-identical.
@@ -88,9 +88,9 @@ use crate::block::BlockType;
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
+use crate::kuna_iteregion::{leaf_bblock, printed_ops, same_storage};
 use crate::op::pcodeop_addlflags;
 use crate::options::on_or_off;
-use crate::p8_structure::kuna_iteregion::{leaf_bblock, printed_ops, same_storage};
 
 use unlace_base::marshal::ElementId;
 
@@ -244,7 +244,7 @@ pub fn match_ite_boolean(data: &Funcdata, n: BlockId) -> Option<IteBoolMatch> {
     // arm is only ever reached for the individual clauses of an already-found
     // chain.  `m.cond_block` stays the outer list so the printer still emits the
     // leading components as ordinary statements.
-    let cond_tail = crate::p8_structure::kuna_itecondlist::cond_list_tail(data, cond_block);
+    let cond_tail = crate::kuna_itecondlist::cond_list_tail(data, cond_block);
     if data.sblocks_ref().block(cond_tail).get_type() != BlockType::Condition {
         return None;
     }
@@ -386,7 +386,7 @@ impl crate::kuna_optionset::KunaOption for Iteboolean {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p8_structure::kuna_iteboolean::OptionIteBoolean.apply(value)?;
+        let (v, msg) = crate::kuna_iteboolean::OptionIteBoolean.apply(value)?;
         Ok((Iteboolean(v), msg))
     }
 }

@@ -1513,9 +1513,9 @@ pub struct CollapseStructure<'a> {
     /// allowlist).  A *complex* sibling may be folded into a short-circuit condition
     /// operand when EITHER rule admits it — angr Phoenix's
     /// `MultiStatementExpression` relaxation; see
-    /// [`crate::p8_structure::kuna_condfold`].  Empty (and every use dead) when the
+    /// [`crate::kuna_condfold`].  Empty (and every use dead) when the
     /// option is off.
-    condfold_sets: crate::p8_structure::kuna_condfold::CondFoldSets,
+    condfold_sets: crate::kuna_condfold::CondFoldSets,
     /// (kuna, `option condfold`) structuring nodes produced by a condfold-relaxed
     /// [`rule_block_or`](Self::rule_block_or) fold.  `BlockCondition::isComplex`
     /// delegates to sub-block 0, so a folded node whose *right* operand carries a
@@ -1526,8 +1526,8 @@ pub struct CollapseStructure<'a> {
     /// (kuna) Per-`bblocks`-block facts the `BlockCopy` mirror cannot read for
     /// itself — the artificial-halt type of a block's trailing `RETURN` and its
     /// start address.  Precomputed by `ActionBlockStructure::apply`; see
-    /// [`crate::p8_structure::kuna_ifnoexit`].
-    exitleaf_facts: crate::p8_structure::kuna_ifnoexit::ExitLeafFacts,
+    /// [`crate::kuna_ifnoexit`].
+    exitleaf_facts: crate::kuna_ifnoexit::ExitLeafFacts,
     /// (kuna) `KUNA_RS_DEBUG` decision trace for `rule_block_if_no_exit`.
     dbg_ifne: bool,
     /// (kuna) `ActionBlockStructure::apply` invocation index, for the trace.
@@ -1561,7 +1561,7 @@ impl<'a> CollapseStructure<'a> {
             condfold_sets: Default::default(),
             condfolded: std::collections::BTreeSet::new(),
             exitleaf_facts: Default::default(),
-            dbg_ifne: crate::p8_structure::kuna_ifnoexit::trace_enabled(),
+            dbg_ifne: crate::kuna_ifnoexit::trace_enabled(),
             dbg_apply: 0,
             guard_arm: false,
             loop_cond_hoist: false,
@@ -1581,7 +1581,7 @@ impl<'a> CollapseStructure<'a> {
     /// graphs keep the empty default.
     pub fn with_exitleaf_facts(
         mut self,
-        facts: crate::p8_structure::kuna_ifnoexit::ExitLeafFacts,
+        facts: crate::kuna_ifnoexit::ExitLeafFacts,
         apply_index: u32,
     ) -> Self {
         self.exitleaf_facts = facts;
@@ -1590,13 +1590,10 @@ impl<'a> CollapseStructure<'a> {
     }
 
     /// (kuna, `option condfold`) install the precomputed admission-rule verdicts (see
-    /// [`kuna_condfold::compute_condfold_sets`](crate::p8_structure::kuna_condfold::compute_condfold_sets)).
+    /// [`kuna_condfold::compute_condfold_sets`](crate::kuna_condfold::compute_condfold_sets)).
     /// Builder method; the empty default (option off, and every hand-built unit-test
     /// graph) means "nothing is condfold-eligible", i.e. upstream-identical behavior.
-    pub fn with_condfold_sets(
-        mut self,
-        condfold_sets: crate::p8_structure::kuna_condfold::CondFoldSets,
-    ) -> Self {
+    pub fn with_condfold_sets(mut self, condfold_sets: crate::kuna_condfold::CondFoldSets) -> Self {
         self.condfold_sets = condfold_sets;
         self
     }
@@ -2162,7 +2159,8 @@ impl<'a> CollapseStructure<'a> {
     /// complex regardless of how trivial its front `BlockBasic` is — that is
     /// what forces the valid `while(true){...; if (cond) break;}` overflow
     /// syntax instead of inlining statements into the `while(...)` parens.
-    pub(crate) fn is_complex(&self, bl: BlockId) -> bool {
+    #[doc(hidden)]
+    pub fn is_complex(&self, bl: BlockId) -> bool {
         let mut bl = bl;
         loop {
             // (kuna, `option condfold`) a node produced by a condfold-relaxed fold
@@ -2235,7 +2233,7 @@ impl<'a> CollapseStructure<'a> {
             // sibling.  When condfold is on, a complex sibling is still accepted if
             // EITHER admission rule takes it — angr Phoenix's
             // MultiStatementExpression relaxation.  See
-            // [`crate::p8_structure::kuna_condfold`].
+            // [`crate::kuna_condfold`].
             let relaxed = if self.is_complex(orblock) {
                 if !self.condfold_ok(bl, orblock) {
                     continue;
@@ -2293,7 +2291,7 @@ impl<'a> CollapseStructure<'a> {
 
     /// (kuna, `option condfold`) may the fold of `bl` with the *complex* sibling
     /// `orblock` proceed anyway?  The union of the two admission rules — see
-    /// [`crate::p8_structure::kuna_condfold`] for why they are a union and not an
+    /// [`crate::kuna_condfold`] for why they are a union and not an
     /// intersection.
     ///
     /// * **Rule A (bounded prefix).**  `orblock` is a
@@ -2314,7 +2312,7 @@ impl<'a> CollapseStructure<'a> {
         if self.graph.block(orblock).get_type() == BlockType::Copy {
             if let Some(basic) = self.graph.block(orblock).get_copy() {
                 if self.condfold_sets.prefix.contains(&basic) {
-                    crate::p8_structure::kuna_condfold::trace_admit_fold(
+                    crate::kuna_condfold::trace_admit_fold(
                         "CollapseStructure",
                         "prefix",
                         bl,
@@ -2385,11 +2383,11 @@ impl<'a> CollapseStructure<'a> {
     /// (kuna, `option condfold`, Rule B) Conservatively-scored printed statements that
     /// `bl` would contribute to a comma-separated condition.  A leaf with no recorded
     /// score is charged the per-block maximum
-    /// [`MAX_SHAPE_STMTS`](crate::p8_structure::kuna_condfold::MAX_SHAPE_STMTS) (a
+    /// [`MAX_SHAPE_STMTS`](crate::kuna_condfold::MAX_SHAPE_STMTS) (a
     /// not-complex block holds at most that many by definition), so the sum is always
     /// an upper bound.
     fn cond_stmt_count(&self, bl: BlockId) -> int4 {
-        let cap = crate::p8_structure::kuna_condfold::MAX_SHAPE_STMTS;
+        let cap = crate::kuna_condfold::MAX_SHAPE_STMTS;
         match self.graph.block(bl).get_type() {
             BlockType::Condition => {
                 let b0 = self.graph.block(bl).get_block(0);
@@ -2421,7 +2419,7 @@ impl<'a> CollapseStructure<'a> {
             return false;
         }
         if self.cond_leaf_count(bl) + self.cond_leaf_count(orblock)
-            > crate::p8_structure::kuna_condfold::MAX_JOIN_LEAVES
+            > crate::kuna_condfold::MAX_JOIN_LEAVES
         {
             return false;
         }
@@ -2430,16 +2428,11 @@ impl<'a> CollapseStructure<'a> {
         // fold can nest this whole BlockCondition as someone else's right operand, at
         // which point every leaf prints inside the expression — so budget both sides.
         if self.cond_stmt_count(bl) + self.cond_stmt_count(orblock)
-            > crate::p8_structure::kuna_condfold::MAX_JOIN_TOTAL_STMTS
+            > crate::kuna_condfold::MAX_JOIN_TOTAL_STMTS
         {
             return false;
         }
-        crate::p8_structure::kuna_condfold::trace_admit_fold(
-            "CollapseStructure",
-            "shape",
-            bl,
-            orblock,
-        );
+        crate::kuna_condfold::trace_admit_fold("CollapseStructure", "shape", bl, orblock);
         true
     }
 
@@ -2618,9 +2611,7 @@ impl<'a> CollapseStructure<'a> {
             .get_exit_leaf(bl)
             .and_then(|lf| self.graph.block(lf).get_copy())
         {
-            Some(bb) => {
-                crate::p8_structure::kuna_ifnoexit::halt_str(self.exitleaf_facts.halt_type(bb))
-            }
+            Some(bb) => crate::kuna_ifnoexit::halt_str(self.exitleaf_facts.halt_type(bb)),
             None => "noleaf".to_string(),
         }
     }
@@ -4104,7 +4095,7 @@ impl Action for ActionBlockStructure {
     fn apply(&mut self, data: &mut Funcdata, ctx: &mut ActionContext) -> ApplyResult {
         // C++ blockaction.cc:2170.
         if data.sblocks_get_size() != 0 {
-            crate::p8_structure::kuna_condstmts::record_hits(data);
+            crate::kuna_condstmts::record_hits(data);
             return 0; // Already structured
         }
         data.install_switch_defaults();
@@ -4134,8 +4125,7 @@ impl Action for ActionBlockStructure {
             .0
             && !java_try
         {
-            match crate::p8_structure::region_structurer::run_region_structurer(data, ctx.deadline)
-            {
+            match crate::region_structurer::run_region_structurer(data, ctx.deadline) {
                 Ok((true, flips)) => {
                     // Realize the deferred data-flow half of the loop-condition
                     // `negateCondition`s the region structurer recorded (the same
@@ -4165,7 +4155,7 @@ impl Action for ActionBlockStructure {
         // graph is a BlockCopy mirror without op ownership), keyed by the bblocks
         // id each BlockCopy's `copy` pointer references.  ruleBlockOr/whileDo read
         // it through `CollapseStructure::is_complex`.
-        let mut complex_blocks = crate::p8_structure::kuna_condstmts::complex_blocks(data);
+        let mut complex_blocks = crate::kuna_condstmts::complex_blocks(data);
         // Precompute the bblocks switch-block → jumpvec slot map (C++
         // `BlockSwitch(ind)` does `ind->getJumptable()`; the structuring graph has
         // no Funcdata pointer, so resolve it here).  A bblocks `BlockBasic` is a
@@ -4177,8 +4167,8 @@ impl Action for ActionBlockStructure {
         // artificial-halt type of a trailing RETURN (`op_mark_halt`), which tells
         // a no-return-callee halt apart from a genuine source `return`, and the
         // block start address (trace only).
-        let mut exitleaf_facts = crate::p8_structure::kuna_ifnoexit::ExitLeafFacts::default();
-        let dbg_ifne = crate::p8_structure::kuna_ifnoexit::trace_enabled();
+        let mut exitleaf_facts = crate::kuna_ifnoexit::ExitLeafFacts::default();
+        let dbg_ifne = crate::kuna_ifnoexit::trace_enabled();
         let guard_arm = data
             .get_arch()
             .kuna_options
@@ -4243,20 +4233,20 @@ impl Action for ActionBlockStructure {
         // into a short-circuit operand as a comma expression (angr Phoenix's
         // MultiStatementExpression relaxation).  Empty and unbuilt when the option
         // is off.
-        let condfold_sets = crate::p8_structure::kuna_condfold::compute_condfold_sets(
+        let condfold_sets = crate::kuna_condfold::compute_condfold_sets(
             data,
-            crate::p8_structure::kuna_condstmts::condfold_budget(
+            crate::kuna_condstmts::condfold_budget(
                 data.get_arch()
                     .kuna_options
-                    .get::<crate::p8_structure::kuna_condfold::CondFold>()
+                    .get::<crate::kuna_condfold::CondFold>()
                     .0,
                 data.get_arch()
                     .kuna_options
-                    .get::<crate::p8_structure::kuna_condstmts::CondStmts>()
+                    .get::<crate::kuna_condstmts::CondStmts>()
                     .0,
             ),
         );
-        let apply_index = crate::p8_structure::kuna_ifnoexit::next_apply_index();
+        let apply_index = crate::kuna_ifnoexit::next_apply_index();
         if dbg_ifne {
             eprintln!(
                 "[ifne] === func={} entry=0x{:x} apply#{} ===",
@@ -4272,7 +4262,7 @@ impl Action for ActionBlockStructure {
             .get::<crate::kuna_loopcontinue::LoopContinue>()
             .0
         {
-            crate::p8_structure::kuna_loopcontinue::refine_latches(data.sblocks_mut(), sroot);
+            crate::kuna_loopcontinue::refine_latches(data.sblocks_mut(), sroot);
         }
         let mut collapse = CollapseStructure::new(data.sblocks_mut(), sroot)
             .with_exitleaf_facts(exitleaf_facts, apply_index)
@@ -4380,12 +4370,8 @@ impl Action for ActionFinalStructure {
             .get::<crate::kuna_loopcontinue::LoopContinue>()
             .0
         {
-            let points = crate::p8_structure::kuna_loopcontinue::continue_points(data, sroot);
-            crate::p8_structure::kuna_loopcontinue::recover_continues(
-                data.sblocks_mut(),
-                sroot,
-                &points,
-            );
+            let points = crate::kuna_loopcontinue::continue_points(data, sroot);
+            crate::kuna_loopcontinue::recover_continues(data.sblocks_mut(), sroot, &points);
         }
         data.sblocks_mut().mark_unstructured(sroot);
         // graph.markLabelBumpUp(false): let loop blocks steal the label of their

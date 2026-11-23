@@ -11,7 +11,8 @@ use crate::funcdata::Funcdata;
 use crate::kuna_atomicxadd::Instruction;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct Plan {
+#[doc(hidden)]
+pub struct Plan {
     pub atomic: OpId,
     pub store: OpId,
     pub sum: OpId,
@@ -181,7 +182,8 @@ fn addition(
     Some((id, op.get_in(0)?, op.get_in(1)?))
 }
 
-pub(crate) fn plan(fd: &Funcdata, arch: &Architecture) -> Option<Plan> {
+#[doc(hidden)]
+pub fn plan(fd: &Funcdata, arch: &Architecture) -> Option<Plan> {
     if !arch.source_lang().is_go()
         || !arch.archid.starts_with("x86:LE:64:")
         || fd.kuna_atomic_xadds().len() != 1
@@ -319,12 +321,8 @@ pub(crate) fn plan(fd: &Funcdata, arch: &Architecture) -> Option<Plan> {
 }
 
 impl crate::printc::PrintC {
-    pub(crate) fn emit_go_atomic_return(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        plan: &Plan,
-    ) {
+    #[doc(hidden)]
+    pub fn emit_go_atomic_return(&mut self, fd: &Funcdata, arch: &Architecture, plan: &Plan) {
         use crate::prettyprint::{Emit, SyntaxHighlight};
         use crate::printc::{op_key, tokens};
 

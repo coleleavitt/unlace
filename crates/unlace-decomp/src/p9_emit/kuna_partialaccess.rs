@@ -89,7 +89,8 @@ pub fn is_scalar_width(size: int4) -> bool {
 /// A scalar value type spelled at exactly `size` bytes: the only kind a
 /// dereference can assign or compare as a whole (an array or an aggregate of
 /// the access width would print `*(char (*)[16])&v = 0`).
-pub(crate) fn readable(ct: &Datatype, size: int4) -> bool {
+#[doc(hidden)]
+pub fn readable(ct: &Datatype, size: int4) -> bool {
     ct.get_size() == size
         && (matches!(size, 1 | 2 | 4 | 8) || ct.get_metatype() == type_metatype::TYPE_FLOAT)
         && matches!(

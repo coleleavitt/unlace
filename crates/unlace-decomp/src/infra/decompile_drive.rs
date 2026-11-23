@@ -175,45 +175,42 @@ impl FlowEnvironment for ArchFlowEnv {
         self.arch().pspec_symbol_at(entry).map(str::to_string)
     }
     fn query_call_definition(&self, entry: &Address) -> Option<Address> {
-        crate::p4_calls::kuna_pltlocal::definition(self.arch(), entry)
+        crate::kuna_pltlocal::definition(self.arch(), entry)
     }
     fn query_call_register_model(&self, entry: &Address) -> Option<Rc<crate::fspec::ProtoModel>> {
-        crate::p4_calls::kuna_calleereginputs::callee_register_model(self.arch(), entry)
+        crate::kuna_calleereginputs::callee_register_model(self.arch(), entry)
     }
     fn query_call_arg_registers(&self, entry: &Address) -> u8 {
-        crate::p4_calls::kuna_calleereginputs::argument_registers(self.arch(), entry)
+        crate::kuna_calleereginputs::argument_registers(self.arch(), entry)
     }
     fn query_call_extra_pop(&self, entry: &Address) -> Option<int4> {
-        crate::p4_calls::kuna_calleepurge::callee_extra_pop(self.arch(), entry)
+        crate::kuna_calleepurge::callee_extra_pop(self.arch(), entry)
     }
-    fn query_call_returns(
-        &self,
-        entry: &Address,
-    ) -> Option<crate::p4_calls::kuna_spsolve::CalleeReturns> {
-        crate::p4_calls::kuna_spsolve::callee_returns(self.arch(), entry)
+    fn query_call_returns(&self, entry: &Address) -> Option<crate::kuna_spsolve::CalleeReturns> {
+        crate::kuna_spsolve::callee_returns(self.arch(), entry)
     }
     fn query_callind_cleanup(&self, call_at: &Address) -> u32 {
-        crate::p4_calls::kuna_calleereginputs::callind_cleanup(self.arch(), call_at)
+        crate::kuna_calleereginputs::callind_cleanup(self.arch(), call_at)
     }
     fn query_call_stack_arg_bytes(
         &self,
         entry: &Address,
         call_at: &Address,
-    ) -> Option<crate::p4_calls::kuna_calleepurge::StackArgs> {
-        crate::p4_calls::kuna_calleestackargs::callee_stack_arg_bytes(self.arch(), entry, call_at)
+    ) -> Option<crate::kuna_calleepurge::StackArgs> {
+        crate::kuna_calleestackargs::callee_stack_arg_bytes(self.arch(), entry, call_at)
     }
     fn query_call_stack_window(&self, entry: &Address, call_at: &Address) -> Option<u32> {
-        crate::p4_calls::kuna_calleestackargs::callee_stack_window(self.arch(), entry, call_at)
+        crate::kuna_calleestackargs::callee_stack_window(self.arch(), entry, call_at)
     }
     fn query_call_return_pop(&self, entry: &Address) -> Option<u32> {
-        crate::p4_calls::kuna_calleestackargs::callee_return_pop(self.arch(), entry)
+        crate::kuna_calleestackargs::callee_return_pop(self.arch(), entry)
     }
     fn query_call_moves_stack(&self, entry: &Address) -> bool {
-        crate::p4_calls::kuna_calleestackargs::callee_moves_stack(self.arch(), entry)
+        crate::kuna_calleestackargs::callee_moves_stack(self.arch(), entry)
     }
     fn query_call_no_return(&self, entry: &Address) -> bool {
-        crate::p4_calls::kuna_calleenoreturn::is_no_return(self.arch(), entry)
-            || crate::p4_calls::kuna_spsolve::callee_never_returns(self.arch(), entry)
+        crate::kuna_calleenoreturn::is_no_return(self.arch(), entry)
+            || crate::kuna_spsolve::callee_never_returns(self.arch(), entry)
     }
     fn query_call_retarget(&self, callsite: &Address) -> Option<Address> {
         let imp = *self
@@ -234,12 +231,7 @@ impl FlowEnvironment for ArchFlowEnv {
         call: &Address,
         fallthrough: &Address,
     ) -> bool {
-        crate::p4_calls::kuna_calleenoreturn::is_proxy_no_return_at(
-            self.arch(),
-            entry,
-            call,
-            fallthrough,
-        )
+        crate::kuna_calleenoreturn::is_proxy_no_return_at(self.arch(), entry, call, fallthrough)
     }
 
     fn funcbound_flow_enabled(&self) -> bool {
@@ -1652,7 +1644,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
         // give up once it passes, which would otherwise keep the guard.
         let spoiled = !abandoned
             && (fd.stack_store_guard_spoiled()
-                || crate::p6_variables::kuna_storereach::withdraw_spoiled_guard(fd));
+                || crate::kuna_storereach::withdraw_spoiled_guard(fd));
         if let Some(err) = budget_error(arch) {
             return Err(err);
         }
@@ -1696,27 +1688,27 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
         crate::kuna_rustabi::seed_callee_return_writes(arch, fd);
         // (kuna `bejoin evidence`) And the wide-return verdicts.
         crate::kuna_bejoin::seed_wide_returns(arch, fd);
-        crate::p4_calls::kuna_callwide::seed(arch, fd);
+        crate::kuna_callwide::seed(arch, fd);
         // (kuna `calleedeadarg`) Same story for the entry-liveness probe the
         // input-trial scoring seam consults.
-        crate::p4_calls::kuna_calleedeadarg::seed_callee_entry_dead(arch, fd);
-        crate::p4_calls::kuna_darwinvarargs::seed(arch, fd);
+        crate::kuna_calleedeadarg::seed_callee_entry_dead(arch, fd);
+        crate::kuna_darwinvarargs::seed(arch, fd);
         crate::kuna_swiftcall::seed_self_readers(arch, fd);
         // (kuna `zerofillreturn`) And the zero fills, read off the fresh p-code.
-        crate::p4_calls::kuna_zerofillreturn::seed(fd);
-        crate::p4_calls::kuna_importvote::seed(arch, fd);
+        crate::kuna_zerofillreturn::seed(fd);
+        crate::kuna_importvote::seed(arch, fd);
         // (kuna `protoorder types`) And for the parameter types earlier callees stated.
-        crate::p4_calls::kuna_protoorder::seed_protoorder_types(arch, fd);
-        crate::p4_calls::kuna_callrettype::seed(arch, fd);
-        crate::p4_calls::kuna_narrowret::seed(arch, fd);
-        crate::p4_calls::kuna_voidret::seed(arch, fd);
-        crate::p4_calls::kuna_calleevote::seed(arch, fd);
-        crate::p4_calls::kuna_callerargs::seed(arch, fd);
+        crate::kuna_protoorder::seed_protoorder_types(arch, fd);
+        crate::kuna_callrettype::seed(arch, fd);
+        crate::kuna_narrowret::seed(arch, fd);
+        crate::kuna_voidret::seed(arch, fd);
+        crate::kuna_calleevote::seed(arch, fd);
+        crate::kuna_callerargs::seed(arch, fd);
         crate::kuna_elemptr::seed(arch, fd);
         // The call-guard seam's view of the callee's writes; shares rustabi's
         // cache, so this is a map lookup.
-        crate::p4_calls::kuna_calleepreserves::seed_callee_preserves(arch, fd);
-        crate::p4_calls::kuna_calleeretpurge::seed(arch, fd);
+        crate::kuna_calleepreserves::seed_callee_preserves(arch, fd);
+        crate::kuna_calleeretpurge::seed(arch, fd);
         crate::kuna_calleememory::seed(arch, fd);
     }
 }
@@ -1841,7 +1833,7 @@ fn eligible_callees(
         {
             continue;
         }
-        if crate::p4_calls::kuna_protoorder::stated_key(&entry).is_some_and(|key| {
+        if crate::kuna_protoorder::stated_key(&entry).is_some_and(|key| {
             arch.kuna_tables
                 .get::<crate::kuna_protoorder::CalleeTypes>()
                 .contains_key(&key)
@@ -1850,8 +1842,8 @@ fn eligible_callees(
         }
         entries.push(entry);
     }
-    entries.sort_by_key(crate::p4_calls::kuna_protoorder::stated_key);
-    entries.dedup_by_key(|entry| crate::p4_calls::kuna_protoorder::stated_key(entry));
+    entries.sort_by_key(crate::kuna_protoorder::stated_key);
+    entries.dedup_by_key(|entry| crate::kuna_protoorder::stated_key(entry));
     entries
 }
 
@@ -1918,9 +1910,7 @@ fn bootstrap_split_callees(
     let mut any_stated = false;
     let cyclic = contract_cycles(&root_entry, &recovered);
     for (entry, stated, _) in recovered {
-        let (Some(stated), Some(key)) =
-            (stated, crate::p4_calls::kuna_protoorder::stated_key(&entry))
-        else {
+        let (Some(stated), Some(key)) = (stated, crate::kuna_protoorder::stated_key(&entry)) else {
             continue;
         };
         if !cyclic.contains(&key) {
@@ -1933,18 +1923,18 @@ fn bootstrap_split_callees(
     // The caller's own pipeline already ran `seed_protoorder_types` at the drive
     // start, so hand the new statements to the live `Funcdata` here: the paused
     // `ActionActiveParam` resumes and the later type fold reads them.
-    crate::p4_calls::kuna_protoorder::seed_protoorder_types(arch, root);
+    crate::kuna_protoorder::seed_protoorder_types(arch, root);
     if any_stated {
         // `ActionFuncLink` already ran, before these statements existed.  Re-run
         // the three seams there that read them, so a forwarded register the
         // callee states (the passthrough claim, the VFP input link, the variadic
         // read record) is in place exactly as a drive that knew the statement
         // before linking would have made it.
-        crate::p4_calls::kuna_passthrough::claim_untouched_registers_late(root);
+        crate::kuna_passthrough::claim_untouched_registers_late(root);
         for i in 0..root.num_calls() {
             crate::kuna_armfloatargs::link_call_inputs(root, i);
         }
-        crate::p4_calls::kuna_calleereadarg::record_variadic_setups(root);
+        crate::kuna_calleereadarg::record_variadic_setups(root);
     }
 }
 
@@ -2013,7 +2003,7 @@ fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
             Some(MAX_TAIL_CALLEE_INSTRUCTIONS),
             false,
         ) {
-            if let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(&entry) {
+            if let Some(key) = crate::kuna_protoorder::stated_key(&entry) {
                 stated.push((key, types));
             }
         }
@@ -2052,8 +2042,7 @@ fn recover_got_callee(
         .kuna_tables
         .get_mut::<crate::kuna_protoorder::CalleeTypes>() = prior;
     let (stated, _, callee) = got?;
-    if let (Some(types), Some(key)) = (stated, crate::p4_calls::kuna_protoorder::stated_key(entry))
-    {
+    if let (Some(types), Some(key)) = (stated, crate::kuna_protoorder::stated_key(entry)) {
         arch.kuna_tables
             .get_mut::<crate::kuna_protoorder::CalleeTypes>()
             .insert(key, types);
@@ -2115,15 +2104,15 @@ fn recover_one_contract(
                 (!entry.is_invalid()).then(|| entry.clone())
             })
             .collect();
-        let _ = crate::p4_calls::kuna_protoorder::park_recovered(
+        let _ = crate::kuna_protoorder::park_recovered(
             arch,
             entry,
             &name,
             &callee,
             callee.get_func_proto(),
-            crate::p4_calls::kuna_protoorder::ProtoOrderMode::Types,
+            crate::kuna_protoorder::ProtoOrderMode::Types,
         );
-        let stated = crate::p4_calls::kuna_protoorder::stated_key(entry).and_then(|key| {
+        let stated = crate::kuna_protoorder::stated_key(entry).and_then(|key| {
             arch.kuna_tables
                 .get::<crate::kuna_protoorder::CalleeTypes>()
                 .get(&key)
@@ -2164,36 +2153,36 @@ fn contract_cycles(
     )],
 ) -> HashSet<StatedKey> {
     let mut keys = HashSet::new();
-    if let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(root_entry) {
+    if let Some(key) = crate::kuna_protoorder::stated_key(root_entry) {
         keys.insert(key);
     }
     for (entry, _, _) in recovered {
-        if let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(entry) {
+        if let Some(key) = crate::kuna_protoorder::stated_key(entry) {
             keys.insert(key);
         }
     }
     let mut edges: HashMap<StatedKey, Vec<StatedKey>> = HashMap::new();
-    if let Some(root) = crate::p4_calls::kuna_protoorder::stated_key(root_entry) {
+    if let Some(root) = crate::kuna_protoorder::stated_key(root_entry) {
         let out = recovered
             .iter()
-            .filter_map(|(entry, _, _)| crate::p4_calls::kuna_protoorder::stated_key(entry))
+            .filter_map(|(entry, _, _)| crate::kuna_protoorder::stated_key(entry))
             .collect();
         edges.insert(root, out);
     }
     for (entry, _, calls) in recovered {
-        let Some(from) = crate::p4_calls::kuna_protoorder::stated_key(entry) else {
+        let Some(from) = crate::kuna_protoorder::stated_key(entry) else {
             continue;
         };
         let out: Vec<StatedKey> = calls
             .iter()
-            .filter_map(crate::p4_calls::kuna_protoorder::stated_key)
+            .filter_map(crate::kuna_protoorder::stated_key)
             .filter(|key| keys.contains(key))
             .collect();
         edges.entry(from).or_default().extend(out);
     }
     let mut cyclic = HashSet::new();
     for (entry, _, _) in recovered {
-        let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(entry) else {
+        let Some(key) = crate::kuna_protoorder::stated_key(entry) else {
             continue;
         };
         if reaches(&edges, key, key) {
@@ -2635,7 +2624,7 @@ fn decompile_func_full_with_objects_inner(
         // Apply the resolved prototype to the fresh funcp (the input-param
         // recovery SEED): after this the inputs/output are type-locked, so
         // ActionPrototypeTypes forces the typed Varnodes.
-        let combined_proto = crate::p4_calls::kuna_inputstorage::merge_mapped(
+        let combined_proto = crate::kuna_inputstorage::merge_mapped(
             pending_proto.or(recovered_proto.as_ref()),
             mapped_params,
         );
@@ -2823,20 +2812,20 @@ fn decompile_func_full_with_objects_inner(
         // the translator is reachable; inert unless the model joins its pair
         // high word first.
         crate::kuna_bejoin::seed_wide_returns(arch, &mut fd);
-        crate::p4_calls::kuna_callwide::seed(arch, &mut fd);
-        crate::p4_calls::kuna_gochanrecv::seed(arch, &mut fd);
+        crate::kuna_callwide::seed(arch, &mut fd);
+        crate::kuna_gochanrecv::seed(arch, &mut fd);
         // (kuna `calleedeadarg`) Take the callee entry-liveness probe the
         // input-trial scoring seam consults, for the same reason and at the same
         // point.
-        crate::p4_calls::kuna_calleedeadarg::seed_callee_entry_dead(arch, &mut fd);
-        crate::p4_calls::kuna_darwinvarargs::seed(arch, &mut fd);
+        crate::kuna_calleedeadarg::seed_callee_entry_dead(arch, &mut fd);
+        crate::kuna_darwinvarargs::seed(arch, &mut fd);
         // (kuna `swiftcall`) Which direct callees do not read `swiftself`, for
         // the stale-`self` test at the same seam.
         crate::kuna_swiftcall::seed_self_readers(arch, &mut fd);
         // (kuna `zerofillreturn`) Mark the zero fills of narrow vector-register
         // writes while the p-code is still as lifted; heritage splits a 128-bit
         // write into the same lanes.
-        crate::p4_calls::kuna_zerofillreturn::seed(&mut fd);
+        crate::kuna_zerofillreturn::seed(&mut fd);
         // (kuna `protoorder` single-function drive) A `unlace decompile` of one
         // function has no callee-first run behind it, so it may state the
         // prototypes of the direct callees its own call sites pass preferred-split
@@ -2856,7 +2845,7 @@ fn decompile_func_full_with_objects_inner(
         );
         // (kuna `importvote`) An undeclared import a tail call reaches takes
         // what its other call sites pass.
-        crate::p4_calls::kuna_importvote::seed(arch, &fd);
+        crate::kuna_importvote::seed(arch, &fd);
         // (kuna `protoorder`) A drive with no callee-first run behind it states
         // the prototype of each callee the function tail-calls before its own
         // pipeline runs.
@@ -2866,22 +2855,22 @@ fn decompile_func_full_with_objects_inner(
             bootstrap_tail_callees(arch, &fd);
         }
         // (kuna `protoorder types`) The parameter types callees decompiled earlier stated.
-        crate::p4_calls::kuna_protoorder::seed_protoorder_types(arch, &mut fd);
+        crate::kuna_protoorder::seed_protoorder_types(arch, &mut fd);
         // (kuna `callrettype`) And the return types they stated.
-        crate::p4_calls::kuna_callrettype::seed(arch, &mut fd);
-        crate::p4_calls::kuna_narrowret::seed(arch, &mut fd);
+        crate::kuna_callrettype::seed(arch, &mut fd);
+        crate::kuna_narrowret::seed(arch, &mut fd);
         // (kuna `voidret`) The return storage its callers read, when it is due.
-        crate::p4_calls::kuna_voidret::seed(arch, &mut fd);
+        crate::kuna_voidret::seed(arch, &mut fd);
         // (kuna `calleevote`) What every caller of this function passes.
-        crate::p4_calls::kuna_calleevote::seed(arch, &mut fd);
+        crate::kuna_calleevote::seed(arch, &mut fd);
         // (kuna `narrowargs callers`) The parameters every caller passes narrow.
-        crate::p4_calls::kuna_callerargs::seed(arch, &mut fd);
+        crate::kuna_callerargs::seed(arch, &mut fd);
         // (kuna `elemptr`) The globals another function of the batch disagrees about.
         crate::kuna_elemptr::seed(arch, &mut fd);
         // The call-guard seam's view of the same decode: the registers the
         // callee is proven NOT to write.
-        crate::p4_calls::kuna_calleepreserves::seed_callee_preserves(arch, &mut fd);
-        crate::p4_calls::kuna_calleeretpurge::seed(arch, &mut fd);
+        crate::kuna_calleepreserves::seed_callee_preserves(arch, &mut fd);
+        crate::kuna_calleeretpurge::seed(arch, &mut fd);
         crate::kuna_calleememory::seed(arch, &mut fd);
         // Report a pass panic as a per-function failure at the driver boundary.
         let res =
@@ -2943,9 +2932,9 @@ fn decompile_func_full_with_objects_inner(
         };
         // (kuna `condstmts`) A function whose final structure folded a block over the
         // cap is analyzed again with that block complex from the first structuring on.
-        for _ in 0..crate::p8_structure::kuna_condstmts::MAX_REATTEMPTS {
+        for _ in 0..crate::kuna_condstmts::MAX_REATTEMPTS {
             let Ok(fd) = &result else { break };
-            let Some(next) = crate::p8_structure::kuna_condstmts::next_seed(fd) else {
+            let Some(next) = crate::kuna_condstmts::next_seed(fd) else {
                 break;
             };
             seed = next;

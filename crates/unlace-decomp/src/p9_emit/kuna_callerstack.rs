@@ -8,7 +8,8 @@ use crate::funcdata::Funcdata;
 
 /// The AMD64 CFA is entry RSP + 8. Locals and the saved return address are not
 /// incoming caller storage, and retain their existing symbol handling.
-pub(crate) fn address(
+#[doc(hidden)]
+pub fn address(
     arch: &Architecture,
     fd: &Funcdata,
     loc: &Address,

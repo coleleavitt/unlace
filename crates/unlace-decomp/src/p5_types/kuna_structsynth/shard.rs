@@ -389,7 +389,8 @@ impl ShardHook {
 }
 
 /// `lookup_or_mint`, through the hook.
-pub(super) fn lookup(
+#[doc(hidden)]
+pub fn lookup(
     handle: &ShardHandle,
     types: &dyn TypeFactory,
     fields: Vec<TypeField>,

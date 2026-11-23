@@ -16,7 +16,7 @@
 //!   sub  esp, 0x14         ; the frame is back where it was
 //! ```
 //!
-//! [`crate::p6_variables::kuna_calleepop`] reads a pop off the push run in
+//! [`crate::kuna_calleepop`] reads a pop off the push run in
 //! front of the call, and there is none here, so the guess stays at the return
 //! address alone. The `sub` then lowers the solved stack pointer by the popped
 //! bytes, and every later frame offset in the function is off by them: an
@@ -53,7 +53,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p6_variables::kuna_calleepop::{
+use crate::kuna_calleepop::{
     MAX_ARG_BYTES, RETURN_ADDRESS_ONLY, at_address, const_signed, decompose,
 };
 

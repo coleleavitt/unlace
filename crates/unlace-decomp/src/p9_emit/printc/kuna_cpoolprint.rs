@@ -21,7 +21,8 @@ impl PrintC {
     }
 
     /// `PrintC::opCpoolRefOp` / `PrintJava::opCpoolRefOp`.
-    pub(super) fn op_cpoolref_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
+    #[doc(hidden)]
+    pub fn op_cpoolref_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         let Some(o) = fd.obank().get(op) else { return };
         let outvn = o.get_out();
         let vn0 = o.get_in(0);
@@ -129,7 +130,8 @@ impl PrintC {
     }
 
     /// `PrintC::opNewOp`: `new T[n]` for an array allocation, `new(T)` otherwise.
-    pub(super) fn op_new_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
+    #[doc(hidden)]
+    pub fn op_new_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         let Some(o) = fd.obank().get(op) else { return };
         let outvn = o.get_out();
         let (vn0, vn1) = (o.get_in(0), o.get_in(1));
@@ -209,7 +211,8 @@ impl PrintC {
     }
 
     /// `PrintJava::opLoad`: a load through a reference prints its value.
-    pub(super) fn java_load_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
+    #[doc(hidden)]
+    pub fn java_load_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         let Some(ptr) = fd.obank().get(op).and_then(|o| o.get_in(1)) else {
             return;
         };
@@ -225,7 +228,8 @@ impl PrintC {
     }
 
     /// `PrintJava::opStore`.
-    pub(super) fn java_store_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
+    #[doc(hidden)]
+    pub fn java_store_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         let Some(o) = fd.obank().get(op) else { return };
         let (Some(ptr), val) = (o.get_in(1), o.get_in(2)) else {
             return;
@@ -247,7 +251,8 @@ impl PrintC {
 
     /// `PrintJava::opCallind`: `object.method(args)`, the object being the
     /// call's hidden `this` argument (`PrintC::getHiddenThisSlot`).
-    pub(super) fn java_callind_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
+    #[doc(hidden)]
+    pub fn java_callind_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         let Some(o) = fd.obank().get(op) else { return };
         let nin = o.num_input();
         let skip = fd.get_call_specs_index(op).map_or(-1, |index| {

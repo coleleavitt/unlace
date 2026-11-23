@@ -14,7 +14,8 @@ use unlace_num::opcodes::OpCode;
 
 pub(crate) use carrier::is_zero_word_carrier;
 
-pub(crate) fn fields(cx: &SpellCtx, ty: &Datatype) -> Option<[Rc<Datatype>; 2]> {
+#[doc(hidden)]
+pub fn fields(cx: &SpellCtx, ty: &Datatype) -> Option<[Rc<Datatype>; 2]> {
     if ty.get_metatype() != type_metatype::TYPE_STRUCT {
         return None;
     }
@@ -39,11 +40,13 @@ fn storage(fields: &[Rc<Datatype>; 2]) -> String {
     format!("struct {{ result0 {a}; result1 {b} }}")
 }
 
-pub(crate) fn storage_type(cx: &SpellCtx, ty: &Datatype) -> Option<String> {
+#[doc(hidden)]
+pub fn storage_type(cx: &SpellCtx, ty: &Datatype) -> Option<String> {
     Some(storage(&fields(cx, ty)?))
 }
 
-pub(crate) fn result_type(cx: &SpellCtx, ty: &Datatype) -> Option<String> {
+#[doc(hidden)]
+pub fn result_type(cx: &SpellCtx, ty: &Datatype) -> Option<String> {
     let [a, b] = names(&fields(cx, ty)?);
     Some(format!("({a}, {b})"))
 }
@@ -59,7 +62,8 @@ fn call_fields(cx: &SpellCtx, fd: &Funcdata, op: OpId) -> Option<[Rc<Datatype>; 
     fields(cx, proto.get_output_type()?)
 }
 
-pub(crate) fn call_projection(fd: &Funcdata, arch: &Architecture, op: OpId) -> Option<usize> {
+#[doc(hidden)]
+pub fn call_projection(fd: &Funcdata, arch: &Architecture, op: OpId) -> Option<usize> {
     if !arch
         .kuna_options
         .get::<crate::kuna_analysisgates::Godwarfsig>()
@@ -126,7 +130,8 @@ fn forwarded_call(
 }
 
 impl PrintC {
-    pub(crate) fn push_go_pair_conversion(
+    #[doc(hidden)]
+    pub fn push_go_pair_conversion(
         &mut self,
         fd: &Funcdata,
         value: VarnodeId,
@@ -162,12 +167,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn push_go_pair_extract(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        op: OpId,
-    ) -> bool {
+    #[doc(hidden)]
+    pub fn push_go_pair_extract(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         let Some(operation) = fd.obank().get(op) else {
             return false;
         };
@@ -216,7 +217,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn push_go_pair_call_adapter(
+    #[doc(hidden)]
+    pub fn push_go_pair_call_adapter(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -241,7 +243,8 @@ impl PrintC {
         projection
     }
 
-    pub(crate) fn push_go_pair_projection(&mut self, op: OpId, index: usize) {
+    #[doc(hidden)]
+    pub fn push_go_pair_projection(&mut self, op: OpId, index: usize) {
         self.push_atom(&Atom::with_op(
             format!("result{index}"),
             TagType::OpToken,
@@ -268,7 +271,8 @@ impl PrintC {
         ));
     }
 
-    pub(crate) fn emit_go_pair_assignment(
+    #[doc(hidden)]
+    pub fn emit_go_pair_assignment(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -295,7 +299,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn push_go_pair_return(
+    #[doc(hidden)]
+    pub fn push_go_pair_return(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -344,12 +349,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn push_go_pair_piece(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        op: OpId,
-    ) -> bool {
+    #[doc(hidden)]
+    pub fn push_go_pair_piece(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         static COMPOUND: OpToken = op_token("", "}", 2, 66, false, TokenType::Postsurround, 0, 0);
         let Some(operation) = fd.obank().get(op) else {
             return false;

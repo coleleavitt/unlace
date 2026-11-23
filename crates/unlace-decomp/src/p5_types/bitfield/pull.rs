@@ -1203,7 +1203,8 @@ impl BitFieldPullTransform {
 /// LOAD printed for another reader. Its value must obey the same ordering
 /// checks as a directly printed LOAD even though the pull itself is a pure
 /// p-code op.
-pub(crate) fn printed_load(data: &Funcdata, op: OpId) -> Option<OpId> {
+#[doc(hidden)]
+pub fn printed_load(data: &Funcdata, op: OpId) -> Option<OpId> {
     let operation = data.obank().get(op)?;
     match operation.code() {
         OpCode::CPUI_LOAD => Some(op),

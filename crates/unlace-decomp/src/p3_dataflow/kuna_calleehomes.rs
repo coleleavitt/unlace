@@ -25,7 +25,8 @@ fn signed(value: u64, size: u32) -> Option<i64> {
     }
 }
 
-pub(crate) fn is_home_slot(offset: i64, size: u32) -> bool {
+#[doc(hidden)]
+pub fn is_home_slot(offset: i64, size: u32) -> bool {
     size > 0
         && offset >= HOME_START
         && offset
@@ -95,7 +96,8 @@ fn verified_home_gap(fd: &Funcdata, call: &FuncCallSpecs) -> Option<Rc<AddrSpace
 /// stack return slot and the locked model starts its sole stack input at byte 40.
 /// The caller-side proof must still place the translated cell in a negative local.
 /// Kuna does not currently expose the cspec `stackshift` as a model property.
-pub(crate) fn caller_home_cell(
+#[doc(hidden)]
+pub fn caller_home_cell(
     fd: &Funcdata,
     call: &FuncCallSpecs,
     offset: i64,
@@ -116,7 +118,8 @@ pub(crate) fn caller_home_cell(
 
 /// Map a callee-frame byte interval through a resolved call stack offset. This
 /// proves physical aliasing only; it does not imply caller ownership.
-pub(crate) fn callee_frame_cell(
+#[doc(hidden)]
+pub fn callee_frame_cell(
     fd: &Funcdata,
     call: &FuncCallSpecs,
     offset: i64,
@@ -154,7 +157,7 @@ fn overlaps(start: i64, size: i32, other_start: i64, other_size: i32) -> bool {
 }
 
 fn frame_range(fd: &Funcdata, pointer: VarnodeId, width: i32) -> Option<(i64, i64)> {
-    let address = crate::p6_variables::kuna_stackranges::frame_address(fd, pointer)?;
+    let address = crate::kuna_stackranges::frame_address(fd, pointer)?;
     let (start, size) = address.extent(width)?;
     let start = signed(start, u32::try_from(address.pointer_size).ok()?)?;
     Some((start, start.checked_add(i64::from(size))?))
@@ -211,7 +214,7 @@ fn stack_access_width(fd: &Funcdata, op: OpId, code: OpCode) -> Option<i32> {
 }
 
 fn frame_value_overlaps(fd: &Funcdata, vn: VarnodeId, start: i64, size: i32) -> Option<bool> {
-    let address = crate::p6_variables::kuna_stackranges::frame_address(fd, vn)?;
+    let address = crate::kuna_stackranges::frame_address(fd, vn)?;
     let (frame_start, frame_size) = address.extent(1)?;
     let frame_start = signed(frame_start, u32::try_from(address.pointer_size).ok()?)?;
     Some(overlaps(frame_start, frame_size, start, size))
@@ -263,19 +266,14 @@ fn strict_other_call_unobserved(fd: &Funcdata, id: OpId, start: u64, size: i32) 
     let Some(mask) = 1u32.checked_shl(size as u32).map(|bits| bits - 1) else {
         return false;
     };
-    crate::p3_dataflow::kuna_calleememory::unobserved_strict(fd, id, start, size, mask)
-        == Some(mask)
+    crate::kuna_calleememory::unobserved_strict(fd, id, start, size, mask) == Some(mask)
 }
 
 /// Check caller operations for reads, forwarding, or unresolved aliases of a
 /// mapped home cell. Direct calls need complete strict summaries; indirect and
 /// user calls remain barriers.
-pub(crate) fn caller_home_unobserved(
-    fd: &Funcdata,
-    current_call: OpId,
-    start: u64,
-    size: i32,
-) -> bool {
+#[doc(hidden)]
+pub fn caller_home_unobserved(fd: &Funcdata, current_call: OpId, start: u64, size: i32) -> bool {
     if !(1..=16).contains(&size) {
         return false;
     }
@@ -345,9 +343,8 @@ pub(crate) fn caller_home_unobserved(
                                     |data| space.get_offset() == data.get_index() as u64,
                                 )
                         });
-            let access_space =
-                crate::p3_dataflow::ruleaction_4::RuleLoadVarnode::check_spacebase(fd, id)
-                    .map(|(space, _)| space);
+            let access_space = crate::ruleaction_4::RuleLoadVarnode::check_spacebase(fd, id)
+                .map(|(space, _)| space);
             if let Some((first, end)) = pointer_range {
                 if overlaps(first, (end - first) as i32, start_signed, size) {
                     if op.code() == OpCode::CPUI_LOAD {
@@ -396,8 +393,7 @@ pub(crate) fn caller_home_unobserved(
                         return false;
                     };
                     if !pointer_temporary(fd, out_id)
-                        || crate::p6_variables::kuna_stackranges::frame_address(fd, out_id)
-                            .is_none()
+                        || crate::kuna_stackranges::frame_address(fd, out_id).is_none()
                     {
                         return false;
                     }
@@ -411,4 +407,4 @@ pub(crate) fn caller_home_unobserved(
 
 #[cfg(test)]
 #[path = "kuna_calleehomes/tests.rs"]
-pub(crate) mod tests;
+pub mod tests;

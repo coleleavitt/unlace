@@ -1,5 +1,5 @@
 //! Unit tests for the caller-scratch boundary test.  Every case runs through
-//! [`plan_from_body`](crate::p4_calls::kuna_calleearitybody::plan_from_body).  The end-to-end behaviour is
+//! [`plan_from_body`](crate::kuna_calleearitybody::plan_from_body).  The end-to-end behaviour is
 //! `tests/cli/hint-printing-call-loses.json` and
 //! `tests/stages/kuna-calleearityscratch.xml`.
 
@@ -11,9 +11,9 @@ use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::int4;
 
 use crate::context::VarnodeId;
-use crate::p4_calls::kuna_calleearitybody::plan_from_body;
-use crate::p4_calls::kuna_calleearitycut::accepts_cut_run;
-use crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead;
+use crate::kuna_calleearitybody::plan_from_body;
+use crate::kuna_calleearitycut::accepts_cut_run;
+use crate::kuna_calleedeadarg::CalleeEntryDead;
 
 const REG: int4 = 3;
 

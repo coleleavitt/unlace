@@ -36,7 +36,8 @@ pub struct ObjectAssertion {
 }
 
 impl ObjectAssertion {
-    pub(crate) fn view_name(&self, ty: &Datatype) -> String {
+    #[doc(hidden)]
+    pub fn view_name(&self, ty: &Datatype) -> String {
         let types: BTreeSet<_> = self
             .uses
             .iter()
@@ -171,7 +172,8 @@ pub fn apply(
     Ok(true)
 }
 
-pub(crate) fn validate(fd: &Funcdata) -> Result<(), String> {
+#[doc(hidden)]
+pub fn validate(fd: &Funcdata) -> Result<(), String> {
     for assertion in specs(fd) {
         if !fd
             .get_arch()
@@ -337,7 +339,8 @@ fn bind_use(
     Some(())
 }
 
-pub(crate) fn backing_view(
+#[doc(hidden)]
+pub fn backing_view(
     fd: &mut Funcdata,
     call: OpId,
     width: i32,
@@ -388,7 +391,8 @@ pub(crate) fn backing_view(
     Some(value)
 }
 
-pub(crate) fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
+#[doc(hidden)]
+pub fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
     let assertions = specs(fd).to_vec();
     let mut aliases = BTreeMap::new();
     for assertion in assertions {
@@ -415,7 +419,8 @@ pub(crate) fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
     }
 }
 
-pub(crate) fn seed_writes(
+#[doc(hidden)]
+pub fn seed_writes(
     fd: &mut Funcdata,
     start: u64,
     backing: &Rc<Datatype>,

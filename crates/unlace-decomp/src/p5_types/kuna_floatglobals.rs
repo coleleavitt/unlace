@@ -64,7 +64,8 @@ impl FloatScan {
 /// Does the program only move the `size`-byte global at `addr` through float
 /// registers?  `false` while the answer is not known yet, and the function is
 /// marked so the console takes the scan and decides it again.
-pub(crate) fn float_only(data: &Funcdata, addr: &Address, size: int4) -> bool {
+#[doc(hidden)]
+pub fn float_only(data: &Funcdata, addr: &Address, size: int4) -> bool {
     let glb = data.get_arch();
     if !matches!(size, 4 | 8) {
         return false;

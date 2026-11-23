@@ -6,7 +6,7 @@
 //! `foldcallret` (§6.4) lets an order-safe single-use call output fall through
 //! `base_explicit`'s forced-explicit call arm, but that is only the first of two
 //! gates.  `ActionMarkImplied` then runs
-//! [`check_implied_cover`](crate::p6_variables::coreaction_cleanup), whose third
+//! [`check_implied_cover`](crate::coreaction_cleanup), whose third
 //! arm forces a Varnode explicit when one of its operands cannot have its Cover
 //! inflated to the print site without colliding with another SSA version of the
 //! same `HighVariable` (`Merge::inflate_test`).  Upstream never reaches that arm
@@ -68,7 +68,7 @@
 //!
 //! folding `helper(g)` into the last statement evaluates it *after* `k = 42` and
 //! changes what it returns.
-//! [`op_writes_tied_storage`](crate::p6_variables::kuna_callretfold::op_writes_tied_storage)
+//! [`op_writes_tied_storage`](crate::kuna_callretfold::op_writes_tied_storage)
 //! is the missing barrier, and every span this module clears is tested with it —
 //! for a frame slot as well, since the callee can reach one whenever the frame
 //! address escaped into the call.  (The same hole is reachable through
@@ -89,7 +89,7 @@
 //! block behind a branch.  The rejection this module discounts is sometimes the
 //! only thing holding such a call in place, so the discount re-derives the real
 //! print point (the end of
-//! [`print_chain`](crate::p6_variables::kuna_callretfold::print_chain)) and
+//! [`print_chain`](crate::kuna_callretfold::print_chain)) and
 //! re-runs the span guard over the whole distance the call would move.  A print
 //! point outside the call's own block, or one with a barrier or a global write
 //! in between, declines.  So does a chain into the right-hand operand of a
@@ -174,13 +174,13 @@ pub fn conflict_is_self_call_effect(
 /// `use_op`; this re-runs the guard over the span from the call to the statement
 /// the folded expression actually lands in, which is where it is evaluated at
 /// run time, and adds the memory-write barrier
-/// [`op_writes_tied_storage`](crate::p6_variables::kuna_callretfold::op_writes_tied_storage)
+/// [`op_writes_tied_storage`](crate::kuna_callretfold::op_writes_tied_storage)
 /// that the opcode test misses.  The print point itself is not a barrier — the
 /// folded expression is evaluated as its operand, before it — but its *other*
 /// operands must not read an effect of the call, so the INDIRECT test covers it
 /// too.  A chain into the right-hand operand of a short-circuit operator
 /// declines: see
-/// [`chain_reaches_short_circuit_rhs`](crate::p6_variables::kuna_callretfold::chain_reaches_short_circuit_rhs).
+/// [`chain_reaches_short_circuit_rhs`](crate::kuna_callretfold::chain_reaches_short_circuit_rhs).
 ///
 /// This is wider than either span `foldcallret` clears — every opcode, the
 /// storage test with no self-copy exemption, no exemption for the ops the

@@ -9,14 +9,16 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct ByteAddress {
+#[doc(hidden)]
+pub struct ByteAddress {
     pub name: String,
     pub offset: i32,
     pub terms: Vec<crate::kuna_stackranges::IndexTerm>,
     pub pointer_size: i32,
 }
 
-pub(crate) struct Access {
+#[doc(hidden)]
+pub struct Access {
     pub pointer: VarnodeId,
     pub value: Option<VarnodeId>,
     pub datatype: Rc<Datatype>,
@@ -26,7 +28,8 @@ pub(crate) struct Access {
 
 /// Without `stackviews`, only accesses inside a recovered parameter backing
 /// are copied; other memory keeps its ordinary dereference.
-pub(crate) fn access(fd: &Funcdata, op: OpId) -> Option<Access> {
+#[doc(hidden)]
+pub fn access(fd: &Funcdata, op: OpId) -> Option<Access> {
     if !crate::kuna_stackviews::enabled(fd) {
         return None;
     }

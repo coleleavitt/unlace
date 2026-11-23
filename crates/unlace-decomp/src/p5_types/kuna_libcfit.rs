@@ -48,7 +48,8 @@ use unlace_base::types::int4;
 
 /// Does the value call `op` reads in `slot` get used outside the libc
 /// aggregate `ct` points at?
-pub(crate) fn overruns(data: &Funcdata, op: OpId, slot: int4, ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn overruns(data: &Funcdata, op: OpId, slot: int4, ct: &Datatype) -> bool {
     if !data.get_arch().libctypes {
         return false;
     }
@@ -63,7 +64,8 @@ pub(crate) fn overruns(data: &Funcdata, op: OpId, slot: int4, ct: &Datatype) -> 
 
 /// Should type propagation refuse to carry `ct` onto `vn`? The same question
 /// [`overruns`] asks at a call, asked of the Varnode the type would land on.
-pub(crate) fn refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
     if !data.get_arch().libctypes {
         return false;
     }
@@ -74,7 +76,8 @@ pub(crate) fn refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
 }
 
 /// The `void *` the vote falls back to, as wide as the declared pointer.
-pub(crate) fn width_stable_vote(data: &Funcdata, ct: &Datatype) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn width_stable_vote(data: &Funcdata, ct: &Datatype) -> Option<Rc<Datatype>> {
     let tlst = data.get_arch().types()?;
     let void = tlst.get_type_void().ok()?;
     let ws = ct.get_word_size().unwrap_or(1);

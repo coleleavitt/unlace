@@ -104,7 +104,8 @@ const ZERO_DEPTH: u32 = 8;
 
 /// Preserve pending return reads until scheduled frame SSA can resolve spills.
 /// A LOAD is not itself proof: it may reload unused incoming arguments.
-pub(crate) fn awaiting_stack(data: &Funcdata, active: &ParamActive, returns: &[OpId]) -> bool {
+#[doc(hidden)]
+pub fn awaiting_stack(data: &Funcdata, active: &ParamActive, returns: &[OpId]) -> bool {
     let Some(stack) = data.get_arch().manage().get_stack_space() else {
         return false;
     };
@@ -182,11 +183,8 @@ fn pending_stack_word(
 /// A high-first pair with at least one complete declared integer call result.
 /// Other paths may replace either word with a literal, including before the
 /// simplification pool folds it, but may not introduce unrelated live values.
-pub(crate) fn whole_pair(
-    data: &Funcdata,
-    active: &ParamActive,
-    returns: &[OpId],
-) -> Option<[i32; 2]> {
+#[doc(hidden)]
+pub fn whole_pair(data: &Funcdata, active: &ParamActive, returns: &[OpId]) -> Option<[i32; 2]> {
     let proto = data.get_func_proto();
     if proto.is_output_locked() || !proto.has_model() || active.get_num_trials() < 2 {
         return None;
@@ -675,7 +673,8 @@ fn below_noops(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
 
 /// The values `vn` merges: walk back through phis, value-preserving INDIRECTs
 /// and the injected no-op of a return's mode switch.
-pub(crate) fn roots(data: &Funcdata, vn: VarnodeId) -> Option<Vec<VarnodeId>> {
+#[doc(hidden)]
+pub fn roots(data: &Funcdata, vn: VarnodeId) -> Option<Vec<VarnodeId>> {
     let mut out = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     let mut work = vec![vn];
@@ -1149,7 +1148,8 @@ fn is_call_result(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
 }
 
 /// Is the INDIRECT creation `op` a call's clobber of its output?
-pub(crate) fn created_by_call(data: &Funcdata, op: &crate::op::PcodeOp) -> bool {
+#[doc(hidden)]
+pub fn created_by_call(data: &Funcdata, op: &crate::op::PcodeOp) -> bool {
     let Some(iop) = op.get_in(1).and_then(|i| data.vbank().get(i)) else {
         return false;
     };
@@ -1484,13 +1484,13 @@ pub fn plant(data: &mut Funcdata) {
     if first_size != second_size || !only_returns_read(data, &first_addr, first_size) {
         return;
     }
-    let plant_first = !crate::p4_calls::kuna_passthrough::touched(data, &first_addr, first_size);
+    let plant_first = !crate::kuna_passthrough::touched(data, &first_addr, first_size);
     let plant_second = !named_whole(data, &second_addr, second_size);
     if plant_first {
-        crate::p4_calls::kuna_voidret::plant_piece(data, first_addr, first_size);
+        crate::kuna_voidret::plant_piece(data, first_addr, first_size);
     }
     if plant_second {
-        crate::p4_calls::kuna_voidret::plant_piece(data, second_addr, second_size);
+        crate::kuna_voidret::plant_piece(data, second_addr, second_size);
     }
 }
 

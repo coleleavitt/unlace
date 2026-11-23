@@ -47,7 +47,8 @@ fn scratch(code: OpCode) -> bool {
     )
 }
 
-pub(super) fn flag_only_results(ops: &[RawOp]) -> Vec<bool> {
+#[doc(hidden)]
+pub fn flag_only_results(ops: &[RawOp]) -> Vec<bool> {
     let mut safe = vec![false; ops.len()];
     for (index, op) in ops.iter().enumerate().rev() {
         let Some(out) = op.out.as_ref() else { continue };

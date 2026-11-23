@@ -760,7 +760,8 @@ fn pull_absorb_comp_zero(data: &mut Funcdata, comp_op: OpId, pull_op: OpId) -> i
 
 /// `RulePullAbsorb::applyOp` (bitfield.cc:2168-2208): walk the descendants of the
 /// `ZPULL`/`SPULL` output and dispatch into the absorb* helpers.
-pub(super) fn pull_absorb_apply(op: OpId, data: &mut Funcdata) -> int4 {
+#[doc(hidden)]
+pub fn pull_absorb_apply(op: OpId, data: &mut Funcdata) -> int4 {
     let outvn = match op_out(data, op) {
         Some(v) => v,
         None => return 0,
@@ -1104,7 +1105,8 @@ fn insert_absorb_nested_and(data: &mut Funcdata, base_op: OpId, insert_op: OpId)
 
 /// `RuleInsertAbsorb::applyOp` (bitfield.cc:2363-2400): switch on the def opcode
 /// of the INSERT value input (`in(1)`) and dispatch into the absorb* helpers.
-pub(super) fn insert_absorb_apply(op: OpId, data: &mut Funcdata) -> int4 {
+#[doc(hidden)]
+pub fn insert_absorb_apply(op: OpId, data: &mut Funcdata) -> int4 {
     let in_vn = match op_in(data, op, 1) {
         Some(v) => v,
         None => return 0,

@@ -39,7 +39,8 @@ use crate::varmap::AliasChecker;
 
 /// Flag trial `i` of call spec `idx` for [`recheck`] when one of `loads`, the
 /// LOADs its walk took as solid, reads the caller's frame.
-pub(crate) fn note(data: &mut Funcdata, idx: int4, i: int4, loads: &[OpId]) {
+#[doc(hidden)]
+pub fn note(data: &mut Funcdata, idx: int4, i: int4, loads: &[OpId]) {
     if loads.is_empty() || data.get_arch().source_lang.is_go() {
         return;
     }
@@ -62,7 +63,8 @@ pub(crate) fn note(data: &mut Funcdata, idx: int4, i: int4, loads: &[OpId]) {
 /// Drop the flagged trials of call spec `idx` that [`junk`] rejects and that
 /// no other active trial sits above in the callee model's order, unless the
 /// call's format string names them.
-pub(crate) fn recheck(data: &mut Funcdata, idx: int4, mut alias: Option<&mut AliasChecker>) {
+#[doc(hidden)]
+pub fn recheck(data: &mut Funcdata, idx: int4, mut alias: Option<&mut AliasChecker>) {
     if !data.get_call_specs(idx).proto().has_model() {
         return;
     }

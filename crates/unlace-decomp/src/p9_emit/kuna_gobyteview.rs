@@ -8,7 +8,8 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
-pub(crate) enum View {
+#[doc(hidden)]
+pub enum View {
     Whole,
     Integer(Rc<Datatype>),
 }
@@ -70,7 +71,8 @@ fn value_type(ty: Rc<Datatype>) -> Option<Rc<Datatype>> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn plan(
+#[doc(hidden)]
+pub fn plan(
     fd: &Funcdata,
     arch: &Architecture,
     vn: VarnodeId,

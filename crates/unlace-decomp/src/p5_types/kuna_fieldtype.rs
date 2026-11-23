@@ -594,7 +594,8 @@ fn choose(
 /// function, base, offset, width, declared type, and every access of that width
 /// with what the program does with its value (`+` held as a pointer, `#` used
 /// as a number).  Changes nothing.
-pub(crate) fn trace_on() -> bool {
+#[doc(hidden)]
+pub fn trace_on() -> bool {
     use std::sync::OnceLock;
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KUNA_FIELDTYPE_TRACE").is_some())
@@ -656,7 +657,8 @@ fn uses(data: &Funcdata, v: VarnodeId) -> String {
 }
 
 /// Print one [`trace_on`] line per field of the record synthesized over `base`.
-pub(crate) fn trace(
+#[doc(hidden)]
+pub fn trace(
     data: &Funcdata,
     base: VarnodeId,
     fields: &[(

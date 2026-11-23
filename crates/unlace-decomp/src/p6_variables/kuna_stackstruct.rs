@@ -520,7 +520,8 @@ fn measure(
 
 /// Replace the hints of every recognized frame record with one fixed hint of
 /// its synthesized structure.
-pub(super) fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
+#[doc(hidden)]
+pub fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     if !fd
         .get_arch()
         .kuna_options
@@ -621,7 +622,7 @@ fn mint(
 
 crate::kuna_flag!(
     /// (kuna `stackstruct`) Lay out an address-taken frame record as one
-    /// structure. See [`crate::p6_variables::kuna_stackstruct`].
+    /// structure. See [`crate::kuna_stackstruct`].
     StackStruct,
     "stackstruct",
     "Address-taken frame record layout",
@@ -632,25 +633,25 @@ crate::kuna_flag!(
 /// (kuna `stackstruct`) Every frame record a `restructure_varnode` pass laid out; later passes
 /// keep it while no access contradicts its bounds. Kept across `Funcdata::clear`.
 #[derive(Default)]
-struct RecordsSlot(std::cell::RefCell<Vec<crate::p6_variables::kuna_stackstruct::StackRecord>>);
+struct RecordsSlot(std::cell::RefCell<Vec<crate::kuna_stackstruct::StackRecord>>);
 crate::kuna_func_state!(RecordsSlot, keep_across_clear: true);
 
 /// The `kuna_stackstruct` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStackstructExt {
     /// (kuna `stackstruct`) The frame records earlier passes laid out.
-    fn stack_records(&self) -> Vec<crate::p6_variables::kuna_stackstruct::StackRecord>;
+    fn stack_records(&self) -> Vec<crate::kuna_stackstruct::StackRecord>;
     /// (kuna `stackstruct`) Remember a frame record, replacing one at the same start.
-    fn record_stack_record(&self, r: crate::p6_variables::kuna_stackstruct::StackRecord);
+    fn record_stack_record(&self, r: crate::kuna_stackstruct::StackRecord);
 }
 
 impl FuncdataStackstructExt for crate::funcdata::Funcdata {
     /// (kuna `stackstruct`) The frame records earlier passes laid out.
-    fn stack_records(&self) -> Vec<crate::p6_variables::kuna_stackstruct::StackRecord> {
+    fn stack_records(&self) -> Vec<crate::kuna_stackstruct::StackRecord> {
         self.kuna_state::<RecordsSlot>().0.borrow().clone()
     }
     /// (kuna `stackstruct`) Remember a frame record, replacing one at the same start.
-    fn record_stack_record(&self, r: crate::p6_variables::kuna_stackstruct::StackRecord) {
+    fn record_stack_record(&self, r: crate::kuna_stackstruct::StackRecord) {
         let mut all = self.kuna_state::<RecordsSlot>().0.borrow_mut();
         all.retain(|o| o.start != r.start);
         all.push(r);

@@ -5,7 +5,7 @@
 //! # The presentation gap
 //!
 //! Ghidra/kuna force **every** call output to be *explicit* in
-//! [`ActionMarkExplicit::base_explicit`](crate::p6_variables::coreaction_cleanup)
+//! [`ActionMarkExplicit::base_explicit`](crate::coreaction_cleanup)
 //! (`coreaction.cc:3105`, the `if (op->isCall()) return -1;` arm), so a call
 //! result always spills to its own named local:
 //!
@@ -219,7 +219,8 @@ pub fn expression_contains_foldable_call(data: &Funcdata, root: VarnodeId) -> bo
 /// effect, so the call expression must not be sunk past it (GH-181).  Marker
 /// ops (a later call's own INDIRECTs chain the earlier call's versions as
 /// inputs) have no textual evaluation point and are skipped.
-pub(crate) fn op_reads_indirect_output_of(data: &Funcdata, op: OpId, call: OpId) -> bool {
+#[doc(hidden)]
+pub fn op_reads_indirect_output_of(data: &Funcdata, op: OpId, call: OpId) -> bool {
     let o = match data.obank().get(op) {
         Some(o) => o,
         None => return true, // stale: be conservative
@@ -264,7 +265,7 @@ pub(crate) fn op_reads_indirect_output_of(data: &Funcdata, op: OpId, call: OpId)
 /// travelling and is evaluated wherever that value is finally consumed, which
 /// can be several statements later — past a write the callee reads (GH-657) or
 /// in another block.  Called from
-/// [`check_implied_cover`](crate::p6_variables::coreaction_cleanup), where
+/// [`check_implied_cover`](crate::coreaction_cleanup), where
 /// `ActionMarkImplied`'s descendants-first walk has already classified the
 /// downstream values, so the landing statement is derivable.
 pub fn fold_print_point_is_order_safe(data: &Funcdata, vn: VarnodeId) -> bool {
@@ -288,7 +289,8 @@ const MAX_IMPLIED_CHAIN: usize = 8;
 /// implied and the expression migrates into that value's own consumer, so the
 /// walk follows the implied chain.  `None` means there is no provable single
 /// print point: a marker, a fan-out, or a value not classified yet.
-pub(crate) fn print_chain(data: &Funcdata, use_op: OpId) -> Option<Vec<OpId>> {
+#[doc(hidden)]
+pub fn print_chain(data: &Funcdata, use_op: OpId) -> Option<Vec<OpId>> {
     let mut chain = Vec::with_capacity(MAX_IMPLIED_CHAIN);
     let mut op = use_op;
     for _ in 0..MAX_IMPLIED_CHAIN {
@@ -441,7 +443,8 @@ fn op_is_statement(data: &Funcdata, op: OpId) -> bool {
 /// stop being made, so it keeps its own statement.  The left-hand operand is
 /// always evaluated, and the printer emits input 0 on the left.  Both fold
 /// predicates, this module's and `foldcallretphi`'s, ask it over the same chain.
-pub(crate) fn chain_reaches_short_circuit_rhs(data: &Funcdata, call: OpId, chain: &[OpId]) -> bool {
+#[doc(hidden)]
+pub fn chain_reaches_short_circuit_rhs(data: &Funcdata, call: OpId, chain: &[OpId]) -> bool {
     let Some(mut val) = data.obank().get(call).and_then(|o| o.get_out()) else {
         return true;
     };
@@ -503,7 +506,8 @@ fn op_is_self_copy(data: &Funcdata, op: OpId) -> bool {
 ///
 /// This is the set for the span from the call to its single use.  `foldcallretphi`
 /// composes it too, over the wider span it clears for its own folds.
-pub(crate) fn op_is_barrier(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn op_is_barrier(data: &Funcdata, op: OpId) -> bool {
     let o = match data.obank().get(op) {
         Some(o) => o,
         None => return true, // stale: be conservative
@@ -557,7 +561,8 @@ fn op_is_write_barrier(data: &Funcdata, op: OpId) -> bool {
 /// This is the storage test alone; [`op_writes_observable_storage`] is the one
 /// the fold predicates use.  `foldcallretphi` composes this one, unsoftened, in
 /// the span guard it shipped with.
-pub(crate) fn op_writes_tied_storage(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn op_writes_tied_storage(data: &Funcdata, op: OpId) -> bool {
     let Some(o) = data.obank().get(op) else {
         return true; // stale: be conservative
     };
@@ -580,11 +585,13 @@ fn op_writes_observable_storage(data: &Funcdata, op: OpId) -> bool {
     op_writes_tied_storage(data, op) && !op_is_self_copy(data, op)
 }
 
-pub(crate) fn op_is_marker(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn op_is_marker(data: &Funcdata, op: OpId) -> bool {
     data.obank().get(op).map(|o| o.is_marker()).unwrap_or(true)
 }
 
-pub(crate) fn op_parent(data: &Funcdata, op: OpId) -> Option<crate::context::BlockId> {
+#[doc(hidden)]
+pub fn op_parent(data: &Funcdata, op: OpId) -> Option<crate::context::BlockId> {
     data.obank().get(op).and_then(|o| o.get_parent())
 }
 

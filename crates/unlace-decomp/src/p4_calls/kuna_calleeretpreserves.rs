@@ -39,7 +39,7 @@
 //! trial for it. The caller's `xor eax,eax` is then dead, the trial is used by
 //! the `RET`, and the call acquires a return value the machine never computes.
 //!
-//! [`calleepreserves`](crate::p4_calls::kuna_calleepreserves) is the pass that
+//! [`calleepreserves`](crate::kuna_calleepreserves) is the pass that
 //! narrows `killedbycall` from the callee's own decoded body, and it declines
 //! here for its own reason: its positive-evidence gate asks the callee to have
 //! written a register the convention promises is *preserved*, which is the
@@ -175,7 +175,8 @@ fn undeclared_model_output(fc: &FuncCallSpecs, addr: &Address, size: int4) -> bo
 /// summary, but it does not overrule facts the summary did recover. A known
 /// write to any ABI return storage, a STORE into an ABI output processor space,
 /// and an explicit prototype effect all win.
-pub(crate) fn exact_cookie_preserves_return_storage(
+#[doc(hidden)]
+pub fn exact_cookie_preserves_return_storage(
     data: &Funcdata,
     fc: &FuncCallSpecs,
     addr: &Address,
@@ -196,7 +197,8 @@ pub(crate) fn exact_cookie_preserves_return_storage(
 /// The caller additionally requires this cell to be part of its own declared
 /// output, so this does not widen the generic complete-body proof or retain an
 /// unrelated scratch-register slice.
-pub(crate) fn exact_cookie_preserves_unjustified_return_slice(
+#[doc(hidden)]
+pub fn exact_cookie_preserves_unjustified_return_slice(
     data: &Funcdata,
     fc: &FuncCallSpecs,
     addr: &Address,
@@ -210,7 +212,8 @@ pub(crate) fn exact_cookie_preserves_unjustified_return_slice(
 
 /// Return the exact ABI-output slice contained by a wider killed range when the
 /// generic complete-body proof permits preserving that slice.
-pub(crate) fn callee_preserved_output_within(
+#[doc(hidden)]
+pub fn callee_preserved_output_within(
     data: &Funcdata,
     fc: &FuncCallSpecs,
     addr: &Address,
@@ -223,7 +226,8 @@ pub(crate) fn callee_preserved_output_within(
 
 /// Return the exact ABI-output slice contained by a wider killed range when an
 /// exact cookie site permits preserving that slice.
-pub(crate) fn exact_cookie_preserved_output_within(
+#[doc(hidden)]
+pub fn exact_cookie_preserved_output_within(
     data: &Funcdata,
     fc: &FuncCallSpecs,
     addr: &Address,
@@ -293,7 +297,8 @@ fn locked_void_uses_model_output(fc: &FuncCallSpecs) -> bool {
 /// an ABI return register before the call. In that one state, use the model's
 /// output list solely to identify the narrow set of killed registers for which
 /// the body proof is valid. A non-void locked return continues to win.
-pub(crate) fn characterize_preserved_output(
+#[doc(hidden)]
+pub fn characterize_preserved_output(
     fc: &FuncCallSpecs,
     addr: &Address,
     size: int4,
@@ -310,7 +315,8 @@ pub(crate) fn characterize_preserved_output(
 
 /// The evidence half of [`callee_preserves_return_storage`], with the
 /// "is this the call's return storage" question already answered.
-pub(crate) fn callee_never_writes(
+#[doc(hidden)]
+pub fn callee_never_writes(
     data: &Funcdata,
     fc: &FuncCallSpecs,
     addr: &Address,

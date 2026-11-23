@@ -10,7 +10,8 @@ use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
 
-pub(super) fn build(
+#[doc(hidden)]
+pub fn build(
     fd: &mut Funcdata,
     addr: &Address,
     size: int4,
@@ -85,10 +86,8 @@ pub(super) fn build(
 }
 
 /// Limit guard construction only in a closed frame with immutable pointer slots.
-pub(super) fn bounds(
-    fd: &Funcdata,
-    stores: &[OpId],
-) -> std::collections::HashMap<OpId, (u64, int4)> {
+#[doc(hidden)]
+pub fn bounds(fd: &Funcdata, stores: &[OpId]) -> std::collections::HashMap<OpId, (u64, int4)> {
     use std::collections::HashMap;
     let empty = HashMap::new();
     if stores.len() < 16
@@ -160,7 +159,8 @@ pub(super) fn bounds(
 }
 
 /// Admit the whole provisional guard set or leave the existing policy in charge.
-pub(super) fn within_budget(
+#[doc(hidden)]
+pub fn within_budget(
     fd: &Funcdata,
     stores: &[OpId],
     bounds: &std::collections::HashMap<OpId, (u64, int4)>,
@@ -261,7 +261,8 @@ fn overlaps(
         || stack.wrap_offset(b.wrapping_sub(a)) < a_size as u64
 }
 
-pub(super) fn prune(fd: &mut Funcdata, guards: &[(OpId, OpId)]) {
+#[doc(hidden)]
+pub fn prune(fd: &mut Funcdata, guards: &[(OpId, OpId)]) {
     if guards.is_empty() {
         return;
     }

@@ -277,7 +277,8 @@ fn loses(arch: &Architecture, data: &Funcdata, callee: Key) -> bool {
 /// `Some(stated)` when a tail call to this function loses nothing: it takes
 /// and returns nothing (`false`), or its statement fixes what it takes and
 /// what it returns (`true`).
-pub(crate) fn callable_by_recovery(
+#[doc(hidden)]
+pub fn callable_by_recovery(
     arch: &mut Architecture,
     entry: &Address,
     data: &Funcdata,
@@ -325,13 +326,13 @@ pub(crate) fn callable_by_recovery(
 fn takes_every_input(
     arch: &mut Architecture,
     entry: &Address,
-    stated: &crate::p4_calls::kuna_protoorder::RecoveredTypes,
+    stated: &crate::kuna_protoorder::RecoveredTypes,
 ) -> bool {
-    use crate::p4_calls::kuna_entryreads::overlaps;
+    use crate::kuna_entryreads::overlaps;
     if stated
         .inputs
         .iter()
-        .any(|(a, _, _)| !crate::p4_calls::kuna_calleearitybody::is_register(a))
+        .any(|(a, _, _)| !crate::kuna_calleearitybody::is_register(a))
     {
         return false;
     }
@@ -345,8 +346,8 @@ fn takes_every_input(
     else {
         return false;
     };
-    let facts = crate::p4_calls::kuna_calleedeadarg::probe_cached(arch, entry, reg_idx)
-        .filter(|f| f.is_complete());
+    let facts =
+        crate::kuna_calleedeadarg::probe_cached(arch, entry, reg_idx).filter(|f| f.is_complete());
     stated.inputs.iter().all(|(a, s, _)| {
         overlaps(&stated.passes, a, *s)
             || match &facts {
@@ -361,7 +362,8 @@ fn takes_every_input(
 /// a callee-first run does not raise again (`pending`). A redo can refuse a
 /// tail call the first decompile took, and the stale `// tail-call` would
 /// print on the body the redo copies in.
-pub(crate) fn clear_stale_warnings(
+#[doc(hidden)]
+pub fn clear_stale_warnings(
     arch: &mut Architecture,
     entry: &Address,
     pending: &[(uint4, Address, String)],

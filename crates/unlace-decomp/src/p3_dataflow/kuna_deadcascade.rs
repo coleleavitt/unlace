@@ -22,7 +22,8 @@ use crate::funcdata::Funcdata;
 
 /// Remove `op`, which `removable` accepted, and when it is a join or a guard
 /// the dead chain of joins and guards behind it.
-pub(crate) fn remove(data: &mut Funcdata, op: OpId, removable: fn(OpId, &mut Funcdata) -> bool) {
+#[doc(hidden)]
+pub fn remove(data: &mut Funcdata, op: OpId, removable: fn(OpId, &mut Funcdata) -> bool) {
     let o = data.obank().get(op).expect("deadcascade: stale op");
     if !o.is_marker() {
         data.op_destroy(op);

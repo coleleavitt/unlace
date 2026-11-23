@@ -13,7 +13,8 @@ use crate::funcdata::Funcdata;
 /// offset whose width says nothing about the size of the referenced scalar.
 /// The address width is kept when [`splits_wider_object`] finds the frame map
 /// has likely cut a wider object in two.
-pub(crate) fn object_type(fd: &Funcdata, high: HighVariableId) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn object_type(fd: &Funcdata, high: HighVariableId) -> Option<Rc<Datatype>> {
     if crate::kuna_paramrefdecl::references_parameter_symbol(fd, high) {
         return None;
     }

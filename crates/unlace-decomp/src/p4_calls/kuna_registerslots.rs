@@ -41,7 +41,8 @@ fn extensions(entries: &[ParamEntry]) -> impl Iterator<Item = &Extension> {
 /// `registerextension` states only the slot-to-register extension, independently
 /// of how a smaller C type fills the slot. Existing fixed `extension` declarations
 /// continue to cover both extents.
-pub(crate) fn decode(
+#[doc(hidden)]
+pub fn decode(
     element: &unlace_base::xml::Element,
     register: Option<VarnodeData>,
     size: i32,
@@ -68,7 +69,8 @@ pub(crate) fn decode(
     Ok(extension)
 }
 
-pub(crate) fn assumed(
+#[doc(hidden)]
+pub fn assumed(
     entries: &[ParamEntry],
     addr: &Address,
     size: i32,
@@ -82,7 +84,8 @@ pub(crate) fn assumed(
 
 /// `maxsize` remains the slot width; an explicit fixed extension describes the
 /// rest of a wider named register. No extension is inferred from register aliases.
-pub(crate) fn declared(
+#[doc(hidden)]
+pub fn declared(
     register: Option<VarnodeData>,
     size: i32,
     alignment: i32,
@@ -116,7 +119,8 @@ pub(crate) fn declared(
 
 /// Canonicalize incoming argument words before SSA, for both inferred and locked
 /// prototypes. Entries sharing the physical container cannot state this unconditionally.
-pub(crate) fn apply(data: &mut Funcdata) -> KunaResult<()> {
+#[doc(hidden)]
+pub fn apply(data: &mut Funcdata) -> KunaResult<()> {
     if data
         .kuna_state::<crate::kuna_callmechanisms::State>()
         .register_slots
@@ -183,7 +187,8 @@ pub(crate) fn apply(data: &mut Funcdata) -> KunaResult<()> {
 /// the same extension on each physical piece; a narrow result may first be
 /// extended to its slot by the existing type-aware rule. Install before that
 /// rule so its word definition precedes the physical-register definition.
-pub(crate) fn apply_return(data: &mut Funcdata, index: i32) -> KunaResult<()> {
+#[doc(hidden)]
+pub fn apply_return(data: &mut Funcdata, index: i32) -> KunaResult<()> {
     let call = data.get_call_specs(index);
     let proto = call.proto();
     if !proto.has_model()
@@ -260,7 +265,8 @@ pub(crate) fn apply_return(data: &mut Funcdata, index: i32) -> KunaResult<()> {
 
 /// The argument slot a call reads from a heritaged physical register whose
 /// extension the compiler declares, in the caller's address perspective.
-pub(crate) fn input_slot(
+#[doc(hidden)]
+pub fn input_slot(
     call: &crate::fspec::FuncCallSpecs,
     addr: &Address,
     translated: &Address,
@@ -279,7 +285,8 @@ pub(crate) fn input_slot(
 /// Recover the logical return trial when heritage groups its read with the
 /// wider register. The upper bytes are defined by the compiler declaration,
 /// without enabling the generic overlap heuristic or widening the trial.
-pub(crate) fn guard_output(
+#[doc(hidden)]
+pub fn guard_output(
     data: &mut Funcdata,
     call: &mut crate::fspec::FuncCallSpecs,
     addr: &Address,

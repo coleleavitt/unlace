@@ -7,13 +7,15 @@ use unlace_num::opcodes::OpCode;
 const LIMIT: i64 = 65536;
 
 #[derive(Clone)]
-pub(crate) struct IndexTerm {
+#[doc(hidden)]
+pub struct IndexTerm {
     pub value: VarnodeId,
     pub scale: i64,
     pub op: OpId,
 }
 
-pub(crate) struct FrameAddress {
+#[doc(hidden)]
+pub struct FrameAddress {
     pub pointer_size: i32,
     pub offset: i64,
     pub first: i64,
@@ -140,7 +142,8 @@ fn signed_constant(value: u64, size: i32) -> i64 {
     }
 }
 
-pub(crate) fn frame_address(fd: &Funcdata, value: VarnodeId) -> Option<FrameAddress> {
+#[doc(hidden)]
+pub fn frame_address(fd: &Funcdata, value: VarnodeId) -> Option<FrameAddress> {
     if fd.get_arch().manage().get_stack_space()?.get_word_size() != 1 {
         return None;
     }
@@ -148,7 +151,8 @@ pub(crate) fn frame_address(fd: &Funcdata, value: VarnodeId) -> Option<FrameAddr
 }
 
 /// Pointer choices and unresolved pointer arms cannot prove frame disjointness.
-pub(crate) fn may_alias(fd: &Funcdata, value: VarnodeId, start: u64, size: i32) -> bool {
+#[doc(hidden)]
+pub fn may_alias(fd: &Funcdata, value: VarnodeId, start: u64, size: i32) -> bool {
     let Some(space) = fd.get_arch().manage().get_stack_space() else {
         return true;
     };

@@ -197,7 +197,8 @@ pub mod modifiers {
     /// non-boolean-preserving operator by `op_push_ir`.
     pub const CONDITION_CONTEXT: uint4 = 0x10000;
     /// Take a raw address when Rust emits an indexed STORE operand.
-    pub(crate) const RUST_RAW_INDEX_ADDRESS: uint4 = 0x20000;
+    #[doc(hidden)]
+    pub const RUST_RAW_INDEX_ADDRESS: uint4 = 0x20000;
 }
 
 /// Possible types of [`Atom`] (C++ `PrintLanguage::tagtype`,

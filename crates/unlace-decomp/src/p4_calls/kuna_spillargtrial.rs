@@ -124,7 +124,8 @@ impl OptionSpillArgTrial {
 
 /// The stack-pointer register storage this architecture's stack space is
 /// relative to (C++ `SpacebaseSpace::getSpacebase(0)`).
-pub(crate) fn stack_pointer_storage(data: &Funcdata) -> Option<VarnodeStorage> {
+#[doc(hidden)]
+pub fn stack_pointer_storage(data: &Funcdata) -> Option<VarnodeStorage> {
     let stackspc = data.get_arch().manage().get_stack_space()?;
     if stackspc.num_spacebase() < 1 {
         return None;
@@ -153,7 +154,8 @@ fn is_stack_pointer(data: &Funcdata, vn: VarnodeId, sp: &VarnodeStorage) -> bool
 ///
 /// Walks same-width copies and constant displacements back to a particular SP
 /// value. Unknown frame registers, phi nodes, and unbounded chains are declined.
-pub(crate) fn frame_slot(
+#[doc(hidden)]
+pub fn frame_slot(
     data: &Funcdata,
     ptr: VarnodeId,
     sp: &VarnodeStorage,
@@ -346,7 +348,7 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 /// (option `spillargtrial`).  `0` = off (upstream-faithful: every
 /// `CPUI_STORE` makes the trial inactive), `1` = spill/reload pairs only,
 /// `2` = any caller-frame store of the value.  See
-/// [`crate::p4_calls::kuna_spillargtrial`].
+/// [`crate::kuna_spillargtrial`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpillArgTrial(pub int4);
 
@@ -363,7 +365,7 @@ impl crate::kuna_optionset::KunaOption for SpillArgTrial {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p4_calls::kuna_spillargtrial::OptionSpillArgTrial.apply(value)?;
+        let (v, msg) = crate::kuna_spillargtrial::OptionSpillArgTrial.apply(value)?;
         Ok((SpillArgTrial(v), msg))
     }
 }

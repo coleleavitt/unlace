@@ -123,8 +123,8 @@ fn kuna_anchor_flags_default_to_div_values() {
     );
     assert_eq!(
         arch.kuna_options
-            .get::<crate::p8_structure::kuna_gotoreduce::GotoReduceMode>(),
-        crate::p8_structure::kuna_gotoreduce::GotoReduceMode::On
+            .get::<crate::kuna_gotoreduce::GotoReduceMode>(),
+        crate::kuna_gotoreduce::GotoReduceMode::On
     );
     assert!(
         arch.kuna_options

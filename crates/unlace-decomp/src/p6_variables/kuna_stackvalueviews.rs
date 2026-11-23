@@ -8,7 +8,8 @@ use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::unionresolve::ResolvedUnion;
 
-pub(crate) fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
+#[doc(hidden)]
+pub fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
     let mut edges = Vec::new();
     for id in fd.obank().iter_alive() {
         let op = fd.obank().get(id).unwrap();

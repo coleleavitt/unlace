@@ -118,7 +118,7 @@ fn exact_indirect_target_slot(
 /// load+jump, and for calls through an import slot.
 ///
 /// The flag says the slot was read through the call's own instruction
-/// ([`crate::p4_calls::kuna_slotargs`]).
+/// ([`crate::kuna_slotargs`]).
 fn indirect_target_slot(
     data: &Funcdata,
     call_op: crate::context::OpId,
@@ -608,7 +608,7 @@ impl Action for ActionDefaultParams {
                     let pieces = arch.callee_proto_pieces(&entry);
                     (
                         if own_slot {
-                            pieces.map(crate::p4_calls::kuna_slotargs::input_only)
+                            pieces.map(crate::kuna_slotargs::input_only)
                         } else {
                             pieces
                         },
@@ -680,15 +680,14 @@ impl Action for ActionDefaultParams {
                                 // (kuna) `calleeprotostack`: a locked parameter
                                 // list under a model that leaves its extrapop
                                 // unknown states how much the callee pops.  See
-                                // [`crate::p4_calls::kuna_calleeprotostack`].
+                                // [`crate::kuna_calleeprotostack`].
                                 Ok(()) => {
-                                    crate::p4_calls::kuna_calleeprotostack::resolve_declared_extra_pop(
+                                    crate::kuna_calleeprotostack::resolve_declared_extra_pop(
                                         &mut fp,
                                     );
                                     let op = data.get_call_specs(i).get_op();
-                                    (!own_slot
-                                        || crate::p4_calls::kuna_slotargs::backed(data, op, &fp))
-                                    .then(|| Rc::new(fp))
+                                    (!own_slot || crate::kuna_slotargs::backed(data, op, &fp))
+                                        .then(|| Rc::new(fp))
                                 }
                                 // The callee storage assignment hit an un-ported boundary: fall
                                 // back to the default-model recovery for this call site.
@@ -805,7 +804,7 @@ impl Action for ActionDefaultParams {
                 .callee_proto_model(data.get_call_specs(i).get_entry_address())
                 .is_some()
             {
-                crate::p4_calls::kuna_calleeprotostack::resolve_declared_extra_pop(
+                crate::kuna_calleeprotostack::resolve_declared_extra_pop(
                     data.get_call_specs_mut(i).proto_mut(),
                 );
             }
@@ -817,8 +816,8 @@ impl Action for ActionDefaultParams {
         }
         // (kuna) `msvcbyval`: size an MSVC `__cdecl` import's by-value class at
         // each call, now that every call's pop is known.  See
-        // [`crate::p4_calls::kuna_msvcbyval`].
-        crate::p4_calls::kuna_msvcbyval::size_slots(data);
+        // [`crate::kuna_msvcbyval`].
+        crate::kuna_msvcbyval::size_slots(data);
         0
     }
 }
@@ -897,17 +896,17 @@ impl Action for ActionExtraPopSetup {
         };
         let sb_addr = Address::new(point_space, point.offset);
         let sb_size = point.size as int4;
-        crate::p6_variables::kuna_stackexitanchor::record(data, &sb_addr);
+        crate::kuna_stackexitanchor::record(data, &sb_addr);
 
-        if crate::p4_calls::kuna_spsolve::settle(data, &sb_addr, sb_size) {
+        if crate::kuna_spsolve::settle(data, &sb_addr, sb_size) {
             return 0;
         }
-        let exact = crate::p4_calls::kuna_calleepurge::every_pop_settled(data);
+        let exact = crate::kuna_calleepurge::every_pop_settled(data);
         for i in 0..data.num_calls() {
-            let mut extrapop = crate::p4_calls::kuna_calleeretpurge::effective_extra_pop(data, i);
+            let mut extrapop = crate::kuna_calleeretpurge::effective_extra_pop(data, i);
             if extrapop == EXTRAPOP_UNKNOWN && exact {
                 // (kuna) A pop the callee's own returns prove; see
-                // [`crate::p4_calls::kuna_calleepurge`].
+                // [`crate::kuna_calleepurge`].
                 if let Some(ep) = data.get_call_specs(i).callee_purge() {
                     data.get_call_specs_mut(i).proto_mut().set_extra_pop(ep);
                     extrapop = ep;
@@ -1209,7 +1208,7 @@ impl ActionFuncLink {
         if data.obank().get(callop).and_then(|o| o.get_out()).is_some() {
             data.op_unset_output(callop);
         }
-        if let Err(error) = crate::p4_calls::kuna_registerslots::apply_return(data, idx) {
+        if let Err(error) = crate::kuna_registerslots::apply_return(data, idx) {
             data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
                 .failure = Some(error.to_string());
             return;
@@ -1317,14 +1316,14 @@ impl Action for ActionFuncLink {
             ActionFuncLink::func_link_input(i, data);
             ActionFuncLink::func_link_output(i, data);
         }
-        crate::p4_calls::kuna_calleereadarg::record_variadic_setups(data);
-        crate::p4_calls::kuna_passthrough::claim_untouched_registers(data);
+        crate::kuna_calleereadarg::record_variadic_setups(data);
+        crate::kuna_passthrough::claim_untouched_registers(data);
         for i in 0..size {
             crate::kuna_armfloatargs::link_call_inputs(data, i);
         }
-        crate::p4_calls::kuna_voidret::plant(data);
+        crate::kuna_voidret::plant(data);
         crate::kuna_retcallhalf::plant(data);
-        crate::p4_calls::kuna_callresultuse::plant(data);
+        crate::kuna_callresultuse::plant(data);
         crate::kuna_floatreg::note_float_pairs(data);
         0
     }
@@ -1470,7 +1469,7 @@ impl ActionActiveParam {
         &mut self,
         data: &mut Funcdata,
         aliascheck: &mut Option<crate::varmap::AliasChecker>,
-        held: &mut crate::p4_calls::kuna_calleestackargs::Contenders,
+        held: &mut crate::kuna_calleestackargs::Contenders,
         idx: int4,
     ) -> bool {
         use crate::funcdata_callsite::check_input_trial_use;
@@ -1564,20 +1563,20 @@ impl Action for ActionActiveParam {
         // aliascheck.gather(&data, getStackSpace(), true): deferred local-alias
         // checker for the spacebase-parameter branch.
         let mut aliascheck = data.build_alias_checker_deferred();
-        let mut held = crate::p4_calls::kuna_calleestackargs::Contenders::default();
+        let mut held = crate::kuna_calleestackargs::Contenders::default();
         let manager_rc = data.get_arch().manage.clone();
         // (kuna) `calleearityfwd`: call sites that finalize with an empty argument
         // list, retried at the end of the pass against the siblings that finalize
-        // after them.  See [`crate::p4_calls::kuna_calleearityfwd`].
+        // after them.  See [`crate::kuna_calleearityfwd`].
         let mut pending_rescue = Vec::new();
         // (kuna) `calleearitylive`: call sites that finalize with a SHORT argument
         // list, retried the same way.  See
-        // [`crate::p4_calls::kuna_calleearitylive`].
+        // [`crate::kuna_calleearitylive`].
         let mut pending_extend = Vec::new();
         // (kuna) `calleearitybody`: call sites that recovered nothing and have no
         // sibling to compare against, answered from the callee's own body after
         // the sibling rules have had their turn.  See
-        // [`crate::p4_calls::kuna_calleearitybody`].
+        // [`crate::kuna_calleearitybody`].
         let mut pending_body = Vec::new();
         // (kuna) `passthrough`: call sites that may still take a register the
         // function forwards untouched, extended after every other rule.
@@ -1607,11 +1606,9 @@ impl Action for ActionActiveParam {
                     }
                     ready.push(idx);
                     if !ctx.deadline_expired() {
-                        if let Some(entry) =
-                            crate::p4_calls::kuna_calleetrial::split_trial_callee(data, idx)
+                        if let Some(entry) = crate::kuna_calleetrial::split_trial_callee(data, idx)
                         {
-                            if let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(&entry)
-                            {
+                            if let Some(key) = crate::kuna_protoorder::stated_key(&entry) {
                                 if self.contract_requested.insert(key) {
                                     data.kuna_queue_callee_split_call(entry);
                                     pause = true;
@@ -1656,9 +1653,9 @@ impl Action for ActionActiveParam {
                 let before = aliascheck
                     .as_ref()
                     .filter(|ac| ac.split_drawn())
-                    .map(|_| crate::p4_calls::kuna_directalias::call_inputs(data, call_op));
+                    .map(|_| crate::kuna_directalias::call_inputs(data, call_op));
                 if data.get_call_specs(idx).active_input().needs_final_check() {
-                    crate::p4_calls::kuna_reloadarg::recheck(data, idx, aliascheck.as_mut());
+                    crate::kuna_reloadarg::recheck(data, idx, aliascheck.as_mut());
                 }
                 let mut fc = data.replace_call_specs(idx);
                 if fc.get_active_input().needs_final_check() {
@@ -1669,10 +1666,7 @@ impl Action for ActionActiveParam {
                 // slots before them are the ABI's doing and not evidence that
                 // the recovery has run past the argument list.
                 let vararg_split = fc.is_dotdotdot()
-                    || crate::p4_calls::kuna_darwinvarargs::is_variadic_callee(
-                        data,
-                        fc.get_entry_address(),
-                    );
+                    || crate::kuna_darwinvarargs::is_variadic_callee(data, fc.get_entry_address());
                 fc.get_active_input().set_vararg_stack_split(vararg_split);
                 // (kuna) `stackarggap`: tell `fillinMap` that an argument
                 // register this caller never wrote ends the argument list when
@@ -1682,7 +1676,7 @@ impl Action for ActionActiveParam {
                 // (kuna) `passthrough`: a register this caller hands on untouched
                 // is not a run of empty slots in front of a later argument.
                 let forwarded_neutral =
-                    crate::p4_calls::kuna_passthrough::neutral_scope(data, &fc, &mut first_calls);
+                    crate::kuna_passthrough::neutral_scope(data, &fc, &mut first_calls);
                 fc.get_active_input()
                     .set_forwarded_neutral(forwarded_neutral);
                 let reads = fc
@@ -1692,7 +1686,7 @@ impl Action for ActionActiveParam {
                 crate::kuna_armfloatargs::mark_single_floats(&mut fc, data);
                 // (kuna) `calleefilledarg`: an unfilled register the callee
                 // loads itself is no slot, and ends no argument list.
-                crate::p4_calls::kuna_calleefilledarg::mark(&mut fc, data);
+                crate::kuna_calleefilledarg::mark(&mut fc, data);
                 let written = crate::kuna_armfloatargs::written_inputs(&fc, data);
                 // resolveModel(activeinput) + deriveInputMap(activeinput): resolve
                 // the model and fill in the trial → parameter map.
@@ -1701,8 +1695,8 @@ impl Action for ActionActiveParam {
                 // (kuna `formatstring`) A resolved format call's declared
                 // arguments are arguments whatever the positional rules made
                 // of the gap in front of them.
-                crate::p4_calls::kuna_formattail::keep_declared_trials(&mut fc);
-                crate::p4_calls::kuna_darwinvarargs::keep_stack_tail(&mut fc, data);
+                crate::kuna_formattail::keep_declared_trials(&mut fc);
+                crate::kuna_darwinvarargs::keep_stack_tail(&mut fc, data);
                 let fixup = build_input_from_trials(&mut fc, data);
                 if let Some(p) = fixup.rescue {
                     pending_rescue.push(p);
@@ -1722,9 +1716,7 @@ impl Action for ActionActiveParam {
                 fc.clear_active_input();
                 data.restore_call_specs_at(idx, fc);
                 if let (Some(ac), Some(before)) = (aliascheck.as_mut(), before) {
-                    crate::p4_calls::kuna_directalias::refresh_rewritten(
-                        data, ac, call_op, &before,
-                    );
+                    crate::kuna_directalias::refresh_rewritten(data, ac, call_op, &before);
                 }
                 self.base.count += 1;
                 finalized = true;
@@ -1732,24 +1724,24 @@ impl Action for ActionActiveParam {
         }
         // (kuna `formatstring`) Once no call has trials left, a resolved format
         // call sheds the tail it was scored with.
-        self.base.count += crate::p4_calls::kuna_formattail::shed_format_tails(data);
+        self.base.count += crate::kuna_formattail::shed_format_tails(data);
         // (kuna) `calleearityfwd`: every spec in this pass is final now, so the
         // sites that recovered nothing get their one retry.
-        crate::p4_calls::kuna_calleearityfwd::rescue_pending(data, &pending_rescue);
+        crate::kuna_calleearityfwd::rescue_pending(data, &pending_rescue);
         // (kuna) `calleearitylive`: and the sites that recovered too FEW get theirs.
-        crate::p4_calls::kuna_calleearitylive::extend_pending(data, &pending_extend);
+        crate::kuna_calleearitylive::extend_pending(data, &pending_extend);
         // (kuna) `calleearitybody`: last, so a site a sibling could speak for is
         // already non-empty and is left alone.
-        crate::p4_calls::kuna_calleearitybody::recover_pending(data, &pending_body);
+        crate::kuna_calleearitybody::recover_pending(data, &pending_body);
         // (kuna) `calleereadarg`: after every rule that settles a list from the
         // trials, so it only ever adds the registers the callee reads.
-        crate::p4_calls::kuna_calleereadarg::extend_pending(data, &pending_read);
+        crate::kuna_calleereadarg::extend_pending(data, &pending_read);
         // (kuna) `passthrough`: last of all, so it only ever adds to a final list.
-        crate::p4_calls::kuna_passthrough::extend_pending(data, &pending_pass);
+        crate::kuna_passthrough::extend_pending(data, &pending_pass);
         // (kuna) The MSVC frame cookie and the frame slots above it leave every
         // call once no call scores trials any more.
         if finalized {
-            self.base.count += crate::p4_calls::kuna_stackcookie::shed_frame_cookies(data);
+            self.base.count += crate::kuna_stackcookie::shed_frame_cookies(data);
         }
         0
     }
@@ -2050,7 +2042,7 @@ impl Action for ActionReturnRecovery {
             None => return 0,
         };
         let maxancestor = data.get_arch().trim_recurse_max;
-        let remembering = crate::p4_calls::kuna_condexeret::remembering(&active);
+        let remembering = crate::kuna_condexeret::remembering(&active);
         let mut cond_failed = Vec::new();
         let return_ops: Vec<crate::context::OpId> =
             data.obank().iter_code(OpCode::CPUI_RETURN).collect();
@@ -2071,10 +2063,10 @@ impl Action for ActionReturnRecovery {
                 if active.get_trial(i).is_checked() {
                     continue;
                 }
-                let strict = match crate::p4_calls::kuna_condexeret::check(&active, i, op, data) {
-                    crate::p4_calls::kuna_condexeret::Check::Skip => continue,
-                    crate::p4_calls::kuna_condexeret::Check::Normal => Vec::new(),
-                    crate::p4_calls::kuna_condexeret::Check::Strict(inputs) => inputs,
+                let strict = match crate::kuna_condexeret::check(&active, i, op, data) {
+                    crate::kuna_condexeret::Check::Skip => continue,
+                    crate::kuna_condexeret::Check::Normal => Vec::new(),
+                    crate::kuna_condexeret::Check::Strict(inputs) => inputs,
                 };
                 let slot = active.get_trial(i).get_slot();
                 let vn = match data.obank().get(op).and_then(|o| o.get_in(slot)) {
@@ -2092,8 +2084,8 @@ impl Action for ActionReturnRecovery {
                     let t = active.get_trial(i);
                     (t.get_address().clone(), t.get_size())
                 };
-                if crate::p4_calls::kuna_passthrough::returns_tail_result(data, vn, &taddr, tsize)
-                    || crate::p4_calls::kuna_cachereturn::returns_cached(
+                if crate::kuna_passthrough::returns_tail_result(data, vn, &taddr, tsize)
+                    || crate::kuna_cachereturn::returns_cached(
                         data,
                         &return_ops,
                         slot,
@@ -2121,14 +2113,7 @@ impl Action for ActionReturnRecovery {
                     .input_fail_reader()
                     .filter(|_| remembering && !realistic)
                     .and_then(|m| {
-                        crate::p4_calls::kuna_condexeret::remember(
-                            data,
-                            i,
-                            active.get_trial(i),
-                            op,
-                            slot,
-                            m,
-                        )
+                        crate::kuna_condexeret::remember(data, i, active.get_trial(i), op, slot, m)
                     })
                 {
                     cond_failed.push(r);
@@ -2148,24 +2133,24 @@ impl Action for ActionReturnRecovery {
             }
         }
 
-        crate::p4_calls::kuna_voidret::score_forced(data, &mut active, &return_ops, maxancestor);
-        crate::p4_calls::kuna_condexeret::end_pass(&mut active, cond_failed);
+        crate::kuna_voidret::score_forced(data, &mut active, &return_ops, maxancestor);
+        crate::kuna_condexeret::end_pass(&mut active, cond_failed);
         active.finish_pass();
         if active.get_num_passes() > active.get_max_pass() {
             active.mark_fully_checked();
         }
 
         if active.is_fully_checked() {
-            crate::p4_calls::kuna_zerocallregs::drop_epilogue_zeros(data, &mut active, &return_ops);
-            crate::p4_calls::kuna_passthrough::keep_tail_return_whole(data, &mut active);
-            crate::p4_calls::kuna_callresultuse::yield_to_own_value(data, &mut active, &return_ops);
-            crate::p4_calls::kuna_callresultuse::settle_planted(data, &mut active);
-            crate::p4_calls::kuna_zerofillreturn::drop_zero_fill(data, &mut active, &return_ops);
+            crate::kuna_zerocallregs::drop_epilogue_zeros(data, &mut active, &return_ops);
+            crate::kuna_passthrough::keep_tail_return_whole(data, &mut active);
+            crate::kuna_callresultuse::yield_to_own_value(data, &mut active, &return_ops);
+            crate::kuna_callresultuse::settle_planted(data, &mut active);
+            crate::kuna_zerofillreturn::drop_zero_fill(data, &mut active, &return_ops);
             crate::kuna_armfloatreturn::narrow_returns(data, &mut active);
             crate::kuna_retsysreg::drop_set_aside(data, &mut active, &return_ops);
-            crate::p4_calls::kuna_x87emptyreturn::drop_empty(data, &mut active, &return_ops);
+            crate::kuna_x87emptyreturn::drop_empty(data, &mut active, &return_ops);
             let own_input = crate::kuna_retcallhalf::accept(data, &mut active, &return_ops);
-            crate::p4_calls::kuna_callwide::retain_pair(data, &mut active, &return_ops);
+            crate::kuna_callwide::retain_pair(data, &mut active, &return_ops);
             crate::kuna_bejoin::keep_proven_pair(data, &mut active, &return_ops);
             let whole_pair = crate::kuna_retcallhalf::whole_pair(data, &active, &return_ops);
             if let Some(indices) = whole_pair {
@@ -2174,12 +2159,12 @@ impl Action for ActionReturnRecovery {
                 }
             }
             let handed_back = whole_pair.is_none()
-                && crate::p4_calls::kuna_bejoinpass::settle_return(data, &mut active, &return_ops);
+                && crate::kuna_bejoinpass::settle_return(data, &mut active, &return_ops);
             let manager_rc = data.get_arch().manage.clone();
             let _ = data
                 .get_func_proto()
                 .derive_output_map(&mut active, &manager_rc);
-            crate::p4_calls::kuna_voidret::whole_or_none(data, &mut active);
+            crate::kuna_voidret::whole_or_none(data, &mut active);
             crate::kuna_retinputhalf::note_moved_back_returns(
                 data,
                 &active,
@@ -2207,7 +2192,7 @@ impl Action for ActionReturnRecovery {
                 }
                 Self::build_return_output(&active, op, data, return_single, order);
             }
-            crate::p4_calls::kuna_voidret::void_unless_returned(data);
+            crate::kuna_voidret::void_unless_returned(data);
             crate::kuna_armfloatreturn::type_returns(data, &active);
             crate::kuna_x87return::type_returns(data, &active);
             data.clear_active_output();
@@ -2332,7 +2317,7 @@ impl Action for ActionInputPrototype {
             // trial means the body reads the register before it writes it.  Tell
             // `forceInactiveChain` that a run of unused argument registers is not
             // evidence against a later one.  See
-            // [`crate::p4_calls::kuna_inputparamgap`].
+            // [`crate::kuna_inputparamgap`].
             active.set_own_input_gap(true);
             let mut triallist: Vec<crate::context::VarnodeId> = Vec::new();
             let input_vns: Vec<crate::context::VarnodeId> = data
@@ -2744,7 +2729,7 @@ impl Action for ActionPrototypeWarnings {
         // The warning channel (`ActionContext::warnings`) IS realized, but with
         // the placeholder proto there are no errors to report.  Deferred
         // (count stays 0); no warning is emitted.
-        crate::p4_calls::kuna_x87depth::warn(_data);
+        crate::kuna_x87depth::warn(_data);
         0
     }
 }

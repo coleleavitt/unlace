@@ -1,7 +1,7 @@
 //! (kuna `rettriangle`) Decline a `returndup` split at the join of a one-block
 //! `if`.
 //!
-//! [`returndup`](crate::p8_structure::kuna_returndup) gives every predecessor of
+//! [`returndup`](crate::kuna_returndup) gives every predecessor of
 //! a shared constant-return block its own copy of the return, which recovers a
 //! source's early-return guards.  When the two predecessors are the two arms of a
 //! one-block `if` -- a condition `C` that goes either straight to the return `R`
@@ -35,7 +35,8 @@ use crate::options::on_or_off;
 /// predecessors, one a two-way condition whose other successor is the other
 /// predecessor, which has that condition as its only predecessor and `r` as its
 /// only successor.
-pub(crate) fn is_triangle_join(data: &Funcdata, r: BlockId) -> bool {
+#[doc(hidden)]
+pub fn is_triangle_join(data: &Funcdata, r: BlockId) -> bool {
     let g = data.bblocks_ref();
     let rb = g.block(r);
     if rb.size_in() != 2 {

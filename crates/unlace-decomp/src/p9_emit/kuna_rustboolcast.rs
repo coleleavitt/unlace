@@ -88,7 +88,8 @@ impl PrintC {
         }
     }
 
-    pub(crate) fn push_rust_truncated_boolean_conversion(
+    #[doc(hidden)]
+    pub fn push_rust_truncated_boolean_conversion(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -119,7 +120,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn push_rust_boolean_conversion(
+    #[doc(hidden)]
+    pub fn push_rust_boolean_conversion(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

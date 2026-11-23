@@ -651,7 +651,8 @@ impl StackSolver {
 }
 
 /// Order-by-value address comparison (C++ `getAddr() != spacebase`).
-pub(crate) fn addr_eq(a: &Address, b: &Address) -> bool {
+#[doc(hidden)]
+pub fn addr_eq(a: &Address, b: &Address) -> bool {
     let sa = a.get_space().map(|s| s.get_index());
     let sb = b.get_space().map(|s| s.get_index());
     sa == sb && a.get_offset() == b.get_offset()
@@ -817,7 +818,8 @@ fn repair(
 /// C++ `ActionStackPtrFlow::checkClog` (`coreaction.cc:447`): find stack-pointer
 /// clogs (an `INT_ADD` whose addend was `LOAD`ed off the stack) and repair them.
 /// Returns the number of clogs repaired.
-pub(crate) fn check_clog(data: &mut Funcdata, id: &Rc<AddrSpace>, spcbase: int4) -> int4 {
+#[doc(hidden)]
+pub fn check_clog(data: &mut Funcdata, id: &Rc<AddrSpace>, spcbase: int4) -> int4 {
     let point = match id.get_spacebase(spcbase) {
         Ok(p) => p,
         Err(_) => return 0,
@@ -931,11 +933,8 @@ pub(crate) fn check_clog(data: &mut Funcdata, id: &Rc<AddrSpace>, spcbase: int4)
 /// solve to recover stack-pointer change across undetermined sub-functions, then
 /// rewrite the solved producers to `INT_ADD const`.  Returns the number of
 /// producers rewritten (so the caller can signal `count`).
-pub(crate) fn analyze_extra_pop(
-    data: &mut Funcdata,
-    stackspace: &Rc<AddrSpace>,
-    spcbase: int4,
-) -> int4 {
+#[doc(hidden)]
+pub fn analyze_extra_pop(data: &mut Funcdata, stackspace: &Rc<AddrSpace>, spcbase: int4) -> int4 {
     use crate::fspec::EXTRAPOP_UNKNOWN;
 
     // C++ `ActionStackPtrFlow::analyzeExtraPop` (coreaction.cc:279-282).

@@ -47,7 +47,8 @@ fn o_out(data: &Funcdata, op: OpId) -> Option<VarnodeId> {
 }
 
 /// Merge every pair of identical pure ops reading one varnode; returns how many merged.
-pub(crate) fn latecse_apply(data: &mut Funcdata) -> i32 {
+#[doc(hidden)]
+pub fn latecse_apply(data: &mut Funcdata) -> i32 {
     let shared: Vec<VarnodeId> = data
         .vbank()
         .iter_def()

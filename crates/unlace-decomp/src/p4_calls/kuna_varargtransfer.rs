@@ -5,7 +5,8 @@ use crate::funcdata::Funcdata;
 
 /// Preserve values and scoring outside the new fixed parameters. No trial is
 /// invented, and definitely unused trials retain their exclusion flags.
-pub(crate) fn pending_trials(data: &Funcdata, fc: &FuncCallSpecs) -> Vec<(ParamTrial, VarnodeId)> {
+#[doc(hidden)]
+pub fn pending_trials(data: &Funcdata, fc: &FuncCallSpecs) -> Vec<(ParamTrial, VarnodeId)> {
     if !fc.is_dotdotdot() {
         return Vec::new();
     }

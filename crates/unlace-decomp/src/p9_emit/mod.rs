@@ -6,7 +6,7 @@
 pub mod cast;
 pub mod coreaction_casts;
 pub mod coreaction_render;
-pub(crate) mod kuna_acleintrinsics; // (kuna) AArch64 barrier, hint and memory-tagging user ops as ACLE intrinsics
+pub mod kuna_acleintrinsics; // (kuna) AArch64 barrier, hint and memory-tagging user ops as ACLE intrinsics
 pub mod kuna_addressdecl;
 pub mod kuna_aggregatecast;
 pub mod kuna_armconstantshift;
@@ -16,11 +16,11 @@ pub mod kuna_arraynotation;
 pub mod kuna_bitcast;
 pub mod kuna_braceelide;
 pub mod kuna_bytearrayc;
-pub(crate) mod kuna_bytearrayslice;
+pub mod kuna_bytearrayslice;
 pub mod kuna_bytehonest;
-pub(crate) mod kuna_callargextend;
+pub mod kuna_callargextend;
 pub mod kuna_callerstack;
-pub(crate) mod kuna_callresult;
+pub mod kuna_callresult;
 pub mod kuna_castarith; // (kuna) pointer arithmetic stays in pointer terms
 pub mod kuna_castimplied; // (kuna) casts C's own conversions already perform
 pub mod kuna_castnarrow; // (kuna) a narrowing C's own assignment, argument or return conversion performs keeps no cast
@@ -33,20 +33,20 @@ pub mod kuna_ctypes; // (kuna) valid per-architecture C spelling of the core typ
 pub mod kuna_declorder; // (kuna) the order local declarations print in
 pub mod kuna_dedupvardecls;
 pub mod kuna_emptystrconst;
-pub(crate) mod kuna_fieldextract;
-pub(crate) mod kuna_floatslice;
-pub(crate) mod kuna_floatstore;
+pub mod kuna_fieldextract;
+pub mod kuna_floatslice;
+pub mod kuna_floatstore;
 pub mod kuna_funcptrnames;
 pub mod kuna_functionwarnings; // (kuna) the analysis warnings a render wrote, where the engine recorded them
 pub mod kuna_globalref; // (kuna) a constant address used as a pointer prints as its global
-pub(crate) mod kuna_goatomicreturn;
-pub(crate) mod kuna_gobyteextract;
-pub(crate) mod kuna_gobyteview;
+pub mod kuna_goatomicreturn;
+pub mod kuna_gobyteextract;
+pub mod kuna_gobyteview;
 mod kuna_gomethod;
-pub(crate) mod kuna_goorderedcompare;
+pub mod kuna_goorderedcompare;
 pub mod kuna_gopackage;
-pub(crate) mod kuna_gopairreturns;
-pub(crate) mod kuna_gopointerarith;
+pub mod kuna_gopairreturns;
+pub mod kuna_gopointerarith;
 mod kuna_gostringindex;
 mod kuna_gozerorecord;
 pub mod kuna_infloopstyle;
@@ -60,7 +60,7 @@ pub mod kuna_langjava; // (kuna) the java-language profile and type speller
 pub mod kuna_langrust; // (kuna) the rust-language policy objects (profile + caps)
 pub mod kuna_langtypes; // (kuna) the type-spelling seam (TypeSpeller + SpellCtx)
 pub mod kuna_mapglobalsyms; // (kuna `mapglobalsyms`) keep mapGlobals' DAT_ Symbols in the global scope
-pub(crate) mod kuna_memberbase;
+pub mod kuna_memberbase;
 pub mod kuna_namedglobals;
 pub mod kuna_narrowselector; // (kuna) a switch on a narrow expression casts it to its own width
 pub mod kuna_oslog;
@@ -71,32 +71,32 @@ pub mod kuna_pointerargs; // (kuna) a scalar's address passed to a character-poi
 pub mod kuna_pointerstorecast;
 pub mod kuna_postinc; // (kuna `postinc`) `*p++` for a pointer step after its dereference
 pub mod kuna_renderfault; // (kuna) test-only: panic one function's render partway through
-pub(crate) mod kuna_rustarrayaddr;
-pub(crate) mod kuna_rustarraydecay;
-pub(crate) mod kuna_rustarrayindex;
-pub(crate) mod kuna_rustarrayzero;
-pub(crate) mod kuna_rustboolcast;
-pub(crate) mod kuna_rustextend;
+pub mod kuna_rustarrayaddr;
+pub mod kuna_rustarraydecay;
+pub mod kuna_rustarrayindex;
+pub mod kuna_rustarrayzero;
+pub mod kuna_rustboolcast;
+pub mod kuna_rustextend;
 pub mod kuna_rustfmt;
 pub mod kuna_rustfmtargs;
 pub mod kuna_rustfmtflags;
 pub mod kuna_rustfmtio;
-pub(crate) mod kuna_rustfmtliteral;
-pub(crate) mod kuna_rustfmtpanic;
-pub(crate) mod kuna_rustfmtpieces;
-pub(crate) mod kuna_rustfmtresult;
+pub mod kuna_rustfmtliteral;
+pub mod kuna_rustfmtpanic;
+pub mod kuna_rustfmtpieces;
+pub mod kuna_rustfmtresult;
 pub mod kuna_rustfmtstr;
 pub mod kuna_rustfmtwrite;
-pub(crate) mod kuna_rustfuncptr;
-pub(crate) mod kuna_rustintegers;
+pub mod kuna_rustfuncptr;
+pub mod kuna_rustintegers;
 mod kuna_rustoption;
-pub(crate) mod kuna_rustptradd;
-pub(crate) mod kuna_rustsigned;
-pub(crate) mod kuna_ruststorevalue;
+pub mod kuna_rustptradd;
+pub mod kuna_rustsigned;
+pub mod kuna_ruststorevalue;
 mod kuna_ruststorewidth;
 pub mod kuna_rusttypes; // (kuna) the rust-language type speller
-pub(crate) mod kuna_rustuserop;
-pub(crate) mod kuna_rustwrapping;
+pub mod kuna_rustuserop;
+pub mod kuna_rustwrapping;
 pub mod kuna_signedread; // (kuna) a signed read of an expression that prints unsigned casts it back
 pub mod kuna_srcmap;
 pub mod kuna_stackassign;
@@ -116,16 +116,16 @@ pub mod prettyprint;
 pub mod printc;
 pub mod printlanguage;
 
-pub(crate) mod kuna_stackmarkers;
-pub(crate) mod kuna_stackversions;
+pub mod kuna_stackmarkers;
+pub mod kuna_stackversions;
 
-pub(crate) mod kuna_indirectargs;
+pub mod kuna_indirectargs;
 
 pub mod kuna_callprototypes;
 
-pub(crate) mod kuna_gostorevalue;
+pub mod kuna_gostorevalue;
 
-pub(crate) mod kuna_constantshift;
+pub mod kuna_constantshift;
 pub mod kuna_fidproto; // (kuna) the prototype a .fid record carries, and its check against the body
 pub mod kuna_reglocals;
 

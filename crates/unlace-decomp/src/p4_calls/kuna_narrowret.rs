@@ -94,7 +94,8 @@ fn return_register_width(data: &Funcdata) -> Option<int4> {
 /// the value under `mask`, whether the RETURN still hands back the zero
 /// extension of a narrow value: every trim from the whole register on dropped
 /// only known-zero bits.
-pub(crate) fn note_trim(data: &mut Funcdata, op: OpId, before: VarnodeId, mask: u64) {
+#[doc(hidden)]
+pub fn note_trim(data: &mut Funcdata, op: OpId, before: VarnodeId, mask: u64) {
     if !data
         .get_arch()
         .kuna_options
@@ -522,7 +523,8 @@ pub fn stated_type(
 /// Does the CALL `op` read a callee that states it returns a truth value, in
 /// exactly the storage and width of the call's output?  `boolbyte` counts such
 /// a call as a truth-valued definition of the byte that holds its result.
-pub(crate) fn states_truth(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn states_truth(data: &Funcdata, op: OpId) -> bool {
     if !data
         .get_arch()
         .kuna_options
@@ -683,7 +685,7 @@ fn sole_tail(
                 .get(r)
                 .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
         })
-        .map(|r| crate::p4_calls::kuna_passthrough::producing_call(data, r))
+        .map(|r| crate::kuna_passthrough::producing_call(data, r))
         .collect();
     if !producers.contains(&Some(op)) {
         return true;
@@ -738,7 +740,7 @@ fn trace() -> bool {
 
 /// (kuna) Make a call to a callee that returns a narrow value zero-extended
 /// read that value (option `narrowret`).  See
-/// [`crate::p4_calls::kuna_narrowret`].
+/// [`crate::kuna_narrowret`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NarrowRet(pub bool);
 

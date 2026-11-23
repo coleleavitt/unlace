@@ -22,7 +22,8 @@ use unlace_num::opcodes::OpCode;
 
 /// Sort the leading phis in `ops`, the op list of a block about to be cloned, so the
 /// ones on globals come last, by address.  Only the clone takes the new order.
-pub(crate) fn order_global_phis(data: &Funcdata, ops: &mut [OpId]) {
+#[doc(hidden)]
+pub fn order_global_phis(data: &Funcdata, ops: &mut [OpId]) {
     let n = ops
         .iter()
         .take_while(|&&op| {

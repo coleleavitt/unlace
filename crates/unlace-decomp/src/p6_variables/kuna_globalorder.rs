@@ -30,7 +30,7 @@ pub fn copy_moves_write(data: &Funcdata, global: HighVariableId, value: HighVari
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {
@@ -126,7 +126,8 @@ pub fn write_moves(data: &Funcdata, copy: OpId, source: VarnodeId) -> bool {
     false
 }
 
-pub(crate) fn value_definition(data: &Funcdata, mut source: VarnodeId) -> Option<OpId> {
+#[doc(hidden)]
+pub fn value_definition(data: &Funcdata, mut source: VarnodeId) -> Option<OpId> {
     let mut depth = 0;
     loop {
         let Some(v) = data.vbank().get(source) else {

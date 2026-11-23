@@ -198,7 +198,7 @@ fn stack_rooted(data: &Funcdata, vn: VarnodeId, depth: usize) -> bool {
     if node.is_spacebase() {
         return true;
     }
-    if let Some(sp) = crate::p4_calls::kuna_spillargtrial::stack_pointer_storage(data) {
+    if let Some(sp) = crate::kuna_spillargtrial::stack_pointer_storage(data) {
         if !node.is_constant()
             && sp
                 .space
@@ -313,7 +313,7 @@ fn constant(data: &Funcdata, vn: VarnodeId, depth: usize) -> Option<u64> {
 
 /// (kuna) A return register that holds one memory cell's value on every
 /// path is the return value (option `cachereturn`).  See
-/// [`crate::p4_calls::kuna_cachereturn`].
+/// [`crate::kuna_cachereturn`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct CacheReturn(pub bool);
 
@@ -330,7 +330,7 @@ impl crate::kuna_optionset::KunaOption for CacheReturn {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p4_calls::kuna_cachereturn::OptionCacheReturn.apply(value)?;
+        let (v, msg) = crate::kuna_cachereturn::OptionCacheReturn.apply(value)?;
         Ok((CacheReturn(v), msg))
     }
 }

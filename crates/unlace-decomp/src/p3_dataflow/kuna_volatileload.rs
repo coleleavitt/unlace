@@ -14,7 +14,8 @@ use unlace_num::opcodes::OpCode;
 
 /// Values proven for written varnodes: `Some` is the constant, `None` a
 /// varnode proven not to be one. Valid while the op graph is unchanged.
-pub(crate) type Memo = BTreeMap<VarnodeId, Option<u64>>;
+#[doc(hidden)]
+pub type Memo = BTreeMap<VarnodeId, Option<u64>>;
 
 /// Written varnodes one proof may evaluate beyond those already in the memo.
 const BUDGET: u32 = 64;
@@ -129,12 +130,14 @@ fn target(data: &Funcdata, id: OpId, memo: &mut Memo) -> Option<(i32, u64, i32)>
 }
 
 /// Whether a LOAD provably reads volatile storage.
-pub(crate) fn is_volatile(data: &Funcdata, id: OpId) -> bool {
+#[doc(hidden)]
+pub fn is_volatile(data: &Funcdata, id: OpId) -> bool {
     is_volatile_with(data, id, &mut Memo::new())
 }
 
 /// [`is_volatile`] sharing `memo` across the LOADs of one unchanged op graph.
-pub(crate) fn is_volatile_with(data: &Funcdata, id: OpId, memo: &mut Memo) -> bool {
+#[doc(hidden)]
+pub fn is_volatile_with(data: &Funcdata, id: OpId, memo: &mut Memo) -> bool {
     if let Some(pointer) = data
         .get_arch()
         .types()
@@ -166,7 +169,8 @@ pub(crate) fn is_volatile_with(data: &Funcdata, id: OpId, memo: &mut Memo) -> bo
 /// and either `kept` holds for it or it was lifted first, so one read per
 /// address per instruction survives however often the SLEIGH flag macros
 /// re-load an operand.
-pub(crate) fn rereads(
+#[doc(hidden)]
+pub fn rereads(
     data: &Funcdata,
     id: OpId,
     memo: &mut Memo,

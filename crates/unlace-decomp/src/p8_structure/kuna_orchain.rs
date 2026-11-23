@@ -1,10 +1,10 @@
 //! S8 **short-circuit operand-chain protection** for
-//! [`returndup`](crate::p8_structure::kuna_returndup) — decline the one split that
+//! [`returndup`](crate::kuna_returndup) — decline the one split that
 //! permanently destroys a `||`/`&&` fold.
 //!
 //! # The structural gap
 //!
-//! [`ActionReturnDup`](crate::p8_structure::kuna_returndup::ActionReturnDup) gives
+//! [`ActionReturnDup`](crate::kuna_returndup::ActionReturnDup) gives
 //! every predecessor of a shared bare-epilogue RETURN block its own private return,
 //! which is exactly how the source's early-return guards are recovered.  But the
 //! operand blocks of a short-circuit expression are *also* predecessors of a shared
@@ -78,7 +78,8 @@ pub const ELEM_ORCHAIN: ElementId = ElementId::new("orchain", 4136);
 /// The blocks that are the **shared out-target** of at least one short-circuit fold
 /// `CollapseStructure::rule_block_or` would perform on this CFG — i.e. the blocks a
 /// `returndup` split must leave shared.  See the module header for the predicate.
-pub(crate) fn shortcircuit_shared_targets(data: &Funcdata) -> BTreeSet<BlockId> {
+#[doc(hidden)]
+pub fn shortcircuit_shared_targets(data: &Funcdata) -> BTreeSet<BlockId> {
     let mut shared: BTreeSet<BlockId> = BTreeSet::new();
     let nbb = data.bblocks_get_size();
     if nbb < 3 {

@@ -102,14 +102,16 @@ const RULE_GROUP: &str = "analysis";
 /// of the rewritten op) comes from the canonical port of that table
 /// ([`crate::typeop::seam_type_op_for`], reproduced verbatim from `typeop.cc`),
 /// which answers for every op-code.
-pub(crate) fn resolve_typeop(opc: OpCode) -> TypeOp {
+#[doc(hidden)]
+pub fn resolve_typeop(opc: OpCode) -> TypeOp {
     crate::typeop::seam_type_op_for(opc)
 }
 
 /// `data.opSetOpcode(op, opc)` — the C++ `Funcdata::opSetOpcode(PcodeOp*,OpCode)`
 /// overload, resolving the op-code to its W6 [`TypeOp`] via [`resolve_typeop`].
 /// // STUB(W6): `glb->inst[opc]`.
-pub(crate) fn rule_set_opcode(data: &mut Funcdata, op: OpId, opc: OpCode) {
+#[doc(hidden)]
+pub fn rule_set_opcode(data: &mut Funcdata, op: OpId, opc: OpCode) {
     data.op_set_opcode(op, resolve_typeop(opc));
 }
 

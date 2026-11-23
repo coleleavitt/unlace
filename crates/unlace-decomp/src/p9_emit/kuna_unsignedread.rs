@@ -38,11 +38,13 @@ use crate::funcdata::Funcdata;
 const DEPTH: u32 = 8;
 
 /// A C integer type after promotion: `(unsigned, bytes)`.
-pub(crate) type CInt = (bool, int4);
+#[doc(hidden)]
+pub type CInt = (bool, int4);
 
 /// The unsigned type input `slot` of `op` must be cast to because the
 /// expression there is a signed `int` or `long` in C, or `None`.
-pub(crate) fn cast(
+#[doc(hidden)]
+pub fn cast(
     data: &mut Funcdata,
     strat: &CastStrategyC,
     op: OpId,
@@ -137,7 +139,8 @@ fn suffixable_literal(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
 
 /// The promoted C type of `vn` as printed where `reader` reads it,
 /// `(unsigned, bytes)`, or `None` when the text does not settle it.
-pub(crate) fn c_int(
+#[doc(hidden)]
+pub fn c_int(
     data: &mut Funcdata,
     strat: &CastStrategyC,
     vn: VarnodeId,

@@ -87,7 +87,8 @@ fn pointed_storage(fd: &Funcdata, mut id: VarnodeId, width: i32) -> Option<Rc<Da
     None
 }
 
-pub(crate) fn input_contract(fd: &Funcdata, id: OpId, slot: i32) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn input_contract(fd: &Funcdata, id: OpId, slot: i32) -> Option<Rc<Datatype>> {
     let op = fd.obank().get(id).filter(|op| !op.is_dead())?;
     if op.is_marker() || op.is_return_copy() {
         return None;
@@ -149,7 +150,8 @@ pub(crate) fn input_contract(fd: &Funcdata, id: OpId, slot: i32) -> Option<Rc<Da
     Some(contract)
 }
 
-pub(crate) fn declared_view(fd: &Funcdata, id: OpId, slot: i32) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn declared_view(fd: &Funcdata, id: OpId, slot: i32) -> Option<Rc<Datatype>> {
     let pointer = input_contract(fd, id, slot)?;
     if pointer.get_metatype() != type_metatype::TYPE_PTR {
         return None;
@@ -158,7 +160,8 @@ pub(crate) fn declared_view(fd: &Funcdata, id: OpId, slot: i32) -> Option<Rc<Dat
     (!view.is_incomplete() && view.get_size() > 0).then_some(view)
 }
 
-pub(crate) fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
+#[doc(hidden)]
+pub fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
     let mut uses = Vec::new();
     for id in fd.obank().iter_alive() {
         let op = fd.obank().get(id).unwrap();

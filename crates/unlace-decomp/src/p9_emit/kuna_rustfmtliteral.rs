@@ -9,11 +9,8 @@ use crate::varnode::varnode_flags;
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) fn recover(
-    fd: &Funcdata,
-    arch: &Architecture,
-    op: OpId,
-) -> Option<(&'static str, String)> {
+#[doc(hidden)]
+pub fn recover(fd: &Funcdata, arch: &Architecture, op: OpId) -> Option<(&'static str, String)> {
     if !arch
         .kuna_options
         .get::<crate::kuna_rustfmt::RustFmtMode>()
@@ -33,11 +30,8 @@ pub(crate) fn recover(
     Some(render(text, stderr))
 }
 
-pub(crate) fn literal_bytes(
-    fd: &Funcdata,
-    pointer: VarnodeId,
-    descriptor: VarnodeId,
-) -> Option<Vec<u8>> {
+#[doc(hidden)]
+pub fn literal_bytes(fd: &Funcdata, pointer: VarnodeId, descriptor: VarnodeId) -> Option<Vec<u8>> {
     let ptr = constant_word(fd, pointer)?;
     let tag = constant_word(fd, descriptor)?;
     let len = tag >> 1;
@@ -64,7 +58,8 @@ pub(crate) fn literal_bytes(
     Some(bytes)
 }
 
-pub(crate) fn print_sink(fd: &Funcdata, id: OpId) -> Option<bool> {
+#[doc(hidden)]
+pub fn print_sink(fd: &Funcdata, id: OpId) -> Option<bool> {
     let call = fd.get_call_specs(fd.get_call_specs_index(id)?);
     match call.get_name() {
         "std::io::stdio::_print" => Some(false),
@@ -108,7 +103,8 @@ fn constant_word(fd: &Funcdata, mut id: VarnodeId) -> Option<u64> {
     None
 }
 
-pub(crate) fn render(text: &str, stderr: bool) -> (&'static str, String) {
+#[doc(hidden)]
+pub fn render(text: &str, stderr: bool) -> (&'static str, String) {
     let (text, newline) = text.strip_suffix('\n').map_or((text, false), |s| (s, true));
     let name = match (stderr, newline) {
         (false, false) => "print!",

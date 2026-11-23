@@ -287,7 +287,7 @@ impl CalleeEntryDead {
     /// before writing it — the callee consuming the register as an input?
     ///
     /// The mirror of [`Self::proves_dead`] and the evidence
-    /// [`crate::p4_calls::kuna_calleearitylive`] extends an argument list on.
+    /// [`crate::kuna_calleearitylive`] extends an argument list on.
     /// An incomplete walk clears `reads`, so it answers `false` there too.
     pub fn proves_read(&self, addr: &Address, size: int4) -> bool {
         if !self.complete || size <= 0 {
@@ -313,7 +313,7 @@ impl CalleeEntryDead {
     /// before writing it, for a value that can actually reach something?
     ///
     /// [`Self::proves_read`] with the register-zeroing idiom excluded, and the
-    /// evidence [`crate::p4_calls::kuna_calleearitybody`] recovers an argument
+    /// evidence [`crate::kuna_calleearitybody`] recovers an argument
     /// list on.  The distinction matters there and only there: that rule takes
     /// a read as proof of an INPUT with no sibling call to check it against, and
     /// an API-resolution stub whose prologue is `xor ecx,ecx; lea rdx,[..]; call`
@@ -350,7 +350,7 @@ impl CalleeEntryDead {
     /// only pushes it as an alignment pad above a call's stack arguments
     /// ([`Self::unpadded_read_bytes`]) does not count with `pads`. A walk that
     /// met an undecodable instruction answers `false`. Read by
-    /// [`crate::p4_calls::kuna_calleereadarg`].
+    /// [`crate::kuna_calleereadarg`].
     pub fn reads_low_byte(&self, addr: &Address, size: int4, stores: bool, pads: bool) -> bool {
         if !self.complete || self.undecodable || size <= 0 {
             return false;
@@ -408,7 +408,8 @@ impl CalleeEntryDead {
     /// Mark byte `b` of the register file written before every read of it, so
     /// a test can stand up a partial write followed by a wide read.
     #[cfg(test)]
-    pub(crate) fn with_written_byte(mut self, b: u64) -> Self {
+    #[doc(hidden)]
+    pub fn with_written_byte(mut self, b: u64) -> Self {
         self.live_read_bytes.remove(&(self.reg_idx, b));
         self.unpadded_read_bytes.remove(&(self.reg_idx, b));
         self
@@ -518,7 +519,7 @@ impl CalleeEntryDead {
     /// jump (through a GOT slot or a register), none returns, calls or runs a
     /// user op, and nothing is read before it is written? What such a body
     /// writes is its own business; every other register goes to the real
-    /// target untouched. Read by [`crate::p4_calls::kuna_calleefilledarg`].
+    /// target untouched. Read by [`crate::kuna_calleefilledarg`].
     pub fn is_trampoline(&self) -> bool {
         self.complete
             && !self.lost
@@ -629,14 +630,16 @@ impl CalleeEntryDead {
     /// Record one unnameable-transfer terminator, so a consumer of this
     /// evidence can unit-test the forwarding case without a translator.
     #[cfg(test)]
-    pub(crate) fn with_opaque_cut(mut self, written: Vec<(int4, u64)>) -> Self {
+    #[doc(hidden)]
+    pub fn with_opaque_cut(mut self, written: Vec<(int4, u64)>) -> Self {
         self.opaque_cuts.push(written.into_iter().collect());
         self
     }
 
     /// Record one system-call terminator, for the same reason.
     #[cfg(test)]
-    pub(crate) fn with_trap_cut(mut self, written: Vec<(int4, u64)>) -> Self {
+    #[doc(hidden)]
+    pub fn with_trap_cut(mut self, written: Vec<(int4, u64)>) -> Self {
         let cut: ByteSet = written.into_iter().collect();
         self.opaque_cuts.push(cut.clone());
         self.cuts.push(cut.clone());
@@ -646,7 +649,8 @@ impl CalleeEntryDead {
 
     /// Record one direct-call terminator, for the same reason.
     #[cfg(test)]
-    pub(crate) fn with_named_cut(mut self, target: Address, written: Vec<(int4, u64)>) -> Self {
+    #[doc(hidden)]
+    pub fn with_named_cut(mut self, target: Address, written: Vec<(int4, u64)>) -> Self {
         self.named_cuts
             .push((target, written.into_iter().collect()));
         self
@@ -655,7 +659,8 @@ impl CalleeEntryDead {
     /// Build a summary by hand, so a module that only CONSUMES this evidence can
     /// unit-test its own decisions without standing up a translator.
     #[cfg(test)]
-    pub(crate) fn from_parts(
+    #[doc(hidden)]
+    pub fn from_parts(
         reg_idx: int4,
         reads: Vec<(int4, u64, int4)>,
         cuts: Vec<Vec<(int4, u64)>>,
@@ -691,7 +696,8 @@ impl CalleeEntryDead {
 
     /// Turn the read of byte `b` into one that only stored it.
     #[cfg(test)]
-    pub(crate) fn with_stored_byte(mut self, b: u64) -> Self {
+    #[doc(hidden)]
+    pub fn with_stored_byte(mut self, b: u64) -> Self {
         if self.live_read_bytes.remove(&(self.reg_idx, b)) {
             self.unpadded_read_bytes.remove(&(self.reg_idx, b));
             self.stored_read_bytes.insert((self.reg_idx, b));
@@ -702,7 +708,8 @@ impl CalleeEntryDead {
     /// Turn the read of byte `b` into a push nothing read back, so a consumer
     /// can unit-test `pads` without a translator.
     #[cfg(test)]
-    pub(crate) fn with_padded_byte(mut self, b: u64) -> Self {
+    #[doc(hidden)]
+    pub fn with_padded_byte(mut self, b: u64) -> Self {
         self.unpadded_read_bytes.remove(&(self.reg_idx, b));
         self
     }
@@ -710,7 +717,8 @@ impl CalleeEntryDead {
     /// Record that some path met an undecodable instruction, so a consumer
     /// can unit-test its refusal without a translator.
     #[cfg(test)]
-    pub(crate) fn with_undecodable(mut self) -> Self {
+    #[doc(hidden)]
+    pub fn with_undecodable(mut self) -> Self {
         self.undecodable = true;
         self
     }
@@ -1013,7 +1021,8 @@ fn takes(stated: &crate::kuna_protoorder::RecoveredTypes, &(ridx, off, sz): &Reg
 }
 
 /// The entry-liveness probe of `entry`, from the run's cache or taken now.
-pub(crate) fn probe_cached(
+#[doc(hidden)]
+pub fn probe_cached(
     arch: &mut crate::architecture::Architecture,
     entry: &Address,
     reg_idx: int4,
@@ -1964,7 +1973,7 @@ pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data
     // `passthrough` asks this walk of the function's OWN body too: a register it
     // writes before reading is not a parameter it can be carrying, which is what
     // says a claim across that slot would materialize one
-    // ([`crate::p4_calls::kuna_passthrough`]'s `no_hole_before`).
+    // ([`crate::kuna_passthrough`]'s `no_hole_before`).
     // `calleereadarg` asks it too, of a function with a call to extend: one
     // that reads its last argument register on entry may be variadic, and is
     // left alone.
@@ -2038,7 +2047,8 @@ const MAX_LEFTOVER_DEPTH: u32 = 12;
 /// a `PIECE` or `MULTIEQUAL` has to have all of its inputs qualify. Anything
 /// else — a constant, a `LOAD`, arithmetic, or a Varnode that is a function
 /// input — answers `false`, because the caller put it there on purpose.
-pub(crate) fn is_leftover_call_result(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
+#[doc(hidden)]
+pub fn is_leftover_call_result(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
     if depth >= MAX_LEFTOVER_DEPTH {
         return false;
     }

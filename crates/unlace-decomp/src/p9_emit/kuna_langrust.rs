@@ -347,7 +347,8 @@ impl PrintC {
     ///
     /// A unit return is omitted rather than spelled `-> ()`, which is what a Rust
     /// reader expects.
-    pub(crate) fn emit_prototype_declaration_rust(
+    #[doc(hidden)]
+    pub fn emit_prototype_declaration_rust(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -470,12 +471,8 @@ impl PrintC {
     }
 
     /// `loop { ... }` — where C emits `do { ... } while( true );`.
-    pub(crate) fn emit_block_inf_loop_rust(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        blk: BlockId,
-    ) {
+    #[doc(hidden)]
+    pub fn emit_block_inf_loop_rust(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         self.context.push_mod();
         self.context
             .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
@@ -500,12 +497,8 @@ impl PrintC {
     /// The condition is emitted through the same `ONLY_BRANCH` path C uses for
     /// its `while (cond)` tail, wrapped in a `BOOLEAN_NOT` so the sense is the
     /// *exit* test rather than the continue test.
-    pub(crate) fn emit_block_do_while_rust(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        blk: BlockId,
-    ) {
+    #[doc(hidden)]
+    pub fn emit_block_do_while_rust(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         self.context.push_mod();
         self.context
             .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
@@ -561,7 +554,8 @@ impl PrintC {
     /// recorded as a comment. It is deliberately still emitted: the label names
     /// a place some `goto` marker refers to, and dropping it would leave that
     /// marker pointing at nothing.
-    pub(crate) fn emit_label_statement_rust(&mut self, fd: &Funcdata, bl: BlockId) {
+    #[doc(hidden)]
+    pub fn emit_label_statement_rust(&mut self, fd: &Funcdata, bl: BlockId) {
         use crate::block::BlockType;
         if self.context.is_set(modifiers::ONLY_BRANCH) {
             return;
@@ -586,7 +580,8 @@ impl PrintC {
     /// identifier: `decl_type` is already the Rust prefix spelling of the element
     /// type, so the count is wrapped around it here. This is the same inversion
     /// that makes `TypeSpeller::declarator` return an empty `back`.
-    pub(crate) fn emit_var_decl_rust(
+    #[doc(hidden)]
+    pub fn emit_var_decl_rust(
         &mut self,
         name: &str,
         decl_type: &str,
@@ -651,7 +646,8 @@ impl PrintC {
     /// for this back-end -- exactly what `gotoreduce`, `taildup`,
     /// `ifelseflatten` and `crossjumprevert` reduce, and what every CLI surface
     /// reports through [`count_unstructured_gotos`].
-    pub(crate) fn emit_unrepresentable_goto(&mut self, fd: &Funcdata, target: BlockId) {
+    #[doc(hidden)]
+    pub fn emit_unrepresentable_goto(&mut self, fd: &Funcdata, target: BlockId) {
         let name = self.block_label_name(fd, target);
         self.emit.print(
             &format!("/* {UNSTRUCTURED_GOTO_NOTE}{name} */"),
@@ -682,12 +678,8 @@ impl PrintC {
     /// forced off for a language without one, so the initializer and increment
     /// stay where the CFG put them. Moving them back at print time would let a
     /// `continue` in the body skip the increment.
-    pub(crate) fn emit_block_while_do_rust(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        blk: BlockId,
-    ) {
+    #[doc(hidden)]
+    pub fn emit_block_while_do_rust(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         self.context.push_mod();
         self.context
             .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
@@ -809,12 +801,8 @@ impl PrintC {
     /// `match` form without duplicating the tail, which is a block-graph edit and
     /// not a printing decision. Those arms carry the same loud marker a residual
     /// goto does.
-    pub(crate) fn emit_block_match_rust(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        blk: BlockId,
-    ) {
+    #[doc(hidden)]
+    pub fn emit_block_match_rust(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         let switch_block = fd.sblocks_ref().block(blk).get_block(0);
 
         self.context.push_mod();
@@ -954,7 +942,8 @@ impl PrintC {
     ///
     /// Counts printed ops the way `if_body_elides` does: not-printed ops,
     /// branches and implied-output ops never reach the page.
-    pub(crate) fn cond_block_emits_statements(&self, fd: &Funcdata, cond: BlockId) -> bool {
+    #[doc(hidden)]
+    pub fn cond_block_emits_statements(&self, fd: &Funcdata, cond: BlockId) -> bool {
         use crate::block::BlockType;
         if fd.sblocks_ref().block(cond).get_type() != BlockType::Copy {
             // A condition that is itself a list or a folded condition carries

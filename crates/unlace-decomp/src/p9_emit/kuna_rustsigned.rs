@@ -8,11 +8,12 @@ use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct SignedTextPlan {
-    pub(crate) inputs: [VarnodeId; 2],
-    pub(crate) casts: [Option<&'static str>; 2],
-    pub(crate) constant_types: [Option<Rc<Datatype>>; 2],
-    pub(crate) output: Option<Rc<Datatype>>,
+#[doc(hidden)]
+pub struct SignedTextPlan {
+    pub inputs: [VarnodeId; 2],
+    pub casts: [Option<&'static str>; 2],
+    pub constant_types: [Option<Rc<Datatype>>; 2],
+    pub output: Option<Rc<Datatype>>,
 }
 
 fn signed_operand_name(ty: &Datatype) -> Option<&'static str> {
@@ -31,7 +32,8 @@ fn signed_operand_name(ty: &Datatype) -> Option<&'static str> {
     }
 }
 
-pub(crate) fn plan(fd: &Funcdata, op: OpId) -> Option<SignedTextPlan> {
+#[doc(hidden)]
+pub fn plan(fd: &Funcdata, op: OpId) -> Option<SignedTextPlan> {
     let operation = fd.obank().get(op)?;
     let shift = match operation.code() {
         OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL => false,

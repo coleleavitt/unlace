@@ -80,7 +80,8 @@ fn eligible_extent(fd: &Funcdata, start: u64, size: i32) -> bool {
 }
 
 /// Retain physical-store evidence before heritage can narrow or combine it.
-pub(crate) fn record_store(fd: &mut Funcdata, address: &Address, size: i32) {
+#[doc(hidden)]
+pub fn record_store(fd: &mut Funcdata, address: &Address, size: i32) {
     if fd
         .get_arch()
         .kuna_options
@@ -142,7 +143,8 @@ pub(crate) fn record_store(fd: &mut Funcdata, address: &Address, size: i32) {
     }
 }
 
-pub(crate) fn preserves_range(fd: &Funcdata, address: &Address, size: i32) -> bool {
+#[doc(hidden)]
+pub fn preserves_range(fd: &Funcdata, address: &Address, size: i32) -> bool {
     if size <= 0 || fd.stack_parameter_store_extents.is_empty() {
         return false;
     }
@@ -167,14 +169,16 @@ pub(crate) fn preserves_range(fd: &Funcdata, address: &Address, size: i32) -> bo
 }
 
 /// A formal scalar describes the incoming value, not every later write to its slot.
-pub(crate) fn wider_scalar_parameters(fd: &Funcdata) -> Vec<(u64, i32)> {
+#[doc(hidden)]
+pub fn wider_scalar_parameters(fd: &Funcdata) -> Vec<(u64, i32)> {
     fd.stack_parameter_store_extents
         .iter()
         .filter_map(|(&start, &width)| eligible_extent(fd, start, width).then_some((start, width)))
         .collect()
 }
 
-pub(crate) fn can_map_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
+#[doc(hidden)]
+pub fn can_map_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
     let Some(scope) = fd.get_scope_local() else {
         return false;
     };
@@ -189,7 +193,8 @@ pub(crate) fn can_map_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
             .is_none()
 }
 
-pub(crate) fn map_backing(fd: &mut Funcdata, start: u64, datatype: Rc<Datatype>) -> bool {
+#[doc(hidden)]
+pub fn map_backing(fd: &mut Funcdata, start: u64, datatype: Rc<Datatype>) -> bool {
     let Some(scope) = fd.get_scope_local_mut() else {
         return false;
     };
@@ -199,7 +204,8 @@ pub(crate) fn map_backing(fd: &mut Funcdata, start: u64, datatype: Rc<Datatype>)
         .is_ok()
 }
 
-pub(crate) fn parameter_types(fd: &Funcdata, start: u64, size: i32) -> Vec<(i32, Rc<Datatype>)> {
+#[doc(hidden)]
+pub fn parameter_types(fd: &Funcdata, start: u64, size: i32) -> Vec<(i32, Rc<Datatype>)> {
     if !fd.get_func_proto().has_store() {
         return Vec::new();
     }
@@ -218,7 +224,8 @@ pub(crate) fn parameter_types(fd: &Funcdata, start: u64, size: i32) -> Vec<(i32,
         .collect()
 }
 
-pub(crate) fn backing_for_address(
+#[doc(hidden)]
+pub fn backing_for_address(
     fd: &Funcdata,
     address: &Address,
     size: i32,
@@ -350,7 +357,8 @@ fn initialize_parameters(
 }
 
 /// Scalar slots also need backing when their addresses have wider observers.
-pub(crate) fn needs_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
+#[doc(hidden)]
+pub fn needs_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
     let aliases = |input| crate::kuna_stackranges::may_alias(fd, input, start, size);
     for id in fd.obank().iter_alive() {
         let Some(op) = fd.obank().get(id) else {
@@ -516,11 +524,8 @@ fn closed_reuse(fd: &Funcdata, object: &StackObject) -> bool {
     true
 }
 
-pub(crate) fn separates_parameter(
-    fd: &Funcdata,
-    first: HighVariableId,
-    second: HighVariableId,
-) -> bool {
+#[doc(hidden)]
+pub fn separates_parameter(fd: &Funcdata, first: HighVariableId, second: HighVariableId) -> bool {
     if !crate::kuna_stackviews::enabled(fd) || first == second {
         return false;
     }
@@ -681,7 +686,8 @@ fn storage(fd: &Funcdata, object: &StackObject) -> Option<VarnodeId> {
 /// `stackviews`, an address may escape without a call carrying a declared
 /// pointee type, so every mapped backing is initialized independently of the
 /// call-specific objects.
-pub(crate) fn prepare_casts(fd: &mut Funcdata) {
+#[doc(hidden)]
+pub fn prepare_casts(fd: &mut Funcdata) {
     let Some(factory) = fd.get_arch().types_rc() else {
         return;
     };

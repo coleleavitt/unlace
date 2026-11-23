@@ -7,15 +7,17 @@ use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct ConstantLslPlan {
-    pub(crate) lhs: VarnodeId,
-    pub(crate) count: VarnodeId,
-    pub(crate) unsigned_type: Rc<Datatype>,
-    pub(crate) signed_result_type: Option<Rc<Datatype>>,
+#[doc(hidden)]
+pub struct ConstantLslPlan {
+    pub lhs: VarnodeId,
+    pub count: VarnodeId,
+    pub unsigned_type: Rc<Datatype>,
+    pub signed_result_type: Option<Rc<Datatype>>,
 }
 
 /// Shift the complete input modulo 64 bits and restore the result type.
-pub(crate) fn plan_fixed64_lsl(
+#[doc(hidden)]
+pub fn plan_fixed64_lsl(
     fd: &Funcdata,
     arch: &Architecture,
     op: OpId,
@@ -23,8 +25,8 @@ pub(crate) fn plan_fixed64_lsl(
 ) -> Option<ConstantLslPlan> {
     if arch
         .kuna_options
-        .get::<crate::p9_emit::kuna_armconstantshift::ConstShiftMode>()
-        != crate::p9_emit::kuna_armconstantshift::ConstShiftMode::All
+        .get::<crate::kuna_armconstantshift::ConstShiftMode>()
+        != crate::kuna_armconstantshift::ConstShiftMode::All
     {
         return None;
     }

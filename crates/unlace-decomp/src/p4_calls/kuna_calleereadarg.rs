@@ -30,7 +30,7 @@
 //! # The evidence
 //!
 //! The callee's body settles it. The bounded entry decode
-//! [`crate::p4_calls::kuna_calleedeadarg`] takes for every direct call, cached
+//! [`crate::kuna_calleedeadarg`] takes for every direct call, cached
 //! per callee, shows whether some path reads the register's LOW byte before
 //! writing it, for a value that can reach something
 //! ([`CalleeEntryDead::reads_low_byte`]); whatever the caller left there is then
@@ -108,7 +108,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_class;
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead;
+use crate::kuna_calleedeadarg::CalleeEntryDead;
 
 /// How many entries in a row may stand between the list and the register the
 /// callee reads (upstream `fillinMap`'s `maxchain`).
@@ -160,7 +160,8 @@ fn is_register(addr: &Address) -> bool {
 /// argument: its low byte read on entry, with `last`, the final register of its
 /// storage class, left unread? A register the callee only pushes for its next
 /// call, with nothing reading the slot back, is not read.
-pub(crate) fn reads_as_argument(
+#[doc(hidden)]
+pub fn reads_as_argument(
     live: &CalleeEntryDead,
     addr: &Address,
     size: int4,
@@ -185,9 +186,9 @@ pub(crate) fn reads_as_argument(
 /// Called at the end of `ActionFuncLink`, next to `passthrough`'s own record,
 /// which that option skips in a function that is variadic itself.
 pub fn record_variadic_setups(data: &mut Funcdata) {
-    let variadic = crate::p4_calls::kuna_passthrough::tests_the_vararg_count(data);
+    let variadic = crate::kuna_passthrough::tests_the_vararg_count(data);
     let ops: Vec<OpId> = (0..data.num_calls())
-        .filter(|&i| variadic || crate::p4_calls::kuna_passthrough::set_up_as_variadic(data, i))
+        .filter(|&i| variadic || crate::kuna_passthrough::set_up_as_variadic(data, i))
         .map(|i| data.get_call_specs(i).get_op())
         .collect();
     data.kuna_set_readarg_vararg_calls(ops);
@@ -344,9 +345,9 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
     }
     if fresh {
         for s in row.iter_mut().flatten() {
-            if s.vn.is_some_and(|v| {
-                crate::p4_calls::kuna_calleedeadarg::is_leftover_call_result(data, v, 0)
-            }) {
+            if s.vn
+                .is_some_and(|v| crate::kuna_calleedeadarg::is_leftover_call_result(data, v, 0))
+            {
                 s.vn = None;
                 s.reads = false;
             }
@@ -363,7 +364,8 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
 /// the call's final list already uses: the entries after a leading run of used
 /// ones, up to the last the callee reads, through at most [`MAX_HOLES`] entries
 /// in a row it does not.
-pub(crate) fn extension<'a>(row: &'a [Option<Slot>], used: &HashSet<int4>) -> Vec<&'a Slot> {
+#[doc(hidden)]
+pub fn extension<'a>(row: &'a [Option<Slot>], used: &HashSet<int4>) -> Vec<&'a Slot> {
     let is_used = |e: &Option<Slot>| e.as_ref().is_some_and(|s| used.contains(&s.index));
     let k = row.iter().take_while(|e| is_used(e)).count();
     if row[k..].iter().any(is_used) {
@@ -436,7 +438,7 @@ fn extend_one(data: &mut Funcdata, p: &PendingReadArg) -> bool {
             return false;
         };
         let arg = if vsize > s.width {
-            match crate::p4_calls::kuna_passthrough::truncate_before(data, vn, s.width, p.op) {
+            match crate::kuna_passthrough::truncate_before(data, vn, s.width, p.op) {
                 Some(v) => v,
                 None => return false,
             }

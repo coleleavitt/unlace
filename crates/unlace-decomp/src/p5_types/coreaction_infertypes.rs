@@ -59,7 +59,8 @@ use crate::typeop::type_op_info;
 /// W6 typeop inst table (`getOutputLocal`/`getInputLocal`).  Falls back to a
 /// size-correct `TYPE_UNKNOWN` if the factory query fails (the C++ getBase never
 /// fails for a valid size).
-pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
+#[doc(hidden)]
+pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
     let arch = Rc::clone(data.get_arch());
     let o = data.obank().get(op).expect("output_type_local: stale op");
     let out_size = o
@@ -291,10 +292,8 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
 }
 
 /// The Intel vector type `vn` has when a vector user-op wrote it.
-pub(crate) fn vector_result_type(
-    data: &Funcdata,
-    vn: crate::context::VarnodeId,
-) -> Option<Rc<Datatype>> {
+#[doc(hidden)]
+pub fn vector_result_type(data: &Funcdata, vn: crate::context::VarnodeId) -> Option<Rc<Datatype>> {
     let mut vn = vn;
     for _ in 0..8 {
         let v = data.vbank().get(vn)?;
@@ -326,7 +325,8 @@ fn vector_userop_type(
     crate::kuna_avxintrin::vector_type(arch.types()?, size, kind)
 }
 
-pub(crate) fn input_type_local(data: &Funcdata, op: OpId, slot: int4) -> Rc<Datatype> {
+#[doc(hidden)]
+pub fn input_type_local(data: &Funcdata, op: OpId, slot: int4) -> Rc<Datatype> {
     input_type_local_with(data, op, slot, true)
 }
 
@@ -334,7 +334,8 @@ pub(crate) fn input_type_local(data: &Funcdata, op: OpId, slot: int4) -> Rc<Data
 /// type a call argument is REQUIRED to have, which is what a cast is measured
 /// against.  A recovered type is a vote about the value, not a declaration the
 /// value must be converted to, so it never emits a cast.
-pub(crate) fn declared_input_type_local(data: &Funcdata, op: OpId, slot: int4) -> Rc<Datatype> {
+#[doc(hidden)]
+pub fn declared_input_type_local(data: &Funcdata, op: OpId, slot: int4) -> Rc<Datatype> {
     input_type_local_with(data, op, slot, false)
 }
 
@@ -703,11 +704,11 @@ fn call_output_type_local(data: &Funcdata, op: OpId, opcode: OpCode) -> Option<R
             .get_out()
             .and_then(|v| data.vbank().get(v))
             .map(|v| v.get_size())?;
-        return crate::p4_calls::kuna_passthrough::tail_return_type(data, op, size)
-            .or_else(|| crate::p4_calls::kuna_slotargs::declared_result_type(data, op, fc, size))
-            .or_else(|| crate::p4_calls::kuna_callrettype::stated_return_type(data, op, fc))
+        return crate::kuna_passthrough::tail_return_type(data, op, size)
+            .or_else(|| crate::kuna_slotargs::declared_result_type(data, op, fc, size))
+            .or_else(|| crate::kuna_callrettype::stated_return_type(data, op, fc))
             .or_else(|| crate::kuna_swiftinfer::pair_output_type(data, op))
-            .or_else(|| crate::p4_calls::kuna_narrowret::stated_type(data, op, fc, size))
+            .or_else(|| crate::kuna_narrowret::stated_type(data, op, fc, size))
             .or_else(|| crate::kuna_floatreg::jump_result_type(data, op, size));
     }
     let ct = proto.get_output_type()?;
@@ -1048,9 +1049,8 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
         Some(t) => t,
         None => return false,
     };
-    let backing_store = crate::p5_types::kuna_stackwordtypes::backing_store(
-        data, op, inslot, outslot, invn, &alttype,
-    );
+    let backing_store =
+        crate::kuna_stackwordtypes::backing_store(data, op, inslot, outslot, invn, &alttype);
     // (C++ coreaction.cc:5335-5341)  Always give the incoming union/relative-pointer
     // a chance to resolve so the field choice is cached for later facing lookups,
     // but only adopt the resolved type for the propagation when `op` is not a MULTIEQUAL
@@ -1066,7 +1066,7 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
         }
     }
     if backing_store {
-        alttype = crate::p5_types::kuna_stackwordtypes::stored_word(data, invn, alttype);
+        alttype = crate::kuna_stackwordtypes::stored_word(data, invn, alttype);
     }
 
     // Resolve the outgoing Varnode.

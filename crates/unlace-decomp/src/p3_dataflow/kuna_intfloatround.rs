@@ -32,7 +32,8 @@ fn int_converts_exactly(precision: int4, size: int4, constant: Option<uintb>) ->
 /// May `RuleFloatCast` turn FLOAT2FLOAT(INT2FLOAT(x)) into one INT2FLOAT of
 /// the `int_size`-byte `x` straight to `out_size`, skipping the `mid_size`
 /// float the binary rounds through?
-pub(crate) fn combines(arch: &ArchContext, int_size: int4, mid_size: int4, out_size: int4) -> bool {
+#[doc(hidden)]
+pub fn combines(arch: &ArchContext, int_size: int4, mid_size: int4, out_size: int4) -> bool {
     mid_size == out_size
         || float_precision(arch, mid_size)
             .is_some_and(|bits| int_converts_exactly(bits, int_size, None))
@@ -42,7 +43,8 @@ pub(crate) fn combines(arch: &ArchContext, int_size: int4, mid_size: int4, out_s
 /// `constant`) at its narrower `precision` instead of `original_size`? The
 /// replacement is never wider than the original, so its own exactness is
 /// the whole condition.
-pub(crate) fn lowers(
+#[doc(hidden)]
+pub fn lowers(
     arch: &ArchContext,
     int_size: int4,
     constant: Option<uintb>,

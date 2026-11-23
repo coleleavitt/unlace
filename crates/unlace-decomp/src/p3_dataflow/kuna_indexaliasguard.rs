@@ -183,7 +183,7 @@ pub fn keeps_forced_self_copy(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool 
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
         .0
         < LEVEL_GLOBAL
     {
@@ -219,7 +219,7 @@ pub fn keeps_forced_join(data: &Funcdata, out: VarnodeId, a: VarnodeId, b: Varno
     };
     data.get_arch()
         .kuna_options
-        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
         .0
         >= LEVEL_GLOBAL
         && data.vbank().get(out).is_some_and(|o| o.is_persist())
@@ -241,7 +241,7 @@ pub fn load_crosses_global_store(data: &Funcdata, vn: VarnodeId) -> bool {
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
         .0
         < LEVEL_GLOBAL
     {
@@ -379,7 +379,7 @@ pub fn keeps_store_guard_input(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {
@@ -411,7 +411,7 @@ pub fn keeps_store_before_load(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {
@@ -651,13 +651,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn option_is_registered() {
-        assert!(
-            crate::kuna_option_dispatch::KUNA_OPTION_NAMES.contains(&OptionIndexAliasGuard::NAME)
-        );
     }
 
     #[test]

@@ -12,7 +12,7 @@
 //! a model whose own `<prototype extrapop="unknown">` declines to. Nothing in
 //! the tree called it, so a locked prototype left the call at
 //! `extrapop_unknown`, `StackSolver` fell through to a guess, and
-//! [`crate::p6_variables::kuna_calleepop`]'s guess reads the push run in front of
+//! [`crate::kuna_calleepop`]'s guess reads the push run in front of
 //! the call. That run is not always the callee's: a Win32 image stages the
 //! arguments of one API and calls a second, argument-less one in the middle of
 //! the run, and every staged push is then credited to the wrong callee. The
@@ -100,7 +100,8 @@ pub fn declared_caller_frame_floor(fp: &FuncProto) -> Option<int4> {
 /// setup can save and restore a frame pointer through memory, breaking the
 /// additive alias walk. Inspect storage rather than SSA links: call guards are
 /// installed before this heritage pass has linked all register reads.
-pub(crate) fn rebound_frame_base(fd: &crate::funcdata::Funcdata) -> bool {
+#[doc(hidden)]
+pub fn rebound_frame_base(fd: &crate::funcdata::Funcdata) -> bool {
     use unlace_num::opcodes::OpCode;
     let Some(stack) = fd.get_arch().manage().get_stack_space() else {
         return false;
@@ -144,7 +145,8 @@ pub(crate) fn rebound_frame_base(fd: &crate::funcdata::Funcdata) -> bool {
 /// A declared pointer input must be proved disjoint before suppressing a stack
 /// write guard. The global additive walk can lose a frame pointer saved to and
 /// restored from memory while a nested frame is active.
-pub(crate) fn pointer_input_may_alias(
+#[doc(hidden)]
+pub fn pointer_input_may_alias(
     fd: &crate::funcdata::Funcdata,
     call: &crate::fspec::FuncCallSpecs,
     offset: uintb,
@@ -180,7 +182,8 @@ pub(crate) fn pointer_input_may_alias(
 /// expression must keep its guard until the frame merge resolves; a concrete
 /// disjoint range can still collapse later. Elsewhere an unresolved pointer
 /// (a cursor into a local buffer) defers to the alias mark.
-pub(crate) fn declared_pointer_reaches(
+#[doc(hidden)]
+pub fn declared_pointer_reaches(
     fd: &crate::funcdata::Funcdata,
     call: &crate::fspec::FuncCallSpecs,
     address: &unlace_base::address::Address,

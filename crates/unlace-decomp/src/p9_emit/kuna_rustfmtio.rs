@@ -31,19 +31,22 @@ pub struct WriterProfile {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Writer {
+#[doc(hidden)]
+pub struct Writer {
     pub value: VarnodeId,
     pub pointer_bridge: bool,
     pub receiver: ReceiverAbi,
 }
 
-pub(crate) struct Plan {
+#[doc(hidden)]
+pub struct Plan {
     pub writer: Writer,
     pub signed_result: bool,
     pub format: super::kuna_rustfmtargs::Plan,
 }
 
-pub(crate) static WITH_UNSIGNED_RESULT: OpToken = OpToken {
+#[doc(hidden)]
+pub static WITH_UNSIGNED_RESULT: OpToken = OpToken {
     print1: "({ use std::io::Write as _; match ",
     print2: " { std::result::Result::Ok(()) => 0u64, std::result::Result::Err(_kuna_io_error) => std::mem::transmute::<std::io::Error, *mut ()>(_kuna_io_error) as usize as u64 } })",
     stage: 2,
@@ -57,7 +60,8 @@ pub(crate) static WITH_UNSIGNED_RESULT: OpToken = OpToken {
     left_to_right_only: false,
 };
 
-pub(crate) static WITH_SIGNED_RESULT: OpToken = OpToken {
+#[doc(hidden)]
+pub static WITH_SIGNED_RESULT: OpToken = OpToken {
     print1: "({ use std::io::Write as _; match ",
     print2: " { std::result::Result::Ok(()) => 0i64, std::result::Result::Err(_kuna_io_error) => std::mem::transmute::<std::io::Error, *mut ()>(_kuna_io_error) as usize as i64 } })",
     stage: 2,
@@ -71,7 +75,8 @@ pub(crate) static WITH_SIGNED_RESULT: OpToken = OpToken {
     left_to_right_only: false,
 };
 
-pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
+#[doc(hidden)]
+pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
         .get::<crate::kuna_rustfmt::RustFmtMode>()
@@ -195,7 +200,8 @@ fn profile_unchanged(fd: &Funcdata, profile: &WriterProfile) -> bool {
     true
 }
 
-pub(crate) fn push_writer(
+#[doc(hidden)]
+pub fn push_writer(
     printer: &mut crate::printc::PrintC,
     fd: &Funcdata,
     arch: &Architecture,

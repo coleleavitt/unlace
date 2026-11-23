@@ -8,7 +8,7 @@
 //! above its last argument.
 //!
 //! The extent comes from the same walk that proves a callee's pop
-//! ([`crate::p4_calls::kuna_calleepurge`]): the highest byte at or above the
+//! ([`crate::kuna_calleepurge`]): the highest byte at or above the
 //! first argument slot that a load or store touches, through the stack pointer
 //! or any register holding a stack address the walk placed exactly, rounded up
 //! to a whole slot. A nested direct call whose own extent is known touches its
@@ -76,7 +76,7 @@ pub fn callee_stack_arg_bytes(
     arch: &Architecture,
     entry: &Address,
     call_at: &Address,
-) -> Option<crate::p4_calls::kuna_calleepurge::StackArgs> {
+) -> Option<crate::kuna_calleepurge::StackArgs> {
     if !arch
         .kuna_options
         .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
@@ -84,7 +84,7 @@ pub fn callee_stack_arg_bytes(
     {
         return None;
     }
-    crate::p4_calls::kuna_calleepurge::callee_arg_bytes(arch, entry, call_at)
+    crate::kuna_calleepurge::callee_arg_bytes(arch, entry, call_at)
 }
 
 /// For a direct callee `entry` that states no extent, the stack bytes its
@@ -97,7 +97,7 @@ pub fn callee_stack_window(arch: &Architecture, entry: &Address, call_at: &Addre
     {
         return None;
     }
-    crate::p4_calls::kuna_calleepurge::callee_window(arch, entry, call_at)
+    crate::kuna_calleepurge::callee_window(arch, entry, call_at)
 }
 
 /// For a direct callee `entry` that states no extent, the stack bytes its
@@ -111,7 +111,7 @@ pub fn callee_return_pop(arch: &Architecture, entry: &Address) -> Option<u32> {
     {
         return None;
     }
-    crate::p4_calls::kuna_calleepurge::callee_return_pop(arch, entry)
+    crate::kuna_calleepurge::callee_return_pop(arch, entry)
 }
 
 /// Does the direct callee `entry` move its caller's stack pointer? The solver
@@ -121,7 +121,7 @@ pub fn callee_moves_stack(arch: &Architecture, entry: &Address) -> bool {
     arch.kuna_options
         .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
         .0
-        && crate::p4_calls::kuna_calleepurge::moves_stack(arch, entry)
+        && crate::kuna_calleepurge::moves_stack(arch, entry)
 }
 
 /// Would a call in `data` whose callee states no extent take `vn`, the stored
@@ -132,7 +132,8 @@ pub fn callee_moves_stack(arch: &Architecture, entry: &Address) -> bool {
 /// the trial then stays with `idx` and the upstream test. A call that could
 /// take the value as an argument (an indirect call, one whose window covers the
 /// slot) does not hold it back: there the freed push is its argument.
-pub(crate) fn contested(data: &Funcdata, idx: int4, vn: VarnodeId, held: &mut Contenders) -> bool {
+#[doc(hidden)]
+pub fn contested(data: &Funcdata, idx: int4, vn: VarnodeId, held: &mut Contenders) -> bool {
     let Some(off) = data.vbank().get(vn).map(|v| v.get_offset()) else {
         return false;
     };
@@ -157,7 +158,8 @@ pub(crate) fn contested(data: &Funcdata, idx: int4, vn: VarnodeId, held: &mut Co
 /// scoring its trials or has an input freed, so each input is checked again
 /// where it is used.
 #[derive(Default)]
-pub(crate) struct Contenders {
+#[doc(hidden)]
+pub struct Contenders {
     slots: Option<HashMap<uintb, Slot>>,
 }
 
@@ -330,7 +332,7 @@ impl crate::kuna_optionset::KunaOption for KunaCalleeargs {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p4_calls::kuna_calleestackargs::OptionCalleeArgs.apply(value)?;
+        let (v, msg) = crate::kuna_calleestackargs::OptionCalleeArgs.apply(value)?;
         Ok((KunaCalleeargs(v), msg))
     }
 }

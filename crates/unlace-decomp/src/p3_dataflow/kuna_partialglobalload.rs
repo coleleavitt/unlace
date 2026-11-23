@@ -10,7 +10,8 @@ use unlace_num::opcodes::OpCode;
 
 /// Resolve pointer bounds after renaming, before dead-code removal. A pointer
 /// proven outside the global does not require its partial stores to survive.
-pub(crate) fn apply(fd: &mut Funcdata, guards: Vec<Guard>) {
+#[doc(hidden)]
+pub fn apply(fd: &mut Funcdata, guards: Vec<Guard>) {
     let mut bounds = FxHashMap::default();
     let mut inputs = FxHashMap::default();
     for guard in guards {

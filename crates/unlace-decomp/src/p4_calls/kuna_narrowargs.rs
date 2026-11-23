@@ -225,7 +225,8 @@ pub fn narrow_inputs(data: &mut Funcdata) -> int4 {
 /// Replace the register input `vn` by its low `w` bytes, extended back to the
 /// register by `ext` at the entry, when the model passes an integer argument
 /// there; whether it was.
-pub(crate) fn narrow_input_to(data: &mut Funcdata, vn: VarnodeId, w: int4, ext: OpCode) -> bool {
+#[doc(hidden)]
+pub fn narrow_input_to(data: &mut Funcdata, vn: VarnodeId, w: int4, ext: OpCode) -> bool {
     let Some((addr, size)) = data
         .vbank()
         .get(vn)
@@ -352,7 +353,7 @@ fn trace() -> bool {
 
 /// (kuna `narrowargs`) Declare a register parameter at the width its uses read
 /// (`body`), and a 32-bit ARM parameter every caller passes narrow (`callers`,
-/// [`crate::p4_calls::kuna_callerargs`]).
+/// [`crate::kuna_callerargs`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NarrowArgs {
     pub body: bool,

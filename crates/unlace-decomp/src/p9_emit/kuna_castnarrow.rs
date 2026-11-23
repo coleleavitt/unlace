@@ -60,7 +60,8 @@ use crate::kuna_castwiden::{operand_set, plain_int, store_pointee};
 
 /// Leave out the truncation or sign change `op` prints, read by `read_op`
 /// (`None` at the top of a statement)?
-pub(crate) fn drops(
+#[doc(hidden)]
+pub fn drops(
     ic: &ImpliedCasts,
     p: &dyn PrintedForms,
     fd: &Funcdata,
@@ -100,7 +101,8 @@ pub(crate) fn drops(
 /// [`drops`] sets: `T` is a plain integer, `name` is declared exactly `whole`,
 /// an integer, and C converts the value to exactly `T` where it lands.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn drops_partial(
+#[doc(hidden)]
+pub fn drops_partial(
     ic: &ImpliedCasts,
     p: &dyn PrintedForms,
     fd: &Funcdata,

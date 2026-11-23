@@ -28,8 +28,8 @@
 //!
 //! # What this pass does
 //!
-//! This is the **sibling** of [`crate::p8_structure::kuna_gotoreduce`]
-//! ([`ActionGotoReduce`](crate::p8_structure::kuna_gotoreduce::ActionGotoReduce)):
+//! This is the **sibling** of [`crate::kuna_gotoreduce`]
+//! ([`ActionGotoReduce`](crate::kuna_gotoreduce::ActionGotoReduce)):
 //! `gotoreduce` duplicates a tail that ends in `return` (a *closed* path — no
 //! fall-through to reconcile), while this pass duplicates a **non-return,
 //! fall-through** cross-jump tail, which additionally requires a
@@ -213,7 +213,7 @@ impl Action for ActionCrossJumpReverter {
         // Drop the label on any target no longer reached by an unstructured edge --
         // counting switch-case and multigoto carriers, not just BlockGoto/BlockIf
         // (`kuna_gotolabel`), so a target a switch arm still jumps to keeps its label.
-        crate::p8_structure::kuna_gotolabel::release_converted_labels(data, &converted_targets);
+        crate::kuna_gotolabel::release_converted_labels(data, &converted_targets);
 
         self.base_mut().count += count;
         0
@@ -360,8 +360,7 @@ impl crate::kuna_optionset::KunaOption for RevertCrossJumps {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) =
-            crate::p8_structure::kuna_crossjumpreverter::OptionCrossJumpReverter.apply(value)?;
+        let (v, msg) = crate::kuna_crossjumpreverter::OptionCrossJumpReverter.apply(value)?;
         Ok((RevertCrossJumps(v), msg))
     }
 }

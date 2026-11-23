@@ -23,7 +23,6 @@
 //     return-storage preservation but remains in the function.
 
 use super::*;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 
 use std::rc::Rc;
 
@@ -143,15 +142,6 @@ fn mk_op(fd: &mut Funcdata, inputs: int4, off: u64, opc: OpCode) -> OpId {
     op
 }
 
-/// The function's entry stack-pointer Varnode.
-fn sp_input(fd: &mut Funcdata) -> VarnodeId {
-    let a = reg(fd, SP_OFF);
-    let vn = fd.new_varnode(SP_SIZE, &a, None);
-    let vn = fd.set_input_varnode(vn).unwrap();
-    fd.spacebase();
-    vn
-}
-
 /// A register Varnode written by a binary op placed in `bl`.
 fn binop(
     fd: &mut Funcdata,
@@ -200,51 +190,13 @@ fn cookie_read(fd: &mut Funcdata, bl: BlockId, at: u64, out_reg: u64) -> Varnode
 
 // --- stack_pointer_offset -----------------------------------------------------
 
-#[test]
-fn entry_stack_pointer_is_offset_zero() {
-    let mut fd = build_fd();
-    let spin = sp_input(&mut fd);
-    let sp = sp(&fd);
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(
-        stack_pointer_offset(spin, WALK_DEPTH, &fd, &sp, &mut budget),
-        Some(0)
-    );
-}
-
-#[test]
-fn ptrsub_chain_reports_signed_frame_offset() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let spin = sp_input(&mut fd);
-    // `sub rsp,0x48` normalized to SP - 0x48.
-    let frame = frame_ptr(&mut fd, bl, 0x10, spin, (-0x48i64) as u64, 0x100);
-    let sp = sp(&fd);
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(
-        stack_pointer_offset(frame, WALK_DEPTH, &fd, &sp, &mut budget),
-        Some(-0x48)
-    );
-}
-
-#[test]
-fn cast_between_the_chain_is_peeled() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let spin = sp_input(&mut fd);
-    let frame = frame_ptr(&mut fd, bl, 0x10, spin, (-0x48i64) as u64, 0x100);
-    let op = mk_op(&mut fd, 1, 0x14, OpCode::CPUI_CAST);
-    fd.op_set_input(op, frame, 0).unwrap();
-    let addr = reg(&fd, 0x108);
-    let out = fd.vbank_mut().create(8, addr, unk(8));
-    fd.op_set_output(op, out).unwrap();
-    fd.op_insert_end(op, bl);
-    let sp = sp(&fd);
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(
-        stack_pointer_offset(out, WALK_DEPTH, &fd, &sp, &mut budget),
-        Some(-0x48)
-    );
+fn sp_input(fd: &mut Funcdata) -> VarnodeId {
+    use crate::funcdata_spacebase::FuncdataSpacebaseExt;
+    let a = reg(fd, SP_OFF);
+    let vn = fd.new_varnode(SP_SIZE, &a, None);
+    let vn = fd.set_input_varnode(vn).unwrap();
+    fd.spacebase();
+    vn
 }
 
 #[test]
@@ -331,35 +283,6 @@ fn cancel_at_the_same_frame_offset_matches() {
     let sp = sp(&fd);
     let mut budget = MAX_MATCH_STEPS;
     assert_eq!(cookie_cancel(out, &fd, &sp, &mut budget), Some(vec![init]));
-}
-
-#[test]
-fn a_cookie_carried_across_many_calls_still_matches() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let spin = sp_input(&mut fd);
-    let k = cookie_read(&mut fd, bl, 0x10, 0x100);
-    let f1 = frame_ptr(&mut fd, bl, 0x14, spin, (-0x48i64) as u64, 0x108);
-    let mut saved = binop(&mut fd, bl, 0x18, OpCode::CPUI_INT_XOR, k, f1, 0x110);
-    let init = fd.vbank().get(saved).unwrap().get_def().unwrap();
-    for i in 0..300u64 {
-        let op = mk_op(&mut fd, 2, 0x40 + i, OpCode::CPUI_INDIRECT);
-        fd.op_set_input(op, saved, 0).unwrap();
-        let blocker = fd.new_constant(8, i);
-        fd.op_set_input(op, blocker, 1).unwrap();
-        let out_addr = reg(&fd, 0x200 + i * 8);
-        let out = fd.vbank_mut().create(8, out_addr, unk(8));
-        fd.op_set_output(op, out).unwrap();
-        fd.op_insert_end(op, bl);
-        saved = out;
-    }
-    let f2 = frame_ptr(&mut fd, bl, 0x90, spin, (-0x48i64) as u64, 0x500);
-    let out = binop(&mut fd, bl, 0x94, OpCode::CPUI_INT_XOR, saved, f2, 0x508);
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(
-        cookie_cancel(out, &fd, &sp(&fd), &mut budget),
-        Some(vec![init])
-    );
 }
 
 fn copy_chain(fd: &mut Funcdata, bl: BlockId, mut value: VarnodeId, count: usize) -> VarnodeId {
@@ -449,33 +372,6 @@ fn every_argument_shares_the_call_budget() {
     assert_eq!(cookie_check_op(&fd, call, &sp(&fd)), None);
 }
 
-#[test]
-fn a_loop_carried_cookie_phi_uses_its_entry_scramble() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let spin = sp_input(&mut fd);
-    let k = cookie_read(&mut fd, bl, 0x10, 0x100);
-    let f1 = frame_ptr(&mut fd, bl, 0x14, spin, (-0x48i64) as u64, 0x108);
-    let saved = binop(&mut fd, bl, 0x18, OpCode::CPUI_INT_XOR, k, f1, 0x110);
-    let init = fd.vbank().get(saved).unwrap().get_def().unwrap();
-
-    let phi_op = mk_op(&mut fd, 2, 0x1c, OpCode::CPUI_MULTIEQUAL);
-    let phi_addr = reg(&fd, 0x118);
-    let carried = fd.vbank_mut().create(8, phi_addr, unk(8));
-    fd.op_set_output(phi_op, carried).unwrap();
-    fd.op_set_input(phi_op, saved, 0).unwrap();
-    fd.op_set_input(phi_op, carried, 1).unwrap();
-    fd.op_insert_begin(phi_op, bl);
-
-    let f2 = frame_ptr(&mut fd, bl, 0x20, spin, (-0x48i64) as u64, 0x120);
-    let out = binop(&mut fd, bl, 0x24, OpCode::CPUI_INT_XOR, carried, f2, 0x128);
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(
-        cookie_cancel(out, &fd, &sp(&fd), &mut budget),
-        Some(vec![init])
-    );
-}
-
 enum CycleExternal {
     Backedge,
     Unknown,
@@ -552,59 +448,6 @@ fn a_cookie_cycle_spanning_multiple_phis_reaches_its_entry_scramble() {
 }
 
 #[test]
-fn a_seedless_multi_phi_cycle_declines() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let spin = sp_input(&mut fd);
-
-    let phi_a_op = mk_op(&mut fd, 2, 0x10, OpCode::CPUI_MULTIEQUAL);
-    let phi_a_addr = reg(&fd, 0x100);
-    let phi_a = fd.vbank_mut().create(8, phi_a_addr, unk(8));
-    fd.op_set_output(phi_a_op, phi_a).unwrap();
-    fd.op_insert_begin(phi_a_op, bl);
-
-    let phi_b_op = mk_op(&mut fd, 2, 0x14, OpCode::CPUI_MULTIEQUAL);
-    let phi_b_addr = reg(&fd, 0x108);
-    let phi_b = fd.vbank_mut().create(8, phi_b_addr, unk(8));
-    fd.op_set_output(phi_b_op, phi_b).unwrap();
-    fd.op_insert_begin(phi_b_op, bl);
-
-    fd.op_set_input(phi_a_op, phi_b, 0).unwrap();
-    fd.op_set_input(phi_a_op, phi_b, 1).unwrap();
-    fd.op_set_input(phi_b_op, phi_a, 0).unwrap();
-    fd.op_set_input(phi_b_op, phi_a, 1).unwrap();
-
-    let frame = frame_ptr(&mut fd, bl, 0x18, spin, (-0x48i64) as u64, 0x110);
-    let out = binop(&mut fd, bl, 0x1c, OpCode::CPUI_INT_XOR, phi_a, frame, 0x118);
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(cookie_cancel(out, &fd, &sp(&fd), &mut budget), None);
-}
-
-#[test]
-fn a_seedless_cycle_alongside_a_valid_scramble_declines() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let spin = sp_input(&mut fd);
-    let k = cookie_read(&mut fd, bl, 0x10, 0x100);
-    let f1 = frame_ptr(&mut fd, bl, 0x14, spin, (-0x48i64) as u64, 0x108);
-    let saved = binop(&mut fd, bl, 0x18, OpCode::CPUI_INT_XOR, k, f1, 0x110);
-
-    let loop_op = mk_op(&mut fd, 2, 0x1c, OpCode::CPUI_MULTIEQUAL);
-    let loop_addr = reg(&fd, 0x118);
-    let loop_value = fd.vbank_mut().create(8, loop_addr, unk(8));
-    fd.op_set_output(loop_op, loop_value).unwrap();
-    fd.op_set_input(loop_op, loop_value, 0).unwrap();
-    fd.op_set_input(loop_op, loop_value, 1).unwrap();
-    fd.op_insert_begin(loop_op, bl);
-
-    let joined = phi(&mut fd, bl, 0x20, saved, loop_value, 0x120);
-    let f2 = frame_ptr(&mut fd, bl, 0x24, spin, (-0x48i64) as u64, 0x128);
-    let out = binop(&mut fd, bl, 0x28, OpCode::CPUI_INT_XOR, joined, f2, 0x130);
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(cookie_cancel(out, &fd, &sp(&fd), &mut budget), None);
-}
-
-#[test]
 fn a_multi_phi_cycle_with_an_unproven_entry_declines() {
     let mut fd = build_fd();
     let (out, _) = build_multi_phi_cycle_cancel(&mut fd, CycleExternal::Unknown);
@@ -627,34 +470,6 @@ fn cancel_at_a_different_frame_offset_declines() {
     let sp = sp(&fd);
     let mut budget = MAX_MATCH_STEPS;
     assert_eq!(cookie_cancel(out, &fd, &sp, &mut budget), None);
-}
-
-#[test]
-fn a_constant_scrambled_with_the_stack_pointer_is_not_a_cookie() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let spin = sp_input(&mut fd);
-    let k = fd.new_constant(8, 0x1234_5678);
-    let f1 = frame_ptr(&mut fd, bl, 0x14, spin, (-0x48i64) as u64, 0x108);
-    let saved = binop(&mut fd, bl, 0x18, OpCode::CPUI_INT_XOR, k, f1, 0x110);
-    let f2 = frame_ptr(&mut fd, bl, 0x20, spin, (-0x48i64) as u64, 0x118);
-    let out = binop(&mut fd, bl, 0x24, OpCode::CPUI_INT_XOR, saved, f2, 0x120);
-    let sp = sp(&fd);
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(cookie_cancel(out, &fd, &sp, &mut budget), None);
-}
-
-#[test]
-fn one_xor_is_not_a_cancel() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let spin = sp_input(&mut fd);
-    let k = cookie_read(&mut fd, bl, 0x10, 0x100);
-    let f1 = frame_ptr(&mut fd, bl, 0x14, spin, (-0x48i64) as u64, 0x108);
-    let saved = binop(&mut fd, bl, 0x18, OpCode::CPUI_INT_XOR, k, f1, 0x110);
-    let sp = sp(&fd);
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(cookie_cancel(saved, &fd, &sp, &mut budget), None);
 }
 
 /// `phi = MULTIEQUAL(a, b)` placed at the head of `bl`.
@@ -709,50 +524,6 @@ fn a_join_with_one_scramble_at_another_offset_declines() {
     let sp = sp(&fd);
     let mut budget = MAX_MATCH_STEPS;
     assert_eq!(cookie_cancel(out, &fd, &sp, &mut budget), None);
-}
-
-#[test]
-fn a_cookie_carried_through_more_than_walk_depth_phis_matches() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let spin = sp_input(&mut fd);
-    let k = cookie_read(&mut fd, bl, 0x10, 0x100);
-    let f1 = frame_ptr(&mut fd, bl, 0x14, spin, (-0x48i64) as u64, 0x108);
-    let first = binop(&mut fd, bl, 0x18, OpCode::CPUI_INT_XOR, k, f1, 0x110);
-    let init = fd.vbank().get(first).unwrap().get_def().unwrap();
-    let mut carried = first;
-    for i in 0..40u64 {
-        carried = phi(&mut fd, bl, 0x200 + i * 4, carried, carried, 0x600 + i * 8);
-    }
-    let f2 = frame_ptr(&mut fd, bl, 0x400, spin, (-0x48i64) as u64, 0x900);
-    let out = binop(&mut fd, bl, 0x404, OpCode::CPUI_INT_XOR, carried, f2, 0x908);
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(
-        cookie_cancel(out, &fd, &sp(&fd), &mut budget),
-        Some(vec![init])
-    );
-}
-
-#[test]
-fn a_transparent_cycle_in_the_cookie_operand_declines() {
-    let mut fd = build_fd();
-    let bl = mk_block(&mut fd);
-    let spin = sp_input(&mut fd);
-
-    let copy = mk_op(&mut fd, 1, 0x10, OpCode::CPUI_COPY);
-    let cookie_addr = reg(&fd, 0x100);
-    let cookie = fd.vbank_mut().create(8, cookie_addr, unk(8));
-    fd.op_set_output(copy, cookie).unwrap();
-    fd.op_set_input(copy, cookie, 0).unwrap();
-    fd.op_insert_begin(copy, bl);
-
-    let f1 = frame_ptr(&mut fd, bl, 0x14, spin, (-0x48i64) as u64, 0x108);
-    let saved = binop(&mut fd, bl, 0x18, OpCode::CPUI_INT_XOR, cookie, f1, 0x110);
-    let f2 = frame_ptr(&mut fd, bl, 0x1c, spin, (-0x48i64) as u64, 0x118);
-    let out = binop(&mut fd, bl, 0x20, OpCode::CPUI_INT_XOR, saved, f2, 0x120);
-
-    let mut budget = MAX_MATCH_STEPS;
-    assert_eq!(cookie_cancel(out, &fd, &sp(&fd), &mut budget), None);
 }
 
 // --- cookie_check_op ---------------------------------------------------------

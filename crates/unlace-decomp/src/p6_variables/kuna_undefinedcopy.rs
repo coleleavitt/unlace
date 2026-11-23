@@ -18,7 +18,8 @@ struct State {
 /// Mark the trim copies whose values no observable use can reach. The roots
 /// share one step budget, so they are walked in creation order: a Varnode's id
 /// is only the arena slot it reused.
-pub(crate) fn mark(data: &mut Funcdata) {
+#[doc(hidden)]
+pub fn mark(data: &mut Funcdata) {
     let mut copies: BTreeMap<VarnodeId, Vec<OpId>> = BTreeMap::new();
     for id in data.obank().iter_alive() {
         let op = data.obank().get(id).unwrap();

@@ -456,12 +456,8 @@ fn roots(data: &Funcdata, start: VarnodeId) -> Vec<OpId> {
 
 /// Try the fold from the low-word compare `loop_` reading `i`'s low piece
 /// (called from `apply_rule_in` alongside upstream's compare forms).
-pub(crate) fn apply_rule(
-    i: &SplitVarnode,
-    loop_: OpId,
-    workishi: bool,
-    data: &mut Funcdata,
-) -> bool {
+#[doc(hidden)]
+pub fn apply_rule(i: &SplitVarnode, loop_: OpId, workishi: bool, data: &mut Funcdata) -> bool {
     if workishi {
         return false;
     }
@@ -801,7 +797,7 @@ impl crate::action::Rule for RuleDoubleInputPair {
 
 /// (kuna) Join two adjacent input words a borrow or carry chain links into
 /// one double-precision input (option `pairparam`).  See
-/// [`crate::p5_types::kuna_borrowcompare::RuleDoubleInputPair`].
+/// [`crate::kuna_borrowcompare::RuleDoubleInputPair`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PairParams(pub bool);
 

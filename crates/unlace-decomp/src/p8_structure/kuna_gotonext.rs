@@ -19,11 +19,12 @@
 
 use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
 use crate::context::BlockId;
-use crate::p8_structure::kuna_switchmerge::SwitchPlans;
+use crate::kuna_switchmerge::SwitchPlans;
 use std::collections::BTreeSet;
 
 #[derive(Default)]
-pub(crate) struct GotoRewrites {
+#[doc(hidden)]
+pub struct GotoRewrites {
     /// `BlockGoto` nodes whose jump is left out.
     pub silent: BTreeSet<BlockId>,
     /// `BlockGoto` and goto-`BlockIf` nodes printed as `break;`.
@@ -36,7 +37,8 @@ pub(crate) struct GotoRewrites {
 
 impl GotoRewrites {
     /// The goto type a `BlockGoto` or goto-`BlockIf` node prints with.
-    pub(crate) fn gototype(&self, carrier: BlockId, gototype: u32) -> u32 {
+    #[doc(hidden)]
+    pub fn gototype(&self, carrier: BlockId, gototype: u32) -> u32 {
         if gototype == block_flags::f_goto_goto && self.breaks.contains(&carrier) {
             block_flags::f_break_goto
         } else {
@@ -45,7 +47,8 @@ impl GotoRewrites {
     }
 
     /// The goto type a bare-goto switch arm prints with.
-    pub(crate) fn case_gototype(&self, switch: BlockId, case: BlockId, gototype: u32) -> u32 {
+    #[doc(hidden)]
+    pub fn case_gototype(&self, switch: BlockId, case: BlockId, gototype: u32) -> u32 {
         if gototype == block_flags::f_goto_goto && self.case_breaks.contains(&(switch, case)) {
             block_flags::f_break_goto
         } else {
@@ -82,7 +85,8 @@ fn break_target(graph: &BlockGraph, plans: &SwitchPlans, id: BlockId) -> Option<
 /// The goto rewrites for the structured tree under `root`; `breaks` is option
 /// `loopbreak_recovery`, which also decides whether a jump prints as `break;`.
 /// `plans` holds the switch arms the printer moves or leaves out.
-pub(crate) fn goto_rewrites(
+#[doc(hidden)]
+pub fn goto_rewrites(
     graph: &BlockGraph,
     root: BlockId,
     breaks: bool,

@@ -7,9 +7,9 @@
 //! flag [`BlockGraph::mark_unstructured`](crate::block::BlockGraph::mark_unstructured)
 //! sets on each goto target, and the three goto-reduction passes that convert a
 //! `goto` into a duplicated tail
-//! ([`kuna_gotoreduce`](crate::p8_structure::kuna_gotoreduce),
-//! [`kuna_taildup`](crate::p8_structure::kuna_taildup),
-//! [`kuna_crossjumpreverter`](crate::p8_structure::kuna_crossjumpreverter)) clear
+//! ([`kuna_gotoreduce`](crate::kuna_gotoreduce),
+//! [`kuna_taildup`](crate::kuna_taildup),
+//! [`kuna_crossjumpreverter`](crate::kuna_crossjumpreverter)) clear
 //! that flag once the converted target is no longer reached by an unstructured
 //! edge.  Each pass carried its own copy of the "still reached" test, and all
 //! three copies looked at `BlockGoto`/`BlockIf` goto targets only — so a target
@@ -42,7 +42,8 @@ use crate::funcdata::Funcdata;
 /// whose edge is a real goto, and every `BlockMultiGoto` virtual edge.  Targets
 /// are recorded as given (the block the carrier names), matching how the passes
 /// address the flag they clear.
-pub(crate) fn referenced_goto_targets(
+#[doc(hidden)]
+pub fn referenced_goto_targets(
     graph: &BlockGraph,
     root: BlockId,
 ) -> std::collections::BTreeSet<BlockId> {
@@ -92,7 +93,8 @@ pub(crate) fn referenced_goto_targets(
 /// label printed.  That asymmetry is deliberate: a label no `goto` reaches is
 /// legal C, a `goto` with no label is not, and tightening the clear would
 /// remove statements rather than fix a label.
-pub(crate) fn release_converted_labels(data: &mut Funcdata, converted: &[BlockId]) {
+#[doc(hidden)]
+pub fn release_converted_labels(data: &mut Funcdata, converted: &[BlockId]) {
     if converted.is_empty() {
         return;
     }

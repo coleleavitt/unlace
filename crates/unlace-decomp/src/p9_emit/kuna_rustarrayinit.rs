@@ -81,7 +81,8 @@ impl PrintC {
     }
 
     /// Return the last consumed op only after proving a complete ordered cover.
-    pub(super) fn emit_rust_array_init(
+    #[doc(hidden)]
+    pub fn emit_rust_array_init(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

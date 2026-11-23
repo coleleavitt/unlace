@@ -7,7 +7,8 @@ use crate::context::VarnodeId;
 use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 
-pub(crate) fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
+#[doc(hidden)]
+pub fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
     let mut snapshots = Vec::new();
     for (_, high) in fd.high_bank().iter() {
         if high.kuna_symbol_type().is_some() {

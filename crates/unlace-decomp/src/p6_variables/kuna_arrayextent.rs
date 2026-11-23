@@ -105,9 +105,10 @@ impl OptionArrayExtent {
 /// An indexed base `extend_unbounded` may lengthen: its open hint's start and
 /// element size.
 #[derive(Clone, Copy)]
-pub(crate) struct OpenBase {
-    pub(crate) start: uintb,
-    pub(crate) elem: int4,
+#[doc(hidden)]
+pub struct OpenBase {
+    pub start: uintb,
+    pub elem: int4,
 }
 
 /// How many `elem`-byte elements from `offset` the dereferences through the
@@ -116,7 +117,8 @@ pub(crate) struct OpenBase {
 /// in further address arithmetic. The count stops at `next`, the closest other
 /// pointer base above `offset`: a known-bits bound is loose (a byte index
 /// reaches 256), and the address taken there is another object.
-pub(crate) fn bounded_items(
+#[doc(hidden)]
+pub fn bounded_items(
     fd: &Funcdata,
     space: &Rc<AddrSpace>,
     base: VarnodeId,
@@ -148,7 +150,8 @@ pub(crate) fn bounded_items(
 
 /// The closest pointer base in `offsets` above `offset`, in signed frame
 /// order.
-pub(crate) fn next_base(space: &Rc<AddrSpace>, offsets: &[uintb], offset: uintb) -> Option<uintb> {
+#[doc(hidden)]
+pub fn next_base(space: &Rc<AddrSpace>, offsets: &[uintb], offset: uintb) -> Option<uintb> {
     let bits = space.get_addr_size() as int4 * 8 - 1;
     let signed = |o: uintb| sign_extend(space.wrap_offset(o) as intb, bits);
     let start = signed(offset);
@@ -187,7 +190,8 @@ fn access_size(fd: &Funcdata, vn: VarnodeId) -> Option<int4> {
 /// Lengthen the open hint of each unbounded indexed base over the contiguous
 /// write-only slots that follow its elements, and record each array lengthened
 /// for [`settle`].
-pub(crate) fn extend_unbounded(
+#[doc(hidden)]
+pub fn extend_unbounded(
     fd: &Funcdata,
     state: &mut MapState,
     space: &Rc<AddrSpace>,
@@ -263,7 +267,8 @@ pub(crate) fn extend_unbounded(
 /// carries the array past that slot anyway. A constant there would otherwise
 /// let `RangeHint::absorb` raise the array one element past it and from there
 /// over each following constant-initialised local.
-pub(crate) fn settle(state: &mut MapState, space: &Rc<AddrSpace>, types: &dyn TypeFactory) {
+#[doc(hidden)]
+pub fn settle(state: &mut MapState, space: &Rc<AddrSpace>, types: &dyn TypeFactory) {
     let extended = state.take_extended();
     if extended.is_empty() {
         return;

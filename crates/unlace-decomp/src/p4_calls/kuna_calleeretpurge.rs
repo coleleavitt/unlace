@@ -22,7 +22,7 @@
 //! 32-bit x86 only: x86-64 code does not pop arguments, and the decode is not
 //! free when a Ghidra host serves the instructions. Not under a Windows
 //! compiler spec either: its models state no extrapop, and
-//! [`crate::p4_calls::kuna_calleepurge`] reads the callee's purge there.
+//! [`crate::kuna_calleepurge`] reads the callee's purge there.
 
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
@@ -230,7 +230,7 @@ pub fn effective_extra_pop(data: &Funcdata, i: int4) -> int4 {
 
 crate::kuna_flag!(
     /// (kuna) Take a direct callee's extrapop from its own `ret imm16`
-    /// (option `calleeretpurge`).  See [`crate::p4_calls::kuna_calleeretpurge`].
+    /// (option `calleeretpurge`).  See [`crate::kuna_calleeretpurge`].
     CalleeRetPurge,
     "calleeretpurge",
     "Callee `ret imm16` extrapop",

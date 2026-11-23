@@ -11,15 +11,17 @@ use crate::printc::{PrintC, display_format, op_key, tokens, vn_key};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 use unlace_num::opcodes::OpCode;
 
-pub(crate) struct Operand {
-    pub(crate) value: VarnodeId,
-    pub(crate) reader: OpId,
+#[doc(hidden)]
+pub struct Operand {
+    pub value: VarnodeId,
+    pub reader: OpId,
 }
 
-pub(crate) struct Addition {
-    pub(crate) base: Operand,
-    pub(crate) offset: Operand,
-    pub(crate) operation: OpId,
+#[doc(hidden)]
+pub struct Addition {
+    pub base: Operand,
+    pub offset: Operand,
+    pub operation: OpId,
     negative_constant: Option<i64>,
 }
 
@@ -73,7 +75,8 @@ fn peel(fd: &Funcdata, mut value: VarnodeId, mut reader: OpId, size: i32) -> Opt
     None
 }
 
-pub(crate) fn addition(
+#[doc(hidden)]
+pub fn addition(
     fd: &Funcdata,
     value: VarnodeId,
     reader: OpId,
@@ -136,7 +139,8 @@ fn operation(
 }
 
 impl PrintC {
-    pub(crate) fn push_go_pointer_add(
+    #[doc(hidden)]
+    pub fn push_go_pointer_add(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -162,7 +166,8 @@ impl PrintC {
         true
     }
 
-    pub(crate) fn push_go_pointer_operation(
+    #[doc(hidden)]
+    pub fn push_go_pointer_operation(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -211,7 +216,8 @@ impl PrintC {
         }
     }
 
-    pub(crate) fn push_go_record_prefix_address(
+    #[doc(hidden)]
+    pub fn push_go_record_prefix_address(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

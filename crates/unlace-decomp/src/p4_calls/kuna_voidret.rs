@@ -1229,10 +1229,8 @@ fn widens(storage: &(Address, int4), word: &(Address, int4, bool)) -> bool {
 /// function was not narrowed to, but computes only with `eax`. A shift on the
 /// way moves the upper bits where the RETURN or the argument takes them:
 /// `return (long)z6(x) >> 1` hands on bit 32 of the result.
-pub(crate) fn used_storage(
-    data: &Funcdata,
-    out: crate::context::VarnodeId,
-) -> Option<(Address, int4)> {
+#[doc(hidden)]
+pub fn used_storage(data: &Funcdata, out: crate::context::VarnodeId) -> Option<(Address, int4)> {
     let node = data.vbank().get(out)?;
     let addr = node.get_addr();
     let size = node.get_size();
@@ -1366,7 +1364,8 @@ fn operated_bits(data: &Funcdata, out: crate::context::VarnodeId, size: int4) ->
 /// The storage a caller reads of the call result `out`: the bytes its uses
 /// consume (a `movss` of an `xmm0` result reads four), at the least
 /// significant end of the register.
-pub(crate) fn read_storage(out: &crate::varnode::Varnode) -> Option<(Address, int4)> {
+#[doc(hidden)]
+pub fn read_storage(out: &crate::varnode::Varnode) -> Option<(Address, int4)> {
     let addr = out.get_addr();
     let size = out.get_size();
     match addr.get_space()?.get_type() {
@@ -1878,8 +1877,9 @@ pub fn plant(data: &mut Funcdata) {
     }
 }
 
-pub(crate) fn plant_piece(data: &mut Funcdata, addr: Address, size: int4) {
-    if (crate::p4_calls::kuna_passthrough::suppresses_return_trial(data, &addr, size)
+#[doc(hidden)]
+pub fn plant_piece(data: &mut Funcdata, addr: Address, size: int4) {
+    if (crate::kuna_passthrough::suppresses_return_trial(data, &addr, size)
         && !crate::kuna_armfloatreturn::forwarded_vfp_return(data, &addr, size))
         || touched_beyond(data, &addr, size)
     {

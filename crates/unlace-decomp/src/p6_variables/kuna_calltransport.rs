@@ -17,7 +17,8 @@ pub trait FuncdataCallTransportExt {
 }
 
 /// [`Funcdata`] methods for outgoing-argument transport detection used elsewhere in the crate.
-pub(crate) trait FuncdataCallTransportCrateExt {
+#[doc(hidden)]
+pub trait FuncdataCallTransportCrateExt {
     fn kuna_record_call_transport(&mut self, first: VarnodeId);
     fn kuna_is_call_transport_projection(
         &self,

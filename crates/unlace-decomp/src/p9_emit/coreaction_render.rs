@@ -2810,7 +2810,7 @@ fn dc_is_eventual_constant(data: &Funcdata, vn: VarnodeId, max_binary: i32, max_
 /// readers consume none of its bits (which the sweep would otherwise delete as
 /// never consumed), unless its instruction already reads that address.
 fn dc_last_chance_load(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) -> bool {
-    use crate::p3_dataflow::kuna_volatileload;
+    use crate::kuna_volatileload;
     if data.is_jumptable_recovery_on() {
         return false;
     }

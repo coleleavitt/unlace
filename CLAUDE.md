@@ -127,6 +127,11 @@ push to main. On a PR from a branch in this repo the workspace suite is skipped 
 the gate for `make rust-test`** (or add the `full-ci` label). Workspace integration tests
 need built specs; missing specs are failures, not skips.
 
+A PR labelled **`needs rebase`** no longer merges cleanly into main
+(`.github/workflows/conflicts.yml` sets and clears the label). Its green checks are stale;
+bringing it up to date with main is the author's job. Do not resolve its conflicts or review
+it until the label is gone.
+
 ## Project Claude Layout
 - `CLAUDE.md` (this file, = `AGENTS.md`): the authoritative guide.
 - `docs/dev-setup.md`: the build recipe, gates, git hooks and worktree layout.

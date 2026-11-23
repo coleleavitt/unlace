@@ -1630,6 +1630,7 @@ impl Action for ActionActiveParam {
         };
         let mut ready = ready_calls.into_iter();
         let mut finalized = false;
+        let mut first_calls = None;
         for position in 0..count {
             let idx = if bootstrap {
                 ready.next().expect("checked call")
@@ -1672,6 +1673,12 @@ impl Action for ActionActiveParam {
                 // the next slot is on the stack -- the ABI reaches the stack
                 // only past a full register file.
                 fc.get_active_input().set_stack_arg_gap(true);
+                // (kuna) `passthrough`: a register this caller hands on untouched
+                // is not a run of empty slots in front of a later argument.
+                let forwarded_neutral =
+                    crate::p4_calls::kuna_passthrough::neutral_scope(data, &fc, &mut first_calls);
+                fc.get_active_input()
+                    .set_forwarded_neutral(forwarded_neutral);
                 let reads = fc
                     .callee_reg_model()
                     .is_some_and(|m| fc.proto().has_matching_model(m));

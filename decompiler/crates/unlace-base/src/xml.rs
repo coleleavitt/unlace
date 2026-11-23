@@ -2280,6 +2280,11 @@ mod tests {
         // and kuna-panicloc / a Rust panic Location record is typed and named after its position (option panicloc)
         // and kuna-gotypenames / Go type descriptors and itabs named as the linker spells them, go1.16 on
         // and kuna-opaquepredicate / a comparison constant for every input folds under opaquepredicate
+        // and kuna-passthrough-fwdchain / forwarded registers in front of a live one are not an inactive chain (option passthrough)
+        // and kuna-passthrough-fwdchain-arm / gcc ARM's push {r3,lr} invents no argument under that rule
+        // and kuna-passthrough-calltarget / the register an indirect call jumps through stays an argument below a live one
+        // and kuna-passthrough-anchor-arm / a canary wipe, a restored alignment slot or a float kept across the call anchors no forwarded run
+        // and kuna-passthrough-anchor-x86 / a frame local in the outgoing-argument area anchors no forwarded run
         // and kuna-stubbinds / a stripped Mach-O stub is named from the chained bind on its slot (option stubbinds)
         // and kuna-calleefilledarg / an objc_msgSend$ selector stub keeps the arguments staged after x1 (option calleefilledarg)
         // and kuna-calleefilledarg-ctramp / a C trampoline that fills rsi keeps the positional rule
@@ -2310,7 +2315,6 @@ mod tests {
         // and kuna-swiftrrregs / the arm64 register-specific swift_retain_x<N> / swift_release_x<N> take their register
         // and kuna-copyrunself / a copy run beside a global it may alias folds its INDIRECT chains
         // and kuna-typelib / the prebuilt type library declares the libc imports no table does
-        assert_eq!(count, 980, "corpus file count drifted");
         // and kuna-swiftstdlib / the Swift standard library's C entry points carry their shims-header signatures
         // and kuna-swiftself / swiftself read after a call; an imported Swift method takes its self
         // and kuna-darwinvarargs / an undeclared variadic callee on Apple arm64 keeps its stack-passed arguments
@@ -2318,8 +2322,8 @@ mod tests {
         // and kuna-objcstubagree / an objc_msgSend$<sel> stub is typed only from declarations that agree on its registers
         // and kuna-swiftstrcmp / a Swift literal compared for equality prints in the inline test
         // and kuna-iokitcxx / IOKit classes typed like C++ classes (option iokitclasses on)
-        // and kuna-swiftinfer / an unbound function that reads swiftself is Swift; a two-word result is a pair
         // and kuna-relswitch-a64 / an arm64e hardened jump table is a switch; its inline table is no function start
+        assert_eq!(count, 985, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

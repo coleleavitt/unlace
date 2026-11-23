@@ -2462,19 +2462,21 @@ fn state_recovered_types(
     let Some(key) = stated_key(entry) else {
         return Err(Decline::InvalidStorage);
     };
-    arch.kuna_protoorder_types.insert(
-        key,
-        Rc::new(RecoveredTypes {
-            inputs,
-            arity_sound,
-            output,
-            result,
-            vararg_tail,
-            reads,
-            passes,
-            callers_vote: false,
-        }),
-    );
+    arch.kuna_tables
+        .get_mut::<crate::kuna_protoorder::CalleeTypes>()
+        .insert(
+            key,
+            Rc::new(RecoveredTypes {
+                inputs,
+                arity_sound,
+                output,
+                result,
+                vararg_tail,
+                reads,
+                passes,
+                callers_vote: false,
+            }),
+        );
     Ok(Recovered { pieces, trimmed: 0 })
 }
 
@@ -2495,7 +2497,8 @@ pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
     if names.is_empty() {
         return;
     }
-    arch.kuna_protoorder_types
+    arch.kuna_tables
+        .get_mut::<crate::kuna_protoorder::CalleeTypes>()
         .retain(|_, stated| !stated.inputs.iter().any(|(_, _, ct)| names_type(ct, names)));
 }
 
@@ -2528,7 +2531,11 @@ pub(crate) fn names_type(ct: &Rc<Datatype>, names: &[String]) -> bool {
 /// statement is what an earlier decompile of this same function said, and a
 /// redo exists because that answer changed.
 pub fn seed_protoorder_types(arch: &Architecture, data: &mut crate::funcdata::Funcdata) {
-    if arch.kuna_protoorder_types.is_empty() {
+    if arch
+        .kuna_tables
+        .get::<crate::kuna_protoorder::CalleeTypes>()
+        .is_empty()
+    {
         return;
     }
     let own = stated_key(data.get_address());
@@ -2545,7 +2552,11 @@ pub fn seed_protoorder_types(arch: &Architecture, data: &mut crate::funcdata::Fu
         if Some(key) == own {
             continue;
         }
-        if let Some(stated) = arch.kuna_protoorder_types.get(&key) {
+        if let Some(stated) = arch
+            .kuna_tables
+            .get::<crate::kuna_protoorder::CalleeTypes>()
+            .get(&key)
+        {
             data.kuna_set_protoorder_types(&e, Rc::clone(stated));
         }
     }
@@ -2611,6 +2622,15 @@ impl crate::funcdata::Funcdata {
             .map(|r| r.as_ref())
     }
 }
+
+/// (kuna `protoorder types`) The recovered parameter types each callee stated for the callers
+/// decompiled after it, by `(space index, entry offset)`; an
+/// [`ArchTable`](crate::kuna_archstate::ArchTable).
+pub type CalleeTypes = std::collections::HashMap<
+    (unlace_base::types::int4, unlace_base::types::uintb),
+    std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
+>;
+crate::kuna_arch_table!(CalleeTypes);
 
 #[cfg(test)]
 mod tests;

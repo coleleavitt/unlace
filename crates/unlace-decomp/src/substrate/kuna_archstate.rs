@@ -8,8 +8,14 @@
 //! values, so neither names a pass's type: a pass installs its table with
 //! `states.set(Rc::new(value))` and reads it with `states.get::<S>()`. A type never set reads as
 //! `None`.
+//!
+//! An [`ArchTables`] is the mutable counterpart, held by `Architecture` alone: one value per
+//! [`ArchTable`] type, created with [`Default`] on first use, for the run-wide ledgers and caches
+//! a pass keeps across the functions it decompiles (`arch.kuna_tables.get::<T>()`,
+//! `arch.kuna_tables.get_mut::<T>()`).
 
 use std::any::Any;
+use std::cell::OnceCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -81,6 +87,74 @@ impl ArchStates {
         if let Some(slot) = self.slots.get_mut(S::id().0) {
             *slot = None;
         }
+    }
+}
+
+/// How many state and table types a process can register.
+pub const MAX_ARCH_TABLES: usize = 256;
+
+/// One pass's run-wide mutable table on the architecture.
+pub trait ArchTable: Any + Default {
+    /// This type's index; implement it with [`kuna_arch_table!`].
+    fn id() -> ArchStateId;
+}
+
+/// Implement [`ArchTable`] for a type (or a type alias of one).
+#[macro_export]
+macro_rules! kuna_arch_table {
+    ($ty:ty) => {
+        impl $crate::kuna_archstate::ArchTable for $ty {
+            #[inline]
+            fn id() -> $crate::kuna_archstate::ArchStateId {
+                static ID: std::sync::OnceLock<$crate::kuna_archstate::ArchStateId> =
+                    std::sync::OnceLock::new();
+                *ID.get_or_init($crate::kuna_archstate::ArchStateId::next)
+            }
+        }
+    };
+}
+
+/// The run-wide tables of every pass that has used one.
+#[derive(Default)]
+pub struct ArchTables {
+    slots: OnceCell<Box<[OnceCell<Box<dyn Any>>]>>,
+}
+
+impl ArchTables {
+    fn table(&self) -> &[OnceCell<Box<dyn Any>>] {
+        self.slots
+            .get_or_init(|| (0..MAX_ARCH_TABLES).map(|_| OnceCell::new()).collect())
+    }
+
+    fn index<T: ArchTable>() -> usize {
+        let index = T::id().0;
+        assert!(
+            index < MAX_ARCH_TABLES,
+            "more than {MAX_ARCH_TABLES} architecture state types"
+        );
+        index
+    }
+
+    /// The table of `T`, created with its default on first use.
+    #[inline]
+    pub fn get<T: ArchTable>(&self) -> &T {
+        self.table()[Self::index::<T>()]
+            .get_or_init(|| Box::new(T::default()))
+            .downcast_ref::<T>()
+            .expect("architecture table slot holds its own type")
+    }
+
+    /// The table of `T` for writing, created with its default on first use.
+    #[inline]
+    pub fn get_mut<T: ArchTable>(&mut self) -> &mut T {
+        let index = Self::index::<T>();
+        self.table();
+        let cell = &mut self.slots.get_mut().expect("table was just created")[index];
+        let _ = cell.get_or_init(|| Box::new(T::default()));
+        cell.get_mut()
+            .expect("table slot was just filled")
+            .downcast_mut::<T>()
+            .expect("architecture table slot holds its own type")
     }
 }
 

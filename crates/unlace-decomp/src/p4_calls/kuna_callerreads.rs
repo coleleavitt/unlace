@@ -138,7 +138,8 @@ pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
 /// `storage`, as `kuna_voidret` does for a function whose callers read it.
 pub fn force(arch: &mut Architecture, entry: &Address, storage: (Address, int4)) {
     if let Some(space) = entry.get_space() {
-        arch.kuna_voidret
+        arch.kuna_tables
+            .get_mut::<crate::kuna_voidret::Ledger>()
             .forced
             .insert((space.get_index(), entry.get_offset()), storage);
     }
@@ -147,7 +148,8 @@ pub fn force(arch: &mut Architecture, entry: &Address, storage: (Address, int4))
 /// Undo [`force`].
 pub fn release(arch: &mut Architecture, entry: &Address) {
     if let Some(space) = entry.get_space() {
-        arch.kuna_voidret
+        arch.kuna_tables
+            .get_mut::<crate::kuna_voidret::Ledger>()
             .forced
             .remove(&(space.get_index(), entry.get_offset()));
     }

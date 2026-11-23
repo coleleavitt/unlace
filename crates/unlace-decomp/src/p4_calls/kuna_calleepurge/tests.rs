@@ -591,13 +591,19 @@ fn a_host_flush_drops_the_walks_and_keeps_the_decoded_instructions() {
     );
     let mut arch = Architecture::new("t", sleigh);
     {
-        let mut cache = arch.kuna_callee_purge.borrow_mut();
+        let mut cache = arch
+            .kuna_tables
+            .get::<crate::kuna_calleepurge::CacheCell>()
+            .borrow_mut();
         cache.whole.insert(0x1000, (UNKNOWN, 0));
         cache.cut.insert((0x2000, CUT), UNKNOWN);
         cache.decoded.insert(0x1000, Rc::new((Vec::new(), 1)));
     }
     arch.flush_remote_caches();
-    let cache = arch.kuna_callee_purge.borrow();
+    let cache = arch
+        .kuna_tables
+        .get::<crate::kuna_calleepurge::CacheCell>()
+        .borrow();
     assert!(
         cache.whole.is_empty() && cache.cut.is_empty(),
         "a walk read names a flush may have changed"

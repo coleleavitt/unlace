@@ -395,11 +395,14 @@ fn decompile_batch(
         Vec::new()
     };
     unlace_decomp::kuna_elemptr::start(prog.arch_mut(), targets.len() <= 1);
-    prog.arch_mut().kuna_storetype.start(if targets.len() <= 1 {
-        unlace_decomp::kuna_storetype::StoreTypeMode::Off
-    } else {
-        storetype
-    });
+    prog.arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+        .start(if targets.len() <= 1 {
+            unlace_decomp::kuna_storetype::StoreTypeMode::Off
+        } else {
+            storetype
+        });
     let mut pending = targets.into_iter();
     decompile_pulled(prog, opts, &mut || pending.next(), &mut |r| {
         landed(&r);
@@ -409,7 +412,10 @@ fn decompile_batch(
     converge_element_globals(prog, opts, &replay, &mut out);
     converge_store_types(prog, opts, &replay, &mut out);
     unlace_decomp::kuna_elemptr::stop(prog.arch_mut());
-    prog.arch_mut().kuna_storetype.stop();
+    prog.arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+        .stop();
     if opts.want_pointer_arguments {
         reconcile_pointer_arguments(&mut out);
     }
@@ -461,7 +467,11 @@ pub fn converge_store_types(
         .kuna_options
         .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
     for _ in 0..2 {
-        let decided = prog.arch_mut().kuna_storetype.decide(mode);
+        let decided = prog
+            .arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+            .decide(mode);
         let typed: Vec<u64> = decided
             .into_iter()
             .filter(|(addr, ty)| commit_store_type(prog, *addr, ty))
@@ -470,7 +480,11 @@ pub fn converge_store_types(
         if typed.is_empty() {
             return;
         }
-        let redo = prog.arch().kuna_storetype.readers(&typed);
+        let redo = prog
+            .arch()
+            .kuna_tables
+            .get::<unlace_decomp::kuna_storetype::Ledger>()
+            .readers(&typed);
         for (i, t) in targets.iter().enumerate() {
             if i >= out.len() || !redo.contains(&t.addr.get_offset()) {
                 continue;
@@ -953,7 +967,12 @@ pub fn decompile_pulled(
                 // already decompiled. Containing it here honors the per-function
                 // isolation contract (one bad function → one `error` record).
                 // (kuna `narrowargs callers`) Record what this function passes at each call.
-                if prog.arch().kuna_callerargs.recording {
+                if prog
+                    .arch()
+                    .kuna_tables
+                    .get::<unlace_decomp::kuna_callerargs::Ledger>()
+                    .recording
+                {
                     unlace_decomp::kuna_callerargs::record(prog.arch_mut(), &park_entry, &fd);
                 }
                 // (kuna `calleereginputs custom`) Record what this function read on
@@ -1002,17 +1021,32 @@ pub fn decompile_pulled(
                     unlace_decomp::kuna_gottailcall::record(prog.arch_mut(), &park_entry, &fd);
                 }
                 // (kuna `calleevote`) Record what this function passes at each call.
-                if prog.arch().kuna_calleevote.recording {
+                if prog
+                    .arch()
+                    .kuna_tables
+                    .get::<unlace_decomp::kuna_calleevote::Ledger>()
+                    .recording
+                {
                     unlace_decomp::kuna_calleevote::record(prog.arch_mut(), &park_entry, &mut fd);
                 }
                 // (kuna `callbacktype`) Record every constant it hands to a
                 // declared callback slot.
-                if prog.arch().kuna_callbacktype.recording {
+                if prog
+                    .arch()
+                    .kuna_tables
+                    .get::<unlace_decomp::kuna_callbacktype::Ledger>()
+                    .recording
+                {
                     unlace_decomp::kuna_callbacktype::record(prog.arch_mut(), &park_entry, &fd);
                 }
                 // (kuna `elemptr`) Record what this function said about each global.
                 unlace_decomp::kuna_elemptr::record(prog.arch_mut(), &fd);
-                unlace_decomp::kuna_storetype::record(&mut prog.arch_mut().kuna_storetype, &fd);
+                unlace_decomp::kuna_storetype::record(
+                    prog.arch_mut()
+                        .kuna_tables
+                        .get_mut::<unlace_decomp::kuna_storetype::Ledger>(),
+                    &fd,
+                );
                 let original_display = fd.get_display_name().to_string();
                 if header_carries_types {
                     if let Some(display) =

@@ -159,13 +159,13 @@ kuna_options! { self, p1;
     "calleefilledarg" => registered!(crate::kuna_calleefilledarg::CalleeFilledArg),
     "callwide" => {
         let (enabled, msg) = <crate::kuna_callwide::CallWide as crate::kuna_optionset::KunaOption>::parse(p1)?;
-        self.kuna_callwide.clear();
+        self.kuna_tables.get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>().clear();
         self.kuna_options.set(enabled);
         Ok(msg)
     },
     "bejoin" => {
         let (mode, msg) = crate::kuna_bejoin::BeJoinMode::parse(p1)?;
-        self.kuna_callwide.clear();
+        self.kuna_tables.get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>().clear();
         self.kuna_options.set(mode);
         Ok(msg)
     },
@@ -173,7 +173,7 @@ kuna_options! { self, p1;
     "bejoinpass" => {
         let (mode, msg) = crate::kuna_bejoinpass::BeJoinPassMode::parse(p1)?;
         if mode != self.kuna_options.get::<crate::kuna_bejoinpass::BeJoinPassMode>() {
-            self.kuna_wide.forget_verdicts();
+            self.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>().forget_verdicts();
         }
         self.kuna_options.set(mode);
         Ok(msg)
@@ -234,7 +234,7 @@ kuna_options! { self, p1;
     "narrowext" => {
         let (mode, msg) = <crate::kuna_narrowext::NarrowExtMode as crate::kuna_optionset::KunaOption>::parse(p1)?;
         if mode != self.kuna_options.get::<crate::kuna_narrowext::NarrowExtMode>() {
-            self.kuna_callwide.clear();
+            self.kuna_tables.get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>().clear();
         }
         self.kuna_options.set(mode);
         Ok(msg)

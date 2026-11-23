@@ -762,7 +762,11 @@ pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
             continue;
         };
         let key = (space.get_index(), entry.get_offset());
-        if !arch.kuna_callee_memory_cache.contains_key(&key) {
+        if !arch
+            .kuna_tables
+            .get::<crate::kuna_calleememory::CalleeMemoryCache>()
+            .contains_key(&key)
+        {
             let translator = arch.translate();
             let summary = walk(
                 |at| {
@@ -777,9 +781,15 @@ pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
                 link,
             )
             .unwrap_or_default();
-            arch.kuna_callee_memory_cache.insert(key, Rc::new(summary));
+            arch.kuna_tables
+                .get_mut::<crate::kuna_calleememory::CalleeMemoryCache>()
+                .insert(key, Rc::new(summary));
         }
-        if let Some(summary) = arch.kuna_callee_memory_cache.get(&key) {
+        if let Some(summary) = arch
+            .kuna_tables
+            .get::<crate::kuna_calleememory::CalleeMemoryCache>()
+            .get(&key)
+        {
             fd.callee_memory_mut().insert(key, Rc::clone(summary));
         }
     }
@@ -1255,6 +1265,14 @@ impl crate::funcdata::Funcdata {
         &mut self.kuna_state_mut::<SummariesSlot>().0
     }
 }
+
+/// (kuna `calleememory`) The run-wide cache of callee memory summaries, by callee
+/// `(space index, entry offset)`; an [`ArchTable`](crate::kuna_archstate::ArchTable).
+pub type CalleeMemoryCache = std::collections::HashMap<
+    (unlace_base::types::int4, unlace_base::types::uintb),
+    std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+>;
+crate::kuna_arch_table!(CalleeMemoryCache);
 
 #[cfg(test)]
 mod tests {

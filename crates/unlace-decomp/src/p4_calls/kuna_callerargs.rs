@@ -288,11 +288,20 @@ fn argument(data: &Funcdata, vn: VarnodeId, addr: Address, zext_trimmed: bool) -
 /// call passes, replacing an earlier decompile's record, and, the first time,
 /// its own parameters.
 pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
-    if !arch.kuna_callerargs.recording {
+    if !arch
+        .kuna_tables
+        .get::<crate::kuna_callerargs::Ledger>()
+        .recording
+    {
         return;
     }
     let me = entry.get_offset();
-    let own = if arch.kuna_callerargs.own.contains_key(&me) {
+    let own = if arch
+        .kuna_tables
+        .get::<crate::kuna_callerargs::Ledger>()
+        .own
+        .contains_key(&me)
+    {
         None
     } else {
         own_params(arch, entry, fd)
@@ -331,8 +340,14 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
             },
         ));
     }
-    let taken = taken_entries(&arch.kuna_callerargs.expected, fd);
-    let ledger = &mut arch.kuna_callerargs;
+    let taken = taken_entries(
+        &arch
+            .kuna_tables
+            .get::<crate::kuna_callerargs::Ledger>()
+            .expected,
+        fd,
+    );
+    let ledger = arch.kuna_tables.get_mut::<crate::kuna_callerargs::Ledger>();
     ledger.taken.extend(taken);
     if !ledger.recorded.insert(me) {
         for sites in ledger.sites.values_mut() {
@@ -419,7 +434,7 @@ fn agree(args: &[&Arg]) -> Option<(int4, Ext)> {
 /// Decide what every function's callers state about its parameters; returns
 /// the entries whose statement is new.
 pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
-    let ledger = &arch.kuna_callerargs;
+    let ledger = arch.kuna_tables.get::<crate::kuna_callerargs::Ledger>();
     let mut decided: Vec<(uintb, Vec<NarrowParam>)> = Vec::new();
     for (&entry, expected) in &ledger.expected {
         let (Some(own), Some(sites)) = (ledger.own.get(&entry), ledger.sites.get(&entry)) else {
@@ -480,7 +495,10 @@ pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
                 );
             }
         }
-        arch.kuna_callerargs.stated.insert(k, Rc::new(s));
+        arch.kuna_tables
+            .get_mut::<crate::kuna_callerargs::Ledger>()
+            .stated
+            .insert(k, Rc::new(s));
     }
     keys
 }
@@ -495,7 +513,8 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
         return;
     }
     if let Some(s) = arch
-        .kuna_callerargs
+        .kuna_tables
+        .get::<crate::kuna_callerargs::Ledger>()
         .stated
         .get(&data.get_address().get_offset())
     {
@@ -597,6 +616,8 @@ impl crate::funcdata::Funcdata {
         self.kuna_state::<NarrowSlot>().0.as_ref()
     }
 }
+
+crate::kuna_arch_table!(Ledger);
 
 #[cfg(test)]
 mod tests;

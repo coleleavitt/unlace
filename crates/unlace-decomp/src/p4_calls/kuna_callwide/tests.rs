@@ -524,7 +524,9 @@ fn every_model_mutation_revokes_an_already_seeded_drive() {
     for mutation in mutations {
         let (fd, proof) = data_and_proof();
         let mut arch = architecture();
-        arch.kuna_callwide = ProofSlot(Some(proof));
+        *arch
+            .kuna_tables
+            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>() = ProofSlot(Some(proof));
         assert!(proven(&fd, fd.get_address()));
         mutation(&mut arch);
         assert!(!proven(&fd, fd.get_address()));
@@ -539,7 +541,9 @@ fn replaying_the_same_declared_model_does_not_split_a_batch() {
     arch.set_function_prototype_model("f", model.clone());
     arch.set_default_model_rc(model.clone());
     arch.register_model(model.clone());
-    arch.kuna_callwide = ProofSlot(Some(proof));
+    *arch
+        .kuna_tables
+        .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>() = ProofSlot(Some(proof));
     arch.set_function_prototype_model("f", model.clone());
     arch.set_default_model_rc(model.clone());
     arch.register_model(model);

@@ -1102,16 +1102,26 @@ pub fn seed_callee_write_probe(arch: &mut crate::architecture::Architecture, dat
         let key = (sp.get_index(), e.get_offset());
         let no_return =
             |target: &Address| crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, target);
-        let reusable = arch.kuna_callee_write_cache.get(&key).is_some_and(|w| {
-            w.call_facts
-                .iter()
-                .all(|(target, terminal)| no_return(target) == *terminal)
-        });
+        let reusable = arch
+            .kuna_tables
+            .get::<crate::kuna_rustabi::CalleeWriteCache>()
+            .get(&key)
+            .is_some_and(|w| {
+                w.call_facts
+                    .iter()
+                    .all(|(target, terminal)| no_return(target) == *terminal)
+            });
         if !reusable {
             let probed = probe_callee_return_writes(arch.translate(), &e, userops, no_return);
-            arch.kuna_callee_write_cache.insert(key, Rc::new(probed));
+            arch.kuna_tables
+                .get_mut::<crate::kuna_rustabi::CalleeWriteCache>()
+                .insert(key, Rc::new(probed));
         }
-        if let Some(w) = arch.kuna_callee_write_cache.get(&key) {
+        if let Some(w) = arch
+            .kuna_tables
+            .get::<crate::kuna_rustabi::CalleeWriteCache>()
+            .get(&key)
+        {
             data.kuna_set_callee_ret_writes(&e, Rc::clone(w));
         }
     }
@@ -1334,6 +1344,14 @@ impl crate::funcdata::Funcdata {
             .map(|r| r.as_ref())
     }
 }
+
+/// (kuna `rustabi`) The run-wide cache of callee return-write probes, by callee `(space index,
+/// entry offset)`; an [`ArchTable`](crate::kuna_archstate::ArchTable).
+pub type CalleeWriteCache = std::collections::HashMap<
+    (unlace_base::types::int4, unlace_base::types::uintb),
+    std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
+>;
+crate::kuna_arch_table!(CalleeWriteCache);
 
 #[cfg(test)]
 #[path = "kuna_rustabi/tests.rs"]

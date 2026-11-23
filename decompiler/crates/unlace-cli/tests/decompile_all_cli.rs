@@ -3975,7 +3975,7 @@ fn a_float_register_return_and_a_read_void_result_round_trip() {
     let (stdout, stderr, ok) = run_kuna(&["decompile-all", &bin, "--sleighpath", &sp]);
     assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in [
-        "float nanf(void)",
+        "float nanf(char *a0)",
         "float sub_1150(void)",
         "return nanf((char *)0x203d);",
         "v1 = sub_1150();",
@@ -4022,7 +4022,8 @@ fn a_float_register_return_and_a_read_void_result_round_trip() {
         ));
         init.push_str(&format!("  memcpy(&{name}, {name}_b, sizeof {name});\n"));
     }
-    // The stub takes no parameters (its jump reads none); its caller passes nanf's.
+    // The stub carries libc's `nanf` prototype (`typelib`); the macro hands its
+    // caller's call and the definition to a stub of no parameters.
     let src = format!(
         "#include <stdio.h>\n#include <string.h>\n{BITS}#define nanf(...) nanf_stub()\n\
          static float target(void) {{ return __builtin_nanf(\"\"); }}\nfloat (*dat_4018)(void) = target;\n{globals}{printed}\n\

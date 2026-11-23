@@ -81,12 +81,13 @@ called whole by the nightly). Its four jobs start together; none waits for anoth
 | `tidy` | `cargo fmt --all --check`, `make test-tools` (includes `scripts/check_test_layout.py`), actionlint with shellcheck over `.github/workflows` | about 1 min |
 | `clippy` | `make lint`: `-D warnings` on unlace-cli, unlace-base and unlace-num (the rest of the workspace is not clippy-clean yet) | about 2 min |
 | `parity gates` | release build, `make test`, `make test-stages`, `make check-spec`, `make test-cli`, `unlace catalog --check`, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
-| `cargo workspace suite` | `make rust-test` under cargo-llvm-cov, then the Repowise coverage upload. Skipped on a PR from a branch of this repository unless it has the `full-ci` label | about 20 min |
+| `workspace suite (build)` | builds every workspace test binary into a cargo-nextest archive (`cargo nextest archive`), runs the doc tests | about 12 min |
+| `cargo workspace suite (1/3..3/3)` | three jobs, each running a third of the archive (`--partition count:N/3`) under the nextest profile `ci` (`decompiler/.config/nextest.toml`), which leaves out the slow tests listed there. Both suite jobs are skipped on a PR from a branch of this repository unless it has the `full-ci` label | a few min each |
 
 Caching:
 
 - `Swatinem/rust-cache` keeps each job's dependency build under its own key (`clippy`,
-  `gates`, `rust-test-line-tables`; the jobs build different units, so a shared key would not help).
+  `gates`, `rust-test-nextest`; the jobs build different units, so a shared key would not help).
   Only runs on `main` save it; PR runs read it. The workspace suite also saves after a
   failing test (`cache-on-failure`).
 - The compiled `.sla` files are cached under a hash of `specs/**/*.{slaspec,sinc}`,
@@ -94,7 +95,28 @@ Caching:
   `make specs`. Both jobs still check that every `.slaspec` has its `.sla`.
 - `CARGO_INCREMENTAL=0` for the whole workflow (CI builds are never incremental).
 
-A new push to a PR cancels that PR's running workflow; runs on `main` are never cancelled.
+A new push to a PR cancels that PR's running workflow. Each commit on `main` runs in a
+concurrency group of its own, so no landed commit's run is cancelled or replaced.
+
+`.github/workflows/coverage.yml` runs the whole suite (the slow tests included) under
+cargo-llvm-cov once a day and on manual dispatch, on cargo's own harness (under nextest
+every test process wrote its own `.profraw` and the runner's disk filled), writes `lcov.info`
+whether or not a test failed, and uploads it to Repowise. It is kept off the push path
+because instrumented binaries run the suite several times slower.
+
+Locally the same suite runs with `cd decompiler && cargo nextest run --workspace
+--exclude unlace-wasm --profile ci` (or `--profile full`). A test binary outside the
+checkout (a target dir elsewhere, or an archive) finds the repository through `KUNA_ROOT`.
+
+Many tests build their input with a cross toolchain. The PE tests run
+`clang --target=x86_64-w64-windows-gnu` (and `i686-…`), which links with `ld` unless a
+`<triple>-ld` is on `PATH`; a distribution `ld` built for ELF only fails with
+`unrecognised emulation mode: i386pep`. With MinGW binutils installed, link the triple
+names to them (`ln -s /usr/bin/x86_64-w64-mingw32-ld ~/.local/bin/x86_64-w64-windows-gnu-ld`,
+the same for `i686`). A test that needs an LLVM backend the host's clang or llvm-mc was
+built without (SPARC, PowerPC, MIPS) checks it with `common::host` in
+`unlace-cli/tests/common/host.rs` and skips with a `skipped: this host lacks …` note; with
+`CI` set the same check fails the test, so a runner never skips one.
 `.github/actionlint.yaml` declares the `ubuntu-26.04` runner label, which actionlint does not
 know yet. Run `actionlint` from the repository root before pushing a workflow change.
 

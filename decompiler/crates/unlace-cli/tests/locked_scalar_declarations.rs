@@ -303,10 +303,19 @@ int main(void) {
 }
 
 /// A DWARF function-pointer local merged with a `void *` register keeps its
-/// declared type, so the indirect call through it is valid C.
+/// declared type, so the indirect call through it is valid C. The debug sections
+/// are read both plain and compressed (`SHF_COMPRESSED`, the default of some
+/// toolchains), whose relocations apply to the uncompressed bytes.
 #[test]
 #[cfg(target_arch = "x86_64")]
 fn dwarf_function_pointer_local_keeps_its_declaration() {
+    for debug in ["-gz=none", "-gz=zlib"] {
+        function_pointer_local_round_trips(debug);
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+fn function_pointer_local_round_trips(debug: &str) {
     let source = common::scratch_file("locked-function-pointer", "c");
     let object = source.with_extension("o");
     let helpers =
@@ -318,7 +327,7 @@ fn dwarf_function_pointer_local_keeps_its_declaration() {
     .unwrap();
     if process::optional_output(
         Command::new("gcc")
-            .args(["-g", "-O0", "-fno-pic", "-c"])
+            .args(["-g", debug, "-O0", "-fno-pic", "-c"])
             .arg(&source)
             .arg("-o")
             .arg(&object),
@@ -331,7 +340,7 @@ fn dwarf_function_pointer_local_keeps_its_declaration() {
     assert_eq!(status, 0, "{err}");
     assert!(
         body.contains("int (*f)(int,int);"),
-        "function-pointer type was lost:\n{body}"
+        "{debug}: function-pointer type was lost:\n{body}"
     );
     let generated = common::scratch_file("locked-function-pointer-generated", "c");
     std::fs::write(

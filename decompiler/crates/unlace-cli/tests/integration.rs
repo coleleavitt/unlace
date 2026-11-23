@@ -980,3 +980,6 @@ mod types_header;
 
 #[path = "typelib.rs"]
 mod typelib;
+
+#[path = "vexzeroupper_cli.rs"]
+mod vexzeroupper_cli;

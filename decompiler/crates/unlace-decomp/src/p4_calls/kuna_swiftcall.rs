@@ -929,7 +929,7 @@ fn counts_as_swift(name: &str) -> bool {
 /// language Swift targets: AArch64's x20 / x21 / x22 and x86-64's r13 /
 /// r12 / r14.
 pub fn swift_registers(
-    has_register: impl Fn(&str) -> Option<int4>,
+    has_register: &dyn Fn(&str) -> Option<int4>,
 ) -> Option<(&'static str, &'static str, &'static str)> {
     [("x20", "x21", "x22"), ("R13", "R12", "R14")]
         .into_iter()
@@ -1145,6 +1145,7 @@ crate::kuna_flag!(
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.swiftcall_swift_registers = Some(swift_registers);
     hooks.swiftcall_derive_model = Some(derive_model);
 }
 

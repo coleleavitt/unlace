@@ -4930,18 +4930,22 @@ impl Architecture {
             .map(|s| s.get_addr_size() as int4)
             .unwrap_or(0);
         let resolve = |nm: &[u8]| self.translate.probe_register_varnode(nm).is_some();
-        if !crate::kuna_msvcftol::language_is_x86_32(resolve, code_addr_size)
-            || self
-                .proto_models
-                .contains_key(crate::kuna_x87intrinsic::MODEL_NAME)
+        if !(crate::architecture::default_pass_hooks().msvcftol_language_is_x86_32)(
+            &resolve,
+            code_addr_size,
+        ) || self
+            .proto_models
+            .contains_key(crate::kuna_x87intrinsic::MODEL_NAME)
         {
             return;
         }
         let mut decoded = Vec::new();
-        let _ = crate::kuna_x87intrinsic::decode_prototype(|proto| {
-            decoded.extend(self.decode_proto_model(proto, root).ok());
-            Ok(())
-        });
+        let _ = (crate::architecture::default_pass_hooks().x87intrinsic_decode_prototype)(
+            &mut |proto| {
+                decoded.extend(self.decode_proto_model(proto, root).ok());
+                Ok(())
+            },
+        );
         for model in decoded {
             self.register_model(Rc::new(model));
         }
@@ -4978,9 +4982,15 @@ impl Architecture {
             .map(|s| s.is_big_endian())
             .unwrap_or(false);
         let resolve = |nm: &[u8]| self.translate.probe_register_varnode(nm).is_some();
-        let ftol = crate::kuna_msvcftol::language_is_x86_32(resolve, code_addr_size);
+        let ftol = (crate::architecture::default_pass_hooks().msvcftol_language_is_x86_32)(
+            &resolve,
+            code_addr_size,
+        );
         let helpers = crate::kuna_arithhelpers::helper_abi(resolve, code_addr_size, big_endian);
-        let objc_arc = crate::kuna_objcarc::payload_xml(resolve, code_addr_size);
+        let objc_arc = (crate::architecture::default_pass_hooks().objcarc_payload_xml)(
+            &resolve,
+            code_addr_size,
+        );
         if !ftol && helpers.is_none() && objc_arc.is_none() {
             return Ok(());
         }
@@ -4998,10 +5008,13 @@ impl Architecture {
             Ok(())
         };
         if let Some(xml) = objc_arc {
-            crate::kuna_objcarc::decode_payload(&xml, &mut register)?;
+            (crate::architecture::default_pass_hooks().objcarc_decode_payload)(
+                &xml,
+                &mut register,
+            )?;
         }
         if ftol {
-            crate::kuna_msvcftol::decode_payload(&mut register)?;
+            (crate::architecture::default_pass_hooks().msvcftol_decode_payload)(&mut register)?;
         }
         if let Some(abi) = helpers {
             crate::kuna_arithhelpers::decode_payloads(abi, &mut register)?;
@@ -6770,9 +6783,10 @@ impl Architecture {
         // string-op stride, and `1 - 2*DF` survives into the output as
         // `(uint8)v18 * -2 + 1`. Applied only where the spec is silent, and a
         // structural no-op on any language with no `DF` register.
-        crate::kuna_dfunaffected::assert_direction_flag_unaffected(&mut model, |nm| {
-            self.translate.probe_register_varnode(nm)
-        });
+        (crate::architecture::default_pass_hooks().dfunaffected_assert_direction_flag_unaffected)(
+            &mut model,
+            &|nm| self.translate.probe_register_varnode(nm),
+        );
         Ok(model)
     }
 
@@ -6860,7 +6874,7 @@ impl Architecture {
         // on a language Swift targets when the spec declares neither.
         let default_el =
             find_child(root, "default_proto").and_then(|dp| find_child(&dp, "prototype"));
-        let regs = crate::kuna_swiftcall::swift_registers(|name| {
+        let regs = (crate::architecture::default_pass_hooks().swiftcall_swift_registers)(&|name| {
             self.translate
                 .probe_register_varnode(name.as_bytes())
                 .map(|v| v.size as int4)

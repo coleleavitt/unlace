@@ -136,7 +136,7 @@ pub fn payload_sse_xml() -> String {
 /// bytes wide. x86-64 also resolves `EAX`/`EDX`/`ESP`/`ST0` as sub-registers, so
 /// the width test is what excludes it — MSVC x64 has no `_ftol`.
 pub fn language_is_x86_32(
-    resolve_register: impl Fn(&[u8]) -> bool,
+    resolve_register: &dyn Fn(&[u8]) -> bool,
     code_space_addr_size: i32,
 ) -> bool {
     code_space_addr_size == 4
@@ -148,10 +148,9 @@ pub fn language_is_x86_32(
 /// Parse both payloads into the decoder shape `decode_inject` consumes, and
 /// hand each to `register`. Split from the architecture so the XML and the guard
 /// can be unit-tested without a bootstrapped engine.
-pub fn decode_payload<F>(mut register: F) -> KunaResult<()>
-where
-    F: FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
-{
+pub fn decode_payload(
+    register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
+) -> KunaResult<()> {
     use unlace_base::xml::DocumentStorage;
     for xml in [payload_xml(), payload_sse_xml()] {
         let mut store = DocumentStorage::new();
@@ -159,6 +158,12 @@ where
         register(&root)?;
     }
     Ok(())
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.msvcftol_decode_payload = Some(decode_payload);
+    hooks.msvcftol_language_is_x86_32 = Some(language_is_x86_32);
 }
 
 #[cfg(test)]

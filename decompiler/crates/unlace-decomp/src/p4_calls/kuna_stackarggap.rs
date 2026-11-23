@@ -140,7 +140,7 @@ pub fn ends_argument_list(
     active: &ParamActive,
     index: int4,
     stop: int4,
-    trial_is_spacebase: impl Fn(int4) -> bool,
+    trial_is_spacebase: &dyn Fn(int4) -> bool,
 ) -> bool {
     if !active.is_stack_arg_gap() || !active.is_recover_subcall() {
         return false;
@@ -170,6 +170,7 @@ pub fn address_is_spacebase(addr: &unlace_base::address::Address) -> bool {
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackarggap_ends_argument_list = Some(ends_argument_list);
     hooks.stackarggap_address_is_spacebase = Some(address_is_spacebase);
 }
 

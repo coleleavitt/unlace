@@ -100,7 +100,7 @@ pub fn payload_xml_x86_64() -> String {
 /// The payload for this language: arm64 when `x0`..`x28` resolve at an 8-byte
 /// code space, x86-64 when `RAX`/`RDI`/`RSI`/`RSP` do; `None` elsewhere.
 pub fn payload_xml(
-    resolve_register: impl Fn(&[u8]) -> bool,
+    resolve_register: &dyn Fn(&[u8]) -> bool,
     code_space_addr_size: i32,
 ) -> Option<String> {
     if code_space_addr_size != 8 {
@@ -119,10 +119,10 @@ pub fn payload_xml(
 }
 
 /// Parse `xml` — one `<callfixup>` after another — and hand each root to `register`.
-pub fn decode_payload<F>(xml: &str, mut register: F) -> KunaResult<()>
-where
-    F: FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
-{
+pub fn decode_payload(
+    xml: &str,
+    register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
+) -> KunaResult<()> {
     use unlace_base::xml::DocumentStorage;
     let wrapped = format!("<kuna_objcarc>\n{xml}</kuna_objcarc>");
     let mut store = DocumentStorage::new();
@@ -131,6 +131,12 @@ where
         register(child)?;
     }
     Ok(())
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.objcarc_decode_payload = Some(decode_payload);
+    hooks.objcarc_payload_xml = Some(payload_xml);
 }
 
 #[cfg(test)]
@@ -156,21 +162,21 @@ mod tests {
     #[test]
     fn language_guard_picks_the_payload() {
         let arm = |r: &[u8]| r.starts_with(b"x");
-        assert!(payload_xml(arm, 8).unwrap().contains("x0 = x0;"));
-        assert!(payload_xml(arm, 4).is_none());
+        assert!(payload_xml(&arm, 8).unwrap().contains("x0 = x0;"));
+        assert!(payload_xml(&arm, 4).is_none());
         let x64 = |r: &[u8]| matches!(r, b"RAX" | b"RDI" | b"RSI" | b"RSP");
         assert!(
-            payload_xml(x64, 8)
+            payload_xml(&x64, 8)
                 .unwrap()
                 .contains("RSP = RSP + 8; RAX = RDI;")
         );
-        assert!(payload_xml(|_| false, 8).is_none());
+        assert!(payload_xml(&|_| false, 8).is_none());
     }
 
     #[test]
     fn payload_parses_as_one_element_per_fixup() {
         let mut n = 0;
-        decode_payload(&payload_xml_x86_64(), |root| {
+        decode_payload(&payload_xml_x86_64(), &mut |root| {
             assert_eq!(root.get_name(), "callfixup");
             n += 1;
             Ok(())

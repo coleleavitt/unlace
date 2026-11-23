@@ -2328,7 +2328,9 @@ mod tests {
         // and kuna-objcstructabi / an Objective-C method passing or returning a union, an unnamed struct or bit-fields by value keeps its prototype
         // and kuna-objcblocksx86 / x86-64 Objective-C stack blocks named and typed from their creators
         // and kuna-objcsdksend / a send to a class the image only imports resolves from the SDK headers
-        assert_eq!(count, 998, "corpus file count drifted");
+        // and kuna-itaniumeh-arm / ARM EHABI landing pads print as try/catch (option itaniumeh)
+        // and kuna-itaniumeh-clang / a clang call-site range that starts before its call (option itaniumeh)
+        assert_eq!(count, 1000, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

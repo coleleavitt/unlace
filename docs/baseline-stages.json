@@ -1,7 +1,7 @@
 {
   "data_footer": [
-    5898,
-    5898
+    5909,
+    5909
   ],
   "passing": [
     "data:64-bit logical shift retains unsigned destination",
@@ -4437,6 +4437,7 @@
     "data:itaniumctors #9: no virtual destructor: the destructor stays unnamed",
     "data:itaniumeh #10: the second call of cleanup prints once per pass (inside the one try when on)",
     "data:itaniumeh #11: no exceptional edge prints as a bare if",
+    "data:itaniumeh #12: a typed clause and a catch-all share one header",
     "data:itaniumeh #1: off shows catcher as the normal path only",
     "data:itaniumeh #2: off drops the catch bodies (all three matches are the on pass's)",
     "data:itaniumeh #3: on prints each landing pad as a try region (catcher two, cleanup one, typed one)",
@@ -4445,7 +4446,7 @@
     "data:itaniumeh #6: on names the catch clauses by selector",
     "data:itaniumeh #7: on resumes unwinding from the cleanup pads and the unmatched selector",
     "data:itaniumeh #8: the destructor keeps its one argument on both paths (one off, two on)",
-    "data:itaniumeh #9: a pad with one typed clause is catch (T &)",
+    "data:itaniumeh #9: the header names the caught types in handler order",
     "data:itaniumeh a64 #1: off has no catch code (the one match is the on pass)",
     "data:itaniumeh a64 #2: on prints the pad as a try region",
     "data:itaniumeh a64 #3: on passes x0 to __cxa_begin_catch",
@@ -4454,6 +4455,16 @@
     "data:itaniumeh cold #2: on follows the pad stub into the cold code",
     "data:itaniumeh cold #3: on tests the selector",
     "data:itaniumeh cold #4: the jump into catcher.cold is not a tail call",
+    "data:itaniumeh-arm #1: every guarded call prints in a try region (x86-64, ARM, Thumb)",
+    "data:itaniumeh-arm #2: the handler names the caught builtin type",
+    "data:itaniumeh-arm #3: a hidden class is named from its type_info string, then the catch-all",
+    "data:itaniumeh-arm #4: ARM and Thumb: the handler returns the caught value",
+    "data:itaniumeh-arm #5: the exception reaches __cxa_begin_catch as its void * argument",
+    "data:itaniumeh-arm #6: the stripped Thumb helper decodes as Thumb",
+    "data:itaniumeh-arm #7: no exceptional edge prints as a bare if",
+    "data:itaniumeh-clang #1: a range that starts before the call still gives the call its edge",
+    "data:itaniumeh-clang #2: four clauses print in handler order",
+    "data:itaniumeh-clang #3: the cleanup pad runs the destructor",
     "data:itaniumvfunc #1: off: the Drawable thunk and its target are unnamed",
     "data:itaniumvfunc #2: off: the destructor slot call is unnamed",
     "data:itaniumvfunc #3: on: the thunk is named for its sub-vtable slot",

@@ -212,13 +212,37 @@ pub(crate) fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
                 }
             }
         }
-        // (kuna itaniumeh) the exceptional-edge test is a `bool`.
+        // (kuna itaniumeh) the exceptional-edge test is a `bool`, the
+        // exception a `void *` and the selector a signed integer.
         if in0_off == crate::userop::BUILTIN_EH_UNWINDING as u64 {
             if let Some(Ok(t)) = arch
                 .types()
                 .map(|t| t.get_base(out_size, type_metatype::TYPE_BOOL))
             {
                 return t;
+            }
+        }
+        if in0_off == crate::userop::BUILTIN_EH_SELECTOR as u64
+            && let Some(Ok(t)) = arch
+                .types()
+                .map(|t| t.get_base(out_size, type_metatype::TYPE_INT))
+        {
+            return t;
+        }
+        if in0_off == crate::userop::BUILTIN_EH_EXCEPTION as u64
+            && let Some(tlst) = arch.types()
+        {
+            let ws = data
+                .get_arch()
+                .manage()
+                .get_default_data_space()
+                .map(|s| s.get_word_size())
+                .unwrap_or(1);
+            if let Ok(ptr) = tlst
+                .get_type_void()
+                .and_then(|v| tlst.get_type_pointer(out_size, v, ws))
+            {
+                return ptr;
             }
         }
     }

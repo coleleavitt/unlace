@@ -5329,44 +5329,36 @@ impl PrintC {
         false
     }
 
-    /// (kuna `itaniumeh`) `catch (T)` for a pad with one typed clause, else
-    /// `catch (...)`.
+    /// (kuna `itaniumeh`) `catch (A | B)`: the pad's catch types in handler
+    /// order, `...` for a catch-all or an unnamed type; cleanup and exception
+    /// specifications are not handlers. `catch (...)` when nothing is caught.
     fn eh_catch_header(fd: &Funcdata, pad: u64) -> String {
+        use crate::kuna_itaniumeh::EhClause;
         let Some(table) = fd.get_arch().eh_table.clone() else {
             return "catch (...)".into();
         };
-        let types: Vec<String> = table
+        let mut types: Vec<&str> = Vec::new();
+        for c in table
             .sites
             .iter()
             .filter(|s| s.pad == pad)
             .flat_map(|s| s.clauses.iter())
-            .filter_map(|c| match c {
-                crate::kuna_itaniumeh::EhClause::Catch {
+        {
+            let t = match c {
+                EhClause::Catch {
                     type_name: Some(t), ..
-                } => Some(t.clone()),
-                _ => None,
-            })
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        let catch_all = table
-            .sites
-            .iter()
-            .filter(|s| s.pad == pad)
-            .flat_map(|s| s.clauses.iter())
-            .any(|c| {
-                !matches!(
-                    c,
-                    crate::kuna_itaniumeh::EhClause::Catch {
-                        type_name: Some(_),
-                        ..
-                    }
-                )
-            });
-        match types.as_slice() {
-            [t] if !catch_all => format!("catch ({t} &)"),
-            _ => "catch (...)".into(),
+                } => t.as_str(),
+                EhClause::Catch { .. } | EhClause::CatchAll { .. } => "...",
+                EhClause::Cleanup | EhClause::Filter { .. } => continue,
+            };
+            if !types.contains(&t) {
+                types.push(t);
+            }
         }
+        if types.is_empty() {
+            return "catch (...)".into();
+        }
+        format!("catch ({})", types.join(" | "))
     }
 
     /// (kuna `itaniumeh`) Emit `try { <cond statements> } catch (..) { <pad> }`.
@@ -5588,16 +5580,18 @@ impl PrintC {
             && fd.sblocks_ref().block(blk).get_size() >= 2
             && self.is_eh_if(fd, blk)
         {
+            let cond = fd.sblocks_ref().block(blk).get_block(0);
             let tru = fd.sblocks_ref().block(blk).get_block(1);
+            let other = (fd.sblocks_ref().block(blk).get_size() == 3)
+                .then(|| fd.sblocks_ref().block(blk).get_block(2));
+            // The normal arm goes inside the `try`: printed after the `catch`
+            // it would read as code the handler falls into.
             if let Some(pad) = self.eh_pad_start(fd, tru) {
-                let cond = fd.sblocks_ref().block(blk).get_block(0);
-                self.emit_eh_try(fd, arch, cond, None, pad, &[tru], false);
-                if fd.sblocks_ref().block(blk).get_size() == 3 {
-                    let other = fd.sblocks_ref().block(blk).get_block(2);
-                    let id = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, other);
-                    self.emit.end_block(id);
-                }
+                self.emit_eh_try(fd, arch, cond, other, pad, &[tru], false);
+                return;
+            }
+            if let Some((other, pad)) = other.and_then(|o| Some((o, self.eh_pad_start(fd, o)?))) {
+                self.emit_eh_try(fd, arch, cond, Some(tru), pad, &[other], false);
                 return;
             }
         }

@@ -123,6 +123,9 @@ cxa_bad_typeid
 cxa_pure_virtual
 cxa_deleted_virtual
 cxa_throw_bad_array_new_length
+# ARM EHABI (libsupc++ eh_arm.cc): `__cxa_end_cleanup` ends a cleanup pad by
+# resuming the unwind (`_Unwind_Resume`), so it never returns.
+cxa_end_cleanup
 ZSt10unexpectedv
 ZSt17rethrow_exception*
 rethrow_exception

@@ -624,3 +624,22 @@ fn constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.switchextent_table_read = Some(table_read);
 }
+
+/// (kuna `switchextent`) The jump tables the function's extent dispatches through, and those a Swift enum's case indexes, once a flow with a computed jump decoded it; kept across `Funcdata::clear`.
+#[derive(Default)]
+struct ExtentSlot(Option<std::rc::Rc<crate::kuna_switchextent::ExtentTables>>);
+crate::kuna_func_state!(ExtentSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn kuna_extent_tables(
+        &self,
+    ) -> &Option<std::rc::Rc<crate::kuna_switchextent::ExtentTables>> {
+        &self.kuna_state::<ExtentSlot>().0
+    }
+
+    pub(crate) fn kuna_extent_tables_mut(
+        &mut self,
+    ) -> &mut Option<std::rc::Rc<crate::kuna_switchextent::ExtentTables>> {
+        &mut self.kuna_state_mut::<ExtentSlot>().0
+    }
+}

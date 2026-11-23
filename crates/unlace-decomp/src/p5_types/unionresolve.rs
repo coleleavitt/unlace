@@ -1431,6 +1431,36 @@ impl ResolveCache {
     }
 }
 
+/// The map from data-flow edges to the resolved field of a `TypeUnion` being accessed (C++ `map<ResolveEdge,ResolvedUnion> unionMap`, `funcdata.hh:101`), read and written through `funcdata_union`; a `BTreeMap` keeps the C++ `std::map` order. Reset by `Funcdata::clear` (`funcdata.cc:90`).
+#[derive(Default)]
+struct UnionMapSlot(
+    std::collections::BTreeMap<
+        crate::unionresolve::ResolveEdge,
+        crate::unionresolve::ResolvedUnion,
+    >,
+);
+crate::kuna_func_state!(UnionMapSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn union_map(
+        &self,
+    ) -> &std::collections::BTreeMap<
+        crate::unionresolve::ResolveEdge,
+        crate::unionresolve::ResolvedUnion,
+    > {
+        &self.kuna_state::<UnionMapSlot>().0
+    }
+
+    pub(crate) fn union_map_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeMap<
+        crate::unionresolve::ResolveEdge,
+        crate::unionresolve::ResolvedUnion,
+    > {
+        &mut self.kuna_state_mut::<UnionMapSlot>().0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

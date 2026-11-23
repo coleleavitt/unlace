@@ -117,7 +117,7 @@ into the knowledge plane), and the loader/environment options PR after it.
   slots (each with a flag for whether it survives `clear()`). The slot store is
   `substrate/kuna_funcstate.rs` (`FuncState`, `kuna_func_state!`, `Funcdata::kuna_state[_mut]`);
   a pass's accessors move with its table into an `impl Funcdata` block in the pass module, so
-  callers keep their method names. Done: callmechanisms (`State`), bejoin, callwide, libcnames, calleevote, callerargs, elfmaindecl, inputhints, passthrough, msvcbyval, entryreads, retpushedhalf, calltargettype (field calls), rustabi, calleedeadarg, protoorder, callrettype, narrowret, voidret, elemptr. Left: the other
+  callers keep their method names. Done: callmechanisms (`State`), bejoin, callwide, libcnames, calleevote, callerargs, elfmaindecl, inputhints, passthrough, msvcbyval, entryreads, retpushedhalf, calltargettype (field calls), rustabi, calleedeadarg, protoorder, callrettype, narrowret, voidret, elemptr, atomicxadd, ppc32piccalls, switchextent (extent tables), unionresolve (union map), stackviews (write views), localstackviews, stackobjects (+ bound uses), stackobjectasserts, calleememory, stackreadscope (guarded reads). Left: the other
   `funcdata -> *` lines of `scripts/layers-allowlist.txt`, then the arch/context edges
   (callmechanisms `Mechanisms`, jumpassist, segmentize, modelrules, heritage -> prefersplit).
 - **Step 8:** `#[inline]` on small core accessors before they cross a crate boundary; compare

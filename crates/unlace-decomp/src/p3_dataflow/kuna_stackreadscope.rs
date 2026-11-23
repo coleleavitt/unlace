@@ -50,7 +50,10 @@ pub(crate) fn mark_stack_read(data: &mut Funcdata, op: OpId) {
         offset: value.get_offset(),
         size: value.get_size(),
     };
-    data.kuna_guarded_reads.lowered.entry(op).or_insert(read);
+    data.kuna_guarded_reads_mut()
+        .lowered
+        .entry(op)
+        .or_insert(read);
     if let Some(operation) = data.obank_mut().get_mut(op) {
         operation.set_additional_flag(crate::op::pcodeop_addlflags::kuna_stack_read);
     }
@@ -82,7 +85,7 @@ pub(crate) fn mark_guarded_read(
         offset: addr.get_offset(),
         size,
     };
-    data.kuna_guarded_reads.guarded.insert(read);
+    data.kuna_guarded_reads_mut().guarded.insert(read);
 }
 
 #[inline]
@@ -115,10 +118,14 @@ pub(crate) fn record_propagated_read(data: &mut Funcdata, op: OpId, source: Varn
     if !data.obank().get(effect).is_some_and(|op| op.is_call()) {
         return;
     }
-    let Some(read) = data.kuna_guarded_reads.lowered.get(&op).cloned() else {
+    let Some(read) = data.kuna_guarded_reads().lowered.get(&op).cloned() else {
         return;
     };
-    let reads = data.kuna_guarded_reads.by_call.entry(effect).or_default();
+    let reads = data
+        .kuna_guarded_reads_mut()
+        .by_call
+        .entry(effect)
+        .or_default();
     if !reads.contains(&read) {
         reads.push(read);
     }
@@ -142,4 +149,20 @@ pub(crate) fn record_current_read(data: &mut Funcdata, op: OpId) {
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.stackreadscope_mark_guarded_read = Some(mark_guarded_read);
+}
+
+crate::kuna_func_state!(crate::p3_dataflow::kuna_stackreadscope::ReadScopes, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn kuna_guarded_reads(
+        &self,
+    ) -> &crate::p3_dataflow::kuna_stackreadscope::ReadScopes {
+        self.kuna_state::<crate::p3_dataflow::kuna_stackreadscope::ReadScopes>()
+    }
+
+    pub(crate) fn kuna_guarded_reads_mut(
+        &mut self,
+    ) -> &mut crate::p3_dataflow::kuna_stackreadscope::ReadScopes {
+        self.kuna_state_mut::<crate::p3_dataflow::kuna_stackreadscope::ReadScopes>()
+    }
 }

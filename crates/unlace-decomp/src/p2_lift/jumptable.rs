@@ -3542,7 +3542,7 @@ impl JumpBasicModel {
     /// plus an index scaled by the entry width; that index becomes the
     /// range's start.
     fn kuna_try_extent_bound_table(&mut self, fd: &Funcdata, maxtablesize: uint4) -> bool {
-        let Some(tables) = fd.kuna_extent_tables.as_ref() else {
+        let Some(tables) = fd.kuna_extent_tables().as_ref() else {
             return false;
         };
         let loads: Vec<OpId> = (0..self.path_meld.num_ops())
@@ -5618,7 +5618,7 @@ impl JumpBasicModel {
             return NextTableRows::Keep;
         };
         let own = fd
-            .kuna_extent_tables
+            .kuna_extent_tables()
             .as_deref()
             .map_or(&[][..], |t| t.tables.as_slice());
         let space = entry.get_space().cloned();

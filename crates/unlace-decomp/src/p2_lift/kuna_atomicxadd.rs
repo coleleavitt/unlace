@@ -34,11 +34,11 @@ fn overlaps(a: Storage, b: Storage) -> bool {
 /// Capture only the one-instruction envelope; final SSA and user-op names are
 /// independently checked by the emitter before any presentation changes.
 pub(crate) fn observe(fd: &mut Funcdata, ops: &[OpId]) {
-    if !fd.get_arch().source_lang.is_go() || fd.kuna_atomic_xadds.len() >= 2 {
+    if !fd.get_arch().source_lang.is_go() || fd.kuna_atomic_xadds().len() >= 2 {
         return;
     }
     if let Some(proof) = instruction(fd, ops) {
-        fd.kuna_atomic_xadds.push(proof);
+        fd.kuna_atomic_xadds_mut().push(proof);
     }
 }
 
@@ -143,6 +143,23 @@ fn instruction(fd: &Funcdata, ops: &[OpId]) -> Option<Instruction> {
         members: ops.to_vec(),
         width,
     })
+}
+
+/// (kuna `atomicxadd`) The one-instruction atomic add envelopes the flow captured; reset by `Funcdata::clear`.
+#[derive(Default)]
+struct XaddsSlot(Vec<crate::p2_lift::kuna_atomicxadd::Instruction>);
+crate::kuna_func_state!(XaddsSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn kuna_atomic_xadds(&self) -> &Vec<crate::p2_lift::kuna_atomicxadd::Instruction> {
+        &self.kuna_state::<XaddsSlot>().0
+    }
+
+    pub(crate) fn kuna_atomic_xadds_mut(
+        &mut self,
+    ) -> &mut Vec<crate::p2_lift::kuna_atomicxadd::Instruction> {
+        &mut self.kuna_state_mut::<XaddsSlot>().0
+    }
 }
 
 #[cfg(test)]

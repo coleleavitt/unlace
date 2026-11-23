@@ -2064,10 +2064,10 @@ impl FuncdataCastLocalExt for Funcdata {
         if out_high_type.needs_resolution() {
             self.inherit_union_field(&out_high_type, newop, -1, op, -1);
         }
-        match self.stack_write_views.remove(&op) {
+        match self.stack_write_views_mut().remove(&op) {
             Some(view) => {
                 self.inherit_union_field(&view.backing, newop, -1, op, -1);
-                self.stack_write_views.insert(newop, view);
+                self.stack_write_views_mut().insert(newop, view);
             }
             _ => {
                 if storage_type.is_some() {

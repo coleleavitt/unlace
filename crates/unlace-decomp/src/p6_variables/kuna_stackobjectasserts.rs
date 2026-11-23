@@ -58,11 +58,11 @@ impl ObjectAssertion {
 }
 
 pub fn specs(fd: &Funcdata) -> &[ObjectAssertion] {
-    &fd.stack_object_assertions
+    fd.stack_object_assertions()
 }
 
 pub fn seed(fd: &mut Funcdata, assertions: &[ObjectAssertion]) {
-    fd.stack_object_assertions = assertions.to_vec();
+    *fd.stack_object_assertions_mut() = assertions.to_vec();
 }
 
 /// Return false when the name belongs to the ordinary symbol/high-variable plane.
@@ -79,7 +79,7 @@ pub fn apply(
         .filter(|(_, o)| o.name == target)
         .collect();
     let given: Vec<_> = fd
-        .stack_object_assertions
+        .stack_object_assertions()
         .iter()
         .filter(|assertion| assertion.name == target && assertion.selector != target)
         .collect();
@@ -125,7 +125,7 @@ pub fn apply(
         }
     }
     let mut assertion = fd
-        .stack_object_assertions
+        .stack_object_assertions()
         .iter()
         .find(|assertion| assertion.selector == object.name)
         .cloned()
@@ -153,7 +153,7 @@ pub fn apply(
         assertion.datatype = datatype;
     }
     if fd
-        .stack_object_assertions
+        .stack_object_assertions()
         .iter()
         .any(|old| old.selector != assertion.selector && old.name == assertion.name)
     {
@@ -162,9 +162,9 @@ pub fn apply(
             assertion.name
         ));
     }
-    fd.stack_object_assertions
+    fd.stack_object_assertions_mut()
         .retain(|old| old.selector != assertion.selector);
-    fd.stack_object_assertions.push(assertion);
+    fd.stack_object_assertions_mut().push(assertion);
     Ok(true)
 }
 
@@ -203,7 +203,7 @@ pub(crate) fn validate(fd: &Funcdata) -> Result<(), String> {
                 .filter(|&op| crate::kuna_stackviews::declared_view(fd, op, use_.slot).is_some())
                 .collect();
             if !fd
-                .stack_object_bound_uses
+                .stack_object_bound_uses()
                 .contains(&(use_.point, use_.slot))
                 || calls.len() != 1
                 || !selected_view(fd, calls[0], use_, assertion)
@@ -369,7 +369,7 @@ pub(crate) fn backing_view(
     let mut resolution = ResolvedUnion::new_field(backing_ptr.clone(), member, factory).ok()?;
     resolution.set_lock(true);
     let time = fd.obank().get(facet)?.get_time();
-    fd.union_map
+    fd.union_map_mut()
         .insert(ResolveEdge::new_op(&backing_ptr, time, -1), resolution);
     if info.sym_off != 0 {
         value = ptrsub(
@@ -391,7 +391,7 @@ pub(crate) fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
     for assertion in assertions {
         for use_ in &assertion.uses {
             if fd
-                .stack_object_bound_uses
+                .stack_object_bound_uses()
                 .contains(&(use_.point, use_.slot))
             {
                 continue;
@@ -405,7 +405,8 @@ pub(crate) fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
             if calls.len() == 1
                 && bind_use(fd, &assertion, use_, calls[0], factory, &mut aliases).is_some()
             {
-                fd.stack_object_bound_uses.insert((use_.point, use_.slot));
+                fd.stack_object_bound_uses_mut()
+                    .insert((use_.point, use_.slot));
             }
         }
     }
@@ -511,14 +512,33 @@ pub(crate) fn seed_writes(
         };
         resolution.set_lock(true);
         let time = fd.obank().get(op).unwrap().get_time();
-        fd.union_map
+        fd.union_map_mut()
             .insert(ResolveEdge::new_op(backing, time, -1), resolution);
-        fd.stack_write_views.insert(
+        fd.stack_write_views_mut().insert(
             op,
             crate::kuna_stackviews::StorageView {
                 backing: Rc::clone(backing),
                 offset,
             },
         );
+    }
+}
+
+/// (kuna `stackobjects`) The stack-object assertions the drive seeded; kept across `Funcdata::clear`.
+#[derive(Default)]
+struct AssertionsSlot(Vec<crate::kuna_stackobjectasserts::ObjectAssertion>);
+crate::kuna_func_state!(AssertionsSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn stack_object_assertions(
+        &self,
+    ) -> &Vec<crate::kuna_stackobjectasserts::ObjectAssertion> {
+        &self.kuna_state::<AssertionsSlot>().0
+    }
+
+    pub(crate) fn stack_object_assertions_mut(
+        &mut self,
+    ) -> &mut Vec<crate::kuna_stackobjectasserts::ObjectAssertion> {
+        &mut self.kuna_state_mut::<AssertionsSlot>().0
     }
 }

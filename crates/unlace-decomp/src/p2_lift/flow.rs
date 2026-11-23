@@ -3802,7 +3802,7 @@ truncating the fall-through here"
             let anchor = self.unwind_edge_end(op);
             self.data.op_dead_insert_after(haltop, anchor);
             if !is_inline {
-                let text = if self.data.ppc32_pic_calls.contains_key(&addr.get_offset()) {
+                let text = if self.data.ppc32_pic_calls().contains_key(&addr.get_offset()) {
                     crate::kuna_ppc32piccalls::WARNING
                 } else {
                     "Subroutine does not return"
@@ -5040,7 +5040,7 @@ truncating the fall-through here"
             while rounds < 2
                 && matches!(mode, Ok(None) | Err(RecoveryMode::FailNormal))
                 && retried.is_none()
-                && (self.data.kuna_extent_tables.is_none() || wanted.is_some())
+                && (self.data.kuna_extent_tables().is_none() || wanted.is_some())
                 && self
                     .data
                     .get_arch()
@@ -5053,7 +5053,7 @@ truncating the fall-through here"
                 let entry = self.data.get_address().clone();
                 let end = self.data.get_arch().function_entry_after(&entry);
                 let mut bounded = false;
-                if self.data.kuna_extent_tables.is_none() {
+                if self.data.kuna_extent_tables().is_none() {
                     let arch = self.data.get_arch();
                     let tables = std::rc::Rc::new(super::kuna_switchextent::function_tables(
                         self.env.translate(),
@@ -5064,10 +5064,10 @@ truncating the fall-through here"
                             .as_ref(),
                     ));
                     if let Some(partial) = shared_partial.as_mut() {
-                        partial.kuna_extent_tables = Some(std::rc::Rc::clone(&tables));
+                        *partial.kuna_extent_tables_mut() = Some(std::rc::Rc::clone(&tables));
                     }
                     bounded = tables.tables.len() >= 2 || !tables.cases.is_empty();
-                    self.data.kuna_extent_tables = Some(tables);
+                    *self.data.kuna_extent_tables_mut() = Some(tables);
                 }
                 if let Some(table) = wanted {
                     let arch = self.data.get_arch();
@@ -5388,7 +5388,7 @@ impl<E: FlowEnvironment> PcodeEmit for FlowEmit<'_, '_, E> {
         let opc = if opc == OpCode::CPUI_BRANCHIND
             && self
                 .fd
-                .ppc32_pic_calls
+                .ppc32_pic_calls()
                 .get(&addr.get_offset())
                 .is_some_and(|b| b.tail)
         {

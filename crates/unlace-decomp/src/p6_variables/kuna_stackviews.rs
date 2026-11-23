@@ -35,7 +35,7 @@ pub(crate) fn enabled(fd: &Funcdata) -> bool {
         .kuna_options
         .get::<crate::kuna_coreoptions::StackViews>()
         .0
-        || !fd.stack_write_views.is_empty()
+        || !fd.stack_write_views().is_empty()
 }
 
 pub struct OptionStackViews;
@@ -672,9 +672,9 @@ fn seed_writes(
         if let Ok(mut resolution) = ResolvedUnion::new_field(Rc::clone(union), index, factory) {
             resolution.set_lock(true);
             let time = fd.obank().get(op).unwrap().get_time();
-            fd.union_map
+            fd.union_map_mut()
                 .insert(ResolveEdge::new_op(union, time, -1), resolution);
-            fd.stack_write_views.insert(
+            fd.stack_write_views_mut().insert(
                 op,
                 StorageView {
                     backing: Rc::clone(union),
@@ -770,7 +770,7 @@ pub fn access_type(
         Some((info.sym_type?, info.sym_off))
     };
     let from_edge = (slot == -1)
-        .then(|| fd.stack_write_views.get(&op))
+        .then(|| fd.stack_write_views().get(&op))
         .flatten()
         .map(|view| (Rc::clone(&view.backing), view.offset));
     let from_type = || {
@@ -890,4 +890,27 @@ pub(crate) fn pointer_origin(fd: &Funcdata, mut id: crate::context::VarnodeId) -
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.stackviews_enabled = Some(enabled);
+}
+
+/// (kuna `stackviews`) The storage view each stack write was given; reset by `Funcdata::clear`.
+#[derive(Default)]
+struct WriteViewsSlot(
+    std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>,
+);
+crate::kuna_func_state!(WriteViewsSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn stack_write_views(
+        &self,
+    ) -> &std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>
+    {
+        &self.kuna_state::<WriteViewsSlot>().0
+    }
+
+    pub(crate) fn stack_write_views_mut(
+        &mut self,
+    ) -> &mut std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>
+    {
+        &mut self.kuna_state_mut::<WriteViewsSlot>().0
+    }
 }

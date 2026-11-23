@@ -29,7 +29,7 @@ impl Calls {
         let Some(space) = address.get_space() else {
             return false;
         };
-        if fd.callee_memory.is_empty()
+        if fd.callee_memory().is_empty()
             || space.get_type() != spacetype::IPTR_PROCESSOR
             || space.get_word_size() != 1
             || size <= 0
@@ -119,7 +119,7 @@ fn resolve(fd: &Funcdata, call: &FuncCallSpecs) -> Option<Vec<(u64, u64)>> {
     }
     let entry = call.get_entry_address();
     let summary = fd
-        .callee_memory
+        .callee_memory()
         .get(&(entry.get_space()?.get_index(), entry.get_offset()))?;
     if summary.uses_frame_return() {
         let stack = fd.get_arch().manage().get_stack_space()?;

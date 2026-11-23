@@ -2592,6 +2592,11 @@ pub fn default_pass_hooks() -> &'static crate::kuna_passhooks::KunaHooks {
 }
 
 impl Architecture {
+    /// The pass hooks this architecture's contexts start with ([`crate::kuna_passhooks`]).
+    pub fn pass_hooks(&self) -> &'static crate::kuna_passhooks::KunaHooks {
+        default_pass_hooks()
+    }
+
     /// Construct an `Architecture` over an already-initialized disassembly
     /// engine (C++ `Architecture::Architecture` + the `restoreFromSpec` subsystem
     /// builds, condensed: the C++ ctor leaves the heavy subsystems null and
@@ -3957,7 +3962,9 @@ impl Architecture {
         pieces: crate::fspec::PrototypePieces,
     ) {
         let merged = match self.symboltab.function_proto_pieces_of(sid) {
-            Some(old) if self.analysis_protomerge => crate::kuna_protomerge::merge(old, pieces),
+            Some(old) if self.analysis_protomerge => {
+                (self.pass_hooks().protomerge_merge)(old, pieces)
+            }
             _ => pieces,
         };
         self.symboltab.set_function_proto_pieces(sid, merged);
@@ -4053,28 +4060,30 @@ impl Architecture {
         // `evalfp_current`) so the proto-recovery actions can set the function's
         // model and run output recovery against the real param lists.
         // (kuna) `armfloatreturn` widens the default model with the d-registers.
-        let helper = crate::kuna_armfloatreturn::applies(self)
+        let helper = (self.pass_hooks().armfloatreturn_applies)(self)
             && entry
                 .and_then(|e| self.symboltab.function_display_name_across_scopes(e))
-                .is_some_and(|name| crate::kuna_armfloatreturn::base_pcs_helper(&name));
-        ctx.arm_float_return = crate::kuna_armfloatreturn::applies(self) && !helper;
-        ctx.arm_float_args = crate::kuna_armfloatargs::applies(self) && !helper;
+                .is_some_and(|name| (self.pass_hooks().armfloatreturn_base_pcs_helper)(&name));
+        ctx.arm_float_return = (self.pass_hooks().armfloatreturn_applies)(self) && !helper;
+        ctx.arm_float_args = (self.pass_hooks().armfloatargs_applies)(self) && !helper;
         ctx.arm_base_model = self
             .defaultfp
             .clone()
-            .filter(|_| crate::kuna_armfloatreturn::applies(self));
-        ctx.arm_helper_model = crate::kuna_armfloatreturn::applies(self)
-            .then(|| crate::kuna_typedcallabi::soft_model(self, Some(false)))
+            .filter(|_| (self.pass_hooks().armfloatreturn_applies)(self));
+        ctx.arm_helper_model = (self.pass_hooks().armfloatreturn_applies)(self)
+            .then(|| (self.pass_hooks().typedcallabi_soft_model)(self, Some(false)))
             .flatten();
-        ctx.float_arg_registers = crate::kuna_typedcallabi::image_evidence(self);
-        ctx.soft_float_model = crate::kuna_typedcallabi::soft_model(self, ctx.float_arg_registers);
+        ctx.float_arg_registers = (self.pass_hooks().typedcallabi_image_evidence)(self);
+        ctx.soft_float_model =
+            (self.pass_hooks().typedcallabi_soft_model)(self, ctx.float_arg_registers);
         ctx.soft_float_declarations = ctx
             .soft_float_model
             .clone()
-            .filter(|_| crate::kuna_typedcallabi::without_fpu(self));
-        ctx.vfp_variadic = crate::kuna_vfpvariadic::applies(self);
-        ctx.caller_extends_returns_from = crate::kuna_typedcallabi::caller_extends_from(self);
-        ctx.vararg_floats = crate::kuna_varargretreg::image_vararg_floats(self);
+            .filter(|_| (self.pass_hooks().typedcallabi_without_fpu)(self));
+        ctx.vfp_variadic = (self.pass_hooks().vfpvariadic_applies)(self);
+        ctx.caller_extends_returns_from =
+            (self.pass_hooks().typedcallabi_caller_extends_from)(self);
+        ctx.vararg_floats = crate::p4_calls::kuna_varargretreg::image_vararg_floats(self);
         ctx.narrow_ext = crate::kuna_narrowext::rules(self);
         ctx.defaultfp = self.defaultfp.as_ref().map(|model| {
             if ctx.arm_float_return {
@@ -4086,7 +4095,8 @@ impl Architecture {
                 {
                     return widened.clone();
                 }
-                let widened = crate::kuna_armfloatreturn::model(model, ctx.manage(), backfill);
+                let widened =
+                    (self.pass_hooks().armfloatreturn_model)(model, ctx.manage(), backfill);
                 built.push((model.clone(), backfill, widened.clone()));
                 widened
             } else {
@@ -4144,8 +4154,8 @@ impl Architecture {
         ctx.swift_str = self.swift_str;
         ctx.chkstk_darwin = self.chkstk_darwin
             && self.image_apple
-            && crate::kuna_chkstkdarwin::applies_to(&self.archid);
-        ctx.sp_solve = crate::p4_calls::kuna_spsolve::applies(self);
+            && (self.pass_hooks().chkstkdarwin_applies_to)(&self.archid);
+        ctx.sp_solve = (self.pass_hooks().spsolve_applies)(self);
         ctx.type_vote = self.type_vote;
         ctx.go_new_type = self.go_new_type;
         ctx.outlined_inline = self.outlined_inline;
@@ -4329,7 +4339,8 @@ impl Architecture {
         ctx.syscall_regs_family = crate::kuna_syscallregs::SyscallFamily::from_archid(&self.archid);
         ctx.syscall_regs_userops =
             crate::kuna_syscallregs::userop_ids(&self.userops, ctx.syscall_regs_family);
-        ctx.windows_cspec = crate::kuna_fastfailnoreturn::archid_is_windows(self.get_description()); // (kuna) pebnames
+        ctx.windows_cspec =
+            (self.pass_hooks().fastfailnoreturn_archid_is_windows)(self.get_description()); // (kuna) pebnames
         ctx.image_windows_user = self.image_windows_user;
         ctx.tls_layout = self.tls_layout.clone(); // (kuna) tlsnames
         ctx.struct_synth = self.struct_synth; // (kuna) structsynth
@@ -4449,7 +4460,7 @@ impl Architecture {
                 if let Some((_, widened)) = built.iter().find(|(from, _)| Rc::ptr_eq(from, model)) {
                     return widened.clone();
                 }
-                let widened = crate::kuna_vectorabi::model(model, ctx.manage());
+                let widened = (self.pass_hooks().vectorabi_model)(model, ctx.manage());
                 built.push((model.clone(), widened.clone()));
                 widened
             })
@@ -4460,8 +4471,8 @@ impl Architecture {
             Rc::clone(self.vector_userop_kinds.get_or_init(|| {
                 let sleigh = self.userops.named_ops().filter_map(|(i, nm)| {
                     let (intr, _) =
-                        crate::kuna_avxintrin::intrinsic(std::str::from_utf8(nm).ok()?, 32)?;
-                    Some((i, crate::kuna_avxintrin::element_kind(&intr)))
+                        (self.pass_hooks().avxintrin_intrinsic)(std::str::from_utf8(nm).ok()?, 32)?;
+                    Some((i, (self.pass_hooks().avxintrin_element_kind)(&intr)))
                 });
                 let fused = crate::kuna_lanefuse::builtins()
                     .into_iter()
@@ -4469,9 +4480,9 @@ impl Architecture {
                         self.userops.named_ops(),
                     ))
                     .filter_map(|(i, nm)| {
-                        let (intr, _) = crate::kuna_avxintrin::intrinsic(&nm, 32)
+                        let (intr, _) = (self.pass_hooks().avxintrin_intrinsic)(&nm, 32)
                             .or_else(|| Some((nm.clone(), vec![])))?;
-                        Some((i, crate::kuna_avxintrin::element_kind(&intr)))
+                        Some((i, (self.pass_hooks().avxintrin_element_kind)(&intr)))
                     });
                 let mut all: Vec<(unlace_base::types::uint4, u8)> = sleigh.chain(fused).collect();
                 all.sort_unstable();
@@ -4486,7 +4497,7 @@ impl Architecture {
                 if let Some((_, widened)) = built.iter().find(|(from, _)| Rc::ptr_eq(from, model)) {
                     return widened.clone();
                 }
-                let widened = crate::kuna_vectorabi::model(model, ctx.manage());
+                let widened = (self.pass_hooks().vectorabi_model)(model, ctx.manage());
                 built.push((model.clone(), widened.clone()));
                 widened
             })
@@ -7517,7 +7528,7 @@ impl Architecture {
         if let Some(extension) = &extension {
             addressbase = extension.input.offset;
         }
-        flags |= crate::p4_calls::kuna_stackparamalign::decode(pentry, &space, alignment, size)?;
+        flags |= (self.pass_hooks().stackparamalign_decode)(pentry, &space, alignment, size)?;
         let mut entry = crate::fspec::ParamEntry::seed(
             group,
             type_,

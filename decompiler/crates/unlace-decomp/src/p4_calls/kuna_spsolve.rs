@@ -1229,5 +1229,10 @@ pub fn settle(data: &mut Funcdata, sp: &Address, size: int4) -> bool {
     restart
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.spsolve_applies = Some(applies);
+}
+
 #[cfg(test)]
 mod tests;

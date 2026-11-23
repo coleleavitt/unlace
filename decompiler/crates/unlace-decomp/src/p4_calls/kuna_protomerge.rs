@@ -84,6 +84,11 @@ pub fn merge(old: &PrototypePieces, new: PrototypePieces) -> PrototypePieces {
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.protomerge_merge = Some(merge);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

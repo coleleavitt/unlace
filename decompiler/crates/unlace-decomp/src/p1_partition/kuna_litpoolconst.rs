@@ -109,5 +109,10 @@ pub fn contains(ranges: &[(u64, u64)], offset: u64, size: u32) -> bool {
     idx > 0 && ranges[idx - 1].1 >= last
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.litpoolconst_contains = Some(contains);
+}
+
 #[cfg(test)]
 mod tests;

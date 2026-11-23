@@ -260,6 +260,12 @@ fn rest_fma((kind, form, ty): (&str, &str, &str), w: &str) -> (String, Vec<usize
     (format!("_mm{w}_f{kind}_{ty}"), order)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.avxintrin_element_kind = Some(element_kind);
+    hooks.avxintrin_intrinsic = Some(intrinsic);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

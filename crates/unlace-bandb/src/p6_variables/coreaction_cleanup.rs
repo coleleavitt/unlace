@@ -148,6 +148,7 @@ impl Action for ActionAssignHigh {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, CleanUp);
         // C++ coreaction.hh:347 — ActionAssignHigh::apply
         //   data.setHighLevel(); return 0;
         data.set_high_level();
@@ -653,6 +654,7 @@ impl Action for ActionMergeRequired {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, HighVariables);
         // C++ coreaction.hh:370 — ActionMergeRequired::apply
         //   data.getMerge().mergeAddrTied();
         //   data.getMerge().groupPartials();
@@ -1128,6 +1130,7 @@ impl Action for ActionMarkExplicit {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, HighVariables);
         // C++ coreaction.cc:3340 — ActionMarkExplicit::apply.
         // (kuna `implweight`) Under a weight limit an expression with more readers
         // than `max_implied_ref` is still a candidate; process_multiplier then caps
@@ -3606,6 +3609,7 @@ impl Action for ActionNameVars {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Merge);
         // C++ coreaction.cc:3076 — ActionNameVars::apply
         //
         // The W4 ScopeLocal/`Symbol` surface (`getScopeLocal`/`buildDefaultName`/
@@ -3663,6 +3667,7 @@ impl Action for ActionSetCasts {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Merge);
         // C++ coreaction.cc:2812 — ActionSetCasts::apply.  The full driver +
         // helpers (castInput/castOutput/resolveUnion/checkPointerIssues/
         // insertPtrsubZero/testStructOffset0/tryResolution*/isOpIdentical), the

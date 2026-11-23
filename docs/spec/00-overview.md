@@ -4341,7 +4341,10 @@ level. The pre-SSA passes of mainloop's head (`cleanupcode`, `gojumpchain`,
 `outline`, the lowered-switch install) ask `is_settled(Fact::Ssa)` instead of reading
 the heritage pass counter, and `condstmts` asks `is_settled(Fact::HighVariables)`;
 both are the same test by definition. `gotoreduce` and `ifelseflatten` assert the
-casts and the block structure they edit. A pass that relies on an earlier phase states it with
+casts and the block structure they edit. In the one-shot tail, `startcleanup` and
+`inputprototype` assert dataflow (fullloop's fixed point), `assignhigh` clean-up,
+`mergerequired` and `markexplicit` high-variables, `outputprototype`, `namevars` and
+`setcasts` merge, `mapglobals` prototype, and `prototypewarnings` casts. A pass that relies on an earlier phase states it with
 `debug_assert_settled!(fd, Fact)`, which checks only in debug builds and only for
 a function driven through the full `decompile` root (`run_pipeline`). A unit test
 that applies one action to a hand-built `Funcdata`, or a reduced variant, is not

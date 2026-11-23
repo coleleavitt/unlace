@@ -204,6 +204,7 @@ impl Action for ActionStartCleanUp {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Dataflow);
         data.start_clean_up();
         0
     }

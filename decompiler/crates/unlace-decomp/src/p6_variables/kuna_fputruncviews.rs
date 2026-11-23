@@ -352,6 +352,13 @@ pub(crate) fn keeps_root_alone(
     ctx.fpu_trunc_views_enabled() && (ctx.fpu_trunc_root_high(a) || ctx.fpu_trunc_root_high(b))
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.fputruncviews_keeps_apart = Some(keeps_apart);
+    hooks.fputruncviews_keeps_highs_apart = Some(keeps_highs_apart);
+    hooks.fputruncviews_keeps_root_alone = Some(keeps_root_alone);
+}
+
 #[cfg(test)]
 #[path = "kuna_fputruncviews/tests.rs"]
 mod tests;

@@ -199,6 +199,11 @@ fn observes(data: &Funcdata, op: OpId, global: &crate::varnode::Varnode) -> bool
     pointer.get_offset() < global_end && global.get_offset() < access_end
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.globalorder_keeps_apart = Some(keeps_apart);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

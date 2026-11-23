@@ -20,13 +20,15 @@ use unlace_base::types::{int4, uint4, uintb};
 use unlace_base::error::KunaResult;
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::context::{BlockId, OpId, VarnodeId};
+use crate::context::{BlockId, HighVariableId, OpId, VarnodeId};
 use crate::database::SymbolEntry;
 use crate::dtype::Datatype;
 use crate::fspec::{FuncCallSpecs, FuncProto, ParamTrial};
 use crate::funcdata::Funcdata;
 use crate::jumptable::LoadTable;
 use crate::kuna_fasthash::FxHashMap;
+use crate::merge::MergeContext;
+use crate::variable::HighIntersectTest;
 use crate::varmap::{AliasChecker, LinkEntryInfo};
 
 macro_rules! declare_hooks {
@@ -265,4 +267,22 @@ declare_hooks! {
     switchtrim_trimmed_rows: fn(&Funcdata, &[Address], &[LoadTable], Option<&Vec<int4>>) -> usize;
     /// `kuna_varargtransfer::pending_trials`.
     varargtransfer_pending_trials: fn(&Funcdata, &FuncCallSpecs) -> Vec<(ParamTrial, VarnodeId)>;
+    /// `kuna_fputruncviews::keeps_apart`.
+    fputruncviews_keeps_apart: fn(&dyn MergeContext, OpId) -> bool;
+    /// `kuna_fputruncviews::keeps_highs_apart`.
+    fputruncviews_keeps_highs_apart: fn(&dyn MergeContext, HighVariableId, HighVariableId) -> bool;
+    /// `kuna_fputruncviews::keeps_root_alone`.
+    fputruncviews_keeps_root_alone: fn(&dyn MergeContext, HighVariableId, HighVariableId) -> bool;
+    /// `kuna_globalorder::keeps_apart`.
+    globalorder_keeps_apart: fn(&mut dyn MergeContext, VarnodeId, VarnodeId) -> bool;
+    /// `kuna_globalvalue::keeps_apart`.
+    globalvalue_keeps_apart: fn(&mut dyn MergeContext, HighVariableId, HighVariableId) -> bool;
+    /// `kuna_loadorder::keeps_apart`.
+    loadorder_keeps_apart: fn(&mut dyn MergeContext, VarnodeId, VarnodeId) -> bool;
+    /// `kuna_pointeevalue::keeps_apart`.
+    pointeevalue_keeps_apart: fn(&mut dyn MergeContext, VarnodeId, VarnodeId) -> bool;
+    /// `kuna_tiedphitrim::intersects`.
+    tiedphitrim_intersects: fn(&[(VarnodeId, Address)], &mut dyn MergeContext, &mut HighIntersectTest, HighVariableId, HighVariableId) -> bool;
+    /// `kuna_tiedphitrim::tied_slots`.
+    tiedphitrim_tied_slots: fn(&mut dyn MergeContext, OpId) -> Option<(Vec<int4>, Address)>;
 }

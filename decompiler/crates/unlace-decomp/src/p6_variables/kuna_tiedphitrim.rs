@@ -253,3 +253,9 @@ fn loaded(ctx: &mut dyn MergeContext, vn: VarnodeId) -> bool {
     }
     false
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.tiedphitrim_intersects = Some(intersects);
+    hooks.tiedphitrim_tied_slots = Some(tied_slots);
+}

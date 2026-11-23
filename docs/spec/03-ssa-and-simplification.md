@@ -253,7 +253,7 @@ reports that function as failed and continues with the remaining functions.
 **Op properties on a heritage-created op.** The three op-codes heritage installs
 (the phi, the read-size SUBPIECE, the write-size PIECE) take their property flags
 from the same op-code table every other producer of p-code resolves through
-(`crates/unlace-middle/src/p5_types/typeop.rs (seam_type_op_for)`), so a
+(`crates/unlace-middle/src/substrate/typeop.rs (seam_type_op_for)`), so a
 heritage-created op is indistinguishable from the same op-code installed by a
 simplification rule. The phi's entry carries `special`, `marker` and `nocollapse`
 together, and each of the three is load-bearing somewhere: `marker` is what
@@ -2347,7 +2347,7 @@ architecture's singleton property record (`glb->inst[opc]`); kuna's
 `Funcdata::op_set_opcode` takes the already-resolved record, so each rule file
 resolves it at the call site. Every one of those call sites goes through the
 single canonical port of that table,
-`crates/unlace-middle/src/p5_types/typeop.rs (seam_type_op_for)`, whose
+`crates/unlace-middle/src/substrate/typeop.rs (seam_type_op_for)`, whose
 per-op-code rows are transcribed field-for-field from the upstream `typeop.cc`
 constructors. The seam is **total**: the table's `match` carries no wildcard arm
 (so a new op-code cannot enter the enum without the compiler demanding its row),
@@ -2474,7 +2474,7 @@ registers each one in the user-op table after the translator's own ops, the
 pspec's before the cspec's, and its snippet joins the inject library;
 `architecture.rs (initialize_segments)` then emits the compiled snippet into a
 snippet emulator,
-`crates/unlace-middle/src/p3_dataflow/kuna_segmentize.rs (SegmentDef)`,
+`crates/unlace-middle/src/spec/kuna_segmentize.rs (SegmentDef)`,
 which `SegmentDef::execute` runs on constant inputs (C++ `SegmentOp::execute`
 over `ExecutablePcode::evaluate`). The definitions are shared into the
 per-function architecture snapshot.
@@ -2494,7 +2494,7 @@ constant segment and offset to the snippet's result, and, for a far-pointer
 segment op, replaces one whose segment and offset are the high and low SUBPIECEs
 of a single value with that value (the `LES` far pointer). The jump-table
 emulator executes SEGMENTOP through the same snippet
-(`crates/unlace-middle/src/p2_lift/kuna_emulatefunction.rs`), so a
+(`crates/unlace-middle/src/engine/kuna_emulatefunction.rs`), so a
 `jmp [cs:bx+table]` is recovered. A stack reference built against a stack whose
 containing space has a segment op is wrapped in `SEGMENTOP(contain, 0, ref)`
 (`crates/unlace-middle/src/substrate/funcdata_op.rs (create_stack_ref)`).

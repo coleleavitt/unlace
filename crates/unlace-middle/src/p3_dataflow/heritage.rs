@@ -1012,7 +1012,7 @@ pub struct Heritage {
     guard_iops: crate::kuna_fasthash::FxHashMap<crate::context::OpId, crate::context::VarnodeId>,
     /// (kuna) C++ `Heritage::splitmanage`: the compiler spec's preferred
     /// register splits, run once at heritage pass 0.
-    splitmanage: crate::p5_types::prefersplit::PreferSplitManager,
+    splitmanage: crate::prefersplit::PreferSplitManager,
 }
 
 impl Heritage {

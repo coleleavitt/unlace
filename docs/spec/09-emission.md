@@ -3,7 +3,6 @@
 ```yaml
 Anchors:
   - crates/unlace-emit/src/p9_emit
-  - crates/unlace-middle/src/p9_emit
 ```
 
 The CLI's `functions --json` serializes borrowed inventory records through
@@ -3095,7 +3094,7 @@ literal was clipped, the terminator `..." /* TRUNCATED STRING LITERAL */`
 (`printc.rs (PrintC::push_ptr_char_constant_ir, PrintC::print_character_constant)`).
 On any refusal the constant falls back to the ordinary integer render, so a
 wrong guess costs readability, never correctness. The manager itself —
-`crates/unlace-middle/src/p9_emit/stringmanage.rs
+`crates/unlace-middle/src/p0_knowledge/stringmanage.rs
 (StringManagerUnicode)`, one shared instance per Architecture with a
 2048-character budget — pulls loadimage bytes 32 at a time until it finds a
 character-width-aligned NUL (no terminator within budget, or unreadable

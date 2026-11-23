@@ -40,7 +40,7 @@ default-divergences are DIV-3/14 in `docs/history.md`.
 
 ## 6.1 HighVariables & Cover
 
-**The artifact.** A `crates/unlace-middle/src/p6_variables/variable.rs
+**The artifact.** A `crates/unlace-middle/src/substrate/variable.rs
 (HighVariable)` is an ordered list of member Varnodes that will render as one
 named variable. Its derived state — boolean properties, data-type, name
 representative, cover — is *lazily* recomputed under dirty bits
@@ -118,7 +118,7 @@ dynamic dataflow anchor instead of accepting an ambiguous storage mapping.
 
 **Cover.** A variable can only absorb another if their live ranges do not
 collide, and the live range is the
-`crates/unlace-middle/src/p6_variables/cover.rs (Cover)`: per basic
+`crates/unlace-middle/src/substrate/cover.rs (Cover)`: per basic
 block, one interval from a start point to a stop point in the block's op order
 (sentinels for block-begin/block-end/function-input). Interval comparison
 returns a three-level verdict — 0 no overlap, 1 boundary-touch only, 2 real
@@ -2804,7 +2804,7 @@ decompiler-internal temporary or a constant has no storage that survives
 re-decompilation, so an assertion attached to it ("this constant is an
 equate", "this union access uses field X") needs a different identity. The
 identity is a 64-bit hash of the value's *local data-flow neighborhood*
-(`crates/unlace-middle/src/p6_variables/dynamic.rs (DynamicHash)`):
+(`crates/unlace-middle/src/substrate/dynamic.rs (DynamicHash)`):
 starting from the root Varnode, grow the sub-graph one edge layer at a time
 (four methods of increasing reach for Varnodes, methods 0–3; three for op/slot
 roots, methods 4–6), fold every edge through CRC32 in a deterministic order,

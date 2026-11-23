@@ -937,7 +937,7 @@ recovered switch table.
   (PcodeInjectLibraryBase)` holds the payloads — `<callfixup>`,
   `<callotherfixup>`, and executable-p-code snippets — decoded from the
   compiler/processor specs; their SLEIGH source bodies are compiled to p-code
-  templates by `crates/unlace-middle/src/p2_lift/inject_sleigh.rs
+  templates by `crates/unlace-middle/src/engine/inject_sleigh.rs
   (parse_inject)` and emitted at a concrete address through
   `inject_sleigh.rs (SleighInjectEngine)`. Local compilation needs a loaded
   language, so in ghidra mode — no `.sla` — the payloads are registered but
@@ -2476,7 +2476,7 @@ the case targets.
    guard's CBRANCH has no record that restricts the chosen variable
    (`jumptable.rs (JumpBasicModel::unbounded_guards)`). It emulates each
    value's path and evaluates those guards' varnodes from what the path
-   computed (`crates/unlace-middle/src/p2_lift/kuna_emulatefunction.rs
+   computed (`crates/unlace-middle/src/engine/kuna_emulatefunction.rs
    (EmulateFunction::evaluate_held)`: pure ops back to computed values and
    constants, a LOAD only through an address computed from them). A value
    outside a guard's range is not dispatched (`jumptable.rs
@@ -2549,7 +2549,7 @@ the case targets.
    `max_jumptable_size` entries are not affected.
 5. **Enumeration.** `jumptable.rs (JumpBasicModel::build_addresses_basic)`
    emulates the meld path once per in-range value on the one-path syntax-tree
-   emulator (`crates/unlace-middle/src/p2_lift/kuna_emulatefunction.rs
+   emulator (`crates/unlace-middle/src/engine/kuna_emulatefunction.rs
    (EmulateFunction::emulate_path)`), masking each result by the architecture's
    function-pointer alignment; with `option jumpload` the table LOADs are also
    recorded as `jumptable.rs (LoadTable)` entries. A sanity pass

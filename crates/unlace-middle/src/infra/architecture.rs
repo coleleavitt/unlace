@@ -860,7 +860,7 @@ pub struct Architecture {
     /// a whole register that the spec prefers to read as two independent pieces.
     /// Decoded once in [`build_default_proto`](Architecture::build_default_proto)
     /// and inherited by every per-function handle, where heritage pass 0 hands
-    /// them to the [`PreferSplitManager`](crate::p5_types::prefersplit::PreferSplitManager).
+    /// them to the [`PreferSplitManager`](crate::prefersplit::PreferSplitManager).
     split_records: Vec<PreferSplitRecord>,
     /// (kuna) How many decompile drives are active: 0 outside a drive, 1 for the
     /// drive the caller asked for, and more when a drive runs a recovery drive

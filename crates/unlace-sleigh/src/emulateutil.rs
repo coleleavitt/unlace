@@ -8,8 +8,8 @@
 //! Load-image reads fetch eight bytes, apply the address space's byte order
 //! and requested-size adjustment, and propagate unavailable-data errors.
 //!
-//! Emulation over decompiler IR lives in `unlace-decomp`'s
-//! `p2_lift/kuna_emulatefunction.rs`, which combines the upstream
+//! Emulation over decompiler IR lives in `unlace-middle`'s
+//! `engine/kuna_emulatefunction.rs`, which combines the upstream
 //! `EmulatePcodeOp` and `EmulateFunction` behavior.
 
 use std::cell::RefCell;

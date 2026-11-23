@@ -5,7 +5,6 @@ Anchors:
   - crates/unlace-bandb-base/src/p5_types
   - crates/unlace-bandb-core/src/p5_types
   - crates/unlace-bandb/src/p5_types
-  - crates/unlace-middle/src/p5_types
   - crates/unlace-middle/src/substrate/dtype.rs
 ```
 
@@ -338,7 +337,7 @@ pass with inference live.
    asks its defining op and each reading op for a suggestion
    (`output_type_local` / `input_type_local`, same module) and keeps the most
    specific by `type_order`. The suggestions come from the per-opcode table
-   `crates/unlace-middle/src/p5_types/typeop.rs (type_op_info)` — the
+   `crates/unlace-middle/src/substrate/typeop.rs (type_op_info)` — the
    port of the C++ `TypeOp` `inst[]` registry, which bundles each opcode's
    p-code property flags, display attributes, and local input/output
    meta-types — with two live upgrades: a CALL/CALLIND whose resolved callee
@@ -4246,7 +4245,7 @@ re-stored the field's old byte. `RuleBitFieldIn` likewise never takes a
 constant as a pull root.
 
 **Preferred splits**
-(`crates/unlace-middle/src/p5_types/prefersplit.rs
+(`crates/unlace-middle/src/spec/prefersplit.rs
 (PreferSplitManager)`). The inverse of §5.5: some processors keep two logical
 values in one physical register (SIMD halves), and the spec can declare a
 `<prefersplit>` table of storage+offset records. Wherever the whole register

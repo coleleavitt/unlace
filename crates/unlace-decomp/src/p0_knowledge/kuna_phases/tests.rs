@@ -751,7 +751,7 @@ fn option_values_live_value_present_for_129() {
                             // live value is the registered option `GoBoolMode`.
                             | "gobool"
                             // (kuna) `fpuemu` takes the same MODE shape; its
-                            // live value is `Architecture::fpu_emu`.
+                            // live value is the registered option `FpuEmuMode`.
                             | "fpuemu"
                             // (kuna) `gowritebarrier`: the same MODE shape;
                             // its live value is the registered option `GoWriteBarrierMode`.

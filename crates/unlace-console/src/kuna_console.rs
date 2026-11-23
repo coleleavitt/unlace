@@ -170,7 +170,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         );
     }
     if option == "typelib" {
-        return Some(Cow::Owned(conf.analysis_typelib.as_str()));
+        return Some(Cow::Owned(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_typelib::TypeLib>()
+                .as_str(),
+        ));
     }
     if option == "kernelcache" {
         // The program's load options, or for a program loaded from the
@@ -218,7 +222,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // C++ `arraynotation` reads `conf->print` (PrintC::getArrayNotation), now
         // exposed via `Architecture::print()` (the owned `PrintC`).
         "arraynotation" => on_off(conf.print().options.array_notation()),
-        "armfloatargs" => on_off(conf.arm_float_args),
+        "armfloatargs" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_armfloatargs::ArmFloatArgs>()
+                .0,
+        ),
         "callarrayextent" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_callarrayextent::CallArrayExtent>()
@@ -405,7 +413,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .get::<unlace_decomp::kuna_gobool::GoBoolMode>()
             .as_str(),
         // (kuna `fpuemu`) Three-valued, so it reports its own token.
-        "fpuemu" => unlace_decomp::kuna_fpuemu::FpuEmuMode::from_u8(conf.fpu_emu).as_str(),
+        "fpuemu" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_fpuemu::FpuEmuMode>()
+            .as_str(),
         "mzdgroup" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_coreoptions::MzDgroupOn>()
@@ -436,7 +447,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         ),
         // (kuna `sourcelang`) Reports the OPTION state, not the detected fact:
         // `auto` until a run forces a language.
-        "sourcelang" => match conf.source_lang_forced {
+        "sourcelang" => match conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_sourcelang::SourceLangForced>()
+            .0
+        {
             Some(lang) => lang.as_str(),
             None => "auto",
         },
@@ -534,10 +549,13 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         ),
         // (kuna `libctypes`) Valued `off|opaque|glibc`, so the live token is the
         // value, not an on/off word.
-        "libctypes" => match (conf.analysis_libctypes, conf.analysis_libctypes_glibc) {
-            (false, _) => "off",
-            (true, false) => "opaque",
-            (true, true) => "glibc",
+        "libctypes" => match conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_libctypes::LibcTypesLayout>()
+        {
+            unlace_decomp::kuna_libctypes::LibcTypesLayout::Off => "off",
+            unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque => "opaque",
+            unlace_decomp::kuna_libctypes::LibcTypesLayout::Glibc => "glibc",
         },
         "strings" => on_off(
             conf.kuna_options
@@ -587,13 +605,29 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         ),
         "exporttrie" => on_off(unlace_decomp::kuna_exporttrie::exporttrie_enabled()),
         "ppc32picimports" => conf.analysis_ppc32picimports.as_str(),
-        "ifuncfpret" => on_off(conf.analysis_ifuncfpret),
-        "ppcapu" => on_off(conf.analysis_ppcapu),
+        "ifuncfpret" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_ifuncfpret::IfuncFpRet>()
+                .0,
+        ),
+        "ppcapu" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_ppcapu::PpcApu>()
+                .0,
+        ),
 
-        "debuglink" => on_off(conf.analysis_debuglink),
+        "debuglink" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_debuglink::DebugLink>()
+                .0,
+        ),
         // (kuna `goabi`) Two-valued but spelled auto|off, so it reports its token.
         "goabi" => {
-            if conf.analysis_goabi {
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_goabi::GoAbi>()
+                .0
+            {
                 "auto"
             } else {
                 "off"
@@ -602,7 +636,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "dyldcrossrefs" => on_off(unlace_decomp::kuna_dyldcache::dyldcrossrefs_enabled()),
         "cil" => on_off(unlace_decomp::kuna_cil::cil_enabled()),
         // (kuna `symbolnamechars`) Three-valued, so it reports its own token.
-        "symbolnamechars" => conf.analysis_symbolnamechars.as_str(),
+        "symbolnamechars" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_symbolnamechars::NameChars>()
+            .as_str(),
         "dwarf" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Dwarf>()
@@ -737,7 +774,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // (PR-8) Mach-O arm64e spec selection: reflects the recorded requested
         // state (the live spec-selection gate is the load-time env var, but the
         // catalog `current` mirrors the `option macho-arm64e on|off` request).
-        "macho-arm64e" => on_off(conf.macho_arm64e),
+        "macho-arm64e" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_macho_arm64e::MachoArm64e>()
+                .0,
+        ),
         // No current field (C++ returns "").
         _ => return None,
     }))
@@ -1741,7 +1782,12 @@ impl IfaceCommandAction for IfcCallwidePrepare {
             .conf
             .as_mut()
             .ok_or_else(|| IfaceError::execution("No load image present"))?;
-        if !prog.arch().call_wide {
+        if !prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_callwide::CallWide>()
+            .0
+        {
             return Ok(());
         }
         prog.commit_pending_analysis()

@@ -1,7 +1,7 @@
 //! (kuna `objcivars`) The load-time half of the instance-layout gate.
 //!
 //! The commit decides whether `self` is typed and the offset variables fold
-//! (`Architecture::analysis_objcivars`); the pass that builds the structs runs
+//! (the registered [`ObjcIvars`] value); the pass that builds the structs runs
 //! while the loader snapshots the image, upstream of every console `option`,
 //! so the same switch also travels as a process environment variable the way
 //! `sourcelang` does. Off, no class struct is interned at all.
@@ -22,3 +22,12 @@ pub fn set_objcivars_env(on: bool) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(OBJCIVARS_ENV, if on { "on" } else { "off" }) };
 }
+
+crate::kuna_flag!(
+    /// (kuna `objcivars`) Objective-C instance structs, typed `self` and the ivar offset fold.
+    ObjcIvars,
+    "objcivars",
+    "Objective-C instance layouts",
+    unset: true,
+    shipped: true
+);

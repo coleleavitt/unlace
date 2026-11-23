@@ -1087,3 +1087,12 @@ impl crate::kuna_optionset::KunaOption for ArmFrames {
         ))
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `dwarfscopes`) DWARF lexical-block and location-list locals; the loader reads `KUNA_DWARFSCOPES`.
+    DwarfScopes,
+    "dwarfscopes",
+    "DWARF lexical-block and location-list locals",
+    unset: true,
+    shipped: true
+);

@@ -9,7 +9,7 @@
 //! `option` arm sets it for a later `load file` in the same process, and the
 //! loader reads it when it picks the language. Unset means **on**; only an
 //! explicit off-token turns the AppleSilicon selection off. The companion
-//! `Architecture::macho_arm64e` bool records the requested state for the
+//! registered [`MachoArm64e`] value records the requested state for the
 //! catalog's `current` field.
 
 /// Environment variable the Mach-O loader reads to decide whether an arm64e
@@ -29,6 +29,15 @@ pub fn set_macho_arm64e_env(on: bool) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(MACHO_ARM64E_ENV, if on { "on" } else { "off" }) };
 }
+
+crate::kuna_flag!(
+    /// (kuna `macho-arm64e`) The requested state of the arm64e spec selection; the catalog's live `current` field reads it.
+    MachoArm64e,
+    "macho-arm64e",
+    "Mach-O arm64e Apple-Silicon spec selection",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

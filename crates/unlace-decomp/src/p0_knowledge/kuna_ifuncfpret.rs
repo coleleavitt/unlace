@@ -11,7 +11,7 @@
 //! command**. An `Architecture` bool would be read too late. So the gate is a
 //! process environment variable ([`IFUNCFPRET_ENV`]), consulted by the loader at
 //! decode time and set by the CLI on the `decomp_dbg` subprocess before it loads
-//! the file. The companion `Architecture::analysis_ifuncfpret` bool exists only
+//! the file. The companion registered [`IfuncFpRet`] value exists only
 //! so the option is catalog-visible and `phase catalog`'s live `current` field
 //! reflects it.
 //!
@@ -42,6 +42,15 @@ pub fn set_ifuncfpret_env(on: bool) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(IFUNCFPRET_ENV, if on { "on" } else { "off" }) };
 }
+
+crate::kuna_flag!(
+    /// (kuna `ifuncfpret`) The requested state of the load-time IFUNC PLT-stub naming; the catalog's live `current` field reads it.
+    IfuncFpRet,
+    "ifuncfpret",
+    "IFUNC PLT-stub naming",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

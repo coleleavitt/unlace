@@ -428,10 +428,6 @@ pub struct Architecture {
     /// (C++ `userops.segmentop`), built at the end of boot.  See
     /// [`kuna_segmentize`](crate::kuna_segmentize).
     segment_defs: Vec<Option<Rc<crate::kuna_segmentize::SegmentDef>>>,
-    /// (kuna `fpuemu`) `option fpuemu` mode (`FpuEmuMode` as u8): decode the
-    /// 8087 emulator's `INT 34h`-`3Dh` as x87 instructions.  Default auto.
-    /// See [`kuna_fpuemu`](crate::kuna_fpuemu).
-    pub fpu_emu: u8,
     /// (kuna `fpuemu`) The loader found 8087-emulator code in the image, which
     /// `auto` decodes by.
     pub fpu_emu_evidence: bool,
@@ -496,8 +492,6 @@ pub struct Architecture {
     /// operations; `decompile_drive::is_injected_userop` applies them only under
     /// `option octeoneffects off`.
     pub octeon_upstream_inject: Vec<int4>,
-    /// Retain register-pair returns established by complete declared caller evidence.
-    pub call_wide: bool,
     /// (kuna) The halves of the image's MIPS unaligned load/store pairs, once
     /// scanned ([`crate::kuna_mipsunaligned`]).
     pub kuna_mips_pairs: Option<Rc<Vec<u64>>>,
@@ -529,10 +523,6 @@ pub struct Architecture {
     pub rust_fmt_write_relro: Option<(u64, u64)>,
     pub rust_io_writer_profiles:
         std::collections::BTreeMap<u64, crate::kuna_rustfmtio::WriterProfile>,
-    /// (kuna) The per-run `option sourcelang` override (`None` = auto).  Kept
-    /// apart from the fact so `option sourcelang auto` restores the detected
-    /// verdict and the catalog `current` reports the option, not the image.
-    pub source_lang_forced: Option<crate::kuna_sourcelang::SourceLang>,
 
     /// (kuna `msvcbyval`) The MSVC declarations with one by-value class of
     /// unstated size, by entry `(space index, offset)`; filled by the analysis
@@ -542,14 +532,6 @@ pub struct Architecture {
     /// object at an address they are handed (a constructor, or a function
     /// returning a class by value).
     pub msvc_builders: Rc<crate::p4_calls::kuna_msvcbyval::Builders>,
-    /// (kuna) Recover whole scalar VFP returns and double arguments on an ARM
-    /// image that states the VFP calling convention (option `armfloatreturn`).
-    /// See [`crate::p4_calls::kuna_armfloatreturn`].
-    pub arm_float_return: bool,
-    /// (kuna) Recover scalar VFP inputs at their full widths when the ARM image
-    /// states the VFP calling convention (option `armfloatargs`).
-    /// See [`crate::p4_calls::kuna_armfloatargs`].
-    pub arm_float_args: bool,
     /// (kuna) The default models `armfloatreturn` has widened, with the model
     /// each was built from and whether it skips back-fill holes, so every
     /// function reuses one instead of rebuilding it.
@@ -771,25 +753,9 @@ pub struct Architecture {
     /// (kuna `arm64evcall`) `call site → methods its vtable slot can hold`,
     /// committed from the analysis tier; read when flow builds the CALLIND.
     pub kuna_vcall_targets: Rc<std::collections::BTreeMap<u64, VcallTargets>>,
-    /// (kuna) Gate the named libc/POSIX aggregate types in the prototype tables
-    /// (`libctypes`); default on (`opaque`). Catalog-visible twin of the load-time
-    /// [`crate::kuna_libctypes`] **env var** (the named shells are interned at
-    /// `load file`, upstream of every `option` command).
-    pub analysis_libctypes: bool,
-    /// (kuna `libctypes glibc`) Whether the named shells additionally carry the
-    /// published glibc x86-64 FIELD layouts. Catalog-visible twin of the same
-    /// env bridge; whether the layouts are actually installed is the analysis
-    /// pass's decision, which also requires the target to be an x86-64 ELF
-    /// against glibc.
-    pub analysis_libctypes_glibc: bool,
 
-    /// (kuna) `dwarfscopes`: DWARF locals in lexical blocks and location lists.
-    pub analysis_dwarfscopes: bool,
     /// (kuna `esprom`) The chip the loaded Espressif application image names.
     pub esp_image_chip: Option<crate::kuna_esprom::EspChip>,
-    /// (kuna `typelib`) The prebuilt type library the analysis commit reads;
-    /// default `auto`.
-    pub analysis_typelib: crate::kuna_typelib::TypeLib,
 
     /// Caller-local PPC32 PIC import proof, applied during flow following.
     pub analysis_ppc32picimports: crate::kuna_ppc32picimports::Mode,
@@ -802,36 +768,6 @@ pub struct Architecture {
     load_options_from_env: bool,
     /// Validated import slots. Never registered as executable FunctionSymbols.
     pub ppc32_pic_imports: std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::ImportSlot>,
-    /// (kuna) Gate the x86-64 IFUNC (`R_X86_64_IRELATIVE`) `.plt.sec`/`.iplt`
-    /// stub naming (`ifuncfpret`); default on. The loader
-    /// (`unlace-analysis::loader::elf_plt::resolve_plt_imports`) names each ifunc
-    /// stub `ifunc_<resolver>` so a tail `jmp` to it is recovered as a tail call
-    /// (`tailcalljump`). Read through the [`crate::kuna_ifuncfpret`] **env var**
-    /// (the PLT map is baked at `load file`); this bool is for catalog visibility.
-    pub analysis_ifuncfpret: bool,
-    /// (kuna) Gate e500 selection from a PowerPC ELF APU note (`ppcapu`); default
-    /// off. Read through the [`crate::kuna_ppcapu`] **env var** (the language is
-    /// chosen at `load file`); this bool is for catalog visibility.
-    pub analysis_ppcapu: bool,
-
-    /// (kuna) Name a stripped ELF's functions from its debug companion or
-    /// `.gnu_debugdata` (`debuglink`); read through [`crate::kuna_debuglink`]'s
-    /// env var at `load file`, kept here for the catalog's live value.
-    pub analysis_debuglink: bool,
-    /// (kuna `goabi`) Select the vendored golang compiler spec for a Go image
-    /// (the catalog-visible mirror of the `KUNA_GOABI` load-time env gate).
-    pub analysis_goabi: bool,
-    /// (kuna) How much of a raw symbol name's byte content is rewritten at the
-    /// mint (`symbolnamechars`); default [`NameChars::Safe`]. A name's bytes
-    /// otherwise reach emitted C verbatim, where a `*/`, a newline or a `//`
-    /// restructures the document and an invalid UTF-8 byte collapses two
-    /// distinct symbols onto one `String`. Read through the
-    /// [`crate::kuna_symbolnamechars`] **env var** (names are minted inside
-    /// `load file`, upstream of `option`); this field exists only for catalog
-    /// visibility and the `phase catalog` live `current` field.
-    ///
-    /// [`NameChars::Safe`]: crate::kuna_symbolnamechars::NameChars::Safe
-    pub analysis_symbolnamechars: crate::kuna_symbolnamechars::NameChars,
 
     /// (kuna `msvcsig`) The entries, as `(space index, offset)`, whose MSVC
     /// prototype the analysis commit locked onto the FunctionSymbol. A call
@@ -922,11 +858,6 @@ pub struct Architecture {
     /// (kuna) FLIRT reference-site checks and arbitration (`flirtsites`). Default on.
     pub analysis_flirtsites: bool,
 
-    /// (kuna `objcivars`) Type an Objective-C method's `self` as a pointer to the
-    /// struct built from its class's ivar list, and fold the `__objc_ivar` offset
-    /// variables to their compile-time layout offsets so an ivar access renders
-    /// `self->field`; default **on**. Inert unless `objc` is on.
-    pub analysis_objcivars: bool,
     /// (kuna `blobs`) The first address of each committed blob. A constant equal
     /// to one is weighed as a pointer even below the space's pointer lower bound.
     pub blob_entries: Rc<std::collections::BTreeSet<u64>>,
@@ -958,17 +889,6 @@ pub struct Architecture {
     /// (kuna `swiftmetadata`) Each local Swift enum's case count by its
     /// metadata accessor's entry offset (`p2_lift/kuna_switchextent.rs`).
     pub loader_swift_enum_cases: Rc<std::collections::BTreeMap<u64, u32>>,
-    /// (kuna) Gate the Mach-O arm64e Apple-Silicon SLEIGH-spec selection
-    /// (`macho-arm64e`); default **on** (design §3.7). An arm64e Mach-O
-    /// (`cpusubtype` CPU_SUBTYPE_ARM64E) loads with the
-    /// `AARCH64:LE:64:AppleSilicon` pointer-auth spec instead of the generic
-    /// `v8A`; pointer-auth does NOT change import naming or symbols, only the
-    /// spec. NB: spec selection happens at *load* (`language_id_for`), before any
-    /// console `option` command runs, so the actual gate is read live from the
-    /// `KUNA_MACHO_ARM64E` env var ([`crate::kuna_macho_arm64e`]) that the CLI
-    /// exports and the `option` arm sets; this field records the requested state
-    /// for the catalog. A non-arm64e / non-Mach-O target is untouched.
-    pub macho_arm64e: bool,
 
     // --- Owned subsystems (architecture.hh:211-233) -----------------------
     /// Memory map of global variables and functions (C++ `symboltab`).
@@ -1384,7 +1304,6 @@ impl Architecture {
             vector_userop_kinds: std::cell::OnceCell::new(),
             eh_table: Rc::new(crate::kuna_itaniumeh::EhTable::default()),
 
-            fpu_emu: 0, // (kuna) option fpuemu; reset_defaults sets the shipped default (auto)
             fpu_emu_evidence: false,
             mz_dgroup: None,
             segment_defs: Vec::new(),
@@ -1406,7 +1325,6 @@ impl Architecture {
 
             kuna_opaque_globals: None,
             octeon_upstream_inject: Vec::new(), // (kuna) set by init_userops_and_fixups on an Octeon language
-            call_wide: false,
             kuna_mips_pairs: None,
             kuna_mips_pairs_painted: false,
             rustc_stable_version: None,
@@ -1421,14 +1339,11 @@ impl Architecture {
             source_lang_detected: Default::default(), // (kuna) a load-time fact; set by the console's `load file`
             go_chanrecv2: None,
             go_chanrecv_status_sites: Default::default(),
-            source_lang_forced: None, // (kuna) option sourcelang; reset_defaults restores auto
 
             msvc_byval_decls: Rc::new(Default::default()),
             msvc_builders: Rc::new(Default::default()),
-            arm_float_args: false, // (kuna) option armfloatargs
             arm_widened_models: std::cell::RefCell::new(Vec::new()),
             arm_float_library_prototypes: Vec::new(),
-            arm_float_return: false, // (kuna) option armfloatreturn
 
             kuna_fde_extents: Rc::new(Vec::new()),
 
@@ -1478,21 +1393,11 @@ impl Architecture {
             // effective default (phases.toml's `default` column mirrors it;
             // asserted equal by kuna_phases/tests.rs `live_value` parity).
             kuna_vcall_targets: Rc::default(),
-            analysis_libctypes: false,
-            analysis_libctypes_glibc: false,
 
-            analysis_dwarfscopes: true,
             esp_image_chip: None,
-            analysis_typelib: crate::kuna_typelib::TypeLib::Auto,
 
             analysis_ppc32picimports: Default::default(),
             ppc32_pic_imports: Default::default(),
-            analysis_ifuncfpret: true, // (kuna) option ifuncfpret, default on (x86-64 IRELATIVE slots only)
-            analysis_ppcapu: false,    // (kuna) option ppcapu, default off (opt-in)
-
-            analysis_debuglink: true,
-            analysis_goabi: false, // (kuna) option goabi; reset_defaults sets the shipped default (auto)
-            analysis_symbolnamechars: crate::kuna_symbolnamechars::NameChars::Off,
 
             msvcsig_import_slots: std::collections::BTreeSet::new(),
             format_call_overrides: std::collections::BTreeMap::new(),
@@ -1515,7 +1420,6 @@ impl Architecture {
 
             analysis_flirtsites: true,
 
-            analysis_objcivars: true,
             loader_param_locks: std::collections::BTreeMap::new(),
             cfstring_entries: std::collections::BTreeSet::new(),
             kuna_this_hints: std::collections::BTreeMap::new(),
@@ -1524,7 +1428,6 @@ impl Architecture {
             loader_input_hints: std::collections::BTreeMap::new(),
             loader_swift_abi: None,
             loader_swift_enum_cases: Rc::default(),
-            macho_arm64e: false,
 
             symboltab,
             remote_scope: None,
@@ -1584,11 +1487,21 @@ impl Architecture {
     /// (kuna) The effective source language for this image: the per-run
     /// `option sourcelang` override when one is set, else the detected fact.
     pub fn source_lang(&self) -> crate::kuna_sourcelang::SourceLang {
-        self.source_lang_forced.unwrap_or(self.source_lang_detected)
+        self.kuna_options
+            .get::<crate::kuna_sourcelang::SourceLangForced>()
+            .0
+            .unwrap_or(self.source_lang_detected)
     }
 
     pub fn reset_defaults_internal(&mut self) {
+        // The load-time ppcapu and ifuncfpret requests outlive a reset, as the env vars they set do.
+        let ppcapu = self.kuna_options.get::<crate::kuna_ppcapu::PpcApu>();
+        let ifuncfpret = self
+            .kuna_options
+            .get::<crate::kuna_ifuncfpret::IfuncFpRet>();
         self.kuna_options.reset_shipped();
+        self.kuna_options.set(ppcapu);
+        self.kuna_options.set(ifuncfpret);
         self.trim_recurse_max = 5;
         self.max_implied_ref = 2; // 2 is best, in specific cases a higher number might be good
         self.max_term_duplication = 2; // 2 and 3 (4) are reasonable
@@ -1597,16 +1510,11 @@ impl Architecture {
         self.max_instructions = 100000;
         self.infer_pointers = true;
         self.apply_segmentize();
-        self.fpu_emu = crate::kuna_fpuemu::FpuEmuMode::Auto.as_u8(); // (kuna #1288) decode the 8087 emulator's INT 34h-3Dh as x87 where the loader found emulator code (MS-DOS executables); only x86-16.sla has the fpuEmu context bit, so every other input and every datatest is unchanged; `option fpuemu off` keeps the interrupts
         (self.pass_hooks().fpuemu_apply)(self);
         (self.pass_hooks().mzdgroup_apply)(self);
 
-        self.call_wide = false;
         self.kuna_callwide.clear();
-        self.source_lang_forced = None; // (kuna) option sourcelang default auto; the detected fact survives resets
 
-        self.arm_float_args = true; // (kuna) option armfloatargs: default-ON with armfloatreturn; inert unless the ELF states the VFP procedure-call standard
-        self.arm_float_return = true; // (kuna) option armfloatreturn: default-ON; inert unless the ELF states the VFP procedure-call standard
         self.analyze_for_loops = true;
         self.readonlypropagate = false;
         self.nan_ignore_all = false;
@@ -1632,13 +1540,10 @@ impl Architecture {
         // cannot observe it; the evidence is the corpus sweep in
         // docs/features/libctypes/record.json. The pass itself reads the
         // load-time env bridge, which defaults on to match this.
-        self.analysis_libctypes = true;
         // and the layout value defaults to `opaque`: the field layouts are the
         // `glibc` value, which is opt-in.
-        self.analysis_libctypes_glibc = false;
         // (kuna) The prebuilt type library -- default `auto`: the built-in
         // library on a target that has one, nothing anywhere else.
-        self.analysis_typelib = crate::kuna_typelib::TypeLib::Auto;
         // (kuna) DIV-141 built-in Win32 API signature table -- default-ON.
 
         // (kuna) DIV-139 declared-name libc prototype lookup -- default-ON.
@@ -1680,10 +1585,6 @@ impl Architecture {
             crate::kuna_ppc32picimports::Mode::loaded_with(self.load_options.ppc32picimports)
         }; // (kuna) abi when the loader applied it, else off
 
-        self.analysis_debuglink = true; // (kuna) separate debug files, default-ON: only a stripped ELF with a findable companion changes
-        self.analysis_goabi = true; // (kuna) option goabi default auto: a Go image takes the vendored golang cspec
-        self.analysis_symbolnamechars = crate::kuna_symbolnamechars::NameChars::Safe; // (kuna) DIV-94: symbol-name sanitizing defaults to `safe` -- the structural set only, a measured no-op on every name a real toolchain emits
-
         // (kuna) DIV: demangled C++ signatures default to the PROVEN tier — only
         // the prototypes the mangling entails (ctor/dtor/cv-qualified member/
         // unqualified global), measured at precision 1.0000 on google/leveldb.
@@ -1696,8 +1597,6 @@ impl Architecture {
         // (kuna, GH-299) AIF literal-pool slide -- default-ON; inert without `aif`.
 
         self.analysis_flirtsites = true;
-        self.analysis_objcivars = true; // (kuna) ObjC instance structs + typed self + ivar offset fold; inert unless objc is on
-        self.macho_arm64e = true; // arm64e Apple-Silicon spec selection (arm64e Mach-O only)
     }
 
     /// Apply a named, concrete decompiler *mode* preset (`reliable` |
@@ -2301,9 +2200,6 @@ impl Architecture {
         ctx.vcall_targets = Rc::clone(&self.kuna_vcall_targets);
         ctx.retsysreg_userops = ids(crate::kuna_retsysreg::STATE_USEROP_NAMES);
         ctx.retsysreg_cop_userops = ids(crate::kuna_retsysreg::COP_USEROP_NAMES);
-        // (kuna) carry the big-endian pair-order gate so `kuna_bejoin` reaches
-        // `option bejoin` via `glb`.
-        ctx.call_wide = self.call_wide;
         // (kuna) carry the Rust return-ABI gate and the detected source language
         // so `kuna_rustabi` reaches both via `glb`.
         ctx.source_lang = self.source_lang();
@@ -2439,7 +2335,10 @@ impl Architecture {
                 && self.print.out_lang() == crate::kuna_outlang::OutLang::C,
         )); // (kuna) castindex
         ctx.elem_ptr_ranges = std::rc::Rc::clone(&self.globalref_ranges); // (kuna) elemptr
-        ctx.libctypes = self.analysis_libctypes; // (kuna) libctypes (kuna_libcfit)
+        ctx.libctypes = self
+            .kuna_options
+            .get::<crate::kuna_libctypes::LibcTypesLayout>()
+            != crate::kuna_libctypes::LibcTypesLayout::Off; // (kuna) libctypes (kuna_libcfit)
         ctx.msvc_byval_decls = Rc::clone(&self.msvc_byval_decls);
         ctx.msvc_builders = Rc::clone(&self.msvc_builders);
 

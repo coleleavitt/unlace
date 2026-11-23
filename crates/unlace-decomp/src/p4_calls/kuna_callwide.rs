@@ -106,7 +106,7 @@ impl Drop for ProofSlot {
 
 /// Copy previously frozen facts into a fresh drive without discovering a fact.
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
-    let proof = if arch.call_wide
+    let proof = if arch.kuna_options.get::<CallWide>().0
         && arch
             .kuna_options
             .get::<crate::kuna_bejoin::BeJoinMode>()
@@ -128,7 +128,8 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
 
 /// The same verdict is read by the producer's own return and every direct call.
 pub fn proven(data: &Funcdata, entry: &Address) -> bool {
-    if !data.get_arch().call_wide || !crate::kuna_bejoin::mode(data).proves() {
+    if !data.get_arch().kuna_options.get::<CallWide>().0 || !crate::kuna_bejoin::mode(data).proves()
+    {
         return false;
     }
     let Some(space) = entry.get_space() else {
@@ -503,7 +504,7 @@ pub fn publish_mips(
     declarations: &[Declaration],
 ) -> usize {
     arch.kuna_callwide.clear();
-    if !arch.call_wide
+    if !arch.kuna_options.get::<CallWide>().0
         || !arch
             .kuna_options
             .get::<crate::kuna_bejoin::BeJoinMode>()
@@ -553,3 +554,12 @@ impl crate::funcdata::Funcdata {
 #[cfg(test)]
 #[path = "kuna_callwide/tests.rs"]
 mod tests;
+
+crate::kuna_flag!(
+    /// (kuna `callwide`) Caller-proved register-pair returns.
+    CallWide,
+    "callwide",
+    "Caller-proved register-pair returns",
+    unset: false,
+    shipped: false
+);

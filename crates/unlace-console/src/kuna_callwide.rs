@@ -253,7 +253,9 @@ mod tests {
     fn refused_producer_does_not_publish_other_strict_dwarf_contracts() {
         use crate::engine::EntrySelector;
         let mut prog = image_program("mips32_be_dwarf.elf");
-        prog.arch_mut().call_wide = true;
+        prog.arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_callwide::CallWide(true));
         prog.arch_mut()
             .kuna_options
             .set(unlace_decomp::kuna_analysisgates::Dwarf(true));
@@ -318,7 +320,9 @@ mod tests {
     fn positive_proof_publishes_only_its_used_strict_contracts() {
         use crate::engine::EntrySelector;
         let mut prog = image_program("mips32_be_dwarf.elf");
-        prog.arch_mut().call_wide = true;
+        prog.arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_callwide::CallWide(true));
         prog.arch_mut()
             .kuna_options
             .set(unlace_decomp::kuna_analysisgates::Dwarf(true));
@@ -402,7 +406,9 @@ mod tests {
         use unlace_decomp::kuna_narrowext::NarrowExtMode;
         for mode in [NarrowExtMode::Abi, NarrowExtMode::Off] {
             let mut prog = image_program("mips32_be_dwarf.elf");
-            prog.arch_mut().call_wide = true;
+            prog.arch_mut()
+                .kuna_options
+                .set(unlace_decomp::kuna_callwide::CallWide(true));
             prog.arch_mut()
                 .kuna_options
                 .set(unlace_decomp::kuna_analysisgates::Dwarf(true));
@@ -455,7 +461,9 @@ mod tests {
         register_decomp_commands(&mut status);
         crate::kuna_console::register_kuna_commands(&mut status);
         let mut prog = program();
-        prog.arch_mut().call_wide = true;
+        prog.arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_callwide::CallWide(true));
         prog.arch_mut()
             .kuna_options
             .set(unlace_decomp::kuna_analysisgates::Dwarf(false));
@@ -474,7 +482,11 @@ mod tests {
                 .downcast_mut::<IfaceDecompData>()
                 .unwrap();
             let prog = data.conf.as_mut().unwrap();
-            if prog.arch().call_wide
+            if prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_callwide::CallWide>()
+                .0
                 && prog
                     .arch()
                     .kuna_options
@@ -702,7 +714,11 @@ pub(crate) fn target_declaration(
 
 /// A refusal is stable until an external mutation; no selected function can supply a positive fact.
 pub fn prepare(prog: &mut ConsoleProgram) {
-    if !prog.arch().call_wide
+    if !prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_callwide::CallWide>()
+        .0
         || !prog
             .arch()
             .kuna_options

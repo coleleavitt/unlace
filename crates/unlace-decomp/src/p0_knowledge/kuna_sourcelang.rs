@@ -129,6 +129,32 @@ pub fn parse_option_value(value: &str) -> Result<Option<SourceLang>, String> {
     })
 }
 
+/// (kuna `sourcelang`) The language a run forces; `None` follows detection (`auto`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SourceLangForced(pub Option<SourceLang>);
+
+impl crate::kuna_optionset::KunaOption for SourceLangForced {
+    const NAME: &'static str = "sourcelang";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        SourceLangForced(None)
+    }
+
+    fn shipped() -> Self {
+        SourceLangForced(None)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let forced = parse_option_value(value).map_err(unlace_base::error::KunaError::parse)?;
+        let msg = match forced {
+            Some(lang) => format!("Source language forced to {}", lang.as_str()),
+            None => "Source language follows detection (auto)".to_string(),
+        };
+        Ok((SourceLangForced(forced), msg))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

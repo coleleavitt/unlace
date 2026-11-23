@@ -155,7 +155,7 @@ pub fn apply(arch: &Architecture) -> bool {
     let Some(space) = arch.manage().get_default_code_space().cloned() else {
         return false;
     };
-    let on = match FpuEmuMode::from_u8(arch.fpu_emu) {
+    let on = match arch.kuna_options.get::<FpuEmuMode>() {
         FpuEmuMode::Off => false,
         FpuEmuMode::Auto => arch.fpu_emu_evidence,
         FpuEmuMode::On => true,
@@ -175,6 +175,23 @@ pub fn apply(arch: &Architecture) -> bool {
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.fpuemu_apply = Some(apply);
+}
+
+impl crate::kuna_optionset::KunaOption for FpuEmuMode {
+    const NAME: &'static str = "fpuemu";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        FpuEmuMode::Off
+    }
+
+    fn shipped() -> Self {
+        FpuEmuMode::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        parse_fpuemu_mode(value).map_err(unlace_base::error::KunaError::parse)
+    }
 }
 
 #[cfg(test)]

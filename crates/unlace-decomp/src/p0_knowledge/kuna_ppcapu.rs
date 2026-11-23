@@ -3,7 +3,7 @@
 //!
 //! The language is chosen while the image loads, before any `option` command
 //! runs, so the gate is the process environment variable [`PPCAPU_ENV`], set by
-//! the CLI before loading. `Architecture::analysis_ppcapu` exists only for the
+//! the CLI before loading. The registered [`PpcApu`] value exists only for the
 //! catalog's live `current` field. Default off: the e500 compiler model does
 //! not yet recover scalar call arguments held in its 64-bit registers.
 
@@ -23,6 +23,15 @@ pub fn set_ppcapu_env(on: bool) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(PPCAPU_ENV, if on { "on" } else { "off" }) };
 }
+
+crate::kuna_flag!(
+    /// (kuna `ppcapu`) The requested state of the load-time APU-note language selection; the catalog's live `current` field reads it.
+    PpcApu,
+    "ppcapu",
+    "PowerPC APU-note language selection",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 mod tests {

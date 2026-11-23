@@ -22,7 +22,7 @@
 //! exported by the `unlace decompile`/`decompile-all` CLI before the load and set
 //! by the console's `option libctypes …` arm, exactly as the other load-time
 //! gates do. The companion
-//! `Architecture::analysis_libctypes` bool keeps the option catalog-visible and
+//! registered [`LibcTypesLayout`] value keeps the option catalog-visible and
 //! makes `phase catalog`'s live `current` field reflect it.
 //!
 //! With the gate off the pass does not run at all, so not one named shell is
@@ -135,6 +135,38 @@ pub fn set_libctypes_env_layout(layout: LibcTypesLayout) {
             },
         )
     };
+}
+
+impl crate::kuna_optionset::KunaOption for LibcTypesLayout {
+    const NAME: &'static str = "libctypes";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        LibcTypesLayout::Off
+    }
+
+    fn shipped() -> Self {
+        LibcTypesLayout::Opaque
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let layout = match value.trim().to_ascii_lowercase().as_str() {
+            "opaque" | "on" | "1" | "true" => LibcTypesLayout::Opaque,
+            "glibc" => LibcTypesLayout::Glibc,
+            "off" | "0" | "false" => LibcTypesLayout::Off,
+            other => {
+                return Err(unlace_base::error::KunaError::lowlevel(format!(
+                    "libctypes: expected `off`, `opaque` or `glibc`, got `{other}`"
+                )));
+            }
+        };
+        let state = match layout {
+            LibcTypesLayout::Off => "off",
+            LibcTypesLayout::Opaque => "on (opaque)",
+            LibcTypesLayout::Glibc => "on (glibc layouts)",
+        };
+        Ok((layout, format!("Named libc aggregate types turned {state}")))
+    }
 }
 
 #[cfg(test)]

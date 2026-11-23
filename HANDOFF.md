@@ -64,34 +64,39 @@ tidy/clippy/parity are green, then the next one.
 
 ## What remains
 
-### Option registry (crate-split step 5)
-1. Land #121, then `optreg-10` .. `optreg-14` in order (each needs the full gate; #14 needs clippy).
-2. Options that set two fields together need a small value struct each: `opaquepredicate`,
-   `tailcalljump`, `loweredswitch`, `narrowargs`, `returndup`, `itaniumeh`, `lanefuse`,
-   `calleereginputs`, `flowmode`, `cvftrace`, `fid`, `iokitclasses`, `cfstrings`, `armframes`,
-   `narrowext`. Inline parsing to move into the type: `readonlycalls`, `persistcalls`,
-   `deadcascade`, `implweight`, `jumptablemax`.
-3. Options read by middle-band code (types go in `kuna_coreoptions`): `stackviews`, `impliedrefs`,
-   `termdup`, `namestyle`, `rettriangle`, `retsplitglobal`, `syscallregs`, `fieldtype`;
-   `ctypes` and `floatglobals` need manual work (name clashes with existing fields).
-4. Options with loader/environment side effects: `fpuemu`, `mzdgroup` apply, `goabi`, `sourcelang`,
-   `kernelcache`, `dyldimage`, `objcsdk`, `ppcapu`, `ifuncfpret`, `macho-arm64e`, `exporttrie`,
-   `debuglink`, `dwarfscopes`, `cil`, `dyldcrossrefs`, `symbolnamechars`, `typelib`,
-   `ppc32picimports`, `callwide`, `armfloatargs`, `armfloatreturn`.
-5. **Decision needed:** ~10 options live on the printer's own options (`print_mut().options`,
-   e.g. `arraynotation`, `braceelide`, `warnstyle`). Suggested: leave them there (they are not on
-   `Architecture`/`ArchContext`).
+### Option registry (crate-split step 5): done
+Landed: #121 (optreg-9), #126 (optreg-10), #133 (steps 5j-5p: optreg-11..17), #135 (option types
+into the knowledge plane), and the loader/environment options PR after it.
+1. Done: #121 and optreg-10 .. optreg-14.
+2. Done (#133): the two-field options are value structs; `readonlycalls`, `persistcalls`,
+   `deadcascade`, `implweight` parse in their types. `jumptablemax` stays the upstream
+   `max_jumptable_size` field.
+3. Done (#133): the middle-band options are in `kuna_coreoptions`; `impliedrefs` and `termdup` stay
+   the upstream `max_implied_ref` / `max_term_duplication` fields.
+4. Done: `fpuemu`, `goabi`, `sourcelang`, `ppcapu`, `ifuncfpret`, `macho-arm64e`, `debuglink`,
+   `dwarfscopes`, `symbolnamechars`, `typelib`, `callwide`, `armfloatargs`, `armfloatreturn` (plus
+   `libctypes` and `objcivars`, the same kind) are registered types; their dispatch arms keep the
+   load-option and env side effects. `ppcapu` and `ifuncfpret` are carried across
+   `reset_defaults_internal`, as their fields were. `mzdgroup` was already registered (its apply
+   stays in the arm).
+   Left on purpose: `ppc32picimports` stays a field, because its reset value depends on what the
+   loader applied (`Mode::loaded()`), which a static `shipped()` cannot state. `kernelcache`,
+   `kernelcache-boot`, `dyldimage`, `objcsdk`, `exporttrie`, `cil`, `dyldcrossrefs` hold no
+   `Architecture` field: their state is the program's load options and the env bridge.
+5. Decided: the printer options (`arraynotation`, `braceelide`, `warnstyle`, ...) stay on the
+   printer's own options.
+- The live-value pin (`kuna_phases::tests`) is 138, which matches the 138 `live_field` rows in
+  `phases.toml`.
 
 ### Hooks and pass-to-pass edges
 1. Land #120 and #119, then `arch/hooks-13` and `arch/p2p-5`.
 2. Middle -> pass edges after `arch/hooks-14` (which cleared jumptable -> constselectjump /
    jumpassist, architecture -> goreg / prefersplit, context -> prefersplit / narrowext / syscallregs,
    kuna_loadoptions -> goreg; their calls go through KunaHooks):
-   - Held only by option types (clear when the option registry moves them to the knowledge
-     plane; the calls already go through hooks): architecture -> syscallregs (`SyscallRegsMode`),
-     narrowext (`NarrowExtMode`); heritage -> indexaliasguard (`IndexAliasGuard`, `LEVEL_*`).
-   - octeoneffects (architecture, context): the mode is being registered by the optreg track;
-     after that, move `Effect`/`Kind`/`UPSTREAM` down and hook `userop_ids`.
+   - Done (#133, #135): architecture -> syscallregs / narrowext / octeoneffects, context ->
+     octeoneffects, heritage -> indexaliasguard. The option types are in `kuna_coreoptions`; the
+     Octeon mode, operation table, upstream fixups and `userop_ids` are in
+     `p0_knowledge/kuna_octeonops.rs` (only `UserOpManage` is needed, so no hook).
    - Step 6 (per-arch or per-function state with behaviour; a hook signature would have to name
      the pass type): architecture/context -> callmechanisms (`Mechanisms`, funcdata `State`,
      plus `CallMechanismMode`), jumpassist (`JumpAssists`), segmentize (`SegmentDef`);

@@ -137,10 +137,11 @@ fn language_layout_and_formatter_facts_bound_string_recovery() {
                     1 => arch.rustc_stable_version = None,
                     2 => arch.rustc_stable_version = Some((1, 90, 0)),
                     3 => arch.rustc_stable_version = Some((1, 99, 1)),
-                    _ => {
-                        arch.source_lang_forced =
-                            Some(unlace_decomp::kuna_sourcelang::SourceLang::C)
-                    }
+                    _ => arch
+                        .kuna_options
+                        .set(unlace_decomp::kuna_sourcelang::SourceLangForced(Some(
+                            unlace_decomp::kuna_sourcelang::SourceLang::C,
+                        ))),
                 },
                 |_| {},
             )

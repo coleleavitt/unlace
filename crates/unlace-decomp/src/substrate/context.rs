@@ -813,7 +813,6 @@ pub struct ArchContext {
     /// resolved from the program's user ops when the handle is built.
     pub retsysreg_userops: Vec<unlace_base::types::uint4>,
     pub retsysreg_cop_userops: Vec<unlace_base::types::uint4>,
-    pub call_wide: bool,
     /// (kuna) The source language of this image (`option sourcelang` override
     /// applied): what `option rustabi auto` tests and `option reloadarg`
     /// stands down on.  Copied from the engine `Architecture` in
@@ -905,7 +904,7 @@ pub struct ArchContext {
     /// inclusive; the `globalref` ranges, copied from the Architecture.
     pub elem_ptr_ranges: std::rc::Rc<Vec<(u64, u64)>>,
     /// (kuna `libctypes`) The named libc aggregate tables are on.  Copied from
-    /// [`Architecture::analysis_libctypes`](crate::architecture::Architecture);
+    /// the option's [`LibcTypesLayout`](crate::kuna_libctypes::LibcTypesLayout) (not `off`);
     /// read by [`kuna_libcfit`](crate::p5_types::kuna_libcfit), which holds a
     /// named libc pointer vote to what the caller does through it.
     pub libctypes: bool,
@@ -1258,7 +1257,6 @@ impl ArchContext {
             retsysreg_cop_userops: Vec::new(),
             // (kuna) `option bejoin`; the real value is copied from the engine
             // Architecture in `build_arch_handle`.
-            call_wide: false,
             source_lang: Default::default(),
             // (kuna) `option gobool` default auto; copied the same way.
             // (kuna) `option gonewtype` default on; copied the same way.

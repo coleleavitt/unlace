@@ -107,7 +107,7 @@ pub trait DatabaseArch {
     /// Minimum bytes a FunctionSymbol map consumes (C++
     /// `Architecture::min_funcsymbol_size`).
     fn min_funcsymbol_size(&self) -> int4;
-    /// C++ (kuna) `Architecture::name_style_angr` — is angr-style naming active?
+    /// C++ (kuna) `glb->name_style_angr` (option `namestyle`) — is angr-style naming active?
     /// STUB(W4-p0pack): namestyle.  Default angr (per the `settableTable`
     /// registration in `kuna_stages.cc`); the architecture porter wires this to
     /// the `option namestyle` toggle.

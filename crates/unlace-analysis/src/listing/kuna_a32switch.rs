@@ -50,7 +50,9 @@ pub(crate) fn applies(
     arch: &unlace_decomp::architecture::Architecture,
 ) -> bool {
     use object::Object;
-    arch.analysis_armframes
+    arch.kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+        .inventory
         && file.architecture() == object::Architecture::Arm
         && file.kind() != object::ObjectKind::Relocatable
 }

@@ -305,7 +305,11 @@ fn has_later_reload(
 /// pointer) into a caller-frame slot, and — below [`LEVEL_SPILL`] — a later LOAD
 /// reads that slot back at the same width.
 pub fn store_is_caller_save_spill(data: &Funcdata, store_op: OpId, vn: VarnodeId) -> bool {
-    let level = data.get_arch().spill_arg_trial;
+    let level = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_spillargtrial::SpillArgTrial>()
+        .0;
     if level <= LEVEL_OFF {
         return false;
     }
@@ -335,6 +339,33 @@ pub fn store_is_caller_save_spill(data: &Funcdata, store_op: OpId, vn: VarnodeId
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.spillargtrial_store_is_caller_save_spill = Some(store_is_caller_save_spill);
+}
+
+/// (kuna) Predicate strength for tolerating the caller's own caller-save
+/// spill among a trial Varnode's descendants in `Funcdata::onlyOpUse`
+/// (option `spillargtrial`).  `0` = off (upstream-faithful: every
+/// `CPUI_STORE` makes the trial inactive), `1` = spill/reload pairs only,
+/// `2` = any caller-frame store of the value.  See
+/// [`crate::p4_calls::kuna_spillargtrial`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct SpillArgTrial(pub int4);
+
+impl crate::kuna_optionset::KunaOption for SpillArgTrial {
+    const NAME: &'static str = "spillargtrial";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        SpillArgTrial(0)
+    }
+
+    fn shipped() -> Self {
+        SpillArgTrial(0)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p4_calls::kuna_spillargtrial::OptionSpillArgTrial.apply(value)?;
+        Ok((SpillArgTrial(v), msg))
+    }
 }
 
 #[cfg(test)]

@@ -886,7 +886,12 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             .get_arch()
             .dex
             .as_ref()
-            .filter(|_| data.get_arch().java_try)
+            .filter(|_| {
+                data.get_arch()
+                    .kuna_options
+                    .get::<crate::kuna_coreoptions::JavaTry>()
+                    .0
+            })
             .map(|model| {
                 (
                     crate::kuna_javatry::JavaTryPlan::new(model, entry.get_offset()),
@@ -2404,7 +2409,13 @@ truncating the fall-through here"
                 stat.seqnum = seq;
             }
             self.op_mark_start_instruction(firstop);
-            if self.data.get_arch().lane_fuse {
+            if self
+                .data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_coreoptions::LaneFuse>()
+                .on
+            {
                 let mut ops = Vec::new();
                 let mut cursor = Some(firstop);
                 while let Some(op) = cursor {
@@ -2431,7 +2442,12 @@ truncating the fall-through here"
                     has_lanes && self.data.get_arch().loader_fill(&mut head, curaddr).is_ok();
                 if has_lanes {
                     let vex = fetched && matches!(head[0], 0xc4 | 0xc5 | 0x62)
-                        || self.data.get_arch().lane_fuse_all;
+                        || self
+                            .data
+                            .get_arch()
+                            .kuna_options
+                            .get::<crate::kuna_coreoptions::LaneFuse>()
+                            .all;
                     if !self.data.kuna_vector_code
                         && crate::kuna_lanefuse::has_vector_run(&self.data, &ops)
                     {
@@ -2459,7 +2475,13 @@ truncating the fall-through here"
                     crate::kuna_lanefuse::fold_mask(&mut self.data, &ops, evex_z)?;
                 }
             }
-            if self.data.get_arch().vex_zero_upper {
+            if self
+                .data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_coreoptions::VexZeroUpper>()
+                .0
+            {
                 let mut insn = Vec::new();
                 let mut cursor = Some(firstop);
                 while let Some(op) = cursor {
@@ -2479,7 +2501,12 @@ truncating the fall-through here"
                 // `try` without their own edge. `itaniumeh catch` keeps only the
                 // pads with a catch clause.
                 let call = (!self.is_flow_for_inline()
-                    && (!self.data.get_arch().itanium_eh_catch_only
+                    && (!self
+                        .data
+                        .get_arch()
+                        .kuna_options
+                        .get::<crate::kuna_itaniumeh::ItaniumEh>()
+                        .catch_only
                         || site
                             .clauses
                             .iter()
@@ -3796,7 +3823,13 @@ truncating the fall-through here"
     /// `ActionDeindirect` would see the mark disagree with the resolved
     /// callee's prototype and restart the function.
     fn trap_follows_call(&self, op: OpId) -> bool {
-        if !self.data.get_arch().trap_after_call {
+        if !self
+            .data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::TrapAfterCall>()
+            .0
+        {
             return false;
         }
         let Some(addr) = self.data.obank().get(op).map(|o| o.get_addr().clone()) else {

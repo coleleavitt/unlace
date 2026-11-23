@@ -120,7 +120,12 @@ impl Action for ActionCrossJumpReverter {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option crossjumprevert on|off`, carried on the Architecture boundary.
-        if !data.get_arch().revert_cross_jumps {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_crossjumpreverter::RevertCrossJumps>()
+            .0
+        {
             return 0;
         }
         if data.sblocks_get_size() == 0 {
@@ -333,5 +338,30 @@ impl OptionCrossJumpReverter {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Cross-jump tail reversion turned {prop}")))
+    }
+}
+
+/// (kuna) angr SAILR `CrossJumpReverter`: revert compiler cross-jumping by
+/// duplicating a small *non-return* cross-jump tail into the `goto` source so
+/// both paths fall straight through (`revert_cross_jumps`, opt-in default-off).
+#[derive(Clone, Debug, PartialEq)]
+pub struct RevertCrossJumps(pub bool);
+
+impl crate::kuna_optionset::KunaOption for RevertCrossJumps {
+    const NAME: &'static str = "crossjumprevert";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        RevertCrossJumps(false)
+    }
+
+    fn shipped() -> Self {
+        RevertCrossJumps(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) =
+            crate::p8_structure::kuna_crossjumpreverter::OptionCrossJumpReverter.apply(value)?;
+        Ok((RevertCrossJumps(v), msg))
     }
 }

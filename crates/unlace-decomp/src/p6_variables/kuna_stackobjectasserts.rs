@@ -170,7 +170,12 @@ pub fn apply(
 
 pub(crate) fn validate(fd: &Funcdata) -> Result<(), String> {
     for assertion in specs(fd) {
-        if !fd.get_arch().stack_views {
+        if !fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::StackViews>()
+            .0
+        {
             return Err("Logical stack object assertions require stackviews on".to_string());
         }
         let found = crate::kuna_stackobjects::objects(fd).iter().any(|object| {

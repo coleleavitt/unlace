@@ -143,7 +143,13 @@ impl AnalysisPass for FidPass {
                 name,
                 by_signature: true,
             };
-            if ctx.arch.analysis_fid_strict && !kuna_fidstrict::supports_rename(records, &quad) {
+            if ctx
+                .arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .strict
+                && !kuna_fidstrict::supports_rename(records, &quad)
+            {
                 out.signature_vetoes.push(fact);
             } else {
                 out.fid_names.push(fact);

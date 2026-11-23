@@ -73,7 +73,11 @@ impl AnalysisPass for IokitClassesPass {
         }
         let img = MachoImage::with_fixups(ctx.file, resolve_chained_fixups(ctx.file, ctx.bytes));
         let classes = recover(ctx.file, &img);
-        let typed = ctx.arch.analysis_iokittypes;
+        let typed = ctx
+            .arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::IokitClasses>()
+            .types;
         classes.emit(&mut out, typed);
         if typed {
             out.iokit_cxx = classes.cxx_facts(&classes.known_names());

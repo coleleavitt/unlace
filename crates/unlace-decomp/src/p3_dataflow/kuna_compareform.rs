@@ -27,7 +27,7 @@
 //! construction (the boundary `Funcdata::glb` does carry `present_lessequal`, but the
 //! kuna leaf actions take the resolved gate as a constructor argument to stay
 //! uniform with the rule pool).  W8/W9 thread the live
-//! `Architecture::present_lessequal`; [`action`] uses the shipped default
+//! the registered option `PresentLessequal`; [`action`] uses the shipped default
 //! (`original` => `present_lessequal = true`, kuna DIV-2 default-on, GH-558).
 //!
 //! The option-apply body that selects that gate value — `OptionCompareForm::apply`
@@ -35,7 +35,7 @@
 //! sibling `parse_return_pair_form` / `parse_memset_recover_form`): it parses
 //! `original`/`canonical` into [`CompareForm`] (the `glb->present_lessequal` write
 //! becomes the returned form, threaded by `w4-kuna-p0-pack` into
-//! [`Architecture::present_lessequal`]) and surfaces the C++ `throw ParseError(...)`
+//! [the registered option `PresentLessequal`]) and surfaces the C++ `throw ParseError(...)`
 //! as a [`KunaError::parse`].
 //!
 //! ## STUB(W6) — opcode-flag resolution
@@ -116,7 +116,13 @@ impl Action for ActionPresentCompareForm {
         // which carries the `present_lessequal` P0 flag (DIV-2 default-on, GH-558).
         // The static `enabled` constructor arg is retained as an OR override for
         // unit tests that drive the action without a fully-reset Architecture.
-        if !self.enabled && !data.get_arch().present_lessequal {
+        if !self.enabled
+            && !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_compareform::PresentLessequal>()
+                .0
+        {
             return 0;
         }
         // The C++ iterates the live `alivelist` while `restoreLessequal` mutates
@@ -280,7 +286,7 @@ impl CompareForm {
 /// [`parse_return_pair_form`](crate::kuna_returnpair::parse_return_pair_form) /
 /// [`parse_memset_recover_form`](crate::kuna_memsetsequence::parse_memset_recover_form)).
 /// The caller writes the resolved [`CompareForm::present_lessequal`] into
-/// [`Architecture::present_lessequal`].
+/// [the registered option `PresentLessequal`].
 pub fn parse_compare_form(p1: &str) -> KunaResult<(CompareForm, String)> {
     let form = if p1 == "original" {
         CompareForm::Original
@@ -325,6 +331,30 @@ fn vn_offset(data: &Funcdata, vn: VarnodeId) -> uintb {
 }
 fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
     data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(0)
+}
+
+/// (kuna GH-558) Restore canonicalized comparisons to LESSEQUAL form for
+/// presentation (C++ `present_lessequal`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PresentLessequal(pub bool);
+
+impl crate::kuna_optionset::KunaOption for PresentLessequal {
+    const NAME: &'static str = "compareform";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        PresentLessequal(true)
+    }
+
+    fn shipped() -> Self {
+        PresentLessequal(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::kuna_compareform::parse_compare_form(value)
+            .map(|(form, msg)| (form.present_lessequal(), msg))?;
+        Ok((PresentLessequal(v), msg))
+    }
 }
 
 #[cfg(test)]

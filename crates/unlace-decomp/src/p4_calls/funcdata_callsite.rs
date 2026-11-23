@@ -511,7 +511,10 @@ pub fn check_input_trial_use(
                 // reads it.
                 let t = data.get_call_specs(idx).active_input().get_trial(i);
                 let (addr, size) = (t.get_address().clone(), t.get_size());
-                data.get_arch().pass_through
+                data.get_arch()
+                    .kuna_options
+                    .get::<crate::kuna_passthrough::PassThrough>()
+                    .0
                     && crate::p4_calls::kuna_passthrough::forwarded_own_input(data, vn, &addr, size)
                     && crate::p4_calls::kuna_passthrough::stated_width(
                         data,
@@ -562,7 +565,11 @@ pub fn check_input_trial_use(
                     .get_trial_mut(i)
                     .set_forwarded_input();
             } else if active
-                && data.get_arch().pass_through
+                && data
+                    .get_arch()
+                    .kuna_options
+                    .get::<crate::kuna_passthrough::PassThrough>()
+                    .0
                 && (crate::p4_calls::kuna_passthrough::survives_call(data, op, vn)
                     || crate::p4_calls::kuna_passthrough::set_before_branch(data, op, vn))
             {
@@ -572,7 +579,11 @@ pub fn check_input_trial_use(
                     .set_live_past_call();
             }
             if active
-                && data.get_arch().pass_through
+                && data
+                    .get_arch()
+                    .kuna_options
+                    .get::<crate::kuna_passthrough::PassThrough>()
+                    .0
                 && crate::p4_calls::kuna_stackarggap::address_is_spacebase(&addr)
                 && crate::p4_calls::kuna_passthrough::holds_constant(data, vn)
             {

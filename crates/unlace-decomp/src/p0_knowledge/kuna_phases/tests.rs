@@ -355,7 +355,7 @@ fn option_values_live_value_present_for_129() {
         // `gotypeglobals`. Default-on.
         "gonewtype",
         // (kuna) The MS-DOS data segment in DS -- an on/off engine gate
-        // (`Architecture::mz_dgroup_on`) read console-side via kuna_live_value,
+        // (the registered option `MzDgroupOn`) read console-side via kuna_live_value,
         // like `gonewtype`. Default-on, MZ loads only.
         "mzdgroup",
         "strings",
@@ -619,24 +619,24 @@ fn option_values_live_value_present_for_129() {
                             // is the registered option `PtrFromUseMode`.
                             | "ptrfromuse"
                             // (kuna) `readonlycalls` takes `off|on|<n>`, a guard
-                            // count; its live value is `Architecture::readonly_calls`.
+                            // count; its live value is the registered option `ReadonlyCalls`.
                             | "readonlycalls"
                             // (kuna) `persistcalls` takes `off|on|<n>`, a guard
-                            // count; its live value is `Architecture::persist_calls`.
+                            // count; its live value is the registered option `PersistCalls`.
                             | "persistcalls"
                             // (kuna) `deadcascade` takes `off|on|<n>`, a pass
-                            // count; its live value is `Architecture::dead_cascade`.
+                            // count; its live value is the registered option `DeadCascade`.
                             | "deadcascade"
                             // (kuna) `retsplitlimit` takes `off|<n>`, an op count;
                             // its live value is the registered option `RetSplitLimit`.
                             | "retsplitlimit"
                             // (kuna) `narrowargs` takes `off|on|callers`; its
-                            // live value is the pair `Architecture::narrow_args`
-                            // and `Architecture::narrow_args_callers`.
+                            // live value is the registered option
+                            // `NarrowArgs`.
                             | "narrowargs"
                             // (kuna) `structsynth` takes a MODE (`off|param|nest`),
                             // for the same reason.  Its live value is
-                            // `Architecture::struct_synth`.
+                            // the registered option `StructSynthMode`.
                             | "structsynth"
                             // (kuna) `structmerge` takes a MODE
                             // (`off|siblings`) over an enum field, for the same
@@ -651,15 +651,15 @@ fn option_values_live_value_present_for_129() {
                             // (kuna) `protoorder` takes a MODE
                             // (`off|types|cycles|lock`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::protoorder`.
+                            // the registered option `ProtoOrderMode`.
                             | "protoorder"
                             // (kuna) `calleevote` takes a MODE
                             // (`off|types|fields`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::calleevote`.
+                            // the registered option `CalleeVoteMode`.
                             | "calleevote"
                             // (kuna) `callbacktype` is an enum field the same
-                            // way; its live value is `Architecture::callbacktype`.
+                            // way; its live value is the registered option `CallbackTypeMode`.
                             | "callbacktype"
                             // (kuna `calleereginputs`) three-valued
                             // (`off|on|custom`), so its live value is read
@@ -688,12 +688,12 @@ fn option_values_live_value_present_for_129() {
                             // (kuna) `narrowext` takes a MODE
                             // (`off|abi|compiler`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::narrow_ext`.
+                            // the registered option `NarrowExtMode`.
                             | "narrowext"
                             // (kuna) `syscallregs` takes a MODE
                             // (`off|auto|on`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::syscall_regs`.
+                            // the registered option `SyscallRegsMode`.
                             | "syscallregs"
                             // (kuna) `linuxsyscall` takes the same MODE
                             // (`off|auto|on`) over an enum field; its live
@@ -702,7 +702,7 @@ fn option_values_live_value_present_for_129() {
                             // (kuna) `callmechanisms` takes a MODE
                             // (`off|auto|on`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::call_mechanism_mode`.
+                            // the registered option `CallMechanismMode`.
                             | "callmechanisms"
                             // (kuna) `bejoin` takes a MODE (`off|evidence|on`)
                             // over an enum field, for the same reason.  Its live
@@ -713,7 +713,7 @@ fn option_values_live_value_present_for_129() {
                             | "bejoinpass"
                             // (kuna) `octeoneffects` likewise
                             // (`off|atomic|ordered`); its live value is
-                            // `Architecture::octeon_effects`.
+                            // the registered option `OcteonEffectsMode`.
                             | "octeoneffects"
                             | "bytearrayc"
                             // (kuna) `structdefs` is a PrintC option: its live

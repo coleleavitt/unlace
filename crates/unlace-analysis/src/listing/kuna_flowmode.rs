@@ -95,7 +95,10 @@ impl FlowMode {
         arch: &Architecture,
         painter: &ContextPainter,
     ) -> Option<FlowMode> {
-        if !arch.analysis_flowmode
+        if !arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FlowMode>()
+            .on
             || arch.input_arm_isa_override
             || file.format() != object::BinaryFormat::Elf
             || file.architecture() != object::Architecture::Arm
@@ -130,7 +133,10 @@ impl FlowMode {
             shift: u32::try_from(range.get_shift()).ok()?,
             mask: range.get_mask(),
             words: usize::try_from(words).ok()?,
-            after_call: arch.analysis_flowmode_aftercall,
+            after_call: arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::FlowMode>()
+                .after_call,
             seeds,
         })
     }

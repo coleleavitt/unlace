@@ -47,7 +47,9 @@ fn frame_data_with_views(stack_views: bool) -> (Funcdata, Rc<AddrSpace>) {
     ));
     manage.insert_space(Rc::clone(&ram)).unwrap();
     let mut context = ArchContext::new(manage);
-    context.stack_views = stack_views;
+    context
+        .kuna_options
+        .set(crate::kuna_coreoptions::StackViews(stack_views));
     let fd = Funcdata::new(
         "early_views",
         "early_views",

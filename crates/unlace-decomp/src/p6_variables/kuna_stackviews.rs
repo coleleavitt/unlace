@@ -31,7 +31,11 @@ pub(crate) struct StorageView {
 
 /// Reused narrow parameter slots require physical backing even in default mode.
 pub(crate) fn enabled(fd: &Funcdata) -> bool {
-    fd.get_arch().stack_views || !fd.stack_write_views.is_empty()
+    fd.get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
+        || !fd.stack_write_views.is_empty()
 }
 
 pub struct OptionStackViews;
@@ -341,7 +345,11 @@ fn backing_type(
 /// conflict or intersect. Indexed references require a bounded byte extent;
 /// explicit user-locked layouts and unresolved extents remain unchanged.
 pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
-    let full_views = fd.get_arch().stack_views;
+    let full_views = fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0;
     let reused = if full_views {
         Vec::new()
     } else {

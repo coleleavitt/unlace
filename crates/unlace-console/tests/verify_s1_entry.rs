@@ -11,7 +11,7 @@
 //! The proof: `main` (0x1405) is NOT in any symbol table of this binary — it is
 //! recovered by the entry-discovery oracles (the `_start`→`main` libc-start idiom
 //! AND the `.eh_frame` FDE pcBegin). The angr-style default naming
-//! (`Architecture::name_style_angr`, default-on) means the discovered name is
+//! (the `namestyle` option, default `angr`) means the discovered name is
 //! `sub_1405` (`p0_knowledge::database::kuna_function_name`, no leading zeros).
 
 use std::path::PathBuf;

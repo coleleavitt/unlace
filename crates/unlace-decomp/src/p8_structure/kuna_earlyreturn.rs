@@ -107,7 +107,12 @@ impl Action for ActionEarlyReturn {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option earlyreturn on|off`, carried on the Architecture boundary.
-        if !data.get_arch().early_return {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_earlyreturn::EarlyReturn>()
+            .0
+        {
             return 0;
         }
         let changes = data.earlyreturn_apply(MAX_EARLYRETURN_SPLITS, MAX_EARLYRETURN_INEDGES);
@@ -142,5 +147,30 @@ impl OptionEarlyReturn {
             val,
             format!("Const-guard early-return hoisting turned {prop}"),
         ))
+    }
+}
+
+/// (kuna) Hoist a leading const-guard into an early return (`if (c) return K;`) by
+/// peeling only the CONSTANT arm of a mixed return phi — the per-edge narrowing of
+/// angr SAILR `ReturnDuplicatorHigh` that `duplicate_shared_returns`' whole-block
+/// const gate cannot reach (`early_return`, opt-in default-off).
+#[derive(Clone, Debug, PartialEq)]
+pub struct EarlyReturn(pub bool);
+
+impl crate::kuna_optionset::KunaOption for EarlyReturn {
+    const NAME: &'static str = "earlyreturn";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        EarlyReturn(false)
+    }
+
+    fn shipped() -> Self {
+        EarlyReturn(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p8_structure::kuna_earlyreturn::OptionEarlyReturn.apply(value)?;
+        Ok((EarlyReturn(v), msg))
     }
 }

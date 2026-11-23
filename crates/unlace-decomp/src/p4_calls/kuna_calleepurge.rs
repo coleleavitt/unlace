@@ -364,12 +364,15 @@ pub(crate) fn summary(arch: &Architecture, entry: &Address, depth: u8) -> Summar
 /// The options a walk reads: `calleeargs`, which follows the stack addresses a
 /// walk loses, and the gates of the no-return names that end its paths.
 fn walk_options(arch: &Architecture) -> u8 {
-    u8::from(arch.kuna_calleeargs)
-        | u8::from(
-            arch.kuna_options
-                .get::<crate::kuna_analysisgates::NoreturnKnown>()
-                .0,
-        ) << 1
+    u8::from(
+        arch.kuna_options
+            .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+            .0,
+    ) | u8::from(
+        arch.kuna_options
+            .get::<crate::kuna_analysisgates::NoreturnKnown>()
+            .0,
+    ) << 1
         | u8::from(
             arch.kuna_options.get::<crate::kuna_gobounds::GoBounds>().0
                 && arch.source_lang().is_go(),
@@ -1119,7 +1122,10 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
     let mut extrapop: Option<int4> = None;
     let mut returns = false;
     let mut returns_stack = false;
-    let track = arch.kuna_calleeargs;
+    let track = arch
+        .kuna_options
+        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .0;
     let mut steps = 0usize;
     while let Some((at, incoming)) = work.pop() {
         let state = match seen.get(&at) {

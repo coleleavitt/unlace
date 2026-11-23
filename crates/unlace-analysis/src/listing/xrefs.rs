@@ -1103,7 +1103,15 @@ fn descend(
             .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
             .0
         && file.architecture() == object::Architecture::Arm;
-    let prologues = preserve_bodies && arch.analysis_armframes && arch.analysis_armframes_full;
+    let prologues = preserve_bodies
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+            .inventory
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+            .full;
     let mut st = State::new(&seed_set, measure || preserve_bodies);
 
     // Reused across every decode in the walk (see [`FullCapture`]).
@@ -1115,7 +1123,10 @@ fn descend(
     let mut raw: Vec<RawOp> = Vec::new();
 
     // Share the decoded partition with prologue recovery and AIF.
-    let gapwalk = arch.analysis_aif.enabled();
+    let gapwalk = arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_aif::AifMode>()
+        .enabled();
     let mut fingerprint_contexts =
         (prologues && gapwalk).then(super::kuna_fingerprintcontext::FingerprintContexts::default);
     let mut prologues_done = false;
@@ -2286,8 +2297,12 @@ fn gap_entries(
             prior,
             translate,
             Rc::clone(code_space),
-            arch.analysis_aif.strict(),
-            arch.analysis_aif.corroborate(),
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .strict(),
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .corroborate(),
             bracket,
             poolslide,
             None,
@@ -2299,8 +2314,12 @@ fn gap_entries(
             translate,
             Rc::clone(code_space),
             listing.exec_ranges(),
-            arch.analysis_aif.strict(),
-            arch.analysis_aif.corroborate(),
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .strict(),
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .corroborate(),
             bracket,
             poolslide,
         )

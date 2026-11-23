@@ -6,7 +6,10 @@ use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 
 pub fn enabled_for(fd: &Funcdata, addr: &Address, size: i32) -> bool {
-    (fd.get_arch().stack_views
+    (fd.get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
         || crate::kuna_stackparamviews::preserves_range(fd, addr, 1)
         || crate::kuna_localstackviews::preserves_range(fd, addr, size))
         && addr

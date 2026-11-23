@@ -505,7 +505,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // `(ptr, len)` records (`strings::kuna_strrecords`), the analysis-side half
     // of the fatstr option. Registered ONLY for `Compiler::Rustc`, so every
     // non-Rust binary's pass set is byte-identical to before; committed under
-    // the `fatstr` mode gate (`Architecture::fat_str`), so `--option fatstr
+    // the `fatstr` mode gate (the registered option `FatStrMode`), so `--option fatstr
     // off` drops the facts at the read-symbols boundary.
     if compiler.is_rust() {
         passes.push(Box::new(
@@ -769,7 +769,12 @@ fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPa
                 .0,
             Box::new(crate::noreturn_propagate::NoReturnPropagatePass),
         ),
-        (arch.analysis_fid, Box::new(crate::fid::FidPass)),
+        (
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .on,
+            Box::new(crate::fid::FidPass),
+        ),
         // (kuna `itaniumrtti`) Constructor/destructor names from vptr stores: the
         // vtable half runs at load, this half needs the Listing's data edges.
         (
@@ -778,14 +783,23 @@ fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPa
                 .0,
             Box::new(crate::rtti::kuna_itaniumctors::ItaniumCtorsPass),
         ),
-        (arch.analysis_flirt, Box::new(crate::flirt::FlirtPass)),
+        (
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::Flirt>()
+                .0,
+            Box::new(crate::flirt::FlirtPass),
+        ),
         // (kuna `formatstring static`) The load-time format-string resolver: a
         // Listing consumer like the rest, because the call edges are what it
         // walks. `full` runs it too — the decompile-time loop then covers only
         // the sites it declined.
         (
-            arch.analysis_formatstring.resolves_at_load(&arch.archid)
-                || (arch.analysis_formatstring
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
+                .resolves_at_load(&arch.archid)
+                || (arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
                     != unlace_decomp::kuna_formatstring::FormatStringMode::Off
                     && unlace_decomp::kuna_armfloatargs::applies(arch)),
             Box::new(crate::formatstring::kuna_fmtstatic::FormatStringStaticPass),
@@ -1207,7 +1221,10 @@ pub fn run_listing_consumers_replaying_observed(
             .kuna_options
             .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
             .0
-        && arch.analysis_armframes
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+            .inventory
     {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let memo = std::rc::Rc::new(crate::listing::kuna_decodememo::DecodeMemo::new(
@@ -1361,7 +1378,12 @@ pub fn run_listing_consumers_replaying_observed(
                                 continue;
                             }
                         }
-                        if arch.analysis_aif.enabled() && frame_aif.is_none() {
+                        if arch
+                            .kuna_options
+                            .get::<unlace_decomp::kuna_aif::AifMode>()
+                            .enabled()
+                            && frame_aif.is_none()
+                        {
                             let probe = translate.context_scope();
                             if let Some(scope) = &probe {
                                 let _ = scope.protect_variable(b"TMode");
@@ -1672,7 +1694,10 @@ pub fn run_listing_consumers_replaying_observed(
         .kuna_options
         .get::<unlace_decomp::kuna_analysisgates::Listing>()
         .0
-        && arch.analysis_aif.enabled()
+        && arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .enabled()
     {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let mut aif_out = AnalysisOutput::default();
@@ -2324,10 +2349,15 @@ mod tests {
             .set(unlace_decomp::kuna_analysisgates::NoreturnDisc(false));
         arch.kuna_options
             .set(unlace_decomp::kuna_analysisgates::NoreturnPropagate(true));
-        arch.analysis_fid = false;
+        arch.kuna_options
+            .set(unlace_decomp::kuna_analysisgates::Fid {
+                on: false,
+                strict: false,
+            });
         arch.kuna_options
             .set(unlace_decomp::kuna_analysisgates::Itaniumrtti(true));
-        arch.analysis_formatstring = unlace_decomp::kuna_formatstring::FormatStringMode::Off;
+        arch.kuna_options
+            .set(unlace_decomp::kuna_formatstring::FormatStringMode::Off);
 
         let schedule: Vec<(&str, bool)> = listing_consumer_passes(&arch)
             .into_iter()
@@ -2357,7 +2387,7 @@ mod tests {
             ("AARCH64:LE:64:v8A:default", Full, true),
         ] {
             arch.archid = archid.to_string();
-            arch.analysis_formatstring = mode;
+            arch.kuna_options.set(mode);
             let enabled = listing_consumer_passes(&arch)
                 .into_iter()
                 .find(|(_, pass)| pass.id() == "formatstring")

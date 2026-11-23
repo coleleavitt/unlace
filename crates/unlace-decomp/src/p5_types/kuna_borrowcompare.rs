@@ -723,7 +723,13 @@ impl crate::action::Rule for RuleDoubleInputPair {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().pair_params || data.get_func_proto().is_input_locked() {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_borrowcompare::PairParams>()
+            .0
+            || data.get_func_proto().is_input_locked()
+        {
             return 0;
         }
         let Some(o) = data.obank().get(op) else {
@@ -790,6 +796,31 @@ impl crate::action::Rule for RuleDoubleInputPair {
             }
         }
         joined as int4
+    }
+}
+
+/// (kuna) Join two adjacent input words a borrow or carry chain links into
+/// one double-precision input (option `pairparam`).  See
+/// [`crate::p5_types::kuna_borrowcompare::RuleDoubleInputPair`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct PairParams(pub bool);
+
+impl crate::kuna_optionset::KunaOption for PairParams {
+    const NAME: &'static str = "pairparam";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        PairParams(true)
+    }
+
+    fn shipped() -> Self {
+        PairParams(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::options::on_or_off(value)
+            .map(|v| (v, format!("Double-precision input pairing turned {value}")))?;
+        Ok((PairParams(v), msg))
     }
 }
 

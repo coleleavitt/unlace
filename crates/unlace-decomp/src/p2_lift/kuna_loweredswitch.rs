@@ -918,7 +918,13 @@ fn recover_cascade(
 
     // RULE3: need >= 3 cases.  `loweredswitch tree` moves the floor to 2 and the
     // cap to 64 for a binary-search cascade; a linear chain keeps 3 to 16.
-    let (floor, cap) = if saw_range && data.get_arch().lowered_switch_tree {
+    let (floor, cap) = if saw_range
+        && data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
+            .tree()
+    {
         (2, 64)
     } else {
         (3, 16)
@@ -980,7 +986,12 @@ fn recover_cascade(
         }
         Some(proven)
     } else {
-        if !data.get_arch().lowered_switch_linear {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
+            .linear()
+        {
             return None;
         }
         let blocks = data.bblocks_ref();
@@ -1192,7 +1203,13 @@ impl ActionLowerSwitchDetect {
     /// Returns the number of records added (0 unless a cascade was recorded).
     pub fn detect(&mut self, data: &mut Funcdata) -> int4 {
         // P0 assertion not set
-        if !self.enabled && !data.get_arch().recover_lowered_switch {
+        if !self.enabled
+            && !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
+                .enabled()
+        {
             return 0;
         }
         // not inside partial-fn recovery
@@ -1460,7 +1477,13 @@ impl ActionLowerSwitchInstall {
     pub fn install(&mut self, data: &mut Funcdata) -> int4 {
         // The live gate is carried on the ArchContext Architecture (`build_arch_handle`);
         // `enabled` stays as the unit-test OR-override (action registered false).
-        if !self.enabled && !data.get_arch().recover_lowered_switch {
+        if !self.enabled
+            && !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
+                .enabled()
+        {
             return 0;
         }
         // only in the pre-SSA window.
@@ -1726,6 +1749,23 @@ crate::kuna_flag!(
     unset: false,
     shipped: false
 );
+
+impl crate::kuna_optionset::KunaOption for LoweredSwitchMode {
+    const NAME: &'static str = "loweredswitch";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        LoweredSwitchMode::Off
+    }
+
+    fn shipped() -> Self {
+        LoweredSwitchMode::On
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        OptionLowerSwitch.apply(value)
+    }
+}
 
 #[cfg(test)]
 #[path = "kuna_loweredswitch/tests.rs"]

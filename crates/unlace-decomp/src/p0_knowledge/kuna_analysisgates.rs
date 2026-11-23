@@ -815,3 +815,275 @@ crate::kuna_flag!(
     unset: true,
     shipped: true
 );
+
+/// (kuna `flowmode`) Paint ARM decode modes the flow proves (`on`), also past calls proven to return (`after_call`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FlowMode {
+    pub on: bool,
+    pub after_call: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for FlowMode {
+    const NAME: &'static str = "flowmode";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        FlowMode {
+            on: false,
+            after_call: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        FlowMode {
+            on: false,
+            after_call: false,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (on, after_call) = match value.trim().to_ascii_lowercase().as_str() {
+            "on" | "1" | "true" => (true, false),
+            "aftercall" => (true, true),
+            "off" | "0" | "false" => (false, false),
+            other => {
+                return Err(unlace_base::error::KunaError::lowlevel(format!(
+                    "flowmode: expected `on`, `aftercall` or `off`, got `{other}`"
+                )));
+            }
+        };
+        let state = match (on, after_call) {
+            (false, _) => "off",
+            (true, false) => "on",
+            (true, true) => "on, past calls proven to return",
+        };
+        Ok((
+            FlowMode { on, after_call },
+            format!("ARM flow-proven decode-mode paints turned {state}"),
+        ))
+    }
+}
+
+/// (kuna `cvftrace`) Name CVF routines from their `.trace` records (`names`), with source-line comments (`lines`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CvfTrace {
+    pub names: bool,
+    pub lines: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for CvfTrace {
+    const NAME: &'static str = "cvftrace";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        CvfTrace {
+            names: false,
+            lines: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        CvfTrace {
+            names: true,
+            lines: false,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (names, lines) = match value.trim().to_ascii_lowercase().as_str() {
+            "on" | "1" | "true" => (true, false),
+            "lines" => (true, true),
+            "off" | "0" | "false" => (false, false),
+            other => {
+                return Err(unlace_base::error::KunaError::lowlevel(format!(
+                    "cvftrace: expected `on`, `lines` or `off`, got `{other}`"
+                )));
+            }
+        };
+        let state = match (names, lines) {
+            (false, _) => "off",
+            (true, false) => "on",
+            (true, true) => "on, with source-line comments",
+        };
+        Ok((
+            CvfTrace { names, lines },
+            format!("CVF .trace routine names turned {state}"),
+        ))
+    }
+}
+
+/// (kuna `fid`) Run the FID fingerprint matcher (`on`), renaming only what it can confirm (`strict`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Fid {
+    pub on: bool,
+    pub strict: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for Fid {
+    const NAME: &'static str = "fid";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        Fid {
+            on: false,
+            strict: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        Fid {
+            on: false,
+            strict: false,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (on, strict) = match value {
+            "off" => (false, false),
+            "" | "on" => (true, false),
+            "strict" => (true, true),
+            _ => {
+                return Err(unlace_base::error::KunaError::parse(
+                    "fid expects on, off, or strict",
+                ));
+            }
+        };
+        let state = if strict {
+            "strict"
+        } else if on {
+            "on"
+        } else {
+            "off"
+        };
+        Ok((
+            Fid { on, strict },
+            format!("FID fingerprint matcher set to {state}"),
+        ))
+    }
+}
+
+/// (kuna `iokitclasses`) Recover IOKit class names (`names`) and their vtable types (`types`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IokitClasses {
+    pub names: bool,
+    pub types: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for IokitClasses {
+    const NAME: &'static str = "iokitclasses";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        IokitClasses {
+            names: false,
+            types: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        IokitClasses {
+            names: true,
+            types: true,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (names, types) = match value {
+            "on" => (true, true),
+            "names" => (true, false),
+            "off" => (false, false),
+            other => {
+                return Err(unlace_base::error::KunaError::parse(format!(
+                    "iokitclasses takes on|names|off, not {other:?}"
+                )));
+            }
+        };
+        Ok((
+            IokitClasses { names, types },
+            format!("IOKit class and vtable recovery set to {value}"),
+        ))
+    }
+}
+
+/// (kuna `cfstrings`) Run the Mach-O `__cfstring` pass (`pass`), and mark each literal it prints as a CFString (`annotate`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CfStrings {
+    pub pass: bool,
+    pub annotate: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for CfStrings {
+    const NAME: &'static str = "cfstrings";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        CfStrings {
+            pass: false,
+            annotate: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        CfStrings {
+            pass: true,
+            annotate: false,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (pass, annotate) = match value {
+            "annotate" => (true, true),
+            other => (crate::options::on_or_off(other)?, false),
+        };
+        let state = if annotate {
+            "on, annotated"
+        } else if pass {
+            "on"
+        } else {
+            "off"
+        };
+        Ok((
+            CfStrings { pass, annotate },
+            format!("Mach-O __cfstring constant-string recovery pass turned {state}"),
+        ))
+    }
+}
+
+/// (kuna `armframes`) Inventory validated ARM frames (`inventory`), and recover functions from them (`full`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ArmFrames {
+    pub inventory: bool,
+    pub full: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for ArmFrames {
+    const NAME: &'static str = "armframes";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ArmFrames {
+            inventory: true,
+            full: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        ArmFrames {
+            inventory: true,
+            full: false,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (inventory, full) = if value == "inventory" {
+            (true, false)
+        } else {
+            let on = crate::options::on_or_off(value)?;
+            (on, on)
+        };
+        Ok((
+            ArmFrames { inventory, full },
+            format!("Validated ARM frame recovery set to {value}"),
+        ))
+    }
+}

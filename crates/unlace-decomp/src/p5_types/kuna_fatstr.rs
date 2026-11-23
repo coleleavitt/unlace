@@ -120,7 +120,7 @@ pub fn parse_fatstr_mode(value: &str) -> Result<(FatStrMode, String), String> {
 
 /// Is the rewrite live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match FatStrMode::from_u8(data.get_arch().fat_str) {
+    match data.get_arch().kuna_options.get::<FatStrMode>() {
         FatStrMode::Off => false,
         FatStrMode::Auto => {
             let lang = data.get_arch().source_lang;
@@ -321,6 +321,23 @@ pub fn specs() -> Vec<RuleSpec> {
         group: "analysis",
         ctor: || Box::new(RuleFatStr::with_group(true, "analysis")),
     }]
+}
+
+impl crate::kuna_optionset::KunaOption for FatStrMode {
+    const NAME: &'static str = "fatstr";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        FatStrMode::Auto
+    }
+
+    fn shipped() -> Self {
+        FatStrMode::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        parse_fatstr_mode(value).map_err(unlace_base::error::KunaError::parse)
+    }
 }
 
 #[cfg(test)]

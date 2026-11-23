@@ -2213,24 +2213,45 @@ pub fn park_recovered(
     }
     let (mut pieces, mut storage) = recovered_pieces(proto, name)?;
     if mode.states_types_only() {
-        let arity_sound = arch.pass_through && arity_claim_sound(arch, entry, &pieces, &storage);
-        let output = if arch.pass_through {
+        let arity_sound = arch
+            .kuna_options
+            .get::<crate::kuna_passthrough::PassThrough>()
+            .0
+            && arity_claim_sound(arch, entry, &pieces, &storage);
+        let output = if arch
+            .kuna_options
+            .get::<crate::kuna_passthrough::PassThrough>()
+            .0
+        {
             recovered_output(proto, data)
         } else {
             None
         };
-        let result = if arch.pass_through {
+        let result = if arch
+            .kuna_options
+            .get::<crate::kuna_passthrough::PassThrough>()
+            .0
+        {
             recovered_result(proto)
         } else {
             None
         };
-        let vararg_tail = if arch.pass_through {
+        let vararg_tail = if arch
+            .kuna_options
+            .get::<crate::kuna_passthrough::PassThrough>()
+            .0
+        {
             crate::kuna_varargtail::vararg_tail_inputs(data, &storage)
         } else {
             Vec::new()
         };
         let (reads, passes) = match data.kuna_entry_reads() {
-            Some(r) if arch.pass_through => {
+            Some(r)
+                if arch
+                    .kuna_options
+                    .get::<crate::kuna_passthrough::PassThrough>()
+                    .0 =>
+            {
                 let finals = crate::kuna_entryreads::final_forwards(data);
                 crate::kuna_entryreads::reads_through(r, &finals, |c, a, s| {
                     crate::kuna_entryreads::callee_takes(data, c, a, s, true)
@@ -2528,6 +2549,23 @@ pub fn seed_protoorder_types(arch: &Architecture, data: &mut crate::substrate::f
         if let Some(stated) = arch.kuna_protoorder_types.get(&key) {
             data.kuna_set_protoorder_types(&e, Rc::clone(stated));
         }
+    }
+}
+
+impl crate::kuna_optionset::KunaOption for ProtoOrderMode {
+    const NAME: &'static str = "protoorder";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        crate::kuna_protoorder::ProtoOrderMode::Off
+    }
+
+    fn shipped() -> Self {
+        crate::kuna_protoorder::ProtoOrderMode::Cycles
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(crate::kuna_protoorder::OptionProtoOrder.apply(value)?)
     }
 }
 

@@ -62,7 +62,7 @@ impl OptionCalleeArgs {
     pub const NAME: &'static str = "calleeargs";
 
     /// Resolve the flag and its confirmation message; the caller writes it into
-    /// `Architecture::kuna_calleeargs`.
+    /// the registered option `KunaCalleeargs`.
     pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, String)> {
         let val = crate::p0_knowledge::options::on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
@@ -77,7 +77,11 @@ pub fn callee_stack_arg_bytes(
     entry: &Address,
     call_at: &Address,
 ) -> Option<crate::p4_calls::kuna_calleepurge::StackArgs> {
-    if !arch.kuna_calleeargs {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .0
+    {
         return None;
     }
     crate::p4_calls::kuna_calleepurge::callee_arg_bytes(arch, entry, call_at)
@@ -86,7 +90,11 @@ pub fn callee_stack_arg_bytes(
 /// For a direct callee `entry` that states no extent, the stack bytes its
 /// returns pop or the caller removes after the call at `call_at`.
 pub fn callee_stack_window(arch: &Architecture, entry: &Address, call_at: &Address) -> Option<u32> {
-    if !arch.kuna_calleeargs {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .0
+    {
         return None;
     }
     crate::p4_calls::kuna_calleepurge::callee_window(arch, entry, call_at)
@@ -96,7 +104,11 @@ pub fn callee_stack_window(arch: &Architecture, entry: &Address, call_at: &Addre
 /// reached returns pop above the return address: the part of its window the
 /// callee releases itself.
 pub fn callee_return_pop(arch: &Architecture, entry: &Address) -> Option<u32> {
-    if !arch.kuna_calleeargs {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .0
+    {
         return None;
     }
     crate::p4_calls::kuna_calleepurge::callee_return_pop(arch, entry)
@@ -106,7 +118,10 @@ pub fn callee_return_pop(arch: &Architecture, entry: &Address) -> Option<u32> {
 /// cannot follow such a call, so the stack offsets of every call in its caller
 /// are guesses, and no extent is applied there.
 pub fn callee_moves_stack(arch: &Architecture, entry: &Address) -> bool {
-    arch.kuna_calleeargs && crate::p4_calls::kuna_calleepurge::moves_stack(arch, entry)
+    arch.kuna_options
+        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .0
+        && crate::p4_calls::kuna_calleepurge::moves_stack(arch, entry)
 }
 
 /// Would a call in `data` whose callee states no extent take `vn`, the stored
@@ -295,6 +310,29 @@ fn stored(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
         vn = input;
     }
     vn
+}
+
+/// (kuna `calleeargs`) Bound a call's stack arguments by what its callee
+/// reads.
+#[derive(Clone, Debug, PartialEq)]
+pub struct KunaCalleeargs(pub bool);
+
+impl crate::kuna_optionset::KunaOption for KunaCalleeargs {
+    const NAME: &'static str = "calleeargs";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        KunaCalleeargs(true)
+    }
+
+    fn shipped() -> Self {
+        KunaCalleeargs(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p4_calls::kuna_calleestackargs::OptionCalleeArgs.apply(value)?;
+        Ok((KunaCalleeargs(v), msg))
+    }
 }
 
 #[cfg(test)]

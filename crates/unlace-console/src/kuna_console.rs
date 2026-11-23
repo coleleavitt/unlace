@@ -199,9 +199,17 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_loopcontinue::LoopContinue>()
                 .0,
         ),
-        "postinc" => on_off(conf.post_increment),
+        "postinc" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::PostIncrement>()
+                .0,
+        ),
         "compareform" => {
-            if conf.present_lessequal {
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_compareform::PresentLessequal>()
+                .0
+            {
                 "original"
             } else {
                 "canonical"
@@ -226,7 +234,14 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_globalarrayanchor::GlobalArrayAnchor>()
                 .0,
         ),
-        "opaquepredicate" if conf.opaque_predicate && conf.opaque_globals => "globals",
+        "opaquepredicate"
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::OpaquePredicate>()
+                .globals =>
+        {
+            "globals"
+        }
 
         "bitidioms" => on_off(
             conf.kuna_options
@@ -273,31 +288,72 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_switchguardmerge::SwitchGuardMerge>()
                 .0,
         ),
-        "opaquepredicate" => on_off(conf.opaque_predicate),
-        "memsetrecover" => on_off(conf.memset_recover),
-        "rodatastring" => on_off(conf.rodata_string),
+        "opaquepredicate" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::OpaquePredicate>()
+                .on,
+        ),
+        "memsetrecover" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_memsetsequence::MemsetRecover>()
+                .0,
+        ),
+        "rodatastring" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_rodatastring::RodataString>()
+                .0,
+        ),
         "returnpair" => {
-            if conf.return_single {
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_returnpair::ReturnSingle>()
+                .0
+            {
                 "single"
             } else {
                 "pair"
             }
         }
-        "nulterminator" => on_off(conf.nul_terminator),
-        "retsplitglobal" => on_off(conf.ret_split_global),
+        "nulterminator" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_nulterminator::NulTerminator>()
+                .0,
+        ),
+        "retsplitglobal" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::RetSplitGlobal>()
+                .0,
+        ),
         // (kuna `protoorder`) Three-valued, so it reports its own token.
-        "protoorder" => conf.protoorder.as_str(),
+        "protoorder" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
+            .as_str(),
         // (kuna `calleevote`) Three-valued, so it reports its own token.
-        "calleevote" => conf.calleevote.as_str(),
+        "calleevote" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_calleevote::CalleeVoteMode>()
+            .as_str(),
         // (kuna `callbacktype`) A mode over an enum field like its two
         // neighbours, so it reports its own token rather than a `live_field`.
-        "callbacktype" => conf.callbacktype.as_str(),
+        "callbacktype" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+            .as_str(),
         // (kuna `calleereginputs`) Three-valued (off|on|custom), reported from
         // its two engine flags.
         "calleereginputs" => {
-            if conf.callee_reginputs_custom {
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_calleereginputs::CalleeRegInputs>()
+                .custom
+            {
                 "custom"
-            } else if conf.callee_reginputs {
+            } else if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_calleereginputs::CalleeRegInputs>()
+                .on
+            {
                 "on"
             } else {
                 "off"
@@ -309,21 +365,40 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .get::<unlace_decomp::kuna_castwiden::CastWidenMode>()
             .as_str(),
         // (kuna `narrowext`) Three-valued, so it reports its own token.
-        "narrowext" => conf.narrow_ext.as_str(),
+        "narrowext" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_narrowext::NarrowExtMode>()
+            .as_str(),
         // (kuna `syscallregs`) Three-valued, so it reports its own token.
-        "syscallregs" => conf.syscall_regs.as_str(),
+        "syscallregs" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_syscallregs::SyscallRegsMode>()
+            .as_str(),
         // (kuna `linuxsyscall`) Three-valued, so it reports its own token.
         "linuxsyscall" => conf
             .kuna_options
             .get::<unlace_decomp::kuna_linuxsyscall::LinuxSyscallMode>()
             .as_str(),
         // (kuna `callmechanisms`) Three-valued, so it reports its own token.
-        "callmechanisms" => conf.call_mechanism_mode.as_str(),
+        "callmechanisms" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_callmechanisms::CallMechanismMode>()
+            .as_str(),
         // (kuna `rustabi`) Three-valued, so it reports its own token.
-        "rustabi" => unlace_decomp::kuna_rustabi::RustAbiMode::from_u8(conf.rust_abi).as_str(),
+        "rustabi" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_rustabi::RustAbiMode>()
+            .as_str(),
         // (kuna `fatstr`) Three-valued, so it reports its own token.
-        "fatstr" => unlace_decomp::kuna_fatstr::FatStrMode::from_u8(conf.fat_str).as_str(),
-        "swiftstr" => unlace_decomp::kuna_fatstr::FatStrMode::from_u8(conf.swift_str).as_str(),
+        "fatstr" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_fatstr::FatStrMode>()
+            .as_str(),
+        "swiftstr" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_swiftstr::SwiftStr>()
+            .0
+            .as_str(),
         // (kuna `gobool`) Three-valued, so it reports its own token.
         "gobool" => conf
             .kuna_options
@@ -331,7 +406,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .as_str(),
         // (kuna `fpuemu`) Three-valued, so it reports its own token.
         "fpuemu" => unlace_decomp::kuna_fpuemu::FpuEmuMode::from_u8(conf.fpu_emu).as_str(),
-        "mzdgroup" => on_off(conf.mz_dgroup_on),
+        "mzdgroup" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::MzDgroupOn>()
+                .0,
+        ),
         "rustprobestack" => conf
             .kuna_options
             .get::<unlace_decomp::kuna_rustprobestack::RustProbestackMode>()
@@ -370,7 +449,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .kuna_options
             .get::<unlace_decomp::kuna_bejoinpass::BeJoinPassMode>()
             .as_str(),
-        "octeoneffects" => conf.octeon_effects.as_str(),
+        "octeoneffects" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_octeoneffects::OcteonEffectsMode>()
+            .as_str(),
         "sparcstructret" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_sparcstructret::SparcStructReturn>()
@@ -386,7 +468,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::heritage::StackAliasDeadstore>()
                 .0,
         ),
-        "stackviews" => on_off(conf.stack_views),
+        "stackviews" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::StackViews>()
+                .0,
+        ),
         "v850indirectbranch" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_v850indbranch::V850IndirectBranch>()
@@ -526,7 +612,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // like the analysis-pass gates, so the live flag is authoritative.
         // (kuna `cppsig`) Three-valued, so it reports its own token rather than
         // on/off.
-        "cppsig" => conf.analysis_cppsig.as_str(),
+        "cppsig" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_cppsig::CppSigMode>()
+            .as_str(),
         "addrtable" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
@@ -538,18 +627,34 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .0,
         ),
         "fid" => {
-            if !conf.analysis_fid {
+            if !conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .on
+            {
                 "off"
-            } else if conf.analysis_fid_strict {
+            } else if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .strict
+            {
                 "strict"
             } else {
                 "on"
             }
         }
         "armframes" => {
-            if !conf.analysis_armframes {
+            if !conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+                .inventory
+            {
                 "off"
-            } else if conf.analysis_armframes_full {
+            } else if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+                .full
+            {
                 "on"
             } else {
                 "inventory"
@@ -566,12 +671,26 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .0,
         ),
         // (kuna `flowmode`) Valued `on|aftercall|off`, so it reports its own token.
-        "flowmode" => match (conf.analysis_flowmode, conf.analysis_flowmode_aftercall) {
+        "flowmode" => match (
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::FlowMode>()
+                .on,
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::FlowMode>()
+                .after_call,
+        ) {
             (false, _) => "off",
             (true, false) => "on",
             (true, true) => "aftercall",
         },
-        "cvftrace" => match (conf.analysis_cvftrace, conf.analysis_cvftrace_lines) {
+        "cvftrace" => match (
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .names,
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .lines,
+        ) {
             (false, _) => "off",
             (true, false) => "on",
             (true, true) => "lines",
@@ -587,7 +706,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .0,
         ),
         // (kuna `aif`) Four-valued, so it reports its own token.
-        "aif" => conf.analysis_aif.as_str(),
+        "aif" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .as_str(),
 
         "objectview" => on_off(
             conf.kuna_options
@@ -604,7 +726,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
                 .0,
         ),
-        "esprom" => conf.esprom.as_str(),
+        "esprom" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_esprom::EspRom>()
+            .as_str(),
         "armconstshift" => conf
             .kuna_options
             .get::<unlace_decomp::kuna_armconstantshift::ConstShiftMode>()
@@ -860,11 +985,17 @@ impl IfaceCommandAction for IfcKunaPhaseStatus {
         os.push_str(conf.allacts.get_current_name());
         os.push('\n');
         os.push_str("compareform: ");
-        os.push_str(if conf.present_lessequal {
-            "original"
-        } else {
-            "canonical"
-        });
+        os.push_str(
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_compareform::PresentLessequal>()
+                .0
+            {
+                "original"
+            } else {
+                "canonical"
+            },
+        );
         os.push('\n');
         os.push_str("arraynotation: ");
         os.push_str(if conf.print().options.array_notation() {

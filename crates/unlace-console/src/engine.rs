@@ -3880,7 +3880,10 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                     .kuna_options
                     .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
                     .0
-                && arch.analysis_armframes
+                && arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+                    .inventory
         }
         "noreturn_known" => {
             arch.kuna_options
@@ -3941,7 +3944,10 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // per-call-site overrides are computed at the deferred commit point and
         // applied only when the gate asks for the static half (`static` on x86,
         // `full` everywhere).
-        "formatstring" => arch.analysis_formatstring.resolves_at_load(&arch.archid),
+        "formatstring" => arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
+            .resolves_at_load(&arch.archid),
         // (kuna) The built-in Win32 API signatures — the Windows half of the
         // `.gdt` stand-in, seeded onto IMPORTED API names only and keyed by entry
         // address. Facts computed at LOAD, COMMITTED only when this gate is on, so
@@ -3969,9 +3975,15 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // (kuna `fatstr`) The Rust `&str`-record string pass — gated on the SAME
         // option mode the engine's (ptr,len) literal rule reads, so one option
         // governs both recognizers; `off` (0) drops the bounded facts here.
-        "fatstrrecords" => arch.fat_str != 0,
+        "fatstrrecords" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_fatstr::FatStrMode>()
+                != unlace_decomp::kuna_fatstr::FatStrMode::Off
+        }
         "strcodelen" => {
-            arch.fat_str != 0
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_fatstr::FatStrMode>()
+                != unlace_decomp::kuna_fatstr::FatStrMode::Off
                 && arch
                     .kuna_options
                     .get::<unlace_decomp::kuna_analysisgates::Strcodelen>()
@@ -3997,12 +4009,19 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::EhFrameFull>()
                 .0
         }
-        "itaniumeh" => arch.itanium_eh,
+        "itaniumeh" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_itaniumeh::ItaniumEh>()
+                .on
+        }
         "ehnote" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Ehnote>()
                 .0
-                && !arch.itanium_eh
+                && !arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_itaniumeh::ItaniumEh>()
+                    .on
         }
         // (kuna) Mach-O `__unwind_info` function-start discovery — facts computed
         // at LOAD, COMMITTED only when this gate is on. Default-off (output-
@@ -4117,7 +4136,10 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         }
         // (kuna `cppsig`) The whole-pass gate; WHICH certainty tier survives is a
         // second decision, made on the mode in `commit_analysis_output`.
-        "cppsig" => arch.analysis_cppsig.enabled(),
+        "cppsig" => arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_cppsig::CppSigMode>()
+            .enabled(),
         // Explicit (NOT the fail-open `_ => true` default): the source-line pass is
         // default-OFF (it changes the output), so it must be registered here to be
         // gated by the `analysis_dwarf_lines` flag rather than running by default.
@@ -4126,8 +4148,16 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::DwarfLines>()
                 .0
         }
-        "cvftrace" => arch.analysis_cvftrace,
-        "cvftrace_lines" => arch.analysis_cvftrace_lines,
+        "cvftrace" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .names
+        }
+        "cvftrace_lines" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .lines
+        }
         "addrtable" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
@@ -4162,8 +4192,16 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::NoreturnPropagate>()
                 .0
         }
-        "fid" => arch.analysis_fid,
-        "flirt" => arch.analysis_flirt,
+        "fid" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .on
+        }
+        "flirt" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::Flirt>()
+                .0
+        }
         // (kuna) MSVC RTTI / vftable recovery — a standalone load-time pass whose
         // class-name + RTTI_* labels are computed at LOAD but COMMITTED only when
         // this gate is on. Default-OFF (output-changing: adds named data symbols),
@@ -4185,12 +4223,19 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::Itaniumrtti>()
                 .0
         }
-        "aif" => arch.analysis_aif.enabled(),
+        "aif" => arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .enabled(),
         // (kuna, GH-299) The AIF bracketed-candidate reject has no fact stream of
         // its own -- it shapes the `aif` accept list inside `run_aif`, which the
         // `aif` arm above already gates. Registered here so the fail-open
         // `_ => true` never silently re-enables a pass id that does not exist.
-        "vtabletypes" => arch.analysis_vtabletypes,
+        "vtabletypes" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::Vtabletypes>()
+                .0
+        }
         // (kuna, GH-299) The AIF filler reject, shaping the `aif` accept list the
         // same way; registered for the same fail-open reason.
         // (kuna, GH-299) The AIF literal-pool slide, shaping the `aif` accept list
@@ -4262,8 +4307,16 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // output-changing (renders CFString constants as `CFSTR("...")` typed
         // `CFStringRef`). Registered here so `off` really skips it; `off`
         // renders the entry exactly as before.
-        "cfstrings" => arch.analysis_cfstrings,
-        "iokitclasses" => arch.analysis_iokitclasses,
+        "cfstrings" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::CfStrings>()
+                .pass
+        }
+        "iokitclasses" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::IokitClasses>()
+                .names
+        }
         "xnutables" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Xnutables>()
@@ -6972,7 +7025,10 @@ fn commit_analysis_output(
     //     selects WHICH certainty tiers survive: `proven` only the prototypes the
     //     mangling entails, `inferred` those plus the class-evidence inferences,
     //     `off` neither.
-    let cppsig_mode = prog.arch().analysis_cppsig;
+    let cppsig_mode = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_cppsig::CppSigMode>();
     let (msvc_byval, msvc_builders) = if cppsig_mode.enabled() {
         (
             std::mem::take(&mut out.cpp_sig.msvc_byval),
@@ -6983,13 +7039,28 @@ fn commit_analysis_output(
     };
     // (kuna `iokitclasses on`) The IOKit classes are typed like the Itanium
     // ones, whether or not `vtabletypes` types those.
-    let iokit = if prog.arch().analysis_iokittypes {
+    let iokit = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::IokitClasses>()
+        .types
+    {
         std::mem::take(&mut out.iokit_cxx)
     } else {
         Default::default()
     };
-    let typed_vtables = prog.arch().analysis_vtabletypes || !iokit.vtables.classes.is_empty();
-    if !prog.arch().analysis_vtabletypes {
+    let typed_vtables = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_coreoptions::Vtabletypes>()
+        .0
+        || !iokit.vtables.classes.is_empty();
+    if !prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_coreoptions::Vtabletypes>()
+        .0
+    {
         out.cpp_vtables = Default::default();
     }
     out.cpp_vtables
@@ -7415,7 +7486,11 @@ fn commit_analysis_output(
     for &vma in &out.entries {
         if lazy_funcs
             && !eager.contains(&vma)
-            && prog.arch().name_style_angr
+            && prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::NameStyleAngr>()
+                .0
             && !named_placeholders.contains(&vma)
             && prog.thumb_normalized(vma) == vma
         {
@@ -7860,7 +7935,13 @@ fn commit_analysis_output(
     //    rustc packs literals back to back, so the row glues the literal before
     //    it to this one (IDA 9.5 rust.so splits at every referenced byte the
     //    same way).
-    let narrow: Vec<unlace_analysis::pass::StringFact> = if prog.arch().fat_str != 0 {
+    let narrow: Vec<unlace_analysis::pass::StringFact> = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_fatstr::FatStrMode>(
+    )
+        != unlace_decomp::kuna_fatstr::FatStrMode::Off
+    {
         let mut starts: Vec<u64> = out.bounded_strings.iter().map(|f| f.addr).collect();
         starts.sort_unstable();
         out.strings

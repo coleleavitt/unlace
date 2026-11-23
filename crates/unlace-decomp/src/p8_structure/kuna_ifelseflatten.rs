@@ -104,7 +104,12 @@ impl Action for ActionIfElseFlatten {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option ifelseflatten on|off`, carried on the Architecture boundary.
-        if !data.get_arch().flatten_ifelse {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_ifelseflatten::FlattenIfelse>()
+            .0
+        {
             return 0;
         }
         if data.sblocks_get_size() == 0 {
@@ -289,5 +294,29 @@ impl OptionIfElseFlatten {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("If-else flattening turned {prop}")))
+    }
+}
+
+/// (kuna) angr `IfElseFlattener`: drop the `else` arm of a 3-component `if`
+/// whose true-clause is statement-terminating, re-parenting the else body as
+/// the `if`'s follower (`flatten_ifelse`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct FlattenIfelse(pub bool);
+
+impl crate::kuna_optionset::KunaOption for FlattenIfelse {
+    const NAME: &'static str = "ifelseflatten";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        FlattenIfelse(false)
+    }
+
+    fn shipped() -> Self {
+        FlattenIfelse(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p8_structure::kuna_ifelseflatten::OptionIfElseFlatten.apply(value)?;
+        Ok((FlattenIfelse(v), msg))
     }
 }

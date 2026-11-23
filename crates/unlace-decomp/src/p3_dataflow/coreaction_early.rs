@@ -433,7 +433,12 @@ impl Action for ActionHeritage {
             ctx.error = Some(error);
             return -1;
         }
-        if data.get_arch().pass_through {
+        if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_passthrough::PassThrough>()
+            .0
+        {
             crate::kuna_entryreads::capture(data);
         }
         // (kuna) Expand a frame `rep movs` with a known count before the stack's

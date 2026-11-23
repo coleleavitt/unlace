@@ -340,7 +340,11 @@ impl Action for ActionRustProbestack {
         }
         if data.get_heritage_pass() != 0
             || data.num_calls() == 0
-            || data.get_arch().stack_views
+            || data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_coreoptions::StackViews>()
+                .0
             || data
                 .get_arch()
                 .kuna_options

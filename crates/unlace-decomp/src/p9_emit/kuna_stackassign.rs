@@ -20,7 +20,12 @@ pub(crate) struct Assignment {
 }
 
 pub(crate) fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
-    if !fd.get_arch().stack_views {
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
+    {
         return None;
     }
     let operation = fd.obank().get(op)?;

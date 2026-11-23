@@ -8,8 +8,14 @@ pub(super) fn policy(
     code_space: Rc<AddrSpace>,
 ) -> GapWalk<'_> {
     GapWalk {
-        strict: arch.analysis_aif.strict(),
-        corroborate: arch.analysis_aif.corroborate(),
+        strict: arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .strict(),
+        corroborate: arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .corroborate(),
         bracket: None,
         noppad: false,
         poolslide: arch

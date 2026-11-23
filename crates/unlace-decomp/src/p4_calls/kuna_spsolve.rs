@@ -113,7 +113,9 @@ pub use crate::kuna_calleefacts::CalleeReturns;
 /// `option spsolve` on its target: a loaded x86-32 ELF under a default model
 /// that states its extrapop.
 pub fn applies(arch: &Architecture) -> bool {
-    arch.sp_solve
+    arch.kuna_options
+        .get::<crate::kuna_coreoptions::SpSolve>()
+        .0
         && arch.image_elf
         && arch.archid.starts_with("x86:LE:32:")
         && arch
@@ -1180,7 +1182,14 @@ fn spread(data: &Funcdata, verdicts: &mut [Verdict], pinned: &[bool]) {
 /// plants it. `sp` and `size` are the stack pointer's storage. Returns `true`
 /// when calls that do not return were found and a restart was requested.
 pub fn settle(data: &mut Funcdata, sp: &Address, size: int4) -> bool {
-    if !data.get_arch().sp_solve || data.is_jumptable_recovery_on() || data.num_calls() == 0 {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::SpSolve>()
+        .0
+        || data.is_jumptable_recovery_on()
+        || data.num_calls() == 0
+    {
         return false;
     }
     let verdicts = solve_calls(data, sp, size);

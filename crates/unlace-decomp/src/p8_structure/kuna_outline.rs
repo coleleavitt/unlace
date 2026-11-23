@@ -232,7 +232,12 @@ impl Action for ActionOutline {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option outline <spec>`, carried on the Architecture boundary.
-        let raw = data.get_arch().outline_spec.clone();
+        let raw = data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_outline::OutlineOption>()
+            .0
+            .clone();
         if raw.is_empty() || raw == "off" {
             return 0;
         }
@@ -849,6 +854,91 @@ impl OptionOutline {
             p1.trim().to_string(),
             format!("Region outlining armed for {n} region(s)"),
         ))
+    }
+}
+
+/// (kuna) Short-circuit condition folding across a **complex sibling block**
+/// (angr Phoenix's `MultiStatementExpression` relaxation of
+/// `_match_acyclic_short_circuit_conditions`).  Ghidra's `ruleBlockOr` declines
+/// the `A || B` fold whenever the sibling condition block is *complex*
+/// (`BlockBasic::isComplex`: more than two statements), so a single spill,
+/// address computation or extra call parked in front of the second test costs a
+/// crossing `goto` back into the first arm's clause — or, on a guard cascade
+/// whose arms reconverge, a `goto` + label into the shared body.  When this is
+/// set, a complex sibling is accepted when it fits the level's **printed-width
+/// budget** (the operand renders at most 5 comma elements at `on` / 9 at `wide`,
+/// counted with the printer's own skip rules) **and** either admission rule takes
+/// it:
+///
+/// * **Rule A** — a `BlockCopy` of ONE `BlockBasic`, branch-free, comment-free,
+///   with at most 1 *statement-root* call;
+/// * **Rule B** — the statement-shape allowlist (marker / op with an output /
+///   void `CALL`/`CALLIND` / `STORE` / the single terminal `CBRANCH`), <=2
+///   `calc_explicit`-scored statements and <=2 calls per block, no comment, and —
+///   because Rule B also admits a nested `BlockCondition` so a cascade can fold —
+///   <=4 condition leaves and <=4 total scored statements at the fold site.
+///
+/// The absorbed statements then render inside the `&&`/`||` operand as a C comma
+/// expression, which the printer already supports (`comma_separate`).  The fold
+/// moves no p-code — it re-parents two existing structuring nodes — and C's
+/// short-circuit + comma sequencing preserves the original execution paths and
+/// order, so predicates that call functions need no purity analysis.
+///
+/// **What the budget bounds.**  Per admitted leaf, the comma chain measured at
+/// structuring time is at most the level's cap; measured over 2827 functions the
+/// widest operand condfold *creates* is 5 elements at `on` and 7 at `wide`.  It
+/// does NOT bound the summed width of a Rule-B cascade's leaves (the only
+/// cross-leaf cap is expressed in the weak `calc_explicit` score), it is taken on
+/// the op list as it stands at structuring time (later passes can add or drop an
+/// op), and it over-counts where a call's stack-effect ops are still live — an
+/// error in the declining, i.e. safe, direction.  Rule B's <=2 *scored* statements
+/// is explicitly **not** a width bound: a block can score 2 and render 7, which is
+/// exactly why the printed-width budget exists.
+///
+/// Rule A's call cap counts only calls printed as their own comma-chain element:
+/// the eligibility walk mirrors the printer, whose implied-output skip
+/// necessarily runs before the call test, so a call inlined into the sibling's
+/// own condition is not charged and a folded operand can render more than one
+/// call.  That is deliberate and is a readability bound, not a soundness bound —
+/// see
+/// [`MAX_PREFIX_ROOT_CALLS`](crate::p8_structure::kuna_condfold::MAX_PREFIX_ROOT_CALLS).
+/// Rule B charges every call op.
+///
+/// Two effects are accepted rather than fixed: this is **not a monotone goto
+/// reducer** (an individual function can gain a goto even where the aggregate
+/// falls), and an advisory comment produced by a pass that runs *after*
+/// structuring can be dropped by the `comma_separate` operand (the guard declines
+/// on any comment buffered at structuring time, but sees no later one).
+///
+/// The value is the **shared printed-width budget**, which doubles as the whole
+/// option's policy level: `0` = `option condfold off` (byte-identical to
+/// upstream: the precompute is skipped and every gate disjunct is dead), `5`
+/// ([`MAX_PREFIX_STMTS_ANGR`](crate::p8_structure::kuna_condfold::MAX_PREFIX_STMTS_ANGR))
+/// = `on` (angr parity), `9`
+/// ([`MAX_PREFIX_STMTS_WIDE`](crate::p8_structure::kuna_condfold::MAX_PREFIX_STMTS_WIDE))
+/// = `wide` (absorbs kuna's finer printed-statement granularity).  The level moves
+/// the budget for BOTH rules and nothing else.  Default-OFF opt-in.  See
+/// [`crate::p8_structure::kuna_condfold`].
+/// (kuna) `outline` region spec, empty when off.  See
+/// [`crate::p8_structure::kuna_outline`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct OutlineOption(pub String);
+
+impl crate::kuna_optionset::KunaOption for OutlineOption {
+    const NAME: &'static str = "outline";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        OutlineOption(String::new())
+    }
+
+    fn shipped() -> Self {
+        OutlineOption(String::new())
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p8_structure::kuna_outline::OptionOutline.apply(value)?;
+        Ok((OutlineOption(v), msg))
     }
 }
 

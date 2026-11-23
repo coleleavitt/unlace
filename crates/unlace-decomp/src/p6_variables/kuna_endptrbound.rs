@@ -94,7 +94,7 @@ impl OptionEndPtrBound {
     pub const NAME: &'static str = "endptrbound";
 
     /// Resolve the flag and its confirmation message; the caller writes it into
-    /// `Architecture::end_ptr_bound`.
+    /// the registered option `EndPtrBound`.
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
@@ -559,7 +559,12 @@ fn controlling_bounds(
 
 /// The walks `restructure_varnode` acts on: none unless the option is on.
 pub fn gather_walks(fd: &Funcdata, space: &Rc<AddrSpace>) -> Vec<PointerWalk> {
-    if !fd.get_arch().end_ptr_bound {
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_endptrbound::EndPtrBound>()
+        .0
+    {
         return Vec::new();
     }
     match fd.find_spacebase_input(space) {
@@ -842,6 +847,29 @@ pub fn rebase_bounds(fd: &mut Funcdata, space: &Rc<AddrSpace>, walks: &[PointerW
         }
     }
     count
+}
+
+/// (kuna) A stack pointer walk's one-past-the-end bound renders on the walked
+/// buffer, recovered as one array (option `endptrbound`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct EndPtrBound(pub bool);
+
+impl crate::kuna_optionset::KunaOption for EndPtrBound {
+    const NAME: &'static str = "endptrbound";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        EndPtrBound(true)
+    }
+
+    fn shipped() -> Self {
+        EndPtrBound(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p6_variables::kuna_endptrbound::OptionEndPtrBound.apply(value)?;
+        Ok((EndPtrBound(v), msg))
+    }
 }
 
 #[cfg(test)]

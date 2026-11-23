@@ -604,7 +604,12 @@ impl ImpliedCasts {
         base: Option<VarnodeId>,
         ptradd: Option<OpId>,
     ) -> Option<Rc<Datatype>> {
-        if !fd.get_arch().elem_ptr {
+        if !fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_elemptr::ElemPtr>()
+            .0
+        {
             return None;
         }
         let (base, ptradd) = (base?, ptradd?);

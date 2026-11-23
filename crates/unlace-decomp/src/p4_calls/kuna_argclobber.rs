@@ -238,7 +238,7 @@ impl OptionArgClobber {
     pub const NAME: &'static str = "argclobber";
 
     /// Resolve the flag and its confirmation message; the caller writes it into
-    /// `Architecture::arg_clobber`.
+    /// the registered option `ArgClobber`.
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
@@ -486,7 +486,12 @@ fn storage_overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool 
 /// after `kuna_calleearity::unify_with_sibling_call`, so a slot the sibling rule
 /// just promoted is visible here and declined. Inert with the option off.
 pub fn drop_clobber_tail_arg(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
-    if !data.get_arch().arg_clobber {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_argclobber::ArgClobber>()
+        .0
+    {
         return;
     }
     // A locked or variadic prototype is not recovered from trials at all, and a
@@ -595,4 +600,27 @@ pub fn drop_clobber_tail_arg(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
         return;
     }
     fc.get_active_input().get_trial_mut(idx).mark_no_use();
+}
+
+/// (kuna) Drop a trailing register argument a previous call's clobber put
+/// there (option `argclobber`).  See [`crate::p4_calls::kuna_argclobber`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct ArgClobber(pub bool);
+
+impl crate::kuna_optionset::KunaOption for ArgClobber {
+    const NAME: &'static str = "argclobber";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ArgClobber(true)
+    }
+
+    fn shipped() -> Self {
+        ArgClobber(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p4_calls::kuna_argclobber::OptionArgClobber.apply(value)?;
+        Ok((ArgClobber(v), msg))
+    }
 }

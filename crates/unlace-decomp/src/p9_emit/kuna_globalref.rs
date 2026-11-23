@@ -165,7 +165,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
     let mut direct = Vec::new();
     let mut pointees: BTreeMap<u64, Seen> = BTreeMap::new();
     let mut indexed = HashSet::new();
-    let elem_held = if arch.elem_ptr {
+    let elem_held = if arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0 {
         fd.kuna_elemptr_verdicts()
     } else {
         BTreeMap::new()
@@ -191,11 +191,21 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
                     continue;
                 }
                 let Some(to) = ct.get_ptr_to() else { continue };
-                if arch.elem_ptr && fd.kuna_elemptr_objects() && is_indexed_base(fd, op, vn) {
+                if arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0
+                    && fd.kuna_elemptr_objects()
+                    && is_indexed_base(fd, op, vn)
+                {
                     indexed.insert(off);
                 }
                 let seen = pointees.remove(&off);
-                pointees.insert(off, Seen::merge(seen, to, arch.elem_ptr));
+                pointees.insert(
+                    off,
+                    Seen::merge(
+                        seen,
+                        to,
+                        arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0,
+                    ),
+                );
             }
         } else if data_space.is_some()
             && v.get_addr().get_space().map(|s| s.get_index()) == data_space
@@ -209,7 +219,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
             // pointee and which nothing uses as a number, is used only as that
             // pointer: one of another type (its value before a call, which
             // nothing prints) is not a read of it at that type.
-            let elem = arch.elem_ptr
+            let elem = arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0
                 && matches!(
                     elem_held.get(&Obj::Held(v.get_offset())),
                     Some(GlobalVerdict::Typed { .. } | GlobalVerdict::Claimed { .. })

@@ -787,7 +787,11 @@ pub fn trace() -> bool {
 /// batch's convergence sweep decompiles a function again and must not drop
 /// the vote its body was printed with.
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
-    if !arch.calleevote.is_on() {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_calleevote::CalleeVoteMode>()
+        .is_on()
+    {
         return;
     }
     let Some(key) = key_of(data.get_address()) else {
@@ -797,7 +801,12 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     if let Some(stated) = ledger.stated.get(&key) {
         data.kuna_set_calleevote_inputs(Some(Rc::clone(stated)));
     }
-    if arch.calleevote.fields() && ledger.closed.contains(&key) {
+    if arch
+        .kuna_options
+        .get::<crate::kuna_calleevote::CalleeVoteMode>()
+        .fields()
+        && ledger.closed.contains(&key)
+    {
         data.kuna_set_calleevote_closed(true);
     }
 }
@@ -1039,6 +1048,23 @@ fn meets_an_address_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
         }
     }
     false
+}
+
+impl crate::kuna_optionset::KunaOption for CalleeVoteMode {
+    const NAME: &'static str = "calleevote";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        crate::kuna_calleevote::CalleeVoteMode::Off
+    }
+
+    fn shipped() -> Self {
+        crate::kuna_calleevote::CalleeVoteMode::Fields
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(crate::kuna_calleevote::OptionCalleeVote.apply(value)?)
+    }
 }
 
 #[cfg(test)]

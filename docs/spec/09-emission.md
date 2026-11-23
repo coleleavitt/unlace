@@ -3247,7 +3247,7 @@ flushed by the decompile drive into the Architecture-wide comment database
 with byte-exact de-duplication (same function, address, and text ⇒ dropped),
 so re-decompilation never doubles a warning. At print time
 `printc.rs (PrintC::setup_comments)` loads the function's comments into the
-sorter `decompiler/crates/unlace-decomp/src/p9_emit/comment.rs (CommentSorter)`,
+sorter `decompiler/crates/unlace-decomp/src/substrate/comment.rs (CommentSorter)`,
 which bins each comment by the basic block containing its address and orders
 it against the block's ops; the body emitters then interleave them — each
 statement flushes the comments sorted before it (`printc.rs

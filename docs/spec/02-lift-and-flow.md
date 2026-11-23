@@ -4178,7 +4178,7 @@ wrapped in a loop whose latch calls the runtime. The fold restores
 straight-line entry flow.
 
 **Matching is a shape, not a name.** The matcher is the first shared
-entry-guard-loop shape in `decompiler/crates/unlace-decomp/src/infra/idiom.rs
+entry-guard-loop shape in `decompiler/crates/unlace-decomp/src/substrate/idiom.rs
 (match_entry_guard_loop)` (the language-runtime idiom vocabulary of
 `docs/multilang.md` W2): the cold arm is a basic block whose ONE predecessor
 and ONE successor are the same block — the guard — which itself ends in a
@@ -4207,7 +4207,7 @@ diverging, and flow then HALTS at the prologue's call: the back-edge is never
 lifted, no entry block is inserted, and the loop shape above cannot exist —
 which silently kept the guard on every function of such an image while its
 stripped twin folded. The matcher therefore accepts a second, equally tight
-sub-shape (`decompiler/crates/unlace-decomp/src/infra/idiom.rs
+sub-shape (`decompiler/crates/unlace-decomp/src/substrate/idiom.rs
 (match_entry_guard_halt)`): the cold arm is a basic block with no out-edges
 whose ONLY call is the matched runtime routine, its one predecessor ends in a
 CBRANCH, and that predecessor is the function start (a block nothing enters —
@@ -4245,7 +4245,7 @@ modeled return, so the recording stores read an undefined local, and the
 value split can mangle even the real store's address expression.
 
 **The second shared idiom shape.** The matcher is
-`decompiler/crates/unlace-decomp/src/infra/idiom.rs (match_guarded_cold_call)`:
+`decompiler/crates/unlace-decomp/src/substrate/idiom.rs (match_guarded_cold_call)`:
 a one-block cold arm holding exactly one call (`block_has_other_call` refuses
 an arm with a second transfer — that is a real `if` body), whose guard ends in
 a CBRANCH and whose other out-edge closes the diamond in ONE hop. Either

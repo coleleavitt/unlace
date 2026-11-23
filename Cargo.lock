@@ -1100,6 +1100,7 @@ dependencies = [
  "unlace-base",
  "unlace-console",
  "unlace-decomp",
+ "unlace-decomp-dylib",
  "unlace-num",
  "unlace-slacomp",
  "unlace-sleigh",
@@ -1116,6 +1117,7 @@ dependencies = [
  "unlace-analysis",
  "unlace-base",
  "unlace-decomp",
+ "unlace-decomp-dylib",
  "unlace-num",
  "unlace-slacomp",
  "unlace-sleigh",
@@ -1153,6 +1155,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-decomp-dylib"
+version = "0.1.0"
+dependencies = [
+ "unlace-analysis",
+ "unlace-decomp",
+]
+
+[[package]]
 name = "unlace-emit"
 version = "0.1.0"
 dependencies = [
@@ -1178,6 +1188,7 @@ dependencies = [
  "unlace-base",
  "unlace-console",
  "unlace-decomp",
+ "unlace-decomp-dylib",
  "unlace-num",
  "unlace-sleigh",
 ]
@@ -1191,6 +1202,7 @@ dependencies = [
  "unlace-base",
  "unlace-console",
  "unlace-decomp",
+ "unlace-decomp-dylib",
  "unlace-num",
  "unlace-slacomp",
  "unlace-sleigh",

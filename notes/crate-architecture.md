@@ -339,6 +339,11 @@ split: an option PR no longer edits the three most conflicted files.
 Steps 0-2 and 4-10 landed on coleleavitt/unlace; the workspace now has eight decompiler crates (step 10 split
 `unlace-bandb` into `unlace-bandb-base`, `unlace-bandb-core` and `unlace-bandb`). Step 3 (the dev dylib) was not
 needed: the split plus thin LTO recovered the speed without it, and step 0's numbers below show the rebuild gain.
+It now exists as an opt-in: `crates/unlace-decomp-dylib` (`crate-type = ["dylib"]`, re-exports `unlace-decomp`
+and `unlace-analysis`, excluded from the workspace) behind a `dynamic_linking` feature on unlace-cli,
+unlace-console, unlace-harness and unlace-ghidra, off by default, with an rpath from the cli, console and
+harness build scripts (`docs/dev-setup.md`). Whether to turn it on for dev builds waits on a `cargo build
+--timings` link-time comparison.
 
 **Crates** (lines of `src/**/*.rs`, in-tree unit tests included, at 38ede1720c):
 

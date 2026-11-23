@@ -26,8 +26,8 @@
 
 use std::rc::Rc;
 
+use crate::architecture::Architecture;
 use crate::dtype::{Datatype, type_metatype};
-use crate::infra::architecture::Architecture;
 
 /// A one-byte value the type system never committed to: the carrier the
 /// `variables` surface must report by width rather than by a fabricated element

@@ -64,7 +64,7 @@ impl OptionCalleeArgs {
     /// Resolve the flag and its confirmation message; the caller writes it into
     /// the registered option `KunaCalleeargs`.
     pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, String)> {
-        let val = crate::p0_knowledge::options::on_or_off(p1)?;
+        let val = crate::options::on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Callee stack-argument extent turned {prop}")))
     }

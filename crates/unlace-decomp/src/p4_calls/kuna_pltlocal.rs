@@ -27,7 +27,7 @@
 
 use unlace_base::address::Address;
 
-use crate::infra::architecture::Architecture;
+use crate::architecture::Architecture;
 
 /// The definition the PLT stub at `entry` is bound to, in `entry`'s space, when
 /// the stub declares no prototype of its own and the symbol table knows a

@@ -26,7 +26,7 @@ pub(super) fn enabled(
 pub(super) fn frame_unresolved(
     fd: &crate::funcdata::Funcdata,
     spc: &Rc<unlace_base::space::AddrSpace>,
-    store_guard: &[super::heritage::LoadGuard],
+    store_guard: &[crate::heritage::LoadGuard],
 ) -> bool {
     use unlace_num::opcodes::OpCode;
     let stores: Vec<crate::context::OpId> = store_guard
@@ -77,7 +77,7 @@ const UNLOCKED_ELEMENTS: u128 = 4;
 
 fn store_bound(
     fd: &crate::funcdata::Funcdata,
-    guard: &super::heritage::LoadGuard,
+    guard: &crate::heritage::LoadGuard,
     bounds: &mut StoreBounds,
 ) -> Option<(u64, u64)> {
     *bounds.entry(guard.op).or_insert_with(|| {
@@ -91,7 +91,7 @@ fn store_bound(
 /// pointer base and inferred minimum, clipped to the inferred maximum. A range
 /// entirely before the base retains its original start.
 pub(super) fn window_overlaps(
-    guard: &super::heritage::LoadGuard,
+    guard: &crate::heritage::LoadGuard,
     store_size: int4,
     bound: Option<(u64, u64)>,
     lo: u64,
@@ -128,7 +128,7 @@ pub(super) fn window_overlaps(
 /// dynamically allocated stack.
 pub(super) fn indexed_stores(
     fd: &crate::funcdata::Funcdata,
-    store_guard: &[super::heritage::LoadGuard],
+    store_guard: &[crate::heritage::LoadGuard],
     bounds: &mut StoreBounds,
     addr: &Address,
     size: int4,
@@ -165,7 +165,7 @@ pub(super) fn indexed_stores(
 /// out not to reach the INDIRECT's range.
 pub(super) fn prune_indexed(
     fd: &mut crate::funcdata::Funcdata,
-    store_guard: &[super::heritage::LoadGuard],
+    store_guard: &[crate::heritage::LoadGuard],
     bounds: &mut StoreBounds,
     guards: &[(crate::context::OpId, crate::context::OpId)],
 ) {

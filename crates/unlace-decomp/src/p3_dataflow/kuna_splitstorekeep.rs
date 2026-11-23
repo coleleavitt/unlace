@@ -56,7 +56,7 @@ use crate::funcdata::Funcdata;
 /// Carry the `stack_store` mark from a refined write onto its pieces (kuna
 /// `splitstorekeep`).
 ///
-/// Called from [`Heritage::refine_write`](crate::p3_dataflow::heritage) with the
+/// Called from [`Heritage::refine_write`](crate::heritage) with the
 /// write Varnode about to be replaced and the partition cells that will carry
 /// its storage.  Returns whether the mark was propagated.
 pub fn keep_store_mark(fd: &mut Funcdata, vn: VarnodeId, pieces: &[VarnodeId]) -> bool {

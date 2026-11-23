@@ -225,7 +225,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::VarnodeId;
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::p0_knowledge::options::on_or_off;
+use crate::options::on_or_off;
 
 /// Marshaling element `<argclobber>` (kuna 4000+ range).
 pub const ELEM_ARGCLOBBER: ElementId = ElementId::new("argclobber", 4173);

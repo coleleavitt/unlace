@@ -2,7 +2,7 @@
 //!
 //! # The gap
 //!
-//! [`Heritage::guard_calls`](crate::p3_dataflow::heritage::Heritage) characterizes
+//! [`Heritage::guard_calls`](crate::heritage::Heritage) characterizes
 //! every heritaged range against each call site's prototype.  When the range is
 //! *bigger* than the ABI storage it contains the characterization is
 //! [`Containment::ContainedBy`](crate::fspec::Containment), and upstream Ghidra
@@ -36,7 +36,7 @@
 //!   are registered at every level.
 //!
 //! The guards themselves are upstream `Heritage` methods and live with their
-//! siblings in [`crate::p3_dataflow::heritage`]; this module owns the option's
+//! siblings in [`crate::heritage`]; this module owns the option's
 //! parse surface and the level vocabulary the gate reads.
 
 use unlace_base::error::KunaResult;

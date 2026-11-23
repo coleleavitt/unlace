@@ -23,8 +23,8 @@ use unlace_base::space::spacetype;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
+use crate::architecture::Architecture;
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
 
 /// The most call sites of one function [`read`] decodes.
 pub const MAX_CALL_SITES: usize = 32;

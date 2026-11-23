@@ -20,9 +20,9 @@ use std::rc::Rc;
 
 use unlace_base::space::AddrSpace;
 
+use crate::architecture::Architecture;
 use crate::context::HighVariableId;
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
 use crate::kuna_funcreport::VarInfo;
 use crate::printc::{DeclaredLocal, PrintC};
 

@@ -26,11 +26,11 @@ use unlace_base::space::spacetype;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
+use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_class, type_metatype};
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
 use crate::op::pcodeop_addlflags::kuna_narrowret;
 
 /// The narrow value a callee returns zero-extended: its storage and width.

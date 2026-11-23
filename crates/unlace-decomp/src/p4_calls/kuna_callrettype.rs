@@ -35,11 +35,11 @@ use unlace_base::address::Address;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
+use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
+use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
-use crate::p4_calls::fspec::FuncCallSpecs;
 
 /// A callee's recovered return value: where it is returned, how wide, and the
 /// type the callee's own decompile gave it.

@@ -20,7 +20,7 @@ use unlace_base::address::Address;
 use unlace_base::types::int4;
 
 use crate::funcdata::Funcdata;
-use crate::p5_types::prefersplit::PreferSplitRecord;
+use crate::prefersplit::PreferSplitRecord;
 
 /// Is `addr:size` the whole preferred-split register of `record`, or a scalar
 /// argument living inside one of the two pieces heritage pass 0 replaced it

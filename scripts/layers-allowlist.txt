@@ -1,6 +1,4 @@
 # Upward crate:: edges between unlace-decomp's layering bands (scripts/check_layers.py). Only delete lines.
-architecture -> engine_translate
-architecture -> inject_sleigh
 architecture -> kuna_bejoin
 architecture -> kuna_callbacktype
 architecture -> kuna_calleedeadarg
@@ -11,7 +9,6 @@ architecture -> kuna_callerargs
 architecture -> kuna_callrettype
 architecture -> kuna_callwide
 architecture -> kuna_cortexmpriv
-architecture -> kuna_decodekit
 architecture -> kuna_elemptr
 architecture -> kuna_esprom
 architecture -> kuna_floatglobals
@@ -51,8 +48,6 @@ architecture -> kuna_x87intrinsic
 architecture -> kuna_x87truncate
 architecture -> printc
 architecture -> printlanguage
-architecture -> remote_provider
-architecture -> stringmanage
 context -> kuna_floatglobals
 context -> kuna_itaniumeh
 context -> kuna_kalloctype
@@ -67,9 +62,6 @@ context -> kuna_tlsnames
 context -> kuna_varargretreg
 context -> kuna_varargsave
 context -> kuna_x87emptyreturn
-context -> remote_provider
-context -> stringmanage
-database -> remote_provider
 dtype -> bitfield
 dtype -> prettyprint
 fspec -> kuna_calleedeadarg
@@ -79,14 +71,11 @@ fspec -> kuna_libcnames
 fspec -> kuna_passthrough
 fspec -> kuna_registerslots
 fspec -> kuna_spsolve
-fspec -> remote_provider
 heritage -> kuna_calloverlap
 heritage -> kuna_globalcallranges
 heritage -> kuna_loadguardreads
 heritage -> kuna_revisitrefine
-jumptable -> kuna_emulatefunction
 kuna_loadoptions -> kuna_calltargettype
 options -> kuna_option_dispatch
 varmap -> kuna_arrayextent
 varmap -> kuna_stablenames
-varmap -> remote_provider

@@ -40,7 +40,12 @@ const HOP_CAP: usize = 10;
 /// The target's `void *`, or `None` when nothing is decided: the option or
 /// `calleevote` is off.
 pub fn void_pointer(arch: &Architecture) -> Option<Rc<Datatype>> {
-    if !arch.caller_ptr || !arch.calleevote.is_on() {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_callerptr::CallerPtr>()
+        .0
+        || !arch.calleevote.is_on()
+    {
         return None;
     }
     let tlst = arch.types();
@@ -416,3 +421,13 @@ fn declared_pointer_argument(data: &Funcdata, r: OpId, v: VarnodeId) -> bool {
             })
         })
 }
+
+crate::kuna_flag!(
+    /// (kuna `callerptr`) Does a pointer-width integer parameter every caller
+    /// passes some pointer or a null take a pointer?
+    CallerPtr,
+    "callerptr",
+    "Caller pointer-class parameter typing",
+    unset: false,
+    shipped: true
+);

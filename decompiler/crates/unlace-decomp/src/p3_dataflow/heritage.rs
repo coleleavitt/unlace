@@ -1867,7 +1867,11 @@ impl Heritage {
             return true;
         }
         if fd.get_arch().stack_views
-            || fd.get_arch().stack_alias_deadstore
+            || fd
+                .get_arch()
+                .kuna_options
+                .get::<crate::heritage::StackAliasDeadstore>()
+                .0
             || (fd.hooks().localstackviews_preserves_range)(
                 fd,
                 &Address::new(Rc::clone(spc), offset),
@@ -7159,6 +7163,16 @@ impl Default for Heritage {
         Heritage::new()
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna GH-8500) Hold a store-through-a-stack-pointer-alias across the
+    /// deadcode race (C++ `stack_alias_deadstore`).
+    StackAliasDeadstore,
+    "stackalias",
+    "Stack-pointer-alias dead-store hold",
+    unset: false,
+    shipped: false
+);
 
 /// The LOAD and STORE ops of one space that can reach a global (system calls
 /// that guard memory among the STOREs), and the function's returns, collected

@@ -341,7 +341,11 @@ impl Action for ActionRustProbestack {
         if data.get_heritage_pass() != 0
             || data.num_calls() == 0
             || data.get_arch().stack_views
-            || data.get_arch().stack_alias_deadstore
+            || data
+                .get_arch()
+                .kuna_options
+                .get::<crate::heritage::StackAliasDeadstore>()
+                .0
         {
             return 0;
         }

@@ -167,7 +167,12 @@ fn kuna_anchor_flags_default_to_div_values() {
             .0
     );
     assert!(!arch.unrolled_guard);
-    assert!(!arch.stack_alias_deadstore);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::heritage::StackAliasDeadstore>()
+            .0
+    );
 }
 
 #[test]

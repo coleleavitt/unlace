@@ -242,6 +242,15 @@ pub fn withdraw(arch: &mut Architecture, addr: &Address) {
     );
 }
 
+crate::kuna_flag!(
+    /// (kuna) Apply libc prototype / no-return to functions a FID or FLIRT rename names (`fidproto`). Default on.
+    Fidproto,
+    "fidproto",
+    "Prototype and no-return for FID/FLIRT renames",
+    unset: true,
+    shipped: true
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

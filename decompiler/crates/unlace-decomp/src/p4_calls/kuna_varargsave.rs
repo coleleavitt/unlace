@@ -71,7 +71,10 @@ impl Regs {
 
 pub fn regs(arch: &crate::architecture::Architecture) -> Option<Regs> {
     let id = arch.get_description();
-    if !arch.vararg_save
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_varargsave::VarargSave>()
+        .0
         || !id.starts_with("x86:LE:64")
         || crate::kuna_fastfailnoreturn::archid_is_windows(id)
     {
@@ -542,3 +545,13 @@ pub fn strip(data: &mut Funcdata) {
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.varargsave_regs = Some(regs);
 }
+
+crate::kuna_flag!(
+    /// (kuna) Remove a System V x86-64 register save area and mark the function
+    /// variadic (option `varargsave`).
+    VarargSave,
+    "varargsave",
+    "System V register save area of variadic functions",
+    unset: false,
+    shipped: false
+);

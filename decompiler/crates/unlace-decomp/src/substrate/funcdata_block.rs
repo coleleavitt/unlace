@@ -256,7 +256,12 @@ impl Funcdata {
             None => return,
         };
         let ncase = cases.len();
-        if self.get_arch().goto_next {
+        if self
+            .get_arch()
+            .kuna_options
+            .get::<crate::funcdata_block::GotoNext>()
+            .0
+        {
             self.chain_fallthru_cases(&mut cases);
         }
         // Construct the depth parameter, to sort fall-thru cases.
@@ -4943,6 +4948,18 @@ impl CloneBlockOps {
         }
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `gotonext`) Leave out a `goto` whose target is the block that runs
+    /// next anyway, print one to the block after the enclosing loop or switch as
+    /// `break;`, and keep switch fall-thru chains in case order
+    /// (`p8_structure/kuna_gotonext.rs`). Default on.
+    GotoNext,
+    "gotonext",
+    "goto-to-next suppression",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

@@ -178,6 +178,15 @@ fn prints_only_its_branch(data: &Funcdata, leaf: BlockId) -> bool {
     true
 }
 
+crate::kuna_flag!(
+    /// Preserve secondary natural-loop latches as continues (`loopcontinue`).
+    LoopContinue,
+    "loopcontinue",
+    "Secondary loop-latch continue recovery",
+    unset: true,
+    shipped: true
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -245,5 +245,17 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.arithhelpers_helper_abi = Some(helper_abi);
 }
 
+crate::kuna_flag!(
+    /// (kuna `arithhelpers`) Install the arithmetic runtime-helper call-fixups
+    /// (`p2_lift/kuna_arithhelpers.rs`) so a 32-bit call to `__udivdi3`,
+    /// `__aeabi_uldivmod`, `_alldiv`, ... prints as the C operator it implements.
+    /// Read by the analysis-tier call-fixup installer, like `msvc_ftol`.
+    ArithHelpers,
+    "arithhelpers",
+    "arithmetic runtime-helper call-fixups",
+    unset: false,
+    shipped: true
+);
+
 #[cfg(test)]
 mod tests;

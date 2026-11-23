@@ -900,8 +900,6 @@ pub struct ArchContext {
     pub bit_idioms: bool,
     /// (kuna `helperroles`) Read by [`RuleStrcpyChain`](crate::kuna_helperrole::RuleStrcpyChain).
     pub helper_roles: bool,
-    /// (kuna `dynalloca`) Read by [`RuleDynAlloca`](crate::kuna_dynalloca::RuleDynAlloca).
-    pub dyn_alloca: bool,
     /// (kuna `vaarg`) The x86-64 va_arg expansion as va_arg(ap, T).
     pub va_arg: bool,
     /// (kuna `indexrescale`) A byte offset into an array becomes an element index.
@@ -953,10 +951,6 @@ pub struct ArchContext {
     /// ([`USEROP_NAMES`](crate::kuna_roundingops::USEROP_NAMES)), typed float in
     /// and out by [`kuna_roundingops`](crate::kuna_roundingops).
     pub float_rounding_userops: Vec<unlace_base::types::uint4>,
-    /// (kuna) `returnbranch`, default-on: a RETURN whose target the entry
-    /// prefix proves constant flows as an indirect branch
-    /// ([`crate::kuna_returnbranch`]). Off keeps the spec's RETURN.
-    pub return_branch: bool,
     /// (kuna) GH-8724: re-express a strided-induction offset as counter*stride
     /// (C++ `recover_array_stride`, DIV-3 default-on).  Read by
     /// [`RuleArrayStride`](crate::kuna_arraystride::RuleArrayStride).
@@ -1229,14 +1223,10 @@ pub struct ArchContext {
     /// `ruleBlockWhileDo` keeps the loop's head test.  Read by
     /// [`ActionBlockStructure`](crate::blockaction::ActionBlockStructure).
     pub loop_cond_hoist: bool,
-    /// Preserve secondary natural-loop latches as continues (`loopcontinue`).
-    pub loop_continue: bool,
     /// (kuna `loopcontinue`) The output language's do-while runs its test on
     /// `continue;`: C `do..while` and Go's `for` post statement do, Rust's
     /// `loop { ..; if !(c) { break; } }` restarts the body instead.
     pub do_while_continue: bool,
-    /// (kuna `gotonext`) Re-derive switch fall-thru chains before the case sort.
-    pub goto_next: bool,
     /// (kuna `postinc`) A pointer step after its dereference prints as `*p++`.
     pub post_increment: bool,
     /// (kuna) region structurer cyclic loop-successor refinement
@@ -1280,10 +1270,6 @@ pub struct ArchContext {
     /// (kuna) The loader identified the image as a Linux ELF: the fact
     /// `option linuxsyscall auto` acts on.
     pub image_linux_elf: bool,
-    /// (kuna) `option msvcstrappend`: collapse inlined MSVC `std::string`
-    /// appends into one call.  Read by
-    /// [`ActionMsvcStrAppend`](crate::p2_lift::kuna_msvcstrappend::ActionMsvcStrAppend).
-    pub msvc_str_append: bool,
     /// Exact GCC AMD64 target supporting the ordinary SysV stack model.
     pub x64_syscall_memory_target: bool,
     /// (kuna) The user-op indices the `SYSCALL` constructor emits, resolved once
@@ -1410,22 +1396,8 @@ pub struct ArchContext {
     /// (option `indirectonly`, opt-in default-off).  Read by
     /// `ActionMarkIndirectOnly`.
     pub mark_indirect_only: bool,
-    /// (kuna) strip the glibc -fstack-protector canary epilogue (C++
-    /// `strip_stack_guard`, opt-in default-off).  Read by
-    /// [`crate::kuna_stackguard`]'s `ActionStripStackGuard`.
-    pub strip_stack_guard: bool,
     /// (kuna `canaryglobal`) Read by `kuna_stackguard`.
     pub canary_global: bool,
-    /// (kuna) strip rustc's bounds / slice / divide-by-zero panic branches
-    /// (kuna) Strip the MSVC `/GS` frame-cookie boilerplate (option
-    /// `msvcstackguard`, default-off).  Read by
-    /// [`crate::kuna_msvcstackguard`]'s `ActionStripMsvcStackGuard`.
-    pub strip_msvc_stack_guard: bool,
-    /// (option `securitycheck`, DIV-82 default-on).  Read by
-    /// [`crate::kuna_securitycheck`]'s `ActionRemoveSecurityCheck`.
-    pub strip_security_check: bool,
-    /// Fold Go compiler bounds/division panic arms (option gobounds).
-    pub go_bounds: bool,
     /// AArch64 integer division returns zero for a zero divisor.
     pub go_keep_divide_checks: bool,
     /// (kuna) flip negated-guard if/else branches for linearity (option
@@ -1473,12 +1445,6 @@ pub struct ArchContext {
     /// by `JumpBasic::buildAddresses` to align recovered targets.  `0` (no
     /// alignment) for hand-built fixtures.
     pub funcptr_align: int4,
-    /// (kuna) Bound a LOAD-table jumptable by a modulo/and-mask on its index when
-    /// the basic model fails to bound it (C++ `Architecture::switch_modulo_bound`,
-    /// flipped by `option switchmodbound`, GH-9191), shared from the real
-    /// architecture.  Read by `JumpBasic::recoverModel` before
-    /// `kunaTryModuloBoundTable`.  `false` (default off / upstream byte-identical).
-    pub switch_modulo_bound: bool,
     /// (kuna) End a jump table no range check bounds at the next jump table
     /// its function dispatches through (`option switchextent`,
     /// `p2_lift/kuna_switchextent.rs`), shared from the real architecture.
@@ -1487,24 +1453,8 @@ pub struct ArchContext {
     /// sorted, so the run-on cut (`kuna_switchrunon`) sees the same functions
     /// with the option on.
     pub lazy_entry_starts: Rc<Vec<u64>>,
-    /// (kuna) Bound a LOAD-table jumptable by an out-of-band CBRANCH range guard
-    /// when the basic model's guard analysis could not (C++
-    /// `Architecture::switch_guard_bound`, flipped by `option switchguardbound`,
-    /// angr `test_decompiling_missing_function_call`), shared from the real
-    /// architecture.  Read by `JumpBasic::recoverModel` before
-    /// `kuna_try_guard_bound_table`.  `false` (default off / upstream byte-identical).
-    pub switch_guard_bound: bool,
     /// Match complete high-byte slices to equivalent logical shifts.
     pub highslice_guard: bool,
-    /// (kuna) Recover a GCC PIC relative-offset jump table whose base register is a
-    /// loop-carried MULTIEQUAL, so the path-meld collapses and the CBRANCH range
-    /// guard on the load index never bounds the table (C++
-    /// `Architecture::switch_shared_case`, flipped by `option switchsharedcase`,
-    /// angr `test_switch_case_shared_case_nodes_b2sum_digest`), shared from the
-    /// real architecture.  Read by `JumpBasic::recoverModel` before
-    /// `kuna_try_loop_carried_guard_table`.  `false` (default off / upstream
-    /// byte-identical).
-    pub switch_shared_case: bool,
     /// (kuna) Recover an image-base-relative jump table whose bound guard is
     /// "unrolled" / duplicated across multiple predecessors of the dispatch
     /// block (the `BRANCHIND` parent has `sizeIn() > 1`) (C++
@@ -1514,8 +1464,6 @@ pub struct ArchContext {
     /// multi-predecessor unrolled-guard walk.  `false` (default off / upstream
     /// byte-identical).
     pub switch_multi_pred: bool,
-    /// (kuna) `Architecture::switch_trim`, flipped by `option switchtrim`.
-    pub switch_trim: bool,
     /// (kuna) `Architecture::stack_exit_anchor`, flipped by `option stackexitanchor`.
     pub stack_exit_anchor: bool,
     /// (kuna) `Architecture::fde_flow_bound`, flipped by `option fdeflowbound`.
@@ -1799,7 +1747,6 @@ impl ArchContext {
             mba: false,
             bit_idioms: false,
             helper_roles: false,
-            dyn_alloca: false,
             va_arg: false,
             index_rescale: false,
             loop_rotate: false,
@@ -1817,7 +1764,6 @@ impl ArchContext {
             x87_float_to_int_userops: Vec::new(),
             x87_integer_userops: Vec::new(),
             float_rounding_userops: Vec::new(),
-            return_branch: false,        // returnbranch
             recover_array_stride: false, // GH-8724 arraystride
             memset_recover: false,       // GH-9230/1537 memsetrecover
             rodata_string: false,        // (kuna) rodatastring
@@ -1907,9 +1853,7 @@ impl ArchContext {
             rep_string: false, // repstring (live value copied from the Architecture)
             region_structure: false, // regionstructure (opt-in default-off)
             guard_arm: false,  // guardarm (opt-in default-off)
-            loop_continue: true,
             do_while_continue: true,
-            goto_next: false,
             post_increment: false,
             loop_cond_hoist: false,      // loopcondhoist (opt-in default-off)
             region_loop_refine: false,   // regionlooprefine (opt-in default-off)
@@ -1917,7 +1861,6 @@ impl ArchContext {
             outline_spec: String::new(), // outline (opt-in default-off; empty = off)
             remove_cleanup_code: true, // cleanupcode (DIV-81 default-on; inert on a non-Rust binary)
             image_linux_elf: false,
-            msvc_str_append: false, // msvcstrappend (opt-in default-off)
             x64_syscall_memory_target: false,
             x64_syscall_userops: Vec::new(),
             octeon_effects: crate::kuna_octeoneffects::OcteonEffectsMode::Off,
@@ -1948,14 +1891,10 @@ impl ArchContext {
             recover_loop_break: false, // loopbreak_recovery (opt-in default-off)
             fold_call_returns: false, // foldcallret (Architecture::reset_defaults sets the shipped default: on)
             mark_indirect_only: false, // indirectonly (opt-in default-off)
-            strip_stack_guard: false, // stackguard (opt-in default-off)
-            strip_msvc_stack_guard: true, // msvcstackguard (the live gate rides build_arch_handle)
 
             canary_global: false,
-            go_bounds: true,
             go_keep_divide_checks: false,
-            strip_security_check: false, // securitycheck (fixture default-off; the live gate rides build_arch_handle)
-            branch_flip: false,          // branchflip (opt-in default-off)
+            branch_flip: false, // branchflip (opt-in default-off)
             // C++ Architecture default: analyze_for_loops = true (architecture.cc).
             analyze_for_loops: true,
             // C++ Architecture default: nan_ignore_all = false (architecture.cc:1453);
@@ -1968,14 +1907,10 @@ impl ArchContext {
             max_jumptable_size: 0,
             alias_block_level: 2, // Architecture default: block structs and arrays
             funcptr_align: 0,
-            switch_modulo_bound: false, // (kuna) GH-9191 default off (upstream byte-identical)
             switch_extent: false, // (kuna) option switchextent; the real architecture carries the shipped default
             lazy_entry_starts: Rc::default(),
             highslice_guard: false,
-            switch_guard_bound: false, // (kuna) angr opt-in default off (upstream byte-identical)
-            switch_shared_case: false, // (kuna) angr opt-in default off (upstream byte-identical)
-            switch_multi_pred: false,  // (kuna) angr opt-in default off (upstream byte-identical)
-            switch_trim: false,
+            switch_multi_pred: false, // (kuna) angr opt-in default off (upstream byte-identical)
             stack_exit_anchor: false,
             fde_flow_bound: false,
             kuna_fde_extents: Rc::new(Vec::new()),

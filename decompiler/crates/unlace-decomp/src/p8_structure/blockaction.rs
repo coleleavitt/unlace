@@ -4247,7 +4247,12 @@ impl Action for ActionBlockStructure {
             );
         }
         let sroot = data.sblocks_root();
-        if data.get_arch().loop_continue {
+        if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_loopcontinue::LoopContinue>()
+            .0
+        {
             crate::p8_structure::kuna_loopcontinue::refine_latches(data.sblocks_mut(), sroot);
         }
         let mut collapse = CollapseStructure::new(data.sblocks_mut(), sroot)
@@ -4345,7 +4350,12 @@ impl Action for ActionFinalStructure {
         // collapse).  The graph-side recursion is faithful; the op-flag print-prep
         // it enables is the BlockCopy label statement.
         let sroot = data.sblocks_root();
-        if data.get_arch().loop_continue {
+        if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_loopcontinue::LoopContinue>()
+            .0
+        {
             let points = crate::p8_structure::kuna_loopcontinue::continue_points(data, sroot);
             crate::p8_structure::kuna_loopcontinue::recover_continues(
                 data.sblocks_mut(),

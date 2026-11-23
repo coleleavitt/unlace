@@ -105,7 +105,10 @@ pub fn target_fixup_map(arch: &Architecture) -> Vec<(String, String)> {
             continue;
         };
         if fixup_name.starts_with(unlace_decomp::kuna_arithhelpers::FIXUP_PREFIX)
-            && !arch.arith_helpers
+            && !arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_arithhelpers::ArithHelpers>()
+                .0
         {
             continue;
         }

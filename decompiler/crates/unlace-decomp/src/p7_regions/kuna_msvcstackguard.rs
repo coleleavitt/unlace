@@ -116,7 +116,7 @@
 //! `stackguard off` gives a reader who wants to audit the protector itself,
 //! kept separate so flipping one does not silently change the other.  The live
 //! flag is
-//! [`Architecture::strip_msvc_stack_guard`](crate::architecture::Architecture),
+//! [the registered option `StripMsvcStackGuard`](crate::architecture::Architecture),
 //! mirrored onto [`ArchContext`](crate::context::ArchContext).
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -500,7 +500,12 @@ impl Action for ActionStripMsvcStackGuard {
     }
 
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        let strip = self.enabled || data.get_arch().strip_msvc_stack_guard;
+        let strip = self.enabled
+            || data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_msvcstackguard::StripMsvcStackGuard>()
+                .0;
         if data.num_calls() == 0 {
             return 0;
         }
@@ -555,6 +560,18 @@ impl Action for ActionStripMsvcStackGuard {
         1
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) Strip the MSVC `/GS` frame-cookie boilerplate -- the entry-side
+    /// `cookie ^ SP` scramble and the epilogue `__security_check_cookie((cookie
+    /// ^ SP) ^ SP)` call (option `msvcstackguard`, default-off).  The sibling of
+    /// `strip_stack_guard` for the Windows shape, which has no CBRANCH to match.
+    StripMsvcStackGuard,
+    "msvcstackguard",
+    "MSVC /GS frame-cookie stripping",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 #[path = "kuna_msvcstackguard/tests.rs"]

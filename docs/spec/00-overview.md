@@ -3706,7 +3706,10 @@ and an agent writes:
   takes on first use, and every per-function `ArchContext` carries a copy, so neither
   structure names the pass. A set built for the engine reads each option's shipped
   value (`KunaOption::shipped`) until the dispatch sets it; a bare `ArchContext`
-  reads `KunaOption::unset`, the value its field initialiser held.
+  reads `KunaOption::unset`, the value its field initialiser held. An `on`/`off`
+  option is declared with `kuna_flag!` (a `bool` newtype whose parse is the
+  console's `on_or_off`); a type read by middle-band code (`jumptable`,
+  `funcdata_block`) is declared in that module, so the core never names a pass.
   The handler declaration generates both the dispatch and its name allowlist;
   adding a handler cannot leave those two out of sync. Catalog metadata remains
   independent, so `unlace catalog --check` compares the documented options against

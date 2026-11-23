@@ -5300,6 +5300,60 @@ impl PrintC {
         Some(fd.vbank().get(dest)?.get_offset())
     }
 
+    /// (kuna `itaniumeh`) The landing pad of an exceptional-edge `if`, by the
+    /// call-site record of the call the edge follows, and the arm the edge
+    /// enters, with the other arm. This names the pad where its own block is
+    /// gone: a pad that only sets the exception registers and jumps on to a
+    /// handler it shares with another pad folds into that handler, so the arm
+    /// starts at the shared code, not at the pad.
+    fn eh_if_arms(&self, fd: &Funcdata, blk: BlockId) -> Option<(u64, BlockId, Option<BlockId>)> {
+        let table = fd.get_arch().eh_table.clone()?;
+        let sb = fd.sblocks_ref();
+        let ifb = sb.block(blk);
+        let cond = ifb.get_block(0);
+        let leaf = sb.get_exit_leaf(cond)?;
+        let bb = sb.block(leaf).get_copy()?;
+        let br = fd.bb_op_tail(bb)?;
+        let o = fd.obank().get(br)?;
+        let pad = table.site_at(o.get_addr().get_offset())?.pad;
+        if pad == 0 {
+            return None;
+        }
+        let mut negated = false;
+        let mut vn = o.get_in(1);
+        for _ in 0..3 {
+            let def = vn
+                .and_then(|v| fd.vbank().get(v))
+                .and_then(|v| v.get_def())
+                .and_then(|d| fd.obank().get(d))?;
+            match def.code() {
+                OpCode::CPUI_BOOL_NEGATE => negated = !negated,
+                OpCode::CPUI_COPY => {}
+                _ => break,
+            }
+            vn = def.get_in(0);
+        }
+        let basic = fd.bblocks_ref().block(bb);
+        if basic.size_out() != 2 {
+            return None;
+        }
+        let target = if negated {
+            basic.get_false_out()
+        } else {
+            basic.get_true_out()
+        };
+        let enters = |arm: BlockId| {
+            sb.get_front_leaf(arm).and_then(|l| sb.block(l).get_copy()) == Some(target)
+        };
+        let tru = ifb.get_block(1);
+        let other = (ifb.get_size() == 3).then(|| ifb.get_block(2));
+        if enters(tru) {
+            return Some((pad, tru, other));
+        }
+        let other = other.filter(|&o| enters(o))?;
+        Some((pad, other, Some(tru)))
+    }
+
     /// (kuna `itaniumeh`) Is `blk` an `if` whose condition is an
     /// `eh_unwinding()` exceptional edge?
     fn is_eh_if(&self, fd: &Funcdata, blk: BlockId) -> bool {
@@ -5612,6 +5666,10 @@ impl PrintC {
             }
             if let Some((other, pad)) = other.and_then(|o| Some((o, self.eh_pad_start(fd, o)?))) {
                 self.emit_eh_try(fd, arch, cond, Some(tru), pad, &[other], false);
+                return;
+            }
+            if let Some((pad, handler, normal)) = self.eh_if_arms(fd, blk) {
+                self.emit_eh_try(fd, arch, cond, normal, pad, &[handler], false);
                 return;
             }
         }

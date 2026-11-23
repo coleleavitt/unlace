@@ -4555,7 +4555,15 @@ CBRANCH prints as `try { <condition-block statements> } catch (..) { <pad> }`:
   through the pad;
 - inside a `try`, an exceptional edge to the same pad
   (`eh_open_pad`, compared with the CBRANCH target) prints as its plain
-  statements: the calls of one try region share it.
+  statements: the calls of one try region share it;
+- when neither branch starts at a landing pad, because the pad only loads the
+  exception registers and jumps on into handler code it shares with another
+  pad and its own block was folded into that code (g++'s hot/cold split,
+  patchelf's `catch (SysError &)` in `shrinkRPath`), the pad is the one the
+  call-site record of the edge's call names, and the handler is the branch
+  whose first block is the edge's own successor: the CBRANCH's true out-edge,
+  or its false out-edge when the condition is `eh_unwinding()` negated
+  (`printc.rs (eh_if_arms)`).
 
 The header lists the pad's caught types in handler order, joined by ` | `:
 `catch (std::runtime_error | ...)`, with `...` for a catch-all or a type no
@@ -4572,7 +4580,8 @@ fixture), `tests/stages/kuna-itaniumeh-cold.xml` (the partitioned build),
 `tests/stages/kuna-itaniumeh-arm.xml` (ARM32 and stripped Thumb EHABI tables,
 a type named only by its `type_info` string) and
 `tests/stages/kuna-itaniumeh-clang.xml` (clang ranges that start before the
-call, the multi-clause header).
+call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`
+(pads folded into a shared handler).
 
 ## 2.13 VEX zero-upper writes and per-lane vector p-code
 

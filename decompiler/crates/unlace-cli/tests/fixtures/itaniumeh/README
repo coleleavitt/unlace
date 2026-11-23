@@ -2,3 +2,4 @@ eh_x86_64.elf:      g++ -O2 -fno-reorder-blocks-and-partition -fno-pie -no-pie -
 eh_x86_64_cold.elf: g++ -O2 -fno-pie -no-pie -o eh_x86_64_cold.elf eh.cc; strip --strip-debug
 eh3_x86_64_clang.so: clang++ -O2 -fPIC -shared -o eh3_x86_64_clang.so eh3.cc (clang 22.1.8)
 eh_aarch64.so:      clang++ --target=aarch64-linux-gnu -O2 -fPIC -c eh2.cc -o eh2.o; ld.lld -shared -o eh_aarch64.so eh2.o
+eh4_x86_64.elf:     g++ -O2 -fno-pie -no-pie -Wl,--build-id=none -o eh4_x86_64.elf eh4.cc; strip --strip-debug (g++ 15.3.0)

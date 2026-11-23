@@ -106,7 +106,7 @@ pub const BUILTIN_MASK_BASE: uint4 = 0x1001_0000;
 
 /// The masked built-ins for the SLEIGH vector user-ops `(index, name)`:
 /// `vaddps_avx512f_mask` and `vaddps_avx512f_maskz` beside `vaddps_avx512f`.
-pub fn mask_builtins<'a>(ops: impl Iterator<Item = (uint4, &'a [u8])>) -> Vec<(uint4, String)> {
+pub fn mask_builtins(ops: &mut dyn Iterator<Item = (uint4, &[u8])>) -> Vec<(uint4, String)> {
     let mut out = Vec::new();
     for (i, nm) in ops {
         let Ok(name) = std::str::from_utf8(nm) else {
@@ -576,5 +576,6 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.lanefuse_mask_builtins = Some(mask_builtins);
     hooks.lanefuse_builtins = Some(builtins);
 }

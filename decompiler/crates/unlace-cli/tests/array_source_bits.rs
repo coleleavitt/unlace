@@ -255,7 +255,8 @@ fn direct_load_body(binary: &std::path::Path, read: u64, mix: u64) -> String {
     );
     fd.op_set_all_input(store, &inputs).unwrap();
     let arch = data.conf.as_mut().unwrap().arch_mut();
-    arch.realtypes = true;
+    arch.kuna_options
+        .set(unlace_decomp::printc::Realtypes(true));
     arch.ctypes = true;
     arch.with_print(|printer, arch| {
         printer.options.partial_access = true;

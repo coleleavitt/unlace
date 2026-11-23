@@ -110,7 +110,11 @@ fn kuna_anchor_flags_default_to_div_values() {
     let arch = Architecture::new("test:LE:32", bare_sleigh());
     // DIV-2/DIV-3 default-on (architecture.cc:1430-1451).
     assert!(arch.memset_recover);
-    assert!(arch.recover_array_stride);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_arraystride::RecoverArrayStride>()
+            .0
+    );
     assert!(arch.recover_lowered_switch);
     assert!(arch.name_style_angr);
     assert!(arch.present_lessequal);
@@ -124,8 +128,16 @@ fn kuna_anchor_flags_default_to_div_values() {
     // default-on (per-test opt-out keeps the datatest/stage corpora at parity).
     assert!(arch.tail_call_jumps);
     assert!(arch.tail_call_tables);
-    assert!(arch.switch_multi_pred);
-    assert!(arch.region_loop_refine);
+    assert!(
+        arch.kuna_options
+            .get::<crate::jumptable::SwitchMultiPred>()
+            .0
+    );
+    assert!(
+        arch.kuna_options
+            .get::<crate::region_structurer::RegionLoopRefine>()
+            .0
+    );
     assert_eq!(
         arch.kuna_options
             .get::<crate::p8_structure::kuna_gotoreduce::GotoReduceMode>(),
@@ -136,7 +148,7 @@ fn kuna_anchor_flags_default_to_div_values() {
     assert!(arch.dedup_ite_tail);
     assert!(arch.fold_call_returns);
     // (kuna) foldcallretphi default-on (docs/features/foldcallretphi/flip.md).
-    assert!(arch.branch_flip);
+    assert!(arch.kuna_options.get::<crate::blockaction::BranchFlip>().0);
     // (kuna) DIV-14 default-on sweep: 3 more flags default-on (2 of them REMOVE
     // CODE — stackguard/noreturn_propagate). Per-test opt-out
     // (stackguard on the 2 Partial-splitting datatests) keeps the corpora at
@@ -157,7 +169,11 @@ fn kuna_anchor_flags_default_to_div_values() {
             .get::<crate::kuna_sparcstructret::SparcStructReturn>()
             .0
     ); // sparcstructret (SPARC-gated)
-    assert!(arch.v850_indirect_branch); // v850indirectbranch (V850-gated)
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_v850indbranch::V850IndirectBranch>()
+            .0
+    ); // v850indirectbranch (V850-gated)
     // default-off (upstream byte-identical).
     assert!(!arch.return_single);
     assert!(
@@ -166,7 +182,7 @@ fn kuna_anchor_flags_default_to_div_values() {
             .get::<crate::jumptable::SwitchModuloBound>()
             .0
     );
-    assert!(!arch.unrolled_guard);
+    assert!(!arch.kuna_options.get::<crate::flow::UnrolledGuard>().0);
     assert!(
         !arch
             .kuna_options
@@ -226,7 +242,11 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
             .get::<crate::kuna_sparcstructret::SparcStructReturn>()
             .0
     ); // SPARC-idiom-gated, safe to enable
-    assert!(arch.v850_indirect_branch); // V850-gated, listed so the preset owns it
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_v850indbranch::V850IndirectBranch>()
+            .0
+    ); // V850-gated, listed so the preset owns it
     // The exclusion: annotates every statement of a `-g` binary with a
     // `/* src.c:NNN */` comment — noise, not recovery.
     assert!(!arch.analysis_dwarf_lines);

@@ -589,7 +589,7 @@ pub trait FlowEnvironment {
     }
 
     /// (kuna `funcboundflow`) Is the fall-through bound at a known function entry
-    /// enabled (`option funcboundflow`, `Architecture::funcbound_flow`)?  When on,
+    /// enabled (`option funcboundflow`, the registered option `FuncboundFlow`)?  When on,
     /// `process_instruction` truncates a fall-through that reaches the entry of
     /// another known function (via [`query_call`](FlowEnvironment::query_call))
     /// instead of decoding the next function's body into this one.  The default
@@ -2074,7 +2074,9 @@ following this call as a branch"
     /// function ends, so walking past it decodes the next function's bytes.
     fn leaves_own_fde(&self, next: &Address) -> bool {
         let arch = self.data.get_arch();
-        if !arch.fde_flow_bound || self.is_inside_declared_extent(next) {
+        if !arch.kuna_options.get::<crate::flow::FdeFlowBound>().0
+            || self.is_inside_declared_extent(next)
+        {
             return false;
         }
         let entry = self.data.get_address().get_offset();
@@ -3121,7 +3123,12 @@ truncating the fall-through here"
                         // When the gate is on, skip an unresolvable case-target
                         // edge instead of throwing -- the same "assume no branches
                         // out" shape the `findJumpTable==0` partial path uses.
-                        let tolerate_missing = self.data.get_arch().unrolled_guard
+                        let tolerate_missing = self
+                            .data
+                            .get_arch()
+                            .kuna_options
+                            .get::<crate::flow::UnrolledGuard>()
+                            .0
                             && (self.data.flags()
                                 & crate::funcdata::funcdata_flags::jumptablerecovery_on)
                                 != 0;
@@ -4295,7 +4302,12 @@ truncating the fall-through here"
         // (kuna `outlinedinline`) A fragment whose flow leaves the image (a
         // dyld-cache extract tail-calling into another library) stays a call.
         if inlineflow.has_unmapped_target()
-            && self.data.get_arch().outlined_inline
+            && self
+                .data
+                .get_arch()
+                .kuna_options
+                .get::<crate::flow::OutlinedInline>()
+                .0
             && crate::kuna_outlinedinline::is_outlined_name(inlineflow.data.get_name())
         {
             *inlinefd = inlineflow.data;
@@ -4482,7 +4494,12 @@ truncating the fall-through here"
     /// caller by tail-calling a no-return routine). Upstream refuses both; the
     /// clone then keeps the fragment's RETURN as is.
     fn ends_without_return_site(&self, inlineflow: &FlowInfo<'a, E>, op: OpId) -> bool {
-        if !self.data.get_arch().outlined_inline
+        if !self
+            .data
+            .get_arch()
+            .kuna_options
+            .get::<crate::flow::OutlinedInline>()
+            .0
             || !crate::kuna_outlinedinline::is_outlined_name(inlineflow.data.get_name())
         {
             return false;
@@ -4988,7 +5005,12 @@ truncating the fall-through here"
                 && matches!(mode, Ok(None) | Err(RecoveryMode::FailNormal))
                 && retried.is_none()
                 && (self.data.kuna_extent_tables.is_none() || wanted.is_some())
-                && self.data.get_arch().switch_extent
+                && self
+                    .data
+                    .get_arch()
+                    .kuna_options
+                    .get::<crate::jumptable::SwitchExtent>()
+                    .0
                 && !crate::kuna_budget::deadline_passed_in("jump-table recovery")
             {
                 rounds += 1;
@@ -5467,3 +5489,47 @@ pub fn build_partial_blocks<E: FlowEnvironment>(
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.flow_next_fspec_handle = Some(next_fspec_handle);
 }
+
+crate::kuna_flag!(
+    /// (kuna) `option outlinedinline`: inline the MachineOutliner's
+    /// `OUTLINED_FUNCTION_<n>` fragments.  Default on.
+    OutlinedInline,
+    "outlinedinline",
+    "MachineOutliner fragment inlining",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna) Stop fall-through at the end of the function's own unwind-table
+    /// extent (option `fdeflowbound`).
+    FdeFlowBound,
+    "fdeflowbound",
+    "Unwind-extent fall-through bound",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna, angr `test_decompiling_optimized_memcpy`) Recover the interleaved
+    /// jump tables of an MSVC optimized memcpy/memmove (Duff's device).  When a
+    /// function holds several jump tables whose case bodies are reachable only as
+    /// one another's case targets, kuna recovers them one at a time, each in its
+    /// own fresh partial-flow clone; a later table's clone re-clones an
+    /// already-recovered sibling table into its jumpvec, and that partial's
+    /// `collect_edges` then calls `target()` on a sibling case body that was
+    /// never decoded into this partial's `visited` (it is only decoded into the
+    /// PARENT flow after the recovery pass returns), throwing
+    /// "Could not find op at target address" and degrading the dispatch to a
+    /// computed call.  Upstream avoids this by building one shared partial and
+    /// running `collectEdges` once while the sibling tables are still empty; this
+    /// gate makes the partial-clone `collect_edges` SKIP an unresolvable
+    /// recovered-table case-target edge (the same "assume no branches out" shape
+    /// the `findJumpTable==0` partial path already uses) instead of throwing
+    /// (C++ `unrolled_guard`).
+    UnrolledGuard,
+    "unrolledguard",
+    "Interleaved unrolled-guard jump-table partial-flow recovery",
+    unset: false,
+    shipped: false
+);

@@ -320,7 +320,12 @@ fn single_assign_arm(data: &Funcdata, id: BlockId) -> Option<(OpId, VarnodeId)> 
     // bookkeeping ops (a `STORE`, a call, a branch, an `INDIRECT`/`MULTIEQUAL`)
     // can never be a ternary branch expression and are always rejected.
     if o.code() != OpCode::CPUI_COPY {
-        if !data.get_arch().iteexpr {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_iteregion::Iteexpr>()
+            .0
+        {
             return None;
         }
         if matches!(
@@ -414,3 +419,18 @@ impl OptionIteRegion {
         ))
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) `iteexpr`: extend [`iteregion`](Self::iteregion) to diamonds whose
+    /// arms are a single **computed** pure-value assignment (`v = *p`, `v = b + 5`)
+    /// — not just a plain `COPY` — matching angr's aggressive `?:` recovery.  A C
+    /// ternary evaluates only the taken branch, so the rewrite is
+    /// semantics-preserving; it is print-only.  A runtime choice, default-off (it
+    /// diverges when the source used explicit if/else); measured net-positive on the
+    /// decbench O0 set where source ternaries dominate.
+    Iteexpr,
+    "iteexpr",
+    "Computed-expression arm ?: recovery (iteregion extension)",
+    unset: false,
+    shipped: false
+);

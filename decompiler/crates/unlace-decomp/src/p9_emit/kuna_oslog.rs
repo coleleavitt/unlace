@@ -88,7 +88,7 @@ fn callee_shape(fd: &Funcdata, call: OpId) -> Option<Shape> {
 /// The decode at `call`, or `None` when the call is not an os_log entry point or
 /// nothing about it can be shown better.
 pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, call: OpId) -> Option<Plan> {
-    if !arch.os_log_args {
+    if !arch.kuna_options.get::<crate::kuna_oslog::OsLogArgs>().0 {
         return None;
     }
     let shape = callee_shape(fd, call)?;
@@ -116,7 +116,7 @@ pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, call: OpId) -> Option<
 /// The buffer-filling statements of every decoded call in `fd`.
 pub(crate) fn hidden_ops(fd: &Funcdata, arch: &Architecture) -> BTreeSet<OpId> {
     let mut hidden = BTreeSet::new();
-    if !arch.os_log_args {
+    if !arch.kuna_options.get::<crate::kuna_oslog::OsLogArgs>().0 {
         return hidden;
     }
     for call in fd.obank().iter_alive() {
@@ -682,6 +682,15 @@ fn piece_of(fd: &Funcdata, id: VarnodeId) -> Option<(VarnodeId, u64)> {
     let size = fd.vbank().get(whole)?.get_size() as u64;
     (byte.checked_add(width)? <= size).then_some((whole, byte))
 }
+
+crate::kuna_flag!(
+    /// (kuna `oslog`) Print decoded os_log buffer arguments at the call.
+    OsLogArgs,
+    "oslog",
+    "Apple os_log call arguments",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

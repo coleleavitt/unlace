@@ -2889,7 +2889,11 @@ impl Funcdata {
         // Build the partial function (clone ops + jump-tables) and run the reduced
         // pipeline over it, or reuse the one an earlier table in this batch already
         // built (C++ `if (!partial.isJumptableRecoveryOn())`, `option jtsharepartial`).
-        let share = self.get_arch().jumptable_share_partial;
+        let share = self
+            .get_arch()
+            .kuna_options
+            .get::<crate::funcdata_block::JumptableSharePartial>()
+            .0;
         let mut owned: Option<Funcdata> = None;
         if !share || shared.is_none() {
             let mut fresh = match self.build_jumptable_partial() {
@@ -4993,6 +4997,21 @@ pub enum HeadOperand {
     /// The output of a load the head compare reads.
     Value(VarnodeId),
 }
+
+crate::kuna_flag!(
+    /// (kuna) Run the jump-table partial sub-decompilation ONCE per
+    /// `FlowInfo::recoverJumpTables` batch and share it across every table in
+    /// that batch, as the C++ does (`Funcdata::stageJumpTable` guards the clone
+    /// and the reduced pipeline behind `if (!partial.isJumptableRecoveryOn())`);
+    /// off re-clones and re-analyses the function once per table, which is what
+    /// `option unrolledguard` needs to see an already-recovered sibling table
+    /// (C++ has no equivalent flag — this is the upstream shape vs kuna's).
+    JumptableSharePartial,
+    "jtsharepartial",
+    "Shared jump-table partial sub-decompilation",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

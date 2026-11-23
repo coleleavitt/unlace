@@ -12,7 +12,8 @@ fn pair_with_gate(
     enabled: bool,
 ) -> (Funcdata, OpId, OpId) {
     let mut arch = ArchContext::new(build_manager());
-    arch.highslice_guard = enabled;
+    arch.kuna_options
+        .set(crate::jumptable::HighsliceGuard(enabled));
     let arch = Rc::new(arch);
     let ram = Rc::clone(arch.manage().get_space_by_name("ram").unwrap());
     let mut fd = Funcdata::new(

@@ -412,3 +412,44 @@ A private edit in middle no longer rebuilds the crates above it (the public-API 
 which is why even middle edits got faster. bandb, at 249k lines, gains least; splitting it (step 10)
 is where the remaining incremental time is. Cold dev build of `unlace-cli`: about 3 minutes either
 way.
+
+
+### Step 10: splitting unlace-bandb, measured (2026-11-23)
+
+The module graph inside `unlace-bandb` (`crate::`/`super::` paths in non-test code, the same
+resolution as `scripts/check_layers.py`; 308 modules, 249k lines with tests):
+
+| from \ to (module pairs) | p3_dataflow | p4_calls | p5_types | p6_variables |
+|---|---|---|---|---|
+| p3_dataflow (78k) | - | 14 | 11 | 17 |
+| p4_calls (84k) | 4 | - | 16 | 8 |
+| p5_types (50k) | 6 | 28 | - | 10 |
+| p6_variables (37k) | 12 | 4 | 15 | - |
+
+Every folder reaches every other one. A split by phase needs at least 22 module edges inverted (best
+order: calls+types+variables below dataflow, 171k / 77k), 40 for three crates, more for four. The
+plan's calls / types / dataflow+variables order costs 44.
+
+The strongly connected components say why. One component holds 81 modules and 116k lines: 31 calls,
+20 types, 20 variables and 10 dataflow modules that reach each other (the P3-P6 fixpoint of
+`docs/architecture/decompiler-ir-landscape.md`). Around it, every other module is acyclic:
+
+| group | modules | lines | what it is |
+|---|---|---|---|
+| below the component | 49 | 30k | helpers the component reads (callee summaries, constant folds, union resolution, ...) |
+| unrelated to it | 119 | 54k | passes that neither reach nor are reached by the component (they read only the row above, each other, or lower crates) |
+| the component | 81 | 116k | the fixpoint core |
+| above the component | 59 | 49k | passes that read the core (callee arity/preserve trials, cleanup, stack effects, ...) |
+
+So a split along the condensation costs no inversion at all: `unlace-bandb-base` (below + unrelated,
+168 modules, 84k), `unlace-bandb-core` (the component, 116k), and `unlace-bandb` (above, 49k, keeps
+the name, so emit and the driver are unchanged). Every crate keeps the four phase folders it has
+modules in. Cutting the component itself is the expensive part: the best cut by folder (variables
+below calls+types below dataflow) is 10 edges for 17k / 74k / 25k, and module moves only bring it to
+5 edges with a 88k middle.
+
+Expected rebuild after a one-line edit, from step 0's four crates (time is close to linear in the
+edited crate's size: 6.3 s + 19 ms per 1k lines fits all four within 0.2 s): base 7.9 s, core 8.5 s,
+top 7.2 s, against 11.1 s for `unlace-bandb` today. Chosen: the three-crate split along the
+condensation, no inversions; the component stays one crate. Measured times are recorded below once
+the crates exist.

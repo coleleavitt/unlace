@@ -304,7 +304,11 @@ impl CatchTable {
     /// and option `javatry` is on.
     pub fn new(data: &Funcdata) -> Option<CatchTable> {
         let arch = data.get_arch();
-        let model = arch.dex.as_ref().filter(|_| arch.java_try)?;
+        let model = arch.dex.as_ref().filter(|_| {
+            arch.kuna_options
+                .get::<crate::kuna_coreoptions::JavaTry>()
+                .0
+        })?;
         let mut handlers: BTreeMap<u64, (Vec<(u64, u64)>, Vec<Option<u32>>)> = BTreeMap::new();
         for block in canonical_blocks(model, data.get_address().get_offset()) {
             for &(type_idx, handler) in &block.handlers {
@@ -551,7 +555,12 @@ impl crate::action::Action for ActionJavaThrowPrune {
         data: &mut Funcdata,
         _ctx: &mut crate::action::ActionContext,
     ) -> crate::action::ApplyResult {
-        if !data.get_arch().java_try {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::JavaTry>()
+            .0
+        {
             return 0;
         }
         let mut removed = false;

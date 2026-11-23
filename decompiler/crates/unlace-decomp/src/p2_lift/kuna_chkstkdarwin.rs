@@ -193,7 +193,13 @@ impl Action for ActionChkstkDarwin {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().chkstk_darwin || data.get_heritage_pass() != 0 || data.num_calls() == 0
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::ChkstkDarwin>()
+            .0
+            || data.get_heritage_pass() != 0
+            || data.num_calls() == 0
         {
             return 0;
         }

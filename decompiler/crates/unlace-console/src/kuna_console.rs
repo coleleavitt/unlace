@@ -199,7 +199,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_loopcontinue::LoopContinue>()
                 .0,
         ),
-        "postinc" => on_off(conf.post_increment),
+        "postinc" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::PostIncrement>()
+                .0,
+        ),
         "compareform" => {
             if conf
                 .kuna_options
@@ -373,7 +377,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .as_str(),
         // (kuna `fpuemu`) Three-valued, so it reports its own token.
         "fpuemu" => unlace_decomp::kuna_fpuemu::FpuEmuMode::from_u8(conf.fpu_emu).as_str(),
-        "mzdgroup" => on_off(conf.mz_dgroup_on),
+        "mzdgroup" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::MzDgroupOn>()
+                .0,
+        ),
         "rustprobestack" => conf
             .kuna_options
             .get::<unlace_decomp::kuna_rustprobestack::RustProbestackMode>()

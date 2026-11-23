@@ -3084,7 +3084,10 @@ impl PrintC {
         };
         self.java_caught_shown.clear();
         self.java_throw_userop = (self.out_lang == crate::kuna_lang::OutLang::Java
-            && arch.java_try)
+            && arch
+                .kuna_options
+                .get::<crate::kuna_coreoptions::JavaTry>()
+                .0)
             .then(|| {
                 arch.userops
                     .get_op_by_name(b"throwException")
@@ -16681,7 +16684,10 @@ impl IntegerLiteral {
 /// factory + `promoteSize = tlst->getSizeOfInt()`, so the rebuild is exact).
 fn cast_strategy_for(arch: &Architecture) -> Option<CastStrategyC> {
     let tlst = arch.types_rc() as std::rc::Rc<dyn crate::dtype::TypeFactory>;
-    let c = arch.call_target_type
+    let c = arch
+        .kuna_options
+        .get::<crate::kuna_coreoptions::CallTargetType>()
+        .0
         && arch.ctypes
         && arch.print().out_lang() == crate::kuna_lang::OutLang::C;
     let java = arch.print().out_lang() == crate::kuna_lang::OutLang::Java;

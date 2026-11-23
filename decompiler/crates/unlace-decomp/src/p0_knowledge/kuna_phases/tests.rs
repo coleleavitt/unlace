@@ -355,7 +355,7 @@ fn option_values_live_value_present_for_129() {
         // `gotypeglobals`. Default-on.
         "gonewtype",
         // (kuna) The MS-DOS data segment in DS -- an on/off engine gate
-        // (`Architecture::mz_dgroup_on`) read console-side via kuna_live_value,
+        // (the registered option `MzDgroupOn`) read console-side via kuna_live_value,
         // like `gonewtype`. Default-on, MZ loads only.
         "mzdgroup",
         "strings",

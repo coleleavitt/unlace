@@ -4175,7 +4175,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .0
         }
         "fid" => arch.analysis_fid,
-        "flirt" => arch.analysis_flirt,
+        "flirt" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::Flirt>()
+                .0
+        }
         // (kuna) MSVC RTTI / vftable recovery — a standalone load-time pass whose
         // class-name + RTTI_* labels are computed at LOAD but COMMITTED only when
         // this gate is on. Default-OFF (output-changing: adds named data symbols),
@@ -4205,7 +4209,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // its own -- it shapes the `aif` accept list inside `run_aif`, which the
         // `aif` arm above already gates. Registered here so the fail-open
         // `_ => true` never silently re-enables a pass id that does not exist.
-        "vtabletypes" => arch.analysis_vtabletypes,
+        "vtabletypes" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::Vtabletypes>()
+                .0
+        }
         // (kuna, GH-299) The AIF filler reject, shaping the `aif` accept list the
         // same way; registered for the same fail-open reason.
         // (kuna, GH-299) The AIF literal-pool slide, shaping the `aif` accept list
@@ -6999,8 +7007,18 @@ fn commit_analysis_output(
     } else {
         Default::default()
     };
-    let typed_vtables = prog.arch().analysis_vtabletypes || !iokit.vtables.classes.is_empty();
-    if !prog.arch().analysis_vtabletypes {
+    let typed_vtables = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_coreoptions::Vtabletypes>()
+        .0
+        || !iokit.vtables.classes.is_empty();
+    if !prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_coreoptions::Vtabletypes>()
+        .0
+    {
         out.cpp_vtables = Default::default();
     }
     out.cpp_vtables

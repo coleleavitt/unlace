@@ -62,7 +62,7 @@
 //! In C output a target left with a pointer C cannot call is cast to its call's
 //! type at each call instead ([`uncallable_target_cast`]).
 //!
-//! Gated by [`ArchContext::call_target_type`](crate::context::ArchContext)
+//! Gated by [the registered option `CallTargetType`](crate::context::ArchContext)
 //! (option `calltargettype on|off`), which is set only together with `ctypes`:
 //! without C's own spelling the target prints the upstream `code *`, and nothing
 //! here runs.
@@ -145,7 +145,12 @@ impl Action for ActionCallTargetType {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         data.kuna_clear_call_target_types();
-        if data.get_arch().call_target_type {
+        if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::CallTargetType>()
+            .0
+        {
             retype_call_targets(data);
         }
         0

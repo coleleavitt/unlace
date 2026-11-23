@@ -38,7 +38,6 @@
 //! (ADR: BTree-only for owned maps; this is a sorted-`Vec` binary search, the
 //! exact analogue of the C++ `vector` + `lower_bound`).
 
-use std::cmp::Ordering;
 use std::rc::Rc;
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::marshal::ElementId;
@@ -53,55 +52,7 @@ use crate::funcdata::Funcdata;
 /// Marshaling element `<prefersplit>` (C++ `ELEM_PREFERSPLIT = ElementId("prefersplit",225)`).
 pub const ELEM_PREFERSPLIT: ElementId = ElementId::new("prefersplit", 225);
 
-/// A record describing storage that should be rendered as two split pieces.
-///
-/// C++ `struct PreferSplitRecord` (`prefersplit.hh`).
-#[derive(Clone, Debug)]
-pub struct PreferSplitRecord {
-    /// The full storage location of the value to split.
-    pub storage: VarnodeData,
-    /// Number of initial bytes (in address order) to split into the first piece.
-    pub splitoffset: int4,
-}
-
-impl PreferSplitRecord {
-    /// Total order over records (C++ `PreferSplitRecord::operator<`).
-    ///
-    /// Ordering: space index, then **bigger sizes first**, then offset.  This is
-    /// the comparator `initialize`'s `sort` and `find_record`'s `lower_bound`
-    /// both rely on, so it is output-determining and transcribed field-by-field.
-    fn cmp_key(&self) -> (i32, std::cmp::Reverse<u32>, u64) {
-        let space_index = self
-            .storage
-            .space
-            .as_ref()
-            .map(|s| s.get_index())
-            .unwrap_or(-1);
-        // size: bigger sizes come first -> Reverse on the size
-        (
-            space_index,
-            std::cmp::Reverse(self.storage.size),
-            self.storage.offset,
-        )
-    }
-}
-
-impl PartialEq for PreferSplitRecord {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp_key() == other.cmp_key()
-    }
-}
-impl Eq for PreferSplitRecord {}
-impl PartialOrd for PreferSplitRecord {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for PreferSplitRecord {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.cmp_key().cmp(&other.cmp_key())
-    }
-}
+pub use crate::architecture::PreferSplitRecord;
 
 // =============================================================================
 // Small IR read helpers (mirrors double.rs' idiom: read through the banks)

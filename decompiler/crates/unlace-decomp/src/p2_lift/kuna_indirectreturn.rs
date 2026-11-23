@@ -668,18 +668,21 @@ mod tests {
         jt.increment_recovery_count();
         use crate::kuna_constselectjump::ConstSelectMode;
         assert!(
-            !jt.kuna_admits_const_select(ConstSelectMode::Reentry)
-                && jt.kuna_admits_const_select(ConstSelectMode::On)
+            !crate::kuna_constselectjump::admits(&jt, ConstSelectMode::Reentry)
+                && crate::kuna_constselectjump::admits(&jt, ConstSelectMode::On)
         );
         jt.kuna_retry_flow();
-        assert!(jt.kuna_admits_const_select(ConstSelectMode::Reentry));
+        assert!(crate::kuna_constselectjump::admits(
+            &jt,
+            ConstSelectMode::Reentry
+        ));
         assert!(!jt.kuna_keeps_recovered_targets());
         jt.kuna_push_entry(Address::new(ram, 0x1040), 0, 0x1040);
         assert!(jt.kuna_keeps_recovered_targets());
         jt.mark_complete();
         assert!(
             !jt.kuna_keeps_recovered_targets()
-                && jt.kuna_admits_const_select(ConstSelectMode::Reentry)
+                && crate::kuna_constselectjump::admits(&jt, ConstSelectMode::Reentry)
         );
     }
 

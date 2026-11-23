@@ -38,42 +38,11 @@
 //! (`archid` compiler field `golang`), which only `goabi auto` on a
 //! Go-detected image composes.
 
-pub use crate::architecture::GoLayout;
+pub use crate::architecture::{GOVERSION_ENV, GoLayout};
 use unlace_base::error::KunaResult;
 use unlace_base::types::{int4, uint4};
 
 use crate::dtype::{TypeFactory, TypeField, type_metatype};
-
-/// Environment variable carrying the image's Go toolchain version
-/// (`"<maj>.<min>"`) into the architecture build — set by the console
-/// bootstrap from the build-info blob (`unlace-analysis loader/gobuildinfo`)
-/// BEFORE the engine is built, because the shell install runs inside the
-/// cspec decode, upstream of every per-image fact write. Absent or
-/// unparsable means the go1.22 register-ABI baseline.
-pub const GOVERSION_ENV: &str = "KUNA_GOVERSION";
-
-impl GoLayout {
-    /// The go1.22 register-ABI baseline (also the unknown-version fallback).
-    pub fn baseline() -> GoLayout {
-        GoLayout {
-            gobuf_words: 7,
-            syscallbp: false,
-        }
-    }
-
-    /// The layout a toolchain version implies.
-    pub fn from_version(maj: u16, min: u16) -> GoLayout {
-        GoLayout {
-            gobuf_words: if (maj, min) >= (1, 25) { 6 } else { 7 },
-            syscallbp: (maj, min) >= (1, 23),
-        }
-    }
-
-    /// `runtime.gobuf`'s byte size under this layout.
-    pub fn gobuf_size(self) -> int4 {
-        self.gobuf_words * 8
-    }
-}
 
 /// Whether a Go image built by `version` passes arguments in registers on
 /// the golang-cspec architecture `archid`: from go1.17 on amd64 and go1.18 on

@@ -764,7 +764,7 @@ pub struct ArchContext {
     /// (kuna) The compiler spec's `<prefersplit>` rows: whole registers heritage
     /// pass 0 splits into two independent pieces.  Copied from the engine
     /// `Architecture` in `build_arch_handle`; empty when the spec states none.
-    pub split_records: Vec<crate::p5_types::prefersplit::PreferSplitRecord>,
+    pub split_records: Vec<crate::architecture::PreferSplitRecord>,
     /// The p-code OpBehavior emulation table (C++ `glb->inst[opc]->getBehavior()`),
     /// indexed by op-code.
     ///

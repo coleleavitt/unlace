@@ -471,3 +471,23 @@ impl JumpModel for JumpModelAssisted {
         self.switchvn = None;
     }
 }
+
+/// The assisted model of the branch at `indirect`, when a jump-assist script computes its
+/// destinations.
+pub fn recover(
+    fd: &mut Funcdata,
+    indirect: OpId,
+    matchsize: uint4,
+    maxtablesize: uint4,
+) -> KunaResult<Option<Box<dyn JumpModel>>> {
+    let mut model = JumpModelAssisted::new();
+    if model.recover_model(fd, indirect, matchsize, maxtablesize)? {
+        return Ok(Some(Box::new(model)));
+    }
+    Ok(None)
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.jumpassist_recover = Some(recover);
+}

@@ -40,7 +40,7 @@ use crate::funcdata::Funcdata;
 use crate::funcdata_block::HeadOperand;
 use crate::funcdata_varnode::{Forced, Reach};
 use crate::heritage::{Guard, LiveCalls, LoadGuard, MemoryOps, StoreBounds, WidePair};
-use crate::jumptable::{GuardRecord, LoadTable};
+use crate::jumptable::{GuardRecord, JumpModel, JumpTable, LoadTable};
 use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 use crate::merge::MergeContext;
 use crate::op::PcodeOpBank;
@@ -506,4 +506,12 @@ declare_hooks! {
     /// The universal action tree for the architecture: its stack space and embedder hooks
     /// (`universalaction::build_universal_action_hooked`).
     universal_action: fn(&Architecture) -> Box<dyn Action>;
+    /// `kuna_constselectjump::kuna_destination_is_local`.
+    constselectjump_destination_is_local: fn(uintb, uintb) -> bool;
+    /// `kuna_constselectjump::JumpModelConstSelect::from_flow_targets`.
+    constselectjump_from_flow_targets: fn(Vec<uintb>, Option<uintb>) -> Box<dyn JumpModel>;
+    /// `kuna_constselectjump::recover`.
+    constselectjump_recover: fn(&JumpTable, &mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
+    /// `kuna_jumpassist::recover`.
+    jumpassist_recover: fn(&mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
 }

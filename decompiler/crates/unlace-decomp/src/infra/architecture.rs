@@ -2250,7 +2250,7 @@ pub struct Architecture {
     /// Decoded once in [`build_default_proto`](Architecture::build_default_proto)
     /// and inherited by every per-function handle, where heritage pass 0 hands
     /// them to the [`PreferSplitManager`](crate::p5_types::prefersplit::PreferSplitManager).
-    split_records: Vec<crate::p5_types::prefersplit::PreferSplitRecord>,
+    split_records: Vec<PreferSplitRecord>,
     /// (kuna) How many decompile drives are active: 0 outside a drive, 1 for the
     /// drive the caller asked for, and more when a drive runs a recovery drive
     /// inside itself (the P4 callee-contract bootstrap).  The outermost drive
@@ -5446,10 +5446,10 @@ impl Architecture {
     }
 
     /// (kuna `goreg`) The runtime layouts of the image's Go toolchain release.
-    fn go_layout(&self) -> crate::kuna_goreg::GoLayout {
+    fn go_layout(&self) -> GoLayout {
         match self.go_version() {
-            Some((major, minor)) => crate::kuna_goreg::GoLayout::from_version(major, minor),
-            None => crate::kuna_goreg::GoLayout::baseline(),
+            Some((major, minor)) => GoLayout::from_version(major, minor),
+            None => GoLayout::baseline(),
         }
     }
 
@@ -5997,9 +5997,8 @@ impl Architecture {
                 // `None` (== the C++ `defaultReturnAddr.space == 0`).
                 self.default_return_addr = self.decode_default_return_addr(&root);
                 self.split_records = self.decode_split_records(&root);
-                crate::p5_types::prefersplit::PreferSplitManager::initialize(
-                    &mut self.split_records,
-                );
+                // C++ `PreferSplitManager::initialize`.
+                self.split_records.sort();
                 if let Ok(model) = self.decode_default_proto(&root) {
                     let rc = Rc::new(model);
                     self.register_model(Rc::clone(&rc));
@@ -6515,7 +6514,7 @@ impl Architecture {
     }
 
     /// The compiler spec's preferred-split rows, in `PreferSplitRecord` order.
-    pub fn split_records(&self) -> &[crate::p5_types::prefersplit::PreferSplitRecord] {
+    pub fn split_records(&self) -> &[PreferSplitRecord] {
         &self.split_records
     }
 
@@ -6540,7 +6539,7 @@ impl Architecture {
     }
 
     /// Decode the cspec's `<prefersplit style="...">` block into the
-    /// [`PreferSplitRecord`](crate::p5_types::prefersplit::PreferSplitRecord)
+    /// [`PreferSplitRecord`](PreferSplitRecord)
     /// table heritage pass 0 consumes (C++ `Architecture::parseCompilerConfig`
     /// `ELEM_PREFERSPLIT` arm).
     ///
@@ -6548,10 +6547,7 @@ impl Architecture {
     /// the first piece: `inhalf` (half the register), `in1234` (4 bytes) and
     /// `in12345678` (8 bytes).  An unknown style or a register the language does
     /// not define states nothing, so the function keeps the whole-register view.
-    fn decode_split_records(
-        &self,
-        root: &Rc<unlace_base::xml::Element>,
-    ) -> Vec<crate::p5_types::prefersplit::PreferSplitRecord> {
+    fn decode_split_records(&self, root: &Rc<unlace_base::xml::Element>) -> Vec<PreferSplitRecord> {
         let Some(split) = find_child(root, "prefersplit") else {
             return Vec::new();
         };
@@ -6576,7 +6572,7 @@ impl Architecture {
             if splitoffset <= 0 || splitoffset >= storage.size as int4 {
                 continue;
             }
-            out.push(crate::p5_types::prefersplit::PreferSplitRecord {
+            out.push(PreferSplitRecord {
                 storage,
                 splitoffset,
             });
@@ -8182,6 +8178,87 @@ pub struct GoLayout {
     pub gobuf_words: int4,
     /// `g.syscallbp` present (go1.23+).
     pub syscallbp: bool,
+}
+
+/// Environment variable carrying the image's Go toolchain version
+/// (`"<maj>.<min>"`) into the architecture build — set by the console
+/// bootstrap from the build-info blob (`unlace-analysis loader/gobuildinfo`)
+/// BEFORE the engine is built, because the shell install runs inside the
+/// cspec decode, upstream of every per-image fact write. Absent or
+/// unparsable means the go1.22 register-ABI baseline.
+pub const GOVERSION_ENV: &str = "KUNA_GOVERSION";
+
+impl GoLayout {
+    /// The go1.22 register-ABI baseline (also the unknown-version fallback).
+    pub fn baseline() -> GoLayout {
+        GoLayout {
+            gobuf_words: 7,
+            syscallbp: false,
+        }
+    }
+
+    /// The layout a toolchain version implies.
+    pub fn from_version(maj: u16, min: u16) -> GoLayout {
+        GoLayout {
+            gobuf_words: if (maj, min) >= (1, 25) { 6 } else { 7 },
+            syscallbp: (maj, min) >= (1, 23),
+        }
+    }
+
+    /// `runtime.gobuf`'s byte size under this layout.
+    pub fn gobuf_size(self) -> int4 {
+        self.gobuf_words * 8
+    }
+}
+
+/// A record describing storage that should be rendered as two split pieces.
+///
+/// C++ `struct PreferSplitRecord` (`prefersplit.hh`).
+#[derive(Clone, Debug)]
+pub struct PreferSplitRecord {
+    /// The full storage location of the value to split.
+    pub storage: unlace_num::pcoderaw::VarnodeData,
+    /// Number of initial bytes (in address order) to split into the first piece.
+    pub splitoffset: int4,
+}
+
+impl PreferSplitRecord {
+    /// Total order over records (C++ `PreferSplitRecord::operator<`).
+    ///
+    /// Ordering: space index, then **bigger sizes first**, then offset.  This is
+    /// the comparator `initialize`'s `sort` and `find_record`'s `lower_bound`
+    /// both rely on, so it is output-determining and transcribed field-by-field.
+    pub(crate) fn cmp_key(&self) -> (i32, std::cmp::Reverse<u32>, u64) {
+        let space_index = self
+            .storage
+            .space
+            .as_ref()
+            .map(|s| s.get_index())
+            .unwrap_or(-1);
+        // size: bigger sizes come first -> Reverse on the size
+        (
+            space_index,
+            std::cmp::Reverse(self.storage.size),
+            self.storage.offset,
+        )
+    }
+}
+
+impl PartialEq for PreferSplitRecord {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp_key() == other.cmp_key()
+    }
+}
+impl Eq for PreferSplitRecord {}
+impl PartialOrd for PreferSplitRecord {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for PreferSplitRecord {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.cmp_key().cmp(&other.cmp_key())
+    }
 }
 
 #[cfg(test)]

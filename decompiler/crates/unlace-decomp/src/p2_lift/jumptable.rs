@@ -6144,14 +6144,6 @@ impl JumpTable {
     pub(crate) fn kuna_is_reentered(&self) -> bool {
         self.reentered
     }
-    /// (kuna) The constant-select model needs `constselectjump on`, except on a
-    /// table staged again for re-entry, which only `off` prevents.
-    pub(crate) fn kuna_admits_const_select(
-        &self,
-        mode: crate::kuna_constselectjump::ConstSelectMode,
-    ) -> bool {
-        mode == crate::kuna_constselectjump::ConstSelectMode::On || self.reentered
-    }
     /// (kuna) The synthetic return destination, when the model proved the
     /// dispatch can also jump to the caller's return address.
     pub(crate) fn kuna_return_default(&self) -> Option<&Address> {
@@ -6168,9 +6160,8 @@ impl JumpTable {
         }
         self.addresstable.pop();
         let dests = self.addresstable.iter().map(|a| a.get_offset()).collect();
-        self.jmodel = Some(Box::new(
-            crate::kuna_constselectjump::JumpModelConstSelect::from_flow_targets(dests, None),
-        ));
+        let hooks = crate::architecture::default_pass_hooks();
+        self.jmodel = Some((hooks.constselectjump_from_flow_targets)(dests, None));
     }
     /// (kuna) Is this a re-entry retry of a table whose followed targets must
     /// survive a failed second stage?
@@ -6185,7 +6176,7 @@ impl JumpTable {
     ) -> Option<bool> {
         if self.is_override()
             || self.addresstable.is_empty()
-            || !crate::kuna_constselectjump::kuna_destination_is_local(
+            || !(crate::architecture::default_pass_hooks().constselectjump_destination_is_local)(
                 self.opaddress.get_offset(),
                 target.get_offset(),
             )
@@ -6208,11 +6199,10 @@ impl JumpTable {
         if let Some(address) = &stub {
             self.addresstable.push(address.clone());
         }
-        self.jmodel = Some(Box::new(
-            crate::kuna_constselectjump::JumpModelConstSelect::from_flow_targets(
-                dests,
-                stub.as_ref().map(|a| a.get_offset()),
-            ),
+        self.jmodel = Some((crate::architecture::default_pass_hooks()
+            .constselectjump_from_flow_targets)(
+            dests,
+            stub.as_ref().map(|a| a.get_offset()),
         ));
         self.reentered = true;
         self.partial_table = false;
@@ -6819,14 +6809,13 @@ impl JumpTable {
             .and_then(|def| fd.obank().get(def))
             .is_some_and(|def| def.code() == OpCode::CPUI_CALLOTHER);
         if callother {
-            let mut jassisted = crate::kuna_jumpassist::JumpModelAssisted::new();
-            if jassisted.recover_model(
+            if let Some(model) = (fd.hooks().jumpassist_recover)(
                 fd,
                 indirect,
                 self.addresstable.len() as uint4,
                 max_table_size,
             )? {
-                self.jmodel = Some(Box::new(jassisted));
+                self.jmodel = Some(model);
                 return Ok(());
             }
         }
@@ -6882,24 +6871,12 @@ impl JumpTable {
         // re-entered the code before it, the destination may still be a select over
         // constants -- a set both models prune away at the MULTIEQUAL rather than
         // lose.  See `p2_lift/kuna_constselectjump.rs`.
-        if self.kuna_admits_const_select(
-            fd.get_arch()
-                .kuna_options
-                .get::<crate::kuna_constselectjump::ConstSelectMode>(),
-        ) {
-            let mut jconst = crate::kuna_constselectjump::JumpModelConstSelect::new();
-            if self.reentered {
-                jconst.kuna_admit_return(self.target_encoding);
-            }
-            if jconst.recover_model(
-                fd,
-                indirect,
-                self.addresstable.len() as uint4,
-                max_table_size,
-            )? {
-                self.jmodel = Some(Box::new(jconst));
-                return Ok(());
-            }
+        let matchsize = self.addresstable.len() as uint4;
+        if let Some(model) =
+            (fd.hooks().constselectjump_recover)(self, fd, indirect, matchsize, max_table_size)?
+        {
+            self.jmodel = Some(model);
+            return Ok(());
         }
         // No model matched.
         self.jmodel = None;

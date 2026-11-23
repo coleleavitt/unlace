@@ -60,7 +60,6 @@
 //! `return v` that `ActionReturnSplit` (the next action in the `returnsplit`
 //! group) duplicates into each predecessor, eliminating the goto/label.
 
-use crate::funcdata_spacebase::FuncdataAliasCrateExt;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -497,7 +496,13 @@ pub(crate) fn release_canary_slots(data: &mut Funcdata, slots: &[(Address, int4)
         // adjacent open local (a char buf[], a piece-written struct) over the
         // freed bytes.
         if let Some(space) = addr.get_space().map(Rc::clone) {
-            data.scope_local_mark_not_mapped(&space, addr.get_offset(), *size, false);
+            (data.hooks().scope_local_mark_not_mapped)(
+                data,
+                &space,
+                addr.get_offset(),
+                *size,
+                false,
+            );
         }
     }
 }

@@ -1,8 +1,6 @@
 # Upward crate:: edges between unlace-decomp's layering bands (scripts/check_layers.py). Only delete lines.
 action -> actionprof
 addtreestate -> coreaction_infertypes
-addtreestate -> funcdata_facing
-addtreestate -> funcdata_union
 architecture -> engine_translate
 architecture -> flow
 architecture -> inject_sleigh
@@ -133,7 +131,6 @@ context -> kuna_x87emptyreturn
 context -> prefersplit
 context -> remote_provider
 context -> stringmanage
-coreaction_cleanup -> coreaction_casts
 coreaction_cleanup -> kuna_namespaces
 coreaction_cleanup -> kuna_naming
 coreaction_cleanup -> printlanguage
@@ -174,8 +171,6 @@ fspec -> kuna_varargstackargs
 fspec -> kuna_varargtransfer
 fspec -> modelrules
 fspec -> remote_provider
-funcdata -> funcdata_spacebase
-funcdata -> funcdata_union
 funcdata -> kuna_atomicxadd
 funcdata -> kuna_bejoin
 funcdata -> kuna_calleedeadarg
@@ -185,7 +180,6 @@ funcdata -> kuna_callerargs
 funcdata -> kuna_callmechanisms
 funcdata -> kuna_callrettype
 funcdata -> kuna_calltargettype
-funcdata -> kuna_calltransport
 funcdata -> kuna_callwide
 funcdata -> kuna_dynamiclocals
 funcdata -> kuna_elemptr
@@ -232,10 +226,8 @@ funcdata_resolveflow -> funcdata_union
 funcdata_resolveflow -> kuna_aggregatefields
 funcdata_resolveflow -> unionresolve
 funcdata_resolveflow -> unionresolve_run
-funcdata_varnode -> funcdata_spacebase
 funcdata_varnode -> kuna_calleereginputs
 funcdata_varnode -> kuna_callresultuse
-funcdata_varnode -> kuna_calltransport
 funcdata_varnode -> kuna_condexeretuse
 funcdata_varnode -> kuna_exclusivearguse
 funcdata_varnode -> kuna_exclusivecallret
@@ -249,7 +241,6 @@ funcdata_varnode -> kuna_syscallregs
 funcdata_varnode -> kuna_voidret
 funcdata_varnode -> kuna_zeroidiomuse
 funcdata_varnode -> userop
-heritage -> funcdata_spacebase
 heritage -> kuna_armfloatargs
 heritage -> kuna_armfloatreturn
 heritage -> kuna_bejoin
@@ -322,7 +313,6 @@ kuna_gottailcall -> kuna_protoorder
 kuna_gowbphi -> idiom
 kuna_gowritebarrier -> idiom
 kuna_guardedloop -> kuna_strlenscan
-kuna_iteboolean -> funcdata_facing
 kuna_javanew -> cpool
 kuna_jumpassist -> kuna_callmechanisms
 kuna_lanefuse -> kuna_avxintrin
@@ -339,7 +329,6 @@ kuna_slotptr -> printc
 kuna_slotreport -> kuna_varsources
 kuna_slotsplit -> decompile_drive
 kuna_srcmap -> decompile_drive
-kuna_stackguard -> funcdata_spacebase
 kuna_stackobjectinfo -> decompile_drive
 kuna_stackstruct -> kuna_partialaccess
 kuna_switchguardmerge -> kuna_strlenscan

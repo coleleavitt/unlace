@@ -98,7 +98,6 @@
 //! type exposes `boxed(group)` returning the boxed action.  [`merge_actions`]
 //! enumerates the full merge-group set in C++ schedule order for the W8 assembler.
 
-use crate::coreaction_casts::FuncdataCastExt;
 use crate::funcdata_merge::FuncdataMergeExt;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -3651,7 +3650,7 @@ impl Action for ActionSetCasts {
         if data.get_arch().cast_object {
             crate::kuna_castobject::reconcile(data);
         }
-        let _count = data.action_set_casts();
+        let _count = (data.hooks().action_set_casts)(data);
         0
     }
 }

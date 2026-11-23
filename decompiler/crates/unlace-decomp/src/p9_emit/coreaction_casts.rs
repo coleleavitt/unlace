@@ -1394,6 +1394,11 @@ fn load_store_space(data: &Funcdata, op: OpId) -> Option<Rc<unlace_base::space::
 // ActionSetCasts driver + helpers (coreaction.cc:2407-2872), on Funcdata.
 // =============================================================================
 
+/// Fill the cast hook ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.action_set_casts = Some(Funcdata::action_set_casts);
+}
+
 /// [`Funcdata`] methods for cast insertion (ActionSetCasts).
 pub trait FuncdataCastExt {
     fn action_set_casts(&mut self) -> int4;

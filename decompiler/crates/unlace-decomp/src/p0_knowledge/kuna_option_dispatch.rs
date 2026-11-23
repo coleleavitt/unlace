@@ -45,11 +45,7 @@ kuna_options! { self, p1;
         self.set_print_language_checked(p1)?;
         Ok(format!("Output language set to {}", self.print().get_name()))
     },
-    "compareform" => {
-        let (form, msg) = crate::kuna_compareform::parse_compare_form(p1)?;
-        self.present_lessequal = form.present_lessequal();
-        Ok(msg)
-    },
+    "compareform" => registered!(crate::kuna_compareform::PresentLessequal),
     "wrapadd" => registered!(crate::kuna_widenedadd::WrapAdd),
     "armconstshift" => registered!(crate::p9_emit::kuna_armconstantshift::ConstShiftMode),
     "armshiftguard" => registered!(crate::kuna_armregistershift::ArmShiftGuard),
@@ -99,11 +95,7 @@ kuna_options! { self, p1;
         self.print_mut().options.set_global_ref(val);
         Ok(msg)
     },
-    "returnpair" => {
-        let (form, msg) = crate::kuna_returnpair::parse_return_pair_form(p1)?;
-        self.return_single = form.return_single();
-        Ok(msg)
-    },
+    "returnpair" => registered!(crate::kuna_returnpair::ReturnSingle),
     "bitidioms" => registered!(crate::kuna_bitidioms::BitIdioms),
     "helperroles" => registered!(crate::kuna_helperrole::HelperRoles),
     "dynalloca" => registered!(crate::kuna_dynalloca::DynAlloca),
@@ -289,16 +281,8 @@ kuna_options! { self, p1;
         self.stack_views = value;
         Ok(message)
     },
-    "memsetrecover" => {
-        let (form, msg) = crate::kuna_memsetsequence::parse_memset_recover_form(p1)?;
-        self.memset_recover = form.memset_recover();
-        Ok(msg)
-    },
-    "rodatastring" => {
-        let (form, msg) = crate::kuna_rodatastring::parse_rodata_string_form(p1)?;
-        self.rodata_string = form.rodata_string();
-        Ok(msg)
-    },
+    "memsetrecover" => registered!(crate::kuna_memsetsequence::MemsetRecover),
+    "rodatastring" => registered!(crate::kuna_rodatastring::RodataString),
     "switchmodbound" => registered!(crate::jumptable::SwitchModuloBound),
     "switchextent" => registered!(crate::jumptable::SwitchExtent),
     "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
@@ -351,22 +335,10 @@ kuna_options! { self, p1;
         self.narrow_args_callers = callers;
         Ok(format!("Narrow register parameter recovery set to {p1}"))
     },
-    "regnarrow" => {
-        self.narrow_locals = on_or_off(p1)?;
-        Ok(format!("Narrow register local recovery turned {p1}"))
-    },
-    "pairparam" => {
-        self.pair_params = on_or_off(p1)?;
-        Ok(format!("Double-precision input pairing turned {p1}"))
-    },
-    "narrowret" => {
-        self.narrow_ret = on_or_off(p1)?;
-        Ok(format!("Narrow call result recovery turned {p1}"))
-    },
-    "regsigned" => {
-        self.narrow_signed = on_or_off(p1)?;
-        Ok(format!("Signed narrow register local recovery turned {p1}"))
-    },
+    "regnarrow" => registered!(crate::kuna_regnarrow::NarrowLocals),
+    "pairparam" => registered!(crate::kuna_borrowcompare::PairParams),
+    "narrowret" => registered!(crate::kuna_narrowret::NarrowRet),
+    "regsigned" => registered!(crate::kuna_regnarrow::NarrowSigned),
     "narrowext" => {
         let (mode, msg) = crate::kuna_narrowext::OptionNarrowExt.apply(p1)?;
         if self.narrow_ext != mode {
@@ -560,11 +532,7 @@ kuna_options! { self, p1;
         ))
     },
 
-    "storetype" => {
-        let mode = crate::kuna_storetype::StoreTypeMode::parse(p1.trim()).map_err(KunaError::parse)?;
-        self.storetype = mode;
-        Ok(format!("global typing from stored values set to {}", mode.as_str()))
-    },
+    "storetype" => registered!(crate::kuna_storetype::StoreTypeMode),
     "callbacktype" => registered!(crate::kuna_callbacktype::CallbackTypeMode),
     "cortexmpriv" => registered!(crate::kuna_cortexmpriv::Cortexmpriv),
     "acleintrinsics" => registered!(crate::kuna_memtag::AcleIntrinsics),

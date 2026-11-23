@@ -53,7 +53,8 @@ fn build_fd() -> Funcdata {
     // These unit fixtures drive the gate purely through the `ActionPresentCompareForm`
     // `enabled` constructor arg (the original seam-style contract); clear the
     // arch-flag default (DIV-2 default-on) so the flag does not also open the gate.
-    arch.present_lessequal = false;
+    arch.kuna_options
+        .set(crate::kuna_compareform::PresentLessequal(false));
     let glb = Rc::new(arch);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let addr = Address::new(ram, 0x1000);

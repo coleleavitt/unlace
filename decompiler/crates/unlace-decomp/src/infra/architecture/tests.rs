@@ -109,7 +109,11 @@ fn reset_defaults_internal_matches_cpp() {
 fn kuna_anchor_flags_default_to_div_values() {
     let arch = Architecture::new("test:LE:32", bare_sleigh());
     // DIV-2/DIV-3 default-on (architecture.cc:1430-1451).
-    assert!(arch.memset_recover);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_memsetsequence::MemsetRecover>()
+            .0
+    );
     assert!(
         arch.kuna_options
             .get::<crate::kuna_arraystride::RecoverArrayStride>()
@@ -117,7 +121,11 @@ fn kuna_anchor_flags_default_to_div_values() {
     );
     assert!(arch.recover_lowered_switch);
     assert!(arch.name_style_angr);
-    assert!(arch.present_lessequal);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_compareform::PresentLessequal>()
+            .0
+    );
     // (kuna) signedness ships `auto` -- a declaration is re-signed when every
     // signedness-sensitive reader of the value agrees.
     assert_eq!(
@@ -195,7 +203,12 @@ fn kuna_anchor_flags_default_to_div_values() {
             .0
     ); // v850indirectbranch (V850-gated)
     // default-off (upstream byte-identical).
-    assert!(!arch.return_single);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::kuna_returnpair::ReturnSingle>()
+            .0
+    );
     assert!(
         !arch
             .kuna_options

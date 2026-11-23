@@ -145,7 +145,13 @@ impl Rule for RuleMemsetCopy {
 
     /// Recover a validated constant-fill run, subject to the resolved gate.
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !self.enabled && !data.get_arch().memset_recover {
+        if !self.enabled
+            && !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_memsetsequence::MemsetRecover>()
+                .0
+        {
             return 0;
         }
         let in0 = match data.obank().get(op).and_then(|o| o.get_in(0)) {
@@ -247,7 +253,7 @@ impl MemsetRecoverForm {
 /// `onOrOff` is the shared parser ([`on_or_off`](crate::options::on_or_off)): an
 /// empty string or `"on"` is `true`, `"off"` is `false`, anything else is a parse
 /// error.  The caller writes [`MemsetRecoverForm::memset_recover`] into
-/// [`Architecture::memset_recover`].
+/// [the registered option `MemsetRecover`].
 pub fn parse_memset_recover_form(p1: &str) -> KunaResult<(MemsetRecoverForm, String)> {
     let val = crate::options::on_or_off(p1)
         .map_err(|_: KunaError| KunaError::parse("Must specify toggle value, on/off"))?;
@@ -343,6 +349,30 @@ pub(crate) fn detect_fill_run(
         move_ops.truncate(keep);
     }
     Some((fb, total_bytes))
+}
+
+/// (kuna GH-9230) Recover constant-fill store/copy runs as `builtin_memset`
+/// (C++ `memset_recover`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MemsetRecover(pub bool);
+
+impl crate::kuna_optionset::KunaOption for MemsetRecover {
+    const NAME: &'static str = "memsetrecover";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        MemsetRecover(false)
+    }
+
+    fn shipped() -> Self {
+        MemsetRecover(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::kuna_memsetsequence::parse_memset_recover_form(value)
+            .map(|(form, msg)| (form.memset_recover(), msg))?;
+        Ok((MemsetRecover(v), msg))
+    }
 }
 
 #[cfg(test)]

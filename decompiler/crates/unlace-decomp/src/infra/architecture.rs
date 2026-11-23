@@ -400,15 +400,6 @@ pub struct Architecture {
     pub infer_ptr_spaces: Vec<Rc<AddrSpace>>,
 
     // --- kuna anchor flags (architecture.hh:179-201, the `(kuna)` members) -
-    /// (kuna GH-6990) Keep multi-register return values single, un-joined
-    /// (C++ `return_single`).
-    pub return_single: bool,
-    /// (kuna GH-9230) Recover constant-fill store/copy runs as `builtin_memset`
-    /// (C++ `memset_recover`).
-    pub memset_recover: bool,
-    /// (kuna `rodatastring`) Recover a read-only string block copy as
-    /// `builtin_strncpy`.
-    pub rodata_string: bool,
     /// (kuna `calltargettype`) Give an indirect call's target the
     /// function-pointer type the call states (`kuna_calltargettype`).
     pub call_target_type: bool,
@@ -714,22 +705,6 @@ pub struct Architecture {
     /// caller passes a narrow value (option `narrowargs callers`).  See
     /// [`crate::p4_calls::kuna_callerargs`].
     pub narrow_args_callers: bool,
-    /// (kuna) Declare a register-local web whose values all fit a narrower low
-    /// part at that width (option `regnarrow`).  See
-    /// [`crate::p3_dataflow::kuna_regnarrow`].
-    pub narrow_locals: bool,
-    /// (kuna) Join two adjacent input words a borrow or carry chain links into
-    /// one double-precision input (option `pairparam`).  See
-    /// [`crate::p5_types::kuna_borrowcompare::RuleDoubleInputPair`].
-    pub pair_params: bool,
-    /// (kuna) Make a call to a callee that returns a narrow value zero-extended
-    /// read that value (option `narrowret`).  See
-    /// [`crate::p4_calls::kuna_narrowret`].
-    pub narrow_ret: bool,
-    /// (kuna) Also narrow a register-local web whose values are all sign
-    /// extensions of a narrower part (option `regsigned`).  See
-    /// [`crate::p3_dataflow::kuna_regnarrow`].
-    pub narrow_signed: bool,
 
     /// (kuna) An expression read more than `max_implied_ref` times still prints
     /// inline when its terms times its uses is at most this; 0 = off (option
@@ -784,9 +759,6 @@ pub struct Architecture {
     /// does not declare the user-op. Identifies the one payload
     /// `option cortexmpriv off` suppresses.
     pub cortexmpriv_inject: Option<int4>,
-    /// (kuna GH-558) Restore canonicalized comparisons to LESSEQUAL form for
-    /// presentation (C++ `present_lessequal`).
-    pub present_lessequal: bool,
     /// (unlace decompile-all watchdog) Optional wall-clock budget for ONE
     /// function's decompile drive (`unlace decompile-all --max-fn-seconds N`).
     /// `None` (the default) means no budget: the console/`decomp_dbg` parity
@@ -931,8 +903,6 @@ pub struct Architecture {
     pub kuna_elemptr: crate::kuna_elemptr::Ledger,
     /// (kuna `storetype`) The globals a batch stored typed values into.
     pub kuna_storetype: crate::kuna_storetype::Ledger,
-    /// (kuna `storetype`) Which stored types may type a global.
-    pub storetype: crate::kuna_storetype::StoreTypeMode,
     /// (ghidra-mode, Phase 4) Name recommendations staged for the NEXT
     /// decompile drive — `(name, storage addr, usepoint, size)`, taken (and
     /// cleared) by `decompile_func_full_with_override_dyn` and seeded into the
@@ -1636,9 +1606,6 @@ impl Architecture {
             loadersymbols_parsed: false,
             infer_ptr_spaces: Vec::new(),
 
-            return_single: false,
-            memset_recover: false,
-            rodata_string: false, // (kuna) option rodatastring; reset_defaults sets the shipped default
             call_target_type: false, // (kuna) option calltargettype; reset_defaults sets the shipped default
             float_globals: true, // (kuna) option floatglobals; reset_defaults sets the shipped default
             kuna_float_scan: None,
@@ -1734,10 +1701,6 @@ impl Architecture {
             persist_calls: Some(crate::p3_dataflow::heritage::PERSIST_CROSS_PRODUCT),
             narrow_args: true,
             narrow_args_callers: true,
-            narrow_locals: true,
-            pair_params: true,
-            narrow_ret: true,
-            narrow_signed: false,
 
             impl_weight: 0, // (kuna) option implweight; reset_defaults sets the shipped default
             post_increment: true,
@@ -1750,9 +1713,8 @@ impl Architecture {
             ctypes: false, // (kuna) option ctypes; reset_defaults sets the shipped default
             data_import_slots: std::collections::BTreeSet::new(),
             cortexmpriv_inject: None, // (kuna) set by init_userops_and_fixups when the language declares the user-op
-            present_lessequal: false,
-            kuna_fn_budget: None, // (kuna) decompile-all watchdog: no budget by default
-            kuna_fn_deadline: None, // (kuna) set per drive from kuna_fn_budget
+            kuna_fn_budget: None,     // (kuna) decompile-all watchdog: no budget by default
+            kuna_fn_deadline: None,   // (kuna) set per drive from kuna_fn_budget
             kuna_callee_write_cache: std::collections::HashMap::new(),
             kuna_callee_purge_cache: std::collections::HashMap::new(),
             kuna_import_sites: Rc::new(std::collections::HashMap::new()),
@@ -1783,7 +1745,6 @@ impl Architecture {
             kuna_gottailcall: Default::default(),
             kuna_elemptr: crate::kuna_elemptr::Ledger::default(),
             kuna_storetype: crate::kuna_storetype::Ledger::default(),
-            storetype: crate::kuna_storetype::StoreTypeMode::Off,
             kuna_pending_name_recs: Vec::new(), // (ghidra Phase 4) staged per drive
             kuna_pending_dyn_recs: Vec::new(),  // (ghidra Phase 4) staged per drive
             kuna_pending_proto_model: None,     // (ghidra Phase 4) staged per drive
@@ -1933,9 +1894,6 @@ impl Architecture {
         self.flowoptions = flow_flags::error_toomanyinstructions;
         self.max_instructions = 100000;
         self.infer_pointers = true;
-        self.return_single = false; // (kuna) default: upstream (join register pairs)
-        self.memset_recover = true; // (kuna) DIV-2 default-on (GH-9230/1537)
-        self.rodata_string = true; // (kuna) DIV-113 default-on: a read-only string block copy collapses to builtin_strncpy instead of the invalid-C partial-symbol slice assignments. Byte-identical (0/675) — the corpus carries no data symbols, so the covering-string-symbol guard never fires. Restore the slice assignments with `option rodatastring off`
         self.syscall_regs = crate::kuna_syscallregs::SyscallRegsMode::Auto; // (kuna) default `auto`: on an image the loader identified as an operating system's user-space program, the system call writes its result register and reads the number register and the leading argument registers the function writes on every path to it. Gated on that loader fact, which the XML bootstrap never sets, so it is structurally inert on the datatest corpus (0/675); `option syscallregs on` acts on any image, `off` restores the zero-effect CALLOTHER
         self.apply_segmentize();
         self.fpu_emu = crate::kuna_fpuemu::FpuEmuMode::Auto.as_u8(); // (kuna #1288) decode the 8087 emulator's INT 34h-3Dh as x87 where the loader found emulator code (MS-DOS executables); only x86-16.sla has the fpuEmu context bit, so every other input and every datatest is unchanged; `option fpuemu off` keeps the interrupts
@@ -1976,10 +1934,6 @@ impl Architecture {
         self.persist_calls = Some(crate::p3_dataflow::heritage::PERSIST_CROSS_PRODUCT);
         self.narrow_args_callers = true; // (kuna) option narrowargs default `callers`: also narrow a 32-bit ARM parameter every caller of a closed function passes narrow, one of them extending it itself
         self.narrow_args = true; // (kuna) option narrowargs default-on: a register parameter whose uses read only its low 1, 2 or 4 bytes is declared that wide, and a callee's stated narrow parameter caps how much of the argument its callers consume (0/675 datatests)
-        self.narrow_signed = false; // (kuna) option regsigned default-off: rebuilding a sign-extended register-local web at its low 1, 2 or 4 bytes moves decbench type_match by +0 to +4 perfect functions and adds casts elsewhere
-        self.narrow_locals = true; // (kuna) option regnarrow default-on: a register-local web whose values the nonzero-bit analysis proves fit a low 1, 2 or 4 bytes, entered only through zero extensions, masks, constants and copies, is rebuilt at that width
-        self.pair_params = true; // (kuna) option pairparam default-on: two adjacent input words a borrow or carry chain links are one 8-byte parameter
-        self.narrow_ret = true; // (kuna) option narrowret default-on: a call to a callee that returns a narrow value zero-extended reads that value
         self.post_increment = true;
         self.returndup_triangle = false; // (kuna) option rettriangle default-off: decbench sample O0 -163 GED / +56 perfect, O2 +60 GED / +1 perfect; on in the aggressive preset
         self.duplicate_shared_returns = true; // (kuna) DIV-54 default-on, superseding the DIV-18 revert (angr SAILR gotoless ReturnDuplicatorHigh). The -976 GED-perfect regression that reverted it was measured before #137 added the const-return gate (`returndup_is_const_ret`); re-ablated on 52,862 decbench functions the selective pass is +417 GED-perfect / -7,756 aggregate GED, net-positive in every one of nine tested partitions. Per-test opt-out (`option returndup off`) on the datatests it changes keeps the corpus byte-identical.
@@ -2006,7 +1960,6 @@ impl Architecture {
         self.callee_reginputs = true; // (kuna) option calleereginputs default-on: only x86-32 Windows (x86win.cspec) decodes a callee; 0/675 datatest assertions move
         self.callee_reginputs_custom = crate::p4_calls::kuna_calleereginputs::CUSTOM_DEFAULT; // (kuna) option calleereginputs `custom`: callee-saved EBX/ESI/EDI custom args; see the module and docs/spec chapter 04
         self.analyze_for_loops = true;
-        self.present_lessequal = true; // (kuna) DIV-2 default-on (GH-558)
         self.readonlypropagate = false;
         self.nan_ignore_all = false;
         self.nan_ignore_compare = true; // Ignore NaN ops associated with FP comparisons by default
@@ -2040,7 +1993,6 @@ impl Architecture {
         self.analysis_typelib = crate::kuna_typelib::TypeLib::Auto;
         // (kuna) DIV-141 built-in Win32 API signature table -- default-ON.
 
-        self.storetype = crate::kuna_storetype::StoreTypeMode::Uefi;
         // (kuna) DIV-139 declared-name libc prototype lookup -- default-ON.
         // (kuna) Unmapped-CALL-target entry suppression -- default-ON (it only ever
         // withholds an entry the walk already refused to decode).
@@ -2665,7 +2617,6 @@ impl Architecture {
         ctx.trim_recurse_max = self.trim_recurse_max;
         ctx.max_implied_ref = self.max_implied_ref;
         ctx.max_term_duplication = self.max_term_duplication;
-        ctx.return_single = self.return_single;
         let ids = |names: &[&[u8]]| -> Vec<unlace_base::types::uint4> {
             names
                 .iter()
@@ -2717,7 +2668,6 @@ impl Architecture {
         // (kuna GH-558) carry the comparison-presentation gate so the
         // `compareform canonical|original` option reaches
         // `ActionPresentCompareForm` via `glb` (the ArchContext read site).
-        ctx.present_lessequal = self.present_lessequal;
         // (kuna) carry the remaining stage-model rule gates so their `option
         // <name> on|off` reaches the consuming Rule/Action via `glb` (each rule
         // reads `data.get_arch().<flag>`; the rule is registered `enabled=false`
@@ -2766,8 +2716,6 @@ impl Architecture {
                     .map(|u| u.get_index() as unlace_base::types::uint4)
             })
             .collect();
-        ctx.memset_recover = self.memset_recover; // GH-9230/1537 memsetrecover
-        ctx.rodata_string = self.rodata_string; // (kuna) rodatastring
         ctx.call_target_type = self.call_target_type && self.ctypes; // (kuna) calltargettype: only C's own spelling needs it
         ctx.call_target_c =
             ctx.call_target_type && self.print.out_lang() == crate::kuna_lang::OutLang::C; // (kuna) calltargettype
@@ -2798,10 +2746,6 @@ impl Architecture {
         ctx.kuna_custom_reg_callers = Rc::clone(&self.kuna_custom_reg_callers);
         ctx.kuna_custom_reg_models = Rc::clone(&self.kuna_custom_reg_models);
         ctx.narrow_args = self.narrow_args; // narrowargs
-        ctx.narrow_locals = self.narrow_locals; // regnarrow
-        ctx.pair_params = self.pair_params; // pairparam
-        ctx.narrow_ret = self.narrow_ret; // narrowret
-        ctx.narrow_signed = self.narrow_signed; // regsigned
         ctx.stack_views = self.stack_views;
 
         ctx.impl_weight = self.impl_weight; // implweight

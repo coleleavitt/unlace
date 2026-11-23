@@ -176,13 +176,21 @@ fn image_address(data: &Funcdata, c: uintb) -> bool {
 /// how many webs were rebuilt. A web whose flow did not close is not traced
 /// again from the same seed in a later `fullloop` pass.
 pub fn narrow_locals(data: &mut Funcdata) -> int4 {
-    if !data.get_arch().narrow_locals
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_regnarrow::NarrowLocals>()
+        .0
         || data.bblocks_get_size() == 0
         || data.kuna_regnarrow_runs >= MAX_RUNS
     {
         return 0;
     }
-    let signed = data.get_arch().narrow_signed;
+    let signed = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_regnarrow::NarrowSigned>()
+        .0;
     let seeds: Vec<VarnodeId> = data
         .vbank()
         .iter_loc()
@@ -421,4 +429,58 @@ pub fn unsigned_vote(
         _ => return None,
     };
     data.get_arch().types()?.get_base(ct.get_size(), meta).ok()
+}
+
+/// (kuna) Declare a register-local web whose values all fit a narrower low
+/// part at that width (option `regnarrow`).  See
+/// [`crate::p3_dataflow::kuna_regnarrow`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct NarrowLocals(pub bool);
+
+impl crate::kuna_optionset::KunaOption for NarrowLocals {
+    const NAME: &'static str = "regnarrow";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        NarrowLocals(true)
+    }
+
+    fn shipped() -> Self {
+        NarrowLocals(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::options::on_or_off(value)
+            .map(|v| (v, format!("Narrow register local recovery turned {value}")))?;
+        Ok((NarrowLocals(v), msg))
+    }
+}
+
+/// (kuna) Also narrow a register-local web whose values are all sign
+/// extensions of a narrower part (option `regsigned`).  See
+/// [`crate::p3_dataflow::kuna_regnarrow`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct NarrowSigned(pub bool);
+
+impl crate::kuna_optionset::KunaOption for NarrowSigned {
+    const NAME: &'static str = "regsigned";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        NarrowSigned(false)
+    }
+
+    fn shipped() -> Self {
+        NarrowSigned(false)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::options::on_or_off(value).map(|v| {
+            (
+                v,
+                format!("Signed narrow register local recovery turned {value}"),
+            )
+        })?;
+        Ok((NarrowSigned(v), msg))
+    }
 }

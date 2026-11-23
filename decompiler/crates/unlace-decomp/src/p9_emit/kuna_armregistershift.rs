@@ -93,7 +93,14 @@ fn unsigned_extension_source(fd: &Funcdata, vn: VarnodeId) -> VarnodeId {
     let Some(v) = fd.vbank().get(vn) else {
         return vn;
     };
-    if !fd.get_arch().narrow_locals || v.is_explicit() || v.get_size() != 4 {
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_regnarrow::NarrowLocals>()
+        .0
+        || v.is_explicit()
+        || v.get_size() != 4
+    {
         return vn;
     }
     let Some(def) = v.get_def().and_then(|d| fd.obank().get(d)) else {

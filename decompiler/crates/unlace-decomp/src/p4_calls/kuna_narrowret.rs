@@ -95,7 +95,12 @@ fn return_register_width(data: &Funcdata) -> Option<int4> {
 /// extension of a narrow value: every trim from the whole register on dropped
 /// only known-zero bits.
 pub(crate) fn note_trim(data: &mut Funcdata, op: OpId, before: VarnodeId, mask: u64) {
-    if !data.get_arch().narrow_ret {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_narrowret::NarrowRet>()
+        .0
+    {
         return;
     }
     let Some(o) = data.obank().get(op) else {
@@ -235,7 +240,11 @@ fn tail_statement(data: &Funcdata, vn: VarnodeId) -> Option<NarrowReturn> {
 /// the callers decompiled after it.  A statement from an earlier decompile of
 /// the same function is replaced or, when this one states nothing, forgotten.
 pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
-    if !arch.narrow_ret {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_narrowret::NarrowRet>()
+        .0
+    {
         return;
     }
     let Some(k) = key(entry) else { return };
@@ -308,7 +317,12 @@ pub fn restore(arch: &mut Architecture, k: (int4, uintb), stated: Option<Rc<Narr
 /// Copy onto `data` what every callee it calls stated.  A function never reads
 /// its own statement.
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
-    if !arch.narrow_ret || arch.kuna_narrowret.is_empty() {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_narrowret::NarrowRet>()
+        .0
+        || arch.kuna_narrowret.is_empty()
+    {
         return;
     }
     let own = key(data.get_address());
@@ -365,7 +379,12 @@ pub fn narrow_call_output(
     fc: &FuncCallSpecs,
     callees: &[(OpId, (int4, uintb))],
 ) {
-    if !data.get_arch().narrow_ret {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_narrowret::NarrowRet>()
+        .0
+    {
         return;
     }
     let Some(k) = key(fc.get_entry_address()) else {
@@ -458,7 +477,13 @@ pub fn stated_type(
     fc: &FuncCallSpecs,
     size: int4,
 ) -> Option<Rc<Datatype>> {
-    if !data.get_arch().narrow_ret || size != 1 {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_narrowret::NarrowRet>()
+        .0
+        || size != 1
+    {
         return None;
     }
     let out = data
@@ -480,7 +505,12 @@ pub fn stated_type(
 /// exactly the storage and width of the call's output?  `boolbyte` counts such
 /// a call as a truth-valued definition of the byte that holds its result.
 pub(crate) fn states_truth(data: &Funcdata, op: OpId) -> bool {
-    if !data.get_arch().narrow_ret {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_narrowret::NarrowRet>()
+        .0
+    {
         return false;
     }
     let Some(out) = data
@@ -686,4 +716,29 @@ pub fn widened_read(data: &Funcdata, out: VarnodeId) -> VarnodeId {
 /// Is the decision trace on (`KUNA_NARROWRET_TRACE=1`)?
 fn trace() -> bool {
     std::env::var("KUNA_NARROWRET_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
+}
+
+/// (kuna) Make a call to a callee that returns a narrow value zero-extended
+/// read that value (option `narrowret`).  See
+/// [`crate::p4_calls::kuna_narrowret`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct NarrowRet(pub bool);
+
+impl crate::kuna_optionset::KunaOption for NarrowRet {
+    const NAME: &'static str = "narrowret";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        NarrowRet(true)
+    }
+
+    fn shipped() -> Self {
+        NarrowRet(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::options::on_or_off(value)
+            .map(|v| (v, format!("Narrow call result recovery turned {value}")))?;
+        Ok((NarrowRet(v), msg))
+    }
 }

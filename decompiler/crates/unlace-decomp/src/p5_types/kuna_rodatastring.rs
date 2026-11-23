@@ -113,7 +113,13 @@ impl Rule for RuleRodataStringCopy {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !self.enabled && !data.get_arch().rodata_string {
+        if !self.enabled
+            && !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_rodatastring::RodataString>()
+                .0
+        {
             return 0;
         }
         match try_recover(op, data) {
@@ -400,6 +406,30 @@ pub fn specs() -> Vec<RuleSpec> {
         group: "analysis",
         ctor: || Box::new(RuleRodataStringCopy::with_group(true, "analysis")),
     }]
+}
+
+/// (kuna `rodatastring`) Recover a read-only string block copy as
+/// `builtin_strncpy`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RodataString(pub bool);
+
+impl crate::kuna_optionset::KunaOption for RodataString {
+    const NAME: &'static str = "rodatastring";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        RodataString(false)
+    }
+
+    fn shipped() -> Self {
+        RodataString(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::kuna_rodatastring::parse_rodata_string_form(value)
+            .map(|(form, msg)| (form.rodata_string(), msg))?;
+        Ok((RodataString(v), msg))
+    }
 }
 
 #[cfg(test)]

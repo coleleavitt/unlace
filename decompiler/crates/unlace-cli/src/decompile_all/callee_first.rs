@@ -160,7 +160,10 @@ pub(crate) fn decompile_callee_first(
     }
     let mut slots = ResultStore::new(targets.len());
     unlace_decomp::kuna_elemptr::start(prog.arch_mut(), true);
-    let storetype = prog.arch().storetype;
+    let storetype = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
     prog.arch_mut().kuna_storetype.start(storetype);
     prog.arch_mut().kuna_voidret = Default::default();
     let mut reads = VoidReads::default();
@@ -326,7 +329,10 @@ fn converge_store_types_callee_first(
     base: &unlace_console::project::DecompileOptions,
     slots: &mut ResultStore,
 ) {
-    let mode = prog.arch().storetype;
+    let mode = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
     for _ in 0..2 {
         let decided = prog.arch_mut().kuna_storetype.decide(mode);
         let typed: Vec<u64> = decided

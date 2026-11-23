@@ -374,7 +374,10 @@ fn decompile_batch(
 ) -> Vec<FuncResult> {
     let mut out = Vec::with_capacity(targets.len());
     // Only the surfaces that can decide a function again pay for the replay list.
-    let storetype = prog.arch().storetype;
+    let storetype = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
     let replay = if prog
         .arch()
         .kuna_options
@@ -453,7 +456,10 @@ pub fn converge_store_types(
     targets: &[FunctionEntry],
     out: &mut [FuncResult],
 ) {
-    let mode = prog.arch().storetype;
+    let mode = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
     for _ in 0..2 {
         let decided = prog.arch_mut().kuna_storetype.decide(mode);
         let typed: Vec<u64> = decided

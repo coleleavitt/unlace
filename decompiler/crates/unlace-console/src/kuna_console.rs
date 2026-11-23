@@ -201,7 +201,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         ),
         "postinc" => on_off(conf.post_increment),
         "compareform" => {
-            if conf.present_lessequal {
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_compareform::PresentLessequal>()
+                .0
+            {
                 "original"
             } else {
                 "canonical"
@@ -274,10 +278,22 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .0,
         ),
         "opaquepredicate" => on_off(conf.opaque_predicate),
-        "memsetrecover" => on_off(conf.memset_recover),
-        "rodatastring" => on_off(conf.rodata_string),
+        "memsetrecover" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_memsetsequence::MemsetRecover>()
+                .0,
+        ),
+        "rodatastring" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_rodatastring::RodataString>()
+                .0,
+        ),
         "returnpair" => {
-            if conf.return_single {
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_returnpair::ReturnSingle>()
+                .0
+            {
                 "single"
             } else {
                 "pair"
@@ -888,11 +904,17 @@ impl IfaceCommandAction for IfcKunaPhaseStatus {
         os.push_str(conf.allacts.get_current_name());
         os.push('\n');
         os.push_str("compareform: ");
-        os.push_str(if conf.present_lessequal {
-            "original"
-        } else {
-            "canonical"
-        });
+        os.push_str(
+            if conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_compareform::PresentLessequal>()
+                .0
+            {
+                "original"
+            } else {
+                "canonical"
+            },
+        );
         os.push('\n');
         os.push_str("arraynotation: ");
         os.push_str(if conf.print().options.array_notation() {

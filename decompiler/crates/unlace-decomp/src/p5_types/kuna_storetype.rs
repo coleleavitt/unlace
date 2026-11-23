@@ -186,3 +186,27 @@ pub fn efi_global_name(ty: &Datatype) -> Option<&'static str> {
         _ => return None,
     })
 }
+
+impl crate::kuna_optionset::KunaOption for StoreTypeMode {
+    const NAME: &'static str = "storetype";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        crate::kuna_storetype::StoreTypeMode::Off
+    }
+
+    fn shipped() -> Self {
+        crate::kuna_storetype::StoreTypeMode::Uefi
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(crate::kuna_storetype::StoreTypeMode::parse(value.trim())
+            .map_err(unlace_base::error::KunaError::parse)
+            .map(|mode| {
+                (
+                    mode,
+                    format!("global typing from stored values set to {}", mode.as_str()),
+                )
+            })?)
+    }
+}

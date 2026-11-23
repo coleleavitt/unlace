@@ -1050,7 +1050,11 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
     let mut paths: Vec<(OpId, OpId)> = Vec::new();
     let mut own: Vec<OpId> = Vec::new();
     let mut widths: Vec<(int4, bool)> = Vec::new();
-    let narrow_tails = data.get_arch().narrow_ret
+    let narrow_tails = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_narrowret::NarrowRet>()
+        .0
         && !data
             .get_arch()
             .manage()

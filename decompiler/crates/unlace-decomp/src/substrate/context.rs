@@ -811,8 +811,6 @@ pub struct ArchContext {
     /// `Architecture::max_term_duplication`, default 2).  Drives
     /// `ActionMarkExplicit::processMultiplier`.
     pub max_term_duplication: int4,
-    /// (kuna) GH-6990: keep only the first return register (C++ `return_single`).
-    pub return_single: bool,
     /// (kuna) CALLOTHER user-op ids named in
     /// [`STATE_USEROP_NAMES`](crate::kuna_retsysreg::STATE_USEROP_NAMES), and
     /// those named in [`COP_USEROP_NAMES`](crate::kuna_retsysreg::COP_USEROP_NAMES),
@@ -865,10 +863,6 @@ pub struct ArchContext {
     pub kuna_objc_classes: Rc<crate::kuna_objcrettype::ObjcClassTable>,
     /// (kuna `xnutables`) The struct each kalloc_type view allocates, by view address.
     pub kuna_kalloc_types: Rc<crate::kuna_kalloctype::KallocTypes>,
-    /// (kuna) GH-558: present canonicalized `INT_LESS(x, c+1)` comparisons in
-    /// their original `x <= c` form (C++ `present_lessequal`, DIV-2 default-on).
-    /// Read by [`ActionPresentCompareForm`](crate::kuna_compareform::ActionPresentCompareForm).
-    pub present_lessequal: bool,
 
     /// (kuna `guardedloop`) A guarded do-while prints as a while loop (C output only).
     pub guarded_loop: bool,
@@ -906,14 +900,6 @@ pub struct ArchContext {
     /// ([`USEROP_NAMES`](crate::kuna_roundingops::USEROP_NAMES)), typed float in
     /// and out by [`kuna_roundingops`](crate::kuna_roundingops).
     pub float_rounding_userops: Vec<unlace_base::types::uint4>,
-    /// (kuna) GH-9230/1537: recover constant-fill store/copy runs as
-    /// `builtin_memset` (C++ `memset_recover`, DIV-2 default-on).  Read by
-    /// [`RuleMemsetCopy`](crate::kuna_memsetsequence::RuleMemsetCopy).
-    pub memset_recover: bool,
-    /// (kuna `rodatastring`) Collapse a read-only string block copy into
-    /// `builtin_strncpy`.  Read by
-    /// [`RuleRodataStringCopy`](crate::kuna_rodatastring::RuleRodataStringCopy).
-    pub rodata_string: bool,
     /// (kuna `calltargettype`) Give an indirect call's target the
     /// function-pointer type the call states; set only when `ctypes` is on too.
     /// Read by
@@ -1034,19 +1020,6 @@ pub struct ArchContext {
     /// (kuna) narrow a register parameter to the low part its uses consume
     /// (`narrowargs`). Read by [`crate::kuna_narrowargs`].
     pub narrow_args: bool,
-    /// (kuna) narrow a register-local web whose values fit a low part
-    /// (`regnarrow`). Read by [`crate::kuna_regnarrow`].
-    pub narrow_locals: bool,
-    /// (kuna) join two adjacent input words a borrow or carry links into one
-    /// double-precision input (`pairparam`). Read by
-    /// [`crate::kuna_borrowcompare::RuleDoubleInputPair`].
-    pub pair_params: bool,
-    /// (kuna) a call reads the narrow value its callee returns zero-extended
-    /// (`narrowret`). Read by [`crate::kuna_narrowret`].
-    pub narrow_ret: bool,
-    /// (kuna) also narrow a register-local web of sign extensions
-    /// (`regsigned`). Read by [`crate::kuna_regnarrow`].
-    pub narrow_signed: bool,
 
     /// Operation-specific typed views over shared physical frame storage.
     pub stack_views: bool,
@@ -1379,7 +1352,6 @@ impl ArchContext {
             max_implied_ref: 2,
             // C++ Architecture default: max_term_duplication = 2 (resetDefaults).
             max_term_duplication: 2,
-            return_single: false,
             retsysreg_userops: Vec::new(),
             retsysreg_cop_userops: Vec::new(),
             // (kuna) `option bejoin`; the real value is copied from the engine
@@ -1409,7 +1381,6 @@ impl ArchContext {
             kuna_objc_classes: Rc::new(Default::default()),
             kuna_kalloc_types: Rc::new(Default::default()),
             // (kuna) DIV-2 default-on (GH-558): resetDefaults sets present_lessequal=true.
-            present_lessequal: true,
             // (kuna) the real arch overwrites each of these in `build_arch_handle`;
             // hand-built fixtures (no `build_arch_handle`) get `false`, so a rule
             // registered `enabled=false` is inert there — matching the gate-off
@@ -1424,8 +1395,6 @@ impl ArchContext {
             x87_float_to_int_userops: Vec::new(),
             x87_integer_userops: Vec::new(),
             float_rounding_userops: Vec::new(),
-            memset_recover: false,   // GH-9230/1537 memsetrecover
-            rodata_string: false,    // (kuna) rodatastring
             call_target_type: false, // (kuna) option calltargettype
             call_target_c: false,    // (kuna) option calltargettype, C output
             java_casts: false,
@@ -1471,10 +1440,6 @@ impl ArchContext {
             kuna_custom_reg_callers: Rc::default(),
             kuna_custom_reg_models: Rc::default(),
             narrow_args: true,
-            narrow_locals: true,
-            pair_params: true,
-            narrow_ret: true,
-            narrow_signed: false,
             stack_views: false, // stackviews (opt-in)
 
             impl_weight: 0, // implweight (live value copied from the Architecture)

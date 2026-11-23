@@ -62,7 +62,6 @@ pub mod kuna_langtypes; // (kuna) the type-spelling seam (TypeSpeller + SpellCtx
 pub mod kuna_mapglobalsyms; // (kuna `mapglobalsyms`) keep mapGlobals' DAT_ Symbols in the global scope
 pub(crate) mod kuna_memberbase;
 pub mod kuna_namedglobals;
-pub mod kuna_namespaces; // (kuna) which namespaces print in front of a name
 pub mod kuna_narrowselector; // (kuna) a switch on a narrow expression casts it to its own width
 pub mod kuna_oslog;
 pub mod kuna_paramrefdecl;

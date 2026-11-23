@@ -1188,6 +1188,7 @@ pub fn call_input_allowed(
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.armfloatreturn_declared_helper_model = Some(declared_helper_model);
     hooks.armfloatreturn_applies = Some(applies);
     hooks.armfloatreturn_base_pcs_helper = Some(base_pcs_helper);
     hooks.armfloatreturn_model = Some(model);

@@ -494,11 +494,11 @@ pub trait FlowEnvironment {
     }
 
     /// (kuna `spsolve`) What the returns of the function at the direct-call
-    /// `entry` do to the stack pointer. See [`crate::p4_calls::kuna_spsolve`].
+    /// `entry` do to the stack pointer. See `p4_calls/kuna_spsolve.rs`.
     fn query_call_returns(
         &self,
         _entry: &Address,
-    ) -> Option<crate::p4_calls::kuna_spsolve::CalleeReturns> {
+    ) -> Option<crate::kuna_calleefacts::CalleeReturns> {
         None
     }
 
@@ -518,7 +518,7 @@ pub trait FlowEnvironment {
     }
 
     /// The extrapop the returns of the function at the direct-call `entry`
-    /// state. See [`crate::p4_calls::kuna_calleepurge`].
+    /// state. See `p4_calls/kuna_calleepurge.rs`.
     fn query_call_extra_pop(&self, _entry: &Address) -> Option<int4> {
         None
     }
@@ -535,7 +535,7 @@ pub trait FlowEnvironment {
         &self,
         _entry: &Address,
         _call_at: &Address,
-    ) -> Option<crate::p4_calls::kuna_calleepurge::StackArgs> {
+    ) -> Option<crate::kuna_calleefacts::StackArgs> {
         None
     }
 
@@ -2015,7 +2015,7 @@ following this call as a branch"
                     .is_some_and(|out| out.get_addr() == want.get_addr())
             });
             let Some(pos) = pos else {
-                return crate::p4_calls::kuna_calleearitybody::is_register(want.get_addr())
+                return crate::kuna_calleefacts::is_register(want.get_addr())
                     .then(|| (want.get_addr().clone(), want.get_size()));
             };
             let def = obank.get(earlier[pos])?;
@@ -2383,7 +2383,7 @@ truncating the fall-through here"
             while let Some(next) = self.dead_next(*insn_ops.last().expect("non-empty")) {
                 insn_ops.push(next);
             }
-            crate::kuna_retpushedhalf::observe_instruction(&mut self.data, &insn_ops);
+            (self.data.hooks().retpushedhalf_observe_instruction)(&mut self.data, &insn_ops);
             if flowoverride == crate::overrides::flow_type::NONE {
                 super::kuna_atomicxadd::observe(&mut self.data, &insn_ops);
             }
@@ -4139,7 +4139,7 @@ truncating the fall-through here"
             // calls the C++ ActionDefaultParams copy arm actually reaches.
             // (kuna `armfloatreturn`) A declared AEABI helper is laid out under
             // the core-register model by ActionDefaultParams instead.
-            let helper = crate::kuna_armfloatreturn::declared_helper_model(
+            let helper = (self.data.hooks().armfloatreturn_declared_helper_model)(
                 self.data.get_arch(),
                 fc.get_name(),
             )
@@ -4170,8 +4170,11 @@ truncating the fall-through here"
                         }
                     }
                     if self.env.msvc_locked_entry(&entry) {
-                        crate::p4_calls::kuna_calleeprotostack::resolve_declared_extra_pop(
-                            fc.proto_mut(),
+                        (self
+                            .data
+                            .hooks()
+                            .calleeprotostack_resolve_declared_extra_pop)(
+                            fc.proto_mut()
                         );
                     }
                 }
@@ -5431,7 +5434,7 @@ impl<E: FlowEnvironment> PcodeEmit for FlowEmit<'_, '_, E> {
             }
             i += 1;
         }
-        crate::kuna_localstackviews::record_native(self.fd, op);
+        (self.fd.hooks().localstackviews_record_native)(self.fd, op);
         self.emitted.push(op);
     }
 }

@@ -932,6 +932,7 @@ pub(crate) fn views(fd: &Funcdata) -> Vec<(u64, Rc<Datatype>)> {
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.localstackviews_record_native = Some(record_native);
     hooks.localstackviews_preserves_range = Some(preserves_range);
 }
 

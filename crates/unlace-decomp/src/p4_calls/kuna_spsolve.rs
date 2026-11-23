@@ -108,14 +108,7 @@ const MAX_TESTS: usize = 64;
 /// The most a callee is taken to pop above its return address.
 const MAX_POP: i64 = 0x400;
 
-/// What the returns of a direct callee do to the stack pointer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CalleeReturns {
-    /// The extrapop every reachable return proves.
-    pub proven: Option<int4>,
-    /// The most any reached return adds to the stack pointer.
-    pub most: Option<int4>,
-}
+pub use crate::kuna_calleefacts::CalleeReturns;
 
 /// `option spsolve` on its target: a loaded x86-32 ELF under a default model
 /// that states its extrapop.

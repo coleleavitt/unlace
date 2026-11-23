@@ -6,7 +6,17 @@
 //! a `::`-qualified console name implies, are not the live `Scope` tree upstream
 //! walks, so both sides arrive as lists of names.
 
-use crate::printlanguage::NamespaceStrategy;
+/// Strategies for displaying namespace tokens (C++
+/// `PrintLanguage::namespace_strategy`, printlanguage.hh:176-180).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NamespaceStrategy {
+    /// (default) Print just enough namespace info to fully resolve symbol.
+    MinimalNamespaces = 0,
+    /// Never print namespace information.
+    NoNamespaces = 1,
+    /// Always print all namespace information.
+    AllNamespaces = 2,
+}
 
 /// `Symbol::getResolutionDepth(useScope)`: how many of the symbol's enclosing
 /// scopes must be printed for its name to resolve where it is used.

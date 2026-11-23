@@ -226,17 +226,7 @@ pub enum TagType {
     LiteralToken,
 }
 
-/// Strategies for displaying namespace tokens (C++
-/// `PrintLanguage::namespace_strategy`, printlanguage.hh:176-180).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NamespaceStrategy {
-    /// (default) Print just enough namespace info to fully resolve symbol.
-    MinimalNamespaces = 0,
-    /// Never print namespace information.
-    NoNamespaces = 1,
-    /// Always print all namespace information.
-    AllNamespaces = 2,
-}
+pub use crate::kuna_namespaces::NamespaceStrategy;
 
 /// An opaque arena key for a PcodeOp or Varnode carried on the RPN stack: the
 /// slotmap key's full 64-bit ffi form, so it round-trips on 32-bit targets too.

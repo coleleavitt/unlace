@@ -848,5 +848,10 @@ fn bind_uses(
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackparamviews_backing_for_address = Some(backing_for_address);
+}
+
 #[cfg(test)]
 mod tests;

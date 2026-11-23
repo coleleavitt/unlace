@@ -80,6 +80,20 @@ pub fn split_is_declined(limit: Option<u64>, ops: usize, edges: usize) -> bool {
     limit.is_some_and(|limit| (ops as u64).saturating_mul(edges as u64) > limit)
 }
 
+/// [`split_is_declined`] under the run's [`RetSplitLimit`].
+fn declined_by_option(
+    options: &crate::kuna_optionset::OptionSet,
+    ops: usize,
+    edges: usize,
+) -> bool {
+    split_is_declined(options.get::<RetSplitLimit>().0, ops, edges)
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.retsplitlimit_split_is_declined = Some(declined_by_option);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

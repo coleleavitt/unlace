@@ -657,6 +657,13 @@ fn result_register(data: &Funcdata) -> Option<(Address, int4)> {
     ))
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.callresultuse_scores_trial = Some(scores_trial);
+    hooks.callresultuse_scoring_argument = Some(scoring_argument);
+    hooks.callresultuse_scoring_return = Some(scoring_return);
+}
+
 #[cfg(test)]
 #[path = "kuna_callresultuse/tests.rs"]
 mod tests;

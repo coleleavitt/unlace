@@ -46,3 +46,8 @@ pub(crate) fn order_global_phis(data: &Funcdata, ops: &mut [OpId]) {
         (Some(x), Some(y)) => x.cmp(&y),
     });
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.clonephiorder_order_global_phis = Some(order_global_phis);
+}

@@ -2376,11 +2376,7 @@ impl Funcdata {
         }
         // (kuna `loweredswitchexact`) Nothing a deleted compare block writes may be
         // read again on the raw p-code this edits.
-        if !crate::p2_lift::kuna_loweredswitchexact::raw_install_keeps_values(
-            self,
-            head,
-            &out_blocks,
-        ) {
+        if !(self.hooks().loweredswitchexact_raw_install_keeps_values)(self, head, &out_blocks) {
             return Ok(None);
         }
 
@@ -2825,7 +2821,7 @@ impl Funcdata {
         shared: &mut Option<Funcdata>,
     ) -> Result<Option<usize>, crate::jumptable::RecoveryMode> {
         use crate::jumptable::RecoveryMode;
-        let encoding = crate::kuna_indirectreturn::target_encoding(self, op);
+        let encoding = (self.hooks().indirectreturn_target_encoding)(self, op);
         // linkJumpTable: search for a pre-existing table.
         if let Some(idx) = self.link_jump_table(op) {
             self.get_jump_table_mut(idx as int4)
@@ -3351,7 +3347,7 @@ impl Funcdata {
                             (Some(ov), Some(iv)) => ov.get_addr() == iv.get_addr(),
                             _ => false,
                         };
-                    if crate::p8_structure::kuna_retsplitglobal::is_global_store(
+                    if (self.hooks().retsplitglobal_is_global_store)(
                         opc == OpCode::CPUI_COPY,
                         outvn.map(|v| v.is_persist()).unwrap_or(false),
                         o.is_return_copy(),
@@ -3377,7 +3373,7 @@ impl Funcdata {
         }
         // (kuna `retsplitglobal`) a bare epilogue is cheap to clone; one that
         // stores to more globals than the bound is not one.
-        !crate::p8_structure::kuna_retsplitglobal::split_is_declined(
+        !(self.hooks().retsplitglobal_split_is_declined)(
             self.get_arch().ret_split_global,
             global_stores,
         )
@@ -3461,11 +3457,8 @@ impl Funcdata {
                 retnode.pop();
             }
             // (kuna `retsplitlimit`) a block too big to clone this many times keeps its gotos.
-            if crate::p8_structure::kuna_retsplitlimit::split_is_declined(
-                self.get_arch()
-                    .kuna_options
-                    .get::<crate::p8_structure::kuna_retsplitlimit::RetSplitLimit>()
-                    .0,
+            if (self.hooks().retsplitlimit_split_is_declined)(
+                &self.get_arch().kuna_options,
                 self.bb_op_count(parent),
                 retnode.len() - first,
             ) {
@@ -3625,7 +3618,7 @@ impl Funcdata {
             // guard: splitting it prints `if (!c) return K; f(); return K;` for
             // `if (c) f(); return K;`.
             if self.get_arch().returndup_triangle
-                && crate::p8_structure::kuna_rettriangle::is_triangle_join(self, parent)
+                && (self.hooks().rettriangle_is_triangle_join)(self, parent)
             {
                 continue;
             }
@@ -3638,7 +3631,7 @@ impl Funcdata {
         // common is the operand chain of a short-circuit expression: splitting it
         // blocks `rule_block_or` permanently, and the source's
         // `return a || (b && c);` becomes a cascade of constant-return guards.
-        let shared = crate::p8_structure::kuna_orchain::shortcircuit_shared_targets(self);
+        let shared = (self.hooks().orchain_shortcircuit_shared_targets)(self);
         if parents.iter().any(|p| shared.contains(p)) {
             return 0;
         }
@@ -4660,7 +4653,7 @@ impl CloneBlockOps {
                 | opaf::store_unmapped
                 | opaf::kuna_zextreturn
                 | opaf::kuna_exactfloat);
-        let error_flag = crate::kuna_syscallregs::is_error_flag(data, op);
+        let error_flag = (data.hooks().syscallregs_is_error_flag)(data, op);
         {
             let o = data
                 .obank_mut()
@@ -4735,7 +4728,7 @@ impl CloneBlockOps {
                 .basic_neighbours()
                 .1;
         }
-        crate::p8_structure::kuna_clonephiorder::order_global_phis(data, &mut ops);
+        (data.hooks().clonephiorder_order_global_phis)(data, &mut ops);
         for orig_op in ops {
             let clone_op = match self.build_op_clone(data, orig_op)? {
                 Some(c) => c,

@@ -1091,7 +1091,7 @@ impl Funcdata {
             .get_mut(newop)
             .expect("clone_op")
             .set_additional_flag(exact);
-        if crate::kuna_syscallregs::is_error_flag(self, op) {
+        if (self.hooks().syscallregs_is_error_flag)(self, op) {
             self.obank_mut()
                 .get_mut(newop)
                 .expect("clone_op")
@@ -2618,7 +2618,7 @@ impl Funcdata {
     /// that redirect.
     pub fn op_insert_after(&mut self, op: OpId, prev: OpId) {
         let mut prev = prev;
-        if let Some(targ) = crate::p3_dataflow::kuna_indirectanchor::anchor_of(self, prev) {
+        if let Some(targ) = (self.hooks().indirectanchor_anchor_of)(self, prev) {
             prev = targ;
         }
 

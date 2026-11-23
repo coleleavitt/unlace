@@ -195,3 +195,8 @@ fn preds_of(data: &Funcdata, b: BlockId) -> Vec<BlockId> {
     let blk = data.bblocks_ref().block(b);
     (0..blk.size_in()).map(|i| blk.get_in(i)).collect()
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.orchain_shortcircuit_shared_targets = Some(shortcircuit_shared_targets);
+}

@@ -115,6 +115,12 @@ fn shared_producer(data: &Funcdata, producer: BlockId, a: BlockId, b: BlockId) -
     a != b && follows(a) && follows(b)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.exclusivecallret_applies = Some(applies);
+    hooks.exclusivecallret_skips_use = Some(skips_use);
+}
+
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;

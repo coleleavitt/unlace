@@ -417,3 +417,154 @@ crate::kuna_flag!(
     unset: true,
     shipped: true
 );
+
+/// (kuna) When the system call gets its register effects: `syscallregs
+/// off|auto|on`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SyscallRegsMode {
+    /// The vendored model: no register inputs, no output.
+    #[default]
+    Off,
+    /// Only on an image the loader identified as an operating system's
+    /// user-space program.
+    Auto,
+    /// On any image.
+    On,
+}
+
+impl SyscallRegsMode {
+    /// The option token for this mode.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SyscallRegsMode::Off => "off",
+            SyscallRegsMode::Auto => "auto",
+            SyscallRegsMode::On => "on",
+        }
+    }
+
+    /// Does the pass act on an image with this loader fact?
+    pub fn fires(self, image_os_userland: bool) -> bool {
+        match self {
+            SyscallRegsMode::Off => false,
+            SyscallRegsMode::Auto => image_os_userland,
+            SyscallRegsMode::On => true,
+        }
+    }
+}
+
+/// (kuna) Parse `option syscallregs off|auto|on`; the caller writes the live
+/// field.
+pub struct OptionSyscallRegs;
+
+impl OptionSyscallRegs {
+    /// The option name.
+    pub const NAME: &'static str = "syscallregs";
+
+    /// Parse + validate the value.
+    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(SyscallRegsMode, String)> {
+        let mode = match p1 {
+            "off" => SyscallRegsMode::Off,
+            "auto" => SyscallRegsMode::Auto,
+            "on" => SyscallRegsMode::On,
+            other => {
+                return Err(unlace_base::error::KunaError::parse(format!(
+                    "Unknown syscallregs value: {other} (expected off|auto|on)"
+                )));
+            }
+        };
+        Ok((mode, format!("System-call register effects set to {p1}")))
+    }
+}
+
+impl crate::kuna_optionset::KunaOption for SyscallRegsMode {
+    const NAME: &'static str = "syscallregs";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        SyscallRegsMode::Off
+    }
+
+    fn shipped() -> Self {
+        SyscallRegsMode::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionSyscallRegs.apply(value)
+    }
+}
+
+/// `option indexaliasguard off` — neither index-alias guard runs.
+pub const LEVEL_OFF: unlace_base::types::int4 = 0;
+
+/// `option indexaliasguard load` — `Heritage::guardLoads` only.
+pub const LEVEL_LOAD: unlace_base::types::int4 = 1;
+
+/// `option indexaliasguard global` — `guardLoads` + the STORE guard on a
+/// global range.
+pub const LEVEL_GLOBAL: unlace_base::types::int4 = 2;
+
+/// `option indexaliasguard full` — `guardLoads` + `guardStores`, i.e. upstream
+/// Ghidra's behavior.
+pub const LEVEL_FULL: unlace_base::types::int4 = 3;
+
+/// The `indexaliasguard` level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IndexAliasGuard(pub unlace_base::types::int4);
+
+impl crate::kuna_optionset::KunaOption for IndexAliasGuard {
+    const NAME: &'static str = "indexaliasguard";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        IndexAliasGuard(LEVEL_GLOBAL)
+    }
+
+    fn shipped() -> Self {
+        IndexAliasGuard(LEVEL_GLOBAL)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionIndexAliasGuard
+            .apply(value)
+            .map(|(v, msg)| (IndexAliasGuard(v), msg))
+    }
+}
+
+/// `option indexaliasguard off|load|global|full` (C++ has no equivalent —
+/// upstream is unconditionally `full`).
+pub struct OptionIndexAliasGuard;
+
+impl OptionIndexAliasGuard {
+    /// The option name.
+    pub const NAME: &'static str = "indexaliasguard";
+
+    /// Parse `off`/`load`/`global`/`full` into the guard level + a confirmation
+    /// message.
+    pub fn apply(
+        &self,
+        p1: &str,
+    ) -> unlace_base::error::KunaResult<(unlace_base::types::int4, String)> {
+        match p1 {
+            "off" => Ok((LEVEL_OFF, "Index-alias heritage guards turned off".to_string())),
+            "load" => Ok((
+                LEVEL_LOAD,
+                "Index-alias heritage guards turned on, LOAD side only (guardLoads)".to_string(),
+            )),
+            // Empty parameter reads as the shipped default, matching `options::on_or_off`.
+            "global" | "on" | "" => Ok((
+                LEVEL_GLOBAL,
+                "Index-alias heritage guards turned on, LOAD side plus STORE and LOAD guards on globals"
+                    .to_string(),
+            )),
+            "full" => Ok((
+                LEVEL_FULL,
+                "Index-alias heritage guards turned on, LOAD + STORE \
+                 (guardLoads + guardStores)"
+                    .to_string(),
+            )),
+            _ => Err(unlace_base::error::KunaError::parse(
+                "Must specify one of off, load, global, full",
+            )),
+        }
+    }
+}

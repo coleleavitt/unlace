@@ -2462,16 +2462,16 @@ impl Architecture {
                 && self.print.out_lang() == crate::kuna_outlang::OutLang::C,
         ));
         ctx.image_linux_elf = self.image_linux_elf; // (kuna) linuxsyscall
-        ctx.octeon_memory_userops = crate::kuna_octeoneffects::userop_ids(
+        ctx.octeon_memory_userops = crate::kuna_octeonops::userop_ids(
             &self.userops,
             self.kuna_options
-                .get::<crate::kuna_octeoneffects::OcteonEffectsMode>(),
+                .get::<crate::kuna_octeonops::OcteonEffectsMode>(),
             &self.octeon_upstream_inject,
         );
         ctx.x64_syscall_memory_target = self.archid == "x86:LE:64:default:gcc";
         ctx.syscall_regs = self
             .kuna_options
-            .get::<crate::kuna_syscallregs::SyscallRegsMode>()
+            .get::<crate::kuna_coreoptions::SyscallRegsMode>()
             .fires(self.image_os_userland); // (kuna) syscallregs
         ctx.syscall_regs_family = crate::context::SyscallFamily::from_archid(&self.archid);
         ctx.syscall_regs_userops =
@@ -3674,12 +3674,12 @@ impl Architecture {
 
     /// (kuna `octeoneffects`) Register a callother fixup holding upstream's
     /// lifting for each Octeon reservation and ordering operation the language
-    /// declares unspecialized ([`crate::kuna_octeoneffects::UPSTREAM`]), as
+    /// declares unspecialized ([`crate::kuna_octeonops::UPSTREAM`]), as
     /// step 2b does for `cortexmpriv`; `decompile_drive::is_injected_userop`
     /// applies them only under `option octeoneffects off`.
     fn register_octeon_upstream_fixups(&mut self) -> KunaResult<()> {
         self.octeon_upstream_inject.clear();
-        for fixup in crate::kuna_octeoneffects::UPSTREAM {
+        for fixup in crate::kuna_octeonops::UPSTREAM {
             let inputs: Vec<Vec<u8>> = fixup.inputs.iter().map(|input| input.to_vec()).collect();
             if let Some(injectid) =
                 self.register_manual_fixup(fixup.name, fixup.output, &inputs, fixup.body, true)?

@@ -11,7 +11,8 @@ use super::modelrules::Primitive;
 use crate::dtype::{Datatype, DatatypeKind, type_class, type_metatype};
 use crate::fspec::{AssignActionResponse, ParamListStandard, ParameterPieces};
 
-pub(super) struct PrimitiveField {
+#[doc(hidden)]
+pub struct PrimitiveField {
     pub dt: Rc<Datatype>,
     pub offset: i32,
     pub alignment: i32,
@@ -21,7 +22,8 @@ pub(super) struct PrimitiveField {
 /// Include the occupied bytes of bitfields in ABI primitive classification.
 /// Overlapping containers contribute once; integer chunks never cross their
 /// natural boundary. Bitfield positions do not impose ordinary-member alignment.
-pub(super) fn primitive_fields(dt: &Datatype, offset: i32) -> Option<Vec<PrimitiveField>> {
+#[doc(hidden)]
+pub fn primitive_fields(dt: &Datatype, offset: i32) -> Option<Vec<PrimitiveField>> {
     let DatatypeKind::Struct { field, bitfield } = &dt.kind else {
         return None;
     };
@@ -76,7 +78,8 @@ pub(super) fn primitive_fields(dt: &Datatype, offset: i32) -> Option<Vec<Primiti
     Some(fields)
 }
 
-pub(super) fn direct_fields(dt: &Rc<Datatype>) -> Option<Vec<Primitive>> {
+#[doc(hidden)]
+pub fn direct_fields(dt: &Rc<Datatype>) -> Option<Vec<Primitive>> {
     let members = primitive_fields(dt, 0)?;
     if members.is_empty() {
         return None;
@@ -96,7 +99,8 @@ pub(super) fn direct_fields(dt: &Rc<Datatype>) -> Option<Vec<Primitive>> {
     Some(fields)
 }
 
-pub(super) fn float_fields(dt: &Rc<Datatype>, max: i32) -> bool {
+#[doc(hidden)]
+pub fn float_fields(dt: &Rc<Datatype>, max: i32) -> bool {
     !dt.has_bitfields()
         && direct_fields(dt).is_some_and(|fields| {
             fields.len() <= max as usize
@@ -162,7 +166,8 @@ fn append_padding(
 /// Assign each direct field independently, keeping its byte offset in the struct.
 /// ABI padding has no physical value. Zero pieces retain its logical offsets;
 /// heritage discards writes to these pieces instead of creating register uses.
-pub(super) fn assign_fields(
+#[doc(hidden)]
+pub fn assign_fields(
     dt: &Rc<Datatype>,
     class: type_class,
     status: &mut [i32],

@@ -978,7 +978,12 @@ fn taken_reads(
     if let Some(r) = memo.get(&(key.0, key.1, depth)) {
         return Some(Rc::clone(r));
     }
-    let taken = match arch.kuna_protoorder_types.get(&key).cloned() {
+    let taken = match arch
+        .kuna_tables
+        .get::<crate::kuna_protoorder::CalleeTypes>()
+        .get(&key)
+        .cloned()
+    {
         Some(stated) if stated.arity_sound => {
             let dead = probe_cached(arch, entry, reg_idx)?;
             let through = if depth == 0 {
@@ -1015,7 +1020,11 @@ pub(crate) fn probe_cached(
 ) -> Option<Rc<CalleeEntryDead>> {
     let sp = entry.get_space()?;
     let key = (sp.get_index(), entry.get_offset());
-    if !arch.kuna_callee_dead_cache.contains_key(&key) {
+    if !arch
+        .kuna_tables
+        .get::<crate::kuna_calleedeadarg::CalleeDeadCache>()
+        .contains_key(&key)
+    {
         let follow = crate::kuna_armfloatargs::applies(arch);
         let traps = crate::kuna_syscallregs::userop_ids(
             &arch.userops,
@@ -1029,9 +1038,14 @@ pub(crate) fn probe_cached(
             &traps,
             &arch.format_stack_args,
         );
-        arch.kuna_callee_dead_cache.insert(key, Rc::new(probed));
+        arch.kuna_tables
+            .get_mut::<crate::kuna_calleedeadarg::CalleeDeadCache>()
+            .insert(key, Rc::new(probed));
     }
-    arch.kuna_callee_dead_cache.get(&key).cloned()
+    arch.kuna_tables
+        .get::<crate::kuna_calleedeadarg::CalleeDeadCache>()
+        .get(&key)
+        .cloned()
 }
 
 /// `dead`'s live reads plus what each direct call's target takes of the bytes
@@ -1925,12 +1939,18 @@ pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data
         .kuna_options
         .get::<crate::kuna_argclobber::ArgClobber>()
         .0
-        && !arch.kuna_protoorder_types.is_empty();
+        && !arch
+            .kuna_tables
+            .get::<crate::kuna_protoorder::CalleeTypes>()
+            .is_empty();
     let pass_through = arch
         .kuna_options
         .get::<crate::kuna_passthrough::PassThrough>()
         .0
-        && !arch.kuna_protoorder_types.is_empty();
+        && !arch
+            .kuna_tables
+            .get::<crate::kuna_protoorder::CalleeTypes>()
+            .is_empty();
     let reg_idx = arch
         .manage()
         .get_space_by_name("register")
@@ -1966,7 +1986,8 @@ pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data
         }
         if pass_through
             && arch
-                .kuna_protoorder_types
+                .kuna_tables
+                .get::<crate::kuna_protoorder::CalleeTypes>()
                 .get(&key)
                 .is_some_and(|s| !s.inputs.is_empty())
         {
@@ -1978,11 +1999,21 @@ pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data
         // over the bodies it calls in turn and so cannot be answered at the
         // seam either.
         if clobber_veto {
-            if !arch.kuna_callee_forward_cache.contains_key(&key) {
+            if !arch
+                .kuna_tables
+                .get::<crate::kuna_calleedeadarg::CalleeForwardCache>()
+                .contains_key(&key)
+            {
                 let fwd = resolve_forward_transfer(arch, &e, reg_idx);
-                arch.kuna_callee_forward_cache.insert(key, Rc::new(fwd));
+                arch.kuna_tables
+                    .get_mut::<crate::kuna_calleedeadarg::CalleeForwardCache>()
+                    .insert(key, Rc::new(fwd));
             }
-            if let Some(f) = arch.kuna_callee_forward_cache.get(&key) {
+            if let Some(f) = arch
+                .kuna_tables
+                .get::<crate::kuna_calleedeadarg::CalleeForwardCache>()
+                .get(&key)
+            {
                 data.kuna_set_callee_forward(&e, Rc::clone(f));
             }
         }
@@ -2273,6 +2304,22 @@ impl FuncdataCalleedeadargExt for crate::funcdata::Funcdata {
             .map(|r| r.as_ref())
     }
 }
+
+/// (kuna `calleedeadarg`) The run-wide cache of callee entry-liveness probes, by callee
+/// `(space index, entry offset)`; an [`ArchTable`](crate::kuna_archstate::ArchTable).
+pub type CalleeDeadCache = std::collections::HashMap<
+    (unlace_base::types::int4, unlace_base::types::uintb),
+    std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>,
+>;
+crate::kuna_arch_table!(CalleeDeadCache);
+
+/// (kuna `argclobber`) The run-wide cache of forwarding resolutions, by callee
+/// `(space index, entry offset)`; an [`ArchTable`](crate::kuna_archstate::ArchTable).
+pub type CalleeForwardCache = std::collections::HashMap<
+    (unlace_base::types::int4, unlace_base::types::uintb),
+    std::rc::Rc<crate::kuna_calleedeadarg::ForwardTransfer>,
+>;
+crate::kuna_arch_table!(CalleeForwardCache);
 
 #[cfg(test)]
 #[path = "kuna_calleedeadarg/tests.rs"]

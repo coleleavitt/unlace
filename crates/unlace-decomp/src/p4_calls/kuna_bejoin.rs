@@ -3278,6 +3278,8 @@ impl FuncdataBejoinExt for crate::funcdata::Funcdata {
     }
 }
 
+crate::kuna_arch_table!(crate::kuna_bejoin::WideCache);
+
 #[cfg(test)]
 #[path = "kuna_bejoin/tests.rs"]
 mod tests;

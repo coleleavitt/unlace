@@ -99,7 +99,7 @@ pub struct Ledger {
 /// return of the caller is a tail call: passthrough takes no tail call's
 /// result beside a return of the caller's own.
 pub fn callable(arch: &Architecture, data: &Funcdata, dest: &Address) -> bool {
-    let ledger = &arch.kuna_gottailcall;
+    let ledger = arch.kuna_tables.get::<crate::kuna_gottailcall::Ledger>();
     if !ledger.recording {
         return false;
     }
@@ -109,7 +109,11 @@ pub fn callable(arch: &Architecture, data: &Funcdata, dest: &Address) -> bool {
     let ok = match ledger.callable.get(&k) {
         Some(c) => {
             !ledger.refused.contains(&(own, k))
-                && (!c.stated || arch.kuna_protoorder_types.contains_key(&k))
+                && (!c.stated
+                    || arch
+                        .kuna_tables
+                        .get::<crate::kuna_protoorder::CalleeTypes>()
+                        .contains_key(&k))
                 && !(c.returns && returns_on_its_own(data))
         }
         None => false,
@@ -123,7 +127,7 @@ pub fn callable(arch: &Architecture, data: &Funcdata, dest: &Address) -> bool {
 /// Note that the flow of `data` follows a one-destination table to `dest`
 /// instead of taking a tail call.
 pub fn followed(arch: &Architecture, data: &Funcdata, dest: &Address) {
-    let ledger = &arch.kuna_gottailcall;
+    let ledger = arch.kuna_tables.get::<crate::kuna_gottailcall::Ledger>();
     if !ledger.recording {
         return;
     }
@@ -155,12 +159,20 @@ fn returns_on_its_own(data: &Funcdata) -> bool {
 /// prototype is `tailcalljump`'s to read, and a variadic or model-less
 /// recovery states nothing a call could carry.
 pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
-    if !arch.kuna_gottailcall.recording {
+    if !arch
+        .kuna_tables
+        .get::<crate::kuna_gottailcall::Ledger>()
+        .recording
+    {
         return;
     }
     let Some(own) = key(entry) else { return };
     let taken: Vec<Key> = {
-        let mut t = arch.kuna_gottailcall.taken.borrow_mut();
+        let mut t = arch
+            .kuna_tables
+            .get::<crate::kuna_gottailcall::Ledger>()
+            .taken
+            .borrow_mut();
         let mine: Vec<Key> = t
             .iter()
             .filter(|(c, _)| *c == own)
@@ -174,19 +186,35 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         .filter(|k| loses(arch, data, *k))
         .collect();
     for k in &lost {
-        arch.kuna_gottailcall.refused.insert((own, *k));
-        arch.kuna_gottailcall
+        arch.kuna_tables
+            .get_mut::<crate::kuna_gottailcall::Ledger>()
+            .refused
+            .insert((own, *k));
+        arch.kuna_tables
+            .get_mut::<crate::kuna_gottailcall::Ledger>()
             .waiting
             .entry(*k)
             .or_default()
             .insert(own);
     }
     match callable_by_recovery(arch, entry, data).filter(|_| lost.is_empty()) {
-        Some(stated) => arch.kuna_gottailcall.callable.insert(own, stated),
-        None => arch.kuna_gottailcall.callable.remove(&own),
+        Some(stated) => arch
+            .kuna_tables
+            .get_mut::<crate::kuna_gottailcall::Ledger>()
+            .callable
+            .insert(own, stated),
+        None => arch
+            .kuna_tables
+            .get_mut::<crate::kuna_gottailcall::Ledger>()
+            .callable
+            .remove(&own),
     };
     let followed: Vec<Key> = {
-        let mut f = arch.kuna_gottailcall.followed.borrow_mut();
+        let mut f = arch
+            .kuna_tables
+            .get::<crate::kuna_gottailcall::Ledger>()
+            .followed
+            .borrow_mut();
         let mine: Vec<Key> = f
             .iter()
             .filter(|(c, k)| *c == own && *k != own)
@@ -196,8 +224,14 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         mine
     };
     for k in followed {
-        if !arch.kuna_gottailcall.callable.contains_key(&k) {
-            arch.kuna_gottailcall
+        if !arch
+            .kuna_tables
+            .get::<crate::kuna_gottailcall::Ledger>()
+            .callable
+            .contains_key(&k)
+        {
+            arch.kuna_tables
+                .get_mut::<crate::kuna_gottailcall::Ledger>()
                 .waiting
                 .entry(k)
                 .or_default()
@@ -210,7 +244,12 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
 /// callee returns a value and the caller came out returning nothing, or a call
 /// to it passes fewer arguments than its statement names?
 fn loses(arch: &Architecture, data: &Funcdata, callee: Key) -> bool {
-    let Some(c) = arch.kuna_gottailcall.callable.get(&callee) else {
+    let Some(c) = arch
+        .kuna_tables
+        .get::<crate::kuna_gottailcall::Ledger>()
+        .callable
+        .get(&callee)
+    else {
         return false;
     };
     let own_void = data
@@ -221,7 +260,8 @@ fn loses(arch: &Architecture, data: &Funcdata, callee: Key) -> bool {
         return true;
     }
     let wanted = arch
-        .kuna_protoorder_types
+        .kuna_tables
+        .get::<crate::kuna_protoorder::CalleeTypes>()
         .get(&callee)
         .map_or(0, |s| s.inputs.len() as int4);
     (0..data.num_calls()).any(|i| {
@@ -263,7 +303,11 @@ pub(crate) fn callable_by_recovery(
             returns,
         });
     }
-    let stated = Rc::clone(arch.kuna_protoorder_types.get(&key(entry)?)?);
+    let stated = Rc::clone(
+        arch.kuna_tables
+            .get::<crate::kuna_protoorder::CalleeTypes>()
+            .get(&key(entry)?)?,
+    );
     if (returns && stated.output.is_none()) || !takes_every_input(arch, entry, &stated) {
         return None;
     }
@@ -322,7 +366,11 @@ pub(crate) fn clear_stale_warnings(
     entry: &Address,
     pending: &[(uint4, Address, String)],
 ) {
-    if !arch.kuna_gottailcall.recording {
+    if !arch
+        .kuna_tables
+        .get::<crate::kuna_gottailcall::Ledger>()
+        .recording
+    {
         return;
     }
     arch.commentdb.retain_comments(|c| {
@@ -341,7 +389,9 @@ pub(crate) fn clear_stale_warnings(
 /// callee that is now filed, once every callee it copied in has been
 /// decompiled, and each one refused a tail call at once.
 pub fn due(arch: &mut Architecture) -> BTreeSet<Key> {
-    arch.kuna_gottailcall.take_due()
+    arch.kuna_tables
+        .get_mut::<crate::kuna_gottailcall::Ledger>()
+        .take_due()
 }
 
 impl Ledger {
@@ -395,19 +445,29 @@ pub enum SingleStep {
 /// Give a single-function drive a ledger of its own, unless a callee-first run
 /// is already recording. Returns the ledger to put back with [`end_single`].
 pub fn begin_single(arch: &mut Architecture) -> Option<Ledger> {
-    if arch.kuna_gottailcall.recording {
+    if arch
+        .kuna_tables
+        .get::<crate::kuna_gottailcall::Ledger>()
+        .recording
+    {
         return None;
     }
     let own = Ledger {
         recording: true,
         ..Ledger::default()
     };
-    Some(std::mem::replace(&mut arch.kuna_gottailcall, own))
+    Some(std::mem::replace(
+        arch.kuna_tables
+            .get_mut::<crate::kuna_gottailcall::Ledger>(),
+        own,
+    ))
 }
 
 /// Put back the ledger [`begin_single`] replaced.
 pub fn end_single(arch: &mut Architecture, saved: Ledger) {
-    arch.kuna_gottailcall = saved;
+    *arch
+        .kuna_tables
+        .get_mut::<crate::kuna_gottailcall::Ledger>() = saved;
 }
 
 /// After one decompile of the function entered at `entry` under a
@@ -428,7 +488,11 @@ pub fn single_step(
         return SingleStep::Done;
     };
     let taken: Vec<Key> = {
-        let mut t = arch.kuna_gottailcall.taken.borrow_mut();
+        let mut t = arch
+            .kuna_tables
+            .get::<crate::kuna_gottailcall::Ledger>()
+            .taken
+            .borrow_mut();
         let mine = t
             .iter()
             .filter(|(c, _)| *c == own)
@@ -438,7 +502,11 @@ pub fn single_step(
         mine
     };
     let followed: BTreeSet<Key> = {
-        let mut f = arch.kuna_gottailcall.followed.borrow_mut();
+        let mut f = arch
+            .kuna_tables
+            .get::<crate::kuna_gottailcall::Ledger>()
+            .followed
+            .borrow_mut();
         let mine = f
             .iter()
             .filter(|(c, _)| *c == own)
@@ -463,7 +531,10 @@ pub fn single_step(
         .collect();
     if !lost.is_empty() {
         for k in lost {
-            arch.kuna_gottailcall.refused.insert((own, k));
+            arch.kuna_tables
+                .get_mut::<crate::kuna_gottailcall::Ledger>()
+                .refused
+                .insert((own, k));
         }
         return SingleStep::Redo;
     }
@@ -472,8 +543,16 @@ pub fn single_step(
         if tried.len() >= MAX_SINGLE_CALLEES || !tried.insert(k) {
             continue;
         }
-        if arch.kuna_gottailcall.callable.contains_key(&k)
-            || arch.kuna_gottailcall.refused.contains(&(own, k))
+        if arch
+            .kuna_tables
+            .get::<crate::kuna_gottailcall::Ledger>()
+            .callable
+            .contains_key(&k)
+            || arch
+                .kuna_tables
+                .get::<crate::kuna_gottailcall::Ledger>()
+                .refused
+                .contains(&(own, k))
         {
             continue;
         }
@@ -489,7 +568,10 @@ pub fn single_step(
             continue;
         }
         if let Some(callee) = recover(arch, &dest) {
-            arch.kuna_gottailcall.callable.insert(k, callee);
+            arch.kuna_tables
+                .get_mut::<crate::kuna_gottailcall::Ledger>()
+                .callable
+                .insert(k, callee);
             filed = true;
         }
     }
@@ -499,6 +581,8 @@ pub fn single_step(
         SingleStep::Done
     }
 }
+
+crate::kuna_arch_table!(Ledger);
 
 #[cfg(test)]
 #[path = "kuna_gottailcall/tests.rs"]

@@ -402,7 +402,12 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &mut Funcdata) {
         .kuna_options
         .get::<crate::kuna_callerptr::CallerPtr>()
         .0;
-    let own = if arch.kuna_calleevote.own.contains_key(&me) {
+    let own = if arch
+        .kuna_tables
+        .get::<crate::kuna_calleevote::Ledger>()
+        .own
+        .contains_key(&me)
+    {
         None
     } else {
         own_params(arch, entry, fd)
@@ -467,7 +472,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &mut Funcdata) {
             },
         ));
     }
-    let ledger = &mut arch.kuna_calleevote;
+    let ledger = arch.kuna_tables.get_mut::<crate::kuna_calleevote::Ledger>();
     for sites in ledger.sites.values_mut() {
         sites.retain(|s| s.caller != me.1);
     }
@@ -545,7 +550,7 @@ pub fn decide(
         .fires();
     let pointers = crate::kuna_callerptr::void_pointer(arch);
     let decided = decide_ledger_with(
-        &arch.kuna_calleevote,
+        arch.kuna_tables.get::<crate::kuna_calleevote::Ledger>(),
         ptr_size,
         headless,
         pointers.as_ref(),
@@ -553,7 +558,10 @@ pub fn decide(
     );
     let changed = decided.iter().map(|(k, _)| *k).collect();
     for (key, stated) in decided {
-        arch.kuna_calleevote.stated.insert(key, Rc::new(stated));
+        arch.kuna_tables
+            .get_mut::<crate::kuna_calleevote::Ledger>()
+            .stated
+            .insert(key, Rc::new(stated));
     }
     changed
 }
@@ -766,7 +774,9 @@ pub fn decide_ledger_with(
 /// stated: tar's `exclude_add_pattern_buffer (struct exclude *, char *)` is
 /// redone for its record and its callers still pass the buffer as `char *`.
 pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
-    arch.kuna_calleevote.forget_naming(names);
+    arch.kuna_tables
+        .get_mut::<crate::kuna_calleevote::Ledger>()
+        .forget_naming(names);
 }
 
 /// A type's name for the trace, pointers spelled through.
@@ -797,7 +807,7 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     let Some(key) = key_of(data.get_address()) else {
         return;
     };
-    let ledger = &arch.kuna_calleevote;
+    let ledger = arch.kuna_tables.get::<crate::kuna_calleevote::Ledger>();
     if let Some(stated) = ledger.stated.get(&key) {
         data.kuna_set_calleevote_inputs(Some(Rc::clone(stated)));
     }
@@ -1098,6 +1108,8 @@ impl crate::kuna_optionset::KunaOption for CalleeVoteMode {
         Ok(crate::kuna_calleevote::OptionCalleeVote.apply(value)?)
     }
 }
+
+crate::kuna_arch_table!(Ledger);
 
 #[cfg(test)]
 mod tests;

@@ -306,7 +306,12 @@ mod tests {
             DeclarationSource::Assertion,
         );
         prepare(&mut prog);
-        assert!(prog.arch().kuna_callwide.is_empty());
+        assert!(
+            prog.arch()
+                .kuna_tables
+                .get::<unlace_decomp::kuna_callwide::ProofSlot>()
+                .is_empty()
+        );
         assert!(
             prog.arch()
                 .symboltab
@@ -351,21 +356,30 @@ mod tests {
                 .is_none()
         );
         prepare(&mut prog);
-        assert!(!prog.arch().kuna_callwide.is_empty());
+        assert!(
+            !prog
+                .arch()
+                .kuna_tables
+                .get::<unlace_decomp::kuna_callwide::ProofSlot>()
+                .is_empty()
+        );
         assert!(
             prog.arch()
-                .kuna_callwide
+                .kuna_tables
+                .get::<unlace_decomp::kuna_callwide::ProofSlot>()
                 .needed_declaration(caller.addr.get_offset())
         );
         assert!(
             prog.arch()
-                .kuna_callwide
+                .kuna_tables
+                .get::<unlace_decomp::kuna_callwide::ProofSlot>()
                 .needed_declaration(ignored.addr.get_offset())
         );
         assert!(
             !prog
                 .arch()
-                .kuna_callwide
+                .kuna_tables
+                .get::<unlace_decomp::kuna_callwide::ProofSlot>()
                 .needed_declaration(unused.addr.get_offset())
         );
         let ignored_contract = prog
@@ -426,7 +440,14 @@ mod tests {
             let bytes = prog.callwide.image.as_ref().unwrap();
             assert!(facts(&prog, bytes).is_some());
             prepare(&mut prog);
-            assert!(prog.arch().kuna_callwide.is_empty(), "{}", mode.as_str());
+            assert!(
+                prog.arch()
+                    .kuna_tables
+                    .get::<unlace_decomp::kuna_callwide::ProofSlot>()
+                    .is_empty(),
+                "{}",
+                mode.as_str()
+            );
             assert!(
                 prog.arch()
                     .symboltab
@@ -563,7 +584,12 @@ mod tests {
         );
         assert!(prog.callwide.declarations.is_empty());
         assert!(prog.callwide.unavailable.is_some());
-        assert!(prog.arch().kuna_callwide.is_empty());
+        assert!(
+            prog.arch()
+                .kuna_tables
+                .get::<unlace_decomp::kuna_callwide::ProofSlot>()
+                .is_empty()
+        );
     }
 
     fn record(target: Target, name: &str, source: DeclarationSource) -> Record {
@@ -729,7 +755,10 @@ pub fn prepare(prog: &mut ConsoleProgram) {
         return;
     }
     unlace_decomp::kuna_mipsunaligned::paint(prog.arch_mut());
-    prog.arch_mut().kuna_callwide.clear();
+    prog.arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_callwide::ProofSlot>()
+        .clear();
     ingest_dwarf(prog);
     prog.callwide.frozen = true;
     if let Some(reason) = prog.callwide.unavailable {
@@ -794,14 +823,20 @@ pub fn prepare(prog: &mut ConsoleProgram) {
             {
                 return;
             }
-            let Some(verdict) = prog.arch().kuna_callwide.verdict() else {
+            let Some(verdict) = prog
+                .arch()
+                .kuna_tables
+                .get::<unlace_decomp::kuna_callwide::ProofSlot>()
+                .verdict()
+            else {
                 return;
             };
             let needed: Vec<_> = declarations
                 .iter()
                 .filter(|declaration| {
                     prog.arch()
-                        .kuna_callwide
+                        .kuna_tables
+                        .get::<unlace_decomp::kuna_callwide::ProofSlot>()
                         .needed_declaration(declaration.entry)
                 })
                 .cloned()
@@ -821,7 +856,12 @@ pub fn prepare(prog: &mut ConsoleProgram) {
                     Some(&declaration.model),
                 );
             }
-            if prog.arch().kuna_callwide.is_empty() {
+            if prog
+                .arch()
+                .kuna_tables
+                .get::<unlace_decomp::kuna_callwide::ProofSlot>()
+                .is_empty()
+            {
                 unlace_decomp::kuna_callwide::publish_mips(
                     prog.arch_mut(),
                     &regions,
@@ -832,8 +872,16 @@ pub fn prepare(prog: &mut ConsoleProgram) {
                     &declarations,
                 );
             }
-            if !prog.arch().kuna_callwide.same_verdict(&verdict) {
-                prog.arch_mut().kuna_callwide.clear();
+            if !prog
+                .arch()
+                .kuna_tables
+                .get::<unlace_decomp::kuna_callwide::ProofSlot>()
+                .same_verdict(&verdict)
+            {
+                prog.arch_mut()
+                    .kuna_tables
+                    .get_mut::<unlace_decomp::kuna_callwide::ProofSlot>()
+                    .clear();
                 refuse(prog, "declaration replay changed the frozen proof");
             }
         }

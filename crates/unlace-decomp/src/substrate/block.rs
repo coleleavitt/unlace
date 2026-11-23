@@ -4011,7 +4011,8 @@ impl BlockGraph {
     /// Encode the \<bhead> list + recursive bodies of a BlockGraph
     /// (C++ `BlockGraph::encodeBody`, `block.cc:1377`).  Leaf blocks have empty
     /// bodies except BlockBasic, which writes its `cover`.
-    pub(crate) fn encode_body(&self, this_id: BlockId, encoder: &mut dyn Encoder) {
+    #[doc(hidden)]
+    pub fn encode_body(&self, this_id: BlockId, encoder: &mut dyn Encoder) {
         let bt = self.arena[this_id].get_type();
         if let BlockKind::Basic(bd) = &self.arena[this_id].kind {
             // BlockBasic::encodeBody: cover.encode(encoder)
@@ -4107,7 +4108,8 @@ impl BlockGraph {
     }
 
     /// Encode edge information (C++ `FlowBlock::encodeEdges`, `block.cc:2489`).
-    pub(crate) fn encode_edges(&self, this_id: BlockId, encoder: &mut dyn Encoder) {
+    #[doc(hidden)]
+    pub fn encode_edges(&self, this_id: BlockId, encoder: &mut dyn Encoder) {
         for i in 0..self.arena[this_id].intothis.len() {
             self.arena[this_id].intothis[i].encode(encoder, &self.arena);
         }

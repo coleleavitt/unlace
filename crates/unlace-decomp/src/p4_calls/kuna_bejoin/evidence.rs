@@ -668,12 +668,12 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
     let Some(model) = arch.default_fp().cloned() else {
         return;
     };
-    let mut cache = std::mem::take(&mut arch.kuna_wide);
+    let mut cache = std::mem::take(arch.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>());
     if cache.pair.is_none() {
         cache.pair = Some(wide_pair(&model, arch.manage()));
     }
     let Some(Some(pair)) = cache.pair.clone() else {
-        arch.kuna_wide = cache;
+        *arch.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>() = cache;
         return;
     };
     let mut entries: Vec<Entry> = Vec::new();
@@ -700,7 +700,7 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
         verdicts,
         missed: Default::default(),
     });
-    arch.kuna_wide = cache;
+    *arch.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>() = cache;
 }
 
 /// After a pass of the pipeline: did a call ask about a callee no verdict was
@@ -718,12 +718,12 @@ pub fn missed_proven(arch: &mut Architecture, data: &Funcdata) -> bool {
     let Some(model) = arch.default_fp().cloned() else {
         return false;
     };
-    let mut cache = std::mem::take(&mut arch.kuna_wide);
+    let mut cache = std::mem::take(arch.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>());
     let mut any = false;
     for k in missed {
         any |= take(arch, &mut cache, &model, &view.pair, k);
     }
-    arch.kuna_wide = cache;
+    *arch.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>() = cache;
     any
 }
 

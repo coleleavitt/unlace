@@ -1302,7 +1302,8 @@ impl Funcdata {
     /// takes.  Shared by [`link_symbol_reference`] (the attach) and
     /// [`name_undefined_spacebase_symbols`] (the namerec rename pre-pass) so the two
     /// passes resolve the identical address.
-    pub(crate) fn resolve_spacebase_ref_addr(&self, off_vn: VarnodeId) -> Option<Address> {
+    #[doc(hidden)]
+    pub fn resolve_spacebase_ref_addr(&self, off_vn: VarnodeId) -> Option<Address> {
         // The PTRSUB this constant feeds.
         let op = self.lone_descend(off_vn)?;
         // The spacebase varnode.
@@ -2807,7 +2808,8 @@ impl Funcdata {
     /// Recurses up through INDIRECT/MULTIEQUAL/COPY/PIECE/SUBPIECE definitions
     /// (bounded by `maxlevel`), and at the top ancestor defers to
     /// [`only_op_use`](Self::only_op_use).
-    pub(crate) fn ancestor_op_use(
+    #[doc(hidden)]
+    pub fn ancestor_op_use(
         &mut self,
         maxlevel: int4,
         invn: VarnodeId,
@@ -2828,7 +2830,8 @@ impl Funcdata {
     /// upstream walk with no memo, and the number of steps it took.
     #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn ancestor_op_use_counted(
+    #[doc(hidden)]
+    pub fn ancestor_op_use_counted(
         &mut self,
         every_path: bool,
         maxlevel: int4,
@@ -3388,7 +3391,8 @@ enum AncestorCmd {
 /// RETURN/CALL has realistic data-flow ancestry for a parameter-passing
 /// location.  Operates on `&mut Funcdata` (it sets/clears the Varnode mark bit
 /// to trim cycles, exactly as the C++ `mark`).
-pub(crate) struct AncestorRealistic {
+#[doc(hidden)]
+pub struct AncestorRealistic {
     state_stack: Vec<AncestorState>,
     marked_vn: Vec<VarnodeId>,
     multi_depth: int4,
@@ -3421,7 +3425,8 @@ pub(crate) struct AncestorRealistic {
 }
 
 impl AncestorRealistic {
-    pub(crate) fn new() -> AncestorRealistic {
+    #[doc(hidden)]
+    pub fn new() -> AncestorRealistic {
         AncestorRealistic {
             state_stack: Vec::new(),
             marked_vn: Vec::new(),
@@ -3441,7 +3446,8 @@ impl AncestorRealistic {
 
     /// (kuna) The LOADs the last [`Self::execute`] stopped at as solid
     /// movement, read by [`crate::p4_calls::kuna_reloadarg`].
-    pub(crate) fn solid_loads(&self) -> &[OpId] {
+    #[doc(hidden)]
+    pub fn solid_loads(&self) -> &[OpId] {
         &self.solid_loads
     }
 
@@ -3458,26 +3464,30 @@ impl AncestorRealistic {
 
     /// (kuna) `condexeret`: the op that read the non-directwrite function input
     /// the last [`Self::execute`] failed at, if that is what failed it.
-    pub(crate) fn input_fail_reader(&self) -> Option<OpId> {
+    #[doc(hidden)]
+    pub fn input_fail_reader(&self) -> Option<OpId> {
         self.input_fail_reader
     }
 
     /// (kuna) `condexeret`: from now on, pass a non-directwrite function input
     /// and record it with its reader instead of failing there, so one walk sees
     /// every such input; any other failure still ends it.
-    pub(crate) fn collect_inputs(&mut self) {
+    #[doc(hidden)]
+    pub fn collect_inputs(&mut self) {
         self.collect_inputs = true;
     }
 
     /// (kuna) `condexeret`: the (reader, input) pairs the last collecting walk
     /// passed.
-    pub(crate) fn collected(&self) -> &[(OpId, VarnodeId)] {
+    #[doc(hidden)]
+    pub fn collected(&self) -> &[(OpId, VarnodeId)] {
         &self.collected
     }
 
     /// (kuna) `condexeret`: from now on, fail at any function input overlapping
     /// one of `ranges`, directwrite or not.
-    pub(crate) fn forbid_inputs(&mut self, ranges: Vec<(Address, int4)>) {
+    #[doc(hidden)]
+    pub fn forbid_inputs(&mut self, ranges: Vec<(Address, int4)>) {
         self.forbidden = ranges;
     }
 
@@ -3917,7 +3927,8 @@ impl AncestorRealistic {
     /// reads; the walk may set the trial's `ind_create_formed`/`cond_exe_effect`/
     /// `ancestor_realistic`/`ancestor_solid` flags — those are applied to the
     /// caller's `trial` after `execute` returns (see [`Self::apply_trial`]).
-    pub(crate) fn execute(
+    #[doc(hidden)]
+    pub fn execute(
         &mut self,
         fd: &mut Funcdata,
         op: OpId,
@@ -3975,12 +3986,8 @@ impl AncestorRealistic {
     /// caller's `ParamTrial` (the C++ mutates `trial` in place; the kuna port
     /// collects the flags and applies them here so the walk can borrow `&mut
     /// Funcdata` cleanly).  `realistic`/`solid` are the `execute` result.
-    pub(crate) fn apply_trial(
-        &self,
-        trial: &mut crate::fspec::ParamTrial,
-        realistic: bool,
-        solid: bool,
-    ) {
+    #[doc(hidden)]
+    pub fn apply_trial(&self, trial: &mut crate::fspec::ParamTrial, realistic: bool, solid: bool) {
         if self.set_ind_create_formed {
             trial.set_ind_create_formed();
         }
@@ -4003,7 +4010,8 @@ impl AncestorRealistic {
 /// slotmap key's bit pattern is used.  `slotmap` keys expose their packed `u64`
 /// form via `KeyData::as_ffi`; the round-trip is opaque to the IR (the iop-space
 /// value is only ever decoded back to identify the same op).
-pub(crate) fn op_iop_encode(op: OpId) -> uintb {
+#[doc(hidden)]
+pub fn op_iop_encode(op: OpId) -> uintb {
     use slotmap::Key;
     op.data().as_ffi()
 }
@@ -4018,7 +4026,8 @@ pub(crate) fn op_iop_encode(op: OpId) -> uintb {
 /// [`TransformVar::create_replacement`](crate::transform) for the `constant_iop`
 /// placeholder.
 #[inline]
-pub(crate) fn op_iop_decode(val: uintb) -> OpId {
+#[doc(hidden)]
+pub fn op_iop_decode(val: uintb) -> OpId {
     OpId::from(slotmap::KeyData::from_ffi(val))
 }
 
@@ -4033,7 +4042,7 @@ pub struct Forced {
 /// Blocks reachable from each forced out block, computed once per walk.
 #[derive(Default)]
 pub struct Reach {
-    pub(crate) sets: std::collections::HashMap<
+    pub sets: std::collections::HashMap<
         crate::context::BlockId,
         Option<std::collections::HashSet<crate::context::BlockId>>,
     >,

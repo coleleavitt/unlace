@@ -2931,7 +2931,8 @@ impl Database {
 
     /// Find an overlapping mapping satisfying a symbol predicate, including
     /// entries beginning inside the requested interval.
-    pub(crate) fn find_overlap_matching(
+    #[doc(hidden)]
+    pub fn find_overlap_matching(
         &self,
         scope: ScopeId,
         addr: &Address,
@@ -3071,7 +3072,8 @@ impl Database {
         );
     }
 
-    pub(crate) fn set_function_proto_with_go_string(
+    #[doc(hidden)]
+    pub fn set_function_proto_with_go_string(
         &mut self,
         sid: SymbolId,
         pieces: crate::fspec::PrototypePieces,
@@ -3142,7 +3144,8 @@ impl Database {
         }
     }
 
-    pub(crate) fn go_pointer_receiver(
+    #[doc(hidden)]
+    pub fn go_pointer_receiver(
         &self,
         addr: &Address,
     ) -> Option<&crate::kuna_gopointermethod::Receiver> {
@@ -5107,7 +5110,8 @@ impl Database {
         self.encode_scope_with_storage(scope, wire_symbols, &BTreeMap::new(), encoder)
     }
 
-    pub(crate) fn wrapped_stack_wire_specs(&self, scope: ScopeId) -> Vec<(uint8, int4)> {
+    #[doc(hidden)]
+    pub fn wrapped_stack_wire_specs(&self, scope: ScopeId) -> Vec<(uint8, int4)> {
         self.scopes[scope]
             .nametree
             .values()
@@ -5125,7 +5129,8 @@ impl Database {
             .collect()
     }
 
-    pub(crate) fn encode_scope_with_storage(
+    #[doc(hidden)]
+    pub fn encode_scope_with_storage(
         &self,
         scope: ScopeId,
         wire_symbols: &[WireSymbol],

@@ -108,18 +108,25 @@ pub(crate) fn decompile_callee_first(
         .is_on()
         && open.is_some()
     {
-        let ledger = &mut prog.arch_mut().kuna_callbacktype;
+        let ledger = prog
+            .arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_callbacktype::Ledger>();
         *ledger = unlace_decomp::kuna_callbacktype::Ledger::default();
         ledger.recording = true;
     }
-    prog.arch_mut().kuna_gottailcall = unlace_decomp::kuna_gottailcall::Ledger {
-        recording: true,
-        planned: plan
-            .iter()
-            .filter_map(|&(i, _)| vote_key(&targets[i]))
-            .collect(),
-        ..Default::default()
-    };
+    *prog
+        .arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_gottailcall::Ledger>() =
+        unlace_decomp::kuna_gottailcall::Ledger {
+            recording: true,
+            planned: plan
+                .iter()
+                .filter_map(|&(i, _)| vote_key(&targets[i]))
+                .collect(),
+            ..Default::default()
+        };
     let callers = match &graph {
         Ok(graph)
             if prog
@@ -157,7 +164,10 @@ pub(crate) fn decompile_callee_first(
     drop(graph);
     crate::kuna_allocrelease::after_analysis();
     {
-        let ledger = &mut prog.arch_mut().kuna_callerargs;
+        let ledger = prog
+            .arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_callerargs::Ledger>();
         *ledger = Default::default();
         if let Some(expected) = callers {
             ledger.expected = expected;
@@ -170,8 +180,14 @@ pub(crate) fn decompile_callee_first(
         .arch()
         .kuna_options
         .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
-    prog.arch_mut().kuna_storetype.start(storetype);
-    prog.arch_mut().kuna_voidret = Default::default();
+    prog.arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+        .start(storetype);
+    *prog
+        .arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_voidret::Ledger>() = Default::default();
     let mut reads = VoidReads::default();
     for &(index, park) in &plan {
         let first = decompile_planned(prog, &targets[index], park, &base);
@@ -179,21 +195,33 @@ pub(crate) fn decompile_callee_first(
         slots.put(index, first);
         if let Some(k) = vote_key(&targets[index]) {
             reads.decompiled(k);
-            prog.arch_mut().kuna_gottailcall.seen.insert(k);
+            prog.arch_mut()
+                .kuna_tables
+                .get_mut::<unlace_decomp::kuna_gottailcall::Ledger>()
+                .seen
+                .insert(k);
         }
         reads.settle(prog, &targets, &plan, &base, &mut slots);
     }
     if let Some(expected) = expected {
         callee_vote_rounds(prog, &targets, &plan, &base, &mut slots, &expected);
     }
-    if prog.arch().kuna_callerargs.recording {
+    if prog
+        .arch()
+        .kuna_tables
+        .get::<unlace_decomp::kuna_callerargs::Ledger>()
+        .recording
+    {
         caller_args_round(prog, &targets, &plan, &base, &mut slots);
     }
     if !custom_plan.is_empty() {
         custom_reg_round(prog, &custom_plan, &targets, &plan, &base, &mut slots);
     }
     converge_callee_first(prog, &targets, &plan, &base, &mut slots);
-    prog.arch_mut().kuna_callbacktype.recording = false;
+    prog.arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_callbacktype::Ledger>()
+        .recording = false;
     if let (Some(refs), Some(open)) = (&callback_refs, &open)
         && prog
             .arch()
@@ -206,9 +234,15 @@ pub(crate) fn decompile_callee_first(
     converge_element_globals_callee_first(prog, &targets, &plan, &base, &mut slots);
     converge_store_types_callee_first(prog, &targets, &plan, &base, &mut slots);
     prog.arch_mut().kuna_settle_caller_reads = previous_settling;
-    prog.arch_mut().kuna_gottailcall = Default::default();
+    *prog
+        .arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_gottailcall::Ledger>() = Default::default();
     unlace_decomp::kuna_elemptr::stop(prog.arch_mut());
-    prog.arch_mut().kuna_storetype.stop();
+    prog.arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+        .stop();
     let mut results: Vec<FuncResult> = slots.into_results();
     if base.want_pointer_arguments {
         unlace_console::project::reconcile_pointer_arguments(&mut results);
@@ -340,7 +374,11 @@ fn converge_store_types_callee_first(
         .kuna_options
         .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
     for _ in 0..2 {
-        let decided = prog.arch_mut().kuna_storetype.decide(mode);
+        let decided = prog
+            .arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+            .decide(mode);
         let typed: Vec<u64> = decided
             .into_iter()
             .filter(|(addr, ty)| unlace_console::project::commit_store_type(prog, *addr, ty))
@@ -349,7 +387,11 @@ fn converge_store_types_callee_first(
         if typed.is_empty() {
             return;
         }
-        let redo = prog.arch().kuna_storetype.readers(&typed);
+        let redo = prog
+            .arch()
+            .kuna_tables
+            .get::<unlace_decomp::kuna_storetype::Ledger>()
+            .readers(&typed);
         for &(index, park) in plan {
             if !redo.contains(&targets[index].addr.get_offset()) {
                 continue;
@@ -435,7 +477,11 @@ fn caller_args_round(
         .collect();
     let (admitted, declined) = admit_within_budget(queue, &mut budget, &mut spent);
     for (_, key) in declined {
-        prog.arch_mut().kuna_callerargs.stated.remove(&key.1);
+        prog.arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_callerargs::Ledger>()
+            .stated
+            .remove(&key.1);
     }
     for &(index, park) in plan {
         let Some(key) = vote_key(&targets[index]).filter(|k| admitted.contains(k)) else {
@@ -448,13 +494,20 @@ fn caller_args_round(
                 if !same_arity(&first, &again)
                     || !unlace_console::project::redo_replaces(&first, &again) =>
             {
-                prog.arch_mut().kuna_callerargs.stated.remove(&key.1);
+                prog.arch_mut()
+                    .kuna_tables
+                    .get_mut::<unlace_decomp::kuna_callerargs::Ledger>()
+                    .stated
+                    .remove(&key.1);
                 unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), key, stated);
             }
             _ => slots.put(index, again),
         }
     }
-    prog.arch_mut().kuna_callerargs.recording = false;
+    prog.arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_callerargs::Ledger>()
+        .recording = false;
 }
 
 /// (kuna `calleereginputs custom`) Join the caller side listed before the pass
@@ -587,7 +640,11 @@ fn callback_park_round(
 ) {
     use unlace_decomp::kuna_callbacktype as cb;
     let trace = cb::trace();
-    let decided = prog.arch().kuna_callbacktype.decided();
+    let decided = prog
+        .arch()
+        .kuna_tables
+        .get::<unlace_decomp::kuna_callbacktype::Ledger>()
+        .decided();
     if decided.is_empty() {
         return;
     }
@@ -703,7 +760,10 @@ fn open_callee_votes(
         }
         expected.insert(key, sites);
     }
-    let ledger = &mut prog.arch_mut().kuna_calleevote;
+    let ledger = prog
+        .arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_calleevote::Ledger>();
     *ledger = unlace_decomp::kuna_calleevote::Ledger::default();
     ledger.closed = closed;
     ledger.recording = true;
@@ -772,9 +832,14 @@ fn callee_vote_rounds(
             .kuna_options
             .get::<unlace_decomp::kuna_callerptr::CallerPtr>()
             .0;
-        let (pointers_only, queue): (Vec<_>, Vec<_>) = queue
-            .into_iter()
-            .partition(|(_, key)| caller_ptr && prog.arch().kuna_calleevote.pointers_only(*key));
+        let (pointers_only, queue): (Vec<_>, Vec<_>) = queue.into_iter().partition(|(_, key)| {
+            caller_ptr
+                && prog
+                    .arch()
+                    .kuna_tables
+                    .get::<unlace_decomp::kuna_calleevote::Ledger>()
+                    .pointers_only(*key)
+        });
         let (mut admitted, mut declined) = admit_within_budget(queue, &mut budget, &mut spent);
         let (more, refused) = admit_within_budget(pointers_only, &mut pointer_budget, &mut spent);
         admitted.extend(more);
@@ -786,7 +851,10 @@ fn callee_vote_rounds(
                     key.1
                 );
             }
-            prog.arch_mut().kuna_calleevote.decline(key);
+            prog.arch_mut()
+                .kuna_tables
+                .get_mut::<unlace_decomp::kuna_calleevote::Ledger>()
+                .decline(key);
         }
         for &(index, park) in plan {
             let Some(key) = vote_key(&targets[index]).filter(|k| admitted.contains(k)) else {
@@ -798,7 +866,10 @@ fn callee_vote_rounds(
             redone += 1;
             match slots.get(index) {
                 Some(first) if !same_arity(&first, &again) => {
-                    prog.arch_mut().kuna_calleevote.forget(key);
+                    prog.arch_mut()
+                        .kuna_tables
+                        .get_mut::<unlace_decomp::kuna_calleevote::Ledger>()
+                        .forget(key);
                     unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), key, stated);
                     unlace_decomp::kuna_narrowret::restore(prog.arch_mut(), key, narrow);
                 }
@@ -810,7 +881,10 @@ fn callee_vote_rounds(
                     unlace_decomp::kuna_narrowret::restore(prog.arch_mut(), key, narrow);
                 }
                 _ => {
-                    prog.arch_mut().kuna_calleevote.keep(key);
+                    prog.arch_mut()
+                        .kuna_tables
+                        .get_mut::<unlace_decomp::kuna_calleevote::Ledger>()
+                        .keep(key);
                     slots.put(index, again);
                 }
             }
@@ -821,7 +895,10 @@ fn callee_vote_rounds(
             "[calleevote] redo pass: {redone} decompiles, {spent} lines reprinted of {opening} budgeted"
         );
     }
-    prog.arch_mut().kuna_calleevote.recording = false;
+    prog.arch_mut()
+        .kuna_tables
+        .get_mut::<unlace_decomp::kuna_calleevote::Ledger>()
+        .recording = false;
 }
 
 #[expect(

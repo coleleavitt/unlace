@@ -148,7 +148,11 @@ fn sibling_callees_in_a_cycle_do_not_publish_partial_contracts() {
     .result
     .unwrap();
     assert!(
-        program.arch().kuna_protoorder_types.is_empty(),
+        program
+            .arch()
+            .kuna_tables
+            .get::<unlace_decomp::kuna_protoorder::CalleeTypes>()
+            .is_empty(),
         "a cycle between direct callees must not state either contract"
     );
 }

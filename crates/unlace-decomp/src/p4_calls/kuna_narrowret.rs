@@ -269,17 +269,24 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     }
     match stated {
         Some(s) => {
-            arch.kuna_narrowret.insert(k, Rc::new(s));
+            arch.kuna_tables
+                .get_mut::<crate::kuna_narrowret::NarrowReturns>()
+                .insert(k, Rc::new(s));
         }
         None => {
-            arch.kuna_narrowret.remove(&k);
+            arch.kuna_tables
+                .get_mut::<crate::kuna_narrowret::NarrowReturns>()
+                .remove(&k);
         }
     }
 }
 
 /// What the function filed under `k` states it returns, for [`restore`].
 pub fn statement(arch: &Architecture, k: (int4, uintb)) -> Option<Rc<NarrowReturn>> {
-    arch.kuna_narrowret.get(&k).cloned()
+    arch.kuna_tables
+        .get::<crate::kuna_narrowret::NarrowReturns>()
+        .get(&k)
+        .cloned()
 }
 
 /// Do two statements say the same: one storage, one width, one type?
@@ -306,10 +313,14 @@ pub fn same_statement(a: Option<&NarrowReturn>, b: Option<&NarrowReturn>) -> boo
 pub fn restore(arch: &mut Architecture, k: (int4, uintb), stated: Option<Rc<NarrowReturn>>) {
     match stated {
         Some(s) => {
-            arch.kuna_narrowret.insert(k, s);
+            arch.kuna_tables
+                .get_mut::<crate::kuna_narrowret::NarrowReturns>()
+                .insert(k, s);
         }
         None => {
-            arch.kuna_narrowret.remove(&k);
+            arch.kuna_tables
+                .get_mut::<crate::kuna_narrowret::NarrowReturns>()
+                .remove(&k);
         }
     }
 }
@@ -321,7 +332,10 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
         .kuna_options
         .get::<crate::kuna_narrowret::NarrowRet>()
         .0
-        || arch.kuna_narrowret.is_empty()
+        || arch
+            .kuna_tables
+            .get::<crate::kuna_narrowret::NarrowReturns>()
+            .is_empty()
     {
         return;
     }
@@ -335,7 +349,11 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
         if Some(k) == own {
             continue;
         }
-        if let Some(s) = arch.kuna_narrowret.get(&k) {
+        if let Some(s) = arch
+            .kuna_tables
+            .get::<crate::kuna_narrowret::NarrowReturns>()
+            .get(&k)
+        {
             data.kuna_set_narrowret(k, Rc::clone(s));
         }
     }
@@ -823,3 +841,5 @@ impl FuncdataNarrowretExt for crate::funcdata::Funcdata {
         self.kuna_state::<ReadsSlot>().0.get(&op)
     }
 }
+
+crate::kuna_arch_table!(NarrowReturns);

@@ -808,12 +808,18 @@ fn code_end_in_target_units(value: u64, word_size: u64) -> u64 {
 impl ConsoleProgram {
     pub fn callwide_changed(&mut self) {
         self.callwide.changed();
-        self.arch_mut().kuna_callwide.clear();
+        self.arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_callwide::ProofSlot>()
+            .clear();
     }
 
     pub fn callwide_unavailable(&mut self, reason: &'static str) {
         self.callwide.unavailable(reason);
-        self.arch_mut().kuna_callwide.clear();
+        self.arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_callwide::ProofSlot>()
+            .clear();
     }
 
     /// Borrow the `Architecture` god object (C++ `dcp->conf`, viewed as the base).

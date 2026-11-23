@@ -213,6 +213,9 @@ mod verify_floatglobals;
 #[path = "verify_flowreuse.rs"]
 mod verify_flowreuse;
 
+#[path = "verify_maturity.rs"]
+mod verify_maturity;
+
 #[path = "verify_formatstring_crossarch.rs"]
 mod verify_formatstring_crossarch;
 

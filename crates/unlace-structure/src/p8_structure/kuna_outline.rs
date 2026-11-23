@@ -242,7 +242,7 @@ impl Action for ActionOutline {
             return 0;
         }
         // The pre-SSA window: before heritage there are no MULTIEQUALs to patch.
-        if data.get_heritage_pass() != 0 {
+        if data.is_settled(crate::kuna_maturity::Fact::Ssa) {
             return 0;
         }
         if data.bblocks_get_size() < 2 {

@@ -142,4 +142,5 @@ unlace-decomp            18k   driver: schedule, option dispatch, fills the hook
   the scheduler has got through the current pass (`raw` … `band-b` … `complete`), and passes ask
   whether a fact is settled instead of reading ad-hoc flags. Because the middle is one fixpoint
   that restarts, a level only rises within a pass and drops back to `raw` on a restart
-  (`docs/spec/00-overview.md` §0.10).
+  (`docs/spec/00-overview.md` §0.10; `unlace-middle`'s `kuna_maturity`, marked by the driver's
+  schedule).

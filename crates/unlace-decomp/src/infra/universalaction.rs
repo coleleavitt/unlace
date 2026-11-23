@@ -23,6 +23,7 @@ use crate::action::{
     UNIVERSAL_NAME, ruleflags,
 };
 use crate::kuna_hooks::HookRegistry;
+use crate::kuna_maturity::Maturity;
 use crate::kuna_passhooks::{KunaHookSlots, KunaHooks};
 use crate::kuna_phases::KunaPhase;
 
@@ -134,6 +135,10 @@ pub enum SchedNode {
     /// A schedule point that holds nothing: a phase boundary no callback is
     /// registered for.  It adds no action and no listing line.
     Empty,
+    /// (kuna maturity) A node whose completion settles a maturity level
+    /// (`docs/spec/00-overview.md` §0.10): materialized, filtered and listed as
+    /// the node itself, with [`ActionBase::settles`](crate::action::ActionBase) set.
+    Settles(Maturity, Box<SchedNode>),
 }
 
 impl SchedNode {
@@ -180,6 +185,11 @@ impl SchedNode {
                 Box::new(grp)
             }
             SchedNode::Empty => return None,
+            SchedNode::Settles(level, node) => {
+                let mut action = node.materialize_node()?;
+                action.base_mut().settles = Some(level);
+                action
+            }
         })
     }
 
@@ -196,6 +206,7 @@ impl SchedNode {
                 children.iter().any(|c| c.survives(grouplist))
             }
             SchedNode::Empty => false,
+            SchedNode::Settles(_, node) => node.survives(grouplist),
         }
     }
 
@@ -248,6 +259,7 @@ impl SchedNode {
                 ..
             } => Self::print_container(out, num, *flags, name, depth, children, grouplist),
             SchedNode::Empty => num,
+            SchedNode::Settles(_, node) => node.print_listing(out, num, depth, grouplist),
         }
     }
 
@@ -377,6 +389,11 @@ fn print_rule_line(
         out.push(' ');
     }
     out.push_str(name);
+}
+
+/// (kuna maturity) Mark `node` as settling `level` when it completes.
+fn settles(level: Maturity, node: SchedNode) -> SchedNode {
+    SchedNode::Settles(level, Box::new(node))
 }
 
 // Declarative-DSL helpers (kept terse so the spec body reads like the C++).
@@ -1621,7 +1638,7 @@ pub fn universal_sched_hooked(
         name: UNIVERSAL_NAME,
         max: 1,
         children: vec![
-            act!(ActionStart::boxed("base")),
+            settles(Maturity::Lifted, act!(ActionStart::boxed("base"))),
             hooks.boundary(KunaPhase::P2),
             act!(ActionConstbase::boxed("base")),
             // (kuna) linuxsyscall (option `linuxsyscall`, default-OFF): name the
@@ -1680,8 +1697,14 @@ pub fn universal_sched_hooked(
                 ActionExtraPopSetup::boxed("base", stackspace_index)
             })),
             act!(ActionPrototypeTypes::boxed("protorecovery")),
-            act!(ActionFuncLink::boxed("protorecovery")),
-            act!(ActionFuncLinkOutOnly::boxed("noproto")),
+            settles(
+                Maturity::CallsLinked,
+                act!(ActionFuncLink::boxed("protorecovery")),
+            ),
+            settles(
+                Maturity::CallsLinked,
+                act!(ActionFuncLinkOutOnly::boxed("noproto")),
+            ),
             // (kuna) swifterror (option `swiftcall`): the error register
             // defined after a throwing Swift call and read before a throwing
             // return. After FuncLink, which gives each call its model; before
@@ -1689,17 +1712,20 @@ pub fn universal_sched_hooked(
             act!(crate::kuna_swifterror::ActionSwiftError::boxed(
                 "protorecovery"
             )),
-            fullloop,
+            settles(Maturity::BandB, fullloop),
             hooks.boundary(KunaPhase::P3),
             hooks.boundary(KunaPhase::P4),
             hooks.boundary(KunaPhase::P5),
             act!(ActionMappedLocalSync::boxed("localrecovery")),
             act!(ActionStartCleanUp::boxed("cleanup")),
-            SchedNode::Pool {
-                flags: REPEAT,
-                name: "cleanup",
-                rules: cleanup_rules,
-            },
+            settles(
+                Maturity::CleanedUp,
+                SchedNode::Pool {
+                    flags: REPEAT,
+                    name: "cleanup",
+                    rules: cleanup_rules,
+                },
+            ),
             act!(ActionPreferComplement::boxed("blockrecovery", true)),
             act!(ActionStructureTransform::boxed("blockrecovery", true)),
             act!(ActionNormalizeBranches::boxed("normalizebranches")),
@@ -1719,11 +1745,14 @@ pub fn universal_sched_hooked(
             act!(ActionMergeAdjacent::boxed("merge")),
             act!(ActionMergeType::boxed("merge")),
             act!(ActionHideShadow::boxed("merge")),
-            act!(ActionCopyMarker::boxed("merge")),
+            settles(Maturity::Merged, act!(ActionCopyMarker::boxed("merge"))),
             hooks.boundary(KunaPhase::P6),
             act!(crate::kuna_typevote::ActionTypeVote::boxed("typerecovery")),
             act!(ActionLateDoNothing::boxed("blockrecovery")),
-            act!(ActionBlockStructure::boxed("blockrecovery")),
+            settles(
+                Maturity::Structured,
+                act!(ActionBlockStructure::boxed("blockrecovery")),
+            ),
             hooks.boundary(KunaPhase::P7),
             act!(ActionPreferComplement::boxed("blockrecovery", false)),
             act!(ActionStructureTransform::boxed("blockrecovery", false)),
@@ -1736,7 +1765,10 @@ pub fn universal_sched_hooked(
                 crate::kuna_compareform::ActionPresentCompareForm::new(false, "presentcompare")
             )),
             act!(ActionOutputPrototype::boxed("localrecovery")),
-            act!(ActionInputPrototype::boxed("fixateproto")),
+            settles(
+                Maturity::PrototypeFixed,
+                act!(ActionInputPrototype::boxed("fixateproto")),
+            ),
             act!(ActionMapGlobals::boxed("fixateglobals")),
             act!(ActionDynamicSymbols::boxed("dynamic")),
             act!(ActionNameVars::boxed("merge")),
@@ -1747,7 +1779,7 @@ pub fn universal_sched_hooked(
             act!(crate::kuna_calltargettype::ActionCallTargetType::boxed(
                 "typerecovery"
             )),
-            act!(ActionSetCasts::boxed("casts")),
+            settles(Maturity::Casts, act!(ActionSetCasts::boxed("casts"))),
             act!(ActionFinalStructure::boxed("blockrecovery")),
             act!(crate::kuna_postinc::ActionPostIncrement::boxed(
                 "blockrecovery"
@@ -1816,7 +1848,7 @@ pub fn universal_sched_hooked(
             )),
             hooks.boundary(KunaPhase::P8),
             act!(ActionPrototypeWarnings::boxed("protorecovery")),
-            act!(ActionStop::boxed("base")),
+            settles(Maturity::Complete, act!(ActionStop::boxed("base"))),
         ],
     }
 }

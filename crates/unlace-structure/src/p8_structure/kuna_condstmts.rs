@@ -50,7 +50,7 @@ pub fn complex_blocks(data: &Funcdata) -> BTreeSet<BlockId> {
         return out;
     }
     let seed = data.condstmts_seed();
-    let measure = data.is_high_on();
+    let measure = data.is_settled(crate::kuna_maturity::Fact::HighVariables);
     if seed.is_empty() && !measure {
         return out;
     }
@@ -74,7 +74,10 @@ fn is_overlong(data: &Funcdata, bb: BlockId, cap: int4) -> bool {
 /// comma-printed position.  Only meaningful once implied flags exist.
 pub fn record_hits(data: &mut Funcdata) {
     let cap = data.get_arch().kuna_options.get::<CondStmts>().0;
-    if cap < 0 || !data.is_high_on() || data.sblocks_get_size() == 0 {
+    if cap < 0
+        || !data.is_settled(crate::kuna_maturity::Fact::HighVariables)
+        || data.sblocks_get_size() == 0
+    {
         return;
     }
     let mut hits: Vec<Address> = Vec::new();

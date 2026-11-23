@@ -128,7 +128,7 @@ impl Action for ActionGoJumpChain {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().source_lang.is_go()
-            || data.get_heritage_pass() != 0
+            || data.is_settled(crate::kuna_maturity::Fact::Ssa)
             || data.num_calls() == 0
             || !crate::kuna_gowritebarrier::live(data)
         {

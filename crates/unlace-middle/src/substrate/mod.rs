@@ -32,6 +32,7 @@ pub mod kuna_funcreport;
 pub mod kuna_funcslots;
 pub mod kuna_funcstate;
 pub mod kuna_hostmem;
+pub mod kuna_maturity; // (kuna) how far the scheduler has got through a pass (spec §0.10)
 pub mod kuna_namespaces; // (kuna) which namespaces print in front of a name
 pub mod kuna_optionset;
 pub mod kuna_outlang;

@@ -334,7 +334,7 @@ impl Action for ActionPtrAuthTrap {
         let Some(userop) = data.get_arch().ptrauth_trap_userop else {
             return 0;
         };
-        if data.get_heritage_pass() != 0 {
+        if data.is_settled(crate::kuna_maturity::Fact::Ssa) {
             return 0;
         }
         let edges = trap_edges(data, userop);

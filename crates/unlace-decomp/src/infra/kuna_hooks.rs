@@ -188,6 +188,7 @@ fn pool_owns_group(node: &SchedNode, group: &str) -> bool {
         SchedNode::Group { children, .. } | SchedNode::RestartGroup { children, .. } => {
             children.iter().any(|child| pool_owns_group(child, group))
         }
+        SchedNode::Settles(_, node) => pool_owns_group(node, group),
         SchedNode::Action(_) | SchedNode::Empty => false,
     }
 }

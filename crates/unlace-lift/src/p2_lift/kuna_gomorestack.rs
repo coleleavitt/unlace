@@ -180,7 +180,7 @@ impl Action for ActionGoMorestack {
         // The pre-SSA window: cut the edge before heritage so the entry phi
         // never forms (a function carries one entry guard; the loop covers a
         // wrapper that inlined another and keeps each edit's match fresh).
-        if data.get_heritage_pass() != 0 || data.num_calls() == 0 {
+        if data.is_settled(crate::kuna_maturity::Fact::Ssa) || data.num_calls() == 0 {
             return 0;
         }
         let mut changed = 0;

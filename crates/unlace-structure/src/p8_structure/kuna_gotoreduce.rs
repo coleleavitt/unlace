@@ -147,6 +147,7 @@ impl Action for ActionGotoReduce {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Casts);
         if !data
             .get_arch()
             .kuna_options

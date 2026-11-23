@@ -460,6 +460,17 @@ impl LanguageDatabase {
         kuna_memoryspecs::read(&self.mounts, path)
     }
 
+    /// (kuna) The image to decode for a resolved `.sla` ([`BuildSpecFiles::slafile`]): a file
+    /// on disk is read through `unlace_slacomp::slacache::read_image` (its uncompressed copy,
+    /// which skips the inflate; `UNLACE_SLA_RAW=0` reads the `.sla` itself), a mounted one
+    /// as [`Self::read_spec`] reads it.
+    pub fn read_sla_image(&self, path: &str) -> std::io::Result<Cow<'_, [u8]>> {
+        if std::path::Path::new(path).is_file() {
+            return unlace_slacomp::slacache::read_image(path).map(Cow::Owned);
+        }
+        self.read_spec(path)
+    }
+
     /// All parsed language descriptions, in `.ldefs` document then file order
     /// (C++ `description`).
     pub fn descriptions(&self) -> &[LanguageDescription] {

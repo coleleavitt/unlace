@@ -682,6 +682,7 @@ impl AdditiveEdge {
         self.slot
     }
     /// Get the Varnode term (C++ `getVarnode`).
+    #[inline]
     pub fn get_varnode(&self) -> VarnodeId {
         self.vn
     }
@@ -844,6 +845,7 @@ impl TermOrder {
     }
 
     /// Borrow a term by sorter index (helper to read the sorted edges).
+    #[inline]
     pub fn term(&self, idx: usize) -> &AdditiveEdge {
         &self.terms[idx]
     }

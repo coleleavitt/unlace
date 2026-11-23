@@ -56,6 +56,7 @@ unsafe extern "Rust" {
 
 /// The pass hooks every [`ArchContext`] starts with: the default pipeline's, composed with the
 /// universal action tree it schedules.
+#[inline]
 pub fn default_pass_hooks() -> &'static KunaHooks {
     __unlace_default_pass_hooks()
 }

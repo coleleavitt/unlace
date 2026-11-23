@@ -794,10 +794,12 @@ impl Funcdata {
     // -----------------------------------------------------------------------
 
     /// Get the function's local symbol name (C++ `getName`).
+    #[inline]
     pub fn get_name(&self) -> &str {
         &self.name
     }
     /// Get the name to display in output (C++ `getDisplayName`).
+    #[inline]
     pub fn get_display_name(&self) -> &str {
         &self.display_name
     }
@@ -811,11 +813,13 @@ impl Funcdata {
     }
     /// Get the [`Override`](crate::overrides::Override) object for \b this function
     /// (C++ `getOverride`, `funcdata.hh:214`).
+    #[inline]
     pub fn get_override(&self) -> &crate::overrides::Override {
         &self.localoverride
     }
     /// Mutably get the [`Override`](crate::overrides::Override) for \b this function
     /// (C++ `getOverride` non-const).  The console override commands write here.
+    #[inline]
     pub fn get_override_mut(&mut self) -> &mut crate::overrides::Override {
         &mut self.localoverride
     }
@@ -1022,6 +1026,7 @@ impl Funcdata {
     }
 
     /// (kuna `--assert`) The previous decompile's default numbering to keep.
+    #[inline]
     pub fn kuna_prior_names(&self) -> &crate::kuna_stablenames::PriorNames {
         &self.kuna_prior_names
     }
@@ -1179,6 +1184,7 @@ impl Funcdata {
     }
 
     /// (kuna `voidret`) The return storage this function's callers read, by register.
+    #[inline]
     pub fn kuna_forced_return(&self) -> &[(Address, int4)] {
         &self.kuna_forced_return
     }
@@ -1250,6 +1256,7 @@ impl Funcdata {
     }
 
     /// (kuna `voidret`) The storage the callee at `key` last returned a value in.
+    #[inline]
     pub fn kuna_callee_return_storage(
         &self,
         key: (int4, unlace_base::types::uintb),
@@ -1477,6 +1484,7 @@ impl Funcdata {
     }
 
     /// Get the entry point address (C++ `getAddress`).
+    #[inline]
     pub fn get_address(&self) -> &Address {
         &self.baseaddr
     }
@@ -1486,21 +1494,25 @@ impl Funcdata {
     }
     /// Get the program/architecture owning \b this function (C++ `getArch`).
     /// The pass hooks of the function's architecture ([`crate::kuna_passhooks`]).
+    #[inline]
     pub fn hooks(&self) -> &'static crate::kuna_passhooks::KunaHooks {
         self.glb.pass_hooks
     }
 
+    #[inline]
     pub fn get_arch(&self) -> &ArchHandle {
         &self.glb
     }
 
     /// A kuna pass's per-function state, created with its default on first use
     /// ([`crate::kuna_funcstate`]).
+    #[inline]
     pub fn kuna_state<S: crate::kuna_funcstate::FuncState>(&self) -> &S {
         self.kuna_states.get::<S>()
     }
 
     /// A kuna pass's per-function state for writing ([`crate::kuna_funcstate`]).
+    #[inline]
     pub fn kuna_state_mut<S: crate::kuna_funcstate::FuncState>(&mut self) -> &mut S {
         self.kuna_states.get_mut::<S>()
     }
@@ -1519,12 +1531,14 @@ impl Funcdata {
         )
     }
     /// Get the function's prototype object (C++ `getFuncProto`).
+    #[inline]
     pub fn get_func_proto(&self) -> &FuncProto {
         &self.funcp
     }
     /// Mutably borrow the function's prototype object (C++ non-const
     /// `getFuncProto`).  Proto-recovery actions (`ActionPrototypeTypes`,
     /// `ActionReturnRecovery`, ...) set the model and derive the output map.
+    #[inline]
     pub fn get_func_proto_mut(&mut self) -> &mut FuncProto {
         &mut self.funcp
     }
@@ -1638,6 +1652,7 @@ impl Funcdata {
     /// `Heritage::guardReturns` and `ActionReturnRecovery` see a live
     /// [`ParamActive`].  `ActionDeadCode::gatherConsumedReturn` also reads it to
     /// decide whether the return is fully consumed.
+    #[inline]
     pub fn get_active_output(&self) -> Option<&ParamActive> {
         self.activeoutput.as_ref()
     }
@@ -1696,12 +1711,14 @@ impl Funcdata {
     /// Number of sub-function call specifications (C++ `Funcdata::numCalls`,
     /// `funcdata.hh:281`).  The `qlst` is populated by `FlowInfo::setupCallSpecs`
     /// during flow analysis.
+    #[inline]
     pub fn num_calls(&self) -> int4 {
         self.qlst.len() as int4
     }
 
     /// Get the i-th call specification (C++ `Funcdata::getCallSpecs(int4)`,
     /// `funcdata.hh:282`).
+    #[inline]
     pub fn get_call_specs(&self, i: int4) -> &FuncCallSpecs {
         &self.qlst[i as usize]
     }
@@ -1713,6 +1730,7 @@ impl Funcdata {
 
     /// Get the i-th call specification mutably (the recovery actions need to
     /// mutate the `ParamActive` trials in place).
+    #[inline]
     pub fn get_call_specs_mut(&mut self, i: int4) -> &mut FuncCallSpecs {
         &mut self.qlst[i as usize]
     }
@@ -1948,6 +1966,7 @@ impl Funcdata {
 
     /// Overall count of heritage passes (C++ `Funcdata::getHeritagePass`,
     /// `funcdata.hh:239` — `heritage.getPass()`).
+    #[inline]
     pub fn get_heritage_pass(&self) -> int4 {
         self.heritage.get_pass()
     }
@@ -2030,6 +2049,7 @@ impl Funcdata {
     }
 
     /// Get the local function scope (C++ `getScopeLocal`).
+    #[inline]
     pub fn get_scope_local(&self) -> Option<&crate::varmap::ScopeLocal> {
         self.localmap.as_ref()
     }
@@ -2095,6 +2115,7 @@ impl Funcdata {
     }
 
     /// (kuna `stackstoreguard`) Is the guard on for this function?
+    #[inline]
     pub fn stack_store_guard(&self) -> bool {
         !self.stack_store_guard_withdrawn.get()
     }
@@ -2148,6 +2169,7 @@ impl Funcdata {
 
     /// (kuna `stackstoreguard`) The STOREs heritage guarded written stack
     /// ranges against.
+    #[inline]
     pub(crate) fn indexed_guard_stores(&self) -> std::collections::BTreeSet<OpId> {
         self.indexed_guard_stores.borrow().clone()
     }
@@ -2319,6 +2341,7 @@ impl Funcdata {
     /// Mutably borrow the local function scope (C++ non-const `getScopeLocal`).
     /// The console `map` commands and `ActionRestructureVarnode` reach the
     /// `ScopeLocal` through this to add/restructure symbols.
+    #[inline]
     pub fn get_scope_local_mut(&mut self) -> Option<&mut crate::varmap::ScopeLocal> {
         self.localmap.as_mut()
     }
@@ -2893,6 +2916,7 @@ impl Funcdata {
     // -----------------------------------------------------------------------
 
     /// Are high-level variables assigned to Varnodes (C++ `isHighOn`).
+    #[inline]
     pub fn is_high_on(&self) -> bool {
         (self.flags & funcdata_flags::highlevel_on) != 0
     }
@@ -2914,10 +2938,12 @@ impl Funcdata {
         (self.flags & funcdata_flags::blocks_unreachable) != 0
     }
     /// Will data-type analysis be performed (C++ `isTypeRecoveryOn`).
+    #[inline]
     pub fn is_type_recovery_on(&self) -> bool {
         (self.flags & funcdata_flags::typerecovery_on) != 0
     }
     /// Has data-type recovery processes started (C++ `hasTypeRecoveryStarted`).
+    #[inline]
     pub fn has_type_recovery_started(&self) -> bool {
         (self.flags & funcdata_flags::typerecovery_start) != 0
     }
@@ -2951,6 +2977,7 @@ impl Funcdata {
         }
     }
     /// Is \b this used for jump-table recovery (C++ `isJumptableRecoveryOn`).
+    #[inline]
     pub fn is_jumptable_recovery_on(&self) -> bool {
         (self.flags & funcdata_flags::jumptablerecovery_on) != 0
     }
@@ -2998,6 +3025,7 @@ impl Funcdata {
         self.kuna_infertypes_settled = val;
     }
     /// (kuna `structsynth`) Has type propagation reached its fixpoint?
+    #[inline]
     pub fn kuna_infertypes_settled(&self) -> bool {
         self.kuna_infertypes_settled
     }
@@ -3031,6 +3059,7 @@ impl Funcdata {
         };
     }
     /// Does \b this function need to restart its analysis (C++ `hasRestartPending`).
+    #[inline]
     pub fn has_restart_pending(&self) -> bool {
         (self.flags & funcdata_flags::restart_pending) != 0
     }
@@ -3074,14 +3103,17 @@ impl Funcdata {
     // -----------------------------------------------------------------------
 
     /// Borrow the Varnode container (C++ `vbank`).
+    #[inline]
     pub fn vbank(&self) -> &VarnodeBank {
         &self.vbank
     }
     /// Mutably borrow the Varnode container.
+    #[inline]
     pub fn vbank_mut(&mut self) -> &mut VarnodeBank {
         &mut self.vbank
     }
 
+    #[inline]
     pub fn kuna_storage_sources(&self, vn: VarnodeId) -> &[crate::kuna_varsources::StorageSource] {
         self.kuna_storage_sources
             .get(&vn)
@@ -3267,6 +3299,7 @@ impl Funcdata {
         self.kuna_call_transport_projections.remove(&vn);
     }
 
+    #[inline]
     pub(crate) fn kuna_was_call_transport(&self, vn: VarnodeId) -> bool {
         self.kuna_call_transport.contains(&vn)
     }
@@ -3434,10 +3467,12 @@ impl Funcdata {
         }
     }
     /// Borrow the PcodeOp container (C++ `obank`).
+    #[inline]
     pub fn obank(&self) -> &PcodeOpBank {
         &self.obank
     }
     /// Mutably borrow the PcodeOp container.
+    #[inline]
     pub fn obank_mut(&mut self) -> &mut PcodeOpBank {
         &mut self.obank
     }
@@ -3466,6 +3501,7 @@ impl Funcdata {
     }
 
     /// Get the basic blocks container (C++ `getBasicBlocks`).
+    #[inline]
     pub fn bblocks_ref(&self) -> &BlockGraph {
         &self.bblocks
     }
@@ -3475,10 +3511,12 @@ impl Funcdata {
         &mut self.bblocks
     }
     /// Get the control-flow structuring hierarchy (C++ `getStructure`).
+    #[inline]
     pub fn sblocks_ref(&self) -> &BlockGraph {
         &self.sblocks
     }
     /// Mutably borrow the structuring hierarchy.
+    #[inline]
     pub fn sblocks_mut(&mut self) -> &mut BlockGraph {
         &mut self.sblocks
     }
@@ -3502,10 +3540,12 @@ impl Funcdata {
     }
     /// The starting code address of a basic block (C++ `FlowBlock::getStart`).
     /// Used to place a forced-input extension op at the function entry block.
+    #[inline]
     pub fn bblocks_block_start(&self, bl: BlockId) -> Address {
         crate::block::block_get_start(&self.bblocks.arena, bl)
     }
     /// The root graph node of `sblocks`.
+    #[inline]
     pub(crate) fn sblocks_root(&self) -> BlockId {
         self.sblocks
             .root
@@ -3566,14 +3606,17 @@ impl Funcdata {
     // -----------------------------------------------------------------------
 
     /// Get the number of jump-tables for \b this function (C++ `numJumpTables`).
+    #[inline]
     pub fn num_jump_tables(&self) -> int4 {
         self.jumpvec.len() as int4
     }
     /// Get the i-th jump-table (C++ `getJumpTable`).
+    #[inline]
     pub fn get_jump_table(&self, i: int4) -> &crate::jumptable::JumpTable {
         &self.jumpvec[i as usize]
     }
     /// Mutable access to the i-th jump-table.
+    #[inline]
     pub fn get_jump_table_mut(&mut self, i: int4) -> &mut crate::jumptable::JumpTable {
         &mut self.jumpvec[i as usize]
     }
@@ -3870,6 +3913,7 @@ impl Funcdata {
 
     /// First op in basic block `bl` (C++ `BlockBasic::beginOp()` front /
     /// `firstOp`), `None` when empty.
+    #[inline]
     pub fn bb_op_head(&self, bl: BlockId) -> Option<OpId> {
         match self.bblocks.block(bl).kind() {
             BlockKind::Basic(b) => b.op_head,
@@ -3877,6 +3921,7 @@ impl Funcdata {
         }
     }
     /// Last op in basic block `bl` (C++ `BlockBasic::lastOp`), `None` when empty.
+    #[inline]
     pub fn bb_op_tail(&self, bl: BlockId) -> Option<OpId> {
         match self.bblocks.block(bl).kind() {
             BlockKind::Basic(b) => b.op_tail,
@@ -3886,6 +3931,7 @@ impl Funcdata {
     /// The op following `op` in its basic block's intrusive op list (C++
     /// `++iter` over `bb->beginOp()`), `None` at the end of the block.  The
     /// printer's `emitBlockBasic` walks the block ops with this.
+    #[inline]
     pub fn bb_op_next(&self, op: OpId) -> Option<OpId> {
         self.obank.get(op).and_then(|o| o.basic_neighbours().1)
     }
@@ -4564,10 +4610,12 @@ impl Funcdata {
     }
 
     /// Borrow the HighVariable arena (the W7 high-variable map).
+    #[inline]
     pub fn high_bank(&self) -> &crate::variable::HighVariableBank {
         &self.high_bank
     }
     /// Mutably borrow the HighVariable arena.
+    #[inline]
     pub fn high_bank_mut(&mut self) -> &mut crate::variable::HighVariableBank {
         &mut self.high_bank
     }
@@ -4682,6 +4730,7 @@ impl Funcdata {
     }
 
     /// `(block_index, CoverPoint)` of `op` for the merge cover tests.
+    #[inline]
     pub(crate) fn op_cover_point_pub(&self, op: OpId) -> CoverPoint {
         self.op_cover_point(op)
     }

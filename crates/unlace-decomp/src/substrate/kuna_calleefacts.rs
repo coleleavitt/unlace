@@ -31,6 +31,7 @@ pub struct StackArgs {
 /// `IPTR_PROCESSOR`, and `register` is the name
 /// [`probe_callee_entry_dead`](crate::p4_calls::kuna_calleedeadarg::probe_callee_entry_dead)
 /// resolves its own index from.
+#[inline]
 pub fn is_register(addr: &Address) -> bool {
     addr.get_space()
         .map(|s| s.get_name() == "register")

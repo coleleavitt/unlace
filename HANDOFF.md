@@ -120,8 +120,13 @@ into the knowledge plane), and the loader/environment options PR after it.
   callers keep their method names. Done: callmechanisms (`State`), bejoin, callwide, libcnames, calleevote, callerargs, elfmaindecl, inputhints, passthrough, msvcbyval, entryreads, retpushedhalf, calltargettype (field calls), rustabi, calleedeadarg, protoorder, callrettype, narrowret, voidret, elemptr, atomicxadd, ppc32piccalls, switchextent (extent tables), unionresolve (union map), stackviews (write views), localstackviews, stackobjects (+ bound uses), stackobjectasserts, calleememory, stackreadscope (guarded reads). Left: the other
   `funcdata -> *` lines of `scripts/layers-allowlist.txt`, then the arch/context edges
   (callmechanisms `Mechanisms`, jumpassist, segmentize, modelrules, heritage -> prefersplit).
-- **Step 8:** `#[inline]` on small core accessors before they cross a crate boundary; compare
-  `decompile-all` CPU time on 3 binaries, best of 3.
+- **Step 8:** `#[inline]` half done (arch/inline-8): 301 small middle-band functions (substrate,
+  p0_knowledge, infra) that p1-p9 code calls at least 5 times (codegraph `edges` kind `calls`), each a
+  field read or a one-line wrapper of at most 4 body lines, no loops or searches; plus the
+  `FuncStates` slot readers and the `kuna_func_state!` / `kuna_option_id!` `id()` functions. Functions
+  that already had `#[inline]`/`#[inline(always)]` were left as they were. Not done: the benchmark half
+  (`decompile-all` CPU time on 3 binaries, best of 3) needs release builds, so it was skipped under
+  the no-compile rule; the lead runs it once before step 9.
 - **Step 9:** the physical split, one crate per PR, bottom-up via `git mv` + re-exports:
   `unlace-middle` (~105k), then lift, structure, bandb, emit; `unlace-decomp` stays the driver +
   facade. Only after steps 5, 6 and 8 (splitting earlier makes builds worse; see the plan).

@@ -112,6 +112,7 @@ impl CircleRange {
     // -----------------------------------------------------------------------
 
     /// Construct an empty range (C++ `CircleRange(void)`).
+    #[inline]
     pub fn new_empty() -> CircleRange {
         CircleRange::default()
     }
@@ -190,6 +191,7 @@ impl CircleRange {
     // -----------------------------------------------------------------------
 
     /// Return `true` if the range is empty (C++ `isEmpty`).
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.isempty
     }
@@ -205,6 +207,7 @@ impl CircleRange {
     }
 
     /// Get the left boundary of the range (C++ `getMin`).
+    #[inline]
     pub fn get_min(&self) -> uintb {
         self.left
     }
@@ -215,6 +218,7 @@ impl CircleRange {
     }
 
     /// Get the right boundary of the range (C++ `getEnd`).
+    #[inline]
     pub fn get_end(&self) -> uintb {
         self.right
     }
@@ -231,6 +235,7 @@ impl CircleRange {
     }
 
     /// Get the step for the range (C++ `getStep`).
+    #[inline]
     pub fn get_step(&self) -> int4 {
         self.step
     }

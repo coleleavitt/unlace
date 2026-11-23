@@ -51,11 +51,13 @@ pub enum SourceLang {
 
 impl SourceLang {
     /// `true` for [`SourceLang::Rust`] — what `option rustabi auto` tests.
+    #[inline]
     pub fn is_rust(self) -> bool {
         matches!(self, SourceLang::Rust)
     }
 
     /// `true` for [`SourceLang::Go`].
+    #[inline]
     pub fn is_go(self) -> bool {
         matches!(self, SourceLang::Go)
     }

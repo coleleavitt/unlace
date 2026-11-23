@@ -118,6 +118,7 @@ pub struct RestartLog {
 
 impl RestartLog {
     /// A new, empty restart log.
+    #[inline]
     pub fn new() -> RestartLog {
         RestartLog::default()
     }

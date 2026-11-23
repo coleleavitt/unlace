@@ -352,6 +352,7 @@ impl SymbolEntry {
     }
 
     /// Offset of this within the Symbol (C++ `getOffset`).
+    #[inline]
     pub fn get_offset(&self) -> int4 {
         self.offset
     }
@@ -396,11 +397,13 @@ impl SymbolEntry {
     }
 
     /// Number of bytes consumed by this storage (C++ `getSize`).
+    #[inline]
     pub fn get_size(&self) -> int4 {
         self.size
     }
 
     /// Starting address of this storage (C++ `getAddr`).
+    #[inline]
     pub fn get_addr(&self) -> &Address {
         &self.addr
     }
@@ -760,11 +763,13 @@ impl Symbol {
     }
 
     /// Get the local name of the symbol (C++ `getName`).
+    #[inline]
     pub fn get_name(&self) -> &str {
         &self.name
     }
 
     /// Get the name to display in output (C++ `getDisplayName`).
+    #[inline]
     pub fn get_display_name(&self) -> &str {
         &self.display_name
     }
@@ -785,6 +790,7 @@ impl Symbol {
     }
 
     /// Get the Symbol category (C++ `getCategory`).
+    #[inline]
     pub fn get_category(&self) -> int4 {
         self.category
     }
@@ -795,11 +801,13 @@ impl Symbol {
     }
 
     /// Is the Symbol type-locked (C++ `isTypeLocked`).
+    #[inline]
     pub fn is_type_locked(&self) -> bool {
         (self.flags & varnode_flags::typelock) != 0
     }
 
     /// Is the Symbol name-locked (C++ `isNameLocked`).
+    #[inline]
     pub fn is_name_locked(&self) -> bool {
         (self.flags & varnode_flags::namelock) != 0
     }
@@ -822,6 +830,7 @@ impl Symbol {
     /// Does this have an undefined name (C++ `isNameUndefined`,
     /// `database.cc:247-251`)?  True iff the name is exactly 15 chars and starts
     /// with `$$undef`.
+    #[inline]
     pub fn is_name_undefined(&self) -> bool {
         self.name.len() == 15 && self.name.starts_with("$$undef")
     }
@@ -832,6 +841,7 @@ impl Symbol {
     }
 
     /// Return true if this is isolated from speculative merging (C++ `isIsolated`).
+    #[inline]
     pub fn is_isolated(&self) -> bool {
         (self.dispflags & symbol_dispflags::ISOLATE) != 0
     }
@@ -1273,6 +1283,7 @@ impl Database {
     }
 
     /// Get the global Scope id (C++ `getGlobalScope`).
+    #[inline]
     pub fn get_global_scope(&self) -> Option<ScopeId> {
         self.globalscope
     }
@@ -1303,6 +1314,7 @@ impl Database {
     }
 
     /// Borrow a scope by id.
+    #[inline]
     pub fn scope(&self, id: ScopeId) -> &Scope {
         &self.scopes[id]
     }
@@ -1322,6 +1334,7 @@ impl Database {
     }
 
     /// Borrow a symbol by id.
+    #[inline]
     pub fn symbol(&self, id: SymbolId) -> &Symbol {
         &self.symbols[id]
     }

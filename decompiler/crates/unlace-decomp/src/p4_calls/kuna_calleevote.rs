@@ -398,7 +398,10 @@ pub fn took_stated_type(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
 /// ones the last redo left untyped.
 pub fn record(arch: &mut Architecture, entry: &Address, fd: &mut Funcdata) {
     let Some(me) = key_of(entry) else { return };
-    let prove = arch.caller_ptr;
+    let prove = arch
+        .kuna_options
+        .get::<crate::kuna_callerptr::CallerPtr>()
+        .0;
     let own = if arch.kuna_calleevote.own.contains_key(&me) {
         None
     } else {

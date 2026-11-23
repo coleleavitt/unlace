@@ -437,7 +437,12 @@ fn instancetype_at(
 /// pointer for `init…`, `self`, `retain`, `autorelease`, `copy` and an
 /// `instancetype` declaration, and the class a declaration returns.
 pub fn instancetype(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<Rc<Datatype>> {
-    if !data.get_arch().objc_rettype {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_objcrettype::ObjcRettype>()
+        .0
+    {
         return None;
     }
     instancetype_at(data, op, fc, 0)
@@ -535,6 +540,17 @@ pub(crate) fn holds_loaded_value(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bo
             _ => false,
         }
 }
+
+crate::kuna_flag!(
+    /// (kuna `objcrettype`) Type a message send's result by its receiver:
+    /// `[Foo alloc]` is a `Foo *`, `init…`/`self`/`retain`/`copy` return their
+    /// receiver's class (`p5_types/kuna_objcrettype.rs`). Default on.
+    ObjcRettype,
+    "objcrettype",
+    "Objective-C message result typed by its receiver",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

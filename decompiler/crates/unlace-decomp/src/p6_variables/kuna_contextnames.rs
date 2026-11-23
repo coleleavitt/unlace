@@ -195,3 +195,13 @@ fn result(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evidence>>
         found.entry(high).or_default().push(e);
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `contextnames`) Name loop counters and the returned local.
+    /// See [`crate::kuna_contextnames`].
+    ContextNames,
+    "contextnames",
+    "loop-counter and result local names",
+    unset: false,
+    shipped: false
+);

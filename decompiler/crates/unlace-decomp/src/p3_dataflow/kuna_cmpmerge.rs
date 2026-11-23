@@ -482,7 +482,12 @@ impl Rule for RuleCompareMerge {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().cmp_merge {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_cmpmerge::CmpMerge>()
+            .0
+        {
             return 0;
         }
         let Some(o) = data.obank().get(op) else {
@@ -709,10 +714,24 @@ impl Action for ActionBranchMerge {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().cmp_merge {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_cmpmerge::CmpMerge>()
+            .0
+        {
             return 0;
         }
         self.base.count += branchmerge_apply(data);
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) Merge two comparisons of the same operands, combined by a boolean op or by two branches in a row, into one. (option `cmpmerge`).
+    CmpMerge,
+    "cmpmerge",
+    "comparison merge",
+    unset: false,
+    shipped: false
+);

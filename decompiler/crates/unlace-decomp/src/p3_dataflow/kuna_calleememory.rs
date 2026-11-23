@@ -710,7 +710,10 @@ fn walk(
 
 pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
     if !arch.stack_views
-        && !arch.stack_alias_deadstore
+        && !arch
+            .kuna_options
+            .get::<crate::heritage::StackAliasDeadstore>()
+            .0
         && !super::kuna_globalcallranges::should_seed(fd)
     {
         return;
@@ -866,7 +869,12 @@ fn for_call<'a>(
     start: u64,
     size: i32,
 ) -> Option<&'a CalleeMemory> {
-    if (!fd.get_arch().stack_views && !fd.get_arch().stack_alias_deadstore)
+    if (!fd.get_arch().stack_views
+        && !fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::heritage::StackAliasDeadstore>()
+            .0)
         || fd.obank().get(call.get_op())?.code() != OpCode::CPUI_CALL
         || !call.proto().has_store()
         || call.proto().has_effect_override()

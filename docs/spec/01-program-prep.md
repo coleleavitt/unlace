@@ -1262,7 +1262,13 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   a laid-out section has its `st_value` shifted by **its own section's** delta,
   since the layout is non-contiguous and there is no single global offset (a COFF
   symbol needs no shift — it is reported as `VirtualAddress + value`, so the section
-  write already moved it). Each patched field is written in the object's own byte
+  write already moved it). A debug section stored compressed (ELF
+  `SHF_COMPRESSED`, zlib or zstd: `-gz`, and the default of some toolchains) is
+  inflated before its relocations are applied, because their offsets address the
+  uncompressed bytes; the relocated bytes are appended to the image and the section
+  header points at them, uncompressed. Patched in place, the relocations corrupted
+  the compressed stream and such a `.o` lost all of its DWARF (`int apply(int k,int
+  a,int b)` printed as `unsigned long apply(unsigned int a0,…)`). Each patched field is written in the object's own byte
   order (ELF `EI_DATA`), the implicit addends of a REL table read in it, so a
   big-endian object (PowerPC, MIPS, SPARC, ARM big-endian) is rebased as a
   little-endian one is; it used to keep the pre-link view, so `unlace functions`
@@ -10993,8 +10999,12 @@ A byte-addressed raw image also runs the object-file pass list
 (`objectview`, default-on), through an ELF view
 (`decompiler/crates/unlace-analysis/src/loader/kuna_objectview.rs (raw_as_elf)`).
 The view has one `PT_LOAD` and one `SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR`
-`.text` section covering the file at `--base`, which is the read-write-execute
-block Ghidra's raw importer makes. Its machine, class and byte order come from
+`.text` section covering the mapped bytes at `--base`, which is the read-write-execute
+block Ghidra's raw importer makes. The mapped bytes are the file for a headerless
+image, and the image the container builds for a load that strips a header or
+relocates (a PS-X EXE's 0x800-byte header, a DOS load module, a CIL method run): a
+view of the whole file would put every byte the header's length past its address, so
+the prologue oracle named functions in unmapped memory. Its machine, class and byte order come from
 the selected SLEIGH language, and its `e_entry` is the first seed. A processor
 ELF assigns no number gets `EM_NONE`: the sections still scan, and only
 `object`'s architecture is unknown. The view runs at the commit like a TE's,

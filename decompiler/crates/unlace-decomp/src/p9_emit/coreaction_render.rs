@@ -1270,7 +1270,9 @@ fn is_pointer(
                 }
             }
             OpCode::CPUI_CALLOTHER => {
-                if !glb.rep_string || crate::kuna_repstring::input_type(data, op, slot).is_none() {
+                if !glb.kuna_options.get::<crate::kuna_repstring::RepString>().0
+                    || crate::kuna_repstring::input_type(data, op, slot).is_none()
+                {
                     return None;
                 }
             }
@@ -2075,7 +2077,12 @@ fn map_globals(data: &mut Funcdata) {
             i += 1;
         }
         let Some((first, esize, name)) = arch.global_data_symbol_at(addr) else {
-            if arch.mapglobalsyms && arch.global_symbol_extent(addr).is_none() {
+            if arch
+                .kuna_options
+                .get::<crate::kuna_mapglobalsyms::Mapglobalsyms>()
+                .0
+                && arch.global_symbol_extent(addr).is_none()
+            {
                 let size = end.wrapping_sub(addr.get_offset());
                 let exact = maxvn.get_addr() == addr && maxvn.get_size() as u64 == size;
                 let ct = if exact {

@@ -217,3 +217,13 @@ pub fn ctor_calls(fd: &Funcdata) -> HashMap<OpId, CtorCall> {
     }
     out
 }
+
+crate::kuna_flag!(
+    /// (kuna) Print an allocation and its `<init>` call as `new T(args)` in
+    /// Java (option `javanew`).
+    JavaNew,
+    "javanew",
+    "Java new T(args) from an allocation and its <init> call",
+    unset: true,
+    shipped: true
+);

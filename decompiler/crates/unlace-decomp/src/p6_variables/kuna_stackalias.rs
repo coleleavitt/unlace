@@ -17,7 +17,12 @@ pub fn holds_store(fd: &Funcdata, id: VarnodeId) -> bool {
     if crate::kuna_localstackviews::publication(fd, id) {
         return true;
     }
-    let full = fd.get_arch().stack_alias_deadstore || fd.get_arch().stack_views;
+    let full = fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::heritage::StackAliasDeadstore>()
+        .0
+        || fd.get_arch().stack_views;
     if !full
         && !crate::kuna_localstackviews::active(fd)
         && fd
@@ -47,7 +52,12 @@ pub fn holds_store(fd: &Funcdata, id: VarnodeId) -> bool {
 /// Compute once per dead-code pass. A later full overwrite before any memory
 /// observer kills only the earlier store's potentially aliased bytes.
 pub fn prepare(fd: &mut Funcdata) -> i32 {
-    let full = fd.get_arch().stack_alias_deadstore || fd.get_arch().stack_views;
+    let full = fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::heritage::StackAliasDeadstore>()
+        .0
+        || fd.get_arch().stack_views;
     if !full
         && !crate::kuna_localstackviews::active(fd)
         && fd
@@ -256,7 +266,7 @@ fn unobserved_bytes(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StackAliasOption {
     /// True if a store-through-a-stack-pointer-alias is held across the deadcode
-    /// race (C++ `Architecture::stack_alias_deadstore`).
+    /// race (C++ the registered option `StackAliasDeadstore`).
     pub enabled: bool,
 }
 

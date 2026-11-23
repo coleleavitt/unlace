@@ -71,7 +71,13 @@ impl Action for ActionDevectorize {
     }
 
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !self.enabled && !data.get_arch().devectorize_reduction {
+        if !self.enabled
+            && !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_devectorize::DevectorizeReduction>()
+                .0
+        {
             return 0;
         }
         for i in 0..data.bblocks_get_size() {
@@ -749,6 +755,18 @@ fn match_reduction(data: &Funcdata, h: BlockId) -> Option<(BlockId, int4)> {
     }
     Some((g, arm_edge))
 }
+
+crate::kuna_flag!(
+    /// (kuna) Re-roll a vectorized integer reduction (guard, stride loop with
+    /// one accumulator per lane, fold, scalar remainder loop) into its scalar
+    /// loop (option `devectorize`, opt-in default-off).  See
+    /// [`crate::p3_dataflow::kuna_devectorize`].
+    DevectorizeReduction,
+    "devectorize",
+    "Vectorized reduction re-roll",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 mod tests;

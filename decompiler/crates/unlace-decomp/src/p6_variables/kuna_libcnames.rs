@@ -386,7 +386,12 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
             }
         }
     }
-    if fd.get_arch().context_names {
+    if fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_contextnames::ContextNames>()
+        .0
+    {
         let mut context: BTreeMap<HighVariableId, Vec<Evidence>> = BTreeMap::new();
         crate::kuna_contextnames::evidence(fd, &mut context);
         for (high, evidence) in context {
@@ -504,7 +509,10 @@ pub struct LibraryAlias {
 pub fn candidates(fd: &mut Funcdata) -> Vec<Candidate> {
     let arch = fd.get_arch();
     if !arch.libc_names
-        && !arch.context_names
+        && !arch
+            .kuna_options
+            .get::<crate::kuna_contextnames::ContextNames>()
+            .0
         && !fd.kuna_record_names()
         && fd.kuna_prior_names().is_empty()
     {

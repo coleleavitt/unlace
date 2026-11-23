@@ -3872,7 +3872,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // `.gdt` stand-in, seeded onto IMPORTED API names only and keyed by entry
         // address. Facts computed at LOAD, COMMITTED only when this gate is on, so
         // `off` renders exactly what no Win32 prototype at all renders.
-        "tlsnames" => arch.analysis_tlsnames,
+        "tlsnames" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_tlsnames::Tlsnames>()
+                .0
+        }
         "uefi" => arch.analysis_uefi,
         "cortexmscs" => arch.analysis_cortexmscs,
         "strings" => arch.analysis_strings,
@@ -4938,6 +4942,11 @@ pub(crate) fn bootstrap_raw_image(
         })
     };
     let base_bytes = address_to_byte(base, "base")?;
+    let mapped_bytes = match &bytes {
+        RawBytes::Whole(bytes) => Some(bytes.clone()),
+        RawBytes::Module(module) => Some(module.bytes.clone()),
+        RawBytes::File | RawBytes::Segmented(_) => None,
+    };
     match bytes {
         RawBytes::Whole(bytes) => {
             raw.build_loader_from_bytes(Rc::clone(&code_space), base, bytes, Vec::new())
@@ -5057,11 +5066,13 @@ pub(crate) fn bootstrap_raw_image(
             .first()
             .map_or(image_base, Address::get_offset);
         let language = prog.arch.arch_id().to_string();
-        let view = std::fs::read(path).ok().and_then(|bytes| {
-            unlace_analysis::loader::kuna_objectview::raw_as_elf(
-                &bytes, image_base, entry, &language,
-            )
-        });
+        let view = mapped_bytes
+            .or_else(|| std::fs::read(path).ok())
+            .and_then(|bytes| {
+                unlace_analysis::loader::kuna_objectview::raw_as_elf(
+                    &bytes, image_base, entry, &language,
+                )
+            });
         prog.set_object_view(path, view);
     }
     Ok(prog)
@@ -6621,7 +6632,12 @@ fn commit_analysis_output(
         out.typed_data.extend(swift.typed_data);
         out.prototypes.extend(swift.prototypes);
         out.swift_types.param_locks = swift.param_locks;
-        if prog.arch().analysis_swiftcall {
+        if prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_swiftcall::Swiftcall>()
+            .0
+        {
             out.swift_types.models = swift.models;
             out.swift_types.input_hints = swift.input_hints;
             out.swift_types.no_self = swift.no_self;
@@ -7394,7 +7410,12 @@ fn commit_analysis_output(
             prog.register_symbol(&m.name, addr.clone());
             // (kuna `fidproto`) The new name brings what the name means: the
             // libc prototype and the no-return verdict.
-            if prog.arch().analysis_fidproto {
+            if prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_fidproto::Fidproto>()
+                .0
+            {
                 prog.apply_renamed_library_facts(sid, &m.name, &addr);
             }
         }
@@ -7408,7 +7429,12 @@ fn commit_analysis_output(
         if !contested.contains(&prog.thumb_normalized(addr.get_offset())) {
             prog.arch_mut().symboltab.rename_symbol(sid, name)?;
             prog.register_symbol(name, addr.clone());
-            if prog.arch().analysis_fidproto {
+            if prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_fidproto::Fidproto>()
+                .0
+            {
                 prog.apply_renamed_library_facts(sid, name, &addr);
             }
         }

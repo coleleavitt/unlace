@@ -121,7 +121,12 @@ impl Action for ActionLateCse {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().late_cse {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_latecse::LateCse>()
+            .0
+        {
             return 0;
         }
         for _ in 0..MAX_ROUNDS {
@@ -134,3 +139,12 @@ impl Action for ActionLateCse {
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) Merge identical pure ops that read the same varnode once the rules settle. (option `latecse`).
+    LateCse,
+    "latecse",
+    "late common-subexpression elimination",
+    unset: false,
+    shipped: false
+);

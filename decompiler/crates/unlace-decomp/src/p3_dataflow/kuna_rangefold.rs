@@ -301,10 +301,26 @@ impl Action for ActionRangeFold {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().range_fold {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_rangefold::RangeFold>()
+            .0
+        {
             return 0;
         }
         self.base.count += rangefold_apply(data);
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) Fold a comparison or mask whose outcome the ranges dominating
+    /// branches establish fixes (option `rangefold`).  See
+    /// [`crate::p3_dataflow::kuna_rangefold`].
+    RangeFold,
+    "rangefold",
+    "dominating-range folding",
+    unset: false,
+    shipped: true
+);

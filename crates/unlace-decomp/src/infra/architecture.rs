@@ -434,9 +434,6 @@ pub struct Architecture {
     /// (kuna `fpuemu`) The loader found 8087-emulator code in the image, which
     /// `auto` decodes by.
     pub fpu_emu_evidence: bool,
-    /// (kuna `mzdgroup`) The data segment the MS-DOS loader read off the startup
-    /// code, when it could.
-    pub mz_dgroup: Option<crate::kuna_mzdgroup::MzDataSegment>,
     /// (kuna) `tlsnames`: the static TLS block the loader committed.
     pub tls_layout: Option<std::rc::Rc<crate::p5_types::kuna_tlsnames::TlsLayout>>,
     /// (kuna `dwarfscopes`) Register-held DWARF locals by function entry:
@@ -517,15 +514,8 @@ pub struct Architecture {
     pub rust_fmt_pieces_relro: Option<(u64, u64)>,
     /// Primitive Display callback types from full Rust object-symbol identities.
     pub rust_display_formatters: std::collections::BTreeMap<u64, &'static str>,
-    /// Integer callback types and traits from full Rust object-symbol identities.
-    pub rust_integer_formatters:
-        std::collections::BTreeMap<u64, crate::kuna_rustfmtflags::Formatter>,
     pub rust_str_display_formatters: std::collections::BTreeSet<u64>,
-    pub rust_string_writer_methods:
-        std::collections::BTreeMap<u64, crate::kuna_rustfmtwrite::WriterMethod>,
     pub rust_fmt_write_relro: Option<(u64, u64)>,
-    pub rust_io_writer_profiles:
-        std::collections::BTreeMap<u64, crate::kuna_rustfmtio::WriterProfile>,
 
     /// (kuna `msvcbyval`) The MSVC declarations with one by-value class of
     /// unstated size, by entry `(space index, offset)`; filled by the analysis
@@ -653,10 +643,6 @@ pub struct Architecture {
     /// disagree with the database and make Java's `checkFullCommit` rewrite
     /// the user's signature on any rename.  `None` outside ghidra mode.
     pub kuna_pending_proto_model: Option<Rc<crate::fspec::ProtoModel>>,
-    /// (kuna `--assert`) The default numbering the next drive of a function
-    /// keeps, set by the caller that replays a directive batch and cleared
-    /// after it; see [`crate::kuna_stablenames`].  Empty everywhere else.
-    pub kuna_prior_names: crate::kuna_stablenames::PriorNames,
     /// (kuna `--assert`) Whether the next drive records the numbering its
     /// naming pass hands out, because a directive batch may be replayed
     /// against it; set and cleared by that caller.
@@ -675,9 +661,6 @@ pub struct Architecture {
     /// committed from the analysis tier; read when flow builds the CALLIND.
     pub kuna_vcall_targets: Rc<std::collections::BTreeMap<u64, VcallTargets>>,
 
-    /// (kuna `esprom`) The chip the loaded Espressif application image names.
-    pub esp_image_chip: Option<crate::kuna_esprom::EspChip>,
-
     /// Caller-local PPC32 PIC import proof, applied during flow following.
     pub analysis_ppc32picimports: crate::kuna_ppc32picimports::Mode,
     /// (kuna) The load-time options this program was loaded with: the ones in
@@ -687,25 +670,12 @@ pub struct Architecture {
     /// (kuna) Built with no options in force: an entry point that takes none
     /// loaded this program, so its gates keep reading the environment live.
     load_options_from_env: bool,
-    /// Validated import slots. Never registered as executable FunctionSymbols.
-    pub ppc32_pic_imports: std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::ImportSlot>,
 
     /// (kuna `msvcsig`) The entries, as `(space index, offset)`, whose MSVC
     /// prototype the analysis commit locked onto the FunctionSymbol. A call
     /// through one of these import slots is made direct while the flow is
     /// followed ([`crate::kuna_msvcimportcall`]). Empty unless `msvcsig` applied.
     pub msvcsig_import_slots: std::collections::BTreeSet<(int4, uintb)>,
-    /// (kuna `formatstring static`) Per-call-site prototype overrides the
-    /// LOAD-TIME format-string resolver recovered, keyed by the CONTAINING
-    /// function's entry VMA and then by the call-site VMA.
-    ///
-    /// The `error_noreturn_callsites` precedent: a fact the Listing tier derived
-    /// once, parked on the architecture, and consumed per function at decompile
-    /// time — here by `decompile_step::decompile_one`, which hands the entries of
-    /// the function it is about to decompile to the FIRST drive as prototype
-    /// overrides.  Empty unless the Listing and `formatstring` are both on.
-    pub format_call_overrides:
-        std::collections::BTreeMap<u64, Vec<crate::kuna_formatstring::ParkedFormatSite>>,
     /// (kuna `pushpadread`) The number of STACK arguments each printf-family
     /// format call consumes, keyed by the call instruction's VMA -- derived from
     /// the format resolver's per-site conversion count. The callee-body probe
@@ -741,12 +711,6 @@ pub struct Architecture {
     /// (kuna `uefi`) The interface instances the EFI module installs
     /// ([`crate::kuna_uefiprotocols`]).
     pub kuna_uefi_installs: Vec<crate::kuna_uefiprotocols::InstalledInterface>,
-    /// (kuna `formatstring`) Which variadic arguments the target passes exactly
-    /// as named ones, which bounds what a closed printf/scanf override may
-    /// declare. A FACT, written once at `load file` from the image's container;
-    /// `None` (the XML `<binaryimage>` bootstrap) falls back to the language id.
-    /// See [`crate::kuna_formatstring::target_vararg_abi`].
-    pub format_vararg_abi: Option<crate::kuna_formatstring::VarargAbi>,
     /// (kuna `varargstackargs`) Per-run cache of the callee `va_start` probe,
     /// keyed by the callee's `(space index, entry offset)`.
     pub kuna_darwin_variadic_cache: std::collections::HashMap<(int4, uintb), bool>,
@@ -766,11 +730,6 @@ pub struct Architecture {
     /// discovery finds them (`unlace_analysis::listing::kuna_dosexit`); flow ends
     /// at each ([`FlowEnvironment::is_dos_exit_callind`](crate::flow::FlowEnvironment::is_dos_exit_callind)).
     pub dos_exit_sites: Vec<u64>,
-    /// (kuna `kernelbug`) The Linux kernel's `__bug_table` entries, sorted by
-    /// trap address. The analysis tier reads the table
-    /// (`unlace_analysis::kernelbug`); flow renders each trap as `BUG()` or
-    /// `__WARN(file,line)` ([`crate::kuna_kernelbug`]). Empty on every other image.
-    pub kernel_bug_sites: Vec<crate::kuna_kernelbug::KernelBugSite>,
 
     /// (kuna) Check FID matches against callee names, several rounds, tiny-stub guard (`fidcallees`). Default on.
     pub analysis_fidcallees: bool,
@@ -791,19 +750,11 @@ pub struct Architecture {
     /// (kuna `cfstrings`) The `__cfstring` entry addresses the commit seeded, so
     /// the printer renders a literal at one of them as `CFSTR("...")`.
     pub cfstring_entries: std::collections::BTreeSet<u64>,
-    /// (kuna `iokitclasses on`) The `this` input hints, by function entry.
-    pub kuna_this_hints:
-        std::collections::BTreeMap<Address, Rc<Vec<crate::kuna_inputhints::InputHint>>>,
     /// (kuna) The calling convention the analysis tier bound to a function
     /// without declaring its signature, by entry `(space index, offset)`.
     /// The function's own parameters, and those of every direct call to it,
     /// are recovered under it ([`crate::context::ArchContext::bound_proto_models`]).
     pub loader_proto_models: Rc<std::collections::BTreeMap<(int4, uintb), Rc<ProtoModel>>>,
-    /// (kuna) Names and types for the inputs a function's own analysis
-    /// recovers, by function entry, applied without locking them
-    /// ([`crate::kuna_inputhints`]).
-    pub loader_input_hints:
-        std::collections::BTreeMap<Address, Rc<Vec<crate::kuna_inputhints::InputHint>>>,
     /// (kuna `swiftcall`) The Swift registers and the throwing model
     /// ([`crate::kuna_swiftcall`]).
     pub loader_swift_abi: Option<Rc<crate::kuna_swiftcall::SwiftAbi>>,
@@ -1223,7 +1174,6 @@ impl Architecture {
             eh_table: Rc::new(crate::kuna_itaniumeh::EhTable::default()),
 
             fpu_emu_evidence: false,
-            mz_dgroup: None,
             kuna_states: Default::default(),
             kuna_tables: Default::default(),
             image_os_userland: false, // (kuna) a load-time fact; set by the console's `load file`
@@ -1250,11 +1200,8 @@ impl Architecture {
             rustc_pieces_layout: false,
             rust_fmt_pieces_relro: None,
             rust_display_formatters: std::collections::BTreeMap::new(),
-            rust_integer_formatters: std::collections::BTreeMap::new(),
             rust_str_display_formatters: std::collections::BTreeSet::new(),
-            rust_string_writer_methods: std::collections::BTreeMap::new(),
             rust_fmt_write_relro: None,
-            rust_io_writer_profiles: std::collections::BTreeMap::new(),
             source_lang_detected: Default::default(), // (kuna) a load-time fact; set by the console's `load file`
             go_chanrecv2: None,
             go_chanrecv_status_sites: Default::default(),
@@ -1286,7 +1233,6 @@ impl Architecture {
             kuna_pending_name_recs: Vec::new(), // (ghidra Phase 4) staged per drive
             kuna_pending_dyn_recs: Vec::new(),  // (ghidra Phase 4) staged per drive
             kuna_pending_proto_model: None,     // (ghidra Phase 4) staged per drive
-            kuna_prior_names: Default::default(),
             kuna_record_names: false,
 
             // Analysis-pass gates: placeholder values -- `Architecture::new` calls
@@ -1295,13 +1241,9 @@ impl Architecture {
             // asserted equal by kuna_phases/tests.rs `live_value` parity).
             kuna_vcall_targets: Rc::default(),
 
-            esp_image_chip: None,
-
             analysis_ppc32picimports: Default::default(),
-            ppc32_pic_imports: Default::default(),
 
             msvcsig_import_slots: std::collections::BTreeSet::new(),
-            format_call_overrides: std::collections::BTreeMap::new(),
             format_stack_args: std::rc::Rc::new(std::collections::BTreeMap::new()),
             elfmain_main_decl: None,
             fid_prototypes: std::collections::BTreeSet::new(),
@@ -1309,13 +1251,11 @@ impl Architecture {
             kuna_callee_overrides: std::collections::BTreeMap::new(),
             kuna_callsite_protos: std::collections::BTreeMap::new(),
             kuna_uefi_installs: Vec::new(),
-            format_vararg_abi: None, // (kuna) a load-time fact; set by the console's `load file`
             kuna_darwin_variadic_cache: std::collections::HashMap::new(),
             lazy_entry_starts: Rc::default(),
 
             error_noreturn_callsites: Vec::new(),
             dos_exit_sites: Vec::new(),
-            kernel_bug_sites: Vec::new(),
 
             analysis_fidcallees: true,
 
@@ -1323,10 +1263,8 @@ impl Architecture {
 
             loader_param_locks: std::collections::BTreeMap::new(),
             cfstring_entries: std::collections::BTreeSet::new(),
-            kuna_this_hints: std::collections::BTreeMap::new(),
             blob_entries: Rc::default(),
             loader_proto_models: Rc::default(),
-            loader_input_hints: std::collections::BTreeMap::new(),
             loader_swift_abi: None,
             loader_swift_enum_cases: Rc::default(),
 
@@ -2245,7 +2183,7 @@ impl Architecture {
             .kuna_options
             .get::<crate::kuna_coreoptions::Vtabletypes>()
             .0
-            || !self.kuna_this_hints.is_empty();
+            || (self.pass_hooks().inputhints_has_this_hints)(&self.kuna_tables);
         // (kuna `calleereginputs custom`) a function's own evaluation sees the
         // same per-callee models its callers' flow does.
         ctx.kuna_custom_reg_callers = Rc::clone(&self.kuna_custom_reg_callers);

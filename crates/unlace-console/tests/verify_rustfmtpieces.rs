@@ -221,7 +221,9 @@ fn language_options_and_layout_evidence_bound_recovery() {
                     1 => arch.rust_fmt_pieces_relro = None,
                     2 => {
                         arch.rust_display_formatters.clear();
-                        arch.rust_integer_formatters.clear();
+                        arch.kuna_tables
+                            .get_mut::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>()
+                            .clear();
                     }
                     _ => {
                         let (lo, hi) = arch.rust_fmt_pieces_relro.unwrap();

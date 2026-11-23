@@ -145,20 +145,32 @@ fn producer_language_and_current_image_evidence_are_required() {
                         .set(unlace_decomp::kuna_sourcelang::SourceLangForced(Some(
                             unlace_decomp::kuna_sourcelang::SourceLang::C,
                         ))),
-                    3 => arch.rust_io_writer_profiles.clear(),
+                    3 => arch
+                        .kuna_tables
+                        .get_mut::<unlace_decomp::kuna_rustfmtio::WriterProfiles>()
+                        .clear(),
                     4 => {
-                        for profile in arch.rust_io_writer_profiles.values_mut() {
+                        for profile in arch
+                            .kuna_tables
+                            .get_mut::<unlace_decomp::kuna_rustfmtio::WriterProfiles>()
+                            .values_mut()
+                        {
                             profile.protected[0].bytes[0] ^= 1;
                         }
                     }
                     5 => {
-                        for profile in arch.rust_io_writer_profiles.values_mut() {
+                        for profile in arch
+                            .kuna_tables
+                            .get_mut::<unlace_decomp::kuna_rustfmtio::WriterProfiles>()
+                            .values_mut()
+                        {
                             profile.protected.clear();
                         }
                     }
                     _ => {
                         let spans: Vec<_> = arch
-                            .rust_io_writer_profiles
+                            .kuna_tables
+                            .get::<unlace_decomp::kuna_rustfmtio::WriterProfiles>()
                             .values()
                             .flat_map(|profile| profile.protected.iter())
                             .map(|span| (span.address, span.bytes.len()))

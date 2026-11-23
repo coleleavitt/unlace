@@ -443,7 +443,10 @@ fn add_scoped_calls(
 ) -> Option<String> {
     let arch = prog.arch();
     if !arch.analysis_ppc32picimports.scoped()
-        || arch.ppc32_pic_imports.is_empty()
+        || arch
+            .kuna_tables
+            .get::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
+            .is_empty()
         || !args.instructions
         || !(args.kinds.is_empty() || args.kinds.contains(&XrefKind::Call))
     {
@@ -451,10 +454,11 @@ fn add_scoped_calls(
     }
     let selected: Vec<_> = match args.direction {
         Direction::To
-            if target
-                .class
-                .iter()
-                .any(|a| arch.ppc32_pic_imports.contains_key(a)) =>
+            if target.class.iter().any(|a| {
+                arch.kuna_tables
+                    .get::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
+                    .contains_key(a)
+            }) =>
         {
             entries.iter().collect()
         }
@@ -1079,7 +1083,8 @@ fn target_address(prog: &ConsoleProgram, spec: &str) -> Result<Resolution, Strin
     if prog.arch().analysis_ppc32picimports.scoped()
         && let Some(slot) = prog
             .arch()
-            .ppc32_pic_imports
+            .kuna_tables
+            .get::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
             .values()
             .find(|s| s.name == spec)
     {
@@ -1133,7 +1138,8 @@ fn resolve_target(
     if by_name && prog.arch().analysis_ppc32picimports.scoped() {
         class.extend(
             prog.arch()
-                .ppc32_pic_imports
+                .kuna_tables
+                .get::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
                 .values()
                 .filter(|s| Some(&s.name) == name.as_ref())
                 .map(|s| s.address),
@@ -1198,7 +1204,8 @@ fn name_at(
                 .scoped()
                 .then(|| {
                     prog.arch()
-                        .ppc32_pic_imports
+                        .kuna_tables
+                        .get::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
                         .get(&vma)
                         .map(|s| s.name.clone())
                 })

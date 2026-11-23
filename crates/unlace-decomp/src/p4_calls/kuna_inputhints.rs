@@ -97,3 +97,29 @@ impl FuncdataInputhintsExt for crate::funcdata::Funcdata {
             .map(Vec::as_slice)
     }
 }
+
+/// (kuna `swiftcall`) The input hints the IOKit pass gave each method's `this`, by entry; an
+/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+#[derive(Default)]
+pub struct ThisHints(
+    pub std::collections::BTreeMap<unlace_base::address::Address, std::rc::Rc<Vec<InputHint>>>,
+);
+crate::kuna_arch_table!(ThisHints);
+
+/// The input hints the loader stated for each function, by entry; an
+/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+#[derive(Default)]
+pub struct LoaderHints(
+    pub std::collections::BTreeMap<unlace_base::address::Address, std::rc::Rc<Vec<InputHint>>>,
+);
+crate::kuna_arch_table!(LoaderHints);
+
+/// Did a pass give any method's `this` input hints?
+fn has_this_hints(tables: &crate::kuna_archstate::ArchTables) -> bool {
+    !tables.get::<ThisHints>().0.is_empty()
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.inputhints_has_this_hints = Some(has_this_hints);
+}

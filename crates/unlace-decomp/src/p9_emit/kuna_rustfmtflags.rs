@@ -197,6 +197,11 @@ impl Options {
     }
 }
 
+/// (kuna `rustfmtflags`) The image's integer `Display` formatters, by address; an
+/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+pub type IntegerFormatters = std::collections::BTreeMap<u64, Formatter>;
+crate::kuna_arch_table!(IntegerFormatters);
+
 #[cfg(test)]
 mod tests {
     use super::*;

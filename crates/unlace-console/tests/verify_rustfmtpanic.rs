@@ -217,7 +217,9 @@ fn language_version_and_formatting_options_bound_recovery() {
             "rust",
             |arch| {
                 arch.rust_display_formatters.clear();
-                arch.rust_integer_formatters.clear();
+                arch.kuna_tables
+                    .get_mut::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>()
+                    .clear();
             },
             |_| {},
         )

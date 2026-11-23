@@ -35,7 +35,13 @@ fn decompile(
     )
     .unwrap();
     assert_eq!(program.arch().rustc_stable_version, Some((1, 93, 1)));
-    assert!(!program.arch().rust_integer_formatters.is_empty());
+    assert!(
+        !program
+            .arch()
+            .kuna_tables
+            .get::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>()
+            .is_empty()
+    );
     program.arch_mut().kuna_options.set(if enabled {
         RustFmtMode::On
     } else {
@@ -134,7 +140,9 @@ fn version_identity_and_language_are_required() {
     }
     let no_identity = |enabled| {
         decompile(false, "hex_width", enabled, "rust", |arch| {
-            arch.rust_integer_formatters.clear()
+            arch.kuna_tables
+                .get_mut::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>()
+                .clear()
         })
     };
     assert_eq!(no_identity(true), no_identity(false));

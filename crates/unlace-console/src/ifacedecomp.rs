@@ -2655,7 +2655,10 @@ decomp_command!(
         // whole-binary loop (`project::decompile_targets`) run the identical
         // pipeline — including the FormatStringAnalyzer half-B override /
         // re-decompile loop, which used to live only here.
-        prog.arch_mut().kuna_prior_names = prior_names;
+        *prog
+            .arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_stablenames::PriorNames>() = prior_names;
         prog.arch_mut().kuna_record_names = true;
         let step = crate::decompile_step::decompile_one_prefollowed(
             prog.arch_mut(),
@@ -2675,7 +2678,10 @@ decomp_command!(
             &proto_overrides,
             prefollowed,
         );
-        prog.arch_mut().kuna_prior_names = Default::default();
+        *prog
+            .arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_stablenames::PriorNames>() = Default::default();
         prog.arch_mut().kuna_record_names = false;
         let result = step.result;
         if !step.discovered.is_empty() {

@@ -531,7 +531,11 @@ pub(crate) fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
     let arch = data.get_arch();
     let gates = Gates {
         tails: arch.revert_cross_jumps,
-        latch: arch.revert_cross_jumps && arch.loop_continue,
+        latch: arch.revert_cross_jumps
+            && arch
+                .kuna_options
+                .get::<crate::kuna_loopcontinue::LoopContinue>()
+                .0,
         brk: arch.recover_loop_break,
         do_while_continue: arch.do_while_continue,
     };

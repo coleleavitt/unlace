@@ -29,7 +29,7 @@
 //! model in `jumptable.rs` (it needs the protected `pathMeld`/`jrange`/
 //! `selectguards`/`varnodeIndex` state). It is invoked from `recoverModel()`
 //! only after the normal model — and the modulo/and-mask extension — fail to
-//! bound the table. Only the gate (`Architecture::switch_guard_bound`, default
+//! bound the table. Only the gate (the registered option `SwitchGuardBound`, default
 //! off) is owned here.
 //!
 //! The option ships **default-off** (upstream byte-identical): a CBRANCH-guard
@@ -57,7 +57,7 @@ pub const ELEM_SWITCHGUARDBOUND: ElementId = ElementId::new("switchguardbound", 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SwitchGuardBoundOption {
     /// True if a CBRANCH range guard on a LOAD-table jumptable index bounds the
-    /// table (C++ `Architecture::switch_guard_bound`).
+    /// table (C++ the registered option `SwitchGuardBound`).
     pub enabled: bool,
 }
 

@@ -375,8 +375,15 @@ pub(crate) fn summary(arch: &Architecture, entry: &Address, depth: u8) -> Summar
 fn walk_options(arch: &Architecture) -> u8 {
     u8::from(arch.kuna_calleeargs)
         | u8::from(arch.analysis_noreturn_known) << 1
-        | u8::from(arch.go_bounds && arch.source_lang().is_go()) << 2
-        | u8::from(arch.strip_security_check) << 3
+        | u8::from(
+            arch.kuna_options.get::<crate::kuna_gobounds::GoBounds>().0
+                && arch.source_lang().is_go(),
+        ) << 2
+        | u8::from(
+            arch.kuna_options
+                .get::<crate::kuna_securitycheck::StripSecurityCheck>()
+                .0,
+        ) << 3
 }
 
 /// [`summary`] and the depth it needed. A walk is reused at any depth it fits

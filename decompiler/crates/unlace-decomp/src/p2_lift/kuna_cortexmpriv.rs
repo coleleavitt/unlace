@@ -75,3 +75,23 @@ pub const SNIPPET: &[u8] = b"res = 1:1;\n";
 pub fn is_our_fixup(registered: Option<int4>, injectid: int4) -> bool {
     registered == Some(injectid)
 }
+
+crate::kuna_flag!(
+    /// (kuna `cortexmpriv`) Assume the Cortex-M core is privileged, folding away
+    /// the `isCurrentModePrivileged()` guard the vendored ARM SLEIGH wraps around
+    /// every VERSION_7M MRS/MSR (`kuna_cortexmpriv`).
+    ///
+    /// Twelve `ARMTHUMBinstructions.sinc` constructors lower as
+    /// `b:1 = isCurrentModePrivileged(); if (!b) goto <notPriv>; <effect>`, so
+    /// each MRS/MSR costs one basic block and two CFG edges that exist in no
+    /// source. On the guard folds to `1` and only the effect survives.
+    ///
+    /// Read at the CALLOTHER consumption gate
+    /// (`decompile_drive::is_injected_userop`), not at registration: the payload
+    /// is installed at architecture bootstrap, before any `option` line.
+    Cortexmpriv,
+    "cortexmpriv",
+    "Cortex-M privileged-mode guard folding",
+    unset: false,
+    shipped: true
+);

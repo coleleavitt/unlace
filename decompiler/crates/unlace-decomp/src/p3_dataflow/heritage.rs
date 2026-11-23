@@ -5610,27 +5610,24 @@ impl Heritage {
         refine[lastpos] = size - lastpos as int4;
         if !byte_copy && !halves {
             let space = addr.get_space().expect("refinement: space");
-            crate::p3_dataflow::kuna_inputrefinement::coalesce(
-                &mut refine,
-                |start, junction, end| {
-                    inputvars.iter().any(|&vn| {
-                        let v = fd.vbank().get(vn).expect("refinement: input");
-                        let Some(input_space) = v.get_addr().get_space() else {
-                            return false;
-                        };
-                        if input_space.get_index() != space.get_index() {
-                            return false;
-                        }
-                        let input_start = space
-                            .wrap_offset(v.get_addr().get_offset().wrapping_sub(addr.get_offset()))
-                            as usize;
-                        let input_span = (input_start, input_start + v.get_size() as usize);
-                        (fd.hooks().inputrefinement_span_straddles_join)(
-                            input_span, start, junction, end,
-                        )
-                    })
-                },
-            );
+            (fd.hooks().inputrefinement_coalesce)(&mut refine, &mut |start, junction, end| {
+                inputvars.iter().any(|&vn| {
+                    let v = fd.vbank().get(vn).expect("refinement: input");
+                    let Some(input_space) = v.get_addr().get_space() else {
+                        return false;
+                    };
+                    if input_space.get_index() != space.get_index() {
+                        return false;
+                    }
+                    let input_start = space
+                        .wrap_offset(v.get_addr().get_offset().wrapping_sub(addr.get_offset()))
+                        as usize;
+                    let input_span = (input_start, input_start + v.get_size() as usize);
+                    (fd.hooks().inputrefinement_span_straddles_join)(
+                        input_span, start, junction, end,
+                    )
+                })
+            });
         }
         let mut retired = Vec::new();
         let mut spans = Vec::new();

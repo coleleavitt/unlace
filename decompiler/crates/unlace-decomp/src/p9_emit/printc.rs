@@ -4786,16 +4786,17 @@ impl PrintC {
         } else {
             Default::default()
         };
-        self.goto_rewrites = if arch.goto_next && c_switch {
-            crate::p8_structure::kuna_gotonext::goto_rewrites(
-                fd.sblocks_ref(),
-                sroot,
-                arch.recover_loop_break,
-                &self.switch_plans,
-            )
-        } else {
-            Default::default()
-        };
+        self.goto_rewrites =
+            if arch.kuna_options.get::<crate::funcdata_block::GotoNext>().0 && c_switch {
+                crate::p8_structure::kuna_gotonext::goto_rewrites(
+                    fd.sblocks_ref(),
+                    sroot,
+                    arch.recover_loop_break,
+                    &self.switch_plans,
+                )
+            } else {
+                Default::default()
+            };
         self.assign_label_names(fd, sroot);
         self.emit_block_graph(fd, arch, sroot);
         while let Some(id) = self.eh_open_catch.pop() {

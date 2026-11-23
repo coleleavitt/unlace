@@ -337,7 +337,10 @@ impl FlowEnvironment for ArchFlowEnv {
         // (kuna overlapbranch) the Architecture-owned gate (`option overlapbranch`).
         // When on, `flow.rs` truncates a conditional branch's fall-through whose
         // encoding swallows the branch's own target.
-        self.arch().overlap_branch
+        self.arch()
+            .kuna_options
+            .get::<crate::kuna_overlapbranch::OverlapBranch>()
+            .0
     }
     fn decode_halt_reports(&self) -> bool {
         true
@@ -429,7 +432,11 @@ impl FlowEnvironment for ArchFlowEnv {
                 return arch.octeon_effects == crate::kuna_octeoneffects::OcteonEffectsMode::Off;
             }
         }
-        if !arch.cortexmpriv {
+        if !arch
+            .kuna_options
+            .get::<crate::kuna_cortexmpriv::Cortexmpriv>()
+            .0
+        {
             if let Some(id) = op.get_inject_id() {
                 if crate::kuna_cortexmpriv::is_our_fixup(arch.cortexmpriv_inject, id as int4) {
                     return false;
@@ -590,7 +597,11 @@ impl FlowEnvironment for ArchFlowEnv {
         // user-op name resolution is `glb->userops.getOp(id)->getName()` (None ==
         // the C++ null `UserPcodeOp *`).
         let arch = self.arch();
-        if !arch.sparc_struct_return {
+        if !arch
+            .kuna_options
+            .get::<crate::kuna_sparcstructret::SparcStructReturn>()
+            .0
+        {
             // Fast-path the default-off gate without touching the IR (matches the
             // predicate's leading `if (!gate) return false`).
             return None;
@@ -598,7 +609,9 @@ impl FlowEnvironment for ArchFlowEnv {
         crate::kuna_sparcstructret::kuna_sparc_struct_ret_trap_producer(
             fd,
             op,
-            arch.sparc_struct_return,
+            arch.kuna_options
+                .get::<crate::kuna_sparcstructret::SparcStructReturn>()
+                .0,
             |id| {
                 arch.userops
                     .get_op(id)
@@ -916,7 +929,11 @@ impl FlowEnvironment for ArchFlowEnv {
         // (`getStackSpace()->getSpacebaseFull(0)`).  A compiler spec with no
         // `<stackpointer>` has no stack space, and the rule declines.
         let arch = self.arch();
-        if !arch.tail_call_frame {
+        if !arch
+            .kuna_options
+            .get::<crate::kuna_tailcallframe::TailCallFrame>()
+            .0
+        {
             // Fast-path the gate without touching the IR.
             return false;
         }
@@ -927,7 +944,9 @@ impl FlowEnvironment for ArchFlowEnv {
         crate::kuna_tailcallframe::kuna_is_frame_teardown_tail_call(
             fd,
             op,
-            arch.tail_call_frame,
+            arch.kuna_options
+                .get::<crate::kuna_tailcallframe::TailCallFrame>()
+                .0,
             fd.get_address(),
             dest,
             sp.as_ref(),

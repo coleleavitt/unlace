@@ -198,7 +198,7 @@ impl Action for ActionChkstkDarwin {
             .kuna_options
             .get::<crate::kuna_coreoptions::ChkstkDarwin>()
             .0
-            || data.get_heritage_pass() != 0
+            || data.is_settled(crate::kuna_maturity::Fact::Ssa)
             || data.num_calls() == 0
         {
             return 0;

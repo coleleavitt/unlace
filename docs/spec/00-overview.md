@@ -4325,11 +4325,27 @@ level is reached only when its node survives the filter. Levels can be skipped (
 `merge` group, so it never reaches `merged`), but the order never changes. The jump-table sub-query (§2.3) runs on its own partial `Funcdata`, so
 its levels never touch the function being decompiled.
 
+**Where it lives.** The levels, facts and queries are
+`crates/unlace-middle/src/substrate/kuna_maturity.rs`; the level sits in a
+per-function state slot that `Funcdata::clear` drops. The driver marks the nodes in
+`crates/unlace-decomp/src/infra/universalaction.rs (settles)`, which sets
+`ActionBase::settles` on the materialized action (a pool and a group keep it through
+`clone_filtered`), and `ActionGroup::apply`
+(`crates/unlace-middle/src/infra/action.rs`) advances the function when a marked member
+completes, unless the pass was abandoned or is past its deadline. `run_pipeline` marks the
+function as driven by the full root before each perform.
+
 **Use.** A pass asks `fd.is_settled(fact)` for a fact, or `fd.maturity()` for the
-level. A pass that relies on an earlier phase states it with
+level. The pre-SSA passes of mainloop's head (`cleanupcode`, `gojumpchain`,
+`gomorestack`, `gowritebarrier`, `ptrauthtrap`, `chkstkdarwin`, `rustprobestack`,
+`outline`, the lowered-switch install) ask `is_settled(Fact::Ssa)` instead of reading
+the heritage pass counter, and `condstmts` asks `is_settled(Fact::HighVariables)`;
+both are the same test by definition. `gotoreduce` and `ifelseflatten` assert the
+casts and the block structure they edit. A pass that relies on an earlier phase states it with
 `debug_assert_settled!(fd, Fact)`, which checks only in debug builds and only for
 a function driven through the full `decompile` root (`run_pipeline`). A unit test
 that applies one action to a hand-built `Funcdata`, or a reduced variant, is not
-held to the tree's order. The level is reported by the console's `phase status`.
+held to the tree's order. The level is reported by the console's `phase status` (`maturity: <level> (settled:
+<facts>)`, after the three option lines, when a function is selected).
 Marking a level changes no analysis: it is a record of where the scheduler is, not
 a new decision.

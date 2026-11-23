@@ -387,6 +387,11 @@ boundaries. Fixed with a per-spec stamp file (size + mtime of each source, the k
 `[profile.release] lto = "thin"`: grep 4.58 s -> 4.41 s, sort 2.25 -> 2.34 s, libselinux.so.1 3.56 -> 3.53 s,
 total 10.39 -> 10.28 s, output still byte-identical.
 
+**Maturity levels (2026-11-23).** The Hex-Rays idea from the landscape doc landed as a record of the
+scheduler's progress, with no behaviour change: `unlace-middle`'s `kuna_maturity` (levels raw ...
+complete, facts, `is_settled`, `debug_assert_settled!`), marked on ten schedule nodes by the
+driver, reset by a restart, reported by `phase status` (spec §0.10).
+
 **Left:**
 - Step 0: the build-time measurement (`cargo build --timings`, `-Zself-profile` for an edit in each band)
   was never taken, so the incremental-rebuild gain is estimated in section 5, not measured.

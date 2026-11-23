@@ -247,6 +247,9 @@ pub struct ActionBase {
     pub name: String,
     /// Base group this action belongs to (C++ `basegroup`).
     pub basegroup: String,
+    /// (kuna) The maturity level a function reaches when this action completes, set by the
+    /// driver on the schedule nodes that settle one (`docs/spec/00-overview.md` §0.10).
+    pub settles: Option<crate::kuna_maturity::Maturity>,
 }
 
 impl ActionBase {
@@ -262,6 +265,7 @@ impl ActionBase {
             count_apply: 0,
             name: nm.into(),
             basegroup: g.into(),
+            settles: None,
         }
     }
 
@@ -838,6 +842,14 @@ impl Action for ActionGroup {
                 ctx.abandoned_for_restart = true;
                 ctx.reflow_requested = true;
                 return 0;
+            }
+            // (kuna maturity) A completed member that settles a level advances the function.
+            if res >= 0
+                && let Some(level) = self.list[self.state].base().settles
+                && !ctx.abandon
+                && !ctx.deadline_expired()
+            {
+                data.advance_maturity(level);
             }
             if res > 0 {
                 // A change was made
@@ -1646,7 +1658,9 @@ impl Action for ActionPool {
         for entry in &self.allrules {
             if let Some(cloned) = entry.clone_filtered(grouplist) {
                 let pool = res.get_or_insert_with(|| {
-                    ActionPool::new(self.base.flags, self.base.name.clone())
+                    let mut pool = ActionPool::new(self.base.flags, self.base.name.clone());
+                    pool.base.settles = self.base.settles;
+                    pool
                 });
                 pool.add_rule(cloned.state, cloned.rule);
             }

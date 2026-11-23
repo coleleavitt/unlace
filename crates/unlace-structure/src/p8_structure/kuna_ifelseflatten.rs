@@ -103,6 +103,7 @@ impl Action for ActionIfElseFlatten {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, BlockStructure);
         // P0 assertion `option ifelseflatten on|off`, carried on the Architecture boundary.
         if !data
             .get_arch()

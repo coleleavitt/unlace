@@ -46,6 +46,9 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   are a taxonomy; the real pass order is `universal_sched` in
   `crates/unlace-decomp/src/infra/universalaction.rs`. One-screen model: `docs/phases.md`;
   normative algorithms: `docs/spec/`.
+- **Maturity** (`docs/spec/00-overview.md` §0.10): each function records how far the current pass has
+  got (`fd.maturity()`, `fd.is_settled(Fact::…)`); a pass that relies on an earlier phase asks that
+  or states it with `debug_assert_settled!` instead of reading ad-hoc flags. A restart resets it.
 - Decisions are flipped per run with `--option NAME VALUE`; discover them via `unlace catalog --json`.
 
 ## Current State

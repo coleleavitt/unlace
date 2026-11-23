@@ -1003,7 +1003,8 @@ impl IfaceCommandAction for IfcKunaPhaseMap {
 // ---------------------------------------------------------------------------
 
 /// (kuna) `phase status`: report the active pipeline variant and the state of
-/// kuna sub-stage options (C++ `IfcKunaPhaseStatus`).
+/// kuna sub-stage options (C++ `IfcKunaPhaseStatus`), then, for a selected
+/// function, its maturity level and settled facts (kuna).
 ///
 /// The first two lines (pipeline variant, compareform) read accessors the
 /// merged tree exposes; the third (`arraynotation`) dereferences `conf->print`
@@ -1046,6 +1047,20 @@ impl IfaceCommandAction for IfcKunaPhaseStatus {
             "off"
         });
         os.push('\n');
+        // (kuna maturity) How far the selected function's last pass got
+        // (`docs/spec/00-overview.md` §0.10), and the facts settled there.
+        if let Some(fd) = dcp.fd.as_ref() {
+            let settled: Vec<&str> = fd.settled_facts().iter().map(|f| f.name()).collect();
+            os.push_str(&format!(
+                "maturity: {} (settled: {})\n",
+                fd.maturity(),
+                if settled.is_empty() {
+                    "none".to_string()
+                } else {
+                    settled.join(", ")
+                }
+            ));
+        }
         // C++ writes the bulk stream (`*status->fileoptr`); the datatest harness
         // sets `fileoptr` to the matched bulk buffer (the interactive console
         // falls back to stdout when no `openfile` redirect is active).

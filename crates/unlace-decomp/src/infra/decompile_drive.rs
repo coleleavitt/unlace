@@ -1585,6 +1585,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
             // into the action loop (`None` = no budget, the parity default).
             ctx.deadline = deadline;
             ctx.restart_early = reflows < MAX_REFLOW;
+            fd.set_maturity_tracked(true);
             let r = root.perform(fd, &mut ctx);
             if let Some(error) = ctx.error {
                 return Err(error);

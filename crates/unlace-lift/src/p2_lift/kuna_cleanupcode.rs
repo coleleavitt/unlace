@@ -383,7 +383,7 @@ impl Action for ActionRemoveCleanupCode {
         }
         // The pre-SSA window: no INDIRECT call effects to unpick, and the
         // argument setup still dies to the following dead-code fixpoint.
-        if data.get_heritage_pass() != 0 || data.num_calls() == 0 {
+        if data.is_settled(crate::kuna_maturity::Fact::Ssa) || data.num_calls() == 0 {
             return 0;
         }
         // Never gut the glue itself: a cleanup routine's body is calls to other

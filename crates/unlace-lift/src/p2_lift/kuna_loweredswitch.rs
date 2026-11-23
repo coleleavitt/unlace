@@ -1492,7 +1492,7 @@ impl ActionLowerSwitchInstall {
         // restart re-flows raw pcode and re-clears heritage, so the first mainloop
         // iteration on the restart has pass 0 — the install fires there, then
         // ActionHeritage rebuilds SSA over the corrected CFG.
-        if data.get_heritage_pass() != 0 {
+        if data.is_settled(crate::kuna_maturity::Fact::Ssa) {
             return 0;
         }
         let store = self.store.borrow();

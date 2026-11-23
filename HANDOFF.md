@@ -395,6 +395,13 @@ tests that reached a hook from a higher crate moved to the driver (`infra/{middl
   folder/`MODULE_BAND` map stays for files still in unlace-decomp). Once every crate is split, the dependency graph
   enforces the layering and the script can retire.
 
+### Maturity levels (2026-11-23)
+- Design: `docs/spec/00-overview.md` §0.10 (#188). Implementation: `unlace-middle`'s
+  `kuna_maturity` (levels, facts, `Funcdata::is_settled`, `debug_assert_settled!`), the driver's
+  `settles(...)` marks in `universal_sched`, `ActionGroup::apply` advancing, `phase status` reporting.
+  No behaviour change. Next candidates: more passes stating what they rely on through
+  `debug_assert_settled!` (the band-b crates, after the bandb split settles).
+
 ### CI and tests
 - 2026-11-23, after the stop: every finished Tests run on `main` since 2026-11-22 20:57 had failed
   the workspace suite (11 real failures), and queued main runs were replaced by newer pushes, so most

@@ -1975,11 +1975,9 @@ impl ScopeLocal {
                 }
                 if self.adjust_fit(&mut cur) {
                     if open {
-                        if let Some(size) = crate::p6_variables::kuna_arraysize::fit(
-                            &cur,
-                            cur_end,
-                            cur.size as intb,
-                            state,
+                        if let Some(size) = (crate::architecture::default_pass_hooks()
+                            .arraysize_fit)(
+                            &cur, cur_end, cur.size as intb, state
                         ) {
                             cur.size = size;
                         }
@@ -3194,12 +3192,12 @@ pub struct MapState {
     extended: Vec<crate::p6_variables::kuna_arrayextent::Extended>,
     /// (kuna `arraysize`) Per signed offset an escaped address starts at, what
     /// the calls receiving it and the accesses through it say about its size.
-    stated_sizes: std::collections::BTreeMap<intb, crate::p6_variables::kuna_arraysize::Evidence>,
+    stated_sizes: std::collections::BTreeMap<intb, Evidence>,
     /// (kuna `arraysize`) The sorted signed offsets of index bases whose reach is
     /// not proven.
     unproven_indexes: Vec<intb>,
     /// (kuna `arraysize`) Where the accesses through each escaped address land.
-    reaches: Vec<crate::p6_variables::kuna_arraysize::Reach>,
+    reaches: Vec<Reach>,
 }
 
 impl MapState {
@@ -3529,9 +3527,9 @@ impl MapState {
     /// through each escaped address land.
     pub(crate) fn set_stated_sizes(
         &mut self,
-        sizes: std::collections::BTreeMap<intb, crate::p6_variables::kuna_arraysize::Evidence>,
+        sizes: std::collections::BTreeMap<intb, Evidence>,
         unproven_indexes: Vec<intb>,
-        reaches: Vec<crate::p6_variables::kuna_arraysize::Reach>,
+        reaches: Vec<Reach>,
     ) {
         self.stated_sizes = sizes;
         self.unproven_indexes = unproven_indexes;
@@ -3539,15 +3537,12 @@ impl MapState {
     }
 
     /// (kuna `arraysize`) Where the accesses through each escaped address land.
-    pub(crate) fn reaches(&self) -> &[crate::p6_variables::kuna_arraysize::Reach] {
+    pub(crate) fn reaches(&self) -> &[Reach] {
         &self.reaches
     }
 
     /// (kuna `arraysize`) What calls and accesses say about the address at `sstart`.
-    pub(crate) fn stated_sizes(
-        &self,
-        sstart: intb,
-    ) -> Option<&crate::p6_variables::kuna_arraysize::Evidence> {
+    pub(crate) fn stated_sizes(&self, sstart: intb) -> Option<&Evidence> {
         self.stated_sizes.get(&sstart)
     }
 
@@ -3610,6 +3605,54 @@ pub struct Extended {
     pub(crate) elem: int4,
     pub(crate) from: int4,
     pub(crate) to: int4,
+}
+
+/// What a call's byte count says about the buffer it receives.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Says {
+    /// A library length the callee may fill the buffer up to (a capacity).
+    Fills,
+    /// A library length the callee writes exactly (`memset`, a `memcpy`
+    /// destination): the buffer is at least that long.
+    Covers,
+    /// A library length the callee only reads: the buffer is at least that long.
+    Reads,
+    /// A `__*_chk` destination object size: the whole object at the address
+    /// for the `mem*`, `read`, `recv` and `fread` families
+    /// (`__builtin_object_size` mode 0), and at `_FORTIFY_SOURCE=2` the closest
+    /// enclosing sub-object for the `str*`, `printf`, `fgets`, `getcwd` and
+    /// `readlink` families (mode 1), which for a structure's first member is
+    /// the member.
+    Object,
+    /// A constant beside the buffer in a call outside the tables (`calls`).
+    Constant,
+}
+
+/// What the function's calls say about the buffer at one frame offset.
+#[derive(Clone, Default)]
+pub struct Evidence {
+    /// The byte counts calls state for the start, what each says, and whether
+    /// it already includes a terminator byte at the call's result.
+    pub(crate) counts: Vec<(intb, Says, bool)>,
+}
+
+/// Where the accesses through one escaped address land, as signed frame
+/// offsets.
+#[derive(Clone, Copy, Debug)]
+pub struct Reach {
+    /// The frame offset of the address.
+    pub(crate) offset: intb,
+    /// The lowest byte a constant-offset access through it touches.
+    pub(crate) lo: intb,
+    /// One past the highest byte a constant-offset access through it touches.
+    pub(crate) hi: intb,
+    /// Some access may land anywhere above the address: a loop advances it, a
+    /// non-constant offset other than a terminator is added, a library call
+    /// receives it with a non-constant length.
+    pub(crate) open_up: bool,
+    /// Some access may land anywhere below the address (a loop walks it down,
+    /// or a non-constant offset is added).
+    pub(crate) open_down: bool,
 }
 
 #[cfg(test)]

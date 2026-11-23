@@ -37,6 +37,9 @@
 //! array keeps that byte. The bytes past the array stay unmapped, as alignment
 //! padding is. Upstream's gap is restored with `option arraysize off`.
 
+pub use crate::varmap::Evidence;
+pub use crate::varmap::Reach;
+pub use crate::varmap::Says;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -104,27 +107,6 @@ impl OptionArraySize {
             _ => Err(KunaError::parse("Must specify one of off, on, calls")),
         }
     }
-}
-
-/// What a call's byte count says about the buffer it receives.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum Says {
-    /// A library length the callee may fill the buffer up to (a capacity).
-    Fills,
-    /// A library length the callee writes exactly (`memset`, a `memcpy`
-    /// destination): the buffer is at least that long.
-    Covers,
-    /// A library length the callee only reads: the buffer is at least that long.
-    Reads,
-    /// A `__*_chk` destination object size: the whole object at the address
-    /// for the `mem*`, `read`, `recv` and `fread` families
-    /// (`__builtin_object_size` mode 0), and at `_FORTIFY_SOURCE=2` the closest
-    /// enclosing sub-object for the `str*`, `printf`, `fgets`, `getcwd` and
-    /// `readlink` families (mode 1), which for a structure's first member is
-    /// the member.
-    Object,
-    /// A constant beside the buffer in a call outside the tables (`calls`).
-    Constant,
 }
 
 /// `(callee, buffer argument, arguments whose product is the byte count, what
@@ -227,33 +209,6 @@ const RETURNS_STORED: &[&str] = &[
     "fread",
     "fread_unlocked",
 ];
-
-/// What the function's calls say about the buffer at one frame offset.
-#[derive(Clone, Default)]
-pub(crate) struct Evidence {
-    /// The byte counts calls state for the start, what each says, and whether
-    /// it already includes a terminator byte at the call's result.
-    counts: Vec<(intb, Says, bool)>,
-}
-
-/// Where the accesses through one escaped address land, as signed frame
-/// offsets.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Reach {
-    /// The frame offset of the address.
-    offset: intb,
-    /// The lowest byte a constant-offset access through it touches.
-    lo: intb,
-    /// One past the highest byte a constant-offset access through it touches.
-    hi: intb,
-    /// Some access may land anywhere above the address: a loop advances it, a
-    /// non-constant offset other than a terminator is added, a library call
-    /// receives it with a non-constant length.
-    open_up: bool,
-    /// Some access may land anywhere below the address (a loop walks it down,
-    /// or a non-constant offset is added).
-    open_down: bool,
-}
 
 /// A constant argument: a constant Varnode, or the pointer constant
 /// `PTRSUB(#0, #c)` the type pass makes of an integer that happens to be a
@@ -759,6 +714,11 @@ pub fn fit(cur: &RangeHint, cur_end: intb, gap: intb, state: &MapState) -> Optio
         }
     }
     int4::try_from(bytes).ok()
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.arraysize_fit = Some(fit);
 }
 
 #[cfg(test)]

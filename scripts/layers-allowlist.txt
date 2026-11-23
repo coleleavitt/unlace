@@ -103,7 +103,6 @@ coreaction_cleanup -> printlanguage
 coreaction_infertypes -> kuna_avxintrin
 database -> remote_provider
 dtype -> bitfield
-dtype -> kuna_typequal
 dtype -> prettyprint
 flow -> kuna_armfloatreturn
 flow -> kuna_calleearitybody
@@ -217,6 +216,5 @@ options -> kuna_lang
 options -> kuna_option_dispatch
 subflow -> kuna_truncarg
 varmap -> kuna_arrayextent
-varmap -> kuna_arraysize
 varmap -> kuna_stablenames
 varmap -> remote_provider

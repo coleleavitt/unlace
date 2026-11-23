@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
-use unlace_base::types::{int4, uint4, uintb};
+use unlace_base::types::{int4, intb, uint4, uintb};
 
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::IdRegistry;
@@ -358,8 +358,6 @@ declare_hooks! {
     swifterror_is_error_op: fn(&PcodeOpBank, &VarnodeBank, OpId) -> bool;
     /// `kuna_syscallregs::is_error_flag_op`.
     syscallregs_is_error_flag_op: fn(&PcodeOpBank, &VarnodeBank, OpId) -> bool;
-    /// `kuna_typequal::is_volatile`.
-    typequal_is_volatile: fn(&Datatype) -> bool;
     /// `kuna_varargstackargs::stack_section_split`.
     varargstackargs_stack_section_split: fn(&ParamActive, int4, int4) -> Option<int4>;
     /// `kuna_calloverlap::auto_register`.
@@ -473,4 +471,6 @@ declare_hooks! {
     varargsave_regs: fn(&Architecture) -> Option<Regs>;
     /// `kuna_x87emptyreturn::storage`.
     x87emptyreturn_storage: fn(&Architecture) -> Option<Storage>;
+    /// `kuna_arraysize::fit`.
+    arraysize_fit: fn(&RangeHint, intb, intb, &MapState) -> Option<int4>;
 }

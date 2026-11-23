@@ -25,6 +25,7 @@ pub mod kuna_fnmemory;
 pub mod kuna_hostmem;
 pub mod kuna_optionset;
 pub mod kuna_passhooks;
+pub mod kuna_typequal; // (kuna) C type qualifiers on their own type layer
 pub mod op;
 pub mod pcodeinject;
 pub mod rangeutil;

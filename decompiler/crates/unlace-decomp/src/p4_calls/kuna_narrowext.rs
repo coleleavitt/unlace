@@ -71,12 +71,7 @@ impl OptionNarrowExt {
     }
 }
 
-/// The widening an image's arguments and return values follow, if known.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Rules {
-    pub input: Option<Widen>,
-    pub output: Option<Widen>,
-}
+pub use crate::context::NarrowExtRules as Rules;
 
 /// The rules for `arch` under its `narrowext` value.
 pub fn rules(arch: &Architecture) -> Rules {
@@ -302,6 +297,7 @@ fn implied_mask(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>) -> Op
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.narrowext_or_model = Some(or_model);
     hooks.narrowext_mark = Some(mark);
+    hooks.narrowext_rules = Some(rules);
 }
 
 #[cfg(test)]

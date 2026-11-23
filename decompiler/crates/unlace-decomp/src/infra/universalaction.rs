@@ -161,6 +161,7 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p4_calls::kuna_bejoin::provide(&mut slots);
     crate::p2_lift::kuna_constselectjump::provide(&mut slots);
     crate::p2_lift::kuna_jumpassist::provide(&mut slots);
+    crate::p3_dataflow::kuna_indexaliasguard::provide(&mut slots);
     slots.universal_action = Some(universal_action);
     slots
         .finish()

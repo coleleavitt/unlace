@@ -1095,7 +1095,7 @@ pub struct ArchContext {
     pub vararg_floats: crate::p4_calls::kuna_varargretreg::VarargFloats,
     /// (kuna) how a narrow integer argument or return value fills its register
     /// (`narrowext`).  Read by [`crate::p4_calls::kuna_narrowext`].
-    pub narrow_ext: crate::kuna_narrowext::Rules,
+    pub narrow_ext: NarrowExtRules,
 
     /// (kuna `vtabletypes`) A call made direct by an indirect-call override
     /// does not take the register that carried its target as an argument.
@@ -1248,7 +1248,7 @@ pub struct ArchContext {
     pub syscall_regs: bool,
     /// (kuna) The processor family of the loaded language, when `syscallregs`
     /// models it.
-    pub syscall_regs_family: Option<crate::p2_lift::kuna_syscallregs::SyscallFamily>,
+    pub syscall_regs_family: Option<SyscallFamily>,
     /// (kuna) The family's system-call user-op ids, minus any a compiler spec
     /// specialized with its own `<callotherfixup>`.
     pub syscall_regs_userops: Vec<unlace_base::types::uint4>,
@@ -1755,7 +1755,7 @@ impl ArchContext {
             variadic_declarations: std::cell::OnceCell::new(),
             caller_extends_returns_from: i32::MAX,
             vararg_floats: Default::default(),
-            narrow_ext: crate::kuna_narrowext::Rules::default(),
+            narrow_ext: NarrowExtRules::default(),
             pass_through: true,    // (kuna) option passthrough (default on)
             mixed_tail_ret: false, // (kuna) option mixedtailret (default off)
 
@@ -2762,6 +2762,81 @@ impl crate::database::DatabaseArch for ArchContext {
             None => String::new(),
         }
     }
+}
+
+/// (kuna `syscallregs`) The processor families whose system-call user-op the pass models.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyscallFamily {
+    Arm,
+    AArch64,
+    RiscV,
+    Mips,
+    PowerPc,
+}
+
+impl SyscallFamily {
+    /// The family a language id names, from its processor field.
+    pub fn from_archid(archid: &str) -> Option<Self> {
+        match archid.split(':').next()? {
+            "ARM" => Some(SyscallFamily::Arm),
+            "AARCH64" => Some(SyscallFamily::AArch64),
+            "RISCV" => Some(SyscallFamily::RiscV),
+            "MIPS" => Some(SyscallFamily::Mips),
+            "PowerPC" => Some(SyscallFamily::PowerPc),
+            _ => None,
+        }
+    }
+
+    /// The user-op the family's system-call constructor emits.
+    pub fn userop(self) -> &'static str {
+        match self {
+            SyscallFamily::Arm => "software_interrupt",
+            SyscallFamily::AArch64 => "CallSupervisor",
+            SyscallFamily::RiscV => "ecall",
+            SyscallFamily::Mips | SyscallFamily::PowerPc => "syscall",
+        }
+    }
+
+    /// The register the kernel returns its result in.
+    pub fn result(self) -> &'static str {
+        match self {
+            SyscallFamily::Arm => "r0",
+            SyscallFamily::AArch64 => "x0",
+            SyscallFamily::RiscV => "a0",
+            SyscallFamily::Mips => "v0",
+            SyscallFamily::PowerPc => "r3",
+        }
+    }
+
+    /// The register the kernel flags a failure in besides the result: `a3` is 0
+    /// or 1 on MIPS, and the summary-overflow bit of `cr0` is set on PowerPC.
+    pub fn error_flag(self) -> Option<&'static str> {
+        match self {
+            SyscallFamily::Mips => Some("a3"),
+            SyscallFamily::PowerPc => Some("cr0"),
+            _ => None,
+        }
+    }
+
+    /// The registers the call may read, number register first. `wide` selects
+    /// the 64-bit MIPS ABIs, whose fifth and sixth arguments are `t0`/`t1`.
+    pub fn inputs(self, wide: bool) -> &'static [&'static str] {
+        match self {
+            SyscallFamily::Arm => &["r7", "r0", "r1", "r2", "r3", "r4", "r5", "r6"],
+            SyscallFamily::AArch64 => &["x8", "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7"],
+            SyscallFamily::RiscV => &["a7", "a0", "a1", "a2", "a3", "a4", "a5", "a6"],
+            SyscallFamily::Mips if wide => &["v0", "a0", "a1", "a2", "a3", "t0", "t1"],
+            SyscallFamily::Mips => &["v0", "a0", "a1", "a2", "a3"],
+            SyscallFamily::PowerPc => &["r0", "r3", "r4", "r5", "r6", "r7", "r8"],
+        }
+    }
+}
+
+/// (kuna `narrowext`) The widening an image's arguments and return values follow, if known.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct NarrowExtRules {
+    pub input: Option<crate::fspec::Widen>,
+    pub output: Option<crate::fspec::Widen>,
 }
 
 /// Shared per-function configuration and services (`Funcdata::glb`).

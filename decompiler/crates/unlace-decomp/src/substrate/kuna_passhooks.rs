@@ -514,4 +514,12 @@ declare_hooks! {
     constselectjump_recover: fn(&JumpTable, &mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
     /// `kuna_jumpassist::recover`.
     jumpassist_recover: fn(&mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
+    /// `kuna_indexaliasguard::stores_into`.
+    indexaliasguard_stores_into: fn(&Funcdata, &Rc<AddrSpace>, &dyn Fn(&Funcdata, VarnodeId) -> Option<Rc<AddrSpace>>) -> Vec<OpId>;
+    /// `kuna_narrowext::rules`.
+    narrowext_rules: fn(&Architecture) -> crate::context::NarrowExtRules;
+    /// `kuna_syscallregs::userop_ids`.
+    syscallregs_userop_ids: fn(&crate::userop::UserOpManage, Option<crate::context::SyscallFamily>) -> Vec<uint4>;
+    /// `kuna_indexaliasguard::loads_from`.
+    indexaliasguard_loads_from: fn(&Funcdata, &Rc<AddrSpace>, &dyn Fn(&Funcdata, VarnodeId) -> Option<Rc<AddrSpace>>) -> Vec<(OpId, Option<(u64, u64)>)>;
 }

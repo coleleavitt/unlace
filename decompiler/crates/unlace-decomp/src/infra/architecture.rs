@@ -3814,7 +3814,7 @@ impl Architecture {
             (self.pass_hooks().typedcallabi_caller_extends_from)(self);
         ctx.vararg_floats =
             (crate::architecture::default_pass_hooks().varargretreg_image_vararg_floats)(self);
-        ctx.narrow_ext = crate::kuna_narrowext::rules(self);
+        ctx.narrow_ext = (self.pass_hooks().narrowext_rules)(self);
         ctx.defaultfp = self.defaultfp.as_ref().map(|model| {
             if ctx.arm_float_return {
                 let backfill = ctx.arm_float_args;
@@ -4044,9 +4044,9 @@ impl Architecture {
         );
         ctx.x64_syscall_memory_target = self.archid == "x86:LE:64:default:gcc";
         ctx.syscall_regs = self.syscall_regs.fires(self.image_os_userland); // (kuna) syscallregs
-        ctx.syscall_regs_family = crate::kuna_syscallregs::SyscallFamily::from_archid(&self.archid);
+        ctx.syscall_regs_family = crate::context::SyscallFamily::from_archid(&self.archid);
         ctx.syscall_regs_userops =
-            crate::kuna_syscallregs::userop_ids(&self.userops, ctx.syscall_regs_family);
+            (self.pass_hooks().syscallregs_userop_ids)(&self.userops, ctx.syscall_regs_family);
         ctx.windows_cspec =
             (self.pass_hooks().fastfailnoreturn_archid_is_windows)(self.get_description()); // (kuna) pebnames
         ctx.image_windows_user = self.image_windows_user;

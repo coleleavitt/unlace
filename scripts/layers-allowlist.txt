@@ -76,7 +76,6 @@ context -> kuna_jumpassist
 context -> kuna_kalloctype
 context -> kuna_libcnames
 context -> kuna_msvcbyval
-context -> kuna_narrowext
 context -> kuna_nullable_reloc
 context -> kuna_objcrettype
 context -> kuna_octeoneffects
@@ -84,7 +83,6 @@ context -> kuna_opaqueglobals
 context -> kuna_segmentize
 context -> kuna_structsynth
 context -> kuna_swiftcall
-context -> kuna_syscallregs
 context -> kuna_tlsnames
 context -> kuna_varargretreg
 context -> kuna_varargsave

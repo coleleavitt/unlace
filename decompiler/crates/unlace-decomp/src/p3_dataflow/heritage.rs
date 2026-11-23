@@ -91,6 +91,17 @@ use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
 use crate::overrides::Override;
 use crate::varnode::varnode_flags;
 
+/// How many global STORE guards one function's heritage builds before it stops
+/// guarding further ranges.  Every later pass visits each guard: a run of data
+/// decoded as code, with hundreds of stores and of addresses it "reads",
+/// reaches 100k guards and triples a whole firmware decompile, and at 2048 the
+/// guards still cost that firmware 6% of its time.
+pub const GLOBAL_STORE_BUDGET: usize = 1024;
+
+/// How many global LOAD guard `COPY`s one heritage pass builds before it stops
+/// guarding further ranges.
+pub const GLOBAL_LOAD_BUDGET: usize = 4096;
+
 // =============================================================================
 // VariableStack (heritage.hh:29)
 // =============================================================================
@@ -3485,7 +3496,7 @@ impl Heritage {
     /// (kuna `indexaliasguard global`) The global arm of `guardStores`: an
     /// `indirect_store` INDIRECT on the range at each `STORE` into the range's
     /// own space, while the function stays within
-    /// [`GLOBAL_STORE_BUDGET`](crate::kuna_indexaliasguard::GLOBAL_STORE_BUDGET).
+    /// [`GLOBAL_STORE_BUDGET`].
     fn guard_global_stores(
         &mut self,
         fd: &mut crate::funcdata::Funcdata,
@@ -3494,7 +3505,6 @@ impl Heritage {
         size: int4,
         write: &mut Vec<crate::context::VarnodeId>,
     ) {
-        use crate::kuna_indexaliasguard::{GLOBAL_STORE_BUDGET, stores_into};
         use crate::op::pcodeop_flags;
 
         let spc = addr
@@ -3512,7 +3522,10 @@ impl Heritage {
             return;
         }
         if self.global_stores.as_ref().map(|c| c.0) != Some(index) {
-            self.global_stores = Some((index, stores_into(fd, &spc, store_space_from_const)));
+            self.global_stores = Some((
+                index,
+                (fd.hooks().indexaliasguard_stores_into)(fd, &spc, &store_space_from_const),
+            ));
         }
         let stores = self
             .global_stores
@@ -3607,7 +3620,6 @@ impl Heritage {
         write: &[crate::context::VarnodeId],
         partial_writes: Option<&[crate::context::VarnodeId]>,
     ) {
-        use crate::kuna_indexaliasguard::{GLOBAL_LOAD_BUDGET, loads_from};
         use unlace_num::opcodes::OpCode;
 
         let writes = write
@@ -3629,7 +3641,10 @@ impl Heritage {
             .clone();
         let index = spc.get_index();
         if self.global_loads.as_ref().map(|c| c.0) != Some(index) {
-            self.global_loads = Some((index, loads_from(fd, &spc, store_space_from_const)));
+            self.global_loads = Some((
+                index,
+                (fd.hooks().indexaliasguard_loads_from)(fd, &spc, &store_space_from_const),
+            ));
         }
         let lo = addr.get_offset();
         let hi = lo.wrapping_add(size as u64);

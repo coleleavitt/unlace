@@ -5,7 +5,7 @@
 //! `CPUI_SPULL` op (built by the [`super::insert`]/[`super::pull`] transforms),
 //! the *structure*, the *bitfield description*, and (for the LOAD/STORE forms)
 //! the *Varnode holding the pointer to the parent structure* — exactly the
-//! elements [`crate::printc`] needs to render `ptr->field` member syntax instead
+//! elements `printc` needs to render `ptr->field` member syntax instead
 //! of the raw `INSERT(...)`/`ZPULL(...)` functional form.
 //!
 //! # Faithfulness

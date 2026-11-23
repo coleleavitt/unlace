@@ -145,7 +145,7 @@ sub-decisions `cast-policy`, `naming-policy`, `literal-format`,
 (the console/`kassert` assertion writer — an output *consumer* that writes P0
 assertions for the next run, not an algorithm of this folder). One P9-registered
 pass lives outside the folder: the (kuna, GH-558) comparison canonicalizer
-`crates/unlace-decomp/src/p3_dataflow/kuna_compareform.rs
+`crates/unlace-bandb/src/p3_dataflow/kuna_compareform.rs
 (ActionPresentCompareForm)`, group `presentcompare`, is described with its
 folder in chapter [03](03-ssa-and-simplification.md). Option defaults, tiers,
 and flip guidance for the kuna settable options named below live in the
@@ -239,7 +239,7 @@ conversion, and structured member extraction retains priority.
 whose input may be a signaling NaN and whose result reaches a conversion back
 to the source format materializes its C result in a volatile compound literal
 (`crates/unlace-decomp/src/p9_emit/printc.rs (PrintC::op_float_quiet_ir)`,
-`crates/unlace-decomp/src/p3_dataflow/kuna_floatquiet.rs (feeds_round_trip)`):
+`crates/unlace-bandb/src/p3_dataflow/kuna_floatquiet.rs (feeds_round_trip)`):
 `(float)(*&(volatile double){ (double)x })`. A C compiler erases a plain
 `(float)(double)x` pair even with strict rounding flags. The literal evaluates
 its input once and forces the wider format to exist in storage. The read goes
@@ -785,7 +785,7 @@ default arm alone printed `sink(a0 * 3)` for a callee that reads the whole
 register, passing a value the binary never passed.
 
 That trim is the evidence that the binary zero-extended. When
-`crates/unlace-decomp/src/p3_dataflow/subflow.rs
+`crates/unlace-bandb/src/p3_dataflow/subflow.rs
 (SubvariableFlow::try_call_pull)` narrows a call input whose non-zero mask lies
 inside the logical mask (`crates/unlace-decomp/src/p9_emit/kuna_truncarg.rs
 (drops_only_zero_bits)`), `do_replacement` records the slot, its new size and
@@ -869,7 +869,7 @@ pointer to the prototype-less `code`, or to `void`, needs no cast under
 When `calltargettype` recorded the type the call states for a target it could
 not give that type -- its uses disagree, or a declaration fixes another type --
 and the target is still such a pointer,
-`crates/unlace-decomp/src/p5_types/kuna_calltargettype.rs
+`crates/unlace-bandb/src/p5_types/kuna_calltargettype.rs
 (uncallable_target_cast)` returns that type and the target is cast to it at the
 call (chapter [05](05-types.md)), in C output only. With the same option on in
 C output, `cast_standard` also prints no cast between a record's declaration and
@@ -1329,7 +1329,7 @@ arithmetic for a non-`bool` integer one (`kuna_castarith.rs
 (store_value_settled)`). Finally, a constant that names a global keeps it, and
 so does an address-like constant beside an integer that was cast to a pointer:
 `table[i]` compiles to the same `INT_ADD`, with the table as the constant and the
-subscript as the "pointer" (`crates/unlace-decomp/src/p5_types/kuna_ptrfromuse.rs
+subscript as the "pointer" (`crates/unlace-bandb/src/p5_types/kuna_ptrfromuse.rs
 (constant_may_be_global_base)`). A record base keeps `p->field` wherever the
 offset lands on a field, because chapter 05 already made that access a `PTRSUB`.
 An offset where the record has no field is still an `INT_ADD` here and is
@@ -1430,7 +1430,7 @@ model a PTRADD/PTRSUB was built on; the driver demotes them back to raw
 arithmetic (`cast_fixup_ptradd` undoes the scaling; `cast_fixup_ptrsub`
 becomes COPY or INT_ADD) rather than print a field access into the wrong type.
 The fit test for a PTRSUB off a spacebase
-(`crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs
+(`crates/unlace-bandb/src/p6_variables/funcdata_spacebase.rs
 (Funcdata::is_ptrsub_matching_scope)`, shared with `RulePtrsubUndo`) looks the
 offset up in the scope the spacebase selects, as upstream `TypeSpacebase::getSubType`
 does: the global symbol table for a global reference, the function's frame map
@@ -2376,7 +2376,7 @@ angr|ghidra` (default `angr` since DIV-5; live flag `name_style_angr` set in
 `crates/unlace-middle/src/infra/architecture.rs
 (reset_defaults_internal)`) re-skins every *default* (generated) name; user
 and recovered names are never touched. The policy helpers live in
-`crates/unlace-decomp/src/p6_variables/kuna_naming.rs` with the pure
+`crates/unlace-bandb/src/p6_variables/kuna_naming.rs` with the pure
 address renderers in `crates/unlace-middle/src/p0_knowledge/database.rs
 (kuna_global_data_name, kuna_function_name, kuna_label_name, kuna_arg_name)`.
 Under the angr scheme: locals and decompiler temporaries are `v1`, `v2`, … —
@@ -2399,7 +2399,7 @@ label; the first leaf with a given name keeps it and the n-th takes
 target's front leaf through the same table, so it names the copy it jumps
 to. A function with no shared label prints exactly as before. Under `ghidra` the upstream scheme
 returns: `param_N`, type-prefixed `iVar1`/`uVar2`-style locals
-(`crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
+(`crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs
 (kuna_default_local_name)`), `func_`/`code_` addresses. Both schemes are
 recognized as "generated" by `kuna_naming.rs (kuna_is_generated_name)` so
 cross-function name recommendation never propagates a default name.
@@ -2493,7 +2493,7 @@ only ported local-naming pass). Never set on the standalone path, so both
 existing styles are byte-identical.
 
 **Where names bind vs. where they render.** The *assignment* is a P6 pass —
-`crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
+`crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs
 (ActionNameVars)` binds one name per HighVariable (symbol-derived where a
 mapped/global symbol exists, e.g. the DIV-24 DWARF data-global names; the
 sequential default otherwise) — and P9 only *consumes* the binding: the leaf
@@ -2510,7 +2510,7 @@ prototype name always wins. The angr scheme's second visible artifact is P9-owne
 local declaration gains a trailing storage comment — `// rax` (register,
 lowercased), `// stack - 0x10` (frame-relative signed offset), `// rdx:rax` (a
 join value's register pieces), `// tmp` (an SSA temporary with no machine
-home). `crates/unlace-decomp/src/p6_variables/kuna_varsources.rs` gathers
+home). `crates/unlace-bandb/src/p6_variables/kuna_varsources.rs` gathers
 every member's machine storage and the storage retained when simplification
 removed an equivalent copy. Distinct homes print once, in sorted order, separated
 by ` | `: `// eax | ebx`. A register pair holding one split value keeps its
@@ -2527,7 +2527,7 @@ that variable's base: a register copied from the field at -0x80 of a record at
 `--mode reliable`, e.g. `stack - 0x208` to `stack - 0x1c0`).
 Register copies used only to supply outgoing CALL or CALLIND arguments are
 transport locations, so they do not contribute to a local's source comment.
-`crates/unlace-decomp/src/p6_variables/kuna_calltransport.rs` checks that
+`crates/unlace-bandb/src/p6_variables/kuna_calltransport.rs` checks that
 the copy has an earlier home and reaches only argument slots whose ABI storage
 matches that register. This keeps a saved register's home even when its only
 readers forward the value to outgoing arguments. A reload from an existing
@@ -2557,7 +2557,7 @@ declaration says `unsigned long long *` — so the same `*v9` reads eight bytes
 past the object and drops the sign extension. kuna declares the type
 representative's type (always on), which is the
 `sym->getType()` upstream would have written
-(`crates/unlace-decomp/src/p6_variables/kuna_declhightype.rs
+(`crates/unlace-bandb/src/p6_variables/kuna_declhightype.rs
 (type_representative)`). It is presentation only: no cast, no statement and no
 p-code moves. It applies only to a high the symbol table does not describe — a
 mapped local keeps the declaration representative's type, because kuna does not
@@ -3211,7 +3211,7 @@ for a `char *` constant once that type is established.
 **An indexed table is a literal only when the index stays inside it.** With
 `elemptr` on (05-types §5.2), a character-pointer constant that is the base of a
 `PTRADD` indexed by a computed value is probed with the index's largest value
-(`crates/unlace-decomp/src/p5_types/kuna_elemptr.rs
+(`crates/unlace-bandb/src/p5_types/kuna_elemptr.rs
 (literal_index_bound)`): a zero-extended byte is at most 255, a mask is at most
 its mask, an unsigned remainder is less than its divisor, and anything else is
 unbounded. `push_ptr_char_constant_ir` keeps the literal only when that bound is
@@ -3985,7 +3985,7 @@ enums (`printc.rs (render_type_definitions)`; the per-type body renderers —
 functions for unit-testability, and emission is direct string building, since
 no emitter markup exists for type definitions). The structures `structsynth`
 minted are moved after every other type, in ascending `N`
-(`crates/unlace-decomp/src/p5_types/kuna_structsynth/ledger.rs
+(`crates/unlace-bandb/src/p5_types/kuna_structsynth/ledger.rs
 (in_name_order)`), because the tree orders them by the address of a field's type
 and the header would otherwise change from run to run (chapter
 [05](05-types.md), struct synthesis). Two documented `(kuna)`
@@ -4743,7 +4743,7 @@ definition fails the export. A conflicting definition or type-name collision
 cannot silently remove a required wide declaration. Ordinary locked-declaration
 conflicts retain the diagnostic behavior above. Capture remains after temporary
 C rendering and before publication. The proof and bounded contract checks belong to
-`crates/unlace-decomp/src/p4_calls/kuna_callwide.rs`.
+`crates/unlace-bandb/src/p4_calls/kuna_callwide.rs`.
 
 Format-specific call arities are not declarations of the callee. When a call
 has format-derived arguments, project declarations restore its parked formal

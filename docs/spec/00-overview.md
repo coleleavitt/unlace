@@ -879,7 +879,7 @@ Four front-ends drive one engine assembly:
   C++ `ActionNameVars::linkSymbols` Symbol objects, two mechanisms supply the
   ids the wire needs. First, the naming pass RECORDS the bind it actually made
   (`HighVariable::kuna_link_symbol`,
-  `crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs`) when
+  `crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs`) when
   a high resolves to a covering localmap entry — and, for a `&symbol`
   REFERENCE, the identity of the Symbol referred to
   (`HighVariable::kuna_ref_symbol`, set by `Funcdata::link_symbol_reference`,
@@ -1672,7 +1672,7 @@ address the written-slot guard guards, every 256 new values a pointer walk of
 `stackstoreguard` visits, every 64 steps of a variable-merging pass
 (`crates/unlace-middle/src/p6_variables/merge.rs (Merge::budget)`,
 chapter 06), every 1024 seeds the implied-variable walk visits
-(`crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
+(`crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs
 (MARK_IMPLIED_PROBE_STRIDE)`), every 256 Varnodes the dead-code sweep visits
 (`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (SWEEP_DEADLINE_STRIDE)`: destroying a dead operation unlinks it from each
@@ -1990,10 +1990,10 @@ number its own structures. What a function ASKS the ledger, though, does not
 depend on what it is answered: the evidence is collected before anything is
 installed, and a field takes the type an access carried. So the first pool's
 workers record every lookup and what their own ledger answered
-(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
 (SynthRequest)`), and the parent, which decompiles nothing, replays the lookups
 in target order through the ledger's own decision
-(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
 (Replay)`). The replay yields every answer, every mint, the superseded set and
 the answers the convergence sweep's lookups will get.
 
@@ -2002,19 +2002,19 @@ lookup with a structure that has exactly the members of the serial answer's --
 it minted what it measured, and so did the serial run under another number --
 printed the serial text with other numbers, so the parent renames the
 identifiers in its C, prototype, variable types and type definitions
-(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
 (renaming)`). The renaming is refused when an answer's members differ, when two
 names would become one, or when the text spells a structure name the renaming
 does not cover or spells one inside a string or character literal
-(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
 (rename_identifiers)`), and when a name it covers is a symbol's rather than a
 type's -- nothing kuna names spells a `struct_N`, but a binary's own symbols
 could. On `tar` O2, 100 of the 106 functions that synthesize
 are renamed. The rest are decompiled a second time by the same workers, each of
 which first destroys the structures it minted itself, and every type built on
-one (`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+one (`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
 (forget_minted)`), mints the replayed structures in the serial order
-(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
 (install_table)`) and answers each lookup with its replayed name; a function the
 sweep will decide differently is renamed onto its sweep answers or goes out
 twice in that pool, and the parent applies the sweep on the first-pass text
@@ -2023,7 +2023,7 @@ decompile records its lookups as well, and they have to be the first ones,
 repeats aside. A decompile can ask one question twice (a restarted pass measures
 the same layout again), whether it does follows the process's history, and a
 forced worker answers a repeat as it answered the first asking
-(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
 (distinct)`), so the replay also requires every question to get the same answer
 at the end of its function as when it was first asked. A function whose first
 answers do change what it asks next is the real exception: its questions up to
@@ -2046,7 +2046,7 @@ still start from a fresh clone of the same base ledger.
 
 A structure can travel only if another process can rebuild every field type,
 and a named type counts only if the worker's load created it
-(`crates/unlace-decomp/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
 (AtLoad)`): `pebnames` creates `PEB` and `TEB` the first time a function reads
 them, so one worker holds them and another does not. The unnamed unknown
 placeholder a Varnode starts with is held by no factory and is rebuilt as itself
@@ -2611,7 +2611,7 @@ same function. A printed register local gets the isolated, type-locked Symbol
 over its definition that a `type` stating its present type would map, and the
 use-point carry brings it to the second pass. A stack local and a parameter
 are isolated without a type lock, and reach the second pass by their storage
-(chapter 06, `crates/unlace-decomp/src/p6_variables/kuna_isolated.rs`).
+(chapter 06, `crates/unlace-bandb/src/p6_variables/kuna_isolated.rs`).
 
 When a Varnode is created at an isolated local's mapped definition,
 `Funcdata::set_varnode_properties` applies its exact, locked type before
@@ -3260,7 +3260,7 @@ runtime `on_or_off` parser.
 |---|---|---|
 | `KUNA_IFUNCFPRET` | `ifuncfpret` | x86-64 IFUNC (`R_X86_64_IRELATIVE`) stub naming, `crates/unlace-middle/src/p0_knowledge/kuna_ifuncfpret.rs (IFUNCFPRET_ENV)` |
 | `KUNA_PPCAPU` | `ppcapu` | PowerPC32 e500 selection from an SPE APU note, `crates/unlace-middle/src/p0_knowledge/kuna_ppcapu.rs (PPCAPU_ENV)` |
-| `KUNA_CALLTARGETTYPE` | `calltargettype` | DWARF `DW_TAG_subroutine_type` import as a function prototype (on unless the option is set off, and never for Rust output), `crates/unlace-decomp/src/p5_types/kuna_calltargettype.rs (CALLTARGETTYPE_ENV)` |
+| `KUNA_CALLTARGETTYPE` | `calltargettype` | DWARF `DW_TAG_subroutine_type` import as a function prototype (on unless the option is set off, and never for Rust output), `crates/unlace-bandb/src/p5_types/kuna_calltargettype.rs (CALLTARGETTYPE_ENV)` |
 | `KUNA_MACHO_SLICE` | `--slice` | Mach-O fat-binary slice peel, `crates/unlace-console/src/engine.rs (select_macho_slice)` |
 | `KUNA_MACHO_ARM64E` | `macho-arm64e` | arm64e spec selection (on by default), `crates/unlace-middle/src/p0_knowledge/kuna_macho_arm64e.rs (MACHO_ARM64E_ENV)` |
 | `KUNA_ARM_ISA` | `--isa` | explicit ARM/Thumb `TMode` selection over the mapped code ranges, `crates/unlace-console/src/engine.rs (ARM_ISA_ENV)` |
@@ -3560,7 +3560,7 @@ the first op that is not one, because that run is not stable: a phi can be
 rewritten into an ordinary op **in place**, keeping its position among the markers
 — `op_zero_multi` turns a 1-input MULTIEQUAL into a COPY, and the stack-pointer
 solve rewrites a solved phi into an `INT_ADD`
-(`crates/unlace-decomp/src/p6_variables/coreaction_stackptr.rs
+(`crates/unlace-bandb/src/p6_variables/coreaction_stackptr.rs
 (analyze_extra_pop)`). A resync that stopped there would leave the phis behind it
 claiming an edge the block no longer has, and the next pass to index a phi slot as
 an in-edge — `descend2_undef`, reached from the unreachable-block sweep — would
@@ -3578,9 +3578,9 @@ module docs):
 | `crates/unlace-middle/src/substrate/funcdata_varnode.rs` | varnode creation/lookup primitives |
 | `crates/unlace-middle/src/substrate/funcdata_block.rs` | CFG surgery + the jump-table drivers |
 | `crates/unlace-middle/src/substrate/funcdata_encode.rs`, `crates/unlace-middle/src/substrate/funcdata_printraw.rs` | marshaling, raw printing |
-| `crates/unlace-decomp/src/p5_types/funcdata_resolveflow.rs` | flow resolution (P2) |
-| `crates/unlace-decomp/src/p5_types/funcdata_union.rs` | union facet resolution (P5) |
-| `crates/unlace-decomp/src/p6_variables/funcdata_facing.rs`, `crates/unlace-middle/src/substrate/funcdata_merge.rs`, `crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
+| `crates/unlace-bandb/src/p5_types/funcdata_resolveflow.rs` | flow resolution (P2) |
+| `crates/unlace-bandb/src/p5_types/funcdata_union.rs` | union facet resolution (P5) |
+| `crates/unlace-bandb/src/p6_variables/funcdata_facing.rs`, `crates/unlace-middle/src/substrate/funcdata_merge.rs`, `crates/unlace-bandb/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
 | `crates/unlace-decomp/src/p9_emit/coreaction_casts.rs` | cast insertion hooks (P9) |
 
 **Data types are shared IR, not per-function state.** The type factory
@@ -4098,7 +4098,7 @@ study summarized in `docs/history.md`; every row below is re-verified against th
 | Band B → P3/P2, dead-code delay | restart + persisted hint | a free varnode reappears at an already-heritaged address after dead code was removed | `Override::insert_deadcode_delay` (+1) in P0 | `crates/unlace-middle/src/p3_dataflow/heritage.rs (bump_deadcode_delay)`; suppressed during jump-table recovery (the `is_jumptable_recovery_on` guards at its call sites) |
 | P4 → Band B, late prototype | restart + persisted hint | a resolved indirect call's prototype cannot be merged in place (`late_restriction` fails) | `Override::insert_indirect_override` — the re-flow rebuilds the CALLIND as a direct CALL | `crates/unlace-middle/src/p4_calls/fspec.rs (FuncCallSpecs::deindirect, FuncCallSpecs::force_set)` |
 | (angr) P2 → P2, lowered switch | detect-then-restart, two halves | a comparison cascade recognized as a compiler-lowered switch after simplification | the recovered cascade record, in a store shared by both halves | detect in fullloop writes + requests restart, install in mainloop (before heritage) reads on the restarted run — `crates/unlace-lift/src/p2_lift/kuna_loweredswitch.rs (ActionLowerSwitchDetect, ActionLowerSwitchInstall)` |
-| P5 → P2, determined branch | in-loop re-entry | constant folding decides a conditional branch, removing a CFG edge | the simplified ops themselves | `crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs (ActionDeterminedBranch)`, inside mainloop |
+| P5 → P2, determined branch | in-loop re-entry | constant folding decides a conditional branch, removing a CFG edge | the simplified ops themselves | `crates/unlace-bandb/src/p3_dataflow/coreaction_early.rs (ActionDeterminedBranch)`, inside mainloop |
 | (kuna/angr) P7/P8 structuring fallback | degraded re-run | the region structurer cannot collapse the graph to a single root | nothing; `sblocks` is re-seeded clean | `crates/unlace-structure/src/p8_structure/blockaction.rs (ActionBlockStructure)` falls back to `CollapseStructure` after `crates/unlace-structure/src/p8_structure/region_structurer.rs (run_region_structurer)` declines |
 | P0 → everything, the outer loop | knowledge-store re-run | an operator/agent writes an assertion (`option`, `kassert`, override) and re-decompiles | the entire P0 store | `crates/unlace-middle/src/p0_knowledge/kuna_assert.rs (Dispatch)`; the console rebuilds the IR per `decompile`, re-seeding stashed facts — `crates/unlace-decomp/src/infra/decompile_drive.rs (decompile_func_full_with_override_dyn)` (§0.8 is when the rebuild is skipped) |
 

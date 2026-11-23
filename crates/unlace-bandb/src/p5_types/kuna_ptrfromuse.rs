@@ -421,7 +421,7 @@ pub fn constant_is_global_base(data: &Funcdata, op: OpId, cvn: VarnodeId) -> boo
 
 /// Could the constant `cvn` of `op` be the base of its `INT_ADD` -- a global
 /// object, or an address-like value that names nothing?  Shared with
-/// [`crate::kuna_castarith`], which keeps such a sum in its integer form.
+/// `kuna_castarith`, which keeps such a sum in its integer form.
 #[doc(hidden)]
 pub fn constant_may_be_global_base(data: &Funcdata, op: OpId, cvn: VarnodeId) -> bool {
     !matches!(const_base_evidence(data, op, cvn), BaseEvidence::No)

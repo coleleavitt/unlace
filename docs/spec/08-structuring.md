@@ -1162,7 +1162,7 @@ re-derives the match and emits the single statement `v = ( c );` — or
 
 *Why it is a structuring decision and not a P3 one.* The rule that normally
 collapses this is P3 `RuleConditionalMove`
-(`crates/unlace-decomp/src/p3_dataflow/ruleaction_7.rs
+(`crates/unlace-bandb/src/p3_dataflow/ruleaction_7.rs
 (RuleConditionalMove)`), which folds a `MULTIEQUAL(0,1)` into `zext(cond)`. It
 fires on the one-test shape, but requires each MULTIEQUAL input block to be the
 CBRANCH root itself or a **single-predecessor** pass-through — upstream Ghidra's

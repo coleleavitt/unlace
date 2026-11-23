@@ -1,7 +1,7 @@
 //! The `ActionInferTypes` type-propagation engine (C++ `coreaction.cc:5262-5672`).
 //!
 //! This is the W8 `ActionInferTypes::apply` body lifted out of the stub in
-//! [`coreaction_render`](crate::coreaction_render).  It runs the bounded
+//! `coreaction_render`.  It runs the bounded
 //! bidirectional type lattice that the C++ deep decompiler uses to recover
 //! Varnode data-types:
 //!

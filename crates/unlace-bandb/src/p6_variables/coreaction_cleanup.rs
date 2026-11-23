@@ -2292,7 +2292,7 @@ impl Action for ActionCopyMarker {
 /// The kuna model has no `SymbolEntry`; the equivalent of "the piece inherits the
 /// root's symbol" is stamping the root's display name + the root's struct type +
 /// the piece's group-relative in-symbol byte offset onto the piece's HighVariable
-/// — exactly the triple [`crate::printc`]'s `push_partial_symbol_ir` walks to emit
+/// — exactly the triple `printc`'s `push_partial_symbol_ir` walks to emit
 /// `root.field`.  The piece's offset is `piece->getOffset() + group->getSymbolOffset()`
 /// (C++ `HighVariable::setSymbol`, `variable.cc:259`), where the group offset comes
 /// from `establishGroupSymbolOffset` on the root.

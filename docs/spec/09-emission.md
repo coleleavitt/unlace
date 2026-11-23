@@ -2375,7 +2375,7 @@ angr|ghidra` (default `angr` since DIV-5; live flag `name_style_angr` set in
 `decompiler/crates/unlace-decomp/src/infra/architecture.rs
 (reset_defaults_internal)`) re-skins every *default* (generated) name; user
 and recovered names are never touched. The policy helpers live in
-`decompiler/crates/unlace-decomp/src/p9_emit/kuna_naming.rs` with the pure
+`decompiler/crates/unlace-decomp/src/p6_variables/kuna_naming.rs` with the pure
 address renderers in `decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
 (kuna_global_data_name, kuna_function_name, kuna_label_name, kuna_arg_name)`.
 Under the angr scheme: locals and decompiler temporaries are `v1`, `v2`, … —
@@ -2556,7 +2556,7 @@ declaration says `unsigned long long *` — so the same `*v9` reads eight bytes
 past the object and drops the sign extension. kuna declares the type
 representative's type (always on), which is the
 `sym->getType()` upstream would have written
-(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_declhightype.rs
+(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_declhightype.rs
 (type_representative)`). It is presentation only: no cast, no statement and no
 p-code moves. It applies only to a high the symbol table does not describe — a
 mapped local keeps the declaration representative's type, because kuna does not
@@ -4805,7 +4805,7 @@ from its Symbol's scalar type (`kuna_pointerstorecast.rs (target)`).
 
 ## (kuna) Intel intrinsic names for AVX user-ops — `option avxintrinsics`, default on
 
-**`decompiler/crates/unlace-decomp/src/p9_emit/kuna_avxintrin.rs (intrinsic)`,
+**`decompiler/crates/unlace-decomp/src/substrate/kuna_avxintrin.rs (intrinsic)`,
 called from `printc.rs (op_callother_ir)`.** The x86 SLEIGH spec lifts most
 AVX2, FMA and AVX-512 instructions to opaque user-ops named after the mnemonic
 and its extension: `vpaddd_avx2`, `vfmadd132ps_fma`, `vaddps_avx512f`. When a

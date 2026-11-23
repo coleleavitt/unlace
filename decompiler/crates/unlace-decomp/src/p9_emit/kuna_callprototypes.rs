@@ -100,7 +100,7 @@ pub fn declarations(arch: &Architecture, fd: &Funcdata) -> Result<Declarations, 
 pub fn type_definitions(
     arch: &Architecture,
     fd: &Funcdata,
-) -> Vec<crate::decompile_drive::TypeInfo> {
+) -> Vec<crate::kuna_funcreport::TypeInfo> {
     if !arch.print().options.struct_defs()
         || arch.print().out_lang() != crate::kuna_lang::OutLang::C
     {
@@ -110,7 +110,7 @@ pub fn type_definitions(
     let types = crate::kuna_structdefs::referenced_call_types(fd);
     crate::kuna_structdefs::dedup_by_name(&types)
         .iter()
-        .map(|ty| crate::decompile_drive::TypeInfo {
+        .map(|ty| crate::kuna_funcreport::TypeInfo {
             name: ty.get_name().to_string(),
             definition: crate::kuna_structdefs::definition_text(ty, rt.clone()),
             size: ty.get_size() as i64,

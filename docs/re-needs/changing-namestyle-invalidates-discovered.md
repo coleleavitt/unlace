@@ -14,7 +14,7 @@ rounds: [11]
 first_seen_round: 11
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli/src/decompile.rs, decompiler/crates/unlace-decomp/src/p9_emit/kuna_naming.rs]
+touches: [decompiler/crates/unlace-cli/src/decompile.rs, decompiler/crates/unlace-decomp/src/p6_variables/kuna_naming.rs]
 scope: small
 regression_of: null
 pr: null

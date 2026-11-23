@@ -59,6 +59,7 @@
 //! input crosses one are marked ([`stale_inputs`]), and either event restarts
 //! the function with every guard built.
 
+use crate::heritage::MemoryOps;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
@@ -77,17 +78,6 @@ const LOAD: u8 = 5;
 const CALL: u8 = 9;
 
 type Event = (usize, u32, u8, OpId);
-
-/// The LOAD and STORE ops of one space that can reach a global (system calls
-/// that guard memory among the STOREs), and the function's returns, collected
-/// once per heritage pass.
-#[derive(Debug, Default)]
-pub(crate) struct MemoryOps {
-    space: Option<i32>,
-    loads: Vec<OpId>,
-    stores: Vec<OpId>,
-    returns: Vec<OpId>,
-}
 
 impl MemoryOps {
     pub(crate) fn clear(&mut self) {
@@ -723,6 +713,18 @@ fn solve(
             block.iter().for_each(&mut visit);
         }
     }
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.persistcalls_applies = Some(applies);
+    hooks.persistcalls_crosses_skipped = Some(crosses_skipped);
+    hooks.persistcalls_keep = Some(keep);
+    hooks.persistcalls_restart_full = Some(restart_full);
+    hooks.persistcalls_skip_guard = Some(skip_guard);
+    hooks.persistcalls_skip_join = Some(skip_join);
+    hooks.persistcalls_stale_calls = Some(stale_calls);
+    hooks.persistcalls_stale_inputs = Some(stale_inputs);
 }
 
 #[cfg(test)]

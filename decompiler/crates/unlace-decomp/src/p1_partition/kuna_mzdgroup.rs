@@ -91,3 +91,8 @@ pub fn apply(arch: &Architecture) {
         }
     });
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.mzdgroup_apply = Some(apply);
+}

@@ -107,6 +107,16 @@ because instrumented binaries run the suite several times slower.
 Locally the same suite runs with `cd decompiler && cargo nextest run --workspace
 --exclude unlace-wasm --profile ci` (or `--profile full`). A test binary outside the
 checkout (a target dir elsewhere, or an archive) finds the repository through `KUNA_ROOT`.
+
+Many tests build their input with a cross toolchain. The PE tests run
+`clang --target=x86_64-w64-windows-gnu` (and `i686-…`), which links with `ld` unless a
+`<triple>-ld` is on `PATH`; a distribution `ld` built for ELF only fails with
+`unrecognised emulation mode: i386pep`. With MinGW binutils installed, link the triple
+names to them (`ln -s /usr/bin/x86_64-w64-mingw32-ld ~/.local/bin/x86_64-w64-windows-gnu-ld`,
+the same for `i686`). A test that needs an LLVM backend the host's clang or llvm-mc was
+built without (SPARC, PowerPC, MIPS) checks it with `common::host` in
+`unlace-cli/tests/common/host.rs` and skips with a `skipped: this host lacks …` note; with
+`CI` set the same check fails the test, so a runner never skips one.
 `.github/actionlint.yaml` declares the `ubuntu-26.04` runner label, which actionlint does not
 know yet. Run `actionlint` from the repository root before pushing a workflow change.
 

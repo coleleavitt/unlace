@@ -541,13 +541,18 @@ fn copy_operations(
         .collect()
 }
 
+/// (kuna `dexmodel`) The DEX `uponentry` copies are in; reset by `Funcdata::clear`.
+#[derive(Default)]
+struct EntrySlot(bool);
+crate::kuna_func_state!(EntrySlot, keep_across_clear: false);
+
 /// Insert the `uponentry` copies at the start of the function (the dynamic
 /// payload `ActionConstbase` injects upstream).
 pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
     if data.get_arch().dex.is_none()
         || data
-            .kuna_state::<crate::kuna_callmechanisms::State>()
-            .dex_entry
+            .kuna_state::<EntrySlot>()
+            .0
         || data.bblocks_get_size() == 0
     {
         return Ok(());
@@ -566,9 +571,8 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
     let block = data.bblocks_get_block(0);
     let start = data.bblocks_block_start(block);
     let operations = copy_operations(&start, register, &copies);
-    crate::kuna_callmechanisms::install_at_entry(data, block, &operations)?;
-    data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
-        .dex_entry = true;
+    (data.hooks().callmechanisms_install_at_entry)(data, block, &operations)?;
+    data.kuna_state_mut::<EntrySlot>().0 = true;
     Ok(())
 }
 

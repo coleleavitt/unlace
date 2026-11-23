@@ -30,6 +30,7 @@ MODULE_BAND = {
     "action": "middle", "architecture": "middle", "kuna_fasthash": "middle",
     "typeop": "middle", "fspec": "middle", "variable": "middle", "cover": "middle", "varmap": "middle",
     "dynamic": "middle", "heritage": "middle", "merge": "middle", "jumptable": "middle",
+    "modelrules": "middle", "kuna_aggregateabi": "middle", "prefersplit": "middle",
 }
 SRC = "crates/unlace-decomp/src"
 ALLOWLIST = "scripts/layers-allowlist.txt"

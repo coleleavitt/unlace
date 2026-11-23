@@ -480,6 +480,19 @@ fn body_is_a_body(
     })
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.calleeretpreserves_callee_preserved_output_within = Some(callee_preserved_output_within);
+    hooks.calleeretpreserves_callee_preserves_return_storage =
+        Some(callee_preserves_return_storage);
+    hooks.calleeretpreserves_exact_cookie_preserved_output_within =
+        Some(exact_cookie_preserved_output_within);
+    hooks.calleeretpreserves_exact_cookie_preserves_return_storage =
+        Some(exact_cookie_preserves_return_storage);
+    hooks.calleeretpreserves_exact_cookie_preserves_unjustified_return_slice =
+        Some(exact_cookie_preserves_unjustified_return_slice);
+}
+
 #[cfg(test)]
 #[path = "kuna_calleeretpreserves/tests.rs"]
 mod tests;

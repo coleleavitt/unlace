@@ -138,3 +138,8 @@ pub(crate) fn record_current_read(data: &mut Funcdata, op: OpId) {
         }
     }
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackreadscope_mark_guarded_read = Some(mark_guarded_read);
+}

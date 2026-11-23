@@ -95,3 +95,8 @@ fn guard(
         }
     }
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.memoryguard_guard_memory = Some(guard_memory);
+}

@@ -17,7 +17,11 @@ use unlace_num::opcodes::OpCode;
 /// 16-bit low half: that pair is one split high/low address immediate, and its
 /// high half is no reference to the object that starts there.
 pub(crate) fn preserve_array_base(data: &Funcdata, root: OpId) -> bool {
-    if !data.get_arch().global_array_anchor
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_globalarrayanchor::GlobalArrayAnchor>()
+        .0
         || !data.get_arch().infer_pointers
         || !data.is_type_recovery_on()
         || data
@@ -306,6 +310,16 @@ fn memory_address_root(data: &Funcdata, mut root: OpId) -> Option<(OpId, OpId)> 
     None
 }
 
+crate::kuna_flag!(
+    /// Keep mapped global array bases separate from negative element offsets
+    /// (option `globalarrayanchor`).
+    GlobalArrayAnchor,
+    "globalarrayanchor",
+    "Global array anchor preservation",
+    unset: false,
+    shipped: false
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -404,7 +418,8 @@ mod tests {
         ));
         manager.insert_space(ram.clone()).unwrap();
         let mut arch = ArchContext::new(manager);
-        arch.global_array_anchor = true;
+        arch.kuna_options
+            .set(crate::kuna_globalarrayanchor::GlobalArrayAnchor(true));
         arch.infer_pointers = true;
         arch.opbehaviors
             .resize_with(OpCode::CPUI_MAX as usize, || None);

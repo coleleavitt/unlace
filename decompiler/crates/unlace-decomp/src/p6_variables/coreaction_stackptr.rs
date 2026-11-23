@@ -532,7 +532,12 @@ impl StackSolver {
                 }
             }
         }
-        if data.get_arch().stack_exit_anchor {
+        if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_stackexitanchor::StackExitAnchor>()
+            .0
+        {
             for &(call, value) in data.kuna_stack_exit_anchors() {
                 if let Some(&var) = self.call_out.get(&call) {
                     self.anchors.push((var, value));
@@ -960,7 +965,12 @@ pub(crate) fn analyze_extra_pop(
         return 0;
     }
     solver.solve();
-    if data.get_arch().stack_exit_anchor {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_stackexitanchor::StackExitAnchor>()
+        .0
+    {
         if let Some(var) = solver.inconsistent() {
             let at = data
                 .vbank()

@@ -93,10 +93,15 @@ use crate::funcdata::Funcdata;
 /// any other callee, no probe for it, or one that returns, calls or reads a
 /// register on entry, the trials keep the positional rule.
 pub fn mark(call: &mut FuncCallSpecs, data: &Funcdata) {
-    let dead = (data.get_arch().callee_filled_arg && is_selector_stub(call.get_name()))
-        .then(|| data.kuna_callee_entry_dead_shared(call.get_entry_address()))
-        .flatten()
-        .filter(|d| d.is_trampoline());
+    let dead = (data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_calleefilledarg::CalleeFilledArg>()
+        .0
+        && is_selector_stub(call.get_name()))
+    .then(|| data.kuna_callee_entry_dead_shared(call.get_entry_address()))
+    .flatten()
+    .filter(|d| d.is_trampoline());
     let active = call.get_active_input();
     if let Some(dead) = &dead {
         for i in 0..active.get_num_trials() {
@@ -123,6 +128,17 @@ fn is_selector_stub(name: &str) -> bool {
     name.strip_prefix("objc_msgSend$")
         .is_some_and(|sel| !sel.is_empty())
 }
+
+crate::kuna_flag!(
+    /// (kuna) `option calleefilledarg`: an unfilled argument register an
+    /// Objective-C selector stub loads itself ends no argument list.  See
+    /// [`crate::p4_calls::kuna_calleefilledarg`].
+    CalleeFilledArg,
+    "calleefilledarg",
+    "Callee-filled argument slots",
+    unset: true,
+    shipped: true
+);
 
 #[cfg(test)]
 mod tests {

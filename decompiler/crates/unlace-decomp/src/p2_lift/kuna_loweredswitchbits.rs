@@ -443,3 +443,13 @@ pub(crate) fn recover(data: &Funcdata) -> Option<KunaLoweredSwitchRecord> {
     }
     None
 }
+
+crate::kuna_flag!(
+    /// (kuna `loweredswitchbits`) A switch lowered to bit tests re-rolls.  See
+    /// [`crate::p2_lift::kuna_loweredswitchbits`].
+    LoweredSwitchBits,
+    "loweredswitchbits",
+    "Switches lowered to bit tests re-rolled",
+    unset: false,
+    shipped: true
+);

@@ -50,7 +50,7 @@ use unlace_num::opcodes::OpCode;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct V850IndirectBranchOption {
     /// True if V850 "jmp [reg]" CALLIND is reclassified to BRANCHIND
-    /// (C++ `Architecture::v850_indirect_branch`).
+    /// (C++ the registered option `V850IndirectBranch`).
     pub enabled: bool,
 }
 
@@ -82,7 +82,10 @@ impl V850IndirectBranchOption {
 /// The option is on and the loaded language is a V850 variant, the only
 /// processor whose SLEIGH lifts `jmp [reg]` to a CALLIND.
 pub fn applies(arch: &crate::infra::architecture::Architecture) -> bool {
-    arch.v850_indirect_branch && arch.archid.starts_with("V850:")
+    arch.kuna_options
+        .get::<crate::kuna_v850indbranch::V850IndirectBranch>()
+        .0
+        && arch.archid.starts_with("V850:")
 }
 
 /// (kuna) Is `op` a V850 "jmp [reg]" CALLIND that should become a BRANCHIND?
@@ -132,6 +135,16 @@ pub fn kuna_is_v850_indirect_jmp(
     }
     true
 }
+
+crate::kuna_flag!(
+    /// (kuna GH-8817) Reclassify V850 `jmp [reg]` CALLIND to BRANCHIND
+    /// (C++ `v850_indirect_branch`).
+    V850IndirectBranch,
+    "v850indirectbranch",
+    "V850 indirect-branch reclassification",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 #[path = "kuna_v850indbranch/tests.rs"]

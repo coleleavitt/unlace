@@ -1052,7 +1052,11 @@ fn descend(
         preserved: &preserved,
         settled: false,
         named: Some(&named),
-        next_table: arch.switch_extent.then_some(&next_table),
+        next_table: arch
+            .kuna_options
+            .get::<unlace_decomp::jumptable::SwitchExtent>()
+            .0
+            .then_some(&next_table),
     };
     let arm = file.architecture() == object::Architecture::Arm;
     let pic_image = pool.as_ref().map(|pool| kuna_picpool::Image {

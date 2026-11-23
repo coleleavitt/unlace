@@ -39,7 +39,12 @@ pub(crate) fn intrinsic(
     op: OpId,
     name: &[u8],
 ) -> Option<Intrinsic> {
-    if !arch.acle_intrinsics || !arch.archid.starts_with("AARCH64:") {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_memtag::AcleIntrinsics>()
+        .0
+        || !arch.archid.starts_with("AARCH64:")
+    {
         return None;
     }
     let o = fd.obank().get(op)?;

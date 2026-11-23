@@ -782,7 +782,12 @@ impl Action for ActionConstantPtr {
     /// C++ `ActionConstantPtr::reset`: `{ localcount = 0; }`.
     fn reset(&mut self, data: &mut Funcdata) {
         self.localcount = 0;
-        data.kuna_global_array_anchor_passes = data.get_arch().global_array_anchor.then_some(0);
+        data.kuna_global_array_anchor_passes = data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_globalarrayanchor::GlobalArrayAnchor>()
+            .0
+            .then_some(0);
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:1183 — ActionConstantPtr::apply
@@ -794,7 +799,12 @@ impl Action for ActionConstantPtr {
             return 0;
         }
         self.localcount += 1;
-        if data.get_arch().global_array_anchor {
+        if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_globalarrayanchor::GlobalArrayAnchor>()
+            .0
+        {
             data.kuna_global_array_anchor_passes = Some(self.localcount as u8);
         }
 

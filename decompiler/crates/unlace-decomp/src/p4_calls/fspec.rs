@@ -8084,11 +8084,11 @@ impl FuncCallSpecs {
         newinput: &mut Vec<Option<VarnodeId>>,
         newoutput: &mut Vec<VarnodeId>,
     ) -> KunaResult<bool> {
-        if super::kuna_joincalloutput::needs_reflow(data, self, restricted_proto) {
+        if (data.hooks().joincalloutput_needs_reflow)(data, self, restricted_proto) {
             return Ok(false);
         }
         if data.get_arch().call_mechanism_effects
-            && crate::kuna_callmechanisms::requires_reflow(&self.proto, restricted_proto)
+            && (data.hooks().callmechanisms_requires_reflow)(&self.proto, restricted_proto)
         {
             return Ok(false);
         }
@@ -8153,7 +8153,7 @@ impl FuncCallSpecs {
         // printed name + entry are registered in the fspec-space side table (the C++
         // raw-pointer-cast equivalent), exactly as flow.rs `build_call_specs` does
         // for a direct call.
-        let handle = crate::flow::next_fspec_handle();
+        let handle = (data.hooks().flow_next_fspec_handle)();
         let style = data.get_arch().kuna_name_style();
         self.register_in_fspec_space(handle, style);
         let fspecvn = data.new_varnode_call_specs(handle);
@@ -8710,7 +8710,7 @@ impl FuncCallSpecs {
         if !self.is_input_locked() {
             return Ok(());
         }
-        let variadic = crate::p4_calls::kuna_varargtransfer::pending_trials(data, self);
+        let variadic = (data.hooks().varargtransfer_pending_trials)(data, self);
         let stackref = self.get_spacebase_relative(data);
         let mut placeholder = if self.stack_placeholder_slot >= 0 {
             data.obank()

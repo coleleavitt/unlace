@@ -619,3 +619,8 @@ fn constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
     let v = fd.vbank().get(vn)?;
     v.is_constant().then(|| v.get_offset())
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.switchextent_table_read = Some(table_read);
+}

@@ -5910,7 +5910,7 @@ impl Funcdata {
             None => (1, OpCode::CPUI_COPY),
         };
         if opc == OpCode::CPUI_CALLOTHER {
-            if let Some(ty) = crate::kuna_octeoneffects::output_type(self, op) {
+            if let Some(ty) = (self.hooks().octeoneffects_output_type)(self, op) {
                 return ty;
             }
         }
@@ -5936,7 +5936,7 @@ impl Funcdata {
             None => (1, OpCode::CPUI_COPY),
         };
         if opc == OpCode::CPUI_CALLOTHER {
-            if let Some(ty) = crate::kuna_octeoneffects::input_type(self, op, slot) {
+            if let Some(ty) = (self.hooks().octeoneffects_input_type)(self, op, slot) {
                 return ty;
             }
         }
@@ -6658,7 +6658,7 @@ impl Funcdata {
                 .into_iter()
                 .find(|entry| entry.symbol == sym)
                 .ok_or_else(|| KunaError::lowlevel("build_dynamic_symbol: missing entry"))?;
-            crate::kuna_dynamiclocals::bind(self, vn, &entry)?;
+            (self.hooks().dynamiclocals_bind)(self, vn, &entry)?;
             return Ok(());
         }
         let localmap = self
@@ -6791,7 +6791,7 @@ impl Funcdata {
             }
             return Ok(true);
         }
-        crate::kuna_dynamiclocals::bind(self, vn, entry)
+        (self.hooks().dynamiclocals_bind)(self, vn, entry)
     }
 
     /// Refresh the dynamic symbol on the final high, following an inserted CAST.
@@ -6887,7 +6887,7 @@ impl Funcdata {
             }
         }
 
-        crate::kuna_dynamiclocals::bind(self, vn, entry)
+        (self.hooks().dynamiclocals_bind)(self, vn, entry)
     }
 
     /// The forced integer display format of the equate-Symbol bound to `vn`'s

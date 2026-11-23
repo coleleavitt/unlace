@@ -714,6 +714,11 @@ impl Mechanisms {
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.callmechanisms_requires_reflow = Some(requires_reflow);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

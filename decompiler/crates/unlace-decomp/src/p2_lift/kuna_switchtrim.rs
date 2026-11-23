@@ -67,3 +67,8 @@ pub fn trimmed_rows(
     }
     addresstable.len()
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.switchtrim_trimmed_rows = Some(trimmed_rows);
+}

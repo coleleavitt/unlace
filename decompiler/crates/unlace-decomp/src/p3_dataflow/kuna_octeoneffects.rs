@@ -444,6 +444,12 @@ fn result_metatype(size: int4) -> type_metatype {
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.octeoneffects_input_type = Some(input_type);
+    hooks.octeoneffects_output_type = Some(output_type);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

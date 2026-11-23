@@ -422,8 +422,8 @@ fn i386_rel_table_reads_the_implicit_addend_from_the_slot() {
 /// An architecture kuna has no triple for produces nothing rather than guessing.
 #[test]
 fn unhandled_machine_is_inert() {
-    // EM_PPC64 (21) — parsed fine, but no RELATIVE/GLOB_DAT/JUMP_SLOT triple.
-    let bytes = image64(21, 8, 6, 7);
+    // EM_SPARCV9 (43) — parsed fine, but `dyn_types` has no entry for it.
+    let bytes = image64(43, 8, 6, 7);
     assert!(run(&bytes).writes.is_empty());
 }
 
@@ -435,7 +435,7 @@ fn runtime_written_is_the_slots_resolve_leaves_alone() {
         run(&image64(62, 8, 6, 7)).runtime_written,
         Some(vec![(GOT_VMA + 16, GOT_VMA + 24)])
     );
-    assert_eq!(run(&image64(21, 8, 6, 7)).runtime_written, None);
+    assert_eq!(run(&image64(43, 8, 6, 7)).runtime_written, None);
 }
 
 /// GH #1379: [`fixup_sites`] lists every slot, the import [`resolve`] leaves

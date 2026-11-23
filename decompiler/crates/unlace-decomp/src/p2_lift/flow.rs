@@ -5531,3 +5531,8 @@ pub fn build_partial_blocks<E: FlowEnvironment>(
     partial.set_flag_raw(crate::funcdata::funcdata_flags::blocks_generated);
     Ok(())
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.flow_next_fspec_handle = Some(next_fspec_handle);
+}

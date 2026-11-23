@@ -273,3 +273,8 @@ fn target_through_segment(fd: &crate::funcdata::Funcdata, indop: crate::context:
     }
     false
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.segmentize_table_leaves_image = Some(table_leaves_image);
+}

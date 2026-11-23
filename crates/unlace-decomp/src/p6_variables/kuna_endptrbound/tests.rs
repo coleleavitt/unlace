@@ -66,7 +66,8 @@ impl Fx {
             .add_spacebase_pointer(&stack, &sp_data, 8, true)
             .unwrap();
         let mut glb = ArchContext::new(manage);
-        glb.end_ptr_bound = option;
+        glb.kuna_options
+            .set(crate::kuna_endptrbound::EndPtrBound(option));
         let entry = Address::new(Rc::clone(&reg), 0x1000);
         let mut fd = Funcdata::new("walk", "walk", Rc::new(glb), entry, 0x1000_0000, 0x40).unwrap();
         let vn = fd.new_varnode(8, &Address::new(reg, SP_OFF), None);

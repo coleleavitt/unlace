@@ -60,7 +60,10 @@ fn invalidate(fd: &mut Funcdata) {
 }
 
 fn enabled(fd: &Funcdata) -> bool {
-    !fd.get_arch().stack_views
+    !fd.get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
 }
 
 fn valid_extent(space: &AddrSpace, start: u64, size: i32) -> bool {

@@ -374,9 +374,20 @@ fn decompile_batch(
 ) -> Vec<FuncResult> {
     let mut out = Vec::with_capacity(targets.len());
     // Only the surfaces that can decide a function again pay for the replay list.
-    let storetype = prog.arch().storetype;
-    let replay = if prog.arch().struct_synth.fires()
-        || prog.arch().elem_ptr
+    let storetype = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
+    let replay = if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_structsynth::StructSynthMode>()
+        .fires()
+        || prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_elemptr::ElemPtr>()
+            .0
         || storetype != unlace_decomp::kuna_storetype::StoreTypeMode::Off
     {
         targets.clone()
@@ -445,7 +456,10 @@ pub fn converge_store_types(
     targets: &[FunctionEntry],
     out: &mut [FuncResult],
 ) {
-    let mode = prog.arch().storetype;
+    let mode = prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
     for _ in 0..2 {
         let decided = prog.arch_mut().kuna_storetype.decide(mode);
         let typed: Vec<u64> = decided
@@ -573,7 +587,12 @@ pub fn converge_synthesized_structs(
 /// superseded so far in this run: what the convergence sweep looks for. Empty
 /// when `structsynth` is off.
 pub fn superseded_struct_names(prog: &ConsoleProgram) -> Vec<String> {
-    if !prog.arch().struct_synth.fires() {
+    if !prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_structsynth::StructSynthMode>()
+        .fires()
+    {
         return Vec::new();
     }
     unlace_decomp::kuna_structsynth::ledger::superseded_names(prog.arch().types())
@@ -944,7 +963,10 @@ pub fn decompile_pulled(
                 }
                 // (kuna `protoorder`) State what this function's recovery found for its callers.
                 if opts.park_recovered_proto {
-                    let mode = prog.arch().protoorder;
+                    let mode = prog
+                        .arch()
+                        .kuna_options
+                        .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>();
                     let outcome = unlace_decomp::kuna_protoorder::park_recovered(
                         prog.arch_mut(),
                         &park_entry,

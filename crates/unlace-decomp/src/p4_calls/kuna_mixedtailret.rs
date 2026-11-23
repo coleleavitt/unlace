@@ -78,7 +78,7 @@ impl OptionMixedTailRet {
     pub const NAME: &'static str = "mixedtailret";
 
     /// Resolve the flag and its confirmation message; the caller writes it into
-    /// `Architecture::mixed_tail_ret`.
+    /// the registered option `MixedTailRet`.
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
@@ -113,7 +113,13 @@ pub fn returns_decided_value(
     tails: &[(OpId, OpId)],
 ) -> bool {
     let [(addr, size)] = pieces else { return false };
-    if !data.get_arch().mixed_tail_ret || !last_write_is_own(data, ret, addr, *size) {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_mixedtailret::MixedTailRet>()
+        .0
+        || !last_write_is_own(data, ret, addr, *size)
+    {
         return false;
     }
     let (calls, rets): (Vec<OpId>, Vec<OpId>) = tails.iter().copied().unzip();
@@ -150,7 +156,11 @@ pub fn feeds_tail_call(data: &Funcdata, producers: &[OpId], pieces: &[(Address, 
 /// `ret` and a tail callee leaves alone before the other is no such value, and
 /// yielding to it returned `xmm0` where the function returns `eax`.
 pub fn claimed_beside_own(data: &Funcdata) -> bool {
-    data.get_arch().mixed_tail_ret && data.kuna_passthrough_claims().iter().any(|c| c.beside_own)
+    data.get_arch()
+        .kuna_options
+        .get::<crate::kuna_mixedtailret::MixedTailRet>()
+        .0
+        && data.kuna_passthrough_claims().iter().any(|c| c.beside_own)
 }
 
 fn overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
@@ -769,6 +779,30 @@ fn condition_feeders(data: &Funcdata, bl: BlockId) -> Vec<OpId> {
         cur = data.op_previous_op(op);
     }
     feeders
+}
+
+/// (kuna) A value a function returns beside a claimed tail-call result is
+/// its return value too (option `mixedtailret`).  See
+/// [`crate::p4_calls::kuna_mixedtailret`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct MixedTailRet(pub bool);
+
+impl crate::kuna_optionset::KunaOption for MixedTailRet {
+    const NAME: &'static str = "mixedtailret";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        MixedTailRet(false)
+    }
+
+    fn shipped() -> Self {
+        MixedTailRet(false)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p4_calls::kuna_mixedtailret::OptionMixedTailRet.apply(value)?;
+        Ok((MixedTailRet(v), msg))
+    }
 }
 
 #[cfg(test)]

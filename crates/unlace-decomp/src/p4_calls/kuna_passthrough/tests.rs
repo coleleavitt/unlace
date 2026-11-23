@@ -75,7 +75,8 @@ fn late_linking_preserves_existing_forwarded_register_claims() {
     manage.insert_space(Rc::clone(&ram)).unwrap();
     manage.insert_space(Rc::clone(&reg)).unwrap();
     let mut arch = ArchContext::new(manage);
-    arch.pass_through = true;
+    arch.kuna_options
+        .set(crate::kuna_passthrough::PassThrough(true));
     let mut data = Funcdata::new(
         "f",
         "f",

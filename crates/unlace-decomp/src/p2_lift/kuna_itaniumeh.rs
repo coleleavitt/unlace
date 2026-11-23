@@ -179,6 +179,50 @@ pub fn define_pad_registers(data: &mut Funcdata, table: &EhTable, pad: &Address)
 /// Ghidra's `Comment::user2`, the instruction comment the printer emits inline.
 const USER2: unlace_base::types::uint4 = 2;
 
+/// (kuna `itaniumeh`) Give calls covered by a call-site record an exceptional
+/// edge to their landing pad (`on`), only for pads with a catch clause under
+/// `itaniumeh catch` (`catch_only`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ItaniumEh {
+    pub on: bool,
+    pub catch_only: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for ItaniumEh {
+    const NAME: &'static str = "itaniumeh";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ItaniumEh {
+            on: false,
+            catch_only: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        ItaniumEh {
+            on: true,
+            catch_only: false,
+        }
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        let catch_only = value.trim().eq_ignore_ascii_case("catch");
+        let on = catch_only || crate::options::on_or_off(value)?;
+        let state = if catch_only {
+            "catch"
+        } else if on {
+            "on"
+        } else {
+            "off"
+        };
+        Ok((
+            ItaniumEh { on, catch_only },
+            format!("Itanium exception edges to landing pads turned {state}"),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -24,7 +24,7 @@
 //! prototype override (fixed types ++ format-derived varargs, varargs closed).
 //! Ghidra origins are cited inline; the parser + override-pieces builder live in
 //! `unlace_analysis::formatstring` (halves A + B-logic).  Gated OFF by default
-//! (`Architecture::analysis_formatstring`), so the loop is inert -- and both
+//! (the registered option `FormatStringMode`), so the loop is inert -- and both
 //! surfaces byte-identical to their pre-DIV-66 output -- unless the run enables
 //! `formatstring`.
 
@@ -193,7 +193,9 @@ fn decompile_one_prefollowed_once(
     proto_overrides: &[(Address, PrototypePieces)],
     prefollowed: Option<Funcdata>,
 ) -> DecompileStep {
-    let formatstring_mode = arch.analysis_formatstring;
+    let formatstring_mode = arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_formatstring::FormatStringMode>();
     let saved_readonlypropagate = arch.readonlypropagate;
     // Only the LOOP needs the drive to fold the format constant out of read-only
     // memory; the static resolver read it out of the image at load.

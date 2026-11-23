@@ -709,7 +709,10 @@ fn walk(
 }
 
 pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
-    if !arch.stack_views
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
         && !arch
             .kuna_options
             .get::<crate::heritage::StackAliasDeadstore>()
@@ -869,7 +872,11 @@ fn for_call<'a>(
     start: u64,
     size: i32,
 ) -> Option<&'a CalleeMemory> {
-    if (!fd.get_arch().stack_views
+    if (!fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
         && !fd
             .get_arch()
             .kuna_options
@@ -993,7 +1000,11 @@ pub(crate) fn test_call_summary_is_usable(
 
 /// Only complete body evidence can narrow the frame's call-write guard.
 pub(crate) fn preserves(fd: &Funcdata, call: &FuncCallSpecs, address: &Address, size: i32) -> bool {
-    if !fd.get_arch().stack_views
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
         || !(1..=16).contains(&size)
         || address.get_space().map(|s| s.get_index())
             != fd.get_scope_local().map(|s| s.get_space_id().get_index())

@@ -243,7 +243,12 @@ pub(crate) fn reinterprets_to_float(fd: &Funcdata, input: VarnodeId) -> bool {
 /// result to: a call whose prototype returns one (its logical width, not the ABI register's),
 /// or a native float op whose output has that width. The assignment then stores the bits.
 pub(crate) fn word_result(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
-    if !fd.get_arch().stack_views {
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
+    {
         return None;
     }
     let operation = fd.obank().get(op)?;
@@ -280,7 +285,12 @@ pub(crate) fn word_result(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
 
 /// Explicit word storage keeps its bits when a native float op consumes it.
 pub(crate) fn stack_float_input(fd: &Funcdata, op: OpId, input: VarnodeId) -> Option<Transfer> {
-    if !fd.get_arch().stack_views {
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
+    {
         return None;
     }
     let code = fd.obank().get(op)?.code();
@@ -464,7 +474,12 @@ pub(crate) fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Da
         }
     }
     let declared = crate::printc::declared_variable_type(fd, id)?;
-    if !fd.get_arch().stack_views {
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
+    {
         return Some(declared);
     }
     let value = fd.vbank().get(id)?;

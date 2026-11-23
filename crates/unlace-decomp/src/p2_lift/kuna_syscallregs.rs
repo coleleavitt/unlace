@@ -674,5 +674,22 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.syscallregs_userop_ids = Some(userop_ids);
 }
 
+impl crate::kuna_optionset::KunaOption for SyscallRegsMode {
+    const NAME: &'static str = "syscallregs";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        SyscallRegsMode::Off
+    }
+
+    fn shipped() -> Self {
+        SyscallRegsMode::Auto
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        OptionSyscallRegs.apply(value)
+    }
+}
+
 #[cfg(test)]
 mod tests;

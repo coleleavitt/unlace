@@ -109,7 +109,7 @@ const POSTDOM_MAX_GRAPH_SIZE: int4 = 50;
 ///
 /// Mirrors [`OptionGotoReduce`](crate::p8_structure::kuna_gotoreduce::OptionGotoReduce):
 /// parse `on`/`off`, returning the bool + a confirmation message.  The flag is
-/// stored as `Architecture::region_structure` (and copied to the boundary in
+/// stored as the registered option `RegionStructure` (and copied to the boundary in
 /// `build_arch_handle`).
 pub struct OptionRegionStructure;
 
@@ -3474,6 +3474,33 @@ crate::kuna_flag!(
     unset: false,
     shipped: false
 );
+
+/// (kuna) Region-based (Phoenix/SAILR) structurer: structure the CFG by
+/// walking the [`KunaRegionIdentifier`](crate::p7_regions::kuna_regionid)
+/// region tree and matching Phoenix acyclic schemas instead of running
+/// Ghidra's `CollapseStructure` (option `regionstructure`, DIV-12 default-on:
+/// the primary structuring path; falls back to `CollapseStructure` on irreducible code).
+#[derive(Clone, Debug, PartialEq)]
+pub struct RegionStructure(pub bool);
+
+impl crate::kuna_optionset::KunaOption for RegionStructure {
+    const NAME: &'static str = "regionstructure";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        RegionStructure(false)
+    }
+
+    fn shipped() -> Self {
+        RegionStructure(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) =
+            crate::p8_structure::region_structurer::OptionRegionStructure.apply(value)?;
+        Ok((RegionStructure(v), msg))
+    }
+}
 
 #[cfg(test)]
 mod tests {

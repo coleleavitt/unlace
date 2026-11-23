@@ -68,7 +68,7 @@ pub fn parse_mode(value: &str) -> Result<(FatStrMode, String), String> {
 
 /// Is the rewrite live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match FatStrMode::from_u8(data.get_arch().swift_str) {
+    match data.get_arch().kuna_options.get::<SwiftStr>().0 {
         FatStrMode::Off => false,
         FatStrMode::Auto => data.get_arch().source_lang.is_swift(),
         FatStrMode::Always => true,
@@ -892,6 +892,28 @@ pub fn specs() -> Vec<RuleSpec> {
         group: "analysis",
         ctor: || Box::new(RuleSwiftString::with_group(true, "analysis")),
     }]
+}
+
+/// The `swiftstr` setting: the fat-string mode for Swift two-word literals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SwiftStr(pub crate::kuna_fatstr::FatStrMode);
+
+impl crate::kuna_optionset::KunaOption for SwiftStr {
+    const NAME: &'static str = "swiftstr";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        SwiftStr(crate::kuna_fatstr::FatStrMode::Auto)
+    }
+
+    fn shipped() -> Self {
+        SwiftStr(crate::kuna_fatstr::FatStrMode::Auto)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (mode, msg) = parse_mode(value).map_err(unlace_base::error::KunaError::parse)?;
+        Ok((SwiftStr(mode), msg))
+    }
 }
 
 #[cfg(test)]

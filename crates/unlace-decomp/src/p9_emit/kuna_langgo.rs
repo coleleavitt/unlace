@@ -490,7 +490,13 @@ impl PrintC {
         markup: &MarkupRef,
     ) {
         let name = if param.get_name().is_empty() {
-            crate::database::kuna_materialized_param_name(arch.name_style_angr, index, "")
+            crate::database::kuna_materialized_param_name(
+                arch.kuna_options
+                    .get::<crate::kuna_coreoptions::NameStyleAngr>()
+                    .0,
+                index,
+                "",
+            )
         } else {
             param.get_name().to_string()
         };

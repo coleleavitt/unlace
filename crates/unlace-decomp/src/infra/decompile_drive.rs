@@ -432,7 +432,10 @@ impl FlowEnvironment for ArchFlowEnv {
         }
         if let Some(id) = op.get_inject_id() {
             if arch.octeon_upstream_inject.contains(&(id as int4)) {
-                return arch.octeon_effects == crate::kuna_octeoneffects::OcteonEffectsMode::Off;
+                return arch
+                    .kuna_options
+                    .get::<crate::kuna_octeoneffects::OcteonEffectsMode>()
+                    == crate::kuna_octeoneffects::OcteonEffectsMode::Off;
             }
         }
         if !arch
@@ -857,7 +860,11 @@ impl FlowEnvironment for ArchFlowEnv {
         // function entry, incl. a PLT thunk?) and the self-entry check is
         // `dest == fd.getAddress()`.
         let arch = self.arch();
-        if !arch.tail_call_jumps {
+        if !arch
+            .kuna_options
+            .get::<crate::kuna_tailcalljump::TailCallJump>()
+            .jumps
+        {
             // Fast-path the default-off gate without touching the IR.
             return false;
         }
@@ -866,7 +873,9 @@ impl FlowEnvironment for ArchFlowEnv {
         crate::kuna_tailcalljump::kuna_is_tail_call_branch(
             fd,
             op,
-            arch.tail_call_jumps,
+            arch.kuna_options
+                .get::<crate::kuna_tailcalljump::TailCallJump>()
+                .jumps,
             dest_is_known_function,
             dest_is_self,
         )
@@ -884,7 +893,9 @@ impl FlowEnvironment for ArchFlowEnv {
         let tail_call = crate::kuna_tailcalljump::kuna_is_tail_call_table(
             fd,
             op,
-            arch.tail_call_tables,
+            arch.kuna_options
+                .get::<crate::kuna_tailcalljump::TailCallJump>()
+                .tables,
             self.query_call(dest).is_some(),
             dest == fd.get_address(),
             dest_outside_extent,
@@ -1841,7 +1852,13 @@ fn bootstrap_split_callees(
     candidates: Vec<Address>,
     budget: &mut usize,
 ) {
-    if !arch.protoorder.is_on() || root.num_calls() == 0 || !arch.has_split_records() {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_protoorder::ProtoOrderMode>()
+        .is_on()
+        || root.num_calls() == 0
+        || !arch.has_split_records()
+    {
         return;
     }
     if *budget == 0 {
@@ -1913,7 +1930,12 @@ const MAX_TAIL_CALLEE_INSTRUCTIONS: u32 = 512;
 /// callees of at most [`MAX_TAIL_CALLEE_INSTRUCTIONS`] instructions are tried.
 /// Inert under `protoorder off`.
 fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
-    if !arch.protoorder.is_on() || root.num_calls() == 0 {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_protoorder::ProtoOrderMode>()
+        .is_on()
+        || root.num_calls() == 0
+    {
         return;
     }
     let returns: Vec<Address> = root
@@ -2751,7 +2773,10 @@ fn decompile_func_full_with_objects_inner(
         fd.kuna_set_callee_contract_armed(
             purpose == DrivePurpose::SingleFunction
                 && CONTRACT_DEPTH.with(|d| d.get()) == 0
-                && arch.protoorder.is_on()
+                && arch
+                    .kuna_options
+                    .get::<crate::kuna_protoorder::ProtoOrderMode>()
+                    .is_on()
                 && arch.has_split_records(),
         );
         // (kuna `importvote`) An undeclared import a tail call reaches takes
@@ -2810,8 +2835,14 @@ fn decompile_func_full_with_objects_inner(
     // run behind it files the callees its one-destination tables reach itself.
     let got_ledger = ((purpose == DrivePurpose::SingleFunction || arch.kuna_tail_callee_batch)
         && CONTRACT_DEPTH.with(|d| d.get()) == 0
-        && arch.tail_call_tables
-        && arch.protoorder.is_on())
+        && arch
+            .kuna_options
+            .get::<crate::kuna_tailcalljump::TailCallJump>()
+            .tables
+        && arch
+            .kuna_options
+            .get::<crate::kuna_protoorder::ProtoOrderMode>()
+            .is_on())
     .then(|| crate::kuna_gottailcall::begin_single(arch))
     .flatten();
     let mut got_tried = std::collections::BTreeSet::new();

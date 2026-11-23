@@ -273,7 +273,12 @@ pub fn effect(data: &Funcdata, op: OpId) -> Option<Effect> {
 /// Does `op` take a guard under the current mode?
 pub fn guards(data: &Funcdata, op: OpId) -> bool {
     effect(data, op).is_some_and(|e| {
-        e.addressed() || data.get_arch().octeon_effects == OcteonEffectsMode::Ordered
+        e.addressed()
+            || data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_octeoneffects::OcteonEffectsMode>()
+                == OcteonEffectsMode::Ordered
     })
 }
 
@@ -448,6 +453,23 @@ fn result_metatype(size: int4) -> type_metatype {
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.octeoneffects_input_type = Some(input_type);
     hooks.octeoneffects_output_type = Some(output_type);
+}
+
+impl crate::kuna_optionset::KunaOption for OcteonEffectsMode {
+    const NAME: &'static str = "octeoneffects";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        crate::kuna_octeoneffects::OcteonEffectsMode::Off
+    }
+
+    fn shipped() -> Self {
+        crate::kuna_octeoneffects::OcteonEffectsMode::Atomic
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(crate::kuna_octeoneffects::OcteonEffectsMode::parse(value)?)
+    }
 }
 
 #[cfg(test)]

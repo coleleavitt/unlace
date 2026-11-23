@@ -436,7 +436,11 @@ fn proven_unobserved(fd: &Funcdata, saves: &[Save], stack_space: &Rc<AddrSpace>)
 }
 
 pub(crate) fn restrict_local_saved_lanes(fd: &mut Funcdata) -> i32 {
-    if !fd.get_arch().stack_views
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
         && !fd
             .get_arch()
             .kuna_options

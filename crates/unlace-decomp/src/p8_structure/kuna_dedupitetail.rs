@@ -112,7 +112,12 @@ impl Action for ActionDedupIteTail {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option dedupitetail on|off`, carried on the Architecture boundary.
-        if !data.get_arch().dedup_ite_tail {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_dedupitetail::DedupIteTail>()
+            .0
+        {
             return 0;
         }
         if data.sblocks_get_size() == 0 {
@@ -616,5 +621,32 @@ impl OptionDedupIteTail {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("If/else tail deduplication turned {prop}")))
+    }
+}
+
+/// (kuna) angr structurer ITE region-dedup: merge a duplicated `if/else` tail
+/// (a maximal common prefix/suffix of statement-equivalent leaves shared by both
+/// arms) by hoisting the shared blocks out of the `if` — emitting one copy
+/// instead of two.  The inverse of the SAILR duplication passes
+/// (`gotoreduce`/`crossjumprevert`) (`dedup_ite_tail`, opt-in
+/// default-off).
+#[derive(Clone, Debug, PartialEq)]
+pub struct DedupIteTail(pub bool);
+
+impl crate::kuna_optionset::KunaOption for DedupIteTail {
+    const NAME: &'static str = "dedupitetail";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        DedupIteTail(false)
+    }
+
+    fn shipped() -> Self {
+        DedupIteTail(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p8_structure::kuna_dedupitetail::OptionDedupIteTail.apply(value)?;
+        Ok((DedupIteTail(v), msg))
     }
 }

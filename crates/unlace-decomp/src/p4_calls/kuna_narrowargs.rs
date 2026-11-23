@@ -170,7 +170,11 @@ fn shifts_by(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
 /// Replace every register input whose consumed bits fit a narrower low part by
 /// that part, zero-extended at the entry. Returns how many were replaced.
 pub fn narrow_inputs(data: &mut Funcdata) -> int4 {
-    if !data.get_arch().narrow_args
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_narrowargs::NarrowArgs>()
+        .body
         || data.get_func_proto().is_input_locked()
         || data.bblocks_get_size() == 0
     {
@@ -299,7 +303,12 @@ fn replace(
 /// part of the integer register the argument is passed in; 0 when nothing is
 /// stated.
 pub fn stated_bytes_consumed(data: &Funcdata, fc: &FuncCallSpecs, slot: usize) -> int4 {
-    if !data.get_arch().narrow_args {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_narrowargs::NarrowArgs>()
+        .body
+    {
         return 0;
     }
     let Some(stated) = data.kuna_protoorder_types(fc.get_entry_address()) else {
@@ -338,4 +347,43 @@ pub fn stated_bytes_consumed(data: &Funcdata, fc: &FuncCallSpecs, slot: usize) -
 /// Is the decision trace on (`KUNA_NARROWARGS_TRACE=1`)?
 fn trace() -> bool {
     std::env::var("KUNA_NARROWARGS_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
+}
+
+/// (kuna `narrowargs`) Declare a register parameter at the width its uses read
+/// (`body`), and a 32-bit ARM parameter every caller passes narrow (`callers`,
+/// [`crate::p4_calls::kuna_callerargs`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NarrowArgs {
+    pub body: bool,
+    pub callers: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for NarrowArgs {
+    const NAME: &'static str = "narrowargs";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        NarrowArgs {
+            body: true,
+            callers: true,
+        }
+    }
+
+    fn shipped() -> Self {
+        NarrowArgs {
+            body: true,
+            callers: true,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (body, callers) = match value {
+            "callers" => (true, true),
+            _ => (crate::options::on_or_off(value)?, false),
+        };
+        Ok((
+            NarrowArgs { body, callers },
+            format!("Narrow register parameter recovery set to {value}"),
+        ))
+    }
 }

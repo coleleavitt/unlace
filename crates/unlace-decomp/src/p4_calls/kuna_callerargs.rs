@@ -487,7 +487,11 @@ pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
 
 /// Hand the function its callers' statement before the pipeline runs.
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
-    if !arch.narrow_args_callers {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_narrowargs::NarrowArgs>()
+        .callers
+    {
         return;
     }
     if let Some(s) = arch

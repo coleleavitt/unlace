@@ -2192,7 +2192,11 @@ impl Action for ActionReturnRecovery {
                 crate::kuna_bejoin::join_order(&active, data, &return_ops)
             };
             data.kuna_set_pairs_first_low(crate::kuna_bejoin::joins_first_low(&active, order));
-            let return_single = data.get_arch().return_single;
+            let return_single = data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_returnpair::ReturnSingle>()
+                .0;
             for &op in &return_ops {
                 let o = match data.obank().get(op) {
                     Some(o) => o,

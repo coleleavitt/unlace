@@ -76,9 +76,15 @@ pub use crate::context::NarrowExtRules as Rules;
 /// The rules for `arch` under its `narrowext` value.
 pub fn rules(arch: &Architecture) -> Rules {
     let id = arch.archid.as_str();
-    let compiler = arch.narrow_ext == NarrowExtMode::Compiler;
+    let compiler = arch
+        .kuna_options
+        .get::<crate::kuna_narrowext::NarrowExtMode>()
+        == NarrowExtMode::Compiler;
     let gated = |w, documented: bool| (compiler || documented).then_some(w);
-    match arch.narrow_ext {
+    match arch
+        .kuna_options
+        .get::<crate::kuna_narrowext::NarrowExtMode>()
+    {
         NarrowExtMode::Off => Rules::default(),
         _ if id.starts_with("RISCV:") || id.starts_with("Loongarch:") => Rules {
             input: Some(Widen::Register),
@@ -298,6 +304,23 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.narrowext_or_model = Some(or_model);
     hooks.narrowext_mark = Some(mark);
     hooks.narrowext_rules = Some(rules);
+}
+
+impl crate::kuna_optionset::KunaOption for NarrowExtMode {
+    const NAME: &'static str = "narrowext";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        NarrowExtMode::Off
+    }
+
+    fn shipped() -> Self {
+        NarrowExtMode::Abi
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionNarrowExt.apply(value)
+    }
 }
 
 #[cfg(test)]

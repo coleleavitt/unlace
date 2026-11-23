@@ -1560,14 +1560,22 @@ pub(crate) fn raw_arm_frames(
             .map(|start| (start, decoder.probe(start).unwrap().len))
             .collect();
         claimed.extend(spans.iter().copied());
-        if arch.analysis_aif.enabled() || capture_xrefs {
+        if arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .enabled()
+            || capture_xrefs
+        {
             frames.validated(vma, spans, &mut decoder);
         } else {
             frames.validated_body(vma, spans);
         }
     }
 
-    if arch.analysis_aif.enabled()
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_aif::AifMode>()
+        .enabled()
         && !accepted.is_empty()
         && listing.function_count() >= MINIMUM_FUNCTION_COUNT
     {
@@ -1595,7 +1603,10 @@ pub(crate) fn arm_frame_prefixes(
     translate: &dyn Translate,
     code_space: Rc<AddrSpace>,
 ) -> BTreeMap<u64, u64> {
-    if !arch.analysis_aif.enabled()
+    if !arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_aif::AifMode>()
+        .enabled()
         || roots.is_empty()
         || corpus.function_count() < MINIMUM_FUNCTION_COUNT
     {

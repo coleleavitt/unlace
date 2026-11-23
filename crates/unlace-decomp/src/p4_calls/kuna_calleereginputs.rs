@@ -99,7 +99,10 @@ pub(crate) fn model_name(inputs: u8) -> Option<&'static str> {
 /// option `calleereginputs` is on and the language is x86-32 Windows under a
 /// default model that leaves extrapop unknown.
 pub fn virtual_this(arch: &Architecture) -> Option<(Rc<ProtoModel>, Address, int4, Address)> {
-    if !arch.callee_reginputs
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_calleereginputs::CalleeRegInputs>()
+        .on
         || !arch.archid.starts_with("x86:LE:32:")
         || !crate::kuna_fastfailnoreturn::archid_is_windows(&arch.archid)
     {
@@ -375,7 +378,11 @@ pub fn own_register_model(
 /// whole-image rule decided, else the spec's `__thiscall`/`__fastcall` from the
 /// register straight-line walk (exactly as #1575).
 fn register_model_for(arch: &Architecture, entry: &Address) -> Option<Rc<ProtoModel>> {
-    if !arch.callee_reginputs {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_calleereginputs::CalleeRegInputs>()
+        .on
+    {
         return None;
     }
     if let Some(m) = custom_model(
@@ -412,8 +419,13 @@ pub const KEY_CUSTOM_SHIFT: u16 = 2;
 /// whole-image caller scan is skipped where this is false, so the extension
 /// costs nothing off its target.
 pub fn custom_applies(arch: &Architecture) -> bool {
-    arch.callee_reginputs
-        && arch.callee_reginputs_custom
+    arch.kuna_options
+        .get::<crate::kuna_calleereginputs::CalleeRegInputs>()
+        .on
+        && arch
+            .kuna_options
+            .get::<crate::kuna_calleereginputs::CalleeRegInputs>()
+            .custom
         && arch.archid.starts_with("x86:LE:32:")
         && crate::kuna_fastfailnoreturn::archid_is_windows(&arch.archid)
         && arch.default_fp().map(|m| m.get_extra_pop()) == Some(EXTRAPOP_UNKNOWN)
@@ -818,6 +830,65 @@ fn walk(arch: &Architecture, entry: &Address) -> Option<u8> {
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.calleereginputs_virtual_this = Some(virtual_this);
     hooks.calleereginputs_reads_register = Some(reads_register);
+}
+
+/// (kuna `calleereginputs`) Take `__thiscall`/`__fastcall` from the registers
+/// a callee reads (`on`), and recover callee-saved custom arguments too
+/// (`custom`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CalleeRegInputs {
+    pub on: bool,
+    pub custom: bool,
+}
+
+impl CalleeRegInputs {
+    /// The option's token: `off`, `on` or `custom`.
+    pub fn as_str(self) -> &'static str {
+        if self.custom {
+            "custom"
+        } else if self.on {
+            "on"
+        } else {
+            "off"
+        }
+    }
+}
+
+impl crate::kuna_optionset::KunaOption for CalleeRegInputs {
+    const NAME: &'static str = "calleereginputs";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        CalleeRegInputs {
+            on: true,
+            custom: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        CalleeRegInputs {
+            on: true,
+            custom: CUSTOM_DEFAULT,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (on, custom) = match value.trim().to_ascii_lowercase().as_str() {
+            "custom" => (true, true),
+            "" | "on" => (true, false),
+            "off" => (false, false),
+            _ => {
+                return Err(unlace_base::error::KunaError::parse(
+                    "Must specify off, on or custom",
+                ));
+            }
+        };
+        let mode = CalleeRegInputs { on, custom };
+        Ok((
+            mode,
+            format!("Callee register-input call models set to {}", mode.as_str()),
+        ))
+    }
 }
 
 #[cfg(test)]

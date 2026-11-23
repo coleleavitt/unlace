@@ -20,10 +20,6 @@ use unlace_base::address::SeqNum;
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
 
-/// The default pass of a pool run from which removal cascades: a run that has
-/// gone this long is almost always taking dead chains apart one link a pass.
-pub(crate) const DEFAULT_PASSES: u32 = 32;
-
 /// Remove `op`, which `removable` accepted, and when it is a join or a guard
 /// the dead chain of joins and guards behind it.
 pub(crate) fn remove(data: &mut Funcdata, op: OpId, removable: fn(OpId, &mut Funcdata) -> bool) {

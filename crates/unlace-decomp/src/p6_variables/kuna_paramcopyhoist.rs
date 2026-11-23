@@ -141,7 +141,12 @@ impl Action for ActionParamCopyHoist {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // P0 assertion `option paramcopyhoist on|off`, carried on the Architecture
         // boundary.  Off => nothing moves => byte-identical output.
-        if !data.get_arch().param_copy_hoist {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_paramcopyhoist::ParamCopyHoist>()
+            .0
+        {
             return 0;
         }
         if data.bblocks_get_size() < 2 {
@@ -326,5 +331,34 @@ fn instance_shadows_root(fd: &Funcdata, vn: VarnodeId, root_vn: VarnodeId) -> bo
     match fd.obank().get(def).and_then(|o| o.get_in(0)) {
         Some(in0) => fd.varnode_copy_shadow(in0, root_vn),
         None => false,
+    }
+}
+
+/// (kuna) `paramcopyhoist`: anchor the trim COPY of an **unmodified incoming
+/// parameter** in the function's entry block instead of at the tail of the
+/// MULTIEQUAL slot's predecessor, so a guarded parameter's copy-shadow
+/// (`v6 = a1;`) prints in the entry block like the source's spill instead of
+/// below an earlier guard.  Read by
+/// [`crate::p6_variables::kuna_paramcopyhoist::hoist_target`] from
+/// `Merge::trimOpInput`; guarded by the `buildDominantCopy` Cover test.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ParamCopyHoist(pub bool);
+
+impl crate::kuna_optionset::KunaOption for ParamCopyHoist {
+    const NAME: &'static str = "paramcopyhoist";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ParamCopyHoist(false)
+    }
+
+    fn shipped() -> Self {
+        ParamCopyHoist(false)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) =
+            crate::p6_variables::kuna_paramcopyhoist::OptionParamCopyHoist.apply(value)?;
+        Ok((ParamCopyHoist(v), msg))
     }
 }

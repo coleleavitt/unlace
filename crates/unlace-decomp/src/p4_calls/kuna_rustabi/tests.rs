@@ -46,7 +46,7 @@ fn build_fd_lang(mode: RustAbiMode, is_rust: bool) -> Funcdata {
     .unwrap();
     m.insert_space(Rc::new(JoinSpace::new(3, false))).unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.rust_abi = mode.as_u8();
+    ctx.kuna_options.set(mode);
     ctx.source_lang = if is_rust {
         crate::kuna_sourcelang::SourceLang::Rust
     } else {
@@ -387,7 +387,7 @@ fn build_call_fd_gates(mode: RustAbiMode, is_rust: bool) -> Funcdata {
     m.insert_space(Rc::new(JoinSpace::new(3, false))).unwrap();
     m.set_register_lookup(Rc::new(NamelessRegisters));
     let mut ctx = ArchContext::new(m);
-    ctx.rust_abi = mode.as_u8();
+    ctx.kuna_options.set(mode);
     ctx.source_lang = if is_rust {
         crate::kuna_sourcelang::SourceLang::Rust
     } else {

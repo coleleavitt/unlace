@@ -26,7 +26,7 @@
 //! * [`ReturnPairForm`] + [`parse_return_pair_form`] — the `pair`/`single`
 //!   parse and the confirmation message, the faithful decision body of
 //!   `OptionReturnPair::apply` (the `glb->return_single = single` write becomes
-//!   the returned `ReturnPairForm`; the [`Architecture::return_single`] flag is
+//!   the returned `ReturnPairForm`; the [the registered option `ReturnSingle`] flag is
 //!   already threaded — `architecture.rs`).
 //! * [`keep_single_return`] — the reusable `buildReturnOutput` gate predicate
 //!   (`return_single && newparam.size() > 2`), so the later wave's
@@ -40,7 +40,7 @@
 //! requires a setter on `ArchOptionContext` (`set_return_single`, in `options.rs`,
 //! a file this pack does not own) and the console's option-dispatch surface (W9).
 //! Until then the parse/decision is exposed as a free function; the live flag
-//! flows through [`Architecture::return_single`].  Noted in the structured losses.
+//! flows through [the registered option `ReturnSingle`].  Noted in the structured losses.
 //!
 //! ## STUB (cross-file) — the `buildReturnOutput` resize site
 //!
@@ -84,7 +84,7 @@ impl ReturnPairForm {
 /// The C++ returns the error text as a normal (non-throwing) `string`; the Rust
 /// port surfaces it as a `KunaError::parse` (the established option-parse error
 /// idiom in `options.rs`).  The caller writes the resolved
-/// [`ReturnPairForm::return_single`] into [`Architecture::return_single`].
+/// [`ReturnPairForm::return_single`] into [the registered option `ReturnSingle`].
 pub fn parse_return_pair_form(p1: &str) -> KunaResult<(ReturnPairForm, String)> {
     let form = if p1 == "single" {
         ReturnPairForm::Single
@@ -105,10 +105,34 @@ pub fn parse_return_pair_form(p1: &str) -> KunaResult<(ReturnPairForm, String)> 
 /// least one extra register was gathered).  The consumer (`coreaction.cc`, a
 /// later wave) does `newparam.resize(2)` when this is `true`.
 ///
-/// `return_single` is [`Architecture::return_single`]; `newparam_size` is the
+/// `return_single` is [the registered option `ReturnSingle`]; `newparam_size` is the
 /// `newparam.size()` at the resize point.
 pub fn keep_single_return(return_single: bool, newparam_size: usize) -> bool {
     return_single && newparam_size > 2
+}
+
+/// (kuna GH-6990) Keep multi-register return values single, un-joined
+/// (C++ `return_single`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReturnSingle(pub bool);
+
+impl crate::kuna_optionset::KunaOption for ReturnSingle {
+    const NAME: &'static str = "returnpair";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ReturnSingle(false)
+    }
+
+    fn shipped() -> Self {
+        ReturnSingle(false)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::kuna_returnpair::parse_return_pair_form(value)
+            .map(|(form, msg)| (form.return_single(), msg))?;
+        Ok((ReturnSingle(v), msg))
+    }
 }
 
 #[cfg(test)]

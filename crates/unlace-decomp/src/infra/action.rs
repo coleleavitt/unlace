@@ -1689,7 +1689,9 @@ impl Action for ActionPool {
             };
             let cascade = data
                 .get_arch()
-                .dead_cascade
+                .kuna_options
+                .get::<crate::kuna_coreoptions::DeadCascade>()
+                .0
                 .is_some_and(|n| self.run_passes > n);
             data.set_dead_cascade_now(cascade);
             self.op_state = OpCursor::Unstarted;

@@ -368,7 +368,11 @@ pub fn recover(fd: &mut Funcdata) {
             if address.first != address.last || !address.terms.is_empty() {
                 continue;
             }
-            if !fd.get_arch().stack_views
+            if !fd
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_coreoptions::StackViews>()
+                .0
                 && crate::kuna_stackparamviews::backing_for_address(
                     fd,
                     &Address::new(Rc::clone(&space), space.wrap_offset(address.first as u64)),

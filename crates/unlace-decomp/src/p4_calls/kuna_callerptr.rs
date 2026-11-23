@@ -44,7 +44,10 @@ pub fn void_pointer(arch: &Architecture) -> Option<Rc<Datatype>> {
         .kuna_options
         .get::<crate::kuna_callerptr::CallerPtr>()
         .0
-        || !arch.calleevote.is_on()
+        || !arch
+            .kuna_options
+            .get::<crate::kuna_calleevote::CalleeVoteMode>()
+            .is_on()
     {
         return None;
     }

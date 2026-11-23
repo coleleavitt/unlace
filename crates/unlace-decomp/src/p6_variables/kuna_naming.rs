@@ -24,8 +24,8 @@
 //! parameter-comment skip) and [`kuna_storage_comment`] (consumed by
 //! `printc.cc`'s `emitVarDeclStatement`).
 //!
-//! `kunaAngrNaming(glb)` is the runtime gate; in the Rust tree the flag lives on
-//! `Architecture::name_style_angr`, so [`kuna_angr_naming`] takes the flag value
+//! `kunaAngrNaming(glb)` is the runtime gate; in the Rust tree the flag is the
+//! registered option `NameStyleAngr`, so [`kuna_angr_naming`] takes the flag value
 //! directly (the caller reads `glb->name_style_angr`).
 //!
 //! # Storage-comment boundary
@@ -202,7 +202,7 @@ pub fn kuna_storage_comment(view: &StorageView) -> String {
 ///
 /// Follows the kuna-option idiom (`OptionLowerSwitch::apply`): parse + validate
 /// here, return the resolved flag plus the confirmation message; the caller
-/// writes the flag into `Architecture::name_style_angr` (W4/W9 dispatch).
+/// writes the flag into the registered option `NameStyleAngr`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OptionNameStyle;
 

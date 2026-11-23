@@ -360,7 +360,10 @@ fn a_placeholder_resolves_in_every_naming_style() {
 fn a_default_style_name_survives_a_namestyle_flip() {
     let mut program = boot_fixture("tailcallframe_x86_64");
     let default_style_name = "sub_1170";
-    program.arch_mut().name_style_angr = false;
+    program
+        .arch_mut()
+        .kuna_options
+        .set(unlace_decomp::kuna_coreoptions::NameStyleAngr(false));
     assert_eq!(
         program.arch().name_function(
             &program

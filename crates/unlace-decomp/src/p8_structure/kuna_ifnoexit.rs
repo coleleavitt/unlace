@@ -122,3 +122,53 @@ pub fn next_apply_index() -> u32 {
     static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
+
+/// (kuna) Source-layout tie-break for `CollapseStructure::ruleBlockIfNoExit`'s
+/// clause arm (option `guardarm`, default-off opt-in).  Only fires when BOTH
+/// arms are eligible clauses; the earlier-addressed arm becomes the `if`
+/// clause instead of out-index 0.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GuardArm(pub bool);
+
+impl crate::kuna_optionset::KunaOption for GuardArm {
+    const NAME: &'static str = "guardarm";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        GuardArm(false)
+    }
+
+    fn shipped() -> Self {
+        GuardArm(false)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p8_structure::kuna_ifnoexit::OptionGuardArm.apply(value)?;
+        Ok((GuardArm(v), msg))
+    }
+}
+
+/// (kuna) Defer a live loop head in `CollapseStructure`'s deferred
+/// `ruleBlockIfNoExit` scan while a non-head candidate remains (option
+/// `loopcondhoist`, default-off opt-in), so `ruleBlockWhileDo` keeps the
+/// loop's head test instead of emitting `while(true) { if (!C) ...; }`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LoopCondHoist(pub bool);
+
+impl crate::kuna_optionset::KunaOption for LoopCondHoist {
+    const NAME: &'static str = "loopcondhoist";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        LoopCondHoist(false)
+    }
+
+    fn shipped() -> Self {
+        LoopCondHoist(false)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::p8_structure::kuna_ifnoexit::OptionLoopCondHoist.apply(value)?;
+        Ok((LoopCondHoist(v), msg))
+    }
+}

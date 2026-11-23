@@ -200,6 +200,23 @@ pub fn parse_formatstring_mode(p1: &str) -> KunaResult<(FormatStringMode, String
     ))
 }
 
+impl crate::kuna_optionset::KunaOption for FormatStringMode {
+    const NAME: &'static str = "formatstring";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        crate::kuna_formatstring::FormatStringMode::Off
+    }
+
+    fn shipped() -> Self {
+        crate::kuna_formatstring::FormatStringMode::Static
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(crate::kuna_formatstring::parse_formatstring_mode(value)?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

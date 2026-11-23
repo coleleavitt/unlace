@@ -45,11 +45,7 @@ kuna_options! { self, p1;
         self.set_print_language_checked(p1)?;
         Ok(format!("Output language set to {}", self.print().get_name()))
     },
-    "compareform" => {
-        let (form, msg) = crate::kuna_compareform::parse_compare_form(p1)?;
-        self.present_lessequal = form.present_lessequal();
-        Ok(msg)
-    },
+    "compareform" => registered!(crate::kuna_compareform::PresentLessequal),
     "wrapadd" => registered!(crate::kuna_widenedadd::WrapAdd),
     "armconstshift" => registered!(crate::p9_emit::kuna_armconstantshift::ConstShiftMode),
     "armshiftguard" => registered!(crate::kuna_armregistershift::ArmShiftGuard),
@@ -99,44 +95,26 @@ kuna_options! { self, p1;
         self.print_mut().options.set_global_ref(val);
         Ok(msg)
     },
-    "returnpair" => {
-        let (form, msg) = crate::kuna_returnpair::parse_return_pair_form(p1)?;
-        self.return_single = form.return_single();
-        Ok(msg)
-    },
+    "returnpair" => registered!(crate::kuna_returnpair::ReturnSingle),
     "bitidioms" => registered!(crate::kuna_bitidioms::BitIdioms),
     "helperroles" => registered!(crate::kuna_helperrole::HelperRoles),
     "dynalloca" => registered!(crate::kuna_dynalloca::DynAlloca),
     "vaarg" => registered!(crate::kuna_vaarg::VaArg),
     "indexrescale" => registered!(crate::kuna_indexrescale::IndexRescale),
     "looprotate" => registered!(crate::kuna_looprotate::LoopRotate),
-    "guardedloop" => on_off!(guarded_loop, "Guarded do-while loops printed as while loops"),
+    "guardedloop" => registered!(crate::kuna_coreoptions::GuardedLoop),
     "loweredswitchbits" => registered!(crate::kuna_loweredswitchbits::LoweredSwitchBits),
     "vastart" => registered!(crate::kuna_vastart::VaStartRewrite),
     "switchguardmerge" => registered!(crate::kuna_switchguardmerge::SwitchGuardMerge),
     "returnbranch" => registered!(crate::kuna_returnbranch::ReturnBranch),
     "globalarrayanchor" => registered!(crate::kuna_globalarrayanchor::GlobalArrayAnchor),
-    "opaquepredicate" => {
-        let (on, globals) = crate::kuna_opaquepredicate::parse_mode(p1)?;
-        self.opaque_predicate = on;
-        self.opaque_globals = globals;
-        Ok(format!("Constant-comparison folding set to {p1}"))
-    },
-    "callresultuse" => {
-        let (mode, msg) = crate::p4_calls::kuna_callresultuse::OptionCallResultUse.apply(p1)?;
-        self.call_result_use = mode;
-        Ok(msg)
-    },
+    "opaquepredicate" => registered!(crate::kuna_coreoptions::OpaquePredicate),
+    "callresultuse" => registered!(crate::p4_calls::kuna_callresultuse::CallResultUse),
     "signedness" => registered!(crate::kuna_typeround::SignPolicy),
-    "retsplitglobal" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_retsplitglobal::OptionRetSplitGlobal.apply(p1)?;
-        self.ret_split_global = val;
-        Ok(msg)
-    },
+    "retsplitglobal" => registered!(crate::kuna_coreoptions::RetSplitGlobal),
     "retsplitlimit" => registered!(crate::p8_structure::kuna_retsplitlimit::RetSplitLimit),
     "v850indirectbranch" => registered!(crate::kuna_v850indbranch::V850IndirectBranch),
-    "ptrauthtrap" => on_off!(ptrauth_trap, "arm64e pointer-auth failure-check removal"),
+    "ptrauthtrap" => registered!(crate::kuna_coreoptions::PtrauthTrap),
     "relronoreturn" => registered!(crate::decompile_drive::RelroNoreturn),
     "outlinedinline" => registered!(crate::flow::OutlinedInline),
     "calleeretpurge" => registered!(crate::kuna_calleeretpurge::CalleeRetPurge),
@@ -151,30 +129,18 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "mzdgroup" => {
-        let msg = on_off!(mz_dgroup_on, "MS-DOS data segment in DS");
+        let msg = registered!(crate::kuna_coreoptions::MzDgroupOn);
         crate::kuna_mzdgroup::apply(self);
         msg
     },
-    "syscallregs" => {
-        let (mode, msg) = crate::kuna_syscallregs::OptionSyscallRegs.apply(p1)?;
-        self.syscall_regs = mode;
-        Ok(msg)
-    },
+    "syscallregs" => registered!(crate::kuna_syscallregs::SyscallRegsMode),
     "pebnames" => registered!(crate::kuna_pebnames::PebNamesMode),
-    "structsynth" => {
-        let (mode, msg) = crate::kuna_structsynth::OptionStructSynth.apply(p1)?;
-        self.struct_synth = mode;
-        Ok(msg)
-    },
+    "structsynth" => registered!(crate::kuna_structsynth::StructSynthMode),
     "structmerge" => registered!(crate::kuna_structmerge::StructMergeMode),
     "structheadless" => registered!(crate::kuna_structheadless::StructHeadlessMode),
-    "fieldtype" => {
-        let (val, msg) = crate::kuna_fieldtype::OptionFieldType.apply(p1)?;
-        self.field_type = val;
-        Ok(msg)
-    },
-    "chkstkdarwin" => on_off!(chkstk_darwin, "Darwin stack-probe call removal"),
-    "spsolve" => on_off!(sp_solve, "x86-32 stack-pointer delta solve"),
+    "fieldtype" => registered!(crate::kuna_coreoptions::FieldType),
+    "chkstkdarwin" => registered!(crate::kuna_coreoptions::ChkstkDarwin),
+    "spsolve" => registered!(crate::kuna_coreoptions::SpSolve),
 
     "arithhelpers" => registered!(crate::kuna_arithhelpers::ArithHelpers),
     "objcarc" => registered!(crate::kuna_objcarc::ObjcArc),
@@ -182,12 +148,7 @@ kuna_options! { self, p1;
     "objcresolve" => registered!(crate::kuna_objcrettype::ObjcResolve),
     "typevote" => registered!(crate::kuna_typevote::TypeVote),
     "oslog" => registered!(crate::kuna_oslog::OsLogArgs),
-    "tailcalljump" => {
-        let (jumps, tables, msg) = crate::kuna_tailcalljump::tail_call_mode(p1)?;
-        self.tail_call_jumps = jumps;
-        self.tail_call_tables = tables;
-        Ok(msg.to_string())
-    },
+    "tailcalljump" => registered!(crate::kuna_tailcalljump::TailCallJump),
     "tailcallframe" => registered!(crate::kuna_tailcallframe::TailCallFrame),
     "funcboundflow" => registered!(crate::decompile_drive::FuncboundFlow),
     "overlapbranch" => registered!(crate::kuna_overlapbranch::OverlapBranch),
@@ -209,11 +170,7 @@ kuna_options! { self, p1;
         self.kuna_options.set(mode);
         Ok(msg)
     },
-    "octeoneffects" => {
-        let (mode, msg) = crate::kuna_octeoneffects::OcteonEffectsMode::parse(p1)?;
-        self.octeon_effects = mode;
-        Ok(msg)
-    },
+    "octeoneffects" => registered!(crate::kuna_octeoneffects::OcteonEffectsMode),
     "bejoinpass" => {
         let (mode, msg) = crate::kuna_bejoinpass::BeJoinPassMode::parse(p1)?;
         if mode != self.kuna_options.get::<crate::kuna_bejoinpass::BeJoinPassMode>() {
@@ -222,21 +179,9 @@ kuna_options! { self, p1;
         self.kuna_options.set(mode);
         Ok(msg)
     },
-    "rustabi" => {
-        let (mode, msg) = crate::kuna_rustabi::parse_rust_abi_mode(p1)?;
-        self.rust_abi = mode.as_u8();
-        Ok(msg)
-    },
-    "fatstr" => {
-        let (mode, msg) = crate::kuna_fatstr::parse_fatstr_mode(p1).map_err(KunaError::parse)?;
-        self.fat_str = mode.as_u8();
-        Ok(msg)
-    },
-    "swiftstr" => {
-        let (mode, msg) = crate::kuna_swiftstr::parse_mode(p1).map_err(KunaError::parse)?;
-        self.swift_str = mode.as_u8();
-        Ok(msg)
-    },
+    "rustabi" => registered!(crate::kuna_rustabi::RustAbiMode),
+    "fatstr" => registered!(crate::kuna_fatstr::FatStrMode),
+    "swiftstr" => registered!(crate::kuna_swiftstr::SwiftStr),
     "gobool" => registered!(crate::kuna_gobool::GoBoolMode),
     "gonewtype" => registered!(crate::kuna_gonewtype::GoNewType),
     "rustprobestack" => registered!(crate::kuna_rustprobestack::RustProbestackMode),
@@ -262,55 +207,11 @@ kuna_options! { self, p1;
     "sparcstructret" => registered!(crate::kuna_sparcstructret::SparcStructReturn),
     "arraystride" => registered!(crate::kuna_arraystride::RecoverArrayStride),
     "stackalias" => registered!(crate::heritage::StackAliasDeadstore),
-    "readonlycalls" => {
-        let field = p1.trim();
-        let (val, msg) = match field {
-            "off" => (None, "Unguarded read-only memory at calls turned off".to_string()),
-            "on" => (Some(1), "Read-only memory is unguarded at every call".to_string()),
-            _ => {
-                let n = field
-                    .parse::<u64>()
-                    .ok()
-                    .filter(|_| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit()))
-                    .ok_or_else(|| KunaError::parse("Must specify off, on or a decimal guard count"))?;
-                (Some(n), format!("Read-only memory is unguarded at calls from {n} guards"))
-            }
-        };
-        self.readonly_calls = val;
-        Ok(msg)
-    },
-    "persistcalls" => {
-        let field = p1.trim();
-        let (val, msg) = match field {
-            "off" => (None, "Persistent globals are guarded at every call".to_string()),
-            "on" => (Some(1), "Persistent globals are guarded only next to their accesses".to_string()),
-            _ => {
-                let n = field
-                    .parse::<u64>()
-                    .ok()
-                    .filter(|_| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit()))
-                    .ok_or_else(|| KunaError::parse("Must specify off, on or a decimal guard count"))?;
-                (Some(n), format!("Persistent globals are guarded only next to their accesses from {n} guards"))
-            }
-        };
-        self.persist_calls = val;
-        Ok(msg)
-    },
-    "stackviews" => {
-        let (value, message) = crate::kuna_stackviews::OptionStackViews.apply(p1)?;
-        self.stack_views = value;
-        Ok(message)
-    },
-    "memsetrecover" => {
-        let (form, msg) = crate::kuna_memsetsequence::parse_memset_recover_form(p1)?;
-        self.memset_recover = form.memset_recover();
-        Ok(msg)
-    },
-    "rodatastring" => {
-        let (form, msg) = crate::kuna_rodatastring::parse_rodata_string_form(p1)?;
-        self.rodata_string = form.rodata_string();
-        Ok(msg)
-    },
+    "readonlycalls" => registered!(crate::heritage::ReadonlyCalls),
+    "persistcalls" => registered!(crate::heritage::PersistCalls),
+    "stackviews" => registered!(crate::kuna_coreoptions::StackViews),
+    "memsetrecover" => registered!(crate::kuna_memsetsequence::MemsetRecover),
+    "rodatastring" => registered!(crate::kuna_rodatastring::RodataString),
     "switchmodbound" => registered!(crate::jumptable::SwitchModuloBound),
     "switchextent" => registered!(crate::jumptable::SwitchExtent),
     "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
@@ -321,122 +222,40 @@ kuna_options! { self, p1;
     "switchtrim" => registered!(crate::jumptable::SwitchTrim),
     "unrolledguard" => registered!(crate::flow::UnrolledGuard),
     "jtsharepartial" => registered!(crate::funcdata_block::JumptableSharePartial),
-    "deadcascade" => {
-        let field = p1.trim();
-        let (val, msg) = match field {
-            "off" => (None, "Dead-op removal takes one link of a dead chain per pass".to_string()),
-            "on" => (Some(0), "Dead-op removal takes a dead chain of joins and guards out at once".to_string()),
-            _ => {
-                let n = field
-                    .parse::<u32>()
-                    .ok()
-                    .filter(|_| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit()))
-                    .ok_or_else(|| KunaError::parse("Must specify off, on or a decimal pass count"))?;
-                (Some(n), format!("Dead-op removal takes a dead chain of joins and guards out at once once a pool run has made {n} passes"))
-            }
-        };
-        self.dead_cascade = val;
-        Ok(msg)
-    },
-    "loweredswitch" => {
-        let (mode, msg) = crate::kuna_loweredswitch::OptionLowerSwitch.apply(p1)?;
-        self.recover_lowered_switch = mode.enabled();
-        self.lowered_switch_linear = mode.linear();
-        self.lowered_switch_tree = mode.tree();
-        Ok(msg)
-    },
-    "nulterminator" => {
-        let (val, msg) =
-            crate::p6_variables::kuna_nulterminator::OptionNulTerminator.apply(p1)?;
-        self.nul_terminator = val;
-        Ok(msg)
-    },
-    "endptrbound" => {
-        let (val, msg) =
-            crate::p6_variables::kuna_endptrbound::OptionEndPtrBound.apply(p1)?;
-        self.end_ptr_bound = val;
-        Ok(msg)
-    },
-    "castobject" => {
-        let (val, msg) =
-            crate::p6_variables::kuna_castobject::OptionCastObject.apply(p1)?;
-        self.cast_object = val;
-        Ok(msg)
-    },
-    "calleeargs" => {
-        let (val, msg) = crate::p4_calls::kuna_calleestackargs::OptionCalleeArgs.apply(p1)?;
-        self.kuna_calleeargs = val;
-        Ok(msg)
-    },
-    "argclobber" => {
-        let (val, msg) = crate::p4_calls::kuna_argclobber::OptionArgClobber.apply(p1)?;
-        self.arg_clobber = val;
-        Ok(msg)
-    },
+    "deadcascade" => registered!(crate::kuna_coreoptions::DeadCascade),
+    "loweredswitch" => registered!(crate::kuna_loweredswitch::LoweredSwitchMode),
+    "nulterminator" => registered!(crate::kuna_nulterminator::NulTerminator),
+    "endptrbound" => registered!(crate::kuna_endptrbound::EndPtrBound),
+    "castobject" => registered!(crate::kuna_castobject::CastObject),
+    "calleeargs" => registered!(crate::kuna_calleestackargs::KunaCalleeargs),
+    "argclobber" => registered!(crate::kuna_argclobber::ArgClobber),
     "armfloatargs" => {
         self.arm_float_args = on_or_off(p1)?;
         Ok(format!("ARM floating argument recovery turned {p1}"))
     },
-    "narrowargs" => {
-        let (body, callers) = match p1 {
-            "callers" => (true, true),
-            _ => (on_or_off(p1)?, false),
-        };
-        self.narrow_args = body;
-        self.narrow_args_callers = callers;
-        Ok(format!("Narrow register parameter recovery set to {p1}"))
-    },
-    "regnarrow" => {
-        self.narrow_locals = on_or_off(p1)?;
-        Ok(format!("Narrow register local recovery turned {p1}"))
-    },
-    "pairparam" => {
-        self.pair_params = on_or_off(p1)?;
-        Ok(format!("Double-precision input pairing turned {p1}"))
-    },
-    "narrowret" => {
-        self.narrow_ret = on_or_off(p1)?;
-        Ok(format!("Narrow call result recovery turned {p1}"))
-    },
-    "regsigned" => {
-        self.narrow_signed = on_or_off(p1)?;
-        Ok(format!("Signed narrow register local recovery turned {p1}"))
-    },
+    "narrowargs" => registered!(crate::kuna_narrowargs::NarrowArgs),
+    "regnarrow" => registered!(crate::kuna_regnarrow::NarrowLocals),
+    "pairparam" => registered!(crate::kuna_borrowcompare::PairParams),
+    "narrowret" => registered!(crate::kuna_narrowret::NarrowRet),
+    "regsigned" => registered!(crate::kuna_regnarrow::NarrowSigned),
     "narrowext" => {
-        let (mode, msg) = crate::kuna_narrowext::OptionNarrowExt.apply(p1)?;
-        if self.narrow_ext != mode {
+        let (mode, msg) = <crate::kuna_narrowext::NarrowExtMode as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        if mode != self.kuna_options.get::<crate::kuna_narrowext::NarrowExtMode>() {
             self.kuna_callwide.clear();
         }
-        self.narrow_ext = mode;
+        self.kuna_options.set(mode);
         Ok(msg)
     },
     "armfloatreturn" => {
         self.arm_float_return = on_or_off(p1)?;
         Ok(format!("ARM floating return recovery turned {p1}"))
     },
-    "passthrough" => {
-        let (val, msg) = crate::p4_calls::kuna_passthrough::OptionPassThrough.apply(p1)?;
-        self.pass_through = val;
-        Ok(msg)
-    },
-    "mixedtailret" => {
-        let (val, msg) = crate::p4_calls::kuna_mixedtailret::OptionMixedTailRet.apply(p1)?;
-        self.mixed_tail_ret = val;
-        Ok(msg)
-    },
-    "cachereturn" => {
-        let (val, msg) = crate::p4_calls::kuna_cachereturn::OptionCacheReturn.apply(p1)?;
-        self.cache_return = val;
-        Ok(msg)
-    },
+    "passthrough" => registered!(crate::kuna_passthrough::PassThrough),
+    "mixedtailret" => registered!(crate::kuna_mixedtailret::MixedTailRet),
+    "cachereturn" => registered!(crate::kuna_cachereturn::CacheReturn),
     "varargsharedfloat" => registered!(crate::kuna_varargsharedfloat::VarargSharedFloat),
     "calloverlap" => registered!(crate::p3_dataflow::kuna_calloverlap::CallOverlap),
-    "spillargtrial" => {
-        let (val, msg) =
-            crate::p4_calls::kuna_spillargtrial::OptionSpillArgTrial.apply(p1)?;
-        self.spill_arg_trial = val;
-        Ok(msg)
-    },
+    "spillargtrial" => registered!(crate::kuna_spillargtrial::SpillArgTrial),
     "indexaliasguard" => registered!(crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard),
     "callarrayextent" => registered!(crate::kuna_callarrayextent::CallArrayExtent),
     "stackstruct" => registered!(crate::kuna_stackstruct::StackStruct),
@@ -446,121 +265,31 @@ kuna_options! { self, p1;
     "strlenscan" => registered!(crate::kuna_strlenscan::StrlenScan),
     "repstring" => registered!(crate::kuna_repstring::RepString),
     "copyrun" => registered!(crate::kuna_copyrun::CopyRun),
-    "regionstructure" => {
-        let (val, msg) =
-            crate::p8_structure::region_structurer::OptionRegionStructure.apply(p1)?;
-        self.region_structure = val;
-        Ok(msg)
-    },
-    "guardarm" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_ifnoexit::OptionGuardArm.apply(p1)?;
-        self.guard_arm = val;
-        Ok(msg)
-    },
-    "loopcondhoist" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_ifnoexit::OptionLoopCondHoist.apply(p1)?;
-        self.loop_cond_hoist = val;
-        Ok(msg)
-    },
+    "regionstructure" => registered!(crate::region_structurer::RegionStructure),
+    "guardarm" => registered!(crate::kuna_ifnoexit::GuardArm),
+    "loopcondhoist" => registered!(crate::kuna_ifnoexit::LoopCondHoist),
     "loopcontinue" => registered!(crate::kuna_loopcontinue::LoopContinue),
-    "postinc" => on_off!(post_increment, "Pointer steps folded into *p++"),
+    "postinc" => registered!(crate::kuna_coreoptions::PostIncrement),
     "regionlooprefine" => registered!(crate::region_structurer::RegionLoopRefine),
     "regionedgeorder" => registered!(crate::region_structurer::RegionEdgeOrder),
-    "outline" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_outline::OptionOutline.apply(p1)?;
-        self.outline_spec = val;
-        Ok(msg)
-    },
+    "outline" => registered!(crate::kuna_outline::OutlineOption),
     "condfold" => registered!(crate::p8_structure::kuna_condfold::CondFold),
-    "implweight" => {
-        let field = p1.trim();
-        if field == "off" {
-            self.impl_weight = 0;
-            return Ok("Implied-expression weight limit turned off".to_string());
-        }
-        match field.parse::<i32>() {
-            Ok(n) if (2..=64).contains(&n) => {
-                self.impl_weight = n;
-                Ok(format!("An expression prints inline while its terms times its uses is at most {n}"))
-            }
-            _ => Err(KunaError::parse("Must specify off or a weight from 2 to 64")),
-        }
-    },
+    "implweight" => registered!(crate::coreaction_cleanup::ImplWeight),
     "condstmts" => registered!(crate::p8_structure::kuna_condstmts::CondStmts),
     "gotoreduce" => registered!(crate::p8_structure::kuna_gotoreduce::GotoReduceMode),
-    "ifelseflatten" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_ifelseflatten::OptionIfElseFlatten.apply(p1)?;
-        self.flatten_ifelse = val;
-        Ok(msg)
-    },
-    "crossjumprevert" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_crossjumpreverter::OptionCrossJumpReverter.apply(p1)?;
-        self.revert_cross_jumps = val;
-        Ok(msg)
-    },
-    "dedupitetail" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_dedupitetail::OptionDedupIteTail.apply(p1)?;
-        self.dedup_ite_tail = val;
-        Ok(msg)
-    },
-    "iteregion" => {
-        let (val, msg) = crate::p8_structure::kuna_iteregion::OptionIteRegion.apply(p1)?;
-        self.iteregion = val;
-        Ok(msg)
-    },
+    "ifelseflatten" => registered!(crate::kuna_ifelseflatten::FlattenIfelse),
+    "crossjumprevert" => registered!(crate::kuna_crossjumpreverter::RevertCrossJumps),
+    "dedupitetail" => registered!(crate::kuna_dedupitetail::DedupIteTail),
+    "iteregion" => registered!(crate::kuna_iteregion::Iteregion),
     "iteexpr" => registered!(crate::kuna_iteregion::Iteexpr),
-    "iteboolean" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_iteboolean::OptionIteBoolean.apply(p1)?;
-        self.iteboolean = val;
-        Ok(msg)
-    },
-    "paramcopyhoist" => {
-        let (val, msg) =
-            crate::p6_variables::kuna_paramcopyhoist::OptionParamCopyHoist.apply(p1)?;
-        self.param_copy_hoist = val;
-        Ok(msg)
-    },
-    "returndup" => {
-        let (val, calls, msg) =
-            crate::p8_structure::kuna_returndup::OptionReturnDup.apply(p1)?;
-        self.duplicate_shared_returns = val;
-        self.duplicate_call_returns = calls;
-        Ok(msg)
-    },
-    "rettriangle" => {
-        let (val, msg) = crate::p8_structure::kuna_rettriangle::OptionRetTriangle.apply(p1)?;
-        self.returndup_triangle = val;
-        Ok(msg)
-    },
-    "earlyreturn" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_earlyreturn::OptionEarlyReturn.apply(p1)?;
-        self.early_return = val;
-        Ok(msg)
-    },
-    "switchreturn" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_switchreturn::OptionSwitchReturn.apply(p1)?;
-        self.switch_return = val;
-        Ok(msg)
-    },
-    "foldcallret" => {
-        let (val, msg) = crate::kuna_callretfold::OptionFoldCallRet.apply(p1)?;
-        self.fold_call_returns = val;
-        Ok(msg)
-    },
-    "indirectonly" => {
-        let (val, msg) = crate::kuna_indirectonly::OptionIndirectOnly.apply(p1)?;
-        self.mark_indirect_only = val;
-        Ok(msg)
-    },
+    "iteboolean" => registered!(crate::kuna_iteboolean::Iteboolean),
+    "paramcopyhoist" => registered!(crate::kuna_paramcopyhoist::ParamCopyHoist),
+    "returndup" => registered!(crate::kuna_returndup::ReturnDup),
+    "rettriangle" => registered!(crate::kuna_coreoptions::RetTriangle),
+    "earlyreturn" => registered!(crate::kuna_earlyreturn::EarlyReturn),
+    "switchreturn" => registered!(crate::kuna_switchreturn::SwitchReturn),
+    "foldcallret" => registered!(crate::kuna_callretfold::FoldCallReturns),
+    "indirectonly" => registered!(crate::kuna_indirectonly::MarkIndirectOnly),
     "impliedrefs" => {
         let (val, msg) = crate::kuna_impliedrefs::OptionImpliedRefs.apply(p1)?;
         self.max_implied_ref = val;
@@ -592,28 +321,15 @@ kuna_options! { self, p1;
         registered!(crate::kuna_securitycheck::StripSecurityCheck)
     },
     "branchflip" => registered!(crate::blockaction::BranchFlip),
-    "loopbreak_recovery" => {
-        let (val, msg) =
-            crate::kuna_loopbreak_recovery::OptionLoopBreakRecovery.apply(p1)?;
-        self.recover_loop_break = val;
-        Ok(msg)
-    },
-    "namestyle" => {
-        let (val, msg) = crate::kuna_naming::OptionNameStyle.apply(p1)?;
-        self.name_style_angr = val;
-        Ok(msg)
-    },
+    "loopbreak_recovery" => registered!(crate::kuna_loopbreak_recovery::RecoverLoopBreak),
+    "namestyle" => registered!(crate::kuna_coreoptions::NameStyleAngr),
     "realtypes" => registered!(crate::printc::Realtypes),
-    "ctypes" => on_off!(ctypes, "valid-C core type spelling"),
-    "callmechanisms" => {
-        let (mode, msg) = crate::kuna_callmechanisms::OptionCallMechanisms.apply(p1)?;
-        self.call_mechanism_mode = mode;
-        Ok(msg)
-    },
-    "dexmodel" => on_off!(dex_model, "DEX constant pool and register payloads"),
-    "jumpassist" => on_off!(jump_assist, "jump-assist switch recovery"),
+    "ctypes" => registered!(crate::kuna_coreoptions::CTypes),
+    "callmechanisms" => registered!(crate::kuna_callmechanisms::CallMechanismMode),
+    "dexmodel" => registered!(crate::kuna_coreoptions::DexModel),
+    "jumpassist" => registered!(crate::kuna_coreoptions::JumpAssist),
     "javanew" => registered!(crate::kuna_javanew::JavaNew),
-    "javatry" => on_off!(java_try, "Java try/catch from a DEX method's try items"),
+    "javatry" => registered!(crate::kuna_coreoptions::JavaTry),
     "voidtailreturn" => registered!(crate::printc::Voidtailreturn),
     "dirtypool" => registered!(crate::action::DirtyPool),
     "latecse" => registered!(crate::kuna_latecse::LateCse),
@@ -634,89 +350,38 @@ kuna_options! { self, p1;
     "declorder" => registered!(crate::kuna_declorder::DeclOrder),
     "castwiden" => registered!(crate::kuna_castwiden::CastWidenMode),
     "ptrdepthcap" => registered!(crate::coreaction_infertypes::Ptrdepthcap),
-    "calltargettype" => on_off!(call_target_type, "indirect-call target types"),
-    "floatglobals" => on_off!(float_globals, "float typing of globals moved only through float registers"),
-    "itaniumeh" => {
-        let catch = p1.trim().eq_ignore_ascii_case("catch");
-        self.itanium_eh = catch || on_or_off(p1)?;
-        self.itanium_eh_catch_only = catch;
-        Ok(format!("Itanium exception edges to landing pads turned {}", if catch { "catch" } else if self.itanium_eh { "on" } else { "off" }))
-    },
-    "vexzeroupper" => on_off!(vex_zero_upper, "VEX zero-upper writes split at the result width"),
-    "vectorabi" => on_off!(vector_abi, "SysV x86-64 vector arguments and returns"),
-    "lanefuse" => {
-        let v = p1.trim().to_ascii_lowercase();
-        let (on, all) = match v.as_str() {
-            "all" => (true, true),
-            _ => (on_or_off(p1)?, false),
-        };
-        self.lane_fuse = on;
-        self.lane_fuse_all = all;
-        Ok(format!("Per-lane vector p-code re-fused into one intrinsic turned {}", if all { "all" } else if on { "on" } else { "off" }))
-    },
+    "calltargettype" => registered!(crate::kuna_coreoptions::CallTargetType),
+    "floatglobals" => registered!(crate::kuna_coreoptions::FloatGlobalsOn),
+    "itaniumeh" => registered!(crate::kuna_itaniumeh::ItaniumEh),
+    "vexzeroupper" => registered!(crate::kuna_coreoptions::VexZeroUpper),
+    "vectorabi" => registered!(crate::kuna_coreoptions::VectorAbi),
+    "lanefuse" => registered!(crate::kuna_coreoptions::LaneFuse),
     "strcodelen" => registered!(crate::kuna_analysisgates::Strcodelen),
     "mba" => registered!(crate::kuna_mba::Mba),
     "avxintrinsics" => registered!(crate::printc::AvxIntrinsics),
     "x87depth" => registered!(crate::kuna_x87depth::X87Depth),
-    "trapaftercall" => on_off!(trap_after_call, "no-return evidence from a trap after a call"),
+    "trapaftercall" => registered!(crate::kuna_coreoptions::TrapAfterCall),
     "retpolinethunk" => registered!(crate::kuna_retpolinethunk::RetpolineThunk),
     "varargsave" => registered!(crate::kuna_varargsave::VarargSave),
     "alloca" => registered!(crate::kuna_alloca::AllocaCalls),
     "boolbyte" => registered!(crate::kuna_boolbyte::BoolByte),
     "charbyte" => registered!(crate::kuna_charbyte::CharByte),
-    "castarith" => on_off!(cast_arith, "pointer arithmetic in pointer terms"),
-    "castindex" => on_off!(cast_index, "variable indexes and pointer differences in pointer terms"),
+    "castarith" => registered!(crate::kuna_coreoptions::CastArith),
+    "castindex" => registered!(crate::kuna_coreoptions::CastIndex),
     "ptrfromuse" => registered!(crate::p5_types::kuna_ptrfromuse::PtrFromUseMode),
     "charptr" => registered!(crate::kuna_charptr::CharPtr),
     "cstringconst" => registered!(crate::kuna_cstringconst::CstringConst),
-    "elemptr" => {
-        let (val, msg) = crate::p5_types::kuna_elemptr::OptionElemPtr.apply(p1)?;
-        self.elem_ptr = val;
-        Ok(msg)
-    },
-    "protoorder" => {
-        let (mode, msg) = crate::kuna_protoorder::OptionProtoOrder.apply(p1)?;
-        self.protoorder = mode;
-        Ok(msg)
-    },
-    "calleevote" => {
-        let (mode, msg) = crate::kuna_calleevote::OptionCalleeVote.apply(p1)?;
-        self.calleevote = mode;
-        Ok(msg)
-    },
+    "elemptr" => registered!(crate::kuna_elemptr::ElemPtr),
+    "protoorder" => registered!(crate::kuna_protoorder::ProtoOrderMode),
+    "calleevote" => registered!(crate::kuna_calleevote::CalleeVoteMode),
     "callerptr" => registered!(crate::kuna_callerptr::CallerPtr),
-    "calleereginputs" => {
-        let (on, custom) = match p1.trim().to_ascii_lowercase().as_str() {
-            "custom" => (true, true),
-            "" | "on" => (true, false),
-            "off" => (false, false),
-            _ => return Err(KunaError::parse("Must specify off, on or custom")),
-        };
-        self.callee_reginputs = on;
-        self.callee_reginputs_custom = custom;
-        Ok(format!(
-            "Callee register-input call models set to {}",
-            if custom { "custom" } else if on { "on" } else { "off" }
-        ))
-    },
+    "calleereginputs" => registered!(crate::kuna_calleereginputs::CalleeRegInputs),
 
-    "storetype" => {
-        let mode = crate::kuna_storetype::StoreTypeMode::parse(p1.trim()).map_err(KunaError::parse)?;
-        self.storetype = mode;
-        Ok(format!("global typing from stored values set to {}", mode.as_str()))
-    },
-    "callbacktype" => {
-        let (mode, msg) = crate::kuna_callbacktype::OptionCallbackType.apply(p1)?;
-        self.callbacktype = mode;
-        Ok(msg)
-    },
+    "storetype" => registered!(crate::kuna_storetype::StoreTypeMode),
+    "callbacktype" => registered!(crate::kuna_callbacktype::CallbackTypeMode),
     "cortexmpriv" => registered!(crate::kuna_cortexmpriv::Cortexmpriv),
     "acleintrinsics" => registered!(crate::kuna_memtag::AcleIntrinsics),
-    "dedupvardecls" => {
-        let (val, msg) = crate::kuna_dedupvardecls::OptionDedupVarDecls.apply(p1)?;
-        self.dedup_var_decls = val;
-        Ok(msg)
-    },
+    "dedupvardecls" => registered!(crate::kuna_dedupvardecls::DedupVarDecls),
     "noreturn_known" => registered!(crate::kuna_analysisgates::NoreturnKnown),
     "libgccsigs" => registered!(crate::kuna_analysisgates::Libgccsigs),
     "gotypeglobals" => registered!(crate::kuna_analysisgates::GoTypeGlobals),
@@ -764,28 +429,7 @@ kuna_options! { self, p1;
     "addrtakenentry" => {
         registered!(crate::kuna_analysisgates::Addrtakenentry)
     },
-    "flowmode" => {
-        let (on, after_call) = match p1.trim().to_ascii_lowercase().as_str() {
-            "on" | "1" | "true" => (true, false),
-            "aftercall" => (true, true),
-            "off" | "0" | "false" => (false, false),
-            other => {
-                return Err(KunaError::lowlevel(format!(
-                    "flowmode: expected `on`, `aftercall` or `off`, got `{other}`"
-                )))
-            }
-        };
-        self.analysis_flowmode = on;
-        self.analysis_flowmode_aftercall = after_call;
-        Ok(format!(
-            "ARM flow-proven decode-mode paints turned {}",
-            match (on, after_call) {
-                (false, _) => "off",
-                (true, false) => "on",
-                (true, true) => "on, past calls proven to return",
-            }
-        ))
-    },
+    "flowmode" => registered!(crate::kuna_analysisgates::FlowMode),
     "elfmain" => {
         registered!(crate::kuna_analysisgates::Elfmain)
     },
@@ -810,17 +454,7 @@ kuna_options! { self, p1;
     "funcstart_patterns" => {
         registered!(crate::kuna_analysisgates::FuncstartPatterns)
     },
-    "armframes" => {
-        let (inventory, full) = if p1 == "inventory" {
-            (true, false)
-        } else {
-            let on = on_or_off(p1)?;
-            (on, on)
-        };
-        self.analysis_armframes = inventory;
-        self.analysis_armframes_full = full;
-        Ok(format!("Validated ARM frame recovery set to {p1}"))
-    },
+    "armframes" => registered!(crate::kuna_analysisgates::ArmFrames),
     "cortexmvectors" => {
         registered!(crate::kuna_analysisgates::Cortexmvectors)
     },
@@ -904,38 +538,13 @@ kuna_options! { self, p1;
         Ok(format!("symbol-name character sanitizing set to {}", mode.as_str()))
     },
     "dwarf" => registered!(crate::kuna_analysisgates::Dwarf),
-    "cvftrace" => {
-        let (names, lines) = match p1.trim().to_ascii_lowercase().as_str() {
-            "on" | "1" | "true" => (true, false),
-            "lines" => (true, true),
-            "off" | "0" | "false" => (false, false),
-            other => {
-                return Err(KunaError::lowlevel(format!(
-                    "cvftrace: expected `on`, `lines` or `off`, got `{other}`"
-                )))
-            }
-        };
-        self.analysis_cvftrace = names;
-        self.analysis_cvftrace_lines = lines;
-        Ok(format!(
-            "CVF .trace routine names turned {}",
-            match (names, lines) {
-                (false, _) => "off",
-                (true, false) => "on",
-                (true, true) => "on, with source-line comments",
-            }
-        ))
-    },
+    "cvftrace" => registered!(crate::kuna_analysisgates::CvfTrace),
     "dwarf_lines" => {
         registered!(crate::kuna_analysisgates::DwarfLines)
     },
     "dwarfnocall" => registered!(crate::kuna_analysisgates::Dwarfnocall),
     "godwarfsig" => registered!(crate::kuna_analysisgates::Godwarfsig),
-    "cppsig" => {
-        let (mode, msg) = crate::kuna_cppsig::parse_cppsig_mode(p1)?;
-        self.analysis_cppsig = mode;
-        Ok(msg)
-    },
+    "cppsig" => registered!(crate::kuna_cppsig::CppSigMode),
     "dwarfglobaltypes" => registered!(crate::kuna_analysisgates::Dwarfglobaltypes),
     "dwarfscopes" => {
         let val = on_or_off(p1)?;
@@ -946,11 +555,7 @@ kuna_options! { self, p1;
     },
     "addrtable" => registered!(crate::kuna_analysisgates::Addrtable),
     "operand_refs" => registered!(crate::kuna_analysisgates::OperandRefs),
-    "formatstring" => {
-        let (mode, msg) = crate::kuna_formatstring::parse_formatstring_mode(p1)?;
-        self.analysis_formatstring = mode;
-        Ok(msg)
-    },
+    "formatstring" => registered!(crate::kuna_formatstring::FormatStringMode),
     "formatcallees" => registered!(crate::kuna_analysisgates::FormatCallees),
     "listing" => registered!(crate::kuna_analysisgates::Listing),
     "fast_funcdisc" => {
@@ -972,33 +577,14 @@ kuna_options! { self, p1;
     "noreturn_reach" => {
         registered!(crate::kuna_analysisgates::NoreturnReach)
     },
-    "fid" => {
-        let (enabled, strict) = match p1 {
-            "off" => (false, false),
-            "" | "on" => (true, false),
-            "strict" => (true, true),
-            _ => return Err(KunaError::parse("fid expects on, off, or strict")),
-        };
-        self.analysis_fid = enabled;
-        self.analysis_fid_strict = strict;
-        let state = if strict { "strict" } else if enabled { "on" } else { "off" };
-        Ok(format!("FID fingerprint matcher set to {state}"))
-    },
+    "fid" => registered!(crate::kuna_analysisgates::Fid),
     "rtti" => registered!(crate::kuna_analysisgates::Rtti),
     "itaniumrtti" => {
         registered!(crate::kuna_analysisgates::Itaniumrtti)
     },
-    "vtabletypes" => on_off!(analysis_vtabletypes, "typed C++ vtables and vtable slot folding"),
-    "aif" => {
-        let (mode, msg) = crate::kuna_aif::parse_aif_mode(p1)?;
-        self.analysis_aif = mode;
-        Ok(msg)
-    },
-    "esprom" => {
-        let (value, msg) = crate::kuna_esprom::parse_esprom(p1)?;
-        self.esprom = value;
-        Ok(msg)
-    },
+    "vtabletypes" => registered!(crate::kuna_coreoptions::Vtabletypes),
+    "aif" => registered!(crate::kuna_aif::AifMode),
+    "esprom" => registered!(crate::kuna_esprom::EspRom),
     "aifpoolslide" => {
         registered!(crate::kuna_analysisgates::Aifpoolslide)
     },
@@ -1025,7 +611,7 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Nameladder)
     },
     "flirt" => {
-        on_off!(analysis_flirt, "FLIRT signature matching")
+        registered!(crate::kuna_coreoptions::Flirt)
     },
     "fidproto" => {
         registered!(crate::kuna_fidproto::Fidproto)
@@ -1034,7 +620,7 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Codestrings)
     },
     "protomerge" => {
-        on_off!(analysis_protomerge, "Slot-by-slot merge of load-time prototypes")
+        registered!(crate::kuna_coreoptions::Protomerge)
     },
 
     "calltable" => registered!(crate::kuna_analysisgates::Calltable),
@@ -1043,16 +629,7 @@ kuna_options! { self, p1;
     "objc" => registered!(crate::kuna_analysisgates::Objc),
     "panicloc" => registered!(crate::kuna_analysisgates::Panicloc),
     "swiftmetadata" => registered!(crate::kuna_analysisgates::Swiftmetadata),
-    "cfstrings" => {
-        let (pass, annotate) = match p1 {
-            "annotate" => (true, true),
-            other => (on_or_off(other)?, false),
-        };
-        self.analysis_cfstrings = pass;
-        self.cfstrings_annotate = annotate;
-        let state = if annotate { "on, annotated" } else if pass { "on" } else { "off" };
-        Ok(format!("Mach-O __cfstring constant-string recovery pass turned {state}"))
-    },
+    "cfstrings" => registered!(crate::kuna_analysisgates::CfStrings),
     "blobs" => registered!(crate::kuna_analysisgates::Blobs),
     "swifttypes" => registered!(crate::kuna_analysisgates::Swifttypes),
     "swifthelpers" => registered!(crate::kuna_analysisgates::Swifthelpers),
@@ -1074,21 +651,7 @@ kuna_options! { self, p1;
             None => "Objective-C SDK headers off".to_string(),
         })
     },
-    "iokitclasses" => {
-        let (names, types) = match p1 {
-            "on" => (true, true),
-            "names" => (true, false),
-            "off" => (false, false),
-            other => {
-                return Err(KunaError::parse(format!(
-                    "iokitclasses takes on|names|off, not {other:?}"
-                )));
-            }
-        };
-        self.analysis_iokitclasses = names;
-        self.analysis_iokittypes = types;
-        Ok(format!("IOKit class and vtable recovery set to {p1}"))
-    },
+    "iokitclasses" => registered!(crate::kuna_analysisgates::IokitClasses),
     "xnutables" => registered!(crate::kuna_analysisgates::Xnutables),
     "osclassinfo" => registered!(crate::kuna_analysisgates::Osclassinfo),
     "swiftcall" => registered!(crate::kuna_swiftcall::Swiftcall),

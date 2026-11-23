@@ -742,7 +742,12 @@ fn vn_type(data: &mut Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
 /// Walk the op bank once and accumulate the access evidence per base.
 fn collect(data: &mut Funcdata) -> BTreeMap<VarnodeId, Evidence> {
     let mut ev: BTreeMap<VarnodeId, Evidence> = BTreeMap::new();
-    let keep_values = data.get_arch().field_type || crate::kuna_fieldtype::trace_on();
+    let keep_values = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::FieldType>()
+        .0
+        || crate::kuna_fieldtype::trace_on();
 
     for opc in [OpCode::CPUI_LOAD, OpCode::CPUI_STORE] {
         let ops: Vec<_> = data.obank().iter_code(opc).collect();
@@ -1110,10 +1115,18 @@ fn synthesize(data: &mut Funcdata) -> bool {
         return false;
     };
     let raw = collect(data);
-    let nests = data.get_arch().struct_synth.nests();
+    let nests = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_structsynth::StructSynthMode>()
+        .nests();
     let ptrsize = types.get_size_of_pointer();
     let mut asks = Vec::new();
-    let field_type = data.get_arch().field_type;
+    let field_type = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::FieldType>()
+        .0;
     for (base, e) in by_creation(data, &raw) {
         let mut e = e.pruned();
         if !accepts(data, *base, &e) {
@@ -1169,7 +1182,12 @@ fn synthesize(data: &mut Funcdata) -> bool {
     // earlier answer superseded, which a `--jobs` replay cannot reproduce; asked
     // widest first, a later layout never contains an earlier one. Parameters
     // alone keep the order `param` always had.
-    if data.get_arch().struct_synth.locals() {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_structsynth::StructSynthMode>()
+        .locals()
+    {
         asks.sort_by(|a, b| b.1.cmp(&a.1));
     }
 
@@ -1283,7 +1301,14 @@ fn accepts(data: &mut Funcdata, base: VarnodeId, e: &Evidence) -> bool {
     // A record is synthesized over a parameter, under `locals` over a pointer a
     // call returned, and under `nest` over what a record's pointer fields hold
     // ([`nest`]).
-    if !v.is_input() && !(data.get_arch().struct_synth.locals() && is_local_base(data, base, e)) {
+    if !v.is_input()
+        && !(data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_structsynth::StructSynthMode>()
+            .locals()
+            && is_local_base(data, base, e))
+    {
         return false;
     }
     // A user/DWARF/declared type is authoritative.
@@ -1782,7 +1807,13 @@ impl Action for ActionStructSynth {
         self.requested = false;
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().struct_synth.fires() || self.fired {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_structsynth::StructSynthMode>()
+            .fires()
+            || self.fired
+        {
             return 0;
         }
         if !self.requested && wants_settle_pass(data) {
@@ -1805,6 +1836,23 @@ impl Action for ActionStructSynth {
             self.base.count += 1;
         }
         0
+    }
+}
+
+impl crate::kuna_optionset::KunaOption for StructSynthMode {
+    const NAME: &'static str = "structsynth";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        crate::p5_types::kuna_structsynth::StructSynthMode::Locals
+    }
+
+    fn shipped() -> Self {
+        crate::kuna_structsynth::StructSynthMode::Locals
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        Ok(crate::kuna_structsynth::OptionStructSynth.apply(value)?)
     }
 }
 

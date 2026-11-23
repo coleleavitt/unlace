@@ -515,7 +515,13 @@ fn plan(data: &Funcdata, w: BlockId, targets: &BTreeSet<BlockId>) -> Option<Opti
 /// Print each qualifying guarded do-while as a while loop (see the module docs);
 /// returns how many loops changed.
 pub(crate) fn guardedloop_apply(data: &mut Funcdata) -> i32 {
-    if !data.get_arch().guarded_loop || data.sblocks_get_size() == 0 {
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::GuardedLoop>()
+        .0
+        || data.sblocks_get_size() == 0
+    {
         return 0;
     }
     let root = data.sblocks_root();

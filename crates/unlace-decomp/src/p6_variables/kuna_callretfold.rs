@@ -608,11 +608,35 @@ impl OptionFoldCallRet {
     pub const NAME: &'static str = "foldcallret";
 
     /// Parse `on|off` and return the resolved flag + confirmation message.  The
-    /// caller writes the flag into `Architecture::fold_call_returns`.
+    /// caller writes the flag into the registered option `FoldCallReturns`.
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Call-return variable folding turned {prop}")))
+    }
+}
+
+/// (kuna) Fold an order-safe single-use call return into its use site
+/// (`fold_call_returns`, DIV-14 default-on; angr "call return variable
+/// folding").
+#[derive(Clone, Debug, PartialEq)]
+pub struct FoldCallReturns(pub bool);
+
+impl crate::kuna_optionset::KunaOption for FoldCallReturns {
+    const NAME: &'static str = "foldcallret";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        FoldCallReturns(false)
+    }
+
+    fn shipped() -> Self {
+        FoldCallReturns(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (v, msg) = crate::kuna_callretfold::OptionFoldCallRet.apply(value)?;
+        Ok((FoldCallReturns(v), msg))
     }
 }
 

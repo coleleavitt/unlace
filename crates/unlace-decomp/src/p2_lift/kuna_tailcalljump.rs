@@ -82,13 +82,13 @@ pub const ELEM_TAILCALLJUMP: ElementId = ElementId::new("tailcalljump", 4101);
 /// STUB(W4): the flag is carried as a plain `bool` whose [`Default`] mirrors the
 /// *shipped* default (`option tailcalljump off`, i.e. \b false — kept opt-in
 /// default-off because default-on regresses 2 datatests (`Long double #1/#2`),
-/// matching `Architecture::reset_defaults_internal`).  W9's option dispatch flips
-/// `Architecture::tail_call_jumps`; [`apply`](TailCallJumpOption::apply)
+/// matching `Architecture::reset_defaults_internal`).  The option dispatch sets
+/// [`TailCallJump`]; [`apply`](TailCallJumpOption::apply)
 /// transcribes the `onOrOff(p1)` body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TailCallJumpOption {
     /// True if a direct `jmp` to another function's entry is recovered as a tail
-    /// call (`Architecture::tail_call_jumps`).
+    /// call ([`TailCallJump::jumps`]).
     pub enabled: bool,
 }
 
@@ -323,6 +323,39 @@ pub fn output_stated_by_pieces(pieces: Option<&PrototypePieces>) -> bool {
 /// a tail call's return value, so it would print `void`.
 pub fn tail_call_states_the_body(callee: Option<StatedCallee>, own_output_stated: bool) -> bool {
     callee.is_some_and(|c| c.returns_nothing || own_output_stated)
+}
+
+/// (kuna `tailcalljump`) The two gates the option sets: recover direct jumps
+/// to another function's entry (`jumps`), and one-destination computed jumps
+/// too (`tables`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TailCallJump {
+    pub jumps: bool,
+    pub tables: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for TailCallJump {
+    const NAME: &'static str = "tailcalljump";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        TailCallJump {
+            jumps: false,
+            tables: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        TailCallJump {
+            jumps: true,
+            tables: true,
+        }
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        let (jumps, tables, msg) = tail_call_mode(value)?;
+        Ok((TailCallJump { jumps, tables }, msg.to_string()))
+    }
 }
 
 #[cfg(test)]

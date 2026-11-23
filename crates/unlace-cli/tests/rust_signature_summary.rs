@@ -261,7 +261,10 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
             .arch_mut()
             .kuna_options
             .set(unlace_decomp::kuna_analysisgates::Listing(listing));
-        program.arch_mut().analysis_flirt = false;
+        program
+            .arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_coreoptions::Flirt(false));
         program.request_rust_profiles(Request {
             candidates: vec![Profile {
                 version: (1, 88, 0),
@@ -298,7 +301,13 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
                 .0,
             listing
         );
-        assert!(!program.arch().analysis_flirt);
+        assert!(
+            !program
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::Flirt>()
+                .0
+        );
         program.commit_pending_analysis().unwrap();
         assert_eq!(program.rust_profile_report(), Some(&first));
         assert_eq!(
@@ -309,7 +318,13 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
                 .0,
             listing
         );
-        assert!(!program.arch().analysis_flirt);
+        assert!(
+            !program
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::Flirt>()
+                .0
+        );
     }
 }
 
@@ -715,7 +730,10 @@ fn application_consumes_one_observation_and_console_rejects_effective_overlays()
             .options(&LoadOptions::default())
             .object(binary.to_str().unwrap())
             .unwrap();
-        program.arch_mut().analysis_flirt = false;
+        program
+            .arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_coreoptions::Flirt(false));
         program
             .arch_mut()
             .kuna_options

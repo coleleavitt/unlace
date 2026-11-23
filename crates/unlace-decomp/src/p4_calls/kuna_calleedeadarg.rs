@@ -1921,8 +1921,16 @@ pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data
     // `argclobber` reads this probe only as a veto on a drop its recovered-
     // prototype clause already admitted, so with nothing parked it can never
     // consult it and the decode is pure cost.
-    let clobber_veto = arch.arg_clobber && !arch.kuna_protoorder_types.is_empty();
-    let pass_through = arch.pass_through && !arch.kuna_protoorder_types.is_empty();
+    let clobber_veto = arch
+        .kuna_options
+        .get::<crate::kuna_argclobber::ArgClobber>()
+        .0
+        && !arch.kuna_protoorder_types.is_empty();
+    let pass_through = arch
+        .kuna_options
+        .get::<crate::kuna_passthrough::PassThrough>()
+        .0
+        && !arch.kuna_protoorder_types.is_empty();
     let reg_idx = arch
         .manage()
         .get_space_by_name("register")

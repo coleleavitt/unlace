@@ -3,7 +3,7 @@
 ```yaml
 Anchors:
   - crates/unlace-analysis/src
-  - crates/unlace-decomp/src/p1_partition
+  - crates/unlace-lift/src/p1_partition
 ```
 
 Everything in this chapter runs **before any function is decompiled**. The
@@ -460,7 +460,7 @@ The AArch64 C model already has a zero extra pop.
 (`crates/unlace-middle/src/infra/architecture.rs
 (kuna_go_stack_default)`, run right after the cspec's models are registered).
 The register ABI reached amd64 in go1.17 and arm64 in go1.18
-(`crates/unlace-decomp/src/p1_partition/kuna_goreg.rs
+(`crates/unlace-lift/src/p1_partition/kuna_goreg.rs
 (register_abi)`); 386 never got it, and its golang cspec already defaults to
 `abi0`. An older image passes every argument on the stack, so under
 `abi-internal` its calls lost all their arguments (`main.add3();` in a go1.16
@@ -535,7 +535,7 @@ splits at the starts it has evidence for.
 
 (kuna) **With the golang cspec active, the goroutine register becomes the
 named, typed global `g`** (always on;
-`crates/unlace-decomp/src/p1_partition/kuna_goreg.rs`, installed by
+`crates/unlace-lift/src/p1_partition/kuna_goreg.rs`, installed by
 the architecture build right after the cspec `<global>` decode —
 `crates/unlace-middle/src/infra/architecture.rs (kuna_install_goreg)`).
 The register ABI pins the current goroutine in a register — `R14` on amd64,
@@ -558,7 +558,7 @@ inside the cspec decode, upstream of every per-image fact write. The image's
 own version wins over a release the caller stated; a load without explicit
 options publishes it as `KUNA_GOVERSION`, and clears that variable for an image
 with no version, so a stale value from an earlier load cannot leak in. It selects the release's layout
-(`crates/unlace-decomp/src/p1_partition/kuna_goreg.rs (GoLayout)`):
+(`crates/unlace-lift/src/p1_partition/kuna_goreg.rs (GoLayout)`):
 go1.23 inserted `g.syscallbp`, go1.25 dropped `gobuf.ret`, and with both
 perturbations the liblink-stable anchors (`stackguard0` 0x10, `_panic` 0x20,
 `m` 0x30, `stktopsp`..`goid` 0x80..0x98) land identically while
@@ -2060,7 +2060,7 @@ with another known segment in DS while DGROUP comes back afterwards is
 recorded as entered with another DS: Borland C++'s StartExit walks the `_INIT_`
 and `_EXIT_` tables through DS. The segment is stated as DS's tracked value
 over the load module
-(`crates/unlace-decomp/src/p1_partition/kuna_mzdgroup.rs (apply)`),
+(`crates/unlace-lift/src/p1_partition/kuna_mzdgroup.rs (apply)`),
 keeping every other tracked register (the spec's `DF = 0`), and is left out at
 the entry address, where DS holds the PSP, and at each routine recorded as
 entered with another DS. `ActionConstbase` then starts each
@@ -3238,7 +3238,7 @@ funcsym stream:
   walk runs on every read of the import stream, so each demangled
   classification is memoized per thread.
 - **In-code literal pools** (kuna, `litpoolconst`, always on, DIV-136,
-  `crates/unlace-decomp/src/p1_partition/kuna_litpoolconst.rs`): the
+  `crates/unlace-lift/src/p1_partition/kuna_litpoolconst.rs`): the
   third user of the same "constant by construction, not by policy" exception, and
   the one that needs no loader pass at all — only the section table the loader
   already reports.
@@ -3691,7 +3691,7 @@ inside that reservation, so a slot never shares an address with a COMMON object
 or an extern; a field address or slot that cannot be represented is skipped or
 diagnosed, never wrapped. Other architectures reserve nothing and keep their
 COMMON addresses.
-`crates/unlace-decomp/src/p2_lift/kuna_nullable_reloc.rs (materialize)`
+`crates/unlace-lift/src/p2_lift/kuna_nullable_reloc.rs (materialize)`
 replaces only a uniquely matched supported operand with a slot load and the
 relocation's arithmetic. MIPS HI16/LO16/HIGHER/HIGHEST preserve rounding and
 signed immediates; x86-64 absolute and PC-relative address forms preserve addends
@@ -5054,7 +5054,7 @@ moves.
     interface struct, the global or stack slot the interface out-parameter
     addresses holds a pointer to it, and that one call gets a prototype whose
     out-parameter is `INTERFACE **`
-    (`crates/unlace-decomp/src/p2_lift/kuna_callsiteproto.rs (parked)`:
+    (`crates/unlace-lift/src/p2_lift/kuna_callsiteproto.rs (parked)`:
     a prototype parked by call-instruction address, installed as the call's
     prototype override when `FlowInfo` builds the call, unless the function
     already carries an override there).
@@ -8605,7 +8605,7 @@ both
   image language's processor, address size and instruction byte order, the rule
   of Ghidra's `FidFile.canProcessLanguage`. Those facts are read from the
   `.ldefs` entries the bootstrap scanned
-  (`crates/unlace-decomp/src/p1_partition/kuna_langfamily.rs (families)`,
+  (`crates/unlace-lift/src/p1_partition/kuna_langfamily.rs (families)`,
   with the `instructionEndian` attribute the C++ decoder ignores), not from the
   id's fields, which differ for some languages: `MIPS:BE:64:64-32addr` is 32-bit,
   and BE8 ARM (`ARM:LEBE:32:*`) and big-endian AArch64 have little-endian
@@ -8991,7 +8991,7 @@ both
   each conversion to the compiler spec as a named argument, so it is sound only
   where the target passes a variadic argument exactly where it passes a named
   argument of the same type. That is a property of the ABI, recorded per target
-  by `crates/unlace-decomp/src/p1_partition/kuna_formatstring.rs
+  by `crates/unlace-lift/src/p1_partition/kuna_formatstring.rs
   (vararg_abi)` and checked for every conversion by `build_override_pieces`:
 
   - x86 (32- and 64-bit, SysV and Win64) and AArch64 under the standard AAPCS64
@@ -9530,7 +9530,7 @@ secure-PLT stub (r30-relative short/long or absolute), which is how GNU's FDE
 for stubs merged into `.text` begins. A function that only contains a
 stub-shaped sequence starts at its own prologue and keeps its FDE. The stub
 recognizer the PIC import proofs use,
-`crates/unlace-decomp/src/p2_lift/kuna_ppc32piccalls.rs (stub)`, also
+`crates/unlace-lift/src/p2_lift/kuna_ppc32piccalls.rs (stub)`, also
 serves this check and absolute-stub naming
 (`crates/unlace-analysis/src/loader/kuna_ppc32_imports.rs (stubs)`);
 stub starts are sorted once and each FDE start is a binary search.
@@ -11137,7 +11137,7 @@ than 2 instructions, no bad byte or out-of-range flow) *and* its prologue matche
 start fingerprint shared by at least 4 already-discovered functions
 (`FINGERPRINT_THRESHOLD`) — the exhaustive gap oracle for functions with no
 static or accepted pointer-table root. The option's four values are cumulative
-settings of one walk (`crates/unlace-decomp/src/p1_partition/kuna_aif.rs`):
+settings of one walk (`crates/unlace-lift/src/p1_partition/kuna_aif.rs`):
 `off` runs no walk, `on` runs it with the byte-granular cursor, `strict` with the
 aligned cursor described below, and `precise` adds upstream's second fingerprint
 test to `strict`. The `aggressive` preset sets `strict`; the whole-binary drivers
@@ -13561,7 +13561,7 @@ cooperate, each subsuming the last's blind spot; all of them emit the same
 `NoReturnFact` through the same commit arm (address-resolved
 `set_function_no_return`, §1.1), and the flow consequence — an artificial halt at
 the call site, dead fall-through never decoded — is inherited from the engine's
-flow layer (`crates/unlace-decomp/src/p2_lift/flow.rs`), never
+flow layer (`crates/unlace-lift/src/p2_lift/flow.rs`), never
 re-implemented per pass.
 
 **Known names** (`noreturn_known`,
@@ -13819,11 +13819,11 @@ can reach: in an ET_REL `.o`, a libc no-return is a UND symbol with no address a
 no PLT, so nothing above ever marks it, and flow runs off the function's end into
 alignment padding decoded as garbage `add [rax],al` statements. Under
 `noreturn_known`,
-`crates/unlace-decomp/src/p2_lift/kuna_noreturn_externmatch.rs` applies
+`crates/unlace-lift/src/p2_lift/kuna_noreturn_externmatch.rs` applies
 the same vendored name list and namespace guard *at the flow query seam*
 (`crates/unlace-decomp/src/infra/decompile_drive.rs
 (query_call_no_return)`); its sibling
-`crates/unlace-decomp/src/p2_lift/kuna_noreturnextern.rs` applies an
+`crates/unlace-lift/src/p2_lift/kuna_noreturnextern.rs` applies an
 equivalent name match in the same query, differing in name-resolution path and
 name set — it carries a frozen hard-coded copy of upstream's 21 names rather than
 reading the shipped list, so neither kuna divergence block reaches it; it is
@@ -13858,10 +13858,10 @@ namespace guard, and the mangled prefixes are exact ABI encodings of
 ## 1.8 In-engine image binding
 
 Inside the engine, P1 is the architecture/loader binding —
-`crates/unlace-decomp/src/p1_partition` — three front-ends over one base,
+`crates/unlace-lift/src/p1_partition` — three front-ends over one base,
 the C++ inheritance chain modeled by composition:
 
-- `crates/unlace-decomp/src/p1_partition/sleigh_arch.rs
+- `crates/unlace-lift/src/p1_partition/sleigh_arch.rs
   (SleighArchitecture)` is the base every path shares: resolve a language id
   against the `.ldefs` records scanned from the spec roots (the C++ file-level
   statics become an explicit `LanguageDatabase` value the bootstrap owns), find the
@@ -13870,7 +13870,7 @@ the C++ inheritance chain modeled by composition:
   upstream translator-reuse cache is deliberately not ported — it affects build
   speed only — and is the recorded loss here. (kuna) A spec root is a
   directory or a tree held in memory
-  (`crates/unlace-decomp/src/p1_partition/kuna_memoryspecs.rs
+  (`crates/unlace-lift/src/p1_partition/kuna_memoryspecs.rs
   (MemorySpecs)`): a table of `/`-separated relative paths and their contents.
   The table need not follow Ghidra's layout; one language's `.ldefs`, `.sla`,
   `.pspec` and `.cspec`, flat, form a complete root. The database mounts each
@@ -13880,11 +13880,11 @@ the C++ inheritance chain modeled by composition:
   list of roots once. A bootstrap over the result skips the `.ldefs` scan and
   reads only its own language's `.sla`, `.pspec` and `.cspec`
   (`LanguageDatabase::read_spec`), so threads may share one database.
-- `crates/unlace-decomp/src/p1_partition/xml_arch.rs (XmlArchitecture)`
+- `crates/unlace-lift/src/p1_partition/xml_arch.rs (XmlArchitecture)`
   binds the decompiler's XML `<binaryimage>` container — the datatest corpus's
   entire load path, and the reason the analysis tier can be default-on without
   touching parity: this front-end never sees an `ObjectLoadImage`.
-- `crates/unlace-decomp/src/p1_partition/raw_arch.rs
+- `crates/unlace-lift/src/p1_partition/raw_arch.rs
   (RawBinaryArchitecture)` is the catch-all leaf for a raw byte image: its file
   match always succeeds (so capability sorting pushes it last), the language must
   be supplied by the target, and the loader is a plain offset-mapped
@@ -14000,7 +14000,7 @@ descriptor (`0xABCD5432`) is the constants and the other flash segments are
 code. The language is Xtensa or RISC-V by the chip id unless `--target` names
 one.
 
-`esprom` (default `auto`; `crates/unlace-decomp/src/p1_partition/kuna_esprom.rs`
+`esprom` (default `auto`; `crates/unlace-lift/src/p1_partition/kuna_esprom.rs`
 holds the value, `crates/unlace-console/src/kuna_esprom.rs (apply)`
 applies it at the analysis commit) adds what the image does not carry. An ESP
 application calls the routines of the chip's mask ROM at fixed addresses, and

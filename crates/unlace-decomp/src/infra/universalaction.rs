@@ -61,14 +61,14 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p4_calls::kuna_spillargtrial::provide(&mut slots);
     crate::p6_variables::kuna_stackparamviews::provide(&mut slots);
     crate::p6_variables::kuna_stackviews::provide(&mut slots);
-    crate::p2_lift::kuna_syscallregs::provide(&mut slots);
+    crate::kuna_syscallregs::provide(&mut slots);
     crate::p4_calls::kuna_voidret::provide(&mut slots);
     crate::p4_calls::kuna_zeroidiomuse::provide(&mut slots);
     crate::p5_types::coreaction_infertypes::provide(&mut slots);
     crate::p8_structure::kuna_clonephiorder::provide(&mut slots);
     crate::p3_dataflow::kuna_indirectanchor::provide(&mut slots);
-    crate::p2_lift::kuna_indirectreturn::provide(&mut slots);
-    crate::p2_lift::kuna_loweredswitchexact::provide(&mut slots);
+    crate::kuna_indirectreturn::provide(&mut slots);
+    crate::kuna_loweredswitchexact::provide(&mut slots);
     crate::p8_structure::kuna_orchain::provide(&mut slots);
     crate::p8_structure::kuna_retsplitglobal::provide(&mut slots);
     crate::p8_structure::kuna_retsplitlimit::provide(&mut slots);
@@ -95,15 +95,15 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p3_dataflow::kuna_renamereads::provide(&mut slots);
     crate::p3_dataflow::kuna_spillstoreguard::provide(&mut slots);
     crate::p3_dataflow::kuna_wrapsplit::provide(&mut slots);
-    crate::p2_lift::flow::provide(&mut slots);
+    crate::flow::provide(&mut slots);
     crate::p4_calls::kuna_callmechanisms::provide(&mut slots);
     crate::p6_variables::kuna_dynamiclocals::provide(&mut slots);
-    crate::p2_lift::kuna_highslice_guard::provide(&mut slots);
+    crate::kuna_highslice_guard::provide(&mut slots);
     crate::p4_calls::kuna_joincalloutput::provide(&mut slots);
     crate::p3_dataflow::kuna_octeoneffects::provide(&mut slots);
     crate::kuna_segmentize::provide(&mut slots);
-    crate::p2_lift::kuna_switchextent::provide(&mut slots);
-    crate::p2_lift::kuna_switchtrim::provide(&mut slots);
+    crate::kuna_switchextent::provide(&mut slots);
+    crate::kuna_switchtrim::provide(&mut slots);
     crate::p4_calls::kuna_varargtransfer::provide(&mut slots);
     crate::p6_variables::kuna_fputruncviews::provide(&mut slots);
     crate::p6_variables::kuna_globalorder::provide(&mut slots);
@@ -117,9 +117,9 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p6_variables::kuna_stablenames::provide(&mut slots);
     crate::p6_variables::kuna_guardedreadtrim::provide(&mut slots);
     crate::kuna_avxintrin::provide(&mut slots);
-    crate::p2_lift::kuna_chkstkdarwin::provide(&mut slots);
-    crate::p2_lift::kuna_fastfailnoreturn::provide(&mut slots);
-    crate::p1_partition::kuna_litpoolconst::provide(&mut slots);
+    crate::kuna_chkstkdarwin::provide(&mut slots);
+    crate::kuna_fastfailnoreturn::provide(&mut slots);
+    crate::kuna_litpoolconst::provide(&mut slots);
     crate::p4_calls::kuna_protomerge::provide(&mut slots);
     crate::p4_calls::kuna_qualifiedcall::provide(&mut slots);
     crate::p4_calls::kuna_spsolve::provide(&mut slots);
@@ -143,21 +143,21 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p3_dataflow::kuna_persistcalls::provide(&mut slots);
     crate::p3_dataflow::kuna_prunedssa::provide(&mut slots);
     crate::p3_dataflow::kuna_stackstoreguard::provide(&mut slots);
-    crate::p2_lift::kuna_fpuemu::provide(&mut slots);
-    crate::p1_partition::kuna_goreg::provide(&mut slots);
-    crate::p2_lift::kuna_lanefuse::provide(&mut slots);
-    crate::p1_partition::kuna_mzdgroup::provide(&mut slots);
+    crate::kuna_fpuemu::provide(&mut slots);
+    crate::kuna_goreg::provide(&mut slots);
+    crate::kuna_lanefuse::provide(&mut slots);
+    crate::kuna_mzdgroup::provide(&mut slots);
     crate::p4_calls::kuna_swiftcall::provide(&mut slots);
     crate::p4_calls::kuna_dfunaffected::provide(&mut slots);
-    crate::p2_lift::kuna_msvcftol::provide(&mut slots);
-    crate::p2_lift::kuna_objcarc::provide(&mut slots);
-    crate::p2_lift::kuna_switchrunon::provide(&mut slots);
+    crate::kuna_msvcftol::provide(&mut slots);
+    crate::kuna_objcarc::provide(&mut slots);
+    crate::kuna_switchrunon::provide(&mut slots);
     crate::p4_calls::kuna_x87intrinsic::provide(&mut slots);
     crate::p4_calls::kuna_retpushedhalf::provide(&mut slots);
     crate::kuna_bitcast::provide(&mut slots);
     crate::printc::provide(&mut slots);
-    crate::p2_lift::kuna_arithhelpers::provide(&mut slots);
-    crate::p2_lift::kuna_switchguardrange::provide(&mut slots);
+    crate::kuna_arithhelpers::provide(&mut slots);
+    crate::kuna_switchguardrange::provide(&mut slots);
     crate::modelrules::provide(&mut slots);
     crate::p4_calls::kuna_customreturn::provide(&mut slots);
     crate::p6_variables::kuna_arrayextent::provide(&mut slots);
@@ -165,7 +165,7 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p4_calls::kuna_x87emptyreturn::provide(&mut slots);
     crate::p6_variables::kuna_arraysize::provide(&mut slots);
     crate::p4_calls::kuna_condexeretuse::provide(&mut slots);
-    crate::p2_lift::kuna_loweredswitchvalue::provide(&mut slots);
+    crate::kuna_loweredswitchvalue::provide(&mut slots);
     crate::p4_calls::kuna_bejoin::provide(&mut slots);
     crate::p4_calls::kuna_callwide::provide(&mut slots);
     crate::kuna_hooks::provide(&mut slots);
@@ -173,8 +173,8 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p4_calls::kuna_inputhints::provide(&mut slots);
     crate::p3_dataflow::kuna_globalcallranges::provide(&mut slots);
     crate::p4_calls::kuna_calleepurge::provide(&mut slots);
-    crate::p2_lift::kuna_constselectjump::provide(&mut slots);
-    crate::p2_lift::kuna_jumpassist::provide(&mut slots);
+    crate::kuna_constselectjump::provide(&mut slots);
+    crate::kuna_jumpassist::provide(&mut slots);
     crate::p3_dataflow::kuna_indexaliasguard::provide(&mut slots);
     slots.universal_action = Some(universal_action);
     slots
@@ -1488,18 +1488,24 @@ pub fn universal_sched_hooked(
             // ordinary ActionDeadCode fixpoint collect the argument setup that only
             // fed the drop.  Before `outline`, so a region whose only call was drop
             // glue becomes outline-eligible.  Inert on a non-Rust binary.
-            act!(crate::p2_lift::kuna_cleanupcode::ActionRemoveCleanupCode::boxed("deadcode")),
+            act!(crate::kuna_cleanupcode::ActionRemoveCleanupCode::boxed(
+                "deadcode"
+            )),
             act!(crate::kuna_gojumpchain::ActionGoJumpChain::boxed(
                 "deadcode"
             )),
-            act!(crate::p2_lift::kuna_gomorestack::ActionGoMorestack::boxed(
+            act!(crate::kuna_gomorestack::ActionGoMorestack::boxed(
                 "deadcode"
             )),
-            act!(crate::p2_lift::kuna_gowritebarrier::ActionGoWriteBarrier::boxed("deadcode")),
-            act!(crate::p2_lift::kuna_ptrauthtrap::ActionPtrAuthTrap::boxed(
+            act!(crate::kuna_gowritebarrier::ActionGoWriteBarrier::boxed(
                 "deadcode"
             )),
-            act!(crate::p2_lift::kuna_chkstkdarwin::ActionChkstkDarwin::boxed("deadcode")),
+            act!(crate::kuna_ptrauthtrap::ActionPtrAuthTrap::boxed(
+                "deadcode"
+            )),
+            act!(crate::kuna_chkstkdarwin::ActionChkstkDarwin::boxed(
+                "deadcode"
+            )),
             // (kuna) outline (option `outline`, default-OFF - destructive, and inert
             // with no region supplied).  Excise a SUPPLIED single-entry region and
             // emit a call to a synthesized pseudofunction in its place.
@@ -1758,20 +1764,22 @@ pub fn universal_sched_hooked(
             // it builds is input-LOCKED, so it has to exist before ActionFuncLink
             // materializes the argument Varnodes and before ActionExtraPopSetup
             // reads its extrapop.  Inert on every language but x86-32.
-            act!(crate::p2_lift::kuna_linuxsyscall::ActionLinuxSyscall::boxed("protorecovery")),
+            act!(crate::kuna_linuxsyscall::ActionLinuxSyscall::boxed(
+                "protorecovery"
+            )),
             // (kuna) x64syscall (option `x64syscall`, default-OFF): give the
             // x86-64 `SYSCALL` user-op the Linux ABI's register effects.  Here
             // for the same two reasons as its i386 neighbour above: the op is
             // matched on the RAW p-code, and adding a register read or write to
             // it is only legal before heritage builds SSA.  Inert on every
             // language but x86-64 and on any function with no SYSCALL.
-            act!(crate::p2_lift::kuna_x64syscall::ActionX64Syscall::boxed(
+            act!(crate::kuna_x64syscall::ActionX64Syscall::boxed(
                 "protorecovery"
             )),
             // (kuna) syscallregs (option `syscallregs`): the same rewrite for the
             // ARM, AArch64, RISC-V, MIPS and PowerPC system-call user-op, here for
             // the same reasons.
-            act!(crate::p2_lift::kuna_syscallregs::ActionSyscallRegs::boxed(
+            act!(crate::kuna_syscallregs::ActionSyscallRegs::boxed(
                 "protorecovery"
             )),
             // (kuna) pebnames (option `pebnames`, default `auto`): map `TEB *teb`
@@ -1789,7 +1797,9 @@ pub fn universal_sched_hooked(
             // into one call.  Here for linuxsyscall's reasons: the diamond is
             // proved over the RAW p-code, and the call it leaves carries a
             // LOCKED prototype that ActionFuncLink must materialize.
-            act!(crate::p2_lift::kuna_msvcstrappend::ActionMsvcStrAppend::boxed("protorecovery")),
+            act!(crate::kuna_msvcstrappend::ActionMsvcStrAppend::boxed(
+                "protorecovery"
+            )),
             act!(crate::kuna_rustprobestack::ActionRustProbestack::boxed(
                 "protorecovery"
             )),

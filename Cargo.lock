@@ -1081,6 +1081,7 @@ dependencies = [
  "thiserror 2.0.18",
  "toml",
  "unlace-base",
+ "unlace-lift",
  "unlace-middle",
  "unlace-num",
  "unlace-sleigh",
@@ -1106,6 +1107,19 @@ dependencies = [
  "unlace-base",
  "unlace-console",
  "unlace-decomp",
+ "unlace-num",
+ "unlace-sleigh",
+]
+
+[[package]]
+name = "unlace-lift"
+version = "0.1.0"
+dependencies = [
+ "slotmap",
+ "smallvec",
+ "thiserror 2.0.18",
+ "unlace-base",
+ "unlace-middle",
  "unlace-num",
  "unlace-sleigh",
 ]

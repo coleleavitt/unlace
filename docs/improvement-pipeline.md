@@ -181,7 +181,7 @@ investigating.
 
 ## 3. Implement: one option-gated feature
 
-Canonical template: `crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs`
+Canonical template: `crates/unlace-lift/src/p2_lift/kuna_loweredswitch.rs`
 (+ its `phases.toml` row and `tests/stages/ghangr-loweredswitch.xml`). Model the code,
 registration, and test on it. New logic lives in `kuna_<slug>.rs` inside the owning phase
 folder; edits to ported-core files only where an anchor demands it, each marked

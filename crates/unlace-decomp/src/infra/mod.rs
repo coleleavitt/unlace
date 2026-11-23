@@ -10,6 +10,8 @@ pub mod graph;
 pub mod kuna_hooks;
 pub mod libdecomp;
 #[cfg(test)]
+mod lift_tests;
+#[cfg(test)]
 mod middle_tests;
 pub mod paramid;
 pub mod signature;

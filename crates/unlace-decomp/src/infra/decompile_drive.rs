@@ -389,7 +389,7 @@ impl FlowEnvironment for ArchFlowEnv {
         if id >= 0 {
             return id;
         }
-        crate::p2_lift::kuna_retpolinethunk::inject_id(arch, entry)
+        crate::kuna_retpolinethunk::inject_id(arch, entry)
     }
     fn build_inline_funcdata(&self, entry: &Address) -> KunaResult<Option<Funcdata>> {
         // C++ `Funcdata::inlineFlow` builds a fresh FlowInfo over the queried
@@ -566,7 +566,7 @@ impl FlowEnvironment for ArchFlowEnv {
         if !arch.archid.starts_with("PowerPC:") {
             return false;
         }
-        crate::p2_lift::kuna_ppcpcread::is_pc_capture(fd, op, &arch.kuna_function_bodies, |dest| {
+        crate::kuna_ppcpcread::is_pc_capture(fd, op, &arch.kuna_function_bodies, |dest| {
             self.query_call(dest).is_some()
         })
     }

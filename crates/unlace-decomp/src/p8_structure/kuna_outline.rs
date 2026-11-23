@@ -53,7 +53,7 @@
 //! # The seam
 //!
 //! Pre-heritage `bblocks` surgery, self-gated on `get_heritage_pass() == 0`
-//! (the documented pre-SSA window, as [`crate::p2_lift::kuna_loweredswitch`] uses).
+//! (the documented pre-SSA window, as [`crate::kuna_loweredswitch`] uses).
 //! Before SSA there are no `MULTIEQUAL`s to patch when edges move, and
 //! `ActionFuncLink` still runs afterwards to materialize the call's argument and
 //! return varnodes. Doing this later, as a P8 print-tree edit, would be wrong:

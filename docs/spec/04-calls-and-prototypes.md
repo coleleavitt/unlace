@@ -751,7 +751,7 @@ typed-call recovery. An explicit `default`, its N32 `n32` or N64 `n64` alias, or
 `hard` override remains authoritative when container attributes are missing or
 contradictory. Typed-call recovery and the narrow-extension rule classify these
 compiler IDs through one table
-(`crates/unlace-decomp/src/p1_partition/kuna_octeonid.rs (hard_float)`),
+(`crates/unlace-lift/src/p1_partition/kuna_octeonid.rs (hard_float)`),
 so two IDs naming the same compiler spec cannot disagree.
 
 Both models declare the entire v0/v1 return registers call-clobbered. A caller
@@ -1549,7 +1549,7 @@ at the match (01 §1.4).
   the slot is queried before generic recovery. (kuna) Input 0 may also be the
   temporary the call's own instruction fills from the slot, by a `COPY` of the
   memory word or a `LOAD` through a constant pointer
-  (`crates/unlace-decomp/src/p2_lift/kuna_msvcimportcall.rs
+  (`crates/unlace-lift/src/p2_lift/kuna_msvcimportcall.rs
   (loaded_slot)`): that is x86's `call [abs32]` and `call [rip+disp]` before
   heritage links the temporary, so an IAT call (or an ELF `-fno-plt` or Mach-O
   GOT call) reaches the import's parked `win32sigs` or libc pieces here.
@@ -2293,7 +2293,7 @@ classified:
   budget no probe answers spent.
 
   (kuna) A system call that `syscallregs` rewrote
-  (`crates/unlace-decomp/src/p2_lift/kuna_syscallregs.rs
+  (`crates/unlace-lift/src/p2_lift/kuna_syscallregs.rs
   (reads_as_argument)`) is treated as a call site, not as an op the value flows
   through. The walk does not follow it to its output, because that output is the
   kernel's result. When the trial is a RETURN's, a value the system call reads as
@@ -4220,14 +4220,14 @@ input recovered off-center in its containing entry.
 
 ### How a CALL op carries its spec
 
-Call specs are born at lift time: `crates/unlace-decomp/src/p2_lift/flow.rs
+Call specs are born at lift time: `crates/unlace-lift/src/p2_lift/flow.rs
 (FlowInfo::setup_call_specs, FlowInfo::setup_callind_specs,
 FlowInfo::build_call_specs)` creates a `FuncCallSpecs` per CALL/CALLIND and
 pushes it onto the function's spec list (`crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::num_calls)`, the upstream `qlst`). A direct CALL's input 0 is
 replaced by an **fspec annotation**: a Varnode in the reserved fspec address
 space whose offset is a process-unique handle into a side table mapping back
-to the spec (`crates/unlace-decomp/src/p2_lift/flow.rs
+to the spec (`crates/unlace-lift/src/p2_lift/flow.rs
 (next_fspec_handle)`, `crates/unlace-middle/src/p4_calls/fspec.rs
 (FuncCallSpecs::register_in_fspec_space)`) — the arena-safe replacement for
 the upstream pointer-cast-into-offset trick. A CALLIND keeps the computed
@@ -4237,7 +4237,7 @@ prototype override is copied on first (before the callee-name query, so
 inline/inject effects are not clobbered), then the callee symbol's
 inline/no-return flow effects — inline queues the site for body injection, and
 no-return plants an artificial halt after the call plus the "Subroutine does
-not return" warning (`crates/unlace-decomp/src/p2_lift/flow.rs
+not return" warning (`crates/unlace-lift/src/p2_lift/flow.rs
 (FlowInfo::check_for_flow_modification)`; the fact-producing analyses are
 chapter 01 §1.7, the lift-time behavior chapter 02 §2.4). Because that override
 already gives the call spec a model, the later exact-slot query in
@@ -8051,7 +8051,7 @@ symbol-bearing dynamic relocation naming a defined `STT_FUNC`, the pair
 versions of one symbol are two definitions), and an `STT_GNU_IFUNC` is skipped
 because its value is the resolver. The pairs reach the engine as
 `Architecture::plt_local`. When flow builds the call spec of a direct call
-(`crates/unlace-decomp/src/p2_lift/flow.rs (build_call_specs)`), a stub
+(`crates/unlace-lift/src/p2_lift/flow.rs (build_call_specs)`), a stub
 in that table whose definition is a known function and which declares no
 prototype of its own (`crates/unlace-decomp/src/p4_calls/kuna_pltlocal.rs
 (definition)`) has its `FuncCallSpecs` built at the definition's entry. The

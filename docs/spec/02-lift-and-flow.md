@@ -2,7 +2,7 @@
 
 ```yaml
 Anchors:
-  - crates/unlace-decomp/src/p2_lift
+  - crates/unlace-lift/src/p2_lift
   - crates/unlace-middle/src/p2_lift
 ```
 
@@ -22,7 +22,7 @@ call site, and — the centerpiece — a recovered `JumpTable` for every indirec
 branch that is really a switch. The driver is
 `crates/unlace-decomp/src/infra/decompile_drive.rs (follow_flow_on_fd)`
 (the C++ `Funcdata::followFlow`): it constructs a
-`crates/unlace-decomp/src/p2_lift/flow.rs (FlowInfo)` over the fresh
+`crates/unlace-lift/src/p2_lift/flow.rs (FlowInfo)` over the fresh
 `Funcdata`, applies the architecture's flow options (default
 `error_toomanyinstructions`, instruction budget 100000 —
 `crates/unlace-middle/src/infra/architecture.rs (reset_defaults_internal)`),
@@ -30,7 +30,7 @@ runs op generation + block generation, maps each recovered jump table's
 addresses onto block out-edges (`JumpTable::switch_over`), and finally computes
 the dominator tree (`structure_reset`) the SSA phase requires. `FlowInfo`
 reaches the architecture only through the
-`crates/unlace-decomp/src/p2_lift/flow.rs (FlowEnvironment)` trait; the
+`crates/unlace-lift/src/p2_lift/flow.rs (FlowEnvironment)` trait; the
 live implementation is
 `crates/unlace-decomp/src/infra/decompile_drive.rs (ArchFlowEnv)`.
 
@@ -46,7 +46,7 @@ without an inference option.
 
 Loader-validated MIPS lazy-binding resolver sites carry call-and-return
 overrides in the shared architecture snapshot
-(`crates/unlace-decomp/src/p2_lift/kuna_stubtailcall.rs (flow_override)`). The resolver binds the import
+(`crates/unlace-lift/src/p2_lift/kuna_stubtailcall.rs (flow_override)`). The resolver binds the import
 and jumps to it with the stub caller's return address restored, so the stub is a
 tail call: flow recovery keeps the indirect call, including its delay slot and
 register writes, and ends the stub with a return after it. It is not an
@@ -86,7 +86,7 @@ sites inside FDE bodies of 135 compiler-built PPC32 images satisfy this rule;
 the 570 that skip literal words load one within 19 instructions of the `mflr`.
 Other calls retain their existing treatment. The rewrite is the same
 CALL-to-BRANCH conversion the call-trampoline rule uses. The recognition
-lives in `crates/unlace-decomp/src/p2_lift/kuna_ppcpcread.rs (is_pc_capture)`.
+lives in `crates/unlace-lift/src/p2_lift/kuna_ppcpcread.rs (is_pc_capture)`.
 
 The A32 single-register `POP {pc}` alias (`ldr pc,[sp],#4`) lifts as a return,
 including its conditional forms. Its address mode still advances SP by four
@@ -207,7 +207,7 @@ data store alone. The lift is then false about the program:
 `return __arm_mte_create_random_tag(p, 0);` is `irg x0, x0; ret` and
 decompiled to `return a0;`, and a function that only tags memory decompiled
 to an empty `void f(void)`.
-`crates/unlace-decomp/src/p2_lift/kuna_memtag.rs (paint)` runs
+`crates/unlace-lift/src/p2_lift/kuna_memtag.rs (paint)` runs
 before each function's flow and makes the context agree with the option: it
 reads `ShowMemTag` at the function entry and, when that differs, sets the
 default and paints the whole code space. Only the memory-tagging
@@ -366,7 +366,7 @@ place: outside 16-bit x86 each `X87_Dn` expands to the old `byte=0xDn`, the
 quoted mnemonics print as before and the `with x87` block is under `@ifdef
 IA16`, so `x86.sla` and `x86-64.sla` are byte-identical, and so is the
 16-bit decode of every native ESC instruction.
-`crates/unlace-decomp/src/p2_lift/kuna_fpuemu.rs (apply)` paints
+`crates/unlace-lift/src/p2_lift/kuna_fpuemu.rs (apply)` paints
 `fpuEmu` over the default code space from `option fpuemu` (`off|auto|on`,
 default `auto`). `on` sets it, `off` clears it, and `auto` sets it when the
 MS-DOS loader found emulator code in the load module (`emulator_evidence`): at
@@ -398,7 +398,7 @@ has whole-access forms for both halves, selected by the context bit
 `PAIR_INSTRUCTION_FLAG`: the half at the lower address on a big-endian target
 (the higher on a little-endian one) loads or stores the whole word, and the
 other does nothing. Ghidra's `MipsPreAnalyzer` sets the bit;
-`crates/unlace-decomp/src/p2_lift/kuna_mipsunaligned.rs (paint)`
+`crates/unlace-lift/src/p2_lift/kuna_mipsunaligned.rs (paint)`
 does the same once per image, at the first flow (and before `callwide`'s
 whole-image proof); the painting is always on.
 It reads the image's executable ranges, collects the target of every direct
@@ -575,7 +575,7 @@ nothing into functions that produce a body carrying the warnings above.
 **Mapped ELF x86 fall-through.** Mapped-flow boundary recovery (always on)
 retains decoded paths when another path falls through an image edge. The
 load-time predicate in
-`crates/unlace-decomp/src/p2_lift/kuna_mappedflowboundary.rs (eligible_elf)`
+`crates/unlace-lift/src/p2_lift/kuna_mappedflowboundary.rs (eligible_elf)`
 requires a linked little-endian ELF (ET_EXEC or ET_DYN), class/machine
 ELF32/i386 or ELF64/x86-64, and matching resolved SLEIGH processor, endian,
 and width. Other images and mismatched targets retain legacy flow. Each
@@ -606,7 +606,7 @@ An instruction that flow reaches from decoded code, whose first byte is mapped
 but whose encoding runs past the contiguous mapped run, is the same fact as a
 fall-through into unmapped memory: the path cannot continue on image bytes.
 The check in
-`crates/unlace-decomp/src/p2_lift/kuna_mappedflowboundary.rs (truncated_instruction)`
+`crates/unlace-lift/src/p2_lift/kuna_mappedflowboundary.rs (truncated_instruction)`
 re-derives it from the image with a length-only decode, so a failed read cannot
 qualify. That path then ends in a one-byte missing halt at the instruction's own
 address with the warning `the instruction at <addr> runs past the mapped bytes`
@@ -843,7 +843,7 @@ as an argument: a virtual call de-indirected through a folded vtable slot
 through it. (kuna `msvcsig`) One more CALLIND is made direct there: a
 call through an import slot whose MSVC-declared prototype the analysis commit
 locked onto the import symbol (01, `msvcsig`)
-(`crates/unlace-decomp/src/p2_lift/kuna_msvcimportcall.rs
+(`crates/unlace-lift/src/p2_lift/kuna_msvcimportcall.rs
 (locked_import_slot)`). The target must be the word the call's own instruction
 reads from a constant address (the folded `COPY` of a memory varnode, or a
 `LOAD` through a constant pointer, through temporary copies), that address must
@@ -881,7 +881,7 @@ which is why it is not the default.
 (kuna `--assert callee`) The reader can plant the same indirect override. A
 front-end parks `call site -> callee entry` facts on the architecture, keyed
 by the entry of the function that holds the call, and
-`crates/unlace-decomp/src/p2_lift/kuna_calleeoverride.rs (seed)`
+`crates/unlace-lift/src/p2_lift/kuna_calleeoverride.rs (seed)`
 copies a function's facts into its `Override` store when the flow build
 creates the `Funcdata`. `setup_callind_specs` then makes the named CALLIND a
 direct CALL, so the callee's name and its declared prototype apply. A named
@@ -970,7 +970,7 @@ recovered switch table.
   transferred to the call spec created inside the woven body, and a nested call
   to the same fixup entry is cycle-broken (it must not re-inject).
 - **kuna-owned call fixups.** Payloads are not required to come from a spec
-  file. `crates/unlace-decomp/src/p2_lift/kuna_msvcftol.rs` synthesizes
+  file. `crates/unlace-lift/src/p2_lift/kuna_msvcftol.rs` synthesizes
   a `<callfixup>` in Rust and registers it through the same
   `PcodeInjectLibraryBase::decode_inject` path immediately after the cspec's own
   (`architecture.rs (decode_kuna_call_fixups)`), so the vendored spec tree stays
@@ -1009,7 +1009,7 @@ recovered switch table.
   test's cheap half is the code-space width, which ARM32/MIPS32/PPC32 all pass).
   The analysis-tier call-fixup installer tags the payload onto its targets at
   `read symbols`.
-- **Arithmetic runtime helpers.** `crates/unlace-decomp/src/p2_lift/kuna_arithhelpers.rs`
+- **Arithmetic runtime helpers.** `crates/unlace-lift/src/p2_lift/kuna_arithhelpers.rs`
   registers one more family of kuna-owned call fixups beside `kuna_msvcftol`'s,
   through the same `decode_kuna_call_fixups` seam: the helpers a 32-bit target
   calls for an operation it has no instruction for. Their contracts are
@@ -1047,7 +1047,7 @@ recovered switch table.
   helper also has an `entry|1` twin, and its calls resolve to the even entry).
   The gate is on the install, as for `msvcftol`.
 
-- **Objective-C ARC bookkeeping** (`crates/unlace-decomp/src/p2_lift/kuna_objcarc.rs`,
+- **Objective-C ARC bookkeeping** (`crates/unlace-lift/src/p2_lift/kuna_objcarc.rs`,
   option **`objcarc`**, default on): the second kuna-owned call-fixup family,
   registered next to the one above. An ARC-compiled method is strewn with
   `objc_retain(x)`, `objc_release(x)`, `v = objc_retainAutoreleasedReturnValue(v)`
@@ -1080,7 +1080,7 @@ recovered switch table.
   `-[Holder total:]` is `v1 = objc_msgSend(arg1,sel_count); v2 = objc_msgSend(arg1,sel_inner); return objc_msgSend(v2,sel_count) + v1;`
   with no release left; off, the five ARC calls are shown typed.
 - **kuna-owned callother fixups.** The same freedom applies to the user-op side.
-  `crates/unlace-decomp/src/p2_lift/kuna_cortexmpriv.rs` supplies a
+  `crates/unlace-lift/src/p2_lift/kuna_cortexmpriv.rs` supplies a
   `<callotherfixup>` body for the ARM user op `isCurrentModePrivileged`, which
   the vendored Cortex-M SLEIGH raises at twelve places. Every VERSION_7M MRS/MSR
   constructor in `ARMTHUMBinstructions.sinc` models its special-register move as
@@ -1142,7 +1142,7 @@ jump tables do not — they are re-recovered) and re-runs the action pipeline, a
 most 8 cross-flow restarts before keeping the last analyzed IR.
 
 **(angr) Tail-call jumps — `option tailcalljump`, default on (DIV-14),
-`crates/unlace-decomp/src/p2_lift/kuna_tailcalljump.rs
+`crates/unlace-lift/src/p2_lift/kuna_tailcalljump.rs
 (kuna_is_tail_call_branch)`.** At `-O2` a "call X then return" tail compiles to
 a direct `jmp X`. Decision rule: a `CPUI_BRANCH` whose direct machine-address target is the
 entry of a *known function* (including a PLT thunk) that is not the current
@@ -1357,7 +1357,7 @@ an unmapped non-function and a jump to the function's own code as controls,
 `-fno-plt` library and a MIPS PIC object.
 
 **(kuna) Frame-teardown tail jumps — `option tailcallframe`, default on
-(DIV-109), `crates/unlace-decomp/src/p2_lift/kuna_tailcallframe.rs
+(DIV-109), `crates/unlace-lift/src/p2_lift/kuna_tailcallframe.rs
 (kuna_is_frame_teardown_tail_call)`.** `tailcalljump` above resolves the callee
 through `query_call`, so it only fires on a target some discovery oracle already
 found. Every kuna oracle reaches a function from a symbol, from an unwind record,
@@ -1407,7 +1407,7 @@ fix; it is a change to the walk's ordering rather than to this predicate.
 
 **(kuna) A teardown has to give back what the entry block saved — part of
 `tailcallframe` (DIV-157),
-`crates/unlace-decomp/src/p2_lift/kuna_tailcallsaved.rs
+`crates/unlace-lift/src/p2_lift/kuna_tailcallsaved.rs
 (kuna_stack_saved_bytes / kuna_stack_restored_bytes /
 kuna_teardown_restores_saves)`.** Cancelling deltas are necessary but not
 sufficient. Because both of `tailcallframe`'s scans stop at the first
@@ -1440,7 +1440,7 @@ the first word back. One-directional: the rule can only decline a recovery
 parity corpora and across 803 `decompile-all` runs of the decbench corpus.
 
 **(kuna) Fall-through function bound — `option funcboundflow`, default on
-(DIV-67), `crates/unlace-decomp/src/p2_lift/kuna_funcboundflow.rs
+(DIV-67), `crates/unlace-lift/src/p2_lift/kuna_funcboundflow.rs
 (kuna_should_bound_at_entry)`.** A kuna `FunctionSymbol` is an entry address with
 no extent, and CALL/CALLIND are fall-through, so flow stops only at a RETURN or a
 *known* no-return callee (`query_call_no_return`). A function whose last act is a
@@ -1496,7 +1496,7 @@ invariant: an unprocessed address before the cutoff, or in another space, still
 raises `Could not find op at target address`.
 
 The same bound holds at the function's own literal pool
-(`crates/unlace-decomp/src/p2_lift/kuna_funcboundflow.rs
+(`crates/unlace-lift/src/p2_lift/kuna_funcboundflow.rs
 (kuna_should_bound_at_pool)`), on ARM32. A compiler places the PC-relative
 constants a body loads right after its last instruction, so a function that ends
 in a call kuna cannot prove no-return (an unnamed import, a call to an address
@@ -1545,7 +1545,7 @@ generated no p-code and terminate at the proven boundary. It does not mark the
 foreign entry as decoded and does not mask a missing op before the cutoff.
 
 **(kuna) Return-address-discarding call trampolines — always on (DIV-144),
-`crates/unlace-decomp/src/p2_lift/kuna_calltrampoline.rs
+`crates/unlace-lift/src/p2_lift/kuna_calltrampoline.rs
 (kuna_trampoline_branch_target)`.** `CPUI_CALL` is a fall-through op, so the
 follower decodes the return address as the next instruction. A protector breaks
 that assumption with a fragment the caller reaches by `call`: `lea esp,[esp+4]`
@@ -1597,7 +1597,7 @@ discovered callee does not, and stays a `CALL` for `tailcalljump` to claim at it
 own `jmp`.
 
 **(kuna) Return-address-popping call transfers — always on (DIV-163),
-`crates/unlace-decomp/src/p2_lift/kuna_callpopret.rs
+`crates/unlace-lift/src/p2_lift/kuna_callpopret.rs
 (kuna_call_pops_return_address)`.** A second flavour of the same family ends in
 `ret` instead of `jmp`: `call` jumps over inline data, the callee pops the
 pushed return address into a result register, adjusts that pointer, then `ret`s
@@ -1630,7 +1630,7 @@ whole packer stub, both code and inline data, occupies a section without the
 executable flag.
 
 **(kuna) Immediate-stack RET tail transfers — always on (DIV-170,
-`crates/unlace-decomp/src/p2_lift/kuna_pushimmediateret.rs`).** A packer can spell an unconditional terminal transfer
+`crates/unlace-lift/src/p2_lift/kuna_pushimmediateret.rs`).** A packer can spell an unconditional terminal transfer
 as `push <immediate>; ret`. Left as RETURN, flow ends correctly but dead-store
 elimination erases the pushed destination, so emitted C loses the transfer.
 Before following the function, the shared console decompile step runs the
@@ -1665,7 +1665,7 @@ function's real-mode return IP. Normal flow decoding still publishes its
 segment discoveries.
 
 **(kuna) `__fastfail` is a no-return — always on (DIV-120),
-`crates/unlace-decomp/src/p2_lift/kuna_fastfailnoreturn.rs
+`crates/unlace-lift/src/p2_lift/kuna_fastfailnoreturn.rs
 (is_fastfail_callind)`.** x86 SLEIGH lifts `INT imm8` to `intloc = swi(imm8);
 call [intloc]` — a `call` with no matching push, unlike every other x86 `CALL`,
 which lifts as `RSP = RSP - 8; push &next; call target`. Nothing downstream
@@ -1695,7 +1695,7 @@ compiler-spec component of the resolved language id, since `int 0x29` is
 `__fastfail` by Windows convention alone.
 
 **(kuna) DOS exits are no-returns — always on (#1288),
-`crates/unlace-decomp/src/p2_lift/flow.rs (FlowEnvironment::is_dos_exit_callind)`.**
+`crates/unlace-lift/src/p2_lift/flow.rs (FlowEnvironment::is_dos_exit_callind)`.**
 An interrupt that ends an MS-DOS program (`INT 20h`, `INT 27h`, `INT 21h` with
 AH = 00h, 31h or 4Ch) lowers to the same falling-through `swi` call, so flow
 used to run past `mov ah,4ch; int 21h` into whatever follows it, typically zero
@@ -1715,7 +1715,7 @@ list is empty unless a real-mode raw or MZ image was discovered, so every other
 input, the XML corpus included, is byte-identical.
 
 **(kuna) The `int3` pad control ran into — `option int3pad`, default `warn`
-(DIV-128), `crates/unlace-decomp/src/p2_lift/kuna_int3pad.rs
+(DIV-128), `crates/unlace-lift/src/p2_lift/kuna_int3pad.rs
 (is_int3_callind)`.** `INT3` lowers the same way (`intloc = swi(3); call
 [intloc]; return [0:1]`), so a decoded breakpoint byte prints as `v1 = (code
 *)swi(3); return (*v1)();` — an ordinary call through a function pointer, whose
@@ -1741,12 +1741,12 @@ naming the pad does not depend on asserting that the process dies there. `option
 int3pad off` restores the unannotated rendering. Exercised by
 `tests/stages/kuna-int3pad.xml`.
 
-**(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-decomp/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.xml`.
+**(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.xml`.
 
-**(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-decomp/src/p2_lift/kuna_retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/kuna-retpolinethunk.xml`.
+**(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/kuna_retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/kuna-retpolinethunk.xml`.
 
 **(kuna) A compiler's AArch64 `brk` trap ends the flow — always on,
-`crates/unlace-decomp/src/p2_lift/kuna_brktrap.rs
+`crates/unlace-lift/src/p2_lift/kuna_brktrap.rs
 (is_brk_trap_branchind)`.** AArch64 SLEIGH lowers `BRK #imm16` to `pc =
 SoftwareBreakpoint(imm16, inst_next); goto [pc];` (`AARCH64base.sinc`, `:brk`):
 a jump through a user-op's result, not a call. Jump-table recovery cannot
@@ -1778,7 +1778,7 @@ and hands the halt to its `CPUI_RETURN` arm. The CALLOTHER stays and prints as a
 dead-code removal drops it. `__fastfail` passes its failure code in `w0`
 (`mov w0,#8; brk #0xf003`), and the code says why the process died, so for
 `#0xf003` alone the flow also appends a read of `w0` to the CALLOTHER's inputs
-(`crates/unlace-decomp/src/p2_lift/kuna_brktrap.rs (read_code)`): the
+(`crates/unlace-lift/src/p2_lift/kuna_brktrap.rs (read_code)`): the
 trap prints as `SoftwareBreakpoint(0xf003,..,8);`, as the x86 `int 0x29` keeps
 its `ecx` argument. A `w0` set in the function resolves to its value there; one
 the function never sets is its incoming `w0`, which `__fastfail(code)` called
@@ -1799,7 +1799,7 @@ user-op index fails before any op is walked. Exercised by
 `tests/stages/kuna-brktrap.xml`.
 
 **(kuna) A Linux kernel `WARN`/`BUG` site prints as the statement it is — always
-on, `crates/unlace-decomp/src/p2_lift/kuna_kernelbug.rs (rewrite)`.**
+on, `crates/unlace-lift/src/p2_lift/kuna_kernelbug.rs (rewrite)`.**
 The kernel plants a trap at every `WARN_ON`/`BUG_ON` site — `ud2` on x86, `brk
 #0x800` on AArch64 — and names it in a `__bug_table` entry whose flags say
 whether the handler resumes after the trap (`BUGFLAG_WARNING`) or panics. x86
@@ -1834,7 +1834,7 @@ here only through a table entry. Exercised by `tests/stages/kuna-kernelbug.xml`.
 
 **(kuna) The x86-64 `SYSCALL` user-op's ABI effects — `option x64syscall`,
 default `on`, x86-64-gated (DIV-152),
-`crates/unlace-decomp/src/p2_lift/kuna_x64syscall.rs
+`crates/unlace-lift/src/p2_lift/kuna_x64syscall.rs
 (ActionX64Syscall)`.** The 64-bit instruction is not an interrupt and takes none
 of the paths above: `ia.sinc:4836` lowers it as `RCX = inst_next; R11 = rflags;
 syscall();`, a `CALLOTHER` with no inputs and no output at all. That one fact
@@ -1916,7 +1916,7 @@ store remains preserved.
 
 **(kuna) The system call of ARM, AArch64, RISC-V, MIPS and PowerPC —
 `option syscallregs`, default `auto`,
-`crates/unlace-decomp/src/p2_lift/kuna_syscallregs.rs
+`crates/unlace-lift/src/p2_lift/kuna_syscallregs.rs
 (ActionSyscallRegs)`.** `svc` (ARM and AArch64), `ecall` (RISC-V), `syscall`
 (MIPS) and `sc` (PowerPC) lift to a `CALLOTHER` with no register inputs and no
 output, so the same two halves of damage follow as for x86-64. The Linux and BSD
@@ -2103,7 +2103,7 @@ registers set, so it also passes the kernel the `a2` its caller left.
 an object with and without a GNU ABI-tag note: the note turns the default on.
 
 **(kuna) Overlapping branch target — `option overlapbranch`, default on
-(DIV-106), `crates/unlace-decomp/src/p2_lift/kuna_overlapbranch.rs
+(DIV-106), `crates/unlace-lift/src/p2_lift/kuna_overlapbranch.rs
 (kuna_overlaps_pending_branch)`.** A conditional branch pushes both successors and
 the follower pops the fall-through first, so the fall-through instruction is
 decoded before the branch target is ever looked at. The x86 anti-disassembly
@@ -2148,7 +2148,7 @@ the instruction *currently* being decoded and the winner is still pending, which
 is what keeps this out of the "repair the flow graph afterwards" class of change.
 
 **(kuna) Stack-probe loops — always on (DIV-3),
-`crates/unlace-decomp/src/p2_lift/kuna_stackprobeloop.rs
+`crates/unlace-lift/src/p2_lift/kuna_stackprobeloop.rs
 (RuleStackProbeLoop)` (from Ghidra issues GH-8017/6858).** gcc's
 stack-clash/`-fstack-check` prologue probes a large frame one page at a time,
 leaving the post-loop stack pointer as a self-referential phi
@@ -2162,7 +2162,7 @@ rewrites the phi to the value the exit comparison pins:
 `INT_ADD(SP_in, limit_const - page)`. Inert on functions without a probe loop.
 
 **(kuna) V850 indirect branch — `option v850indirectbranch`, default on, V850-gated,
-`crates/unlace-decomp/src/p2_lift/kuna_v850indbranch.rs
+`crates/unlace-lift/src/p2_lift/kuna_v850indbranch.rs
 (kuna_is_v850_indirect_jmp)` (from Ghidra issue GH-8817).** The V850 SLEIGH
 spec lifts `jmp [reg]` to a CALLIND, so a compiler switch dispatch never
 reaches jump-table recovery (which is gated on BRANCHIND). When on, a CALLIND
@@ -2179,7 +2179,7 @@ are recorded in
 [`docs/features/ghidra-v850-register-lookup/analysis.md`](../features/ghidra-v850-register-lookup/analysis.md).
 
 **(kuna) Computed return-register jumps — `option returnbranch`, default on,
-`crates/unlace-decomp/src/p2_lift/kuna_returnbranch.rs (computed_target)`.**
+`crates/unlace-lift/src/p2_lift/kuna_returnbranch.rs (computed_target)`.**
 A SLEIGH spec marks a jump through the return register as RETURN whatever the
 register holds, so MIPS code that loads a constant code address into `$ra` and
 executes `jr $ra` ended the function there and dropped what it reached. At the
@@ -2214,13 +2214,13 @@ shape. A flow override at the return keeps its classification, and off restores
 the spec's RETURN.
 
 **(kuna) Re-entered indirect dispatches — `option constselectjump`, default
-`reentry`, `crates/unlace-decomp/src/p2_lift/flow.rs (generate_ops_with_jumptables)`.**
+`reentry`, `crates/unlace-lift/src/p2_lift/flow.rs (generate_ops_with_jumptables)`.**
 A dispatcher loop jumps through one register, and each step's code loads the
 next step's address and jumps back. Flow recovers the dispatch's first target
 before that code is decoded, so upstream keeps a one-entry table and drops every
 later step. Under `reentry` (and `on`), a recovered in-bounds, non-override
 singleton table is provisional. After each round of table following,
-`crates/unlace-decomp/src/p2_lift/kuna_indirectreturn.rs (reentry_edges)`
+`crates/unlace-lift/src/p2_lift/kuna_indirectreturn.rs (reentry_edges)`
 collects the new direct branches and fallthroughs into previously decoded
 instructions, reading only the dead list's tail: flow appends what it
 generates and moves injected or inlined sequences only next to other new
@@ -2230,7 +2230,7 @@ followed again on every round, so its transfer/destination pairs are followed
 once each; other tables keep upstream's re-following, which on x86-64 gnulib
 `quotearg_buffer_restyled` already shapes the output.
 
-`crates/unlace-decomp/src/p2_lift/kuna_indirectreturn.rs (reaching_edges)`
+`crates/unlace-lift/src/p2_lift/kuna_indirectreturn.rs (reaching_edges)`
 keeps, for each provisional dispatch, only the new edges whose destination
 reaches it over raw flow: fallthroughs, direct targets, every operation of an
 instruction with an internal relative branch, and recovered table targets. An
@@ -2238,7 +2238,7 @@ edge elsewhere cannot bring the dispatch another value, so it costs that
 dispatch nothing. A round's walks visit at most 2^20 operations; past that,
 every dispatch counts as reached. When every reaching edge lands on the
 dispatch instruction itself,
-`crates/unlace-decomp/src/p2_lift/kuna_returnbranch.rs (target_on_edge)`
+`crates/unlace-lift/src/p2_lift/kuna_returnbranch.rs (target_on_edge)`
 runs the edge's block and the dispatch instruction's own operations through
 the same `Prefix` evaluator as the entry proof, and a proven local constant
 extends the table without another partial decompile. Any other reaching edge
@@ -2267,7 +2267,7 @@ Out-of-bounds or unmapped destinations retain one placeholder and do not make a
 singleton table provisional. The original transfer's mask is recorded from raw
 storage before SSA can combine it with other operations.
 
-`crates/unlace-decomp/src/p2_lift/kuna_indirectreturn.rs (normalize_return_selector)`
+`crates/unlace-lift/src/p2_lift/kuna_indirectreturn.rs (normalize_return_selector)`
 checks a bounded COPY/PHI/low-pointer projection of known destinations and the
 incoming return token. All constant targets must already be represented.
 `crates/unlace-decomp/src/p9_emit/kuna_returnselector.rs (ActionReturnSelector)`
@@ -2415,7 +2415,7 @@ the case targets.
    stride from the non-zero mask) and intersects every matching guard range;
    ranges still larger than 0x10000 are assumed positive. After that existing
    domain narrowing, matching guards are intersected again by
-   `crates/unlace-decomp/src/p2_lift/kuna_switchguardrange.rs (intersect)`.
+   `crates/unlace-lift/src/p2_lift/kuna_switchguardrange.rs (intersect)`.
    Two circular guard ranges whose first intersection needed two intervals may
    now intersect as one interval. This retains both bounds of a guarded A32 `ADDPL pc,pc,index,lsl #2`
    table instead of dropping its branch bodies into an unresolved interior call.
@@ -2574,7 +2574,7 @@ the case targets.
    4-variant enum and decoded 4,791 blocks of 64 other functions, 4.2 GB and
    no C in 300 s. The model's sanity check
    (`jumptable.rs (JumpBasicModel::own_rows)` over
-   `crates/unlace-decomp/src/p2_lift/kuna_switchrunon.rs (own_rows)`)
+   `crates/unlace-lift/src/p2_lift/kuna_switchrunon.rs (own_rows)`)
    reads each row's owner from the global symbol snapshot (the last known
    function entry at or before it, `context.rs
    (GlobalQuery::function_entry_at_or_before)`, together with the entries
@@ -2613,7 +2613,7 @@ the case targets.
    outright (no model, or the basic model's normal failure) and the function
    has not been scanned yet, the flow decodes the function's extent once
    (`flow.rs (FlowInfo::recover_jump_tables)` over
-   `crates/unlace-decomp/src/p2_lift/kuna_switchextent.rs
+   `crates/unlace-lift/src/p2_lift/kuna_switchextent.rs
    (function_tables)`: its entry to the next known function entry,
    `context.rs (ArchContext::function_entry_after)`, or a MiB), folds every
    register through the small lattice the dispatch shapes need (the newest
@@ -2831,7 +2831,7 @@ This is a correctness repair, without an option: before it, such a switch kept
 one case, and its other indexes fell through to the code after the switch.
 
 **Guard merging** (`switchguardmerge`, default on; kuna;
-`crates/unlace-decomp/src/p2_lift/kuna_switchguardmerge.rs (ActionSwitchGuardMerge)`,
+`crates/unlace-lift/src/p2_lift/kuna_switchguardmerge.rs (ActionSwitchGuardMerge)`,
 run after `ActionSwitchNorm`): gcc and clang lower a switch with a far outlier
 (`case 100:` beside `case 0 ... 6:`) to a range guard around the jump table and
 `x == 100` tests on the guard's other side, or (clang) to a chain of such tests
@@ -3018,7 +3018,7 @@ own recovery instead of the whole function.
 GCC lowers a dense switch over a small variable into a balanced binary-search
 tree of compares — no BRANCHIND, so no switch, and Ghidra (like stock angr)
 renders a deep if/else chain.
-`crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs` (port of
+`crates/unlace-lift/src/p2_lift/kuna_loweredswitch.rs` (port of
 SAILR's `LoweredSwitchSimplifier`) detects the cascade and *manufactures* the
 artifact. The two halves straddle a restart because the CFG surgery must not
 strand phi state:
@@ -3143,7 +3143,7 @@ did compare can drop out of the prototype.
 
 With the option on, the install reads what the head's own compare instruction
 reads.
-`crates/unlace-decomp/src/p2_lift/kuna_loweredswitchvalue.rs (head_compare_operand)`
+`crates/unlace-lift/src/p2_lift/kuna_loweredswitchvalue.rs (head_compare_operand)`
 walks the branch condition back through the raw p-code of the head block, and of
 its single predecessor. Raw reads are not linked to their writes before heritage,
 so each read is matched to the last op writing the same location on that path.
@@ -3208,7 +3208,7 @@ shared join).
 `funcdata_block.rs (Funcdata::kuna_install_lowered_switch)`
 pushes one table entry per case value, so shared bodies keep every label, and
 detection keeps a recovered record only when
-`crates/unlace-decomp/src/p2_lift/kuna_loweredswitchexact.rs (record_is_exact)`
+`crates/unlace-lift/src/p2_lift/kuna_loweredswitchexact.rs (record_is_exact)`
 holds. `kuna_loweredswitchexact.rs (switch_routes_like_cascade)` replays the
 compare tree against the switch the install builds. Every node compares the
 switch variable, widened only by zero or sign extension (or a same-width copy),
@@ -3258,7 +3258,7 @@ that single test finds no case, and the fifteen-case tree behind it rendered as 
 goto ladder into the shared join, because detection only ever tried the first
 head.
 
-`crates/unlace-decomp/src/p2_lift/kuna_loweredswitchheads.rs (cascade_heads)`
+`crates/unlace-lift/src/p2_lift/kuna_loweredswitchheads.rs (cascade_heads)`
 lists every head in block order and detection tries each (past its leading
 all-ones sentinel guards), recording the first cascade that recovers. Every
 cascade is recorded only when `kuna_loweredswitchexact.rs (record_is_exact)`
@@ -3280,7 +3280,7 @@ check on an offset copy of the selector and a test of a bit of a constant mask
 sharing one shift, plus equality tests for the outliers. `recover_cascade` reads
 only compares of the selector itself against a constant, so these stay `if`
 chains. When `ActionLowerSwitchDetect` records nothing for a function,
-`crates/unlace-decomp/src/p2_lift/kuna_loweredswitchbits.rs (recover)`
+`crates/unlace-lift/src/p2_lift/kuna_loweredswitchbits.rs (recover)`
 tries them.
 
 A condition block is one whose CBRANCH condition is computed by integer, boolean,
@@ -3344,7 +3344,7 @@ is never changed, only what counts as a bound.
 
 - **(kuna) `switchmodbound`, default off (from Ghidra issue GH-9191) —**
   `jumptable.rs (JumpBasicModel::kuna_try_modulo_bound_table)` (option shell:
-  `crates/unlace-decomp/src/p2_lift/kuna_switchmodbound.rs`). Accepts
+  `crates/unlace-lift/src/p2_lift/kuna_switchmodbound.rs`). Accepts
   an *in-band* bound: the meld path from the BRANCHIND, through realigning ops
   and exactly one table LOAD, reaches an `INT_REM`/`INT_SREM` by a constant `N`
   or an `INT_AND` with a contiguous low mask (`bound = mask+1`); the index is
@@ -3353,7 +3353,7 @@ is never changed, only what counts as a bound.
   no modulo bound it can over-bound an unrelated computed jump.
 - **(angr) `switchguardbound`, default off —**
   `jumptable.rs (JumpBasicModel::kuna_try_guard_bound_table)` (option shell:
-  `crates/unlace-decomp/src/p2_lift/kuna_switchguardbound.rs`).
+  `crates/unlace-lift/src/p2_lift/kuna_switchguardbound.rs`).
   Accepts an *out-of-band* CBRANCH range guard that guard analysis missed —
   the GCC `sub LOW; ja DEFAULT` dispatch where, on the early partial-function
   run, the guard is still unsimplified x86 flag arithmetic (the pull-back
@@ -3367,7 +3367,7 @@ is never changed, only what counts as a bound.
   memory round-trip dataflow cannot prove.
 - **(angr) `switchsharedcase`, default on (DIV-14) —**
   `jumptable.rs (JumpBasicModel::kuna_try_loop_carried_guard_table)` (option
-  shell: `crates/unlace-decomp/src/p2_lift/kuna_switchsharedcase.rs`).
+  shell: `crates/unlace-lift/src/p2_lift/kuna_switchsharedcase.rs`).
   Rescues the GCC PIC relative-offset table (`target = base +
   sext(load4(base + idx*4))`) whose `lea .rodata` base register is set *before*
   a getopt-style loop while the BRANCHIND sits inside it: the base reaches the
@@ -3480,7 +3480,7 @@ sources, checked in order:
    the call-graph fixpoint `noreturn_propagate`) described in chapter
    [01 — Program preparation](01-program-prep.md);
 2. **(angr) the vendored-list name match (DIV-13, under `noreturn_known`)** —
-   `crates/unlace-decomp/src/p2_lift/kuna_noreturn_externmatch.rs
+   `crates/unlace-lift/src/p2_lift/kuna_noreturn_externmatch.rs
    (is_known_noreturn_name)`: the callee *display name* matched against the
    same vendored list the analysis tier uses
    (`crates/unlace-analysis/data/ElfFunctionsThatDoNotReturn`,
@@ -3488,7 +3488,7 @@ sources, checked in order:
    all-leading-underscore strip, global/`std`-only namespace guard, and
    trailing-`*` wildcard-prefix support;
 3. **(angr) the closed-list name match (DIV-14, under `noreturn_known`)** —
-   `crates/unlace-decomp/src/p2_lift/kuna_noreturnextern.rs
+   `crates/unlace-lift/src/p2_lift/kuna_noreturnextern.rs
    (matches_noreturn_extern_name)`: an exact-match check against a closed,
    hard-coded ELF no-return name set with the same namespace guard.
 
@@ -3540,7 +3540,7 @@ belongs to the call site, `is_no_return` (and with it the `bejoin` and
 
 ### Caller-local PPC32 PIC imports
 
-`crates/unlace-decomp/src/p2_lift/kuna_ppc32piccalls.rs (prove)` implements
+`crates/unlace-lift/src/p2_lift/kuna_ppc32piccalls.rs (prove)` implements
 `ppc32picimports on` (default off). The separate `abi` mode uses the loader
 analysis and assumptions in `docs/spec/01-program-prep.md`. After ordinary flow builds raw P-code blocks,
 constant propagation follows every reachable CFG successor. It recognizes a
@@ -3602,7 +3602,7 @@ budget is reported as a coverage note, since its import calls are then missing.
 ## 2.5 Arch quirks
 
 **(kuna) SPARC struct return — `option sparcstructret`, default on, SPARC-gated,
-`crates/unlace-decomp/src/p2_lift/kuna_sparcstructret.rs
+`crates/unlace-lift/src/p2_lift/kuna_sparcstructret.rs
 (kuna_sparc_struct_ret_trap_producer)` (from Ghidra issue GH-6882).** The SPARC ABI
 places an `unimp <structsize>` word after a call to a struct-returning function.
 SLEIGH lifts this marker to an `IllegalInstructionTrap` CALLOTHER feeding a
@@ -3629,7 +3629,7 @@ image — before each path walk.
 ## 2.6 Cleanup-call removal
 
 **(oxidizer) `option cleanupcode`, default on (DIV-81),
-`crates/unlace-decomp/src/p2_lift/kuna_cleanupcode.rs
+`crates/unlace-lift/src/p2_lift/kuna_cleanupcode.rs
 (ActionRemoveCleanupCode)`.** Rust's automatic resource management emits a
 drop-glue call at every scope exit and every `?` early return. None of those
 calls is in the source, none carries meaning for a reader, and on a real binary
@@ -3702,7 +3702,7 @@ byte-identical to a build without the pass.
 ## 2.7 Linux `int 0x80` syscall naming
 
 **(kuna) `option linuxsyscall off|auto|on`, default `auto`,
-`crates/unlace-decomp/src/p2_lift/kuna_linuxsyscall.rs
+`crates/unlace-lift/src/p2_lift/kuna_linuxsyscall.rs
 (ActionLinuxSyscall)`.** x86 SLEIGH lowers `INT imm8` to a black-box userop
 feeding an indirect call —
 `tmp:1 = imm8; intloc:4 = swi(tmp); call [intloc];` — which is the honest
@@ -3808,7 +3808,7 @@ shellcode and raw dumps; `off` keeps the `swi` rendering.
 ## 2.8 Inlined MSVC `std::string` appends
 
 **(kuna) `option msvcstrappend`, default off,
-`crates/unlace-decomp/src/p2_lift/kuna_msvcstrappend.rs
+`crates/unlace-lift/src/p2_lift/kuna_msvcstrappend.rs
 (ActionMsvcStrAppend)`.** MSVC inlines `std::string::push_back` — which is what
 `operator+=(char)` calls — and the literal form of `append(const char *,
 size_t)` at every call site. The x64 string object keeps its buffer or heap
@@ -4113,7 +4113,7 @@ write no flags: `VMFUNC` leaves them unchanged, and the flags after a guest's
 `tests/stages/gh1628-x86-vmx-decode-flags.xml`.
 
 For the bounded local policy (`kuna_localstackviews.rs`), the `FlowEmit::dump` seam in
-`crates/unlace-decomp/src/p2_lift/flow.rs` records original STORE and
+`crates/unlace-lift/src/p2_lift/flow.rs` records original STORE and
 persistent memory COPY identities for the bounded P6 policy. Register COPYs do
 not contribute. Generational operation identity and original receiver storage
 are retained separately from instruction-start flags, which clones can copy.
@@ -4186,7 +4186,7 @@ Exercised by `tests/stages/kuna-s390x.xml`.
 ## 2.9 Go stack-growth prologue folding
 
 **(kuna) `option gomorestack off|auto|always`, default auto,
-`crates/unlace-decomp/src/p2_lift/kuna_gomorestack.rs
+`crates/unlace-lift/src/p2_lift/kuna_gomorestack.rs
 (ActionGoMorestack)`.** Every non-leaf function the Go compiler emits opens
 with a stack-growth guard: compare SP against the goroutine's stackguard
 (`0x10(%r14)` under the amd64 register ABI, the TLS-reached `g` before it), on
@@ -4256,7 +4256,7 @@ real stripped Go binary and proves the detection-driven `auto` path end to end.
 ## 2.10 Go write-barrier folding
 
 **(kuna) `option gowritebarrier off|auto|always`, default auto,
-`crates/unlace-decomp/src/p2_lift/kuna_gowritebarrier.rs
+`crates/unlace-lift/src/p2_lift/kuna_gowritebarrier.rs
 (ActionGoWriteBarrier)`.** Every pointer store the Go garbage collector must
 see compiles to a flag-test diamond: when `runtime.writeBarrier` is set, a
 `runtime.gcWriteBarrier<N>` thunk hands back the GC pointer buffer (R11 on
@@ -4300,7 +4300,7 @@ gate, which builds a real stripped Go binary and proves the detection-driven
 ## 2.11 arm64e pointer-auth failure checks
 
 **(kuna) `option ptrauthtrap on|off`, default on,
-`crates/unlace-decomp/src/p2_lift/kuna_ptrauthtrap.rs
+`crates/unlace-lift/src/p2_lift/kuna_ptrauthtrap.rs
 (ActionPtrAuthTrap)`.** The AArch64 SLEIGH spec gives every pointer-auth
 instruction a `ShowPAC` context, off in `AARCH64.pspec`, and with it off the
 instruction lifts to no p-code. `paciasp`, `pacibsp`, `autibsp`, `pacia`,
@@ -4378,7 +4378,7 @@ or a value nothing assigns: `int big_frame(int k)` printed as
 array was sized from an unassigned `x1`.
 
 With `option chkstkdarwin` on (the default), the action in
-`crates/unlace-decomp/src/p2_lift/kuna_chkstkdarwin.rs` removes those
+`crates/unlace-lift/src/p2_lift/kuna_chkstkdarwin.rs` removes those
 calls from the raw p-code. It runs right after `rustprobestack`, before
 ExtraPopSetup, FuncLink and SSA, and only on a Darwin AArch64 image: an AArch64
 language and an Apple container (Mach-O, fat Mach-O or dyld shared cache,
@@ -4414,7 +4414,7 @@ import's function symbol. `off` keeps the call.
 ## 2.13 MachineOutliner fragments
 
 **(kuna) `option outlinedinline on|off`, default on,
-`crates/unlace-decomp/src/p2_lift/kuna_outlinedinline.rs
+`crates/unlace-lift/src/p2_lift/kuna_outlinedinline.rs
 (is_outlined_name)`.** At `-Oz`, and in much Swift and Apple system code,
 clang's MachineOutliner moves instruction sequences that repeat across
 functions into shared `OUTLINED_FUNCTION_<n>` fragments. A caller reaches a
@@ -4469,7 +4469,7 @@ decode-table corrections with no option. Pinned by
 ## 2.15 Itanium exception edges
 
 **(kuna) `option itaniumeh on|off`, default on,
-`crates/unlace-decomp/src/p2_lift/kuna_itaniumeh.rs`, fed by
+`crates/unlace-lift/src/p2_lift/kuna_itaniumeh.rs`, fed by
 `crates/unlace-analysis/src/analyzers/entry/kuna_itaniumeh.rs
 (ItaniumEhPass)`.** An Itanium landing pad is reached only by the unwinder, so
 normal flow never gets to it: catch bodies, destructor calls on the exception
@@ -4608,7 +4608,7 @@ call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`
 ## 2.13 VEX zero-upper writes and per-lane vector p-code
 
 **(kuna) `option vexzeroupper on|off`, default on,
-`crates/unlace-decomp/src/p2_lift/kuna_vexzeroupper.rs`.** A VEX- or
+`crates/unlace-lift/src/p2_lift/kuna_vexzeroupper.rs`.** A VEX- or
 EVEX-encoded instruction that writes an XMM or YMM register clears the rest
 of the ZMM register, and the x86 SLEIGH spec states that as one write of the
 whole register, `ZmmReg1 = zext(result)`. Every such write overlaps every
@@ -4631,7 +4631,7 @@ only) each `INT_ZEXT` into a 32- or 64-byte register from a 4-, 8-, 16- or
   (fixture `vexret_avx_x86_64`, which Ubuntu's gcc emits without `-mavx`).
 
 **(kuna) `option lanefuse on|off`, default on,
-`crates/unlace-decomp/src/p2_lift/kuna_lanefuse.rs`.** The spec writes
+`crates/unlace-lift/src/p2_lift/kuna_lanefuse.rs`.** The spec writes
 many SSE/AVX instructions lane by lane: `VADDPS ymm0, ymm0, ymm1` is eight
 `FLOAT_ADD`s on 4-byte slices, so no op reads or writes a whole vector. After
 translation, a run of two or more ops of one opcode whose output and inputs
@@ -4671,7 +4671,7 @@ Pinned by `tests/stages/kuna-vectorabi.xml`.
 ## 2.16 DEX exception edges
 
 **(kuna) `option javatry on|off`, default on,
-`crates/unlace-decomp/src/p2_lift/kuna_javatry.rs`.** A DEX method lists
+`crates/unlace-lift/src/p2_lift/kuna_javatry.rs`.** A DEX method lists
 its protected ranges and their catch clauses in its `code_item`
 (`kuna_dex/format.rs (DexFile::tries)`); nothing in the instruction stream
 reaches a handler, so without the table every catch body is unreachable code.
@@ -4789,7 +4789,7 @@ exceeded the 5% wall-time confidence bound. When enabled, it runs before
 ExtraPopSetup, FuncLink and SSA. At explicit `auto` it
 requires Rust source-language evidence; `always` permits the same proof on other
 images, and `off` retains the helper. The action in
-`crates/unlace-decomp/src/p2_lift/kuna_rustprobestack.rs` matches the
+`crates/unlace-lift/src/p2_lift/kuna_rustprobestack.rs` matches the
 complete 57-byte AMD64 page-probing helper, canonical x86-64 register storage,
 a direct relative CALL and its raw stack push/return-address store, and an
 immediately following `sub rsp,rax`. The full RAX frame-size constant must reach

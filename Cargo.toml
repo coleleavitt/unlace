@@ -33,6 +33,7 @@ unlace-base = { path = "crates/unlace-base" }
 unlace-num = { path = "crates/unlace-num" }
 unlace-sleigh = { path = "crates/unlace-sleigh" }
 unlace-middle = { path = "crates/unlace-middle" }
+unlace-lift = { path = "crates/unlace-lift" }
 unlace-decomp = { path = "crates/unlace-decomp" }
 unlace-analysis = { path = "crates/unlace-analysis" }
 unlace-console = { path = "crates/unlace-console" }

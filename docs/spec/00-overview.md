@@ -1686,7 +1686,7 @@ publishes its deadline to
 `crates/unlace-middle/src/substrate/kuna_budget.rs (deadline_passed)`,
 so a walk inside one pass gives up rather than run past it. Flow-time
 jump-table recovery probes it too, before and after each table's attempt and
-after its basic and default-path models (`crates/unlace-decomp/src/p2_lift/flow.rs
+after its basic and default-path models (`crates/unlace-lift/src/p2_lift/flow.rs
 (FlowInfo::recover_jump_tables)`, `crates/unlace-middle/src/p2_lift/jumptable.rs
 (JumpTable::recover_model)`); a table reached past the deadline is not attempted
 and its indirect jump is truncated as an unrecovered one. Inside a model, every
@@ -1766,7 +1766,7 @@ its call specs registered under their process-unique handles
 which were otherwise kept for every call site of every function; an inlined
 callee's handles pass to the function it is inlined into, whose cloned call
 ops still name them
-(`crates/unlace-decomp/src/p2_lift/flow.rs (FlowInfo::inline_flow)`), and the
+(`crates/unlace-lift/src/p2_lift/flow.rs (FlowInfo::inline_flow)`), and the
 per-callee summaries a run caches are stored compactly (04, `kuna_calleedeadarg.rs`).
 The allocator keeps a function's freed working memory resident, so without
 a release a batch would start every later function at the high-water of the
@@ -4094,10 +4094,10 @@ study summarized in `docs/history.md`; every row below is re-verified against th
 | Edge | Mechanism | Trigger | Survives / persisted where | kuna anchor |
 |---|---|---|---|---|
 | rule pools → themselves | local fixpoint | any rule fires; opcode change rewinds the per-op rule walk | — | `crates/unlace-middle/src/infra/action.rs (ActionPool::process_op)` |
-| P2 → P2, jump-table recovery | reduced sub-query | `BRANCHIND` with unrecovered targets mid flow-follow | recovered table → `jumpvec`; the cloned partial is discarded | `crates/unlace-decomp/src/infra/decompile_drive.rs (run_jumptable_pipeline)`, driven from `crates/unlace-decomp/src/p2_lift/flow.rs (generate_ops_with_jumptables)` |
+| P2 → P2, jump-table recovery | reduced sub-query | `BRANCHIND` with unrecovered targets mid flow-follow | recovered table → `jumpvec`; the cloned partial is discarded | `crates/unlace-decomp/src/infra/decompile_drive.rs (run_jumptable_pipeline)`, driven from `crates/unlace-lift/src/p2_lift/flow.rs (generate_ops_with_jumptables)` |
 | Band B → P3/P2, dead-code delay | restart + persisted hint | a free varnode reappears at an already-heritaged address after dead code was removed | `Override::insert_deadcode_delay` (+1) in P0 | `crates/unlace-middle/src/p3_dataflow/heritage.rs (bump_deadcode_delay)`; suppressed during jump-table recovery (the `is_jumptable_recovery_on` guards at its call sites) |
 | P4 → Band B, late prototype | restart + persisted hint | a resolved indirect call's prototype cannot be merged in place (`late_restriction` fails) | `Override::insert_indirect_override` — the re-flow rebuilds the CALLIND as a direct CALL | `crates/unlace-middle/src/p4_calls/fspec.rs (FuncCallSpecs::deindirect, FuncCallSpecs::force_set)` |
-| (angr) P2 → P2, lowered switch | detect-then-restart, two halves | a comparison cascade recognized as a compiler-lowered switch after simplification | the recovered cascade record, in a store shared by both halves | detect in fullloop writes + requests restart, install in mainloop (before heritage) reads on the restarted run — `crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs (ActionLowerSwitchDetect, ActionLowerSwitchInstall)` |
+| (angr) P2 → P2, lowered switch | detect-then-restart, two halves | a comparison cascade recognized as a compiler-lowered switch after simplification | the recovered cascade record, in a store shared by both halves | detect in fullloop writes + requests restart, install in mainloop (before heritage) reads on the restarted run — `crates/unlace-lift/src/p2_lift/kuna_loweredswitch.rs (ActionLowerSwitchDetect, ActionLowerSwitchInstall)` |
 | P5 → P2, determined branch | in-loop re-entry | constant folding decides a conditional branch, removing a CFG edge | the simplified ops themselves | `crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs (ActionDeterminedBranch)`, inside mainloop |
 | (kuna/angr) P7/P8 structuring fallback | degraded re-run | the region structurer cannot collapse the graph to a single root | nothing; `sblocks` is re-seeded clean | `crates/unlace-decomp/src/p8_structure/blockaction.rs (ActionBlockStructure)` falls back to `CollapseStructure` after `crates/unlace-decomp/src/p8_structure/region_structurer.rs (run_region_structurer)` declines |
 | P0 → everything, the outer loop | knowledge-store re-run | an operator/agent writes an assertion (`option`, `kassert`, override) and re-decompiles | the entire P0 store | `crates/unlace-middle/src/p0_knowledge/kuna_assert.rs (Dispatch)`; the console rebuilds the IR per `decompile`, re-seeding stashed facts — `crates/unlace-decomp/src/infra/decompile_drive.rs (decompile_func_full_with_override_dyn)` (§0.8 is when the rebuild is skipped) |

@@ -91,11 +91,12 @@ macro_rules! declare_hooks {
             }
         }
 
-        #[cfg(test)]
         impl KunaHooks {
-            /// A table whose every hook panics, naming itself: what this crate's own unit tests
-            /// run with, since the driver that provides the real hooks is a crate above this one.
-            fn unprovided() -> KunaHooks {
+            /// A table whose every hook panics, naming itself: what the unit tests of a crate
+            /// below the driver run with, since the driver that provides the real hooks is a
+            /// crate above it.
+            #[doc(hidden)]
+            pub fn unprovided() -> KunaHooks {
                 KunaHooks {
                     $($name: {
                         fn stub$(<$($lt),*>)?($(_: $arg),*) $(-> $ret)? {

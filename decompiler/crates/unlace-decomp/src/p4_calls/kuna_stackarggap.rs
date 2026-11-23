@@ -168,6 +168,11 @@ pub fn address_is_spacebase(addr: &unlace_base::address::Address) -> bool {
         .unwrap_or(false)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackarggap_address_is_spacebase = Some(address_is_spacebase);
+}
+
 #[cfg(test)]
 #[path = "kuna_stackarggap/tests.rs"]
 mod tests;

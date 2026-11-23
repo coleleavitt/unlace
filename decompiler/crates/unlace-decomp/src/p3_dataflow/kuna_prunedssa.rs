@@ -27,6 +27,7 @@
 //! return (output trials) count as reads there; this half is limited to the
 //! stack space.
 
+use crate::heritage::LiveCalls;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
@@ -42,11 +43,6 @@ const USE: u8 = 1;
 const KILL: u8 = 2;
 
 type Event = (usize, u32, u8, OpId);
-
-/// The calls that keep their guard for one stack range.
-pub(crate) struct LiveCalls {
-    keep: FxHashSet<OpId>,
-}
 
 impl LiveCalls {
     /// Can a read of the range follow `call`?
@@ -285,4 +281,12 @@ fn call_reads(
         && fc.proto().characterize_as_input_param(&trans, size) != Containment::NoContainment)
         || ((fc.is_output_active() || fc.is_stack_output_lock())
             && fc.proto().characterize_as_output(&trans, size) != Containment::NoContainment)
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.prunedssa_applies = Some(applies);
+    hooks.prunedssa_applies_to_calls = Some(applies_to_calls);
+    hooks.prunedssa_live_calls = Some(live_calls);
+    hooks.prunedssa_prune_merges = Some(prune_merges);
 }

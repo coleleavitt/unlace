@@ -40,6 +40,11 @@ pub(crate) fn span_straddles_join(
     (span.0 == junction && span.1 > end) || (span.1 == junction && span.0 < start)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.inputrefinement_span_straddles_join = Some(span_straddles_join);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

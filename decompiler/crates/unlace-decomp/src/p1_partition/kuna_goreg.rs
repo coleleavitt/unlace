@@ -397,6 +397,13 @@ pub fn g_symbol_flags() -> uint4 {
     crate::varnode::varnode_flags::typelock | crate::varnode::varnode_flags::namelock
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.goreg_g_symbol_flags = Some(g_symbol_flags);
+    hooks.goreg_goroutine_register = Some(goroutine_register);
+    hooks.goreg_register_abi = Some(register_abi);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

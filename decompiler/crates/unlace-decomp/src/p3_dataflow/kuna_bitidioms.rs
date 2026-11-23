@@ -682,7 +682,7 @@ fn scan_samples(width: i32) -> Vec<u64> {
         0xffff_ffff,
         0x8000_0000_0000_0001,
     ]);
-    let m = crate::kuna_strlenscan::mask(width);
+    let m = crate::kuna_regioneval::mask(width);
     out.into_iter().map(|v| v & m).filter(|&v| v != 0).collect()
 }
 
@@ -690,7 +690,7 @@ fn scan_samples(width: i32) -> Vec<u64> {
 /// running it: for every sample source the counter the head hands to the exit
 /// is the lowest (or highest) set bit index.
 fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
-    use crate::kuna_strlenscan::{eval, op, size, taken};
+    use crate::kuna_regioneval::{eval, op, size, taken};
     let hb = data.bblocks_ref().block(head);
     if hb.size_in() != 2 || hb.size_out() != 2 {
         return None;
@@ -733,7 +733,7 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
             .and_then(|p| p.get_parent())
             .is_some_and(|b| region.contains(&b))
     };
-    let is_const = |v: VarnodeId| crate::kuna_strlenscan::copied_constant(data, v).is_some();
+    let is_const = |v: VarnodeId| crate::kuna_regioneval::copied_constant(data, v).is_some();
     // The source: the one non-constant value entering the loop.
     let mut leaves: Vec<VarnodeId> = phis.iter().map(|p| p.1).filter(|&v| !is_const(v)).collect();
     for &o in &ops {
@@ -768,7 +768,7 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
                 if p.1 == source {
                     Some(x)
                 } else {
-                    crate::kuna_strlenscan::copied_constant(data, p.1)
+                    crate::kuna_regioneval::copied_constant(data, p.1)
                 }
             })
             .collect::<Option<Vec<_>>>()?;

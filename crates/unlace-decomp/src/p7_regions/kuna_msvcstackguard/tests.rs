@@ -106,15 +106,6 @@ fn sp(fd: &Funcdata) -> (Rc<AddrSpace>, uintb, int4) {
     stack_pointer_storage(fd).expect("the fixture has a stack space")
 }
 
-fn sp_input(fd: &mut Funcdata) -> VarnodeId {
-    use crate::funcdata_spacebase::FuncdataSpacebaseExt;
-    let a = reg(fd, SP_OFF);
-    let vn = fd.new_varnode(SP_SIZE, &a, None);
-    let vn = fd.set_input_varnode(vn).unwrap();
-    fd.spacebase();
-    vn
-}
-
 fn reg(fd: &Funcdata, off: u64) -> Address {
     Address::new(
         Rc::clone(

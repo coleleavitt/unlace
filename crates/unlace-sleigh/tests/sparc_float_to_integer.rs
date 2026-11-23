@@ -39,7 +39,7 @@ impl PcodeEmit for Ops {
 fn check_conversions(cases: &[(&str, u32, u32, u32, &str)]) {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     for bits in [32, 64] {
-        let sla = std::fs::read(root.join(format!(
+        let sla = unlace_slacomp::slacache::read_sla(root.join(format!(
             "specs/Ghidra/Processors/Sparc/data/languages/SparcV9_{bits}.sla"
         )))
         .unwrap();

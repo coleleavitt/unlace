@@ -30,8 +30,8 @@ design doc targets — see the *Architecture note* below. From this directory:
 gcc -O2 -ffreestanding -fno-stack-protector -c lib.c -o lib.o
 
 # 2. fingerprint it with kuna's own generator → the vendored .fid
-#    (SLEIGHHOME must point at the repo `specs/` with the x86 .sla built:
-#     `target/release/slacomp -a specs`, or `slacomp specs/.../x86-64.slaspec`)
+#    (SLEIGHHOME must point at the repo `specs/`; the x86-64 .sla compiles into the
+#     .sla cache on first use)
 SLEIGHHOME="$PWD/../../../specs" \
   unlace fid build lib.o -o lib.fid --lang x86:LE:64:default --cspec gcc
 

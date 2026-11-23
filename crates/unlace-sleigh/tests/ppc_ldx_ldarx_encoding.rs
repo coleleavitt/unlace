@@ -57,7 +57,7 @@ fn ldx_and_ldarx_decode_as_doubleword_loads_at_their_own_opcodes() {
         "ppc_32_e500_le",
         "ppc_64_isa_be",
     ] {
-        let sla = std::fs::read(root.join(format!(
+        let sla = unlace_slacomp::slacache::read_sla(root.join(format!(
             "specs/Ghidra/Processors/PowerPC/data/languages/{spec}.sla"
         )))
         .unwrap();

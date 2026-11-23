@@ -32,7 +32,7 @@ legitimate outcome — record it and stop (§4). Not every gap is a feature.
 ## 0. Prerequisites
 
 ```bash
-cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli && target/release/slacomp -a specs      # decomp_dbg / kuna at target/release/, .sla specs
+cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli      # decomp_dbg / kuna at target/release/ (specs compile on first use)
 cd <repo-root>                   # every `python -m scripts.pipeline.<mod>` below runs from the root
 ```
 
@@ -360,8 +360,8 @@ touch .kuna-pipeline/STOP                          # graceful stop; in-flight wo
 
 Mechanics an operator should know: workers claim opportunities atomically
 (`state claim`, exit code 0/1); state always lives in the **main** tree
-(`KUNA_PIPELINE_STATE_DIR`) so `status` sees worktree workers; worktrees reuse the main
-tree's compiled specs (`KUNA_SPECS` — never `target/release/slacomp -a specs` in a worktree); session ids are
+(`KUNA_PIPELINE_STATE_DIR`) so `status` sees worktree workers; worktrees read their own
+`specs/` (each `.sla` compiles into the shared `.sla` cache on first use); session ids are
 recorded for review (`claude --resume` for Claude, `codex exec resume` for Codex), and Codex
 JSONL plus final output are retained beside the worker log; merged/closed-PR worktrees are
 GC'd, open ones kept. Proposals: `status --proposals` lists parked drafts;

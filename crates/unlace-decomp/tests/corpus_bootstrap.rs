@@ -262,9 +262,9 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
     let root = repo_root();
     let corpus_path = root.join(&fix.corpus);
     let sla_path = root.join("specs").join(&fix.sla_rel);
-    if !sla_path.is_file() {
+    if !sla_path.with_extension("slaspec").is_file() {
         return Err(format!(
-            "{} not built (run `target/release/slacomp -a specs`)",
+            "{} unavailable (no .slaspec under specs/)",
             sla_path.display()
         ));
     }

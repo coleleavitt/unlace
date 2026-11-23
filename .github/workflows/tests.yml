@@ -41,6 +41,7 @@ defaults:
     shell: bash
 
 env:
+  UNLACE_SLA_CACHE: ${{ github.workspace }}/.sla-cache
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   # A CI build is always from scratch, so incremental state is dead weight in the cache.
@@ -134,44 +135,28 @@ jobs:
       - name: Build binaries
         run: cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
 
-      # The .sla files depend only on the spec sources and the SLEIGH compiler (slacomp and
-      # the crates it builds from), so they are reused until one of those changes.
-      - name: Restore the compiled SLEIGH specs
+      # The engine compiles each .slaspec it needs into the .sla cache (UNLACE_SLA_CACHE,
+      # crates/unlace-slacomp/src/slacache.rs) on first use. Restoring the cache only saves
+      # that compile time; a miss is correct, just slower.
+      - name: Restore the .sla cache
         id: sla
         uses: actions/cache/restore@v4
         with:
-          path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
-
-      - name: Compile the SLEIGH specs
-        if: steps.sla.outputs.cache-hit != 'true'
-        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
-
-      - name: Save the compiled SLEIGH specs
-        if: steps.sla.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: specs/**/*.sla
-          key: ${{ steps.sla.outputs.cache-primary-key }}
-
-      # `.sla` files are gitignored build artifacts and EVERY datatest decodes
-      # through them. Asserting the tree is complete here turns a partial spec
-      # build into a clear failure instead of a confusing corpus error.
-      - name: Verify the compiled spec tree is complete
-        run: |
-          want=$(find specs -name '*.slaspec' | wc -l)
-          got=$(find specs -name '*.sla' | wc -l)
-          echo "compiled $got of $want .slaspec"
-          if [ "$got" -ne "$want" ] || [ "$got" -eq 0 ]; then
-            echo "::error::compiled $got .sla for $want .slaspec -- the spec tree is incomplete"
-            exit 1
-          fi
+          path: .sla-cache
+          key: sla-v2-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
       # tests/datatests vs docs/baseline.json and tests/stages vs docs/baseline-stages.json,
       # run in-process through the harness's datatest runner (crates/unlace-harness/tests/parity.rs).
       # The workspace suite runs the same two tests; this job carries them on every PR.
       - name: parity -- datatest and stage corpora vs their baselines
         run: cargo test --release -p unlace-harness --test parity
+
+      - name: Save the .sla cache
+        if: always() && steps.sla.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .sla-cache
+          key: ${{ steps.sla.outputs.cache-primary-key }}
 
       - name: spec anchors and phase-folder ownership (tools/check_spec.py)
         run: python3 tools/check_spec.py
@@ -307,27 +292,6 @@ jobs:
 
       - uses: taiki-e/install-action@cargo-nextest
 
-      # The .sla files depend only on the spec sources and the SLEIGH compiler (slacomp and
-      # the crates it builds from), so they are reused until one of those changes. This job
-      # saves them for the three test jobs, which only restore.
-      - name: Restore the compiled SLEIGH specs
-        id: sla
-        uses: actions/cache/restore@v4
-        with:
-          path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
-
-      - name: Compile the SLEIGH specs
-        if: steps.sla.outputs.cache-hit != 'true'
-        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
-
-      - name: Save the compiled SLEIGH specs
-        if: steps.sla.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: specs/**/*.sla
-          key: ${{ steps.sla.outputs.cache-primary-key }}
-
       - name: Test layout
         run: python3 scripts/check_test_layout.py
 
@@ -384,23 +348,15 @@ jobs:
 
       - uses: taiki-e/install-action@cargo-nextest
 
-      - name: Restore the compiled SLEIGH specs
+      # The engine compiles each .slaspec it needs into the .sla cache (UNLACE_SLA_CACHE,
+      # crates/unlace-slacomp/src/slacache.rs) on first use. Restoring the cache only saves
+      # that compile time; a miss is correct, just slower.
+      - name: Restore the .sla cache
         id: sla
         uses: actions/cache/restore@v4
         with:
-          path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
-
-      # Missing or unusable required processor specs fail the tests.
-      - name: Verify the compiled spec tree is complete
-        run: |
-          want=$(find specs -name '*.slaspec' | wc -l)
-          got=$(find specs -name '*.sla' | wc -l)
-          echo "compiled $got of $want .slaspec"
-          if [ "$got" -ne "$want" ] || [ "$got" -eq 0 ]; then
-            echo "::error::compiled $got .sla for $want .slaspec -- the spec tree is incomplete"
-            exit 1
-          fi
+          path: .sla-cache
+          key: sla-v2-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
       - uses: actions/download-artifact@v4
         with:

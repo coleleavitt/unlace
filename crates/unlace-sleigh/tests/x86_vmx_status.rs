@@ -71,7 +71,7 @@ struct Decoded {
 fn decode(longmode: bool, bytes: &[u8]) -> Decoded {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let sla = if longmode { "x86-64.sla" } else { "x86.sla" };
-    let sla = std::fs::read(
+    let sla = unlace_slacomp::slacache::read_sla(
         root.join("specs/Ghidra/Processors/x86/data/languages")
             .join(sla),
     )

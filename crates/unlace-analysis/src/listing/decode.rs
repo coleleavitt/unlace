@@ -420,7 +420,7 @@ mod tests {
 
     fn x86_with(bytes: &[u8], fail: bool) -> (Sleigh, Rc<AddrSpace>, Rc<Cell<usize>>) {
         let path = repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86.sla");
-        let sla = std::fs::read(&path)
+        let sla = unlace_slacomp::slacache::read_sla(&path)
             .unwrap_or_else(|error| panic!("required compiled spec {}: {error}", path.display()));
         let mut sleigh = Sleigh::new(Box::new(DummyImage), Box::new(ContextInternal::new()));
         sleigh

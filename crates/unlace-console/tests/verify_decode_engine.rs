@@ -42,6 +42,7 @@ fn specs_ready(relative: &[&str]) -> bool {
         repo_root()
             .join("specs/Ghidra/Processors")
             .join(path)
+            .with_extension("slaspec")
             .is_file()
     })
 }

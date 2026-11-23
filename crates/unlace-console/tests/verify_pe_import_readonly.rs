@@ -30,7 +30,7 @@ fn load(options: &[(&str, &str)]) -> ConsoleProgram {
     let mut prog =
         bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots).unwrap_or_else(|e| {
             panic!(
-                "bootstrap {FIXTURE} (build `.sla` with `target/release/slacomp -a specs`): {}",
+                "bootstrap {FIXTURE} (SLEIGH sources under specs/): {}",
                 e.explain()
             )
         });

@@ -60,7 +60,7 @@ fn lwarx_sets_the_reservation_tested_by_stwcx() {
         "ppc_64_isa_be",
         "ppc_64_isa_altivec_le",
     ] {
-        let sla = std::fs::read(root.join(format!(
+        let sla = unlace_slacomp::slacache::read_sla(root.join(format!(
             "specs/Ghidra/Processors/PowerPC/data/languages/{spec}.sla"
         )))
         .unwrap();

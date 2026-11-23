@@ -141,8 +141,10 @@ const VMA: u64 = 0x401000;
 /// Build a `Sleigh` over `x86-64.sla` loaded with `code` at `VMA`.
 fn build_x86_64(code: &[u8]) -> Sleigh {
     let root = repo_root();
-    let sla = std::fs::read(root.join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla"))
-        .expect("read x86-64.sla (run: slacomp x86-64.slaspec)");
+    let sla = unlace_slacomp::slacache::read_sla(
+        root.join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla"),
+    )
+    .expect("read x86-64.sla (run: slacomp x86-64.slaspec)");
 
     let ctx = Box::new(ContextInternal::new());
     let img = MemImg {

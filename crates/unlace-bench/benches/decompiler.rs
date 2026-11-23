@@ -1,8 +1,8 @@
 //! End-to-end decompiler benchmarks over committed fixtures, for CodSpeed
 //! (simulation mode in CI) and plain `cargo bench`.
 //!
-//! Every case reads the built `.sla` tree (`$KUNA_SPECS`, else the repo's
-//! `specs/`); build it first with `target/release/slacomp -a specs`. Setup that is not the measured
+//! Every case reads the SLEIGH tree (`$KUNA_SPECS`, else the repo's `specs/`); each `.sla` comes
+//! from the `.sla` cache, compiled on first use. Setup that is not the measured
 //! stage (reading files, loading the image) runs in `with_inputs`, which divan
 //! and CodSpeed leave out of the measurement.
 
@@ -63,7 +63,8 @@ impl LoadImage for NoImage {
 #[divan::bench(args = ["x86/data/languages/x86-64.sla", "AARCH64/data/languages/AARCH64.sla"])]
 fn sleigh_load(bencher: divan::Bencher, sla: &str) {
     let path = specs_dir().join("Ghidra/Processors").join(sla);
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let bytes = unlace_slacomp::slacache::read_sla(&path)
+        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     bencher.bench(|| {
         let mut sleigh = Sleigh::new(Box::new(NoImage), Box::new(ContextInternal::new()));
         sleigh

@@ -53,8 +53,8 @@ fn specs_dir_string() -> String {
 /// Run one datatest file through the engine, returning its full Success/FAIL +
 /// KUNA_DUMP `print C` output (the dump hook routes the rendered C into `out`).
 fn run_one(stem: &str) -> Option<String> {
-    if !x86_64_sla().exists() {
-        eprintln!("SKIP: x86-64.sla not built (run `target/release/slacomp -a specs`)");
+    if !unlace_slacomp::slacache::sla_path(&x86_64_sla()).is_ok() {
+        eprintln!("SKIP: x86-64.sla unavailable (no .slaspec under specs/)");
         return None;
     }
     let path = repo_root()

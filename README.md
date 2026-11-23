@@ -30,7 +30,7 @@ There are no binary releases yet. With a Rust toolchain:
 ```bash
 git clone https://github.com/coleleavitt/unlace && cd unlace
 cargo build --release -p unlace-cli -p unlace-slacomp   # the CLI and the SLEIGH compiler
-target/release/slacomp -a specs                          # compile the SLEIGH specs
+# No spec build step: each language's .sla is compiled from specs/ on first use and cached.
 export PATH="$PWD/target/release:$PATH"
 ```
 

@@ -47,7 +47,8 @@ fn read_sla(spec: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../specs/Ghidra/Processors/nanoMIPS/data/languages")
         .join(format!("{spec}.sla"));
-    std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+    unlace_slacomp::slacache::read_sla(&path)
+        .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
 fn sleigh(spec: &str, image: Vec<u8>, base: u64) -> Sleigh {

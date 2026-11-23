@@ -54,8 +54,10 @@ impl LoadImage for DummyImg {
 
 fn mips_engine() -> Sleigh {
     let root = repo_root();
-    let sla = std::fs::read(root.join("specs/Ghidra/Processors/MIPS/data/languages/mips32be.sla"))
-        .expect("read mips32be.sla");
+    let sla = unlace_slacomp::slacache::read_sla(
+        root.join("specs/Ghidra/Processors/MIPS/data/languages/mips32be.sla"),
+    )
+    .expect("read mips32be.sla");
     let ctx = Box::new(ContextInternal::new());
     let mut sleigh = Sleigh::new(Box::new(DummyImg), ctx);
     sleigh

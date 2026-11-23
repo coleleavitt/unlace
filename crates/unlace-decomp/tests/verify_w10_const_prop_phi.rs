@@ -265,7 +265,7 @@ fn condconst_assertions() -> Option<String> {
         .output()
         .ok()?;
     if !specs_root()
-        .join("Ghidra/Processors/x86/data/languages/x86-64.sla")
+        .join("Ghidra/Processors/x86/data/languages/x86-64.slaspec")
         .exists()
     {
         // specs not compiled in this tree

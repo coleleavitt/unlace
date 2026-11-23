@@ -344,16 +344,13 @@ pub struct Bootstrap {
 /// defaults, open the image).  Mirrors `tests/corpus_bootstrap.rs::bootstrap`.
 ///
 /// Returns `Err(msg)` where `msg` starts with `"not built"` if the `.sla` is
-/// missing (a bare checkout without `target/release/slacomp -a specs`).
+/// missing (a tree without the SLEIGH sources).
 pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
     let root = repo_root();
     let corpus_path = root.join(c.corpus);
     let sla_path = root.join("specs").join(c.sla_rel);
-    if !sla_path.is_file() {
-        return Err(format!(
-            "not built: {} (run `target/release/slacomp -a specs`)",
-            sla_path.display()
-        ));
+    if !sla_path.with_extension("slaspec").is_file() {
+        return Err(format!("no SLEIGH source for {}", sla_path.display()));
     }
 
     let registry = build_registry();

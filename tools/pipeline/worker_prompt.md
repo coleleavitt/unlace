@@ -27,7 +27,7 @@ complete and honest.
 - The Rust `unlace` CLI is `target/release/unlace` — use it for `unlace catalog ...`.
   The parity gates are `cargo test --release -p unlace-harness --test parity`.
 - `KUNA_ROOT`, `KUNA_DECOMP_DBG`, `KUNA_SPECS` point at THIS worktree's tree
-  and binaries (specs `.sla` are reused from the main tree — do **not** run `target/release/slacomp -a specs`).
+  and binaries (each `.sla` is compiled from the worktree's `.slaspec` into the `.sla` cache on first use; nothing to build).
 - Build with `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli` (cargo; the first build of the worktree is slowest, then incremental).
 
 ## Heartbeat (do this so the pipeline can observe you)

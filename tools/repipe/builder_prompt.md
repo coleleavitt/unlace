@@ -175,8 +175,8 @@ On abort: `... --status failed --note "<one line why>"`.
   launcher-owned base instead.
 - **Never `git stash`.** `refs/stash` is one stack shared by every worktree and work has
   already been lost that way. To A/B something, `cp` the file aside.
-- **Never `target/release/slacomp -a specs`** in a worktree. The main tree's compiled `.sla` are already
-  symlinked into `specs/` for you, and `KUNA_SPECS`/`SLEIGHHOME` are set.
+- Specs need no build step: the engine compiles each `.slaspec` it needs into the `.sla` cache
+  (`$XDG_CACHE_HOME/unlace/sla`) on first use and reuses it after.
 - The debug profile is already pinned to no-debug-info and `target/debug` is cleaned on exit;
   a worktree otherwise costs 20–30 GB and has filled this machine mid-run.
 

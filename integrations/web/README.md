@@ -24,8 +24,7 @@ flat, monospace throughout, ink + paper + the mark's red.
 ## Quick start
 
 ```bash
-# 1. Build the .sla specs once (they are gitignored build artifacts).
-target/release/slacomp -a specs
+# 1. Nothing to do for the specs: build.sh compiles every .sla into a scratch copy of specs/.
 
 # 2. Build the wasm and assemble a self-contained static site into dist/.
 integrations/web/build.sh
@@ -65,7 +64,7 @@ function listing, decompilation, and project export. The JavaScript glue request
 
 `.github/workflows/pages.yml` builds this bundle and publishes it to GitHub Pages on every
 push to `main` that touches `integrations/web/`, `crates/`, or `specs/` (and on manual
-dispatch). The workflow builds the SLEIGH specs (`slacomp -a specs`), runs `build.sh` and the
+dispatch). The workflow runs `build.sh` (which compiles the SLEIGH tree into the bundle) and the
 tests, then `split-sites.sh`, which divides `dist/` into the two sites:
 
 - **`decompile.run`** — `dist-run/`: the decompiler at the root, with the wasm, specs,
@@ -133,7 +132,7 @@ All run under Node. A through H need no browser; I and J drive headless Chrome a
 **locally only** (CI does not run them; each skips, exit 0, without Chrome):
 
 ```bash
-# 0. Prereqs: `target/release/slacomp -a specs`, then `integrations/web/build.sh`, and a native
+# 0. Prereqs: `integrations/web/build.sh`, and a native
 #    unlace_wasm:  (cargo build --release -p unlace-wasm)
 
 # A. WASI parity — the wasm runs under Node's node:wasi and its output is

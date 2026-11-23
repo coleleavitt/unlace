@@ -54,8 +54,8 @@ const SWITCHIND_MUST_PASS: &[&str] = &[
 
 #[test]
 fn w10_spacebase_typing_switchind_passing_set_unregressed() {
-    if !x86_64_sla().exists() {
-        eprintln!("SKIP: x86-64.sla not built (run `target/release/slacomp -a specs`)");
+    if !unlace_slacomp::slacache::sla_path(&x86_64_sla()).is_ok() {
+        eprintln!("SKIP: x86-64.sla unavailable (no .slaspec under specs/)");
         return;
     }
     let path = repo_root().join("tests/datatests/switchind.xml");

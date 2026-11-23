@@ -10,8 +10,8 @@
 //! `cargo test -p unlace-harness --test parity` runs both. `UNLACE_BLESS=1` re-records the
 //! baselines from the run (a deliberate default change, a new stage test) instead of comparing;
 //! it refuses while any assertion fails or any file errors. Never bless to absorb a regression.
-//! The corpora run from the repository root (their scripts load fixtures by relative path) and
-//! need the compiled `.sla` files in `specs/`.
+//! The corpora run from the repository root (their scripts load fixtures by relative path); each
+//! `.sla` they need compiles from `specs/` into the `.sla` cache on first use.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -134,8 +134,8 @@ fn corpus_files(dir: &Path) -> Vec<String> {
     files
 }
 
-/// Is there a compiled `.sla` anywhere under `dir`.
-fn has_sla(dir: &Path) -> bool {
+/// Is there a SLEIGH source anywhere under `dir`.
+fn has_slaspec(dir: &Path) -> bool {
     std::fs::read_dir(dir)
         .into_iter()
         .flatten()
@@ -143,17 +143,17 @@ fn has_sla(dir: &Path) -> bool {
         .any(|e| {
             let p = e.path();
             if p.is_dir() {
-                has_sla(&p)
+                has_slaspec(&p)
             } else {
-                p.extension().is_some_and(|x| x == "sla")
+                p.extension().is_some_and(|x| x == "slaspec")
             }
         })
 }
 
 fn run_corpus(root: &Path, corpus: &Path) -> DataResult {
     assert!(
-        has_sla(&root.join("specs")),
-        "specs/ holds no compiled .sla: run `target/debug/slacomp -a specs` (docs/dev-setup.md)"
+        has_slaspec(&root.join("specs")),
+        "specs/ holds no SLEIGH sources (.slaspec)"
     );
     let files = corpus_files(corpus);
     assert!(

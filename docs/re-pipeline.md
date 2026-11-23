@@ -25,12 +25,12 @@ One iteration:
 ## 0. Prerequisites
 
 ```bash
-cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli && target/release/slacomp -a specs
+cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
 tools/repipe/run.sh --preflight        # hard-fails on anything missing
 ```
 
 Preflight requires: `git`, `gh` (authed, `repo` scope), `codex`, `python3`, a built `unlace`,
-compiled `.sla`, the dataset, and `REPIPE_MIN_FREE_GB` free. It also **fails if
+the SLEIGH sources under `specs/`, the dataset, and `REPIPE_MIN_FREE_GB` free. It also **fails if
 `bwrap` is unavailable** — see §2, containment is not optional by default.
 
 The default captain remains Claude for compatibility. Set `REPIPE_CAPTAIN_BACKEND=codex` to
@@ -345,9 +345,9 @@ come from a slot.
   CARGO_PROFILE_TEST_DEBUG=0` and removes `target/debug` from a **trap**, so it fires on
   timeout and crash too. A disk governor stops dispatching below `REPIPE_MIN_FREE_GB` and halts
   below `REPIPE_HALT_FREE_GB`.
-- **Specs.** Never `target/release/slacomp -a specs` in a worktree. `KUNA_SPECS`/`SLEIGHHOME` point at the main tree,
-  but they do **not** reach the cargo workspace suite (~22 targets fail "Could not find .sla
-  file"), so `worker.sh` symlinks the built `.sla` in before `cargo nextest run --workspace --exclude unlace-wasm --profile ci`.
+- **Specs.** Nothing to build or link: the engine and the workspace suite compile each `.slaspec`
+  they need into the shared `.sla` cache on first use (`docs/dev-setup.md`), so a worktree reads
+  its own `specs/` (`KUNA_SPECS`/`SLEIGHHOME` point there).
 - **Never `git stash`** with sibling worktrees live — `refs/stash` is one shared stack and work
   has been lost that way.
 - **codex sqlite.** Each tester gets `CODEX_HOME=.kuna-repipe/runs/<id>/codexhome` (with

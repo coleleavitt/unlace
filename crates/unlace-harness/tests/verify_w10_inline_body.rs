@@ -59,10 +59,8 @@ fn datatest(name: &str) -> String {
 /// (skip) when the x86-64 `.sla` is not built.
 fn run_one(file_name: &str) -> Option<String> {
     let sla = repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla");
-    if !sla.exists() {
-        eprintln!(
-            "SKIP: {file_name}: x86-64.sla not built (run `target/release/slacomp -a specs`)"
-        );
+    if !unlace_slacomp::slacache::sla_path(&sla).is_ok() {
+        eprintln!("SKIP: {file_name}: x86-64.sla unavailable (no .slaspec under specs/)");
         return None;
     }
     let specs = specs_dir().to_str().unwrap().to_string();
@@ -75,10 +73,8 @@ fn run_one(file_name: &str) -> Option<String> {
 /// The PowerPC `inlinetarget.xml` needs the default PPC `.sla`.
 fn run_one_ppc(file_name: &str) -> Option<String> {
     let sla = repo_root().join("specs/Ghidra/Processors/PowerPC/data/languages/ppc_32_be.sla");
-    if !sla.exists() {
-        eprintln!(
-            "SKIP: {file_name}: ppc_32_be.sla not built (run `target/release/slacomp -a specs`)"
-        );
+    if !unlace_slacomp::slacache::sla_path(&sla).is_ok() {
+        eprintln!("SKIP: {file_name}: ppc_32_be.sla unavailable (no .slaspec under specs/)");
         return None;
     }
     let specs = specs_dir().to_str().unwrap().to_string();
@@ -94,8 +90,8 @@ fn run_one_ppc(file_name: &str) -> Option<String> {
 /// `None` when the binary or `.sla` is unavailable (skip).
 fn console_drive(script: &str) -> Option<String> {
     let sla = repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla");
-    if !sla.exists() {
-        eprintln!("SKIP: x86-64.sla not built (run `target/release/slacomp -a specs`)");
+    if !unlace_slacomp::slacache::sla_path(&sla).is_ok() {
+        eprintln!("SKIP: x86-64.sla unavailable (no .slaspec under specs/)");
         return None;
     }
     // The console binary (unlace-console crate) sits in the shared workspace

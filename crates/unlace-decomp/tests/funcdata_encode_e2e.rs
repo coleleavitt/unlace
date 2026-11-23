@@ -15,7 +15,7 @@
 //!     markup `EmitMarkup` path reads, so the `<ast>` ref-ids match the markup
 //!     ref-ids by construction.
 //!
-//! Like `decompile_e2e.rs`, this needs the built `.sla` artifacts (`target/release/slacomp -a specs`);
+//! Like `decompile_e2e.rs`, this needs the SLEIGH sources (each `.sla` compiles into the `.sla` cache);
 //! a fixture whose bootstrap/decompile fails is reported (not silently skipped),
 //! and the gate requires at least a few functions to validate.
 

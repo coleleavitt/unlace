@@ -2112,7 +2112,7 @@ fn raw_image_supported_surfaces_share_seed_and_base_semantics() {
     let target = "ARM:LE:32:v4t:default";
     let spec = PathBuf::from(&sp).join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla");
     assert!(
-        spec.exists(),
+        unlace_slacomp::slacache::sla_path(&spec).is_ok(),
         "required processor spec missing; build specs before running integration tests"
     );
 
@@ -2290,7 +2290,7 @@ fn raw_image_discovers_called_functions_beyond_its_seeds() {
     let target = "Cortus:LE:32:APS3:default";
     let spec = PathBuf::from(&sp).join("Ghidra/Processors/Cortus/data/languages/aps3.sla");
     assert!(
-        spec.exists(),
+        unlace_slacomp::slacache::sla_path(&spec).is_ok(),
         "required processor spec missing; build specs before running integration tests"
     );
 
@@ -2404,7 +2404,7 @@ fn raw_image_decompile_scales_word_addressed_selector() {
     let sp = specs();
     let spec = PathBuf::from(&sp).join("Ghidra/Processors/Atmel/data/languages/avr8.sla");
     assert!(
-        spec.exists(),
+        unlace_slacomp::slacache::sla_path(&spec).is_ok(),
         "required processor spec missing; build specs before running integration tests"
     );
 
@@ -2572,7 +2572,7 @@ fn raw_project_preserves_byte_addressed_data_coordinates() {
     let sp = specs();
     let spec = PathBuf::from(&sp).join("Ghidra/Processors/Atmel/data/languages/avr8.sla");
     assert!(
-        spec.exists(),
+        unlace_slacomp::slacache::sla_path(&spec).is_ok(),
         "required processor spec missing; build specs before running integration tests"
     );
 
@@ -2634,7 +2634,8 @@ fn raw_address_directives_use_target_units() {
     let avr_spec = PathBuf::from(&sp).join("Ghidra/Processors/Atmel/data/languages/avr8.sla");
     let arm_spec = PathBuf::from(&sp).join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla");
     assert!(
-        avr_spec.exists() && arm_spec.exists(),
+        unlace_slacomp::slacache::sla_path(&avr_spec).is_ok()
+            && unlace_slacomp::slacache::sla_path(&arm_spec).is_ok(),
         "required processor spec missing; build specs before running integration tests"
     );
 
@@ -2745,7 +2746,7 @@ fn raw_text_decode_failure_is_not_reported_as_an_external() {
     let sp = specs();
     let spec = PathBuf::from(&sp).join("Ghidra/Processors/x86/data/languages/x86-64.sla");
     assert!(
-        spec.exists(),
+        unlace_slacomp::slacache::sla_path(&spec).is_ok(),
         "required processor spec missing; build specs before running integration tests"
     );
 

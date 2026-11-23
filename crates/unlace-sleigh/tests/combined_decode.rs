@@ -46,7 +46,8 @@ impl LoadImage for Bytes {
 
 fn engine(spec: &str, bytes: &[u8], context: &[(&str, u32)]) -> (Sleigh, Rc<Cell<usize>>) {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let sla = std::fs::read(root.join("specs/Ghidra/Processors").join(spec)).unwrap();
+    let sla = unlace_slacomp::slacache::read_sla(root.join("specs/Ghidra/Processors").join(spec))
+        .unwrap();
     let reads = Rc::new(Cell::new(0));
     let image = Bytes {
         data: bytes.to_vec(),

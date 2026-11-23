@@ -1,8 +1,8 @@
 //! With the `embed-specs` feature, generate `$OUT_DIR/embedded_specs.rs`: an
 //! `include_bytes!` table of the repo's compiled SLEIGH tree (every file under
-//! `specs/` except the SLEIGH sources) and a content id naming that table
-//! (`src/embedded_specs.rs`). Without the feature this does nothing, so a
-//! checkout builds before `target/release/slacomp -a specs` has produced any `.sla`.
+//! `specs/` except the SLEIGH sources, plus each language's `.sla`, compiled into the
+//! `.sla` cache by `unlace_slacomp::slacache`) and a content id naming that table
+//! (`src/embedded_specs.rs`). Without the feature this does nothing.
 
 use std::env;
 use std::fmt::Write as _;
@@ -68,12 +68,23 @@ fn main() {
 
     let mut files = Vec::new();
     collect(&root, &root, &mut files);
+    // The tree holds SLEIGH sources; every language's image comes from the `.sla` cache
+    // (compiled on first use, reused while the sources are unchanged).
+    files.retain(|(rel, _)| !rel.ends_with(".sla"));
+    for slaspec in unlace_slacomp::slacache::slaspecs_under(&root) {
+        let sla = slaspec.with_extension("sla");
+        let image = unlace_slacomp::slacache::sla_path(&sla)
+            .unwrap_or_else(|e| panic!("embed-specs: {}: {e}", slaspec.display()));
+        let rel = sla
+            .strip_prefix(&root)
+            .expect("embed-specs: path under the root")
+            .iter()
+            .map(|c| c.to_str().expect("embed-specs: UTF-8 path"))
+            .collect::<Vec<_>>()
+            .join("/");
+        files.push((rel, image));
+    }
     files.sort();
-    assert!(
-        files.iter().any(|(rel, _)| rel.ends_with(".sla")),
-        "embed-specs: no compiled .sla under {} -- run `target/release/slacomp -a specs` first",
-        root.display()
-    );
 
     let mut hash = FNV_OFFSET;
     let mut table = String::new();

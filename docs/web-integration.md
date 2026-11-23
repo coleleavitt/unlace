@@ -505,8 +505,8 @@ start level. It is whitespace, and only before a column-0 `{` — the committed 
 byte-verbatim, which is what `--verify` checks against.
 
 **Hosting on GitHub Pages.** `.github/workflows/pages.yml` runs this same build in CI
-(stable Rust + `wasm32-wasip1`, `binaryen` for `wasm-opt`, `target/release/slacomp -a specs` to compile the
-whole `.sla` tree), runs the tests on the single bundle, and then splits it with
+(stable Rust + `wasm32-wasip1`, `binaryen` for `wasm-opt`; `build.sh` compiles the whole `.sla`
+tree into a scratch copy of `specs/`), runs the tests on the single bundle, and then splits it with
 `integrations/web/split-sites.sh`, because one repository's Pages has only one custom
 domain:
 

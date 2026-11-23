@@ -22,7 +22,7 @@ fn sparc_calls_and_split_immediates_resolve_to_their_targets() {
     let specs = repo_root().join("specs");
     assert!(
         specs
-            .join("Ghidra/Processors/Sparc/data/languages/SparcV9_32.sla")
+            .join("Ghidra/Processors/Sparc/data/languages/SparcV9_32.slaspec")
             .is_file(),
         "required processor specs must be available"
     );

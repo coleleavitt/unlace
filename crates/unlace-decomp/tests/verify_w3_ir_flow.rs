@@ -645,7 +645,8 @@ fn build_sleigh_flow(meta: &FixtureMeta) -> (Funcdata, SleighEnv) {
         .clone();
     let bi = find_binaryimage(&doc_root).expect("corpus has a binaryimage");
 
-    let sla = std::fs::read(root.join("specs").join(&meta.sla_rel)).expect("read .sla");
+    let sla = unlace_slacomp::slacache::read_sla(root.join("specs").join(&meta.sla_rel))
+        .expect("read .sla");
 
     let mut registry = IdRegistry::with_base_ids();
     register_loadimage_xml_ids(&mut registry);
@@ -704,14 +705,14 @@ fn assert_lift_reaches_emitter_stub(fixture_file: &str) {
     let meta = parse_meta(&text);
     assert!(!meta.lift_points.is_empty(), "fixture has lift points");
 
-    // The compiled `.sla` is a gitignored build artifact (`target/release/slacomp -a specs`).  In a
+    // The `.sla` compiles from its `.slaspec` into the `.sla` cache.  In a
     // fresh worktree it may be absent; skip gracefully so this real-Sleigh wiring
     // strand never breaks the gate when specs are unbuilt.  Strand 1 (the pure-IR
     // algorithms) is the always-runnable substantive verification.
     let sla_path = root.join("specs").join(&meta.sla_rel);
     if !sla_path.is_file() {
         eprintln!(
-            "SKIP {fixture_file}: {} not built (run `target/release/slacomp -a specs`); strand-1 IR tests cover the rest",
+            "SKIP {fixture_file}: {} unavailable (no .slaspec under specs/); strand-1 IR tests cover the rest",
             sla_path.display()
         );
         return;

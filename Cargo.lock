@@ -1014,6 +1014,7 @@ dependencies = [
  "unlace-base",
  "unlace-decomp",
  "unlace-num",
+ "unlace-slacomp",
  "unlace-sleigh",
 ]
 
@@ -1047,6 +1048,7 @@ dependencies = [
  "codspeed-divan-compat",
  "unlace-base",
  "unlace-console",
+ "unlace-slacomp",
  "unlace-sleigh",
 ]
 
@@ -1082,6 +1084,7 @@ dependencies = [
  "unlace-base",
  "unlace-decomp",
  "unlace-num",
+ "unlace-slacomp",
  "unlace-sleigh",
 ]
 
@@ -1101,6 +1104,7 @@ dependencies = [
  "unlace-lift",
  "unlace-middle",
  "unlace-num",
+ "unlace-slacomp",
  "unlace-sleigh",
  "unlace-structure",
 ]
@@ -1143,6 +1147,7 @@ dependencies = [
  "unlace-console",
  "unlace-decomp",
  "unlace-num",
+ "unlace-slacomp",
  "unlace-sleigh",
 ]
 
@@ -1156,6 +1161,7 @@ dependencies = [
  "unlace-base",
  "unlace-middle",
  "unlace-num",
+ "unlace-slacomp",
  "unlace-sleigh",
 ]
 
@@ -1177,6 +1183,7 @@ dependencies = [
  "toml",
  "unlace-base",
  "unlace-num",
+ "unlace-slacomp",
  "unlace-sleigh",
 ]
 
@@ -1205,6 +1212,7 @@ version = "0.1.0"
 dependencies = [
  "unlace-base",
  "unlace-num",
+ "unlace-slacomp",
 ]
 
 [[package]]

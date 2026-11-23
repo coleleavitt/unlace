@@ -41,7 +41,8 @@ fn repo_root() -> PathBuf {
         .unwrap()
 }
 
-/// Every vendored `.sla`, sorted, as `(processor, file name, path)`.
+/// Every vendored language, sorted, as `(processor, `.sla` file name, `.sla` path)`; the path
+/// names the `.slaspec`'s sibling, which `unlace_slacomp::slacache` compiles on first read.
 fn vendored_sla() -> Vec<(String, String, PathBuf)> {
     let procs = repo_root().join("specs/Ghidra/Processors");
     let mut out = Vec::new();
@@ -56,9 +57,10 @@ fn vendored_sla() -> Vec<(String, String, PathBuf)> {
         for f in files {
             let f = f.expect("read language directory entry");
             let p = f.path();
-            if p.extension().and_then(|e| e.to_str()) != Some("sla") {
+            if p.extension().and_then(|e| e.to_str()) != Some("slaspec") {
                 continue;
             }
+            let p = p.with_extension("sla");
             let name = p.file_name().unwrap().to_string_lossy().into_owned();
             out.push((processor.clone(), name, p));
         }
@@ -106,7 +108,8 @@ fn globalset_occurrences(sla: &Path) -> usize {
 }
 
 fn has_commits(sla: &Path) -> bool {
-    let bytes = std::fs::read(sla).unwrap_or_else(|e| panic!("{}: {e}", sla.display()));
+    let bytes = unlace_slacomp::slacache::read_sla(sla)
+        .unwrap_or_else(|e| panic!("{}: {e}", sla.display()));
     let mut engine = Sleigh::new(Box::new(DummyImg), Box::new(ContextInternal::new()));
     engine
         .initialize_from_sla(&bytes)
@@ -185,7 +188,7 @@ fn delay_slot_bytes_are_zero_off_the_delay_slot_languages() {
             .iter()
             .find(|(_, n, _)| n == name)
             .expect("required processor spec");
-        let bytes = std::fs::read(path).expect("read .sla");
+        let bytes = unlace_slacomp::slacache::read_sla(path).expect("read .sla");
         let mut engine = Sleigh::new(Box::new(DummyImg), Box::new(ContextInternal::new()));
         engine.initialize_from_sla(&bytes).expect("decode .sla");
         assert_eq!(
@@ -199,7 +202,7 @@ fn delay_slot_bytes_are_zero_off_the_delay_slot_languages() {
         .iter()
         .find(|(_, n, _)| n == "SparcV9_32.sla")
         .expect("required SPARC processor spec");
-    let bytes = std::fs::read(path).expect("read .sla");
+    let bytes = unlace_slacomp::slacache::read_sla(path).expect("read .sla");
     let mut engine = Sleigh::new(Box::new(DummyImg), Box::new(ContextInternal::new()));
     engine.initialize_from_sla(&bytes).expect("decode .sla");
     assert!(

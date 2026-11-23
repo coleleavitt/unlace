@@ -108,7 +108,9 @@ fn nested_rotate_operands_preserve_values_and_record_flags() {
     let cases = cases();
     for model in ["ppc_64", "ppc_64_isa_altivec"] {
         for endian in ["be", "le"] {
-            let sla = std::fs::read(specs.join(format!("{model}_{endian}.sla"))).unwrap();
+            let sla =
+                unlace_slacomp::slacache::read_sla(specs.join(format!("{model}_{endian}.sla")))
+                    .unwrap();
             let bytes: Vec<u8> = cases
                 .iter()
                 .map(|case| case.word)

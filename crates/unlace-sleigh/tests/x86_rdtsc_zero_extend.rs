@@ -115,7 +115,7 @@ fn subpiece_write_index(ops: &[RawOp], output: &VarnodeData) -> Option<usize> {
 #[test]
 fn rdtsc_zero_extends_eax_and_edx_into_rax_and_rdx() {
     let sla_path = repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla");
-    let sla = std::fs::read(&sla_path).expect("read compiled x86-64 spec");
+    let sla = unlace_slacomp::slacache::read_sla(&sla_path).expect("read compiled x86-64 spec");
 
     let base = 0x1000;
     let ctx = Box::new(ContextInternal::new());

@@ -56,9 +56,10 @@ fn repo_root() -> std::path::PathBuf {
 }
 
 fn x86_64_engine() -> Sleigh {
-    let sla =
-        std::fs::read(repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla"))
-            .expect("read x86-64.sla");
+    let sla = unlace_slacomp::slacache::read_sla(
+        repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla"),
+    )
+    .expect("read x86-64.sla");
     let ctx = Box::new(ContextInternal::new());
     let mut sleigh = Sleigh::new(Box::new(DummyImg), ctx);
     sleigh

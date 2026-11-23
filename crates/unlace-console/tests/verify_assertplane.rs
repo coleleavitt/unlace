@@ -86,7 +86,7 @@ fn load_fixture(fixture: &str) -> ConsoleProgram {
     let mut prog =
         bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots).unwrap_or_else(|e| {
             panic!(
-                "bootstrap {fixture} (build `.sla` with `target/release/slacomp -a specs`): {}",
+                "bootstrap {fixture} (SLEIGH sources under specs/): {}",
                 e.explain()
             )
         });

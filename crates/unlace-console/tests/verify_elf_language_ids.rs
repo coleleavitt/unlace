@@ -18,7 +18,7 @@
 //!
 //! Resolution matches against the language **descriptions** parsed from the
 //! vendored `.ldefs` (not the built `.sla`), so this gate does NOT require
-//! `target/release/slacomp -a specs`. The vendored description files are required.
+//! compiled into the `.sla` cache on first use. The vendored description files are required.
 
 use std::path::PathBuf;
 

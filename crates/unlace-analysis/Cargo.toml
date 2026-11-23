@@ -28,6 +28,7 @@ flirt-sig.workspace = true
 memmap2 = "0.9"
 
 [dev-dependencies]
+unlace-slacomp.workspace = true
 object = { workspace = true, features = ["write"] }
 
 [lints]

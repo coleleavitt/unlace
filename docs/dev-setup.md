@@ -16,10 +16,19 @@ they run on dev binaries, which is faster to build and gives the same results.
   symlink to its own target dir (`../unlace-target/<name>`, or wherever you keep them):
   `ln -s <target-dir> target` at the worktree root. The gate script finds the dev
   binaries through it.
-- Built `.sla` files live in each checkout's `specs/` (gitignored). Build them once per
-  worktree with `target/debug/slacomp -a specs` (about 20 s), or symlink them
-  from another checkout of the same commit. Rebuild after any change to
-  `specs/**/*.{slaspec,sinc,pspec,cspec}`, and check that every `.slaspec` has its `.sla`.
+- `specs/` holds SLEIGH sources only; there is no build step for them. When the engine or a test
+  needs `<lang>.sla`, it compiles the sibling `<lang>.slaspec` in-process into the `.sla` cache and
+  loads it from there (`crates/unlace-slacomp/src/slacache.rs`). The cache is content-addressed
+  (a hash of the `.slaspec`, every file it `@include`s, and the compiler's own sources), so it is
+  shared safely by every checkout and reused until a source or the compiler changes; a first
+  compile takes a fraction of a second to a few seconds per language. It lives in
+  `$UNLACE_SLA_CACHE`, else `$XDG_CACHE_HOME/unlace/sla` (default `~/.cache/unlace/sla`), and
+  deleting it is always safe. A `SLEIGHHOME`/`KUNA_SPECS`/`--sleighpath` directory of prebuilt
+  `.sla` still wins: a `.sla` that is a regular file at least as new as its sources is used as is
+  (a symlinked `.sla` never is).
+- Older checkouts may still have `.sla` files or per-file `.sla` symlinks under `specs/` from
+  the previous recipe. They are unnecessary now and can be removed with
+  `find specs -name '*.sla' -delete` in that checkout (it deletes the links, not their targets).
 - Never `git stash` (refs/stash is shared by every worktree). Stage explicit paths only.
 - Remove a finished worktree with `tools/hooks/unlace-wt-rm <name>` (`--dry-run` first).
   It refuses uncommitted changes, untracked files, unpushed commits, a locked worktree and
@@ -58,7 +67,6 @@ Each gate is one command, run from the repository root on dev binaries:
 ```bash
 cargo fmt --all --check                                  # rustfmt (2024 style, rustfmt.toml)
 cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
-target/debug/slacomp -a specs                            # only when specs/ has no .sla yet
 cargo test -p unlace-harness --test parity               # datatests + stages vs their baselines
 python3 tools/check_spec.py                              # docs/spec anchors, phase-folder ownership
 PYTHONPATH=. python3 -m unittest discover -s scripts/tests -p 'test_*.py'   # Python tooling, test layout, layering
@@ -122,9 +130,10 @@ Caching:
   `gates`, `rust-test-nextest`; the jobs build different units, so a shared key would not help).
   Only runs on `main` save it; PR runs read it. The workspace suite also saves after a
   failing test (`cache-on-failure`).
-- The compiled `.sla` files are cached under a hash of `specs/**/*.{slaspec,sinc}`,
-  `Cargo.lock` and the slacomp, sleigh, base and num crates; a hit skips
-  `target/release/slacomp -a specs`. Both jobs still check that every `.slaspec` has its `.sla`.
+- The `.sla` cache (`UNLACE_SLA_CACHE=.sla-cache`) is restored under a hash of
+  `specs/**/*.{slaspec,sinc}`, `Cargo.lock` and the slacomp, sleigh, base and num crates, and
+  saved by the parity job on `main`. It only saves compile time: a miss compiles each language
+  the tests need on first use.
 - `CARGO_INCREMENTAL=0` for the whole workflow (CI builds are never incremental).
 
 A new push to a PR cancels that PR's running workflow. Each commit on `main` runs in a

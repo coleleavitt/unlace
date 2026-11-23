@@ -82,7 +82,7 @@ fn json_functions_reports_exact_relocation_count_with_fixed_stderr_ceiling() {
     let specs = root.join("specs");
     assert!(
         specs
-            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
+            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.slaspec")
             .exists(),
         "required processor spec missing; build specs before running integration tests"
     );

@@ -27,6 +27,7 @@ defaults:
     shell: bash
 
 env:
+  UNLACE_SLA_CACHE: ${{ github.workspace }}/.sla-cache
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   CARGO_INCREMENTAL: "0"
@@ -63,26 +64,15 @@ jobs:
           key: coverage
           cache-on-failure: true
 
-      - name: Restore the compiled SLEIGH specs
+      # The engine compiles each .slaspec it needs into the .sla cache (UNLACE_SLA_CACHE,
+      # crates/unlace-slacomp/src/slacache.rs) on first use. Restoring the cache only saves
+      # that compile time; a miss is correct, just slower.
+      - name: Restore the .sla cache
         id: sla
         uses: actions/cache/restore@v4
         with:
-          path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
-
-      - name: Compile the SLEIGH specs
-        if: steps.sla.outputs.cache-hit != 'true'
-        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
-
-      - name: Verify the compiled spec tree is complete
-        run: |
-          want=$(find specs -name '*.slaspec' | wc -l)
-          got=$(find specs -name '*.sla' | wc -l)
-          echo "compiled $got of $want .slaspec"
-          if [ "$got" -ne "$want" ] || [ "$got" -eq 0 ]; then
-            echo "::error::compiled $got .sla for $want .slaspec -- the spec tree is incomplete"
-            exit 1
-          fi
+          path: .sla-cache
+          key: sla-v2-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
       - uses: taiki-e/install-action@cargo-llvm-cov
 

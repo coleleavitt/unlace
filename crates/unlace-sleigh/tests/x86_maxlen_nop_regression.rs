@@ -107,7 +107,7 @@ impl LoadImage for DummyImg {
 /// Build an x86-64 SLEIGH over `bytes` at `base` using the required spec.
 fn x86_64_sleigh(base: u64, bytes: Vec<u8>) -> (Sleigh, Address) {
     let sla_path = repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla");
-    let sla = std::fs::read(&sla_path).expect("read compiled x86-64 spec");
+    let sla = unlace_slacomp::slacache::read_sla(&sla_path).expect("read compiled x86-64 spec");
 
     let ctx = Box::new(ContextInternal::new());
     let mut sleigh = Sleigh::new(Box::new(DummyImg), ctx);

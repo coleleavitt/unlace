@@ -42,7 +42,7 @@ struct Machine {
 impl Machine {
     fn new(bits: u32, branch: u32, slot: u32) -> Self {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let sla = std::fs::read(root.join(format!(
+        let sla = unlace_slacomp::slacache::read_sla(root.join(format!(
             "specs/Ghidra/Processors/Sparc/data/languages/SparcV9_{bits}.sla"
         )))
         .unwrap();

@@ -51,11 +51,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "wrapadd" => on_off!(wrap_add, "Wrapping four-byte addition before a wider sign extension"),
-    "armconstshift" => {
-        let (mode, msg) = crate::p9_emit::kuna_armconstantshift::OptionArmConstShift.apply(p1)?;
-        self.arm_constant_shift = mode;
-        Ok(msg)
-    },
+    "armconstshift" => registered!(crate::p9_emit::kuna_armconstantshift::ConstShiftMode),
     "armshiftguard" => on_off!(arm_shift_guard, "ARM register-count shift range guard"),
     "rustarrayzero" => on_off!(rust_array_zero, "Rust byte-array zero values"),
     "arraynotation" => {
@@ -131,23 +127,14 @@ kuna_options! { self, p1;
         self.call_result_use = mode;
         Ok(msg)
     },
-    "signedness" => {
-        let (val, msg) = crate::kuna_typeround::OptionSignedness.apply(p1)?;
-        self.signedness = val;
-        Ok(msg)
-    },
+    "signedness" => registered!(crate::kuna_typeround::SignPolicy),
     "retsplitglobal" => {
         let (val, msg) =
             crate::p8_structure::kuna_retsplitglobal::OptionRetSplitGlobal.apply(p1)?;
         self.ret_split_global = val;
         Ok(msg)
     },
-    "retsplitlimit" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_retsplitlimit::OptionRetSplitLimit.apply(p1)?;
-        self.ret_split_limit = val;
-        Ok(msg)
-    },
+    "retsplitlimit" => registered!(crate::p8_structure::kuna_retsplitlimit::RetSplitLimit),
     "v850indirectbranch" => on_off!(v850_indirect_branch, "V850 indirect-branch reclassification"),
     "ptrauthtrap" => on_off!(ptrauth_trap, "arm64e pointer-auth failure-check removal"),
     "relronoreturn" => on_off!(relro_noreturn, "Flow-time no-return call through a relocated read-only slot"),
@@ -467,17 +454,8 @@ kuna_options! { self, p1;
     },
     "callarrayextent" => on_off!(call_array_extent, "Call-escaped frame array extent"),
     "stackstruct" => on_off!(stack_struct, "Address-taken frame record layout"),
-    "arrayextent" => {
-        let (val, msg) =
-            crate::p6_variables::kuna_arrayextent::OptionArrayExtent.apply(p1)?;
-        self.array_extent = val;
-        Ok(msg)
-    },
-    "arraysize" => {
-        let (val, msg) = crate::p6_variables::kuna_arraysize::OptionArraySize.apply(p1)?;
-        self.array_size = val;
-        Ok(msg)
-    },
+    "arrayextent" => registered!(crate::p6_variables::kuna_arrayextent::ArrayExtent),
+    "arraysize" => registered!(crate::p6_variables::kuna_arraysize::ArraySize),
     "devectorize" => on_off!(devectorize_reduction, "Vectorized reduction re-roll"),
     "strlenscan" => on_off!(strlen_scan, "inline repnz scasb string length as strlen"),
     "repstring" => on_off!(rep_string, "rep movs/stos/cmps loops as copy, fill and compare builtins"),
@@ -516,12 +494,7 @@ kuna_options! { self, p1;
         self.outline_spec = val;
         Ok(msg)
     },
-    "condfold" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_condfold::OptionCondFold.apply(p1)?;
-        self.cond_fold = val;
-        Ok(msg)
-    },
+    "condfold" => registered!(crate::p8_structure::kuna_condfold::CondFold),
     "implweight" => {
         let field = p1.trim();
         if field == "off" {
@@ -536,18 +509,8 @@ kuna_options! { self, p1;
             _ => Err(KunaError::parse("Must specify off or a weight from 2 to 64")),
         }
     },
-    "condstmts" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_condstmts::OptionCondStmts.apply(p1)?;
-        self.cond_stmts = val;
-        Ok(msg)
-    },
-    "gotoreduce" => {
-        let (mode, msg) =
-            crate::p8_structure::kuna_gotoreduce::OptionGotoReduce.apply(p1)?;
-        self.goto_reduce = mode;
-        Ok(msg)
-    },
+    "condstmts" => registered!(crate::p8_structure::kuna_condstmts::CondStmts),
+    "gotoreduce" => registered!(crate::p8_structure::kuna_gotoreduce::GotoReduceMode),
     "ifelseflatten" => {
         let (val, msg) =
             crate::p8_structure::kuna_ifelseflatten::OptionIfElseFlatten.apply(p1)?;
@@ -644,11 +607,7 @@ kuna_options! { self, p1;
         on_off!(strip_msvc_stack_guard, "MSVC /GS frame-cookie stripping")
     },
     "gobounds" => on_off!(go_bounds, "Go compiler-check folding"),
-    "rustfmt" => {
-        let (mode, msg) = crate::kuna_rustfmt::parse_rustfmt_mode(p1).map_err(KunaError::parse)?;
-        self.rust_fmt = mode;
-        Ok(msg)
-    },
+    "rustfmt" => registered!(crate::kuna_rustfmt::RustFmtMode),
     "securitycheck" => {
         on_off!(strip_security_check, "Rust security-check branch stripping")
     },
@@ -692,16 +651,8 @@ kuna_options! { self, p1;
     "castnarrow" => on_off!(cast_narrow, "implied narrowing-cast elision"),
     "libcnames" => on_off!(libc_names, "library-call local names"),
     "contextnames" => on_off!(context_names, "loop-counter and result local names"),
-    "declorder" => {
-        let (mode, msg) = crate::kuna_declorder::OptionDeclOrder.apply(p1)?;
-        self.decl_order = mode;
-        Ok(msg)
-    },
-    "castwiden" => {
-        let (mode, msg) = crate::kuna_castwiden::OptionCastWiden.apply(p1)?;
-        self.cast_widen = mode;
-        Ok(msg)
-    },
+    "declorder" => registered!(crate::kuna_declorder::DeclOrder),
+    "castwiden" => registered!(crate::kuna_castwiden::CastWidenMode),
     "ptrdepthcap" => on_off!(ptrdepthcap, "inferred pointer-nesting cap"),
     "calltargettype" => on_off!(call_target_type, "indirect-call target types"),
     "floatglobals" => on_off!(float_globals, "float typing of globals moved only through float registers"),

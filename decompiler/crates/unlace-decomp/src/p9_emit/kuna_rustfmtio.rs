@@ -72,7 +72,10 @@ pub(crate) static WITH_SIGNED_RESULT: OpToken = OpToken {
 };
 
 pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
-    if !arch.rust_fmt.writers()
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .writers()
         || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
         || arch.rustc_stable_version != Some((1, 93, 1))
         || arch.rust_io_writer_profiles.is_empty()

@@ -46,11 +46,11 @@ fn decompile_fixture(
     assert_eq!(program.arch().rustc_stable_version, Some((1, 93, 1)));
     assert!(!program.arch().rust_display_formatters.is_empty());
     program.arch_mut().rustc_stable_version = version;
-    program.arch_mut().rust_fmt = if enabled {
+    program.arch_mut().kuna_options.set(if enabled {
         RustFmtMode::On
     } else {
         RustFmtMode::Off
-    };
+    });
     if !evidence {
         program.arch_mut().rust_display_formatters.clear();
         program.arch_mut().rust_integer_formatters.clear();

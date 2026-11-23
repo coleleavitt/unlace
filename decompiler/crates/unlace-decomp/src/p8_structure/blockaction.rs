@@ -4227,8 +4227,14 @@ impl Action for ActionBlockStructure {
         let condfold_sets = crate::p8_structure::kuna_condfold::compute_condfold_sets(
             data,
             crate::p8_structure::kuna_condstmts::condfold_budget(
-                data.get_arch().cond_fold,
-                data.get_arch().cond_stmts,
+                data.get_arch()
+                    .kuna_options
+                    .get::<crate::p8_structure::kuna_condfold::CondFold>()
+                    .0,
+                data.get_arch()
+                    .kuna_options
+                    .get::<crate::p8_structure::kuna_condstmts::CondStmts>()
+                    .0,
             ),
         );
         let apply_index = crate::p8_structure::kuna_ifnoexit::next_apply_index();

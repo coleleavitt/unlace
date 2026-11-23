@@ -946,8 +946,6 @@ pub struct ArchContext {
     /// [`Funcdata::return_split_is_splittable`](crate::funcdata::Funcdata),
     /// the predicate both `ActionReturnSplit` and `ActionReturnDup` consult.
     pub ret_split_global: bool,
-    /// (kuna) `retsplitlimit`, read by `Funcdata::return_split_apply`.
-    pub ret_split_limit: Option<u64>,
 
     /// (kuna) CALLOTHER user-op ids the architecture registered under a byte
     /// shuffle name ([`SHUFFLE_USEROP_NAMES`](crate::kuna_simdlane::SHUFFLE_USEROP_NAMES)),
@@ -1207,14 +1205,6 @@ pub struct ArchContext {
     /// Levels in [`crate::p3_dataflow::kuna_indexaliasguard`]; read by
     /// [`Heritage::guard`](crate::p3_dataflow::heritage::Heritage).
     pub index_alias_guard: int4,
-    /// (kuna) `option arrayextent off|bound|on`: how far the open range at an
-    /// indexed stack base reaches past upstream's four elements. Levels in
-    /// [`crate::p6_variables::kuna_arrayextent`]; read by `gather_open`.
-    pub array_extent: int4,
-    /// (kuna) `option arraysize off|on|calls`: end an escaped stack buffer at
-    /// the byte count its calls state. Levels in
-    /// [`crate::p6_variables::kuna_arraysize`]; read by `restructure`.
-    pub array_size: int4,
     /// Keep physical frame writes live when conservative stack aliasing is requested.
     pub stack_alias_deadstore: bool,
     /// Operation-specific typed views over shared physical frame storage.
@@ -1385,13 +1375,6 @@ pub struct ArchContext {
     pub lowered_switch_tree: bool,
     /// (kuna) `loweredswitchbits` — a switch lowered to bit tests re-rolls.
     pub lowered_switch_bits: bool,
-    pub cond_fold: int4,
-    /// (kuna) `condstmts`: most statements a folded condition operand may print
-    /// before its test; negative = off.  See [`crate::p8_structure::kuna_condstmts`].
-    pub cond_stmts: int4,
-    /// (kuna `gotoreduce`) Which small return tails are duplicated into a `goto`
-    /// source.  See [`crate::p8_structure::kuna_gotoreduce`].
-    pub goto_reduce: crate::p8_structure::kuna_gotoreduce::GotoReduceMode,
     /// (kuna) angr `IfElseFlattener`: drop the `else` arm of a terminating-if
     /// 3-component `if` (`flatten_ifelse`, opt-in default-off).  Read by
     /// [`crate::p8_structure::kuna_ifelseflatten`]'s `ActionIfElseFlatten`.
@@ -1866,7 +1849,6 @@ impl ArchContext {
             opaque_globals_wanted: std::cell::Cell::new(false),
             call_result_use: crate::p4_calls::kuna_callresultuse::CallResultUse::Off,
             ret_split_global: false, // retsplitglobal (the ArchSeam carries the real default)
-            ret_split_limit: None,   // retsplitlimit (the ArchSeam carries the real default)
             simd_shuffle_userops: Vec::new(),
             x87_float_to_int_userops: Vec::new(),
             x87_integer_userops: Vec::new(),
@@ -1944,8 +1926,6 @@ impl ArchContext {
             index_alias_guard: 2, // indexaliasguard (global; Architecture::reset_defaults sets the shipped default)
             call_array_extent: false,
             stack_struct: false,
-            array_extent: 0, // arrayextent (Architecture::reset_defaults sets the shipped default)
-            array_size: 0,   // arraysize (Architecture::reset_defaults sets the shipped default)
             stack_alias_deadstore: false,
             stack_views: false, // stackviews (opt-in)
             libc_names: false,  // libcnames; set from the Architecture
@@ -1991,9 +1971,6 @@ impl ArchContext {
             lowered_switch_linear: false, // loweredswitch linear|all
             lowered_switch_tree: false,   // loweredswitch tree|all
             lowered_switch_bits: false, // loweredswitchbits (live value copied from the Architecture)
-            cond_fold: 0,               // condfold (opt-in default-off; 0 = off)
-            cond_stmts: -1,             // condstmts (-1 = off)
-            goto_reduce: crate::p8_structure::kuna_gotoreduce::GotoReduceMode::Off, // gotoreduce
             flatten_ifelse: false,      // ifelseflatten (opt-in default-off)
             revert_cross_jumps: false,  // crossjumprevert (opt-in default-off)
             dedup_ite_tail: false,      // dedupitetail (opt-in default-off)

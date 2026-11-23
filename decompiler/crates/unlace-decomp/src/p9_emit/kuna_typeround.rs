@@ -219,6 +219,23 @@ pub enum SignPolicy {
     PreferUnsigned,
 }
 
+impl crate::kuna_optionset::KunaOption for SignPolicy {
+    const NAME: &'static str = "signedness";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        SignPolicy::Upstream
+    }
+
+    fn shipped() -> Self {
+        SignPolicy::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionSignedness.apply(value)
+    }
+}
+
 impl SignPolicy {
     /// Is any rounding active?
     #[inline]
@@ -246,7 +263,7 @@ impl OptionSignedness {
     pub const NAME: &'static str = "signedness";
 
     /// Parse + validate the value and return the policy plus the confirmation
-    /// message (the caller stores it in `Architecture::signedness`).
+    /// message (the caller stores it in the registered option `SignPolicy`).
     pub fn apply(&self, p1: &str) -> KunaResult<(SignPolicy, String)> {
         let policy = match p1 {
             "upstream" => SignPolicy::Upstream,

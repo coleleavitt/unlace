@@ -21,6 +21,23 @@ pub enum ConstShiftMode {
     All,
 }
 
+impl crate::kuna_optionset::KunaOption for ConstShiftMode {
+    const NAME: &'static str = "armconstshift";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        ConstShiftMode::Off
+    }
+
+    fn shipped() -> Self {
+        ConstShiftMode::Off
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionArmConstShift.apply(value)
+    }
+}
+
 impl ConstShiftMode {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -60,7 +77,9 @@ pub(crate) fn plan_arm_constant_lsl(
     arch: &Architecture,
     op: OpId,
 ) -> Option<ConstantLslPlan> {
-    if arch.arm_constant_shift == ConstShiftMode::Off || !arch.archid.starts_with("ARM:") {
+    if arch.kuna_options.get::<ConstShiftMode>() == ConstShiftMode::Off
+        || !arch.archid.starts_with("ARM:")
+    {
         return None;
     }
     let o = fd.obank().get(op)?;

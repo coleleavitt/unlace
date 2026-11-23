@@ -5,9 +5,6 @@ architecture -> flow
 architecture -> inject_sleigh
 architecture -> kuna_aif
 architecture -> kuna_arithhelpers
-architecture -> kuna_armconstantshift
-architecture -> kuna_arrayextent
-architecture -> kuna_arraysize
 architecture -> kuna_bejoin
 architecture -> kuna_bejoinpass
 architecture -> kuna_callbacktype
@@ -22,13 +19,9 @@ architecture -> kuna_calloverlap
 architecture -> kuna_callresultuse
 architecture -> kuna_callrettype
 architecture -> kuna_callwide
-architecture -> kuna_castwiden
-architecture -> kuna_condfold
-architecture -> kuna_condstmts
 architecture -> kuna_cortexmpriv
 architecture -> kuna_cppsig
 architecture -> kuna_deadcascade
-architecture -> kuna_declorder
 architecture -> kuna_decodekit
 architecture -> kuna_dfunaffected
 architecture -> kuna_elemptr
@@ -39,7 +32,6 @@ architecture -> kuna_formatstring
 architecture -> kuna_fpuemu
 architecture -> kuna_gobool
 architecture -> kuna_goreg
-architecture -> kuna_gotoreduce
 architecture -> kuna_gottailcall
 architecture -> kuna_hooks
 architecture -> kuna_indexaliasguard
@@ -66,11 +58,9 @@ architecture -> kuna_ppc32piccalls
 architecture -> kuna_protoorder
 architecture -> kuna_ptrauthtrap
 architecture -> kuna_registerslots
-architecture -> kuna_retsplitlimit
 architecture -> kuna_retsysreg
 architecture -> kuna_roundingops
 architecture -> kuna_rustabi
-architecture -> kuna_rustfmt
 architecture -> kuna_rustfmtflags
 architecture -> kuna_rustfmtio
 architecture -> kuna_rustfmtwrite
@@ -82,7 +72,6 @@ architecture -> kuna_structsynth
 architecture -> kuna_swiftcall
 architecture -> kuna_syscallregs
 architecture -> kuna_tlsnames
-architecture -> kuna_typeround
 architecture -> kuna_varargretreg
 architecture -> kuna_varargsave
 architecture -> kuna_voidret
@@ -107,7 +96,6 @@ context -> kuna_calloverlap
 context -> kuna_callresultuse
 context -> kuna_deadcascade
 context -> kuna_floatglobals
-context -> kuna_gotoreduce
 context -> kuna_itaniumeh
 context -> kuna_jumpassist
 context -> kuna_kalloctype

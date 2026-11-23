@@ -95,6 +95,23 @@ pub enum CastWidenMode {
     Literal,
 }
 
+impl crate::kuna_optionset::KunaOption for CastWidenMode {
+    const NAME: &'static str = "castwiden";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        CastWidenMode::Off
+    }
+
+    fn shipped() -> Self {
+        CastWidenMode::Literal
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionCastWiden.apply(value)
+    }
+}
+
 impl CastWidenMode {
     pub fn as_str(self) -> &'static str {
         match self {

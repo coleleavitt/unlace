@@ -2,18 +2,11 @@
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
+use crate::heritage::Guard;
 use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
-
-#[derive(Debug)]
-pub(crate) struct Guard {
-    pub addr: Address,
-    pub size: int4,
-    pub writes: Vec<VarnodeId>,
-    pub loads: Vec<OpId>,
-}
 
 /// Resolve pointer bounds after renaming, before dead-code removal. A pointer
 /// proven outside the global does not require its partial stores to survive.
@@ -315,6 +308,11 @@ fn unsigned_bounds(
     };
     memo.insert(vn, range);
     range
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.partialglobalload_apply = Some(apply);
 }
 
 #[cfg(test)]

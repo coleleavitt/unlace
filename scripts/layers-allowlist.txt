@@ -1,2 +1,1 @@
 # Upward crate:: edges between unlace-decomp's layering bands (scripts/check_layers.py). Only delete lines.
-kuna_callwide -> kuna_lang

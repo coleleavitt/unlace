@@ -330,19 +330,12 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
             .insert(own);
     }
     let float = returns == Some(Returns::Float);
+    let float_bits = float && data.kuna_float_bits_return();
+    let own_float = float && returns_its_own_float(data);
+    let ledger = arch.kuna_tables.get_mut::<crate::kuna_voidret::Ledger>();
     for (set, member) in [
-        (
-            arch.kuna_tables
-                .get_mut::<crate::kuna_voidret::Ledger>()
-                .float_bits,
-            float && data.kuna_float_bits_return(),
-        ),
-        (
-            arch.kuna_tables
-                .get_mut::<crate::kuna_voidret::Ledger>()
-                .own_float,
-            float && returns_its_own_float(data),
-        ),
+        (&mut ledger.float_bits, float_bits),
+        (&mut ledger.own_float, own_float),
     ] {
         if member {
             set.insert(own);

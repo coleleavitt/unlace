@@ -1122,6 +1122,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-ctree"
+version = "0.1.0"
+dependencies = [
+ "unlace-base",
+ "unlace-middle",
+]
+
+[[package]]
 name = "unlace-decomp"
 version = "0.1.0"
 dependencies = [

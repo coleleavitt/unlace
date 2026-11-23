@@ -393,6 +393,10 @@ scheduler's progress, with no behaviour change: `unlace-middle`'s `kuna_maturity
 complete, facts, `is_settled`, `debug_assert_settled!`), marked on ten schedule nodes by the
 driver, reset by a restart, reported by `phase status` (spec §0.10).
 
+**C syntax tree (2026-11-23).** A ninth crate, `unlace-ctree`, holds the C syntax tree planned in
+`docs/architecture/ctree.md`: the tree types, its own maturity (`CMaturity`) and the builder from the
+structured block tree. It depends on `unlace-middle` only; nothing calls it yet.
+
 **Middle layout (2026-11-23).** The modules reclassified into middle left the phase folders that
 did not describe them: the IR-level `typeop`, `variable`, `cover`, `dynamic` went to `substrate/`, `stringmanage`
 to `p0_knowledge/`, the SLEIGH engine seam (`engine_translate`, `kuna_decodekit`, `inject_sleigh`,

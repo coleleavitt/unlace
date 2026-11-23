@@ -138,6 +138,25 @@ pub struct FrameSlot {
     pub size: int4,
 }
 
+/// (kuna `--assert`) A `type` directive's retype of a whole printed variable to `ct`, keeping
+/// its width and kind (`kuna_stablenames::unit_retype`); `infer` when type inference has to read
+/// it (`kuna_stablenames::reaches_inference`); `from` the type the variable was printed with.
+#[derive(Clone, Debug)]
+pub struct UnitRetype {
+    pub ct: std::rc::Rc<crate::dtype::Datatype>,
+    pub infer: bool,
+    pub from: std::rc::Rc<crate::dtype::Datatype>,
+}
+
+/// A machine home a Varnode's value was retained from when an equivalent value replaced it
+/// (`kuna_varsources`).
+#[derive(Debug, Clone)]
+pub struct StorageSource {
+    pub address: Address,
+    pub size: int4,
+    pub write_address: Option<Address>,
+}
+
 /// (kuna `--assert`) A local-scope Symbol a `name`/`type` directive touched on
 /// this pass: see [`Funcdata::kuna_directive_symbols`].
 #[derive(Clone, Debug)]
@@ -153,7 +172,7 @@ pub struct DirectiveSymbol {
     pub retyped: bool,
     /// The type a `type` directive gave the whole printed variable, when it keeps
     /// the variable's width and kind (`kuna_stablenames::retypes_as_unit`).
-    pub unit_type: Option<crate::kuna_stablenames::UnitRetype>,
+    pub unit_type: Option<UnitRetype>,
 }
 
 pub struct Funcdata {
@@ -241,9 +260,6 @@ pub struct Funcdata {
     /// Ninja's variable list do.  This side table accumulates the union so
     /// `extract_variables` can report it; it never feeds back into the IR.
     frame_slots: std::cell::RefCell<std::collections::BTreeMap<i64, FrameSlot>>,
-    /// (kuna `slotptr`) What each `restructure_varnode` pass saw stored into, and
-    /// touched in, the stack frame; read only by `extract_variables`.
-    slot_evidence: std::cell::RefCell<crate::kuna_slotptr::SlotEvidence>,
     /// (kuna `castobject`) Every stack object a `restructure_varnode` pass
     /// re-declared, as `(offset, size, type)`; read by
     /// [`crate::kuna_castobject::reconcile`] once the variables are merged.
@@ -254,16 +270,10 @@ pub struct Funcdata {
             std::rc::Rc<crate::dtype::Datatype>,
         )>,
     >,
-    /// (kuna `stackstruct`) Every frame record a `restructure_varnode` pass laid
-    /// out; later passes keep it while no access contradicts its bounds.
-    stack_records: std::cell::RefCell<Vec<crate::p6_variables::kuna_stackstruct::StackRecord>>,
     /// (kuna `stackstoreguard`) Set once a `restructure_varnode` pass lays out a
     /// guarded store's reach; later passes keep doing so
     /// (`p6_variables/kuna_storereach.rs`).
     store_reach_committed: std::cell::Cell<bool>,
-    /// (kuna `stackstoreguard`) What the latest `restructure_varnode` pass says
-    /// the final layout must satisfy (`p6_variables/kuna_storereach.rs`).
-    store_reach_checks: std::cell::RefCell<crate::p6_variables::kuna_storereach::ReachChecks>,
     /// (kuna `stackstoreguard`) The STOREs of any width heritage guarded a
     /// written stack range against (`p3_dataflow/kuna_stackstoreguard.rs`).
     indexed_guard_stores: std::cell::RefCell<std::collections::BTreeSet<OpId>>,
@@ -311,8 +321,7 @@ pub struct Funcdata {
     /// Container of Varnode objects for \b this function (C++ `vbank`)
     vbank: VarnodeBank,
     /// Machine homes retained when equivalent values replace their Varnodes.
-    kuna_storage_sources:
-        crate::kuna_fasthash::FxHashMap<VarnodeId, Vec<crate::kuna_varsources::StorageSource>>,
+    kuna_storage_sources: crate::kuna_fasthash::FxHashMap<VarnodeId, Vec<StorageSource>>,
     kuna_call_transport: crate::kuna_fasthash::FxHashSet<VarnodeId>,
     kuna_call_transport_projections: crate::kuna_fasthash::FxHashMap<VarnodeId, int4>,
     kuna_denied_storage_writes:
@@ -451,17 +460,10 @@ pub struct Funcdata {
     /// empty, so the entries are exactly one batch: the directives between two
     /// decompiles.
     kuna_directive_symbols: Vec<DirectiveSymbol>,
-    /// (kuna `--assert`) The previous decompile's default numbering, seeded by
-    /// the drive when a directive batch is replayed; see
-    /// [`crate::kuna_stablenames`].
-    kuna_prior_names: crate::kuna_stablenames::PriorNames,
     /// One past the last default index the naming pass handed out.
     kuna_default_name_end: int4,
     /// Whether the naming pass records [`Self::kuna_name_snapshot`].
     kuna_record_names: bool,
-    /// The numbering the naming pass handed out, by instance identity; see
-    /// `kuna_stablenames::snapshot`.
-    kuna_name_snapshot: Vec<(String, crate::kuna_stablenames::Keys)>,
     /// The local each replayed rename or retype reached, by the name the
     /// previous decompile printed it under; see
     /// `kuna_stablenames::directive_targets`.
@@ -696,11 +698,8 @@ impl Funcdata {
             activeoutput: None,
             localmap,
             frame_slots: std::cell::RefCell::new(std::collections::BTreeMap::new()),
-            slot_evidence: std::cell::RefCell::new(Default::default()),
             cast_objects: std::cell::RefCell::new(Vec::new()),
-            stack_records: std::cell::RefCell::new(Vec::new()),
             store_reach_committed: std::cell::Cell::new(false),
-            store_reach_checks: std::cell::RefCell::new(Default::default()),
             indexed_guard_stores: std::cell::RefCell::new(Default::default()),
             indexed_guard_indirects: std::cell::RefCell::new(Default::default()),
             guard_only_seen: std::cell::RefCell::new(Vec::new()),
@@ -744,10 +743,8 @@ impl Funcdata {
             kuna_rejected_flow: Vec::new(),
             kuna_rejected_callee: Vec::new(),
             kuna_directive_symbols: Vec::new(),
-            kuna_prior_names: Default::default(),
             kuna_default_name_end: 1,
             kuna_record_names: false,
-            kuna_name_snapshot: Vec::new(),
             kuna_directive_targets: std::collections::BTreeMap::new(),
             kuna_wire_symbols: Vec::new(),
             kuna_wrapped_wire_storage: std::collections::BTreeMap::new(),
@@ -1009,7 +1006,7 @@ impl Funcdata {
     pub fn kuna_set_directive_retype(
         &mut self,
         symbol: crate::database::SymbolId,
-        unit_type: Option<crate::kuna_stablenames::UnitRetype>,
+        unit_type: Option<UnitRetype>,
     ) {
         if let Some(entry) = self
             .kuna_directive_symbols
@@ -1019,15 +1016,6 @@ impl Funcdata {
             entry.retyped = true;
             entry.unit_type = unit_type;
         }
-    }
-
-    /// (kuna `--assert`) The previous decompile's default numbering to keep.
-    pub fn kuna_prior_names(&self) -> &crate::kuna_stablenames::PriorNames {
-        &self.kuna_prior_names
-    }
-
-    pub fn seed_prior_names(&mut self, prior: crate::kuna_stablenames::PriorNames) {
-        self.kuna_prior_names = prior;
     }
 
     /// One past the last default index the naming pass handed out.
@@ -1048,11 +1036,6 @@ impl Funcdata {
         self.kuna_record_names = on;
     }
 
-    /// The numbering the naming pass recorded (empty unless asked to).
-    pub fn kuna_name_snapshot(&self) -> &[(String, crate::kuna_stablenames::Keys)] {
-        &self.kuna_name_snapshot
-    }
-
     /// (kuna `--assert`) The local each replayed rename or retype reached, by
     /// the name the previous decompile printed it under.
     pub fn kuna_directive_targets(
@@ -1066,13 +1049,6 @@ impl Funcdata {
         targets: std::collections::BTreeMap<String, crate::context::HighVariableId>,
     ) {
         self.kuna_directive_targets = targets;
-    }
-
-    pub fn set_kuna_name_snapshot(
-        &mut self,
-        snapshot: Vec<(String, crate::kuna_stablenames::Keys)>,
-    ) {
-        self.kuna_name_snapshot = snapshot;
     }
 
     /// (kuna `stackexitanchor`) Record the epilogue anchors.
@@ -2055,18 +2031,6 @@ impl Funcdata {
             .collect()
     }
 
-    /// (kuna `stackstruct`) The frame records earlier passes laid out.
-    pub fn stack_records(&self) -> Vec<crate::p6_variables::kuna_stackstruct::StackRecord> {
-        self.stack_records.borrow().clone()
-    }
-
-    /// (kuna `stackstruct`) Remember a frame record, replacing one at the same start.
-    pub fn record_stack_record(&self, r: crate::p6_variables::kuna_stackstruct::StackRecord) {
-        let mut all = self.stack_records.borrow_mut();
-        all.retain(|o| o.start != r.start);
-        all.push(r);
-    }
-
     /// (kuna `castobject`) Remember the stack objects one pass re-declared.
     pub fn record_cast_objects(
         &self,
@@ -2105,20 +2069,6 @@ impl Funcdata {
 
     pub(crate) fn is_stack_byte_copy_op(&self, op: OpId) -> bool {
         self.stack_byte_copy_ops.contains(&op)
-    }
-
-    /// (kuna `stackstoreguard`) Record what this pass says the final layout
-    /// must satisfy.
-    pub(crate) fn note_store_reach_checks(
-        &self,
-        checks: crate::p6_variables::kuna_storereach::ReachChecks,
-    ) {
-        *self.store_reach_checks.borrow_mut() = checks;
-    }
-
-    /// (kuna `stackstoreguard`) What the latest pass recorded.
-    pub(crate) fn store_reach_checks(&self) -> crate::p6_variables::kuna_storereach::ReachChecks {
-        self.store_reach_checks.borrow().clone()
     }
 
     /// (kuna `stackstoreguard`) Record a STORE heritage guarded a written
@@ -2307,15 +2257,6 @@ impl Funcdata {
         self.cast_objects.borrow().clone()
     }
 
-    /// (kuna `slotptr`) Fold one pass's stack-store evidence into the running record.
-    pub fn with_slot_evidence(&self, f: impl FnOnce(&mut crate::kuna_slotptr::SlotEvidence)) {
-        f(&mut self.slot_evidence.borrow_mut());
-    }
-
-    /// (kuna `slotptr`) The stack-store evidence every pass recorded.
-    pub fn slot_evidence(&self) -> std::cell::Ref<'_, crate::kuna_slotptr::SlotEvidence> {
-        self.slot_evidence.borrow()
-    }
     /// Mutably borrow the local function scope (C++ non-const `getScopeLocal`).
     /// The console `map` commands and `ActionRestructureVarnode` reach the
     /// `ScopeLocal` through this to add/restructure symbols.
@@ -3082,7 +3023,7 @@ impl Funcdata {
         &mut self.vbank
     }
 
-    pub fn kuna_storage_sources(&self, vn: VarnodeId) -> &[crate::kuna_varsources::StorageSource] {
+    pub fn kuna_storage_sources(&self, vn: VarnodeId) -> &[StorageSource] {
         self.kuna_storage_sources
             .get(&vn)
             .map(Vec::as_slice)
@@ -3111,7 +3052,6 @@ impl Funcdata {
         byte_offset: int4,
         byte_size: int4,
     ) {
-        use crate::kuna_varsources::StorageSource;
         use unlace_base::space::spacetype;
 
         if !self.glb.name_style_angr || destination == original || byte_offset < 0 || byte_size <= 0
@@ -3203,7 +3143,7 @@ impl Funcdata {
     pub(crate) fn kuna_extend_storage_sources(
         &mut self,
         destination: VarnodeId,
-        sources: impl IntoIterator<Item = crate::kuna_varsources::StorageSource>,
+        sources: impl IntoIterator<Item = StorageSource>,
     ) {
         let mut sources = sources.into_iter().peekable();
         if !self.glb.name_style_angr
@@ -3227,7 +3167,7 @@ impl Funcdata {
             };
             (space, address.get_offset())
         };
-        let key = |source: &crate::kuna_varsources::StorageSource| {
+        let key = |source: &StorageSource| {
             (
                 address_key(&source.address),
                 source.size,
@@ -3374,7 +3314,7 @@ impl Funcdata {
         } else {
             0
         };
-        let source = crate::kuna_varsources::StorageSource {
+        let source = StorageSource {
             address: value.get_addr() + offset as i64,
             size,
             write_address: Some(operation.get_addr().clone()),
@@ -3384,7 +3324,7 @@ impl Funcdata {
 
     fn kuna_storage_write_matches(
         denied: &crate::kuna_fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
-        source: &crate::kuna_varsources::StorageSource,
+        source: &StorageSource,
     ) -> bool {
         let Some(pc) = source.write_address.as_ref() else {
             return false;
@@ -4266,16 +4206,12 @@ impl Funcdata {
         self.kuna_wrapped_wire_storage.clear();
         self.kuna_wire_symbol_for_high.clear();
         self.kuna_directive_symbols.clear();
-        // (kuna `slotptr`) The evidence names ops by SeqNum, which a rebuilt op
-        // bank reissues.
-        self.slot_evidence.borrow_mut().clear();
         self.kuna_callee_split_calls.clear();
         self.kuna_passthrough_vararg_calls.clear();
         self.kuna_readarg_vararg_calls.clear();
         self.kuna_passthrough_variadic = false;
         self.kuna_moved_back_returns.clear();
         self.store_reach_committed.set(false);
-        *self.store_reach_checks.borrow_mut() = Default::default();
         self.indexed_guard_stores.borrow_mut().clear();
         self.stack_byte_copy_ops.clear();
         self.indexed_guard_indirects.borrow_mut().clear();

@@ -192,6 +192,11 @@ pub(crate) fn auto_register(
         })
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.calloverlap_auto_register = Some(auto_register);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

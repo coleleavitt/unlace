@@ -210,7 +210,7 @@ fn ends_argument_list_fires_at_the_unreferenced_register() {
     let idx = (0..on.get_num_trials())
         .find(|&i| on.get_trial(i).is_unref())
         .expect("an unref filler");
-    assert!(ends_argument_list(&on, idx, on.get_num_trials(), |j| {
+    assert!(ends_argument_list(&on, idx, on.get_num_trials(), &|j| {
         address_is_spacebase(on.get_trial(j).get_address())
     }));
 }

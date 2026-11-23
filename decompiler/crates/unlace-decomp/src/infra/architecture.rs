@@ -2669,9 +2669,9 @@ impl Architecture {
         self.syscall_regs = crate::kuna_syscallregs::SyscallRegsMode::Auto; // (kuna) default `auto`: on an image the loader identified as an operating system's user-space program, the system call writes its result register and reads the number register and the leading argument registers the function writes on every path to it. Gated on that loader fact, which the XML bootstrap never sets, so it is structurally inert on the datatest corpus (0/675); `option syscallregs on` acts on any image, `off` restores the zero-effect CALLOTHER
         self.apply_segmentize();
         self.fpu_emu = crate::kuna_fpuemu::FpuEmuMode::Auto.as_u8(); // (kuna #1288) decode the 8087 emulator's INT 34h-3Dh as x87 where the loader found emulator code (MS-DOS executables); only x86-16.sla has the fpuEmu context bit, so every other input and every datatest is unchanged; `option fpuemu off` keeps the interrupts
-        crate::kuna_fpuemu::apply(self);
+        (self.pass_hooks().fpuemu_apply)(self);
         self.mz_dgroup_on = true; // (kuna #1288) an MS-DOS executable's functions start with DS holding the data segment its startup code loads; only the MZ loader states one, so every other input and every datatest is unchanged; `option mzdgroup off` leaves DS unknown
-        crate::kuna_mzdgroup::apply(self);
+        (self.pass_hooks().mzdgroup_apply)(self);
         self.struct_synth = crate::kuna_structsynth::StructSynthMode::Locals; // (kuna) structsynth default `locals`: a pointer parameter, or a pointer a call returned, read at two or more constant offsets is declared `struct_N *` and the reads render as fields. Moves 0/675 datatest assertions; `option structsynth param` restores parameters only, `off` the raw offset arithmetic
         self.field_type = false; // (kuna) option fieldtype default-off: the flip moves which record the layout ledger shares between readers (fields-only layout precision .8713 -> .8693); docs/features/fieldtype/default-on-evaluation.md
         self.chkstk_darwin = true; // (kuna) default-on, Darwin AArch64 only (`image_apple` and an AArch64 language): inert unless a call reaches `___chkstk_darwin`; 0/675 datatests
@@ -3773,7 +3773,7 @@ impl Architecture {
                         (self.pass_hooks().avxintrin_intrinsic)(std::str::from_utf8(nm).ok()?, 32)?;
                     Some((i, (self.pass_hooks().avxintrin_element_kind)(&intr)))
                 });
-                let fused = crate::kuna_lanefuse::builtins()
+                let fused = (self.pass_hooks().lanefuse_builtins)()
                     .into_iter()
                     .chain(crate::kuna_lanefuse::mask_builtins(
                         self.userops.named_ops(),
@@ -3851,7 +3851,7 @@ impl Architecture {
         ctx.bound_proto_models = Rc::clone(&self.loader_proto_models);
         ctx.swift_abi = self.loader_swift_abi.clone();
         ctx.swift_enum_cases = Rc::clone(&self.loader_swift_enum_cases);
-        ctx.virtual_this = crate::p4_calls::kuna_calleereginputs::virtual_this(self);
+        ctx.virtual_this = (self.pass_hooks().calleereginputs_virtual_this)(self);
         // Carry the constant-pointer-inference config (C++ `glb->infer_pointers`)
         // and the ordered inferable-pointer spaces (C++ `glb->inferPtrSpaces`,
         // built by cacheAddrSpaceProperties) so `ActionConstantPtr` (run via
@@ -4365,7 +4365,8 @@ impl Architecture {
     /// no-register golang target (x86-32 reaches `g` through TLS) and every
     /// other image are untouched.
     fn kuna_install_goreg(&mut self) -> KunaResult<()> {
-        let Some(reg) = crate::kuna_goreg::goroutine_register(&self.archid, self.go_version())
+        let Some(reg) =
+            (self.pass_hooks().goreg_goroutine_register)(&self.archid, self.go_version())
         else {
             return Ok(());
         };
@@ -4388,7 +4389,7 @@ impl Architecture {
             self.symboltab
                 .add_symbol_mapped(scope, "g", gptr, &addr, &Address::new_invalid())?;
         self.symboltab
-            .set_attribute(sid, crate::kuna_goreg::g_symbol_flags());
+            .set_attribute(sid, (self.pass_hooks().goreg_g_symbol_flags)());
         Ok(())
     }
 
@@ -4534,18 +4535,22 @@ impl Architecture {
             .map(|s| s.get_addr_size() as int4)
             .unwrap_or(0);
         let resolve = |nm: &[u8]| self.translate.probe_register_varnode(nm).is_some();
-        if !crate::kuna_msvcftol::language_is_x86_32(resolve, code_addr_size)
-            || self
-                .proto_models
-                .contains_key(crate::kuna_x87intrinsic::MODEL_NAME)
+        if !(crate::architecture::default_pass_hooks().msvcftol_language_is_x86_32)(
+            &resolve,
+            code_addr_size,
+        ) || self
+            .proto_models
+            .contains_key(crate::kuna_x87intrinsic::MODEL_NAME)
         {
             return;
         }
         let mut decoded = Vec::new();
-        let _ = crate::kuna_x87intrinsic::decode_prototype(|proto| {
-            decoded.extend(self.decode_proto_model(proto, root).ok());
-            Ok(())
-        });
+        let _ = (crate::architecture::default_pass_hooks().x87intrinsic_decode_prototype)(
+            &mut |proto| {
+                decoded.extend(self.decode_proto_model(proto, root).ok());
+                Ok(())
+            },
+        );
         for model in decoded {
             self.register_model(Rc::new(model));
         }
@@ -4582,9 +4587,15 @@ impl Architecture {
             .map(|s| s.is_big_endian())
             .unwrap_or(false);
         let resolve = |nm: &[u8]| self.translate.probe_register_varnode(nm).is_some();
-        let ftol = crate::kuna_msvcftol::language_is_x86_32(resolve, code_addr_size);
+        let ftol = (crate::architecture::default_pass_hooks().msvcftol_language_is_x86_32)(
+            &resolve,
+            code_addr_size,
+        );
         let helpers = crate::kuna_arithhelpers::helper_abi(resolve, code_addr_size, big_endian);
-        let objc_arc = crate::kuna_objcarc::payload_xml(resolve, code_addr_size);
+        let objc_arc = (crate::architecture::default_pass_hooks().objcarc_payload_xml)(
+            &resolve,
+            code_addr_size,
+        );
         if !ftol && helpers.is_none() && objc_arc.is_none() {
             return Ok(());
         }
@@ -4602,10 +4613,13 @@ impl Architecture {
             Ok(())
         };
         if let Some(xml) = objc_arc {
-            crate::kuna_objcarc::decode_payload(&xml, &mut register)?;
+            (crate::architecture::default_pass_hooks().objcarc_decode_payload)(
+                &xml,
+                &mut register,
+            )?;
         }
         if ftol {
-            crate::kuna_msvcftol::decode_payload(&mut register)?;
+            (crate::architecture::default_pass_hooks().msvcftol_decode_payload)(&mut register)?;
         }
         if let Some(abi) = helpers {
             crate::kuna_arithhelpers::decode_payloads(abi, &mut register)?;
@@ -4925,7 +4939,7 @@ impl Architecture {
             userops.register_builtin(BUILTIN_SYSCALL_ERROR, &adapter)?;
             // (kuna strlenscan) the length an inline `repnz scasb` computes.
             userops.register_builtin(BUILTIN_STRLEN, &adapter)?;
-            for (id, name) in crate::kuna_lanefuse::builtins() {
+            for (id, name) in (self.pass_hooks().lanefuse_builtins)() {
                 userops.register_named_builtin(id, &name);
             }
             let named: Vec<(unlace_base::types::uint4, Vec<u8>)> = userops
@@ -5033,7 +5047,7 @@ impl Architecture {
     fn kuna_go_stack_default(&mut self) -> KunaResult<()> {
         if self.archid.ends_with(":golang")
             && self.proto_models.contains_key("abi0")
-            && !crate::kuna_goreg::register_abi(&self.archid, self.go_version())
+            && !(self.pass_hooks().goreg_register_abi)(&self.archid, self.go_version())
         {
             crate::options::ArchOptionContext::set_default_model(self, "abi0")?;
         }
@@ -6273,7 +6287,7 @@ impl Architecture {
         }
         model.set_name(&name);
         let (entry_inject, return_inject) =
-            crate::kuna_callmechanisms::compiled_ids(&self.pcodeinjectlib, &name);
+            crate::p4_calls::kuna_callmechanisms::compiled_ids(&self.pcodeinjectlib, &name);
         model.set_inject_ids(entry_inject, return_inject);
         let strategy = attr_str(proto, "strategy").unwrap_or_default();
         model.build_param_list(&strategy)?;
@@ -6374,9 +6388,10 @@ impl Architecture {
         // string-op stride, and `1 - 2*DF` survives into the output as
         // `(uint8)v18 * -2 + 1`. Applied only where the spec is silent, and a
         // structural no-op on any language with no `DF` register.
-        crate::kuna_dfunaffected::assert_direction_flag_unaffected(&mut model, |nm| {
-            self.translate.probe_register_varnode(nm)
-        });
+        (crate::architecture::default_pass_hooks().dfunaffected_assert_direction_flag_unaffected)(
+            &mut model,
+            &|nm| self.translate.probe_register_varnode(nm),
+        );
         Ok(model)
     }
 
@@ -6464,7 +6479,7 @@ impl Architecture {
         // on a language Swift targets when the spec declares neither.
         let default_el =
             find_child(root, "default_proto").and_then(|dp| find_child(&dp, "prototype"));
-        let regs = crate::kuna_swiftcall::swift_registers(|name| {
+        let regs = (crate::architecture::default_pass_hooks().swiftcall_swift_registers)(&|name| {
             self.translate
                 .probe_register_varnode(name.as_bytes())
                 .map(|v| v.size as int4)
@@ -6474,7 +6489,7 @@ impl Architecture {
                 if byname.contains_key(name) {
                     continue;
                 }
-                let derived = Rc::new(crate::kuna_swiftcall::derive_model(
+                let derived = Rc::new((self.pass_hooks().swiftcall_derive_model)(
                     &el,
                     name,
                     self_reg,
@@ -7203,7 +7218,7 @@ impl Architecture {
         // the whole inject library (callfixup + callotherfixup) is compiled
         // together by parseInject — the MIPS `setISAMode` fixup that makes the
         // dead ISA-mode-switch CALLOTHER injectable.
-        crate::kuna_callmechanisms::register(
+        crate::p4_calls::kuna_callmechanisms::register(
             self.cspec_xml
                 .as_deref()
                 .map(std::str::from_utf8)

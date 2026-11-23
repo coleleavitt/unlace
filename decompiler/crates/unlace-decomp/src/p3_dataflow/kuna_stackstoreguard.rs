@@ -2,6 +2,7 @@
 //! every recorded indexed byte STORE guards a constant-initialized slot, and an
 //! indexed STORE of any width guards a written slot inside the array it may write.
 
+use crate::heritage::StoreBounds;
 use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::int4;
@@ -73,10 +74,6 @@ pub(super) fn indexed_enabled(
 
 /// The fallback element count for an unbounded provisional STORE window.
 const UNLOCKED_ELEMENTS: u128 = 4;
-
-/// The bytes `[lo, last]` each indexed STORE may write by its pointer's own
-/// bound (`kuna_storereach.rs (store_window)`), computed once per heritage pass.
-pub(super) type StoreBounds = std::collections::HashMap<crate::context::OpId, Option<(u64, u64)>>;
 
 fn store_bound(
     fd: &crate::funcdata::Funcdata,
@@ -284,6 +281,15 @@ pub(super) fn keeps_store_indirect_whole(
                         .is_some_and(|u| u.code() != OpCode::CPUI_INDIRECT)
                 })
         })
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackstoreguard_enabled = Some(enabled);
+    hooks.stackstoreguard_frame_unresolved = Some(frame_unresolved);
+    hooks.stackstoreguard_indexed_enabled = Some(indexed_enabled);
+    hooks.stackstoreguard_indexed_stores = Some(indexed_stores);
+    hooks.stackstoreguard_prune_indexed = Some(prune_indexed);
 }
 
 #[cfg(test)]

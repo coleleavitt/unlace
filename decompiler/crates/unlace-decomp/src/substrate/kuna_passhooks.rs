@@ -30,8 +30,9 @@ use crate::fspec::{
     ParameterPieces, ProtoModel, PrototypePieces,
 };
 use crate::funcdata::Funcdata;
+use crate::heritage::{Guard, LiveCalls, LoadGuard, MemoryOps, StoreBounds};
 use crate::jumptable::LoadTable;
-use crate::kuna_fasthash::FxHashMap;
+use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 use crate::merge::MergeContext;
 use crate::op::PcodeOpBank;
 use crate::variable::HighIntersectTest;
@@ -358,4 +359,78 @@ declare_hooks! {
     typequal_is_volatile: fn(&Datatype) -> bool;
     /// `kuna_varargstackargs::stack_section_split`.
     varargstackargs_stack_section_split: fn(&ParamActive, int4, int4) -> Option<int4>;
+    /// `kuna_calloverlap::auto_register`.
+    calloverlap_auto_register: fn(&AddrSpaceManager, &FuncProto, &Address, int4, bool) -> bool;
+    /// `kuna_partialglobalload::apply`.
+    partialglobalload_apply: fn(&mut Funcdata, Vec<Guard>);
+    /// `kuna_persistcalls::applies`.
+    persistcalls_applies: fn(&Funcdata, u32, &Address) -> bool;
+    /// `kuna_persistcalls::crosses_skipped`.
+    persistcalls_crosses_skipped: fn(&Funcdata, VarnodeId, &[(int4, u64, int4)], bool) -> bool;
+    /// `kuna_persistcalls::keep`.
+    persistcalls_keep: fn(&Funcdata, &mut MemoryOps, i32, &[OpId], &[VarnodeId], &[OpId], &[OpId]) -> (FxHashSet<OpId>, FxHashSet<OpId>);
+    /// `kuna_persistcalls::restart_full`.
+    persistcalls_restart_full: fn(&mut Funcdata);
+    /// `kuna_persistcalls::skip_guard`.
+    persistcalls_skip_guard: fn(&mut Funcdata);
+    /// `kuna_persistcalls::skip_join`.
+    persistcalls_skip_join: fn(&mut Funcdata, u32);
+    /// `kuna_persistcalls::stale_calls`.
+    persistcalls_stale_calls: fn(&Funcdata, &[OpId], &FxHashSet<OpId>, &[OpId], &[BlockId]) -> Vec<OpId>;
+    /// `kuna_persistcalls::stale_inputs`.
+    persistcalls_stale_inputs: fn(&Funcdata, &[OpId], &FxHashSet<OpId>, &[OpId], &[BlockId]) -> FxHashSet<OpId>;
+    /// `kuna_prunedssa::applies`.
+    prunedssa_applies: fn(u32, &Address, int4, int4) -> bool;
+    /// `kuna_prunedssa::applies_to_calls`.
+    prunedssa_applies_to_calls: fn(&Funcdata, &Address) -> bool;
+    /// `kuna_prunedssa::live_calls`.
+    prunedssa_live_calls: fn(&Funcdata, &[FuncCallSpecs], &Address, int4, &[VarnodeId], &[OpId], &[OpId]) -> LiveCalls;
+    /// `kuna_prunedssa::prune_merges`.
+    prunedssa_prune_merges: fn(&Funcdata, &Address, int4, &mut Vec<BlockId>) -> bool;
+    /// `kuna_stackstoreguard::enabled`.
+    stackstoreguard_enabled: fn(&Funcdata, &Address, &[VarnodeId]) -> bool;
+    /// `kuna_stackstoreguard::frame_unresolved`.
+    stackstoreguard_frame_unresolved: fn(&Funcdata, &Rc<AddrSpace>, &[LoadGuard]) -> bool;
+    /// `kuna_stackstoreguard::indexed_enabled`.
+    stackstoreguard_indexed_enabled: fn(&Funcdata, &Address, &[VarnodeId]) -> bool;
+    /// `kuna_stackstoreguard::indexed_stores`.
+    stackstoreguard_indexed_stores: fn(&Funcdata, &[LoadGuard], &mut StoreBounds, &Address, int4, &[OpId]) -> Vec<OpId>;
+    /// `kuna_stackstoreguard::prune_indexed`.
+    stackstoreguard_prune_indexed: fn(&mut Funcdata, &[LoadGuard], &mut StoreBounds, &[(OpId, OpId)]);
+    /// `kuna_calleereginputs::virtual_this`.
+    calleereginputs_virtual_this: fn(&Architecture) -> Option<(Rc<ProtoModel>, Address, int4, Address)>;
+    /// `kuna_fpuemu::apply`.
+    fpuemu_apply: fn(&Architecture) -> bool;
+    /// `kuna_goreg::g_symbol_flags`.
+    goreg_g_symbol_flags: fn() -> uint4;
+    /// `kuna_goreg::goroutine_register`.
+    goreg_goroutine_register: fn(&str, Option<(u16, u16)>) -> Option<&'static str>;
+    /// `kuna_goreg::register_abi`.
+    goreg_register_abi: fn(&str, Option<(u16, u16)>) -> bool;
+    /// `kuna_lanefuse::builtins`.
+    lanefuse_builtins: fn() -> Vec<(uint4, String)>;
+    /// `kuna_mzdgroup::apply`.
+    mzdgroup_apply: fn(&Architecture);
+    /// `kuna_swiftcall::derive_model`.
+    swiftcall_derive_model: fn(&Element, &str, &str, Option<&str>, Option<&str>) -> Element;
+    /// `kuna_dfunaffected::assert_direction_flag_unaffected`.
+    dfunaffected_assert_direction_flag_unaffected: fn(&mut ProtoModel, &dyn Fn(&[u8]) -> Option<VarnodeData>);
+    /// `kuna_inputrefinement::coalesce`.
+    inputrefinement_coalesce: fn(&mut [int4], &mut dyn FnMut(usize, usize, usize) -> bool);
+    /// `kuna_msvcftol::decode_payload`.
+    msvcftol_decode_payload: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
+    /// `kuna_msvcftol::language_is_x86_32`.
+    msvcftol_language_is_x86_32: fn(&dyn Fn(&[u8]) -> bool, i32) -> bool;
+    /// `kuna_objcarc::decode_payload`.
+    objcarc_decode_payload: fn(&str, &mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
+    /// `kuna_objcarc::payload_xml`.
+    objcarc_payload_xml: fn(&dyn Fn(&[u8]) -> bool, i32) -> Option<String>;
+    /// `kuna_stackarggap::ends_argument_list`.
+    stackarggap_ends_argument_list: fn(&ParamActive, int4, int4, &dyn Fn(int4) -> bool) -> bool;
+    /// `kuna_swiftcall::swift_registers`.
+    swiftcall_swift_registers: fn(&dyn Fn(&str) -> Option<int4>) -> Option<(&'static str, &'static str, &'static str)>;
+    /// `kuna_switchrunon::own_rows`.
+    switchrunon_own_rows: fn(u64, &[u64], &dyn Fn(u64) -> Option<u64>) -> Option<usize>;
+    /// `kuna_x87intrinsic::decode_prototype`.
+    x87intrinsic_decode_prototype: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
 }

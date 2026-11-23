@@ -816,6 +816,7 @@ fn walk(arch: &Architecture, entry: &Address) -> Option<u8> {
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.calleereginputs_virtual_this = Some(virtual_this);
     hooks.calleereginputs_reads_register = Some(reads_register);
 }
 

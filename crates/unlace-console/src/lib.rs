@@ -16,6 +16,10 @@
 //!
 //! Lints are inherited from the workspace (`[lints] workspace = true`).
 
+// Dev-only: take the engine from the dylib (crates/unlace-decomp-dylib).
+#[cfg(feature = "dynamic_linking")]
+extern crate unlace_decomp_dylib;
+
 pub mod assertions;
 pub mod assertsyntax;
 pub mod classify;

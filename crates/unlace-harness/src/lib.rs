@@ -29,6 +29,10 @@
 //!   `run_test_files`) with the `<stringmatch>` min/max + multi-line matching and
 //!   the `Success -- `/`FAIL -- `/`Total tests applied = N` stdout grammar.
 
+// Dev-only: take the engine from the dylib (crates/unlace-decomp-dylib).
+#[cfg(feature = "dynamic_linking")]
+extern crate unlace_decomp_dylib;
+
 pub mod corpus;
 pub mod liftdiff;
 pub mod testfunction;

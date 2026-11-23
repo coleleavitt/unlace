@@ -100,3 +100,42 @@ impl unlace_sleigh::loadimage::LoadImage for NoImage {
     }
     fn adjust_vma(&mut self, _adjust: i64) {}
 }
+
+#[test]
+fn the_stamp_answers_the_key_until_a_source_changes() {
+    let tmp = std::env::temp_dir().join(format!("unlace-sla-stamp-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&tmp);
+    let langs = tmp.join("languages");
+    fs::create_dir_all(&langs).expect("mkdir");
+    let from = repo_specs().join("Toy/data/languages");
+    for entry in fs::read_dir(&from).expect("read Toy") {
+        let path = entry.expect("entry").path();
+        if path.is_file() {
+            fs::copy(&path, langs.join(path.file_name().unwrap())).expect("copy");
+        }
+    }
+    let spec = langs.join("toy_builder_be_align2.slaspec");
+    let cache = tmp.join("cache");
+    let key = current_key(&cache, "toy_builder_be_align2", &spec);
+    assert_eq!(key, cache_key(&spec));
+    let stamp = stamp_path(&cache, "toy_builder_be_align2", &spec);
+    assert_eq!(stamped_key(&stamp).as_deref(), Some(key.as_str()));
+
+    let include = sources(&spec)
+        .into_iter()
+        .find(|f| f != &spec)
+        .expect("the Toy spec includes a file");
+    let mut text = fs::read(&include).expect("read include");
+    text.extend_from_slice(b"\n# changed\n");
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    fs::write(&include, text).expect("write include");
+    assert_eq!(
+        stamped_key(&stamp),
+        None,
+        "a changed include invalidates the stamp"
+    );
+    let changed = current_key(&cache, "toy_builder_be_align2", &spec);
+    assert_ne!(changed, key);
+    assert_eq!(changed, cache_key(&spec));
+    let _ = fs::remove_dir_all(&tmp);
+}

@@ -86,7 +86,7 @@ use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uint4, uintb};
 
 use crate::context::BlockId;
-use crate::kuna_indexaliasguard::{LEVEL_FULL, LEVEL_GLOBAL, LEVEL_OFF};
+use crate::kuna_coreoptions::{LEVEL_FULL, LEVEL_GLOBAL, LEVEL_OFF};
 use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
 use crate::overrides::Override;
 use crate::varnode::varnode_flags;
@@ -1780,7 +1780,7 @@ impl Heritage {
             let level = fd
                 .get_arch()
                 .kuna_options
-                .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+                .get::<crate::kuna_coreoptions::IndexAliasGuard>()
                 .0;
             let high_ptr_possible = level != LEVEL_OFF
                 && addr

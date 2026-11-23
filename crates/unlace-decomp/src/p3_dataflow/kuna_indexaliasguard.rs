@@ -71,7 +71,6 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -79,80 +78,11 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-/// `option indexaliasguard off` — neither index-alias guard runs.
-pub const LEVEL_OFF: int4 = 0;
-
-/// `option indexaliasguard load` — `Heritage::guardLoads` only.
-pub const LEVEL_LOAD: int4 = 1;
-
-/// `option indexaliasguard global` — `guardLoads` + the STORE guard on a
-/// global range.
-pub const LEVEL_GLOBAL: int4 = 2;
-
-/// `option indexaliasguard full` — `guardLoads` + `guardStores`, i.e. upstream
-/// Ghidra's behavior.
-pub const LEVEL_FULL: int4 = 3;
+pub use crate::kuna_coreoptions::{
+    IndexAliasGuard, LEVEL_FULL, LEVEL_GLOBAL, LEVEL_LOAD, LEVEL_OFF, OptionIndexAliasGuard,
+};
 
 pub use crate::heritage::{GLOBAL_LOAD_BUDGET, GLOBAL_STORE_BUDGET};
-
-/// The `indexaliasguard` level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IndexAliasGuard(pub int4);
-
-impl crate::kuna_optionset::KunaOption for IndexAliasGuard {
-    const NAME: &'static str = "indexaliasguard";
-    crate::kuna_option_id!();
-
-    fn unset() -> Self {
-        IndexAliasGuard(LEVEL_GLOBAL)
-    }
-
-    fn shipped() -> Self {
-        IndexAliasGuard(LEVEL_GLOBAL)
-    }
-
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
-        OptionIndexAliasGuard
-            .apply(value)
-            .map(|(v, msg)| (IndexAliasGuard(v), msg))
-    }
-}
-
-/// `option indexaliasguard off|load|global|full` (C++ has no equivalent —
-/// upstream is unconditionally `full`).
-pub struct OptionIndexAliasGuard;
-
-impl OptionIndexAliasGuard {
-    /// The option name.
-    pub const NAME: &'static str = "indexaliasguard";
-
-    /// Parse `off`/`load`/`global`/`full` into the guard level + a confirmation
-    /// message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
-        match p1 {
-            "off" => Ok((LEVEL_OFF, "Index-alias heritage guards turned off".to_string())),
-            "load" => Ok((
-                LEVEL_LOAD,
-                "Index-alias heritage guards turned on, LOAD side only (guardLoads)".to_string(),
-            )),
-            // Empty parameter reads as the shipped default, matching `options::on_or_off`.
-            "global" | "on" | "" => Ok((
-                LEVEL_GLOBAL,
-                "Index-alias heritage guards turned on, LOAD side plus STORE and LOAD guards on globals"
-                    .to_string(),
-            )),
-            "full" => Ok((
-                LEVEL_FULL,
-                "Index-alias heritage guards turned on, LOAD + STORE \
-                 (guardLoads + guardStores)"
-                    .to_string(),
-            )),
-            _ => Err(unlace_base::error::KunaError::parse(
-                "Must specify one of off, load, global, full",
-            )),
-        }
-    }
-}
 
 /// The live `STORE`s whose address space is `spc` and whose address is not the
 /// stack pointer plus a constant: the ops that can write a global in `spc`.

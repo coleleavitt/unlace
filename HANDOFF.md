@@ -122,8 +122,12 @@ into the knowledge plane), and the loader/environment options PR after it.
   varsources): no `funcdata -> *` line is left in `scripts/layers-allowlist.txt`. `UnitRetype`
   and `StorageSource` are plain data that core `Funcdata` code builds, so they moved down into
   `funcdata.rs` (re-exported from their pass modules). `kuna_go_receiver` and `go_string_input`
-  still name `p0_knowledge` types (same band, no edge). Left: the arch/context edges
-  (callmechanisms `Mechanisms`, jumpassist, segmentize, modelrules, heritage -> prefersplit).
+  still name `p0_knowledge` types (same band, no edge). `modelrules` (with its
+  helper `kuna_aggregateabi`) and `prefersplit` are Ghidra-core modules whose only `crate::` deps are
+  middle-band, so `check_layers.py` now places them in the middle band (`MODULE_BAND`), which
+  clears `architecture/fspec -> modelrules` and `heritage -> prefersplit`; `kuna_dex` keeps its
+  own `dex_entry` slot and installs through the `callmechanisms_install_at_entry` hook. Left: the
+  arch/context edges (callmechanisms `Mechanisms`, jumpassist, segmentize).
 - **Step 8:** `#[inline]` half done (arch/inline-8): 301 small middle-band functions (substrate,
   p0_knowledge, infra) that p1-p9 code calls at least 5 times (codegraph `edges` kind `calls`), each a
   field read or a one-line wrapper of at most 4 body lines, no loops or searches; plus the

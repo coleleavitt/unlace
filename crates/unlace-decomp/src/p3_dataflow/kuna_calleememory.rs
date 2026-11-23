@@ -3293,7 +3293,7 @@ mod tests {
         let space = Rc::clone(fx.fd.get_arch().manage().get_default_data_space().unwrap());
         let index = fx.fd.get_call_specs_index(op).unwrap();
         let call = fx.fd.replace_call_specs(index);
-        let mut cache = super::super::kuna_globalcallranges::Calls::default();
+        let mut cache = crate::heritage::GlobalCallRanges::default();
         for (offset, size, expected) in [
             (0x7000, 8, true),
             (0x7ff8, 8, true),
@@ -3305,7 +3305,8 @@ mod tests {
             (0x8024, 8, true),
         ] {
             assert_eq!(
-                cache.preserves(
+                super::super::kuna_globalcallranges::preserves(
+                    &mut cache,
                     &fx.fd,
                     &call,
                     &Address::new(Rc::clone(&space), offset),
@@ -3328,8 +3329,14 @@ mod tests {
             let space = Rc::clone(fx.fd.get_arch().manage().get_default_data_space().unwrap());
             let index = fx.fd.get_call_specs_index(op).unwrap();
             let call = fx.fd.replace_call_specs(index);
-            let mut cache = super::super::kuna_globalcallranges::Calls::default();
-            assert!(!cache.preserves(&fx.fd, &call, &Address::new(space, 0x9000), 8));
+            let mut cache = crate::heritage::GlobalCallRanges::default();
+            assert!(!super::super::kuna_globalcallranges::preserves(
+                &mut cache,
+                &fx.fd,
+                &call,
+                &Address::new(space, 0x9000),
+                8
+            ));
             fx.fd.restore_call_specs_at(index, call);
         }
         let (mut fx, op) = global_call_site(0x8000, 0);
@@ -3340,14 +3347,20 @@ mod tests {
         fx.fd.op_set_input(op, unknown, 1).unwrap();
         let index = fx.fd.get_call_specs_index(op).unwrap();
         let call = fx.fd.replace_call_specs(index);
-        let mut cache = super::super::kuna_globalcallranges::Calls::default();
+        let mut cache = crate::heritage::GlobalCallRanges::default();
         let watched = Address::new(space, 0x9000);
-        assert!(!cache.preserves(&fx.fd, &call, &watched, 8));
+        assert!(!super::super::kuna_globalcallranges::preserves(
+            &mut cache, &fx.fd, &call, &watched, 8
+        ));
         let known = fx.constant(8, 0x8000);
         fx.fd.op_set_input(op, known, 1).unwrap();
-        assert!(!cache.preserves(&fx.fd, &call, &watched, 8));
+        assert!(!super::super::kuna_globalcallranges::preserves(
+            &mut cache, &fx.fd, &call, &watched, 8
+        ));
         cache.clear();
-        assert!(cache.preserves(&fx.fd, &call, &watched, 8));
+        assert!(super::super::kuna_globalcallranges::preserves(
+            &mut cache, &fx.fd, &call, &watched, 8
+        ));
         fx.fd.restore_call_specs_at(index, call);
     }
 
@@ -3376,9 +3389,15 @@ mod tests {
                 5 => trial.set_ind_create_formed(),
                 _ => (),
             }
-            let mut cache = super::super::kuna_globalcallranges::Calls::default();
+            let mut cache = crate::heritage::GlobalCallRanges::default();
             assert_eq!(
-                cache.preserves(&fx.fd, &call, &Address::new(space, 0x9000), 8),
+                super::super::kuna_globalcallranges::preserves(
+                    &mut cache,
+                    &fx.fd,
+                    &call,
+                    &Address::new(space, 0x9000),
+                    8
+                ),
                 mode == 0,
                 "mode {mode}"
             );
@@ -3397,13 +3416,21 @@ mod tests {
         let watched = Address::new(Rc::clone(&space), 0x9000);
         let index = fx.fd.get_call_specs_index(op).unwrap();
         let mut call = fx.fd.replace_call_specs(index);
-        let mut cache = super::super::kuna_globalcallranges::Calls::default();
-        assert!(cache.preserves(&fx.fd, &call, &watched, 8));
+        let mut cache = crate::heritage::GlobalCallRanges::default();
+        assert!(super::super::kuna_globalcallranges::preserves(
+            &mut cache, &fx.fd, &call, &watched, 8
+        ));
         let mut unknown_frame =
             crate::fspec::FuncCallSpecs::new(op, call.get_entry_address().clone());
         unknown_frame.proto_mut().copy(call.proto());
         cache.clear();
-        assert!(!cache.preserves(&fx.fd, &unknown_frame, &watched, 8));
+        assert!(!super::super::kuna_globalcallranges::preserves(
+            &mut cache,
+            &fx.fd,
+            &unknown_frame,
+            &watched,
+            8
+        ));
         call.proto_mut()
             .push_effect_override(crate::fspec::EffectRecord::from_varnode(
                 VarnodeData {
@@ -3414,7 +3441,9 @@ mod tests {
                 crate::fspec::effect_type::UNKNOWN_EFFECT,
             ));
         cache.clear();
-        assert!(!cache.preserves(&fx.fd, &call, &watched, 8));
+        assert!(!super::super::kuna_globalcallranges::preserves(
+            &mut cache, &fx.fd, &call, &watched, 8
+        ));
         fx.fd.restore_call_specs_at(index, call);
     }
 }

@@ -18,10 +18,11 @@ use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4, uintb};
 
 use unlace_base::error::KunaResult;
+use unlace_base::marshal::IdRegistry;
 use unlace_base::xml::Element;
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::architecture::Architecture;
+use crate::architecture::{Architecture, HelperAbi};
 use crate::context::{ArchContext, BlockId, HighVariableId, OpId, VarnodeId};
 use crate::database::SymbolEntry;
 use crate::dtype::{Datatype, TypeFactory};
@@ -31,10 +32,11 @@ use crate::fspec::{
 };
 use crate::funcdata::Funcdata;
 use crate::heritage::{Guard, LiveCalls, LoadGuard, MemoryOps, StoreBounds};
-use crate::jumptable::LoadTable;
+use crate::jumptable::{GuardRecord, LoadTable};
 use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 use crate::merge::MergeContext;
 use crate::op::PcodeOpBank;
+use crate::rangeutil::CircleRange;
 use crate::variable::HighIntersectTest;
 use crate::varmap::{AliasChecker, LinkEntryInfo, MapState, RangeHint};
 use crate::varnode::VarnodeBank;
@@ -449,4 +451,19 @@ declare_hooks! {
     printc_decl_type_representative: fn(&Funcdata, &Architecture, HighVariableId) -> Option<VarnodeId>;
     /// `printc::type_to_c_string`.
     printc_type_to_c_string: fn(&Architecture, &Rc<Datatype>) -> String;
+    /// `kuna_arithhelpers::decode_payloads`.
+    arithhelpers_decode_payloads: fn(HelperAbi, &mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
+    /// `kuna_arithhelpers::helper_abi`.
+    arithhelpers_helper_abi: fn(&dyn Fn(&[u8]) -> bool, i32, bool) -> Option<HelperAbi>;
+    /// `kuna_lanefuse::mask_builtins`.
+    lanefuse_mask_builtins: fn(&mut dyn Iterator<Item = (uint4, &[u8])>) -> Vec<(uint4, String)>;
+    /// `kuna_switchguardrange::intersect`.
+    switchguardrange_intersect: fn(&Funcdata, &[GuardRecord], VarnodeId, &mut CircleRange);
+    /// `modelrules::register_ids`.
+    modelrules_register_ids: fn(&mut IdRegistry);
+    /// `kuna_customreturn::input_assignment`.
+    customreturn_input_assignment: for<'a> fn(
+        &'a PrototypePieces,
+        &dyn TypeFactory,
+    ) -> KunaResult<std::borrow::Cow<'a, PrototypePieces>>;
 }

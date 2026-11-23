@@ -3,6 +3,7 @@
 //! Stage-aligned module group; declared flatly at the crate root via re-export in
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
+pub mod actionprof;
 pub mod addtreestate;
 pub mod block;
 pub mod capability;
@@ -32,6 +33,8 @@ pub mod kuna_outlang;
 pub mod kuna_passhooks;
 pub mod kuna_regioneval;
 pub mod op;
+pub mod pcodeinject;
 pub mod rangeutil;
 pub mod transform;
+pub mod userop;
 pub mod varnode;

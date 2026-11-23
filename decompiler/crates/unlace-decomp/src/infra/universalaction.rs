@@ -152,6 +152,10 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p4_calls::kuna_retpushedhalf::provide(&mut slots);
     crate::kuna_bitcast::provide(&mut slots);
     crate::printc::provide(&mut slots);
+    crate::p2_lift::kuna_arithhelpers::provide(&mut slots);
+    crate::p2_lift::kuna_switchguardrange::provide(&mut slots);
+    crate::p4_calls::modelrules::provide(&mut slots);
+    crate::p4_calls::kuna_customreturn::provide(&mut slots);
     slots
         .finish()
         .unwrap_or_else(|missing| panic!("pass hooks with no provider: {}", missing.join(", ")))

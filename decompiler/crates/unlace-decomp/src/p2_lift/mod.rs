@@ -68,8 +68,6 @@ pub mod kuna_tailcallsaved; // (kuna) a teardown that restores nothing the entry
 pub mod kuna_v850indbranch;
 pub mod kuna_vexzeroupper; // (kuna `vexzeroupper`) split the VEX zero-upper ZMM write at the result width
 pub mod kuna_x64syscall; // (kuna) give the x86-64 SYSCALL user-op the Linux ABI register effects
-pub mod pcodeinject;
-pub mod userop; // (kuna) test-only: panic one function's jump-table recovery
 
 pub mod kuna_gojumpchain;
 pub mod kuna_returnbranch;

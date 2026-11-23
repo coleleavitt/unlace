@@ -1,10 +1,8 @@
 # Upward crate:: edges between unlace-decomp's layering bands (scripts/check_layers.py). Only delete lines.
-action -> actionprof
 architecture -> engine_translate
 architecture -> flow
 architecture -> inject_sleigh
 architecture -> kuna_aif
-architecture -> kuna_arithhelpers
 architecture -> kuna_bejoin
 architecture -> kuna_callbacktype
 architecture -> kuna_calleedeadarg
@@ -35,7 +33,6 @@ architecture -> kuna_itaniumeh
 architecture -> kuna_jumpassist
 architecture -> kuna_kalloctype
 architecture -> kuna_kernelbug
-architecture -> kuna_lanefuse
 architecture -> kuna_lang
 architecture -> kuna_langfamily
 architecture -> kuna_msvcbyval
@@ -73,14 +70,12 @@ architecture -> kuna_x87emptyreturn
 architecture -> kuna_x87intrinsic
 architecture -> kuna_x87truncate
 architecture -> modelrules
-architecture -> pcodeinject
 architecture -> prefersplit
 architecture -> printc
 architecture -> printlanguage
 architecture -> remote_provider
 architecture -> stringmanage
 architecture -> universalaction
-architecture -> userop
 context -> kuna_callmechanisms
 context -> kuna_callresultuse
 context -> kuna_deadcascade
@@ -113,7 +108,6 @@ dtype -> prettyprint
 fspec -> kuna_calleedeadarg
 fspec -> kuna_calleepurge
 fspec -> kuna_condexeret
-fspec -> kuna_customreturn
 fspec -> kuna_libcnames
 fspec -> kuna_narrowext
 fspec -> kuna_passthrough
@@ -159,7 +153,6 @@ funcdata -> unionresolve
 funcdata_block -> flow
 funcdata_block -> kuna_loweredswitchvalue
 funcdata_varnode -> kuna_condexeretuse
-funcdata_varnode -> userop
 heritage -> kuna_bejoin
 heritage -> kuna_calloverlap
 heritage -> kuna_globalcallranges
@@ -170,10 +163,8 @@ heritage -> prefersplit
 jumptable -> kuna_constselectjump
 jumptable -> kuna_emulatefunction
 jumptable -> kuna_jumpassist
-jumptable -> kuna_switchguardrange
 kuna_assert -> kuna_phases
 kuna_dex -> kuna_callmechanisms
-kuna_dex -> pcodeinject
 kuna_loadoptions -> kuna_calltargettype
 kuna_loadoptions -> kuna_goreg
 options -> flow

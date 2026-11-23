@@ -25,8 +25,8 @@ without re-snapshotting the C++ oracle.
 
 The snapshots are produced by `kuna.goldens` (the stage-boundary harness) run against the
 **main checkout's** built `decomp_dbg` + `.sla` artifacts. From the main tree
-(`/home/mahaloz/github/kuna`, with `decompiler/cpp/decomp_dbg` built and `target/release/slacomp -a specs`
-done):
+(`/home/mahaloz/github/kuna`, with `decompiler/cpp/decomp_dbg` built; the `.sla` images compile
+into the `.sla` cache on first use):
 
 ```bash
 cd /home/mahaloz/github/kuna
@@ -59,5 +59,5 @@ function entry are pinned in the `CASES` table in `../../src/corpus.rs`.
 `<binaryimage>` and runs `FlowInfo::generate_ops` + `generate_blocks` + `structure_reset`
 (the realized body of the C++ `ActionStart` = `followFlow` + `structureReset`) to the
 SAME boundary these snapshots represent, then compares the structural skeleton. It needs
-the `.sla` artifacts built (`target/release/slacomp -a specs` in the worktree, or the main tree's `specs/`);
+the SLEIGH sources under `specs/` (each `.sla` compiles into the `.sla` cache on first use);
 when they are absent every case SKIPs and the gate is a structural pass.

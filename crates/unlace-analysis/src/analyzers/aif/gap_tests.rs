@@ -32,8 +32,10 @@ impl LoadImage for Bytes {
 
 fn arm(bytes: Vec<u8>) -> (Sleigh, Rc<AddrSpace>) {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let sla = std::fs::read(root.join("specs/Ghidra/Processors/ARM/data/languages/ARM7_le.sla"))
-        .expect("AIF tests require built ARM specs");
+    let sla = unlace_slacomp::slacache::read_sla(
+        root.join("specs/Ghidra/Processors/ARM/data/languages/ARM7_le.sla"),
+    )
+    .expect("AIF tests require built ARM specs");
     let mut engine = Sleigh::new(Box::new(Bytes(bytes)), Box::new(ContextInternal::new()));
     engine.initialize_from_sla(&sla).unwrap();
     engine.set_context_default("TMode", 0);

@@ -164,9 +164,9 @@ pub fn require_specs_dir() -> Result<PathBuf, String> {
 }
 
 /// How to point kuna at a SLEIGH tree, for the failures that surface after the
-/// directory itself resolved (a checkout that never ran `target/release/slacomp -a specs`).
-pub const SPECS_HINT: &str = "set KUNA_SPECS to a specs/ directory (from the kuna-v<ver>-specs release \
-     archive), or run `target/release/slacomp -a specs` in a checkout";
+/// directory itself resolved.
+pub const SPECS_HINT: &str = "set KUNA_SPECS to a specs/ directory (a checkout's specs/, whose .sla \
+     images compile into the .sla cache on first use, or the kuna-v<ver>-specs release archive)";
 
 /// The directories [`binary`] probes, in order.
 fn binary_search_dirs() -> Vec<PathBuf> {

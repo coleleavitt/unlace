@@ -204,14 +204,14 @@ fn inject_tempbase_comes_from_unique_start() {
 fn build_arch_from_sla(sla_rel: &str) -> Option<Architecture> {
     let root = repo_root();
     let sla_path = root.join("specs").join(sla_rel);
-    if !sla_path.is_file() {
+    if !sla_path.with_extension("slaspec").is_file() {
         eprintln!(
-            "SKIP: {} not built (run `target/release/slacomp -a specs`)",
+            "SKIP: {} unavailable (no .slaspec under specs/)",
             sla_path.display()
         );
         return None;
     }
-    let sla = std::fs::read(&sla_path).expect("read .sla");
+    let sla = unlace_slacomp::slacache::read_sla(&sla_path).expect("read .sla");
     let mut sleigh = Sleigh::new(Box::new(DummyImg), Box::new(ContextInternal::new()));
     sleigh
         .initialize_from_sla(&sla)

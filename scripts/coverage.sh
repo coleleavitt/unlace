@@ -18,10 +18,6 @@ rustup component list --installed 2>/dev/null | grep -q llvm-tools || {
   echo "coverage: llvm-tools missing; run: rustup component add llvm-tools-preview" >&2
   exit 1
 }
-find "$ROOT/specs" -name '*.sla' -print -quit | grep -q . || {
-  echo "coverage: no built specs; run: target/release/slacomp -a specs" >&2
-  exit 1
-}
 
 # Pre-set the target dir BEFORE show-env: in show-env mode cargo-llvm-cov
 # otherwise instruments into the normal target, and its clean

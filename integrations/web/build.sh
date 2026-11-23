@@ -82,21 +82,25 @@ else
   cp "$WASM" "$DIST/unlace_wasm.wasm"
 fi
 
-# Sanity: the .sla are built artifacts — fail early with a helpful message.
-if [ -z "$(find "$REPO/specs" -name '*.sla' -print -quit)" ]; then
-  echo "error: no .sla found under $REPO/specs"
-  echo "       run 'target/release/slacomp -a specs' at the repo root first (the .sla are built artifacts)."
-  exit 1
-fi
+# The checkout's specs/ holds SLEIGH sources only (the native engine compiles each .sla into its
+# cache on first use). The browser fetches compiled images, so compile the whole tree into a
+# scratch copy here and ship those.
+echo ">> compiling every .slaspec into a scratch tree"
+( cd "$ENGINE" && cargo build --"$PROFILE" -p unlace-slacomp )
+SLA_STAGE="$(mktemp -d)"
+trap 'rm -rf "$SLA_STAGE"' EXIT
+cp -r "$REPO/specs/." "$SLA_STAGE/"
+find "$SLA_STAGE" -name '*.sla' -delete
+"$ENGINE/target/$PROFILE/slacomp" -a "$SLA_STAGE" >/dev/null
 
 echo ">> copying the full runtime SLEIGH tree (all formats/arches; lazy-fetched)"
 find_expr=()
 for e in "${RUNTIME_EXTS[@]}"; do find_expr+=(-name "*.$e" -o); done
 unset 'find_expr[${#find_expr[@]}-1]'   # drop trailing -o
-( cd "$REPO/specs" && find . \( "${find_expr[@]}" \) \( -type f -o -type l \) -print0 ) \
-  | ( cd "$REPO/specs" && rsync -qL --files-from=- -0 . "$DIST/specs/" 2>/dev/null ) \
+( cd "$SLA_STAGE" && find . \( "${find_expr[@]}" \) \( -type f -o -type l \) -print0 ) \
+  | ( cd "$SLA_STAGE" && rsync -qL --files-from=- -0 . "$DIST/specs/" 2>/dev/null ) \
   || {  # rsync may be absent — fall back to cp
-    ( cd "$REPO/specs" && find . \( "${find_expr[@]}" \) \( -type f -o -type l \) -print0 \
+    ( cd "$SLA_STAGE" && find . \( "${find_expr[@]}" \) \( -type f -o -type l \) -print0 \
       | while IFS= read -r -d '' f; do mkdir -p "$DIST/specs/$(dirname "$f")"; cp "$f" "$DIST/specs/$f"; done )
   }
 

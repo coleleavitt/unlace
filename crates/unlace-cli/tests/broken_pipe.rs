@@ -78,7 +78,7 @@ fn functions_json_tolerates_a_closed_reader() {
     let specs = root.join("specs");
     assert!(
         specs
-            .join("Ghidra/Processors/x86/data/languages/x86-64.sla")
+            .join("Ghidra/Processors/x86/data/languages/x86-64.slaspec")
             .exists(),
         "required processor spec missing; build specs before running integration tests"
     );

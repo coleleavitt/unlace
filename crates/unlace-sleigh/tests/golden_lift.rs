@@ -217,7 +217,8 @@ fn fixture_engine(fix: &Fixture) -> Sleigh {
         .clone();
     let bi = find_binaryimage(&doc_root).expect("corpus has a binaryimage");
 
-    let sla = std::fs::read(root.join("specs").join(&fix.sla_rel)).expect("read .sla");
+    let sla = unlace_slacomp::slacache::read_sla(root.join("specs").join(&fix.sla_rel))
+        .expect("read .sla");
 
     let mut registry = IdRegistry::with_base_ids();
     register_loadimage_xml_ids(&mut registry);

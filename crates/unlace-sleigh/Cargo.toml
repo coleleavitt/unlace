@@ -12,6 +12,9 @@ publish.workspace = true
 unlace-base.workspace = true
 unlace-num.workspace = true
 
+[dev-dependencies]
+unlace-slacomp.workspace = true
+
 [lints]
 workspace = true
 

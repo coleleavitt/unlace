@@ -1151,8 +1151,10 @@ mod tests {
         let path = path.to_str().unwrap();
         let bytes = std::fs::read(path).unwrap();
         let file = object::File::parse(&*bytes).unwrap();
-        let sla =
-            std::fs::read(root.join("specs/Ghidra/Processors/x86/data/languages/x86.sla")).unwrap();
+        let sla = unlace_slacomp::slacache::read_sla(
+            root.join("specs/Ghidra/Processors/x86/data/languages/x86.sla"),
+        )
+        .unwrap();
         for detail in [ListingDetail::FULL, ListingDetail::PARTITION_ONLY] {
             for disable in [false, true] {
                 let loader = ObjectLoadImage::from_bytes_silent(path, &bytes).unwrap();

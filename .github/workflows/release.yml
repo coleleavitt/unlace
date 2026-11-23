@@ -115,8 +115,9 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      # The compiled SLEIGH tree, laid over the checkout's specs/ so the
-      # embed-specs build script finds every .sla where `slacomp -a specs` leaves it.
+      # The compiled SLEIGH tree, laid over the checkout's specs/: the embed-specs
+      # build script uses each current prebuilt .sla as is (it would otherwise
+      # compile them through the .sla cache).
       - uses: actions/download-artifact@v4
         with:
           name: unlace-specs

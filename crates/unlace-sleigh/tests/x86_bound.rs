@@ -42,8 +42,10 @@ impl PcodeEmit for Ops {
 fn run_bound(bits: u32, value: i64, lower: i64, upper: i64) -> bool {
     use std::collections::HashMap;
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let sla =
-        std::fs::read(root.join("specs/Ghidra/Processors/x86/data/languages/x86.sla")).unwrap();
+    let sla = unlace_slacomp::slacache::read_sla(
+        root.join("specs/Ghidra/Processors/x86/data/languages/x86.sla"),
+    )
+    .unwrap();
     let bytes = if bits == 16 {
         vec![0x66, 0x62, 0x03]
     } else {

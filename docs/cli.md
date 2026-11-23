@@ -106,8 +106,8 @@ differential is described in `docs/history.md`.
 and both are built into it: `kuna decomp_dbg` and `kuna slacomp` are those
 programs, and `unlace` launches itself that way. `catalog` reads the option table
 in-process and needs neither the console nor specs, unless `--decomp-dbg` or
-`KUNA_DECOMP_DBG` selects a separate console. The engine also needs a compiled
-SLEIGH tree, found in this order when nothing pins it:
+`KUNA_DECOMP_DBG` selects a separate console. The engine also needs a SLEIGH tree, found in
+this order when nothing pins it:
 
 - **built in**: a release `unlace` (cargo feature `embed-specs`) carries the tree and
   unpacks it once, under a name derived from its contents, into the per-user cache
@@ -121,11 +121,17 @@ SLEIGH tree, found in this order when nothing pins it:
 A probe that finds nothing names the directories it looked in, and why a built-in
 tree could not be unpacked.
 
+A tree of SLEIGH sources is enough: the engine compiles each language's `.slaspec` into the
+`.sla` cache the first time a binary needs it and reuses the image after (`UNLACE_SLA_CACHE`
+below). A `.sla` that sits beside its `.slaspec` as a regular file at least as new as its
+sources, or with no `.slaspec` at all (a release tree), is used as is.
+
 | Variable | What it pins |
 |---|---|
 | `KUNA_SPECS` | The SLEIGH tree passed as `-sleighpath` (`SLEIGHHOME` is the engine's own name for the same thing). Wins over a built-in tree. |
 | `KUNA_DECOMP_DBG` | A separate `decomp_dbg` binary to run instead of the built-in console; a non-empty value also makes `catalog` query that build. `--decomp-dbg PATH` does the same for one `decompile` or `catalog` run, and wins over the variable. |
 | `KUNA_DECOMP_TEST` | The `decomp_test_dbg` datatest harness (`unlace test --binary PATH`). It is not built in; it is looked for beside `unlace`, then in the checkout's `target/<profile>/`, under its bare and `.exe` names. |
+| `UNLACE_SLA_CACHE` | Where compiled `.sla` images are cached (default `$XDG_CACHE_HOME/unlace/sla`, else `~/.cache/unlace/sla`). Content-addressed by the sources and the compiler; safe to delete. |
 | `KUNA_SLACOMP` | A separate `slacomp` binary for `unlace specs` to run instead of the built-in compiler. |
 | `KUNA_ROOT` | The repo root, when the binaries are not in-tree: `specs/`, `tests/datatests/` and `target/<profile>/` are all read from it. |
 | `KUNA_RUST_PROFILE` | The `target/<profile>` directory the in-tree fallback reads (default `release`). |

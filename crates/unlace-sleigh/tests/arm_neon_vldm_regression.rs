@@ -111,7 +111,7 @@ impl LoadImage for DummyImg {
 #[test]
 fn arm_thumb_vldmia_upper_neon_regs_does_not_panic() {
     let sla_path = repo_root().join("specs/Ghidra/Processors/ARM/data/languages/ARM8_le.sla");
-    let sla = std::fs::read(&sla_path).expect("read compiled ARM spec");
+    let sla = unlace_slacomp::slacache::read_sla(&sla_path).expect("read compiled ARM spec");
 
     let base: u64 = 0x1000;
     // `vldmia r0, {d16-d31}` (d0 ec 20 0b) then `bx lr` / nop padding, matching

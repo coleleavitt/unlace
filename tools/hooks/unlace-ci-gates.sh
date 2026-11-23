@@ -64,11 +64,6 @@ ignored_fixtures() {
 }
 fmt() { (cargo fmt --all --check >/dev/null) || { echo "run: cargo fmt --all"; return 1; }; }
 build() { (cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli); }
-specs() {
-  local want got; want=$(find specs -name '*.slaspec' | wc -l); got=$(find specs -name '*.sla' | wc -l)
-  if [ "$got" -ne "$want" ]; then "$BIN/slacomp" -a specs >/dev/null || return 1; got=$(find specs -name '*.sla' | wc -l); fi
-  echo "compiled $got of $want .slaspec"; [ "$got" -eq "$want" ] && [ "$got" -gt 0 ]
-}
 lint() { (cargo clippy -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings -A unfulfilled-lint-expectations); }
 options_md() { "$BIN/unlace" catalog --markdown | diff -u docs/options.md - ; }
 counters() { PYTHONPATH="$ROOT" python3 -m scripts.repipe.counters --check --kuna "$BIN/unlace"; }
@@ -91,7 +86,7 @@ web() {
   return $ok
 }
 rusttest() {
-  # The workspace suite reads <repo>/specs; worktree specs are built above.
+  # The workspace suite compiles the .sla images it needs into the .sla cache on first use.
   local web=(--exclude unlace-wasm); [ "${UNLACE_GATES_WEB:-0}" = 1 ] && web=()
   cargo nextest run --workspace "${web[@]}" --profile ci
 }
@@ -104,7 +99,6 @@ if [ "$LEVEL" != fast ]; then
   # CI has no global gitignore; the repo tooling tests create a.exe / x.obj and expect git to see them.
   step test-tools env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.excludesFile GIT_CONFIG_VALUE_0=/dev/null PYTHONPATH="$ROOT" python3 -m unittest discover -s scripts/tests -p 'test_*.py'
   step build build
-  step specs specs
   step lint lint
   # tests/datatests and tests/stages vs their baselines (PARITY OK), through the build above.
   step parity "${SLOT[@]}" cargo test -p unlace-cli --test parity

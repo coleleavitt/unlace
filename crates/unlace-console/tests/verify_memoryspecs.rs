@@ -50,7 +50,7 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<(String, Vec<u8>)>) {
     }
 }
 
-/// Every file `target/release/slacomp -a specs` leaves under `specs/` except the SLEIGH sources,
+/// Every file of a compiled SLEIGH tree under `specs/` except the SLEIGH sources,
 /// copied into memory once.
 fn embedded() -> &'static [(String, Vec<u8>)] {
     static FILES: OnceLock<Vec<(String, Vec<u8>)>> = OnceLock::new();
@@ -58,9 +58,15 @@ fn embedded() -> &'static [(String, Vec<u8>)] {
         let root = specs_dir();
         let mut files = Vec::new();
         collect(&root, &root, &mut files);
+        if !files.iter().any(|(rel, _)| *rel == X86_64_SLA) {
+            files.push((
+                X86_64_SLA.to_string(),
+                unlace_slacomp::slacache::read_sla(root.join(X86_64_SLA)).expect("compile x86-64"),
+            ));
+        }
         assert!(
             files.iter().any(|(rel, _)| *rel == X86_64_SLA),
-            "{X86_64_SLA} is not built; run `target/release/slacomp -a specs`"
+            "{X86_64_SLA} does not compile"
         );
         files
     })

@@ -147,9 +147,9 @@ the tree already unpacked. Old trees are never removed automatically; deleting
 the cache directory is always safe, and the next run unpacks again.
 
 (Inside a repo checkout none of this applies — a plain `cargo build` carries no
-specs, and they are found from the repo root. `target/release/slacomp -a specs` then
-`cargo build --release -p unlace-cli --features embed-specs` builds the
-self-contained binary locally.)
+specs, and they are found from the repo root, each `.sla` compiled into the `.sla` cache on
+first use. `cargo build --release -p unlace-cli --features embed-specs` builds the
+self-contained binary locally; its build script compiles every language through the same cache.)
 
 The `kuna-v<ver>-KunaDecompiler-ghidra_<ghidra-version>.zip` asset is not an
 archive to extract — install it from inside Ghidra (**File → Install

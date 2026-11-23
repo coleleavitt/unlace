@@ -22,6 +22,7 @@ smallvec.workspace = true
 slotmap.workspace = true
 
 [dev-dependencies]
+unlace-slacomp.workspace = true
 # Verifier-only: the datatest <stringmatch> engine (item w10-structure-printbody).
 regex = { workspace = true }
 serde = { version = "1", features = ["derive"] }

@@ -898,6 +898,37 @@ impl SleighArchitecture {
                 &mut slafile,
                 language.get_sla_file(),
             );
+            // (kuna) A spec tree holds SLEIGH sources: the image comes from the `.sla` cache,
+            // compiled from the sibling `.slaspec` on first use (a current prebuilt file wins).
+            let on_disk = !slafile.is_empty() && std::path::Path::new(&slafile).is_file();
+            if slafile.is_empty() || on_disk {
+                let mut slaspec = String::new();
+                let spec_name = std::path::Path::new(language.get_sla_file())
+                    .with_extension("slaspec")
+                    .to_string_lossy()
+                    .into_owned();
+                if slafile.is_empty() {
+                    kuna_memoryspecs::find_file(
+                        &db.mounts,
+                        &db.specpaths,
+                        &mut slaspec,
+                        &spec_name,
+                    );
+                }
+                let wanted = if on_disk {
+                    Some(std::path::PathBuf::from(&slafile))
+                } else if !slaspec.is_empty() && std::path::Path::new(&slaspec).is_file() {
+                    Some(std::path::Path::new(&slaspec).with_extension("sla"))
+                } else {
+                    None
+                };
+                if let Some(wanted) = wanted {
+                    let resolved = unlace_slacomp::slacache::sla_path(&wanted).map_err(|e| {
+                        KunaError::sleigh(format!("{} for {}: {e}", wanted.display(), self.archid))
+                    })?;
+                    slafile = resolved.to_string_lossy().into_owned();
+                }
+            }
             if slafile.is_empty() {
                 return Err(KunaError::sleigh(format!(
                     "Could not find .sla file for {}",

@@ -62,7 +62,7 @@ fn sla_element_stream(sla: &[u8]) -> Vec<u8> {
 /// Core round-trip for one spec: decode -> re-encode -> compare.
 fn check_roundtrip(rel: &str) {
     let path = repo_root().join(rel);
-    let original = match std::fs::read(&path) {
+    let original = match unlace_slacomp::slacache::read_sla(&path) {
         Ok(b) => b,
         Err(e) => panic!(
             "read {} failed ({e}); is the .sla symlinked/built?",
@@ -96,7 +96,7 @@ fn check_roundtrip(rel: &str) {
 
 #[test]
 fn format_decoder_accepts_built_sla() {
-    let original = std::fs::read(
+    let original = unlace_slacomp::slacache::read_sla(
         repo_root().join("specs/Ghidra/Processors/DATA/data/languages/data-le-64.sla"),
     )
     .expect("read data-le-64.sla");

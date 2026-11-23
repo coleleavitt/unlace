@@ -36,7 +36,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 | `tests/datatests/` | Vendored XML regression corpus (675 assertions) vs `docs/baseline.json` — `cargo test -p unlace-cli --test parity datatests`. |
 | `tests/stages/` | kuna-owned issue testcases vs `docs/baseline-stages.json` — `cargo test -p unlace-cli --test parity stage_tests` (`tests/stages/README.md`). |
 | `tests/golden/` | Differential golden vectors for the workspace suite. |
-| `specs/Ghidra/Processors/` | Vendored SLEIGH specs. `.sla` are built artifacts (gitignored), produced by `slacomp`. |
+| `specs/Ghidra/Processors/` | Vendored SLEIGH sources. Each `.sla` is compiled from its `.slaspec` on first use into the `.sla` cache (`$XDG_CACHE_HOME/unlace/sla`, `crates/unlace-slacomp/src/slacache.rs`); nothing to build by hand. |
 | `scripts/` + `tools/` | Python helpers + the improvement pipeline, RE-friction loop, decbench campaign drivers. |
 | `integrations/` | Front-ends embedding the engine: `ghidra/` (unlace as Ghidra's decompiler core), `web/` (the in-browser build; upstream hosts it at `decompile.run`). |
 
@@ -93,16 +93,15 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 - **RAM guard**: stay under 90% RAM during builds/tests; if it climbs, kill the job and ask
   before retrying. No Windows-only work.
 - **Worktrees**: one per agent (`../unlace-wt-<name>`, target dir `../unlace-target/<name>`
-  through a `target` symlink); build or symlink the worktree's `.sla` files; **never
+  through a `target` symlink); specs need no setup (the `.sla` cache compiles them); **never
   `git stash`** (`refs/stash` is shared across worktrees); build with the recipe in
   `docs/dev-setup.md` and never set `CARGO_INCREMENTAL=0`.
 - **Before you finish in a worktree**: commit your work (a worktree can be removed once its
   session ends, and only committed work survives), then remove the worktree and its build dir
   if you are done with it (`tools/hooks/unlace-wt-rm <name>` refuses anything unsaved or unpushed).
-- **Specs**: after a pull that changes any `specs/**/*.{slaspec,sinc}`, rebuild every `.sla` in
-  the checkout with `slacomp -a specs` (exact steps in `docs/dev-setup.md`) and check that
-  each `.slaspec` has its `.sla`; stale or missing specs show up as lift diffs or "Could not
-  find .sla file".
+- **Specs**: the engine and the tests compile each `.slaspec` they need into the `.sla` cache on
+  first use and reuse the image while the sources and the compiler are unchanged, so a pull that
+  changes `specs/**/*.{slaspec,sinc}` needs no rebuild step (details in `docs/dev-setup.md`).
 
 ## Validation
 Only prerequisite: a Rust toolchain. The repo root is the cargo workspace; every command runs

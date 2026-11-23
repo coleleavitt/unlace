@@ -103,10 +103,10 @@ fn usage() {
          (`slacomp`), which this command is a thin alias for -- every other flag is\n\
          passed straight through, and it takes upstream `sleigh_opt`'s CLI.\n\
          \n\
-         -a <dir> compiles every .slaspec under <dir> recursively (= target/release/slacomp -a specs over\n\
-         specs/); a bare list of files compiles just those.  A .sla is a build\n\
-         artifact and is gitignored; the engine finds them under KUNA_SPECS /\n\
-         SLEIGHHOME.  A release kuna carries its compiled specs inside itself.\n\
+         -a <dir> compiles every .slaspec under <dir> recursively; a bare list of\n\
+         files compiles just those.  Nothing needs this to decompile: the engine\n\
+         compiles each .sla it needs into the .sla cache (UNLACE_SLA_CACHE) on\n\
+         first use.  A release kuna carries its compiled specs inside itself.\n\
          --diff prints guidance for independent compiler and decompiler checks; it runs neither."
     );
 }

@@ -43,7 +43,7 @@ impl PcodeEmit for Ops {
 fn fist_conversions_retain_control_word_and_pop_only_when_requested() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     for (spec, mode) in [("x86", 1), ("x86-64", 2)] {
-        let sla = std::fs::read(root.join(format!(
+        let sla = unlace_slacomp::slacache::read_sla(root.join(format!(
             "specs/Ghidra/Processors/x86/data/languages/{spec}.sla"
         )))
         .unwrap();

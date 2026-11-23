@@ -14,7 +14,7 @@
 //!
 //! Fixture: `fauxware` (ELF x86-64), the repo's smallest linked image with all
 //! three shapes in it. Bootstrapping needs the built `x86` `.sla` under
-//! `specs/` (gitignored; `target/release/slacomp -a specs`); when it is absent the test prints that
+//! `specs/` (compiled into the `.sla` cache on first use); when it is absent the test prints that
 //! and returns early.
 
 use std::path::PathBuf;

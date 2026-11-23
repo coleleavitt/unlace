@@ -96,7 +96,7 @@ fn read_sla(spec: &str) -> Vec<u8> {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../../specs/Ghidra/Processors/MIPS/data/languages")
         });
-    std::fs::read(directory.join(format!("{spec}.sla"))).unwrap()
+    unlace_slacomp::slacache::read_sla(directory.join(format!("{spec}.sla"))).unwrap()
 }
 
 const SPECS: [&str; 4] = ["octeonbe", "octeonplusbe", "octeon2be", "octeon3be"];

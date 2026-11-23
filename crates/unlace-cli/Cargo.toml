@@ -25,14 +25,17 @@ sha2 = "0.11"
 tempfile = "3.27"
 
 [features]
-# Carry the compiled SLEIGH tree inside the binary (build.rs reads `specs/`, so
-# `target/release/slacomp -a specs` must run first). Release builds enable it.
+# Carry the compiled SLEIGH tree inside the binary (build.rs reads `specs/` and compiles each
+# language through the `.sla` cache). Release builds enable it.
 embed-specs = []
 
 [dev-dependencies]
 flirt-sig.workspace = true
 object = { workspace = true, features = ["write"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+
+[build-dependencies]
+unlace-slacomp.workspace = true
 
 [lints]
 workspace = true

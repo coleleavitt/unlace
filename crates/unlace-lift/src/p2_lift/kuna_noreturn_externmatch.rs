@@ -392,8 +392,8 @@ mod tests {
     /// of the stated `(address, size)`.
     fn x86_64(bytes: &[u8], sizes: Vec<(u64, u64)>) -> Architecture {
         let sla = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../specs/Ghidra/Processors/x86/data/languages/x86-64.sla");
-        let sla = std::fs::read(&sla).expect("x86-64.sla is built");
+            .join("../../specs/Ghidra/Processors/x86/data/languages/x86-64.sla");
+        let sla = unlace_slacomp::slacache::read_sla(&sla).expect("x86-64.sla is built");
         let image = StubImage(Arc::new(Mapped(bytes.to_vec())));
         let mut sleigh = Sleigh::new(Box::new(image), Box::new(ContextInternal::new()));
         sleigh

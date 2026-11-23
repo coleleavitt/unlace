@@ -56,7 +56,7 @@ fn generic_transfers_use_encoded_selectors_and_live_cpu_registers() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     for profile in ["ARM4", "ARM4t", "ARM5", "ARM5t", "ARM6", "ARM7", "ARM8"] {
         for endian in ["le", "be"] {
-            let sla = std::fs::read(root.join(format!(
+            let sla = unlace_slacomp::slacache::read_sla(root.join(format!(
                 "specs/Ghidra/Processors/ARM/data/languages/{profile}_{endian}.sla"
             )))
             .unwrap();

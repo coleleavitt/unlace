@@ -2,7 +2,7 @@
 //!
 //! A [`MemorySpecs`] is a flat table of files, each keyed by its `/`-separated
 //! path relative to the spec root (`Ghidra/Processors/x86/data/languages/x86-64.sla`):
-//! the tree `target/release/slacomp -a specs` leaves on disk, minus whatever the caller chose not to
+//! a compiled SLEIGH tree (the release archive's `specs/`), minus whatever the caller chose not to
 //! embed. A [`SpecRoot`] names either kind of root. A bootstrap takes a list of
 //! anything that converts into one, so the two kinds mix in one list.
 //!

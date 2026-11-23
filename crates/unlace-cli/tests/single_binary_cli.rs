@@ -82,8 +82,8 @@ fn a_lone_kuna_compiles_a_slaspec_with_its_built_in_compiler() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let shipped = std::fs::read(languages.join("toy_be.sla"))
-        .expect("target/release/slacomp -a specs built toy_be.sla");
+    let shipped = unlace_slacomp::slacache::read_sla(languages.join("toy_be.sla"))
+        .expect("toy_be.sla compiles into the .sla cache");
     assert!(
         compiled.expect("unlace specs wrote no .sla") == shipped,
         "the built-in compiler's .sla differs"

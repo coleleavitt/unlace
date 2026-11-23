@@ -201,7 +201,7 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
 }
 
 /// Bootstrap a fixture, SKIPping (None) when the `.sla` artifacts are not
-/// built in this checkout (`target/release/slacomp -a specs`).
+/// available in this checkout (compiled into the `.sla` cache on first use).
 fn bootstrap_or_skip(stem: &str) -> Option<(DataTest, XmlArchitecture)> {
     let dt = match parse_datatest(stem) {
         Ok(dt) => dt,

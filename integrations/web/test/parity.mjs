@@ -95,7 +95,7 @@ const FIXTURES = [
 function fail(msg) { console.error(`\x1b[31mFAIL\x1b[0m ${msg}`); process.exit(1); }
 
 for (const [label, p] of [['wasm', WASM], ['native', NATIVE], ['specs', SPECS]]) {
-  if (!existsSync(p)) fail(`missing ${label}: ${p}\n  (build first: integrations/web/build.sh, and \`target/release/slacomp -a specs\` for the .sla)`);
+  if (!existsSync(p)) fail(`missing ${label}: ${p}\n  (build first: integrations/web/build.sh)`);
 }
 
 const normalize = (s) => s.replace(/"binary":\s*"[^"]*"/g, '"binary": "<binary>"').trim();

@@ -211,7 +211,7 @@ fn raw_console_reports_word_addresses_in_target_units() {
     let roots = specs();
     assert!(
         PathBuf::from(&roots[0])
-            .join("Ghidra/Processors/Atmel/data/languages/avr8.sla")
+            .join("Ghidra/Processors/Atmel/data/languages/avr8.slaspec")
             .exists(),
         "required processor specs must be available"
     );
@@ -261,7 +261,7 @@ fn raw_map_function_normalizes_an_odd_thumb_pointer() {
     let roots = specs();
     assert!(
         PathBuf::from(&roots[0])
-            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
+            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.slaspec")
             .exists(),
         "required processor specs must be available"
     );
@@ -290,7 +290,7 @@ fn raw_map_address_preserves_an_odd_arm_data_address() {
     let roots = specs();
     assert!(
         PathBuf::from(&roots[0])
-            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
+            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.slaspec")
             .exists(),
         "required processor specs must be available"
     );
@@ -320,7 +320,7 @@ fn console_load_raw_preserves_whitespace_in_final_filename() {
     let roots = specs();
     assert!(
         PathBuf::from(&roots[0])
-            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.sla")
+            .join("Ghidra/Processors/ARM/data/languages/ARM8_le.slaspec")
             .exists(),
         "required processor specs must be available"
     );

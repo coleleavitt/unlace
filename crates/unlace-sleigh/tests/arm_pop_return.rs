@@ -44,7 +44,7 @@ fn only_the_single_register_stack_pop_is_a_return() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     for profile in ["ARM4", "ARM4t", "ARM5", "ARM5t", "ARM6", "ARM7", "ARM8"] {
         for endian in ["le", "be"] {
-            let sla = std::fs::read(root.join(format!(
+            let sla = unlace_slacomp::slacache::read_sla(root.join(format!(
                 "specs/Ghidra/Processors/ARM/data/languages/{profile}_{endian}.sla"
             )))
             .unwrap();

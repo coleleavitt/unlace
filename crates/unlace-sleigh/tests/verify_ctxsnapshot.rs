@@ -42,7 +42,7 @@ fn repo_root() -> PathBuf {
 
 fn engine(rel: &str) -> (Sleigh, Rc<AddrSpace>) {
     let path = repo_root().join("specs/Ghidra/Processors").join(rel);
-    let bytes = std::fs::read(&path).expect("read compiled processor spec");
+    let bytes = unlace_slacomp::slacache::read_sla(&path).expect("read compiled processor spec");
     let mut sleigh = Sleigh::new(Box::new(DummyImg), Box::new(ContextInternal::new()));
     sleigh
         .initialize_from_sla(&bytes)

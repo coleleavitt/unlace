@@ -15,7 +15,7 @@
 //!      the absence assertions, genuinely lacks) the oracle pattern.
 //!
 //! The `.sla` specs are build artifacts; if they are absent (a fresh tree that
-//! never ran `target/release/slacomp -a specs`) the architecture cannot be built and the test
+//! has no SLEIGH sources) the architecture cannot be built and the test
 //! `eprintln!`s a skip note and returns — it never silently green-lights a
 //! broken engine, because the assertions below require an explicit `Success`.
 
@@ -47,10 +47,8 @@ fn datatest(name: &str) -> String {
 /// (skip).  We probe for a `.sla` under the x86 language dir.
 fn run_one(file_name: &str) -> Option<String> {
     let sla = repo_root().join("specs/Ghidra/Processors/x86/data/languages/x86-64.sla");
-    if !sla.exists() {
-        eprintln!(
-            "SKIP: {file_name}: x86-64.sla not built (run `target/release/slacomp -a specs`)"
-        );
+    if !unlace_slacomp::slacache::sla_path(&sla).is_ok() {
+        eprintln!("SKIP: {file_name}: x86-64.sla unavailable (no .slaspec under specs/)");
         return None;
     }
     let specs = specs_dir().to_str().unwrap().to_string();

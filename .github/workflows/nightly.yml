@@ -83,10 +83,8 @@ jobs:
         with:
           key: nightly
 
-      - name: Build unlace and compile the SLEIGH specs
-        run: |
-          cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
-          ./target/release/slacomp -a specs
+      - name: Build unlace
+        run: cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
 
       # Tomorrow's speed baseline: the binary and spec tree exactly as built here.
       - name: Package tonight's build

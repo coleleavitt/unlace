@@ -302,6 +302,8 @@ pub struct SleighCompile {
     noplist: Vec<Vec<u8>>,
     /// Number of fatal errors (`errors`).
     errors: i32,
+    /// (kuna) Suppress warnings on stderr (the `.sla` cache compiles behind the engine's back).
+    quiet: bool,
     constant_space: Option<Rc<AddrSpace>>,
     unique_space: Option<Rc<AddrSpace>>,
 }
@@ -456,7 +458,14 @@ impl SleighCompile {
 
     /// `reportWarning(msg)` (slgh_compile.cc:2454).
     pub fn report_warning(&mut self, msg: &str) {
-        eprintln!("WARN  {msg}");
+        if !self.quiet {
+            eprintln!("WARN  {msg}");
+        }
+    }
+
+    /// (kuna) Suppress warnings on stderr; errors are still reported.
+    pub fn set_quiet(&mut self, quiet: bool) {
+        self.quiet = quiet;
     }
 
     fn report_warning_loc(&mut self, loc: Option<&Location>, msg: &str) {

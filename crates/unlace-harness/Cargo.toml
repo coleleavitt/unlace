@@ -16,6 +16,9 @@ unlace-decomp.workspace = true
 unlace-console.workspace = true
 regex.workspace = true
 
+[dev-dependencies]
+unlace-slacomp.workspace = true
+
 [lints]
 workspace = true
 

@@ -76,7 +76,8 @@ fn arc(sla: &str, base: u64, bytes: Vec<u8>) -> Sleigh {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../specs/Ghidra/Processors/ARC/data/languages")
         .join(sla);
-    let sla = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let sla = unlace_slacomp::slacache::read_sla(&path)
+        .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     let mut sleigh = Sleigh::new(
         Box::new(MemImg { base, bytes }),
         Box::new(ContextInternal::new()),

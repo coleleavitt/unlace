@@ -64,8 +64,8 @@ fn specs_dir_string() -> String {
 /// Run a single datatest file path through the real engine, returning the
 /// results text, or `None` when the spec is unavailable (skip).
 fn run_file(path: &str) -> Option<String> {
-    if !x86_64_sla().exists() {
-        eprintln!("SKIP: {path}: x86-64.sla not built (run `target/release/slacomp -a specs`)");
+    if !unlace_slacomp::slacache::sla_path(&x86_64_sla()).is_ok() {
+        eprintln!("SKIP: {path}: x86-64.sla unavailable (no .slaspec under specs/)");
         return None;
     }
     let specs = specs_dir_string();

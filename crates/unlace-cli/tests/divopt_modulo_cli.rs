@@ -19,7 +19,7 @@ fn shared_div3_reciprocal_recovers_the_modulo() {
         .unwrap_or_else(|| root.join("specs"));
     assert!(
         specs
-            .join("Ghidra/Processors/x86/data/languages/x86-64.sla")
+            .join("Ghidra/Processors/x86/data/languages/x86-64.slaspec")
             .exists(),
         "required processor spec missing; build specs before running integration tests"
     );

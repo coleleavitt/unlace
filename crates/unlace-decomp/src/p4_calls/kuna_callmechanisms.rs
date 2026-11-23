@@ -146,6 +146,13 @@ pub struct State {
     pub dex_entry: bool,
 }
 
+crate::kuna_func_state!(State, keep_across_clear: false);
+
+/// Did installing a call mechanism fail, so the pipeline must stop?
+fn failed(data: &crate::funcdata::Funcdata) -> bool {
+    data.kuna_state::<State>().failure.is_some()
+}
+
 /// Changing a call's return mechanism requires rebuilding its pre-SSA effects.
 pub fn requires_reflow(
     current: &crate::fspec::FuncProto,
@@ -196,7 +203,7 @@ pub fn apply_return(data: &mut crate::funcdata::Funcdata, index: i32) -> KunaRes
     }
     let op = call.get_op();
     let id = call.proto().get_inject_upon_return();
-    if let Some(previous) = data.kuna_call_mechanisms.applied.get(&op) {
+    if let Some(previous) = data.kuna_state::<State>().applied.get(&op) {
         return if *previous == id {
             Ok(())
         } else {
@@ -229,12 +236,12 @@ pub fn apply_return(data: &mut crate::funcdata::Funcdata, index: i32) -> KunaRes
         };
         if let Some(value) = forwardable_value(&operations, store, data, load) {
             forward_reload(data, load, &value)?;
-            data.kuna_call_mechanisms.applied.insert(op, id);
+            data.kuna_state_mut::<State>().applied.insert(op, id);
             return Ok(());
         }
     }
     install_after(data, op, &operations)?;
-    data.kuna_call_mechanisms.applied.insert(op, id);
+    data.kuna_state_mut::<State>().applied.insert(op, id);
     Ok(())
 }
 
@@ -423,7 +430,7 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
         return Ok(());
     };
     let id = model.get_inject_upon_entry();
-    if let Some(previous) = data.kuna_call_mechanisms.entry {
+    if let Some(previous) = data.kuna_state::<State>().entry {
         return if previous == id {
             Ok(())
         } else {
@@ -447,7 +454,7 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
         .call_mechanisms
         .operations(id, arch.manage(), &mut context)?;
     install(data, None, Some(block), &operations)?;
-    data.kuna_call_mechanisms.entry = Some(id);
+    data.kuna_state_mut::<State>().entry = Some(id);
     Ok(())
 }
 
@@ -717,6 +724,7 @@ impl Mechanisms {
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.callmechanisms_requires_reflow = Some(requires_reflow);
+    hooks.callmechanisms_failed = Some(failed);
 }
 
 #[cfg(test)]

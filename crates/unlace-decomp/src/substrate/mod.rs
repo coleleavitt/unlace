@@ -25,6 +25,7 @@ pub(crate) mod kuna_budget;
 pub(crate) mod kuna_checkedarena;
 pub mod kuna_fnmemory;
 pub mod kuna_funcreport;
+pub mod kuna_funcstate;
 pub mod kuna_hostmem;
 pub mod kuna_optionset;
 pub mod kuna_passhooks;

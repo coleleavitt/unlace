@@ -117,7 +117,9 @@ pub(crate) fn declared(
 /// Canonicalize incoming argument words before SSA, for both inferred and locked
 /// prototypes. Entries sharing the physical container cannot state this unconditionally.
 pub(crate) fn apply(data: &mut Funcdata) -> KunaResult<()> {
-    if data.kuna_call_mechanisms.register_slots
+    if data
+        .kuna_state::<crate::kuna_callmechanisms::State>()
+        .register_slots
         || data.bblocks_get_size() == 0
         || data.get_func_proto().has_custom_storage()
     {
@@ -130,7 +132,8 @@ pub(crate) fn apply(data: &mut Funcdata) -> KunaResult<()> {
         return Ok(());
     };
     let candidates: Vec<_> = extensions(input.get_entry()).cloned().collect();
-    data.kuna_call_mechanisms.register_slots = true;
+    data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
+        .register_slots = true;
     if candidates.is_empty() {
         return Ok(());
     }

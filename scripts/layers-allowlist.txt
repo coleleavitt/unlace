@@ -116,7 +116,6 @@ funcdata -> kuna_calleedeadarg
 funcdata -> kuna_calleememory
 funcdata -> kuna_calleevote
 funcdata -> kuna_callerargs
-funcdata -> kuna_callmechanisms
 funcdata -> kuna_callrettype
 funcdata -> kuna_calltargettype
 funcdata -> kuna_callwide

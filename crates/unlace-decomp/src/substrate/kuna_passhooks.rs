@@ -278,6 +278,8 @@ declare_hooks! {
     flow_next_fspec_handle: fn() -> unlace_base::types::uintb;
     /// `kuna_callmechanisms::requires_reflow`.
     callmechanisms_requires_reflow: fn(&crate::fspec::FuncProto, &crate::fspec::FuncProto) -> bool;
+    /// `kuna_callmechanisms::failed`: installing a call mechanism failed, so the pipeline stops.
+    callmechanisms_failed: fn(&Funcdata) -> bool;
     /// `kuna_dynamiclocals::bind`.
     dynamiclocals_bind: fn(&mut Funcdata, VarnodeId, &SymbolEntry) -> KunaResult<bool>;
     /// `kuna_highslice_guard::matches`.

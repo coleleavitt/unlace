@@ -810,7 +810,8 @@ impl Action for ActionDefaultParams {
                 );
             }
             if let Err(error) = crate::kuna_callmechanisms::apply_return(data, i) {
-                data.kuna_call_mechanisms.failure = Some(error.to_string());
+                data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
+                    .failure = Some(error.to_string());
                 return 0;
             }
         }
@@ -1209,7 +1210,8 @@ impl ActionFuncLink {
             data.op_unset_output(callop);
         }
         if let Err(error) = crate::p4_calls::kuna_registerslots::apply_return(data, idx) {
-            data.kuna_call_mechanisms.failure = Some(error.to_string());
+            data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
+                .failure = Some(error.to_string());
             return;
         }
         if data.get_call_specs(idx).proto().is_output_locked() {

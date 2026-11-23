@@ -3710,6 +3710,12 @@ and an agent writes:
   option is declared with `kuna_flag!` (a `bool` newtype whose parse is the
   console's `on_or_off`); a type read by middle-band code (`jumptable`,
   `funcdata_block`) is declared in that module, so the core never names a pass.
+  A pass's per-function side tables follow the same shape
+  (`crates/unlace-decomp/src/substrate/kuna_funcstate.rs (FuncState, FuncStates)`):
+  the table is a type in the pass's module, `Funcdata` holds one slot per such type
+  (created with `Default` on first use), and `Funcdata::clear` drops each slot whose
+  `FuncState::KEEP_ACROSS_CLEAR` is false, so a restart starts those tables over
+  exactly as resetting the old field did.
   The handler declaration generates both the dispatch and its name allowlist;
   adding a handler cannot leave those two out of sync. Catalog metadata remains
   independent, so `unlace catalog --check` compares the documented options against

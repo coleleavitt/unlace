@@ -137,6 +137,11 @@ pub(crate) fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> O
         })
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.guardedreadtrim_guarded_block = Some(guarded_block);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

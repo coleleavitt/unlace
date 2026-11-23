@@ -562,4 +562,22 @@ declare_hooks! {
     syscallregs_userop_ids: fn(&crate::userop::UserOpManage, Option<crate::context::SyscallFamily>) -> Vec<uint4>;
     /// `kuna_indexaliasguard::loads_from`.
     indexaliasguard_loads_from: fn(&Funcdata, &Rc<AddrSpace>, &dyn Fn(&Funcdata, VarnodeId) -> Option<Rc<AddrSpace>>) -> Vec<(OpId, Option<(u64, u64)>)>;
+    /// `kuna_stackvalueorder::moves_write`.
+    stackvalueorder_moves_write: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> bool;
+    /// `kuna_stackparamviews::separates_parameter`.
+    stackparamviews_separates_parameter: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> bool;
+    /// `kuna_isolated::holds`.
+    isolated_holds: fn(&Funcdata, crate::context::HighVariableId) -> bool;
+    /// `kuna_stablenames::same_variable`.
+    stablenames_same_variable: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> Option<bool>;
+    /// `kuna_stablenames::variable_groups`.
+    stablenames_variable_groups: fn(&Funcdata, &[crate::context::HighVariableId]) -> Vec<Vec<crate::context::HighVariableId>>;
+    /// `kuna_pointeevalue::load_crosses_write`.
+    pointeevalue_load_crosses_write: fn(&Funcdata, VarnodeId) -> bool;
+    /// `kuna_loadorder::crosses_global_write`.
+    loadorder_crosses_global_write: fn(&mut Funcdata, VarnodeId, Option<crate::context::HighVariableId>) -> bool;
+    /// `kuna_globalorder::copy_moves_write`.
+    globalorder_copy_moves_write: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> bool;
+    /// `kuna_guardedreadtrim::guarded_block`.
+    guardedreadtrim_guarded_block: fn(&Funcdata, VarnodeId, &[OpId]) -> Option<BlockId>;
 }

@@ -3578,7 +3578,7 @@ module docs):
 | `crates/unlace-decomp/src/substrate/funcdata_encode.rs`, `crates/unlace-decomp/src/substrate/funcdata_printraw.rs` | marshaling, raw printing |
 | `crates/unlace-decomp/src/p5_types/funcdata_resolveflow.rs` | flow resolution (P2) |
 | `crates/unlace-decomp/src/p5_types/funcdata_union.rs` | union facet resolution (P5) |
-| `crates/unlace-decomp/src/p6_variables/funcdata_facing.rs`, `crates/unlace-decomp/src/p6_variables/funcdata_merge.rs`, `crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
+| `crates/unlace-decomp/src/p6_variables/funcdata_facing.rs`, `crates/unlace-decomp/src/substrate/funcdata_merge.rs`, `crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
 | `crates/unlace-decomp/src/p9_emit/coreaction_casts.rs` | cast insertion hooks (P9) |
 
 **Data types are shared IR, not per-function state.** The type factory

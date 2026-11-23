@@ -117,3 +117,23 @@ pub fn type_definitions(
         })
         .collect()
 }
+
+/// The calls through fields of synthesized records `fd` makes, as the project
+/// header declares them.
+pub fn field_declarations(
+    arch: &Architecture,
+    fd: &Funcdata,
+) -> Vec<crate::kuna_calltargettype::FieldDecl> {
+    let rt = crate::printc::RealTypeCtx::from_arch(arch, arch.print().out_lang());
+    fd.kuna_field_calls()
+        .iter()
+        .map(|call| crate::kuna_calltargettype::FieldDecl {
+            record: call.record.clone(),
+            field: call.field.clone(),
+            declaration: call
+                .ty
+                .as_ref()
+                .map(|ty| crate::printc::declaration_text(ty, &call.field, rt.clone())),
+        })
+        .collect()
+}

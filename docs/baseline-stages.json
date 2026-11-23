@@ -1,7 +1,7 @@
 {
   "data_footer": [
-    5912,
-    5912
+    5914,
+    5914
   ],
   "passing": [
     "data:64-bit logical shift retains unsigned destination",
@@ -3286,11 +3286,12 @@
     "data:VARIANTNAMES #2: the store names the variant",
     "data:VARIANTNAMES #3: the latch local is typed as the discriminant enum",
     "data:VARIANTNAMES #4: the payload store keeps its named path",
+    "data:VENEERTAILCALL #10: on, a helper with no prototype is tail-called once its own decompile files what it takes and returns",
     "data:VENEERTAILCALL #1: direct, a bounded veneer's transfer is lost to halt_missing",
     "data:VENEERTAILCALL #2: on, a veneer to a declared prototype tail-calls it, bounded or not",
     "data:VENEERTAILCALL #3: on, a bounded veneer tail-calls a helper with no prototype, A32 and Thumb",
     "data:VENEERTAILCALL #4: direct, the unbounded veneer copies arm_helper's body in",
-    "data:VENEERTAILCALL #5: a helper with no prototype keeps its copied-in body in both passes",
+    "data:VENEERTAILCALL #5: direct, the unbounded veneer copies plain_helper's body in",
     "data:VENEERTAILCALL #6: the register that carried the target is not an argument",
     "data:VENEERTAILCALL #7: a target that is not a function stays out of bounds",
     "data:VENEERTAILCALL #8: every recovered tail call is logged",
@@ -3330,6 +3331,7 @@
     "data:XNUTABLES #12: on types the variable-size allocation from the header signature",
     "data:XNUTABLES #13: off leaves an unindexed __got slot a bare address",
     "data:XNUTABLES #14: on names the __got slot after the function it holds",
+    "data:XNUTABLES #15: under tailcalljump on the stub through the slot is a tail call to Base::m1",
     "data:XNUTABLES #1: off leaves the kalloc_type view a bare address",
     "data:XNUTABLES #2: off leaves the dispatched handler unnamed",
     "data:XNUTABLES #3: on names the view after its type",

@@ -1049,7 +1049,7 @@ pub fn decompile_pulled(
                     let call_declarations = calls.declarations;
                     let callwide_prototypes = calls.callwide_prototypes;
                     let field_calls =
-                        unlace_decomp::kuna_calltargettype::field_declarations(prog.arch(), &fd);
+                        unlace_decomp::kuna_callprototypes::field_declarations(prog.arch(), &fd);
                     let mut variables = if no_vars {
                         Vec::new()
                     } else {

@@ -328,6 +328,14 @@ reaches a hook must live in `infra/middle_tests/`. `check_layers.py` scans both 
 `kuna_callwide -> kuna_lang` (a `speller()` call that was a method edge before) is the one allowlist line.
 Next: 9b `unlace-lift`.
 
+**Prep for structure, bandb, emit and the driver (landed):** #168 flattened every folder-qualified
+`crate::` path outside lift (960 in 169 files); #169 made `pub(crate)`/`pub(super)` items `#[doc(hidden)] pub`
+in the structure, bandb and emit files (1019 items, 67 fields); #170 moved the structure/bandb tests that read
+higher bands to `infra/middle_tests/`; #171 dropped `kuna_callwide`'s leftover `OutLangExt` import, so
+`scripts/layers-allowlist.txt` is empty. The E0117 alias tables are covered by the `TypeId`-indexed traits
+(#167). Each move PR still adds its crate's `#[cfg(test)]` hook stub (as middle's `kuna_passhooks` does) and
+moves its `#[path]` test siblings with their files.
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

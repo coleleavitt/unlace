@@ -102,7 +102,7 @@ kuna_options! { self, p1;
     "vaarg" => registered!(crate::kuna_vaarg::VaArg),
     "indexrescale" => registered!(crate::kuna_indexrescale::IndexRescale),
     "looprotate" => registered!(crate::kuna_looprotate::LoopRotate),
-    "guardedloop" => on_off!(guarded_loop, "Guarded do-while loops printed as while loops"),
+    "guardedloop" => registered!(crate::kuna_coreoptions::GuardedLoop),
     "loweredswitchbits" => registered!(crate::kuna_loweredswitchbits::LoweredSwitchBits),
     "vastart" => registered!(crate::kuna_vastart::VaStartRewrite),
     "switchguardmerge" => registered!(crate::kuna_switchguardmerge::SwitchGuardMerge),
@@ -124,7 +124,7 @@ kuna_options! { self, p1;
     },
     "retsplitlimit" => registered!(crate::p8_structure::kuna_retsplitlimit::RetSplitLimit),
     "v850indirectbranch" => registered!(crate::kuna_v850indbranch::V850IndirectBranch),
-    "ptrauthtrap" => on_off!(ptrauth_trap, "arm64e pointer-auth failure-check removal"),
+    "ptrauthtrap" => registered!(crate::kuna_coreoptions::PtrauthTrap),
     "relronoreturn" => registered!(crate::decompile_drive::RelroNoreturn),
     "outlinedinline" => registered!(crate::flow::OutlinedInline),
     "calleeretpurge" => registered!(crate::kuna_calleeretpurge::CalleeRetPurge),
@@ -139,7 +139,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "mzdgroup" => {
-        let msg = on_off!(mz_dgroup_on, "MS-DOS data segment in DS");
+        let msg = registered!(crate::kuna_coreoptions::MzDgroupOn);
         crate::kuna_mzdgroup::apply(self);
         msg
     },
@@ -157,8 +157,8 @@ kuna_options! { self, p1;
         self.field_type = val;
         Ok(msg)
     },
-    "chkstkdarwin" => on_off!(chkstk_darwin, "Darwin stack-probe call removal"),
-    "spsolve" => on_off!(sp_solve, "x86-32 stack-pointer delta solve"),
+    "chkstkdarwin" => registered!(crate::kuna_coreoptions::ChkstkDarwin),
+    "spsolve" => registered!(crate::kuna_coreoptions::SpSolve),
 
     "arithhelpers" => registered!(crate::kuna_arithhelpers::ArithHelpers),
     "objcarc" => registered!(crate::kuna_objcarc::ObjcArc),
@@ -358,7 +358,7 @@ kuna_options! { self, p1;
     "guardarm" => registered!(crate::kuna_ifnoexit::GuardArm),
     "loopcondhoist" => registered!(crate::kuna_ifnoexit::LoopCondHoist),
     "loopcontinue" => registered!(crate::kuna_loopcontinue::LoopContinue),
-    "postinc" => on_off!(post_increment, "Pointer steps folded into *p++"),
+    "postinc" => registered!(crate::kuna_coreoptions::PostIncrement),
     "regionlooprefine" => registered!(crate::region_structurer::RegionLoopRefine),
     "regionedgeorder" => registered!(crate::region_structurer::RegionEdgeOrder),
     "outline" => registered!(crate::kuna_outline::OutlineOption),
@@ -442,10 +442,10 @@ kuna_options! { self, p1;
     "realtypes" => registered!(crate::printc::Realtypes),
     "ctypes" => on_off!(ctypes, "valid-C core type spelling"),
     "callmechanisms" => registered!(crate::kuna_callmechanisms::CallMechanismMode),
-    "dexmodel" => on_off!(dex_model, "DEX constant pool and register payloads"),
-    "jumpassist" => on_off!(jump_assist, "jump-assist switch recovery"),
+    "dexmodel" => registered!(crate::kuna_coreoptions::DexModel),
+    "jumpassist" => registered!(crate::kuna_coreoptions::JumpAssist),
     "javanew" => registered!(crate::kuna_javanew::JavaNew),
-    "javatry" => on_off!(java_try, "Java try/catch from a DEX method's try items"),
+    "javatry" => registered!(crate::kuna_coreoptions::JavaTry),
     "voidtailreturn" => registered!(crate::printc::Voidtailreturn),
     "dirtypool" => registered!(crate::action::DirtyPool),
     "latecse" => registered!(crate::kuna_latecse::LateCse),
@@ -466,7 +466,7 @@ kuna_options! { self, p1;
     "declorder" => registered!(crate::kuna_declorder::DeclOrder),
     "castwiden" => registered!(crate::kuna_castwiden::CastWidenMode),
     "ptrdepthcap" => registered!(crate::coreaction_infertypes::Ptrdepthcap),
-    "calltargettype" => on_off!(call_target_type, "indirect-call target types"),
+    "calltargettype" => registered!(crate::kuna_coreoptions::CallTargetType),
     "floatglobals" => on_off!(float_globals, "float typing of globals moved only through float registers"),
     "itaniumeh" => {
         let catch = p1.trim().eq_ignore_ascii_case("catch");
@@ -474,8 +474,8 @@ kuna_options! { self, p1;
         self.itanium_eh_catch_only = catch;
         Ok(format!("Itanium exception edges to landing pads turned {}", if catch { "catch" } else if self.itanium_eh { "on" } else { "off" }))
     },
-    "vexzeroupper" => on_off!(vex_zero_upper, "VEX zero-upper writes split at the result width"),
-    "vectorabi" => on_off!(vector_abi, "SysV x86-64 vector arguments and returns"),
+    "vexzeroupper" => registered!(crate::kuna_coreoptions::VexZeroUpper),
+    "vectorabi" => registered!(crate::kuna_coreoptions::VectorAbi),
     "lanefuse" => {
         let v = p1.trim().to_ascii_lowercase();
         let (on, all) = match v.as_str() {
@@ -490,14 +490,14 @@ kuna_options! { self, p1;
     "mba" => registered!(crate::kuna_mba::Mba),
     "avxintrinsics" => registered!(crate::printc::AvxIntrinsics),
     "x87depth" => registered!(crate::kuna_x87depth::X87Depth),
-    "trapaftercall" => on_off!(trap_after_call, "no-return evidence from a trap after a call"),
+    "trapaftercall" => registered!(crate::kuna_coreoptions::TrapAfterCall),
     "retpolinethunk" => registered!(crate::kuna_retpolinethunk::RetpolineThunk),
     "varargsave" => registered!(crate::kuna_varargsave::VarargSave),
     "alloca" => registered!(crate::kuna_alloca::AllocaCalls),
     "boolbyte" => registered!(crate::kuna_boolbyte::BoolByte),
     "charbyte" => registered!(crate::kuna_charbyte::CharByte),
-    "castarith" => on_off!(cast_arith, "pointer arithmetic in pointer terms"),
-    "castindex" => on_off!(cast_index, "variable indexes and pointer differences in pointer terms"),
+    "castarith" => registered!(crate::kuna_coreoptions::CastArith),
+    "castindex" => registered!(crate::kuna_coreoptions::CastIndex),
     "ptrfromuse" => registered!(crate::p5_types::kuna_ptrfromuse::PtrFromUseMode),
     "charptr" => registered!(crate::kuna_charptr::CharPtr),
     "cstringconst" => registered!(crate::kuna_cstringconst::CstringConst),
@@ -788,7 +788,7 @@ kuna_options! { self, p1;
     "itaniumrtti" => {
         registered!(crate::kuna_analysisgates::Itaniumrtti)
     },
-    "vtabletypes" => on_off!(analysis_vtabletypes, "typed C++ vtables and vtable slot folding"),
+    "vtabletypes" => registered!(crate::kuna_coreoptions::Vtabletypes),
     "aif" => registered!(crate::kuna_aif::AifMode),
     "esprom" => registered!(crate::kuna_esprom::EspRom),
     "aifpoolslide" => {
@@ -817,7 +817,7 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Nameladder)
     },
     "flirt" => {
-        on_off!(analysis_flirt, "FLIRT signature matching")
+        registered!(crate::kuna_coreoptions::Flirt)
     },
     "fidproto" => {
         registered!(crate::kuna_fidproto::Fidproto)
@@ -826,7 +826,7 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Codestrings)
     },
     "protomerge" => {
-        on_off!(analysis_protomerge, "Slot-by-slot merge of load-time prototypes")
+        registered!(crate::kuna_coreoptions::Protomerge)
     },
 
     "calltable" => registered!(crate::kuna_analysisgates::Calltable),

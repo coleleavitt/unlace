@@ -778,7 +778,12 @@ fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPa
                 .0,
             Box::new(crate::rtti::kuna_itaniumctors::ItaniumCtorsPass),
         ),
-        (arch.analysis_flirt, Box::new(crate::flirt::FlirtPass)),
+        (
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::Flirt>()
+                .0,
+            Box::new(crate::flirt::FlirtPass),
+        ),
         // (kuna `formatstring static`) The load-time format-string resolver: a
         // Listing consumer like the rest, because the call edges are what it
         // walks. `full` runs it too — the decompile-time loop then covers only

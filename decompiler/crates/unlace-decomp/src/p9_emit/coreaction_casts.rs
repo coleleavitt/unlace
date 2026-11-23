@@ -1475,14 +1475,23 @@ impl FuncdataCastExt for Funcdata {
                     self.cast_fixup_ptrsub(op);
                 }
                 // (kuna `castarith`) A pointer plus whole elements stays pointer arithmetic.
-                if self.get_arch().cast_arith
+                if self
+                    .get_arch()
+                    .kuna_options
+                    .get::<crate::kuna_coreoptions::CastArith>()
+                    .0
                     && self.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_INT_ADD)
                 {
                     crate::kuna_castarith::rewrite(self, op);
                 }
                 // (kuna `castindex`) So does a variable index, and a byte-pointer difference.
                 let mut diff_token = None;
-                if self.get_arch().cast_index {
+                if self
+                    .get_arch()
+                    .kuna_options
+                    .get::<crate::kuna_coreoptions::CastIndex>()
+                    .0
+                {
                     match self.obank().get(op).map(|o| o.code()) {
                         Some(OpCode::CPUI_INT_ADD) => {
                             crate::kuna_castarith::rewrite_index(self, &strat, op);

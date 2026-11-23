@@ -955,7 +955,12 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             .get_arch()
             .dex
             .as_ref()
-            .filter(|_| data.get_arch().java_try)
+            .filter(|_| {
+                data.get_arch()
+                    .kuna_options
+                    .get::<crate::kuna_coreoptions::JavaTry>()
+                    .0
+            })
             .map(|model| {
                 (
                     crate::kuna_javatry::JavaTryPlan::new(model, entry.get_offset()),
@@ -2528,7 +2533,13 @@ truncating the fall-through here"
                     crate::kuna_lanefuse::fold_mask(&mut self.data, &ops, evex_z)?;
                 }
             }
-            if self.data.get_arch().vex_zero_upper {
+            if self
+                .data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_coreoptions::VexZeroUpper>()
+                .0
+            {
                 let mut insn = Vec::new();
                 let mut cursor = Some(firstop);
                 while let Some(op) = cursor {
@@ -3865,7 +3876,13 @@ truncating the fall-through here"
     /// `ActionDeindirect` would see the mark disagree with the resolved
     /// callee's prototype and restart the function.
     fn trap_follows_call(&self, op: OpId) -> bool {
-        if !self.data.get_arch().trap_after_call {
+        if !self
+            .data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::TrapAfterCall>()
+            .0
+        {
             return false;
         }
         let Some(addr) = self.data.obank().get(op).map(|o| o.get_addr().clone()) else {

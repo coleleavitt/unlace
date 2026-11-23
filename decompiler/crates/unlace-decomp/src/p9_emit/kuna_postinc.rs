@@ -144,7 +144,12 @@ impl Action for ActionPostIncrement {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().post_increment {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::PostIncrement>()
+            .0
+        {
             return 0;
         }
         let ops: Vec<OpId> = data.obank().iter_alive().collect();

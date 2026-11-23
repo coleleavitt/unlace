@@ -722,8 +722,6 @@ pub struct ArchContext {
     pub x87_empty_storage: Option<crate::p4_calls::kuna_x87emptyreturn::Storage>,
     /// (kuna `varargsave`) The System V argument registers, when the pass applies.
     pub vararg_regs: Option<crate::p4_calls::kuna_varargsave::Regs>,
-    /// (kuna `trapaftercall`) A trap after an x86 call marks the call no-return.
-    pub trap_after_call: bool,
     /// (kuna `arm64evcall`) The architecture's resolved arm64e virtual calls.
     pub vcall_targets: Rc<std::collections::BTreeMap<u64, crate::architecture::VcallTargets>>,
 
@@ -733,8 +731,6 @@ pub struct ArchContext {
     /// (kuna `dexmodel`) The loaded DEX file's constant pool and register
     /// payloads; `None` for any other image or with the option off.
     pub dex: Option<Rc<crate::kuna_dex::DexModel>>,
-    /// (kuna `javatry`) Give a DEX method's `try_item`s exception edges.
-    pub java_try: bool,
     /// (kuna `jumpassist`) The compiled `<jumpassist>` scripts; empty with the
     /// option off.
     pub jump_assists: Rc<crate::kuna_jumpassist::JumpAssists>,
@@ -823,14 +819,6 @@ pub struct ArchContext {
     /// stands down on.  Copied from the engine `Architecture` in
     /// `build_arch_handle`.
     pub source_lang: crate::kuna_sourcelang::SourceLang,
-    /// (kuna) `option chkstkdarwin` on an AArch64 language; read by
-    /// [`crate::p2_lift::kuna_chkstkdarwin`].  Copied from the engine
-    /// `Architecture` in `build_arch_handle`.
-    pub chkstk_darwin: bool,
-    /// (kuna) `option spsolve` on its target; read by
-    /// [`crate::p4_calls::kuna_spsolve`].  Copied from the engine
-    /// `Architecture` in `build_arch_handle`.
-    pub sp_solve: bool,
     /// (kuna `swifttypes`) Type Swift metadata accessor call results; read by
     /// [`crate::p5_types::kuna_swiftmetaresult`]. Copied from the engine
     /// `Architecture` in `build_arch_handle`.
@@ -856,8 +844,6 @@ pub struct ArchContext {
     /// (kuna `xnutables`) The struct each kalloc_type view allocates, by view address.
     pub kuna_kalloc_types: Rc<crate::kuna_kalloctype::KallocTypes>,
 
-    /// (kuna `guardedloop`) A guarded do-while prints as a while loop (C output only).
-    pub guarded_loop: bool,
     /// Fold comparisons proven constant for every input (`opaquepredicate`).
     pub opaque_predicate: bool,
     /// (kuna `opaquepredicate globals`) The writable data nothing may write,
@@ -892,11 +878,6 @@ pub struct ArchContext {
     /// ([`USEROP_NAMES`](crate::kuna_roundingops::USEROP_NAMES)), typed float in
     /// and out by [`kuna_roundingops`](crate::kuna_roundingops).
     pub float_rounding_userops: Vec<unlace_base::types::uint4>,
-    /// (kuna `calltargettype`) Give an indirect call's target the
-    /// function-pointer type the call states; set only when `ctypes` is on too.
-    /// Read by
-    /// [`ActionCallTargetType`](crate::kuna_calltargettype::ActionCallTargetType).
-    pub call_target_type: bool,
     /// (kuna `calltargettype`) C output: a parameter or global takes the call's
     /// type too, and a target whose uses disagree is cast at each call. The
     /// Rust speller spells every pointer to code `*const ()`, so neither changes
@@ -926,14 +907,6 @@ pub struct ArchContext {
     /// (`LangCaps::integer_promotion`).  Read by
     /// [`kuna_truncarg`](crate::p9_emit::kuna_truncarg).
     pub int_promotion: bool,
-    /// (kuna `castarith`) Mirror of
-    /// [`Architecture::cast_arith`](crate::architecture::Architecture), on only for
-    /// C output; read by [`kuna_castarith`](crate::p9_emit::kuna_castarith).
-    pub cast_arith: bool,
-    /// (kuna `castindex`) Mirror of
-    /// [`Architecture::cast_index`](crate::architecture::Architecture), on only for
-    /// C output; read by [`kuna_castarith`](crate::p9_emit::kuna_castarith).
-    pub cast_index: bool,
 
     /// (kuna `elemptr`) The sections a program's data objects live in, sorted and
     /// inclusive; the `globalref` ranges, copied from the Architecture.
@@ -1022,8 +995,6 @@ pub struct ArchContext {
     /// `continue;`: C `do..while` and Go's `for` post statement do, Rust's
     /// `loop { ..; if !(c) { break; } }` restarts the body instead.
     pub do_while_continue: bool,
-    /// (kuna `postinc`) A pointer step after its dereference prints as `*p++`.
-    pub post_increment: bool,
     /// (kuna) The loader identified the image as a Linux ELF: the fact
     /// `option linuxsyscall auto` acts on.
     pub image_linux_elf: bool,
@@ -1163,8 +1134,6 @@ pub struct ArchContext {
     /// (kuna `itaniumeh`) The image's Itanium call-site table when the option is
     /// on; `None` otherwise (see [`crate::kuna_itaniumeh`]).
     pub eh_table: Option<Rc<crate::kuna_itaniumeh::EhTable>>,
-    /// (kuna `vexzeroupper`) See [`crate::kuna_vexzeroupper`].
-    pub vex_zero_upper: bool,
     /// (kuna `itaniumeh catch`) Only pads with a catch clause get an edge.
     pub itanium_eh_catch_only: bool,
     /// (kuna `lanefuse`) See [`crate::kuna_lanefuse`].
@@ -1315,7 +1284,6 @@ impl ArchContext {
             call_mechanisms: Rc::default(),
             call_mechanism_effects: false,
             dex: None,
-            java_try: false,
             jump_assists: Rc::default(),
             call_mechanism_reload_only: false,
             manage,
@@ -1323,7 +1291,6 @@ impl ArchContext {
             kuna_options: crate::kuna_optionset::OptionSet::new(),
             x87_empty_storage: None,
             vararg_regs: None,
-            trap_after_call: false,
             vcall_targets: Rc::default(),
             lanerecords: Vec::new(),
             split_records: Vec::new(),
@@ -1350,8 +1317,6 @@ impl ArchContext {
             // Architecture in `build_arch_handle`.
             call_wide: false,
             source_lang: Default::default(),
-            chkstk_darwin: false,
-            sp_solve: false,
             // (kuna) `option gobool` default auto; copied the same way.
             // (kuna) `option gonewtype` default on; copied the same way.
             swift_metadata_results: false,
@@ -1370,7 +1335,6 @@ impl ArchContext {
             // hand-built fixtures (no `build_arch_handle`) get `false`, so a rule
             // registered `enabled=false` is inert there — matching the gate-off
             // unit tests.
-            guarded_loop: false,
             opaque_predicate: false,
             opaque_globals: None,
             opaque_globals_pending: false,
@@ -1380,8 +1344,7 @@ impl ArchContext {
             x87_float_to_int_userops: Vec::new(),
             x87_integer_userops: Vec::new(),
             float_rounding_userops: Vec::new(),
-            call_target_type: false, // (kuna) option calltargettype
-            call_target_c: false,    // (kuna) option calltargettype, C output
+            call_target_c: false, // (kuna) option calltargettype, C output
             java_casts: false,
             float_globals: None, // (kuna) option floatglobals
             float_globals_pending: false,
@@ -1391,8 +1354,6 @@ impl ArchContext {
             unknown_byte_is_char: false, // (kuna) realtypes + C output
             unknown_is_integer: false, // (kuna) realtypes, or not C output
             int_promotion: true, // (kuna) LangCaps::integer_promotion (C)
-            cast_arith: false, // (kuna) option castarith
-            cast_index: false, // (kuna) option castindex
             elem_ptr_ranges: std::rc::Rc::new(Vec::new()), // (kuna) elemptr
             libctypes: false,  // (kuna) option libctypes, copied from Architecture
             recover_lowered_switch: false, // loweredswitch
@@ -1429,7 +1390,6 @@ impl ArchContext {
 
             impl_weight: 0, // implweight (live value copied from the Architecture)
             do_while_continue: true,
-            post_increment: false,
             image_linux_elf: false,
             x64_syscall_memory_target: false,
             x64_syscall_userops: Vec::new(),
@@ -1471,7 +1431,6 @@ impl ArchContext {
             // installs them (see `Architecture::dynreloc_const`).
             dynreloc_const: Rc::new(Vec::new()),
             eh_table: None,
-            vex_zero_upper: false,
             itanium_eh_catch_only: false,
             lane_fuse: false,
             lane_fuse_all: false,

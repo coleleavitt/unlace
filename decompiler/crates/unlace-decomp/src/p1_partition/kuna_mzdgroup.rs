@@ -52,7 +52,10 @@ pub fn apply(arch: &Architecture) {
     let Ok(loc) = arch.get_register_varnode(b"DS") else {
         return;
     };
-    let on = arch.mz_dgroup_on;
+    let on = arch
+        .kuna_options
+        .get::<crate::kuna_coreoptions::MzDgroupOn>()
+        .0;
     let at = |offset: u64| Address::new(Rc::clone(&space), offset);
     arch.with_context_db_mut(|db| {
         let unstated =

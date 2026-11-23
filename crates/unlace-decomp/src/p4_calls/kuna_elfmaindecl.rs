@@ -220,3 +220,25 @@ pub fn settled(fd: &Funcdata) -> bool {
         None => false,
     }
 }
+
+/// (kuna `elfmain`) The C runtime's `main` declaration this function's inputs take, when it is
+/// an executable's own `main`; kept across `Funcdata::clear`.
+#[derive(Default)]
+struct RuntimeSlot(Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>);
+crate::kuna_func_state!(RuntimeSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `elfmain`) Give this function's inputs the C runtime's `main`
+    /// declaration, as far as its own analysis recovers them.
+    pub fn kuna_set_elfmain(
+        &mut self,
+        runtime: Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>,
+    ) {
+        self.kuna_state_mut::<RuntimeSlot>().0 = runtime;
+    }
+
+    /// (kuna `elfmain`) The C runtime's `main` declaration for this function.
+    pub fn kuna_elfmain(&self) -> Option<&crate::kuna_elfmaindecl::Runtime> {
+        self.kuna_state::<RuntimeSlot>().0.as_deref()
+    }
+}

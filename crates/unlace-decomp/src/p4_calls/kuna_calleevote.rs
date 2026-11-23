@@ -1041,5 +1041,26 @@ fn meets_an_address_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
     false
 }
 
+/// (kuna `calleevote`) The types every caller of this function passes for its inputs, copied
+/// off the `Architecture` after the flow build; kept across `Funcdata::clear`.
+#[derive(Default)]
+struct InputsSlot(Option<std::rc::Rc<crate::kuna_calleevote::CallerTypes>>);
+crate::kuna_func_state!(InputsSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `calleevote`) Record what this function's callers pass for its inputs.
+    pub fn kuna_set_calleevote_inputs(
+        &mut self,
+        stated: Option<std::rc::Rc<crate::kuna_calleevote::CallerTypes>>,
+    ) {
+        self.kuna_state_mut::<InputsSlot>().0 = stated;
+    }
+
+    /// (kuna `calleevote`) What this function's callers pass for its inputs.
+    pub fn kuna_calleevote_inputs(&self) -> Option<&crate::kuna_calleevote::CallerTypes> {
+        self.kuna_state::<InputsSlot>().0.as_deref()
+    }
+}
+
 #[cfg(test)]
 mod tests;

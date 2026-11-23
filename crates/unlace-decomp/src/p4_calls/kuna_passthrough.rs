@@ -2119,6 +2119,29 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.passthrough_suppresses_return_trial = Some(suppresses_return_trial);
 }
 
+/// (kuna `passthrough`) The register ranges `ActionFuncLink` made visible to heritage for a
+/// call whose callee states them, with the calls that own each; reset by `Funcdata::clear`.
+#[derive(Default)]
+struct ClaimsSlot(Vec<crate::p4_calls::kuna_passthrough::PassThroughClaim>);
+crate::kuna_func_state!(ClaimsSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
+    pub fn kuna_set_passthrough_claims(
+        &mut self,
+        claims: Vec<crate::p4_calls::kuna_passthrough::PassThroughClaim>,
+    ) {
+        self.kuna_state_mut::<ClaimsSlot>().0 = claims;
+    }
+
+    /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
+    pub fn kuna_passthrough_claims(
+        &self,
+    ) -> &[crate::p4_calls::kuna_passthrough::PassThroughClaim] {
+        &self.kuna_state::<ClaimsSlot>().0
+    }
+}
+
 #[cfg(test)]
 #[path = "kuna_passthrough/tests.rs"]
 mod tests;

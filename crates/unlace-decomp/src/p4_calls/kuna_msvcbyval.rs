@@ -737,5 +737,26 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.msvcbyval_constructs = Some(constructs);
 }
 
+/// (kuna `msvcbyval`) The calls whose by-value slot `ActionDefaultParams` sized, with the
+/// constructor call that builds each; reset by `Funcdata::clear`.
+#[derive(Default)]
+struct SitesSlot(Vec<crate::p4_calls::kuna_msvcbyval::ByvalSite>);
+crate::kuna_func_state!(SitesSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `msvcbyval`) Record the calls whose by-value slot was sized.
+    pub fn kuna_set_msvc_byval_sites(
+        &mut self,
+        sites: Vec<crate::p4_calls::kuna_msvcbyval::ByvalSite>,
+    ) {
+        self.kuna_state_mut::<SitesSlot>().0 = sites;
+    }
+
+    /// (kuna `msvcbyval`) The calls whose by-value slot was sized.
+    pub fn kuna_msvc_byval_sites(&self) -> &[crate::p4_calls::kuna_msvcbyval::ByvalSite] {
+        &self.kuna_state::<SitesSlot>().0
+    }
+}
+
 #[cfg(test)]
 mod tests;

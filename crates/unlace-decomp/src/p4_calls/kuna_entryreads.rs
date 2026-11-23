@@ -470,6 +470,24 @@ pub fn reads_through(
     (all, passes)
 }
 
+/// (kuna `passthrough`) The incoming registers the first heritage saw the body read; reset by
+/// `Funcdata::clear`.
+#[derive(Default)]
+struct ReadsSlot(Option<crate::kuna_entryreads::EntryReads>);
+crate::kuna_func_state!(ReadsSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `passthrough`) Record what the first heritage saw the body read.
+    pub fn kuna_set_entry_reads(&mut self, reads: crate::kuna_entryreads::EntryReads) {
+        self.kuna_state_mut::<ReadsSlot>().0 = Some(reads);
+    }
+
+    /// (kuna `passthrough`) The incoming registers the body reads, once heritage ran.
+    pub fn kuna_entry_reads(&self) -> Option<&crate::kuna_entryreads::EntryReads> {
+        self.kuna_state::<ReadsSlot>().0.as_ref()
+    }
+}
+
 #[cfg(test)]
 #[path = "kuna_entryreads/tests.rs"]
 mod tests;

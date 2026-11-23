@@ -22,8 +22,6 @@
 //! not part of the transform); those are STUB-noted no-ops, only reachable on a
 //! distribution failure that does not occur on the targeted corpus.
 
-use crate::funcdata_facing::FuncdataFacingExt;
-use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 
 use unlace_base::address::{calc_mask, sign_extend, uintb_negate};
@@ -100,7 +98,7 @@ impl<'a> AddTreeState<'a> {
         let ptr = data.obank().get(op)?.get_in(slot)?;
         // (route through the Funcdata facing accessor so a union/relative-pointer
         // resolves against the in-flow union cache; C++ Varnode::getTypeReadFacing.)
-        let ct = data.vn_type_read_facing(ptr, op);
+        let ct = (data.hooks().vn_type_read_facing)(data, ptr, op);
         let ptrsize = data.vbank().get(ptr)?.get_size();
         let ptrmask = calc_mask(ptrsize);
         let mut base_type = ct.get_ptr_to()?;
@@ -833,10 +831,16 @@ impl<'a> AddTreeState<'a> {
             if ptr_ty.needs_resolution() {
                 let ptrto_size = ptr_ty.get_ptr_to().map(|p| p.get_size());
                 if ptrto_size == Some(self.base_type.get_size()) {
-                    let _ = self.data.force_facing_type(ptr_ty, -1, op, 0);
+                    let _ = (self.data.hooks().force_facing_type)(self.data, ptr_ty, -1, op, 0);
                 } else {
-                    self.data
-                        .inherit_union_field(&ptr_ty, op, 0, self.base_op, self.base_slot);
+                    (self.data.hooks().inherit_union_field)(
+                        self.data,
+                        &ptr_ty,
+                        op,
+                        0,
+                        self.base_op,
+                        self.base_slot,
+                    );
                 }
             }
             if self.data.is_type_recovery_exceeded() {
@@ -870,8 +874,14 @@ impl<'a> AddTreeState<'a> {
                     .get_type(),
             );
             if mult_ty.needs_resolution() {
-                self.data
-                    .inherit_union_field(&mult_ty, op, 0, self.base_op, self.base_slot);
+                (self.data.hooks().inherit_union_field)(
+                    self.data,
+                    &mult_ty,
+                    op,
+                    0,
+                    self.base_op,
+                    self.base_slot,
+                );
             }
             if self.data.is_type_recovery_exceeded() {
                 self.assign_propagated_type(op);

@@ -13,6 +13,7 @@
 
 use std::borrow::Cow;
 use std::rc::Rc;
+use std::sync::LazyLock;
 
 use unlace_base::space::AddrSpace;
 use unlace_base::types::int4;
@@ -22,6 +23,7 @@ use crate::action::{
     UNIVERSAL_NAME, ruleflags,
 };
 use crate::kuna_hooks::HookRegistry;
+use crate::kuna_passhooks::{KunaHookSlots, KunaHooks};
 use crate::kuna_phases::KunaPhase;
 
 /// Metadata for an omitted upstream pass, retained for API compatibility.
@@ -38,6 +40,21 @@ pub struct UnportedEntry {
 /// No upstream pass is currently allowlisted as missing. Listing tests require
 /// this to stay empty and do not strip entries from the expected snapshot.
 pub const UNPORTED_ALLOWLIST: &[UnportedEntry] = &[];
+
+/// The pass hooks of the default pipeline, one `provide` per pass module that fills
+/// slots (rustc `DEFAULT_QUERY_PROVIDERS`). Built on first use; a slot no module
+/// fills stops the run there, naming the hook.
+pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
+    let mut slots = KunaHookSlots::default();
+    crate::funcdata_spacebase::provide(&mut slots);
+    crate::coreaction_casts::provide(&mut slots);
+    crate::kuna_calltransport::provide(&mut slots);
+    crate::funcdata_facing::provide(&mut slots);
+    crate::funcdata_union::provide(&mut slots);
+    slots
+        .finish()
+        .unwrap_or_else(|missing| panic!("pass hooks with no provider: {}", missing.join(", ")))
+});
 
 // =============================================================================
 // SchedNode — the declarative schedule (ADR 0005)

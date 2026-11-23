@@ -1666,7 +1666,7 @@ fn list_functions(args: &Args) -> Result<(ConsoleProgram, Vec<FunctionEntry>), S
 }
 
 /// (kuna `uefi`) The protocol and PPI interface instances the EFI module at
-/// `path` installs, read off one load of it (`kuna unpack --protocols`).
+/// `path` installs, read off one load of it (`unlace unpack --protocols`).
 pub(crate) fn uefi_installs(
     path: &std::path::Path,
 ) -> Result<Vec<unlace_decomp::kuna_uefiprotocols::InstalledInterface>, String> {

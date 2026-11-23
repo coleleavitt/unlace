@@ -2117,6 +2117,9 @@ fn language_id_for(
     })? {
         return Ok(id.into_bytes());
     }
+    if let Some(id) = crate::loader::kuna_arctarget::language_id(file) {
+        return Ok(id.into_bytes());
+    }
     if let Some(id) = crate::loader::kuna_ppcaputarget::language_id(file) {
         return Ok(id.into_bytes());
     }
@@ -2483,6 +2486,7 @@ pub fn elf_language_ids() -> Vec<String> {
             out.push(id);
         }
     }
+    out.extend(crate::loader::kuna_arctarget::language_ids());
     out.extend(crate::loader::kuna_ppcaputarget::language_ids());
     out.extend(crate::loader::kuna_ppc64elfv2target::language_ids());
     out.extend(crate::loader::kuna_mipstarget::language_ids());

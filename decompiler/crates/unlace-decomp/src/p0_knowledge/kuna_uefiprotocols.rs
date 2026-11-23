@@ -2,7 +2,7 @@
 //! installs, as the `uefi` analysis pass found them.
 //!
 //! Parked on the [`Architecture`](crate::architecture::Architecture) so a
-//! front-end can list them: `kuna unpack --protocols` writes them into the
+//! front-end can list them: `unlace unpack --protocols` writes them into the
 //! index that links a lookup in one module of a firmware volume to the module
 //! that installs the interface.
 

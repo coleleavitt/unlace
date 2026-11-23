@@ -19,7 +19,7 @@
 //! from its GUID ([`protocols`]), an installed interface instance gets its
 //! struct and the functions it points at get their member's name and
 //! prototype, and a PEIM or a standalone-MM module gets the entry prototype of
-//! its phase. Beside an index `kuna unpack --protocols` wrote ([`index`]), a
+//! its phase. Beside an index `unlace unpack --protocols` wrote ([`index`]), a
 //! lookup is annotated with the module of the volume that installs the
 //! interface.
 //!

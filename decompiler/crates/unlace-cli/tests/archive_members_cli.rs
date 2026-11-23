@@ -142,7 +142,7 @@ fn an_unselected_member_is_refused_with_the_member_names() {
     let (_, stderr, code) = kuna(&["functions", &object, "--member", "sq.o"]);
     assert_eq!(code, 2);
     assert!(
-        stderr.contains("--member applies to an ar archive input"),
+        stderr.contains("--member applies to an archive input"),
         "{stderr}"
     );
 }

@@ -92,7 +92,23 @@ fn main() -> ExitCode {
         eprintln!("error: {e}");
         return ExitCode::from(2);
     }
-    let mut prepared = match rawfront::prepare(sub, &rest) {
+    let follow_limit = match followimages::take_limit(&mut rest) {
+        Ok(limit) => limit,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let (_staged, flat) = match armember::resolve(sub, &mut rest) {
+        Ok(armember::Resolved::Run(staged)) => (staged, None),
+        Ok(armember::Resolved::Flat(flat)) => (None, Some(*flat)),
+        Ok(armember::Resolved::Done(code)) => return ExitCode::from(code as u8),
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let mut prepared = match rawfront::prepare(sub, &rest, flat) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("error: {e}");
@@ -100,21 +116,6 @@ fn main() -> ExitCode {
         }
     };
     let rest = &mut prepared.args;
-    let follow_limit = match followimages::take_limit(rest) {
-        Ok(limit) => limit,
-        Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(2);
-        }
-    };
-    let _staged = match armember::resolve(sub, rest) {
-        Ok(armember::Resolved::Run(staged)) => staged,
-        Ok(armember::Resolved::Done(code)) => return ExitCode::from(code as u8),
-        Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(2);
-        }
-    };
     loadtime::export_image_selection(rest);
     followimages::apply(sub, rest, follow_limit);
     let rest = rest.as_slice();
@@ -190,7 +191,7 @@ fn usage() {
          --image NAME[+NAME...] (any subcommand): load those images of a dyld shared cache\n\
          --follow-images N (decompile, disassemble, xrefs): also load up to N images holding\n\
          a requested address outside them (default 2)\n\
-         --member [NAME] (any <binary> that is an ar archive): load that member, or list the members when no NAME follows; <lib.a>:NAME is the same selection"
+         --member [NAME] (any <binary> that is an ar, tar or zip archive or a U-Boot FIT image): load that member, or list the members when no NAME follows; <lib.a>:NAME is the same selection"
     );
 }
 

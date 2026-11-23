@@ -2575,5 +2575,37 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.voidret_scoring_return = Some(scoring_return);
 }
 
+/// (kuna `voidret`) What each callee's last decompile recovered it returns; kept across
+/// `Funcdata::clear`.
+#[derive(Default)]
+struct CalleeReturnsSlot(
+    std::collections::BTreeMap<
+        (unlace_base::types::int4, unlace_base::types::uintb),
+        crate::kuna_voidret::Returns,
+    >,
+);
+crate::kuna_func_state!(CalleeReturnsSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `voidret`) Record what each callee's last decompile recovered it returns.
+    pub fn kuna_set_callee_returns(
+        &mut self,
+        returns: std::collections::BTreeMap<
+            (unlace_base::types::int4, unlace_base::types::uintb),
+            crate::kuna_voidret::Returns,
+        >,
+    ) {
+        self.kuna_state_mut::<CalleeReturnsSlot>().0 = returns;
+    }
+
+    /// (kuna `voidret`) What the callee at `key` was last recovered to return.
+    pub fn kuna_callee_returns(
+        &self,
+        key: (unlace_base::types::int4, unlace_base::types::uintb),
+    ) -> Option<crate::kuna_voidret::Returns> {
+        self.kuna_state::<CalleeReturnsSlot>().0.get(&key).copied()
+    }
+}
+
 #[cfg(test)]
 mod tests;

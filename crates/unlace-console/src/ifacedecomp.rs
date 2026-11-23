@@ -1170,7 +1170,7 @@ decomp_command!(
         // `Architecture::set_kuna_option`, which validates the value and writes
         // the live flag the consuming action/printer reads.  Upstream options
         // fall through to the byte-identical `OptionDatabase` path below.
-        if unlace_decomp::options::KUNA_OPTION_NAMES.contains(&optname.as_str()) {
+        if unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES.contains(&optname.as_str()) {
             let prog = dcp.conf.as_mut().expect("conf checked non-None above");
             let res = prog
                 .arch_mut()

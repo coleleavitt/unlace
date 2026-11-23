@@ -17,8 +17,8 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{ArchContext, BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
+use crate::kuna_option_dispatch::KUNA_OPTION_NAMES;
 use crate::op::pcodeop_flags;
-use crate::options::KUNA_OPTION_NAMES;
 use crate::varnode::varnode_flags;
 
 use super::{OptionIndirectOnly, check_indirect_use, mark_indirect_only};

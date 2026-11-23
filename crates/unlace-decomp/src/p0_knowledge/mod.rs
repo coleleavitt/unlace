@@ -8,7 +8,7 @@ pub mod kuna_analysisgates;
 pub mod kuna_assert;
 pub mod kuna_coreoptions;
 pub mod kuna_octeonops;
-mod kuna_option_dispatch;
+pub mod kuna_option_dispatch;
 pub mod kuna_phases;
 pub mod kuna_restartlog;
 pub mod modes;

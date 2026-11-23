@@ -131,6 +131,18 @@ impl PriorNames {
             && self.symbol_renames.is_empty()
             && self.retypes.is_empty()
     }
+
+    /// What the naming pass keeps of this numbering ([`crate::varmap::NameSeed`]).
+    pub fn name_seed(self) -> crate::varmap::NameSeed {
+        crate::varmap::NameSeed {
+            active: !self.is_empty(),
+            end: self.end,
+            symbols: self.symbols,
+            vacated: self.vacated.into_keys().collect(),
+            given: self.given,
+            symbol_renames: self.symbol_renames,
+        }
+    }
 }
 
 /// The index of a default local name, `v9` -> 9 (or `iVar9` -> 9 under Ghidra
@@ -427,126 +439,7 @@ pub fn assign_numbers(
     assigned
 }
 
-/// The allocator's view of [`PriorNames`] during one naming pass.
-#[derive(Clone, Debug, Default)]
-pub struct NameState {
-    prior: PriorNames,
-    active: bool,
-    handed: BTreeSet<int4>,
-    overflow: int4,
-    preferred: Vec<int4>,
-    targets: BTreeMap<HighVariableId, String>,
-    assigned: BTreeMap<HighVariableId, int4>,
-}
-
-impl NameState {
-    pub fn new(prior: PriorNames) -> NameState {
-        let active = !prior.is_empty();
-        let overflow = prior.end;
-        NameState {
-            prior,
-            active,
-            handed: BTreeSet::new(),
-            overflow,
-            preferred: Vec::new(),
-            targets: BTreeMap::new(),
-            assigned: BTreeMap::new(),
-        }
-    }
-
-    /// Record the number each local keeps (see [`assign_numbers`]).
-    pub fn set_assigned(&mut self, assigned: BTreeMap<HighVariableId, int4>) {
-        self.assigned = assigned;
-    }
-
-    /// The number `high` keeps, if any.
-    pub fn assigned(&self, high: HighVariableId) -> Option<int4> {
-        self.assigned.get(&high).copied()
-    }
-
-    /// Record which local each name-only rename names (see [`rename_targets`]).
-    pub fn set_targets(&mut self, targets: BTreeMap<HighVariableId, String>) {
-        self.targets = targets;
-    }
-
-    /// The name a name-only rename gives `high`, if any.
-    pub fn target(&self, high: HighVariableId) -> Option<&str> {
-        self.targets.get(&high).map(String::as_str)
-    }
-
-    /// Is a previous decompile's numbering being kept?
-    pub fn active(&self) -> bool {
-        self.active
-    }
-
-    /// The numbers the next allocation should try first (see [`best`]).
-    pub fn prefer(&mut self, numbers: Vec<int4>) {
-        self.preferred = numbers;
-    }
-
-    /// Let number `i`, which a renamed local held, be handed out again: the
-    /// rename named nothing (see [`orphaned`]).
-    pub fn release(&mut self, i: int4) {
-        self.prior.vacated.remove(&i);
-    }
-
-    /// The name a rename gave the Symbol at `(addr, size)`, if any.
-    pub fn symbol_rename(&self, addr: &Address, size: int4) -> Option<&str> {
-        self.prior
-            .symbol_renames
-            .get(&(addr.clone(), size))
-            .map(String::as_str)
-    }
-
-    /// Put the number the Symbol at `(addr, size)` had ahead of the others.
-    pub fn prefer_symbol(&mut self, addr: &Address, size: int4) {
-        if let Some(&i) = self.prior.symbols.get(&(addr.clone(), size)) {
-            self.preferred.insert(0, i);
-        }
-    }
-
-    /// The number for the next local: a preferred one no one holds, else one
-    /// past every number handed out. `free` says whether a rendered name is
-    /// unclaimed by a locked Symbol.
-    pub fn pick(&mut self, render: &dyn Fn(int4) -> String, free: &dyn Fn(&str) -> bool) -> int4 {
-        let given = std::mem::take(&mut self.prior.given);
-        let free = |name: &str| !given.contains(name) && free(name);
-        let number = self.pick_free(render, &free);
-        self.prior.given = given;
-        number
-    }
-
-    fn pick_free(&mut self, render: &dyn Fn(int4) -> String, free: &dyn Fn(&str) -> bool) -> int4 {
-        let preferred = std::mem::take(&mut self.preferred);
-        let open = |i: int4, state: &NameState| {
-            !state.prior.vacated.contains_key(&i) && !state.handed.contains(&i)
-        };
-        if let Some(i) = preferred
-            .into_iter()
-            .find(|&i| open(i, self) && free(&render(i)))
-        {
-            return self.hand(i);
-        }
-        let mut i = self.overflow;
-        while !open(i, self) || !free(&render(i)) {
-            i += 1;
-        }
-        self.overflow = i + 1;
-        self.hand(i)
-    }
-
-    fn hand(&mut self, i: int4) -> int4 {
-        self.handed.insert(i);
-        i
-    }
-
-    /// One past every number this pass handed out.
-    pub fn end(&self) -> int4 {
-        self.handed
-            .last()
-            .map_or(self.overflow, |&i| self.overflow.max(i + 1))
-    }
-}
+pub use crate::varmap::NameState;
 
 /// Note that `key` belonged to `name`; a key that belonged to two names
 /// names neither.
@@ -1173,7 +1066,7 @@ mod tests {
             end: 12,
             ..PriorNames::default()
         };
-        let mut state = NameState::new(prior);
+        let mut state = NameState::new(prior.name_seed());
         let render = |i: int4| format!("v{i}");
         assert!(state.active());
         state.prefer(vec![5]);
@@ -1206,6 +1099,6 @@ mod tests {
 
     #[test]
     fn without_a_record_nothing_is_active() {
-        assert!(!NameState::new(PriorNames::default()).active());
+        assert!(!NameState::new(PriorNames::default().name_seed()).active());
     }
 }

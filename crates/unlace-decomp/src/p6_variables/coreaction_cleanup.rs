@@ -2911,7 +2911,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
     data.set_kuna_directive_targets(reached);
     let assigned = crate::kuna_stablenames::assign_numbers(data, &tallies);
     if let Some(lm) = data.get_scope_local_mut() {
-        lm.install_prior_names(prior);
+        lm.install_prior_names(prior.name_seed());
         lm.set_rename_targets(targets);
         lm.set_assigned_numbers(assigned);
     }

@@ -33,6 +33,7 @@ MODULE_BAND = {
     "modelrules": "middle", "kuna_aggregateabi": "middle", "prefersplit": "middle",
     "engine_translate": "middle", "inject_sleigh": "middle", "kuna_emulatefunction": "middle",
     "kuna_decodekit": "middle", "remote_provider": "middle", "stringmanage": "middle",
+    "kuna_calloverlap": "middle", "kuna_loadguardreads": "middle", "kuna_revisitrefine": "middle",
 }
 SRC = "crates/unlace-decomp/src"
 ALLOWLIST = "scripts/layers-allowlist.txt"

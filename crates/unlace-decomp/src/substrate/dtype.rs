@@ -72,7 +72,7 @@ use unlace_base::marshal::Decoder;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, int8, uint4, uint8};
 
-use crate::bitfield::BitRange;
+pub use bitrange::BitRange;
 
 // =============================================================================
 // type_metatype (type.hh:80-100) — verbatim, discriminants load-bearing
@@ -4761,7 +4761,7 @@ impl Datatype {
             encoder.close_element(&crate::kuna_typequal::ELEM_QUALIFIED);
             return Ok(());
         }
-        let elem_type = &crate::prettyprint::ids::ELEM_TYPE;
+        let elem_type = &ELEM_TYPE;
         // The typedef indirection (every C++ subclass override's first check,
         // except the partial/relative kinds which never typedef).
         if self.typedef_imm.is_some()
@@ -4948,7 +4948,7 @@ impl TypeField {
     /// `TypeField::encode`, type.cc:852-862).
     pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
         use unlace_base::marshal::{ATTRIB_ID, ATTRIB_NAME, ATTRIB_OFFSET};
-        let elem_field = &crate::prettyprint::ids::ELEM_FIELD;
+        let elem_field = &ELEM_FIELD;
         encoder.open_element(elem_field);
         encoder.write_string(&ATTRIB_NAME, self.name.as_bytes());
         encoder.write_signed_integer(&ATTRIB_OFFSET, self.offset as i64);
@@ -4966,7 +4966,7 @@ impl TypeBitField {
     /// (C++ `TypeBitField::encode`, type.cc:940-950).
     pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
         use unlace_base::marshal::{ATTRIB_NAME, ATTRIB_OFFSET, ATTRIB_SIZE};
-        let elem_bitfield = &crate::prettyprint::ids::ELEM_BITFIELD;
+        let elem_bitfield = &ELEM_BITFIELD;
         encoder.open_element(elem_bitfield);
         encoder.write_string(&ATTRIB_NAME, self.name.as_bytes());
         encoder.write_signed_integer(&ATTRIB_OFFSET, self.byte_offset as i64);
@@ -6418,7 +6418,7 @@ impl TypeFactoryImpl {
                 }
             }
             let fct = self.decode_type(decoder)?;
-            if sub == crate::prettyprint::ids::ELEM_BITFIELD.get_id() {
+            if sub == ELEM_BITFIELD.get_id() {
                 // <bitfield name id offset size=numbits first=lsb> (type.cc:864-894).
                 let mut bf = TypeBitField::new(
                     if fid == int4::MIN { foffset } else { fid },
@@ -7931,6 +7931,360 @@ impl TypeFactory for TypeFactoryImpl {
 // =============================================================================
 // Tests
 // =============================================================================
+
+/// Marshaling element `<type>` (type.cc:67, id 60).
+pub const ELEM_TYPE: unlace_base::marshal::ElementId =
+    unlace_base::marshal::ElementId::new("type", 60);
+/// Marshaling element `<field>` (type.cc:56, id 49).
+pub const ELEM_FIELD: unlace_base::marshal::ElementId =
+    unlace_base::marshal::ElementId::new("field", 49);
+/// Marshaling element `<bitfield>` (type.cc:74, id 289).
+pub const ELEM_BITFIELD: unlace_base::marshal::ElementId =
+    unlace_base::marshal::ElementId::new("bitfield", 289);
+
+/// (C++ `BitRange`, address.hh) A bit range, kept next to the bit-field types that use it.
+mod bitrange {
+    #![allow(unused_imports)]
+    use unlace_base::address::{leastsigbit_set, mostsigbit_set};
+    use unlace_base::types::{int4, uintb};
+
+    /// An endian-aware range of bits contained in a contiguous set of bytes
+    /// (C++ `BitRange`, address.hh:257).
+    ///
+    /// The four geometry fields are all signed `int4` exactly as in C++ — the
+    /// "undefined" sentinel is `-1` and several methods compute differences that can
+    /// legitimately go negative before being clamped, so the signedness is
+    /// load-bearing.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct BitRange {
+        /// Byte offset of the region containing the range (C++ `byteOffset`).
+        pub byte_offset: int4,
+        /// Size of the region in bytes (C++ `byteSize`).
+        pub byte_size: int4,
+        /// Least significant bit of the bit-range within its region (C++
+        /// `leastSigBit`).
+        pub least_sig_bit: int4,
+        /// Number of bits in the range (C++ `numBits`).
+        pub num_bits: int4,
+        /// Is the underlying encoding big endian (C++ `isBigEndian`).
+        pub is_big_endian: bool,
+    }
+
+    impl BitRange {
+        /// Construct an \e undefined range (C++ `BitRange(void)`, address.hh:264).
+        ///
+        /// All geometry fields are the `-1` sentinel; `isBigEndian` is `false`.
+        pub fn undefined() -> BitRange {
+            BitRange {
+                byte_offset: -1,
+                byte_size: -1,
+                least_sig_bit: -1,
+                num_bits: -1,
+                is_big_endian: false,
+            }
+        }
+
+        /// Construct a byte range (C++ `BitRange(int4,int4,bool)`, address.hh:265-266):
+        /// `leastSigBit = 0`, `numBits = bSize * 8`.
+        pub fn byte_range(b_off: int4, b_size: int4, big_endian: bool) -> BitRange {
+            BitRange {
+                byte_offset: b_off,
+                byte_size: b_size,
+                least_sig_bit: 0,
+                num_bits: b_size * 8,
+                is_big_endian: big_endian,
+            }
+        }
+
+        /// Construct fully (C++ `BitRange(int4,int4,int4,int4,bool)`,
+        /// address.hh:268-269).
+        pub fn new(
+            b_off: int4,
+            b_size: int4,
+            least: int4,
+            num: int4,
+            big_endian: bool,
+        ) -> BitRange {
+            BitRange {
+                byte_offset: b_off,
+                byte_size: b_size,
+                least_sig_bit: least,
+                num_bits: num,
+                is_big_endian: big_endian,
+            }
+        }
+
+        /// Copy a range into a new container (C++ `BitRange(const BitRange&,int4,int4)`,
+        /// address.cc:630-638).  The new container is `(off, sz)`; `numBits`/
+        /// `isBigEndian` are copied and `leastSigBit` is the source range's LSB
+        /// translated into the new frame.
+        pub fn in_container(op2: &BitRange, off: int4, sz: int4) -> BitRange {
+            let mut res = BitRange {
+                byte_offset: off,
+                byte_size: sz,
+                num_bits: op2.num_bits,
+                is_big_endian: op2.is_big_endian,
+                least_sig_bit: 0, // overwritten by translate_lsb below
+            };
+            res.least_sig_bit = res.translate_lsb(op2);
+            res
+        }
+
+        /// Return `true` if `this` is an empty bit range (C++ `empty`,
+        /// address.hh:270).
+        pub fn empty(&self) -> bool {
+            self.num_bits <= 0
+        }
+
+        /// Compare `this` with another as containers (C++ `compare`,
+        /// address.cc:643-655): byteOffset, byteSize, leastSigBit, numBits in order,
+        /// each a signed tie-break, all equal yielding `0`.
+        pub fn compare(&self, op2: &BitRange) -> int4 {
+            if self.byte_offset != op2.byte_offset {
+                return if self.byte_offset < op2.byte_offset {
+                    -1
+                } else {
+                    1
+                };
+            }
+            if self.byte_size != op2.byte_size {
+                return if self.byte_size < op2.byte_size {
+                    -1
+                } else {
+                    1
+                };
+            }
+            if self.least_sig_bit != op2.least_sig_bit {
+                return if self.least_sig_bit < op2.least_sig_bit {
+                    -1
+                } else {
+                    1
+                };
+            }
+            if self.num_bits != op2.num_bits {
+                return if self.num_bits < op2.num_bits { -1 } else { 1 };
+            }
+            0
+        }
+
+        /// Translate `op2.leastSigBit` into `this`'s reference frame (C++
+        /// `translateLSB`, address.cc:660-673).  The result is directly comparable
+        /// with `this.leastSigBit`.
+        pub fn translate_lsb(&self, op2: &BitRange) -> int4 {
+            let mut op2_sig = op2.least_sig_bit;
+            if self.is_big_endian {
+                let this_pos = self.byte_offset + self.byte_size;
+                let op2_pos = op2.byte_offset + op2.byte_size;
+                op2_sig += 8 * (this_pos - op2_pos);
+            } else {
+                op2_sig += 8 * (op2.byte_offset - self.byte_offset);
+            }
+            op2_sig
+        }
+
+        /// Characterize the overlap between `this` and another range (C++
+        /// `overlapTest`, address.cc:685-704).  Returns:
+        /// `-1` (this before, no intersection), `0` (identical), `1` (this after,
+        /// no intersection), `2` (this contained in op2), `3` (op2 contained in
+        /// this), `4` (partial overlap).
+        pub fn overlap_test(&self, op2: &BitRange) -> int4 {
+            let op2_sig = self.translate_lsb(op2);
+            let this_most = self.least_sig_bit + self.num_bits;
+            let op2_most = op2_sig + op2.num_bits;
+            if self.is_big_endian {
+                if self.least_sig_bit >= op2_most {
+                    return -1;
+                }
+                if op2_sig >= this_most {
+                    return 1;
+                }
+            } else {
+                if this_most <= op2_sig {
+                    return -1;
+                }
+                if op2_most <= self.least_sig_bit {
+                    return 1;
+                }
+            }
+            // Reaching here we have some kind of intersection
+            if self.least_sig_bit == op2_sig && this_most == op2_most {
+                return 0;
+            }
+            if op2_sig <= self.least_sig_bit && op2_most >= this_most {
+                return 2; // this contained in op2
+            }
+            if self.least_sig_bit <= op2_sig && this_most >= op2_most {
+                return 3; // op2 contained in this
+            }
+            4
+        }
+
+        /// Replace `this` with the intersection of `this` with another (C++
+        /// `intersection`, address.cc:709-726).  Only `leastSigBit`/`numBits` change;
+        /// an empty intersection sets `numBits = 0`.
+        pub fn intersection(&mut self, op2: &BitRange) {
+            let op2_sig = self.translate_lsb(op2);
+            let op2_most = op2_sig + op2.num_bits;
+            let this_most = self.least_sig_bit + self.num_bits;
+            if op2_sig > self.least_sig_bit {
+                self.num_bits -= op2_sig - self.least_sig_bit;
+                self.least_sig_bit = op2_sig;
+            }
+            if op2_most < this_most {
+                self.num_bits -= this_most - op2_most;
+            }
+            if self.num_bits < 0 {
+                self.least_sig_bit = 0;
+                self.num_bits = 0;
+            }
+        }
+
+        /// Restrict `this` with a mask aligned to the container (C++ `intersectMask`,
+        /// address.cc:731-750).  The result is the minimal cover of the 1-bits in the
+        /// intersection.
+        pub fn intersect_mask(&mut self, mut mask: uintb) {
+            mask &= self.get_mask();
+            if mask == 0 {
+                self.least_sig_bit = 0;
+                self.num_bits = 0;
+                return;
+            }
+            let new_least_sig = leastsigbit_set(mask);
+            let new_most_sig = mostsigbit_set(mask) + 1;
+            let this_most = self.least_sig_bit + self.num_bits;
+            if new_least_sig > self.least_sig_bit {
+                self.num_bits -= new_least_sig - self.least_sig_bit;
+                self.least_sig_bit = new_least_sig;
+            }
+            if new_most_sig < this_most {
+                self.num_bits -= this_most - new_most_sig;
+            }
+        }
+
+        /// Shift the bit range left by the given amount (C++ `shift`,
+        /// address.cc:754-770).
+        pub fn shift(&mut self, left_shift_amount: int4) {
+            self.least_sig_bit += left_shift_amount;
+            let most = self.least_sig_bit + self.num_bits;
+            if self.least_sig_bit < 0 {
+                self.num_bits += self.least_sig_bit;
+                self.least_sig_bit = 0;
+            } else if most > self.byte_size * 8 {
+                self.num_bits -= most - self.byte_size * 8;
+            }
+            if self.num_bits < 0 {
+                self.least_sig_bit = 0;
+                self.num_bits = 0;
+            }
+        }
+
+        /// Truncate the most significant bytes in the container (C++
+        /// `truncateMostSigBytes`, address.cc:774-786).  `numBits` may be affected.
+        pub fn truncate_most_sig_bytes(&mut self, num: int4) {
+            if self.is_big_endian {
+                self.byte_offset += num;
+            }
+            self.byte_size -= num;
+            let max_offset = self.least_sig_bit + self.num_bits;
+            if max_offset > self.byte_size * 8 {
+                self.num_bits -= max_offset - self.byte_size * 8;
+            }
+            if self.num_bits < 0 {
+                self.num_bits = 0;
+            }
+        }
+
+        /// Truncate the least significant bytes in the container (C++
+        /// `truncateLeastSigBytes`, address.cc:789-802).
+        pub fn truncate_least_sig_bytes(&mut self, num: int4) {
+            if !self.is_big_endian {
+                self.byte_offset += num;
+            }
+            self.byte_size -= num;
+            self.least_sig_bit -= num * 8;
+            if self.least_sig_bit < 0 {
+                self.num_bits += self.least_sig_bit;
+                self.least_sig_bit = 0;
+                if self.num_bits < 0 {
+                    self.num_bits = 0;
+                }
+            }
+        }
+
+        /// Add most significant bytes to the container (C++ `extendBytes`,
+        /// address.cc:806-812).  Only the container changes.
+        pub fn extend_bytes(&mut self, num: int4) {
+            if self.is_big_endian {
+                self.byte_offset -= num;
+            }
+            self.byte_size += num;
+        }
+
+        /// Get the bit-mask describing `this` range, aligned with the byte container
+        /// (C++ `getMask`, address.cc:816-829).
+        pub fn get_mask(&self) -> uintb {
+            let mut res: uintb;
+            // C++: numBits >= sizeof(uintb)*8  (uintb is uint8 => 64 bits)
+            if self.num_bits >= (std::mem::size_of::<uintb>() as int4) * 8 {
+                res = 0;
+            } else {
+                res = 1;
+                res <<= self.num_bits;
+            }
+            res = res.wrapping_sub(1);
+            res <<= self.least_sig_bit;
+            res
+        }
+
+        /// Return `true` if the range begins and ends on byte boundaries (C++
+        /// `isByteRange`, address.cc:832-838).
+        pub fn is_byte_range(&self) -> bool {
+            if (self.num_bits & 7) != 0 {
+                return false;
+            }
+            if (self.least_sig_bit & 7) != 0 {
+                return false;
+            }
+            true
+        }
+
+        /// Return `true` if the range occupies the most significant bits of the
+        /// container (C++ `isMostSignificant`, address.cc:841-845).
+        pub fn is_most_significant(&self) -> bool {
+            8 * self.byte_size == self.least_sig_bit + self.num_bits
+        }
+
+        /// Shrink the container to fit the bit range (C++ `minimizeContainer`,
+        /// address.cc:847-862).
+        pub fn minimize_container(&mut self) {
+            let trunc = self.least_sig_bit / 8;
+            if self.is_big_endian {
+                self.byte_size -= trunc;
+            } else {
+                self.byte_offset += trunc;
+            }
+            self.least_sig_bit &= 7;
+            let num = self.byte_size - ((self.least_sig_bit + self.num_bits + 7) / 8);
+            if num > 0 {
+                if self.is_big_endian {
+                    self.byte_offset += num;
+                }
+                self.byte_size -= num;
+            }
+        }
+
+        /// Expand the range until it includes the most significant bits of the
+        /// container (C++ `expandToMost`, address.cc:864-868).
+        pub fn expand_to_most(&mut self) {
+            // Increase number of bits to maximum that still fits
+            self.num_bits = 8 * self.byte_size - self.least_sig_bit;
+        }
+    }
+
+    // =============================================================================
+    // BitFieldNodeState (bitfield.hh:27-42, bitfield.cc:21-51)
+    // =============================================================================
+}
 
 #[cfg(test)]
 mod tests {

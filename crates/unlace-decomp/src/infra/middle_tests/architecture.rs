@@ -37,6 +37,7 @@ use unlace_base::types::int4;
 use unlace_base::types::uint4;
 use unlace_base::types::uintb;
 use unlace_sleigh::globalcontext::ContextInternal;
+use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::Translate;
 use unlace_sleigh::translate::UniqueLayout;

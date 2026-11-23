@@ -532,6 +532,24 @@ pub fn publish_mips(
     arch.kuna_callwide.len()
 }
 
+/// (kuna `callwide`) The function's call-width ledger, kept across `Funcdata::clear`.
+#[derive(Default)]
+struct LedgerSlot(Option<std::rc::Rc<crate::p4_calls::kuna_callwide::Ledger>>);
+crate::kuna_func_state!(LedgerSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    pub(crate) fn kuna_set_callwide(
+        &mut self,
+        proof: Option<std::rc::Rc<crate::p4_calls::kuna_callwide::Ledger>>,
+    ) {
+        self.kuna_state_mut::<LedgerSlot>().0 = proof;
+    }
+
+    pub(crate) fn kuna_callwide(&self) -> Option<&crate::p4_calls::kuna_callwide::Ledger> {
+        self.kuna_state::<LedgerSlot>().0.as_deref()
+    }
+}
+
 #[cfg(test)]
 #[path = "kuna_callwide/tests.rs"]
 mod tests;

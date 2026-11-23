@@ -62,3 +62,27 @@ pub fn took_hint_type(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
 pub fn param_name(data: &Funcdata, addr: &Address, size: int4) -> Option<String> {
     hint_at(data, addr, size).map(|h| h.name.clone())
 }
+
+/// (kuna `swiftcall`) Names and types for the inputs this function's analysis recovers; kept
+/// across `Funcdata::clear`.
+#[derive(Default)]
+struct HintsSlot(Option<std::rc::Rc<Vec<crate::kuna_inputhints::InputHint>>>);
+crate::kuna_func_state!(HintsSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `swiftcall`) Seed the input hints.
+    pub fn kuna_set_input_hints(
+        &mut self,
+        hints: Option<std::rc::Rc<Vec<crate::kuna_inputhints::InputHint>>>,
+    ) {
+        self.kuna_state_mut::<HintsSlot>().0 = hints;
+    }
+
+    /// (kuna `swiftcall`) The input hints of this function.
+    pub fn kuna_input_hints(&self) -> Option<&[crate::kuna_inputhints::InputHint]> {
+        self.kuna_state::<HintsSlot>()
+            .0
+            .as_deref()
+            .map(Vec::as_slice)
+    }
+}

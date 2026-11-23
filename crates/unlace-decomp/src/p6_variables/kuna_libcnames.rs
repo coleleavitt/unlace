@@ -688,6 +688,23 @@ crate::kuna_flag!(
     shipped: true
 );
 
+/// (kuna `libcnames`) The library names the naming pass gave numbered locals, kept across
+/// `Funcdata::clear`.
+#[derive(Default)]
+struct AliasSlot(Vec<crate::kuna_libcnames::LibraryAlias>);
+crate::kuna_func_state!(AliasSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `libcnames`) The library names the naming pass gave numbered locals.
+    pub fn kuna_library_aliases(&self) -> &[crate::kuna_libcnames::LibraryAlias] {
+        &self.kuna_state::<AliasSlot>().0
+    }
+
+    pub fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::kuna_libcnames::LibraryAlias>) {
+        self.kuna_state_mut::<AliasSlot>().0 = aliases;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

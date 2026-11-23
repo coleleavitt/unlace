@@ -455,7 +455,6 @@ pub struct Funcdata {
     /// (kuna `calltargettype`) The function-pointer type each indirect call
     /// states, for a call whose target is cast at the call: the cast names it.
     kuna_call_target_types: std::collections::HashMap<OpId, std::rc::Rc<crate::dtype::Datatype>>,
-    kuna_field_calls: Vec<crate::kuna_calltargettype::FieldCall>,
     /// (kuna) Why the decompile pipeline aborted for this function, when it did.
     ///
     /// A caught per-function abort (`LOSS-131`) unwinds and discards the
@@ -501,9 +500,6 @@ pub struct Funcdata {
     /// previous decompile printed it under; see
     /// `kuna_stablenames::directive_targets`.
     kuna_directive_targets: std::collections::BTreeMap<String, crate::context::HighVariableId>,
-    /// (kuna `libcnames`) The library name each numbered local answers to; see
-    /// [`crate::kuna_libcnames::LibraryAlias`].
-    kuna_library_aliases: Vec<crate::kuna_libcnames::LibraryAlias>,
     /// (kuna, ghidra Phase 4) WIRE-ONLY symbols the encode-time link pass
     /// synthesized for named HighVariables the analysis deliberately left
     /// symbol-less — see [`crate::database::WireSymbol`].  They are encoded
@@ -531,12 +527,6 @@ pub struct Funcdata {
     /// (kuna `stackexitanchor`) `(call, value)`: the stack pointer after `call`
     /// equals the input one plus `value`, read off the raw epilogue.
     kuna_stack_exit_anchors: Vec<(OpId, int4)>,
-    /// (kuna `bejoin evidence`) The model's output pair, the wide-return
-    /// verdicts of this function and its callees, and the callees a call asked
-    /// about without one. Seeded by the driver
-    /// ([`crate::kuna_bejoin::seed_wide_returns`]).
-    kuna_wide: Option<crate::kuna_bejoin::WideView>,
-    kuna_callwide: Option<Rc<crate::p4_calls::kuna_callwide::Ledger>>,
     /// (kuna `varargstackargs`) The direct-call callees whose body runs Apple's
     /// `va_start`, by `(space index, entry offset)`; `None` when the target does
     /// not pass variadic arguments the Apple way.
@@ -660,18 +650,10 @@ pub struct Funcdata {
     /// (kuna `callrettype`) The extensions the return trimming narrowed the
     /// returned value back through ([`crate::kuna_callrettype::note_returned_extension`]).
     kuna_callret_returned: Vec<(bool, int4)>,
-    /// (kuna `passthrough`) The register ranges `ActionFuncLink` made visible to
-    /// heritage for a call whose callee states them, with the calls that own
-    /// each ([`crate::p4_calls::kuna_passthrough`]).  Empty unless the option is
-    /// live and a callee stated a register this function never touches.
-    kuna_passthrough_claims: Vec<crate::p4_calls::kuna_passthrough::PassThroughClaim>,
     /// (kuna `passthrough`) The CALL ops set up as variadic calls -- the caller
     /// writes the return register, which carries no argument, just before them
     /// (`xor %eax,%eax` is SysV's vector-register count).
     kuna_passthrough_vararg_calls: Vec<crate::context::OpId>,
-    /// (kuna `msvcbyval`) The calls whose by-value slot `ActionDefaultParams`
-    /// sized, with the constructor call that builds each.
-    kuna_msvc_byval_sites: Vec<crate::p4_calls::kuna_msvcbyval::ByvalSite>,
     /// (kuna `calleereadarg`) The CALL ops set up as variadic calls, recorded
     /// before heritage whatever `passthrough` decides.
     kuna_readarg_vararg_calls: Vec<crate::context::OpId>,
@@ -679,8 +661,6 @@ pub struct Funcdata {
     /// block read the return register, which carries no argument, before it
     /// writes it (`test %al,%al` in a SysV register-save prologue)?
     kuna_passthrough_variadic: bool,
-    /// (kuna `passthrough`) The incoming registers the first heritage saw the body read.
-    kuna_entry_reads: Option<crate::kuna_entryreads::EntryReads>,
     /// (kuna `retinputhalf`) The return registers whose value the function moved
     /// out of its own register and back at some RETURN, noted while return
     /// recovery can still see the moves
@@ -691,19 +671,8 @@ pub struct Funcdata {
     /// ([`crate::kuna_bejoin::join_order`]), so its calls' pairs are joined that
     /// way too.
     kuna_pairs_first_low: bool,
-    /// (kuna `calleevote`) The types every caller of this function passes for its
-    /// inputs, copied off the `Architecture` after the flow build.
-    kuna_calleevote_inputs: Option<std::rc::Rc<crate::kuna_calleevote::CallerTypes>>,
-    /// (kuna `narrowargs callers`) The parameters every caller passes narrow.
-    kuna_callerargs: Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>,
-    /// (kuna `elfmain`) The C runtime's `main` declaration this function's inputs
-    /// take, when it is an executable's own `main`. See [`crate::kuna_elfmaindecl`].
-    kuna_elfmain: Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>,
     pub(crate) kuna_go_receiver: Option<crate::kuna_gopointermethod::Receiver>,
     go_string_input: Option<Box<crate::kuna_gostringinput::GoStringInput>>,
-    /// (kuna `swiftcall`) Names and types for the inputs this function's
-    /// analysis recovers. See [`crate::kuna_inputhints`].
-    kuna_input_hints: Option<std::rc::Rc<Vec<crate::kuna_inputhints::InputHint>>>,
     /// (kuna `swiftcall`) The direct callees whose body reads `swiftself`.
     kuna_swift_self_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
     /// (kuna `swiftcall`) The direct callees whose body reads `swiftasync`.
@@ -747,11 +716,6 @@ pub struct Funcdata {
         (int4, unlace_base::types::uintb),
         std::rc::Rc<crate::kuna_elemptr::Stated>,
     >,
-    /// (kuna `retpushedhalf`) Registers this function only ever pushed, gathered
-    /// during the flow build while the store and the load still exist and read at
-    /// the return-half placement test
-    /// ([`crate::kuna_retpushedhalf::PushedRegisters`]).
-    kuna_pushed_registers: crate::kuna_retpushedhalf::PushedRegisters,
     pub(crate) kuna_atomic_xadds: Vec<crate::p2_lift::kuna_atomicxadd::Instruction>,
     /// The kuna passes' per-function state ([`crate::kuna_funcstate`]).
     kuna_states: crate::kuna_funcstate::FuncStates,
@@ -920,7 +884,6 @@ impl Funcdata {
             new_globals: Vec::new(),
             kuna_infertypes_settled: false,
             kuna_call_target_types: std::collections::HashMap::new(),
-            kuna_field_calls: Vec::new(),
             kuna_pipeline_failure: None,
             kuna_fspec_handles: Vec::new(),
             kuna_rejected_flow: Vec::new(),
@@ -931,15 +894,12 @@ impl Funcdata {
             kuna_record_names: false,
             kuna_name_snapshot: Vec::new(),
             kuna_directive_targets: std::collections::BTreeMap::new(),
-            kuna_library_aliases: Vec::new(),
             kuna_wire_symbols: Vec::new(),
             kuna_wrapped_wire_storage: std::collections::BTreeMap::new(),
             kuna_wire_symbol_for_high: std::collections::BTreeMap::new(),
             kuna_callee_ret_writes: std::collections::HashMap::new(),
             kuna_callee_purge: std::collections::HashMap::new(),
             kuna_stack_exit_anchors: Vec::new(),
-            kuna_wide: None,
-            kuna_callwide: None,
             kuna_callee_entry_dead: std::collections::HashMap::new(),
             kuna_darwin_variadic: None,
             kuna_swift_self_unread: std::collections::HashSet::new(),
@@ -971,20 +931,13 @@ impl Funcdata {
             kuna_forced_scoring: false,
             kuna_shared_float_call: None,
             kuna_callret_returned: Vec::new(),
-            kuna_passthrough_claims: Vec::new(),
             kuna_passthrough_vararg_calls: Vec::new(),
-            kuna_msvc_byval_sites: Vec::new(),
             kuna_readarg_vararg_calls: Vec::new(),
             kuna_passthrough_variadic: false,
-            kuna_entry_reads: None,
             kuna_moved_back_returns: Vec::new(),
             kuna_pairs_first_low: false,
-            kuna_calleevote_inputs: None,
-            kuna_callerargs: None,
-            kuna_elfmain: None,
             kuna_go_receiver: None,
             go_string_input: None,
-            kuna_input_hints: None,
             kuna_swift_self_callees: std::collections::BTreeSet::new(),
             kuna_swift_async_callees: std::collections::BTreeSet::new(),
             kuna_calleevote_closed: false,
@@ -998,7 +951,6 @@ impl Funcdata {
             kuna_elemptr_typed: std::cell::RefCell::new(std::collections::HashSet::new()),
             kuna_elemptr_no_objects: false,
             kuna_elemptr_stated: std::collections::HashMap::new(),
-            kuna_pushed_registers: crate::kuna_retpushedhalf::PushedRegisters::default(),
             kuna_atomic_xadds: Vec::new(),
             kuna_states: Default::default(),
         })
@@ -1288,38 +1240,6 @@ impl Funcdata {
         snapshot: Vec<(String, crate::kuna_stablenames::Keys)>,
     ) {
         self.kuna_name_snapshot = snapshot;
-    }
-
-    /// (kuna `bejoin evidence`) Hold the wide-return verdicts the driver took
-    /// for this function and its callees.
-    pub fn kuna_set_wide(&mut self, wide: crate::kuna_bejoin::WideView) {
-        self.kuna_wide = Some(wide);
-    }
-
-    /// (kuna `bejoin evidence`) The wide-return verdicts and the model's pair,
-    /// when the driver took them.
-    pub fn kuna_wide(&self) -> Option<&crate::kuna_bejoin::WideView> {
-        self.kuna_wide.as_ref()
-    }
-
-    pub(crate) fn kuna_set_callwide(
-        &mut self,
-        proof: Option<Rc<crate::p4_calls::kuna_callwide::Ledger>>,
-    ) {
-        self.kuna_callwide = proof;
-    }
-
-    pub(crate) fn kuna_callwide(&self) -> Option<&crate::p4_calls::kuna_callwide::Ledger> {
-        self.kuna_callwide.as_deref()
-    }
-
-    /// (kuna `libcnames`) The library names the naming pass gave numbered locals.
-    pub fn kuna_library_aliases(&self) -> &[crate::kuna_libcnames::LibraryAlias] {
-        &self.kuna_library_aliases
-    }
-
-    pub fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::kuna_libcnames::LibraryAlias>) {
-        self.kuna_library_aliases = aliases;
     }
 
     /// (kuna `rustabi`) Record what a probe of `entry`'s body proved about the
@@ -1866,48 +1786,6 @@ impl Funcdata {
         self.kuna_callret_types.get(&key).map(|r| r.as_ref())
     }
 
-    /// (kuna `calleevote`) Record what this function's callers pass for its inputs.
-    pub fn kuna_set_calleevote_inputs(
-        &mut self,
-        stated: Option<std::rc::Rc<crate::kuna_calleevote::CallerTypes>>,
-    ) {
-        self.kuna_calleevote_inputs = stated;
-    }
-
-    /// (kuna `calleevote`) What this function's callers pass for its inputs.
-    pub fn kuna_calleevote_inputs(&self) -> Option<&crate::kuna_calleevote::CallerTypes> {
-        self.kuna_calleevote_inputs.as_deref()
-    }
-
-    /// (kuna `narrowargs callers`) Record the parameters every caller passes narrow.
-    pub fn kuna_set_callerargs(
-        &mut self,
-        stated: Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>,
-    ) {
-        self.kuna_callerargs = stated;
-    }
-
-    /// (kuna `narrowargs callers`) The parameters every caller passes narrow.
-    pub fn kuna_callerargs(
-        &self,
-    ) -> Option<&std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>> {
-        self.kuna_callerargs.as_ref()
-    }
-
-    /// (kuna `elfmain`) Give this function's inputs the C runtime's `main`
-    /// declaration, as far as its own analysis recovers them.
-    pub fn kuna_set_elfmain(
-        &mut self,
-        runtime: Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>,
-    ) {
-        self.kuna_elfmain = runtime;
-    }
-
-    /// (kuna `elfmain`) The C runtime's `main` declaration for this function.
-    pub fn kuna_elfmain(&self) -> Option<&crate::kuna_elfmaindecl::Runtime> {
-        self.kuna_elfmain.as_deref()
-    }
-
     pub(crate) fn set_go_string_input(
         &mut self,
         formal: Option<crate::kuna_gostringinput::GoStringInput>,
@@ -1917,14 +1795,6 @@ impl Funcdata {
 
     pub(crate) fn go_string_input(&self) -> Option<&crate::kuna_gostringinput::GoStringInput> {
         self.go_string_input.as_deref()
-    }
-
-    /// (kuna `swiftcall`) Seed the input hints. See [`crate::kuna_inputhints`].
-    pub fn kuna_set_input_hints(
-        &mut self,
-        hints: Option<std::rc::Rc<Vec<crate::kuna_inputhints::InputHint>>>,
-    ) {
-        self.kuna_input_hints = hints;
     }
 
     /// (kuna `swiftcall`) Seed the direct callees whose body reads `swiftself`.
@@ -1955,11 +1825,6 @@ impl Funcdata {
         &self,
     ) -> &std::collections::BTreeSet<(int4, unlace_base::types::uintb)> {
         &self.kuna_swift_async_callees
-    }
-
-    /// (kuna `swiftcall`) The input hints of this function.
-    pub fn kuna_input_hints(&self) -> Option<&[crate::kuna_inputhints::InputHint]> {
-        self.kuna_input_hints.as_deref().map(Vec::as_slice)
     }
 
     /// (kuna `calleevote fields`) Mark every caller of this function as known.
@@ -2139,21 +2004,6 @@ impl Funcdata {
             .map(|r| r.as_ref())
     }
 
-    /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
-    pub fn kuna_set_passthrough_claims(
-        &mut self,
-        claims: Vec<crate::p4_calls::kuna_passthrough::PassThroughClaim>,
-    ) {
-        self.kuna_passthrough_claims = claims;
-    }
-
-    /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
-    pub fn kuna_passthrough_claims(
-        &self,
-    ) -> &[crate::p4_calls::kuna_passthrough::PassThroughClaim] {
-        &self.kuna_passthrough_claims
-    }
-
     /// (kuna `passthrough`) Record the CALL ops set up as variadic calls.
     pub fn kuna_set_passthrough_vararg_calls(&mut self, ops: Vec<crate::context::OpId>) {
         self.kuna_passthrough_vararg_calls = ops;
@@ -2162,19 +2012,6 @@ impl Funcdata {
     /// (kuna `passthrough`) The CALL ops set up as variadic calls.
     pub fn kuna_passthrough_vararg_calls(&self) -> &[crate::context::OpId] {
         &self.kuna_passthrough_vararg_calls
-    }
-
-    /// (kuna `msvcbyval`) Record the calls whose by-value slot was sized.
-    pub fn kuna_set_msvc_byval_sites(
-        &mut self,
-        sites: Vec<crate::p4_calls::kuna_msvcbyval::ByvalSite>,
-    ) {
-        self.kuna_msvc_byval_sites = sites;
-    }
-
-    /// (kuna `msvcbyval`) The calls whose by-value slot was sized.
-    pub fn kuna_msvc_byval_sites(&self) -> &[crate::p4_calls::kuna_msvcbyval::ByvalSite] {
-        &self.kuna_msvc_byval_sites
     }
 
     /// (kuna `calleereadarg`) Record the CALL ops set up as variadic calls.
@@ -2190,16 +2027,6 @@ impl Funcdata {
     /// (kuna `passthrough`) Record whether this function is itself variadic.
     pub fn kuna_set_passthrough_variadic(&mut self, v: bool) {
         self.kuna_passthrough_variadic = v;
-    }
-
-    /// (kuna `passthrough`) Record what the first heritage saw the body read.
-    pub fn kuna_set_entry_reads(&mut self, reads: crate::kuna_entryreads::EntryReads) {
-        self.kuna_entry_reads = Some(reads);
-    }
-
-    /// (kuna `passthrough`) The incoming registers the body reads, once heritage ran.
-    pub fn kuna_entry_reads(&self) -> Option<&crate::kuna_entryreads::EntryReads> {
-        self.kuna_entry_reads.as_ref()
     }
 
     /// (kuna `passthrough`) Is this function itself variadic?
@@ -2228,18 +2055,6 @@ impl Funcdata {
     /// ABI that puts the high word first ([`crate::kuna_bejoin::join_order`])?
     pub fn kuna_pairs_first_low(&self) -> bool {
         self.kuna_pairs_first_low
-    }
-
-    /// (kuna `retpushedhalf`) The flow build's record of registers this function
-    /// only ever pushed, for appending to.
-    pub fn kuna_pushed_registers_mut(&mut self) -> &mut crate::kuna_retpushedhalf::PushedRegisters {
-        &mut self.kuna_pushed_registers
-    }
-
-    /// (kuna `retpushedhalf`) The flow build's record of registers this function
-    /// only ever pushed.
-    pub fn kuna_pushed_registers(&self) -> &crate::kuna_retpushedhalf::PushedRegisters {
-        &self.kuna_pushed_registers
     }
 
     /// Get the entry point address (C++ `getAddress`).
@@ -3767,18 +3582,9 @@ impl Funcdata {
     pub fn kuna_infertypes_settled(&self) -> bool {
         self.kuna_infertypes_settled
     }
-    /// (kuna `calltargettype`) Forget every recorded call target type.
-    pub fn kuna_clear_call_target_types(&mut self) {
+    /// (kuna `calltargettype`) Forget every recorded call target type, keeping the field calls.
+    pub(crate) fn kuna_clear_call_target_type_map(&mut self) {
         self.kuna_call_target_types.clear();
-        self.kuna_field_calls.clear();
-    }
-    /// (kuna `calltargettype`) Record a call through a field of a synthesized record.
-    pub fn kuna_add_field_call(&mut self, call: crate::kuna_calltargettype::FieldCall) {
-        self.kuna_field_calls.push(call);
-    }
-    /// (kuna `calltargettype`) The calls through fields of synthesized records.
-    pub fn kuna_field_calls(&self) -> &[crate::kuna_calltargettype::FieldCall] {
-        &self.kuna_field_calls
     }
     /// (kuna `calltargettype`) Record the type the indirect call `op` states.
     pub fn kuna_set_call_target_type(&mut self, op: OpId, ty: std::rc::Rc<crate::dtype::Datatype>) {
@@ -5062,12 +4868,9 @@ impl Funcdata {
         // bank reissues.
         self.slot_evidence.borrow_mut().clear();
         self.kuna_callee_split_calls.clear();
-        self.kuna_passthrough_claims.clear();
         self.kuna_passthrough_vararg_calls.clear();
-        self.kuna_msvc_byval_sites.clear();
         self.kuna_readarg_vararg_calls.clear();
         self.kuna_passthrough_variadic = false;
-        self.kuna_entry_reads = None;
         self.kuna_moved_back_returns.clear();
         self.store_reach_committed.set(false);
         *self.store_reach_checks.borrow_mut() = Default::default();

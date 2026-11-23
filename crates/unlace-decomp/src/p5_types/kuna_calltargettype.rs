@@ -1138,5 +1138,29 @@ fn carry_back(
     }
 }
 
+/// (kuna `calltargettype`) The calls through fields of synthesized records; kept across
+/// `Funcdata::clear`, forgotten with the call target types.
+#[derive(Default)]
+struct FieldCallsSlot(Vec<crate::kuna_calltargettype::FieldCall>);
+crate::kuna_func_state!(FieldCallsSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `calltargettype`) Forget every recorded call target type.
+    pub fn kuna_clear_call_target_types(&mut self) {
+        self.kuna_clear_call_target_type_map();
+        self.kuna_state_mut::<FieldCallsSlot>().0.clear();
+    }
+
+    /// (kuna `calltargettype`) Record a call through a field of a synthesized record.
+    pub fn kuna_add_field_call(&mut self, call: crate::kuna_calltargettype::FieldCall) {
+        self.kuna_state_mut::<FieldCallsSlot>().0.push(call);
+    }
+
+    /// (kuna `calltargettype`) The calls through fields of synthesized records.
+    pub fn kuna_field_calls(&self) -> &[crate::kuna_calltargettype::FieldCall] {
+        &self.kuna_state::<FieldCallsSlot>().0
+    }
+}
+
 #[cfg(test)]
 mod tests;

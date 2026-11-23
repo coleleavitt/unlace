@@ -104,6 +104,29 @@ pub const GLOBAL_STORE_BUDGET: usize = 1024;
 /// guarding further ranges.
 pub const GLOBAL_LOAD_BUDGET: usize = 4096;
 
+/// The `indexaliasguard` level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IndexAliasGuard(pub int4);
+
+impl crate::kuna_optionset::KunaOption for IndexAliasGuard {
+    const NAME: &'static str = "indexaliasguard";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        IndexAliasGuard(LEVEL_GLOBAL)
+    }
+
+    fn shipped() -> Self {
+        IndexAliasGuard(LEVEL_GLOBAL)
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        OptionIndexAliasGuard
+            .apply(value)
+            .map(|(v, msg)| (IndexAliasGuard(v), msg))
+    }
+}
+
 /// `option indexaliasguard off|load|global|full` (C++ has no equivalent —
 /// upstream is unconditionally `full`).
 pub struct OptionIndexAliasGuard;
@@ -236,7 +259,13 @@ pub fn loads_from(
 /// storage (a `MULTIEQUAL` that splitting a shared block turned into a `COPY`)?
 /// The store is kept anyway, so taking its value would print the store twice.
 pub fn keeps_forced_self_copy(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    if data.get_arch().index_alias_guard < LEVEL_GLOBAL {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .0
+        < LEVEL_GLOBAL
+    {
         return false;
     }
     let Some(o) = data.obank().get(op) else {
@@ -267,7 +296,11 @@ pub fn keeps_forced_join(data: &Funcdata, out: VarnodeId, a: VarnodeId, b: Varno
             .get(v)
             .is_some_and(|d| d.is_addr_force() && d.is_written())
     };
-    data.get_arch().index_alias_guard >= LEVEL_GLOBAL
+    data.get_arch()
+        .kuna_options
+        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .0
+        >= LEVEL_GLOBAL
         && data.vbank().get(out).is_some_and(|o| o.is_persist())
         && (forced(a) || forced(b))
 }
@@ -284,7 +317,13 @@ pub fn keeps_forced_join(data: &Funcdata, out: VarnodeId, a: VarnodeId, b: Varno
 /// temporary of its input's HighVariable.  When the `LOAD`'s address is a
 /// constant, only a global overlapping the loaded bytes counts.
 pub fn load_crosses_global_store(data: &Funcdata, vn: VarnodeId) -> bool {
-    if data.get_arch().index_alias_guard < LEVEL_GLOBAL {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .0
+        < LEVEL_GLOBAL
+    {
         return false;
     }
     let Some(v) = data.vbank().get(vn) else {
@@ -416,7 +455,13 @@ fn based_on(fd: &Funcdata, mut ptr: VarnodeId, bases: &[(Rc<AddrSpace>, u64)]) -
 /// store in front of the pointer `STORE`'s neighbours or join the value with
 /// the global, whose type it would take.
 pub fn keeps_store_guard_input(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    if data.get_arch().index_alias_guard != LEVEL_GLOBAL {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .0
+        != LEVEL_GLOBAL
+    {
         return false;
     }
     let Some(o) = data.obank().get(op) else {
@@ -442,7 +487,13 @@ pub fn keeps_store_guard_input(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
 /// read the global when it loads from the global's space and, at a constant
 /// address, overlaps it.
 pub fn keeps_store_before_load(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    if data.get_arch().index_alias_guard != LEVEL_GLOBAL {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .0
+        != LEVEL_GLOBAL
+    {
         return false;
     }
     let Some(o) = data.obank().get(op) else {
@@ -583,7 +634,7 @@ mod tests {
                     ));
                     manager.insert_space(Rc::clone(&ram)).unwrap();
                     let mut arch = ArchContext::new(manager);
-                    arch.index_alias_guard = LEVEL_GLOBAL;
+                    arch.kuna_options.set(IndexAliasGuard(LEVEL_GLOBAL));
                     let mut fd = Funcdata::new(
                         "f",
                         "f",

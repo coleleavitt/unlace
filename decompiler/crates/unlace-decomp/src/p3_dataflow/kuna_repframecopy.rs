@@ -1051,7 +1051,12 @@ pub(crate) fn expand_all(fd: &mut Funcdata) -> i32 {
 fn expand_with(fd: &mut Funcdata, returned: bool) -> i32 {
     if fd.get_heritage_pass() != 1
         || !fd.stack_store_guard()
-        || fd.get_arch().index_alias_guard == super::kuna_indexaliasguard::LEVEL_OFF
+        || fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+            .0
+            == super::kuna_indexaliasguard::LEVEL_OFF
     {
         return 0;
     }

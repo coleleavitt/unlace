@@ -827,13 +827,6 @@ pub struct ArchContext {
     pub stack_addr_arg_trial: bool,
     /// (kuna) `option calleefilledarg`.
     pub callee_filled_arg: bool,
-    /// (kuna) `option bejoin`: when may a two-register value join with its
-    /// high word in the first register where the ABI puts it?  Read by
-    /// [`crate::p4_calls::kuna_bejoin::mode`].
-    pub be_join: crate::kuna_bejoin::BeJoinMode,
-    /// (kuna) `option bejoinpass`: how a big-endian pair a call hands back to
-    /// the RETURN joins. Read by [`crate::p4_calls::kuna_bejoinpass`].
-    pub be_join_pass: crate::kuna_bejoinpass::BeJoinPassMode,
     pub call_wide: bool,
     /// (kuna) `option rustabi` (0 off / 1 auto / 2 always): keep a rustc
     /// two-register `ScalarPair` return intact; read by [`crate::kuna_rustabi`].
@@ -858,9 +851,6 @@ pub struct ArchContext {
     pub sp_solve: bool,
     /// (kuna) `option typevote`; read by [`crate::p5_types::kuna_typevote`].
     pub type_vote: bool,
-    /// (kuna) `option gobool` mode; read by [`crate::p4_calls::kuna_gobool`].
-    /// Copied from the engine `Architecture` in `build_arch_handle`.
-    pub go_bool: u8,
     /// (kuna) `option gonewtype`; read by [`crate::p5_types::kuna_gonewtype`].
     /// Copied from the engine `Architecture` in `build_arch_handle`.
     pub go_new_type: bool,
@@ -1175,15 +1165,6 @@ pub struct ArchContext {
     /// [`crate::p4_calls::kuna_varargsharedfloat::feeds_earlier_argument`].
     pub vararg_shared_float: bool,
 
-    /// (kuna) completion level for the two upstream partial-range call-overlap
-    /// guards (`calloverlap`): off (what kuna shipped before the option), auto
-    /// (the default: both guards for a narrow scalar slot in a wide register),
-    /// in (`Heritage::guardCallOverlappingInput` for every contained slot) or
-    /// full (that plus `Heritage::tryOutputOverlapGuard`, i.e. upstream Ghidra).  Read by
-    /// [`Heritage::guard_calls`](crate::p3_dataflow::heritage::Heritage) at both
-    /// `ContainedBy` arms; the level vocabulary lives in
-    /// [`crate::p3_dataflow::kuna_calloverlap`].
-    pub call_overlap: int4,
     /// (kuna) predicate strength for tolerating a caller-save spill among a
     /// trial Varnode's descendants (`spillargtrial`): `0` = upstream, every
     /// `CPUI_STORE` rejects, `1` = tolerate a store that is one half of a
@@ -1191,20 +1172,6 @@ pub struct ArchContext {
     /// Read by [`Funcdata::only_op_use`](crate::funcdata::Funcdata) through
     /// [`crate::p4_calls::kuna_spillargtrial::store_is_caller_save_spill`].
     pub spill_arg_trial: int4,
-    /// (kuna) `option indexaliasguard off|load|global|full`: how much of the
-    /// upstream index-alias arm at the end of `Heritage::guard`
-    /// (`heritage.cc:1194`, the `highPtrPossible` gate) runs — `load` puts an
-    /// `addrforce` `CPUI_COPY` read of the range before every indexed-stack LOAD
-    /// it intersects (`Heritage::guardLoads`, heritage.cc:1570), `global` adds
-    /// the `CPUI_INDIRECT` on a global range across every STORE into its space
-    /// and a `CPUI_COPY` read of it before every LOAD that may read it,
-    /// `full` adds the `CPUI_INDIRECT` across every STORE that can reach any range
-    /// (`Heritage::guardStores`, heritage.cc:1538).  `off` leaves both arms
-    /// unreached, so a stack slot only ever read through an indexed pointer has
-    /// no reader at all and its initializing store dies to `ActionDeadCode`.
-    /// Levels in [`crate::p3_dataflow::kuna_indexaliasguard`]; read by
-    /// [`Heritage::guard`](crate::p3_dataflow::heritage::Heritage).
-    pub index_alias_guard: int4,
     /// Keep physical frame writes live when conservative stack aliasing is requested.
     pub stack_alias_deadstore: bool,
     /// Operation-specific typed views over shared physical frame storage.
@@ -1793,8 +1760,6 @@ impl ArchContext {
             callee_filled_arg: true,
             // (kuna) `option bejoin`; the real value is copied from the engine
             // Architecture in `build_arch_handle`.
-            be_join: crate::kuna_bejoin::BeJoinMode::Off,
-            be_join_pass: crate::kuna_bejoinpass::BeJoinPassMode::Off,
             call_wide: false,
             // (kuna) `option rustabi` default-off; the real value is copied from
             // the engine Architecture in `build_arch_handle`.
@@ -1808,7 +1773,6 @@ impl ArchContext {
             sp_solve: false,
             type_vote: false,
             // (kuna) `option gobool` default auto; copied the same way.
-            go_bool: 1,
             // (kuna) `option gonewtype` default on; copied the same way.
             go_new_type: true,
             swift_metadata_results: false,
@@ -1921,9 +1885,7 @@ impl ArchContext {
             narrow_ret: true,
             narrow_signed: false,
             vararg_shared_float: false, // varargsharedfloat (default-off)
-            call_overlap: crate::kuna_calloverlap::LEVEL_AUTO, // calloverlap (default auto)
             spill_arg_trial: 0,         // spillargtrial (0 = upstream: every STORE rejects)
-            index_alias_guard: 2, // indexaliasguard (global; Architecture::reset_defaults sets the shipped default)
             call_array_extent: false,
             stack_struct: false,
             stack_alias_deadstore: false,

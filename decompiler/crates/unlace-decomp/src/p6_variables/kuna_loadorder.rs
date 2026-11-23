@@ -36,7 +36,13 @@ pub fn crosses_global_write(
     vn: VarnodeId,
     except: Option<HighVariableId>,
 ) -> bool {
-    if data.get_arch().index_alias_guard != LEVEL_GLOBAL {
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .0
+        != LEVEL_GLOBAL
+    {
         return false;
     }
     let Some(v) = data.vbank().get(vn) else {

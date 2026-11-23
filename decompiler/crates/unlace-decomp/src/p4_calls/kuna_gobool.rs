@@ -32,7 +32,7 @@ use crate::action::{ActionGroupList, Rule};
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
 
-/// The three-valued `gobool` gate (the `gomorestack` pattern).
+/// The three-valued `gobool` gate.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GoBoolMode {
     /// Keep the faithful concatenation.
@@ -44,6 +44,23 @@ pub enum GoBoolMode {
     Always,
 }
 
+impl crate::kuna_optionset::KunaOption for GoBoolMode {
+    const NAME: &'static str = "gobool";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        GoBoolMode::Auto
+    }
+
+    fn shipped() -> Self {
+        GoBoolMode::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        parse_gobool_mode(value).map_err(unlace_base::error::KunaError::parse)
+    }
+}
+
 impl GoBoolMode {
     /// The catalog `current` token.
     pub fn as_str(self) -> &'static str {
@@ -51,24 +68,6 @@ impl GoBoolMode {
             GoBoolMode::Off => "off",
             GoBoolMode::Auto => "auto",
             GoBoolMode::Always => "always",
-        }
-    }
-
-    /// Stored form for the `Architecture` field.
-    pub fn as_u8(self) -> u8 {
-        match self {
-            GoBoolMode::Off => 0,
-            GoBoolMode::Auto => 1,
-            GoBoolMode::Always => 2,
-        }
-    }
-
-    /// Inverse of [`GoBoolMode::as_u8`] (unknown values read as `Off`).
-    pub fn from_u8(v: u8) -> GoBoolMode {
-        match v {
-            1 => GoBoolMode::Auto,
-            2 => GoBoolMode::Always,
-            _ => GoBoolMode::Off,
         }
     }
 }
@@ -138,7 +137,7 @@ impl RuleGoBoolReturn {
 
 /// Is the narrowing live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match GoBoolMode::from_u8(data.get_arch().go_bool) {
+    match data.get_arch().kuna_options.get::<GoBoolMode>() {
         GoBoolMode::Off => false,
         GoBoolMode::Auto => data.get_arch().source_lang.is_go(),
         GoBoolMode::Always => true,

@@ -42,5 +42,9 @@ pub fn declines(data: &Funcdata, op: OpId, global: VarnodeId, source: VarnodeId)
 
 /// The level at which a retained COPY can safely print its LOAD input inline.
 pub(crate) fn load_order_enabled(data: &Funcdata) -> bool {
-    data.get_arch().index_alias_guard == LEVEL_GLOBAL
+    data.get_arch()
+        .kuna_options
+        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .0
+        == LEVEL_GLOBAL
 }

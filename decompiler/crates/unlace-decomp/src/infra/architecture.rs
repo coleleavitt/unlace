@@ -764,13 +764,6 @@ pub struct Architecture {
     /// Objective-C selector stub loads itself ends no argument list.  See
     /// [`crate::p4_calls::kuna_calleefilledarg`].
     pub callee_filled_arg: bool,
-    /// (kuna) `option bejoin`: when a two-register value joins with its high
-    /// word in the first register where the ABI puts it there.  Read by
-    /// [`crate::p4_calls::kuna_bejoin`] through the `ArchContext` handle.
-    pub be_join: crate::kuna_bejoin::BeJoinMode,
-    /// (kuna) `option bejoinpass`: how a big-endian pair a call hands back to
-    /// the RETURN joins. Read by [`crate::p4_calls::kuna_bejoinpass`].
-    pub be_join_pass: crate::kuna_bejoinpass::BeJoinPassMode,
     /// (kuna `octeoneffects`) Which Octeon atomic, reservation and ordering user
     /// operations guard memory; see [`crate::kuna_octeoneffects`].
     pub octeon_effects: crate::kuna_octeoneffects::OcteonEffectsMode,
@@ -829,9 +822,6 @@ pub struct Architecture {
     /// string literal's two constant words as the literal. Default auto (act
     /// when `source_lang` is Swift).
     pub swift_str: u8,
-    /// (kuna) `option gobool` mode (`GoBoolMode` as u8): narrow a Go boolean
-    /// return's stale-high concatenation.  Default auto.
-    pub go_bool: u8,
     /// (kuna) `option gonewtype`: type a `runtime.newobject` result from its
     /// descriptor argument through the per-call-site output type lock.
     /// Default on (structurally inert off Go images).
@@ -1049,13 +1039,6 @@ pub struct Architecture {
     /// [`crate::p4_calls::kuna_varargsharedfloat`].
     pub vararg_shared_float: bool,
 
-    /// (kuna) Completion level for the two upstream partial-range call-overlap
-    /// guards `Heritage::guardCallOverlappingInput` and
-    /// `Heritage::tryOutputOverlapGuard`, which kuna shipped as comment-only stubs
-    /// (option `calloverlap`): off, auto (the default; narrow scalar slots in
-    /// wide registers only), in, or full (upstream Ghidra's behavior).  The
-    /// ordered levels are in [`crate::p3_dataflow::kuna_calloverlap`].
-    pub call_overlap: int4,
     /// (kuna) Predicate strength for tolerating the caller's own caller-save
     /// spill among a trial Varnode's descendants in `Funcdata::onlyOpUse`
     /// (option `spillargtrial`).  `0` = off (upstream-faithful: every
@@ -1063,15 +1046,6 @@ pub struct Architecture {
     /// `2` = any caller-frame store of the value.  See
     /// [`crate::p4_calls::kuna_spillargtrial`].
     pub spill_arg_trial: int4,
-    /// (kuna) How much of the upstream index-alias arm at the end of
-    /// `Heritage::guard` (heritage.cc:1194, the `highPtrPossible` gate) runs:
-    /// `0` = neither, `1` = the `addrforce` `COPY` read of the range before
-    /// every indexed-stack LOAD it intersects (`Heritage::guardLoads`), `2` =
-    /// that plus the `INDIRECT` on a global range across every STORE into its
-    /// space, `3` = the `INDIRECT` across every STORE that can reach any range
-    /// (`Heritage::guardStores`), i.e. upstream.  See
-    /// [`crate::p3_dataflow::kuna_indexaliasguard`] (option `indexaliasguard`).
-    pub index_alias_guard: int4,
     /// Opt-in frame-bounded arrays for call-escaped integer storage.
     pub call_array_extent: bool,
     /// (kuna `stackstruct`) Lay out an address-taken frame record as one
@@ -2821,8 +2795,6 @@ impl Architecture {
             ret_split_global: false,
             stack_addr_arg_trial: false,
             callee_filled_arg: false, // (kuna) option calleefilledarg; reset_defaults sets the shipped default
-            be_join: crate::kuna_bejoin::BeJoinMode::Off, // (kuna) option bejoin; reset_defaults sets the shipped default
-            be_join_pass: crate::kuna_bejoinpass::BeJoinPassMode::Off, // (kuna) option bejoinpass; reset_defaults sets the shipped default
             octeon_effects: crate::kuna_octeoneffects::OcteonEffectsMode::Off, // (kuna) option octeoneffects; reset_defaults sets the shipped default
             octeon_upstream_inject: Vec::new(), // (kuna) set by init_userops_and_fixups on an Octeon language
             call_wide: false,
@@ -2844,7 +2816,6 @@ impl Architecture {
             source_lang_forced: None, // (kuna) option sourcelang; reset_defaults restores auto
             fat_str: 0, // (kuna) option fatstr; reset_defaults sets the shipped default (auto)
             swift_str: 0, // (kuna) option swiftstr; reset_defaults sets the shipped default (auto)
-            go_bool: 0, // (kuna) option gobool; reset_defaults sets the shipped default (auto)
             go_new_type: false, // (kuna) option gonewtype; reset_defaults sets the shipped default (on)
             ptrauth_trap: false, // (kuna) option ptrauthtrap; reset_defaults sets the shipped default (on)
 
@@ -2898,9 +2869,7 @@ impl Architecture {
             narrow_ret: true,
             narrow_signed: false,
             vararg_shared_float: false,
-            call_overlap: crate::kuna_calloverlap::LEVEL_OFF, // (kuna) option calloverlap; reset_defaults sets the shipped default
             spill_arg_trial: 0,
-            index_alias_guard: 0, // (kuna) option indexaliasguard; reset_defaults sets the shipped default
             call_array_extent: false,
             stack_struct: false,
             devectorize_reduction: false, // (kuna) option devectorize (opt-in default-off)
@@ -3270,16 +3239,13 @@ impl Architecture {
         self.ret_split_global = true; // (kuna) DIV-PENDING default-on: a shared RETURN block that stores to GLOBALS is not the bare epilogue `ActionReturnSplit::isSplittable` assumes, so it is no longer cloned into every predecessor. One-directional (it can only decline a split) and byte-identical (0/675) on the datatest corpus; restore the upstream predicate with `option retsplitglobal off`
         self.stack_addr_arg_trial = false;
         self.callee_filled_arg = true; // (kuna) option calleefilledarg default-on: at an objc_msgSend$<sel> selector stub, a definitely-unused argument register the stub writes before reading is no parameter slot, so the positional rule does not end the list there; inert outside Objective-C (0/675)
-        self.be_join = crate::kuna_bejoin::BeJoinMode::Callers; // (kuna) option bejoin default `callers` (#904): a big-endian or AVR pair joins high word first, as the ABI returns it, only where the instructions prove one wide value (a sign or zero extension, a product's halves made apart, two adjacent loads, a proven callee's pair) or a caller reads the second register after the call; `evidence` drops the callers, `on` is the instruction-shape guess, which also reads an int over the high half of a 64-bit temporary as that long long
         self.octeon_effects = crate::kuna_octeoneffects::OcteonEffectsMode::Atomic; // (kuna) option octeoneffects default `atomic` (0/675)
-        self.be_join_pass = crate::kuna_bejoinpass::BeJoinPassMode::Whole; // (kuna) option bejoinpass default `whole` (#904): a pair a call hands back untouched joins in the order of its proven side, and an unproven function handing back a proven callee's pair returns the callee's whole value
         self.call_wide = false;
         self.kuna_callwide.clear();
         self.rust_abi = crate::kuna_rustabi::RustAbiMode::Auto.as_u8(); // (kuna) option rustabi default `auto`: acts only on an image the loader detected as rustc-produced
         self.source_lang_forced = None; // (kuna) option sourcelang default auto; the detected fact survives resets
         self.fat_str = crate::kuna_fatstr::FatStrMode::Auto.as_u8(); // (kuna) bounded (ptr,len) literals on Rust/Go images
         self.swift_str = crate::kuna_fatstr::FatStrMode::Auto.as_u8(); // (kuna) Swift two-word string literals on Swift images
-        self.go_bool = crate::kuna_gobool::GoBoolMode::Auto.as_u8(); // (kuna) narrow Go boolean returns on Go images
         self.go_new_type = true; // (kuna) type runtime.newobject results from their descriptors on Go images
 
         self.ptrauth_trap = true; // (kuna) drop arm64e pointer-auth failure checks; inert unless a brk #0xc47x trap's guard is the return-address bit test, 0/675 datatests
@@ -3331,9 +3297,7 @@ impl Architecture {
         self.pair_params = true; // (kuna) option pairparam default-on: two adjacent input words a borrow or carry chain links are one 8-byte parameter
         self.narrow_ret = true; // (kuna) option narrowret default-on: a call to a callee that returns a narrow value zero-extended reads that value
         self.vararg_shared_float = false; // (kuna) default-off: the register-choice reading holds only for -O0 code (post-RA scheduling defeats it at -O1+)
-        self.call_overlap = crate::kuna_calloverlap::LEVEL_AUTO;
         self.spill_arg_trial = 0; // (kuna) spillargtrial default-OFF opt-in (diverges from upstream onlyOpUse; the failure mode is a spurious trailing argument, which no gate can see)
-        self.index_alias_guard = crate::p3_dataflow::kuna_indexaliasguard::LEVEL_GLOBAL; // (kuna) DIV-147 restored upstream Heritage::guardLoads (heritage.cc:1570), which kuna shipped behind a hard-coded highPtrPossible == false; default `global` adds guardStores' INDIRECT on a global at each STORE into its space and a LOAD guard COPY of a global at each LOAD that may read it (0/675 datatest); `load` drops both, `off` drops all, `full` adds upstream guardStores
         self.call_array_extent = false;
         self.stack_struct = false;
         self.region_structure = true; // (kuna) DIV-12 default-on (region-based Phoenix/SAILR structurer; primary structuring path, falls back to CollapseStructure on irreducible code)
@@ -4171,8 +4135,6 @@ impl Architecture {
         ctx.callee_filled_arg = self.callee_filled_arg;
         // (kuna) carry the big-endian pair-order gate so `kuna_bejoin` reaches
         // `option bejoin` via `glb`.
-        ctx.be_join = self.be_join;
-        ctx.be_join_pass = self.be_join_pass;
         ctx.call_wide = self.call_wide;
         // (kuna) carry the Rust return-ABI gate and the detected source language
         // so `kuna_rustabi` reaches both via `glb`.
@@ -4185,7 +4147,6 @@ impl Architecture {
             && crate::kuna_chkstkdarwin::applies_to(&self.archid);
         ctx.sp_solve = crate::p4_calls::kuna_spsolve::applies(self);
         ctx.type_vote = self.type_vote;
-        ctx.go_bool = self.go_bool;
         ctx.go_new_type = self.go_new_type;
         ctx.outlined_inline = self.outlined_inline;
         ctx.swift_metadata_results = self.analysis_swifttypes;
@@ -4322,9 +4283,7 @@ impl Architecture {
         ctx.narrow_ret = self.narrow_ret; // narrowret
         ctx.narrow_signed = self.narrow_signed; // regsigned
         ctx.vararg_shared_float = self.vararg_shared_float; // varargsharedfloat
-        ctx.call_overlap = self.call_overlap; // calloverlap
         ctx.spill_arg_trial = self.spill_arg_trial; // spillargtrial
-        ctx.index_alias_guard = self.index_alias_guard; // indexaliasguard
         ctx.call_array_extent = self.call_array_extent;
         ctx.stack_struct = self.stack_struct;
         ctx.stack_alias_deadstore = self.stack_alias_deadstore; // stackalias

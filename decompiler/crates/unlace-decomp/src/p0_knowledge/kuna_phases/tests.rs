@@ -706,10 +706,10 @@ fn option_values_live_value_present_for_129() {
                             | "callmechanisms"
                             // (kuna) `bejoin` takes a MODE (`off|evidence|on`)
                             // over an enum field, for the same reason.  Its live
-                            // value is `Architecture::be_join`.
+                            // value is the registered option `BeJoinMode`.
                             | "bejoin"
                             // (kuna) `bejoinpass` likewise (`off|whole|high`);
-                            // its live value is `Architecture::be_join_pass`.
+                            // its live value is the registered option `BeJoinPassMode`.
                             | "bejoinpass"
                             // (kuna) `octeoneffects` likewise
                             // (`off|atomic|ordered`); its live value is
@@ -748,7 +748,7 @@ fn option_values_live_value_present_for_129() {
                             | "rustprobestack"
                             | "rustfmt"
                             // (kuna) `gobool` takes the same MODE shape; its
-                            // live value is `Architecture::go_bool`.
+                            // live value is the registered option `GoBoolMode`.
                             | "gobool"
                             // (kuna) `fpuemu` takes the same MODE shape; its
                             // live value is `Architecture::fpu_emu`.

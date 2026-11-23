@@ -141,6 +141,23 @@ pub enum BeJoinMode {
     On,
 }
 
+impl crate::kuna_optionset::KunaOption for BeJoinMode {
+    const NAME: &'static str = "bejoin";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        BeJoinMode::Off
+    }
+
+    fn shipped() -> Self {
+        BeJoinMode::Callers
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        BeJoinMode::parse(value)
+    }
+}
+
 impl BeJoinMode {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -325,7 +342,7 @@ pub(crate) fn proven_callee(data: &Funcdata, entry: &Address) -> bool {
 
 /// The `option bejoin` mode in force.
 pub fn mode(data: &Funcdata) -> BeJoinMode {
-    data.get_arch().be_join
+    data.get_arch().kuna_options.get::<BeJoinMode>()
 }
 
 /// May a pair join in the ABI's order at all? Off, every pair joins first

@@ -462,7 +462,13 @@ mod tests {
                 .downcast_mut::<IfaceDecompData>()
                 .unwrap();
             let prog = data.conf.as_mut().unwrap();
-            if prog.arch().call_wide && prog.arch().be_join.proves() {
+            if prog.arch().call_wide
+                && prog
+                    .arch()
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_bejoin::BeJoinMode>()
+                    .proves()
+            {
                 prepare(prog);
                 assert!(prog.callwide.frozen, "completed preflight before {command}");
             }
@@ -684,7 +690,14 @@ pub(crate) fn target_declaration(
 
 /// A refusal is stable until an external mutation; no selected function can supply a positive fact.
 pub fn prepare(prog: &mut ConsoleProgram) {
-    if !prog.arch().call_wide || !prog.arch().be_join.proves() || prog.callwide.frozen {
+    if !prog.arch().call_wide
+        || !prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_bejoin::BeJoinMode>()
+            .proves()
+        || prog.callwide.frozen
+    {
         return;
     }
     unlace_decomp::kuna_mipsunaligned::paint(prog.arch_mut());

@@ -354,7 +354,12 @@ impl Action for ActionStackByteCopy {
     }
     fn apply(&mut self, fd: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !fd.stack_store_guard()
-            || fd.get_arch().index_alias_guard == super::kuna_indexaliasguard::LEVEL_OFF
+            || fd
+                .get_arch()
+                .kuna_options
+                .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+                .0
+                == super::kuna_indexaliasguard::LEVEL_OFF
             || fd.get_heritage_pass() != 0
         {
             return 0;

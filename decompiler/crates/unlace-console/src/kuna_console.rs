@@ -273,7 +273,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "fatstr" => unlace_decomp::kuna_fatstr::FatStrMode::from_u8(conf.fat_str).as_str(),
         "swiftstr" => unlace_decomp::kuna_fatstr::FatStrMode::from_u8(conf.swift_str).as_str(),
         // (kuna `gobool`) Three-valued, so it reports its own token.
-        "gobool" => unlace_decomp::kuna_gobool::GoBoolMode::from_u8(conf.go_bool).as_str(),
+        "gobool" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_gobool::GoBoolMode>()
+            .as_str(),
         // (kuna `fpuemu`) Three-valued, so it reports its own token.
         "fpuemu" => unlace_decomp::kuna_fpuemu::FpuEmuMode::from_u8(conf.fpu_emu).as_str(),
         "mzdgroup" => on_off(conf.mz_dgroup_on),
@@ -303,8 +306,14 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             None => "auto",
         },
         // (kuna `bejoin`) Three-valued, so it reports its own token.
-        "bejoin" => conf.be_join.as_str(),
-        "bejoinpass" => conf.be_join_pass.as_str(),
+        "bejoin" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_bejoin::BeJoinMode>()
+            .as_str(),
+        "bejoinpass" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_bejoinpass::BeJoinPassMode>()
+            .as_str(),
         "octeoneffects" => conf.octeon_effects.as_str(),
         "sparcstructret" => on_off(conf.sparc_struct_return),
         "arraystride" => on_off(conf.recover_array_stride),
@@ -319,7 +328,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "switchsharedcase" => on_off(conf.switch_shared_case),
         "realtypes" => on_off(conf.realtypes),
         // (kuna `calloverlap`) Report the selected overlap policy.
-        "calloverlap" => match conf.call_overlap {
+        "calloverlap" => match conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_calloverlap::CallOverlap>()
+            .0
+        {
             unlace_decomp::kuna_calloverlap::LEVEL_OFF => "off",
             unlace_decomp::kuna_calloverlap::LEVEL_AUTO => "auto",
             unlace_decomp::kuna_calloverlap::LEVEL_IN => "in",

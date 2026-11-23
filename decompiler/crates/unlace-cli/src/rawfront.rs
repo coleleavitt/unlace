@@ -2,7 +2,8 @@
 //! uImage, Intel HEX, S-record, bFLT, Qualcomm MBN, MediaTek
 //! md1img, PC BIOS image), gets the
 //! `--raw-image --target --base --entry` arguments it would otherwise need by
-//! hand (`unlace_analysis::loader::firmware`). `--svd FILE` adds a CMSIS-SVD
+//! hand (`unlace_analysis::loader::firmware`). A U-Boot FIT image selected as
+//! an archive member (`armember`) arrives already flattened. `--svd FILE` adds a CMSIS-SVD
 //! device's peripherals as typed volatile globals and its interrupt names.
 //!
 //! Runs before the subcommand parses its arguments, for the subcommands that
@@ -11,7 +12,7 @@
 
 use unlace_analysis::loader::firmware::{containers, cortexm, esp, svd};
 
-const RAW_COMMANDS: [&str; 4] = [
+pub(crate) const RAW_COMMANDS: [&str; 4] = [
     "decompile",
     "decompile-all",
     "decompile-project",
@@ -36,8 +37,13 @@ impl Drop for Prepared {
 }
 
 /// The arguments with the firmware layout filled in; `args` unchanged when
-/// nothing applies. An unreadable `--svd` file is an error.
-pub fn prepare(sub: &str, args: &[String]) -> Result<Prepared, String> {
+/// nothing applies. An unreadable `--svd` file is an error. `member` is the
+/// flat image of a container member the arguments already selected.
+pub fn prepare(
+    sub: &str,
+    args: &[String],
+    member: Option<containers::Flat>,
+) -> Result<Prepared, String> {
     let mut prepared = Prepared {
         args: args.to_vec(),
         temp: Vec::new(),
@@ -66,7 +72,10 @@ pub fn prepare(sub: &str, args: &[String]) -> Result<Prepared, String> {
     let Ok(mut bytes) = std::fs::read(&binary) else {
         return Ok(prepared);
     };
-    if !prepared.args.iter().any(|a| a == "--raw-image") && esp::parse(&bytes).is_some() {
+    if member.is_none()
+        && !prepared.args.iter().any(|a| a == "--raw-image")
+        && esp::parse(&bytes).is_some()
+    {
         return Ok(prepared);
     }
     let out = &mut prepared.args;
@@ -78,8 +87,12 @@ pub fn prepare(sub: &str, args: &[String]) -> Result<Prepared, String> {
             .cloned()
     };
     let mut flat_entries: Vec<u64> = Vec::new();
-    if !has(out, "--raw-image") && !is_object(&bytes) {
-        match containers::detect(&bytes)? {
+    if member.is_some() || (!has(out, "--raw-image") && !is_object(&bytes)) {
+        let found = match member {
+            Some(flat) => Some(containers::Container::Flat(flat)),
+            None => containers::detect(&bytes)?,
+        };
+        match found {
             Some(containers::Container::Embedded {
                 format,
                 bytes: inner,

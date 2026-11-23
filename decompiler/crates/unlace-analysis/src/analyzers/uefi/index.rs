@@ -1,6 +1,6 @@
 //! The protocol index of an unpacked firmware volume.
 //!
-//! `kuna unpack <firmware> --protocols` runs the `uefi` pass over every module
+//! `unlace unpack <firmware> --protocols` runs the `uefi` pass over every module
 //! it wrote and saves, beside them, which module installs which protocol or
 //! PPI. When a module of that directory is loaded later, the pass reads the
 //! index to learn the module's FFS file type (a PEIM and a standalone-MM

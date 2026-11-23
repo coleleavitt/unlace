@@ -40,8 +40,7 @@ use crate::printlanguage::OpToken;
 
 pub use crate::kuna_outlang::OutLang;
 
-/// The output language's emit-side records, as an extension trait so [`OutLang`] can live in a lower
-/// crate.
+/// The output language's emit-band records: its profile, ABI renderer and type speller.
 pub trait OutLangExt {
     /// The surface vocabulary and capability record.
     fn profile(self) -> &'static LangProfile;
@@ -80,16 +79,6 @@ impl OutLangExt for OutLang {
             OutLang::Java => &crate::kuna_langjava::JAVA_SPELLER,
         }
     }
-}
-
-/// Does the language promote narrow integers in arithmetic (`LangProfile::caps`)?
-fn integer_promotion(lang: OutLang) -> bool {
-    lang.profile().caps.integer_promotion
-}
-
-/// Does the language have C's three-clause `for` (`LangProfile::caps`)?
-fn c_for(lang: OutLang) -> bool {
-    lang.profile().caps.c_for
 }
 
 /// A tier in an operator-precedence ladder.
@@ -586,11 +575,32 @@ fn do_while_continue(lang: OutLang) -> bool {
     lang.profile().forms.do_while != DoWhileForm::RustLoopBreakIf
 }
 
+/// Does `lang` promote narrow integer operands the way C does?
+fn int_promotion(lang: OutLang) -> bool {
+    lang.profile().caps.integer_promotion
+}
+
+/// Does `lang` have C's `for (init; cond; iter)` header?
+fn c_for(lang: OutLang) -> bool {
+    lang.profile().caps.c_for
+}
+
+/// The language's real name for a residual unknown of `size` bytes.
+fn unknown_base(
+    lang: OutLang,
+    size: int4,
+    under_pointer: bool,
+    long_is_8: bool,
+) -> Option<std::borrow::Cow<'static, str>> {
+    lang.speller().unknown_base(size, under_pointer, long_is_8)
+}
+
 /// Fill this module's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.lang_do_while_continue = Some(do_while_continue);
-    hooks.outlang_integer_promotion = Some(integer_promotion);
-    hooks.outlang_c_for = Some(c_for);
+    hooks.lang_int_promotion = Some(int_promotion);
+    hooks.lang_c_for = Some(c_for);
+    hooks.lang_unknown_base = Some(unknown_base);
 }
 
 #[cfg(test)]

@@ -2067,7 +2067,7 @@ impl Architecture {
             .get::<crate::kuna_coreoptions::Realtypes>()
             .0
             || self.print.out_lang() != crate::kuna_outlang::OutLang::C;
-        ctx.int_promotion = (self.pass_hooks().outlang_integer_promotion)(self.print.out_lang());
+        ctx.int_promotion = (self.pass_hooks().lang_int_promotion)(self.print.out_lang());
         ctx.kuna_options.set(crate::kuna_coreoptions::CastArith(
             self.kuna_options
                 .get::<crate::kuna_coreoptions::CastArith>()
@@ -2145,7 +2145,7 @@ impl Architecture {
         // already the `while` shape. `caps.c_for` is true for C, so the C path is
         // unchanged.
         ctx.analyze_for_loops =
-            self.analyze_for_loops && (self.pass_hooks().outlang_c_for)(self.print.out_lang());
+            self.analyze_for_loops && (self.pass_hooks().lang_c_for)(self.print.out_lang());
         // Carry the `nanignore all` flag (C++ `glb->nan_ignore_all`) so
         // `RuleIgnoreNan` reaches it via `glb`.
         ctx.nan_ignore_all = self.nan_ignore_all;

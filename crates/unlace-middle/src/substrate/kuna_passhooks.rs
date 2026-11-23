@@ -350,6 +350,18 @@ declare_hooks! {
     /// `kuna_lang`: does the output language continue a bottom-tested loop (not Rust's
     /// `loop { ...; if !c { break; } }`)?
     lang_do_while_continue: fn(crate::kuna_outlang::OutLang) -> bool;
+    /// `kuna_lang`: does the output language promote narrow integer operands as C does?
+    lang_int_promotion: fn(crate::kuna_outlang::OutLang) -> bool;
+    /// `kuna_lang`: does the output language have C's `for` header?
+    lang_c_for: fn(crate::kuna_outlang::OutLang) -> bool;
+    /// `kuna_lang`: the language's real name for a residual unknown
+    /// (`TypeSpeller::unknown_base`).
+    lang_unknown_base: fn(
+        crate::kuna_outlang::OutLang,
+        int4,
+        bool,
+        bool,
+    ) -> Option<std::borrow::Cow<'static, str>>;
     /// `kuna_calleepurge`: forget the x86-32 callee walks (the host's facts changed).
     calleepurge_forget_walks: fn(&mut crate::kuna_archstate::ArchTables);
     /// `kuna_jumpassist`: compile the jump assists out of the loaded inject library.
@@ -642,10 +654,6 @@ declare_hooks! {
     globalorder_copy_moves_write: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> bool;
     /// `kuna_guardedreadtrim::guarded_block`.
     guardedreadtrim_guarded_block: fn(&Funcdata, VarnodeId, &[OpId]) -> Option<BlockId>;
-    /// `kuna_lang`: does the output language promote narrow integers in arithmetic.
-    outlang_integer_promotion: fn(crate::kuna_outlang::OutLang) -> bool;
-    /// `kuna_lang`: does the output language have C's three-clause `for`.
-    outlang_c_for: fn(crate::kuna_outlang::OutLang) -> bool;
     /// `kuna_option_dispatch`: validate and apply a named kuna option.
     set_kuna_option: fn(&mut Architecture, &str, &str) -> KunaResult<String>;
 }

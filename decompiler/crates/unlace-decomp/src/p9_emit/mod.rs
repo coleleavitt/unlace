@@ -13,7 +13,6 @@ pub mod kuna_armconstantshift;
 pub mod kuna_armregistershift; // (kuna) defined C for ARM register-controlled LSL
 pub mod kuna_arraycoverwidth;
 pub mod kuna_arraynotation;
-pub mod kuna_avxintrin; // (kuna `avxintrinsics`) Intel intrinsic names for the SLEIGH AVX user-ops
 pub mod kuna_bitcast;
 pub mod kuna_braceelide;
 pub mod kuna_bytearrayc;
@@ -31,7 +30,6 @@ pub mod kuna_castwiden; // (kuna) a 64-bit widening C performs by itself keeps n
 pub mod kuna_cfstr; // (kuna) CFSTR("...") for a Mach-O __cfstring entry
 pub mod kuna_cstringconst;
 pub mod kuna_ctypes; // (kuna) valid per-architecture C spelling of the core types
-pub mod kuna_declhightype;
 pub mod kuna_declorder; // (kuna) the order local declarations print in
 pub mod kuna_dedupvardecls;
 pub mod kuna_emptystrconst;
@@ -65,7 +63,6 @@ pub mod kuna_mapglobalsyms; // (kuna `mapglobalsyms`) keep mapGlobals' DAT_ Symb
 pub(crate) mod kuna_memberbase;
 pub mod kuna_namedglobals;
 pub mod kuna_namespaces; // (kuna) which namespaces print in front of a name
-pub mod kuna_naming;
 pub mod kuna_narrowselector; // (kuna) a switch on a narrow expression casts it to its own width
 pub mod kuna_oslog;
 pub mod kuna_paramrefdecl;

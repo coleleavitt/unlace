@@ -30,7 +30,7 @@ pub fn extract(arch: &Architecture, fd: &Funcdata) -> Vec<StackObjectInfo> {
             StackObjectInfo {
                 id: object.name.clone(),
                 name: asserted.map_or_else(|| object.name.clone(), |a| a.name.clone()),
-                stack_offset: crate::decompile_drive::signed_space_offset(
+                stack_offset: crate::kuna_funcreport::signed_space_offset(
                     object
                         .address
                         .get_space()

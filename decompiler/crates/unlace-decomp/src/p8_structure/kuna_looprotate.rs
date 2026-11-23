@@ -27,7 +27,7 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_strlenscan::taken;
+use crate::kuna_regioneval::taken;
 
 fn pure(code: OpCode) -> bool {
     use OpCode::*;
@@ -88,7 +88,7 @@ fn commutative(code: OpCode) -> bool {
 /// A constant, or a COPY chain of one.
 fn constant(data: &Funcdata, v: VarnodeId) -> Option<(u64, int4)> {
     let n = data.vbank().get(v)?;
-    crate::kuna_strlenscan::copied_constant(data, v).map(|k| (k, n.get_size()))
+    crate::kuna_regioneval::copied_constant(data, v).map(|k| (k, n.get_size()))
 }
 
 struct Loop {
@@ -446,9 +446,9 @@ fn below(
             let (k, size) = constant(data, a).filter(|&(_, s)| (1..=8).contains(&s))?;
             let signed = o.code() == OpCode::CPUI_INT_SLESSEQUAL;
             let min = if signed { 1u64 << (8 * size - 1) } else { 0 };
-            (k & crate::kuna_strlenscan::mask(size) != min).then(|| {
+            (k & crate::kuna_regioneval::mask(size) != min).then(|| {
                 (
-                    Err((k.wrapping_sub(1) & crate::kuna_strlenscan::mask(size), size)),
+                    Err((k.wrapping_sub(1) & crate::kuna_regioneval::mask(size), size)),
                     b,
                     !signed,
                 )
@@ -512,7 +512,7 @@ fn counting(
     let starts = match x {
         Ok(xv) => rot.same(data, xv, x0, 0),
         Err((k, size)) => constant(data, x0)
-            .is_some_and(|(c, s)| s == size && c & crate::kuna_strlenscan::mask(size) == k),
+            .is_some_and(|(c, s)| s == size && c & crate::kuna_regioneval::mask(size) == k),
     };
     if !starts {
         return None;

@@ -4,7 +4,6 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod flow;
-pub mod funcdata_resolveflow;
 pub mod inject_sleigh;
 pub mod jumptable;
 pub mod kuna_arithhelpers; // (kuna) 32-bit runtime arithmetic helpers (__udivdi3, __aeabi_uldivmod, _alldiv) as C operators
@@ -22,7 +21,6 @@ pub mod kuna_fastfailnoreturn; // (kuna) a Windows `int 0x29` (__fastfail) ends 
 pub mod kuna_fpuemu; // (kuna) decode the 8087 emulator's INT 34h-3Dh as the x87 instructions they stand for
 pub mod kuna_funcboundflow; // (kuna) bound fall-through at a known function entry (no cross-function merge)
 pub mod kuna_gomorestack; // (kuna) fold the Go stack-growth entry guard (docs/multilang.md W2)
-pub mod kuna_gottailcall; // (kuna) a one-destination computed jump to a function is a tail call when the call loses nothing
 pub mod kuna_gowritebarrier; // (kuna) fold the Go GC write-barrier diamond (docs/multilang.md W2)
 pub mod kuna_int3pad; // (kuna) name the int3 pad control ran into instead of printing it as a call through swi()
 pub mod kuna_itaniumeh; // (kuna `itaniumeh`) exceptional edges from each covered call to its Itanium landing pad

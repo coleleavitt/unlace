@@ -382,7 +382,7 @@ Read from `core__libida.sqlite` strings, `cfg/ida.cfg`, `cfg/noret.cfg`, `cfg/go
     - Owner: `p3_dataflow/kuna_bitidioms.rs` and `kuna_copyrun`. Fixes. Size S.
 12. **AVX-512 coverage and correctness, plus system-call names on non-x86 targets.**
     - Evidence: avxlifter sub_17A30; hexarm sub_99540.
-    - Owner: `p9_emit/kuna_avxintrin.rs`, `p2_lift/kuna_syscallregs.rs`. Size M, S.
+    - Owner: `substrate/kuna_avxintrin.rs`, `p2_lift/kuna_syscallregs.rs`. Size M, S.
 
 
 ### Loaders and firmware

@@ -61,10 +61,10 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::VarnodeId;
+use crate::database::TranslateAccess;
 use crate::dtype::type_class::TYPECLASS_HIDDENRET;
 use crate::fspec::{FuncCallSpecs, ProtoModel};
 use crate::funcdata::Funcdata;
-use crate::p0_knowledge::database::TranslateAccess;
 
 /// Addresses below this are never mapped for a program, so never a result buffer.
 const NULL_PAGE: u64 = 0x1000;

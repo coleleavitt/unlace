@@ -81,7 +81,7 @@ impl V850IndirectBranchOption {
 
 /// The option is on and the loaded language is a V850 variant, the only
 /// processor whose SLEIGH lifts `jmp [reg]` to a CALLIND.
-pub fn applies(arch: &crate::infra::architecture::Architecture) -> bool {
+pub fn applies(arch: &crate::architecture::Architecture) -> bool {
     arch.kuna_options
         .get::<crate::kuna_v850indbranch::V850IndirectBranch>()
         .0

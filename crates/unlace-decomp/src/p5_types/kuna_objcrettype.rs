@@ -24,8 +24,8 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
+use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::p4_calls::fspec::FuncCallSpecs;
 
 /// One class: its own methods and where to look next. A class of the image
 /// carries its IMPs; a class the SDK headers declare (`objcsdk`) carries its

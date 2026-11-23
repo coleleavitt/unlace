@@ -68,7 +68,7 @@ use unlace_base::marshal::ElementId;
 use unlace_base::types::{int4, intb};
 
 use crate::dtype::type_metatype;
-use crate::p0_knowledge::options::on_or_off;
+use crate::options::on_or_off;
 use crate::varmap::{COPY_CONSTANT, MapState, RangeHint, RangeType};
 
 /// Marshalling element id for the option (kuna 4000+ range; 4167 = the

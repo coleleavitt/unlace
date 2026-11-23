@@ -111,8 +111,8 @@ use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::p4_calls::fspec::FuncCallSpecs;
 use crate::p7_regions::kuna_regiongraph::{
     KunaIncrementalDominators, KunaNodeId, KunaNodePool, KunaNodeSet, KunaRegionGraph, NodeKind,
     kuna_subgraph_between_nodes,

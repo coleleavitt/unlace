@@ -28,8 +28,8 @@ use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::{int4, uintb};
 
+use crate::architecture::Architecture;
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
 
 /// What a function's last decompile recovered it returns, when it has no
 /// declared prototype.
@@ -1985,7 +1985,7 @@ enum CalleeReturn {
     Unknown,
 }
 
-fn callee_return(data: &Funcdata, fc: &crate::p4_calls::fspec::FuncCallSpecs) -> CalleeReturn {
+fn callee_return(data: &Funcdata, fc: &crate::fspec::FuncCallSpecs) -> CalleeReturn {
     let proto = fc.proto();
     if proto.is_output_locked() {
         let out = proto.get_output();
@@ -2446,7 +2446,7 @@ fn void_results(
 fn call_of<'a>(
     data: &'a Funcdata,
     ind: &crate::op::PcodeOp,
-) -> Option<&'a crate::p4_calls::fspec::FuncCallSpecs> {
+) -> Option<&'a crate::fspec::FuncCallSpecs> {
     let call = ind
         .get_in(1)
         .and_then(|i| data.vbank().get(i))

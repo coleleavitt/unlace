@@ -111,7 +111,7 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p6_variables::kuna_loadorder::provide(&mut slots);
     crate::p6_variables::kuna_pointeevalue::provide(&mut slots);
     crate::p6_variables::kuna_tiedphitrim::provide(&mut slots);
-    crate::substrate::kuna_avxintrin::provide(&mut slots);
+    crate::kuna_avxintrin::provide(&mut slots);
     crate::p2_lift::kuna_chkstkdarwin::provide(&mut slots);
     crate::p2_lift::kuna_fastfailnoreturn::provide(&mut slots);
     crate::p1_partition::kuna_litpoolconst::provide(&mut slots);
@@ -153,7 +153,7 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::printc::provide(&mut slots);
     crate::p2_lift::kuna_arithhelpers::provide(&mut slots);
     crate::p2_lift::kuna_switchguardrange::provide(&mut slots);
-    crate::p4_calls::modelrules::provide(&mut slots);
+    crate::modelrules::provide(&mut slots);
     crate::p4_calls::kuna_customreturn::provide(&mut slots);
     crate::p6_variables::kuna_arrayextent::provide(&mut slots);
     crate::p4_calls::kuna_varargsave::provide(&mut slots);

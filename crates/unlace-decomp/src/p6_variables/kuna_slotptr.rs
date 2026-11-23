@@ -31,10 +31,10 @@ use unlace_base::space::AddrSpace;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
+use crate::architecture::Architecture;
 use crate::context::VarnodeId;
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
 
 /// The durable identity of one value stored into a slot.
 #[derive(Clone, Debug, PartialEq)]

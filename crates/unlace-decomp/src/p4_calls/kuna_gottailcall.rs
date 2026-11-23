@@ -50,9 +50,9 @@ use unlace_base::address::Address;
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
+use crate::architecture::Architecture;
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
 
 type Key = (int4, uintb);
 

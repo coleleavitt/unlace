@@ -11,6 +11,23 @@ pub enum RustFmtMode {
     All,
 }
 
+impl crate::kuna_optionset::KunaOption for RustFmtMode {
+    const NAME: &'static str = "rustfmt";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        RustFmtMode::On
+    }
+
+    fn shipped() -> Self {
+        RustFmtMode::On
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        parse_rustfmt_mode(value).map_err(unlace_base::error::KunaError::parse)
+    }
+}
+
 impl RustFmtMode {
     pub fn as_str(self) -> &'static str {
         match self {

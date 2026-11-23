@@ -62,7 +62,10 @@ pub fn formatter_symbols(
 }
 
 pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
-    if !arch.rust_fmt.recovers()
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .recovers()
         || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
     {
@@ -99,7 +102,10 @@ pub(crate) fn recover_inputs_at(
     array_slot: i32,
     kind: MacroKind,
 ) -> Option<Plan> {
-    if !arch.rust_fmt.recovers()
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .recovers()
         || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
         || (arch.rust_display_formatters.is_empty()

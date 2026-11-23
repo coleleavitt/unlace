@@ -475,10 +475,6 @@ pub struct Architecture {
     /// whose every read is a truth test.  Implementation:
     /// [`kuna_boolbyte`](crate::p5_types::kuna_boolbyte).
     pub bool_byte: bool,
-    /// (kuna `armconstshift`) Convert a signed shiftee to unsigned before a
-    /// fixed ARM LSL (`on`), or also every architecture's fixed 64-bit left
-    /// shift (`all`), so the emitted C shift is defined.
-    pub arm_constant_shift: crate::p9_emit::kuna_armconstantshift::ConstShiftMode,
     /// (kuna `armshiftguard`) Print `count < 32u ? x << count : 0` around a
     /// variable ARM LSL whose count is not proven below 32 (on), or the plain
     /// shift (off).
@@ -1333,8 +1329,6 @@ pub struct Architecture {
     pub strip_security_check: bool,
     /// Fold Go compiler bounds/division panic arms (option gobounds).
     pub go_bounds: bool,
-    /// Which verified Rust formatting calls render as macros (option rustfmt).
-    pub rust_fmt: crate::kuna_rustfmt::RustFmtMode,
     /// (kuna) Flip negated-guard if/else branches for linearity: when an
     /// `if (x == 0) {A} else {B}` (equality-to-zero / negated guard) can be flipped
     /// in place, rewrite it to the positive `if (x) {B} else {A}` so the common
@@ -1356,11 +1350,6 @@ pub struct Architecture {
     /// stack slot mapped onto many same-named HighVariables is declared once
     /// (`option dedupvardecls`; angr-inspired, S9).
     pub dedup_var_decls: bool,
-    /// (kuna `signedness`) How a declared integer local's signedness is chosen:
-    /// round the declaration from the operations the body applies to the value
-    /// (`auto`, the default), or keep what type inference produced
-    /// (`upstream`).  See [`crate::kuna_typeround`].
-    pub signedness: crate::kuna_typeround::SignPolicy,
     /// (kuna DIV-6) Render residual `TYPE_UNKNOWN` (`xunknownN`) values as real C
     /// types by size — 1→`char`, 2/4/8→unsigned ints, pointer-to-unknown→`void *` —
     /// instead of the `xunknownN`/`undefined<N>` placeholder.  Default-on; read by
@@ -1423,20 +1412,11 @@ pub struct Architecture {
     /// own recovery stated earlier in a callee-first run.  See
     /// [`crate::kuna_callrettype`].
     pub call_ret_type: bool,
-    /// (kuna `castwiden`) Leave out a 64-bit widening of an arithmetic operand
-    /// when the other operand's printed type makes C convert it to that same type,
-    /// and one into a destination declared with the cast's type or width.
-    /// `literal` also prints an 8-byte literal operand with its size suffix.  See
-    /// [`crate::kuna_castwiden`].
-    pub cast_widen: crate::kuna_castwiden::CastWidenMode,
     /// (kuna `castnarrow`) Leave out an integer truncation or sign change that
     /// flows whole into an assignment, a store, a trusted argument or a `return`
     /// whose type is spelled exactly as the cast's: C's own conversion there is
     /// that very conversion.  See [`crate::kuna_castnarrow`].
     pub cast_narrow: bool,
-    /// (kuna `declorder`) The order the body's local declarations print in.
-    /// See [`crate::kuna_declorder`].
-    pub decl_order: crate::kuna_declorder::DeclOrder,
     /// (kuna `cortexmpriv`) Assume the Cortex-M core is privileged, folding away
     /// the `isCurrentModePrivileged()` guard the vendored ARM SLEIGH wraps around
     /// every VERSION_7M MRS/MSR (`kuna_cortexmpriv`).
@@ -2754,7 +2734,6 @@ impl Architecture {
             vector_userop_kinds: std::cell::OnceCell::new(),
             eh_table: Rc::new(crate::kuna_itaniumeh::EhTable::default()),
             bool_byte: true, // (kuna) option boolbyte; reset_defaults sets the shipped default
-            arm_constant_shift: crate::p9_emit::kuna_armconstantshift::ConstShiftMode::Off,
             arm_shift_guard: true,
             wrap_add: false,
             rust_array_zero: false,
@@ -2958,13 +2937,11 @@ impl Architecture {
 
             canary_global: false,
             go_bounds: true,
-            rust_fmt: crate::kuna_rustfmt::RustFmtMode::On,
             strip_security_check: false,
             branch_flip: false,
             name_style_angr: false,
             name_style_ghidra: false,
             dedup_var_decls: false,
-            signedness: crate::kuna_typeround::SignPolicy::Upstream, // (kuna) option signedness; reset_defaults sets the shipped default
             realtypes: false,
             ctypes: false, // (kuna) option ctypes; reset_defaults sets the shipped default
             voidtailreturn: false, // (kuna) option voidtailreturn; reset_defaults sets the shipped default
@@ -2976,9 +2953,7 @@ impl Architecture {
             cast_sign: false,    // (kuna) option castsign; reset_defaults sets the shipped default
             cast_ternary: false, // (kuna) option castternary; reset_defaults sets the shipped default
             call_ret_type: false, // (kuna) option callrettype; reset_defaults sets the shipped default
-            cast_widen: crate::kuna_castwiden::CastWidenMode::Off, // (kuna) option castwiden; reset_defaults sets the shipped default
             cast_narrow: false, // (kuna) option castnarrow; reset_defaults sets the shipped default
-            decl_order: crate::kuna_declorder::DeclOrder::Name, // (kuna) option declorder; reset_defaults sets the shipped default
             cortexmpriv: false, // (kuna) option cortexmpriv; reset_defaults sets the shipped default
             acle_intrinsics: false, // (kuna) option acleintrinsics; reset_defaults sets the shipped default
             cortexmpriv_inject: None, // (kuna) set by init_userops_and_fixups when the language declares the user-op
@@ -3375,14 +3350,12 @@ impl Architecture {
         self.recover_loop_break = true; // (kuna) DIV-10 default-on (angr break/continue recovery; scopeBreak port)
         self.fold_call_returns = true; // (kuna) DIV-14 default-on (angr call-return folding; per-test opt-out on the datatests it changes)
         self.go_bounds = true;
-        self.rust_fmt = crate::kuna_rustfmt::RustFmtMode::On;
         self.strip_security_check = true; // (kuna) DIV-82 default-on: REMOVES CODE (strips rustc's bounds/slice/divide-by-zero panic branches, the SEFCOM Oxidizer SecurityCheckRemover port). Name-triggered on seven Rust-only `core::panicking`/`core::slice::index`/`core::str` helpers, so it is structurally inert on a C binary: 0/675 datatests and 0 changed lines over the C fixtures
         self.canary_global = true;
         self.strip_stack_guard = true; // (kuna) DIV-14 default-on: REMOVES CODE (strips the -fstack-protector canary epilogue). Per-test opt-out (`option stackguard off`) on the 2 Partial-splitting datatests keeps the corpus byte-identical
         self.branch_flip = true; // (kuna) DIV-13 default-on (angr negated-guard branch flipping; per-test opt-out on the datatests it changes)
         self.name_style_angr = true; // (kuna) default-on: angr-style default naming
         self.dedup_var_decls = true; // (kuna) DIV-7 default-on: collapse duplicate local decls (angr)
-        self.signedness = crate::kuna_typeround::SignPolicy::Auto; // (kuna) default `auto`: a declaration is re-signed only when every signedness-sensitive reader of the value agrees, which makes each surviving cast on it a no-op and leaves every other token byte-identical. 0/675 datatests and PARITY OK on stages; `option signedness upstream` restores the declaration type inference produced
         self.realtypes = true; // (kuna) DIV-6 default-on: real C types for unknowns
         self.ctypes = false; // (kuna) DIV-75: default-OFF in the catalog because the datatest corpus pins `int4`/`float8` spellings in 42 assertions; ON in the `aggressive` and `fast` presets and at every `auto` size, so valid C is the default RENDERING everywhere a real binary is decompiled
         self.goto_next = true; // (kuna) option gotonext default-on: upstream BlockGoto::gotoPrints; only the spelling of a jump changes; 0/675 datatests
@@ -3394,9 +3367,7 @@ impl Architecture {
         self.cast_sign = true; // (kuna) option castsign default-on: a frame local or pointer index only ever compared signed, never an operand of + - * <<, and never met by a top-bit constant in == != & | ^, is declared signed; 0/675 datatest assertions and 0 stage assertions moved, test-cli unchanged, the 444-slice typesweep identical, casts 38,703 -> 38,602 on the census corpus, 41 functions fewer and 0 more; docs/features/castsign/default-on-evaluation.md
         self.cast_ternary = true; // (kuna) option castternary default-on (provisional; see docs/features/castternary)
         self.call_ret_type = true; // (kuna) option callrettype default-on: a call's result takes the return type its callee stated earlier in a callee-first run; 0/675 datatest assertions and 0 stage assertions moved (single-function surfaces state nothing), one test-cli probe moved to the intended form, the 444-slice typesweep +6 perfect and 0 lost, casts 35,588 -> 34,808 on the census corpus (393 functions fewer, 25 more); docs/features/callrettype/default-on-evaluation.md
-        self.cast_widen = crate::kuna_castwiden::CastWidenMode::Literal; // (kuna) option castwiden default `literal`: a 64-bit widening C's usual arithmetic or assignment conversion performs prints no cast, and an 8-byte literal beside one prints its L/UL suffix; 5/675 datatest assertions (upstream's pinned form) opt out per test, 18 stage assertions of other options moved to the new form, 444-slice typesweep identical, casts 35,588 -> 34,062 on the castbench shared set with 0 functions more; docs/features/castwiden/default-on-evaluation.md
         self.cast_narrow = true; // (kuna) option castnarrow default-on: leaves out only an integer truncation or sign change that an assignment, store, trusted argument or return of exactly the cast's type performs itself
-        self.decl_order = crate::kuna_declorder::DeclOrder::Natural; // (kuna) option declorder default `natural`: locals declare v1, v2, ..., v10; only the order of declaration lines moves, 0/675 datatest assertions
         self.range_fold = true; // (kuna) option rangefold default-on: folds only a comparison or mask a dominating branch's range decides; 0/675 datatest assertions, speed within noise; see docs/spec/03-ssa-and-simplification.md
         self.pow2_select = true; // (kuna) option pow2select default-on: rewrites only a select or sign-mask shift proved equal to x / 2^k or x % 2^k; 0/675 datatest assertions; see docs/spec/03-ssa-and-simplification.md
         self.impl_weight = 0; // (kuna) option implweight
@@ -3421,7 +3392,6 @@ impl Architecture {
         self.lane_fuse_all = false;
         self.ptrdepthcap = false; // (kuna) DIV-108: default-OFF in the catalog because it changes INFERRED types and the datatest corpus pins the upstream spellings; ON in the `aggressive` preset, which `auto` selects under 500 KiB, so the cap is the default rendering for every real binary
         self.bool_byte = true; // (kuna) option boolbyte default-on: measured 0/675 datatest assertions moved, stages PARITY OK, decbench type_match improved with none worse, speed within budget; docs/features/boolbyte/record.json carries the evidence
-        self.arm_constant_shift = crate::p9_emit::kuna_armconstantshift::ConstShiftMode::Off;
         self.arm_shift_guard = true;
         self.call_result_use = crate::p4_calls::kuna_callresultuse::CallResultUse::Off; // (kuna) option callresultuse: default off, `bl g; bl h` is `g(); h();` far more often than `h(g())` in C
         self.wrap_add = false; // (kuna) option wrapadd: default off, the casts cost readability on every widened int sum

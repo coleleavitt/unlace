@@ -252,7 +252,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             }
         }
         // (kuna `castwiden`) Three-valued, so it reports its own token.
-        "castwiden" => conf.cast_widen.as_str(),
+        "castwiden" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_castwiden::CastWidenMode>()
+            .as_str(),
         // (kuna `narrowext`) Three-valued, so it reports its own token.
         "narrowext" => conf.narrow_ext.as_str(),
         // (kuna `syscallregs`) Three-valued, so it reports its own token.
@@ -278,7 +281,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .kuna_options
             .get::<unlace_decomp::kuna_rustprobestack::RustProbestackMode>()
             .as_str(),
-        "rustfmt" => conf.rust_fmt.as_str(),
+        "rustfmt" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_rustfmt::RustFmtMode>()
+            .as_str(),
         // (kuna `gomorestack`) Three-valued, so it reports its own token.
         "gomorestack" => conf
             .kuna_options
@@ -410,7 +416,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "mapglobalsyms" => on_off(conf.mapglobalsyms),
         "aifpoolslide" => on_off(conf.analysis_aifpoolslide),
         "esprom" => conf.esprom.as_str(),
-        "armconstshift" => conf.arm_constant_shift.as_str(),
+        "armconstshift" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_armconstantshift::ConstShiftMode>()
+            .as_str(),
         // (PR-8) Mach-O arm64e spec selection: reflects the recorded requested
         // state (the live spec-selection gate is the load-time env var, but the
         // catalog `current` mirrors the `option macho-arm64e on|off` request).

@@ -8,7 +8,6 @@ architecture -> flow
 architecture -> inject_sleigh
 architecture -> kuna_aif
 architecture -> kuna_arithhelpers
-architecture -> kuna_armconstantshift
 architecture -> kuna_armfloatargs
 architecture -> kuna_armfloatreturn
 architecture -> kuna_avxintrin
@@ -26,12 +25,10 @@ architecture -> kuna_calloverlap
 architecture -> kuna_callresultuse
 architecture -> kuna_callrettype
 architecture -> kuna_callwide
-architecture -> kuna_castwiden
 architecture -> kuna_chkstkdarwin
 architecture -> kuna_cortexmpriv
 architecture -> kuna_cppsig
 architecture -> kuna_deadcascade
-architecture -> kuna_declorder
 architecture -> kuna_decodekit
 architecture -> kuna_dfunaffected
 architecture -> kuna_elemptr
@@ -73,7 +70,6 @@ architecture -> kuna_registerslots
 architecture -> kuna_retsysreg
 architecture -> kuna_roundingops
 architecture -> kuna_rustabi
-architecture -> kuna_rustfmt
 architecture -> kuna_rustfmtflags
 architecture -> kuna_rustfmtio
 architecture -> kuna_rustfmtwrite
@@ -88,7 +84,6 @@ architecture -> kuna_swiftcall
 architecture -> kuna_syscallregs
 architecture -> kuna_tlsnames
 architecture -> kuna_typedcallabi
-architecture -> kuna_typeround
 architecture -> kuna_varargretreg
 architecture -> kuna_varargsave
 architecture -> kuna_vectorabi

@@ -2979,7 +2979,7 @@ impl PrintC {
         let cast_sign = arch.cast_sign && self.out_lang.profile().caps.integer_promotion;
         self.sign_plan = crate::kuna_typeround::plan(
             fd,
-            arch.signedness,
+            arch.kuna_options.get::<crate::kuna_typeround::SignPolicy>(),
             cast_sign,
             arch.types_impl(),
             |high| {
@@ -2994,7 +2994,8 @@ impl PrintC {
             cast_sign,
             arch.cast_ternary && promotes && arch.types().get_size_of_int() == 4,
             if promotes && arch.types().get_size_of_int() == 4 {
-                arch.cast_widen
+                arch.kuna_options
+                    .get::<crate::kuna_castwiden::CastWidenMode>()
             } else {
                 crate::kuna_castwiden::CastWidenMode::Off
             },
@@ -4146,7 +4147,11 @@ impl PrintC {
                 }
             }
         }
-        crate::kuna_declorder::order_decls(&mut decls, arch.decl_order, arch.name_style_angr);
+        crate::kuna_declorder::order_decls(
+            &mut decls,
+            arch.kuna_options.get::<crate::kuna_declorder::DeclOrder>(),
+            arch.name_style_angr,
+        );
         let mut source_comments = std::collections::HashMap::new();
         if arch.name_style_angr {
             for (high, _) in &decls {
@@ -10475,7 +10480,12 @@ impl PrintC {
     }
 
     pub(crate) fn op_call_raw_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
-        if self.out_lang == crate::kuna_lang::OutLang::Rust && arch.rust_fmt.writers() {
+        if self.out_lang == crate::kuna_lang::OutLang::Rust
+            && arch
+                .kuna_options
+                .get::<crate::kuna_rustfmt::RustFmtMode>()
+                .writers()
+        {
             if let Some(plan) = super::kuna_rustfmtio::recover(fd, arch, op) {
                 let result = if plan.signed_result {
                     &super::kuna_rustfmtio::WITH_SIGNED_RESULT
@@ -10498,7 +10508,12 @@ impl PrintC {
                 return;
             }
         }
-        if self.out_lang == crate::kuna_lang::OutLang::Rust && arch.rust_fmt.writers() {
+        if self.out_lang == crate::kuna_lang::OutLang::Rust
+            && arch
+                .kuna_options
+                .get::<crate::kuna_rustfmt::RustFmtMode>()
+                .writers()
+        {
             if let Some(plan) = super::kuna_rustfmtwrite::recover(fd, arch, op) {
                 if plan.result_type.is_some() {
                     self.push_op(self.lang().tok_typecast, Some(op_key(op)));
@@ -10541,19 +10556,34 @@ impl PrintC {
                 return;
             }
         }
-        if self.out_lang == crate::kuna_lang::OutLang::Rust && arch.rust_fmt.recovers() {
+        if self.out_lang == crate::kuna_lang::OutLang::Rust
+            && arch
+                .kuna_options
+                .get::<crate::kuna_rustfmt::RustFmtMode>()
+                .recovers()
+        {
             if let Some(plan) = super::kuna_rustfmtpieces::recover(fd, arch, op) {
                 self.push_rust_format_plan(fd, arch, op, plan);
                 return;
             }
         }
-        if self.out_lang == crate::kuna_lang::OutLang::Rust && arch.rust_fmt.recovers() {
+        if self.out_lang == crate::kuna_lang::OutLang::Rust
+            && arch
+                .kuna_options
+                .get::<crate::kuna_rustfmt::RustFmtMode>()
+                .recovers()
+        {
             if let Some(plan) = super::kuna_rustfmtpanic::recover(fd, arch, op) {
                 self.push_rust_format_plan(fd, arch, op, plan);
                 return;
             }
         }
-        if self.out_lang == crate::kuna_lang::OutLang::Rust && arch.rust_fmt.recovers() {
+        if self.out_lang == crate::kuna_lang::OutLang::Rust
+            && arch
+                .kuna_options
+                .get::<crate::kuna_rustfmt::RustFmtMode>()
+                .recovers()
+        {
             if let Some(plan) = super::kuna_rustfmtresult::recover(fd, arch, op) {
                 self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
                 self.push_atom(&Atom::with_op(
@@ -10584,13 +10614,23 @@ impl PrintC {
                 return;
             }
         }
-        if self.out_lang == crate::kuna_lang::OutLang::Rust && arch.rust_fmt.recovers() {
+        if self.out_lang == crate::kuna_lang::OutLang::Rust
+            && arch
+                .kuna_options
+                .get::<crate::kuna_rustfmt::RustFmtMode>()
+                .recovers()
+        {
             if let Some(plan) = super::kuna_rustfmtargs::recover(fd, arch, op) {
                 self.push_rust_format_plan(fd, arch, op, plan);
                 return;
             }
         }
-        if self.out_lang == crate::kuna_lang::OutLang::Rust && arch.rust_fmt.recovers() {
+        if self.out_lang == crate::kuna_lang::OutLang::Rust
+            && arch
+                .kuna_options
+                .get::<crate::kuna_rustfmt::RustFmtMode>()
+                .recovers()
+        {
             if let Some((name, literal)) = super::kuna_rustfmtliteral::recover(fd, arch, op) {
                 self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
                 self.push_atom(&Atom::with_op(

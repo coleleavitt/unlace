@@ -32,11 +32,11 @@ fn decompile(
     )
     .unwrap();
     assert!(program.arch().rustc_pieces_layout);
-    program.arch_mut().rust_fmt = if enabled {
+    program.arch_mut().kuna_options.set(if enabled {
         RustFmtMode::On
     } else {
         RustFmtMode::Off
-    };
+    });
     configure(program.arch_mut());
     program.commit_pending_analysis().unwrap();
     let commands = vec![

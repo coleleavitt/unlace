@@ -37,11 +37,11 @@ fn decompile(
     )
     .unwrap();
     assert_eq!(program.arch().rustc_stable_version, Some((1, 93, 1)));
-    program.arch_mut().rust_fmt = if enabled {
+    program.arch_mut().kuna_options.set(if enabled {
         RustFmtMode::On
     } else {
         RustFmtMode::Off
-    };
+    });
     configure(program.arch_mut());
     program.commit_pending_analysis().unwrap();
     let commands = vec![

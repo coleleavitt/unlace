@@ -12,7 +12,10 @@ use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
 pub(crate) fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
-    if !arch.rust_fmt.recovers()
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .recovers()
         || !arch.rustc_pieces_layout
         || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
     {

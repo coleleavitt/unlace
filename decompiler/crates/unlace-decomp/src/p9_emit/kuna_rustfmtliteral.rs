@@ -14,7 +14,10 @@ pub(crate) fn recover(
     arch: &Architecture,
     op: OpId,
 ) -> Option<(&'static str, String)> {
-    if !arch.rust_fmt.recovers()
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .recovers()
         || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
     {

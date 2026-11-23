@@ -3241,6 +3241,8 @@ pub fn is_exception_table(name: &str) -> bool {
 #[path = "kuna_bejoin/evidence.rs"]
 mod evidence;
 
+pub use evidence::WidePairEvidenceExt;
+
 pub(crate) use evidence::{
     WideCache, WidePair, WideView, build_high_read, missed_proven as wide_callee_missed,
     seed as seed_wide_returns, wide_pair,

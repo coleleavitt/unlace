@@ -19,7 +19,7 @@
     sub_140007be0(container, end, src) call at 0x1400046cc renders
     sub_140007be0(a0), reduced to one branch, re-spelled in the SysV ABI and
     assembled from
-    decompiler/crates/unlace-analysis/tests/fixtures/exclusivearguse_x86_64.s:
+    crates/unlace-analysis/tests/fixtures/exclusivearguse_x86_64.s:
 
         401024  lea  0xfd5(%rip),%rdx     ; the source byte,  3rd argument
         40102e  mov  0x8(%rdi),%rsi       ; the write cursor, 2nd argument

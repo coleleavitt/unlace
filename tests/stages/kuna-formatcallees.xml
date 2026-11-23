@@ -25,7 +25,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtcallees_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtcallees_x86_64</com>
   <com>option listing on</com>
   <com>option formatcallees off</com>
   <com>read symbols</com>
@@ -33,7 +33,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtcallees_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtcallees_x86_64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function main</com>

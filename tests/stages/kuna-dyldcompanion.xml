@@ -26,12 +26,12 @@ c0035fd6
 <script>
   <com>option dyldimage /usr/lib/libcaller.dylib</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>option dyldimage /usr/lib/libcaller.dylib+libcallee</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>load function callee_add</com>

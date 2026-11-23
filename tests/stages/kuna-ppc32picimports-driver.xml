@@ -6,7 +6,7 @@
 <script>
   <com>option ppc32picimports off</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-driver.so</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ppc32-pic-driver.so</com>
   <com>read symbols</com>
   <com>load function refs</com>
   <com>decompile</com>
@@ -16,7 +16,7 @@
   <com>print C</com>
   <com>option ppc32picimports abi</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ppc32-pic-driver.so</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ppc32-pic-driver.so</com>
   <com>read symbols</com>
   <com>load function refs</com>
   <com>decompile</com>

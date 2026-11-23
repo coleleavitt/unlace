@@ -14,7 +14,7 @@ rounds: [11]
 first_seen_round: 11
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli/src/decompile.rs, decompiler/crates/unlace-decomp/src/p6_variables/kuna_naming.rs]
+touches: [crates/unlace-cli/src/decompile.rs, crates/unlace-decomp/src/p6_variables/kuna_naming.rs]
 scope: small
 regression_of: null
 pr: null
@@ -148,7 +148,7 @@ known title-similarity trap. The link is what scores this need 1055.5 against 43
 i.e. it is currently #1 in the build queue on a false premise. Clear regression_of at T_TRIAGE and let
 it re-rank (it lands near 13.9, alongside the other single-instance needs).
 
-TOUCHES IS UNPROVEN: filed as decompiler/crates/unlace-cli. The name lookup happens inside the forked
+TOUCHES IS UNPROVEN: filed as crates/unlace-cli. The name lookup happens inside the forked
 decomp_dbg -- unlace-cli only translates the console's unknown-function output into that message at
 unlace-cli/src/decompile.rs:505. A CLI-tier fix (resolve the name to an address against the analysis
 function list before forking) and a decomp-tier fix (keep the default-style name as an alias) are both

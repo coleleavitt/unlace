@@ -25,31 +25,31 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ebpf/bpf_map.o</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ebpf/bpf_map.o</com>
   <com>read symbols</com>
   <com>load function prog</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ebpf/bpf_subcall.o</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ebpf/bpf_subcall.o</com>
   <com>read symbols</com>
   <com>load function prog</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ebpf/bpf_map_be.o</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ebpf/bpf_map_be.o</com>
   <com>read symbols</com>
   <com>load function prog</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ebpf/bpf_static_call.o</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ebpf/bpf_static_call.o</com>
   <com>read symbols</com>
   <com>load function prog</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/ebpf/bpf_static_call_be.o</com>
+  <com>load file crates/unlace-cli/tests/fixtures/ebpf/bpf_static_call_be.o</com>
   <com>read symbols</com>
   <com>load function prog</com>
   <com>decompile</com>

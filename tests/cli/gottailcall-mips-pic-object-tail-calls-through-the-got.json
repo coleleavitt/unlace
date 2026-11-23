@@ -14,11 +14,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/gottailcall_mipsel.o",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/gottailcall_mipsel.o",
     "binary_sha256": "6769679c5eabedc1b5fa8c757c2d70528624a8bc51e6bf3fab89e08eb4aef10c",
     "binary_size": 1952,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/gottailcall_mipsel.o",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/gottailcall_mipsel.o",
     "selector": "g",
     "selector_kind": "name"
   },

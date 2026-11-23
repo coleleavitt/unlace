@@ -73,7 +73,7 @@ def assemble(doc: dict, reg: dict, code: dict, owners: dict, sched: dict, meta: 
 
 def generate(root: Path | None = None, out: Path | None = None) -> dict:
     root = root or common.repo_root()
-    reg = registry.load(root / "decompiler" / "crates" / "unlace-decomp" / "phases.toml")
+    reg = registry.load(root / "crates" / "unlace-decomp" / "phases.toml")
     return assemble(
         doc=phasesdoc.parse(root / "docs" / "phases.md"),
         reg=reg,

@@ -40,7 +40,7 @@ def binary(name: str, env_var: str = None) -> Path:
 
     An explicit ``$<env_var>`` override (e.g. ``KUNA_DECOMP_DBG``) always wins;
     otherwise the binary is the Rust build at
-    ``decompiler/target/<KUNA_RUST_PROFILE or release>/<name>``. The SLEIGH
+    ``target/<KUNA_RUST_PROFILE or release>/<name>``. The SLEIGH
     compiler binary is named ``slacomp`` (the decompiler binaries keep the
     upstream names ``decomp_dbg`` / ``decomp_test_dbg``).
     """
@@ -50,7 +50,7 @@ def binary(name: str, env_var: str = None) -> Path:
             return Path(override).resolve()
     profile = os.environ.get("KUNA_RUST_PROFILE") or "release"
     exe = "slacomp" if name == "sleigh_opt" else name
-    return repo_root() / "decompiler" / "target" / profile / exe
+    return repo_root() / "target" / profile / exe
 
 
 def decomp_dbg() -> Path:

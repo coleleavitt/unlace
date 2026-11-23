@@ -27,9 +27,9 @@ chapter is anchored to the code that implements it.
    changed heuristic or threshold, a changed default, a new option, a new analysis —
    updates the affected chapter **in the same commit/PR**. Find the chapter via its
    `Anchors:` front-matter (chapters map 1:1 onto the phase folders). A pure
-   move/rename updates only anchor paths. `make check-spec` enforces the basics.
+   move/rename updates only anchor paths. `python3 tools/check_spec.py` enforces the basics.
 2. **Live code only.** Every claim is anchored to a kuna path plus a symbol name in
-   parentheses — `decompiler/crates/unlace-decomp/src/p2_lift/jumptable.rs
+   parentheses — `crates/unlace-decomp/src/p2_lift/jumptable.rs
    (JumpBasic::recoverModel)`. **No line numbers** (they rot). Upstream citations
    (`coreaction.cc:5722`, angr `.py` paths) appear only as parenthetical
    provenance/history, never as the basis of a claim.

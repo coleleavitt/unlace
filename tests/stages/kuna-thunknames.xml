@@ -43,7 +43,7 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/thunknames_aarch64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/thunknames_aarch64</com>
   <com>mode fast</com>
   <com>option thunknames off</com>
   <com>read symbols</com>
@@ -54,7 +54,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/thunknames_aarch64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/thunknames_aarch64</com>
   <com>mode fast</com>
   <com>read symbols</com>
   <com>load function drop_box</com>
@@ -64,7 +64,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/thunknames_mips</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/thunknames_mips</com>
   <com>mode fast</com>
   <com>option thunknames off</com>
   <com>read symbols</com>
@@ -72,7 +72,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/thunknames_mips</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/thunknames_mips</com>
   <com>mode fast</com>
   <com>read symbols</com>
   <com>load function mips_caller</com>

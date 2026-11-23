@@ -25,11 +25,11 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_subcommuteshift_x86_64.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_subcommuteshift_x86_64.exe",
     "binary_sha256": "a39bf9ded430fe75b3a84edebf55dec3ac299bc4428b838a041112a1f8c550fb",
     "binary_size": 10240,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_subcommuteshift_x86_64.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_subcommuteshift_x86_64.exe",
     "selector": "0x1406fa160",
     "selector_kind": "addr"
   },

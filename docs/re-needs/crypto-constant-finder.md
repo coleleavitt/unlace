@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli/src/crypto.rs, decompiler/crates/unlace-cli/src/cryptosig.rs, decompiler/crates/unlace-cli/src/main.rs]
+touches: [crates/unlace-cli/src/crypto.rs, crates/unlace-cli/src/cryptosig.rs, crates/unlace-cli/src/main.rs]
 scope: small
 regression_of: null
 pr: null
@@ -57,11 +57,11 @@ hit by hand, which is what findcrypt does in one step.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/cryptoconst_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/cryptoconst_x86_64",
     "binary_sha256": "623bacb1357d32db674e99d403bcfd42cd8f6c804b3596222ed5e040b09b7520",
     "binary_size": 16120,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/cryptoconst_x86_64"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/cryptoconst_x86_64"
   }
 }
 ```
@@ -97,11 +97,11 @@ hit by hand, which is what findcrypt does in one step.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/cryptoconst_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/cryptoconst_x86_64",
     "binary_sha256": "623bacb1357d32db674e99d403bcfd42cd8f6c804b3596222ed5e040b09b7520",
     "binary_size": 16120,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/cryptoconst_x86_64"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/cryptoconst_x86_64"
   }
 }
 ```

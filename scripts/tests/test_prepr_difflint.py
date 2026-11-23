@@ -8,7 +8,7 @@ from pathlib import Path
 
 from scripts.prepr import difflint
 
-FIXTURES = Path("decompiler/crates/unlace-analysis/tests/fixtures")
+FIXTURES = Path("crates/unlace-analysis/tests/fixtures")
 LEAKED = "/" + "home/someone/bin"
 # The fixture repo ignores the user's global git config: a global excludes file
 # (`*.o`, `*.exe`) would keep the binaries out of the commit, and a global
@@ -101,7 +101,7 @@ class DiffLintTests(unittest.TestCase):
         self.assertEqual(self.checks(), [])
 
     def test_a_new_module_without_an_option_row_is_a_warning(self):
-        self.write("decompiler/crates/unlace-decomp/src/p4_calls/kuna_thing.rs", "fn f() {}\n")
+        self.write("crates/unlace-decomp/src/p4_calls/kuna_thing.rs", "fn f() {}\n")
         self.commit("module")
         self.assertEqual(self.checks(), [("warning", "option-policy", "kuna_thing.rs")])
         with contextlib.redirect_stdout(io.StringIO()):

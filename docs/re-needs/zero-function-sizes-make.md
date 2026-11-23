@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-console/src/funcextent.rs, decompiler/crates/unlace-console/src/engine.rs]
+touches: [crates/unlace-console/src/funcextent.rs, crates/unlace-console/src/engine.rs]
 scope: small
 regression_of: whole-binary-json-untriageable
 pr: null
@@ -94,11 +94,11 @@ Find the large VM interpreter using size-based inventory filtering.
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/noshdr_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/noshdr_x86_64",
     "binary_sha256": "f960c89e9a1308857a344bec32dd3a9b89535c235a428d5cde56ad0657921d65",
     "binary_size": 304,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/noshdr_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/noshdr_x86_64",
     "selector": null,
     "selector_kind": "none"
   },
@@ -160,4 +160,4 @@ LINEAGE: filed `regression_of: whole-binary-json-untriageable` (closed round 1, 
 
 - SECOND FACT THE CONTROL EXPOSED, not previously recorded anywhere and NOT part of this need: stripping the section table also drops DISCOVERY from 54 functions to 11 on the same bytes. The extent bug is what this need is about, but a sectionless ELF is additionally losing ~80% of its function inventory. That is a separate defect with a separate locus, and it makes the sectionless family a four-symptom class, not three. Worth a filed need in round 5 if a tester hits it; do not widen this need's scope to cover it.
 
-- TRACK CORRECTED quality -> tooling, and TOUCHES corrected off the broad `decompiler/crates/unlace-decomp` root to `unlace-console/src/funcextent.rs` + `unlace-console/src/engine.rs`. Rationale: the probe is `unlace functions --json` and emits no C at all (the precedent that closed `xrefs-unify-pe-import`), and the measured locus is the console inventory tier, not the decompiler. TWO DISPATCH CONSEQUENCES. (1) This need is now OUT of the quality-lease monopoly, so it can run beside a quality builder. (2) It is NOT part of the five-need `unlace-analysis/src/loader` block either -- the narrow fix touches neither the loader nor unlace-decomp, so it contends with nothing currently open. That makes it the cheapest dispatchable need in the round. THE CAVEAT THAT DECIDES THIS: the fix direction must be the funcextent fallback (use executable PT_LOAD segment spans when `code_spans` is empty), NOT teaching the loader to synthesize sections from segments. The loader route would take the loader lease, collide with the five-need block, and change `function_entries_executable`'s documented sectionless behaviour ("Loaders without section metadata retain the complete inventory") as a side effect. Bind that in the contract, or the builder may pick the wide route and re-enter the loader contention this correction just removed.
+- TRACK CORRECTED quality -> tooling, and TOUCHES corrected off the broad `crates/unlace-decomp` root to `unlace-console/src/funcextent.rs` + `unlace-console/src/engine.rs`. Rationale: the probe is `unlace functions --json` and emits no C at all (the precedent that closed `xrefs-unify-pe-import`), and the measured locus is the console inventory tier, not the decompiler. TWO DISPATCH CONSEQUENCES. (1) This need is now OUT of the quality-lease monopoly, so it can run beside a quality builder. (2) It is NOT part of the five-need `unlace-analysis/src/loader` block either -- the narrow fix touches neither the loader nor unlace-decomp, so it contends with nothing currently open. That makes it the cheapest dispatchable need in the round. THE CAVEAT THAT DECIDES THIS: the fix direction must be the funcextent fallback (use executable PT_LOAD segment spans when `code_spans` is empty), NOT teaching the loader to synthesize sections from segments. The loader route would take the loader lease, collide with the five-need block, and change `function_entries_executable`'s documented sectionless behaviour ("Loaders without section metadata retain the complete inventory") as a side effect. Bind that in the contract, or the builder may pick the wide route and re-enter the loader contention this correction just removed.

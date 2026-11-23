@@ -84,7 +84,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/noargs_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/noargs_pe_i386.exe</com>
   <com>option calleeargs off</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as steer</com>
@@ -92,14 +92,14 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/noargs_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/noargs_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as steer</com>
   <com>load function steer</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/byval_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/byval_pe_i386.exe</com>
   <com>option calleeargs off</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as draw</com>
@@ -107,14 +107,14 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/byval_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/byval_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as draw</com>
   <com>load function draw</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/repframecopy_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/repframecopy_pe_i386.exe</com>
   <com>option calleeargs off</com>
   <com>read symbols</com>
   <com>function bounds 0x401220 as paint3</com>
@@ -123,7 +123,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/repframecopy_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/repframecopy_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401220 as paint3</com>
   <com>function bounds 0x401240 as big_draw</com>
@@ -131,7 +131,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe</com>
   <com>option calleeargs off</com>
   <com>read symbols</com>
   <com>function bounds 0x40264d as nmsg</com>
@@ -139,14 +139,14 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x40264d as nmsg</com>
   <com>load function nmsg</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/cdecllocal_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/cdecllocal_pe_i386.exe</com>
   <com>option calleeargs off</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as count</com>
@@ -154,21 +154,21 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/cdecllocal_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/cdecllocal_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as count</com>
   <com>load function count</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x4027a0 as isctype</com>
   <com>load function isctype</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/calleeframes_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/calleeframes_pe_i386.exe</com>
   <com>option calleeargs off</com>
   <com>read symbols</com>
   <com>function bounds 0x401200 as start</com>
@@ -176,14 +176,14 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/calleeframes_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/calleeframes_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401200 as start</com>
   <com>load function start</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/calleelost_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/calleelost_pe_i386.exe</com>
   <com>option calleeargs off</com>
   <com>read symbols</com>
   <com>function bounds 0x401050 as call_ret</com>
@@ -227,7 +227,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/calleelost_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/calleelost_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401050 as call_ret</com>
   <com>load function call_ret</com>
@@ -262,7 +262,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/epilogcleanup_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/epilogcleanup_pe_i386.exe</com>
   <com>option calleeargs off</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as steer2</com>
@@ -274,7 +274,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/epilogcleanup_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/epilogcleanup_pe_i386.exe</com>
   <com>read symbols</com>
   <com>function bounds 0x401000 as steer2</com>
   <com>load function steer2</com>

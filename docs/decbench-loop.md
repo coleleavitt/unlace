@@ -609,7 +609,7 @@ Two pinning rules it enforces, both by aborting:
   rivals' frozen GED checkpoints were produced by that evaluator; a different one silently
   re-defines the metric under them.
 - **The refresh must run a snapshotted kuna binary and specs** (`KUNA_BIN`/`KUNA_SPECS`
-  → `stable/`), so a concurrent `make binaries` in the main tree cannot swap the
+  → `stable/`), so a concurrent `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli` in the main tree cannot swap the
   decompiler mid-run. A refreshed column that is half one build and half another is worse
   than a stale one.
 

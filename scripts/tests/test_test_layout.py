@@ -11,7 +11,7 @@ class TestIntegrationLayout(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        self.crate = self.root / "decompiler/crates/example"
+        self.crate = self.root / "crates/example"
         self.tests = self.crate / "tests"
         self.tests.mkdir(parents=True)
         (self.crate / "Cargo.toml").write_text(

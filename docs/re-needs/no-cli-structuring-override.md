@@ -12,7 +12,7 @@ instances: 1
 rounds: [2]
 first_seen_round: 2
 attempts: 0
-touches: [decompiler/crates/unlace-cli/src/assertdecl.rs, decompiler/crates/unlace-console/src/ifacedecomp.rs, decompiler/crates/unlace-decomp/phases.toml]
+touches: [crates/unlace-cli/src/assertdecl.rs, crates/unlace-console/src/ifacedecomp.rs, crates/unlace-decomp/phases.toml]
 scope: small
 pr: "398"
 closed_in_round: 2
@@ -63,11 +63,11 @@ is ever reached (`unlace-cli/src/assertdecl.rs:275`), exit 2, nothing on stdout.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "binary_sha256": "1a592a85f424cc2db8953d5a38c86676bcee5e37b242b6fb6244a2c9fccfeeef",
     "binary_size": 14408,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "selector": "0x13c9",
     "selector_kind": "addr"
   },
@@ -119,11 +119,11 @@ promotes to `tests/cli/` verbatim.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "binary_sha256": "1a592a85f424cc2db8953d5a38c86676bcee5e37b242b6fb6244a2c9fccfeeef",
     "binary_size": 14408,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "selector": "0x13c9",
     "selector_kind": "addr"
   },
@@ -178,9 +178,9 @@ exist). `kind` is effectively `absence`, which is the case `REPIPE_REFUTE_MODE=a
 
 ## Reference
 
-- console command: `decompiler/crates/unlace-console/src/ifacedecomp.rs:2911` (`IfcFlowOverride`)
-- CLI directive parser: `decompiler/crates/unlace-cli/src/assertdecl.rs:263-275`
-- the stubs this record NO LONGER covers: `decompiler/crates/unlace-console/src/kuna_console.rs:718`
+- console command: `crates/unlace-console/src/ifacedecomp.rs:2911` (`IfcFlowOverride`)
+- CLI directive parser: `crates/unlace-cli/src/assertdecl.rs:263-275`
+- the stubs this record NO LONGER covers: `crates/unlace-console/src/kuna_console.rs:718`
   (`Dispatch::ForceGoto`), `:724` (`Dispatch::MultistageJump`), `:727` (`Dispatch::FlowOverride`,
   the `--kassert` arm), and the `structure blocks` / switch-model entries routed through
   `engine_unavailable`.

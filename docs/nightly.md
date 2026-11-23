@@ -99,7 +99,7 @@ retention. The report renders the last two weeks of it.
 ```bash
 python3 -m scripts.nightly.dataset --revision <dataset sha> --data data --sample-out out/sample.json
 <decbench venv>/bin/python -m scripts.nightly.bench --sample out/sample.json --data data \
-    --kuna decompiler/target/release/unlace --specs specs \
+    --kuna target/release/unlace --specs specs \
     [--baseline-kuna old/kuna --baseline-specs old/specs] \
     --decbench-root ~/github/decbench --out out
 python3 -m scripts.nightly.compare --current out/results.json --previous prev/results.json \

@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli/src/functions.rs, decompiler/crates/unlace-analysis/src/listing]
+touches: [crates/unlace-cli/src/functions.rs, crates/unlace-analysis/src/listing]
 scope: small
 regression_of: null
 pr: null
@@ -100,7 +100,7 @@ A trustworthy function inventory for triaging the PE.
 
 The name is not a data-symbol alias winning canonical-name selection. `<Class>::vftable_<i>`
 is a name kuna SYNTHESISES, and it is attached to a genuine function. The `rtti` pass (R3,
-`decompiler/crates/unlace-analysis/src/analyzers/rtti/mod.rs`) walks each recovered vftable and
+`crates/unlace-analysis/src/analyzers/rtti/mod.rs`) walks each recovered vftable and
 emits, per slot, a `SymFact{Function}` **at the address the slot points at** — the virtual
 method itself, not the table. All 10 flagged entries on `trappy attack.exe` are real
 `.text` routines (0x140001040/32B … 0x140001de0/496B), and the classification as functions is

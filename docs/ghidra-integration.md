@@ -12,7 +12,7 @@ extension that spawns it — is on branch `feat/ghidra-mode`).
 noted; C++ paths under `Ghidra/Features/Decompiler/src/decompile/cpp/`. kuna's own
 pinned port anchor is `GHIDRA_REV` `cef869af` (2026-06-01, `docs/history.md`); the one
 protocol-relevant delta between the two revisions is called out in §8. kuna paths are
-relative to `decompiler/crates/`.
+relative to `crates/`.
 
 ---
 
@@ -468,7 +468,7 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
   normalized line-diff ratio against the SAME functions through the in-process CLI
   path. The pins are inline consts in `ghidra_sim_e2e.rs`; they move only with the
   provider/emitter change that earns the move — Phase 3/4 land by flipping them
-  downward. Run: `make test-ghidra` (release; also part of the CI `gates` job on
+  downward. Run: `cargo test --release -p unlace-ghidra -- --include-ignored` (release; also part of the CI `gates` job on
   every PR, which matters because the workspace suite is skipped on internal PRs).
 - **Phase 3+: DecompileDebug captures as fixtures.** Ghidra's "Debug Function
   Decompilation" action (`DecompInterface.enableDebug`, `DebugDecompilerAction.java:38-73`)
@@ -485,8 +485,8 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
   extension, install into a Ghidra 12.2 release (or `-Dghidra.external.modules=`
   in a dev checkout), enable the plugin, verify the spawned PID is `unlace_ghidra`
   and that the C, click-to-address, and rename round-trip behave.
-- **Regression floors**: the standing gates (`make test`, `make test-stages`,
-  `make rust-test`, now plus the `gates`-job ghidra-sim step) must stay green —
+- **Regression floors**: the standing gates (`cargo test -p unlace-cli --test parity datatests`, `cargo test -p unlace-cli --test parity stage_tests`,
+  `cargo nextest run --workspace --exclude unlace-wasm --profile ci`, now plus the `gates`-job ghidra-sim step) must stay green —
   `unlace-ghidra` is additive and must not perturb the standalone engine.
 
 ## 12. Phase breakdown
@@ -505,7 +505,7 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
 **Phase 2 — engine bridge (first real C in the GUI). DONE** (PR #135, branch
 `feat/ghidra-mode-phase2`). Full plan + risk assessment + sequencing: the retired
 `docs/rust-port/ghidra-phase2-plan.md` (git history). Each step landed as its own commit
-keeping `make test` at 675/675 PARITY OK. One design refinement vs the plan: the
+keeping `cargo test -p unlace-cli --test parity datatests` at 675/675 PARITY OK. One design refinement vs the plan: the
 translator seam is a `Box<dyn EngineTranslate>` **trait**, not an enum — an enum
 variant naming `unlace-ghidra`'s `GhidraTranslate` would be a `unlace-decomp`↔`unlace-ghidra`
 dependency cycle; a trait object owned in `unlace-decomp` is not.

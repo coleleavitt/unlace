@@ -18,52 +18,52 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_be.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_be.o</com>
   <com>option noreturn_known off</com>
   <com>read symbols</com>
   <com>load function r6</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_be.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_be.o</com>
   <com>read symbols</com>
   <com>load function r6</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_le.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_le.o</com>
   <com>option noreturn_known off</com>
   <com>read symbols</com>
   <com>load function r6</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_le.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_le.o</com>
   <com>read symbols</com>
   <com>load function r6</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_linked_be.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_linked_be.so</com>
   <com>read symbols</com>
   <com>load function r6</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_linked_be.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_linked_be.so</com>
   <com>option libgccsigs on</com>
   <com>read symbols</com>
   <com>load function r6</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_linked_le.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_linked_le.so</com>
   <com>read symbols</com>
   <com>load function r6</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_linked_le.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/ppc32_stack_chk_local_linked_le.so</com>
   <com>option libgccsigs on</com>
   <com>read symbols</com>
   <com>load function r6</com>

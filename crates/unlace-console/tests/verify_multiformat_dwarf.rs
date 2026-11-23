@@ -1,0 +1,210 @@
+//! Multi-format-loader PR-11 e2e gate: the DWARF analyzer (`dwarf`, the kuna
+//! analog of Ghidra's `DWARFAnalyzer`) now fires on **MinGW-PE** and **Mach-O**,
+//! not just ELF — gimli is format-neutral, so dropping the `BinaryFormat::Elf`
+//! gate and resolving the debug sections through `object`'s format-aware
+//! `section_by_name` lets a `-g` PE/Mach-O recover its DWARF function names and
+//! typed signatures.
+//!
+//! ## The headline before/after
+//!
+//! Both fixtures are the per-format analog of the ELF `dwarf_stripped_x86_64`:
+//! the function NAMES live ONLY in the debug sections (the PE COFF-symtab FUNC
+//! entries are `--strip-symbol`-removed; the Mach-O symtab FUNC entries are
+//! `--redefine-sym`-renamed — see the fixture `.c` headers), with `.debug_*` kept.
+//!
+//! ```text
+//!   before (no DWARF / by raw address):  sub_140001550(...)        / sub_0(...)
+//!   after  (DWARF name recovered):        first_byte(char *a0)      [PE and Mach-O]
+//! ```
+//!
+//! - **PE** (`pe_dwarf.exe`, MinGW `-g`): MinGW emits standard `.debug_*` sections
+//!   in the PE; `object::section_by_name(".debug_info")` finds them verbatim. The
+//!   `dwarf` `SymFact{Function}` names `first_byte`/`add` (the symtab no longer
+//!   does) and the `PrototypePieces` carries `int first_byte(char *)`.
+//! - **Mach-O** (`macho_dwarf.o`, clang `-g`): the DWARF lands in the
+//!   `__DWARF,__debug_*` sections; `object` maps gimli's `.debug_info` → the Mach-O
+//!   short-name `__debug_info` (its documented rule), so the *same* section loader
+//!   reads it. `dwarf` recovers the same DWARF-only names + `char *` type.
+//!
+//! That a name recovers BY its DWARF name (the symtab no longer carries it) is the
+//! DWARF-specific proof; the in-test baseline is the same code decompiled with
+//! **`option dwarf off`**. On the PE nothing else names that address, so the
+//! baseline is the engine's `sub_<addr>` placeholder; on the Mach-O the
+//! `--redefine-sym`ed symtab entry `_l0` remains, which is the sharper statement of
+//! the same claim — `first_byte` exists only in the debug info.
+//!
+//! (The baseline used to be `load addr` with the pass left ON, which reported a
+//! placeholder only because `load addr` ignored the symbol table entirely; DIV-59
+//! fixed that, so the baseline now turns the pass off, which is what it always
+//! meant.)
+//!
+//! ## ELF unchanged
+//!
+//! The pass is default behaviour for any `.debug_info`-carrying object now; the
+//! existing ELF DWARF gate (`verify_s1_dwarf.rs`) is unaffected (this PR only drops
+//! the format gate, the ELF section names are identical). Multi-format (PE/Mach-O)
+//! loading is unconditional — the same default pipeline reads the non-ELF DWARF.
+
+use std::path::PathBuf;
+use std::time::Instant;
+
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
+use unlace_console::ifacedecomp::{
+    DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
+};
+use unlace_console::ifaceterm::ConsoleCommands;
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap()
+}
+
+fn fixtures() -> PathBuf {
+    repo_root().join("crates/unlace-analysis/tests/fixtures")
+}
+
+/// Bootstrap a fixture (multi-format loading is unconditional).
+fn boot(name: &str) -> ConsoleProgram {
+    let root = repo_root();
+    let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
+    let path = fixtures().join(name);
+    assert!(path.exists(), "missing fixture {path:?}");
+
+    bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots)
+        .expect("bootstrap fixture with built processor specs")
+}
+
+/// [`boot`] with the DWARF pass disabled before the deferred analysis commit (the
+/// live-CLI `option` < `read symbols` ordering) — the baseline arm: whatever names
+/// this binary without its debug info.
+fn boot_dwarf_off(name: &str) -> ConsoleProgram {
+    let mut prog = boot(name);
+    prog.arch_mut()
+        .set_kuna_option("dwarf", "off")
+        .expect("the dwarf gate flips off");
+    prog
+}
+
+/// Run a `load …`-driven `decompile` → `print C` and return the captured C.
+fn decompile(prog: ConsoleProgram, setup: &[&str]) -> String {
+    let cmds: Vec<String> = setup.iter().map(|s| s.to_string()).collect();
+    let count = cmds.len();
+    let mut status = ConsoleCommands::into_status(cmds);
+    register_decomp_commands(&mut status);
+    {
+        let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();
+        let dcp = data.as_any_mut().downcast_mut::<IfaceDecompData>().unwrap();
+        dcp.conf = Some(prog);
+    }
+    for _ in 0..count {
+        execute(&mut status);
+    }
+    status.optr.clone()
+}
+
+/// PE (MinGW `-g`): the DWARF-only function name `first_byte` recovers, with its
+/// DWARF-typed `char *` parameter — DIFFERENT from the by-raw-address baseline
+/// (`sub_<addr>`), proving `dwarf` read the PE's `.debug_*` sections.
+#[test]
+fn pe_dwarf_recovers_name_and_typed_signature() {
+    // AFTER: load by the DWARF name (the COFF symtab no longer carries it).
+    let prog = boot("pe_dwarf.exe");
+    let t0 = Instant::now();
+    let after = decompile(prog, &["load function first_byte", "decompile", "print C"]);
+    let elapsed = t0.elapsed();
+    eprintln!("verify_multiformat_dwarf: PE first_byte decompile took {elapsed:?}");
+
+    // BEFORE (in-test baseline): with the DWARF pass off, nothing names this code
+    // — the COFF symtab FUNC entry was `--strip-symbol`-removed — so the same
+    // address renders the engine's `sub_<addr>` placeholder.
+    let prog_b = boot_dwarf_off("pe_dwarf.exe");
+    let before = decompile(prog_b, &["load addr 0x140001550", "decompile", "print C"]);
+
+    // The DWARF name resolved (and is NOT a placeholder for itself).
+    assert!(
+        after.contains("first_byte"),
+        "PE: expected the DWARF name `first_byte`, got:\n{after}"
+    );
+    assert!(
+        !after.contains("sub_140001550") && !after.contains("FUN_140001550"),
+        "PE: first_byte must render by its DWARF name, not a placeholder:\n{after}"
+    );
+    // The DWARF-typed `char *` parameter is in the recovered signature.
+    assert!(
+        after.contains("char *"),
+        "PE: expected the DWARF-typed `char *` parameter, got:\n{after}"
+    );
+    // The baseline (raw address, no DWARF name) is the engine placeholder — the
+    // before/after the DWARF name install delivers.
+    assert!(
+        before.contains("sub_140001550"),
+        "PE: the no-DWARF-name baseline should render `sub_140001550`, got:\n{before}"
+    );
+    assert!(
+        !before.contains("first_byte"),
+        "PE: the raw-address baseline must NOT carry the DWARF name:\n{before}"
+    );
+}
+
+/// Mach-O (clang `-g`): the same DWARF recovery, proving `object` mapped gimli's
+/// `.debug_info` → the Mach-O `__DWARF,__debug_info` short-name so the format-neutral
+/// section loader read it.
+#[test]
+fn macho_dwarf_recovers_name_and_typed_signature() {
+    // AFTER: the DWARF name `first_byte` (the Mach-O symtab FUNC entry was renamed
+    // to `_l0`, so this name is DWARF-only).
+    let prog = boot("macho_dwarf.o");
+    let t0 = Instant::now();
+    let after = decompile(prog, &["load function first_byte", "decompile", "print C"]);
+    let elapsed = t0.elapsed();
+    eprintln!("verify_multiformat_dwarf: Mach-O first_byte decompile took {elapsed:?}");
+
+    // BEFORE: with the DWARF pass off, the only name left at this address is the
+    // `--redefine-sym`ed symtab entry `_l0` — never the DWARF name.
+    let prog_b = boot_dwarf_off("macho_dwarf.o");
+    let before = decompile(prog_b, &["load addr 0x0", "decompile", "print C"]);
+
+    assert!(
+        after.contains("first_byte"),
+        "Mach-O: expected the DWARF name `first_byte`, got:\n{after}"
+    );
+    assert!(
+        !after.contains("sub_0(") && !after.contains("FUN_0("),
+        "Mach-O: first_byte must render by its DWARF name, not a placeholder:\n{after}"
+    );
+    assert!(
+        after.contains("char *"),
+        "Mach-O: expected the DWARF-typed `char *` parameter, got:\n{after}"
+    );
+    assert!(
+        before.contains("_l0"),
+        "Mach-O: the no-DWARF baseline should render the symtab name `_l0`, got:\n{before}"
+    );
+    assert!(
+        !before.contains("first_byte"),
+        "Mach-O: the raw-address baseline must NOT carry the DWARF name:\n{before}"
+    );
+}
+
+/// A second DWARF-only function on each format (`add`, an `int(int,int)`) confirms
+/// the recovery is not a one-off — both the PE `.debug_*` and the Mach-O
+/// `__DWARF,__debug_*` section lookups resolve the whole CU.
+#[test]
+fn both_formats_recover_a_second_dwarf_only_function() {
+    let pe = boot("pe_dwarf.exe");
+    let pe_add = decompile(pe, &["load function add", "decompile", "print C"]);
+
+    let macho = boot("macho_dwarf.o");
+    let macho_add = decompile(macho, &["load function add", "decompile", "print C"]);
+
+    assert!(
+        pe_add.contains("add") && !pe_add.contains("sub_140001564"),
+        "PE: `add` should recover by its DWARF name, got:\n{pe_add}"
+    );
+    assert!(
+        macho_add.contains("add") && !macho_add.contains("sub_20"),
+        "Mach-O: `add` should recover by its DWARF name, got:\n{macho_add}"
+    );
+}

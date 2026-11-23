@@ -24,7 +24,7 @@
     Stage: P4 calls and prototypes (output-prototype), option bejoin.
     Pass 1 is the default (callers), pass 2 option bejoin evidence.
 
-    Images: decompiler/crates/unlace-analysis/tests/fixtures/bejoin_mipspic_O2.so
+    Images: crates/unlace-analysis/tests/fixtures/bejoin_mipspic_O2.so
     (bejoin_mipspic.c) and bejoin_mipsunal (bejoin_mipsunal.S); see
     bejoin_mipspic.provenance.
 
@@ -39,7 +39,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_mipspic_O2.so</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/bejoin_mipspic_O2.so</com>
   <com>option typevote off</com>
   <com>read symbols</com>
   <com>lo fu add64</com>
@@ -56,7 +56,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_mipsunal</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/bejoin_mipsunal</com>
   <com>option typevote off</com>
   <com>read symbols</com>
   <com>option bejoin callers</com>

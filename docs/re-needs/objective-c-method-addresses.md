@@ -14,7 +14,7 @@ rounds: [7]
 first_seen_round: 7
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis/src/analyzers/objc/methods.rs]
+touches: [crates/unlace-analysis/src/analyzers/objc/methods.rs]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/571

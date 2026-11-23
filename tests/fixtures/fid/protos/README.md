@@ -4,7 +4,7 @@ A `.fid` record can carry its function's prototype, parameter names and the
 types they need. `lib.o` is `lib.c` built with debug information; `lib.fid` is
 the database `kuna fid build` writes from it (format version 2); `prog` is
 `main.c` linked with a `lib.c` built without debug information, then stripped.
-`decompiler/crates/kuna-cli/tests/fid_proto_cli.rs` rebuilds `lib.fid` from
+`crates/kuna-cli/tests/fid_proto_cli.rs` rebuilds `lib.fid` from
 `lib.o` and decompiles `prog` against it.
 
 ## Build

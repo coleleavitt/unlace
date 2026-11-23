@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli/src/assertdecl.rs, decompiler/crates/unlace-cli/src/decompile.rs]
+touches: [crates/unlace-cli/src/assertdecl.rs, crates/unlace-cli/src/decompile.rs]
 scope: small
 regression_of: null
 pr: null
@@ -90,11 +90,11 @@ Assign the hash helper a pointer return and named pointer parameters.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/fauxware",
     "binary_sha256": "c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b",
     "binary_size": 8776,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/fauxware",
     "selector": "authenticate",
     "selector_kind": "name"
   },

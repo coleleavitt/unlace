@@ -14,7 +14,7 @@ rounds: [8]
 first_seen_round: 8
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli/src/disassemble.rs, decompiler/crates/unlace-analysis]
+touches: [crates/unlace-cli/src/disassemble.rs, crates/unlace-analysis]
 scope: small
 regression_of: null
 pr: null
@@ -71,11 +71,11 @@ Read the initial global state at 0x140008740.
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_bsstail_x86_64.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_bsstail_x86_64.exe",
     "binary_sha256": "f52dc6962c6fadfbe5a287286933de4ef22bb34d7eb9750a161bb2bceefcb101",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_bsstail_x86_64.exe"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_bsstail_x86_64.exe"
   },
   "timeout_s": 60,
   "cmd": [

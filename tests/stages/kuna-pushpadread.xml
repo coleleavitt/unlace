@@ -33,21 +33,21 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/pushpad_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/pushpad_x86_64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function run</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/pushpadfwd_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/pushpadfwd_x86_64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function report</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/pushpadfwd_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/pushpadfwd_x86_64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function forward</com>

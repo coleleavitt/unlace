@@ -27,7 +27,7 @@ def canned():
                       "subphase": "s", "tier": "core", "summary": "sum", "symptoms": "sym"}],
     }
     code = {
-        "crates": [{"name": "unlace-decomp", "path": "decompiler/crates/unlace-decomp",
+        "crates": [{"name": "unlace-decomp", "path": "crates/unlace-decomp",
                     "description": "core", "files": 2, "loc": 10, "deps": []}],
         "folders": {"p3_dataflow": {"files": 1, "loc": 7, "modules": [
             {"file": "heritage.rs", "loc": 7, "native": False}]}},

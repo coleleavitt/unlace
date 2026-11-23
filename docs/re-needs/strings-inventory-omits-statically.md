@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis/src/analyzers/strings]
+touches: [crates/unlace-analysis/src/analyzers/strings]
 scope: large
 regression_of: null
 pr: null

@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/funcstart_patterns_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/funcstart_patterns_x86_64",
     "binary_sha256": "ff6946f03161c6bbcffabeb6b42d9a05ff65a34d35bb91f8959fa9f5db602017",
     "binary_size": 14296,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/funcstart_patterns_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/funcstart_patterns_x86_64",
     "selector": null,
     "selector_kind": "none"
   },

@@ -19,11 +19,11 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/overlapbranch_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/overlapbranch_i386",
     "binary_sha256": "629475b4de0ca7ec6efdaba25e5978629b741eb90889a74fd40d601b83a8d74d",
     "binary_size": 2096,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/overlapbranch_i386",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/overlapbranch_i386",
     "selector": "0x804881c",
     "selector_kind": "addr"
   },

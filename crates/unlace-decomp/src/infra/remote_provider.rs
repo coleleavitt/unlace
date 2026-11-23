@@ -1424,7 +1424,8 @@ impl RemoteScope {
 
     /// Materialize one decoded symbol into the cache (the kuna analog of C++
     /// `dump2Cache`'s post-processing, database_ghidra.cc:143-171).
-    fn materialize(&self, rec: RemoteSymbolRecord) {
+    #[doc(hidden)]
+    pub fn materialize(&self, rec: RemoteSymbolRecord) {
         // Resolve the namespace path once per scope id.
         let scope_levels = if rec.scope_id != 0 {
             self.namespace_levels(rec.scope_id)

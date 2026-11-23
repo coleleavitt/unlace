@@ -14,6 +14,8 @@ pub mod kuna_decodekit;
 pub mod kuna_fasthash;
 pub mod kuna_hooks;
 pub mod libdecomp;
+#[cfg(test)]
+mod middle_tests;
 pub mod paramid;
 pub mod remote_provider;
 pub mod signature;

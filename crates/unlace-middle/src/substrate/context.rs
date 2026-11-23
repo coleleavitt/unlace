@@ -826,7 +826,7 @@ pub struct ArchContext {
     /// `Architecture` in `build_arch_handle`.
     pub swift_metadata_results: bool,
     /// (kuna) The `SoftwareBreakpoint` user-op id when `option ptrauthtrap`
-    /// is on; read by [`crate::p2_lift::kuna_ptrauthtrap`].
+    /// is on; read by [`crate::kuna_ptrauthtrap`].
     pub ptrauth_trap_userop: Option<unlace_base::types::uint4>,
     /// (kuna) The language is arm64e's; read by
     /// [`crate::p4_calls::kuna_hiddenretarg`].
@@ -957,7 +957,7 @@ pub struct ArchContext {
     /// per program because the boundary `ArchContext` carries no userop table.
     /// A user-op a compiler spec specialized with its own `<callotherfixup>` is
     /// left out, so a spec-declared model always wins.  Read by
-    /// [`ActionX64Syscall`](crate::p2_lift::kuna_x64syscall::ActionX64Syscall).
+    /// [`ActionX64Syscall`](crate::kuna_x64syscall::ActionX64Syscall).
     pub x64_syscall_userops: Vec<unlace_base::types::uint4>,
     /// The Octeon atomic, reservation and ordering operations the language
     /// declares, resolved under [`Self::octeon_effects`]. Under `off` only a
@@ -967,7 +967,7 @@ pub struct ArchContext {
     /// (kuna) `option syscallregs`, resolved against the loader's user-space
     /// fact: does the ARM/AArch64/RISC-V/MIPS/PowerPC system-call user-op read
     /// its setup registers and write its result?  Read by
-    /// [`ActionSyscallRegs`](crate::p2_lift::kuna_syscallregs::ActionSyscallRegs).
+    /// [`ActionSyscallRegs`](crate::kuna_syscallregs::ActionSyscallRegs).
     pub syscall_regs: bool,
     /// (kuna) The processor family of the loaded language, when `syscallregs`
     /// models it.

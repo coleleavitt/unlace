@@ -59,8 +59,6 @@
 
 mod infra;
 mod p0_knowledge;
-mod p1_partition;
-mod p2_lift;
 mod p3_dataflow;
 mod p4_calls;
 mod p5_types;
@@ -71,8 +69,6 @@ mod p9_emit;
 
 pub use infra::*;
 pub use p0_knowledge::*;
-pub use p1_partition::*;
-pub use p2_lift::*;
 pub use p3_dataflow::*;
 pub use p4_calls::*;
 pub use p5_types::*;
@@ -80,6 +76,8 @@ pub use p6_variables::*;
 pub use p7_regions::*;
 pub use p8_structure::*;
 pub use p9_emit::*;
+#[doc(hidden)]
+pub use unlace_lift::*;
 #[doc(hidden)]
 pub use unlace_middle::*;
 

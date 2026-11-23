@@ -1,0 +1,20 @@
+[package]
+name = "unlace-lift"
+description = "The decompiler's lift band: image and code partition (P1) and flow / op-graph recovery (P2), split out of unlace-decomp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+unlace-base.workspace = true
+unlace-num.workspace = true
+unlace-sleigh.workspace = true
+unlace-middle.workspace = true
+thiserror.workspace = true
+smallvec.workspace = true
+slotmap.workspace = true
+
+[lints]
+workspace = true

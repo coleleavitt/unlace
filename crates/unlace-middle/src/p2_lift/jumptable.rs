@@ -3345,7 +3345,7 @@ impl JumpBasicModel {
 
     /// (kuna `switchtrim`) Open an unbounded single-LOAD table to
     /// `[0, maxtablesize)` and let the sanity check end it where its layout
-    /// does (see [`crate::p2_lift::kuna_switchtrim`]).
+    /// does (see [`crate::kuna_switchtrim`]).
     fn kuna_try_trimmed_table(&mut self, fd: &Funcdata, maxtablesize: uint4) -> bool {
         let loads = (0..self.path_meld.num_ops())
             .filter(|&i| {
@@ -7706,7 +7706,7 @@ crate::kuna_flag!(
 
 crate::kuna_flag!(
     /// (kuna) Recover an unbounded single-LOAD jump table by reading until its
-    /// layout ends (option `switchtrim`).  See [`crate::p2_lift::kuna_switchtrim`].
+    /// layout ends (option `switchtrim`).  See [`crate::kuna_switchtrim`].
     SwitchTrim,
     "switchtrim",
     "Unguarded jump-table recovery with layout trimming",

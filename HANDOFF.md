@@ -336,6 +336,15 @@ higher bands to `infra/middle_tests/`; #171 dropped `kuna_callwide`'s leftover `
 (#167). Each move PR still adds its crate's `#[cfg(test)]` hook stub (as middle's `kuna_passhooks` does) and
 moves its `#[path]` test siblings with their files.
 
+**unlace-lift (step 9b, arch/unlace-lift).** `p1_partition/` and `p2_lift/` move with git mv into
+`crates/unlace-lift/src` (same layout); its lib.rs re-exports both folders and `unlace_middle::*`, unlace-decomp
+re-exports `unlace_lift::*`. Prep in the same change: folder paths `crate::p1_partition::`/`crate::p2_lift::`
+outside the band flattened (universalaction 31, decompile_drive and four passes); the band's 62 `pub(crate)` items
+become `#[doc(hidden)] pub`; `KunaHooks::unprovided` is `#[doc(hidden)] pub` so lift's unit tests define the
+hook symbol the same way middle's do; `kuna_int3pad`'s `printc` test moved to `infra/lift_tests/`;
+check_layers.py and check_spec.py scan `crates/unlace-lift/src`; spec anchors follow. Lift unit tests that run a
+pass reaching a hook only the driver provides now panic naming the hook (none known; CI will show).
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

@@ -670,11 +670,11 @@ pub struct Architecture {
     pub format_override_callpoints: std::collections::BTreeSet<u64>,
     /// (kuna `--assert callee`) Caller-stated destinations of indirect calls:
     /// function entry -> call site -> callee entry
-    /// ([`crate::p2_lift::kuna_calleeoverride`]).
+    /// ([`crate::kuna_calleeoverride`]).
     pub kuna_callee_overrides:
         std::collections::BTreeMap<Address, std::collections::BTreeMap<Address, Address>>,
     /// (kuna) Loader-stated prototypes of single call instructions, by the
-    /// instruction's address ([`crate::p2_lift::kuna_callsiteproto`]).
+    /// instruction's address ([`crate::kuna_callsiteproto`]).
     pub kuna_callsite_protos: std::collections::BTreeMap<u64, crate::fspec::PrototypePieces>,
     /// (kuna `uefi`) The interface instances the EFI module installs
     /// ([`crate::kuna_uefiprotocols`]).

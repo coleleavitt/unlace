@@ -13,6 +13,7 @@ unlace-base.workspace = true
 unlace-num.workspace = true
 unlace-sleigh.workspace = true
 unlace-middle.workspace = true
+unlace-lift.workspace = true
 thiserror.workspace = true
 smallvec.workspace = true
 slotmap.workspace = true

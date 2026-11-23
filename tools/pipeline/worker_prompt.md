@@ -86,7 +86,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
 - Read `AGENTS.md`, `docs/phases.md`, `docs/history.md`, `docs/options.md`,
   `tests/stages/README.md`, and the **loweredswitch** feature as the canonical template:
   `git log --oneline | grep loweredswitch`, then read
-  `crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs`, its anchors in `coreaction*.rs` /
+  `crates/unlace-lift/src/p2_lift/kuna_loweredswitch.rs`, its anchors in `coreaction*.rs` /
   `universalaction.rs` / `options.rs` / `architecture.rs` / `phases.toml`, and
   `tests/stages/ghangr-loweredswitch.xml`.
 - Reproduce the gap: `{{KUNA_PY}} -m scripts.pipeline.compare --entry {{TEST_NAME}}` (read both

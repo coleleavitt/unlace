@@ -2668,7 +2668,7 @@ impl Funcdata {
                     // through: its result is the kernel's.  The value is then not
                     // also a returned register half, and stays free to be another
                     // call's argument.  See
-                    // [`crate::p2_lift::kuna_syscallregs::reads_as_argument`].
+                    // [`crate::kuna_syscallregs::reads_as_argument`].
                     OpCode::CPUI_CALLOTHER
                         if (self.hooks().syscallregs_reads_as_argument)(self, op, vn) =>
                     {

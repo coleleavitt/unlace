@@ -2412,7 +2412,7 @@ constant-sequence and bit-field cleanup rules
 (`crates/unlace-decomp/src/p5_types/constseq.rs`,
 `crates/unlace-decomp/src/p5_types/bitfield.rs`, chapter 05), and the
 stack-probe-loop phi resolver
-(`crates/unlace-decomp/src/p2_lift/kuna_stackprobeloop.rs`, chapter
+(`crates/unlace-lift/src/p2_lift/kuna_stackprobeloop.rs`, chapter
 02). A note on the files themselves: their module headers still carry the
 port-wave `STUB(...)` inventory from the mid-port merge; the live registration
 and rule bodies are complete (the tree's action listing is byte-equal to the

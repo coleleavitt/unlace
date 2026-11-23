@@ -51,11 +51,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "wrapadd" => on_off!(wrap_add, "Wrapping four-byte addition before a wider sign extension"),
-    "armconstshift" => {
-        let (mode, msg) = crate::p9_emit::kuna_armconstantshift::OptionArmConstShift.apply(p1)?;
-        self.arm_constant_shift = mode;
-        Ok(msg)
-    },
+    "armconstshift" => registered!(crate::p9_emit::kuna_armconstantshift::ConstShiftMode),
     "armshiftguard" => on_off!(arm_shift_guard, "ARM register-count shift range guard"),
     "rustarrayzero" => on_off!(rust_array_zero, "Rust byte-array zero values"),
     "arraynotation" => {
@@ -131,11 +127,7 @@ kuna_options! { self, p1;
         self.call_result_use = mode;
         Ok(msg)
     },
-    "signedness" => {
-        let (val, msg) = crate::kuna_typeround::OptionSignedness.apply(p1)?;
-        self.signedness = val;
-        Ok(msg)
-    },
+    "signedness" => registered!(crate::kuna_typeround::SignPolicy),
     "retsplitglobal" => {
         let (val, msg) =
             crate::p8_structure::kuna_retsplitglobal::OptionRetSplitGlobal.apply(p1)?;
@@ -615,11 +607,7 @@ kuna_options! { self, p1;
         on_off!(strip_msvc_stack_guard, "MSVC /GS frame-cookie stripping")
     },
     "gobounds" => on_off!(go_bounds, "Go compiler-check folding"),
-    "rustfmt" => {
-        let (mode, msg) = crate::kuna_rustfmt::parse_rustfmt_mode(p1).map_err(KunaError::parse)?;
-        self.rust_fmt = mode;
-        Ok(msg)
-    },
+    "rustfmt" => registered!(crate::kuna_rustfmt::RustFmtMode),
     "securitycheck" => {
         on_off!(strip_security_check, "Rust security-check branch stripping")
     },
@@ -663,16 +651,8 @@ kuna_options! { self, p1;
     "castnarrow" => on_off!(cast_narrow, "implied narrowing-cast elision"),
     "libcnames" => on_off!(libc_names, "library-call local names"),
     "contextnames" => on_off!(context_names, "loop-counter and result local names"),
-    "declorder" => {
-        let (mode, msg) = crate::kuna_declorder::OptionDeclOrder.apply(p1)?;
-        self.decl_order = mode;
-        Ok(msg)
-    },
-    "castwiden" => {
-        let (mode, msg) = crate::kuna_castwiden::OptionCastWiden.apply(p1)?;
-        self.cast_widen = mode;
-        Ok(msg)
-    },
+    "declorder" => registered!(crate::kuna_declorder::DeclOrder),
+    "castwiden" => registered!(crate::kuna_castwiden::CastWidenMode),
     "ptrdepthcap" => on_off!(ptrdepthcap, "inferred pointer-nesting cap"),
     "calltargettype" => on_off!(call_target_type, "indirect-call target types"),
     "floatglobals" => on_off!(float_globals, "float typing of globals moved only through float registers"),

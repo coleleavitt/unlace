@@ -21,7 +21,11 @@ pub(crate) fn plan_fixed64_lsl(
     op: OpId,
     printed: impl Fn(VarnodeId) -> Rc<Datatype>,
 ) -> Option<ConstantLslPlan> {
-    if arch.arm_constant_shift != crate::p9_emit::kuna_armconstantshift::ConstShiftMode::All {
+    if arch
+        .kuna_options
+        .get::<crate::p9_emit::kuna_armconstantshift::ConstShiftMode>()
+        != crate::p9_emit::kuna_armconstantshift::ConstShiftMode::All
+    {
         return None;
     }
     let operation = fd.obank().get(op)?;

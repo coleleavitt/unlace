@@ -30,6 +30,23 @@ pub enum DeclOrder {
     Natural,
 }
 
+impl crate::kuna_optionset::KunaOption for DeclOrder {
+    const NAME: &'static str = "declorder";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        DeclOrder::Name
+    }
+
+    fn shipped() -> Self {
+        DeclOrder::Natural
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionDeclOrder.apply(value)
+    }
+}
+
 impl DeclOrder {
     pub fn as_str(self) -> &'static str {
         match self {

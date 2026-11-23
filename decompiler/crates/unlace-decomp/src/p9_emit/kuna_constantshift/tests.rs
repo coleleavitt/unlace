@@ -30,7 +30,8 @@ fn architecture() -> Architecture {
     arch.types_impl().setup_sizes(Some(4), 8, 8);
     arch.types_impl().set_default_alignment_map();
     arch.build_core_types().unwrap();
-    arch.arm_constant_shift = crate::p9_emit::kuna_armconstantshift::ConstShiftMode::All;
+    arch.kuna_options
+        .set(crate::p9_emit::kuna_armconstantshift::ConstShiftMode::All);
     arch
 }
 fn function() -> Funcdata {
@@ -190,7 +191,7 @@ fn only_the_all_value_plans_a_64_bit_shift() {
         (ConstShiftMode::On, false),
         (ConstShiftMode::All, true),
     ] {
-        arch.arm_constant_shift = mode;
+        arch.kuna_options.set(mode);
         assert_eq!(
             plan_fixed64_lsl(&fd, &arch, shift, as_signed).is_some(),
             planned,

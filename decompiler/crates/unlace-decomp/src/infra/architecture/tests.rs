@@ -116,7 +116,10 @@ fn kuna_anchor_flags_default_to_div_values() {
     assert!(arch.present_lessequal);
     // (kuna) signedness ships `auto` -- a declaration is re-signed when every
     // signedness-sensitive reader of the value agrees.
-    assert_eq!(arch.signedness, crate::kuna_typeround::SignPolicy::Auto);
+    assert_eq!(
+        arch.kuna_options.get::<crate::kuna_typeround::SignPolicy>(),
+        crate::kuna_typeround::SignPolicy::Auto
+    );
     // (kuna) DIV-13 default-on sweep: the 10 angr structuring/switch flags are now
     // default-on (per-test opt-out keeps the datatest/stage corpora at parity).
     assert!(arch.tail_call_jumps);
@@ -154,12 +157,16 @@ fn kuna_anchor_flags_default_to_div_values() {
 fn reset_defaults_is_idempotent_after_mutation() {
     let mut arch = Architecture::new("t", bare_sleigh());
     arch.max_instructions = 7;
-    arch.signedness = crate::kuna_typeround::SignPolicy::Upstream;
+    arch.kuna_options
+        .set(crate::kuna_typeround::SignPolicy::Upstream);
     arch.reset_defaults();
     assert_eq!(arch.max_instructions, 100000);
     // (kuna) `signedness` ships `auto`: the struct literal holds the inert
     // `Upstream` arm, so only reset_defaults puts the shipped value in place.
-    assert_eq!(arch.signedness, crate::kuna_typeround::SignPolicy::Auto);
+    assert_eq!(
+        arch.kuna_options.get::<crate::kuna_typeround::SignPolicy>(),
+        crate::kuna_typeround::SignPolicy::Auto
+    );
 }
 
 #[test]

@@ -669,12 +669,12 @@ fn option_values_live_value_present_for_129() {
                             // (kuna `castwiden`) takes a MODE
                             // (`off|on|literal`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::cast_widen`.
+                            // the registered option `CastWidenMode`.
                             | "castwiden"
                             // (kuna) `armconstshift` takes a MODE
                             // (`off|on|all`) over an enum field, for the same
                             // reason.  Its live value is
-                            // `Architecture::arm_constant_shift`.
+                            // the registered option `ConstShiftMode`.
                             | "armconstshift"
                             // (kuna) `constselectjump` takes a MODE
                             // (`off|reentry|on`) over an enum field, for the
@@ -683,7 +683,7 @@ fn option_values_live_value_present_for_129() {
                             | "constselectjump"
                             // (kuna) `declorder` takes a MODE (`natural|name`)
                             // over an enum field, for the same reason.  Its live
-                            // value is `Architecture::decl_order`.
+                            // value is the registered option `DeclOrder`.
                             | "declorder"
                             // (kuna) `narrowext` takes a MODE
                             // (`off|abi|compiler`) over an enum field, for the
@@ -774,7 +774,7 @@ fn option_values_live_value_present_for_129() {
                             // (a bool `live_true`/`live_false` pair) cannot
                             // express -- the same reason `namestyle`,
                             // `warnstyle` and `int3pad` are here.  Its live
-                            // value is `Architecture::signedness`.
+                            // value is the registered option `SignPolicy`.
                             | "signedness"
                     ) || PASS_GATES.contains(&st.option),
                     "unexpected option with no live reader: {}",

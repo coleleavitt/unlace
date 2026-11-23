@@ -32,6 +32,7 @@
 
 pub mod arm_markers;
 // (kuna) WebAssembly bodies lowered from stack form to register form.
+pub(crate) mod kuna_arctarget;
 pub(crate) mod kuna_mipstarget;
 pub(crate) mod kuna_ppc64elfv2target;
 pub(crate) mod kuna_ppcaputarget;

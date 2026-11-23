@@ -56,14 +56,7 @@ use crate::database::{SymbolId, symbol_category};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 
-/// A library function's own names for its parameters, in slot order (an
-/// empty string for a slot its declaration leaves unnamed), and for the value
-/// it returns, where that value has a conventional name.
-#[derive(Debug, PartialEq, Eq)]
-pub struct LibraryNames {
-    pub params: &'static [&'static str],
-    pub ret: Option<&'static str>,
-}
+pub use crate::fspec::LibraryNames;
 
 /// Parameter names that say which side of one call a value is on rather than
 /// what it is.

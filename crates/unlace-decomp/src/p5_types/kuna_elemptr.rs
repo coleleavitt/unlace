@@ -3123,10 +3123,12 @@ pub fn record(arch: &mut crate::architecture::Architecture, data: &Funcdata) {
     {
         return;
     }
-    arch.kuna_tables.get_mut::<crate::kuna_elemptr::Ledger>().file(
-        data.get_address().get_offset(),
-        data.kuna_elemptr_verdicts(),
-    );
+    arch.kuna_tables
+        .get_mut::<crate::kuna_elemptr::Ledger>()
+        .file(
+            data.get_address().get_offset(),
+            data.kuna_elemptr_verdicts(),
+        );
 }
 
 /// The functions to decompile again: every one that typed an object some other

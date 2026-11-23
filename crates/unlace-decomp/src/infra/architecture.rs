@@ -1413,9 +1413,7 @@ impl Architecture {
         (self.pass_hooks().fpuemu_apply)(self);
         (self.pass_hooks().mzdgroup_apply)(self);
 
-        self.kuna_tables
-            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-            .clear();
+        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
 
         self.analyze_for_loops = true;
         self.readonlypropagate = false;
@@ -1614,9 +1612,7 @@ impl Architecture {
 
     /// Mutably borrow the disassembly engine.
     pub fn translate_mut(&mut self) -> &mut dyn EngineTranslate {
-        self.kuna_tables
-            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-            .clear();
+        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         &mut *self.translate
     }
 
@@ -1750,10 +1746,7 @@ impl Architecture {
         if let Some(remote) = &self.remote_scope {
             remote.clear();
         }
-        self.kuna_tables
-            .get_mut::<crate::kuna_calleepurge::CacheCell>()
-            .get_mut()
-            .forget_walks();
+        (self.pass_hooks().calleepurge_forget_walks)(&mut self.kuna_tables);
         self.types.clear_noncore();
         self.commentdb.clear();
         self.string_manager.borrow_mut().base.clear();
@@ -3760,9 +3753,7 @@ impl Architecture {
     /// `Sleigh::set_loader`, matching the C++ `restoreFromSpec` handing the
     /// loader to the translator.
     pub fn set_loader(&mut self, loader: Box<dyn unlace_sleigh::loadimage::LoadImage>) {
-        self.kuna_tables
-            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-            .clear();
+        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         self.translate.set_loader(loader);
     }
 
@@ -3790,9 +3781,7 @@ impl Architecture {
         &self,
         f: impl FnOnce(&mut dyn unlace_sleigh::globalcontext::ContextDatabase) -> R,
     ) -> R {
-        self.kuna_tables
-            .get::<crate::p4_calls::kuna_callwide::ProofSlot>()
-            .revoke();
+        (self.pass_hooks().callwide_revoke)(&self.kuna_tables);
         // The engine boundary exposes the object-safe `with_context_db_dyn` (a
         // `&mut dyn FnMut`, so it survives the `Box<dyn EngineTranslate>` trait
         // object); adapt the generic, value-returning closure over it.  The
@@ -3890,9 +3879,7 @@ impl Architecture {
             .get(name)
             .is_some_and(|old| Rc::ptr_eq(old, &model))
         {
-            self.kuna_tables
-                .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-                .clear();
+            (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         }
         self.declared_proto_models.insert(name.to_string(), model);
     }
@@ -3911,9 +3898,7 @@ impl Architecture {
                 .get(&(space.get_index(), addr.get_offset()))
                 .is_some_and(|old| Rc::ptr_eq(old, &model))
             {
-                self.kuna_tables
-                    .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-                    .clear();
+                (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
             }
             self.declared_proto_models_at
                 .insert((space.get_index(), addr.get_offset()), model);
@@ -3927,9 +3912,7 @@ impl Architecture {
             .get(model.get_name())
             .is_some_and(|old| Rc::ptr_eq(old, &model))
         {
-            self.kuna_tables
-                .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-                .clear();
+            (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         }
         self.proto_models
             .insert(model.get_name().to_string(), model);
@@ -3943,9 +3926,7 @@ impl Architecture {
             .as_ref()
             .is_some_and(|old| Rc::ptr_eq(old, &model))
         {
-            self.kuna_tables
-                .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-                .clear();
+            (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         }
         self.defaultfp = Some(model);
     }
@@ -4201,9 +4182,7 @@ impl Architecture {
     /// alongside it.  Otherwise a name-only default model is registered so the
     /// engine still has a non-null `defaultfp`.
     pub fn build_default_proto(&mut self) {
-        self.kuna_tables
-            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-            .clear();
+        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         // One parse of the cspec document feeds all three readers below: the
         // top-level <returnaddress> (C++ `Architecture::decodeReturnAddress`,
         // architecture.cc:902), the <default_proto> model, and the named models.
@@ -4269,9 +4248,7 @@ impl Architecture {
     /// from `SleighArchitecture::build_spec_file`) and hands it here before
     /// [`init_post_engine`](Architecture::init_post_engine).
     pub fn set_cspec_xml(&mut self, xml: Vec<u8>) {
-        self.kuna_tables
-            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-            .clear();
+        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         self.cspec_xml = Some(xml);
     }
 
@@ -5965,9 +5942,7 @@ impl ArchOptionContext for Architecture {
     }
     fn set_flow_options(&mut self, val: uint4) {
         if self.flowoptions != val {
-            self.kuna_tables
-                .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-                .clear();
+            (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         }
         self.flowoptions = val;
     }
@@ -5996,9 +5971,7 @@ impl ArchOptionContext for Architecture {
 
     // --- prototype models (C++ defaultfp / evalfp_current) -----------------
     fn set_default_extra_pop(&mut self, expop: int4) {
-        self.kuna_tables
-            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-            .clear();
+        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         // C++ `glb->defaultfp->setExtraPop(expop)` (+ eval-model spreads).
         // The registry holds the model behind `Rc`; mutate the shared model
         // (and keep the registry entry pointing at the same data via the same
@@ -6016,9 +5989,7 @@ impl ArchOptionContext for Architecture {
         // C++ `OptionExtraPop::apply`: queryFunction(name), then
         // `getFuncProto().setExtraPop(expop)`; parked on the symbol like inline.
         let sid = self.query_global_function(name)?;
-        self.kuna_tables
-            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-            .clear();
+        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         self.symboltab.set_function_extra_pop(sid, expop);
         Ok(())
     }
@@ -6044,9 +6015,7 @@ impl ArchOptionContext for Architecture {
                     .as_ref()
                     .is_some_and(|old| Rc::ptr_eq(old, &model))
                 {
-                    self.kuna_tables
-                        .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-                        .clear();
+                    (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
                 }
                 self.evalfp_current = Some(model);
                 Ok(())
@@ -6061,18 +6030,14 @@ impl ArchOptionContext for Architecture {
         // The FunctionSymbol's lazily-built Funcdata/FuncProto is W5; the inline flag
         // is parked on the symbol (read back by FlowInfo::queryCall at flow time).
         let sid = self.query_global_function(name)?;
-        self.kuna_tables
-            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-            .clear();
+        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         self.symboltab.set_function_inline(sid, val);
         Ok(())
     }
     fn set_function_no_return(&mut self, name: &str, val: bool) -> KunaResult<()> {
         // C++ `OptionNoReturn::apply`: same shape as OptionInline, but setNoReturn.
         let sid = self.query_global_function(name)?;
-        self.kuna_tables
-            .get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>()
-            .clear();
+        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
         self.symboltab.set_function_no_return(sid, val);
         Ok(())
     }

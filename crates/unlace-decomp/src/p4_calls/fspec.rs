@@ -202,7 +202,7 @@ pub enum Containment {
 #[derive(Debug, Clone)]
 pub struct ParamEntry {
     /// A declared extension beyond the logical parameter slot.
-    pub register_extension: Option<crate::p4_calls::kuna_registerslots::Extension>,
+    pub register_extension: Option<Extension>,
     /// Boolean properties of the parameter (C++ `flags`).
     flags: uint4,
     /// Data-type storage class that this entry must match (C++ `type`).
@@ -1418,14 +1418,14 @@ pub struct ParamActive {
     /// SITE stay out of the inactive-chain count, `None` for none.  Set by
     /// `ActionActiveParam`; see
     /// [`crate::p4_calls::kuna_passthrough::neutral_in_chain`].
-    forwarded_neutral: Option<crate::p4_calls::kuna_passthrough::NeutralScope>,
+    forwarded_neutral: Option<NeutralScope>,
     /// (kuna `calleereginputs`) Does the callee read every register parameter
     /// of the model these trials are scored against?  Set by
     /// `ActionActiveParam`; see [`crate::p4_calls::kuna_calleereginputs`].
     callee_reads_registers: bool,
     /// (kuna) `condexeret`: where the output trials stand with respect to the one
     /// retry pass; see [`crate::p4_calls::kuna_condexeret`].
-    cond_exe_retry: crate::p4_calls::kuna_condexeret::CondExeRetry,
+    cond_exe_retry: CondExeRetry,
     /// (kuna) `armfloatargs`: the callee's stated single-precision inputs, which a
     /// hole below a later double keeps as words; see
     /// [`crate::p4_calls::kuna_armfloatargs`].
@@ -1436,7 +1436,7 @@ pub struct ParamActive {
     /// (kuna) `calleefilledarg`: the callee's entry-liveness probe, which says
     /// which argument registers it loads itself; see
     /// [`crate::p4_calls::kuna_calleefilledarg`].
-    callee_filled: Option<Rc<crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead>>,
+    callee_filled: Option<Rc<dyn EntryLiveness>>,
 }
 
 impl ParamActive {
@@ -1606,16 +1606,13 @@ impl ParamActive {
 
     /// (kuna) `passthrough`: which forwarded argument registers at this call
     /// site stay out of the inactive-chain count?
-    pub fn forwarded_neutral(&self) -> Option<&crate::p4_calls::kuna_passthrough::NeutralScope> {
+    pub fn forwarded_neutral(&self) -> Option<&NeutralScope> {
         self.forwarded_neutral.as_ref()
     }
 
     /// (kuna) `passthrough`: record the call's scope, `None` with the option
     /// off; a property of the call, as `stack_arg_gap` is.
-    pub fn set_forwarded_neutral(
-        &mut self,
-        val: Option<crate::p4_calls::kuna_passthrough::NeutralScope>,
-    ) {
+    pub fn set_forwarded_neutral(&mut self, val: Option<NeutralScope>) {
         self.forwarded_neutral = val;
     }
 
@@ -1642,10 +1639,7 @@ impl ParamActive {
     }
 
     /// (kuna) `calleefilledarg`: hand over the callee's entry-liveness probe.
-    pub fn set_callee_filled(
-        &mut self,
-        dead: Option<Rc<crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead>>,
-    ) {
+    pub fn set_callee_filled(&mut self, dead: Option<Rc<dyn EntryLiveness>>) {
         self.callee_filled = dead;
     }
 
@@ -1663,11 +1657,11 @@ impl ParamActive {
                     .is_some_and(|d| d.proves_dead(t.get_address(), t.get_size())))
     }
     /// (kuna) `condexeret`: the state of the retry pass.
-    pub fn cond_exe_retry(&self) -> &crate::p4_calls::kuna_condexeret::CondExeRetry {
+    pub fn cond_exe_retry(&self) -> &CondExeRetry {
         &self.cond_exe_retry
     }
     /// (kuna) `condexeret`: move the retry pass to `state`.
-    pub fn set_cond_exe_retry(&mut self, state: crate::p4_calls::kuna_condexeret::CondExeRetry) {
+    pub fn set_cond_exe_retry(&mut self, state: CondExeRetry) {
         self.cond_exe_retry = state;
     }
     /// Are these trials for a call to a sub-function (C++ `isRecoverSubcall`).
@@ -4205,6 +4199,15 @@ fn unassigned_err(dt: &Rc<Datatype>) -> KunaError {
 // PrototypePieces (fspec.hh:373-381)
 // =============================================================================
 
+/// (kuna `libcnames`) A library function's own names for its parameters, in slot order (an
+/// empty string for a slot its declaration leaves unnamed), and for the value
+/// it returns, where that value has a conventional name.
+#[derive(Debug, PartialEq, Eq)]
+pub struct LibraryNames {
+    pub params: &'static [&'static str],
+    pub ret: Option<&'static str>,
+}
+
 /// Raw components of a function prototype obtained from parsing source code
 /// (C++ `PrototypePieces`, `fspec.hh:373-381`).
 ///
@@ -4252,7 +4255,7 @@ pub struct PrototypePieces {
     /// table. Kept apart from [`Self::innames`] so the callee's printed
     /// signature and the name locks stay as they were; only the naming pass
     /// reads them, and only under `option libcnames`.
-    pub kuna_library_names: Option<&'static crate::kuna_libcnames::LibraryNames>,
+    pub kuna_library_names: Option<&'static LibraryNames>,
 }
 
 // =============================================================================
@@ -7405,10 +7408,10 @@ pub struct FuncCallSpecs {
     callee_purge: Option<int4>,
     /// (kuna `spsolve`) What the direct callee's own returns do to the stack
     /// pointer. See [`crate::p4_calls::kuna_spsolve`].
-    callee_returns: Option<crate::p4_calls::kuna_spsolve::CalleeReturns>,
+    callee_returns: Option<crate::kuna_calleefacts::CalleeReturns>,
     /// (kuna `calleeargs`) The stack-argument bytes the direct callee reads. See
     /// [`crate::p4_calls::kuna_calleestackargs`].
-    callee_stack_arg_bytes: Option<crate::p4_calls::kuna_calleepurge::StackArgs>,
+    callee_stack_arg_bytes: Option<crate::kuna_calleefacts::StackArgs>,
     /// (kuna `calleeargs`) The direct callee moves its caller's stack pointer.
     callee_moves_stack: bool,
     /// (kuna `calleeargs`) For a direct callee with no stated extent, the stack
@@ -7897,27 +7900,24 @@ impl FuncCallSpecs {
 
     /// (kuna `spsolve`) What the direct callee's own returns do to the stack
     /// pointer, if read.
-    pub fn callee_returns(&self) -> Option<crate::p4_calls::kuna_spsolve::CalleeReturns> {
+    pub fn callee_returns(&self) -> Option<crate::kuna_calleefacts::CalleeReturns> {
         self.callee_returns
     }
 
     /// (kuna `spsolve`) Record what the direct callee's own returns do.
-    pub fn set_callee_returns(
-        &mut self,
-        returns: Option<crate::p4_calls::kuna_spsolve::CalleeReturns>,
-    ) {
+    pub fn set_callee_returns(&mut self, returns: Option<crate::kuna_calleefacts::CalleeReturns>) {
         self.callee_returns = returns;
     }
 
     /// The stack-argument bytes the direct callee reads, if measured.
-    pub fn callee_stack_arg_bytes(&self) -> Option<crate::p4_calls::kuna_calleepurge::StackArgs> {
+    pub fn callee_stack_arg_bytes(&self) -> Option<crate::kuna_calleefacts::StackArgs> {
         self.callee_stack_arg_bytes
     }
 
     /// Record the stack-argument bytes the direct callee reads.
     pub fn set_callee_stack_arg_bytes(
         &mut self,
-        bytes: Option<crate::p4_calls::kuna_calleepurge::StackArgs>,
+        bytes: Option<crate::kuna_calleefacts::StackArgs>,
     ) {
         self.callee_stack_arg_bytes = bytes;
     }
@@ -9047,6 +9047,37 @@ fn overlap_addr(addr: &Address, size: int4, op: &Address, opsize: int4) -> int4 
         let over = addr.overlap(size - 1, op, opsize);
         if over != -1 { opsize - 1 - over } else { -1 }
     }
+}
+
+/// (kuna `calleefilledarg`) What a callee body's entry-liveness probe proves
+/// (`kuna_calleedeadarg::CalleeEntryDead`), as `ParamActive` reads it.
+pub trait EntryLiveness: std::fmt::Debug {
+    /// Is every byte of `addr`/`size` written on every path before the callee reads it?
+    fn proves_dead(&self, addr: &Address, size: int4) -> bool;
+}
+
+/// (kuna `condexeret`) A trial whose walk at one RETURN failed only at inputs read in threadable
+/// merge blocks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Remembered {
+    pub trial: int4,
+    pub ret: OpId,
+    /// The merge blocks that read the failing inputs.
+    pub merges: Vec<crate::context::BlockId>,
+    /// The storage of the failing inputs.
+    pub inputs: Vec<(Address, int4)>,
+}
+
+/// Where a function's output trials stand with respect to the retry pass.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum CondExeRetry {
+    /// No retry scheduled.
+    #[default]
+    Idle,
+    /// The next pass re-walks only these (trial, RETURN) pairs.
+    Pending(Vec<Remembered>),
+    /// The retry pass has run.
+    Done,
 }
 
 #[derive(Clone, Debug)]

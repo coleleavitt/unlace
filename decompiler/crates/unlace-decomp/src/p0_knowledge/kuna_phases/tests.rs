@@ -67,13 +67,13 @@ fn surface_count_is_101() {
 }
 
 #[test]
-fn settable_count_is_321() {
-    assert_eq!(kuna_num_settables(), 321);
-    assert_eq!(SETTABLE_TABLE.len(), 321);
+fn settable_count_is_322() {
+    assert_eq!(kuna_num_settables(), 322);
+    assert_eq!(SETTABLE_TABLE.len(), 322);
 }
 
 #[test]
-fn tier_counts_are_66_core_156_transform_99_analysis() {
+fn tier_counts_are_66_core_157_transform_99_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -85,7 +85,7 @@ fn tier_counts_are_66_core_156_transform_99_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (66, 156, 99));
+    assert_eq!((core, transform, analysis), (66, 157, 99));
 }
 
 #[test]
@@ -588,6 +588,9 @@ fn option_values_live_value_present_for_129() {
                             // like `foldcallret` above it declares no
                             // `live_field`, so the catalog suppresses `current`.
                             | "indirectonly"
+                            // (kuna) `callresultuse` declares no `live_field`: its mode is read
+                            // at the call trials, not from a printer flag, so `current` is suppressed.
+                            | "callresultuse"
                             | "gotoreduce"
                             | "ifelseflatten"
                             | "crossjumprevert"
@@ -1292,7 +1295,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `calleeargs`; its P4 row sits after `argclobber`.
     // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
     // +1 for `oslog`; its P9 row.
-    assert_eq!(json.matches("},\n").count(), 320);
+    // +1 for `callresultuse`; its P4 row.
+    assert_eq!(json.matches("},\n").count(), 321);
 }
 
 #[test]

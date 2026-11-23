@@ -14,7 +14,7 @@ rounds: [9, 12]
 first_seen_round: 9
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-console]
+touches: [crates/unlace-console]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/581

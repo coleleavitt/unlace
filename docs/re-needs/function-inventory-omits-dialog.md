@@ -14,7 +14,7 @@ rounds: [10, 12]
 first_seen_round: 10
 attempts: 1
 covered_by_option: fast_funcdisc
-touches: [decompiler/crates/unlace-analysis]
+touches: [crates/unlace-analysis]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/582
@@ -52,8 +52,8 @@ Include the callbacks at 0x401410 and 0x401000 in the application inventory and 
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
     "binary_sha256": "78d28ec6d13b9c1634101e86b2042ed61560db31ba63705adfb2b75f5757b7b4",
     "binary_size": 40960,
     "binary_source": "in-repo"
@@ -85,8 +85,8 @@ Include the callbacks at 0x401410 and 0x401000 in the application inventory and 
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
     "binary_sha256": "78d28ec6d13b9c1634101e86b2042ed61560db31ba63705adfb2b75f5757b7b4",
     "binary_size": 40960,
     "binary_source": "in-repo"

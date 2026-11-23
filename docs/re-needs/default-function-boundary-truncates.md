@@ -14,7 +14,7 @@ rounds: [10, 12]
 first_seen_round: 10
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: "589"
@@ -91,11 +91,11 @@ Recover the fork wrapper return value and conditional errno handling.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/function_boundary_return_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/function_boundary_return_x86_64",
     "binary_sha256": "6aac76982527b9e550ef1a70bbe0ab8dd7d59fc67c42cf21a33991e03e40ff01",
     "binary_size": 5080,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/function_boundary_return_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/function_boundary_return_x86_64",
     "selector": "shared_wrapper",
     "selector_kind": "name"
   },
@@ -134,7 +134,7 @@ CONTROL: --option funcboundflow off => correct output, 'unsigned int sub_80488e0
 
 THE SAFE FIX, and why the obvious one is a mass regression. Simply relaxing 'fall-through reached the next function entry' is exactly what funcboundflow exists to prevent — every fall-through function would swallow its neighbour, corpus-wide. The narrow rule that is safe here: *** if the instruction AT the next-function entry is itself a flow terminator (RET), admitting it cannot swallow the neighbour, because flow ends on that one instruction. *** Including 0x80488da's RET gives the shared epilogue its return and stops. Keep funcboundflow default-ON; this is a strict wrong-output fix, no new flag.
 
-*** IT DOES NOT SHARE A ROOT WITH success-report-callback-fails — I TESTED THE LAST TICK'S GUESS AND IT IS WRONG. DO NOT HOLD THEM ON ONE BUILDER. *** The 10:05Z note proposed a shared cluster: lease because both are funcboundflow on this same binary. The declared-extent control separates them. For success-report-callback-fails, declaring funcboundflow's own cut EXITS 0 with full C (opposite outcome, same address). Here, 'unlace decompile BIN 0x80488e0 --addr --define-function 0x80488e0-0x8048900' gives a THIRD, different wrong output: 'void sub_80488e0(void) // warn: Function flows out of bounds' with an empty body and 'Function flow out of bounds: r0x080488e2 flows to r0x080488a7' — the declared path REFUSES the outbound JMP, while funcboundflow FOLLOWS it and then truncates at the entry. Different mechanism, different fix, different code path. They share only the file (flow.rs); B_PLAN's disjoint-lease rule already keeps them apart since both carry touches=[decompiler/crates/unlace-decomp].
+*** IT DOES NOT SHARE A ROOT WITH success-report-callback-fails — I TESTED THE LAST TICK'S GUESS AND IT IS WRONG. DO NOT HOLD THEM ON ONE BUILDER. *** The 10:05Z note proposed a shared cluster: lease because both are funcboundflow on this same binary. The declared-extent control separates them. For success-report-callback-fails, declaring funcboundflow's own cut EXITS 0 with full C (opposite outcome, same address). Here, 'unlace decompile BIN 0x80488e0 --addr --define-function 0x80488e0-0x8048900' gives a THIRD, different wrong output: 'void sub_80488e0(void) // warn: Function flows out of bounds' with an empty body and 'Function flow out of bounds: r0x080488e2 flows to r0x080488a7' — the declared path REFUSES the outbound JMP, while funcboundflow FOLLOWS it and then truncates at the entry. Different mechanism, different fix, different code path. They share only the file (flow.rs); B_PLAN's disjoint-lease rule already keeps them apart since both carry touches=[crates/unlace-decomp].
 - round 10 CAPTAIN (18:35Z tick, B_DRAIN off-critical-path repair): PROBE TARGET BOUND -- this need was STRUCTURALLY UNCLOSABLE as filed. Both arms carried no `target` block, so `verify --acceptance-suite` returned `ProbeError: {{BIN}} used but the context supplies no bin` with unrunnable=true / transition=indeterminate: a builder could have done the work and still not closed it. Bound both arms to the single ELF/PE candidate under ds/challenges/<hexid>/ (sha256 + size captured from the dataset copy, binary_source=dataset). Verified post-fix: unrunnable=false, passed=false, transition=unchanged -- i.e. the acceptance now FAILS honestly and can be seen to flip. NOTE probe ids did NOT move: probe_id_of() is keyed on cmd+expect only (needs.py:269), so binding a target is id-stable and breaks no historical reference. PROMOTION CAVEAT: binary_source is `dataset` and `verify --promote` refuses that verbatim (CI has no dataset, --force does not help) -- vendor an in-repo fixture in the SAME PR or B_DONE cannot promote this probe into tests/cli/.
 - builder attempt 1 (2026-09-12): commit `b6f20b414a3f85abe5946e2fb89b4c6460713117` vendors the byte-reproducible x86-64 shared-RET fixture and promotes its robust acceptance as `a-9d9a83349539`. The original dataset reproduction remains `p-3f3a4aa63b91`; only the acceptance moved because CI cannot replay dataset binaries. Status remains open with `pr: null` pending semantic review, merge, and acceptance application on the landed commit.
 - semantic review (2026-09-12): SAFE on `b6f20b414a3f85abe5946e2fb89b4c6460713117`, with no findings. The reviewer independently validated the synthetic controls and the conservative return predicate. The need remains open pending merge and acceptance application.

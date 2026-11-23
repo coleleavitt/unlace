@@ -49,7 +49,7 @@ export KUNA_PIPELINE_STATE_DIR="$STATE_DIR"
 # per-call latency signal (kuna emits none of its own), and IDA writes its .i64 databases
 # wherever it likes instead of inside the arena.
 export PATH="$ARENA/bin:$PATH"
-export REPIPE_REAL_KUNA="${REPIPE_REAL_KUNA:-$REPO/decompiler/target/release/unlace}"
+export REPIPE_REAL_KUNA="${REPIPE_REAL_KUNA:-$REPO/target/release/unlace}"
 export REPIPE_ARENA="$ARENA"
 
 RUN_DIR="$STATE_DIR/runs/$RUN_ID"

@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: call-args-discarded
 pr: null
@@ -157,7 +157,7 @@ FIVE ABLATIONS, ALL NEGATIVE -- do not repeat them:
 
 THE SAME-CALLER CONTROL IS THE STRONGEST EVIDENCE. In this very function, `printf((char *)sub_10e27(v7,v6,v3,v2));` recovers FOUR register arguments from the identical MOV-immediate-then-call shape (0x1145e MOV ESI,0x2a / MOV EDI,0x11ccc / JMP 0x11495). So caller-side trial machinery is alive and working in this function; something kills the trials at 0x11477 specifically. Emission is fine too: the workaround reproduces, `--assert "prototype 0x110ff long watchdog(long *timers,int count)" --assert-strict` gives `watchdog((long *)0x13050,2)`.
 
-WHERE TO LOOK (not proven to a line -- treat as the redirect, not as fact). The live gate is caller-side trial activation, `Funcdata::ancestor_op_use` -> `only_op_use` in decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs:2229 and :2405, whose own doc says a "branch/load/store/non-matching-call/persistent-output use means the Varnode is not exclusively a parameter". Note EDI is slot 0: if slot 0 goes inactive both arguments vanish, which matches the observed zero-argument call rather than a one-argument one. A builder should dump the trial state at 0x11477 before writing any code.
+WHERE TO LOOK (not proven to a line -- treat as the redirect, not as fact). The live gate is caller-side trial activation, `Funcdata::ancestor_op_use` -> `only_op_use` in crates/unlace-decomp/src/substrate/funcdata_varnode.rs:2229 and :2405, whose own doc says a "branch/load/store/non-matching-call/persistent-output use means the Varnode is not exclusively a parameter". Note EDI is slot 0: if slot 0 goes inactive both arguments vanish, which matches the observed zero-argument call rather than a one-argument one. A builder should dump the trial state at 0x11477 before writing any code.
 
 ACCEPTANCE TRAP -- READ BEFORE BUILDING. The acceptance asserts stdout_absent `watchdog\(\)` AND stdout_matches `watchdog\([^\n,]+,[^\n)]+\)`, i.e. it requires TWO OR MORE arguments. A fix that recovers only slot 0 (`watchdog(0x13050)`) FAILS its own acceptance. The callee-side recovery is four parameters, so propagating the callee prototype wholesale would emit four arguments and PASS -- but note only two are justified by the body, so passing the probe is not the same as being right here.
 

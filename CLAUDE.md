@@ -32,10 +32,10 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 
 | Path | What it owns |
 |---|---|
-| `decompiler/` | The engine (cargo workspace). `unlace-decomp` = the decompiler (`src/` phase-foldered `p0_knowledge/`…`p9_emit/` + `substrate/`, `infra/`); `unlace-analysis` = loader/analyzer tier (ELF/Mach-O, chained fixups, dyld cache, kernelcache, ObjC, Swift, DWARF, DEX, strings, function discovery); `unlace-sleigh`/`unlace-slacomp` = SLEIGH runtime/compiler (`slacomp`); `unlace-console` = `decomp_dbg`/`decomp_test_dbg`; `unlace-cli` = the `unlace` binary; `unlace-ghidra`/`unlace-wasm` = Ghidra and browser front-ends; `unlace-base`/`unlace-num`/`unlace-harness`/`unlace-lift-diff` = support. |
-| `tests/datatests/` | Vendored XML regression corpus (675 assertions) — `make test`. |
-| `tests/stages/` | kuna-owned issue testcases — `make test-stages` (`tests/stages/README.md`). |
-| `tests/golden/` | Differential golden vectors for the workspace suite (`make rust-test`). |
+| `Cargo.toml` + `crates/` | The engine (the cargo workspace is the repo root). `unlace-decomp` = the decompiler (`src/` phase-foldered `p0_knowledge/`…`p9_emit/` + `substrate/`, `infra/`); `unlace-analysis` = loader/analyzer tier (ELF/Mach-O, chained fixups, dyld cache, kernelcache, ObjC, Swift, DWARF, DEX, strings, function discovery); `unlace-sleigh`/`unlace-slacomp` = SLEIGH runtime/compiler (`slacomp`); `unlace-console` = `decomp_dbg`/`decomp_test_dbg`; `unlace-cli` = the `unlace` binary; `unlace-ghidra`/`unlace-wasm` = Ghidra and browser front-ends; `unlace-base`/`unlace-num`/`unlace-harness`/`unlace-lift-diff` = support. |
+| `tests/datatests/` | Vendored XML regression corpus (675 assertions) vs `docs/baseline.json` — `cargo test -p unlace-cli --test parity datatests`. |
+| `tests/stages/` | kuna-owned issue testcases vs `docs/baseline-stages.json` — `cargo test -p unlace-cli --test parity stage_tests` (`tests/stages/README.md`). |
+| `tests/golden/` | Differential golden vectors for the workspace suite. |
 | `specs/Ghidra/Processors/` | Vendored SLEIGH specs. `.sla` are built artifacts (gitignored), produced by `slacomp`. |
 | `scripts/` + `tools/` | Python helpers + the improvement pipeline, RE-friction loop, decbench campaign drivers. |
 | `integrations/` | Front-ends embedding the engine: `ghidra/` (unlace as Ghidra's decompiler core), `web/` (the in-browser build; upstream hosts it at `decompile.run`). |
@@ -44,7 +44,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 - **Decompiler phases P1–P9** (partition → lift/flow → dataflow → calls → types → variables →
   regions → structure → emit) + an orthogonal **P0** knowledge/config plane. Source folders
   are a taxonomy; the real pass order is `universal_sched` in
-  `decompiler/crates/unlace-decomp/src/infra/universalaction.rs`. One-screen model: `docs/phases.md`;
+  `crates/unlace-decomp/src/infra/universalaction.rs`. One-screen model: `docs/phases.md`;
   normative algorithms: `docs/spec/`.
 - Decisions are flipped per run with `--option NAME VALUE`; discover them via `unlace catalog --json`.
 
@@ -60,7 +60,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 ## Working Rules
 - **A judgement call ships behind a named option; a fix does not** (upstream #1521,
   `docs/option-surface-study.md`). An option is a `settableTable` row in
-  `decompiler/crates/unlace-decomp/phases.toml` (all fields incl. `tier`+`symptoms`) + a
+  `crates/unlace-decomp/phases.toml` (all fields incl. `tier`+`symptoms`) + a
   handler in `src/p0_knowledge/kuna_option_dispatch.rs`; keep `unlace catalog --check` green.
   It exists only where the outcome is questionable (faithfulness vs readability, a
   speculative recovery, a speed trade, a heuristic scanner); a strict correctness fix
@@ -70,30 +70,30 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   catalog counts (`kuna_phases/tests.rs`, `tests/catalog_bytecompat.rs`,
   `tests/stages/kuna-catalog.xml`).
 - **The spec is live**: describe every feature/behavior change in prose in the owning
-  `docs/spec/` chapter in the same change; run `make check-spec`.
+  `docs/spec/` chapter in the same change; run `python3 tools/check_spec.py`.
 - **Speed is a core principle**: a new default-ON must change 0/675 datatest assertions and
   pass the speed budget. Record what a default does in its `phases.toml` row + spec chapter.
 - `docs/options.md` is generated: after touching option metadata,
-  `decompiler/target/release/unlace catalog --markdown > docs/options.md`.
+  `target/release/unlace catalog --markdown > docs/options.md`.
 - **Never re-pin `docs/baseline.json` to hide a regression** — fix the code or make it opt-in.
   Sanctioned re-pins (upstream sync / deliberate default change) say so in the message
   (`unlace test --save-baseline`). Adding a stage test re-records `docs/baseline-stages.json`
   and bumps the corpus count in `unlace-base/src/xml.rs`.
-- **Edition 2024 and rustfmt**: the workspace is edition 2024; run `cd decompiler && cargo fmt --all`
-  (2024 style, `decompiler/rustfmt.toml`) before committing. CI and the `fast` gate check it.
+- **Edition 2024 and rustfmt**: the workspace is edition 2024; run `cargo fmt --all`
+  (2024 style, `rustfmt.toml`) before committing. CI and the `fast` gate check it.
 - **Comments are rare**: file header or function header only; inline only for a genuinely
   confusing hack. New functionality → new modules matching surrounding conventions (ported
   files name methods after their C++ originals).
 - kuna ElementIds use the 4000+ range; kuna PcodeOp addlflags bits start at 0x1000. Code
   comments citing `decompiler/cpp/<file>.{cc,hh}` are **upstream Ghidra anchors**, not repo paths.
-- Don't commit build artifacts (`decompiler/target/`, `*.sla`). Commit at milestones with
+- Don't commit build artifacts (`target/`, `*.sla`). Commit at milestones with
   descriptive messages. Public auto-created things (PRs/issues/comments) start with `[AUTOMATED]`.
 - Opening a PR: no issue first (the PR describes the problem), no @-mention of the maintainers,
   and the body ends with the line `Model: <model id>` naming the generating model (`docs/pr-bodies.md`).
 - **RAM guard**: stay under 90% RAM during builds/tests; if it climbs, kill the job and ask
   before retrying. No Windows-only work.
 - **Worktrees**: one per agent (`../unlace-wt-<name>`, target dir `../unlace-target/<name>`
-  through a `decompiler/target` symlink); build or symlink the worktree's `.sla` files; **never
+  through a `target` symlink); build or symlink the worktree's `.sla` files; **never
   `git stash`** (`refs/stash` is shared across worktrees); build with the recipe in
   `docs/dev-setup.md` and never set `CARGO_INCREMENTAL=0`.
 - **Before you finish in a worktree**: commit your work (a worktree can be removed once its
@@ -105,27 +105,32 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   find .sla file".
 
 ## Validation
-Only prerequisite: a Rust toolchain. Develop in the workspace; the Makefile drives builds
-into `decompiler/target/release/`. The full build recipe (jobserver, sccache, worktree
-`CARGO_TARGET_DIR`, dev binaries) and the local gate script `tools/hooks/unlace-ci-gates.sh`
-are in **`docs/dev-setup.md`** — it overrides generic advice.
+Only prerequisite: a Rust toolchain. The repo root is the cargo workspace; every command runs
+from it, and binaries land in `target/<profile>/`. There is no Makefile. The full build recipe
+(jobserver, sccache, worktree `CARGO_TARGET_DIR`, dev binaries) and the local gate script
+`tools/hooks/unlace-ci-gates.sh` are in **`docs/dev-setup.md`** — it overrides generic advice.
 
-**Four gates — run all before every commit:**
+**The gates — run all before every commit:**
 ```sh
-make test          # datatest corpus vs docs/baseline.json      → PARITY OK 675/675
-make test-stages   # stage-issue corpus vs baseline-stages.json  → PARITY OK
-make rust-test     # full cargo workspace suite + options.md freshness  → green
-make check-spec    # docs/spec anchors + phase-folder ownership resolve → green
-make test-tools    # Python tooling unit tests + module layering ratchet (CI-required)
+cargo fmt --all --check
+cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
+cargo test -p unlace-cli --test parity   # tests/datatests vs docs/baseline.json (PARITY OK 675/675)
+                                         # + tests/stages vs docs/baseline-stages.json (PARITY OK)
+python3 tools/check_spec.py              # docs/spec anchors + phase-folder ownership resolve
+PYTHONPATH=. python3 -m unittest discover -s scripts/tests -p 'test_*.py'   # Python tooling + test layout + layering
+target/debug/unlace catalog --check
+cargo nextest run --workspace --exclude unlace-wasm --profile ci   # the workspace suite (CI-required)
 ```
-`scripts/check_layers.py` (run by `make test-tools`) fails on a new module path (`crate::`, `super::`, `self::`) from a lower
+The parity target needs `decomp_test_dbg`, which the build line (or any workspace-wide cargo
+run) produces; a stale harness fails it. `scripts/check_layers.py` (run by the unittest line)
+fails on a new module path (`crate::`, `super::`, `self::`) from a lower
 band of unlace-decomp to a higher one (middle < lift < structure < bandb < emit < driver; the
 bands are listed in the script). Invert the dependency instead of adding it to
 `scripts/layers-allowlist.txt`; that list only shrinks.
-CI runs all four + `unlace catalog --check` + `make lint` (Clippy = errors in CLI/base/num) on
-push to main. On a PR from a branch in this repo the workspace suite is skipped — **you are
-the gate for `make rust-test`** (or add the `full-ci` label). Workspace integration tests
-need built specs; missing specs are failures, not skips.
+CI runs all of these + clippy (`-D warnings` on CLI/base/num) on push to main. On a PR from a
+branch in this repo the workspace suite is skipped — **you are the gate for the nextest
+run** (or add the `full-ci` label). Workspace integration tests need built specs; missing
+specs are failures, not skips.
 
 A PR labelled **`needs rebase`** no longer merges cleanly into main
 (`.github/workflows/conflicts.yml` sets and clears the label). Its green checks are stale;
@@ -155,7 +160,7 @@ it until the label is gone.
 | `docs/decbench-loop.md` | The decbench benchmark / improvement campaign. |
 | `docs/modes.md` | `--mode auto\|reliable\|aggressive\|fast` presets and thresholds. |
 | `docs/multilang.md` | Multi-language source support (Rust/Go/Swift): sourcelang plane, idiom engine. |
-| `docs/observatory.md` | The local codebase observatory (`make observatory`). |
+| `docs/observatory.md` | The local codebase observatory (`PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace`). |
 | `docs/missing-ghidra-analyses.md` | The `unlace-analysis` tier: analyzer gap vs Ghidra. |
 | `docs/ghidra-integration.md` | unlace as Ghidra's decompiler core (architecture + wire protocol). |
 | `docs/web-integration.md` | The WASM/browser front-end and the project site. |

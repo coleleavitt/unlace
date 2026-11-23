@@ -60,7 +60,7 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
 - Swift form: `<…CodingKeys:Swift.Hashable>.hashValue.getter` 0x101324704: `sub_1013245e8(v1); Swift.Hasher._finalize()();`
   (IDA `v0 = sub_1013245E8(v2); return Hasher._finalize()(v0);`).
 - Suspected owner: p4_calls return/parameter recovery — `ActionActiveParam`/`ActionReturnRecovery` ports in
-  `decompiler/crates/unlace-decomp/src/p4_calls/` plus the `kuna_objcarc.rs` call-fixup (`p2_lift/kuna_objcarc.rs:66`,
+  `crates/unlace-decomp/src/p4_calls/` plus the `kuna_objcarc.rs` call-fixup (`p2_lift/kuna_objcarc.rs:66`,
   `retain_x{n}`/`objc_retainAutoreleasedReturnValue` → `x0 = x0`) which makes the receiver an input of a removed call.
   The C/Swift form has no ARC involved, so the root is the return/arity recovery treating an unknown callee's `x0`
   output as dead when it is only read by the next call's `x0` or the `ret`.

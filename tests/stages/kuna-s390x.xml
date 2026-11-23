@@ -7,7 +7,7 @@
     No option: a processor module is inert on every other target.
 
     The script loads the committed ELF built from
-    decompiler/crates/unlace-cli/tests/fixtures/s390x/s390x_abi.c (clang -O2,
+    crates/unlace-cli/tests/fixtures/s390x/s390x_abi.c (clang -O2,
     -mcpu=z196). Before this change the load failed with "unsupported machine
     S390x", so every assert below is the fixed output.
 
@@ -27,7 +27,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/s390x/s390x_abi.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/s390x/s390x_abi.elf</com>
   <com>read symbols</com>
   <com>load function twice</com>
   <com>decompile</com>

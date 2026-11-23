@@ -1,0 +1,1272 @@
+//! The `--assert` override plane end-to-end — `docs/re-needs/no-cli-rename-or-prototype-override.md`.
+//!
+//! `rename`, `retype`, `map param`, `map return`, `map address`, `comment
+//! instruction` and `parse line extern` all work in the console, and none of
+//! them was reachable from the `unlace` binary. This drives the in-process path
+//! `unlace decompile --json` / `decompile-all` take, and asserts for every
+//! directive that **the emitted C changed** — not that the command returned Ok.
+//!
+//! That distinction is the whole point. `override prototype` has printed
+//! "Successfully added override" and changed nothing since it was ported, and it
+//! got there by being reviewed on its return value. A directive that is accepted
+//! and inert is worse than one that errors, because an agent cannot tell.
+//!
+//! Fixture: `unlace-analysis/tests/fixtures/fauxware` — a small unstripped x86-64
+//! ELF whose `authenticate` has an 8-byte stack buffer (`v2`, printed as
+//! read's `buf` and reached by either name), two pointer
+//! parameters and a call to a named global (`sneaky`), so every directive has
+//! something observable to move.  It is decompiled with `foldcallret off`:
+//! the register-local cases target `int v1; // eax`, the `strcmp(a1,sneaky)`
+//! result, which the default folds into its `if` -- leaving no register local
+//! and renumbering the buffer to `v1`.  The plane is under test here, not the fold.
+
+use std::path::PathBuf;
+
+use unlace_console::assertions::{self, Body, Directive, Outcome};
+use unlace_console::engine::{
+    ConsoleProgram, EntrySelector, bootstrap_from_file, bootstrap_from_object,
+};
+use unlace_console::project::decompile_targets;
+
+const TARGET: &str = "authenticate";
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap()
+}
+
+/// Bootstrap the fixture and run the analysis commit.
+fn load() -> ConsoleProgram {
+    let root = repo_root();
+    let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
+    let bin = root.join("crates/unlace-analysis/tests/fixtures/fauxware");
+    let mut prog =
+        bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
+            .expect("bootstrap fixture with built processor specs");
+    prog.arch_mut()
+        .set_kuna_option("foldcallret", "off")
+        .expect("foldcallret is a registered option");
+    prog.commit_pending_analysis().expect("analysis commit");
+    prog
+}
+
+fn directive(spec: &str, body: Body) -> Directive {
+    Directive {
+        raw: spec.to_string(),
+        body,
+    }
+}
+
+/// Decompile `authenticate` under `directives`, returning `(C, report)`.
+fn decompile_with(directives: Vec<Directive>) -> (String, Vec<Outcome>) {
+    let mut prog = load();
+    if !directives.is_empty() {
+        prog.set_assertions(directives);
+        assertions::apply_program_scoped(&mut prog);
+    }
+    let entry = prog
+        .resolve_entry(&EntrySelector::Name(TARGET.to_string()))
+        .expect("fauxware has an `authenticate`");
+    let funcs = decompile_targets(&mut prog, vec![entry], false, false, false);
+    let code = funcs[0].code.clone().unwrap_or_default();
+    (code, prog.assertion_outcomes())
+}
+
+/// Load a durable analysis fixture with one option disabled before the commit.
+/// These are regression fences for the assertion plane itself, so a missing
+/// spec is a failure rather than a green skip.
+fn load_fixture(fixture: &str) -> ConsoleProgram {
+    let root = repo_root();
+    let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
+    let bin = root
+        .join("crates/unlace-analysis/tests/fixtures")
+        .join(fixture);
+    let mut prog =
+        bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots).unwrap_or_else(|e| {
+            panic!(
+                "bootstrap {fixture} (build `.sla` with `target/release/slacomp -a specs`): {}",
+                e.explain()
+            )
+        });
+    prog.commit_pending_analysis().expect("analysis commit");
+    prog
+}
+
+fn decompile_fixture_with_prototype(
+    fixture: &str,
+    caller: u64,
+    target: &str,
+    decl: &str,
+) -> (String, Vec<Outcome>) {
+    let mut prog = load_fixture(fixture);
+    prog.set_assertions(vec![directive(
+        &format!("prototype {target} {decl}"),
+        Body::Prototype {
+            func: target.into(),
+            decl: decl.into(),
+        },
+    )]);
+    assertions::apply_program_scoped(&mut prog);
+    let entry = prog
+        .resolve_entry(&EntrySelector::Numeric(caller))
+        .unwrap_or_else(|e| panic!("fixture caller at 0x{caller:x}: {e}"));
+    let funcs = decompile_targets(&mut prog, vec![entry], false, false, false);
+    (
+        funcs[0].code.clone().unwrap_or_default(),
+        prog.assertion_outcomes(),
+    )
+}
+
+/// Every outcome is `applied`; panics naming the offender otherwise.
+fn all_applied(report: &[Outcome]) {
+    for outcome in report {
+        assert_eq!(
+            outcome.status, "applied",
+            "{:?} was rejected: {:?}",
+            outcome.directive, outcome.detail
+        );
+    }
+}
+
+/// The un-asserted baseline every case below is measured against.
+#[test]
+fn the_baseline_names_nothing_the_directives_name() {
+    let (code, report) = decompile_with(Vec::new());
+    assert!(report.is_empty(), "no directives ⇒ no report rows");
+    assert!(
+        code.contains("char buf [8]"),
+        "baseline lost its 8-byte buffer:\n{code}"
+    );
+    assert!(
+        !code.contains("credbuf"),
+        "baseline already names credbuf:\n{code}"
+    );
+    assert!(
+        code.contains("sneaky"),
+        "baseline lost the named global:\n{code}"
+    );
+}
+
+/// `prototype` + `type` + `name` — the acceptance probe's three directives, and
+/// the need's own headline: an agent states the signature, a local's type and a
+/// local's name in one invocation and all three land in the C.
+#[test]
+fn prototype_type_and_name_all_reach_the_emitted_c() {
+    let (code, report) = decompile_with(vec![
+        directive(
+            "prototype authenticate int4 authenticate(char *user,char *pass)",
+            Body::Prototype {
+                func: TARGET.into(),
+                decl: "int4 authenticate(char *user,char *pass)".into(),
+            },
+        ),
+        directive(
+            "type v2 char[16]",
+            Body::Type {
+                func: None,
+                symbol: "v2".into(),
+                decl: "char[16]".into(),
+            },
+        ),
+        directive(
+            "name v2 credbuf",
+            Body::Name {
+                func: None,
+                symbol: "v2".into(),
+                newname: "credbuf".into(),
+            },
+        ),
+    ]);
+    all_applied(&report);
+    assert!(
+        code.contains("authenticate(char *user,char *pass)"),
+        "the declared signature did not reach the C:\n{code}"
+    );
+    assert!(
+        code.contains("char credbuf [16];"),
+        "the retype+rename did not land:\n{code}"
+    );
+    assert!(
+        !code.contains("char v2 [8]"),
+        "the original buffer survived:\n{code}"
+    );
+}
+
+/// Every directive reads its identifier against the first pass's output, so
+/// `name` then `type` on the printed `v2` lands exactly as `type` then `name`
+/// does (`prototype_type_and_name_all_reach_the_emitted_c`), and a directive
+/// that misses is reported without rolling back the ones that took: an agent
+/// batching forty renames against a re-decompiled binary does not lose the
+/// other 39.
+#[test]
+fn directive_order_does_not_matter_and_a_miss_is_reported() {
+    let (code, report) = decompile_with(vec![
+        directive(
+            "name v2 credbuf",
+            Body::Name {
+                func: None,
+                symbol: "v2".into(),
+                newname: "credbuf".into(),
+            },
+        ),
+        directive(
+            "name v9 nothing",
+            Body::Name {
+                func: None,
+                symbol: "v9".into(),
+                newname: "nothing".into(),
+            },
+        ),
+        directive(
+            "type v2 char[16]",
+            Body::Type {
+                func: None,
+                symbol: "v2".into(),
+                decl: "char[16]".into(),
+            },
+        ),
+    ]);
+    assert_eq!(report[0].status, "applied");
+    assert_eq!(report[1].status, "rejected");
+    assert_eq!(report[1].detail.as_deref(), Some("No symbol named: v9"));
+    assert_eq!(report[2].status, "applied");
+    assert!(
+        code.contains("char credbuf [16];"),
+        "the rename+retype did not land:\n{code}"
+    );
+}
+
+/// `param` — a locked input storage and name (`map param`).
+#[test]
+fn param_locks_the_input_storage_and_name() {
+    let (code, report) = decompile_with(vec![directive(
+        "param 0 %RDI char *username",
+        Body::Param {
+            func: None,
+            index: 0,
+            storage: "%RDI".into(),
+            decl: "char *username".into(),
+        },
+    )]);
+    all_applied(&report);
+    assert!(
+        code.contains("authenticate(char *username)"),
+        "the locked parameter did not reach the signature:\n{code}"
+    );
+}
+
+/// A `param` QUALIFIED with another function declares that function's
+/// prototype, and the effect shows up at the CALL SITE
+/// (`docs/re-needs/qualified-parameter-assertions-modify.md`).
+///
+/// Before this the qualifier was dropped on the way to the console, so
+/// `param callee::0 ...` renamed and retyped the CALLER's inputs while the
+/// callee kept its empty argument list.  Both halves are asserted here: the
+/// declared name must not land on the caller, and the storage the directive
+/// names must be the storage the argument is read from — `%RDI` gives
+/// `open(a0)` and `%RSI`, which holds the mode operand, does not.  Same slot,
+/// same type: only the declared storage differs, so a lowering that dropped it
+/// could not tell the two runs apart.
+#[test]
+fn a_qualified_param_declares_the_callee_and_not_the_caller() {
+    let call_line = |storage: &str| -> String {
+        let (code, report) = decompile_with(vec![directive(
+            &format!("param open::0 {storage} char *pathname"),
+            Body::Param {
+                func: Some("open".into()),
+                index: 0,
+                storage: storage.into(),
+                decl: "char *pathname".into(),
+            },
+        )]);
+        all_applied(&report);
+        let signature = code.lines().next().unwrap_or_default().to_string();
+        assert!(
+            !signature.contains("pathname"),
+            "the callee's parameter name landed on the CALLER: {signature}"
+        );
+        code.lines()
+            .find(|l| l.contains("open("))
+            .unwrap_or_else(|| panic!("no call to open:\n{code}"))
+            .trim()
+            .to_string()
+    };
+    let rdi = call_line("%RDI");
+    let rsi = call_line("%RSI");
+    assert!(
+        rdi.contains("open(a0)"),
+        "the declared RDI argument is missing: {rdi}"
+    );
+    assert_ne!(rdi, rsi, "the declared storage did not pick the argument");
+}
+
+/// The `return` half of the same plumbing: a qualified `return` parks the
+/// callee's output storage, so what the call site reads back moves with it —
+/// and, as above, the caller's own return is left alone.
+#[test]
+fn a_qualified_return_declares_the_callee_output() {
+    let (baseline, _) = decompile_with(Vec::new());
+    let (code, report) = decompile_with(vec![directive(
+        "return open::%RBX int4",
+        Body::Return {
+            func: Some("open".into()),
+            storage: "%RBX".into(),
+            decl: "int4".into(),
+        },
+    )]);
+    all_applied(&report);
+    assert_ne!(
+        baseline, code,
+        "a qualified `return` on a callee changed nothing in the caller"
+    );
+    assert!(
+        code.lines()
+            .next()
+            .unwrap_or_default()
+            .starts_with("unsigned long authenticate("),
+        "the qualified directive rewrote the CALLER's return:\n{code}"
+    );
+}
+
+/// `return` — a locked return storage and type (`map return`).
+///
+/// This is also the regression for the abort below: the directive parks pieces
+/// that carry output storage, and before the fix those aborted the process.
+#[test]
+fn return_locks_the_output_storage_and_type() {
+    let (code, report) = decompile_with(vec![directive(
+        "return %RAX int4",
+        Body::Return {
+            func: None,
+            storage: "%RAX".into(),
+            decl: "int4".into(),
+        },
+    )]);
+    all_applied(&report);
+    assert!(
+        code.starts_with("int4 authenticate") || code.starts_with("int authenticate"),
+        "the locked return type did not reach the signature:\n{code}"
+    );
+}
+
+/// `typedef` interns a type, and `type` can then name it — the pair is what lets
+/// an agent describe a structure kuna never saw.
+#[test]
+fn a_typedef_is_nameable_by_a_later_type_directive() {
+    let (code, report) = decompile_with(vec![
+        directive(
+            "typedef struct creds { char raw[16]; };",
+            Body::Typedef {
+                decl: "struct creds { char raw[16]; };".into(),
+            },
+        ),
+        directive(
+            "type v2 creds",
+            Body::Type {
+                func: None,
+                symbol: "v2".into(),
+                decl: "creds".into(),
+            },
+        ),
+    ]);
+    all_applied(&report);
+    assert!(
+        code.contains("creds buf;"),
+        "the interned struct did not type the local:\n{code}"
+    );
+    assert!(
+        code.contains("buf.raw"),
+        "the struct fields did not render:\n{code}"
+    );
+}
+
+/// `data` — a named, typed global (`map address`), observable at the call that
+/// passes it.
+#[test]
+fn data_renames_the_global_at_its_use() {
+    let (code, report) = decompile_with(vec![directive(
+        "data 0x601048 char *shadowpw",
+        Body::Data {
+            addr: 0x601048,
+            decl: "char *shadowpw".into(),
+        },
+    )]);
+    all_applied(&report);
+    assert!(
+        code.contains("shadowpw"),
+        "the declared global did not reach the C:\n{code}"
+    );
+    assert!(
+        !code.contains("sneaky"),
+        "the loader name survived the declaration:\n{code}"
+    );
+}
+
+/// `comment` — an agent's own note, rendered into the C at the instruction.
+#[test]
+fn comment_reaches_the_emitted_c() {
+    let (code, report) = decompile_with(vec![directive(
+        "comment 0x400699 open the credentials file",
+        Body::Comment {
+            func: None,
+            addr: 0x400699,
+            text: "open the credentials file".into(),
+        },
+    )]);
+    all_applied(&report);
+    assert!(
+        code.contains("/* open the credentials file */"),
+        "the comment did not reach the C:\n{code}"
+    );
+}
+
+/// `function` — the `--define-function` spelling, carried by the same plane.
+#[test]
+fn function_declares_a_bounded_entry() {
+    let mut prog = load();
+    prog.set_assertions(vec![directive(
+        "function 0x400664-0x400680=authstub",
+        Body::Function {
+            start: 0x400664,
+            end: Some(0x400680),
+            name: Some("authstub".into()),
+        },
+    )]);
+    assertions::apply_program_scoped(&mut prog);
+    all_applied(&prog.assertion_outcomes());
+    let entry = prog
+        .resolve_entry(&EntrySelector::Name("authstub".to_string()))
+        .expect("the declared name resolves");
+    assert_eq!(entry.addr.get_offset(), 0x400664);
+    let funcs = decompile_targets(&mut prog, vec![entry], true, false, false);
+    assert_eq!(funcs[0].name, "authstub");
+    assert_eq!(
+        funcs[0].size, 0x1c,
+        "the declared extent is what the record reports"
+    );
+}
+
+/// An unqualified symbol-scoped directive cannot bind on a multi-function run —
+/// it would silently mean "every function that happens to have a `v2`" — so it is
+/// rejected with a detail that says how to write it instead.  A qualified one
+/// binds to exactly the function it names.
+#[test]
+fn a_multi_function_run_needs_the_directive_to_name_its_function() {
+    let mut prog = load();
+    prog.set_assertions(vec![
+        directive(
+            "name v2 credbuf",
+            Body::Name {
+                func: None,
+                symbol: "v2".into(),
+                newname: "credbuf".into(),
+            },
+        ),
+        directive(
+            "name authenticate::v2 credbuf",
+            Body::Name {
+                func: Some(TARGET.into()),
+                symbol: "v2".into(),
+                newname: "credbuf".into(),
+            },
+        ),
+    ]);
+    assertions::apply_program_scoped(&mut prog);
+    let targets: Vec<_> = ["authenticate", "main"]
+        .iter()
+        .map(|n| {
+            prog.resolve_entry(&EntrySelector::Name(n.to_string()))
+                .expect("resolves")
+        })
+        .collect();
+    let funcs = decompile_targets(&mut prog, targets, true, false, false);
+    let report = prog.assertion_outcomes();
+    assert_eq!(
+        report[0].status, "rejected",
+        "an unqualified directive bound anyway"
+    );
+    assert!(
+        report[0]
+            .detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("<func>::<operand>"),
+        "the rejection does not say how to qualify it: {:?}",
+        report[0].detail
+    );
+    assert_eq!(report[1].status, "applied");
+    let authenticate = funcs
+        .iter()
+        .find(|f| f.name == "authenticate")
+        .expect("decompiled");
+    assert!(
+        authenticate
+            .code
+            .as_deref()
+            .unwrap_or_default()
+            .contains("credbuf"),
+        "the qualified directive did not reach its function"
+    );
+}
+
+/// A `map return`-shaped prototype — explicit output storage and NO declared
+/// return type — used to abort the process (`outtype null`,
+/// `ParamListStandardOut::assignMap`) the moment its function was decompiled, so
+/// the one console command an agent would reach for to fix a return value killed
+/// the session.  The declared type is the return type.
+#[test]
+fn output_only_prototype_pieces_do_not_abort_the_drive() {
+    use unlace_decomp::fspec::{ParameterPieces, PrototypePieces, parameter_pieces_flags};
+    let mut prog = load();
+    let entry = prog
+        .resolve_entry(&EntrySelector::Name(TARGET.to_string()))
+        .expect("fauxware has an `authenticate`");
+    let int4 = prog
+        .arch()
+        .types()
+        .get_base(4, unlace_decomp::dtype::type_metatype::TYPE_INT)
+        .expect("int4");
+    let rax = prog
+        .arch()
+        .manage()
+        .get_space_by_name("register")
+        .map(|s| unlace_base::address::Address::new(std::rc::Rc::clone(s), 0))
+        .expect("x86-64 has a register space");
+    let pieces = PrototypePieces {
+        name: TARGET.to_string(),
+        first_var_arg_slot: -1,
+        output_storage: Some(ParameterPieces {
+            addr: rax,
+            type_: Some(int4),
+            flags: parameter_pieces_flags::TYPELOCK,
+        }),
+        ..Default::default()
+    };
+    let addr = entry.addr.clone();
+    let step = unlace_console::decompile_step::decompile_one(
+        prog.arch_mut(),
+        TARGET,
+        addr,
+        0,
+        &unlace_console::decompile_step::DecompileSeed {
+            purpose: unlace_decomp::decompile_drive::DrivePurpose::Batch,
+            mapped_symbols: &[],
+            usepoint_symbols: &[],
+            dynamic_symbols: &[],
+            object_assertions: &[],
+            pending_proto: Some(&pieces),
+            flow_overrides: &[],
+            mapped_params: &[],
+        },
+        &[],
+    );
+    assert!(
+        step.result.is_ok(),
+        "an output-only prototype aborted the drive"
+    );
+}
+
+/// The declarations kuna PRINTS are declarations kuna ACCEPTS
+/// (`docs/re-needs/prototype-assertions-reject-ordinary.md`).  Until the
+/// C-declaration grammar learned the standard scalar keywords, a base type was
+/// whatever `findByName` answered, so `int` / `unsigned int` / `long long` --
+/// exactly what the printer emits -- were rejected as syntax errors while
+/// `int4` / `uint4` / `int8` worked.  Five testers filed it in one round, and
+/// `docs/cli.md`'s own worked example was among the rejected forms.
+#[test]
+fn standard_c_scalar_types_reach_the_emitted_c() {
+    let (code, report) = decompile_with(vec![
+        directive(
+            "prototype authenticate unsigned int authenticate(char *user,char *pass)",
+            Body::Prototype {
+                func: TARGET.into(),
+                decl: "unsigned int authenticate(char *user,char *pass)".into(),
+            },
+        ),
+        directive(
+            "prototype read long long read(int fd,void *buf,unsigned long n)",
+            Body::Prototype {
+                func: "read".into(),
+                decl: "long long read(int fd,void *buf,unsigned long n)".into(),
+            },
+        ),
+        directive(
+            "type v2 unsigned char[8]",
+            Body::Type {
+                func: None,
+                symbol: "v2".into(),
+                decl: "unsigned char[8]".into(),
+            },
+        ),
+    ]);
+    all_applied(&report);
+    // This surface renders core types with their interned names (the C speller
+    // is a `--mode` preset the CLI applies, not this bare drive), so the
+    // declared `unsigned int` reads back as `uint4` and `unsigned char` as
+    // `uint1` -- either spelling names the type that was asserted.  The
+    // baseline return type is an 8-byte integer, so a 4-byte unsigned one is
+    // the discriminator.
+    assert!(
+        code.contains("uint4 authenticate(char *user,char *pass)")
+            || code.contains("unsigned int authenticate(char *user,char *pass)"),
+        "the C return type did not reach the C:\n{code}"
+    );
+    assert!(
+        code.contains("uint1 s2 [8];") || code.contains("unsigned char s2 [8];"),
+        "a multi-word scalar did not survive as a `type` base:\n{code}"
+    );
+}
+
+/// `<func>` is what the signature binds to, not the name inside the declaration
+/// (`docs/re-needs/text-output-silently-ignores.md`).  An agent that has worked
+/// out what a stripped function does writes the declaration under the name it
+/// deserves -- `void *hashit(void *out,void *input)` for `authenticate` -- and
+/// the types must still land on the function that was named as the target.
+///
+/// This surface always did that (`assertions::apply_prototype` overwrites
+/// `pieces.name`); the console script did not, and the two are asserted together
+/// because either alone is self-consistent.
+#[test]
+fn a_declaration_written_under_another_name_still_binds_to_its_target() {
+    let (code, report) = decompile_with(vec![directive(
+        "prototype authenticate void *hashit(void *out,void *input)",
+        Body::Prototype {
+            func: TARGET.into(),
+            decl: "void *hashit(void *out,void *input)".into(),
+        },
+    )]);
+    all_applied(&report);
+    assert!(
+        code.contains("authenticate(void *out,void *input)"),
+        "the declared signature did not reach its target:\n{code}"
+    );
+    assert!(
+        !code.contains("hashit"),
+        "the declaration's name became a function:\n{code}"
+    );
+}
+
+/// A combination that is not a C type is named, not answered with a bare
+/// "Syntax error" pointing at the second keyword.
+#[test]
+fn an_impossible_scalar_combination_is_rejected_by_name() {
+    let (_code, report) = decompile_with(vec![directive(
+        "prototype authenticate short long authenticate(void)",
+        Body::Prototype {
+            func: TARGET.into(),
+            decl: "short long authenticate(void)".into(),
+        },
+    )]);
+    assert_eq!(report.len(), 1);
+    assert_eq!(report[0].status, "rejected", "{report:?}");
+    let detail = report[0].detail.clone().unwrap_or_default();
+    assert!(
+        detail.contains("Invalid combination of C type specifiers: short long"),
+        "the rejection did not name the combination: {detail}"
+    );
+}
+
+/// `<func>` may be an ENTRY ADDRESS, not just a name — an agent has the address
+/// long before it has a name it trusts, and the address form used to be
+/// accepted and then dropped on the floor
+/// (`docs/re-needs/accepted-sqrt-prototype-still.md`): nothing is called
+/// `0x400664`, so the by-name park landed on no symbol at all while the report
+/// still said `applied`.
+#[test]
+fn a_prototype_at_an_entry_address_binds_to_the_function_there() {
+    let (code, report) = decompile_with(vec![directive(
+        "prototype 0x400664 void *hashit(void *out,void *input)",
+        Body::Prototype {
+            func: "0x400664".into(),
+            decl: "void *hashit(void *out,void *input)".into(),
+        },
+    )]);
+    all_applied(&report);
+    assert!(
+        code.contains("authenticate(void *out,void *input)"),
+        "the address-form signature did not reach the function at 0x400664:\n{code}"
+    );
+    assert!(
+        !code.contains("hashit"),
+        "the declaration's name became a function:\n{code}"
+    );
+}
+
+/// The address form is what reaches a CALLEE the name form can miss: the park
+/// is keyed by entry address, which is the key
+/// `ArchContext::callee_proto_pieces` already reads a call site back through.
+/// `strcmp` here is a PLT stub, the same shape as the PE import thunk the need
+/// was filed on.
+#[test]
+fn an_address_form_prototype_reaches_a_callee_at_that_address() {
+    let (baseline, _) = decompile_with(Vec::new());
+    assert!(
+        baseline.contains("strcmp(a1,sneaky)"),
+        "baseline moved:\n{baseline}"
+    );
+    let (code, report) = decompile_with(vec![directive(
+        "prototype 0x400550 int4 strcmp(char *a,char *b,unsigned long n)",
+        Body::Prototype {
+            func: "0x400550".into(),
+            decl: "int4 strcmp(char *a,char *b,unsigned long n)".into(),
+        },
+    )]);
+    all_applied(&report);
+    assert!(
+        code.contains("strcmp(a1,sneaky,"),
+        "the declared third argument never reached the call site:\n{code}"
+    );
+}
+
+/// A resolved name and its executable import veneer are one assertion target.
+/// The fixture also contains a same-named IAT slot, which the old global-scope
+/// query selected: the directive reported `applied` but retained one guessed
+/// argument. The built-in table and the assertion state the same three arguments.
+#[test]
+fn a_named_import_prototype_canonicalizes_to_its_executable_veneer() {
+    const FIXTURE: &str = "win32sigs_pe_i386.exe";
+    const CALLER: u64 = 0x401020;
+    const VENEER: u64 = 0x401010;
+    const DECL: &str = "void *LoadLibraryExW(wchar_t *name,void *file,unsigned int flags)";
+
+    let (named, named_report) =
+        decompile_fixture_with_prototype(FIXTURE, CALLER, "LoadLibraryExW", DECL);
+    let (addressed, addressed_report) =
+        decompile_fixture_with_prototype(FIXTURE, CALLER, &format!("0x{VENEER:x}"), DECL);
+    all_applied(&named_report);
+    all_applied(&addressed_report);
+    assert_eq!(
+        named, addressed,
+        "the name and executable-veneer address must park the same prototype"
+    );
+    let call = named
+        .lines()
+        .find(|line| line.contains("LoadLibraryExW("))
+        .unwrap_or_else(|| panic!("named assertion lost the call:\n{named}"));
+    assert_eq!(
+        call.matches(',').count(),
+        2,
+        "the named prototype did not supply exactly three arguments: {call}"
+    );
+    assert!(
+        !call.contains("LoadLibraryExW()"),
+        "the call is still argumentless: {call}"
+    );
+}
+
+/// Executability only disambiguates an import slot from its code veneer. When
+/// an export and an import veneer with the same spelling are both executable,
+/// the caller must choose an address instead of receiving an arbitrary target.
+#[test]
+fn a_named_prototype_rejects_two_executable_candidates() {
+    let mut prog = load_fixture("libcsigs_pe_x86_64.exe");
+    prog.set_assertions(vec![directive(
+        "prototype memcmp int memcmp(void *a,void *b,unsigned long n)",
+        Body::Prototype {
+            func: "memcmp".into(),
+            decl: "int memcmp(void *a,void *b,unsigned long n)".into(),
+        },
+    )]);
+    assertions::apply_program_scoped(&mut prog);
+    let report = prog.assertion_outcomes();
+    assert_eq!(report.len(), 1);
+    assert_eq!(report[0].status, "rejected", "{report:?}");
+    let detail = report[0].detail.as_deref().unwrap_or_default();
+    assert!(
+        detail.contains("ambiguous"),
+        "unhelpful rejection: {detail}"
+    );
+    // A linked PE maps its candidates itself, so they are reported at their own
+    // addresses; `synthetic` belongs to a relocatable load (kuna, issue #667).
+    assert!(
+        detail.matches(" at 0x").count() >= 2,
+        "the rejection must identify both executable candidates: {detail}"
+    );
+    assert!(
+        !detail.contains("synthetic"),
+        "a linked image has no synthetic VMA: {detail}"
+    );
+}
+
+/// A true miss remains a pending by-name prototype for the interactive
+/// pre-symbol workflow. Existing unique names are exercised throughout this
+/// suite, including `authenticate` and the import-veneer case above.
+#[test]
+fn an_unresolved_name_remains_a_legal_pending_prototype() {
+    let mut prog = load_fixture("win32sigs_pe_i386.exe");
+    prog.set_assertions(vec![directive(
+        "prototype future_symbol int future_symbol(char *value)",
+        Body::Prototype {
+            func: "future_symbol".into(),
+            decl: "int future_symbol(char *value)".into(),
+        },
+    )]);
+    assertions::apply_program_scoped(&mut prog);
+    all_applied(&prog.assertion_outcomes());
+}
+
+/// An explicitly `0x`-prefixed operand that starts no function is REJECTED with
+/// the address in the detail.  `0x...` is not a C identifier, so such a
+/// directive can never bind, and reporting it `applied` — which is what the
+/// whole family did — leaves an agent with no way to tell.
+#[test]
+fn an_address_that_starts_no_function_is_rejected_by_address() {
+    let (_code, report) = decompile_with(vec![directive(
+        "prototype 0x999999 int4 nope(void)",
+        Body::Prototype {
+            func: "0x999999".into(),
+            decl: "int4 nope(void)".into(),
+        },
+    )]);
+    assert_eq!(report.len(), 1);
+    assert_eq!(report[0].status, "rejected", "{report:?}");
+    let detail = report[0].detail.clone().unwrap_or_default();
+    assert!(
+        detail.contains("no function starts at 0x999999"),
+        "unhelpful detail: {detail}"
+    );
+}
+
+/// A qualified `param` takes the same operand, so a callee can be typed by
+/// address as well as by name.
+#[test]
+fn a_qualified_param_accepts_an_entry_address_as_its_function() {
+    let (code, report) = decompile_with(vec![directive(
+        "param 0x400560::0 %RDI char *pathname",
+        Body::Param {
+            func: Some("0x400560".into()),
+            index: 0,
+            storage: "%RDI".into(),
+            decl: "char *pathname".into(),
+        },
+    )]);
+    all_applied(&report);
+    let call = code
+        .lines()
+        .find(|l| l.contains("open("))
+        .unwrap_or_else(|| panic!("no call to open:\n{code}"));
+    assert!(
+        call.contains("open(a0)"),
+        "the declared RDI argument is missing: {call}"
+    );
+}
+
+/// A parameter may be named after a type
+/// (`docs/re-needs/prototype-parser-rejects-valid.md`).  `code` is one of the
+/// core types every compiler spec registers, so the lexer handed it to the
+/// parser as `TYPE_NAME` and `unsigned char *code` was a syntax error with the
+/// caret on the name -- while the same declaration with the parameter renamed
+/// applied.  Every interned name is in that class: the core types, a tag or
+/// typedef declared earlier in the same run, and on a `-g` binary every DWARF
+/// type name the program uses.
+#[test]
+fn a_parameter_named_after_a_type_reaches_the_emitted_c() {
+    let (code, report) = decompile_with(vec![
+        directive(
+            "prototype authenticate unsigned int authenticate(char *code,char *pass)",
+            Body::Prototype {
+                func: TARGET.into(),
+                decl: "unsigned int authenticate(char *code,char *pass)".into(),
+            },
+        ),
+        // A function-pointer parameter named after a type: the same name
+        // position, reached through the parenthesised declarator.  It needs a
+        // real prototype model behind the factory, which is why it is pinned
+        // here rather than in the grammar unit tests.
+        directive(
+            "prototype read int read(int4 (*code)(int4 n))",
+            Body::Prototype {
+                func: "read".into(),
+                decl: "int read(int4 (*code)(int4 n))".into(),
+            },
+        ),
+    ]);
+    all_applied(&report);
+    let sig = code
+        .lines()
+        .find(|l| l.contains("authenticate("))
+        .unwrap_or_else(|| panic!("no signature:\n{code}"));
+    assert!(
+        sig.contains("char *code"),
+        "the declared name did not reach the C: {sig}"
+    );
+    assert!(
+        sig.contains("char *pass"),
+        "the second parameter moved too: {sig}"
+    );
+}
+
+// --- the register locals (`docs/re-needs/local-type-assertion-target.md`) ----
+//
+// `authenticate`'s `int v1; // eax` is a HighVariable the naming pass named, not
+// a Symbol in the local scope, so the by-name resolution the plane was built on
+// could not see it -- and a register local is what most of a function's
+// variables are.  Every case below drives the same fixture the rest of the file
+// does, and every one of them checks the emitted C, not the return value.
+
+/// The need's own case: a type stated on a register local reaches the
+/// declaration.  Before this the directive answered `No symbol named: v1`.
+#[test]
+fn a_type_on_a_register_local_reaches_the_declaration() {
+    let (code, report) = decompile_with(vec![directive(
+        "type v1 unsigned int",
+        Body::Type {
+            func: None,
+            symbol: "v1".into(),
+            decl: "unsigned int".into(),
+        },
+    )]);
+    all_applied(&report);
+    assert!(
+        code.contains("uint4 v1; // eax"),
+        "the retype did not land:\n{code}"
+    );
+}
+
+/// And a name: the body reads the caller's identifier, not `v1`.
+#[test]
+fn a_name_on_a_register_local_reaches_the_body() {
+    let (code, report) = decompile_with(vec![directive(
+        "name v1 rc",
+        Body::Name {
+            func: None,
+            symbol: "v1".into(),
+            newname: "rc".into(),
+        },
+    )]);
+    all_applied(&report);
+    assert!(
+        code.contains("int4 rc; // eax"),
+        "the rename did not land:\n{code}"
+    );
+    assert!(
+        code.contains("rc = strcmp("),
+        "the body still uses the old name:\n{code}"
+    );
+}
+
+/// A Symbol covers `sizeof(type)` bytes from the storage address, so a type
+/// WIDER than the target describes the next register along: `char *` at EAX's
+/// address is RAX.  Reported as a rejection with both widths, because the one
+/// thing the caller cannot read off the C is how wide kuna thinks the variable
+/// is -- and `applied` over an unchanged `v1` is the failure this plane exists
+/// to end.
+#[test]
+fn a_type_wider_than_the_register_is_rejected_with_both_widths() {
+    let (code, report) = decompile_with(vec![directive(
+        "type v1 char *",
+        Body::Type {
+            func: None,
+            symbol: "v1".into(),
+            decl: "char *".into(),
+        },
+    )]);
+    assert_eq!(report[0].status, "rejected");
+    assert_eq!(
+        report[0].detail.as_deref(),
+        Some("Storage is 4 bytes, the stated type is 8")
+    );
+    assert!(
+        code.contains("int4 v1; // eax"),
+        "a rejected directive still moved v1:\n{code}"
+    );
+}
+
+/// A name nothing answers to keeps the wording an agent has already been taught
+/// to read: the fallback must not turn a typo into a different error.
+#[test]
+fn a_name_no_local_answers_to_is_still_no_symbol_named() {
+    let (_, report) = decompile_with(vec![directive(
+        "type v9 int",
+        Body::Type {
+            func: None,
+            symbol: "v9".into(),
+            decl: "int".into(),
+        },
+    )]);
+    assert_eq!(report[0].status, "rejected");
+    assert_eq!(report[0].detail.as_deref(), Some("No symbol named: v9"));
+}
+
+/// The scope owns the stack slots, so a directive naming a slot an EARLIER
+/// directive in the same batch renamed must reach that Symbol, not fall through
+/// and map a second Symbol over the same slot.  `v2` is `char v2 [8]` on the
+/// stack; after `name v2 credbuf` the pass still printed `v2`, so `type v2`
+/// retypes `credbuf`, and the slot is declared once.
+#[test]
+fn a_renamed_stack_local_does_not_get_a_second_symbol() {
+    let (code, report) = decompile_with(vec![
+        directive(
+            "name v2 credbuf",
+            Body::Name {
+                func: None,
+                symbol: "v2".into(),
+                newname: "credbuf".into(),
+            },
+        ),
+        directive(
+            "type v2 char[8]",
+            Body::Type {
+                func: None,
+                symbol: "v2".into(),
+                decl: "char[8]".into(),
+            },
+        ),
+    ]);
+    all_applied(&report);
+    assert_eq!(
+        code.matches("char credbuf [8];").count(),
+        1,
+        "the slot is not declared once:\n{code}"
+    );
+    assert!(
+        !code.contains(" v2 ["),
+        "a second Symbol took the slot:\n{code}"
+    );
+}
+
+#[test]
+fn a_one_formal_custom_input_carries_the_getter_result() {
+    let root = repo_root();
+    let xml = root.join("tests/stages/kuna-custom-call-storage.xml");
+    let mut prog = bootstrap_from_file(
+        xml.to_str().unwrap(),
+        "",
+        &[root.join("specs").to_str().unwrap().to_string()],
+    )
+    .expect("bootstrap authored x86 fixture with built processor specs");
+    prog.set_assertions(vec![
+        directive(
+            "prototype probe int4 MSABI probe(void *object)",
+            Body::Prototype {
+                func: "probe".into(),
+                decl: "int4 MSABI probe(void *object)".into(),
+            },
+        ),
+        directive(
+            "prototype getter int4 MSABI getter(void *object)",
+            Body::Prototype {
+                func: "getter".into(),
+                decl: "int4 MSABI getter(void *object)".into(),
+            },
+        ),
+        directive(
+            "prototype mapper int4 MSABI mapper(int4 raw_type)",
+            Body::Prototype {
+                func: "mapper".into(),
+                decl: "int4 MSABI mapper(int4 raw_type)".into(),
+            },
+        ),
+        directive(
+            "param mapper::0 %EDX int4 raw_type",
+            Body::Param {
+                func: Some("mapper".into()),
+                index: 0,
+                storage: "%EDX".into(),
+                decl: "int4 raw_type".into(),
+            },
+        ),
+    ]);
+    assertions::apply_program_scoped(&mut prog);
+    let entry = prog
+        .resolve_entry(&EntrySelector::Name("probe".into()))
+        .unwrap();
+    let funcs = decompile_targets(&mut prog, vec![entry], false, false, false);
+    all_applied(&prog.assertion_outcomes());
+    let code = funcs[0].code.as_deref().unwrap_or_default();
+    let forwards_getter = code.contains("mapper(getter(object))")
+        || code
+            .lines()
+            .filter_map(|line| line.split_once(" = getter(object);"))
+            .any(|(name, _)| code.contains(&format!("return mapper({});", name.trim())));
+    assert!(forwards_getter, "wrong custom argument:\n{code}");
+}
+
+#[test]
+fn callable_types_keep_distinct_explicit_input_and_output_storage() {
+    use std::rc::Rc;
+    use unlace_base::address::Address;
+    use unlace_console::grammar::{DataOrg, parse_protopieces};
+    use unlace_decomp::fspec::{ParameterPieces, parameter_pieces_flags};
+
+    let prog = load();
+    let arch = prog.arch();
+    let (addr_size, word_size) = arch.data_org();
+    let model = arch.get_model("MSABI").cloned().expect("x86 MSABI model");
+    let mut pieces = parse_protopieces(
+        "int4 mapper(int4 raw_type);",
+        arch.types(),
+        DataOrg {
+            addr_size,
+            word_size,
+        },
+    )
+    .unwrap();
+    let piece = |name: &str, ty: Rc<unlace_decomp::dtype::Datatype>| {
+        let reg = arch.get_register_varnode(name.as_bytes()).unwrap();
+        ParameterPieces {
+            addr: Address::new(reg.space.unwrap(), reg.offset),
+            type_: Some(ty),
+            flags: parameter_pieces_flags::TYPELOCK | parameter_pieces_flags::NAMELOCK,
+        }
+    };
+    let mut previous: Option<Rc<unlace_decomp::dtype::Datatype>> = None;
+    for name in ["ECX", "EDX", "R8D", "ECX", "EDX"] {
+        let input = piece(name, Rc::clone(&pieces.intypes[0]));
+        pieces.input_storage = vec![(0, input.clone())];
+        let code = arch
+            .types_impl()
+            .get_type_code_proto_model(&pieces, Rc::clone(&model))
+            .unwrap();
+        let proto = code.get_code_prototype().unwrap();
+        assert_eq!(proto.num_params(), 1);
+        assert_eq!(
+            proto.get_param(0).unwrap().get_address(),
+            input.addr,
+            "input {name}"
+        );
+        assert!(proto.is_input_locked());
+        if let Some(previous) = previous {
+            let structural = previous.compare(&code, 10).unwrap();
+            let dependency = previous.compare_dependency(&code).unwrap();
+            assert_ne!(structural, 0);
+            assert_ne!(previous.compare(&code, 0).unwrap(), 0);
+            assert_ne!(dependency, 0);
+            assert_eq!(structural, -code.compare(&previous, 10).unwrap());
+            assert_eq!(dependency, -code.compare_dependency(&previous).unwrap());
+        }
+        previous = Some(code);
+    }
+    let repeated = arch
+        .types_impl()
+        .get_type_code_proto_model(&pieces, Rc::clone(&model))
+        .unwrap();
+    assert!(Rc::ptr_eq(previous.as_ref().unwrap(), &repeated));
+    for name in ["EAX", "EBX", "R9D", "EAX", "EBX"] {
+        let output = piece(name, Rc::clone(pieces.outtype.as_ref().unwrap()));
+        pieces.output_storage = Some(output.clone());
+        let code = arch
+            .types_impl()
+            .get_type_code_proto_model(&pieces, Rc::clone(&model))
+            .unwrap();
+        let proto = code.get_code_prototype().unwrap();
+        assert_eq!(
+            proto.get_output().get_address(),
+            output.addr,
+            "output {name}"
+        );
+        assert!(proto.is_output_locked());
+    }
+    pieces.outtype = None;
+    pieces.output_storage = None;
+    let code = arch
+        .types_impl()
+        .get_type_code_proto_model(&pieces, Rc::clone(&model))
+        .unwrap();
+    let proto = code.get_code_prototype().unwrap();
+    assert_eq!(
+        proto.get_param(0).unwrap().get_address(),
+        pieces.input_storage[0].1.addr
+    );
+    assert!(!proto.is_output_locked());
+    pieces.intypes.clear();
+    pieces.innames.clear();
+    pieces.input_storage.clear();
+    let output = piece(
+        "EBX",
+        arch.types()
+            .get_base(4, unlace_decomp::dtype::type_metatype::TYPE_INT)
+            .unwrap(),
+    );
+    pieces.output_storage = Some(output.clone());
+    let code = arch
+        .types_impl()
+        .get_type_code_proto_model(&pieces, model)
+        .unwrap();
+    let proto = code.get_code_prototype().unwrap();
+    assert_eq!(proto.get_output().get_address(), output.addr);
+    assert!(proto.is_output_locked());
+}
+
+fn check_callable_return_lock(declaration: &str, unknown_first: bool) {
+    use std::rc::Rc;
+    use unlace_console::grammar::{DataOrg, parse_protopieces};
+
+    let prog = load();
+    let arch = prog.arch();
+    let (addr_size, word_size) = arch.data_org();
+    let known = parse_protopieces(
+        declaration,
+        arch.types(),
+        DataOrg {
+            addr_size,
+            word_size,
+        },
+    )
+    .unwrap();
+    let mut unknown = known.clone();
+    unknown.outtype = None;
+    let model = arch.get_model("MSABI").cloned().unwrap();
+    let intern = |pieces| {
+        arch.types_impl()
+            .get_type_code_proto_model(pieces, Rc::clone(&model))
+            .unwrap()
+    };
+    let (first, second) = if unknown_first {
+        (intern(&unknown), intern(&known))
+    } else {
+        (intern(&known), intern(&unknown))
+    };
+    assert!(
+        !Rc::ptr_eq(&first, &second),
+        "return types collapsed: {declaration}"
+    );
+    let (unknown_code, known_code) = if unknown_first {
+        (&first, &second)
+    } else {
+        (&second, &first)
+    };
+    assert!(
+        !unknown_code
+            .get_code_prototype()
+            .unwrap()
+            .is_output_locked()
+    );
+    assert!(known_code.get_code_prototype().unwrap().is_output_locked());
+    assert!(unknown_code.get_code_prototype().unwrap().is_input_locked());
+    assert!(known_code.get_code_prototype().unwrap().is_input_locked());
+    for _ in 0..3 {
+        assert!(Rc::ptr_eq(unknown_code, &intern(&unknown)));
+        assert!(Rc::ptr_eq(known_code, &intern(&known)));
+    }
+    let dependency = first.compare_dependency(&second).unwrap();
+    assert_ne!(dependency, 0);
+    assert_eq!(dependency, -second.compare_dependency(&first).unwrap());
+    for depth in [0, 10] {
+        let structural = first.compare(&second, depth).unwrap();
+        assert_ne!(structural, 0);
+        assert_eq!(structural, -second.compare(&first, depth).unwrap());
+    }
+}
+
+#[test]
+fn callable_return_lock_void_first() {
+    check_callable_return_lock("void handler(int4 input);", false);
+}
+
+#[test]
+fn callable_return_lock_unknown_first() {
+    check_callable_return_lock("void handler(int4 input);", true);
+}
+
+#[test]
+fn callable_return_lock_void_first_without_parameters() {
+    check_callable_return_lock("void handler(void);", false);
+}
+
+#[test]
+fn callable_return_lock_unknown_first_without_parameters() {
+    check_callable_return_lock("void handler(void);", true);
+}

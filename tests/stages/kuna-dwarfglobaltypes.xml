@@ -19,7 +19,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfglobaltypes_gcc_O1_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfglobaltypes_gcc_O1_x86_64</com>
   <com>option dwarfglobaltypes off</com>
   <com>read symbols</com>
   <com>load function get_port</com>
@@ -29,7 +29,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfglobaltypes_gcc_O1_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfglobaltypes_gcc_O1_x86_64</com>
   <com>option dwarfglobaltypes on</com>
   <com>read symbols</com>
   <com>load function get_port</com>

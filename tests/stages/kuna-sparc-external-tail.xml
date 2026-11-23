@@ -5,7 +5,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/sparc_external_tail.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/sparc_external_tail.o</com>
   <com>read symbols</com>
   <com>parse line extern int external_tail(short value);</com>
   <com>parse line extern int provider(short value);</com>
@@ -14,7 +14,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/sparc_external_tail.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/sparc_external_tail.o</com>
   <com>read symbols</com>
   <com>parse line extern int external_tail(short value);</com>
   <com>parse line extern int provider(short value);</com>

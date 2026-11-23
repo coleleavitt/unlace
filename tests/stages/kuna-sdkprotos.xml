@@ -35,7 +35,7 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_sdk_c_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_sdk_c_arm64</com>
   <com>read symbols</com>
   <com>load function _name_len</com>
   <com>decompile</com>
@@ -49,9 +49,9 @@ c0035fd6
   <com>load function _where</com>
   <com>decompile</com>
   <com>print C</com>
-  <com>option objcsdk decompiler/crates/unlace-analysis/tests/fixtures/sdk_c</com>
+  <com>option objcsdk crates/unlace-analysis/tests/fixtures/sdk_c</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_sdk_c_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_sdk_c_arm64</com>
   <com>read symbols</com>
   <com>load function _name_len</com>
   <com>decompile</com>

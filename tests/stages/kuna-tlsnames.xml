@@ -19,14 +19,14 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/tlsnames_gcc_O1_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/tlsnames_gcc_O1_x86_64</com>
   <com>option tlsnames off</com>
   <com>read symbols</com>
   <com>load function bump</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/tlsnames_gcc_O1_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/tlsnames_gcc_O1_x86_64</com>
   <com>read symbols</com>
   <com>load function bump</com>
   <com>decompile</com>

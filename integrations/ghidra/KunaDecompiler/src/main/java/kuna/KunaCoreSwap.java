@@ -131,7 +131,7 @@ public final class KunaCoreSwap {
 			throw new FileNotFoundException("The kuna decompiler binary '" + exeName +
 				"' was not found in the " + MODULE_NAME + " extension.\n\n" +
 				"Build it and copy it into the installed extension, then restart Ghidra:\n" +
-				"    cd <kuna-repo>/decompiler && cargo build --release -p unlace-ghidra\n" +
+				"    cd <kuna-repo> && cargo build --release -p unlace-ghidra\n" +
 				"    cp target/release/" + exeName + " <ghidra user settings>/Extensions/" +
 				MODULE_NAME + "/os/" + Platform.CURRENT_PLATFORM.getDirectoryName() + "/\n\n" +
 				"Alternatively point the JVM property -D" + EXE_PROPERTY +

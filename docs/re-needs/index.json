@@ -47,7 +47,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs"
+        "crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs"
       ],
       "scope": "small",
       "regression_of": "argument-recovery-knobs-still",
@@ -80,7 +80,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": "call-args-discarded",
@@ -112,7 +112,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": "call-args-discarded",
@@ -144,7 +144,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/listing/kuna_poolref.rs"
+        "crates/unlace-analysis/src/listing/kuna_poolref.rs"
       ],
       "scope": "small",
       "regression_of": "arm-literal-pool-string",
@@ -176,7 +176,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": "arm-literal-pool-string",
@@ -208,7 +208,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": "argument-recovery-knobs-still",
@@ -240,7 +240,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": "argument-recovery-knobs-still",
@@ -272,7 +272,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": "no-disassembly-command",
@@ -304,8 +304,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/decompile.rs",
-        "decompiler/crates/unlace-cli/src/strings.rs"
+        "crates/unlace-cli/src/decompile.rs",
+        "crates/unlace-cli/src/strings.rs"
       ],
       "scope": "small",
       "regression_of": "analysis-generated-function-name",
@@ -337,8 +337,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-console/src/funcextent.rs",
-        "decompiler/crates/unlace-console/src/engine.rs"
+        "crates/unlace-console/src/funcextent.rs",
+        "crates/unlace-console/src/engine.rs"
       ],
       "scope": "small",
       "regression_of": "whole-binary-json-untriageable",
@@ -370,8 +370,8 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/loader",
-        "decompiler/crates/unlace-analysis/src/analyzers/strings"
+        "crates/unlace-analysis/src/loader",
+        "crates/unlace-analysis/src/analyzers/strings"
       ],
       "scope": "small",
       "regression_of": "no-strings-inventory",
@@ -403,8 +403,8 @@
       "attempts": 1,
       "covered_by_option": "picbase",
       "touches": [
-        "decompiler/crates/unlace-analysis/src/listing/kuna_picbase.rs",
-        "decompiler/crates/unlace-analysis/src/listing/xrefs.rs"
+        "crates/unlace-analysis/src/listing/kuna_picbase.rs",
+        "crates/unlace-analysis/src/listing/xrefs.rs"
       ],
       "scope": "large",
       "regression_of": "no-strings-inventory",
@@ -436,8 +436,8 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/strings.rs",
-        "decompiler/crates/unlace-analysis/src/loader/macho_fat.rs"
+        "crates/unlace-cli/src/strings.rs",
+        "crates/unlace-analysis/src/loader/macho_fat.rs"
       ],
       "scope": "small",
       "regression_of": "no-strings-inventory",
@@ -469,7 +469,7 @@
       "attempts": 1,
       "covered_by_option": "cookiescramble",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": "call-args-discarded",
@@ -501,9 +501,9 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/decompile_graph.rs",
-        "decompiler/crates/unlace-cli/src/decompile_all.rs",
-        "decompiler/crates/unlace-cli/src/xrefs.rs"
+        "crates/unlace-cli/src/decompile_graph.rs",
+        "crates/unlace-cli/src/decompile_all.rs",
+        "crates/unlace-cli/src/xrefs.rs"
       ],
       "scope": "small",
       "regression_of": "whole-binary-json-untriageable",
@@ -539,8 +539,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-console/src/grammar",
-        "decompiler/crates/unlace-console/src/ifacedecomp.rs"
+        "crates/unlace-console/src/grammar",
+        "crates/unlace-console/src/ifacedecomp.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -574,7 +574,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -608,7 +608,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -641,7 +641,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p2_lift"
+        "crates/unlace-decomp/src/p2_lift"
       ],
       "scope": "small",
       "regression_of": null,
@@ -674,7 +674,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p2_lift"
+        "crates/unlace-decomp/src/p2_lift"
       ],
       "scope": "large",
       "regression_of": null,
@@ -707,7 +707,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -740,7 +740,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p4_calls"
+        "crates/unlace-decomp/src/p4_calls"
       ],
       "scope": "small",
       "regression_of": null,
@@ -773,7 +773,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -806,7 +806,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -839,7 +839,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p4_calls"
+        "crates/unlace-decomp/src/p4_calls"
       ],
       "scope": "small",
       "regression_of": null,
@@ -871,7 +871,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "large",
       "regression_of": null,
@@ -904,7 +904,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p4_calls"
+        "crates/unlace-decomp/src/p4_calls"
       ],
       "scope": "small",
       "regression_of": null,
@@ -938,7 +938,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -970,7 +970,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/decompile.rs"
+        "crates/unlace-cli/src/decompile.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1002,7 +1002,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1034,7 +1034,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1066,7 +1066,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p9_emit"
+        "crates/unlace-decomp/src/p9_emit"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1098,7 +1098,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/decompile_all.rs"
+        "crates/unlace-cli/src/decompile_all.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1130,7 +1130,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1162,8 +1162,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src",
-        "decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs"
+        "crates/unlace-cli/src",
+        "crates/unlace-decomp/src/infra/decompile_drive.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1195,7 +1195,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/loader"
+        "crates/unlace-analysis/src/loader"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1227,7 +1227,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1259,8 +1259,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli",
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-cli",
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1292,7 +1292,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1352,8 +1352,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src",
-        "decompiler/crates/unlace-console/src/ifacedecomp.rs"
+        "crates/unlace-cli/src",
+        "crates/unlace-console/src/ifacedecomp.rs"
       ],
       "scope": "large",
       "regression_of": null,
@@ -1385,7 +1385,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "large",
       "regression_of": null,
@@ -1417,7 +1417,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/loader"
+        "crates/unlace-analysis/src/loader"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1449,7 +1449,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/loader"
+        "crates/unlace-analysis/src/loader"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1481,7 +1481,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1513,7 +1513,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1545,7 +1545,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/upx"
+        "crates/unlace-analysis/src/upx"
       ],
       "scope": "large",
       "regression_of": null,
@@ -1577,7 +1577,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/upx"
+        "crates/unlace-analysis/src/upx"
       ],
       "scope": "large",
       "regression_of": null,
@@ -1609,7 +1609,7 @@
       "attempts": 0,
       "covered_by_option": "x64syscall",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1641,8 +1641,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p3_dataflow/heritage.rs",
-        "decompiler/crates/unlace-decomp/src/p5_types/typeop.rs"
+        "crates/unlace-decomp/src/p3_dataflow/heritage.rs",
+        "crates/unlace-decomp/src/p5_types/typeop.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1675,9 +1675,9 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/decompile.rs",
-        "decompiler/crates/unlace-cli/src/main.rs",
-        "decompiler/crates/unlace-cli/src/specs.rs",
+        "crates/unlace-cli/src/decompile.rs",
+        "crates/unlace-cli/src/main.rs",
+        "crates/unlace-cli/src/specs.rs",
         "docs/cli.md",
         "tests/cli"
       ],
@@ -1711,8 +1711,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p9_emit/printc.rs",
-        "decompiler/crates/unlace-decomp/src/p6_variables"
+        "crates/unlace-decomp/src/p9_emit/printc.rs",
+        "crates/unlace-decomp/src/p6_variables"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1744,7 +1744,7 @@
       "attempts": 0,
       "covered_by_option": "splitstorekeep",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1776,8 +1776,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-console/src/assertions.rs",
-        "decompiler/crates/unlace-console/src/ifacedecomp.rs"
+        "crates/unlace-console/src/assertions.rs",
+        "crates/unlace-console/src/ifacedecomp.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1809,7 +1809,7 @@
       "attempts": 0,
       "covered_by_option": "retpushedhalf",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1841,7 +1841,7 @@
       "attempts": 0,
       "covered_by_option": "tailcallsaved",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1873,7 +1873,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1905,7 +1905,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1937,8 +1937,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/disassemble.rs",
-        "decompiler/crates/unlace-cli/src/litpool.rs"
+        "crates/unlace-cli/src/disassemble.rs",
+        "crates/unlace-cli/src/litpool.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -1970,8 +1970,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/listing/xrefs.rs",
-        "decompiler/crates/unlace-analysis/src/analyzers/strings"
+        "crates/unlace-analysis/src/listing/xrefs.rs",
+        "crates/unlace-analysis/src/analyzers/strings"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2003,7 +2003,7 @@
       "attempts": 0,
       "covered_by_option": "constspaceload",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2035,7 +2035,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2067,7 +2067,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/substrate/block.rs"
+        "crates/unlace-decomp/src/substrate/block.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2099,7 +2099,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2131,7 +2131,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2163,7 +2163,7 @@
       "attempts": 0,
       "covered_by_option": "declhightype",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2195,7 +2195,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2227,7 +2227,7 @@
       "attempts": 0,
       "covered_by_option": "exclusivearguse",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2259,7 +2259,7 @@
       "attempts": 0,
       "covered_by_option": "callretpair",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2291,7 +2291,7 @@
       "attempts": 0,
       "covered_by_option": "callpopret",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2323,7 +2323,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2355,7 +2355,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs"
+        "crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2387,8 +2387,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p3_dataflow",
-        "decompiler/crates/unlace-decomp/src/p6_variables"
+        "crates/unlace-decomp/src/p3_dataflow",
+        "crates/unlace-decomp/src/p6_variables"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2420,7 +2420,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2452,7 +2452,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2484,7 +2484,7 @@
       "attempts": 0,
       "covered_by_option": "libcsigs",
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2516,7 +2516,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2548,7 +2548,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2580,7 +2580,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "large",
       "regression_of": null,
@@ -2612,7 +2612,7 @@
       "attempts": 0,
       "covered_by_option": "pdatainterior",
       "touches": [
-        "decompiler/crates/unlace-analysis/src/analyzers/entry/kuna_pdatainterior.rs"
+        "crates/unlace-analysis/src/analyzers/entry/kuna_pdatainterior.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2645,7 +2645,7 @@
       "attempts": 1,
       "covered_by_option": "calleeretpreserves",
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p4_calls"
+        "crates/unlace-decomp/src/p4_calls"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2677,10 +2677,10 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis",
-        "decompiler/crates/unlace-console",
-        "decompiler/crates/unlace-cli",
-        "decompiler/crates/unlace-wasm"
+        "crates/unlace-analysis",
+        "crates/unlace-console",
+        "crates/unlace-cli",
+        "crates/unlace-wasm"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2712,7 +2712,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2744,8 +2744,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/analyzers/entry/patterns",
-        "decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs"
+        "crates/unlace-analysis/src/analyzers/entry/patterns",
+        "crates/unlace-decomp/src/p0_knowledge/options.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2777,7 +2777,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2810,7 +2810,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2842,8 +2842,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/infra",
-        "decompiler/crates/unlace-decomp/src/p2_lift"
+        "crates/unlace-decomp/src/infra",
+        "crates/unlace-decomp/src/p2_lift"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2875,8 +2875,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp",
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-decomp",
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2909,7 +2909,7 @@
       "attempts": 1,
       "covered_by_option": "pushimmediateret",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2942,9 +2942,9 @@
       "attempts": 1,
       "covered_by_option": "entryretdispatch",
       "touches": [
-        "decompiler/crates/unlace-console",
-        "decompiler/crates/unlace-cli",
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-console",
+        "crates/unlace-cli",
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -2977,7 +2977,7 @@
       "attempts": 1,
       "covered_by_option": "tailcalljump",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3010,7 +3010,7 @@
       "attempts": 1,
       "covered_by_option": "calleeretpreserves",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3042,7 +3042,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3074,7 +3074,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3106,7 +3106,7 @@
       "attempts": 0,
       "covered_by_option": "pdatainterior",
       "touches": [
-        "decompiler/crates/unlace-analysis/src/analyzers/entry/kuna_pdatainterior.rs"
+        "crates/unlace-analysis/src/analyzers/entry/kuna_pdatainterior.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3138,7 +3138,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3170,7 +3170,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3203,7 +3203,7 @@
       "attempts": 1,
       "covered_by_option": "fast_funcdisc",
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3235,7 +3235,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3267,8 +3267,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis",
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-analysis",
+        "crates/unlace-decomp"
       ],
       "scope": "large",
       "regression_of": null,
@@ -3300,7 +3300,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3333,7 +3333,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3365,7 +3365,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3397,7 +3397,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3429,9 +3429,9 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/decompile_all.rs",
-        "decompiler/crates/unlace-cli/src/decompile_graph.rs",
-        "decompiler/crates/unlace-analysis/src/analyzers/entry/kuna_machomain.rs"
+        "crates/unlace-cli/src/decompile_all.rs",
+        "crates/unlace-cli/src/decompile_graph.rs",
+        "crates/unlace-analysis/src/analyzers/entry/kuna_machomain.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3463,7 +3463,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3495,7 +3495,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3528,7 +3528,7 @@
       "attempts": 1,
       "covered_by_option": "msvcstackguard",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3560,7 +3560,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3593,7 +3593,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-console"
+        "crates/unlace-console"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3623,9 +3623,9 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/assertdecl.rs",
-        "decompiler/crates/unlace-console/src/ifacedecomp.rs",
-        "decompiler/crates/unlace-decomp/phases.toml"
+        "crates/unlace-cli/src/assertdecl.rs",
+        "crates/unlace-console/src/ifacedecomp.rs",
+        "crates/unlace-decomp/phases.toml"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3657,7 +3657,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/analyzers/objc/methods.rs"
+        "crates/unlace-analysis/src/analyzers/objc/methods.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3690,7 +3690,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3722,8 +3722,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/functions.rs",
-        "decompiler/crates/unlace-analysis/src/listing"
+        "crates/unlace-cli/src/functions.rs",
+        "crates/unlace-analysis/src/listing"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3755,8 +3755,8 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp",
-        "decompiler/crates/unlace-console"
+        "crates/unlace-decomp",
+        "crates/unlace-console"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3788,7 +3788,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3820,7 +3820,7 @@
       "attempts": 1,
       "covered_by_option": "pushimmediateret",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3852,8 +3852,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/assertdecl.rs",
-        "decompiler/crates/unlace-cli/src/decompile.rs"
+        "crates/unlace-cli/src/assertdecl.rs",
+        "crates/unlace-cli/src/decompile.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3885,7 +3885,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3949,7 +3949,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3981,7 +3981,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4013,7 +4013,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/loader"
+        "crates/unlace-analysis/src/loader"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4046,8 +4046,8 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-console",
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-console",
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4079,7 +4079,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p3_dataflow/heritage.rs"
+        "crates/unlace-decomp/src/p3_dataflow/heritage.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4111,8 +4111,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p6_variables/varmap.rs",
-        "decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_3.rs"
+        "crates/unlace-decomp/src/p6_variables/varmap.rs",
+        "crates/unlace-decomp/src/p3_dataflow/ruleaction_3.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4144,7 +4144,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4176,7 +4176,7 @@
       "attempts": 0,
       "covered_by_option": "libproto",
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4208,7 +4208,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4240,7 +4240,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4272,7 +4272,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4304,7 +4304,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/listing/xrefs.rs"
+        "crates/unlace-analysis/src/listing/xrefs.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4336,7 +4336,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/analyzers/strings"
+        "crates/unlace-analysis/src/analyzers/strings"
       ],
       "scope": "large",
       "regression_of": null,
@@ -4369,7 +4369,7 @@
       "attempts": 1,
       "covered_by_option": "funcboundflow",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4401,8 +4401,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/assertdecl.rs",
-        "decompiler/crates/unlace-cli/src/decompile.rs"
+        "crates/unlace-cli/src/assertdecl.rs",
+        "crates/unlace-cli/src/decompile.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4434,7 +4434,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4466,9 +4466,9 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/decompile.rs",
-        "decompiler/crates/unlace-cli/src/decompile_all.rs",
-        "decompiler/crates/unlace-console/src/ifacedecomp.rs"
+        "crates/unlace-cli/src/decompile.rs",
+        "crates/unlace-cli/src/decompile_all.rs",
+        "crates/unlace-console/src/ifacedecomp.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4501,9 +4501,9 @@
       "attempts": 1,
       "covered_by_option": "loweredswitchlabels",
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs",
-        "decompiler/crates/unlace-decomp/src/p2_lift/kuna_loweredswitchlabels.rs",
-        "decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs"
+        "crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs",
+        "crates/unlace-decomp/src/p2_lift/kuna_loweredswitchlabels.rs",
+        "crates/unlace-decomp/src/substrate/funcdata_block.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4535,7 +4535,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4567,7 +4567,7 @@
       "attempts": 0,
       "covered_by_option": "declhightype",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4600,7 +4600,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4633,7 +4633,7 @@
       "attempts": 1,
       "covered_by_option": "calleeretpreserves",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4665,8 +4665,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli",
-        "decompiler/crates/unlace-console/src/project.rs",
+        "crates/unlace-cli",
+        "crates/unlace-console/src/project.rs",
         "docs/cli.md",
         "docs/spec/00-overview.md",
         "docs/history.md"
@@ -4701,7 +4701,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/loader"
+        "crates/unlace-analysis/src/loader"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4734,7 +4734,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4766,7 +4766,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/analyzers/objc/methods.rs"
+        "crates/unlace-analysis/src/analyzers/objc/methods.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4798,7 +4798,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/listing/xrefs.rs"
+        "crates/unlace-analysis/src/listing/xrefs.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4830,7 +4830,7 @@
       "attempts": 1,
       "covered_by_option": "ptrdepthcap",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "large",
       "regression_of": null,
@@ -4862,7 +4862,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4894,7 +4894,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4926,8 +4926,8 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/disassemble.rs",
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-cli/src/disassemble.rs",
+        "crates/unlace-analysis"
       ],
       "scope": "large",
       "regression_of": null,
@@ -4959,7 +4959,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4991,7 +4991,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5023,7 +5023,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5055,7 +5055,7 @@
       "attempts": 1,
       "covered_by_option": "inputparamgap",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "large",
       "regression_of": null,
@@ -5088,7 +5088,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p2_lift"
+        "crates/unlace-decomp/src/p2_lift"
       ],
       "scope": "large",
       "regression_of": null,
@@ -5120,7 +5120,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/loader"
+        "crates/unlace-analysis/src/loader"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5152,7 +5152,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "large",
       "regression_of": null,
@@ -5182,8 +5182,8 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src",
-        "decompiler/crates/unlace-console/src/ifacedecomp.rs"
+        "crates/unlace-cli/src",
+        "crates/unlace-console/src/ifacedecomp.rs"
       ],
       "scope": "large",
       "regression_of": null,
@@ -5213,8 +5213,8 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src",
-        "decompiler/crates/unlace-console/src/assertions.rs"
+        "crates/unlace-cli/src",
+        "crates/unlace-console/src/assertions.rs"
       ],
       "scope": "large",
       "regression_of": null,
@@ -5244,8 +5244,8 @@
       "attempts": 1,
       "covered_by_option": "ppclocalentry",
       "touches": [
-        "decompiler/crates/unlace-analysis/src",
-        "decompiler/crates/unlace-decomp/src/p2_lift/kuna_funcboundflow.rs"
+        "crates/unlace-analysis/src",
+        "crates/unlace-decomp/src/p2_lift/kuna_funcboundflow.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5277,7 +5277,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "large",
       "regression_of": null,
@@ -5310,7 +5310,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5340,7 +5340,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/decompile_all.rs",
+        "crates/unlace-cli/src/decompile_all.rs",
         "docs/cli.md"
       ],
       "scope": "small",
@@ -5373,7 +5373,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5405,7 +5405,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5437,7 +5437,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5469,7 +5469,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5501,7 +5501,7 @@
       "attempts": 1,
       "covered_by_option": "cancelbytearithmetic",
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs"
+        "crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5533,8 +5533,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/decompile.rs",
-        "decompiler/crates/unlace-decomp/src/p9_emit/kuna_naming.rs"
+        "crates/unlace-cli/src/decompile.rs",
+        "crates/unlace-decomp/src/p9_emit/kuna_naming.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5566,9 +5566,9 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p1_partition",
-        "decompiler/crates/unlace-decomp/src/p3_dataflow",
-        "decompiler/crates/unlace-console"
+        "crates/unlace-decomp/src/p1_partition",
+        "crates/unlace-decomp/src/p3_dataflow",
+        "crates/unlace-console"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5600,7 +5600,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5633,7 +5633,7 @@
       "attempts": 2,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5665,7 +5665,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5698,7 +5698,7 @@
       "attempts": 1,
       "covered_by_option": "peimportcall",
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5730,8 +5730,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/disassemble.rs",
-        "decompiler/crates/unlace-analysis"
+        "crates/unlace-cli/src/disassemble.rs",
+        "crates/unlace-analysis"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5763,8 +5763,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-console/src/grammar",
-        "decompiler/crates/unlace-cli/src/assertdecl.rs"
+        "crates/unlace-console/src/grammar",
+        "crates/unlace-cli/src/assertdecl.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5796,8 +5796,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-console/src/grammar",
-        "decompiler/crates/unlace-cli/src/assertdecl.rs"
+        "crates/unlace-console/src/grammar",
+        "crates/unlace-cli/src/assertdecl.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5829,8 +5829,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p2_lift/jumptable.rs",
-        "decompiler/crates/unlace-decomp/src/p8_structure"
+        "crates/unlace-decomp/src/p2_lift/jumptable.rs",
+        "crates/unlace-decomp/src/p8_structure"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5862,7 +5862,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/substrate/funcdata_op.rs",
+        "crates/unlace-decomp/src/substrate/funcdata_op.rs",
         "docs/history.md"
       ],
       "scope": "small",
@@ -5896,7 +5896,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "large",
       "regression_of": null,
@@ -5928,7 +5928,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5960,8 +5960,8 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis",
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-analysis",
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5993,7 +5993,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p0_knowledge"
+        "crates/unlace-decomp/src/p0_knowledge"
       ],
       "scope": "large",
       "regression_of": null,
@@ -6025,9 +6025,9 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli",
-        "decompiler/crates/unlace-analysis",
-        "decompiler/crates/unlace-sleigh"
+        "crates/unlace-cli",
+        "crates/unlace-analysis",
+        "crates/unlace-sleigh"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6059,9 +6059,9 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/litpool.rs",
-        "decompiler/crates/unlace-cli/src/disassemble.rs",
-        "decompiler/crates/unlace-console/src/engine.rs"
+        "crates/unlace-cli/src/litpool.rs",
+        "crates/unlace-cli/src/disassemble.rs",
+        "crates/unlace-console/src/engine.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6093,8 +6093,8 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/xrefs.rs",
-        "decompiler/crates/unlace-analysis/src/listing/xrefs.rs"
+        "crates/unlace-cli/src/xrefs.rs",
+        "crates/unlace-analysis/src/listing/xrefs.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6127,7 +6127,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6159,10 +6159,10 @@
       "attempts": 6,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp",
-        "decompiler/crates/unlace-console",
-        "decompiler/crates/unlace-decomp/phases.toml",
-        "decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs",
+        "crates/unlace-decomp",
+        "crates/unlace-console",
+        "crates/unlace-decomp/phases.toml",
+        "crates/unlace-decomp/src/p0_knowledge/options.rs",
         "docs/options.md",
         "docs/history.md",
         "tests/stages"
@@ -6195,7 +6195,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p4_params"
+        "crates/unlace-decomp/src/p4_params"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6225,7 +6225,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p2_lift/kuna_linuxsyscall.rs"
+        "crates/unlace-decomp/src/p2_lift/kuna_linuxsyscall.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6255,7 +6255,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/analyzers/entry/kuna_entrymainproto.rs"
+        "crates/unlace-analysis/src/analyzers/entry/kuna_entrymainproto.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6285,7 +6285,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/disassemble.rs",
+        "crates/unlace-cli/src/disassemble.rs",
         "docs/cli.md"
       ],
       "scope": "small",
@@ -6316,7 +6316,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli/src/strings.rs",
+        "crates/unlace-cli/src/strings.rs",
         "docs/cli.md"
       ],
       "scope": "small",
@@ -6347,7 +6347,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-analysis/src/listing/kuna_unmappedentry.rs"
+        "crates/unlace-analysis/src/listing/kuna_unmappedentry.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6377,7 +6377,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs"
+        "crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6411,7 +6411,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-cli"
+        "crates/unlace-cli"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6443,7 +6443,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "decompiler/crates/unlace-decomp"
+        "crates/unlace-decomp"
       ],
       "scope": "small",
       "regression_of": null,

@@ -14,7 +14,7 @@ rounds: [11, 12]
 first_seen_round: 11
 attempts: 1
 covered_by_option: peimportcall
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: 606

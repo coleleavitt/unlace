@@ -2,7 +2,7 @@
 # unlace-wt-rm <name> [--dry-run] [--force]
 # unlace-wt-rm --sweep [--days N] [--dry-run]
 #
-# Remove one agent worktree ../unlace-wt-<name> and its build dir its build dir (where its decompiler/target symlink points, else ../unlace-target/<name>), the way Claude Code's
+# Remove one agent worktree ../unlace-wt-<name> and its build dir (where its target symlink points, else ../unlace-target/<name>), the way Claude Code's
 # worktree cleanup works: refuse what would lose work, say why, and only then delete.
 #   - uncommitted changes to tracked files, or untracked files that are not ignored: refused
 #   - commits that no remote branch contains (nothing pushed): refused
@@ -77,7 +77,8 @@ check() {
 remove_one() {
   local n="$1" root="$forks/unlace-wt-$1" target="$forks/unlace-target/$1"
   [ "$n" = main ] && { echo "unlace-wt-rm: REFUSED $root: the main worktree is never removed"; return 1; }
-  [ -L "$root/decompiler/target" ] && target="$(readlink -f "$root/decompiler/target")"
+  [ -L "$root/decompiler/target" ] && target="$(readlink -f "$root/decompiler/target")"   # made before the workspace moved to the root
+  [ -L "$root/target" ] && target="$(readlink -f "$root/target")"
   check "$root" || return 1
   if [ "$dry" -eq 1 ]; then echo "unlace-wt-rm: would remove $root and $target (dry run)"; return 0; fi
   git -C "$main" worktree remove "$root" && echo "unlace-wt-rm: removed worktree $root" || return 1

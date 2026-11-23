@@ -12,7 +12,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_empty_match_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/rust_empty_match_x86_64</com>
   <com>option setlanguage rust-language</com>
   <com>read symbols</com>
   <com>parse line extern int4 empty_case(uint8 x);</com>

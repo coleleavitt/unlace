@@ -21,7 +21,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/typelib_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/typelib_x86_64</com>
   <com>option typelib off</com>
   <com>read symbols</com>
   <com>load function wait_readable</com>
@@ -34,7 +34,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/typelib_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/typelib_x86_64</com>
   <com>read symbols</com>
   <com>load function wait_readable</com>
   <com>decompile</com>
@@ -46,8 +46,8 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/typelib_x86_64</com>
-  <com>option typelib decompiler/crates/unlace-analysis/tests/fixtures/typelib_custom.ktl</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/typelib_x86_64</com>
+  <com>option typelib crates/unlace-analysis/tests/fixtures/typelib_custom.ktl</com>
   <com>read symbols</com>
   <com>load function wait_readable</com>
   <com>decompile</com>

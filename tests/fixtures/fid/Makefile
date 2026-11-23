@@ -4,9 +4,9 @@
 # Requires gcc and the built `unlace` binary + x86-64 .sla
 # (`make binaries specs` from the repo root).
 
-KUNA    ?= ../../../decompiler/target/release/unlace
+KUNA    ?= ../../../target/release/unlace
 SPECS   ?= ../../../specs
-ANALYSIS_FIXTURES ?= ../../../decompiler/crates/unlace-analysis/tests/fixtures
+ANALYSIS_FIXTURES ?= ../../../crates/unlace-analysis/tests/fixtures
 
 CFLAGS  := -O2 -ffreestanding -fno-stack-protector
 LANG    := x86:LE:64:default

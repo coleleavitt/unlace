@@ -29,7 +29,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_rr_regs_macho</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/swift_rr_regs_macho</com>
   <com>read symbols</com>
   <com>load addr 0x100004000</com>
   <com>decompile</com>

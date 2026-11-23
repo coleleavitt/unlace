@@ -2,7 +2,7 @@
 
 ```yaml
 Anchors:
-  - decompiler/crates/unlace-decomp/src/p3_dataflow
+  - crates/unlace-decomp/src/p3_dataflow
 ```
 
 A LOAD through a pointer with an explicitly volatile pointee is treated as a
@@ -29,16 +29,16 @@ rebuilds, until Band B reaches mutual quiescence.
 
 Option metadata (defaults, tiers, symptoms, flip guidance) for every option
 named below lives in the generated catalog ([docs/options.md](../options.md));
-the rows are defined in `decompiler/crates/unlace-decomp/phases.toml` and the
+the rows are defined in `crates/unlace-decomp/phases.toml` and the
 default-divergence measurements are DIV-2/DIV-3 in `docs/history.md`.
 
 ## 3.1 Heritage
 
-`decompiler/crates/unlace-decomp/src/p3_dataflow/heritage.rs (Heritage)` is the
+`crates/unlace-decomp/src/p3_dataflow/heritage.rs (Heritage)` is the
 SSA construction engine — the port of the upstream `heritage.cc`. It is owned by
-the function (`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+the function (`crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::op_heritage_with_deadline)`) and driven once per mainloop iteration
-by `decompiler/crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs
+by `crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs
 (ActionHeritage)`. SSA is therefore built over **multiple passes**, not once: a
 *free* Varnode (a value not yet linked to a defining op) becomes *heritaged*
 when some pass collects its address range, and each pass increments the engine's
@@ -51,7 +51,7 @@ before dead code may be removed there), both seeded from the processor spec's
 per-space values. The registers heritage on pass 0; the stack space is typically
 delayed one pass so that indirect references through the not-yet-renamed stack
 pointer have a chance to materialize as located varnodes first (the
-`heritage-staging` row in `decompiler/crates/unlace-decomp/phases.toml` — latent,
+`heritage-staging` row in `crates/unlace-decomp/phases.toml` — latent,
 no user assertion). A space whose `delay` has not elapsed is skipped for the
 round.
 
@@ -59,7 +59,7 @@ A spacebase space additionally carries `has_call_placeholders`, and reaching it
 for the first time is the moment the call sites' stack-pointer placeholders come
 back off (`heritage.rs (Heritage::clear_stack_placeholders)`, which strips every
 call spec's placeholder input through
-`decompiler/crates/unlace-decomp/src/p4_calls/fspec.rs
+`crates/unlace-decomp/src/p4_calls/fspec.rs
 (FuncCallSpecs::abort_spacebase_relative)`). The placeholder exists only to let a
 call's stack offset be read out of the data flow before the stack is in SSA
 (§4.3); once the space is being heritaged it has either been resolved or never
@@ -88,7 +88,7 @@ padding assignment temporary storage rather than writing to the constant space;
 real member locations still receive their values, including zero-valued fields. These padding rules are not optional: a constant piece
 has no storage to write. Any output created at a renormalized address that lies
 wholly in padding receives a temporary instead
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs (varnode_out)`);
+(`crates/unlace-decomp/src/substrate/funcdata_varnode.rs (varnode_out)`);
 padding renormalizes to constant zero, and any other constant output address is
 still refused. Attaching a constant as an operation's output is refused before
 the operation changes. A struct- or array-typed concatenation with low zero
@@ -250,7 +250,7 @@ reports that function as failed and continues with the remaining functions.
 **Op properties on a heritage-created op.** The three op-codes heritage installs
 (the phi, the read-size SUBPIECE, the write-size PIECE) take their property flags
 from the same op-code table every other producer of p-code resolves through
-(`decompiler/crates/unlace-decomp/src/p5_types/typeop.rs (seam_type_op_for)`), so a
+(`crates/unlace-decomp/src/p5_types/typeop.rs (seam_type_op_for)`), so a
 heritage-created op is indistinguishable from the same op-code installed by a
 simplification rule. The phi's entry carries `special`, `marker` and `nocollapse`
 together, and each of the three is load-bearing somewhere: `marker` is what
@@ -289,7 +289,7 @@ arrives on a subsequent pass, the read is asking for exactly the value those
 pieces still hold. `kuna_inputtile.rs (new_tiled_input)` therefore
 completes the tiling (creating an input for any gap, as `guard_input` does) and
 folds it into one full-size input with
-`decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs (Funcdata::combine_input_varnodes)`, which
+`crates/unlace-decomp/src/substrate/funcdata_varnode.rs (Funcdata::combine_input_varnodes)`, which
 destroys the pieces, rewrites each concatenating PIECE into a COPY, and repoints
 every other reader at a SUBPIECE of the new whole. Only write-masked pieces
 fully contained in the request are folded — a write-masked varnode is never
@@ -302,7 +302,7 @@ split at every varnode boundary observed inside it before phis are placed
 (`heritage.rs (Heritage::refinement)`): ranges over 1024 bytes are never
 refined, and a 1-byte/3-byte adjacent split is normally healed back to a
 four-byte piece (`Heritage::remove13Refinement`, implemented through
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_inputrefinement.rs`). The
+`crates/unlace-decomp/src/p3_dataflow/kuna_inputrefinement.rs`). The
 join is skipped when that four-byte piece would partially overlap a known
 input: an input starts or ends at the junction and extends beyond the joined
 piece. Inputs contained wholly within the piece retain the ordinary join.
@@ -328,7 +328,7 @@ is refined again and indexes past its refinement array. Upstream's refinement
 and renaming assume every Varnode of a range lies inside it.
 `Heritage::refinement` keeps that true. Once the partition is final, each
 marker it would cut
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_revisitrefine.rs (Partitions::cut_span)`)
+(`crates/unlace-decomp/src/p3_dataflow/kuna_revisitrefine.rs (Partitions::cut_span)`)
 is retired first, as a revisited marker always is, against the partitions it
 spans, and the read of those partitions that replaces it is refined with the
 other reads. Each partition a retired marker spans is flagged
@@ -356,7 +356,7 @@ another (`Overlapping input varnodes`), and where neither fails a write through
 the wrapping range never reaches a read of the low bytes. Before heritage walks
 a space, every read, write and input in it that runs past the top is split at
 the top (`heritage.rs (Heritage::split_wrapped)`,
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_wrapsplit.rs (wrap_cut)`),
+`crates/unlace-decomp/src/p3_dataflow/kuna_wrapsplit.rs (wrap_cut)`),
 with the refinement helpers: a read becomes the `PIECE` of the bytes below the
 top and the bytes from offset 0, and a write or an input is carved into the two
 by `SUBPIECE`s. `split_pieces` reduces each piece's byte offset modulo the space,
@@ -365,7 +365,7 @@ orders. This keeps the value byte for byte, and no Varnode heritage sees wraps,
 so its cover stays linear. Code with no wrapping access is unchanged.
 
 **Register pairs refined at their midpoint**
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_pairrefine.rs (split_pair)`,
+(`crates/unlace-decomp/src/p3_dataflow/kuna_pairrefine.rs (split_pair)`,
 always on). The size test above never refines a range that some access
 covers whole, so a SPARC32 even/odd integer register pair that an `ldd` or `std`
 moves as one 8-byte value is heritaged as an 8-byte range even where its two
@@ -399,7 +399,7 @@ A pair assembled only from half-register writes and stored whole is not
 selected.
 
 **Refinement pieces keep the store mark**
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_splitstorekeep.rs
+(`crates/unlace-decomp/src/p3_dataflow/kuna_splitstorekeep.rs
 (keep_store_mark)`, always on). A frame store reaches this phase as a
 direct `stackvn = COPY(value)` whose output `RuleStoreVarnode` marked
 `stack_store` — "originally came from a CPUI_STORE". That mark is what keeps the
@@ -421,7 +421,7 @@ in full.
 **Call and return guards.** For ranges with new addresses, data-flow across
 call sites is made explicit before renaming
 (`heritage.rs (Heritage::guard_calls)`). Each call spec is asked what effect the
-call has on the (callee-translated) range (`decompiler/crates/unlace-decomp/src/p4_calls/fspec.rs
+call has on the (callee-translated) range (`crates/unlace-decomp/src/p4_calls/fspec.rs
 (FuncProto::has_effect)`):
 
 - *unknown effect* or *return address* → an INDIRECT op re-defines the range
@@ -495,7 +495,7 @@ guard at least N persistent-range and call pairs (its calls times its new
 ranges in the default data space,
 `heritage.rs (Heritage::persist_cross_product)`) gives a writable persistent
 global an unknown-effect INDIRECT only at the calls that need one
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_persistcalls.rs (keep)`).
+(`crates/unlace-decomp/src/p3_dataflow/kuna_persistcalls.rs (keep)`).
 Upstream guards every persistent global at every call with an unknown effect
 on it (`Heritage::guardCalls`), and since the range is address-tied and its
 INDIRECT outputs are direct writes, `ActionDeadCode` keeps all of them: a
@@ -601,7 +601,7 @@ argument the call reads from the register it returns in. A declared
 on x86-64 (`d0` on AArch64, `f1` on 32-bit PowerPC), and the call printed as
 `vr(k,k + 1)`. kuna still registers the input trial for such a range when the
 call is variadic and its model passes a variadic argument there (chapter 04,
-`decompiler/crates/unlace-decomp/src/p4_calls/kuna_varargretreg.rs
+`crates/unlace-decomp/src/p4_calls/kuna_varargretreg.rs
 (argument_in_own_output)`); the range still gets no INDIRECT.
 
 **A counted floating-point register whose range is not the register.** On
@@ -616,7 +616,7 @@ four 4-byte lane copies, so clang's `movaps` swap of two doubles refines the
 range into 4-byte lanes: the low lane is a justified piece of the entry, and the
 argument was registered at 4 bytes (`vr(k,y,SUB84(x,0))`).
 `heritage.rs (Heritage::guard_counted_float_input)` handles both for a register
-that `decompiler/crates/unlace-decomp/src/p4_calls/kuna_varargretreg.rs
+that `crates/unlace-decomp/src/p4_calls/kuna_varargretreg.rs
 (counted_float_entry)` names: one of the first `al` floating-point entries of a
 variadic call's model that the range overlaps without being it. A range that
 contains the register passes its low 8 bytes through a SUBPIECE, as
@@ -642,7 +642,7 @@ every later read of it prints as a local the function never assigns.
 
 The call guard consults the callee's own
 instructions instead. The evidence is the bounded body walk chapter 04 already
-takes for the call-output seam (`decompiler/crates/unlace-decomp/src/p4_calls/kuna_rustabi.rs
+takes for the call-output seam (`crates/unlace-decomp/src/p4_calls/kuna_rustabi.rs
 (probe_callee_return_writes)`): from the callee's entry it follows fall-through
 and resolved machine branch targets, ends a path at a `RETURN` or an
 unconditional direct call with the same known no-return contract used by flow
@@ -651,7 +651,7 @@ returning or unknown nested call, an unresolved `BRANCHIND`, a user op (`CALLOTH
 an undecodable instruction, or its instruction budget. A complete
 walk that records no write to the range downgrades *killed by call* to
 *unaffected* for that one call, so no INDIRECT is planted and the caller's value
-flows across (`decompiler/crates/unlace-decomp/src/p4_calls/kuna_calleepreserves.rs
+flows across (`crates/unlace-decomp/src/p4_calls/kuna_calleepreserves.rs
 (callee_preserves_range)`). The output-active arm is skipped for the same range:
 a register the callee provably never writes cannot be carrying its return value
 either, so registering an output trial for it would put the clobber straight
@@ -710,7 +710,7 @@ creation, not one expression.
 
 The scratch-body clause adds a second, independent way for a summary to count
 as a body, and requires both of its marks
-(`decompiler/crates/unlace-decomp/src/p4_calls/kuna_calleescratchbody.rs
+(`crates/unlace-decomp/src/p4_calls/kuna_calleescratchbody.rs
 (scratch_body_is_a_body)`). The body must have written **memory**: a
 register-preserving helper's own save slot is why it can use a register at all
 — `__chkstk` spills `R10`/`R11` into its frame before it touches them and
@@ -737,7 +737,7 @@ For the call's return storage the evidence available is sharper than for a
 scratch register, and the return-storage arm asks for that instead: a callee
 that returns a value in `RAX` must *write* `RAX`, so a complete walk that records
 no write to the return storage proves the call has no return value at all
-(`decompiler/crates/unlace-decomp/src/p4_calls/kuna_calleeretpreserves.rs
+(`crates/unlace-decomp/src/p4_calls/kuna_calleeretpreserves.rs
 (callee_preserves_return_storage)`). For an exact range the effect is downgraded
 to *unaffected*, the output-active arm is skipped, and the caller's own
 definition flows across the call. A call built past a PLT stub (`kuna_pltlocal.rs`) takes no such proof,
@@ -871,7 +871,7 @@ exclusive arms keep each other's narrow scalar trial.
 A physical register range
 completely covered by two or more general ABI input slots receives separate
 call trials before dead-code elimination, at every `calloverlap` level
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_multiregargs.rs
+(`crates/unlace-decomp/src/p3_dataflow/kuna_multiregargs.rs
 (input_partition)`). A wide return can coalesce these slots even after the
 caller overwrites each component. The trials keep those current component
 values live; ordinary trial scoring still decides whether they are used.
@@ -897,7 +897,7 @@ a single argument the caller just wrote whenever the other half of the range
 still holds a stale or clobbered pair half, as in `ldd [p],%o0; call f;
 mov 3,%o0; call g`. The walk skips a SUBPIECE whose kept
 bytes lie wholly outside the PIECE input it reached the PIECE through
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_multiregargs.rs
+(`crates/unlace-decomp/src/p3_dataflow/kuna_multiregargs.rs
 (subpiece_drops_reached_piece)`); that SUBPIECE cannot carry the value.
 
 On the input side (`heritage.rs (Heritage::guard_call_overlapping_input)`), the
@@ -1007,7 +1007,7 @@ pointer Varnodes become the
 sinks of a `ValueSetSolver` system (the solver itself — constraint
 generation, weak topological ordering, widening — is chapter
 [05](05-types.md)'s machinery in
-`decompiler/crates/unlace-decomp/src/substrate/rangeutil.rs (ValueSetSolver)`),
+`crates/unlace-decomp/src/substrate/rangeutil.rs (ValueSetSolver)`),
 one cheap `WidenerNone` solve seeds each guard
 (`heritage.rs (LoadGuard::establish_range)`: minimum from the stable range
 bound or the pointer base, step recorded only when the partial analysis shows
@@ -1222,7 +1222,7 @@ partial reads, it checks for a constant write (through COPY, SUBPIECE or
 integer extension) and the processor's stack space. For this family only byte
 STOREs already recorded by indexed stack-pointer discovery qualify; globals and
 unknown pointers retain the explicit `full` policy. The gate lives in
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_stackstoreguard.rs`.
+`crates/unlace-decomp/src/p3_dataflow/kuna_stackstoreguard.rs`.
 
 Before heritage, `kuna_stackbytecopy.rs` expands a short frame byte-copy loop
 whose control flow and scalar setup prove that it exits after two to four
@@ -1275,7 +1275,7 @@ earlier pass guarded the frame, the guard is withdrawn for the whole function
 (`heritage.rs (store_frame_resolves)`), which then decompiles unguarded.
 
 Right after the first heritage pass, which links the registers but not yet the
-stack, `decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_repframecopy.rs
+stack, `crates/unlace-decomp/src/p3_dataflow/kuna_repframecopy.rs
 (expand_all)` expands a `rep movs` that builds a by-value argument block
 (called from `ActionHeritage`). It runs on x86-32 only, where the stack pointer
 is 4 bytes: on x86-64 the copy leaves `RCX` zero and `RSI` at the source's end,
@@ -1429,7 +1429,7 @@ stack-store guard.
 Spilled pointers to fixed stack offsets also need a temporary STORE guard: the
 stack read can acquire its initializer during renaming, while the pointer
 reload resolves only in the following rule pool.
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_spillstoreguard.rs` guards
+`crates/unlace-decomp/src/p3_dataflow/kuna_spillstoreguard.rs` guards
 STOREs rooted in a free stack-slot read identified by `protect_free_stores`.
 After renaming, it follows only COPYs and constant additions to the input stack
 base with the stack pointer's full width on byte-addressed stacks, and retains
@@ -1457,8 +1457,8 @@ repair is disabled by `indexaliasguard off`.
 removal is only *allowed* in a space once heritage there is past the space's
 dead-code delay: `heritage.rs (Heritage::dead_removal_allowed)` is the gate
 (`pass > deadcodedelay`), consumed by
-`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs (ActionDeadCode)`
-and by `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_1.rs
+`crates/unlace-decomp/src/p9_emit/coreaction_render.rs (ActionDeadCode)`
+and by `crates/unlace-decomp/src/p3_dataflow/ruleaction_1.rs
 (RuleEarlyRemoval)` — the checked variant (`dead_removal_allowed_seen`) also
 records that removal has now *happened* (`deadremoved`). The reason the gate
 exists: a free varnode can surface in pass N+1 at an address already heritaged
@@ -1468,7 +1468,7 @@ there, its defining stores may be gone. When the driver detects exactly that
 (an old-range overlap, `deadremoved > 0`), it fires
 `heritage.rs (Heritage::bump_deadcode_delay)`: install `deadcodedelay + 1` for
 the space as a **persistent Override**
-(`decompiler/crates/unlace-decomp/src/p0_knowledge/overrides.rs
+(`crates/unlace-decomp/src/p0_knowledge/overrides.rs
 (Override::insert_deadcode_delay)` — it survives `Funcdata::clear`), set the
 restart-pending flag, and let the outer drive re-flow the function (§0.6); the
 restarted run re-applies the persisted delay to the fresh per-space info before
@@ -1478,7 +1478,7 @@ self-limiting: if the Override already carries a delay for the space, the bump
 is suppressed rather than re-requested — that suppression is what makes the
 restart converge instead of looping. The bump machinery records both events into a
 throwaway per-call `RestartLog`
-(`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_restartlog.rs
+(`crates/unlace-decomp/src/p0_knowledge/kuna_restartlog.rs
 (RestartLog)`) that is dropped on return — diagnostic plumbing not yet wired to
 the Architecture-owned log — and neither fires during a jump-table
 sub-decompilation (the `is_jumptable_recovery_on` guards at the call sites —
@@ -1491,17 +1491,17 @@ the only live writer of the Override is `Heritage::bump_deadcode_delay`.
 (kuna early restart) Upstream finishes the pass that asked for
 the restart: every later mainloop iteration, the merges and the structuring of
 IR known to be missing data flow, all of which the restart throws away. A bump
-also marks the function (`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+also marks the function (`crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::kuna_set_restart_now)`, cleared by `Funcdata::clear`), and when the
 outer drive will re-follow flow (fewer than its eight re-flows so far) the
 action group that ran the bumping heritage stops right after it
-(`decompiler/crates/unlace-decomp/src/infra/action.rs (ActionGroup::apply)`): the
+(`crates/unlace-decomp/src/infra/action.rs (ActionGroup::apply)`): the
 context abandons the pass as on an expired deadline and requests the re-flow,
 and the drive skips the stack-store-guard layout check for the stopped pass
-(`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (run_pipeline)`).
+(`crates/unlace-decomp/src/infra/decompile_drive.rs (run_pipeline)`).
 The restarted run is the one that is printed in both orders, but it is not
 independent of the first. Like upstream's `Funcdata::clear`, kuna's
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::clear)`)
+(`crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::clear)`)
 drops the local scope's unlocked symbols (`Database::clear_unlocked`), resets
 the local window and clears the prototype's unlocked output and inputs. The
 pending comments the first run recovered still seed the restarted one (upstream's
@@ -1539,7 +1539,7 @@ time inside heritage, and a function that hands the addresses of thousands of
 stack locals to thousands of calls gets one INDIRECT per range per call, so
 the pass bails here rather than at the next action boundary; the abandoned
 partial pass is never rendered), and after every pass `ActionHeritage` runs the lowered-switch input
-repair (`decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs
+repair (`crates/unlace-decomp/src/substrate/funcdata_block.rs
 (Funcdata::kuna_repair_lowered_switch_inputs)`), which re-points a synthetic
 lowered-switch BRANCHIND whose input heritage normalized away (chapter 02). The
 repair accepts written, input, *or heritage-known* varnodes as healthy — the
@@ -1557,12 +1557,12 @@ that output when propagated into integer storage: the declared address remains
 available for named-global recovery instead of becoming an image-address integer.
 This also applies to computed interior addresses: losing the declaration before pointer recovery can leave a base address embedded in integer arithmetic. Without a pointer declaration, integer expressions retain their ordinary meaning.
 
-A `decompiler/crates/unlace-decomp/src/infra/action.rs (Rule)` is a
+A `crates/unlace-decomp/src/infra/action.rs (Rule)` is a
 pattern→rewrite unit with no state of its own beyond what its `reset` clears: `get_op_list` declares the opcodes it can fire on
 (defaulting to *all* opcodes), and `apply_op(op, data)` either returns 0 (no
 match — every guard along the way simply declines) or performs its whole
 rewrite and returns 1. Rules are owned by an
-`decompiler/crates/unlace-decomp/src/infra/action.rs (ActionPool)`, which indexes
+`crates/unlace-decomp/src/infra/action.rs (ActionPool)`, which indexes
 them at registration into a flat per-opcode table (`perop`, insertion order
 preserved). One pool sweep visits every op in the function in sequence-number
 order through a resumable cursor that survives op deletion (§0.3) — it is
@@ -1602,14 +1602,14 @@ the readers of the Varnodes they read, so a test the next sweep makes fails
 again unless it reads what a removal changed. That next pass is therefore a
 wave: it walks the ops in the same order with the same cursor but offers the
 rules only the ops
-`decompiler/crates/unlace-decomp/src/infra/action.rs (ActionPool::wave_wants)`
+`crates/unlace-decomp/src/infra/action.rs (ActionPool::wave_wants)`
 names: the dead ops (destroyed, as the sweep destroys them), the definition and
 readers of each Varnode a removed op read, every op of an opcode a far-walking
 rule fires on (the sub-variable and split flows, which walk a whole data-flow
 web, and `RuleIgnoreNan`, which follows a NaN test through three levels of
 boolean readers; `action.rs (Rule::walks_far)`), and the same neighbourhood of each op the
 wave itself removes. Removals are recorded as they happen
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+(`crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::note_dead_removal)`). The first application other than a removal
 turns the rest of the pass back into the ordinary sweep, and a pool with a
 breakpoint set always sweeps. A rule whose test reads two or more ops away from
@@ -1625,7 +1625,7 @@ each path's last call left, 626 to 674 of them. Each of those passes also
 removes the COPY the pass before freed, and every one swept the whole
 function. An input replacement is a change a wave can follow:
 the rule records the op and the Varnodes it touches before and after
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+(`crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::note_wave_input_change)`; `action.rs (Rule::replaces_inputs_only)`
 marks the rule), so a pass whose only changes were removals and such
 replacements is followed by a wave over the op, its output's readers, and the
@@ -1640,7 +1640,7 @@ for dead-removal waves applies: a rule reading two or more ops away without walk
 can see a change the wave does not offer it, and `RulePropagateCopy`'s own
 `kuna_globalstorekeep` refusal is one, since it reads the readers of the COPY's
 input and walks the blocks after the store
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_globalstorekeep.rs
+(`crates/unlace-decomp/src/p3_dataflow/kuna_globalstorekeep.rs
 (declines)`). Neither mechanism ends a pool run with a full sweep: the run stops
 at its first pass that changes nothing, which can be a wave. Such a rule is
 caught by the schedule around oppool1, the only pool holding `RuleEarlyRemoval`
@@ -1658,7 +1658,7 @@ counts the passes since the run began and sets
 `RuleEarlyRemoval` removes a join (`MULTIEQUAL`) or a guard (`INDIRECT`), it
 also removes the joins and guards behind the cursor that defined what that op
 read and that nothing reads any more, and theirs in turn
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_deadcascade.rs`). They go
+(`crates/unlace-decomp/src/p3_dataflow/kuna_deadcascade.rs`). They go
 in the order the following passes would have removed them: one batch per
 pass, each batch in sequence order; a definition that dies behind the op
 removing it joins the next batch and one ahead of it the same batch. A
@@ -1679,7 +1679,7 @@ the runs of ordinary functions end long before. With `deadcascade off` every
 chain dies one link per pass, as upstream's does.
 
 Three pools exist in the `decompile` tree
-(`decompiler/crates/unlace-decomp/src/infra/universalaction.rs
+(`crates/unlace-decomp/src/infra/universalaction.rs
 (universal_sched)`): **oppool1**, 141 registered rules, sits inside the
 `stackstall` repeat-group in mainloop — the main simplification bag;
 **oppool2**, 5 rules (`RulePushPtr`, `RuleStructOffset0`, `RulePtrArith`,
@@ -1690,12 +1690,12 @@ type recovery started and a stable block structure; and the **cleanup** pool,
 rewrites that must not perturb the analysis fixpoint. The architecture may
 append CPU-specific rules to oppool1 (`universalaction.rs (build_universal_action)`
 takes `extra_pool_rules`); the engine currently always passes an empty list
-(`decompiler/crates/unlace-decomp/src/infra/architecture.rs
+(`crates/unlace-decomp/src/infra/architecture.rs
 (Architecture::build_action)`).
 
 **Binary64 sign-word operations.** (kuna) Before its commute logic,
 `RuleConcatCommute` recognizes the exact binary64 sign-word idioms in
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_floatnegpiece.rs`.
+`crates/unlace-decomp/src/p3_dataflow/kuna_floatnegpiece.rs`.
 `PIECE(FLOAT_NEG(SUBPIECE(x,4)), SUBPIECE(x,0))` becomes `FLOAT_NEG(x)`;
 the corresponding `FLOAT_ABS` pattern becomes `FLOAT_ABS(x)`. Negating or
 clearing the binary32 high word's sign bit changes exactly the binary64 sign
@@ -1706,7 +1706,7 @@ Different sources, changed low slices, wider floats, incompatible types and
 other unary operations decline. These are strict value-correctness repairs
 with no inference option; they add no floating-status or exception model.
 
-**One-destination switches.** `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs
+**One-destination switches.** `crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs
 (RuleSwitchSingle)` rewrites a BRANCHIND whose block has one out-edge and
 whose recovered jump table is labelled into a BRANCH to the table's first
 address, then drops the table and the structured-block graph so no `switch`
@@ -1720,7 +1720,7 @@ the dispatch has one destination. This is a strict fix with no option: a
 `switch` with one `default:` arm states a selection the code does not make.
 
 **Ordered floating-point condition negation.** The shared
-`decompiler/crates/unlace-num/src/opcodes.rs (get_booleanflip)` table returns no
+`crates/unlace-num/src/opcodes.rs (get_booleanflip)` table returns no
 single-opcode complement for `FLOAT_LESS` or `FLOAT_LESSEQUAL`: when either
 operand is NaN, both `a < b` and `b <= a` are false. Consequently
 `Funcdata::op_normalize_flip` leaves the branch flip in place and
@@ -1771,7 +1771,7 @@ only reassembled into a condition after the guards are gone, so x87
 status-word compares keep the upstream approximation.
 
 Every comparison these folds issue or rewrite carries the `kuna_exactfloat`
-addlflag (`decompiler/crates/unlace-decomp/src/substrate/op.rs`). It already
+addlflag (`crates/unlace-decomp/src/substrate/op.rs`). It already
 decides the unordered case, so `RuleIgnoreNan`'s
 `ignorenan_check_back_for_compare` refuses to treat it as a comparison that
 protects a NaN test: an explicit `isnan(x) || x > c` or the `setnp`/`jp` of a
@@ -1790,14 +1790,14 @@ group):
 
 | File | Theme | Representative rules |
 |---|---|---|
-| `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_1.rs` | dead-op pruning, term ordering, bit-mask algebra, SUBPIECE motion through phis/INDIRECTs | `RuleEarlyRemoval` (the all-opcode dead-op reaper, gated by §3.1's dead-definition gate), `RuleCollectTerms`, `RuleAndMask`/`RuleShiftBitops`, `RulePullsubMulti`/`RulePushMulti`, `RuleIntLessEqual` (§3.5 compareform), `RuleRangeMeld`, `RulePiece2Zext` |
-| `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_2.rs` | logical ops through extensions/pieces, double-op fusion, zext elimination | `RuleAndCommute`, `RuleAndCompare`, `RuleDoubleShift`, `RuleConcatShift`, `RuleLeftRight`, `RuleZextEliminate`, `RuleBooleanUndistribute`, `RuleFloatRange` |
-| `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_3.rs` | boolean normalization, phi/INDIRECT collapse, constant folding, reassociation | `RuleMultiCollapse`, `RuleIndirectCollapse`, `RuleCollapseConstants` (the OpBehavior constant evaluator), `RulePropagateCopy`, `RuleAddMultCollapse`, `RuleSborrow`, `RuleShift2Mult` |
-| `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs` | the SUBPIECE/ZEXT/CONCAT commuting family, piece reassembly, stack-var promotion | `RuleSubCommute`, `RuleConcatZext`, `RuleSubCancel`, `RuleHumptyDumpty`/`RuleDumptyHump`, `RuleLoadVarnode`/`RuleStoreVarnode` (oppool2, group `stackvars`), `RuleSwitchSingle`, `RuleCondNegate` |
-| `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_5.rs` | comparisons against extremal constants, equation solving, the pointer-recovery trio | `RuleLess2Zero`, `RuleSLess2Zero`, `RuleEqual2Constant`, and oppool2's `RulePtrArith`/`RuleStructOffset0`/`RulePushPtr` (all no-ops until `ActionStartTypes` flips `has_type_recovery_started` — chapter 05 owns what they build) |
-| `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs` | pointer-op undo, division strength-reduction inversion, cleanup arithmetic | `RulePtraddUndo`/`RulePtrsubUndo`, `RuleDivOpt`/`RuleDivTermAdd`/`RuleSubNormal` (recover `/`, `%` from magic-number multiplies), cleanup-pool `RuleMultNegOne`/`RuleAddUnsigned`/`RuleSubRight`/`RulePieceStructure` |
-| `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_7.rs` | signed div/mod idioms, segments, pointer flow, predication, float compares | `RuleSignDiv2`, `RuleSignMod2nOpt`, `RuleModOpt`, `RuleSegment`, `RulePtrFlow`, `RuleConditionalMove` (group `conditionalexe`), `RuleFloatCast`, `RuleIgnoreNan` |
-| `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_8.rs` | int↔float conversion recovery, bit-counting booleans, float sign ops, compare splitting | `RuleUnsigned2Float`, `RuleThreeWayCompare`, `RulePopcountBoolXor`, `RuleLzcountShiftBool`, `RuleFloatSign`, `RuleOrCompare`, `RuleFuncPtrEncoding`, cleanup-pool `RuleExpandLoad` |
+| `crates/unlace-decomp/src/p3_dataflow/ruleaction_1.rs` | dead-op pruning, term ordering, bit-mask algebra, SUBPIECE motion through phis/INDIRECTs | `RuleEarlyRemoval` (the all-opcode dead-op reaper, gated by §3.1's dead-definition gate), `RuleCollectTerms`, `RuleAndMask`/`RuleShiftBitops`, `RulePullsubMulti`/`RulePushMulti`, `RuleIntLessEqual` (§3.5 compareform), `RuleRangeMeld`, `RulePiece2Zext` |
+| `crates/unlace-decomp/src/p3_dataflow/ruleaction_2.rs` | logical ops through extensions/pieces, double-op fusion, zext elimination | `RuleAndCommute`, `RuleAndCompare`, `RuleDoubleShift`, `RuleConcatShift`, `RuleLeftRight`, `RuleZextEliminate`, `RuleBooleanUndistribute`, `RuleFloatRange` |
+| `crates/unlace-decomp/src/p3_dataflow/ruleaction_3.rs` | boolean normalization, phi/INDIRECT collapse, constant folding, reassociation | `RuleMultiCollapse`, `RuleIndirectCollapse`, `RuleCollapseConstants` (the OpBehavior constant evaluator), `RulePropagateCopy`, `RuleAddMultCollapse`, `RuleSborrow`, `RuleShift2Mult` |
+| `crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs` | the SUBPIECE/ZEXT/CONCAT commuting family, piece reassembly, stack-var promotion | `RuleSubCommute`, `RuleConcatZext`, `RuleSubCancel`, `RuleHumptyDumpty`/`RuleDumptyHump`, `RuleLoadVarnode`/`RuleStoreVarnode` (oppool2, group `stackvars`), `RuleSwitchSingle`, `RuleCondNegate` |
+| `crates/unlace-decomp/src/p3_dataflow/ruleaction_5.rs` | comparisons against extremal constants, equation solving, the pointer-recovery trio | `RuleLess2Zero`, `RuleSLess2Zero`, `RuleEqual2Constant`, and oppool2's `RulePtrArith`/`RuleStructOffset0`/`RulePushPtr` (all no-ops until `ActionStartTypes` flips `has_type_recovery_started` — chapter 05 owns what they build) |
+| `crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs` | pointer-op undo, division strength-reduction inversion, cleanup arithmetic | `RulePtraddUndo`/`RulePtrsubUndo`, `RuleDivOpt`/`RuleDivTermAdd`/`RuleSubNormal` (recover `/`, `%` from magic-number multiplies), cleanup-pool `RuleMultNegOne`/`RuleAddUnsigned`/`RuleSubRight`/`RulePieceStructure` |
+| `crates/unlace-decomp/src/p3_dataflow/ruleaction_7.rs` | signed div/mod idioms, segments, pointer flow, predication, float compares | `RuleSignDiv2`, `RuleSignMod2nOpt`, `RuleModOpt`, `RuleSegment`, `RulePtrFlow`, `RuleConditionalMove` (group `conditionalexe`), `RuleFloatCast`, `RuleIgnoreNan` |
+| `crates/unlace-decomp/src/p3_dataflow/ruleaction_8.rs` | int↔float conversion recovery, bit-counting booleans, float sign ops, compare splitting | `RuleUnsigned2Float`, `RuleThreeWayCompare`, `RulePopcountBoolXor`, `RuleLzcountShiftBool`, `RuleFloatSign`, `RuleOrCompare`, `RuleFuncPtrEncoding`, cleanup-pool `RuleExpandLoad` |
 
 `RuleMultiCollapse` keeps its operand traversal, marked-output list and
 temporary rewrite operands in local inline scratch. Wide or deeply nested
@@ -1812,7 +1812,7 @@ slot read when the walk reaches it holds the value upstream copied.
 The rule is the one stateful member of oppool1: a walk that fails records a
 witness for its op, the input slots leading from the op to the non-matching
 branch it stopped at
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_3.rs
+(`crates/unlace-decomp/src/p3_dataflow/ruleaction_3.rs
 (RuleMultiCollapse::fails_again)`). The next application derives the defining
 branch as the walk would (the first input no `MULTIEQUAL` writes, else the first
 unmarked input) and replays the witness. When every link is still an input the
@@ -1836,7 +1836,7 @@ rule 17.2 million times. Upstream's walk appends 35 billion entries and reads
 witness and 223 thousand walk. The collapses are the same 15,113.
 
 `RulePullsubIndirect`
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_1.rs (RulePullsubIndirect)`)
+(`crates/unlace-decomp/src/p3_dataflow/ruleaction_1.rs (RulePullsubIndirect)`)
 narrows an INDIRECT whose readers are all SUBPIECEs to the bytes they use, from
 the lowest used byte to the highest. The new output piece starts at the lowest
 used byte, and kuna slices the piece of the INDIRECT's input at that same byte,
@@ -1859,7 +1859,7 @@ local declared at pointer width and printed with that stride
 of the slot the store indexes (`unsigned int v1; ((char *)&v1)[i] = j; return
 v1._1_2_;`). Byte readers still narrow, because a byte piece maps as an element
 of the byte array the store indexes. The check is `keeps_store_indirect_whole`
-in `decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_stackstoreguard.rs`.
+in `crates/unlace-decomp/src/p3_dataflow/kuna_stackstoreguard.rs`.
 Keeping the slot whole does not by itself make the slot, its neighbours and the
 read one local; the stack layout decides that, and it maps
 every slot a bounded store may reach as one array and does not end an open range
@@ -1919,7 +1919,7 @@ or union that a declaration laid out -- DWARF, a parsed header, a libc layout --
 and not one `structsynth` minted, and only when that pointer reaches a Varnode
 whose type is locked (a declared prototype's parameter, a declared global)
 through pointer arithmetic, copies and casts alone
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_narrowload.rs (widens_into_declared_field)`).
+(`crates/unlace-decomp/src/p3_dataflow/kuna_narrowload.rs (widens_into_declared_field)`).
 There the declaration attests the whole field, and the compare can name the
 field's own enum constants, `(p->flagfield & (HIGH_2|HIGH_1)) != 0`, which a
 byte of the field cannot; that is what `enum.xml` #4 pins. A bare pointer's
@@ -1967,7 +1967,7 @@ reveals that a load was an outgoing reload of an existing local, its register
 fact can be withdrawn without removing a different write to that register.
 
 **Preserving memory-loaded global stores** (always on;
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_globalcallstore.rs`).
+`crates/unlace-decomp/src/p3_dataflow/kuna_globalcallstore.rs`).
 A persistent store keeps its COPY instead of propagating a LOAD input into
 its sole marker use at the same address and width. Without the COPY, forced
 variable merging can place the assignment at an earlier load. In stack-reload
@@ -1991,7 +1991,7 @@ The typed global field store rule (always on) keeps a typed global COPY spanning
 fields or an array-typed global view, including a complete global array,
 attached to its memory destination when read by a MULTIEQUAL or
 INDIRECT marker.
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_globalfieldstore.rs`
+`crates/unlace-decomp/src/p3_dataflow/kuna_globalfieldstore.rs`
 keeps marker inputs attached to persistent `TYPE_PARTIALSTRUCT` and
 `TYPE_ARRAY` COPY outputs. Replacing that output with its register source can
 leave datatype splitting with register pieces that print as local assignments
@@ -2041,7 +2041,7 @@ its last store printed, so the brake has nothing to add there.
 **Keeping a retyped local out of its readers** (a strict fix, no option). A
 `type` directive that retypes a printed pointer local to a pointer to a record
 is replayed by locking the new type on the local's own definitions before type
-inference (chapter 06, `decompiler/crates/unlace-decomp/src/p6_variables/kuna_stablenames.rs
+inference (chapter 06, `crates/unlace-decomp/src/p6_variables/kuna_stablenames.rs
 (lock_retyped)`). Inference can then re-lay the frame the pointer points into,
 and `RulePtrsubUndo` folds the old frame offset into a new `INT_ADD`, turning
 the local's definition into a `COPY` of it. Propagated, that `COPY` handed its
@@ -2051,14 +2051,14 @@ PowerPC32 a register holding `&frame[1]` and retyped to `struct Probe *` printed
 as `nothing is declared as \`v1\` after it`. `RulePropagateCopy` leaves a `COPY`
 whose output is a definition the lock matched, still carrying the replayed type
 itself
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stablenames.rs (is_retyped_definition)`),
+(`crates/unlace-decomp/src/p6_variables/kuna_stablenames.rs (is_retyped_definition)`),
 as it leaves the type-locked pointer of an isolated Symbol, so the local keeps
 its readers and prints `v1 = &v4; consume(v1);`. Another varnode locked to the
 same type is not one of them and propagates as before. A run without such a directive
 locks nothing and is unchanged.
 
 **Keeping a pointer stored to a global out of the global's markers**
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_pointeestorekeep.rs
+(`crates/unlace-decomp/src/p3_dataflow/kuna_pointeestorekeep.rs
 (declines)`, a strict fix, no option, issue #767). When a register value is
 stored to a persistent global and the value is also used as an address (the
 address of a `LOAD` or `STORE`, or the base of a `PTRADD` or `PTRSUB`, directly
@@ -2122,7 +2122,7 @@ These questions are asked again every time the rule pool visits a reader
 (issue #818). One search for an earlier value read after the store first sets
 aside every value of the global written at or after the store. Each of those
 questions walks up the dominator tree plainly for eight blocks
-(`decompiler/crates/unlace-decomp/src/substrate/block.rs
+(`crates/unlace-decomp/src/substrate/block.rs
 (BlockGraph::dominates_within)`), and only a walk still going after that asks
 one memo for the store's block (`block.rs (BlockGraph::dominates_memo)`), which
 keeps the answer for every block it passes, so a long chain of blocks below the
@@ -2155,7 +2155,7 @@ at `indexaliasguard load` a load after a pointer store still prints the stored
 value there (issue #792).
 
 **Keeping a loop counter's write-back**
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_loopcounterstore.rs
+(`crates/unlace-decomp/src/p3_dataflow/kuna_loopcounterstore.rs
 (declines)`, always on) is the same refusal for the same op, on a different
 shape. A counter the compiler keeps in a frame slot is read, bumped in a
 register and stored back — `MOV EAX,[RSP+0x84]` / `INC EAX` /
@@ -2194,7 +2194,7 @@ decides on the inner op; a `COPY` of an *explicit* value is left alone, because
 there the statement really is `out = <that name>`.
 
 **Keeping a computed global store on its path**
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_globalorderkeep.rs
+(`crates/unlace-decomp/src/p3_dataflow/kuna_globalorderkeep.rs
 (declines)`, a strict fix under `indexaliasguard global`) prevents a forced
 marker merge from bypassing chapter 06's global-write ordering check.
 `RulePropagateCopy` leaves a guarded persistent COPY as the input of a marker
@@ -2214,7 +2214,7 @@ Keeping the copies lets chapter 06 leave the selector separate and each store
 on the path where the binary makes it.
 
 **Keeping a global store whose value is read sign-sensitively**
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_globalstorekeep.rs
+(`crates/unlace-decomp/src/p3_dataflow/kuna_globalstorekeep.rs
 (declines)`, a strict fix, no option) is the same refusal once more, for a
 persistent global. When a register value is stored to a global and an operation
 also reads that value where its declared signedness decides the result — a
@@ -2304,7 +2304,7 @@ is left to upstream, since a parameter never merges with a global, and so is a
 constant's. Every other propagation is upstream's.
 
 **Resolving a direct store's effects**
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_storecopyeffects.rs`,
+(`crates/unlace-decomp/src/p3_dataflow/kuna_storecopyeffects.rs`,
 a strict fix, no option). A STORE can become a direct COPY only after a
 spilled address is recovered. Its existing INDIRECT guards must then read the
 new write immediately: waiting for `RuleIndirectCollapse` lets the next
@@ -2344,7 +2344,7 @@ architecture's singleton property record (`glb->inst[opc]`); kuna's
 `Funcdata::op_set_opcode` takes the already-resolved record, so each rule file
 resolves it at the call site. Every one of those call sites goes through the
 single canonical port of that table,
-`decompiler/crates/unlace-decomp/src/p5_types/typeop.rs (seam_type_op_for)`, whose
+`crates/unlace-decomp/src/p5_types/typeop.rs (seam_type_op_for)`, whose
 per-op-code rows are transcribed field-for-field from the upstream `typeop.cc`
 constructors. The seam is **total**: the table's `match` carries no wildcard arm
 (so a new op-code cannot enter the enum without the compiler demanding its row),
@@ -2360,7 +2360,7 @@ had not enumerated (`INT_SRIGHT` out of `RuleBitUndistribute`, or a
 record and no C at all for that function.
 
 **Commuting a right shift through zero extension.**
-`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs
+`crates/unlace-decomp/src/p3_dataflow/ruleaction_4.rs
 (RuleZextCommute)` rewrites `zext(V) >> n` into `zext(V >> n)` only when the
 count's constant value or nonzero-bit mask proves it is below the width the
 narrowed shift evaluates at. That width is `V`'s, except that when the output
@@ -2378,7 +2378,7 @@ the `V`-width bound. This is a correctness requirement, with no option.
 offset, and only the offset-0 form has a C spelling: it is a cast. Every other
 offset is a p-code-level slice with no operator in the language, so the printer
 falls back to rendering the operation itself — `SUB81(v,7)`, an identifier no
-emitted header declares. `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs
+emitted header declares. `crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs
 (RuleSubRight)` (cleanup pool, registered `subright`) is what keeps that
 fallback unreachable in practice: it rewrites `sub(V,c)` into
 `sub(V >> c*8, 0)`, synthesizing an `INT_RIGHT` by `c*8` bits ahead of the
@@ -2391,7 +2391,7 @@ type is marked for special printing instead and rendered as a field extraction
 (`sym._2_1_`), because there the slice *is* the source-level operation. And
 when output and input are both address-tied and overlap at exactly `c`, the
 SUBPIECE is a storage marker that
-`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
+`crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
 (ActionCopyMarker)` will convert,
 so rewriting it would destroy the partial-symbol rendering. One refinement
 folds a level away: if the SUBPIECE takes the *high* end of its input
@@ -2406,12 +2406,12 @@ the sign bit instead, since that is a sign extraction.
 Rules registered in the pools but implemented elsewhere: the sub-variable
 triggers and split rules (§3.3, `subflow.rs`), `RuleOrPredicate` (§3.4,
 `condexe.rs`), the kuna gated rules (§3.5), the double-precision family
-(`decompiler/crates/unlace-decomp/src/p5_types/double.rs`, chapter 05), the
+(`crates/unlace-decomp/src/p5_types/double.rs`, chapter 05), the
 constant-sequence and bit-field cleanup rules
-(`decompiler/crates/unlace-decomp/src/p5_types/constseq.rs`,
-`decompiler/crates/unlace-decomp/src/p5_types/bitfield.rs`, chapter 05), and the
+(`crates/unlace-decomp/src/p5_types/constseq.rs`,
+`crates/unlace-decomp/src/p5_types/bitfield.rs`, chapter 05), and the
 stack-probe-loop phi resolver
-(`decompiler/crates/unlace-decomp/src/p2_lift/kuna_stackprobeloop.rs`, chapter
+(`crates/unlace-decomp/src/p2_lift/kuna_stackprobeloop.rs`, chapter
 02). A note on the files themselves: their module headers still carry the
 port-wave `STUB(...)` inventory from the mid-port merge; the live registration
 and rule bodies are complete (the tree's action listing is byte-equal to the
@@ -2452,7 +2452,7 @@ that a `CALLIND` consumes.
 **Constant-pool references.** A byte-code processor names a method, field,
 string or type by its index in the program's constant pool, and its SLEIGH spec
 writes that as a `cpool(object, index, tag)` operator (CPOOLREF).
-`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_3.rs
+`crates/unlace-decomp/src/p3_dataflow/ruleaction_3.rs
 (RuleTransformCpool)` visits each CPOOLREF once and looks its constant inputs up
 in the architecture's pool. A primitive record replaces the op with a COPY of
 its constant value; an `instanceof` record marks the op as producing a boolean;
@@ -2466,18 +2466,18 @@ pspec `<segmentop space="ram" userop="segment" farpointer="yes">` of x86 16-bit
 real and protected mode, Z80 and HCS12, with a `<pcode>` snippet for the address
 (`res = (zext(base) << 4) + zext(inner)` in real mode) and a `<constresolve>`
 register that holds the implied segment of a constant near pointer (`DS`).
-`decompiler/crates/unlace-decomp/src/infra/architecture.rs (decode_segment_ops)`
+`crates/unlace-decomp/src/infra/architecture.rs (decode_segment_ops)`
 registers each one in the user-op table after the translator's own ops, the
 pspec's before the cspec's, and its snippet joins the inject library;
 `architecture.rs (initialize_segments)` then emits the compiled snippet into a
 snippet emulator,
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_segmentize.rs (SegmentDef)`,
+`crates/unlace-decomp/src/p3_dataflow/kuna_segmentize.rs (SegmentDef)`,
 which `SegmentDef::execute` runs on constant inputs (C++ `SegmentOp::execute`
 over `ExecutablePcode::evaluate`). The definitions are shared into the
 per-function architecture snapshot.
 
 `ActionSegmentize`
-(`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs (ActionSegmentize)`)
+(`crates/unlace-decomp/src/p9_emit/coreaction_render.rs (ActionSegmentize)`)
 runs once per function right after the first heritage pass: each live CALLOTHER
 of a segment op with three inputs becomes `SEGMENTOP(space, base, inner)`,
 constant terms re-sized to the snippet's declared input sizes; a malformed one
@@ -2491,13 +2491,13 @@ constant segment and offset to the snippet's result, and, for a far-pointer
 segment op, replaces one whose segment and offset are the high and low SUBPIECEs
 of a single value with that value (the `LES` far pointer). The jump-table
 emulator executes SEGMENTOP through the same snippet
-(`decompiler/crates/unlace-decomp/src/p2_lift/kuna_emulatefunction.rs`), so a
+(`crates/unlace-decomp/src/p2_lift/kuna_emulatefunction.rs`), so a
 `jmp [cs:bx+table]` is recovered. A stack reference built against a stack whose
 containing space has a segment op is wrapped in `SEGMENTOP(contain, 0, ref)`
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata_op.rs (create_stack_ref)`).
+(`crates/unlace-decomp/src/substrate/funcdata_op.rs (create_stack_ref)`).
 
 Constant pointers resolve through the segment op
-(`decompiler/crates/unlace-decomp/src/substrate/context.rs (resolve_constant)`, C++
+(`crates/unlace-decomp/src/substrate/context.rs (resolve_constant)`, C++
 `SegmentedResolver`): a constant no wider than the near pointer takes its segment
 from the tracked value of the resolve register at the use point (0 when the
 pspec tracks none), anything wider is a far pointer with the segment in its high
@@ -2531,7 +2531,7 @@ ops are not decoded and the CALLOTHER stays.
 default data space has addresses narrower than the registers
 that hold them: MIPS 64-32addr and N32, PowerPC e500 and the 32addr variants,
 AArch64 ilp32. On such an architecture `RulePtrFlow`
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_7.rs (RulePtrFlow)`)
+(`crates/unlace-decomp/src/p3_dataflow/ruleaction_7.rs (RulePtrFlow)`)
 narrows
 LOAD/STORE address operands to their referenced space's address width and
 indirect branch/call targets to the code-space width. A SUBPIECE takes the low
@@ -2553,14 +2553,14 @@ values, returned old values and other consumers of the original GPR retain
 their full width. Ordering operations have no pointer input.
 
 **(kuna) Octeon memory effects — `option octeoneffects`, default `atomic`,
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_octeoneffects.rs`.** It
+`crates/unlace-decomp/src/p3_dataflow/kuna_octeoneffects.rs`.** It
 resolves the atomic, reservation and ordering operations an Octeon language
 declares, unless a compiler spec injects its own p-code for one. A
 fetch-and-add, exchange, load-linked, store-conditional or cache-block zero
 accesses memory through its address operand, so under `atomic` heritage places
 a guard across each of them over writable RAM and stack ranges, including
 partial overlaps, through the shared helper in
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_memoryguard.rs (guard_memory)`
+`crates/unlace-decomp/src/p3_dataflow/kuna_memoryguard.rs (guard_memory)`
 that the system-call guards also use. A guard retains preceding stores even when the
 instruction result has no scalar consumer, so a store that only a load-linked
 reads is kept, and a later read cannot reuse a value from before the update.
@@ -2570,7 +2570,7 @@ forced: a guard on a local whose address never escapes collapses under
 `RuleIndirectCollapse`, so a spill stays a value. Cache-block zeroing is the
 exception: it can overwrite such a local through a neighboring stack address,
 so its guards survive even when that local's own address never escapes
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_octeoneffects.rs (keeps_unaliased_guard)`).
+(`crates/unlace-decomp/src/p3_dataflow/kuna_octeoneffects.rs (keeps_unaliased_guard)`).
 An address built from the stack pointer, loaded from memory, returned by a
 call or transformed by arithmetic may reach any local. Absence of a
 stack-pointer dependency does not prove disjointness: subtracting 256 from an
@@ -2589,7 +2589,7 @@ a kept guard covers every writable range.
 
 The system calls of `syscallregs` and `x64syscall` and the selected Octeon
 operations form one list
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_memoryguard.rs (memory_ops)`),
+(`crates/unlace-decomp/src/p3_dataflow/kuna_memoryguard.rs (memory_ops)`),
 found once per heritage pass and once per `ActionMarkImplied` pass. Heritage
 guards each. Guards alone do not stop an unresolved LOAD expression from moving
 to a later use, so `ActionMarkImplied` also checks LOAD and call-result covers
@@ -2609,7 +2609,7 @@ also decodes, and only those: at architecture bootstrap each load-linked, store-
 ordering operation gets a callother fixup holding upstream's p-code (a plain
 load; a plain store whose success is 1; `SYNC(n)`), registered under the
 operation's own name, and the flow's injection gate
-(`decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs (is_injected_userop)`)
+(`crates/unlace-decomp/src/infra/decompile_drive.rs (is_injected_userop)`)
 applies it only under `off`. The Octeon-only atomics (SAA/SAAD, the LA forms,
 ZCB/ZCBT) decode in every mode, where the base branch rejected them and upstream
 reaches them only through the SPECIAL2 catch-all Octeon excludes; under `off`
@@ -2625,7 +2625,7 @@ Other targets and unrelated user operations keep their existing treatment.
 
 Truncation can leave hundreds of fresh SUBPIECEs of one stack or base
 register in a single pool pass. While the option is live, `RuleSelectCse`
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_1.rs (RuleSelectCse)`)
+(`crates/unlace-decomp/src/p3_dataflow/ruleaction_1.rs (RuleSelectCse)`)
 therefore returns at once when the visited op's own output is not yet
 heritaged. A pair is merged only when both outputs are heritaged, so the pair
 such a visit would have merged is merged instead when one of its own ops is
@@ -2649,7 +2649,7 @@ the earlier output on truncated targets byte for byte: the port had
 `RulePtrFlow` stubbed out (its op list was always empty), the stack register
 was a single wide input, and `RuleSelectCse` visited every op.
 
-`decompiler/crates/unlace-decomp/src/p3_dataflow/subflow.rs (SubvariableFlow)`
+`crates/unlace-decomp/src/p3_dataflow/subflow.rs (SubvariableFlow)`
 shrinks a logical value out of a larger container: given a *root* varnode and a
 bit-mask identifying where the small value lives, it traces the value's flow
 forward and backward through the data-flow graph, builds a parallel shadow
@@ -2706,19 +2706,19 @@ found — a rewrite whose small value never actually escapes the shadow graph
 would churn the IR for no output gain. (kuna) A call pull whose dropped bits
 are known zero, because the wide input's non-zero mask lies inside the logical
 mask, is recorded on the call's spec when the rewrite commits
-(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_truncarg.rs (note_trimmed_arg)`),
+(`crates/unlace-decomp/src/p9_emit/kuna_truncarg.rs (note_trimmed_arg)`),
 so emission can print the zero-extension C's promotion would otherwise lose
 (chapter [09](09-emission.md)). (kuna) A RETURN pull is recorded on the RETURN
 op the same way when its dropped bits are known zero and the calling convention
 extends a value of the trimmed width by the sign of its type
-(`decompiler/crates/unlace-decomp/src/p5_types/kuna_zextreturn.rs (unsigned_trim)`,
+(`crates/unlace-decomp/src/p5_types/kuna_zextreturn.rs (unsigned_trim)`,
 `note_trimmed_return`); a later trim of the same RETURN that drops bits not known
 to be zero clears the record. Type inference reads it to type the returned value
 unsigned (chapter [05](05-types.md)).
 
 (kuna) The RETURN pull refuses to trim a 64-bit integer a 32-bit convention
 returns in two registers
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/subflow.rs (returns_integer_pair)`):
+(`crates/unlace-decomp/src/p3_dataflow/subflow.rs (returns_integer_pair)`):
 a value no wider than eight bytes, wider than every single integer register of
 the prototype model's output list, and laid out as one integer in the register
 file's byte order. That covers the `join` return recovery builds for ARM `r1:r0`,
@@ -2747,7 +2747,7 @@ restores the word for them.
 
 (kuna) The RETURN pull also refuses to trim a zero-extended word where the
 convention sign-extends every 32-bit return value whatever its sign
-(`decompiler/crates/unlace-decomp/src/p5_types/kuna_zextreturn.rs (zero_extended_word)`):
+(`crates/unlace-decomp/src/p5_types/kuna_zextreturn.rs (zero_extended_word)`):
 the RISC-V and LoongArch LP64 rule of chapter [04](04-calls-and-prototypes.md)
 (`kuna_narrowext::sign_extends_any`), and MIPS64 under `narrowext compiler`.
 The trim must drop only known-zero bits, and the word's sign bit must be
@@ -2782,7 +2782,7 @@ which is what `voidret` asks its callers about.
 
 Three sibling engines share the file. `subflow.rs (SplitFlow)` (trigger
 `RuleSplitFlow`, oppool1) splits a double-sized value into hi/lo lanes through
-the `decompiler/crates/unlace-decomp/src/substrate/transform.rs
+the `crates/unlace-decomp/src/substrate/transform.rs
 (TransformManager)` machinery when a SUBPIECE proves the halves live separate
 lives. `subflow.rs (SubfloatFlow)` (trigger `RuleSubfloatConvert`, group
 `floatprecision`) does the same for a float value carried in a wider float
@@ -2815,7 +2815,7 @@ the policy that keeps every NaN behaviour. The shipped `nanignore compare`
 default and `all` drop it as upstream does, since the source most likely held
 a plain copy (`*d = *s` compiles to `fldl; fstpl` on i386) and C does not
 promise signaling-NaN preservation. Under `none`,
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_floatquiet.rs (can_elide)`
+`crates/unlace-decomp/src/p3_dataflow/kuna_floatquiet.rs (can_elide)`
 permits removing the final conversion only when the input is already quiet.
 Floating arithmetic, integer conversion and a conversion to another floating
 format produce quiet values; copies and merges require their sources to be
@@ -2826,7 +2826,7 @@ uses this guard before making an identity COPY; `SubfloatFlow::trace_backward`
 uses it before replacing a conversion by a COPY at the reduced precision.
 
 Integer-to-float conversions also retain their rounding width (always on;
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_intfloatround.rs`). `RuleFloatCast`
+`crates/unlace-decomp/src/p3_dataflow/kuna_intfloatround.rs`). `RuleFloatCast`
 combines an integer conversion followed by a floating conversion only when
 both floating widths match or the intermediate format can represent every
 signed source integer exactly. The required precision is one less than the
@@ -2868,7 +2868,7 @@ with a thousand splits traces each failing Varnode a thousand times (hkxc's
 0x1401cd7a0: 146,912 traces for 1,001 splits, 37 s). A failed trace changes
 nothing, and what it reads is bounded: the Varnodes it reached and every input
 and output of the ops that define and read them
-(`decompiler/crates/unlace-decomp/src/p9_emit/kuna_lanetrace.rs (footprint)`). A
+(`crates/unlace-decomp/src/p9_emit/kuna_lanetrace.rs (footprint)`). A
 split rewrites only within its own trace's footprint, taken before it is
 applied. So the rescan skips a Varnode whose failed trace read nothing a later
 split's footprint holds, which would fail the same way, and traces again every
@@ -2895,7 +2895,7 @@ new ops, new varnodes, the old ops removed, the old inputs deleted and the
 lane pieces made inputs. A stage can still fail (another input overlapping a
 lane piece, a varnode that cannot be deleted), and by then the function is
 half rewritten. Upstream throws, failing the function; the action
-(`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+(`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (ActionLaneDivide)`) fails it the same way, with the stage's error. It used
 to count the failure as a split that was never tried and walk on over the
 storage it had already rewritten, so the next varnode it read could be one the
@@ -2905,7 +2905,7 @@ option.
 
 One such failure is now caught before anything is rewritten: a transform that
 would give a free varnode it creates a second reader
-(`decompiler/crates/unlace-decomp/src/substrate/transform.rs
+(`crates/unlace-decomp/src/substrate/transform.rs
 (check_free_fanout)`). The action runs that check once a trace succeeds and
 counts a refusal as a failed trace: it tries the next lane size, and the
 failure memo holds it like any other failure, since the check reads only what
@@ -2937,7 +2937,7 @@ a COPY whose **output Varnode is read-only** — an address the load image repor
 inside a non-writable section — is never split. A store into a read-only range is
 not something the program performs, and the split is what makes such a copy
 *visible*: whole, its input and output share a HighVariable and
-`decompiler/crates/unlace-decomp/src/p6_variables/merge.rs
+`crates/unlace-decomp/src/p6_variables/merge.rs
 (Merge::mark_internal_copies)` marks it non-printing; split into one COPY per
 array element, the pieces land in different HighVariables and P9 prints a block of
 per-byte assignments into a `.rodata` string literal. The copies that reach the
@@ -2979,7 +2979,7 @@ body. The trigger rules above never narrow it: the web is read at full width (an
 index, a compare, a call argument), and upstream refuses a flow whose container
 is consumed beyond the logical value.
 
-`regnarrow` (`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_regnarrow.rs`)
+`regnarrow` (`crates/unlace-decomp/src/p3_dataflow/kuna_regnarrow.rs`)
 looks at every web of register Varnodes that MULTIEQUALs join, and at a single
 register definition read at least twice (`narrow_locals`). The nonzero-bit
 masks (`ActionNonzeroMask`) of all its members must fit a low 1, 2 or 4 bytes
@@ -3113,7 +3113,7 @@ cast (`(long)(int)v` on AArch64), which is why the option stays off by default
 
 ## 3.4 Conditional execution
 
-`decompiler/crates/unlace-decomp/src/p3_dataflow/condexe.rs
+`crates/unlace-decomp/src/p3_dataflow/condexe.rs
 (ActionConditionalExe)` (mainloop tail) removes a CBRANCH that re-tests a
 condition an earlier block already decided. The candidate — the *iblock* — must
 satisfy the two-block merge condition
@@ -3126,7 +3126,7 @@ satisfy the two-block merge condition
    purely a re-join of one earlier decision (`find_init_pre`);
 3. the initblock also ends in a CBRANCH, and the two branch conditions are
    provably identical or complementary —
-   `decompiler/crates/unlace-decomp/src/substrate/expression.rs
+   `crates/unlace-decomp/src/substrate/expression.rs
    (BooleanExpressionMatch::verify_condition)` matches the boolean expressions
    structurally (complement flips which path is "true");
 4. every op in the iblock other than its branch is removable or movable
@@ -3140,7 +3140,7 @@ the data-flow — each iblock op's output is replaced per consuming block, with
 pulled-back MULTIEQUALs materialized in the post-blocks as needed
 (`do_replacement`/`get_new_multi`) — deletes the iblock's ops in reverse order,
 and splices the block out of the graph
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs
+(`crates/unlace-decomp/src/substrate/funcdata_block.rs
 (Funcdata::remove_from_flow_split)`). The action loops over all blocks until a
 full round makes no change, and refuses to run at all while unreachable blocks
 exist. An iblock op whose output has **no readers** is removable only once
@@ -3157,9 +3157,9 @@ ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 (or INT_XOR) where one operand is provably zero along the path that reaches it (the
 `MultiPredicate` zero-slot analysis) collapses to a COPY of the other operand.
 
-**Conditional constants.** `decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+**Conditional constants.** `crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (ActionConditionalConst)` (mainloop tail, wrapper over
-`decompiler/crates/unlace-decomp/src/p3_dataflow/condconst.rs (condconst_apply)`)
+`crates/unlace-decomp/src/p3_dataflow/condconst.rs (condconst_apply)`)
 propagates the knowledge a CBRANCH creates: after `x == k` branches, `x` *is*
 `k` on one out-edge (and a raw boolean is 0/1 down its two edges). Every read
 of the varnode dominated by the constant edge is rewritten to the constant
@@ -3200,7 +3200,7 @@ has a loop in-edge and leaves the phi edge untouched (always on; DIV-3 —
 corpus-neutral, 0 of 675 assertions changed).
 
 **Range folding** (`option rangefold`, default **on**) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_rangefold.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_rangefold.rs
 (ActionRangeFold)`, right after `ActionConditionalConst`, in the action group
 `unreachable` with `ActionDeterminedBranch`: the reduced `jumptable` pipeline
 that recovers a switch reads its bounds check, which this pass may decide
@@ -3246,9 +3246,9 @@ it), so each `apply_op` defers per-op to the live gate on the per-function
 architecture snapshot (e.g. `kuna_addcarrychain.rs (RuleAddCarryChain::apply_op)`
 testing `add_carry_chain`) — which makes them subject to the flag-copy hazard
 of §0.5 — and every gate's engine default is set in
-`decompiler/crates/unlace-decomp/src/infra/architecture.rs
+`crates/unlace-decomp/src/infra/architecture.rs
 (reset_defaults_internal)`, mirrored by the `default` column of
-`decompiler/crates/unlace-decomp/phases.toml` (the source quoted below; the
+`crates/unlace-decomp/phases.toml` (the source quoted below; the
 DIV-2/DIV-3 rows of `docs/history.md` carry the ablation evidence). With a
 gate off, the rule returns 0 unconditionally and output is byte-identical to
 upstream. The rules marked *always on* below carry no gate: their off value
@@ -3256,7 +3256,7 @@ only reproduced an unfolded idiom, so they run unconditionally. Full option
 metadata: [docs/options.md](../options.md).
 
 **pow2select** —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_selectdiv.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_selectdiv.rs
 (RuleSelectDiv)` (oppool1, group `analysis`), option `pow2select`, default
 **on**. Signed `x / 2^k` rounds toward zero, so the compiler adds `2^k - 1` to
 a negative `x` before the arithmetic shift. Upstream's division rules
@@ -3289,7 +3289,7 @@ most negative `x` both inputs hold the same value, so those two values may go
 either way. Varnodes are compared through their `COPY` chains.
 
 **latecse, implweight, dirtypool** (all default off).
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_latecse.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_latecse.rs
 (ActionLateCse)`, option `latecse`, runs once per function in group
 `unreachable`: for every varnode with more than one reader, the readers that
 `get_cse_hash` accepts (pure unary or binary ops, no COPY or LOAD) go through
@@ -3303,21 +3303,21 @@ two reads of a value exposes the identical ops over their outputs one layer at
 a time.
 
 Option `implweight N` changes `ActionMarkExplicit`
-(`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs`):
+(`crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs`):
 a varnode with more readers than `max_implied_ref` becomes a multi-reader
 candidate when it has at most N readers, and `process_multiplier` caps its
 terms at `min(max_term_duplication, N / readers)`, so an expression prints
 inline at every reader while terms times readers stays within N.
 
 Option `dirtypool` changes `ActionPool::apply`
-(`decompiler/crates/unlace-decomp/src/infra/action.rs`): when a rule changes an
+(`crates/unlace-decomp/src/infra/action.rs`): when a rule changes an
 op, that op and every op within two def-use steps of it are recorded, and a
 repeated sweep of the same pool (`rule_repeatapply`) visits only those ops and
 the ops created since the previous sweep began. Rules that act further from
 the op they match can reach a different fixpoint, which is why it is off by
 default.
 
-**cmpmerge** — `decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_cmpmerge.rs
+**cmpmerge** — `crates/unlace-decomp/src/p3_dataflow/kuna_cmpmerge.rs
 (RuleCompareMerge, ActionBranchMerge)`, option `cmpmerge`, default off.
 A comparison of `a` and `b` is the set of relations that make it true: `LT`,
 `EQ`, `GT` for integers, plus `UN` (unordered) for floats, so `!=` is
@@ -3347,7 +3347,7 @@ second branch's condition becomes the constant that sends it the other way;
 `ActionDeterminedBranch` then removes the dead edge.
 
 **globalarrayanchor** —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_globalarrayanchor.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_globalarrayanchor.rs
 (preserve_array_base)`.
 With `option globalarrayanchor on` (default off), constant collection defers
 combining an exact mapped array base with a negative whole-element displacement
@@ -3394,7 +3394,7 @@ including auto when the input size selects aggressive. An explicit
 `option globalarrayanchor off` after mode selection restores ordinary folding.
 
 **addcarrychain** (GH-8913) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_addcarrychain.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_addcarrychain.rs
 (RuleAddCarryChain)`, oppool1, fires on PIECE. Pattern: the reassembly of an
 8-bit carry-chained add, `PIECE(hi, lo)` where `lo = INT_ADD(a, b)` and
 `hi = INT_ADD(hipart, carry)` with `carry` the carry of `(a, b)` — either a raw
@@ -3404,7 +3404,7 @@ ZEXT(a))`, recovering the single 16-bit addition the 6502-class ADC pair
 implements. The rule is always on.
 
 Carry-chain and array-stride helper outputs use
-`decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs (new_unique_out)`
+`crates/unlace-decomp/src/substrate/funcdata_varnode.rs (new_unique_out)`
 instead of private copies of the bank allocation sequence. The shared factory
 links each definition and assigns its HighVariable when high-level variables
 are already enabled; it also owns lane bookkeeping. Pattern guards, opcode
@@ -3413,7 +3413,7 @@ schedule applies these rules before high-level assignment, while direct rule
 invocations must also preserve the function's existing high-level state.
 
 **booleanmask** (GH-1282) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_booleanmask.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_booleanmask.rs
 (RuleBoolSignShift)`, oppool1, fires on INT_SRIGHT. Pattern:
 `(b << k) s>> k` with the same non-byte-aligned `k` on both shifts (the
 byte-aligned case already belongs to `RuleLeftRight`), where the pre-shift
@@ -3423,7 +3423,7 @@ giving 0 or all-ones), which the surrounding compare rules then clean to a
 plain boolean test. Always on.
 
 **bitidioms** (kuna) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_bitidioms.rs (RuleBitIdioms)`,
+`crates/unlace-decomp/src/p3_dataflow/kuna_bitidioms.rs (RuleBitIdioms)`,
 `(RuleIntAbs)` and `(ActionBitScanLoop)`, live gate `bit_idioms`
 (`option bitidioms`, default on). On an `INT_OR` the rule follows where each bit
 of the result comes from, through constant shifts, masks, ORs of disjoint bits,
@@ -3453,10 +3453,10 @@ loop, replaces the counter's uses after the loop with `ctz(x)` (or
 `BUILTIN_BSWAP`, `BUILTIN_ROTL`, `BUILTIN_BITREV`, `BUILTIN_CTZ` (unspecialised)
 and `BUILTIN_ABS`/`BUILTIN_LABS` (typed `int`/`long`).
 
-**alloca** (kuna) — `decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/kuna-alloca.xml`.
+**alloca** (kuna) — `crates/unlace-decomp/src/p3_dataflow/kuna_alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/kuna-alloca.xml`.
 
 **cancelbytearithmetic** (repipe `cancelling-byte-arithmetic-splits`) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_cancelbytearithmetic.rs`
+`crates/unlace-decomp/src/p3_dataflow/kuna_cancelbytearithmetic.rs`
 owns the exact graph matcher; a small hook remains in the
 upstream-derived `RuleSubCommute::apply_op` because the witness begins at its
 `SUBPIECE(INT_LEFT(...),0)` arm. Pattern: an outer one-byte add whose inputs are
@@ -3477,7 +3477,7 @@ shift and never creates narrow shift arithmetic, avoiding signed `char << s`
 in emitted C. The original INT_ZEXT/PIECE route is unchanged. Always on.
 
 **simdlane** (repipe `simd-constant-string-initializer`) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_simdlane.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_simdlane.rs
 (RuleSimdShuffleLane)`, oppool1, fires on SUBPIECE. *Pattern:* a one-byte lane
 read of a byte-shuffle user op whose mask is constant — `SUBPIECE(CALLOTHER
 pshufb(src, m), k)` with `m` a constant Varnode. `pshufb` has no p-code
@@ -3505,7 +3505,7 @@ value and every lane byte is provably zero — the broadcast mask, and the only
 wide constant mask the engine constructs. Always on.
 
 **Wide-slice SSA reduction** (always on) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_wideslice.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_wideslice.rs
 (RuleWideSlice)`, in the repeated analysis pool. Heritage widens each partial
 lane write of a vector register by joining it with the bytes below it
 (`normalize_write_size`), so a run of byte writes leaves intermediates 2..15
@@ -3532,7 +3532,7 @@ no `SUB13x` reads);
 `gh275-spillargtrial.xml` independently exercises a 12-byte packed-double tree.
 
 **De-vectorized reductions** (`option devectorize`, default **off**) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_devectorize.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_devectorize.rs
 (ActionDevectorize)`, in the fullloop tail beside the stack-guard and
 security-check strippers. clang and gcc vectorize `for (i) sum += a[i]` into a
 guard `length >= S`, a stride-S loop with one accumulator per lane, a
@@ -3572,7 +3572,7 @@ measured.
 hand-written sums whose exits disagree on a global store.
 
 **Inline string lengths** (`option strlenscan`, default **on**) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_strlenscan.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_strlenscan.rs
 (ActionStrlenScan)`, in the fullloop tail right after `devectorize`. gcc up to
 version 9 (at -O1 and above) and older MSVC expand `strlen(s)` inline as
 `or rcx,-1; xor eax,eax; repnz scasb; not rcx` (ECX on 32-bit x86). The
@@ -3631,7 +3631,7 @@ x86-64 ones beside the source, with buffers whose bytes past the terminator are
 not zero, to check each printed function computes the same values.
 
 **Inline copies, fills and compares** (`option repstring`, default **on**) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_repstring.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_repstring.rs
 (ActionRepString)`, in the fullloop tail right after `strlenscan`. On x86 a
 copy, fill or compare a compiler inlines (gcc and clang at `-Os`, gcc's
 `-minline-all-stringops`, MSVC with `/Oi`) is one `rep movs`, `rep stos` or
@@ -3724,7 +3724,7 @@ the same values.
 
 
 **Unrolled copies** (`option copyrun`, default **on**) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_copyrun.rs (ActionCopyRun)`,
+`crates/unlace-decomp/src/p3_dataflow/kuna_copyrun.rs (ActionCopyRun)`,
 in the fullloop tail after `repstring`. A fixed-size copy (a struct
 assignment, a constant-length `memcpy`) is expanded by the compiler into loads
 and stores of its widest registers, which printed one assignment per element.
@@ -3756,7 +3756,7 @@ does not promise for buffers that overlap through different pointers; the
 rewrite cannot see that, which is what the option is for.
 
 **constspaceload** (repipe `arm-neon-zero-initialization`) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_constspaceload.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_constspaceload.rs
 (RuleConstSpaceLoad)`, oppool1, fires on LOAD. *Pattern:* a LOAD whose space
 operand names the **constant** space and whose pointer is a defined Varnode
 rather than a constant. That shape is what a SLEIGH constructor ending in
@@ -3786,7 +3786,7 @@ also resolves the spacebase-placeholder tail that a bare COPY would drop; a
 free pointer is declined. Always on (DIV-158).
 
 **x87truncate** —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_x87truncate.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_x87truncate.rs
 (RuleX87Truncate)`, oppool1, fires on CALLOTHER. *Pattern:* one of the x87
 `x87_float_to_int16/32/64` user operations that `FIST`/`FISTP` lift to (§2,
 x87 integer conversions), whose control-word operand provably has both
@@ -3812,7 +3812,7 @@ x87 converts to the integer indefinite value when invalid is masked, take
 is the conversion the instruction performs under that control word.
 
 **opaquepredicate** —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_opaquepredicate.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_opaquepredicate.rs
 (RuleOpaquePredicate)`, oppool1, fires on INT_EQUAL, INT_NOTEQUAL, INT_LESS,
 INT_LESSEQUAL, INT_SLESS, INT_SLESSEQUAL and CBRANCH. With `option
 opaquepredicate on` (default off, on in the
@@ -3904,7 +3904,7 @@ The condition is not examined: whichever arm runs, the same code runs.
 *Never-written globals* (`kuna_opaqueglobals.rs`, value `globals` only). The
 narrow-input proof reads a Varnode in the default data space as a constant
 when the analysis tier reports that nothing may write those bytes
-(`decompiler/crates/unlace-analysis/src/listing/kuna_opaqueglobals.rs`). That
+(`crates/unlace-analysis/src/listing/kuna_opaqueglobals.rs`). That
 scan is the whole-program walk `floatglobals` takes: every function from its
 entry, registers and stack slots followed as constants. It marks as written
 every byte a store with a known address covers; every slot the image's loader
@@ -3942,7 +3942,7 @@ of what the binary does: with it folded, the output no longer shows that the
 function was obfuscated or which blocks the bogus edges reached.
 
 **flagcompare** (GH-1276 / GH-8777) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_flagcompare.rs`, two rules
+`crates/unlace-decomp/src/p3_dataflow/kuna_flagcompare.rs`, two rules
 for architectures that model condition flags as explicit bits.
 `RuleBoolSignLess` (fires on INT_SLESS): a boolean shifted into the sign bit
 and tested with `s< 0` — where the operand's nonzero mask is exactly the bit
@@ -3953,7 +3953,7 @@ AND-of-ORs or OR-of-ANDs lowering — becomes `INT_SLESSEQUAL(K, V)` (`V >= K`
 as the source wrote it). Always on (DIV-3).
 
 **ovlesssimplify** (GH-7190) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_ovlesssimplify.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_ovlesssimplify.rs
 (RuleOvLessSimplify)`, oppool1, fires on INT_NOTEQUAL. Pattern: the explicit
 S/OV-flag signed-less-than computation (V850-style),
 `NE(SLESS(V+K, 0), BOOL_AND(signtest, SLESS(-1, V+K)))` — the sign flag XORed
@@ -3962,7 +3962,7 @@ Always on (DIV-2).
 
 **compareform** (GH-558) — not a pool peephole but the canonicalization
 round-trip for `<=`. The analysis wants one canonical compare form, so
-`decompiler/crates/unlace-decomp/src/substrate/funcdata_op.rs
+`crates/unlace-decomp/src/substrate/funcdata_op.rs
 (Funcdata::replace_lessequal)` rewrites `V <= c` into `V < c+1` (and
 `c-1 < V` from `c <= V`), with overflow guards, from exactly three sites: the
 pool rule `ruleaction_1.rs (RuleIntLessEqual)` — carried in its own group
@@ -3971,7 +3971,7 @@ primitives in `funcdata_op.rs` (`op_normalize_flip` and the flip-in-place
 path). Each rewrite stamps a provenance bit on the op
 (`canonical_lessequal`). At the very end of the drive — after structuring's
 last flips, before prototype/cast/naming fixation —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_compareform.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_compareform.rs
 (ActionPresentCompareForm)` (group `presentcompare`, `decompile` variant only)
 inverts every still-marked op back to the source `<=` form, re-validating the
 shape from scratch so an op reshaped by a later transform is simply left
@@ -3981,7 +3981,7 @@ assertions); `option compareform canonical` leaves the analysis form standing,
 reproducing upstream Ghidra's rendering.
 
 **arraystride** (GH-8724) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_arraystride.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_arraystride.rs
 (RuleArrayStride)`, oppool1, fires on MULTIEQUAL. Pattern: a strength-reduced
 array walk — a loop-header offset accumulator
 `acc = MULTIEQUAL(#0, acc + STRIDE)` (STRIDE constant, neither 0 nor 1) with a
@@ -3992,7 +3992,7 @@ pointer rules and the emitter can render `arr[i]` instead of
 `iVar += 0x414`. Settable `arraystride`, shipped default **on** (DIV-3).
 
 **mulblob** (kuna) —
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_mulblob.rs
+`crates/unlace-decomp/src/p3_dataflow/kuna_mulblob.rs
 (declines_zext)`, consulted by `RulePieceStructure` rather than registered as a
 rule of its own. It answers one question: whether a widened operand of a wide
 multiply is a *value* or an *aggregate*.
@@ -4046,7 +4046,7 @@ is inert on every function with no wide multiply.
 
 ## 3.6 Early passes
 
-`decompiler/crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs` holds the
+`crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs` holds the
 setup and maintenance actions the schedule interleaves around heritage and the
 pools (§0.6 places them; this section says what each computes).
 
@@ -4058,7 +4058,7 @@ C++ did there happens in the drive, which follows flow before the tree runs
 register* the context database pins to a constant at this function's address
 (the console `set track` surface). For a DEX method with `option dexmodel`
 on it first inserts the method's `uponentry` copies
-(`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_dex.rs (apply_entry)`):
+(`crates/unlace-decomp/src/p0_knowledge/kuna_dex.rs (apply_entry)`):
 the Dalvik compiler spec passes arguments in the designated input registers
 `iv0..` and leaves the move into the frame to a dynamic payload, which Ghidra's
 `InjectPayloadDexParameters` builds from the method's code item. `this`, when
@@ -4121,7 +4121,7 @@ displacements) folds only in the rule pool, after `ActionDeadCode` has already
 run, so a read whose value the program discards used to be deleted first when
 the address sat deeper than the general `lastChanceLoad` lookahead (three
 levels of binary operations). So before any removal path discards a LOAD,
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_volatileload.rs` evaluates
+`crates/unlace-decomp/src/p3_dataflow/kuna_volatileload.rs` evaluates
 its address through a bounded graph of constant integer operations and asks the
 same local and global property query a new varnode at that address would get.
 When the answer is `volatile`, the LOAD is kept: `lastChanceLoad` holds it on
@@ -4168,7 +4168,7 @@ early and late; `ActionRedundBranch` removes a branch whose target join adds
 nothing (the redundant-join splice); and `ActionDeterminedBranch` converts a
 CBRANCH whose condition has simplified to a constant into an unconditional
 branch, severing the dead edge
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs
+(`crates/unlace-decomp/src/substrate/funcdata_block.rs
 (Funcdata::remove_branch)`) — this is the in-loop feedback edge by which a
 constant-propagation result (P5 facts) edits the P2 control-flow artifact
 without any restart (§0.7): the next mainloop iteration simply re-heritages
@@ -4176,7 +4176,7 @@ the smaller graph.
 
 
 The bounded local policy (`kuna_localstackviews.rs`) adds only positively proved local byte ranges to
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_stackeffects.rs`.
+`crates/unlace-decomp/src/p3_dataflow/kuna_stackeffects.rs`.
 The native STORE hook exposes those ranges before the next heritage pass;
 waiting for dead-code preparation can incorrectly fold a later frame read
 across an escaped pointer write. Unknown pointer STOREs retain the existing
@@ -4207,7 +4207,7 @@ reloaded from memory can change those bytes before a direct stack read; the
 barrier prevents that read from folding to the preceding register-carried store.
 Other frame ranges retain their existing policy.
 
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_calleememory.rs` derives
+`crates/unlace-decomp/src/p3_dataflow/kuna_calleememory.rs` derives
 read, write and pointer-escape summaries from a direct callee's instructions
 when `stackviews` or `stackalias` is enabled. A complete call-free body can
 identify constant byte ranges relative to incoming pointer registers and exact
@@ -4228,7 +4228,7 @@ footprints: an access beyond the prototype's arguments is not treated as private
 memory or silently ignored. Those footprints are translated using the recovered
 call-site spacebase offset.
 
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_calleehomes.rs` distinguishes
+`crates/unlace-decomp/src/p3_dataflow/kuna_calleehomes.rs` distinguishes
 pointer writes into a verified Win64 home area from external pointer publication.
 The callee summary retains each possible home escape and its full write footprint,
 even if later writes partially overwrite the pointer. The caller may discharge
@@ -4283,7 +4283,7 @@ the summary before its effects or return states are used. Partial frame stores
 still invalidate the entire pointer spill. Conditions from every visited path
 share the existing bounded metadata budget with home-spill conditions.
 
-`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_calleeflags.rs` distinguishes
+`crates/unlace-decomp/src/p3_dataflow/kuna_calleeflags.rs` distinguishes
 one-byte comparison/carry results from address fragments. Instruction-local
 scratch feeding only those Boolean results retains its exact frame origin;
 this covers the parity calculation accompanying a stack adjustment. Every use
@@ -4347,7 +4347,7 @@ arithmetic/SUBPIECE checks. Explicit locked array types keep their structuring.
 
 ## (kuna) MBA simplification — `option mba`, default off
 
-**`decompiler/crates/unlace-decomp/src/p3_dataflow/kuna_mba.rs (RuleMbaSimplify)`,
+**`crates/unlace-decomp/src/p3_dataflow/kuna_mba.rs (RuleMbaSimplify)`,
 in oppool1 after `boolsignshift`.** Obfuscators hide `x + y` as
 `(x ^ y) + 2*(x & y)`, `x | y` as `(x & ~y) + y`, and so on. Each of these is a
 *linear mixed boolean-arithmetic* expression: an integer combination of bitwise

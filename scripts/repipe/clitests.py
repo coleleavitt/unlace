@@ -7,7 +7,7 @@ was closed while nothing checked it stayed closed, which is precisely the rot th
 by a tester rather than a minute later by CI.
 
 A probe only lands here if its target is `in-repo`, so this runs with no dataset and is safe
-in CI. `make test-cli` is the entry point.
+in CI. `PYTHONPATH=. python3 -m scripts.repipe.clitests` is the entry point.
 """
 from __future__ import annotations
 

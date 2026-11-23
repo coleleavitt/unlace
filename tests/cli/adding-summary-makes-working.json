@@ -16,11 +16,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/macho_fat",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/macho_fat",
     "binary_sha256": "4877d6d86c3374b884d2c9db78e346f3221edcaaa1a208f92eff8698cc6bae2a",
     "binary_size": 99168,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/macho_fat"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/macho_fat"
   },
   "expect": {
     "exit_code": {

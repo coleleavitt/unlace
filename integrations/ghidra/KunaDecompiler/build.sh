@@ -34,17 +34,17 @@ case "$os/$arch" in
 		echo "       Use the prebuilt extension zip from the kuna GitHub releases tab instead:" >&2
 		echo "       kuna-v<ver>-KunaDecompiler-ghidra_<version>.zip ships ready-to-install" >&2
 		echo "       binaries for all platforms (including win_x86_64/unlace_ghidra.exe)." >&2
-		echo "       Or build manually: (cd decompiler && cargo build --release -p unlace-ghidra)" >&2
+		echo "       Or build manually: cargo build --release -p unlace-ghidra" >&2
 		echo "       and copy the binary into os/<ghidra-platform-dir>/ yourself." >&2
 		exit 1 ;;
 esac
 
 echo ">> building the unlace_ghidra backend (release)"
-( cd "$REPO_ROOT/decompiler" && cargo build --release -p unlace-ghidra )
+( cd "$REPO_ROOT" && cargo build --release -p unlace-ghidra )
 
 echo ">> staging $EXE into os/$PLATFORM/"
 mkdir -p "$EXT_DIR/os/$PLATFORM"
-cp "$REPO_ROOT/decompiler/target/release/$EXE" "$EXT_DIR/os/$PLATFORM/$EXE"
+cp "$REPO_ROOT/target/release/$EXE" "$EXT_DIR/os/$PLATFORM/$EXE"
 chmod +x "$EXT_DIR/os/$PLATFORM/$EXE"
 
 if [ -n "${GHIDRA_INSTALL_DIR:-}" ]; then
@@ -55,5 +55,5 @@ else
 	echo ">> binary staged at os/$PLATFORM/$EXE."
 	echo "   - release install: set GHIDRA_INSTALL_DIR and re-run to build the installable zip; or"
 	echo "   - dev checkout: launch Ghidra with -Dghidra.external.modules=$EXT_DIR"
-	echo "     (skip staging entirely with -Dkuna.decompiler.exe=$REPO_ROOT/decompiler/target/release/$EXE)."
+	echo "     (skip staging entirely with -Dkuna.decompiler.exe=$REPO_ROOT/target/release/$EXE)."
 fi

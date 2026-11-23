@@ -48,7 +48,7 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_helpers_arm64_elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/swift_helpers_arm64_elf</com>
   <com>option swiftmetadata on</com>
   <com>option swifthelpers off</com>
   <com>option swifttypes off</com>
@@ -61,7 +61,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_helpers_arm64_elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/swift_helpers_arm64_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x1194c</com>

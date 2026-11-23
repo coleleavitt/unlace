@@ -2,11 +2,11 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/switchtable_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/switchtable_i386",
     "binary_sha256": "7c67abaf4be653478fff9c6344c1fe58fe68675d022bab1e110985f67044a8cc",
     "binary_size": 9092,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/switchtable_i386"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/switchtable_i386"
   },
   "timeout_s": 60,
   "cmd": [

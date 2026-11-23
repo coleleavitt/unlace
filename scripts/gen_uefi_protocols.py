@@ -17,7 +17,7 @@ bit-field, a packed or unknown by-value type) ends the struct there, so every
 offset that is written is exact.
 
     python3 scripts/gen_uefi_protocols.py /path/to/edk2 \
-        > decompiler/crates/unlace-analysis/src/analyzers/uefi/protocols.txt
+        > crates/unlace-analysis/src/analyzers/uefi/protocols.txt
 """
 import re
 import sys

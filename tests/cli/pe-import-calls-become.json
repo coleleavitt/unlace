@@ -17,11 +17,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
     "binary_sha256": "9cd4f3d091d647eeb36df883e2f3f063d34ac7a508c71c9f28f26683f05ac6f6",
     "binary_size": 1024,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
     "selector": "0x401028",
     "selector_kind": "addr"
   },

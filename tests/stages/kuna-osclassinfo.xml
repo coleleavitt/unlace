@@ -18,7 +18,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/dext_osclassinfo.macho</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/kernelcache/dext_osclassinfo.macho</com>
   <com>option osclassinfo off</com>
   <com>read symbols</com>
   <com>load function get_meta</com>
@@ -28,7 +28,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/dext_osclassinfo.macho</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/kernelcache/dext_osclassinfo.macho</com>
   <com>option osclassinfo on</com>
   <com>read symbols</com>
   <com>load function get_meta</com>

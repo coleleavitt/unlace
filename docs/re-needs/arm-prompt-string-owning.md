@@ -14,7 +14,7 @@ rounds: [6]
 first_seen_round: 6
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis]
+touches: [crates/unlace-analysis]
 scope: small
 regression_of: arm-literal-pool-string
 pr: null

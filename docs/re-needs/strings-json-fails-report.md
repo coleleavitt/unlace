@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 1
 covered_by_option: picbase
-touches: [decompiler/crates/unlace-analysis/src/listing/kuna_picbase.rs, decompiler/crates/unlace-analysis/src/listing/xrefs.rs]
+touches: [crates/unlace-analysis/src/listing/kuna_picbase.rs, crates/unlace-analysis/src/listing/xrefs.rs]
 scope: large
 regression_of: no-strings-inventory
 pr: 378

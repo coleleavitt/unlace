@@ -3,7 +3,7 @@
 <!--
     Kuna: P1 environment binding, options dyldimage and dyldcrossrefs
     (default on). The script loads one image out of the committed synthetic
-    dyld shared cache (decompiler/crates/unlace-analysis/tests/fixtures/
+    dyld shared cache (crates/unlace-analysis/tests/fixtures/
     dyld_cache_arm64e.py): a main file, a .01 sub-cache holding a
     __TEXT_STUBS stub island, and a .symbols file. `option dyldimage`
     selects /usr/lib/libcaller.dylib before `load file`.
@@ -29,7 +29,7 @@
   <com>option exporttrie off</com>
   <com>option dyldcrossrefs off</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
   <com>read symbols</com>
   <com>load function caller_entry</com>
   <com>decompile</com>
@@ -39,7 +39,7 @@
   <com>print C</com>
   <com>option dyldcrossrefs on</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e</com>
   <com>read symbols</com>
   <com>load function caller_entry</com>
   <com>decompile</com>

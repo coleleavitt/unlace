@@ -30,7 +30,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/sharedpush_regparm_pe_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/sharedpush_regparm_pe_i386.exe</com>
   <com>read symbols</com>
   <com>map function r0x401000 local_unwind</com>
   <com>map function r0x401030 stack_free</com>

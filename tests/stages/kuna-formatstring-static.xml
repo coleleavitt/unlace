@@ -130,7 +130,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmt_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmt_x86_64</com>
   <com>option elfmain off</com>
   <com>option listing on</com>
   <com>option formatstring off</com>
@@ -139,7 +139,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmt_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmt_x86_64</com>
   <com>option elfmain off</com>
   <com>option listing on</com>
   <com>read symbols</com>
@@ -147,7 +147,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmt_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmt_x86_64</com>
   <com>option elfmain off</com>
   <com>option formatstring full</com>
   <com>read symbols</com>
@@ -155,7 +155,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtjoin_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtjoin_x86_64</com>
   <com>option libcnames off</com>
   <com>option listing on</com>
   <com>option formatstring off</com>
@@ -167,7 +167,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtjoin_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtjoin_x86_64</com>
   <com>option libcnames off</com>
   <com>option listing on</com>
   <com>read symbols</com>
@@ -178,7 +178,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtjoin_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtjoin_x86_64</com>
   <com>option libcnames off</com>
   <com>option listing on</com>
   <com>option formatstring full</com>
@@ -190,7 +190,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_imports_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_imports_arm64</com>
   <com>option listing on</com>
   <com>option formatstring off</com>
   <com>read symbols</com>
@@ -198,14 +198,14 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_imports_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_imports_arm64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function _main</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_imports_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_imports_arm64</com>
   <com>option listing on</com>
   <com>option formatstring full</com>
   <com>read symbols</com>
@@ -213,7 +213,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtabi_armhf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtabi_armhf</com>
   <com>option listing on</com>
   <com>option armfloatreturn off</com>
   <com>option armfloatargs off</com>
@@ -229,7 +229,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtabi_armhf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtabi_armhf</com>
   <com>option listing on</com>
   <com>option armfloatreturn off</com>
   <com>option armfloatargs off</com>
@@ -244,7 +244,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtabi_armhf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtabi_armhf</com>
   <com>option listing on</com>
   <com>option armfloatreturn off</com>
   <com>option armfloatargs off</com>
@@ -260,7 +260,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtedge_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtedge_x86_64</com>
   <com>option listing on</com>
   <com>option formatstring off</com>
   <com>read symbols</com>
@@ -271,7 +271,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtedge_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtedge_x86_64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function show</com>
@@ -281,7 +281,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtlf_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtlf_x86_64</com>
   <com>option listing on</com>
   <com>option formatstring off</com>
   <com>read symbols</com>
@@ -295,7 +295,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtlf_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtlf_x86_64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function show</com>
@@ -308,7 +308,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtlf_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtlf_x86_64</com>
   <com>option listing on</com>
   <com>option formatstring full</com>
   <com>read symbols</com>
@@ -322,7 +322,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
   <com>option listing on</com>
   <com>option armfloatreturn off</com>
   <com>option armfloatargs off</com>
@@ -338,7 +338,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
   <com>option listing on</com>
   <com>option armfloatreturn off</com>
   <com>option armfloatargs off</com>
@@ -353,7 +353,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtlf_armhf</com>
   <com>option listing on</com>
   <com>option armfloatreturn off</com>
   <com>option armfloatargs off</com>
@@ -369,7 +369,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtzu_pe_x86_64.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtzu_pe_x86_64.exe</com>
   <com>option listing on</com>
   <com>option formatstring off</com>
   <com>read symbols</com>
@@ -380,7 +380,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtzu_pe_x86_64.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtzu_pe_x86_64.exe</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function show_zu</com>
@@ -390,7 +390,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtzu_pe_x86_64.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtzu_pe_x86_64.exe</com>
   <com>option listing on</com>
   <com>option formatstring full</com>
   <com>read symbols</com>
@@ -401,7 +401,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmt_aarch64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmt_aarch64</com>
   <com>option elfmain off</com>
   <com>option listing on</com>
   <com>option formatstring off</com>
@@ -410,7 +410,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmt_aarch64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmt_aarch64</com>
   <com>option elfmain off</com>
   <com>option listing on</com>
   <com>read symbols</com>
@@ -418,7 +418,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmt_aarch64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmt_aarch64</com>
   <com>option elfmain off</com>
   <com>option listing on</com>
   <com>option formatstring full</com>
@@ -427,7 +427,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtvalist_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtvalist_x86_64</com>
   <com>option listing on</com>
   <com>option formatstring off</com>
   <com>read symbols</com>
@@ -435,14 +435,14 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtvalist_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtvalist_x86_64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function credits</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtvalist_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtvalist_x86_64</com>
   <com>option listing on</com>
   <com>option formatstring full</com>
   <com>read symbols</com>
@@ -450,7 +450,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtslots_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtslots_x86_64</com>
   <com>option partialaccess off</com>
   <com>option listing on</com>
   <com>option formatstring off</com>
@@ -465,7 +465,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtslots_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtslots_x86_64</com>
   <com>option partialaccess off</com>
   <com>option listing on</com>
   <com>read symbols</com>
@@ -479,7 +479,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/fmtslots_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/fmtslots_x86_64</com>
   <com>option partialaccess off</com>
   <com>option listing on</com>
   <com>option formatstring full</com>

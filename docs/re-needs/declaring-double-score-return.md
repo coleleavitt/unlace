@@ -14,7 +14,7 @@ rounds: [5, 12]
 first_seen_round: 5
 attempts: 1
 covered_by_option: calleeretpreserves
-touches: [decompiler/crates/unlace-decomp/src/p4_calls]
+touches: [crates/unlace-decomp/src/p4_calls]
 scope: small
 regression_of: null
 pr: 599
@@ -96,11 +96,11 @@ Recover the score with correct double prototypes while preserving the accumulate
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_double_score_return_x86_64.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_double_score_return_x86_64.exe",
     "binary_sha256": "3cf5307ef9c572400d67db3556f5f4bfc5e9483d2ae1b787f4f34ed494eaed19",
     "binary_size": 3584,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_double_score_return_x86_64.exe"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_double_score_return_x86_64.exe"
   }
 }
 ```

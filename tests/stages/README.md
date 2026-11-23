@@ -160,16 +160,16 @@ These run with the same upstream harness as `tests/datatests/` but from a
 separate directory so the upstream baseline (`docs/baseline.json`) is never touched:
 
 ```bash
-make test-stages
+cargo test -p unlace-cli --test parity stage_tests
 # or, directly:
-decompiler/target/release/unlace test --datatests --datatests-dir tests/stages \
+target/release/unlace test --datatests --datatests-dir tests/stages \
     --baseline docs/baseline-stages.json
 ```
 
 After adding a testcase, re-record the stages baseline (never `docs/baseline.json`):
 
 ```bash
-decompiler/target/release/unlace test --datatests --datatests-dir tests/stages \
+target/release/unlace test --datatests --datatests-dir tests/stages \
     --save-baseline docs/baseline-stages.json
 ```
 
@@ -548,10 +548,10 @@ the Linux native/recompiled functions at O0/O2. Source: `src/pointer_storage_lit
 bare MH_FILESET with `kernelcache off` (one image, no symbols), its kext out of an
 IMG4(IM4P(LZFSE)) wrapper, and its kernel out of a bare IM4P(complzss). The
 fixtures and their generator live in
-`decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/`.
+`crates/unlace-analysis/tests/fixtures/kernelcache/`.
 
 `kuna-iokitclasses.xml` decompiles a stripped synthetic kext
-(`decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/gen_iokit.py`) with
+(`crates/unlace-analysis/tests/fixtures/kernelcache/gen_iokit.py`) with
 `iokitclasses` off and on: the OSMetaClass constructor, the metaclass objects and
 a vtable-only override gain their names.
 
@@ -639,7 +639,7 @@ complete native bodies covered by the CLI integration fixture.
 bare MH_FILESET with `kernelcache off` (one image, no symbols), its kext out of an
 IMG4(IM4P(LZFSE)) wrapper, and its kernel out of a bare IM4P(complzss). The
 fixtures and their generator live in
-`decompiler/crates/unlace-analysis/tests/fixtures/kernelcache/`.
+`crates/unlace-analysis/tests/fixtures/kernelcache/`.
 `kuna-kernelcacheboot.xml` loads the kext of a synthetic Auxiliary collection
 twice: with `kernelcache-boot off` its calls into the kernel go through
 unresolved slots, and by default they are named from the boot collection that
@@ -662,13 +662,13 @@ companion compiles the printed C beside the C source and compares results.
 `kuna-elf-unwind-pcread.xml` checks an authored PowerPC PC-relative literal read:
 with FDE ownership disabled it remains a call; with ownership enabled the
 complete body returns `a0 * 3 + 7`. The fixture generator is
-`decompiler/crates/unlace-cli/tests/fixtures/elf_unwind_fixture.rs`.
+`crates/unlace-cli/tests/fixtures/elf_unwind_fixture.rs`.
 
 `kuna-assert-callee.xml` checks `override indirect`: an indirect call and an
 indirect tail jump each print as a direct call to the stated function, and the
 tail call to a callee marked no-return ends the function with no return. The CLI
 companion covers `--assert callee` on both surfaces and every refusal. The
-fixture source is `decompiler/crates/unlace-cli/tests/fixtures/assert_callee.c`.
+fixture source is `crates/unlace-cli/tests/fixtures/assert_callee.c`.
 
 `kuna-rust-process-exit.xml` preserves exit status and preceding stores while
 removing dead trap flow after a known Rust standard-library process exit.

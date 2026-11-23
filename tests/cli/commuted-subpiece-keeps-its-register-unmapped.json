@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/ptx.o",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/ptx.o",
     "binary_sha256": "61ad291a58370d37b8acc4436031de2eb29ec54f7831cb8e18b2f939517c835b",
     "binary_size": 120664,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/ptx.o",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/ptx.o",
     "selector": "print_field",
     "selector_kind": "name"
   },

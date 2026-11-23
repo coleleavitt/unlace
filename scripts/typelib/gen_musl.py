@@ -2,7 +2,7 @@
 """Build a kuna type library from the musl libc headers.
 
     scripts/typelib/gen_musl.py --arch x86_64 \
-        -o decompiler/crates/unlace-console/typelib/linux-x86_64.ktl
+        -o crates/unlace-console/typelib/linux-x86_64.ktl
 
 Source: musl libc (MIT, https://musl.libc.org), the release pinned in MUSL
 below. The headers are read with clang; nothing is copied by hand. For every

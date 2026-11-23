@@ -34,7 +34,7 @@ def load_manifest(text: str) -> dict:
 
 def check(root: Path) -> list[str]:
     errors = []
-    for manifest in sorted((root / "decompiler/crates").glob("*/Cargo.toml")):
+    for manifest in sorted((root / "crates").glob("*/Cargo.toml")):
         config = load_manifest(manifest.read_text())
         if config.get("package", {}).get("autotests", True):
             continue

@@ -26,10 +26,10 @@
     `protoorder`'s argument types the caller keeps the result as the integer
     the call produces.)  The statement is recorded only where
     `park_recovered_proto` is true, which only
-    decompiler/crates/unlace-cli/src/decompile_all.rs sets.
+    crates/unlace-cli/src/decompile_all.rs sets.
 
     The POSITIVE witness is the same code as a real program,
-    decompiler/crates/unlace-analysis/tests/fixtures/callrettype_gcc_O0_x86_64
+    crates/unlace-analysis/tests/fixtures/callrettype_gcc_O0_x86_64
     (source beside it), under `make test-cli`:
     tests/cli/callrettype-types-a-call-by-its-callees-return.json prints
     `v1 = skip_blanks(a0);` and tests/cli/callrettype-off-keeps-the-conversion.json

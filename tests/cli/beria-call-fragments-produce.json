@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/calltrampoline_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/calltrampoline_i386",
     "binary_sha256": "679f9cc962983af0000b8466e0bae520258ecac855633a7f5fb137b0f78b7df4",
     "binary_size": 4584,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/calltrampoline_i386",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/calltrampoline_i386",
     "selector": "protected",
     "selector_kind": "name"
   },

@@ -15,11 +15,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/floatret_cm4.o",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/floatret_cm4.o",
     "binary_sha256": "79336407e43b016799478c45d8ead97245d3cca106fb0d9b28c01ef80a833f07",
     "binary_size": 1728,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/floatret_cm4.o",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/floatret_cm4.o",
     "selector": "qnanf_",
     "selector_kind": "name"
   },

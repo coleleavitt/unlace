@@ -14,7 +14,7 @@ rounds: [5]
 first_seen_round: 5
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis/src/listing/kuna_poolref.rs]
+touches: [crates/unlace-analysis/src/listing/kuna_poolref.rs]
 scope: small
 regression_of: arm-literal-pool-string
 pr: null

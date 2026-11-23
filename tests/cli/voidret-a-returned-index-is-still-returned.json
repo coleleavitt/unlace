@@ -14,11 +14,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/voidret_indexed_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/voidret_indexed_x86_64",
     "binary_sha256": "c68fcd1217cbc1c0596fdbd7bc112f7badf9443703b2f23590235cedb3865e17",
     "binary_size": 15336,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/voidret_indexed_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/voidret_indexed_x86_64",
     "selector": "base_len",
     "selector_kind": "name"
   },

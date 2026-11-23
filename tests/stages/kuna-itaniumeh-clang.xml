@@ -8,7 +8,7 @@
     order (#2), and a pad with a catch clause and a cleanup still names the
     type (#1). f_dtor's cleanup pad runs the destructor (#3).
 
-    Fixture: `decompiler/crates/unlace-cli/tests/fixtures/itaniumeh/eh3_x86_64_clang.so`
+    Fixture: `crates/unlace-cli/tests/fixtures/itaniumeh/eh3_x86_64_clang.so`
     (clang 22 -O2 -fPIC -shared, source eh3.cc beside it).
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">c3</bytechunk>
@@ -16,7 +16,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/itaniumeh/eh3_x86_64_clang.so</com>
+  <com>load file crates/unlace-cli/tests/fixtures/itaniumeh/eh3_x86_64_clang.so</com>
   <com>option itaniumeh on</com>
   <com>read symbols</com>
   <com>load function f_loop</com>

@@ -25,26 +25,26 @@ c3
 <script>
   <com>option dwarfscopes off</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfregs_gcc_O2_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfregs_gcc_O2_x86_64</com>
   <com>read symbols</com>
   <com>load function hash</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfregparm_gcc_O2_i386</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfregparm_gcc_O2_i386</com>
   <com>read symbols</com>
   <com>load function combine</com>
   <com>decompile</com>
   <com>print C</com>
   <com>option dwarfscopes on</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfregs_gcc_O2_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfregs_gcc_O2_x86_64</com>
   <com>read symbols</com>
   <com>load function hash</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfregparm_gcc_O2_i386</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfregparm_gcc_O2_i386</com>
   <com>read symbols</com>
   <com>load function combine</com>
   <com>decompile</com>

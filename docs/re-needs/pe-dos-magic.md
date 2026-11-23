@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis/src/loader, decompiler/crates/unlace-console/src/engine.rs, decompiler/crates/unlace-cli/src/decompile_all.rs]
+touches: [crates/unlace-analysis/src/loader, crates/unlace-console/src/engine.rs, crates/unlace-cli/src/decompile_all.rs]
 scope: small
 regression_of: null
 pr: null
@@ -56,11 +56,11 @@ Load a PE32 whose first byte was overwritten (e_magic 0x5a15 instead of MZ) and 
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_dosmagic_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_dosmagic_i386.exe",
     "binary_sha256": "e53a812817447fa428948cfd4a6f296747cfa42e2acba4e03f78e474941ac912",
     "binary_size": 1024,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_dosmagic_i386.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_dosmagic_i386.exe",
     "selector": null,
     "selector_kind": "none"
   },
@@ -96,11 +96,11 @@ Load a PE32 whose first byte was overwritten (e_magic 0x5a15 instead of MZ) and 
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_dosmagic_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_dosmagic_i386.exe",
     "binary_sha256": "e53a812817447fa428948cfd4a6f296747cfa42e2acba4e03f78e474941ac912",
     "binary_size": 1024,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_dosmagic_i386.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_dosmagic_i386.exe",
     "selector": null,
     "selector_kind": "none"
   },

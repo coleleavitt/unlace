@@ -14,7 +14,7 @@ Usage:
 
 Each `name = 0xADDR;` / `PROVIDE(name = 0xADDR);` assignment becomes one line
 `<hex address> <F|D> <name>` in
-decompiler/crates/unlace-analysis/src/loader/firmware/esprom/<chip>.txt, sorted
+crates/unlace-analysis/src/loader/firmware/esprom/<chip>.txt, sorted
 by address. `F` is a function: an address inside the chip's mask-ROM code
 range that the script does not list under a `Data` heading. The chip's main
 `<chip>.rom.ld` is read first; the first name an address gets and the first
@@ -94,7 +94,7 @@ def main():
     ap.add_argument(
         "--out",
         type=pathlib.Path,
-        default=repo / "decompiler/crates/unlace-analysis/src/loader/firmware/esprom",
+        default=repo / "crates/unlace-analysis/src/loader/firmware/esprom",
     )
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)

@@ -14,7 +14,7 @@ rounds: [11, 12]
 first_seen_round: 11
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: 590
@@ -81,11 +81,11 @@ Read the process-name comparison routine with unambiguous locals.
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/overlaplocals_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/overlaplocals_i386",
     "binary_sha256": "d9a4c30516c60c55703f2822688837b723a4b9b3b8131af2b4f306233e5eebb3",
     "binary_size": 8860,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/overlaplocals_i386",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/overlaplocals_i386",
     "selector": "overlap_bytes",
     "selector_kind": "name"
   },

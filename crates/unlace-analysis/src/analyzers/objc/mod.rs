@@ -164,7 +164,11 @@ impl AnalysisPass for ObjcMetadataPass {
         // Swift): they give the Swift names and types the ivar list encodes as
         // nothing. The record is declared here (the typed `self`, the `@"…"`
         // pointers) and completed there. Otherwise the ivar list builds it.
-        let swifttypes = ctx.arch.analysis_swifttypes
+        let swifttypes = ctx
+            .arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+            .0
             && ctx
                 .file
                 .section_by_name(super::swift::descriptors::MACHO_SECTIONS.fieldmd)

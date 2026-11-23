@@ -390,7 +390,10 @@ impl AnalysisPass for NoReturnKnownPass {
             ctx.file,
             ctx.bytes,
             self.compiler,
-            ctx.arch.analysis_nameladder,
+            ctx.arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
+                .0,
         );
         if let Some(image) = ctx.image {
             let (imports, _) = crate::protos::loaded_import_addrs(ctx.file, ctx.bytes, image);

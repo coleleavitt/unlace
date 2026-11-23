@@ -40,7 +40,7 @@
 //!
 //! ## The gate
 //!
-//!   - the match runs under `noreturn_known` (`Architecture::analysis_noreturn_known`,
+//!   - the match runs under `noreturn_known` (the registered option `NoreturnKnown`,
 //!     the known-no-return pass's own flag), read once at flow time on the main arch
 //!     (no ArchContext copy — flow runs on the main arch, like
 //!     [`is_tail_call_branch`](crate::kuna_tailcalljump)).

@@ -965,10 +965,6 @@ pub struct ArchContext {
     /// C output; read by [`kuna_castarith`](crate::p9_emit::kuna_castarith).
     pub cast_index: bool,
 
-    /// (kuna `valuewitness`) Type a Swift value witness table loaded through
-    /// type metadata. Copied from
-    /// [`Architecture::analysis_valuewitness`](crate::architecture::Architecture).
-    pub analysis_valuewitness: bool,
     /// (kuna `elemptr`) Declare a pointer used only as an array of one element
     /// type as that pointer; option `elemptr on|off`.  Copied from
     /// [`Architecture::elem_ptr`](crate::architecture::Architecture).  The rule
@@ -1587,7 +1583,6 @@ impl ArchContext {
             int_promotion: true, // (kuna) LangCaps::integer_promotion (C)
             cast_arith: false, // (kuna) option castarith
             cast_index: false, // (kuna) option castindex
-            analysis_valuewitness: true, // (kuna) option valuewitness
             elem_ptr: false,   // (kuna) option elemptr, copied from Architecture
             elem_ptr_ranges: std::rc::Rc::new(Vec::new()), // (kuna) elemptr
             libctypes: false,  // (kuna) option libctypes, copied from Architecture

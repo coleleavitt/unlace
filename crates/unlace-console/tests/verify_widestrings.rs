@@ -57,8 +57,12 @@ fn decompile_entry_with(widestrings: bool, operand_refs: bool) -> String {
 
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    prog.arch_mut().analysis_widestrings = widestrings;
-    prog.arch_mut().analysis_operand_refs = operand_refs;
+    prog.arch_mut()
+        .kuna_options
+        .set(unlace_decomp::kuna_analysisgates::Widestrings(widestrings));
+    prog.arch_mut()
+        .kuna_options
+        .set(unlace_decomp::kuna_analysisgates::OperandRefs(operand_refs));
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
 
@@ -150,7 +154,9 @@ fn the_commit_plants_a_symbol_at_the_wide_literal() {
     for (on, want) in [(true, true), (false, false)] {
         let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
             .expect("bootstrap fixture with built processor specs");
-        prog.arch_mut().analysis_widestrings = on;
+        prog.arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_analysisgates::Widestrings(on));
         prog.commit_pending_analysis()
             .expect("analysis commit succeeds");
         let arch = prog.arch();

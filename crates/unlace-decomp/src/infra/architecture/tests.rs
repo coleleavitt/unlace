@@ -158,7 +158,11 @@ fn kuna_anchor_flags_default_to_div_values() {
             .get::<crate::kuna_stackguard::StripStackGuard>()
             .0
     ); // stackguard (REMOVES CODE)
-    assert!(arch.analysis_noreturn_propagate); // noreturn_propagate (REMOVES CODE, Listing-gated)
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_analysisgates::NoreturnPropagate>()
+            .0
+    ); // noreturn_propagate (REMOVES CODE, Listing-gated)
     assert!(
         arch.kuna_options
             .get::<crate::jumptable::SwitchSharedCase>()
@@ -211,24 +215,47 @@ fn reset_defaults_is_idempotent_after_mutation() {
 fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     let mut arch = Architecture::new("test:LE:32", bare_sleigh());
     // Off-by-default under the shipped defaults.
-    assert!(!arch.analysis_listing);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::Listing>()
+            .0
+    );
     assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Off);
-    assert!(!arch.analysis_fast_funcdisc);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::FastFuncdisc>()
+            .0
+    );
     assert!(
         !arch
             .kuna_options
             .get::<crate::jumptable::SwitchGuardBound>()
             .0
     );
-    assert!(!arch.analysis_dwarf_lines);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::DwarfLines>()
+            .0
+    );
 
     arch.apply_mode("aggressive")
         .expect("aggressive mode applies");
 
     // Representative aggressive members turned on.
-    assert!(arch.analysis_listing);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_analysisgates::Listing>()
+            .0
+    );
     assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Strict);
-    assert!(arch.analysis_fast_funcdisc);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_analysisgates::FastFuncdisc>()
+            .0
+    );
     assert!(
         arch.kuna_options
             .get::<crate::jumptable::SwitchGuardBound>()
@@ -249,7 +276,12 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     ); // V850-gated, listed so the preset owns it
     // The exclusion: annotates every statement of a `-g` binary with a
     // `/* src.c:NNN */` comment — noise, not recovery.
-    assert!(!arch.analysis_dwarf_lines);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::DwarfLines>()
+            .0
+    );
 }
 
 #[test]
@@ -258,7 +290,12 @@ fn apply_mode_reliable_is_a_no_op() {
     arch.apply_mode("reliable").expect("reliable mode applies");
     // reliable == shipped defaults: nothing off-default gets flipped, and nothing
     // on-default gets cleared.
-    assert!(!arch.analysis_listing);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::Listing>()
+            .0
+    );
     assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Off);
     assert!(arch.duplicate_shared_returns); // DIV-54 shipped default survives
 }
@@ -266,17 +303,37 @@ fn apply_mode_reliable_is_a_no_op() {
 #[test]
 fn apply_mode_fast_replaces_exhaustive_with_bounded_discovery() {
     let mut arch = Architecture::new("test:LE:32", bare_sleigh());
-    arch.analysis_listing = true;
-    arch.analysis_funcstart_patterns = true;
+    arch.kuna_options
+        .set(crate::kuna_analysisgates::Listing(true));
+    arch.kuna_options
+        .set(crate::kuna_analysisgates::FuncstartPatterns(true));
     arch.analysis_aif = crate::kuna_aif::AifMode::Strict;
 
     arch.apply_mode("fast").expect("fast mode applies");
 
-    assert!(!arch.analysis_listing);
-    assert!(!arch.analysis_funcstart_patterns);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::Listing>()
+            .0
+    );
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::FuncstartPatterns>()
+            .0
+    );
     assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Off);
-    assert!(arch.analysis_fast_funcdisc);
-    assert!(arch.analysis_noreturn_propagate);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_analysisgates::FastFuncdisc>()
+            .0
+    );
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_analysisgates::NoreturnPropagate>()
+            .0
+    );
     assert!(
         !arch
             .kuna_options

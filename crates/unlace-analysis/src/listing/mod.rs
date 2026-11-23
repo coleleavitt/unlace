@@ -425,7 +425,10 @@ impl Listing {
         plan: &WalkPlan,
     ) -> Listing {
         if self.x86_switch_rebuild
-            || (arch.analysis_x86listingswitch
+            || (arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::X86listingswitch>()
+                .0
                 && file.architecture() == object::Architecture::I386
                 && arch.archid.starts_with("x86:LE:32:"))
         {
@@ -560,7 +563,10 @@ impl Listing {
         // `kuna_ppclocalentry`).
         let local_entries = kuna_ppclocalentry::fold_map(file, seeds);
         let tail_transfers: BTreeMap<u64, u64> = mips_transfers.iter().copied().collect();
-        let want_stack_callbacks = arch.analysis_fast_funcdisc
+        let want_stack_callbacks = arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+            .0
             && matches!(
                 file.architecture(),
                 object::Architecture::I386 | object::Architecture::X86_64
@@ -584,7 +590,9 @@ impl Listing {
             .as_ref()
             .map(|pool| kuna_a64switch::A64Tables::new(arch, pool, seeds));
         let x86_tables = arch
-            .analysis_x86listingswitch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::X86listingswitch>()
+            .0
             .then(|| kuna_x86listingswitch::X86Tables::new(file, arch))
             .flatten();
         let st = walk::walk(
@@ -1159,7 +1167,8 @@ mod tests {
                 ));
                 engine.set_loader(Box::new(loader));
                 let mut arch = Architecture::new("x86:LE:32:default:gcc", engine);
-                arch.analysis_x86listingswitch = true;
+                arch.kuna_options
+                    .set(unlace_decomp::kuna_analysisgates::X86listingswitch(true));
                 let mut seeds = vec![0x100000, 0x1004f0];
                 let expanded = Listing::build_with_meta_without_image(
                     &file,
@@ -1173,7 +1182,8 @@ mod tests {
                 assert!(expanded.is_instruction_start(0x100440));
                 assert!(expanded.function_at(0x100510).is_some());
                 if disable {
-                    arch.analysis_x86listingswitch = false;
+                    arch.kuna_options
+                        .set(unlace_decomp::kuna_analysisgates::X86listingswitch(false));
                 } else {
                     seeds.push(0x10040d);
                 }

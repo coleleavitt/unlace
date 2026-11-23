@@ -7,6 +7,7 @@ pub mod bitfield;
 pub mod constseq;
 pub mod coreaction_infertypes;
 pub mod double;
+pub mod funcdata_resolveflow;
 pub mod funcdata_union;
 pub mod kuna_aggregatefields;
 pub mod kuna_boolbyte; // (kuna) type a byte that is only ever a truth value as bool

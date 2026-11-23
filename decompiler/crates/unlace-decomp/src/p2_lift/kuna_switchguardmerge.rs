@@ -33,7 +33,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::{BlockId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::jumptable::NO_LABEL;
-use crate::kuna_strlenscan::{eval, taken};
+use crate::kuna_regioneval::{eval, taken};
 
 /// Ops that only compute: a block made of them can run on more paths.
 fn pure_block(data: &Funcdata, b: BlockId) -> bool {

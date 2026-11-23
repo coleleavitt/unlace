@@ -89,7 +89,8 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_strlenscan::{PURE, eval};
+use crate::kuna_regioneval::eval;
+use crate::kuna_strlenscan::PURE;
 use crate::op::PcodeOp;
 use crate::userop::{
     BUILTIN_MEMCMP, BUILTIN_MEMCPY, BUILTIN_MEMSET, BUILTIN_MEMSET16, BUILTIN_MEMSET32,

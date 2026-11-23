@@ -85,7 +85,7 @@ fn divide(c: u64, size: int4, k: u64) -> Option<u64> {
     let bits = 8 * size.clamp(1, 8) as u32;
     let signed = ((c << (64 - bits)) as i64) >> (64 - bits);
     (signed % k as i64 == 0)
-        .then(|| ((signed / k as i64) as u64) & crate::kuna_strlenscan::mask(size))
+        .then(|| ((signed / k as i64) as u64) & crate::kuna_regioneval::mask(size))
 }
 
 /// What a reader of a web member does with it.

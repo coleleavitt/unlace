@@ -319,6 +319,18 @@ declare_hooks! {
     /// `kuna_lang`: does the output language continue a bottom-tested loop (not Rust's
     /// `loop { ...; if !c { break; } }`)?
     lang_do_while_continue: fn(crate::kuna_outlang::OutLang) -> bool;
+    /// `kuna_lang`: does the output language promote narrow integer operands as C does?
+    lang_int_promotion: fn(crate::kuna_outlang::OutLang) -> bool;
+    /// `kuna_lang`: does the output language have C's `for` header?
+    lang_c_for: fn(crate::kuna_outlang::OutLang) -> bool;
+    /// `kuna_lang`: the language's real name for a residual unknown
+    /// (`TypeSpeller::unknown_base`).
+    lang_unknown_base: fn(
+        crate::kuna_outlang::OutLang,
+        int4,
+        bool,
+        bool,
+    ) -> Option<std::borrow::Cow<'static, str>>;
     /// `kuna_calleepurge`: forget the x86-32 callee walks (the host's facts changed).
     calleepurge_forget_walks: fn(&mut crate::kuna_archstate::ArchTables);
     /// `kuna_jumpassist`: compile the jump assists out of the loaded inject library.

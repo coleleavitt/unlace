@@ -2698,6 +2698,7 @@ use crate::architecture::Architecture;
 use crate::cast::{CastContext, CastStrategy, CastStrategyC, OpRef, VnRef};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
+use crate::kuna_lang::OutLangExt;
 use unlace_num::opcodes::OpCode;
 
 /// One resolved member token of a partial-symbol access walk (C++

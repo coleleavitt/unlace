@@ -15,6 +15,7 @@ use std::rc::Rc;
 use unlace_base::types::int4;
 
 use crate::dtype::{Datatype, type_metatype};
+use crate::kuna_lang::OutLangExt;
 use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
 
 /// The c-language type speller.

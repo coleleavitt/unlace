@@ -6,6 +6,7 @@
 //! re-pinning `docs/baseline.json`.
 
 use super::*;
+use crate::kuna_lang::OutLangExt;
 
 #[test]
 fn profile_matches_legacy_constants() {

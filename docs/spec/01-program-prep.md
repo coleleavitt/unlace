@@ -1262,7 +1262,13 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   a laid-out section has its `st_value` shifted by **its own section's** delta,
   since the layout is non-contiguous and there is no single global offset (a COFF
   symbol needs no shift — it is reported as `VirtualAddress + value`, so the section
-  write already moved it). Each patched field is written in the object's own byte
+  write already moved it). A debug section stored compressed (ELF
+  `SHF_COMPRESSED`, zlib or zstd: `-gz`, and the default of some toolchains) is
+  inflated before its relocations are applied, because their offsets address the
+  uncompressed bytes; the relocated bytes are appended to the image and the section
+  header points at them, uncompressed. Patched in place, the relocations corrupted
+  the compressed stream and such a `.o` lost all of its DWARF (`int apply(int k,int
+  a,int b)` printed as `unsigned long apply(unsigned int a0,…)`). Each patched field is written in the object's own byte
   order (ELF `EI_DATA`), the implicit addends of a REL table read in it, so a
   big-endian object (PowerPC, MIPS, SPARC, ARM big-endian) is rebased as a
   little-endian one is; it used to keep the pre-link view, so `unlace functions`

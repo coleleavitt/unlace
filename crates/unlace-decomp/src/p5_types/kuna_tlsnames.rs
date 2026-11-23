@@ -193,7 +193,7 @@ impl Action for ActionTlsNames {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        let Some(layout) = data.get_arch().tls_layout.clone() else {
+        let Some(layout) = data.get_arch().kuna_states.get_rc::<TlsLayout>() else {
             return 0;
         };
         let Some((reg, size)) = thread_pointer(data) else {
@@ -245,6 +245,8 @@ crate::kuna_flag!(
     unset: false,
     shipped: true
 );
+
+crate::kuna_arch_state!(TlsLayout);
 
 #[cfg(test)]
 mod tests {

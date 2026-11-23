@@ -293,8 +293,6 @@ pub struct Architecture {
     pub loader_transfer_sites: Rc<std::collections::BTreeSet<Address>>,
     /// MIPS GOT import entries identified by the loader, never ordinary definitions.
     pub loader_mips_imports: Rc<std::collections::BTreeSet<Address>>,
-    pub nullable_relocations:
-        Rc<std::collections::BTreeMap<u64, Vec<crate::kuna_nullable_reloc::NullableRelocation>>>,
     pub nullable_literal_values: Rc<std::collections::BTreeSet<u64>>,
 
     // --- Configuration data (architecture.hh:170-208) ---------------------
@@ -400,14 +398,9 @@ pub struct Architecture {
     pub infer_ptr_spaces: Vec<Rc<AddrSpace>>,
 
     // --- kuna anchor flags (architecture.hh:179-201, the `(kuna)` members) -
-    /// (kuna `floatglobals`) What the whole-program scan reads; `None` on every
-    /// path without a loaded image.
-    pub kuna_float_scan: Option<Rc<crate::kuna_floatglobals::FloatScan>>,
     /// Single-function bodies (FDEs, or Go `pclntab` extents) whose interiors the
     /// loader suppressed as separate entries.
     pub kuna_function_bodies: Vec<(u64, u64)>,
-    /// (kuna `floatglobals`) The scan's answer, once a function asked for it.
-    pub kuna_float_globals: Option<Rc<crate::kuna_floatglobals::FloatGlobals>>,
     /// (kuna `floatglobals`) A multi-function run scans images of any size.
     pub kuna_float_scan_batch: bool,
     /// The callee-first driver settles return values from its decompiled callers.
@@ -420,29 +413,21 @@ pub struct Architecture {
         std::cell::RefCell<Vec<(Rc<crate::fspec::ProtoModel>, Rc<crate::fspec::ProtoModel>)>>,
     /// (kuna `vectorabi`) The vector user-ops and their element kinds, built once.
     pub vector_userop_kinds: std::cell::OnceCell<Rc<Vec<(unlace_base::types::uint4, u8)>>>,
-    /// (kuna `itaniumeh`) The image's Itanium call-site table, installed by the
-    /// analysis commit from `AnalysisOutput::eh_call_sites`. Empty without it.
-    pub eh_table: Rc<crate::kuna_itaniumeh::EhTable>,
 
     /// (kuna) The kuna passes' architecture-wide tables ([`crate::kuna_archstate`]): the
     /// compiled `<segmentop>` definitions, call mechanisms and jump assists, built while the
     /// specs load and shared with every per-function context.
-    pub(crate) kuna_states: crate::kuna_archstate::ArchStates,
+    pub kuna_states: crate::kuna_archstate::ArchStates,
     /// (kuna) The kuna passes' run-wide ledgers and caches ([`crate::kuna_archstate::ArchTables`]),
     /// one per table type, created on first use.
     pub kuna_tables: crate::kuna_archstate::ArchTables,
     /// (kuna `fpuemu`) The loader found 8087-emulator code in the image, which
     /// `auto` decodes by.
     pub fpu_emu_evidence: bool,
-    /// (kuna) `tlsnames`: the static TLS block the loader committed.
-    pub tls_layout: Option<std::rc::Rc<crate::p5_types::kuna_tlsnames::TlsLayout>>,
     /// (kuna `dwarfscopes`) Register-held DWARF locals by function entry:
     /// name, type, register storage, and the PC the register holds it from.
     pub dwarf_reg_locals:
         std::collections::BTreeMap<u64, Vec<(String, Rc<crate::dtype::Datatype>, Address, u64)>>,
-    /// (kuna `structsynth`) A `--jobs` worker's ledger hook: records every lookup,
-    /// or answers each from the parent's replay. `None` outside a worker.
-    pub struct_synth_shard: Option<crate::kuna_structsynth::shard::ShardHandle>,
     /// (kuna) Did the loader identify the image as a Windows GUI/console PE?  A
     /// FACT, not an option: written once at `load file` and the thing `option
     /// pebnames auto` tests.  The XML `<binaryimage>` bootstrap never sets it.
@@ -468,25 +453,16 @@ pub struct Architecture {
     /// bootstrap never sets it.
     pub image_apple: bool,
 
-    /// (kuna) The image's Objective-C classes, methods and selector strings,
-    /// handed over by the ObjC analysis commit; empty on every other image.
-    pub kuna_objc_classes: Rc<crate::kuna_objcrettype::ObjcClassTable>,
     /// (kuna `objcresolve`) Message sends a first decompile resolved, by call
     /// site: the IMP the second decompile's CALL goes to instead of the runtime
     /// entry point (`FlowInfo::setup_call_specs`), and for an `objc_msgSend$<sel>`
     /// stub site the prototype the call keeps (the stub's shape, `self` typed).
     pub kuna_objc_retargets: std::collections::HashMap<u64, u64>,
     pub kuna_objc_site_pieces: std::collections::HashMap<u64, crate::fspec::PrototypePieces>,
-    /// (kuna `xnutables`) The struct each kalloc_type view allocates, by view
-    /// address, handed over by the XNU table analysis; empty elsewhere.
-    pub kuna_kalloc_types: Rc<crate::kuna_kalloctype::KallocTypes>,
     /// Mapped ELF x86 flow recovery: load-time container/target eligibility;
     /// XML, raw, and remote images abstain.
     pub mapped_flow_boundary_image: bool,
 
-    /// (kuna `opaquepredicate globals`) The scan's answer, once a function
-    /// asked for it.
-    pub kuna_opaque_globals: Option<Rc<crate::kuna_opaqueglobals::UnwrittenGlobals>>,
     /// (kuna `octeoneffects`) The inject ids of the upstream-lifting fixups this
     /// architecture registered for its Octeon reservation and ordering
     /// operations; `decompile_drive::is_injected_userop` applies them only under
@@ -517,14 +493,6 @@ pub struct Architecture {
     pub rust_str_display_formatters: std::collections::BTreeSet<u64>,
     pub rust_fmt_write_relro: Option<(u64, u64)>,
 
-    /// (kuna `msvcbyval`) The MSVC declarations with one by-value class of
-    /// unstated size, by entry `(space index, offset)`; filled by the analysis
-    /// commit while `msvcsig` applies.
-    pub msvc_byval_decls: Rc<crate::p4_calls::kuna_msvcbyval::ByvalDecls>,
-    /// (kuna `msvcbyval`) The entries an MSVC name declares as building the
-    /// object at an address they are handed (a constructor, or a function
-    /// returning a class by value).
-    pub msvc_builders: Rc<crate::p4_calls::kuna_msvcbyval::Builders>,
     /// (kuna) The default models `armfloatreturn` has widened, with the model
     /// each was built from and whether it skips back-fill holes, so every
     /// function reuses one instead of rebuilding it.
@@ -755,9 +723,6 @@ pub struct Architecture {
     /// The function's own parameters, and those of every direct call to it,
     /// are recovered under it ([`crate::context::ArchContext::bound_proto_models`]).
     pub loader_proto_models: Rc<std::collections::BTreeMap<(int4, uintb), Rc<ProtoModel>>>,
-    /// (kuna `swiftcall`) The Swift registers and the throwing model
-    /// ([`crate::kuna_swiftcall`]).
-    pub loader_swift_abi: Option<Rc<crate::kuna_swiftcall::SwiftAbi>>,
     /// (kuna `swiftmetadata`) Each local Swift enum's case count by its
     /// metadata accessor's entry offset (`p2_lift/kuna_switchextent.rs`).
     pub loader_swift_enum_cases: Rc<std::collections::BTreeMap<u64, u32>>,
@@ -1123,7 +1088,6 @@ impl Architecture {
             loader_mips_t9: None,
             loader_transfer_sites: Rc::default(),
             loader_mips_imports: Rc::default(),
-            nullable_relocations: Rc::default(),
             nullable_literal_values: Rc::default(),
 
             symbol_snapshots: RefCell::new(SymbolSnapshots::default()),
@@ -1163,15 +1127,12 @@ impl Architecture {
             loadersymbols_parsed: false,
             infer_ptr_spaces: Vec::new(),
 
-            kuna_float_scan: None,
             kuna_function_bodies: Vec::new(),
-            kuna_float_globals: None,
             kuna_float_scan_batch: false,
             kuna_settle_caller_reads: false,
             kuna_call_returns: Vec::new(),
             vector_models: std::cell::RefCell::new(Vec::new()),
             vector_userop_kinds: std::cell::OnceCell::new(),
-            eh_table: Rc::new(crate::kuna_itaniumeh::EhTable::default()),
 
             fpu_emu_evidence: false,
             kuna_states: Default::default(),
@@ -1181,18 +1142,13 @@ impl Architecture {
             image_elf: false,         // (kuna) a load-time fact; set by the console's `load file`
             image_apple: false,       // (kuna) a load-time fact; set by the console's `load file`
 
-            tls_layout: None,
             dwarf_reg_locals: std::collections::BTreeMap::new(),
-            struct_synth_shard: None,
             image_windows_user: false, // (kuna) a load-time fact; set by the console's `load file`
 
-            kuna_objc_classes: Rc::new(Default::default()),
             kuna_objc_retargets: Default::default(),
             kuna_objc_site_pieces: Default::default(),
-            kuna_kalloc_types: Rc::new(Default::default()),
             mapped_flow_boundary_image: false,
 
-            kuna_opaque_globals: None,
             octeon_upstream_inject: Vec::new(), // (kuna) set by init_userops_and_fixups on an Octeon language
             kuna_mips_pairs: None,
             kuna_mips_pairs_painted: false,
@@ -1206,8 +1162,6 @@ impl Architecture {
             go_chanrecv2: None,
             go_chanrecv_status_sites: Default::default(),
 
-            msvc_byval_decls: Rc::new(Default::default()),
-            msvc_builders: Rc::new(Default::default()),
             arm_widened_models: std::cell::RefCell::new(Vec::new()),
             arm_float_library_prototypes: Vec::new(),
 
@@ -1265,7 +1219,6 @@ impl Architecture {
             cfstring_entries: std::collections::BTreeSet::new(),
             blob_entries: Rc::default(),
             loader_proto_models: Rc::default(),
-            loader_swift_abi: None,
             loader_swift_enum_cases: Rc::default(),
 
             symboltab,
@@ -2068,8 +2021,6 @@ impl Architecture {
         ctx.name_style_ghidra = self.name_style_ghidra;
         // (kuna) carry the duplicate-declaration collapse gate so `emit_local_var_decls`
         // (which reads the ArchContext `arch`) sees `option dedupvardecls`.
-        ctx.kuna_objc_classes = Rc::clone(&self.kuna_objc_classes);
-        ctx.kuna_kalloc_types = Rc::clone(&self.kuna_kalloc_types);
         // (kuna GH-558) carry the comparison-presentation gate so the
         // `compareform canonical|original` option reaches
         // `ActionPresentCompareForm` via `glb` (the ArchContext read site).
@@ -2084,14 +2035,6 @@ impl Architecture {
                 .0
                 && self.print.out_lang() == crate::kuna_outlang::OutLang::C,
         ));
-        let opaque = self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::OpaquePredicate>();
-        if opaque.on && opaque.globals {
-            ctx.opaque_globals = self.kuna_opaque_globals.clone();
-            ctx.opaque_globals_pending =
-                self.kuna_opaque_globals.is_none() && self.kuna_float_scan.is_some();
-        }
         // (kuna) resolve the byte-shuffle user-op ids ONCE per program, so the
         // rule can name a CALLOTHER through the ArchSeam (the boundary
         // ArchContext carries no userop table).
@@ -2139,15 +2082,6 @@ impl Architecture {
             .0
             && self.print.out_lang() == crate::kuna_outlang::OutLang::C; // (kuna) calltargettype
         ctx.java_casts = self.print.out_lang() == crate::kuna_outlang::OutLang::Java;
-        if self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::FloatGlobalsOn>()
-            .0
-        {
-            ctx.float_globals = self.kuna_float_globals.clone(); // (kuna) floatglobals
-            ctx.float_globals_pending =
-                self.kuna_float_globals.is_none() && self.kuna_float_scan.is_some();
-        }
         ctx.unknown_byte_is_char = self
             .kuna_options
             .get::<crate::kuna_coreoptions::Realtypes>()
@@ -2176,8 +2110,6 @@ impl Architecture {
             .kuna_options
             .get::<crate::kuna_libctypes::LibcTypesLayout>()
             != crate::kuna_libctypes::LibcTypesLayout::Off; // (kuna) libctypes (kuna_libcfit)
-        ctx.msvc_byval_decls = Rc::clone(&self.msvc_byval_decls);
-        ctx.msvc_builders = Rc::clone(&self.msvc_builders);
 
         ctx.vtable_types = self
             .kuna_options
@@ -2215,8 +2147,6 @@ impl Architecture {
         ctx.windows_cspec =
             (self.pass_hooks().fastfailnoreturn_archid_is_windows)(self.get_description()); // (kuna) pebnames
         ctx.image_windows_user = self.image_windows_user;
-        ctx.tls_layout = self.tls_layout.clone(); // (kuna) tlsnames
-        ctx.struct_synth_shard = self.struct_synth_shard.clone();
         // (kuna) resolve the `SYSCALL` user-op ids ONCE per program, for the same
         // reason `simd_shuffle_userops` above is resolved here: the boundary
         // ArchContext carries no userop table.  An op a compiler spec has
@@ -2282,11 +2212,6 @@ impl Architecture {
         // slots so `ActionVarnodeProps` folds those loads with global read-only
         // propagation still off. `Rc` clone: the list is built once at load.
         ctx.dynreloc_const = Rc::clone(&self.dynreloc_const);
-        ctx.eh_table = self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::ItaniumEh>()
-            .on
-            .then(|| Rc::clone(&self.eh_table));
         ctx.kuna_options.set(crate::kuna_coreoptions::VexZeroUpper(
             self.kuna_options
                 .get::<crate::kuna_coreoptions::VexZeroUpper>()
@@ -2388,7 +2313,6 @@ impl Architecture {
         ctx.callee_protos = callee_protos;
         ctx.loader_transfer_sites = Rc::clone(&self.loader_transfer_sites);
         ctx.loader_mips_imports = Rc::clone(&self.loader_mips_imports);
-        ctx.nullable_relocations = Rc::clone(&self.nullable_relocations);
         ctx.nullable_literal_values = Rc::clone(&self.nullable_literal_values);
         // (kuna) The convention each of those callees was DECLARED under, keyed
         // the same way the pieces are (entry address).  The declaration names the
@@ -2410,7 +2334,6 @@ impl Architecture {
                     .collect()
             };
         ctx.bound_proto_models = Rc::clone(&self.loader_proto_models);
-        ctx.swift_abi = self.loader_swift_abi.clone();
         ctx.swift_enum_cases = Rc::clone(&self.loader_swift_enum_cases);
         ctx.virtual_this = (self.pass_hooks().calleereginputs_virtual_this)(self);
         // Carry the constant-pointer-inference config (C++ `glb->infer_pointers`)

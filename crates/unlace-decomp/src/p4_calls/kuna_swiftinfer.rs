@@ -75,7 +75,9 @@ fn overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
 }
 
 fn enabled(arch: &crate::architecture::Architecture) -> bool {
-    arch.loader_swift_abi.is_some()
+    arch.kuna_states
+        .get::<crate::kuna_swiftcall::SwiftAbi>()
+        .is_some()
 }
 
 /// How many instructions [`probe_reads`] decodes from one entry.
@@ -235,7 +237,7 @@ fn reads_entry(
     end: Option<u64>,
     probe: Probe,
 ) -> bool {
-    let Some(abi) = arch.loader_swift_abi.clone() else {
+    let Some(abi) = arch.kuna_states.get_rc::<crate::kuna_swiftcall::SwiftAbi>() else {
         return false;
     };
     let Some(k) = key(entry) else { return false };
@@ -321,7 +323,7 @@ pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) -
 pub fn self_hint(
     arch: &crate::architecture::Architecture,
 ) -> Option<crate::kuna_inputhints::InputHint> {
-    let abi = arch.loader_swift_abi.as_ref()?;
+    let abi = arch.kuna_states.get::<crate::kuna_swiftcall::SwiftAbi>()?;
     Some(crate::kuna_inputhints::InputHint {
         addr: abi.self_reg.0.clone(),
         size: abi.self_reg.1,
@@ -332,7 +334,10 @@ pub fn self_hint(
 
 /// `__swiftcall` for the direct call `idx` when its callee reads `swiftself`.
 pub fn callee_model(data: &Funcdata, idx: int4) -> Option<Rc<ProtoModel>> {
-    let abi = data.get_arch().swift_abi.as_ref()?;
+    let abi = data
+        .get_arch()
+        .kuna_states
+        .get::<crate::kuna_swiftcall::SwiftAbi>()?;
     let k = key(data.get_call_specs(idx).get_entry_address())?;
     data.kuna_swift_self_callees()
         .contains(&k)
@@ -343,7 +348,10 @@ pub fn callee_model(data: &Funcdata, idx: int4) -> Option<Rc<ProtoModel>> {
 /// the flow made a call: the function it awaits, or its return to the resume
 /// function of its context. Either takes the context register.
 pub fn async_tail_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
-    let abi = data.get_arch().swift_abi.as_ref()?;
+    let abi = data
+        .get_arch()
+        .kuna_states
+        .get::<crate::kuna_swiftcall::SwiftAbi>()?;
     let own = data.get_func_proto();
     if !own.has_model() || !is_async_model(own.model()) {
         return None;
@@ -369,7 +377,11 @@ fn is_tail_call(data: &Funcdata, call: OpId) -> bool {
 /// an `async` model? An `async` callee always takes its context, which the
 /// caller's own, handed on untouched, would not show as an argument.
 pub fn passes_context(data: &Funcdata, idx: int4, addr: &Address, size: int4) -> bool {
-    let Some(abi) = data.get_arch().swift_abi.as_ref() else {
+    let Some(abi) = data
+        .get_arch()
+        .kuna_states
+        .get::<crate::kuna_swiftcall::SwiftAbi>()
+    else {
         return false;
     };
     let proto = data.get_call_specs(idx).proto();
@@ -384,7 +396,11 @@ pub fn passes_context(data: &Funcdata, idx: int4, addr: &Address, size: int4) ->
 /// or the awaited function's address is not also its argument.
 pub fn carries_async_target(data: &Funcdata, idx: int4, slot: int4) -> bool {
     let call = data.get_call_specs(idx);
-    if data.get_arch().swift_abi.is_none()
+    if data
+        .get_arch()
+        .kuna_states
+        .get::<crate::kuna_swiftcall::SwiftAbi>()
+        .is_none()
         || !call.proto().has_model()
         || !is_async_model(call.proto().model())
     {
@@ -421,7 +437,10 @@ pub fn async_callee_model(
     idx: int4,
     bound: Option<&Rc<ProtoModel>>,
 ) -> Option<Rc<ProtoModel>> {
-    let abi = data.get_arch().swift_abi.as_ref()?;
+    let abi = data
+        .get_arch()
+        .kuna_states
+        .get::<crate::kuna_swiftcall::SwiftAbi>()?;
     let fc = data.get_call_specs(idx);
     if let Some(&throws) = abi.async_names.get(fc.get_name()) {
         return Some(abi.model(true, throws));
@@ -496,7 +515,10 @@ fn entry_value_at(data: &Funcdata, call: OpId, reg: &Address, size: int4) -> boo
 /// `__swiftcall_throws` for a call after which the caller reads `swifterror`
 /// before writing it, while the register still holds the caller's entry value.
 pub fn error_passing_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
-    let abi = data.get_arch().swift_abi.as_ref()?;
+    let abi = data
+        .get_arch()
+        .kuna_states
+        .get::<crate::kuna_swiftcall::SwiftAbi>()?;
     let (reg, size) = (&abi.error_reg.0, abi.error_reg.1);
     let mut cur = data.op_next_op(call);
     let mut tested = false;
@@ -591,7 +613,9 @@ fn may_be_swift_name(name: &str) -> bool {
 /// `swift.pair` for the result of the call `op` when [`read_as_pair`]
 /// accepts it, in place of the 128-bit integer the join would print as.
 pub fn pair_output_type(data: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
-    data.get_arch().swift_abi.as_ref()?;
+    data.get_arch()
+        .kuna_states
+        .get::<crate::kuna_swiftcall::SwiftAbi>()?;
     let out = data.obank().get(op)?.get_out()?;
     if !read_as_pair(data, out) || !may_be_swift(data, op) {
         return None;
@@ -606,7 +630,13 @@ pub fn pair_output_type(data: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
 /// (`PIECE(hi, lo)`): the pair the function returns its small aggregate in.
 pub fn pair_return_type(data: &Funcdata, op: OpId, slot: int4) -> Option<Rc<Datatype>> {
     let proto = data.get_func_proto();
-    if data.get_arch().swift_abi.is_none() || proto.is_output_locked() {
+    if data
+        .get_arch()
+        .kuna_states
+        .get::<crate::kuna_swiftcall::SwiftAbi>()
+        .is_none()
+        || proto.is_output_locked()
+    {
         return None;
     }
     if !proto.get_model_name().starts_with("__swift") && !may_be_swift_name(data.get_name()) {

@@ -2191,7 +2191,7 @@ following this call as a branch"
             explicit
         };
 
-        let eh_table = self.data.get_arch().eh_table.clone();
+        let eh_table = crate::kuna_itaniumeh::eh_table(self.data.get_arch());
         if let Some(table) = eh_table.as_deref() {
             if table.is_pad(curaddr.get_offset()) && !self.is_flow_for_inline() {
                 crate::kuna_itaniumeh::define_pad_registers(&mut self.data, table, curaddr)?;
@@ -2356,7 +2356,7 @@ truncating the fall-through here"
             self.maxaddr = endaddr.clone();
         }
 
-        if !self.data.get_arch().nullable_relocations.is_empty() {
+        if !crate::kuna_nullable_reloc::relocations(&self.data.get_arch().kuna_states).is_empty() {
             let first = if emptyflag {
                 self.dead_head()
             } else {

@@ -84,7 +84,8 @@ pub fn install(
     classes: &[VtableClass],
 ) -> KunaResult<usize> {
     let mut views: HashMap<&str, &KallocView> = HashMap::new();
-    for v in arch.kuna_kalloc_types.values().filter(|v| !v.pointers) {
+    let kalloc = crate::kuna_kalloctype::kalloc_types(&arch.kuna_states);
+    for v in kalloc.values().filter(|v| !v.pointers) {
         views.entry(v.name.as_str()).or_insert(v);
     }
     let names: std::collections::HashSet<&str> = classes.iter().map(|c| c.class.as_str()).collect();

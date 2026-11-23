@@ -1265,8 +1265,12 @@ fn answer(
     unclaimed: &[(int4, int4)],
     selfs: &[int4],
 ) -> Option<Rc<Datatype>> {
-    match &data.get_arch().struct_synth_shard {
-        Some(hook) => shard::lookup(hook, types, fields, size, unclaimed, selfs),
+    match data
+        .get_arch()
+        .kuna_states
+        .get_rc::<std::cell::RefCell<shard::ShardHook>>()
+    {
+        Some(hook) => shard::lookup(&hook, types, fields, size, unclaimed, selfs),
         None => ledger::lookup_or_mint(
             types,
             fields,

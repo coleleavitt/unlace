@@ -151,7 +151,7 @@ const SEND_SUPER: &str = "objc_msgSendSuper2";
 /// The selector a varnode carries: the string a constant names, the slot a
 /// load reads, through copies and casts.
 fn selector_of(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<String> {
-    let table = &data.get_arch().kuna_objc_classes;
+    let table = &classes(&data.get_arch().kuna_states);
     if let Some(addr) = constant_address(data, vn, 0) {
         return table.selector_at.get(&addr).cloned();
     }
@@ -218,7 +218,7 @@ const IDENTITIES: [&str; 6] = [
 fn class_value(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>) -> ClassValue {
     use ClassValue::*;
     let arch = data.get_arch();
-    let table = &arch.kuna_objc_classes;
+    let table = &classes(&arch.kuna_states);
     if let Some(addr) = constant_address(data, vn, 0) {
         return table.class_at.get(&addr).cloned().map_or(Unknown, Known);
     }
@@ -350,7 +350,7 @@ fn super_start(data: &Funcdata) -> Option<(String, bool)> {
         .strip_prefix('[')?
         .split([' ', '('])
         .next()?;
-    let table = &data.get_arch().kuna_objc_classes;
+    let table = &classes(&data.get_arch().kuna_states);
     Some((table.classes.get(class)?.superclass.clone()?, class_method))
 }
 
@@ -381,7 +381,7 @@ fn instancetype_at(
     depth: u32,
 ) -> Option<Rc<Datatype>> {
     let sel = selector(data, op, fc)?;
-    let table = &data.get_arch().kuna_objc_classes;
+    let table = &classes(&data.get_arch().kuna_states);
     match receiver(data, op, fc, depth) {
         Some(Receiver::Class(class)) => {
             let result = match table
@@ -482,7 +482,7 @@ pub fn resolve_send(data: &Funcdata, op: OpId) -> Option<ResolvedSend> {
     }
     let sel = selector(data, op, fc)?;
     let site = data.obank().get(op)?.get_addr().clone();
-    let table = &arch.kuna_objc_classes;
+    let table = &classes(&arch.kuna_states);
     let (m, self_type, retarget) = match receiver(data, op, fc, 0)? {
         Receiver::Class(class) => (table.resolve(&class, &sel, true)?, None, true),
         Receiver::Super(class, class_method) => {
@@ -565,6 +565,14 @@ crate::kuna_flag!(
     unset: false,
     shipped: true
 );
+
+crate::kuna_arch_state!(ObjcClassTable);
+
+/// The image's Objective-C class table, shared through the architecture's states; empty before
+/// the loader commits one.
+pub fn classes(states: &crate::kuna_archstate::ArchStates) -> Rc<ObjcClassTable> {
+    states.get_rc::<ObjcClassTable>().unwrap_or_default()
+}
 
 #[cfg(test)]
 mod tests {

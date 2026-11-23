@@ -5315,7 +5315,7 @@ impl PrintC {
     /// address of the first op of its front leaf, when the image's call-site
     /// table lists it as a pad.
     fn eh_pad_start(&self, fd: &Funcdata, blk: BlockId) -> Option<u64> {
-        let table = fd.get_arch().eh_table.clone()?;
+        let table = crate::kuna_itaniumeh::eh_table(fd.get_arch())?;
         let leaf = fd.sblocks_ref().get_front_leaf(blk)?;
         let bb = fd.sblocks_ref().block(leaf).get_copy()?;
         let mut cur = fd.bb_op_head(bb);
@@ -5347,7 +5347,7 @@ impl PrintC {
     /// handler it shares with another pad folds into that handler, so the arm
     /// starts at the shared code, not at the pad.
     fn eh_if_arms(&self, fd: &Funcdata, blk: BlockId) -> Option<(u64, BlockId, Option<BlockId>)> {
-        let table = fd.get_arch().eh_table.clone()?;
+        let table = crate::kuna_itaniumeh::eh_table(fd.get_arch())?;
         let sb = fd.sblocks_ref();
         let ifb = sb.block(blk);
         let cond = ifb.get_block(0);
@@ -5448,7 +5448,7 @@ impl PrintC {
     /// specifications are not handlers. `catch (...)` when nothing is caught.
     fn eh_catch_header(fd: &Funcdata, pad: u64) -> String {
         use crate::kuna_itaniumeh::EhClause;
-        let Some(table) = fd.get_arch().eh_table.clone() else {
+        let Some(table) = crate::kuna_itaniumeh::eh_table(fd.get_arch()) else {
             return "catch (...)".into();
         };
         let mut types: Vec<&str> = Vec::new();

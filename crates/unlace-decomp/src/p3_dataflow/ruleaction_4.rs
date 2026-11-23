@@ -309,9 +309,7 @@ impl Rule for RuleLoadVarnode {
             unlace_base::space::AddrSpace::address_to_byte(offoff, baseoff.get_word_size());
         // A read-only relocated pointer is the weak binding plus its addend,
         // not the synthetic display address stored in its pre-link bytes.
-        let nullable = data
-            .get_arch()
-            .nullable_relocations
+        let nullable = crate::kuna_nullable_reloc::relocations(&data.get_arch().kuna_states)
             .get(&offoff)
             .filter(|_| {
                 data.get_address()

@@ -317,25 +317,33 @@ fn decompile_one_prefollowed_once(
     // (kuna `floatglobals`) A float vote asked about a global before the
     // whole-program scan ran: take it once for the run, and drive again. One
     // function of a large image does not pay for it, and refuses the global.
-    if arch.kuna_float_globals.is_none()
+    if arch
+        .kuna_states
+        .get::<unlace_decomp::kuna_floatglobals::FloatGlobalsFound>()
+        .is_none()
         && result
             .as_ref()
             .is_ok_and(|fd| fd.get_arch().float_globals_wanted.get())
     {
-        let input = arch.kuna_float_scan.clone().filter(|input| {
-            arch.kuna_float_scan_batch
-                || input.code_bytes()
-                    <= unlace_decomp::kuna_floatglobals::SINGLE_FUNCTION_SCAN_BYTES
-        });
+        let input = arch
+            .kuna_states
+            .get_rc::<unlace_decomp::kuna_floatglobals::FloatScan>()
+            .filter(|input| {
+                arch.kuna_float_scan_batch
+                    || input.code_bytes()
+                        <= unlace_decomp::kuna_floatglobals::SINGLE_FUNCTION_SCAN_BYTES
+            });
         match input {
-            None => {
-                arch.kuna_float_globals = Some(Rc::new(
+            None => arch.kuna_states.set(Rc::new(
+                unlace_decomp::kuna_floatglobals::FloatGlobalsFound(
                     unlace_decomp::kuna_floatglobals::FloatGlobals::new(),
-                ))
-            }
+                ),
+            )),
             Some(input) => {
                 let found = unlace_analysis::listing::kuna_floatglobals::scan(arch, &input);
-                arch.kuna_float_globals = Some(Rc::new(found));
+                arch.kuna_states.set(Rc::new(
+                    unlace_decomp::kuna_floatglobals::FloatGlobalsFound(found),
+                ));
                 result = unlace_decomp::decompile_drive::decompile_func_full_with_override_dyn(
                     arch,
                     name,
@@ -355,17 +363,20 @@ fn decompile_one_prefollowed_once(
     }
     // (kuna `opaquepredicate globals`) A comparison read a global before the
     // whole-program scan ran: take it once for the run, and drive again.
-    if arch.kuna_opaque_globals.is_none()
+    if arch
+        .kuna_states
+        .get::<unlace_decomp::kuna_opaqueglobals::UnwrittenGlobals>()
+        .is_none()
         && result
             .as_ref()
             .is_ok_and(|fd| fd.get_arch().opaque_globals_wanted.get())
     {
         let found = arch
-            .kuna_float_scan
-            .clone()
+            .kuna_states
+            .get_rc::<unlace_decomp::kuna_floatglobals::FloatScan>()
             .map(|input| unlace_analysis::listing::kuna_opaqueglobals::scan(arch, &input))
             .unwrap_or_default();
-        arch.kuna_opaque_globals = Some(Rc::new(found));
+        arch.kuna_states.set(Rc::new(found));
         result = unlace_decomp::decompile_drive::decompile_func_full_with_override_dyn(
             arch,
             name,

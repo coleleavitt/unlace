@@ -161,7 +161,11 @@ impl Action for ActionSwiftError {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        let Some(abi) = data.get_arch().swift_abi.clone() else {
+        let Some(abi) = data
+            .get_arch()
+            .kuna_states
+            .get_rc::<crate::kuna_swiftcall::SwiftAbi>()
+        else {
             return 0;
         };
         let (reg, size) = abi.error_reg.clone();

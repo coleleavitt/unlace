@@ -73,7 +73,20 @@ impl UnwrittenGlobals {
 /// The value of `vn` when it reads a global no code writes.
 pub(crate) fn constant_read(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
     let glb = data.get_arch();
-    if glb.opaque_globals.is_none() && !glb.opaque_globals_pending {
+    let gate = glb
+        .kuna_options
+        .get::<crate::kuna_coreoptions::OpaquePredicate>();
+    let found = (gate.on && gate.globals)
+        .then(|| glb.kuna_states.get::<UnwrittenGlobals>())
+        .flatten();
+    let pending = gate.on
+        && gate.globals
+        && found.is_none()
+        && glb
+            .kuna_states
+            .get::<crate::kuna_floatglobals::FloatScan>()
+            .is_some();
+    if found.is_none() && !pending {
         return None;
     }
     let v = data.vbank().get(vn)?;
@@ -87,7 +100,7 @@ pub(crate) fn constant_read(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
             return None;
         }
     }
-    let Some(found) = &glb.opaque_globals else {
+    let Some(found) = found else {
         glb.opaque_globals_wanted.set(true);
         return None;
     };
@@ -106,6 +119,8 @@ pub(crate) fn constant_read(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
     };
     Some(value & calc_mask(size))
 }
+
+crate::kuna_arch_state!(UnwrittenGlobals);
 
 #[cfg(test)]
 mod tests;

@@ -779,7 +779,13 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
         Some(jobs::SynthWorker::Force) => Some(take_synth_table(&mut prog, scratch, &at_load)?),
         _ => None,
     };
-    prog.arch_mut().struct_synth_shard = synth_hook.clone();
+    match synth_hook.clone() {
+        Some(hook) => prog.arch_mut().kuna_states.set(hook),
+        None => prog
+            .arch_mut()
+            .kuna_states
+            .remove::<std::cell::RefCell<unlace_decomp::kuna_structsynth::shard::ShardHook>>(),
+    }
     let converge = args.jobs_synth == Some(jobs::SynthWorker::Serial);
 
     while let Ok(assignment) = assignments.recv() {
@@ -927,7 +933,7 @@ fn take_synth_table(
         .and_then(|()| shard::install_table(prog.arch().types(), &table))
         .map_err(|e| format!("cannot install the synthesized structures: {e}"))?;
     let hook = ShardHook::forcing(at_load.clone());
-    prog.arch_mut().struct_synth_shard = Some(hook.clone());
+    prog.arch_mut().kuna_states.set(hook.clone());
     Ok(hook)
 }
 

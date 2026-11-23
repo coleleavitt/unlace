@@ -181,6 +181,16 @@ const USER2: unlace_base::types::uint4 = 2;
 
 pub use crate::kuna_coreoptions::ItaniumEh;
 
+crate::kuna_arch_state!(EhTable);
+
+/// The image's call-site table, when `itaniumeh` is on; empty before the loader commits one.
+pub fn eh_table(glb: &crate::context::ArchContext) -> Option<std::rc::Rc<EhTable>> {
+    glb.kuna_options
+        .get::<crate::kuna_coreoptions::ItaniumEh>()
+        .on
+        .then(|| glb.kuna_states.get_rc::<EhTable>().unwrap_or_default())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

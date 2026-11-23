@@ -85,6 +85,10 @@ processor module
 One data structure, but its maturity only increases, so each pass knows what is already settled: a
 middle ground between Ghidra's free-for-all fixpoint and Binary Ninja's separate IRs.
 
+The ctree is the second idea: C-level cleanups are rewrites of a syntax tree built after
+structuring, not edits of the IR or decisions taken while printing. The plan to add one between
+`unlace-structure` and `unlace-emit` is `docs/architecture/ctree.md`.
+
 ## angr (lift, then a decompiler IR)
 
 Sources: [Clinic pipeline](https://deepwiki.com/angr/angr/6.3-clinic:-ail-transformation-pipeline),

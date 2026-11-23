@@ -8,7 +8,6 @@ architecture -> kuna_calleememory
 architecture -> kuna_calleepurge
 architecture -> kuna_calleevote
 architecture -> kuna_callerargs
-architecture -> kuna_callmechanisms
 architecture -> kuna_callrettype
 architecture -> kuna_callwide
 architecture -> kuna_cortexmpriv
@@ -21,7 +20,6 @@ architecture -> kuna_gottailcall
 architecture -> kuna_hooks
 architecture -> kuna_inputhints
 architecture -> kuna_itaniumeh
-architecture -> kuna_jumpassist
 architecture -> kuna_kalloctype
 architecture -> kuna_kernelbug
 architecture -> kuna_lang
@@ -41,7 +39,6 @@ architecture -> kuna_rustabi
 architecture -> kuna_rustfmtflags
 architecture -> kuna_rustfmtio
 architecture -> kuna_rustfmtwrite
-architecture -> kuna_segmentize
 architecture -> kuna_simdlane
 architecture -> kuna_stablenames
 architecture -> kuna_storetype
@@ -56,17 +53,14 @@ architecture -> printc
 architecture -> printlanguage
 architecture -> remote_provider
 architecture -> stringmanage
-context -> kuna_callmechanisms
 context -> kuna_floatglobals
 context -> kuna_itaniumeh
-context -> kuna_jumpassist
 context -> kuna_kalloctype
 context -> kuna_libcnames
 context -> kuna_msvcbyval
 context -> kuna_nullable_reloc
 context -> kuna_objcrettype
 context -> kuna_opaqueglobals
-context -> kuna_segmentize
 context -> kuna_structsynth
 context -> kuna_swiftcall
 context -> kuna_tlsnames

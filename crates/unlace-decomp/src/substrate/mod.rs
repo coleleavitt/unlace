@@ -20,6 +20,7 @@ pub mod funcdata_op;
 pub mod funcdata_printraw;
 pub mod funcdata_varnode;
 pub mod idiom;
+pub mod kuna_archstate;
 pub mod kuna_avxintrin; // (kuna `avxintrinsics`) Intel intrinsic names for the SLEIGH AVX user-ops
 pub(crate) mod kuna_budget;
 pub mod kuna_calleefacts;

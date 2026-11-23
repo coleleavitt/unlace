@@ -225,9 +225,7 @@ pub fn apply_return(data: &mut crate::funcdata::Funcdata, index: i32) -> KunaRes
         ..Default::default()
     };
     let arch = data.get_arch().clone();
-    let operations = arch
-        .call_mechanisms
-        .operations(id, arch.manage(), &mut context)?;
+    let operations = mechanisms(&arch).operations(id, arch.manage(), &mut context)?;
     if arch.call_mechanism_reload_only {
         let Some((load, store)) = reloads_stored_slot(data, op, &operations) else {
             return Ok(());
@@ -448,9 +446,7 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
         ..Default::default()
     };
     let arch = data.get_arch().clone();
-    let operations = arch
-        .call_mechanisms
-        .operations(id, arch.manage(), &mut context)?;
+    let operations = mechanisms(&arch).operations(id, arch.manage(), &mut context)?;
     install(data, None, Some(block), &operations)?;
     data.kuna_state_mut::<State>().entry = Some(id);
     Ok(())
@@ -641,7 +637,8 @@ fn validate_template(template: &unlace_sleigh::semantics::ConstructTpl) -> KunaR
     Ok(())
 }
 
-/// Immutable compiled mechanisms shared by every function in an architecture.
+/// Immutable compiled mechanisms shared by every function in an architecture, kept in its
+/// [`ArchStates`](crate::kuna_archstate::ArchStates).
 #[derive(Debug, Default)]
 pub struct Mechanisms {
     payloads: std::collections::BTreeMap<
@@ -712,8 +709,45 @@ impl Mechanisms {
     }
 }
 
+crate::kuna_arch_state!(Mechanisms);
+
+/// The architecture's compiled mechanisms; none before the specs load.
+fn mechanisms(arch: &crate::context::ArchContext) -> Rc<Mechanisms> {
+    arch.kuna_states.get_rc::<Mechanisms>().unwrap_or_default()
+}
+
+/// A context's `(call_mechanism_effects, call_mechanism_reload_only)`.
+fn effects(options: &crate::kuna_optionset::OptionSet, image_elfv1_toc: bool) -> (bool, bool) {
+    let mode = options.get::<CallMechanismMode>();
+    (mode.fires(image_elfv1_toc), mode == CallMechanismMode::Auto)
+}
+
+/// Compile the mechanisms out of the architecture's loaded inject library.
+fn load(arch: &mut crate::architecture::Architecture) {
+    let mechanisms = Mechanisms::from_library(&arch.pcodeinjectlib);
+    arch.kuna_states.set(Rc::new(mechanisms));
+}
+
+/// [`compiled_ids`] against the architecture's inject library.
+fn compiled_ids_in(arch: &crate::architecture::Architecture, name: &str) -> (i32, i32) {
+    compiled_ids(&arch.pcodeinjectlib, name)
+}
+
+/// [`register`] into the architecture's inject library.
+fn register_in(
+    xml: Option<&str>,
+    manager: &AddrSpaceManager,
+    arch: &mut crate::architecture::Architecture,
+) -> KunaResult<()> {
+    register(xml, manager, &mut arch.pcodeinjectlib)
+}
+
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.callmechanisms_effects = Some(effects);
+    hooks.callmechanisms_load = Some(load);
+    hooks.callmechanisms_compiled_ids = Some(compiled_ids_in);
+    hooks.callmechanisms_register = Some(register_in);
     hooks.callmechanisms_requires_reflow = Some(requires_reflow);
     hooks.callmechanisms_failed = Some(failed);
     hooks.callmechanisms_install_at_entry = Some(install_at_entry);
@@ -816,7 +850,7 @@ mod tests {
         model.set_inject_ids(0, -1);
         let mut context = crate::context::ArchContext::new(manager);
         context.evalfp_current = Some(Rc::new(model));
-        context.call_mechanisms = Rc::new(mechanisms);
+        context.kuna_states.set(Rc::new(mechanisms));
         context.call_mechanism_effects = true;
         let address = Address::new(ram.clone(), 0x1000);
         let mut data = crate::funcdata::Funcdata::new(

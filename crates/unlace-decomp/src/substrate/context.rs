@@ -727,15 +727,14 @@ pub struct ArchContext {
     /// (kuna `arm64evcall`) The architecture's resolved arm64e virtual calls.
     pub vcall_targets: Rc<std::collections::BTreeMap<u64, crate::architecture::VcallTargets>>,
 
-    pub call_mechanisms: Rc<crate::kuna_callmechanisms::Mechanisms>,
+    /// The kuna passes' architecture-wide tables, shared with the engine
+    /// ([`crate::kuna_archstate`]): call mechanisms, jump assists, segment operations.
+    pub kuna_states: crate::kuna_archstate::ArchStates,
     /// (kuna) `callmechanisms` — apply compiler-spec prototype entry/return p-code.
     pub call_mechanism_effects: bool,
     /// (kuna `dexmodel`) The loaded DEX file's constant pool and register
     /// payloads; `None` for any other image or with the option off.
     pub dex: Option<Rc<crate::kuna_dex::DexModel>>,
-    /// (kuna `jumpassist`) The compiled `<jumpassist>` scripts; empty with the
-    /// option off.
-    pub jump_assists: Rc<crate::kuna_jumpassist::JumpAssists>,
     /// (kuna) `callmechanisms auto` — only return payloads whose stored slot the next instruction
     /// reloads, forwarded into that reload when possible.
     pub call_mechanism_reload_only: bool,
@@ -986,9 +985,6 @@ pub struct ArchContext {
     /// load-linked or store-conditional left without its upstream fixup (ghidra
     /// mode) remains; see `kuna_octeonops::userop_ids`.
     pub octeon_memory_userops: Vec<(u32, crate::kuna_octeonops::Effect)>,
-    /// (kuna) The processor's segment operations by address-space index (C++
-    /// `userops.segmentop`); empty when the spec declares none.
-    pub segment_ops: Vec<Option<Rc<crate::kuna_segmentize::SegmentDef>>>,
     /// (kuna) `option syscallregs`, resolved against the loader's user-space
     /// fact: does the ARM/AArch64/RISC-V/MIPS/PowerPC system-call user-op read
     /// its setup registers and write its result?  Read by
@@ -1226,10 +1222,9 @@ impl ArchContext {
         // minimum; the upstream default when unset is 4.
         ArchContext {
             pass_hooks: crate::architecture::default_pass_hooks(),
-            call_mechanisms: Rc::default(),
+            kuna_states: Default::default(),
             call_mechanism_effects: false,
             dex: None,
-            jump_assists: Rc::default(),
             call_mechanism_reload_only: false,
             manage,
             min_laned_register_size: 4,
@@ -1329,7 +1324,6 @@ impl ArchContext {
             x64_syscall_memory_target: false,
             x64_syscall_userops: Vec::new(),
             octeon_memory_userops: Vec::new(),
-            segment_ops: Vec::new(),
             syscall_regs: false,
             syscall_regs_family: None,
             syscall_regs_userops: Vec::new(),
@@ -1832,20 +1826,6 @@ impl ArchContext {
         }
         self.manage
             .resolve_constant(spc, val, sz, point, full_encoding)
-    }
-
-    /// Number of segment operations supported (C++ `userops.numSegmentOps`).
-    pub fn num_segment_ops(&self) -> int4 {
-        self.segment_ops.len() as int4
-    }
-
-    /// The segment operation for the space with index `i` (C++
-    /// `userops.getSegmentOp`).
-    pub fn get_segment_op(&self, i: int4) -> Option<&Rc<crate::kuna_segmentize::SegmentDef>> {
-        usize::try_from(i)
-            .ok()
-            .and_then(|i| self.segment_ops.get(i))
-            .and_then(|s| s.as_ref())
     }
 
     /// The tracked value of `mem` at `point` (C++ `glb->context->getTrackedValue`).

@@ -306,7 +306,7 @@ impl JumpModel for JumpModelAssisted {
         let Some((index, _)) = offset(0) else {
             return Ok(false);
         };
-        let Some(assist) = fd.get_arch().jump_assists.get(index as uint4) else {
+        let Some(assist) = assists(fd.get_arch()).and_then(|a| a.get(index as uint4)) else {
             return Ok(false);
         };
         let mut inputs = Vec::new();
@@ -490,4 +490,25 @@ pub fn recover(
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.jumpassist_recover = Some(recover);
+    hooks.jumpassist_load = Some(load);
+}
+
+crate::kuna_arch_state!(JumpAssists);
+
+/// The compiled `<jumpassist>` scripts, when the option is on and the specs declare any.
+fn assists(glb: &ArchContext) -> Option<&JumpAssists> {
+    if !glb
+        .kuna_options
+        .get::<crate::kuna_coreoptions::JumpAssist>()
+        .0
+    {
+        return None;
+    }
+    glb.kuna_states.get::<JumpAssists>()
+}
+
+/// Compile the `<jumpassist>` scripts out of the architecture's loaded inject library.
+fn load(arch: &mut crate::architecture::Architecture) {
+    let assists = JumpAssists::from_library(&arch.userops, &arch.pcodeinjectlib);
+    arch.kuna_states.set(Rc::new(assists));
 }

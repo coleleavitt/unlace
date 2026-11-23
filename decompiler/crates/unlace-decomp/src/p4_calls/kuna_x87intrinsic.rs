@@ -132,10 +132,9 @@ pub fn binary_prototype_xml() -> String {
 }
 
 /// Parse both prototypes and hand each element to `decode`.
-pub fn decode_prototype<F>(mut decode: F) -> KunaResult<()>
-where
-    F: FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
-{
+pub fn decode_prototype(
+    decode: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
+) -> KunaResult<()> {
     use unlace_base::xml::DocumentStorage;
     for xml in [prototype_xml(), binary_prototype_xml()] {
         let mut store = DocumentStorage::new();
@@ -143,6 +142,11 @@ where
         decode(&root)?;
     }
     Ok(())
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.x87intrinsic_decode_prototype = Some(decode_prototype);
 }
 
 #[cfg(test)]

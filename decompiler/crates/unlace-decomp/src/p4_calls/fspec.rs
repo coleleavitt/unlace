@@ -3623,11 +3623,16 @@ impl ParamListStandard {
                 // argument list -- the ABI reaches the stack only past a full
                 // register file -- not a hole to fill on the way to a stack
                 // trial.  See [`crate::p4_calls::kuna_stackarggap`].
-                if crate::p4_calls::kuna_stackarggap::ends_argument_list(active, i, stop, |j| {
-                    (crate::architecture::default_pass_hooks().stackarggap_address_is_spacebase)(
-                        active.get_trial(j).get_address(),
-                    )
-                }) {
+                if (crate::architecture::default_pass_hooks().stackarggap_ends_argument_list)(
+                    active,
+                    i,
+                    stop,
+                    &|j| {
+                        (crate::architecture::default_pass_hooks().stackarggap_address_is_spacebase)(
+                            active.get_trial(j).get_address(),
+                        )
+                    },
+                ) {
                     seenchain = true;
                 }
                 let step = if i == start {

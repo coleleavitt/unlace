@@ -5656,7 +5656,7 @@ impl JumpBasicModel {
             return None;
         }
         let offsets: Vec<uintb> = rows.iter().map(|row| row.get_offset()).collect();
-        let cut = crate::kuna_switchrunon::own_rows(entry.get_offset(), &offsets, owner)?;
+        let cut = (fd.hooks().switchrunon_own_rows)(entry.get_offset(), &offsets, &owner)?;
         fd.get_arch()
             .in_section_of(entry, &rows[cut])
             .then_some(cut)

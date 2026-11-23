@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn both_prototypes_parse_with_their_names() {
     let mut names = Vec::new();
-    decode_prototype(|root| {
+    decode_prototype(&mut |root| {
         names.push(String::from_utf8_lossy(root.get_attribute_value("name")?).into_owned());
         Ok(())
     })

@@ -9,7 +9,7 @@ use super::*;
 #[test]
 fn payloads_parse_as_named_callfixups() {
     let mut seen = Vec::new();
-    decode_payload(|root| {
+    decode_payload(&mut |root| {
         seen.push((
             root.get_name().to_string(),
             String::from_utf8_lossy(root.get_attribute_value("name")?).into_owned(),
@@ -32,7 +32,7 @@ fn payloads_parse_as_named_callfixups() {
 #[test]
 fn payloads_split_the_crt_targets_by_result_width() {
     let mut targets: Vec<Vec<String>> = Vec::new();
-    decode_payload(|root| {
+    decode_payload(&mut |root| {
         let mut t = Vec::new();
         for child in root.get_children().iter() {
             if child.get_name() == "target" {
@@ -95,10 +95,10 @@ fn body_pops_the_return_address_and_converts_at_64_bits() {
 fn guard_admits_x86_32_only() {
     let x86 = |_: &[u8]| true;
     let no_x87 = |n: &[u8]| !n.starts_with(b"ST");
-    assert!(language_is_x86_32(x86, 4), "x86-32 is the target");
-    assert!(!language_is_x86_32(x86, 8), "x86-64 has no _ftol helper");
+    assert!(language_is_x86_32(&x86, 4), "x86-32 is the target");
+    assert!(!language_is_x86_32(&x86, 8), "x86-64 has no _ftol helper");
     assert!(
-        !language_is_x86_32(no_x87, 4),
+        !language_is_x86_32(&no_x87, 4),
         "a language without x87 cannot run this body"
     );
 }

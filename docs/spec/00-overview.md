@@ -3576,7 +3576,7 @@ module docs):
 | `decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs` | varnode creation/lookup primitives |
 | `decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs` | CFG surgery + the jump-table drivers |
 | `decompiler/crates/unlace-decomp/src/substrate/funcdata_encode.rs`, `decompiler/crates/unlace-decomp/src/substrate/funcdata_printraw.rs` | marshaling, raw printing |
-| `decompiler/crates/unlace-decomp/src/p2_lift/funcdata_resolveflow.rs` | flow resolution (P2) |
+| `decompiler/crates/unlace-decomp/src/p5_types/funcdata_resolveflow.rs` | flow resolution (P2) |
 | `decompiler/crates/unlace-decomp/src/p5_types/funcdata_union.rs` | union facet resolution (P5) |
 | `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_facing.rs`, `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_merge.rs`, `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs` | variable/merge/stack tiers (P6) |
 | `decompiler/crates/unlace-decomp/src/p9_emit/coreaction_casts.rs` | cast insertion hooks (P9) |

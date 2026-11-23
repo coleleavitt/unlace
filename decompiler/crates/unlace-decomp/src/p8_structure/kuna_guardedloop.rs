@@ -27,7 +27,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
 use crate::context::{BlockId, HighVariableId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p3_dataflow::kuna_strlenscan::taken;
+use crate::kuna_regioneval::taken;
 
 /// The basic block of the last leaf of `id`, through lists only.
 fn last_basic(graph: &BlockGraph, id: BlockId) -> Option<BlockId> {

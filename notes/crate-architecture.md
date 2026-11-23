@@ -473,3 +473,46 @@ Each crate now rebuilds in 6.8-8.2 s, in line with the other band crates (struct
 middle 9.3 s) and with the size model above. The core (116k lines) is the floor without cutting the
 cycle; its cheapest cut by folder (10 inverted edges, largest piece 74k) would save about 0.5 s more,
 which does not pay for hooks through the fixpoint.
+
+
+### Step 10, second half: lifting Ghidra's heavier algorithms out of unlace-middle, measured (2026-11-23)
+
+The module graph of `unlace-middle` (109 modules, 163k lines with tests; `crate::`/`super::` paths in
+non-test code, resolved as `scripts/check_layers.py` does) has one strongly connected component. It holds
+61 modules and 135k lines: `Funcdata`, `Architecture`, `ArchContext`, the type system, the pass-hook table,
+and all five candidates. Every candidate reaches every other middle module, so moving one into a crate
+above middle means inverting every edge into it:
+
+| module | lines | middle modules that reference it (non-test) | what the references are |
+|---|---|---|---|
+| fspec | 10.7k | 17 (architecture 32 paths, context 30, dtype 23, heritage 15, remote_provider 14, passhooks 13, ...) | the prototype model is part of the IR itself: `Architecture`'s models, `ArchContext`, `Datatype` decoding, overrides |
+| heritage | 8.4k | 2 (funcdata, passhooks) | `Funcdata::heritage` is a by-value field driven by ~10 `Funcdata` methods; 7 heritage types appear in hook signatures |
+| jumptable | 8.5k | 7 (funcdata_block 13, funcdata 6, passhooks 4, remote_provider 3, emulatefunction, rangeutil, dtype) | `Funcdata::jumpvec`, the switch recovery in `funcdata_block`, 4 types in hook signatures, the `ATTRIB_LABEL` constant |
+| merge | 3.8k | 3 (funcdata_merge 12, funcdata 2, passhooks) | `Funcdata::covermerge`, the `MergeContext` trait `Funcdata` implements and the hooks use |
+| varmap | 5.6k | 3 (funcdata 4, passhooks 4, heritage) | `Funcdata::localmap` (`ScopeLocal`, the function's local scope, read all over), 4 types in hook signatures |
+
+None of them can move without splitting it in two. The types (`Heritage`, `JumpTable`, `Merge`/`MergeContext`,
+`ScopeLocal`, and the 19 types in `KunaHooks` signatures) are fields of `Funcdata` or parameters of the hook
+table, both in middle, so they stay. Only their method bodies could move, as extension traits (an inherent impl
+cannot live in another crate). The fields would become `FuncState` slots or stay typed in middle. fspec cannot
+move at all: `Architecture`, `ArchContext` and `Datatype` depend on it directly.
+
+Expected gain, from the size model above (6.3 s + 19 ms per 1k lines):
+
+- Best case, the method bodies of heritage, jumptable, merge and varmap (about 26k lines) moved to a crate
+  between middle and lift: a private edit in middle goes from 9.4 s to 8.9 s, and an edit in the moved code from
+  9.4 s to about 6.8 s.
+- A public change in the moved code still rebuilds every crate above middle, since all of them depend on the new
+  crate. The only saving is middle's own share, about 0.5 s.
+- The zero-inversion splits of middle are smaller still. The 9 modules above its component (`funcdata_merge`,
+  `funcdata_op`, `funcdata_printraw`, `idiom`, ... 9k) save about 0.2 s, and the 30 below it (16k) about 0.3 s.
+
+Cost: four inversion series through `Funcdata`'s central state (heritage and merge drive the SSA and cover
+fixpoint), each splitting a type from its methods and changing every caller of the moved methods. That is 21
+files above middle for heritage, 28 for jumptable, 17 for merge and 35 for varmap.
+
+Decision: not done. The gain (0.5 s per middle edit, 2.6 s per edit inside the four algorithms, about 8% of
+the last month's commits) does not pay for splitting `Funcdata`'s core types from their algorithms. Middle
+already avoids most downstream rebuilds through `CARGO_UNSTABLE_PUBLIC_API_HASH`, since private edits keep
+its public-API hash. If middle edits become the bottleneck, the zero-inversion split of the 30 modules below
+its component is the cheap first step.

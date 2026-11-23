@@ -198,6 +198,9 @@ fn a_constant_jump_through_the_return_register_keeps_its_store() {
             eprintln!("returnbranch replay: no {} emulator", abi.name);
             continue;
         };
+        if !common::host::cc_targets(&cc, abi.triple) {
+            continue;
+        }
         let entry = source(
             &format!("returnbranch-start-{}", abi.name),
             &start(abi.exit_syscall),

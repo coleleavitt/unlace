@@ -27,6 +27,9 @@ use crate::kuna_sourcelang::SourceLang;
 use crate::kuna_symbolnamechars::NameChars;
 use crate::options::env_toggle;
 
+/// Carries `calltargettype` to the DWARF type mapper, which runs at `load file`
+/// before any option is applied; the CLI exports it ahead of the load.
+pub const CALLTARGETTYPE_ENV: &str = "KUNA_CALLTARGETTYPE";
 /// The `--slice` fat Mach-O slice override.
 pub const MACHO_SLICE_ENV: &str = "KUNA_MACHO_SLICE";
 /// The external `.pdb` file to apply.
@@ -206,7 +209,7 @@ impl LoadOptions {
             // FIXME: Audit that the environment access only happens in single-threaded code.
             "calltargettype" => unsafe {
                 std::env::set_var(
-                    kuna_calltargettype::CALLTARGETTYPE_ENV,
+                    CALLTARGETTYPE_ENV,
                     if self.calltargettype { "on" } else { "off" },
                 )
             },
@@ -373,7 +376,7 @@ pub mod env {
     }
 
     pub fn calltargettype() -> bool {
-        env_toggle(crate::kuna_calltargettype::CALLTARGETTYPE_ENV, true)
+        env_toggle(super::CALLTARGETTYPE_ENV, true)
     }
 
     pub fn macho_arm64e() -> bool {

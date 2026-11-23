@@ -1140,7 +1140,7 @@ pub struct ScopeLocal {
     isolated_present: bool,
     /// (kuna `--assert`) The previous decompile's numbering, for
     /// [`Self::next_default_name`].
-    name_state: crate::kuna_stablenames::NameState,
+    name_state: NameState,
 }
 
 impl ScopeLocal {
@@ -2131,8 +2131,8 @@ impl ScopeLocal {
     }
 
     /// (kuna `--assert`) Start a naming pass that keeps `prior`'s numbering.
-    pub fn install_prior_names(&mut self, prior: crate::kuna_stablenames::PriorNames) {
-        self.name_state = crate::kuna_stablenames::NameState::new(prior);
+    pub fn install_prior_names(&mut self, seed: NameSeed) {
+        self.name_state = NameState::new(seed);
     }
 
     /// The numbers the next default name should try first (empty clears them).
@@ -3190,7 +3190,7 @@ pub struct MapState {
     absorbing_bases: Vec<intb>,
     /// (kuna `arrayextent`) The arrays `extend_unbounded` lengthened, settled
     /// once the hints are sorted.
-    extended: Vec<crate::p6_variables::kuna_arrayextent::Extended>,
+    extended: Vec<Extended>,
     /// (kuna `arraysize`) Per signed offset an escaped address starts at, what
     /// the calls receiving it and the accesses through it say about its size.
     stated_sizes: std::collections::BTreeMap<intb, Evidence>,
@@ -3512,13 +3512,13 @@ impl MapState {
 
     /// (kuna `arrayextent`) Record the arrays `extend_unbounded` lengthened.
     #[doc(hidden)]
-    pub fn set_extended(&mut self, extended: Vec<crate::p6_variables::kuna_arrayextent::Extended>) {
+    pub fn set_extended(&mut self, extended: Vec<Extended>) {
         self.extended = extended;
     }
 
     /// (kuna `arrayextent`) Take the recorded lengthened arrays.
     #[doc(hidden)]
-    pub fn take_extended(&mut self) -> Vec<crate::p6_variables::kuna_arrayextent::Extended> {
+    pub fn take_extended(&mut self) -> Vec<Extended> {
         std::mem::take(&mut self.extended)
     }
 
@@ -3597,6 +3597,151 @@ impl MapState {
     pub fn covers(&self, st: uintb, size: int4) -> bool {
         self.range
             .in_range(&Address::new(Rc::clone(&self.spaceid), st), size)
+    }
+}
+
+/// (kuna `--assert`) What the naming pass keeps of a previous decompile's numbering
+/// (`kuna_stablenames::PriorNames::name_seed`).
+#[derive(Clone, Debug, Default)]
+pub struct NameSeed {
+    /// Is a previous decompile's numbering being kept?
+    pub active: bool,
+    /// One past the last number the previous decompile handed out.
+    pub end: int4,
+    /// The number each numbered Symbol had, by its storage and width.
+    pub symbols: std::collections::BTreeMap<(Address, int4), int4>,
+    /// The numbers renamed locals held.
+    pub vacated: std::collections::BTreeSet<int4>,
+    /// The default-shaped names a rename gave a local.
+    pub given: std::collections::BTreeSet<String>,
+    /// Each name-only rename of a stack local's Symbol, by its storage and width.
+    pub symbol_renames: std::collections::BTreeMap<(Address, int4), String>,
+}
+
+/// (kuna `--assert`) The allocator's view of a [`NameSeed`] during one naming pass.
+#[derive(Clone, Debug, Default)]
+pub struct NameState {
+    prior: NameSeed,
+    active: bool,
+    handed: std::collections::BTreeSet<int4>,
+    overflow: int4,
+    preferred: Vec<int4>,
+    targets: std::collections::BTreeMap<crate::context::HighVariableId, String>,
+    assigned: std::collections::BTreeMap<crate::context::HighVariableId, int4>,
+}
+
+impl NameState {
+    pub fn new(prior: NameSeed) -> NameState {
+        let active = prior.active;
+        let overflow = prior.end;
+        NameState {
+            prior,
+            active,
+            handed: std::collections::BTreeSet::new(),
+            overflow,
+            preferred: Vec::new(),
+            targets: std::collections::BTreeMap::new(),
+            assigned: std::collections::BTreeMap::new(),
+        }
+    }
+
+    /// Record the number each local keeps (`kuna_stablenames::assign_numbers`).
+    pub fn set_assigned(
+        &mut self,
+        assigned: std::collections::BTreeMap<crate::context::HighVariableId, int4>,
+    ) {
+        self.assigned = assigned;
+    }
+
+    /// The number `high` keeps, if any.
+    pub fn assigned(&self, high: crate::context::HighVariableId) -> Option<int4> {
+        self.assigned.get(&high).copied()
+    }
+
+    /// Record which local each name-only rename names (`kuna_stablenames::rename_targets`).
+    pub fn set_targets(
+        &mut self,
+        targets: std::collections::BTreeMap<crate::context::HighVariableId, String>,
+    ) {
+        self.targets = targets;
+    }
+
+    /// The name a name-only rename gives `high`, if any.
+    pub fn target(&self, high: crate::context::HighVariableId) -> Option<&str> {
+        self.targets.get(&high).map(String::as_str)
+    }
+
+    /// Is a previous decompile's numbering being kept?
+    pub fn active(&self) -> bool {
+        self.active
+    }
+
+    /// The numbers the next allocation should try first (`kuna_stablenames::best`).
+    pub fn prefer(&mut self, numbers: Vec<int4>) {
+        self.preferred = numbers;
+    }
+
+    /// Let number `i`, which a renamed local held, be handed out again: the
+    /// rename named nothing (`kuna_stablenames::orphaned`).
+    pub fn release(&mut self, i: int4) {
+        self.prior.vacated.remove(&i);
+    }
+
+    /// The name a rename gave the Symbol at `(addr, size)`, if any.
+    pub fn symbol_rename(&self, addr: &Address, size: int4) -> Option<&str> {
+        self.prior
+            .symbol_renames
+            .get(&(addr.clone(), size))
+            .map(String::as_str)
+    }
+
+    /// Put the number the Symbol at `(addr, size)` had ahead of the others.
+    pub fn prefer_symbol(&mut self, addr: &Address, size: int4) {
+        if let Some(&i) = self.prior.symbols.get(&(addr.clone(), size)) {
+            self.preferred.insert(0, i);
+        }
+    }
+
+    /// The number for the next local: a preferred one no one holds, else one
+    /// past every number handed out. `free` says whether a rendered name is
+    /// unclaimed by a locked Symbol.
+    pub fn pick(&mut self, render: &dyn Fn(int4) -> String, free: &dyn Fn(&str) -> bool) -> int4 {
+        let given = std::mem::take(&mut self.prior.given);
+        let free = |name: &str| !given.contains(name) && free(name);
+        let number = self.pick_free(render, &free);
+        self.prior.given = given;
+        number
+    }
+
+    fn pick_free(&mut self, render: &dyn Fn(int4) -> String, free: &dyn Fn(&str) -> bool) -> int4 {
+        let preferred = std::mem::take(&mut self.preferred);
+        let open = |i: int4, state: &NameState| {
+            !state.prior.vacated.contains(&i) && !state.handed.contains(&i)
+        };
+        if let Some(i) = preferred
+            .into_iter()
+            .find(|&i| open(i, self) && free(&render(i)))
+        {
+            return self.hand(i);
+        }
+        let mut i = self.overflow;
+        while !open(i, self) || !free(&render(i)) {
+            i += 1;
+        }
+        self.overflow = i + 1;
+        self.hand(i)
+    }
+
+    fn hand(&mut self, i: int4) -> int4 {
+        self.handed.insert(i);
+        i
+    }
+
+    /// One past every number this pass handed out.
+    pub fn end(&self) -> int4 {
+        self.handed
+            .last()
+            .map_or(self.overflow, |&i| self.overflow.max(i + 1))
     }
 }
 

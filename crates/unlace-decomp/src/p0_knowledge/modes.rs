@@ -366,7 +366,7 @@ pub fn mode_names() -> impl Iterator<Item = &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::options::KUNA_OPTION_NAMES;
+    use crate::kuna_option_dispatch::KUNA_OPTION_NAMES;
 
     #[test]
     fn every_override_names_a_real_option() {

@@ -37,8 +37,9 @@ use unlace_console::project::{
 // section/segment walks the zero-discovery diagnosis reads.
 use object::{Object, ObjectSection, ObjectSegment};
 use unlace_decomp::decompile_drive::{LineMapping, TypeInfo, VarInfo, print_c_types};
+use unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES;
 use unlace_decomp::kuna_structsynth::shard::{self, ShardHook};
-use unlace_decomp::options::{KUNA_OPTION_NAMES, OptionDatabase};
+use unlace_decomp::options::OptionDatabase;
 
 use regex::Regex;
 

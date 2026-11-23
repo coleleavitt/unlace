@@ -35,13 +35,3 @@ context -> kuna_opaqueglobals
 context -> kuna_structsynth
 context -> kuna_swiftcall
 context -> kuna_tlsnames
-dtype -> bitfield
-dtype -> prettyprint
-heritage -> kuna_calloverlap
-heritage -> kuna_globalcallranges
-heritage -> kuna_loadguardreads
-heritage -> kuna_revisitrefine
-kuna_loadoptions -> kuna_calltargettype
-options -> kuna_option_dispatch
-varmap -> kuna_arrayextent
-varmap -> kuna_stablenames

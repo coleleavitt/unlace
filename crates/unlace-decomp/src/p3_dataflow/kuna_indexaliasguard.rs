@@ -655,7 +655,9 @@ mod tests {
 
     #[test]
     fn option_is_registered() {
-        assert!(crate::options::KUNA_OPTION_NAMES.contains(&OptionIndexAliasGuard::NAME));
+        assert!(
+            crate::kuna_option_dispatch::KUNA_OPTION_NAMES.contains(&OptionIndexAliasGuard::NAME)
+        );
     }
 
     #[test]

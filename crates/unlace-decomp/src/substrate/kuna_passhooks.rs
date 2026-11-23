@@ -294,6 +294,9 @@ declare_hooks! {
     callwide_clear: fn(&mut crate::kuna_archstate::ArchTables);
     /// `kuna_callwide`: revoke the whole-image caller proof through a shared borrow.
     callwide_revoke: fn(&crate::kuna_archstate::ArchTables);
+    /// `kuna_globalcallranges::preserves`: does a completely decoded leaf callee leave the range alone?
+    globalcallranges_preserves:
+        fn(&mut crate::heritage::GlobalCallRanges, &Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
     /// `kuna_calleepurge`: forget the x86-32 callee walks (the host's facts changed).
     calleepurge_forget_walks: fn(&mut crate::kuna_archstate::ArchTables);
     /// `kuna_jumpassist`: compile the jump assists out of the loaded inject library.

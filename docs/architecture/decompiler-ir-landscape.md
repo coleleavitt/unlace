@@ -44,7 +44,8 @@ loader (unlace-analysis here; Ghidra's Java side)
   other. That was the ~300k-line cycle measured in `notes/crate-architecture.md`, and why the split
   keeps P3–P6's cyclic core together as one crate: it is a single fixpoint by design. Step 10 measured
   the cycle inside P3–P6: 81 modules (116k lines, all four phases) form it; the other 168 modules
-  below it or unrelated to it moved to `unlace-bandb-base` without inverting an edge.
+  below it or unrelated to it moved to `unlace-bandb-base`, the cycle to `unlace-bandb-core`, and the 59
+  modules above it stayed in `unlace-bandb`, without inverting an edge.
 
 ## Binary Ninja (a ladder of IRs)
 
@@ -131,7 +132,8 @@ now (rustc_middle + providers style; lines of src/*.rs incl. in-tree tests, 2026
    ├─ unlace-lift          43k   P1–P2   (SLEIGH p-code → Funcdata)
    ├─ unlace-structure     29k   P7–P8
    ├─ unlace-bandb-base    84k   P3–P6   the modules outside the fixpoint's cycle (step 10)
-   ├─ unlace-bandb        165k   P3–P6   the cyclic core stays one crate, as the algorithm intends
+   ├─ unlace-bandb-core  116k   P3–P6   the cyclic core stays one crate, as the algorithm intends
+   ├─ unlace-bandb        49k   P3–P6   the passes above the core
    └─ unlace-emit          74k   P9
 unlace-decomp            18k   driver: schedule, option dispatch, fills the hooks table; facade
                                re-exports the crates below it

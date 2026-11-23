@@ -4,7 +4,8 @@
 Each top-level module of unlace-decomp (`src/<folder>/<module>.rs` plus its child files) belongs to a
 band, and each phase folder's `mod.rs` belongs to its folder's band. The bands, lowest first, are a
 planned split of the crate: middle (the IR, types, options, symbols), lift (P1-P2), structure (P7-P8),
-bandb-base and bandb (P3-P6: the modules outside and inside the fixpoint's cyclic core, by crate root),
+bandb-base, bandb-core and bandb (P3-P6: the modules below or beside the fixpoint's cyclic core, the core,
+and the passes above it, by crate root),
 emit (P9) and driver (scheduling, option dispatch, the decompile loop).
 
 Every `crate::`, `super::` and `self::` path in non-test code is resolved to the module it names; a path
@@ -18,7 +19,7 @@ from pathlib import Path
 import re
 import sys
 
-BANDS = ["middle", "lift", "structure", "bandb-base", "bandb", "emit", "driver"]
+BANDS = ["middle", "lift", "structure", "bandb-base", "bandb-core", "bandb", "emit", "driver"]
 FOLDER_BAND = {
     "substrate": "middle", "p0_knowledge": "middle",
     "p1_partition": "lift", "p2_lift": "lift",
@@ -45,8 +46,10 @@ STRUCTURE_SRC = "crates/unlace-structure/src"
 BANDB_SRC = "crates/unlace-bandb/src"
 # Step 10: the part of Band B outside the fixpoint's cyclic core, below unlace-bandb.
 BANDB_BASE_SRC = "crates/unlace-bandb-base/src"
+# Step 10: the fixpoint's cyclic core, between unlace-bandb-base and unlace-bandb.
+BANDB_CORE_SRC = "crates/unlace-bandb-core/src"
 # A crate whose phase folders are a sub-band of their folder's band.
-ROOT_BAND = {BANDB_BASE_SRC: "bandb-base"}
+ROOT_BAND = {BANDB_BASE_SRC: "bandb-base", BANDB_CORE_SRC: "bandb-core"}
 MODULE_ROOT: dict[str, str] = {}
 EMIT_SRC = "crates/unlace-emit/src"
 ALLOWLIST = "scripts/layers-allowlist.txt"
@@ -216,7 +219,7 @@ def band(node: str, modules: dict[str, str]) -> int:
 
 
 def upward_edges(root: Path) -> set[tuple[str, str]]:
-    roots = [root / SRC] + [root / s for s in (MIDDLE_SRC, LIFT_SRC, STRUCTURE_SRC, BANDB_BASE_SRC, BANDB_SRC, EMIT_SRC) if (root / s).is_dir()]
+    roots = [root / SRC] + [root / s for s in (MIDDLE_SRC, LIFT_SRC, STRUCTURE_SRC, BANDB_BASE_SRC, BANDB_CORE_SRC, BANDB_SRC, EMIT_SRC) if (root / s).is_dir()]
     files = [(src, p) for src in roots for p in sorted(src.glob("*/**/*.rs"))
              if not is_test_file(p.relative_to(src))]
     modules = {}

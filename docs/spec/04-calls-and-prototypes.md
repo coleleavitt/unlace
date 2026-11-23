@@ -283,6 +283,7 @@ the positional rule; outside Objective-C images the option is inert.
 ```yaml
 Anchors:
   - crates/unlace-bandb-base/src/p4_calls
+  - crates/unlace-bandb-core/src/p4_calls
   - crates/unlace-bandb/src/p4_calls
   - crates/unlace-middle/src/p4_calls
 ```
@@ -1087,7 +1088,7 @@ only other mention of the callee in that function is an address-taken `lea` for 
 witness search has nothing to find.
 
 (kuna) The callee-body recovery
-(`crates/unlace-bandb/src/p4_calls/kuna_calleearitybody.rs`, always on)
+(`crates/unlace-bandb-core/src/p4_calls/kuna_calleearitybody.rs`, always on)
 lets the callee-body evidence stand **alone** as the witness in that quadrant, rather than
 only extending a sibling's list. It takes the same summary
 the partial-list extension reads (`kuna_calleedeadarg.rs (probe_callee_entry_dead)`) and
@@ -1114,7 +1115,7 @@ subject is the callee called once, it is also the one reader for which
 `seed_callee_entry_dead` probes a function with fewer than two calls.
 
 (kuna) The cut-boundary rule
-(`crates/unlace-bandb/src/p4_calls/kuna_calleearitycut.rs`, always on)
+(`crates/unlace-bandb-core/src/p4_calls/kuna_calleearitycut.rs`, always on)
 widens that dead-boundary test, because the boundary is unavailable far more often than the
 run is. `probe_callee_entry_dead` ends **every** path at the callee's first
 nested call, so a register the callee clobbers past that call is invisible to it,
@@ -1147,7 +1148,7 @@ further argument whatever the callee decode can see. All of the callee-body
 recovery's own guards still answer first.
 
 (kuna) The caller-scratch boundary
-(`crates/unlace-bandb/src/p4_calls/kuna_calleearityscratch.rs`, always
+(`crates/unlace-bandb-core/src/p4_calls/kuna_calleearityscratch.rs`, always
 on) widens the last of those three, the **quiet** boundary, because "the caller wrote it"
 and "the caller is passing it" are not the same claim and a register allocator
 does not respect the difference. An ELF x86-64 crackme decodes a string with an
@@ -1193,7 +1194,7 @@ only (the remainder-formed and indirect-creation-formed rejection in
 evidence that disqualifies a return value is ignored for an argument.
 
 (kuna) `argclobber` (default **on**,
-`crates/unlace-bandb/src/p4_calls/kuna_argclobber.rs`) applies that
+`crates/unlace-bandb-core/src/p4_calls/kuna_argclobber.rs`) applies that
 same sentence to the input list, bounded by eight clauses.
 
 The trial must be a **register** trial carrying `is_ind_create_formed` — the
@@ -1558,7 +1559,7 @@ at the match (01 §1.4).
   import was declared in one function and guessed in the next, and on x86-64
   never (`LoadLibraryW()` lost its argument). Two limits keep that declaration
   to what the caller's code shows
-  (`crates/unlace-bandb/src/p4_calls/kuna_slotargs.rs`). Only the
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_slotargs.rs`). Only the
   parameters are locked: the pieces are seeded input-only, so the result stays
   the one the caller's use recovers. A locked result made a function returning
   `al` beside a pointer-returning import's value in the rest of `rax` return
@@ -1633,7 +1634,7 @@ at the match (01 §1.4).
   declared prototype takes the spec's own `__thiscall` model instead of the
   default when its callee reads ECX before writing it, and `__fastcall` when it
   reads ECX and EDX
-  (`crates/unlace-bandb/src/p4_calls/kuna_calleereginputs.rs
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_calleereginputs.rs
   (callee_register_model)`). The default `__stdcall` has no register
   parameters, so a `this` passed in ECX was dropped at every such call, and
   the caller's own stores below the call were offered to the callee as stack
@@ -2555,7 +2556,7 @@ classified:
   `option sourcelang` force applied) is left alone, because Go passes arguments
   in registers the cspec calls scratch. `off` restores the first-pass verdict.
 
-- **Callee-body evidence** (kuna, `crates/unlace-bandb/src/p4_calls/kuna_calleedeadarg.rs`):
+- **Callee-body evidence** (kuna, `crates/unlace-bandb-core/src/p4_calls/kuna_calleedeadarg.rs`):
   every test above reasons on the *caller's* side of the call, and on that side
   a live argument register at an unprototyped callee is exactly what a real
   argument looks like. Where the return register and the first argument register
@@ -2624,7 +2625,7 @@ classified:
   translator — and cached per callee entry, so each distinct body is decoded
   once per run. A cached summary lives for the rest of the run, so its byte
   sets are stored as the runs of consecutive bytes they cover
-  (`crates/unlace-bandb/src/p4_calls/kuna_calleedeadarg/byteset.rs (ByteSet)`)
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_calleedeadarg/byteset.rs (ByteSet)`)
   rather than one set entry per byte: a register write covers its bytes in one
   stretch, so a path that wrote several hundred bytes is a few dozen runs. The
   forward-transfer answer `argclobber` caches keeps only the meet of its
@@ -2818,7 +2819,7 @@ classified:
 
   A register the callee only pushes above a call's stack arguments -- an
   alignment pad -- is no read either
-  (`crates/unlace-bandb/src/p4_calls/kuna_calleedeadarg.rs (at_call)`, always on).
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_calleedeadarg.rs (at_call)`, always on).
   x86 compilers align an odd number of stack arguments by pushing whatever
   register is at hand before them: gcc 9 at -O2 and gcc 11 at -Os push an `rdx`
   the body never set ahead of three bytes for `__snprintf_chk`. The push copies
@@ -2896,7 +2897,7 @@ uses, provided the producer actually defines both words and every caller is
 accounted for. A consumer's type alone is insufficient.
 
 `kuna_callwide::publish_mips`
-(`crates/unlace-bandb/src/p4_calls/kuna_callwide.rs`) freezes one
+(`crates/unlace-bandb-core/src/p4_calls/kuna_callwide.rs`) freezes one
 address/model ledger before rendering. Declaration ingestion records the
 origin of explicit assertions, parsed declarations and enabled DWARF; an
 inferred prototype lock is not positive evidence. The preflight uses the full
@@ -2930,7 +2931,7 @@ MIPS32 big-endian executables. ARM and other architectures decline unchanged:
 the existing ARM CLI caller scan does not establish this feature's complete
 executed transfer set or canonical return-token provenance, and remains
 unchanged. The bounded MIPS whole-image
-proof (`crates/unlace-bandb/src/p4_calls/kuna_callwide/mips.rs
+proof (`crates/unlace-bandb-core/src/p4_calls/kuna_callwide/mips.rs
 (closed_image)`) covers every executable byte, including unowned gaps and
 delay words. Unowned words must be NOPs. Its sole external ELF entry is exactly
 one owned 16-byte `JAL known_coordinator; NOP; J self; NOP` stub: the self-jump
@@ -2971,7 +2972,7 @@ image before reusing facts. Unsupported frontends receive no initial facts;
 this feature does not observe arbitrary external raw-handle mutations.
 
 The raw-pcode walk in
-`crates/unlace-bandb/src/p4_calls/kuna_callwide/proof.rs` requires both
+`crates/unlace-bandb-core/src/p4_calls/kuna_callwide/proof.rs` requires both
 full return words to be producer-written at every return. Carry dependencies
 between those words are allowed; an entry leftover or partial word is not.
 At least one direct caller must forward both unchanged words, in ABI order,
@@ -3143,7 +3144,7 @@ bytes; stack slots retain the architecture's aligned object size.
 
 A RETURN reached only along branch edges whose conditions literals already
 decide the other way is not scored
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (never_reached)`).
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (never_reached)`).
 SPARC's `call` pcode keeps one for a `restore` in its delay slot
 (`didrestore = 0; call; if (didrestore == 0) goto next; return`), and return
 recovery runs before the rule pool folds it away. What it reads in `%o1` is the
@@ -3174,7 +3175,7 @@ argument prints as its two registers in the ABI's order and no order assumption
 applies there.
 
 On those ABIs the (kuna) `bejoin` option decides the order
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (join_order)`):
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (join_order)`):
 `off` joins every pair first register low, as upstream does; `evidence` joins
 in the ABI's order only on proof, from the function's own instructions, that
 the RETURNs hand back one value twice a register's width; `callers`, the
@@ -3183,7 +3184,7 @@ the call (below); `on` joins in the ABI's order when the second register holds
 a low word the function seems to return on purpose.
 
 With `evidence` (and `callers`)
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin/evidence.rs (seed, proven)`)
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin/evidence.rs (seed, proven)`)
 the order is a fact about one function that its own RETURN and every call to
 it must agree on, in any order and in any run: a whole `decompile-all`, a run
 narrowed by `--functions` or `--addr`, `--jobs N`, a single `unlace decompile`,
@@ -3379,7 +3380,7 @@ another local) but that `void`; the measurements are with the defaults'
 summary below.
 
 A call's two-register output joins in the ABI's order when its callee
-is proven (`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs
+is proven (`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs
 (call_join_order)`), so the call reads the value the callee's printed C
 returns; a self-recursive call reads the function's own verdict. The one
 other case is a pair the calling function hands back (`bejoinpass`, below):
@@ -3390,7 +3391,7 @@ the first register reads the value's high word, so the call is given the pair
 as its output and the read becomes its high piece, `(int)((uint8)g() >>
 0x20)`, rather than the whole of a narrower result, which C's truncation would
 read as the low word
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin/evidence.rs (build_high_read)`).
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin/evidence.rs (build_high_read)`).
 A caller that reads only the second register goes through the arm below
 (`build_partial_pair`), which needs more evidence about the callee and may
 still print the register as a local nothing assigns, as before. A callee
@@ -3425,7 +3426,7 @@ temporaries and call results kept across calls, returned as a `long long` or
 as one of its words, the only `int` that moves is the volatile read above.
 
 With `callers`, the default
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin/callers.rs`), the
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin/callers.rs`), the
 callers settle what the callee's bytes cannot. A call clobbers the second
 return register, so a caller compiled against `int f()` never reads it after
 the call; one that reads it before writing it reads the value's low word. A
@@ -3509,7 +3510,7 @@ come from the image's exception tables, which the object bootstrap hands over
 as the sections `.eh_frame`, `.gcc_except_table*`, `.ARM.exidx*` and
 `.ARM.extab*` at the addresses the loader maps them to, an object's relocated
 layout included
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin/landing.rs`): each
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin/landing.rs`): each
 FDE whose CIE carries an `L` augmentation points at an LSDA whose call-site
 records give the pads, as offsets from the function or from the LSDA's own
 base; on ARM each `.ARM.exidx` entry whose `.ARM.extab` data opens with a
@@ -3612,7 +3613,7 @@ three rules (proven on its own once the callees it waits on are, a caller's
 read, a proven caller handing the pair back) over the functions it reaches, up
 to 32 functions and 48 call sites, following a pair back through at most two
 callers in a row
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin/evidence.rs
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin/evidence.rs
 (by_callers)`). Each fact it reads is a function of the image alone, cached
 per image, and only the function asked about keeps its verdict, so a whole
 `decompile-all`, `--functions`, `--jobs N`, a single `unlace decompile` and a
@@ -3652,7 +3653,7 @@ register, stay as `evidence` prints them.
 
 A pair proven either way is the function's output even where return recovery
 alone would leave its second register out
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (keep_proven_pair)`).
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (keep_proven_pair)`).
 Upstream's `onlyOpUse` takes a register whose value also reaches another of
 the RETURN's output registers for a temporary of that one, and on MIPS that
 is how clang builds a 64-bit value: `addu $3,$7,$5; sltu $2,$3,$7` computes a
@@ -3664,7 +3665,7 @@ model's pair when each is one trial and every live RETURN reads both as values
 the function wrote. A register that holds what a call left there (an indirect
 creation, which the output model never joins into a pair), or that some path
 brings to the RETURN still holding its entry value, keeps the old outcome
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (written_on_every_path)`);
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (written_on_every_path)`);
 `callwide`'s retained pair goes through the same test without that
 restriction. A function no proof covers keeps the `int`: its bytes are those
 of an `int` that leaves a scratch value in the second register, which `int`
@@ -3687,7 +3688,7 @@ test binaries, print byte-identically.
 
 A function that hands such a pair back from a call is judged on both sides
 of the pair, and the (kuna) `bejoinpass` option makes the two agree
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoinpass.rs`). Return
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoinpass.rs`). Return
 recovery joins a function's pair by that function's own verdict and the call's
 output by its callee's, so a pair passing from one to the other unchanged
 could be joined in both orders at once. `u64 w(..) { return add64(..); }` on
@@ -3706,14 +3707,14 @@ A side with a proof now fixes the order of both. When the calling function's
 RETURN is joined high word first and reads a call's two output registers
 untouched, through moves and phis, as its own high and low words, the call's
 pair joins in the ABI's order too
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoinpass.rs (call_order)`):
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoinpass.rs (call_order)`):
 the bits are the same, and the function returns the call's value as it came
 (`v1 = (*hook)(); ext(); return v1;`). When a function with no proof of its
 own hands back, at every live RETURN, the pair a call to a proven callee left
 there untouched (the call's two indirect creations, or the most and least
 significant words of the eight-byte output it was already given), the pair
 is the callee's value
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoinpass.rs (settle_return)`).
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoinpass.rs (settle_return)`).
 Its bytes are also those of `u32 hi(..) { return add64(..) >> 32; }`, which
 compiles to the identical instructions, and nothing in the function tells the
 two apart. `whole`, the default, reads the function as the callee's whole
@@ -3736,7 +3737,7 @@ function every path end of which hands back the pair a direct call to a
 proven callee left in place, or two literals, with at least one such call, as
 proven once those callees are and one of its direct callers reads its first
 register after the call, read the way the second register's readers are
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin/evidence.rs
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin/evidence.rs
 (hands_back_whole)`, `callers.rs (reads_first)`). The read is what tells it
 from `void f(..) { g(..); }`, which compiles to the same bytes and whose
 callers read nothing; such a function with no reader stays as `bejoinpass`
@@ -3880,7 +3881,7 @@ of those keeps the wrong register. So once the output map is derived, return
 recovery walks the second register back at every live RETURN, through copies,
 phis, indirects and the pieces heritage splits a register pair into (following
 the byte offset of the low word), to where its value was made
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (classify)`):
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (classify)`):
 
 * both registers the halves of one wider value (an 8-byte load, a product split
   by `mflo`/`mfhi`), which heritage did not merge from two: a wide value,
@@ -3932,7 +3933,7 @@ the byte offset of the low word), to where its value was made
   or difference are tied by its carry, and a `long long` whose high word is
   only a carry (`(u64)a + b`, the same code as the `int` carry test) reads as
   the comparison
-  (`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (computed_flag,
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (computed_flag,
   carry_free, carries_of, tests_carry, of_flags)`);
 * an `int` truncation of a stack temporary: both registers loaded from
   adjacent words of one stack object (the entry stack pointer plus literals,
@@ -3944,7 +3945,7 @@ the byte offset of the low word), to where its value was made
   3,12(31); lwz 4,16(31)`). Two words that are each the home a register's own
   argument was stored to and is reloaded from are two values, not one object:
   -O0 `((u64)a << 32) | b` reloads `a` and `b` from their homes, `b` below `a`
-  (`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs
   (loads_low_word_first)`). This and the comparison tests apply only where one
   register holds a whole `int`, so AVR's byte pairs never take them;
 * a division by a constant: the low word is the low half of a product at least
@@ -3958,7 +3959,7 @@ the byte offset of the low word), to where its value was made
   remainder or any other value built from such a quotient counts the same. A
   `long long` product returns its high half as it is or with more terms added
   (`(i64)a * 3` adds the high word's own product), never shifted down
-  (`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (divided_down)`).
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (divided_down)`).
   A divisor whose magic number needs no shift (`a / 641` and `a / 6700417` are
   a bare `umull r1,r0,r0,r1`) leaves exactly a product's registers and is not
   told apart; it is one of the shapes listed below that read as the `long long`;
@@ -3979,7 +3980,7 @@ the byte offset of the low word), to where its value was made
   local). A shift that leaves only the top bit or the sign (`x >> 31`) is a
   value of its own: a saturated `long long` fills its low word with it beside
   the high word it came from
-  (`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (shifts_into_first)`);
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (shifts_into_first)`);
 * an `int` worked out from the high half of a 64-bit temporary, its low half
   left in the second register. When the low word is a sum or difference
   (through moves; MIPS's `move` is `or $3,$5,$zero`) whose carry or borrow
@@ -4028,7 +4029,7 @@ the byte offset of the low word), to where its value was made
   (choices in different blocks, an expression evaluator's operator cases),
   each sum the choice can return is judged against the first register, and a
   sum whose own high word it is counts as a 64-bit value
-  (`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (reworked,
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (reworked,
   carried_into, works_over)`);
 * the high half of a product beside a first register that reads the product's
   low half, the reverse of a `long long`'s layout: clang -O0 on MIPS spills the
@@ -4037,7 +4038,7 @@ the byte offset of the low word), to where its value was made
   through a frame pointer set by `mr 31,1` or MIPS's `move $fp,$sp`, or
   SPARC's `%fp`, which a `save` that spills the window reaches through a
   chain of indirect effects and choices of the same address
-  (`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (product_high_half,
+  (`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (product_high_half,
   reads_low_half)`);
 * a literal zero, which clang -O0 leaves behind and `(u64)x << 32` returns alike:
   proof of nothing;
@@ -4047,7 +4048,7 @@ the byte offset of the low word), to where its value was made
 
 A RETURN reached only along branch edges literals decide the other way is
 skipped: SPARC's `call` pcode keeps one for a `restore` in its delay slot
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (never_reached)`).
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (never_reached)`).
 A function with an indirect jump flow could not follow (`Treating indirect jump
 as call`: a CALLIND and the artificial RETURN after it) has code return recovery
 does not see, and a user-defined operation given no register inputs (an inline
@@ -4057,7 +4058,7 @@ when such a reader can read it: when one of the values the walk back reaches is
 an input, a literal, or made in a block that dominates the reader. It then
 vetoes the join like scratch; a value made after the reader, on the path that
 returns it, still counts
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (hidden_readers,
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (hidden_readers,
 reaches_jump)`). With `syscallregs` off, PowerPC `pair`'s argument registers
 set up for `sc` come back as a pair joined first register low, as on main. gcc copies an argument into `$3` before a switch for the case
 that passes it on (`move v1,a1`), and when the jump table is left to
@@ -4152,7 +4153,7 @@ global: a value built there merged with the argument bytes it is made of, the
 PIECE became internal to one variable, and `negate` printed `return R25R24;`, a
 read of a register the printed C never assigns. With `bejoin` on, a pair whose parent
 register is global storage therefore still gets a join record over its two
-registers, which keeps it a value (`crates/unlace-bandb/src/p4_calls/kuna_rustabi.rs
+registers, which keeps it a value (`crates/unlace-bandb-core/src/p4_calls/kuna_rustabi.rs
 (pair_join_address)`); the call-output pair builds its whole the same way.
 Register-space parents (`r3:r4` is not a named register, `EDX:EAX` is not
 contiguous) are unaffected.
@@ -4305,7 +4306,7 @@ A call that may take stack arguments cannot find them until the caller's
 stack-pointer value *at that site* is known. `ActionFuncLink` appends a
 placeholder input (§4.2); once simplification collapses the placeholder's
 pointer to `spacebase + constant`, the rule-pool hook
-`crates/unlace-bandb/src/p3_dataflow/ruleaction_4.rs
+`crates/unlace-bandb-core/src/p3_dataflow/ruleaction_4.rs
 (RuleLoadVarnode)` fires `crates/unlace-middle/src/p4_calls/fspec.rs
 (FuncCallSpecs::resolve_spacebase_relative)`: the spec records the relative
 stack offset, and stack trials can from then on be translated between callee-
@@ -4407,7 +4408,7 @@ A prototype whose storage puts a parameter or the return value in one of its
 model's floating-point entries is forced only where the image states a
 convention that keeps such values, doubles included, in floating-point
 registers
-(`crates/unlace-bandb/src/p4_calls/kuna_typedcallabi.rs`). A
+(`crates/unlace-bandb-core/src/p4_calls/kuna_typedcallabi.rs`). A
 declarator that names no convention gets the default model, which passes
 floating-point values in floating-point registers where it can. A soft-float
 image passes them in integer registers, and a single-float one passes doubles
@@ -4473,7 +4474,7 @@ image without floating-point hardware that states the base (soft-float)
 convention, every function passes floating-point values in core registers, so
 such a declaration is laid out under the soft-float model whenever its default
 layout would put a parameter or the return value in a VFP register
-(`crates/unlace-bandb/src/p4_calls/kuna_typedcallabi.rs
+(`crates/unlace-bandb-core/src/p4_calls/kuna_typedcallabi.rs
 (undeclared_model)`). Laid out under the default model, a `double` parameter
 would be read from a VFP register the caller never set, and the core registers
 that carry it would print as unassigned locals or as stray arguments. The same
@@ -4521,7 +4522,7 @@ tail and returns a floating-point value or an aggregate is laid out under the
 default model with three output rules in front of its own: a `float` from the
 core registers, a structure over four bytes through a hidden pointer, and a
 homogeneous floating-point aggregate from the core registers
-(`crates/unlace-bandb/src/p4_calls/kuna_vfpvariadic.rs (model)`). The
+(`crates/unlace-bandb-core/src/p4_calls/kuna_vfpvariadic.rs (model)`). The
 derived model is chosen at the same four places as the soft-float one, so the
 function's own decompile, its callers and the console's code type agree. A
 non-variadic declaration, and a variadic one returning an integer or nothing,
@@ -4717,7 +4718,7 @@ recovered parameter is `unsigned int` or `unsigned long` however few of its
 bits the body can observe. `ActionDeadCode` already computes exactly that: the
 consume mask of every input Varnode is the set of bits any use reads.
 
-`narrowargs` (`crates/unlace-bandb/src/p4_calls/kuna_narrowargs.rs`)
+`narrowargs` (`crates/unlace-bandb-core/src/p4_calls/kuna_narrowargs.rs`)
 reads that mask. When it fits the low 1, 2 or 4 bytes of the register and
 reaches the top bit of that part, the input is replaced by the part, and an
 `INT_ZEXT` at the top of the entry block writes the register-wide value every
@@ -4776,7 +4777,7 @@ above never fires. On ARM firmware these are the parameters decbench's
 type_match finds typed `unsigned int` or `int` most often. The evidence is at
 the call sites, so `narrowargs callers` (the option's default) gathers it in a
 whole-binary `decompile-all` of a 32-bit ARM image
-(`crates/unlace-bandb/src/p4_calls/kuna_callerargs.rs`).
+(`crates/unlace-bandb-core/src/p4_calls/kuna_callerargs.rs`).
 
 After every decompile of the callee-first pass, `record` notes what each direct
 CALL passes in each argument register: whether the value fits a byte or a
@@ -5038,7 +5039,7 @@ caller's argument recovery sees the callee's `swiftself`.
 
 What the binding cannot do is type the parameter, since a declared parameter
 fixes the arity. An input hint names and types one input storage without
-locking anything (`crates/unlace-bandb/src/p4_calls/kuna_inputhints.rs`,
+locking anything (`crates/unlace-bandb-core/src/p4_calls/kuna_inputhints.rs`,
 `Architecture::loader_input_hints`, seeded onto the `Funcdata` with the model):
 when recovery finds the body reading the hinted register at the hinted size,
 type inference gives that input the hinted type, as it gives `elfmain`'s
@@ -5273,7 +5274,7 @@ does not read it — a value witness's `destroy`, called with the value and
 its metadata in the argument registers — and that value is no `self` there.
 
 **The Swift convention of unbound functions**
-(`crates/unlace-bandb/src/p4_calls/kuna_swiftinfer.rs`, part of
+(`crates/unlace-bandb-core/src/p4_calls/kuna_swiftinfer.rs`, part of
 `swiftcall`). The metadata arm binds the Swift models only to functions Swift metadata places
 in a type. A closure, a partial-apply forwarder, a thunk, a free function or a
 stripped method keeps the C model, under which `swiftself` and `swifterror`
@@ -5664,7 +5665,7 @@ the check is upstream's.
 
 The same passive-pair symptom, decided on evidence instead of by fiat, and
 therefore default and unflagged
-(`crates/unlace-bandb/src/p4_calls/kuna_returnuncomputed.rs`). Two
+(`crates/unlace-bandb-core/src/p4_calls/kuna_returnuncomputed.rs`). Two
 shapes reach a RETURN carrying a register the function never meant to return: a
 **callee-saved restore**, where the epilogue reloads a register from a frame slot
 the function only ever read, and a **clobber at a synthesized return**, where the
@@ -5709,7 +5710,7 @@ half is uncomputed — the synthesized-return case — the low, first-in-class
 register is kept so the function's output storage still agrees across every
 RETURN. A pair joined first register high is left alone: return recovery joins
 one that way only when its low word is part of the value, and a declared
-return is placed that way by the model (see the join order above; `crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs
+return is placed that way by the model (see the join order above; `crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs
 (first_register_holds_high)`).
 
 When only the high half carries a value and it is the second register of an
@@ -5743,7 +5744,7 @@ every `bejoin` mode), the repair reads `ZEXT(hi) << 8k` as the pair of `hi` and
 a `k`-byte zero and decides it as it decides any other: when the high half is
 uncomputed by the placement test above and was not moved back, the RETURN
 returns a `k`-byte zero, the low register's width
-(`crates/unlace-bandb/src/p4_calls/kuna_returnuncomputed.rs
+(`crates/unlace-bandb-core/src/p4_calls/kuna_returnuncomputed.rs
 (zero_low_pair)`). On such a pair the folded value is never a 64-bit value the
 function returns: a `long long` there holds its high word in the first
 register, which is the zero, so the folded form prints its words swapped, and
@@ -5956,7 +5957,7 @@ neither register of the callee's stated result.
 A register that is not the first of its class is never a return value of its own,
 so a function that computes one and hands it only to the RETURN returns the pair
 it belongs to. `kuna_retcallhalf::accept`
-(`crates/unlace-bandb/src/p4_calls/kuna_retcallhalf.rs`) runs once
+(`crates/unlace-bandb-core/src/p4_calls/kuna_retcallhalf.rs`) runs once
 `ActionReturnRecovery` has scored every trial for the last time, before the output
 map is derived, and makes an inactive trial active when all of these hold:
 
@@ -6369,7 +6370,7 @@ value is rare and a Rust `Result` is nothing else.
   — the phantom `int4 v3; // edx` that a `Result` guard tests.
 
 `option rustabi off|auto|always`
-(`crates/unlace-bandb/src/p4_calls/kuna_rustabi.rs`) acts at both
+(`crates/unlace-bandb-core/src/p4_calls/kuna_rustabi.rs`) acts at both
 seams. It does **not** answer them with one classification, because they are not
 looking at the same thing, and a shared verdict would be a claim about evidence
 that only one of them has.
@@ -6681,7 +6682,7 @@ function that returns `None` for both languages kuna emits.
 
 Every prototype a caller can read about its callee is a **declared** one.
 `TypeOpCall::getInputLocal`
-(`crates/unlace-bandb/src/p5_types/coreaction_infertypes.rs`) already
+(`crates/unlace-bandb-core/src/p5_types/coreaction_infertypes.rs`) already
 types a call argument from the callee's parameter, and `ActionDefaultParams`
 already gives a call site its callee's whole signature — but both read the
 `PrototypePieces` parked on the callee's `FunctionSymbol`, and the writers of
@@ -6701,7 +6702,7 @@ orders that loop by the program's call graph — the `unlace_analysis::listing::
 edges `unlace xrefs` answers with, not a second graph — so each callee is
 decompiled before its callers, and after each function completes what its own
 recovery found is recorded for the callers still ahead of it
-(`crates/unlace-bandb/src/p4_calls/kuna_protoorder.rs`). Results are
+(`crates/unlace-bandb-core/src/p4_calls/kuna_protoorder.rs`). Results are
 buffered and emitted in address order, so the ORDER of the run changes and the
 order of the output does not.
 
@@ -6726,7 +6727,7 @@ second decompile would read that function's own first answer back.
 
 Before it decompiles anything again, the sweep forgets every stated type list
 that names a superseded structure, at any pointer depth
-(`crates/unlace-bandb/src/p4_calls/kuna_protoorder.rs
+(`crates/unlace-bandb-core/src/p4_calls/kuna_protoorder.rs
 (forget_statements_naming)`). A redone callee states again before its redone
 callers read it, so a callee planned first loses nothing, and a statement that is
 still stale when a redo reaches the call is not read at all. Under `types` a
@@ -6745,7 +6746,7 @@ The types a function's callers stated for it (`calleevote`, below) are forgotten
 input by input rather than as a whole: an input whose stated type names a
 superseded structure loses its statement, and the function's other inputs keep
 what their callers passed
-(`crates/unlace-bandb/src/p4_calls/kuna_calleevote.rs (forget_naming)`).
+(`crates/unlace-bandb-core/src/p4_calls/kuna_calleevote.rs (forget_naming)`).
 Forgetting the whole list made tar's `exclude_add_pattern_buffer (struct exclude
 *, char *)`, redone for its record, print the buffer its callers pass as `char *`
 as `unsigned long`. On the 45 castbench binaries at the defaults no function is
@@ -7324,7 +7325,7 @@ instructions; with no instruction bound it costs 5.0% and changes one line more.
 ### (kuna) `passthrough` — the register a function forwards to a callee that reads it
 
 (kuna) `passthrough` (default on,
-`crates/unlace-bandb/src/p4_calls/kuna_passthrough.rs`) reads the
+`crates/unlace-bandb-core/src/p4_calls/kuna_passthrough.rs`) reads the
 statement `protoorder` makes in the one direction `types` never takes: it lets a
 callee's recovered parameter list add an argument at a call site, and so a
 parameter to the function making the call.
@@ -7502,7 +7503,7 @@ what a forwarder hands on: grep -O2 `bmexec` printed `bmexec_trans()` for
 `bmexec_trans(a0,a1,a2)`, and bash `xtrace_set` printed `sh_validfd()`, whose
 only read of `fd` is the `fcntl` call the walk stops at -- about 2,900 functions
 over the decbench corpus drop a forwarded argument their callee's DWARF
-prototype takes. `crates/unlace-bandb/src/p4_calls/kuna_entryreads.rs`
+prototype takes. `crates/unlace-bandb-core/src/p4_calls/kuna_entryreads.rs`
 records, once per decompile right after the first heritage, which incoming
 registers the body takes, from their input Varnodes' readers. A register is
 *read* when some op computes with it for a result that reaches something,
@@ -8096,7 +8097,7 @@ definition kuna under-recovers.
 ### (kuna) `mixedtailret` — a value returned beside a tail call
 
 (kuna) `mixedtailret` (default **off**,
-`crates/unlace-bandb/src/p4_calls/kuna_mixedtailret.rs`) extends
+`crates/unlace-bandb-core/src/p4_calls/kuna_mixedtailret.rs`) extends
 `passthrough`'s tail claim to a function that returns a value of its own on one
 path and tail-calls on another:
 
@@ -8797,7 +8798,7 @@ carried anything the other way, so a function that only forwards, compares or
 stores a pointer kept `void *` or `long` while every one of its callers held a
 named record or a `char *` for the same value. `calleevote` (values
 `off|types|fields`, default `fields`;
-`crates/unlace-bandb/src/p4_calls/kuna_calleevote.rs`) closes that
+`crates/unlace-bandb-core/src/p4_calls/kuna_calleevote.rs`) closes that
 direction on the one surface that decompiles every caller: the callee-first
 whole-binary run `protoorder` drives (`decompile-all`, `decompile-project`). The
 driver is `callee_vote_rounds` in `crates/unlace-cli/src/decompile_all/callee_first.rs`.
@@ -8921,7 +8922,7 @@ string literal kuna recovered, or adds the negation of one (`p - (long)table`,
 which would print `&a0[-0x2030]`); the walk visits at most a budget of derived
 values and refuses the vote when it runs out, so a comparison a dozen adds and
 merges away is still seen
-(`crates/unlace-bandb/src/p4_calls/kuna_calleevote.rs
+(`crates/unlace-bandb-core/src/p4_calls/kuna_calleevote.rs
 (prints_a_table_as_a_literal)`, which reads `kuna_charptr::constant_is_string`).
 The constant would take the `char *`, and the printer renders the readonly
 bytes there up to the first zero as a string literal: a 16-byte table with a
@@ -9046,10 +9047,10 @@ decbench sweep, 439 are passed a pointer by every direct caller in the printed
 C of the same binary.
 
 When `callerptr` is on (the default), `decide`
-(`crates/unlace-bandb/src/p4_calls/kuna_calleevote.rs
+(`crates/unlace-bandb-core/src/p4_calls/kuna_calleevote.rs
 (decide_ledger_with)`) asks one more question of a parameter the existing rule
 left alone: is it a pointer whatever it points at? The answer comes from
-`crates/unlace-bandb/src/p4_calls/kuna_callerptr.rs (pointer_vote)`.
+`crates/unlace-bandb-core/src/p4_calls/kuna_callerptr.rs (pointer_vote)`.
 The parameter must be one the callee's own recovery typed as a pointer-width
 integer or unknown -- a `void *` already says what this rule would. Every
 recorded call must pass, in exactly the storage the callee recovered the
@@ -9065,7 +9066,7 @@ reuses for a size and then a pointer is one variable, typed as the pointer at
 every use, and coreutils `cp` hands `sparse_copy` its buffer size from such a
 variable. So `record` asks of every pointer-typed argument whether the caller
 holds it as an address for a reason of its own
-(`crates/unlace-bandb/src/p4_calls/kuna_callerptr.rs
+(`crates/unlace-bandb-core/src/p4_calls/kuna_callerptr.rs
 (provably_a_pointer)`), over the value itself -- the argument and every varnode
 a `COPY`, `CAST` or `INDIRECT` joins to it (`same_value`), never a `MULTIEQUAL`:
 a merge's output holds other values on other paths, and openssh -O2
@@ -9167,7 +9168,7 @@ to a function the same listing declares `char * sub_43ee(unsigned long *a0)`
 produced an unknown of its width. Every caller that kept the result as a
 `char *` then printed `v7 = (char *)sub_43ee(a0);`, a conversion from a type
 the call does not have. `callrettype` (values `on|off`;
-`crates/unlace-bandb/src/p4_calls/kuna_callrettype.rs`) carries the
+`crates/unlace-bandb-core/src/p4_calls/kuna_callrettype.rs`) carries the
 return on the same callee-first surface (`decompile-all`, `decompile-project`).
 
 **Recording.** After each function's final decompile in the callee-first order
@@ -9695,7 +9696,7 @@ The ARM default model (`ARM.cspec`) lists the VFP registers only as the 4-byte
 `vmov.f64 d0,#1.5; bx lr` prints `unsigned int fixed(void) { return 0; }`, and a
 `double` parameter read from `d0` is never a parameter at all.
 
-`armfloatreturn` (on by default; `crates/unlace-bandb/src/p4_calls/kuna_armfloatreturn.rs`)
+`armfloatreturn` (on by default; `crates/unlace-bandb-core/src/p4_calls/kuna_armfloatreturn.rs`)
 changes this only for an ARM ELF whose container states the VFP procedure-call
 standard. Both options are also members of the `aggressive` preset, so the preset
 owns them; every image without that ABI evidence, the datatest corpus included,
@@ -9901,7 +9902,7 @@ Neither is C. Over the 45-binary cast corpus main printed 2,126 such uses.
 
 This is a correction, not an option, and it lives on the callee-first surface
 (`decompile-all`, `decompile-project`). After each function's final decompile,
-`crates/unlace-bandb/src/p4_calls/kuna_voidret.rs (record)` files what
+`crates/unlace-bandb-core/src/p4_calls/kuna_voidret.rs (record)` files what
 the function returns (`void`, a float, or another value; nothing for a declared
 prototype) and, for every call it makes, the storage it reads of the call's
 result: the bytes the result's uses consume, at the register's least significant

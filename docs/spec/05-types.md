@@ -3,6 +3,7 @@
 ```yaml
 Anchors:
   - crates/unlace-bandb-base/src/p5_types
+  - crates/unlace-bandb-core/src/p5_types
   - crates/unlace-bandb/src/p5_types
   - crates/unlace-middle/src/p5_types
   - crates/unlace-middle/src/substrate/dtype.rs
@@ -322,7 +323,7 @@ type-recovery flag and reports a change, forcing at least one more `fullloop`
 pass with inference live.
 
 **One pass of the engine.**
-`crates/unlace-bandb/src/p5_types/coreaction_infertypes.rs
+`crates/unlace-bandb-core/src/p5_types/coreaction_infertypes.rs
 (run_infer_types)` executes the bounded bidirectional lattice in four steps:
 
 1. **Seed** (`build_localtypes`): every live Varnode gets a *temporary* type
@@ -358,7 +359,7 @@ pass with inference live.
    every other slot of it. At a `MULTIEQUAL` or `INDIRECT`, whose transfer
    function refuses every input-to-input edge, the walk skips the remaining
    input slots of that op at once
-   (`crates/unlace-bandb/src/p5_types/coreaction_infertypes.rs
+   (`crates/unlace-bandb-core/src/p5_types/coreaction_infertypes.rs
    (joins_only_output)`). It skips only while the entering input's type needs
    no resolution: resolving a union records the field choice, so those edges are
    still taken one by one. A skipped edge would change nothing and push
@@ -389,7 +390,7 @@ propagating through an opcode with no sound transfer is how type garbage
 spreads. A `TYPE_BOOL` additionally refuses to land on any Varnode whose
 non-zero mask (§5.3) admits values above 1. When the incoming type is a union
 (or pointer-to-union), the edge first resolves a concrete facet via
-`crates/unlace-bandb/src/p5_types/funcdata_resolveflow.rs
+`crates/unlace-bandb-core/src/p5_types/funcdata_resolveflow.rs
 (Funcdata::resolve_in_flow)` (§5.4) — except across MULTIEQUAL/INDIRECT
 markers, where the unresolved union flows on so one phi input cannot lock the
 facet for all of them.
@@ -413,7 +414,7 @@ element-size representation without truncation. An access whose address cannot
 be peeled within the walk's depth bound also refuses promotion, even if another
 access through the same base was proven.
 
-With stackviews enabled, `crates/unlace-bandb/src/p5_types/kuna_stackwordtypes.rs`
+With stackviews enabled, `crates/unlace-bandb-core/src/p5_types/kuna_stackwordtypes.rs`
 separates a generated frame backing from the value stored through another
 pointer. A one-, two-, four-, or eight-byte STORE value uses its resolved scalar
 piece, falling back to unsigned bits when the selected view is a byte array or
@@ -428,7 +429,7 @@ finds the stack-pointer input and pushes recovered pointer types (e.g. a
 stack-frame Varnodes (`propagate_ref`), which is what turns "pointer typed as
 `mystruct *`" into "stack local declared `mystruct`". The pass opens by
 committing any pending stack-symbol type recommendations
-(`crates/unlace-bandb/src/p6_variables/funcdata_spacebase.rs
+(`crates/unlace-bandb-core/src/p6_variables/funcdata_spacebase.rs
 (apply_type_recommendations)`), then type-locks a replayed `type` directive whose
 type inference has to read (a pointer to a structure, union, array or function,
 or a relative pointer) on every Varnode an operation of the retyped variable
@@ -520,7 +521,7 @@ parameter is already named `FILE *` from the callee tables, which is why that
 pair witnesses the *engine* behaviour rather than the shipped default.)
 
 When `ptrfromuse` is `byte` or `void` (shipped `void`),
-`crates/unlace-bandb/src/p5_types/kuna_ptrfromuse.rs
+`crates/unlace-bandb-core/src/p5_types/kuna_ptrfromuse.rs
 (pointer_from_use)` supplies the missing candidate directly. For each function
 *input* Varnode whose width equals the default data space's address size — eight
 bytes on the 64-bit images the option is named for, four on a 32-bit image, and
@@ -616,12 +617,12 @@ member rendered as an element of an obstack array: offset 0x980 of the 88-byte
 struct printed `&v1[0x1b].field_0x38`. An rsyslog instance record that begins
 with its mutex printed `a0[9].field_0xc`.
 
-`crates/unlace-bandb/src/p5_types/kuna_libcfit.rs (overruns)` asks what
+`crates/unlace-bandb-core/src/p5_types/kuna_libcfit.rs (overruns)` asks what
 the caller does through the argument before the vote is taken. It walks every
 load, store and derived address reached from the argument Varnode through its
 descendants, with the walker `protoorder` holds its own recovered votes to
 (`accesses_through` in
-`crates/unlace-bandb/src/p4_calls/kuna_protoorder.rs`), and declines
+`crates/unlace-bandb-core/src/p4_calls/kuna_protoorder.rs`), and declines
 when any of them lies outside the aggregate: an access at a constant offset past
 its end or before its start, a derived address at or past the end (rsyslog hands
 `&v1[1]`, one mutex past the one it initialised, to `pthread_cond_init`), or a
@@ -714,7 +715,7 @@ to `strlen` and which kuna prints `void * sub_e680(uint1 *a0)`, the element type
 coming from the byte-wide read its `isspace` test does.
 
 When `charptr` is on (shipped `off`),
-`crates/unlace-bandb/src/p5_types/kuna_charptr.rs
+`crates/unlace-bandb-core/src/p5_types/kuna_charptr.rs
 (char_pointer_from_evidence)` collects that evidence with the same walk
 `ptrfromuse` uses — the bounded breadth-first worklist over the transitive
 descendants, a visited set, a ten-hop cap, `COPY`/`MULTIEQUAL`/`INDIRECT`/`CAST`
@@ -847,7 +848,7 @@ behind two casts: `*(char *)((unsigned long)*(unsigned char *)((long)v1 +
 0x4020) + (long)dat_4070) = (char)v1;`.
 
 When `elemptr` is on (the default),
-`crates/unlace-bandb/src/p5_types/kuna_elemptr.rs (element_pointer)` adds a
+`crates/unlace-bandb-core/src/p5_types/kuna_elemptr.rs (element_pointer)` adds a
 `T *` vote to the `getLocalType` fold for four kinds of
 value: a function input the prototype model could place a parameter in; the
 value a `CALL` returns when the callee left the pointee open (a `void *` or an
@@ -1156,7 +1157,7 @@ non-zero mask admits values above 1) stops it at the first edge into an
 unconstrained input.
 
 When `boolbyte` is `on` (the default),
-`crates/unlace-bandb/src/p5_types/kuna_boolbyte.rs
+`crates/unlace-bandb-core/src/p5_types/kuna_boolbyte.rs
 (truth_value_type)` supplies the missing candidate. It applies to a one-byte
 Varnode that is not a constant, not type-locked, not covered by a type-locked
 symbol, and not in the unique space - a temporary there is an expression the
@@ -1302,7 +1303,7 @@ strchr("([\'`\"",(int)(char)*v1);``, and every gnulib `mbrtowc` wrapper takes
 `unsigned char *a1` only to pass `(char *)a1` on.
 
 When `charbyte` is `on` (shipped `on`),
-`crates/unlace-bandb/src/p5_types/kuna_charbyte.rs (note_edge)` watches
+`crates/unlace-bandb-core/src/p5_types/kuna_charbyte.rs (note_edge)` watches
 the `LOAD` edges while `run_infer_types` propagates and records the byte of
 each one where the pointer carries `char *` and the byte holds `uint1` only
 because of the zero-extension: an `INT_ZEXT` reads it and no other reader's
@@ -1310,7 +1311,7 @@ because of the zero-extension: an `INT_ZEXT` reads it and no other reader's
 shift, an unsigned division or an `unsigned char` call argument is the program
 using the byte as a number, and such a byte is never recorded. If anything was
 recorded, the pass starts over: the local types are rebuilt,
-`crates/unlace-bandb/src/p5_types/kuna_charbyte.rs (seed_char)` seeds
+`crates/unlace-bandb-core/src/p5_types/kuna_charbyte.rs (seed_char)` seeds
 each recorded byte `char` - the fold it would have had without the
 zero-extension's vote, unless the byte is type-locked or its storage is covered
 by a type-locked symbol, whose type stands - and propagation runs again from the
@@ -1324,7 +1325,7 @@ still wins it, and the pointer keeps `char *` because the byte now pushes
 `char *`. A fresh propagation can also tip a contest the rule has no stake in -
 on bash -O2 `param_expand` a string pointer joined with an `int *` parameter
 came out `int *` once the byte stopped voting `unsigned char *` - so
-`crates/unlace-bandb/src/p5_types/kuna_charbyte.rs (keep_or_restore)`
+`crates/unlace-bandb-core/src/p5_types/kuna_charbyte.rs (keep_or_restore)`
 compares the two propagations Varnode by Varnode and keeps the second only if
 every type is unchanged or is the same type with `uint1` read as `char`, through
 any depth of pointers and arrays; otherwise the first propagation's types are
@@ -1336,7 +1337,7 @@ Two kinds of byte are never retyped, whether recorded or only reached through
 a pointer the recorded bytes retyped. The first is a byte that reaches a
 `CALL`, `CALLIND` or `CALLOTHER` argument, a `RETURN`, or the `BRANCHIND` of a
 switch, directly or through copies, joins and one-byte arithmetic
-(`crates/unlace-bandb/src/p5_types/kuna_charbyte.rs (read_without_cast)`).
+(`crates/unlace-bandb-core/src/p5_types/kuna_charbyte.rs (read_without_cast)`).
 kuna shrinks a call argument to the byte when the `movzx` that widened it folds
 away, and C passes a `char` argument through the default promotions with no cast
 to show it, so `logit("%d",c)` would pass -128 for the byte 0x80 where the
@@ -1345,7 +1346,7 @@ binary passes 128; likewise the switch header prints the byte itself, and a
 both arms; only the declaration moves, which is why the check is on the reader
 and not on the text.
 The second is a counter
-(`crates/unlace-bandb/src/p5_types/kuna_charbyte.rs (is_counter)`): a
+(`crates/unlace-bandb-core/src/p5_types/kuna_charbyte.rs (is_counter)`): a
 loaded byte whose own one-byte sum or difference is stored back through the
 address it was loaded from (`*p = c + 1`), directly or through copies and joins.
 The only `char *` such a byte meets is the default signed vote of that sum, and
@@ -1826,7 +1827,7 @@ gives a dereferenced parameter a pointee it can prove and stops there:
 [`structsynth`](../options.md) (`off|param|locals|nest|all`, default `locals`) invents the missing
 layout from the accesses themselves.
 
-`crates/unlace-bandb/src/p5_types/kuna_structsynth.rs
+`crates/unlace-bandb-core/src/p5_types/kuna_structsynth.rs
 (ActionStructSynth)` runs inside `mainloop` immediately after `ActionInferTypes`
 in the `typerecovery` group, so the pointer-arithmetic pools below rewrite the
 accesses on the same iteration. It fires **once** per function, and only once
@@ -2157,7 +2158,7 @@ the synthesized `internal/abi.Type` base shell — never a value type anything i
 declared as — so it is provably never a real parameter type: when
 `FuncProto::updateInputTypes` reads a recovered parameter type that is a pointer
 to `go.typedesc`
-(`crates/unlace-bandb/src/p4_calls/kuna_calleevote.rs
+(`crates/unlace-bandb-core/src/p4_calls/kuna_calleevote.rs
 (is_go_typedesc_pointer)`), it demotes it to the honest untyped word of the same
 width, and the callee-vote plane refuses to monomorphize a parameter to it in
 the first place. The body keeps its local descriptor typing where it genuinely
@@ -2268,7 +2269,7 @@ arena slot it reused, so an unrelated change to when the function frees
 Varnodes would otherwise swap two structures' numbers.
 
 Names are program-wide `struct_N`, minted and handed out by the **layout
-ledger** (`crates/unlace-bandb/src/p5_types/kuna_structsynth/ledger.rs`),
+ledger** (`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/ledger.rs`),
 which is the set of `struct_N` the program's `TypeFactory` already holds: the
 ledger probes `find_by_name` from `struct_0` up to the first free name, reads
 each one's layout back, and declines any whose members are not all named
@@ -2471,7 +2472,7 @@ the 9,443 fields; every function taking a pointer to the same record dereference
 number. When nothing held answers a freshly measured layout, the lookup looks for
 a held structure the layout was measured to AGREE with and mints the UNION of the
 two in place of the layout alone
-(`crates/unlace-bandb/src/p5_types/kuna_structmerge.rs (merge)`, called
+(`crates/unlace-bandb-core/src/p5_types/kuna_structmerge.rs (merge)`, called
 from `ledger.rs (lookup_or_mint)`). The union strictly contains the held
 structure, so that structure is superseded the moment the union exists and the
 convergence sweep above moves its readers onto it.
@@ -2580,7 +2581,7 @@ numbers from `struct_0` again, and so would each worker process of a `--jobs N`
 run if it were left to itself. It is not. The decision a lookup takes reads only
 data -- the measured layout, its members, the bytes it accessed without claiming,
 and the layouts, members and sizes of the structures held -- so
-`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs (Replay)`
+`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs (Replay)`
 can take it without a factory: it scans the `struct_<n>` slots as the ledger
 does, skipping a name another type holds, calls the same `best_of` and
 `keeps_unclaimed`, and mints at the first free slot. A `--jobs` worker records
@@ -2591,17 +2592,17 @@ answer its own ledger gave, with the lookup that minted that structure in the
 worker. The parent replays the records in target order. A structure is its
 members, so when a function's own answers and the serial ones name structures
 built from the same members, lookup for lookup and one name for one name
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
 (renaming)`), the function's text is the serial text with other numbers and
 is renamed. A structure minted from its own function's lookup is the common
 case: the serial run minted the same members under another number. Every other
 function is decompiled again by a worker that has destroyed the structures it
 minted itself and every type built on one, installed the replayed structures in
 mint order
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
 (install_table)`) and answers each lookup with its replayed name. A named field
 type gets a recipe only if the worker's load created it
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/shard.rs (AtLoad)`): a pass
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs (AtLoad)`): a pass
 that interns a type the first time a function needs it, as `pebnames` does
 `PEB` and `TEB`, leaves it in some workers and not in others, so a structure
 with such a field is named by one ordered worker instead. The unnamed unknown
@@ -2630,7 +2631,7 @@ and field recipes without copying them.
 
 The `.h` of a project export lists the minted structures after every other
 type, in ascending `N`
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/ledger.rs
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/ledger.rs
 (in_name_order)`). The factory's tree orders two structures of one size field by
 field and then by the ADDRESS of a field's type, and minted structures always
 agree that far on their first field, `field_0x0`; rendered in tree order, the
@@ -2655,7 +2656,7 @@ function's own text.
 the scalar its loads carried, so every read through it is raw offset arithmetic
 again: `fmt`-style code that loads `o->in` and reads it three times prints
 `v1 = a0->field_0x0; ... (long)*(int *)((long)v1 + 0xc)`. The value `nest` of
-`structsynth` (`crates/unlace-bandb/src/p5_types/kuna_structsynth/nest.rs
+`structsynth` (`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/nest.rs
 (nest_fields)`) also measures the records the pointer fields of an accepted
 record point at. Every `LOAD` of one pointer-sized field is a value of that
 field's type, so the dereferences made through all of them are one base's
@@ -2691,7 +2692,7 @@ calls) gets a record of its own with the same offsets: correct, but a second nam
 A structure that points at itself cannot be completed first, because its own
 field names it, and completing a structure mints a fresh `Rc`. The ledger
 therefore mints it around its incomplete shell
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth/ledger.rs (mint)`):
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/ledger.rs (mint)`):
 `get_type_struct`, a pointer to the shell, then the members. That is the model
 a DWARF `struct node { struct node *next; }` already lives with (chapter 01), and
 it costs the same thing there: a value loaded through the self pointer has a type
@@ -2700,7 +2701,7 @@ with no members, and every read through it printed as
 Where a `LOAD` or `STORE` value type is a pointer to such a shell, and the
 completed structure of that name is a synthesized one that itself points at that
 exact shell,
-`crates/unlace-bandb/src/p5_types/kuna_structsynth.rs (resolve_self_pointer)`
+`crates/unlace-bandb-core/src/p5_types/kuna_structsynth.rs (resolve_self_pointer)`
 gives the pointer to the completed structure instead. It is called from the
 propagation edge (`coreaction_infertypes.rs (propagate_load_store)`) and from the
 load and store cast tokens of chapter 09. A DWARF forward declaration, or any
@@ -2730,7 +2731,7 @@ gave it: an allocation it fills in prints as `v1 = (unsigned long *)xmalloc(0x18
 *(char *)((long)v1 + 0x14) = 0x6e;`, and a pointer a lookup returns as
 `(long)(int)v1[2] + v1[1] + *v1`. The value `locals` of `structsynth` makes the
 value a `CALL` or `CALLIND` returns a base too
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth.rs (is_call_return)`).
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth.rs (is_call_return)`).
 Single assignment makes that value the local's only definition, and it is held
 to every condition a parameter is: already a pointer, not type-locked, no phi,
 index or integer use, two offsets including 0, not an array run, settled
@@ -2859,7 +2860,7 @@ in both arms, and an A/A control, a second `param` arm interleaved in the same
 run, reads 6.7% slower than the first with `locals` between the two, so its
 delta is the machine's noise rather than work this value does.
 A sharded run keeps pace because a function asks for its widest layout first
-(`crates/unlace-bandb/src/p5_types/kuna_structsynth.rs (synthesize)`).
+(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth.rs (synthesize)`).
 A returned record and a parameter of one function are often two layouts of one
 object, and when a later lookup's layout contains an earlier one, the function's
 own ledger supersedes its earlier answer, which a `--jobs` replay cannot
@@ -3044,7 +3045,7 @@ bits' integer value. On a Cortex-M4F the `nanf` crazyflie's libm calls loads
 which is 2143289344.0 where the machine returns a NaN.
 
 This is a correction, not an option.
-`crates/unlace-bandb/src/p5_types/kuna_floatreg.rs (float_register_vote)`
+`crates/unlace-bandb-core/src/p5_types/kuna_floatreg.rs (float_register_vote)`
 supplies the candidate in `build_localtypes`, after every other vote, for a 4-,
 8- or 10-byte Varnode that is not type-locked, whose fold says no more than an
 integer or raw bytes, and that a RETURN reads from a float-class entry of the
@@ -3074,7 +3075,7 @@ the integer by value where the machine hands its bits to `xmm0`, and a Cortex-M4
 So the candidate is refused when the value's family (every Varnode joined to it
 by copies, casts, phi-nodes and INDIRECTs) holds one of the function's inputs.
 It is refused where `protoorder` refuses a callee's float vote (chapter 04;
-`crates/unlace-bandb/src/p4_calls/kuna_protoorder.rs (input_refuses)`):
+`crates/unlace-bandb-core/src/p4_calls/kuna_protoorder.rs (input_refuses)`):
 an integer op computes with the family, it is stored, pieced together or taken
 apart, handed on anywhere a float would print as a conversion, or read from or
 written to a global. A global has one declaration for every function, and
@@ -3154,7 +3155,7 @@ where the machine reads `xmm0` (`d0` on AArch64, `fa0` on RISC-V), and a
 a float: `*q = b + 1.0` printed `double`.
 
 This is a correction, not an option.
-`crates/unlace-bandb/src/p5_types/kuna_floatreg.rs (float_input_vote)`
+`crates/unlace-bandb-core/src/p5_types/kuna_floatreg.rs (float_input_vote)`
 supplies the candidate in `build_localtypes`, beside the return vote, for a 4-
 or 8-byte input Varnode that is not type-locked, of a function whose inputs are
 not locked, whose fold is raw bytes (an integer fold is evidence and stands),
@@ -3249,7 +3250,7 @@ others use it. Option `floatglobals` (default on) asks the whole program. A
 vote asks only once everything else it checks has held, so the question is put
 only where its answer decides the vote: a global -- a data-space Varnode, or a
 load or store through a constant address -- is then the one objection left.
-`crates/unlace-bandb/src/p5_types/kuna_floatglobals.rs (float_only)`
+`crates/unlace-bandb-core/src/p5_types/kuna_floatglobals.rs (float_only)`
 takes the float only where the function's own code agrees, which the whole-program scan below can miss
 but the decompiler cannot (`kuna_floatreg.rs (moved_as_a_float_here)`): every
 Varnode of the global's storage must be the whole global, every value written
@@ -3522,9 +3523,9 @@ zero-extension says the value is unsigned, or never has its sign bit set: the
 compiler spec's `inttype` on the output register (ARM, PowerPC, SPARC), or the
 rule `narrowext` states (chapter 04: RISC-V and LoongArch below 32 bits, and
 MIPS and Apple arm64 under `narrowext compiler`). The RETURN pull records that
-on each RETURN it trims (`crates/unlace-bandb/src/p5_types/kuna_zextreturn.rs
+on each RETURN it trims (`crates/unlace-bandb-core/src/p5_types/kuna_zextreturn.rs
 (unsigned_trim)`), and
-`crates/unlace-bandb/src/p5_types/kuna_zextreturn.rs (unsigned_return_vote)`
+`crates/unlace-bandb-core/src/p5_types/kuna_zextreturn.rs (unsigned_return_vote)`
 supplies the unsigned integer of the value's width as a candidate in
 `build_localtypes`, after the float-register vote. It is offered only for a value
 that is not type-locked, whose fold is a signed integer or unknown bytes (which
@@ -3676,7 +3677,7 @@ live consumers are (a) jump-table recovery — the guard analysis in
 `crates/unlace-middle/src/p2_lift/jumptable.rs (GuardRecord,
 circlerange_pull_back)` pulls the branch condition back to the switch variable
 to bound the case count (chapter 02), and (b) the boolean-expression melding
-rule `crates/unlace-bandb/src/p3_dataflow/ruleaction_1.rs
+rule `crates/unlace-bandb-core/src/p3_dataflow/ruleaction_1.rs
 (RuleRangeMeld)`, which pulls two comparison ranges back to a common Varnode
 and intersects/unions them into one comparison.
 
@@ -3789,7 +3790,7 @@ cached per function in the `union_map`
 Resolution triggers wherever a `needs_resolution` type crosses an edge: during
 propagation (§5.2), during cast planning, and in the printer's facing-type
 lookups. The dispatch is
-`crates/unlace-bandb/src/p5_types/funcdata_resolveflow.rs
+`crates/unlace-bandb-core/src/p5_types/funcdata_resolveflow.rs
 (Funcdata::resolve_in_flow)`; its decision rule for the simple case, in order:
 (1) the per-edge cache; (2) an operator-asserted facet — a `map unionfacet`
 DynamicHash symbol, consulted through
@@ -3801,7 +3802,7 @@ override surface for this whole section (the `aggregate-union` row in
 can be named, at four places owned by three chapters: the concatenation and
 cleanup-split rules (§3), the partial-symbol walk (§9), and this resolution
 rule. Each place asks one predicate in
-`crates/unlace-bandb/src/p5_types/kuna_aggregatefields.rs` (always
+`crates/unlace-bandb-core/src/p5_types/kuna_aggregatefields.rs` (always
 on). Single-component structs and arrays retain the whole container when a RETURN
 value matches the function's locked output type and is an unchanged copy of a
 locked input of that container type. Equal-width COPY chains preserve this
@@ -3815,7 +3816,7 @@ Upstream `scoreSingleComponent` resolves such a RETURN to the field and prints
 padding pieces of a join stay logical constants.
 
 **Facet trials and scoring.**
-`crates/unlace-bandb/src/p5_types/unionresolve_run.rs
+`crates/unlace-bandb-core/src/p5_types/unionresolve_run.rs
 (ScoreUnionFields)` fits every candidate field (plus "the union as a whole",
 score index 0 / field −1) against the surrounding data-flow. From the access
 edge it launches one *trial* per candidate and walks outward level by level —
@@ -4166,14 +4167,14 @@ when it replaces an argument that was a `PTRSUB(0, addr)` naming the old
 pointer, it destroys that `PTRSUB` once nothing else reads it; otherwise the
 dead reference printed as a stray `v1 = "...";` temporary.
 
-**Bitfields** (`crates/unlace-bandb/src/p5_types/bitfield.rs`).
+**Bitfields** (`crates/unlace-bandb-core/src/p5_types/bitfield.rs`).
 Pattern: a struct with sub-byte fields is accessed through shift/mask soup on
 a byte container. The six `cleanup` rules fire only when the container's type
 *has* declared bitfields (`Datatype::has_bitfields` — the triples collected
 from `TypeBitField` in `dtype.rs`): `RuleBitFieldStore`/`RuleBitFieldOut`
 trace backward from a store (or mapped write) through the OR/AND/SHIFT web and
 re-express it as explicit `INSERT` ops per field
-(`crates/unlace-bandb/src/p5_types/bitfield/insert.rs
+(`crates/unlace-bandb-core/src/p5_types/bitfield/insert.rs
 (BitFieldInsertTransform)`); `RuleBitFieldLoad`/`RuleBitFieldIn` trace forward
 from a load and re-express the extractions as sign/zero `PULL` ops
 (`bitfield/pull.rs (BitFieldPullTransform)`); `RulePullAbsorb`/

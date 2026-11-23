@@ -458,3 +458,18 @@ edited crate's size: 6.3 s + 19 ms per 1k lines fits all four within 0.2 s): bas
 top 7.2 s, against 11.1 s for `unlace-bandb` today. Chosen: the three-crate split along the
 condensation, no inversions; the component stays one crate. Measured times are recorded below once
 the crates exist.
+
+Measured (2026-11-23, same method as step 0: `cargo build -p unlace-cli`, dev profile, opt-level 1,
+line-tables-only debug info, warm target dir, a one-line private item appended to the file, best of 2;
+the machine was shared, load average 5-12 on 24 cores, so the baseline was re-measured alongside):
+
+| edit in | before (one unlace-bandb, 30c7265e90) | after 10a | after 10b |
+|---|---|---|---|
+| base (`p4_calls/kuna_calleepurge.rs`) | 10.5 s | 7.9 s | 7.5 s |
+| core (`p5_types/coreaction_infertypes.rs`) | 10.5 s | 9.5 s | 8.2 s |
+| above the core (`p6_variables/coreaction_cleanup.rs`) | 10.5 s | 9.5 s | 6.8 s |
+
+Each crate now rebuilds in 6.8-8.2 s, in line with the other band crates (structure 6.8 s, emit 7.5 s,
+middle 9.3 s) and with the size model above. The core (116k lines) is the floor without cutting the
+cycle; its cheapest cut by folder (10 inverted edges, largest piece 74k) would save about 0.5 s more,
+which does not pay for hooks through the fixpoint.

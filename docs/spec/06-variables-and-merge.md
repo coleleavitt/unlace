@@ -3,6 +3,7 @@
 ```yaml
 Anchors:
   - crates/unlace-bandb-base/src/p6_variables
+  - crates/unlace-bandb-core/src/p6_variables
   - crates/unlace-bandb/src/p6_variables
   - crates/unlace-middle/src/p6_variables
 ```
@@ -33,7 +34,7 @@ default-divergences are DIV-3/14 in `docs/history.md`.
 > `crates/unlace-emit/src/p9_emit/coreaction_render.rs`, and
 > `ActionRestrictLocal` is in
 > `crates/unlace-bandb/src/p4_calls/coreaction_protos.rs`. Conversely
-> `crates/unlace-bandb/src/p6_variables/funcdata_facing.rs` (the
+> `crates/unlace-bandb-core/src/p6_variables/funcdata_facing.rs` (the
 > "facing type" a merged HighVariable presents at each read/write) is consumed
 > by the cast placement of chapter [09 — Emission](09-emission.md).
 
@@ -1406,7 +1407,7 @@ inserted bridge bypass the additional speculative-merge scans.
 
 Stack locals do not exist until this phase builds them; before it, the frame
 is anonymous memory reached through the stack pointer. The promotion chain has
-three links. First `crates/unlace-bandb/src/p6_variables/funcdata_spacebase.rs
+three links. First `crates/unlace-bandb-core/src/p6_variables/funcdata_spacebase.rs
 (Funcdata::spacebase)` (driven by `ActionSpacebase` in `mainloop`) marks every
 Varnode holding the stack-pointer value `spacebase` and types the input
 register as a pointer into the stack space. Second, the `stackvars` rules in
@@ -1918,7 +1919,7 @@ storage retains its earlier values and aliases. The qualifying post-call read
 is still recognized relative to the original passed address, not the expanded
 parent base. Parameters and positive frame offsets are excluded. Explicit local
 types remain authoritative. The implementation is
-`crates/unlace-bandb/src/p6_variables/kuna_callarrayextent.rs`.
+`crates/unlace-bandb-core/src/p6_variables/kuna_callarrayextent.rs`.
 
 **Address-taken frame records (kuna `stackstruct`, default `off`, on in
 `aggressive`).** A local record whose address is handed to a callee keeps no
@@ -1995,7 +1996,7 @@ printed as seven scalars -- and renumbers the synthesized structures of the
 later functions in that run. With the option on
 in default mode no datatest assertion and no other stage file's assertion
 moves. The implementation is
-`crates/unlace-bandb/src/p6_variables/kuna_stackstruct.rs`.
+`crates/unlace-bandb-core/src/p6_variables/kuna_stackstruct.rs`.
 
 
 **An indexed array's extent (kuna `arrayextent`, default `on`).** The [0,3]
@@ -2012,7 +2013,7 @@ indices that their known bits bound (the same walk `stackstoreguard` uses,
 `kuna_storereach.rs (pointer_pieces)`), and which the function only
 dereferences or offsets (no call, store, compare or phi takes it),
 gets room for every element those LOAD and STORE ops may touch:
-`crates/unlace-bandb/src/p6_variables/kuna_arrayextent.rs
+`crates/unlace-bandb-core/src/p6_variables/kuna_arrayextent.rs
 (bounded_items)` raises the base's open hint to cover `[base, lo + reach +
 width)`, stopping at the closest other pointer base above it
 (`kuna_arrayextent.rs (next_base)`). Inside that span the binary can address
@@ -2249,7 +2250,7 @@ bytes). The trip count, which is the buffer size, is not recoverable from the
 C. (A constant initializer that writes the buffer in wider pieces keeps that
 form, `v1._0_4_ = ...`, whichever way the buffer is declared.)
 
-`crates/unlace-bandb/src/p6_variables/kuna_endptrbound.rs
+`crates/unlace-bandb-core/src/p6_variables/kuna_endptrbound.rs
 (find_pointer_walks)` accepts a walk during `restructure_varnode` only when it
 can prove that every dereference through the pointer lands in `[start, end)`.
 The candidates are the `MULTIEQUAL`s that some LOAD or STORE reads through,
@@ -2337,7 +2338,7 @@ object, so a read of it never sees the store. Two layout decisions broke that.
 The first is the reach. Two four-byte constant slots written by `u.w[0]` and
 `u.w[1]` produce two fixed hints, and the store's own open hint only claims the
 first few bytes, so the store indexes one local and reads the next one.
-`crates/unlace-bandb/src/p6_variables/kuna_storereach.rs
+`crates/unlace-bandb-core/src/p6_variables/kuna_storereach.rs
 (prepare_hints)` runs in `restructure_varnode` after the three gathers and
 before `endptrbound`. It takes each STORE of a one-byte value that a guard
 INDIRECT on the stack names as its effect, and resolves its pointer as the
@@ -3466,7 +3467,7 @@ interaction at `crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs
 fullloop already collapsed the upstream-preserved carrier COPY once).
 
 **The exception that proves the rule.** One resident of this folder runs
-*inside* the fixpoint: `crates/unlace-bandb/src/p6_variables/coreaction_stackptr.rs`
+*inside* the fixpoint: `crates/unlace-bandb-core/src/p6_variables/coreaction_stackptr.rs`
 (the realized body of `ActionStackPtrFlow`, scheduled in `stackstall`). It is
 analysis, not commitment — the stack-variable promotion of §6.2 only works
 while the stack pointer remains a tractable affine expression, so this pass
@@ -3514,7 +3515,7 @@ never finished.
 
 A runtime-sized reservation has no constant solution, and kuna keeps the solve
 from inventing one
-(`crates/unlace-bandb/src/p6_variables/coreaction_stackptr.rs
+(`crates/unlace-bandb-core/src/p6_variables/coreaction_stackptr.rs
 (StackSolver::confirm_dynamic, StackSolver::spread_dynamic)`, always on).
 Upstream's MULTIEQUAL equation equates every input of a stack-pointer merge, so
 where one path lowers the stack pointer by a register (`sub sp,ax`: Open
@@ -3524,7 +3525,7 @@ constant, the rewrite turns `sp - ax` into `sp_in + c`, and the allocated
 pointer prints as a fixed frame local; two allocations then share one address
 and the writes into them overflow it. An adjustment whose amount is neither the stack pointer nor a
 value that evaluates to a constant
-(`crates/unlace-bandb/src/p4_calls/kuna_bejoin.rs (literal_value)`; a
+(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (literal_value)`; a
 PTRADD's element size is not an amount) is a candidate. A trial solve with the
 upstream equations keeps a candidate the solve gives a nonzero move as an
 ordinary adjustment, because such a register often holds a constant on that
@@ -3564,7 +3565,7 @@ upstream's guess, except in a function where every call's pop is stated or
 proven by its callee's own returns: there no call reaches the guess at all
 (chapter [04](04-calls-and-prototypes.md), `ActionExtraPopSetup`). For an import the argument bytes are counted off the caller's
 own push run
-(`crates/unlace-bandb/src/p6_variables/kuna_calleepopslot.rs
+(`crates/unlace-bandb-core/src/p6_variables/kuna_calleepopslot.rs
 (guess_extra_pop)`): back from the return-address slot in pointer-sized steps,
 stopping at the first push that stores a register's own input Varnode (a
 prologue callee-save) or at a step that is no push at all (a bare `sub esp,n`).
@@ -3582,7 +3583,7 @@ argument is dropped, which is visible on deep-frame MSVC CRT helpers.
 The constant itself is measured rather than assumed:
 upstream's `4` is the x86-32 return-address size, and the guess's base is now
 the bytes the call instruction itself stores
-(`crates/unlace-bandb/src/p6_variables/kuna_calleepop.rs
+(`crates/unlace-bandb-core/src/p6_variables/kuna_calleepop.rs
 (return_address_bytes)`), counted over the live STOREs at the call's address and
 the COPYs into the stack space that `RuleStoreVarnode` already made of them. An
 x86 16-bit near call stores two bytes and a far call four, so a callee that pops
@@ -3678,7 +3679,7 @@ modes.
 
 ### Shared stack-object views
 
-`crates/unlace-bandb/src/p6_variables/kuna_stackuses.rs` reads declared
+`crates/unlace-bandb-core/src/p6_variables/kuna_stackuses.rs` reads declared
 pointer contracts from calls, typed assignments, and volatile writes as well as
 declared pointer returns. The same contracts drive backing views and logical
 object identities. Global assignments require a locked storage type; unknown
@@ -3690,7 +3691,7 @@ copy and pointer-offset chains back to the locked declaration. Inferred pointer
 types alone do not create a contract. Interior views retain their displacement
 when selecting a backing member.
 
-`crates/unlace-bandb/src/p6_variables/kuna_stackvalueviews.rs` selects
+`crates/unlace-bandb-core/src/p6_variables/kuna_stackvalueviews.rs` selects
 scalar members for register instances coalesced with a shared frame symbol.
 The selection follows the high variable's symbol and byte offset, and preserves
 existing scalar resolutions and declared aggregate views. A generated backing's
@@ -3699,7 +3700,7 @@ value. Definitions and reads both receive field edges;
 a loop counter merged with its stack copy must not lose its scalar member just
 because the counter's own storage is a register.
 
-`crates/unlace-bandb/src/p6_variables/kuna_stackvaluecopies.rs` prevents
+`crates/unlace-bandb-core/src/p6_variables/kuna_stackvaluecopies.rs` prevents
 generated frame types from becoming standalone scalar snapshot types. Unlocked,
 untied values without a backing symbol retain their one-, two-, four-, or
 eight-byte unsigned representation. Locked declarations and physical storage
@@ -3734,7 +3735,7 @@ may observe locally aliased storage, while literal global addresses cannot name
 this frame. Marker versions are not writes. The check is enabled by stackviews.
 
 The bounded local policy (always on) is
-`crates/unlace-bandb/src/p6_variables/kuna_localstackviews.rs`.
+`crates/unlace-bandb-core/src/p6_variables/kuna_localstackviews.rs`.
 Full `stackviews` takes precedence: the bounded local policy records no evidence
 and supplies no preservation, publication or mapping facts while that broader
 option is enabled. Its existing view collection remains authoritative.
@@ -3964,7 +3965,7 @@ spelling consults the same facing type used to request the cast, rather than the
 SSA type that originally occupied the register or slot. Global destinations also
 keep their declared scalar type when a frame address escapes into them.
 
-`crates/unlace-bandb/src/p6_variables/kuna_stackobjects.rs` records
+`crates/unlace-bandb-core/src/p6_variables/kuna_stackobjects.rs` records
 logical object identities at complete, locked pointee uses when `stackviews` is
 enabled. Each identity retains its physical range, declared views, native use
 points and the reaching definition family of each byte. Equal defined families
@@ -3995,7 +3996,7 @@ for scoping object assertions, not a claim that a C or C++ lifetime ended. It
 neither removes memory versions nor allocates separate addresses: an escaped
 pointer continues to observe the shared backing.
 
-`crates/unlace-bandb/src/p6_variables/kuna_stackobjectasserts.rs`
+`crates/unlace-bandb-core/src/p6_variables/kuna_stackobjectasserts.rs`
 consumes these identities for `name` and `type` directives. An assertion retains
 native call addresses, argument slots, its physical range and byte-definition
 families across rebuilds; it contains no operation or high-variable identifiers.
@@ -4030,7 +4031,7 @@ and declared native uses without exposing analysis-local identifiers. CLI result
 carry these records through batch workers. `--no-vars` suppresses their extraction;
 empty collections do not add a JSON field to ordinary runs.
 
-`crates/unlace-bandb/src/p6_variables/kuna_stackobjectalias.rs` binds a
+`crates/unlace-bandb-core/src/p6_variables/kuna_stackobjectalias.rs` binds a
 logical assertion through an existing mapped layout when no matching generated
 union member is available. Its whole extent must fit both the physical entry and
 its complete datatype, with an exact byte displacement. A typed `<name>_view`
@@ -4054,7 +4055,7 @@ credited with popping all three; for the second call the cleanup and its one
 push cancel, so its return-address slot is the first call's result itself and
 the guess gives up at `4`. The class size is not in the mangled name, so a
 demangled prototype cannot settle the second cleanup either.
-`crates/unlace-bandb/src/p6_variables/kuna_calleepopslot.rs
+`crates/unlace-bandb-core/src/p6_variables/kuna_calleepopslot.rs
 (guess_extra_pop)` reads the caller's stack depth for consistency instead.
 A push through a stack-pointer value strictly above the call's own result —
 which only a raise followed by a push produces — vetoes a callee pop: had the
@@ -4094,7 +4095,7 @@ count, the guess stays at `4`, and the `sub` then lowers the solved stack
 pointer by the popped bytes, so an incoming argument read after the call
 resolves to a local and a slot whose address an earlier call was handed is
 read back from a different one.
-`crates/unlace-bandb/src/p6_variables/kuna_calleepopframe.rs
+`crates/unlace-bandb-core/src/p6_variables/kuna_calleepopframe.rs
 (guess_extra_pop)` guesses `4 + n` when the first write to the stack pointer
 after the call in its block is the call's result lowered by `n` (positive, at
 most 256, a multiple of the pointer size) and every pointer-sized slot of

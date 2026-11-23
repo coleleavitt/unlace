@@ -459,7 +459,7 @@ generated catalog ([docs/options.md](../options.md)); the rows are defined in
 `crates/unlace-decomp/phases.toml` and the intentional
 default-divergences are DIV-3/4/13/14 in `docs/history.md`.
 
-> Scope note: `crates/unlace-bandb/src/p5_types/funcdata_resolveflow.rs
+> Scope note: `crates/unlace-bandb-core/src/p5_types/funcdata_resolveflow.rs
 > (Funcdata::resolve_in_flow)` is, despite its name, the union-field
 > `resolveInFlow`/`resolveTruncation` dispatch — type-recovery machinery
 > described in chapter [05 — Types](05-types.md). It lives in this folder only

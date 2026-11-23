@@ -3,6 +3,7 @@
 ```yaml
 Anchors:
   - crates/unlace-bandb-base/src/p3_dataflow
+  - crates/unlace-bandb-core/src/p3_dataflow
   - crates/unlace-bandb/src/p3_dataflow
   - crates/unlace-middle/src/p3_dataflow
 ```
@@ -644,7 +645,7 @@ every later read of it prints as a local the function never assigns.
 
 The call guard consults the callee's own
 instructions instead. The evidence is the bounded body walk chapter 04 already
-takes for the call-output seam (`crates/unlace-bandb/src/p4_calls/kuna_rustabi.rs
+takes for the call-output seam (`crates/unlace-bandb-core/src/p4_calls/kuna_rustabi.rs
 (probe_callee_return_writes)`): from the callee's entry it follows fall-through
 and resolved machine branch targets, ends a path at a `RETURN` or an
 unconditional direct call with the same known no-return contract used by flow
@@ -1224,7 +1225,7 @@ partial reads, it checks for a constant write (through COPY, SUBPIECE or
 integer extension) and the processor's stack space. For this family only byte
 STOREs already recorded by indexed stack-pointer discovery qualify; globals and
 unknown pointers retain the explicit `full` policy. The gate lives in
-`crates/unlace-bandb/src/p3_dataflow/kuna_stackstoreguard.rs`.
+`crates/unlace-bandb-core/src/p3_dataflow/kuna_stackstoreguard.rs`.
 
 Before heritage, `kuna_stackbytecopy.rs` expands a short frame byte-copy loop
 whose control flow and scalar setup prove that it exits after two to four
@@ -1460,7 +1461,7 @@ removal is only *allowed* in a space once heritage there is past the space's
 dead-code delay: `heritage.rs (Heritage::dead_removal_allowed)` is the gate
 (`pass > deadcodedelay`), consumed by
 `crates/unlace-emit/src/p9_emit/coreaction_render.rs (ActionDeadCode)`
-and by `crates/unlace-bandb/src/p3_dataflow/ruleaction_1.rs
+and by `crates/unlace-bandb-core/src/p3_dataflow/ruleaction_1.rs
 (RuleEarlyRemoval)` — the checked variant (`dead_removal_allowed_seen`) also
 records that removal has now *happened* (`deadremoved`). The reason the gate
 exists: a free varnode can surface in pass N+1 at an address already heritaged
@@ -1708,7 +1709,7 @@ Different sources, changed low slices, wider floats, incompatible types and
 other unary operations decline. These are strict value-correctness repairs
 with no inference option; they add no floating-status or exception model.
 
-**One-destination switches.** `crates/unlace-bandb/src/p3_dataflow/ruleaction_4.rs
+**One-destination switches.** `crates/unlace-bandb-core/src/p3_dataflow/ruleaction_4.rs
 (RuleSwitchSingle)` rewrites a BRANCHIND whose block has one out-edge and
 whose recovered jump table is labelled into a BRANCH to the table's first
 address, then drops the table and the structured-block graph so no `switch`
@@ -1792,10 +1793,10 @@ group):
 
 | File | Theme | Representative rules |
 |---|---|---|
-| `crates/unlace-bandb/src/p3_dataflow/ruleaction_1.rs` | dead-op pruning, term ordering, bit-mask algebra, SUBPIECE motion through phis/INDIRECTs | `RuleEarlyRemoval` (the all-opcode dead-op reaper, gated by §3.1's dead-definition gate), `RuleCollectTerms`, `RuleAndMask`/`RuleShiftBitops`, `RulePullsubMulti`/`RulePushMulti`, `RuleIntLessEqual` (§3.5 compareform), `RuleRangeMeld`, `RulePiece2Zext` |
+| `crates/unlace-bandb-core/src/p3_dataflow/ruleaction_1.rs` | dead-op pruning, term ordering, bit-mask algebra, SUBPIECE motion through phis/INDIRECTs | `RuleEarlyRemoval` (the all-opcode dead-op reaper, gated by §3.1's dead-definition gate), `RuleCollectTerms`, `RuleAndMask`/`RuleShiftBitops`, `RulePullsubMulti`/`RulePushMulti`, `RuleIntLessEqual` (§3.5 compareform), `RuleRangeMeld`, `RulePiece2Zext` |
 | `crates/unlace-bandb-base/src/p3_dataflow/ruleaction_2.rs` | logical ops through extensions/pieces, double-op fusion, zext elimination | `RuleAndCommute`, `RuleAndCompare`, `RuleDoubleShift`, `RuleConcatShift`, `RuleLeftRight`, `RuleZextEliminate`, `RuleBooleanUndistribute`, `RuleFloatRange` |
 | `crates/unlace-bandb/src/p3_dataflow/ruleaction_3.rs` | boolean normalization, phi/INDIRECT collapse, constant folding, reassociation | `RuleMultiCollapse`, `RuleIndirectCollapse`, `RuleCollapseConstants` (the OpBehavior constant evaluator), `RulePropagateCopy`, `RuleAddMultCollapse`, `RuleSborrow`, `RuleShift2Mult` |
-| `crates/unlace-bandb/src/p3_dataflow/ruleaction_4.rs` | the SUBPIECE/ZEXT/CONCAT commuting family, piece reassembly, stack-var promotion | `RuleSubCommute`, `RuleConcatZext`, `RuleSubCancel`, `RuleHumptyDumpty`/`RuleDumptyHump`, `RuleLoadVarnode`/`RuleStoreVarnode` (oppool2, group `stackvars`), `RuleSwitchSingle`, `RuleCondNegate` |
+| `crates/unlace-bandb-core/src/p3_dataflow/ruleaction_4.rs` | the SUBPIECE/ZEXT/CONCAT commuting family, piece reassembly, stack-var promotion | `RuleSubCommute`, `RuleConcatZext`, `RuleSubCancel`, `RuleHumptyDumpty`/`RuleDumptyHump`, `RuleLoadVarnode`/`RuleStoreVarnode` (oppool2, group `stackvars`), `RuleSwitchSingle`, `RuleCondNegate` |
 | `crates/unlace-bandb/src/p3_dataflow/ruleaction_5.rs` | comparisons against extremal constants, equation solving, the pointer-recovery trio | `RuleLess2Zero`, `RuleSLess2Zero`, `RuleEqual2Constant`, and oppool2's `RulePtrArith`/`RuleStructOffset0`/`RulePushPtr` (all no-ops until `ActionStartTypes` flips `has_type_recovery_started` — chapter 05 owns what they build) |
 | `crates/unlace-bandb/src/p3_dataflow/ruleaction_6.rs` | pointer-op undo, division strength-reduction inversion, cleanup arithmetic | `RulePtraddUndo`/`RulePtrsubUndo`, `RuleDivOpt`/`RuleDivTermAdd`/`RuleSubNormal` (recover `/`, `%` from magic-number multiplies), cleanup-pool `RuleMultNegOne`/`RuleAddUnsigned`/`RuleSubRight`/`RulePieceStructure` |
 | `crates/unlace-bandb-base/src/p3_dataflow/ruleaction_7.rs` | signed div/mod idioms, segments, pointer flow, predication, float compares | `RuleSignDiv2`, `RuleSignMod2nOpt`, `RuleModOpt`, `RuleSegment`, `RulePtrFlow`, `RuleConditionalMove` (group `conditionalexe`), `RuleFloatCast`, `RuleIgnoreNan` |
@@ -1838,7 +1839,7 @@ rule 17.2 million times. Upstream's walk appends 35 billion entries and reads
 witness and 223 thousand walk. The collapses are the same 15,113.
 
 `RulePullsubIndirect`
-(`crates/unlace-bandb/src/p3_dataflow/ruleaction_1.rs (RulePullsubIndirect)`)
+(`crates/unlace-bandb-core/src/p3_dataflow/ruleaction_1.rs (RulePullsubIndirect)`)
 narrows an INDIRECT whose readers are all SUBPIECEs to the bytes they use, from
 the lowest used byte to the highest. The new output piece starts at the lowest
 used byte, and kuna slices the piece of the INDIRECT's input at that same byte,
@@ -1861,7 +1862,7 @@ local declared at pointer width and printed with that stride
 of the slot the store indexes (`unsigned int v1; ((char *)&v1)[i] = j; return
 v1._1_2_;`). Byte readers still narrow, because a byte piece maps as an element
 of the byte array the store indexes. The check is `keeps_store_indirect_whole`
-in `crates/unlace-bandb/src/p3_dataflow/kuna_stackstoreguard.rs`.
+in `crates/unlace-bandb-core/src/p3_dataflow/kuna_stackstoreguard.rs`.
 Keeping the slot whole does not by itself make the slot, its neighbours and the
 read one local; the stack layout decides that, and it maps
 every slot a bounded store may reach as one array and does not end an open range
@@ -2362,7 +2363,7 @@ had not enumerated (`INT_SRIGHT` out of `RuleBitUndistribute`, or a
 record and no C at all for that function.
 
 **Commuting a right shift through zero extension.**
-`crates/unlace-bandb/src/p3_dataflow/ruleaction_4.rs
+`crates/unlace-bandb-core/src/p3_dataflow/ruleaction_4.rs
 (RuleZextCommute)` rewrites `zext(V) >> n` into `zext(V >> n)` only when the
 count's constant value or nonzero-bit mask proves it is below the width the
 narrowed shift evaluates at. That width is `V`'s, except that when the output
@@ -2411,7 +2412,7 @@ triggers and split rules (§3.3, `subflow.rs`), `RuleOrPredicate` (§3.4,
 (`crates/unlace-bandb-base/src/p5_types/double.rs`, chapter 05), the
 constant-sequence and bit-field cleanup rules
 (`crates/unlace-bandb-base/src/p5_types/constseq.rs`,
-`crates/unlace-bandb/src/p5_types/bitfield.rs`, chapter 05), and the
+`crates/unlace-bandb-core/src/p5_types/bitfield.rs`, chapter 05), and the
 stack-probe-loop phi resolver
 (`crates/unlace-lift/src/p2_lift/kuna_stackprobeloop.rs`, chapter
 02). A note on the files themselves: their module headers still carry the
@@ -2627,7 +2628,7 @@ Other targets and unrelated user operations keep their existing treatment.
 
 Truncation can leave hundreds of fresh SUBPIECEs of one stack or base
 register in a single pool pass. While the option is live, `RuleSelectCse`
-(`crates/unlace-bandb/src/p3_dataflow/ruleaction_1.rs (RuleSelectCse)`)
+(`crates/unlace-bandb-core/src/p3_dataflow/ruleaction_1.rs (RuleSelectCse)`)
 therefore returns at once when the visited op's own output is not yet
 heritaged. A pair is merged only when both outputs are heritaged, so the pair
 such a visit would have merged is merged instead when one of its own ops is
@@ -2651,7 +2652,7 @@ the earlier output on truncated targets byte for byte: the port had
 `RulePtrFlow` stubbed out (its op list was always empty), the stack register
 was a single wide input, and `RuleSelectCse` visited every op.
 
-`crates/unlace-bandb/src/p3_dataflow/subflow.rs (SubvariableFlow)`
+`crates/unlace-bandb-core/src/p3_dataflow/subflow.rs (SubvariableFlow)`
 shrinks a logical value out of a larger container: given a *root* varnode and a
 bit-mask identifying where the small value lives, it traces the value's flow
 forward and backward through the data-flow graph, builds a parallel shadow
@@ -2713,14 +2714,14 @@ so emission can print the zero-extension C's promotion would otherwise lose
 (chapter [09](09-emission.md)). (kuna) A RETURN pull is recorded on the RETURN
 op the same way when its dropped bits are known zero and the calling convention
 extends a value of the trimmed width by the sign of its type
-(`crates/unlace-bandb/src/p5_types/kuna_zextreturn.rs (unsigned_trim)`,
+(`crates/unlace-bandb-core/src/p5_types/kuna_zextreturn.rs (unsigned_trim)`,
 `note_trimmed_return`); a later trim of the same RETURN that drops bits not known
 to be zero clears the record. Type inference reads it to type the returned value
 unsigned (chapter [05](05-types.md)).
 
 (kuna) The RETURN pull refuses to trim a 64-bit integer a 32-bit convention
 returns in two registers
-(`crates/unlace-bandb/src/p3_dataflow/subflow.rs (returns_integer_pair)`):
+(`crates/unlace-bandb-core/src/p3_dataflow/subflow.rs (returns_integer_pair)`):
 a value no wider than eight bytes, wider than every single integer register of
 the prototype model's output list, and laid out as one integer in the register
 file's byte order. That covers the `join` return recovery builds for ARM `r1:r0`,
@@ -2749,7 +2750,7 @@ restores the word for them.
 
 (kuna) The RETURN pull also refuses to trim a zero-extended word where the
 convention sign-extends every 32-bit return value whatever its sign
-(`crates/unlace-bandb/src/p5_types/kuna_zextreturn.rs (zero_extended_word)`):
+(`crates/unlace-bandb-core/src/p5_types/kuna_zextreturn.rs (zero_extended_word)`):
 the RISC-V and LoongArch LP64 rule of chapter [04](04-calls-and-prototypes.md)
 (`kuna_narrowext::sign_extends_any`), and MIPS64 under `narrowext compiler`.
 The trim must drop only known-zero bits, and the word's sign bit must be
@@ -2981,7 +2982,7 @@ body. The trigger rules above never narrow it: the web is read at full width (an
 index, a compare, a call argument), and upstream refuses a flow whose container
 is consumed beyond the logical value.
 
-`regnarrow` (`crates/unlace-bandb/src/p3_dataflow/kuna_regnarrow.rs`)
+`regnarrow` (`crates/unlace-bandb-core/src/p3_dataflow/kuna_regnarrow.rs`)
 looks at every web of register Varnodes that MULTIEQUALs join, and at a single
 register definition read at least twice (`narrow_locals`). The nonzero-bit
 masks (`ActionNonzeroMask`) of all its members must fit a low 1, 2 or 4 bytes
@@ -3349,7 +3350,7 @@ second branch's condition becomes the constant that sends it the other way;
 `ActionDeterminedBranch` then removes the dead edge.
 
 **globalarrayanchor** —
-`crates/unlace-bandb/src/p3_dataflow/kuna_globalarrayanchor.rs
+`crates/unlace-bandb-core/src/p3_dataflow/kuna_globalarrayanchor.rs
 (preserve_array_base)`.
 With `option globalarrayanchor on` (default off), constant collection defers
 combining an exact mapped array base with a negative whole-element displacement
@@ -4209,7 +4210,7 @@ reloaded from memory can change those bytes before a direct stack read; the
 barrier prevents that read from folding to the preceding register-carried store.
 Other frame ranges retain their existing policy.
 
-`crates/unlace-bandb/src/p3_dataflow/kuna_calleememory.rs` derives
+`crates/unlace-bandb-core/src/p3_dataflow/kuna_calleememory.rs` derives
 read, write and pointer-escape summaries from a direct callee's instructions
 when `stackviews` or `stackalias` is enabled. A complete call-free body can
 identify constant byte ranges relative to incoming pointer registers and exact
@@ -4230,7 +4231,7 @@ footprints: an access beyond the prototype's arguments is not treated as private
 memory or silently ignored. Those footprints are translated using the recovered
 call-site spacebase offset.
 
-`crates/unlace-bandb/src/p3_dataflow/kuna_calleehomes.rs` distinguishes
+`crates/unlace-bandb-core/src/p3_dataflow/kuna_calleehomes.rs` distinguishes
 pointer writes into a verified Win64 home area from external pointer publication.
 The callee summary retains each possible home escape and its full write footprint,
 even if later writes partially overwrite the pointer. The caller may discharge
@@ -4285,7 +4286,7 @@ the summary before its effects or return states are used. Partial frame stores
 still invalidate the entire pointer spill. Conditions from every visited path
 share the existing bounded metadata budget with home-spill conditions.
 
-`crates/unlace-bandb/src/p3_dataflow/kuna_calleeflags.rs` distinguishes
+`crates/unlace-bandb-core/src/p3_dataflow/kuna_calleeflags.rs` distinguishes
 one-byte comparison/carry results from address fragments. Instruction-local
 scratch feeding only those Boolean results retains its exact frame origin;
 this covers the parity calculation accompanying a stack adjustment. Every use

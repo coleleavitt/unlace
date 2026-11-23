@@ -189,11 +189,7 @@ heritage -> kuna_globalcallranges
 heritage -> kuna_indexaliasguard
 heritage -> kuna_inputrefinement
 heritage -> kuna_loadguardreads
-heritage -> kuna_partialglobalload
-heritage -> kuna_persistcalls
-heritage -> kuna_prunedssa
 heritage -> kuna_revisitrefine
-heritage -> kuna_stackstoreguard
 heritage -> prefersplit
 heritage -> rangeutil
 jumptable -> kuna_constselectjump

@@ -299,10 +299,13 @@ fn export_return_integer(ty: &crate::dtype::Datatype) -> Option<bool> {
             && !ty.is_char_print()
             && !ty.is_enum_type()
             && !ty.is_variable_length()
-            && crate::kuna_outlang::OutLang::C
-                .speller()
-                .unknown_base(8, false, false)
-                .as_deref()
+            && (crate::kuna_passhooks::default_pass_hooks().lang_unknown_base)(
+                crate::kuna_outlang::OutLang::C,
+                8,
+                false,
+                false,
+            )
+            .as_deref()
                 == Some("unsigned long long"))
         .then_some(false)
     })

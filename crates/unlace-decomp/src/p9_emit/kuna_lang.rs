@@ -40,9 +40,19 @@ use crate::printlanguage::OpToken;
 
 pub use crate::kuna_outlang::OutLang;
 
-impl OutLang {
+/// The output language's emit-band records: its profile, ABI renderer and type speller.
+pub trait OutLangExt {
     /// The surface vocabulary and capability record.
-    pub fn profile(self) -> &'static LangProfile {
+    fn profile(self) -> &'static LangProfile;
+    /// How this language renders a recovered calling convention.
+    fn abi(self) -> &'static dyn crate::kuna_langabi::LangAbi;
+    /// How this language spells a recovered type.
+    fn speller(self) -> &'static dyn crate::kuna_langtypes::TypeSpeller;
+}
+
+impl OutLangExt for OutLang {
+    /// The surface vocabulary and capability record.
+    fn profile(self) -> &'static LangProfile {
         match self {
             OutLang::C => &LANG_C,
             OutLang::Rust => &crate::kuna_langrust::LANG_RUST,
@@ -52,7 +62,7 @@ impl OutLang {
     }
 
     /// How this language renders a recovered calling convention.
-    pub fn abi(self) -> &'static dyn crate::kuna_langabi::LangAbi {
+    fn abi(self) -> &'static dyn crate::kuna_langabi::LangAbi {
         match self {
             OutLang::C | OutLang::Java => &crate::kuna_langabi::C_ABI,
             OutLang::Rust => &crate::kuna_langabi::RUST_ABI,
@@ -61,7 +71,7 @@ impl OutLang {
     }
 
     /// How this language spells a recovered type.
-    pub fn speller(self) -> &'static dyn crate::kuna_langtypes::TypeSpeller {
+    fn speller(self) -> &'static dyn crate::kuna_langtypes::TypeSpeller {
         match self {
             OutLang::C => &crate::kuna_langc::C_SPELLER,
             OutLang::Rust => &crate::kuna_rusttypes::RUST_SPELLER,
@@ -565,9 +575,32 @@ fn do_while_continue(lang: OutLang) -> bool {
     lang.profile().forms.do_while != DoWhileForm::RustLoopBreakIf
 }
 
+/// Does `lang` promote narrow integer operands the way C does?
+fn int_promotion(lang: OutLang) -> bool {
+    lang.profile().caps.integer_promotion
+}
+
+/// Does `lang` have C's `for (init; cond; iter)` header?
+fn c_for(lang: OutLang) -> bool {
+    lang.profile().caps.c_for
+}
+
+/// The language's real name for a residual unknown of `size` bytes.
+fn unknown_base(
+    lang: OutLang,
+    size: int4,
+    under_pointer: bool,
+    long_is_8: bool,
+) -> Option<std::borrow::Cow<'static, str>> {
+    lang.speller().unknown_base(size, under_pointer, long_is_8)
+}
+
 /// Fill this module's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.lang_do_while_continue = Some(do_while_continue);
+    hooks.lang_int_promotion = Some(int_promotion);
+    hooks.lang_c_for = Some(c_for);
+    hooks.lang_unknown_base = Some(unknown_base);
 }
 
 #[cfg(test)]

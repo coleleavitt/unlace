@@ -25,11 +25,11 @@ use unlace_base::types::{int4, uintb};
 
 use unlace_num::opcodes::OpCode;
 
+use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
+use crate::fspec::{FuncCallSpecs, FuncProto, PrototypePieces};
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
-use crate::p4_calls::fspec::{FuncCallSpecs, FuncProto, PrototypePieces};
 
 /// What a recovered prototype is allowed to say about a call site.
 ///
@@ -847,9 +847,8 @@ fn a_float_can_arrive_in(data: &Funcdata, node: &crate::varnode::Varnode) -> boo
     else {
         return true;
     };
-    let float_class = |e: &crate::p4_calls::fspec::ParamEntry| {
-        e.get_type() == crate::dtype::type_class::TYPECLASS_FLOAT
-    };
+    let float_class =
+        |e: &crate::fspec::ParamEntry| e.get_type() == crate::dtype::type_class::TYPECLASS_FLOAT;
     if !list.get_entry().iter().any(float_class) {
         return true;
     }
@@ -1500,7 +1499,7 @@ fn call_model(
     data: &Funcdata,
     call: OpId,
     input: bool,
-) -> Option<&crate::p4_calls::fspec::ParamListStandard> {
+) -> Option<&crate::fspec::ParamListStandard> {
     let proto = data
         .get_call_specs(data.get_call_specs_index(call)?)
         .proto();
@@ -1517,7 +1516,7 @@ fn call_model(
 /// Does `node` live in a register `list` assigns to floats?  A value a call reads
 /// or produces there is a float to that call whatever its declaration says.
 fn in_a_float_register(
-    list: Option<&crate::p4_calls::fspec::ParamListStandard>,
+    list: Option<&crate::fspec::ParamListStandard>,
     node: &crate::varnode::Varnode,
 ) -> bool {
     list.and_then(|l| {
@@ -2528,7 +2527,7 @@ pub(crate) fn names_type(ct: &Rc<Datatype>, names: &[String]) -> bool {
 /// A function never reads its own statement: at its call to itself the
 /// statement is what an earlier decompile of this same function said, and a
 /// redo exists because that answer changed.
-pub fn seed_protoorder_types(arch: &Architecture, data: &mut crate::substrate::funcdata::Funcdata) {
+pub fn seed_protoorder_types(arch: &Architecture, data: &mut crate::funcdata::Funcdata) {
     if arch.kuna_protoorder_types.is_empty() {
         return;
     }

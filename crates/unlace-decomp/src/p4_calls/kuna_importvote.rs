@@ -31,9 +31,9 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
+use crate::architecture::Architecture;
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
 use crate::p4_calls::kuna_protoorder::RecoveredTypes;
 
 const ARG_REGS: [&str; 6] = ["RDI", "RSI", "RDX", "RCX", "R8", "R9"];

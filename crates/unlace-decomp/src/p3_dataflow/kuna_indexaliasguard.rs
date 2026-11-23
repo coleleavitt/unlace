@@ -2,7 +2,7 @@
 //!
 //! # The gap
 //!
-//! [`Heritage::guard`](crate::p3_dataflow::heritage::Heritage) ends with an arm
+//! [`Heritage::guard`](crate::heritage::Heritage) ends with an arm
 //! upstream Ghidra runs whenever a pointer can reach the range being heritaged
 //! (`heritage.cc:1194`, gated on `Architecture::highPtrPossible`):
 //! `Heritage::guardStores` (`heritage.cc:1538`) prepopulates data-flow across
@@ -65,7 +65,7 @@
 //!   (`ttyperm._8_4_ = (unsigned int)v6;` beside `v6 = ttyperm._8_8_;`).
 //!
 //! The guards themselves are upstream `Heritage` methods and live with their
-//! siblings in [`crate::p3_dataflow::heritage`]; this module owns the option's
+//! siblings in [`crate::heritage`]; this module owns the option's
 //! parse surface, the level vocabulary the gate reads, and the global arm's
 //! store and load selection.
 

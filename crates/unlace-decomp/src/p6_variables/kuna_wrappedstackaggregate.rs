@@ -20,8 +20,7 @@ pub(super) fn map(
         return;
     };
     let addr = Address::new(Rc::clone(space), offset);
-    let Some(pieces) = crate::p0_knowledge::kuna_wrappedstackmap::pieces(&addr, ty.get_size())
-    else {
+    let Some(pieces) = crate::kuna_wrappedstackmap::pieces(&addr, ty.get_size()) else {
         return;
     };
     let prefix = pieces[0].2 as u64;

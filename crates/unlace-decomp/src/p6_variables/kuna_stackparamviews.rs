@@ -862,6 +862,7 @@ fn bind_uses(
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackparamviews_separates_parameter = Some(separates_parameter);
     hooks.stackparamviews_backing_for_address = Some(backing_for_address);
 }
 

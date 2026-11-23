@@ -1,5 +1,5 @@
 //! Stack argument alignment can differ from the in-memory type alignment.
-use super::fspec::param_entry_flags::IGNORE_TYPE_ALIGN;
+use crate::fspec::param_entry_flags::IGNORE_TYPE_ALIGN;
 use unlace_base::{
     error::{KunaError, KunaResult},
     space::{AddrSpace, spacetype},

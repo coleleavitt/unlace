@@ -459,7 +459,7 @@ impl MergeContext for Funcdata {
         })
     }
     fn stack_copy_moves_write(&self, storage: HighVariableId, value: HighVariableId) -> bool {
-        crate::p6_variables::kuna_stackvalueorder::moves_write(self, storage, value)
+        (self.hooks().stackvalueorder_moves_write)(self, storage, value)
     }
     fn high_is_input(&mut self, high: HighVariableId) -> bool {
         self.with_high_split(|hb, ctx| hb.get_mut(high).map(|h| h.is_input(ctx)).unwrap_or(false))
@@ -649,7 +649,7 @@ impl MergeContext for Funcdata {
         off: int4,
         high1: HighVariableId,
     ) -> KunaResult<()> {
-        if crate::kuna_stackparamviews::separates_parameter(self, high1, high2) {
+        if (self.hooks().stackparamviews_separates_parameter)(self, high1, high2) {
             return Ok(());
         }
         // The C++ `groupWith` reads each high's `getInstance(0)->getSize()` for the
@@ -799,7 +799,7 @@ impl MergeContext for Funcdata {
         // isolated cannot answer `true` from any of them, and the global arm
         // below is unconditionally `false`, so the whole scan is skippable —
         // see `ScopeLocal::has_isolated_symbols`.
-        if crate::kuna_isolated::holds(self, high) {
+        if (self.hooks().isolated_holds)(self, high) {
             return true;
         }
         if !self
@@ -1172,13 +1172,13 @@ impl MergeContext for Funcdata {
     }
 
     fn kuna_same_prior_variable(&self, a: HighVariableId, b: HighVariableId) -> Option<bool> {
-        crate::kuna_stablenames::same_variable(self, a, b)
+        (self.hooks().stablenames_same_variable)(self, a, b)
     }
     fn kuna_prior_variable_groups(&self, highs: &[HighVariableId]) -> Vec<Vec<HighVariableId>> {
-        crate::kuna_stablenames::variable_groups(self, highs)
+        (self.hooks().stablenames_variable_groups)(self, highs)
     }
     fn vn_loads_across_write(&self, vn: VarnodeId) -> bool {
-        crate::p6_variables::kuna_pointeevalue::load_crosses_write(self, vn)
+        (self.hooks().pointeevalue_load_crosses_write)(self, vn)
     }
     fn vn_load_crosses_global_write(&mut self, vn: VarnodeId, except: HighVariableId) -> bool {
         let guarded = self.high_bank().get(except).is_some_and(|h| {
@@ -1194,10 +1194,10 @@ impl MergeContext for Funcdata {
         if self.vbank().get(vn).is_some_and(|v| v.has_cover()) {
             self.update_varnode_cover(vn);
         }
-        crate::p6_variables::kuna_loadorder::crosses_global_write(self, vn, Some(except))
+        (self.hooks().loadorder_crosses_global_write)(self, vn, Some(except))
     }
     fn global_copy_moves_write(&self, global: HighVariableId, value: HighVariableId) -> bool {
-        crate::p6_variables::kuna_globalorder::copy_moves_write(self, global, value)
+        (self.hooks().globalorder_copy_moves_write)(self, global, value)
     }
 
     // --- Cover construction for a single read -----------------------------
@@ -1273,9 +1273,7 @@ impl MergeContext for Funcdata {
         vn: VarnodeId,
         reads: &[OpId],
     ) -> (BlockId, Address, Option<OpId>) {
-        if let Some(block) =
-            crate::p6_variables::kuna_guardedreadtrim::guarded_block(self, vn, reads)
-        {
+        if let Some(block) = (self.hooks().guardedreadtrim_guarded_block)(self, vn, reads) {
             let pc = self.bblocks_block_start(block);
             let pc = if pc.is_invalid() {
                 self.do_snip_reads_insert_point(vn).1
@@ -1291,7 +1289,7 @@ impl MergeContext for Funcdata {
             o.code() == OpCode::CPUI_INDIRECT
                 && o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_persist_stale != 0
         }) {
-            crate::p3_dataflow::kuna_persistcalls::restart_full(self);
+            (self.hooks().persistcalls_restart_full)(self);
         }
     }
     fn indirect_inherit_union(&mut self, _outvn: VarnodeId, _newop: OpId, _indop: OpId) {
@@ -1420,7 +1418,7 @@ impl MergeContext for Funcdata {
                     continue; // C++ skips free Varnodes (they are not merged)
                 }
                 if v2.is_input()
-                    && crate::kuna_stackparamviews::backing_for_address(self, a2, v2.get_size())
+                    && (self.hooks().stackparamviews_backing_for_address)(self, a2, v2.get_size())
                         .is_some()
                 {
                     j += 1;

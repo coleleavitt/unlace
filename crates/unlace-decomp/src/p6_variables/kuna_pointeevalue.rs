@@ -197,5 +197,6 @@ pub fn load_crosses_write(data: &Funcdata, vn: VarnodeId) -> bool {
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.pointeevalue_load_crosses_write = Some(load_crosses_write);
     hooks.pointeevalue_keeps_apart = Some(keeps_apart);
 }

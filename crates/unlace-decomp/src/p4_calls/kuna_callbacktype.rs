@@ -113,11 +113,11 @@ use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
+use crate::architecture::Architecture;
 use crate::context::VarnodeId;
 use crate::dtype::{Datatype, type_metatype};
+use crate::fspec::{FuncProto, PrototypePieces};
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
-use crate::p4_calls::fspec::{FuncProto, PrototypePieces};
 
 /// Whether a callback is declared by the slot it is passed to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

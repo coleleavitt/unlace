@@ -16,6 +16,7 @@ pub mod flow_flags;
 pub mod funcdata;
 pub mod funcdata_block;
 pub mod funcdata_encode;
+pub mod funcdata_merge;
 pub mod funcdata_op;
 pub mod funcdata_printraw;
 pub mod funcdata_varnode;

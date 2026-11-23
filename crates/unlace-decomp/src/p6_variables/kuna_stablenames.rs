@@ -1130,6 +1130,12 @@ impl crate::funcdata::Funcdata {
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stablenames_same_variable = Some(same_variable);
+    hooks.stablenames_variable_groups = Some(variable_groups);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

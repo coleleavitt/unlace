@@ -87,7 +87,7 @@
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::ElementId;
 
-use crate::p0_knowledge::options::on_or_off;
+use crate::options::on_or_off;
 
 /// Marshalling element id for the option (kuna 4000+ range).
 pub const ELEM_RETSPLITGLOBAL: ElementId = ElementId::new("retsplitglobal", 4143);

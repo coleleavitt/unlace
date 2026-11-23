@@ -16,8 +16,8 @@ use std::rc::Rc;
 
 use crate::context::OpId;
 use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
+use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::p4_calls::fspec::FuncCallSpecs;
 
 /// XNU's typed allocator entry points: (name, returns the allocation,
 /// parameter count). The first parameter is the view.

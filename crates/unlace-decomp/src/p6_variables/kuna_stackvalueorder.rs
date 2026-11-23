@@ -243,3 +243,8 @@ fn is_matching_call_guard(
         })
         .is_some_and(|guarded| guarded.symbol == symbol)
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.stackvalueorder_moves_write = Some(moves_write);
+}

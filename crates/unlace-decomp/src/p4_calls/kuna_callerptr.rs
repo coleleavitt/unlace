@@ -28,10 +28,10 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
+use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::infra::architecture::Architecture;
 use crate::kuna_calleevote::{CallSite, Typed, committed, same_type, trace};
 
 /// How far [`dereferenced`] follows a value through copies and literal offsets.

@@ -207,6 +207,7 @@ fn observes(data: &Funcdata, op: OpId, global: &crate::varnode::Varnode) -> bool
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.globalorder_copy_moves_write = Some(copy_moves_write);
     hooks.globalorder_keeps_apart = Some(keeps_apart);
 }
 

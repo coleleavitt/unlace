@@ -49,6 +49,12 @@ pub fn m_profile_arch(file: &object::File<'_>) -> Option<u32> {
         })
 }
 
+/// Whether the build attributes state the M profile (`Tag_CPU_arch_profile`
+/// `'M'`).
+pub fn m_profile(file: &object::File<'_>) -> bool {
+    m_profile_arch(file).is_some()
+}
+
 pub fn vfp_args(file: &object::File<'_>) -> bool {
     if file.format() != object::BinaryFormat::Elf
         || file.architecture() != object::Architecture::Arm

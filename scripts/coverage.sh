@@ -2,12 +2,12 @@
 # Merged line coverage for kuna: the cargo workspace suite plus the datatest,
 # stages and tests/cli corpora, all through instrumented binaries, rolled up
 # into observatory/data/coverage.json + an lcov/HTML report. Heavy; run via
-# `make coverage`. See docs/observatory.md for the knobs and caveats.
+# `bash scripts/coverage.sh`. See docs/observatory.md for the knobs and caveats.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$ROOT/observatory}"
-cd "$ROOT/decompiler"
+cd "$ROOT"
 
 command -v cargo-llvm-cov >/dev/null 2>&1 || {
   echo "coverage: cargo-llvm-cov not found; install with:" >&2
@@ -19,14 +19,14 @@ rustup component list --installed 2>/dev/null | grep -q llvm-tools || {
   exit 1
 }
 find "$ROOT/specs" -name '*.sla' -print -quit | grep -q . || {
-  echo "coverage: no built specs; run: make specs" >&2
+  echo "coverage: no built specs; run: target/release/slacomp -a specs" >&2
   exit 1
 }
 
 # Pre-set the target dir BEFORE show-env: in show-env mode cargo-llvm-cov
-# otherwise instruments into the normal decompiler/target, and its clean
+# otherwise instruments into the normal target, and its clean
 # step would wipe the release binaries (observed, not hypothetical).
-export CARGO_TARGET_DIR="$ROOT/decompiler/target/llvm-cov"
+export CARGO_TARGET_DIR="$ROOT/target/llvm-cov"
 eval "$(cargo llvm-cov show-env --sh)"
 export CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_RELEASE_DEBUG=0
 cargo llvm-cov clean --workspace

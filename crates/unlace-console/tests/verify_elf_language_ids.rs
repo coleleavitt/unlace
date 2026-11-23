@@ -1,0 +1,186 @@
+//! Gate for the multi-format-loader PR-1 §2.2 refactor: every SLEIGH language id
+//! the ELF loader (`ElfFormat::compiler_model` + `loadimage_object::language_id_for`)
+//! can produce must **resolve in the SLEIGH language database**
+//! (`scan_language_database` → `SleighArchitecture::resolve_architecture`).
+//!
+//! The PR threaded the compiler-model field through the `ObjectFormat` seam; the
+//! ELF id strings are byte-identical to before (proven by the in-crate unit
+//! tests), and this gate proves the structural change still yields only valid,
+//! vendored ids — an invented compiler token (or a stem with no `.ldefs` entry)
+//! would fail to resolve, exactly the "No sleigh specification" error a bad id
+//! produces on the live path.
+//!
+//! The id list comes from `unlace_analysis::loadimage_object::elf_language_ids()`,
+//! derived from the same composer the loader uses, so the test cannot drift from
+//! the producer.
+//!
+//! ## `.ldefs` precondition
+//!
+//! Resolution matches against the language **descriptions** parsed from the
+//! vendored `.ldefs` (not the built `.sla`), so this gate does NOT require
+//! `target/release/slacomp -a specs`. The vendored description files are required.
+
+use std::path::PathBuf;
+
+use unlace_base::marshal::IdRegistry;
+use unlace_decomp::sleigh_arch::{LanguageDatabase, SleighArchitecture, register_sleigh_arch_ids};
+use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
+use unlace_sleigh::translate::register_translate_ids;
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap()
+}
+
+/// The same per-module id registration the console bootstrap's `build_registry`
+/// does (minus the option elements, which language resolution does not need).
+fn build_registry() -> IdRegistry {
+    let mut registry = IdRegistry::with_base_ids();
+    register_translate_ids(&mut registry);
+    register_sleigh_arch_ids(&mut registry);
+    register_loadimage_xml_ids(&mut registry);
+    registry
+}
+
+#[test]
+fn every_elf_language_id_resolves_in_the_database() {
+    let specs = repo_root().join("specs");
+    let registry = build_registry();
+    let mut db = LanguageDatabase::new();
+    db.scan_for_sleigh_directories(specs.to_str().unwrap());
+    db.get_descriptions(&registry)
+        .expect("load required processor descriptions");
+
+    let ids = unlace_analysis::loadimage_object::elf_language_ids();
+    assert!(
+        !ids.is_empty(),
+        "the ELF id producer must enumerate at least one id"
+    );
+
+    for id in &ids {
+        let mut sleigh = SleighArchitecture::new("t", "");
+        sleigh.set_archid(id);
+        sleigh.resolve_architecture(&db, id).unwrap_or_else(|e| {
+            panic!("ELF language id {id:?} failed to resolve: {}", e.explain())
+        });
+        assert!(
+            sleigh.language_index() >= 0,
+            "ELF language id {id:?} did not resolve to a language (index {})",
+            sleigh.language_index()
+        );
+    }
+
+    // Sanity: the headline arches are present in the enumerated set, so a future
+    // arm deletion can't quietly shrink the gate to nothing.
+    for stem in [
+        "x86:LE:64",
+        "x86:LE:32",
+        "ARM:LE:32",
+        "AARCH64:LE:64",
+        "MIPS:LE:32",
+        "RISCV:LE:64",
+    ] {
+        assert!(
+            ids.iter().any(|id| id.starts_with(stem)),
+            "expected an id beginning {stem:?} in {ids:?}"
+        );
+    }
+}
+
+/// Multi-format-loader PR-2 gate: every SLEIGH language id the **PE / Mach-O /
+/// COFF** loaders produce (`PeFormat`/`MachOFormat`/`CoffFormat::compiler_model`
+/// + `compose_language_id`) must resolve in the SLEIGH database — **or** its
+/// §2.2 default-model fallback must, since the engine retries with the fallback
+/// before erroring. This proves the per-format compiler-model tokens
+/// (`windows` / `gcc` / `default`) are real, vendored ids and that no format ever
+/// composes an id that would dead-end with "No sleigh specification".
+#[test]
+fn every_object_format_language_id_resolves_in_the_database() {
+    let specs = repo_root().join("specs");
+    let registry = build_registry();
+    let mut db = LanguageDatabase::new();
+    db.scan_for_sleigh_directories(specs.to_str().unwrap());
+    db.get_descriptions(&registry)
+        .expect("load required processor descriptions");
+
+    // (primary, fallback) per format. A format passes if, for every pair, the
+    // primary resolves OR the fallback resolves (the §2.2 retry path).
+    let resolves = |db: &LanguageDatabase, id: &str| -> bool {
+        let mut sleigh = SleighArchitecture::new("t", "");
+        sleigh.set_archid(id);
+        sleigh.resolve_architecture(db, id).is_ok() && sleigh.language_index() >= 0
+    };
+
+    let suites: &[(&str, Vec<(String, Option<String>)>, &[&str])] = &[
+        (
+            "PE",
+            unlace_analysis::loadimage_object::pe_language_ids(),
+            &["x86:LE:64:default:windows", "x86:LE:32:default:windows"],
+        ),
+        (
+            "Mach-O",
+            unlace_analysis::loadimage_object::macho_language_ids(),
+            &["x86:LE:64:default:gcc", "AARCH64:LE:64:v8A:default"],
+        ),
+        (
+            "COFF",
+            unlace_analysis::loadimage_object::coff_language_ids(),
+            &["x86:LE:64:default:windows"],
+        ),
+        (
+            "TE",
+            unlace_analysis::loadimage_te::te_language_ids(),
+            &[
+                "x86:LE:32:default:gcc",
+                "x86:LE:64:default:windows",
+                "ARM:LE:32:v8:default",
+                "AARCH64:LE:64:v8A:default",
+            ],
+        ),
+        (
+            "retro",
+            unlace_analysis::loader::kuna_retroimage::retro_language_ids()
+                .into_iter()
+                .map(|id| (id.to_string(), None))
+                .collect(),
+            &[
+                "MIPS:LE:32:default",
+                "MIPS:BE:64:64-32addr",
+                "68000:BE:32:default",
+                "PowerPC:BE:32:default",
+            ],
+        ),
+    ];
+
+    for (fmt_name, ids, expected) in suites {
+        assert!(
+            !ids.is_empty(),
+            "{fmt_name} id producer must enumerate at least one id"
+        );
+        for (primary, fallback) in ids {
+            let ok = resolves(&db, primary)
+                || fallback
+                    .as_deref()
+                    .map(|fb| resolves(&db, fb))
+                    .unwrap_or(false);
+            assert!(
+                ok,
+                "{fmt_name} language id {primary:?} (fallback {fallback:?}) failed to resolve"
+            );
+        }
+        // The headline per-format ids must be in the enumerated set and resolve
+        // *directly* (not via fallback) — the spec-selection proof for PR-2.
+        for want in *expected {
+            assert!(
+                ids.iter().any(|(p, _)| p == want),
+                "{fmt_name}: expected {want:?} in enumerated ids {ids:?}"
+            );
+            assert!(
+                resolves(&db, want),
+                "{fmt_name}: headline id {want:?} must resolve directly"
+            );
+        }
+    }
+}

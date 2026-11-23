@@ -49,11 +49,11 @@ TRACK_RESOURCES = {
 # default exists to avoid. The counters, phases.toml and the baselines are different: an
 # identical `85 -> 86` edit on two branches merges CLEANLY to the wrong number.
 PATH_RESOURCES = [
-    ("decompiler/crates/unlace-decomp/phases.toml", "file:phases.toml"),
-    ("decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs", "counter:catalog"),
-    ("decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_phases", "counter:catalog"),
-    ("decompiler/crates/unlace-decomp/tests/catalog_bytecompat.rs", "counter:catalog"),
-    ("decompiler/crates/unlace-base/src/xml.rs", "counter:stages-corpus"),
+    ("crates/unlace-decomp/phases.toml", "file:phases.toml"),
+    ("crates/unlace-decomp/src/p0_knowledge/options.rs", "counter:catalog"),
+    ("crates/unlace-decomp/src/p0_knowledge/kuna_phases", "counter:catalog"),
+    ("crates/unlace-decomp/tests/catalog_bytecompat.rs", "counter:catalog"),
+    ("crates/unlace-base/src/xml.rs", "counter:stages-corpus"),
     ("docs/options.md", "file:docs/options.md"),
     ("docs/baseline-stages.json", "counter:stages-corpus"),
     ("tests/stages", "counter:stages-corpus"),

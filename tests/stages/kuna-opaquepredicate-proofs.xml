@@ -36,7 +36,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/opaqueglobal_x86_64_clang_O0</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/opaqueglobal_x86_64_clang_O0</com>
   <com>read symbols</com>
   <com>option ctypes on</com>
   <com>option rangefold off</com>

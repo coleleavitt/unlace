@@ -32,7 +32,7 @@ count() { # count <label> <expect:zero|nonzero> <grep args...>
     fi
 }
 
-CRATES=decompiler/crates
+CRATES=crates
 
 echo "== rename completeness (expect 0 when the rename milestones are done) =="
 count "KunaStage/KunaSubStage identifiers"      zero -E '\bKunaStage\b|\bKunaSubStage\b' --include='*.rs' "$CRATES"

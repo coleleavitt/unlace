@@ -12,7 +12,7 @@ instances: 1
 rounds: [2]
 first_seen_round: 2
 attempts: 0
-touches: [decompiler/crates/unlace-cli/src, decompiler/crates/unlace-console/src/ifacedecomp.rs]
+touches: [crates/unlace-cli/src, crates/unlace-console/src/ifacedecomp.rs]
 scope: large
 closed_in_round: 2
 closing_pr: "374"
@@ -56,11 +56,11 @@ the declared end instead of swallowing its neighbours.
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "binary_sha256": "1a592a85f424cc2db8953d5a38c86676bcee5e37b242b6fb6244a2c9fccfeeef",
     "binary_size": 14408,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "selector": "0x13c9",
     "selector_kind": "addr"
   },
@@ -143,11 +143,11 @@ Asserts the CURRENT bad behaviour: every named boundary flag is rejected, so the
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "binary_sha256": "1a592a85f424cc2db8953d5a38c86676bcee5e37b242b6fb6244a2c9fccfeeef",
     "binary_size": 14408,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/aif_gap_x86_64",
     "selector": "0x13c9",
     "selector_kind": "addr"
   },

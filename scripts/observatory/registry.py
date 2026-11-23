@@ -1,4 +1,4 @@
-"""Read decompiler/crates/unlace-decomp/phases.toml (groups, subphases, surfaces,
+"""Read crates/unlace-decomp/phases.toml (groups, subphases, surfaces,
 settables). Uses tomllib when the interpreter has it; otherwise a line parser
 covering the flat ``key = value`` subset phases.toml actually uses (quoted
 strings with escapes, booleans, integers) -- same precedent as
@@ -20,7 +20,7 @@ _STRING = re.compile(r'^"(?:[^"\\]|\\.)*"')
 
 
 def default_path() -> Path:
-    return repo_root() / "decompiler" / "crates" / "unlace-decomp" / "phases.toml"
+    return repo_root() / "crates" / "unlace-decomp" / "phases.toml"
 
 
 def _parse_value(raw: str):

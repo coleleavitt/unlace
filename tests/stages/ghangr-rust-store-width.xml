@@ -31,7 +31,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/rust_fmt_write_real_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/rust_fmt_write_real_x86_64</com>
   <!-- bitidioms would fold the leading-zero loop and move the stack buffer this test indexes -->
   <com>option bitidioms off</com>
   <com>read symbols</com>

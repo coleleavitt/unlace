@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/stackarggap_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/stackarggap_x86_64",
     "binary_sha256": "d9f0c0a1be9261562dea5d7271bfd8edfa0a5f96b2082b656fdbe34438c3df83",
     "binary_size": 9024,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/stackarggap_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/stackarggap_x86_64",
     "selector": "hash_final",
     "selector_kind": "name"
   },

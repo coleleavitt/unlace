@@ -14,7 +14,7 @@ rounds: [9]
 first_seen_round: 9
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis]
+touches: [crates/unlace-analysis]
 scope: small
 regression_of: null
 pr: null
@@ -73,11 +73,11 @@ Retain VirtualAlloc for call naming without inventing a function body for its IA
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-      "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe",
+      "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe",
       "binary_sha256": "fc9a367d8615741a122c5b0dbd3d3042f408cbce93451a796bcc45f7710c719b",
       "binary_size": 4608,
       "binary_source": "in-repo",
-      "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe"
+      "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe"
   },
   "timeout_s": 60,
   "cmd": [

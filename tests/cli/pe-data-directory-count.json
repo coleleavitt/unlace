@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_datadircount_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_datadircount_i386.exe",
     "binary_sha256": "a7bd3c04b1159dfc6d31a8426d26d1c6649b23b080f0c3845770313f25a51e9f",
     "binary_size": 1024,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_datadircount_i386.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_datadircount_i386.exe",
     "selector": null,
     "selector_kind": "none"
   },

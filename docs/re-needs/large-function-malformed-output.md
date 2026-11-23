@@ -14,7 +14,7 @@ rounds: [1, 2]
 first_seen_round: 1
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp/src/p2_lift]
+touches: [crates/unlace-decomp/src/p2_lift]
 scope: large
 regression_of: null
 pr: 417
@@ -175,7 +175,7 @@ _none recorded_
   a later round may rebuild.
 - round 2 wave 20 (captain): scope small -> LARGE: the acceptance asks for `std::string` in a 1,200-line optimized MSVC C++
   checker, i.e. C++ object/type recovery, not a local print fix. Expect a proposal fork.
-- round 2 wave 20 (captain): `touches` LEFT as filed (`[decompiler/crates/unlace-decomp]`). I have measured evidence of the
+- round 2 wave 20 (captain): `touches` LEFT as filed (`[crates/unlace-decomp]`). I have measured evidence of the
   symptom but none of the owning module, and a confidently-wrong `touches` would misdirect a
   builder and mis-scope its leases. The builder should set it from its own root-cause work.
 - round 2 B_PLAN (captain): **PASSED OVER for this wave in favour of
@@ -193,7 +193,7 @@ _none recorded_
   large need on a hunch is how one becomes unclosable. Add it at proposal-approval time, once
   the proposal says whether the comparison falls out of the same fix.
 - round 3 (builder `b-r3-large-function-m`): hypothesis OVERTURNED, scope confirmed LARGE, proposal
-  filed. `touches` narrowed to `decompiler/crates/unlace-decomp/src/p2_lift` for increment A. The
+  filed. `touches` narrowed to `crates/unlace-decomp/src/p2_lift` for increment A. The
   acceptance arm is recommended for REPLACEMENT rather than augmentation -- see `## Refutation`.
 - round 3 (captain): **ACCEPTANCE RE-CUT**, on the builder's refutation and re-verified
   independently at 2026-09-05 20:40 UTC. `stdout_matches: ["std::string"]` is unsatisfiable on
@@ -223,7 +223,7 @@ _none recorded_
   `int 0x29`. 0/675 datatest assertions moved and 20.5% faster on the witness. The acceptance
   target is dataset-only, so `verify --promote` refused: `tests/cli/large-function-malformed-output.json`
   carries BOTH clauses verbatim against a vendored 1,536-byte synthesized PE32+
-  (`decompiler/crates/unlace-analysis/tests/fixtures/fastfail_x86_64.exe`) that reproduces the same
+  (`crates/unlace-analysis/tests/fixtures/fastfail_x86_64.exe`) that reproduces the same
   shape in both directions. Increments B1/B2/C remain open in `proposal.md`.
 - closed: acceptance a-2a1f5bccb422 now PASSES at 80e965ca649d
 captain B_DONE r3 (re-applied): closed by #417 (bae88a02); the first application of this bookkeeping was lost when the main tree was checked out to branch docs/restore-round3-records and back, so it was redone from rounds/3/acceptance-suite.json (sha 80e965ca, the current HEAD).

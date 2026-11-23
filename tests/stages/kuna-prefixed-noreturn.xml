@@ -30,7 +30,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/prefixed_noreturn_aarch64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/prefixed_noreturn_aarch64</com>
   <com>option noreturn_known off</com>
   <com>read symbols</com>
   <com>load function probe</com>
@@ -63,7 +63,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/prefixed_noreturn_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/prefixed_noreturn_x86_64</com>
   <com>option noreturn_known off</com>
   <com>read symbols</com>
   <com>load function probe</com>

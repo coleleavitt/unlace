@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis/src/listing/xrefs.rs, decompiler/crates/unlace-analysis/src/listing/kuna_pltstub.rs]
+touches: [crates/unlace-analysis/src/listing/xrefs.rs, crates/unlace-analysis/src/listing/kuna_pltstub.rs]
 scope: small
 regression_of: null
 pr: null
@@ -106,7 +106,7 @@ Seen first on production ARM executables and a shared library (GNU ld, `-fPIC`),
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/xreffp_arm_le32",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/xreffp_arm_le32",
     "binary_sha256": "33c2504a9e043837b83c7668ab36b4e602bff2bb198728af6980a96839ff8e92",
     "binary_size": 77140,
     "binary_source": "in-repo"

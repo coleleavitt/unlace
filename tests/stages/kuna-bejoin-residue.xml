@@ -39,7 +39,7 @@
     bejoinpass.  Pass 1 is the default; pass 2 sets bejoin off (the reloads),
     bejoin evidence (the routine call) or bejoinpass off (the sign test).
 
-    Images: decompiler/crates/unlace-analysis/tests/fixtures/bejoin_spill_*.o
+    Images: crates/unlace-analysis/tests/fixtures/bejoin_spill_*.o
     from bejoin_spill.c, bejoin_handoff_*.o from bejoin_handoff.c,
     bejoin_discard_*.o from bejoin_discard.c; see bejoin_residue.provenance.
 -->
@@ -48,7 +48,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_spill_ppc32_O0.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/bejoin_spill_ppc32_O0.o</com>
   <com>read symbols</com>
   <com>lo fu widen</com>
   <com>decompile</com>
@@ -76,7 +76,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_spill_sparc32_O0.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/bejoin_spill_sparc32_O0.o</com>
   <com>read symbols</com>
   <com>option bejoin callers</com>
   <com>lo fu widen</com>
@@ -93,7 +93,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_handoff_ppc32_O2.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/bejoin_handoff_ppc32_O2.o</com>
   <com>read symbols</com>
   <com>option bejoin callers</com>
   <com>lo fu add64</com>
@@ -112,7 +112,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_handoff_mips32_O2.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/bejoin_handoff_mips32_O2.o</com>
   <com>read symbols</com>
   <com>option bejoinpass whole</com>
   <com>lo fu sign_of</com>
@@ -124,13 +124,13 @@
   <com>print C</com>
   <com>option bejoinpass whole</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_discard_sparc32_O0.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/bejoin_discard_sparc32_O0.o</com>
   <com>read symbols</com>
   <com>lo fu keep</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_discard_mips32_O1.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/bejoin_discard_mips32_O1.o</com>
   <com>read symbols</com>
   <com>lo fu drop</com>
   <com>decompile</com>

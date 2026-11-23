@@ -33,9 +33,9 @@ c0035fd6
 <symbol space="ram" offset="0x100000" name="harness_stub"/>
 </binaryimage>
 <script>
-  <com>option objcsdk decompiler/crates/unlace-analysis/tests/fixtures/objc_sdk_sends</com>
+  <com>option objcsdk crates/unlace-analysis/tests/fixtures/objc_sdk_sends</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objcsdksend_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_objcsdksend_arm64</com>
   <com>option objc on</com>
   <com>option objcresolve off</com>
   <com>option objcrettype off</com>
@@ -50,7 +50,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objcsdksend_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_objcsdksend_arm64</com>
   <com>option objc on</com>
   <com>read symbols</com>
   <com>load addr 0x100000600</com>

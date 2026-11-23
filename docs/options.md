@@ -1,6 +1,6 @@
 # kuna option catalog
 
-**Generated** by `unlace catalog --markdown` from `settableTable` in `decompiler/crates/unlace-decomp/phases.toml` -- do not edit by hand; edit the registry row and regenerate.
+**Generated** by `unlace catalog --markdown` from `settableTable` in `crates/unlace-decomp/phases.toml` -- do not edit by hand; edit the registry row and regenerate.
 
 Set any option per run: `unlace decompile <bin> <fn> --option <name> <value>` (repeatable), `unlace decompile-all <bin> --option <name> <value>`, or the console `option <name> <value>`. Defaults are the shipped values; what a default does is described in its row below. The algorithms behind these options are described in `docs/spec/`.
 

@@ -33,7 +33,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_blocks_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_objc_blocks_x86_64</com>
   <com>option objc off</com>
   <com>read symbols</com>
   <com>load addr 0x100000a20</com>
@@ -43,7 +43,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_blocks_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_objc_blocks_x86_64</com>
   <com>option objc on</com>
   <com>read symbols</com>
   <com>load addr 0x100000a20</com>
@@ -59,7 +59,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_blocks2_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_objc_blocks2_x86_64</com>
   <com>option objc on</com>
   <com>read symbols</com>
   <com>load addr 0x100000890</com>

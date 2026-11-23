@@ -14,7 +14,7 @@ rounds: [10, 12]
 first_seen_round: 10
 attempts: 1
 covered_by_option: funcboundflow
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: 605

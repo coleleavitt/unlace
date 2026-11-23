@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-analysis, decompiler/crates/unlace-console, decompiler/crates/unlace-cli, decompiler/crates/unlace-wasm]
+touches: [crates/unlace-analysis, crates/unlace-console, crates/unlace-cli, crates/unlace-wasm]
 scope: small
 regression_of: null
 pr: "588"
@@ -67,11 +67,11 @@ Inspect GetDlgItemTextA as an import without decoding its four-byte pointer slot
   "schema": "re-probe/1",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe",
     "binary_sha256": "fc9a367d8615741a122c5b0dbd3d3042f408cbce93451a796bcc45f7710c719b",
     "binary_size": 4608,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe"
   },
   "timeout_s": 60,
   "cmd": [
@@ -123,7 +123,7 @@ _not yet refuted_
 
 MEASURED ON b9029a8f (release binaries rebuilt 05:39).
 
-THE CONTROL THAT OVERTURNS IT. decompiler/crates/unlace-analysis/tests/fixtures/pe_imports.exe puts its IAT in .idata at 0x14000d000, flags CONTENTS ALLOC LOAD DATA -- WRITABLE and NOT EXECUTABLE, the exact opposite of the filed condition. kuna registers 50 functions inside that .idata range (DeleteCriticalSection 0x14000d1dc, EnterCriticalSection 0x14000d1e4, GetLastError 0x14000d1ec, ...), and unlace decompile <fixture> 0x14000d1ec --addr emits the SAME class of invented arithmetic body: "v2 = *v8; *(unsigned int *)CONCAT71(v3,v2) = *(int *)CONCAT71(v3,v2) << (v4 & 0x1f) | ...; *(char *)CONCAT71(v3,v2) = *(char *)CONCAT71(v3,v2) + v2;". Pointer arithmetic and a memory write off decoded import-pointer bytes, in a non-executable data section. Section permission is NOT the discriminator. A builder who adds an is-executable guard changes nothing on either binary.
+THE CONTROL THAT OVERTURNS IT. crates/unlace-analysis/tests/fixtures/pe_imports.exe puts its IAT in .idata at 0x14000d000, flags CONTENTS ALLOC LOAD DATA -- WRITABLE and NOT EXECUTABLE, the exact opposite of the filed condition. kuna registers 50 functions inside that .idata range (DeleteCriticalSection 0x14000d1dc, EnterCriticalSection 0x14000d1e4, GetLastError 0x14000d1ec, ...), and unlace decompile <fixture> 0x14000d1ec --addr emits the SAME class of invented arithmetic body: "v2 = *v8; *(unsigned int *)CONCAT71(v3,v2) = *(int *)CONCAT71(v3,v2) << (v4 & 0x1f) | ...; *(char *)CONCAT71(v3,v2) = *(char *)CONCAT71(v3,v2) + v2;". Pointer arithmetic and a memory write off decoded import-pointer bytes, in a non-executable data section. Section permission is NOT the discriminator. A builder who adds an is-executable guard changes nothing on either binary.
 
 BOTH SHIPPED OPTIONS ARE PROVEN INNOCENT on the reported command. unlace decompile crypto4.exe GetDlgItemTextA emits the identical CARRY1 body under --option litpoolconst off AND under --option peimportcall off. So this is NOT the constant-fold defect its sibling turned out to be (see pe-import-calls-become, UPHELD, cause litpoolconst) -- the two needs do not share a root cause, only a binary.
 

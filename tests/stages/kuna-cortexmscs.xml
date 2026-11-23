@@ -22,7 +22,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/cortexm3_scs.elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/cortexm3_scs.elf</com>
   <com>option cortexmscs off</com>
   <com>read symbols</com>
   <com>load function SystemInit</com>
@@ -32,7 +32,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/cortexm3_scs.elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/cortexm3_scs.elf</com>
   <com>read symbols</com>
   <com>load function SystemInit</com>
   <com>decompile</com>

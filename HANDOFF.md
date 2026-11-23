@@ -23,7 +23,7 @@ Nothing is running: no agents, no builds. All work is committed and pushed.
 - Moved off upstream; rebrand; upstream sync; README/NOTICE.
 - CI: fast separate jobs (tidy/rustfmt, clippy, parity gates), the workspace suite under
   cargo-llvm-cov with a Repowise coverage upload, the `.sla` cache, a conflict-label job;
-  CodSpeed with 9 benchmarks (`decompiler/crates/unlace-bench`).
+  CodSpeed with 9 benchmarks (`crates/unlace-bench`).
 - Landed or ported all 61 former upstream PRs (57 merged, 2 superseded, #41's useful parts ported
   onto `itaniumeh`, 3 ObjC PRs rewritten onto main's ObjC code).
 - Exception handling: `itaniumeh` gained ARM EHABI (`.ARM.exidx`/`.ARM.extab`), type names from
@@ -122,7 +122,7 @@ tidy/clippy/parity are green, then the next one.
   landed commits had no run. Branch `ci/fast-tests` fixed the failures (a raw-image object view
   built from the file instead of the mapped bytes; five tests pinned to output that later landings
   changed on purpose), moved the suite to cargo-nextest (one archive build, three partitions,
-  `decompiler/.config/nextest.toml`), gave each main commit its own concurrency group, and moved
+  `.config/nextest.toml`), gave each main commit its own concurrency group, and moved
   coverage plus the slowest tests to the scheduled `coverage.yml`.
 - Known follow-ups:
   - `kuna_phases::tests::option_values_live_value_present_for_129` pins 137 options with a live
@@ -154,7 +154,7 @@ Closed today as done: #7, #11-#15, #22, #35.
 
 - Gate: `cargo check --workspace`, build the binaries, `cargo clippy` on touched crates,
   `cargo fmt --all --check`, `unlace catalog --check`, `python3 scripts/check_layers.py`,
-  `make check-spec`. No local test suites unless asked; CI runs them.
+  `python3 tools/check_spec.py`. No local test suites unless asked; CI runs them.
 - Build env: `export MAKEFLAGS="-j --jobserver-auth=fifo:/run/user/$(id -u)/unlace-jobserver.fifo"`
   and never set `CARGO_BUILD_JOBS` (it bypasses the shared jobserver). Heavy runs through
   `tools/hooks/unlace-slot`. Never export `RUSTFLAGS`.

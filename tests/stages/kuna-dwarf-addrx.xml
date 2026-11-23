@@ -10,7 +10,7 @@
     them: `bump` printed `dat_202250 + dat_202240[k & 3]`.  The index is now
     resolved through .debug_addr, in the file's byte order.
 
-    The two images are decompiler/crates/unlace-analysis/tests/fixtures/dwarf_addrx.c
+    The two images are crates/unlace-analysis/tests/fixtures/dwarf_addrx.c
     built for x86-64 and for big-endian AArch64 (the command is in the source).
     A strict fix with no option: one pass pins the names.
 -->
@@ -21,13 +21,13 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarf_addrx_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarf_addrx_x86_64</com>
   <com>read symbols</com>
   <com>load function bump</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarf_addrx_aarch64_be</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarf_addrx_aarch64_be</com>
   <com>read symbols</com>
   <com>load function bump</com>
   <com>decompile</com>

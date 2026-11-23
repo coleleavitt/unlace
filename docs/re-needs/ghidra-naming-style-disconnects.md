@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/580
@@ -94,11 +94,11 @@ Use alternative naming to identify the problematic temporary without changing se
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
     "binary_sha256": "1c9ad3b67437c7e85ac53d0755609c5b5e015225796a98c0287de5f2cb3d382e",
     "binary_size": 15800,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/assertranges_x86_64",
     "selector": "sample",
     "selector_kind": "name"
   }

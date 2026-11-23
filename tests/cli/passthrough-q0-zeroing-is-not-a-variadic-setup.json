@@ -14,11 +14,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/passthrough_q0zero_aarch64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/passthrough_q0zero_aarch64",
     "binary_sha256": "0d025a43b501ac22a656a92369b15d91bc06c997cecd9bb6ad52d20966fef7bc",
     "binary_size": 1224,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/passthrough_q0zero_aarch64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/passthrough_q0zero_aarch64",
     "selector": "encoded_size",
     "selector_kind": "name"
   },

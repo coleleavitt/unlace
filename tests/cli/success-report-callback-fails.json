@@ -22,11 +22,11 @@
     }
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/funcbound_cutoff_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/funcbound_cutoff_i386",
     "binary_sha256": "7b8a32c3cc0e9816bfe03d2e7c4aa5a596a21e43a6e35dc43cb17fa5867138ec",
     "binary_size": 5208,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/funcbound_cutoff_i386",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/funcbound_cutoff_i386",
     "selector": "0x8048820",
     "selector_kind": "addr"
   },

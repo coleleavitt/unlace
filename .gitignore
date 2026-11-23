@@ -1,10 +1,10 @@
-# Generated SLEIGH artifacts (built by `make specs`)
+# Generated SLEIGH artifacts (built by `target/debug/slacomp -a specs`)
 specs/**/*.sla
 specs/**/*.sla.lock
 
-# Rust build output (decompiler/, the Cargo workspace); a worktree's decompiler/target is a
-# symlink to its target dir (docs/dev-setup.md)
-decompiler/target
+# Rust build output of the Cargo workspace at the root; a worktree's target is a
+# symlink to its target dir (docs/dev-setup.md).
+/target
 
 # The lefthook config link tools/hooks/git-hooks/post-checkout puts in each worktree
 /.lefthook.yml
@@ -30,7 +30,7 @@ __pycache__/
 # Rewritten patch left by tools/sync_upstream.py (dry runs / failed applies)
 .kuna_sync.patch
 
-# Generated codebase-observatory pages + data (`make observatory`; docs/observatory.md).
+# Generated codebase-observatory pages + data (docs/observatory.md).
 # Root-anchored: scripts/observatory/ is the generator source and IS committed.
 /observatory/
 

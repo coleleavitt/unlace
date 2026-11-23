@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/splitstorekeep_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/splitstorekeep_x86_64",
     "binary_sha256": "4f2ee6ff1861a50fba58cba13e1e1ed6dccadcca84d6144200183326344a9671",
     "binary_size": 4800,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/splitstorekeep_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/splitstorekeep_x86_64",
     "selector": "copy31",
     "selector_kind": "name"
   },

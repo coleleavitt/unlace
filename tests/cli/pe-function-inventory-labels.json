@@ -17,11 +17,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/msvc_rtti_x64.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/msvc_rtti_x64.exe",
     "binary_sha256": "8fc43a64b980043382bfc68754298b4533a0a97489ce2b35bf66174ad207325b",
     "binary_size": 3584,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/msvc_rtti_x64.exe"
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/msvc_rtti_x64.exe"
   },
   "expect": {
     "exit_code": {

@@ -20,11 +20,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/segmentgap_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/segmentgap_i386",
     "binary_sha256": "a3b0d166862d058b5f398f08eadcdc85ccb79056d28262f5d339bd7fe09b5402",
     "binary_size": 4295,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/segmentgap_i386",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/segmentgap_i386",
     "selector": "0x8048000",
     "selector_kind": "addr"
   },

@@ -350,7 +350,7 @@ def main(argv=None):
               file=sys.stderr)
         return 1
     print("Applied. Updated GHIDRA_REV -> %s" % to_full)
-    print("Next: `make test` (675/675 PARITY OK), then review `git diff` and commit.")
+    print("Next: `cargo test -p unlace-cli --test parity datatests` (675/675 PARITY OK), then review `git diff` and commit.")
     return 0
 
 

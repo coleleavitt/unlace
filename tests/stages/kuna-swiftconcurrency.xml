@@ -38,7 +38,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_async_elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/swift_async_elf</com>
   <com>option swiftmetadata on</com>
   <com>option swiftcall off</com>
   <com>read symbols</com>
@@ -49,7 +49,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_async_elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/swift_async_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x5200</com>
@@ -62,7 +62,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_sigs_elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/swift_sigs_elf</com>
   <com>option swiftmetadata on</com>
   <com>option swiftcall off</com>
   <com>read symbols</com>
@@ -70,7 +70,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_sigs_elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/swift_sigs_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x3ea0</com>

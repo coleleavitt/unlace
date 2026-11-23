@@ -14,7 +14,7 @@ rounds: [7]
 first_seen_round: 7
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli]
+touches: [crates/unlace-cli]
 scope: small
 regression_of: null
 pr: null
@@ -125,7 +125,7 @@ REPRO (same arena binary as resource-loader-c-retains: arena/7/6442366033c5d4393
   -> warning: ... rejected: Bad C syntax
 Drop the __stdcall and the SAME declaration is accepted. Reproduces at HEAD.
 
-1. FILE AND LINE. decompiler/crates/unlace-console/src/grammar.rs:1362-1366, CParse::lookup_identifier:
+1. FILE AND LINE. crates/unlace-console/src/grammar.rs:1362-1366, CParse::lookup_identifier:
     // glb->hasModel(nm) -> FUNCTION_SPECIFIER. The kuna Architecture has no
     // model registry, so this never fires (it would classify e.g.
     // "__stdcall" as a function specifier).  // STUB(w6-fspec-2)

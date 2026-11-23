@@ -41,7 +41,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_interwork_bl_first_le32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arm_interwork_bl_first_le32</com>
   <com>option listing on</com>
   <com>option armwalkmode off</com>
   <com>read symbols</com>
@@ -49,16 +49,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_interwork_bl_first_le32</com>
-  <com>option listing on</com>
-  <com>option armwalkmode off</com>
-  <com>option flowmode on</com>
-  <com>read symbols</com>
-  <com>load addr 0x2000080</com>
-  <com>decompile</com>
-  <com>print C</com>
-  <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_interwork_le32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arm_interwork_bl_first_le32</com>
   <com>option listing on</com>
   <com>option armwalkmode off</com>
   <com>option flowmode on</com>
@@ -67,7 +58,16 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/arm_interwork_le32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arm_interwork_le32</com>
+  <com>option listing on</com>
+  <com>option armwalkmode off</com>
+  <com>option flowmode on</com>
+  <com>read symbols</com>
+  <com>load addr 0x2000080</com>
+  <com>decompile</com>
+  <com>print C</com>
+  <com>clear architecture</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/arm_interwork_le32</com>
   <com>option listing on</com>
   <com>option armwalkmode off</com>
   <com>option flowmode aftercall</com>

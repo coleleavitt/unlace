@@ -179,9 +179,9 @@ def infer_track(obs_group):
 
 
 TOUCHES_BY_TRACK = {
-    "tooling": ["decompiler/crates/unlace-cli"],
-    "quality": ["decompiler/crates/unlace-decomp"],
-    "loader": ["decompiler/crates/unlace-analysis"],
+    "tooling": ["crates/unlace-cli"],
+    "quality": ["crates/unlace-decomp"],
+    "loader": ["crates/unlace-analysis"],
     "perf": [],
 }
 

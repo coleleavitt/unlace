@@ -14,7 +14,7 @@ rounds: [9, 12]
 first_seen_round: 9
 attempts: 1
 covered_by_option: entryretdispatch
-touches: [decompiler/crates/unlace-console, decompiler/crates/unlace-cli, decompiler/crates/unlace-analysis]
+touches: [crates/unlace-console, crates/unlace-cli, crates/unlace-analysis]
 scope: small
 regression_of: null
 pr: 595
@@ -88,11 +88,11 @@ See the transfer to LoadLibraryA, or a warning that stack-directed control flow 
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/entry_ret_dispatch_i386",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/entry_ret_dispatch_i386",
     "binary_sha256": "d56c357fef6d4fcd03aa96a20fd5adb4bf3635a803f0cfa91779f3428492f7b6",
     "binary_size": 9284,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/entry_ret_dispatch_i386",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/entry_ret_dispatch_i386",
     "selector": "entry_dispatch",
     "selector_kind": "name"
   },

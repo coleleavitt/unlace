@@ -81,17 +81,18 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: decompiler
           key: nightly
 
       - name: Build unlace and compile the SLEIGH specs
-        run: make binaries specs
+        run: |
+          cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
+          ./target/release/slacomp -a specs
 
       # Tomorrow's speed baseline: the binary and spec tree exactly as built here.
       - name: Package tonight's build
         run: |
           mkdir -p build
-          cp decompiler/target/release/unlace build/
+          cp target/release/unlace build/
           tar -czf build/specs.tgz specs
           echo "$(bash scripts/version.sh) (${GITHUB_SHA::10})" | tee build/LABEL
 

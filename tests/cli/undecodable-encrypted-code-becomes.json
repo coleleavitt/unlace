@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/decodehalt_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/decodehalt_x86_64",
     "binary_sha256": "dbe72f3f3ce10f969be05d8049b0aed4879687fc8dd7a83f142723cca5097998",
     "binary_size": 9824,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/decodehalt_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/decodehalt_x86_64",
     "selector": "stub",
     "selector_kind": "name"
   },

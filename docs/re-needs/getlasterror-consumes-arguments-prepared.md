@@ -14,7 +14,7 @@ rounds: [10]
 first_seen_round: 10
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: null
@@ -56,11 +56,11 @@ Recover the error-reporting function with the actual Win32 call arguments.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
     "binary_sha256": "a1734e48030ee5035a5f6d57cf044e8e894422bec392246d865c72ea60889d2e",
     "binary_size": 8704,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
     "selector": "0x401000",
     "selector_kind": "addr"
   }
@@ -96,11 +96,11 @@ Recover the error-reporting function with the actual Win32 call arguments.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
     "binary_sha256": "a1734e48030ee5035a5f6d57cf044e8e894422bec392246d865c72ea60889d2e",
     "binary_size": 8704,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe",
     "selector": "0x401000",
     "selector_kind": "addr"
   }

@@ -7,8 +7,8 @@
 // case replays the file a page on its own exports, and the file a page
 // in a live session exports (its directives in the registers' birth order,
 // built here from registers applied in the opposite order); no directive may
-// be rejected. Skips (exit 0) without a built `unlace` (make binaries).
-//   make binaries && node integrations/web/test/decompile-replay.mjs
+// be rejected. Skips (exit 0) without a built `unlace` (cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli).
+//   cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli && node integrations/web/test/decompile-replay.mjs
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -19,9 +19,9 @@ import { Session } from '../decompile/session.js';
 import * as R from '../decompile/collab/replica.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..');
-const kuna = join(root, 'decompiler/target/release/unlace');
+const kuna = join(root, 'target/release/unlace');
 if (!existsSync(kuna)) {
-  console.log('DECOMPILE REPLAY SKIPPED — no decompiler/target/release/unlace (make binaries)');
+  console.log('DECOMPILE REPLAY SKIPPED — no target/release/unlace (cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli)');
   process.exit(0);
 }
 const sample = join(root, 'integrations/web/test/fixtures/sample.elf');

@@ -4,7 +4,7 @@ Scope: research only. IDA side read from the 9.5 plugin modules (Hex-Rays-style 
 function plus the SQL exports in `~/SiteResearch/ida-pro/sqlite/apple__{objc,swift,macho,arm,dscu,kcu}.sqlite`);
 addresses below are offsets inside those Linux `.so` modules (`objc.so`, `swift.so`, `macho.so`, `arm.so`).
 Every mechanism is described in my own words; no IDA code or text is copied here.
-kuna side: branch `all` at eeceeccd7 (main checkout build `decompiler/target/debug/unlace`, Apple options
+kuna side: branch `all` at eeceeccd7 (main checkout build `target/debug/unlace`, Apple options
 `objc swiftmetadata cfstrings importdata objcsdk` on). Perplexity evidence: the 390 main-binary functions
 that have both an IDA and a unlace decompile in `~/Downloads/perplexity-26.46.0/gaps/` (tp300 + the 91-function
 stratified sample; kuna JSON from b6168f82f, spot checks re-run on eeceeccd7), plus the full IDA

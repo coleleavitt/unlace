@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 6
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp, decompiler/crates/unlace-console, decompiler/crates/unlace-decomp/phases.toml, decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs, docs/options.md, docs/history.md, tests/stages]
+touches: [crates/unlace-decomp, crates/unlace-console, crates/unlace-decomp/phases.toml, crates/unlace-decomp/src/p0_knowledge/options.rs, docs/options.md, docs/history.md, tests/stages]
 scope: small
 regression_of: null
 pr: "411"
@@ -339,7 +339,7 @@ _none recorded_
   sequential timeit here has reported +42% on byte-identical output. **This need may legitimately
   not close on this attempt**; a merged, measured, output-identical cut that still misses 10 s is a
   success by every rule this loop has, and the bar is not moved to meet it.
-- round 2 B_PLAN (captain): `touches` widened to include `decompiler/crates/unlace-console` — #385
+- round 2 B_PLAN (captain): `touches` widened to include `crates/unlace-console` — #385
   landed mostly there (`ifacedecomp.rs`, `decompile_step.rs`) and the declared surface said only
   `unlace-decomp`. Adds no lease (perf holds none); it makes the sibling contract honest. Live sibling
   `b-r2-c-string-objects` is editing `unlace-decomp/src/p5_types/`, `p0_knowledge/`,
@@ -367,7 +367,7 @@ _none recorded_
   **The pre/post delta this wave's harness printed (-0.04 s) is VOID -- do not cite it.** It copied
   the pre-merge `kuna` to /tmp and timed it against the rebuilt one, but `unlace decompile` forks
   `decomp_dbg`, and `unlace-cli/src/paths.rs` resolves that sibling by `exe_dir()` then falls back to
-  `repo_root()/decompiler/target/release`; off /tmp the parent walk fails, `repo_root()` falls back
+  `repo_root()/target/release`; off /tmp the parent walk fails, `repo_root()` falls back
   to the CWD, and the "pre" binary executed the FRESHLY REBUILT engine (proven: the /tmp copy's
   `catalog --json` gained the new option across `make binaries`). Any future A/B of a decompile must
   pin the engine too -- copy `decomp_dbg` aside and point at it with `KUNA_DECOMP_DBG`.

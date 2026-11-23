@@ -31,7 +31,7 @@ MODULE_BAND = {
     "typeop": "middle", "fspec": "middle", "variable": "middle", "cover": "middle", "varmap": "middle",
     "dynamic": "middle", "heritage": "middle", "merge": "middle", "jumptable": "middle",
 }
-SRC = "decompiler/crates/unlace-decomp/src"
+SRC = "crates/unlace-decomp/src"
 ALLOWLIST = "scripts/layers-allowlist.txt"
 TOKEN = re.compile(r"\w+|::|\S")
 WORD = re.compile(r"\w+")

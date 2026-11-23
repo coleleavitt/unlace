@@ -27,7 +27,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/floatparam_x86_64_O0.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/floatparam_x86_64_O0.o</com>
   <com>read symbols</com>
   <com>load function fs</com>
   <com>decompile</com>
@@ -53,7 +53,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/floatparam_x86_64.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/floatparam_x86_64.o</com>
   <com>read symbols</com>
   <com>load function fs</com>
   <com>decompile</com>
@@ -76,7 +76,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/floatparam_a64.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/floatparam_a64.o</com>
   <com>read symbols</com>
   <com>load function fs</com>
   <com>decompile</com>

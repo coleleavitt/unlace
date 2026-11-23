@@ -2323,7 +2323,8 @@ mod tests {
         // and kuna-swiftstrcmp / a Swift literal compared for equality prints in the inline test
         // and kuna-iokitcxx / IOKit classes typed like C++ classes (option iokitclasses on)
         // and kuna-relswitch-a64 / an arm64e hardened jump table is a switch; its inline table is no function start
-        assert_eq!(count, 988, "corpus file count drifted");
+        // and kuna-objcstructabi / an Objective-C method passing or returning a union, an unnamed struct or bit-fields by value keeps its prototype
+        assert_eq!(count, 989, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

@@ -25,19 +25,6 @@ fn run_with_closed_stdout(args: &[&str]) -> std::process::Output {
     child.wait_with_output().expect("wait for kuna")
 }
 
-/// Close the read end before the child writes anything, so the very first write
-/// takes the EPIPE — no dependence on the payload outgrowing the pipe buffer.
-fn run_with_stdout_closed_immediately(args: &[&str]) -> std::process::Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawn kuna");
-    drop(child.stdout.take().expect("stdout pipe"));
-    child.wait_with_output().expect("wait for kuna")
-}
-
 fn assert_no_panic(output: &std::process::Output) {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -93,31 +80,4 @@ fn functions_json_tolerates_a_closed_reader() {
         "fast",
     ]);
     assert_quiet_success(&output);
-}
-
-/// A closed pipe must not turn a red gate green.  `unlace test` scores the stages
-/// corpus against the *main* corpus baseline: the two record disjoint passkeys by
-/// construction, so every baseline entry reads as REGRESSED and the run is a
-/// guaranteed exit 1 — which has to survive nobody reading the report.
-#[test]
-fn a_closed_reader_does_not_turn_a_failing_gate_green() {
-    let root = repo_root();
-    let output = run_with_stdout_closed_immediately(&[
-        "test",
-        "--datatests",
-        "--datatests-dir",
-        root.join("tests/stages").to_str().unwrap(),
-        "--baseline",
-        root.join("docs/baseline.json").to_str().unwrap(),
-        "--name",
-        "kuna-catalog",
-    ]);
-    assert_no_panic(&output);
-    assert_eq!(
-        output.status.code(),
-        Some(1),
-        "a REGRESSED parity run reported {:?} once its reader closed; {}",
-        output.status.code(),
-        String::from_utf8_lossy(&output.stderr)
-    );
 }

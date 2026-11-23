@@ -45,7 +45,7 @@
 //! with no CodeView record, no candidate `.pdb` on disk, an unreadable one, or a
 //! GUID/age mismatch all yield an empty output. The fingerprint gate is what makes
 //! the automatic search safe to run by default: a `.pdb` that is not this image's
-//! cannot be applied. Every parity gate (`cargo test -p unlace-cli --test parity datatests`/`test-stages`/`rust-test`) is
+//! cannot be applied. Every parity gate (`cargo test -p unlace-harness --test parity datatests`/`test-stages`/`rust-test`) is
 //! byte-identical by construction — the XML datatest path never calls
 //! `run_default_analyses`.
 

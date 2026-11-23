@@ -160,17 +160,13 @@ These run with the same upstream harness as `tests/datatests/` but from a
 separate directory so the upstream baseline (`docs/baseline.json`) is never touched:
 
 ```bash
-cargo test -p unlace-cli --test parity stage_tests
-# or, directly:
-target/release/unlace test --datatests --datatests-dir tests/stages \
-    --baseline docs/baseline-stages.json
+cargo test -p unlace-harness --test parity stage_tests
 ```
 
 After adding a testcase, re-record the stages baseline (never `docs/baseline.json`):
 
 ```bash
-target/release/unlace test --datatests --datatests-dir tests/stages \
-    --save-baseline docs/baseline-stages.json
+UNLACE_BLESS=1 cargo test -p unlace-harness --test parity stage_tests
 ```
 
 `kuna-reloc-families.xml` loads relocatable objects (`fixtures/relocs/`, built by

@@ -194,8 +194,8 @@ def _footer_findings(path, rel, text, check):
                            "data_footer says {} passing, the file carries {} keys".format(
                                footer[0], len(passing)),
                            "re-RECORD it, never merge it:\n"
-                           "  unlace test --datatests --datatests-dir tests/stages "
-                           "--save-baseline {}".format(rel)))
+                           "  UNLACE_BLESS=1 cargo test -p unlace-harness --test parity "
+                           "{}".format("datatests" if rel == "docs/baseline.json" else "stage_tests")))
     if len(footer) > 1 and footer[1] < footer[0]:
         out.append(Finding("C", check, REJECT, "impossible-footer", rel, 0,
                            "data_footer {} has more passing than total".format(footer)))

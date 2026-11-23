@@ -14,9 +14,8 @@ every usage block in this CLI does.
 All command output goes through a fallible stdout boundary. A downstream reader that closes
 the pipe early is a normal terminal condition, not the `println!` panic (exit `101`) it used
 to be: no panic text, no broken-pipe diagnostic. It suppresses the *diagnostic*, not the
-*verdict* — the command still exits with the code its own work earned, so `unlace test | head`
-on a regressed baseline exits `1` and the DIV-45 failure contract below holds with or without
-a reader. Other stdout write failures are real errors: reported, and exit `1`.
+*verdict* — the command still exits with the code its own work earned, so `unlace catalog --check | head`
+on a stale catalog exits `1`, with or without a reader. Other stdout write failures are real errors: reported, and exit `1`.
 
 Thin Mach-O loads and CLI metadata probes use a private read-only file mapping.
 Keep the input file unchanged for the duration of analysis: private mapping does
@@ -89,7 +88,7 @@ From the source checkout's root:
 
 ```sh
 cargo test --release -p unlace-slacomp --test compiler_parity
-cargo test -p unlace-cli --test parity datatests
+cargo test -p unlace-harness --test parity datatests
 ```
 
 The first command compares decompressed `.sla` contents with pinned Ghidra
@@ -125,10 +124,8 @@ tree could not be unpacked.
 |---|---|
 | `KUNA_SPECS` | The SLEIGH tree passed as `-sleighpath` (`SLEIGHHOME` is the engine's own name for the same thing). Wins over a built-in tree. |
 | `KUNA_DECOMP_DBG` | A separate `decomp_dbg` binary to run instead of the built-in console; a non-empty value also makes `catalog` query that build. `--decomp-dbg PATH` does the same for one `decompile` or `catalog` run, and wins over the variable. |
-| `KUNA_DECOMP_TEST` | The `decomp_test_dbg` datatest harness (`unlace test --binary PATH`). It is not built in; it is looked for beside `unlace`, then in the checkout's `target/<profile>/`, under its bare and `.exe` names. |
 | `KUNA_SLACOMP` | A separate `slacomp` binary for `unlace specs` to run instead of the built-in compiler. |
-| `KUNA_ROOT` | The repo root, when the binaries are not in-tree: `specs/`, `tests/datatests/` and `target/<profile>/` are all read from it. |
-| `KUNA_RUST_PROFILE` | The `target/<profile>` directory the in-tree fallback reads (default `release`). |
+| `KUNA_ROOT` | The repo root, when the binaries are not in-tree: `specs/` is read from it. |
 | `KUNA_DECODE_JOBS` | Decode lanes for the discovery walk, without `--jobs` — what `--jobs N` exports for the duration of the load (capped at 32, forced to `1` in pool workers). |
 | `KUNA_DECODE_MIN_BYTES` | Lowers the 8 MiB executable-bytes floor under which the lanes decline. The only way to get lanes on a small image; the equivalence tests set `0`. |
 | `KUNA_DECODE_INTERVALS` | Intervals per lane (default 32, clamped to 4096). A measurement knob. |
@@ -142,10 +139,9 @@ An override wins over all of these, and one pointing at nothing is reported as
 such rather than silently re-probed.
 
 A separate engine binary can come from a different build than `unlace`: an
-override pointing at another install, or a `decomp_test_dbg` left behind when
-only `unlace` was rebuilt. (The built-in console is `unlace` itself, so it always
-matches.) `unlace` passes its build identity to every `decomp_dbg` and
-`decomp_test_dbg` it runs (as `KUNA_PARENT_BUILD`). A child from another build
+override pointing at another install. (The built-in console is `unlace` itself, so it always
+matches.) `unlace` passes its build identity to every `decomp_dbg` it runs (as
+`KUNA_PARENT_BUILD`). A child from another build
 answers, and `unlace` prints one warning on stderr naming both, then carries on:
 
 ```
@@ -157,82 +153,40 @@ warning: decomp_dbg is a different build from this unlace
 
 An identity is the version `unlace --version` prints plus a fingerprint of the
 child's production source graph, the workspace manifest and `Cargo.lock`.
-`decomp_dbg` uses the `unlace-console` engine graph; `decomp_test_dbg` adds the
-`unlace-harness` runner. Two source builds of different trees therefore differ even
+`decomp_dbg` uses the `unlace-console` engine graph. Two source builds of different trees therefore differ even
 though both report the workspace version, while a checkout's debug and release
 builds agree. Matching builds print nothing. The warning never goes to stdout,
 so a `--json` document stays clean. A child older than the handshake cannot
 answer: it runs as before, without a warning.
 
-## `unlace test` — the parity gates
+## The parity gates
+
+The datatest corpus (`tests/datatests`, 675 assertions) and the stage corpus (`tests/stages`)
+are plain cargo tests: `crates/unlace-harness/tests/parity.rs` runs each corpus in-process
+through the harness's datatest runner and compares the passing assertions with
+`docs/baseline.json` and `docs/baseline-stages.json`.
 
 ```bash
-unlace test --all --baseline docs/baseline.json          # expect: PARITY OK
-unlace test --datatests --json                           # machine-readable
-unlace test --datatests --datatests-dir tests/stages \
-    --baseline docs/baseline-stages.json               # the stage-issue corpus (= cargo test -p unlace-cli --test parity stage_tests)
+cargo test -p unlace-harness --test parity              # both corpora; expect PARITY OK twice
+cargo test -p unlace-harness --test parity datatests    # tests/datatests only
+cargo test -p unlace-harness --test parity stage_tests  # tests/stages only
+UNLACE_BLESS=1 cargo test -p unlace-harness --test parity stage_tests   # re-record a baseline
 ```
 
-`unlace test` parses the harness's two streams separately (unit results on **stderr**,
-datatest results on **stdout**) and exits nonzero on any failure or baseline regression.
-`--save-baseline PATH` re-records a baseline. Routine use: `docs/baseline-stages.json`
-when adding stage tests. `docs/baseline.json` is re-pinned only for sanctioned intentional
-changes (an upstream sync per `docs/history.md`, or a deliberate default flip the commit
-message names) — never to absorb a regression.
+A test fails on a baseline assertion that no longer passes (listed under `REGRESSED`), on any
+failing assertion, and on a test file that cannot be parsed or run. Assertions that pass but
+are not in the baseline are listed as newly passing and do not fail. The corpora need the
+compiled `.sla` files in `specs/`.
 
-**Selection.** `--name N` (repeatable) narrows `--datatests` to the corpus file `N.xml`
-(`N` itself when it ends in `.xml`), and `--unittests` to the unit test `N`. The datatest harness only
-runs a name that is the file name of an `*.xml` directly in the corpus directory, and it
-ignores any other name without a word. A name that matches nothing, a corpus directory
-with no `*.xml` files, and an unreadable corpus directory are all **selection errors**.
-Each error gets its own `error:` line on stderr. The tests that do exist still run and
-are reported, the run **exits 2**, and `--save-baseline` writes nothing, so a typo'd
-`--datatests-dir` cannot re-record a baseline as empty. The unit registry of
-`decomp_test_dbg` is empty by design (engine unit tests run under `cargo test`). A plain
-`--unittests` run therefore still reports `unit_footer: [0, 0]` and exits `0`. Only a
-named unit test the harness did not run is an error.
+`UNLACE_BLESS=1` re-records the baseline from the run instead of comparing, and refuses while
+any assertion fails. It rewrites the `data:` keys and `data_footer`; other keys in the file are
+kept. Routine use: `docs/baseline-stages.json` when adding stage tests.
+`docs/baseline.json` is re-recorded only for sanctioned intentional changes (an upstream sync
+per `docs/history.md`, or a deliberate default flip the commit message names), never to
+absorb a regression.
 
-| Exit | Meaning |
-|---|---|
-| `0` | every selected test ran and passed, and parity held when `--baseline` was given |
-| `1` | `--baseline` reports a regression or any failure, or (without `--baseline`) a datatest file errored |
-| `N` | without `--baseline`, `N` tests failed (the harness's own count, at most 255) |
-| `2` | a selection error, with the report still printed; or the run could not start or record (harness missing, unreadable or malformed baseline, a `--save-baseline` write failure, usage error), with no report |
-| `128+N` | without `--baseline`, the harness was killed by signal `N` |
-
-A selection error takes precedence over every other status. With `--baseline`, as
-`cargo test -p unlace-cli --test parity datatests` and `cargo test -p unlace-cli --test parity stage_tests` run it, the status is only ever `0`, `1` or `2`, so
-`2` there always means an error. Without `--baseline` the status is the failure count,
-so a run with two failed tests also exits `2`, and automation should read
-`selection.complete` rather than the status alone.
-
-With `--json` the report is one object: `unit_footer` / `data_footer` (`[passed, total]`
-for unit tests, `[applied, passing]` for datatests, `null` for a half that did not run),
-`passing` (the `unit:`/`data:` keys a baseline records), `returncode` (the harness's own
-status), `failures` (`unit`, `data`, `data_errors`), `parity` (with `--baseline`) and
-`selection`:
-
-```json
-"selection": {
-  "complete": false,
-  "errors": ["datatest 'nope.xml' not found in /repo/tests/datatests"],
-  "data": {"corpus": "/repo/tests/datatests", "requested": ["forloop1.xml", "nope.xml"],
-           "matched": ["forloop1.xml"], "missing": ["nope.xml"]},
-  "unit": null
-}
-```
-
-`complete` is `false` exactly when `errors` is non-empty, and then the exit is `2`.
-`data.matched` lists the corpus files the harness ran: the whole corpus when no `--name`
-was given, so an empty corpus is `matched: []`. `unit.matched` lists the unit tests
-the harness reported running. `data` is `null` under `--unittests` and `unit` is `null`
-under `--datatests`. A saved baseline keeps its four fields only (`unit_footer`,
-`data_footer`, `passing`, `returncode`), so recording one never depends on `selection`.
-
-A baseline must be a JSON object with one `passing` array containing only strings.
-Other metadata is optional. Malformed JSON, trailing non-whitespace content, a
-missing or repeated `passing` field, and wrongly typed entries exit `2`; they are
-not treated as an empty baseline. An explicitly empty `passing` array remains valid.
+A baseline is a JSON object whose `passing` array holds strings; a record without one is an
+error, never an empty baseline.
 
 ## `unlace decompile` — one function
 

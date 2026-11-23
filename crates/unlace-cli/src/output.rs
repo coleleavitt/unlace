@@ -8,8 +8,8 @@
 //!
 //! It suppresses the *diagnostic*, never the *verdict*.  The status a command
 //! computed says whether its work succeeded and is orthogonal to whether anyone
-//! was still reading, so it survives the broken pipe (`unlace test | head` on a
-//! REGRESSED baseline still exits 1 -- a gate that cannot go green by losing its
+//! was still reading, so it survives the broken pipe (`unlace catalog --check | head`
+//! on a stale catalog still exits 1 -- a gate that cannot go green by losing its
 //! audience).  Any other write failure is a real error: it is reported and
 //! forces exit 1.
 

@@ -32,9 +32,9 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 
 | Path | What it owns |
 |---|---|
-| `Cargo.toml` + `crates/` | The engine (the cargo workspace is the repo root). `unlace-decomp` = the decompiler's driver and facade (`src/infra/`: scheduling, `decompile_drive`, the pass-hook composition; `src/p0_knowledge/kuna_option_dispatch.rs`; `phases.toml`), re-exporting `unlace-middle`, `unlace-lift`, `unlace-structure`, `unlace-bandb` and `unlace-emit`, so callers keep `unlace_decomp::` paths; `unlace-emit` = its emit band (`p9_emit/`: the printers, the output-language plane, final casts and rendering; same folder layout, builds on the four bands below it); `unlace-bandb` = its Band B (`p3_dataflow/`…`p6_variables/`: dataflow, calls, types, variables; same folder layout, builds on the three bands below it); `unlace-structure` = its structure band (`p7_regions/`, `p8_structure/`: regions and control-flow structuring; same folder layout, builds on `unlace-middle` and `unlace-lift`); `unlace-lift` = its lift band (`p1_partition/`, `p2_lift/`: partition, flow, switch recovery, call fixups; same folder layout, builds only on `unlace-middle`); `unlace-middle` = its IR band (`substrate/`, the option/catalog plane in `p0_knowledge/`, `Architecture`, actions, fspec, heritage, merge, jump tables, the pass-hook table; same folder layout, `build.rs` generates the catalog tables from `unlace-decomp/phases.toml`); `unlace-analysis` = loader/analyzer tier (ELF/Mach-O, chained fixups, dyld cache, kernelcache, ObjC, Swift, DWARF, DEX, strings, function discovery); `unlace-sleigh`/`unlace-slacomp` = SLEIGH runtime/compiler (`slacomp`); `unlace-console` = `decomp_dbg`/`decomp_test_dbg`; `unlace-cli` = the `unlace` binary; `unlace-ghidra`/`unlace-wasm` = Ghidra and browser front-ends; `unlace-base`/`unlace-num`/`unlace-harness`/`unlace-lift-diff` = support. |
-| `tests/datatests/` | Vendored XML regression corpus (675 assertions) vs `docs/baseline.json` — `cargo test -p unlace-cli --test parity datatests`. |
-| `tests/stages/` | kuna-owned issue testcases vs `docs/baseline-stages.json` — `cargo test -p unlace-cli --test parity stage_tests` (`tests/stages/README.md`). |
+| `Cargo.toml` + `crates/` | The engine (the cargo workspace is the repo root). `unlace-decomp` = the decompiler's driver and facade (`src/infra/`: scheduling, `decompile_drive`, the pass-hook composition; `src/p0_knowledge/kuna_option_dispatch.rs`; `phases.toml`), re-exporting `unlace-middle`, `unlace-lift`, `unlace-structure`, `unlace-bandb` and `unlace-emit`, so callers keep `unlace_decomp::` paths; `unlace-emit` = its emit band (`p9_emit/`: the printers, the output-language plane, final casts and rendering; same folder layout, builds on the four bands below it); `unlace-bandb` = its Band B (`p3_dataflow/`…`p6_variables/`: dataflow, calls, types, variables; same folder layout, builds on the three bands below it); `unlace-structure` = its structure band (`p7_regions/`, `p8_structure/`: regions and control-flow structuring; same folder layout, builds on `unlace-middle` and `unlace-lift`); `unlace-lift` = its lift band (`p1_partition/`, `p2_lift/`: partition, flow, switch recovery, call fixups; same folder layout, builds only on `unlace-middle`); `unlace-middle` = its IR band (`substrate/`, the option/catalog plane in `p0_knowledge/`, `Architecture`, actions, fspec, heritage, merge, jump tables, the pass-hook table; same folder layout, `build.rs` generates the catalog tables from `unlace-decomp/phases.toml`); `unlace-analysis` = loader/analyzer tier (ELF/Mach-O, chained fixups, dyld cache, kernelcache, ObjC, Swift, DWARF, DEX, strings, function discovery); `unlace-sleigh`/`unlace-slacomp` = SLEIGH runtime/compiler (`slacomp`); `unlace-console` = `decomp_dbg`; `unlace-cli` = the `unlace` binary; `unlace-ghidra`/`unlace-wasm` = Ghidra and browser front-ends; `unlace-harness` = the datatest runner, the parity gates (`tests/parity.rs`) and `decomp_test_dbg`; `unlace-base`/`unlace-num`/`unlace-lift-diff` = support. |
+| `tests/datatests/` | Vendored XML regression corpus (675 assertions) vs `docs/baseline.json` — `cargo test -p unlace-harness --test parity datatests`. |
+| `tests/stages/` | kuna-owned issue testcases vs `docs/baseline-stages.json` — `cargo test -p unlace-harness --test parity stage_tests` (`tests/stages/README.md`). |
 | `tests/golden/` | Differential golden vectors for the workspace suite. |
 | `specs/Ghidra/Processors/` | Vendored SLEIGH specs. `.sla` are built artifacts (gitignored), produced by `slacomp`. |
 | `scripts/` + `tools/` | Python helpers + the improvement pipeline, RE-friction loop, decbench campaign drivers. |
@@ -77,7 +77,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   `target/release/unlace catalog --markdown > docs/options.md`.
 - **Never re-pin `docs/baseline.json` to hide a regression** — fix the code or make it opt-in.
   Sanctioned re-pins (upstream sync / deliberate default change) say so in the message
-  (`unlace test --save-baseline`). Adding a stage test re-records `docs/baseline-stages.json`
+  (`UNLACE_BLESS=1 cargo test -p unlace-harness --test parity`). Adding a stage test re-records `docs/baseline-stages.json`
   and bumps the corpus count in `unlace-base/src/xml.rs`.
 - **Edition 2024 and rustfmt**: the workspace is edition 2024; run `cargo fmt --all`
   (2024 style, `rustfmt.toml`) before committing. CI and the `fast` gate check it.
@@ -114,15 +114,15 @@ from it, and binaries land in `target/<profile>/`. There is no Makefile. The ful
 ```sh
 cargo fmt --all --check
 cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
-cargo test -p unlace-cli --test parity   # tests/datatests vs docs/baseline.json (PARITY OK 675/675)
-                                         # + tests/stages vs docs/baseline-stages.json (PARITY OK)
+cargo test -p unlace-harness --test parity   # tests/datatests vs docs/baseline.json (PARITY OK 675/675)
+                                             # + tests/stages vs docs/baseline-stages.json (PARITY OK)
 python3 tools/check_spec.py              # docs/spec anchors + phase-folder ownership resolve
 PYTHONPATH=. python3 -m unittest discover -s scripts/tests -p 'test_*.py'   # Python tooling + test layout + layering
 target/debug/unlace catalog --check
 cargo nextest run --workspace --exclude unlace-wasm --profile ci   # the workspace suite (CI-required)
 ```
-The parity target needs `decomp_test_dbg`, which the build line (or any workspace-wide cargo
-run) produces; a stale harness fails it. `scripts/check_layers.py` (run by the unittest line)
+The parity target runs both corpora in-process and needs the compiled `.sla` files in `specs/`;
+`UNLACE_BLESS=1` re-records a baseline instead of comparing. `scripts/check_layers.py` (run by the unittest line)
 fails on a new module path (`crate::`, `super::`, `self::`) from a lower
 band of unlace-decomp to a higher one (middle < lift < structure < bandb < emit < driver; the
 bands are listed in the script). Invert the dependency instead of adding it to

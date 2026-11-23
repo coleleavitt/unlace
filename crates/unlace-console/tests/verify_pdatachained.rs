@@ -19,7 +19,7 @@
 //!
 //! The parity corpora cannot see any of this: both are symbol-less bytechunks
 //! that never construct an `ObjectLoadImage`, so a `.pdata` change is invisible
-//! to `cargo test -p unlace-cli --test parity datatests` and `cargo test -p unlace-cli --test parity stage_tests`.
+//! to `cargo test -p unlace-harness --test parity datatests` and `cargo test -p unlace-harness --test parity stage_tests`.
 
 use std::path::PathBuf;
 

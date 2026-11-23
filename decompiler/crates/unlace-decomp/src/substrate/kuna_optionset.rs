@@ -54,6 +54,35 @@ macro_rules! kuna_option_id {
     };
 }
 
+/// Declare an `on`/`off` kuna option as a `bool` newtype implementing [`KunaOption`].
+#[macro_export]
+macro_rules! kuna_flag {
+    ($(#[$meta:meta])* $ty:ident, $name:literal, $label:literal, unset: $unset:expr, shipped: $shipped:expr) => {
+        $(#[$meta])*
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub struct $ty(pub bool);
+
+        impl $crate::kuna_optionset::KunaOption for $ty {
+            const NAME: &'static str = $name;
+            $crate::kuna_option_id!();
+
+            fn unset() -> Self {
+                $ty($unset)
+            }
+
+            fn shipped() -> Self {
+                $ty($shipped)
+            }
+
+            fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+                let on = $crate::options::on_or_off(value)?;
+                let state = if on { "on" } else { "off" };
+                Ok(($ty(on), format!(concat!($label, " turned {}"), state)))
+            }
+        }
+    };
+}
+
 /// The current value of every registered option. Cloning shares the stored values.
 #[derive(Clone, Default)]
 pub struct OptionSet {

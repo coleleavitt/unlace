@@ -194,7 +194,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 "do"
             }
         }
-        "loopcontinue" => on_off(conf.loop_continue),
+        "loopcontinue" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_loopcontinue::LoopContinue>()
+                .0,
+        ),
         "postinc" => on_off(conf.post_increment),
         "compareform" => {
             if conf.present_lessequal {
@@ -214,7 +218,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
 
         "bitidioms" => on_off(conf.bit_idioms),
         "helperroles" => on_off(conf.helper_roles),
-        "dynalloca" => on_off(conf.dyn_alloca),
+        "dynalloca" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_dynalloca::DynAlloca>()
+                .0,
+        ),
         "vaarg" => on_off(conf.va_arg),
         "indexrescale" => on_off(conf.index_rescale),
         "looprotate" => on_off(conf.loop_rotate),
@@ -315,17 +323,29 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .get::<unlace_decomp::kuna_bejoinpass::BeJoinPassMode>()
             .as_str(),
         "octeoneffects" => conf.octeon_effects.as_str(),
-        "sparcstructret" => on_off(conf.sparc_struct_return),
+        "sparcstructret" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_sparcstructret::SparcStructReturn>()
+                .0,
+        ),
         "arraystride" => on_off(conf.recover_array_stride),
         "stackalias" => on_off(conf.stack_alias_deadstore),
         "stackviews" => on_off(conf.stack_views),
         "v850indirectbranch" => on_off(conf.v850_indirect_branch),
-        "switchmodbound" => on_off(conf.switch_modulo_bound),
+        "switchmodbound" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::jumptable::SwitchModuloBound>()
+                .0,
+        ),
         "constselectjump" => conf
             .kuna_options
             .get::<unlace_decomp::kuna_constselectjump::ConstSelectMode>()
             .as_str(),
-        "switchsharedcase" => on_off(conf.switch_shared_case),
+        "switchsharedcase" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::jumptable::SwitchSharedCase>()
+                .0,
+        ),
         "realtypes" => on_off(conf.realtypes),
         // (kuna `calloverlap`) Report the selected overlap policy.
         "calloverlap" => match conf

@@ -47,7 +47,7 @@
 //!
 //! The decision is a P0 assertion: `option stackguard on|off` (default `on`).
 //! Setting it `off` retains the upstream canary check. The live flag is
-//! [`Architecture::strip_stack_guard`](crate::architecture::Architecture).
+//! [the registered option `StripStackGuard`](crate::architecture::Architecture).
 //!
 //! ## The CFG surgery
 //!
@@ -600,7 +600,13 @@ impl Action for ActionStripStackGuard {
         // C++ `if (!data.getArch()->strip_stack_guard) return 0;` — the live gate
         // is carried on the boundary Architecture (`build_arch_handle`); `enabled`
         // stays as the unit-test OR-override (action registered false).
-        if !self.enabled && !data.get_arch().strip_stack_guard {
+        if !self.enabled
+            && !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_stackguard::StripStackGuard>()
+                .0
+        {
             return 0; // P0 assertion not set
         }
 
@@ -730,12 +736,12 @@ impl Action for ActionStripStackGuard {
 /// `off` retains the upstream rendering (the Action is inert). `on`
 /// strips the `-fstack-protector` canary check + `__stack_chk_fail` call, like
 /// angr's StackCanarySimplifier. This standalone value is separate from the
-/// live [`Architecture::strip_stack_guard`](crate::architecture::Architecture)
+/// live [the registered option `StripStackGuard`](crate::architecture::Architecture)
 /// flag used by the option dispatcher.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StackGuardOption {
     /// True when the canary epilogue is stripped
-    /// (C++ `Architecture::strip_stack_guard`).
+    /// (C++ the registered option `StripStackGuard`).
     pub enabled: bool,
 }
 
@@ -759,6 +765,16 @@ impl StackGuardOption {
         self.enabled
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) Strip the glibc -fstack-protector canary epilogue
+    /// (C++ `strip_stack_guard`).
+    StripStackGuard,
+    "stackguard",
+    "Stack-guard canary stripping",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 #[path = "kuna_stackguard/tests.rs"]

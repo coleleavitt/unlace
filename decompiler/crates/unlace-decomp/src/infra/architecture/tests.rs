@@ -141,14 +141,31 @@ fn kuna_anchor_flags_default_to_div_values() {
     // CODE — stackguard/noreturn_propagate). Per-test opt-out
     // (stackguard on the 2 Partial-splitting datatests) keeps the corpora at
     // parity; noreturn_propagate is Listing-gated so it is inert on every gate.
-    assert!(arch.strip_stack_guard); // stackguard (REMOVES CODE)
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_stackguard::StripStackGuard>()
+            .0
+    ); // stackguard (REMOVES CODE)
     assert!(arch.analysis_noreturn_propagate); // noreturn_propagate (REMOVES CODE, Listing-gated)
-    assert!(arch.switch_shared_case); // switchsharedcase
-    assert!(arch.sparc_struct_return); // sparcstructret (SPARC-gated)
+    assert!(
+        arch.kuna_options
+            .get::<crate::jumptable::SwitchSharedCase>()
+            .0
+    ); // switchsharedcase
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_sparcstructret::SparcStructReturn>()
+            .0
+    ); // sparcstructret (SPARC-gated)
     assert!(arch.v850_indirect_branch); // v850indirectbranch (V850-gated)
     // default-off (upstream byte-identical).
     assert!(!arch.return_single);
-    assert!(!arch.switch_modulo_bound);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::jumptable::SwitchModuloBound>()
+            .0
+    );
     assert!(!arch.unrolled_guard);
     assert!(!arch.stack_alias_deadstore);
 }
@@ -176,7 +193,12 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     assert!(!arch.analysis_listing);
     assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Off);
     assert!(!arch.analysis_fast_funcdisc);
-    assert!(!arch.switch_guard_bound);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::jumptable::SwitchGuardBound>()
+            .0
+    );
     assert!(!arch.analysis_dwarf_lines);
 
     arch.apply_mode("aggressive")
@@ -186,11 +208,19 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     assert!(arch.analysis_listing);
     assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Strict);
     assert!(arch.analysis_fast_funcdisc);
-    assert!(arch.switch_guard_bound);
+    assert!(
+        arch.kuna_options
+            .get::<crate::jumptable::SwitchGuardBound>()
+            .0
+    );
     // Listed by the preset even though DIV-54 makes it a shipped default, so the
     // preset re-enables it after an earlier `--option returndup off`.
     assert!(arch.duplicate_shared_returns);
-    assert!(arch.sparc_struct_return); // SPARC-idiom-gated, safe to enable
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_sparcstructret::SparcStructReturn>()
+            .0
+    ); // SPARC-idiom-gated, safe to enable
     assert!(arch.v850_indirect_branch); // V850-gated, listed so the preset owns it
     // The exclusion: annotates every statement of a `-g` binary with a
     // `/* src.c:NNN */` comment — noise, not recovery.
@@ -222,7 +252,12 @@ fn apply_mode_fast_replaces_exhaustive_with_bounded_discovery() {
     assert_eq!(arch.analysis_aif, crate::kuna_aif::AifMode::Off);
     assert!(arch.analysis_fast_funcdisc);
     assert!(arch.analysis_noreturn_propagate);
-    assert!(!arch.switch_guard_bound);
+    assert!(
+        !arch
+            .kuna_options
+            .get::<crate::jumptable::SwitchGuardBound>()
+            .0
+    );
 }
 
 #[test]

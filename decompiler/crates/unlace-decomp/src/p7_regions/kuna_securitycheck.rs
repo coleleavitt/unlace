@@ -100,7 +100,7 @@
 //! ## The option
 //!
 //! `option securitycheck on|off`, default **on** (DIV-82).  The live flag is
-//! [`Architecture::strip_security_check`](crate::architecture::Architecture),
+//! [the registered option `StripSecurityCheck`](crate::architecture::Architecture),
 //! mirrored onto [`ArchContext`](crate::context::ArchContext) because the Action
 //! reads it through `data.get_arch()`.
 
@@ -239,7 +239,13 @@ impl Action for ActionRemoveSecurityCheck {
     }
 
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !self.enabled && !data.get_arch().strip_security_check {
+        if !self.enabled
+            && !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_securitycheck::StripSecurityCheck>()
+                .0
+        {
             return 0; // P0 assertion not set
         }
         let size = data.bblocks_get_size();
@@ -296,7 +302,7 @@ impl Action for ActionRemoveSecurityCheck {
 ///
 /// `on` (default, DIV-82) removes the bounds/slice/divide-by-zero panic
 /// branches; `off` keeps them.  The resolved value is written into
-/// [`Architecture::strip_security_check`](crate::architecture::Architecture).
+/// [the registered option `StripSecurityCheck`](crate::architecture::Architecture).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SecurityCheckOption {
     /// True when rustc panic-check branches are stripped.
@@ -322,6 +328,19 @@ impl SecurityCheckOption {
         self.enabled
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna) Strip rustc's bounds / slice / divide-by-zero panic branches --
+    /// the `core::panicking::*` / `core::slice::index::*` / `core::str::*`
+    /// helper calls a Rust binary carries in front of every checked access
+    /// (option `securitycheck`, DIV-82 default-on; SEFCOM Oxidizer's
+    /// `SecurityCheckRemover`).  Structurally inert on a C binary.
+    StripSecurityCheck,
+    "securitycheck",
+    "Rust security-check branch stripping",
+    unset: false,
+    shipped: true
+);
 
 #[cfg(test)]
 #[path = "kuna_securitycheck/tests.rs"]

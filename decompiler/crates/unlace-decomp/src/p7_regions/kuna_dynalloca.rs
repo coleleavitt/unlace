@@ -85,7 +85,12 @@ impl Rule for RuleDynAlloca {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().dyn_alloca {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_dynalloca::DynAlloca>()
+            .0
+        {
             return 0;
         }
         let Some(o) = data.obank().get(op) else {
@@ -123,3 +128,12 @@ impl Rule for RuleDynAlloca {
         1
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `dynalloca`) A run-time stack move prints as `alloca(n)`.
+    DynAlloca,
+    "dynalloca",
+    "Run-time stack moves as alloca",
+    unset: false,
+    shipped: false
+);

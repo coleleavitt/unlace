@@ -18,7 +18,7 @@
 //! model in `jumptable.cc` (it needs the protected `pathMeld`/`jrange`/
 //! `varnodeIndex` state).  That member therefore ports with the **W4 jumptable**
 //! wave, on the `JumpBasic` model — see the loss note below; only the gate
-//! (`Architecture::switch_modulo_bound`, default off) is owned here.
+//! (the registered option `SwitchModuloBound`, default off) is owned here.
 //!
 //! STUB(W4): `JumpBasic::kunaTryModuloBoundTable` walks the strictly-linear
 //! chain `BRANCHIND <- LOAD( index*stride + base )` with `index` bounded by
@@ -43,7 +43,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SwitchModBoundOption {
     /// True if a modulo/and-mask on a LOAD-table jumptable index bounds the
-    /// table (C++ `Architecture::switch_modulo_bound`).
+    /// table (C++ the registered option `SwitchModuloBound`).
     pub enabled: bool,
 }
 

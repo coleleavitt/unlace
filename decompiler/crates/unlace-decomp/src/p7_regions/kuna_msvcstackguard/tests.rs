@@ -91,7 +91,8 @@ fn build_fd_with_option(on: bool) -> Funcdata {
         .add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true)
         .unwrap();
     let mut ctx = ArchContext::new(manage);
-    ctx.strip_msvc_stack_guard = on;
+    ctx.kuna_options
+        .set(crate::kuna_msvcstackguard::StripMsvcStackGuard(on));
     let glb = Rc::new(ctx);
     let code = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let entry = Address::new(code, 0x1000);

@@ -239,6 +239,19 @@ driver and stays in unlace-decomp.
     re-export below. The non-exported `arch_option!`, `declare_hooks!`, `descend_into!` are only used in their own
     file.
 
+**Prep landed (2026-11-23):** item 7 (#145, flat `crate::<module>` paths), item 3 (#147, `funcdata_merge.rs`
+moved to `substrate/`, its pass calls through 9 new hooks), item 2 (#149, 32 `Funcdata<Module>Ext` traits in the
+prelude), item 6 (#150, `pub(crate)` -> `#[doc(hidden)] pub` in middle files except architecture.rs/context.rs), item 5
+(#154, #156, tests moved to `infra/middle_tests/`). Still open:
+- Item 4 (the `#[cfg(test)]` stub for `__unlace_default_pass_hooks`) can only land in the move PR: in the one-crate
+  tree it would define the symbol twice in the test build.
+- Item 6 for `infra/architecture.rs` and `substrate/context.rs` (step 6 owns them until its edges are done).
+- Hidden method-call edges `check_layers.py` cannot see (it reads paths, not method calls); these impls stay
+  inherent in pass modules and must move down or go through a hook before the move: `kuna_switchextent`'s
+  `kuna_extent_tables[_mut]` (called by `jumptable`, `funcdata_block`), `kuna_msvcbyval`'s `kuna_msvc_byval_sites`,
+  `MemoryOps::{clear,collect}` (`kuna_persistcalls`) and `LiveCalls::needs` (`kuna_prunedssa`), all called by
+  `heritage`; `OutLang::{profile,abi,speller}` (`kuna_lang`), called by `Architecture::build_arch_handle`.
+
 **Crate order and mechanics.** One PR per crate, bottom-up, each a `git mv` that keeps the folder layout:
 1. `crates/unlace-middle/src/{substrate,p0_knowledge}/...` plus the 12 relocated modules (into `substrate/` and
    `p0_knowledge/`, keeping their `foo/tests.rs` siblings). Cargo.toml with unlace-base/num/sleigh, thiserror,

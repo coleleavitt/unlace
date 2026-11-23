@@ -79,7 +79,6 @@
 //! [`ActionIteBoolean::apply`] early-returns, nothing is marked, and output is
 //! byte-identical.
 
-use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_base::error::KunaResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -329,7 +328,7 @@ fn const_bool_arm(data: &Funcdata, id: BlockId) -> Option<(OpId, VarnodeId, u64)
 /// replacing the constants `0`/`1` with a boolean expression is faithful?
 fn integral_dest(data: &Funcdata, vn: VarnodeId) -> bool {
     matches!(
-        data.vn_type_def_facing(vn).get_metatype(),
+        (data.hooks().vn_type_def_facing)(data, vn).get_metatype(),
         type_metatype::TYPE_UNKNOWN
             | type_metatype::TYPE_INT
             | type_metatype::TYPE_UINT

@@ -26,10 +26,6 @@
 //!   `funcdata_spacebase.rs`          — variable/merge/stack tiers (P6)
 //! - `p9_emit/coreaction_casts.rs`    — cast insertion hooks (P9)
 
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
-use crate::funcdata_union::FuncdataUnionExt;
-use crate::kuna_calltransport::FuncdataCallTransportCrateExt;
-use crate::kuna_calltransport::FuncdataCallTransportExt;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::types::{Wrap, int2, int4, uint4, uint8, uintm};
@@ -2254,6 +2250,11 @@ impl Funcdata {
         self.size
     }
     /// Get the program/architecture owning \b this function (C++ `getArch`).
+    /// The pass hooks of the function's architecture ([`crate::kuna_passhooks`]).
+    pub fn hooks(&self) -> &'static crate::kuna_passhooks::KunaHooks {
+        self.glb.pass_hooks
+    }
+
     pub fn get_arch(&self) -> &ArchHandle {
         &self.glb
     }
@@ -3903,14 +3904,15 @@ impl Funcdata {
             .and_then(|id| self.obank.get(id))
             .map(|op| op.get_addr().clone());
         let mut sources = self.kuna_storage_sources(original).to_vec();
-        if self.kuna_has_local_storage_use(original) {
+        if (self.hooks().has_local_storage_use)(self, original) {
             self.kuna_mark_meaningful_storage_write(original);
         }
-        let transport = self.kuna_is_call_transport(original);
+        let transport = (self.hooks().is_call_transport)(self, original);
         if transport {
-            self.kuna_record_call_transport(original);
+            (self.hooks().record_call_transport)(self, original);
         }
-        let projection = self.kuna_is_call_transport_projection(original, byte_offset, byte_size);
+        let projection =
+            (self.hooks().is_call_transport_projection)(self, original, byte_offset, byte_size);
         if projection {
             self.kuna_mark_call_transport_projection(original, byte_size);
             if let Some(input) = self
@@ -3920,8 +3922,8 @@ impl Funcdata {
                 .and_then(|op| self.obank.get(op))
                 .and_then(|op| op.get_in(0))
             {
-                if self.kuna_is_call_transport(input) {
-                    self.kuna_record_call_transport(input);
+                if (self.hooks().is_call_transport)(self, input) {
+                    (self.hooks().record_call_transport)(self, input);
                 }
             }
         }
@@ -4501,7 +4503,7 @@ impl Funcdata {
             // in the cleanup pool, just before `RuleStringCopy`) is marked
             // address-tied — the keystone `RuleStringCopy::applyOp`'s
             // `outvn->isAddrTied()` guard reads.  OR'd with the global half below.
-            let mut vflags = self.query_local_properties(&addr, size, &usepoint);
+            let mut vflags = (self.hooks().query_local_properties)(self, &addr, size, &usepoint);
             vflags |= self
                 .get_arch()
                 .query_global_properties(&addr, size, &usepoint);
@@ -6756,7 +6758,7 @@ impl Funcdata {
             sym.get_category()
         };
         if category == symbol_category::UNION_FACET {
-            return self.apply_union_facet(entry);
+            return (self.hooks().apply_union_facet)(self, entry);
         }
         let first_use = entry.get_first_use_address();
         let hash = entry.get_hash();
@@ -6815,7 +6817,7 @@ impl Funcdata {
             )
         };
         if category == symbol_category::UNION_FACET {
-            return self.apply_union_facet(entry);
+            return (self.hooks().apply_union_facet)(self, entry);
         }
         let first_use = entry.get_first_use_address();
         let hash = entry.get_hash();

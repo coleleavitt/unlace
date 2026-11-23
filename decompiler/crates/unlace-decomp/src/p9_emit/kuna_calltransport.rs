@@ -518,6 +518,14 @@ impl FuncdataCallTransportLocalExt for Funcdata {
     }
 }
 
+/// Fill the call-transport hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.is_call_transport = Some(Funcdata::kuna_is_call_transport);
+    hooks.record_call_transport = Some(Funcdata::kuna_record_call_transport);
+    hooks.is_call_transport_projection = Some(Funcdata::kuna_is_call_transport_projection);
+    hooks.has_local_storage_use = Some(Funcdata::kuna_has_local_storage_use);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

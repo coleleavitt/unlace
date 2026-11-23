@@ -37,6 +37,12 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, DatatypeKind, type_metatype};
 use crate::funcdata::Funcdata;
 
+/// Fill the facing-type hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.vn_type_def_facing = Some(Funcdata::vn_type_def_facing);
+    hooks.vn_type_read_facing = Some(Funcdata::vn_type_read_facing);
+}
+
 /// [`Funcdata`] methods for union-facing data-types of varnodes.
 pub trait FuncdataFacingExt {
     fn find_resolve_facing(&self, ct: &Rc<Datatype>, op: OpId, slot: i32) -> Rc<Datatype>;

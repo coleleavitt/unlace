@@ -3,8 +3,6 @@
 //! Ported from Ghidra's funcdata_varnode.cc. Bank mutations that replace reads
 //! borrow the varnode and op banks together through `Funcdata::banks_mut`.
 
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
-use crate::kuna_calltransport::FuncdataCallTransportExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -505,7 +503,7 @@ impl Funcdata {
     /// destination array.
     pub fn construct_spacebase_input(&mut self, id: &Rc<AddrSpace>) -> KunaResult<VarnodeId> {
         use crate::dtype::TypeFactory;
-        if let Some(space_ptr) = self.find_spacebase_input(id) {
+        if let Some(space_ptr) = (self.hooks().find_spacebase_input)(self, id) {
             return Ok(space_ptr);
         }
         if id.num_spacebase() == 0 {
@@ -952,7 +950,7 @@ impl Funcdata {
                 .unwrap()
                 .set_synthetic_literal(true);
         }
-        let transport = self.kuna_is_call_transport(vn);
+        let transport = (self.hooks().is_call_transport)(self, vn);
         self.kuna_inherit_storage(cloned, vn);
         if transport {
             self.kuna_mark_call_transport(cloned);
@@ -986,7 +984,7 @@ impl Funcdata {
                 .set_synthetic_literal(true);
         }
         self.kuna_extend_storage_sources(cloned, src.kuna_storage_sources(vn).iter().cloned());
-        if src.kuna_is_call_transport(vn) {
+        if (src.hooks().is_call_transport)(src, vn) {
             self.kuna_mark_call_transport(cloned);
         }
         if let Some(size) = src.kuna_call_transport_projection_size(vn) {

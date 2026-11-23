@@ -2045,3 +2045,24 @@ impl FuncdataAliasLocalExt for Funcdata {
         }
     }
 }
+
+/// Can a pointer reach the stack slot at `offset`: a local or a parameter alias.
+fn stack_slot_aliased(
+    fd: &Funcdata,
+    checker: &mut crate::varmap::AliasChecker,
+    spc: &Rc<unlace_base::space::AddrSpace>,
+    offset: uintb,
+) -> bool {
+    let mut access = fd.alias_gather_access();
+    checker.has_local_alias(Some((Rc::clone(spc), offset)), &mut access)
+        || checker.has_parameter_alias(offset, &mut access)
+}
+
+/// Fill the spacebase and stack-alias hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.query_local_properties = Some(Funcdata::query_local_properties);
+    hooks.find_spacebase_input = Some(Funcdata::find_spacebase_input);
+    hooks.build_alias_checker_deferred = Some(Funcdata::build_alias_checker_deferred);
+    hooks.stack_slot_aliased = Some(stack_slot_aliased);
+    hooks.scope_local_mark_not_mapped = Some(Funcdata::scope_local_mark_not_mapped);
+}

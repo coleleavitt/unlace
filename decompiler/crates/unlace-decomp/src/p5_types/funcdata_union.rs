@@ -31,6 +31,13 @@ use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 
+/// Fill the union-resolution hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.apply_union_facet = Some(Funcdata::apply_union_facet);
+    hooks.force_facing_type = Some(Funcdata::force_facing_type);
+    hooks.inherit_union_field = Some(Funcdata::inherit_union_field);
+}
+
 /// [`Funcdata`] methods for the per-function union-field resolution cache.
 pub trait FuncdataUnionExt {
     fn get_union_field(

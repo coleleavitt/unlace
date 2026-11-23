@@ -715,6 +715,8 @@ mod tests;
 /// queries can use the remote scope. [`ArchHandle`] shares this context between
 /// the function and its analysis passes.
 pub struct ArchContext {
+    /// The pass hooks the IR calls through ([`crate::kuna_passhooks`]).
+    pub pass_hooks: &'static crate::kuna_passhooks::KunaHooks,
     /// The registered kuna options, copied from the engine.
     pub kuna_options: crate::kuna_optionset::OptionSet,
     pub x87_empty_storage: Option<crate::p4_calls::kuna_x87emptyreturn::Storage>,
@@ -1766,6 +1768,7 @@ impl ArchContext {
         // C++ default: getMinimumLanedRegisterSize() returns the configured
         // minimum; the upstream default when unset is 4.
         ArchContext {
+            pass_hooks: crate::architecture::default_pass_hooks(),
             call_mechanisms: Rc::default(),
             call_mechanism_effects: false,
             dex: None,

@@ -78,8 +78,6 @@
 //! [`RestartLog`]: because `Funcdata` does not yet own either handle (a W4
 //! stub), the method takes them as explicit `&mut` parameters — see its doc.
 
-use crate::funcdata_spacebase::FuncdataAliasCrateExt;
-use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use unlace_base::address::Address;
@@ -1729,7 +1727,7 @@ impl Heritage {
             // loop store `*v1=0` as a store-guard and blocks ECX from folding into
             // `local_array[10]`.  Net +7 (Partial splitting #15-19, Wayoff array
             // #1, No-for-loop alias #3), regressed-set empty.
-            fl |= fd.query_local_properties(addr, size, &usepoint);
+            fl |= (fd.hooks().query_local_properties)(fd, addr, size, &usepoint);
             let live = (self.prunes(fl, addr) && super::kuna_prunedssa::applies_to_calls(fd, addr))
                 .then(|| {
                     super::kuna_prunedssa::live_calls(
@@ -1850,16 +1848,13 @@ impl Heritage {
         size: int4,
     ) -> bool {
         if self.protostack_alias.is_none() {
-            self.protostack_alias = Some(fd.build_alias_checker_deferred());
+            self.protostack_alias = Some((fd.hooks().build_alias_checker_deferred)(fd));
         }
         let checker = match self.protostack_alias.as_mut().and_then(|c| c.as_mut()) {
             Some(c) => c,
             None => return true,
         };
-        let mut access = fd.alias_gather_access();
-        if checker.has_local_alias(Some((Rc::clone(spc), offset)), &mut access)
-            || checker.has_parameter_alias(offset, &mut access)
-        {
+        if (fd.hooks().stack_slot_aliased)(fd, checker, spc, offset) {
             return true;
         }
         if fd.get_arch().stack_views
@@ -1874,8 +1869,7 @@ impl Heritage {
                 return true;
             }
             let end = spc.wrap_offset(offset.wrapping_add(size.saturating_sub(1) as uintb));
-            return checker.has_local_alias(Some((Rc::clone(spc), end)), &mut access)
-                || checker.has_parameter_alias(end, &mut access);
+            return (fd.hooks().stack_slot_aliased)(fd, checker, spc, end);
         }
         false
     }
@@ -6564,7 +6558,7 @@ impl Heritage {
             .get_stack_space()
             .filter(|s| s.num_spacebase() > 0)
             .map(Rc::clone)
-            .and_then(|s| fd.find_spacebase_input(&s));
+            .and_then(|s| (fd.hooks().find_spacebase_input)(fd, &s));
         let mut vs_solver = ValueSetSolver::new();
         vs_solver.establish_value_sets(fd, &sinks, &reads, stack_reg, false);
         let widener = WidenerNone::new();

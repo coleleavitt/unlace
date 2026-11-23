@@ -293,6 +293,9 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
 7. **Hooks table (about 6 PRs, ~115 functions).**
    - `KunaHooks` in substrate, held by `ArchContext`. Each phase folder gets a `provide(&mut KunaHooks)`, and the
      driver composes them (the rustc `DEFAULT_QUERY_PROVIDERS` shape).
+   - Done first: `substrate/kuna_passhooks.rs` (`KunaHooks`, `KunaHookSlots::finish`), `ArchContext::pass_hooks`,
+     `Funcdata::hooks()`, composed in `universalaction::PASS_HOOKS`; the 11 IR edges into spacebase, union,
+     facing, calltransport and casts go through it. A slot no `provide` fills stops the first run, naming it.
    - Batches: funcdata_varnode/funcdata_block (25 fns), heritage (21 modules), merge (7), jumptable (7),
      fspec (9), the rest.
    - Then fix the pass-to-pass upward edges: lift->bandb 16, bandb->emit 18, structure->lift 2, bandb->structure 2.

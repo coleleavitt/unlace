@@ -465,14 +465,14 @@ fn get_input_cast_op(
                 .get::<crate::kuna_coreoptions::StackViews>()
                 .0
                 && opc == OpCode::CPUI_CALLOTHER)
-                .then(|| crate::p6_variables::kuna_stackuses::input_contract(data, op, slot))
+                .then(|| crate::kuna_stackuses::input_contract(data, op, slot))
                 .flatten();
             let declared_storage = contract.is_some();
             let reqtype = contract.unwrap_or_else(|| input_type_local(data, op, slot));
             let curtype = data.vn_high_type_read_facing(invn, op);
             let care_ptr_uint = declared_storage
                 || reqtype.get_metatype() != type_metatype::TYPE_UNKNOWN
-                || crate::p9_emit::kuna_unknowncasts::declared_argument(data, op, slot);
+                || crate::kuna_unknowncasts::declared_argument(data, op, slot);
             strat
                 .cast_standard(&reqtype, &curtype, false, care_ptr_uint)
                 .or_else(|| {
@@ -1083,7 +1083,7 @@ pub(crate) fn get_output_token(
             if local.get_metatype() != type_metatype::TYPE_UNKNOWN {
                 return local;
             }
-            crate::p4_calls::kuna_callrettype::refused_token(data, op).unwrap_or(local)
+            crate::kuna_callrettype::refused_token(data, op).unwrap_or(local)
         }
         // TypeOp::getOutputToken default.
         _ => output_type_local(data, op),
@@ -1443,7 +1443,7 @@ impl FuncdataCastExt for Funcdata {
     /// CAST/PTRSUB ops the rendered C needs.  Returns the number of changes made.
     fn action_set_casts(&mut self) -> int4 {
         self.start_cast_phase();
-        crate::p9_emit::kuna_stackversions::prepare(self);
+        crate::kuna_stackversions::prepare(self);
         crate::kuna_stackviews::prepare_casts(self);
         let tlst = match self.get_arch().types_rc() {
             Some(t) => t as Rc<dyn crate::dtype::TypeFactory>,
@@ -1468,7 +1468,7 @@ impl FuncdataCastExt for Funcdata {
                     Some(o) => o,
                     None => continue,
                 };
-                if o.not_printed() || crate::p9_emit::kuna_stackmarkers::nonprinting(self, op) {
+                if o.not_printed() || crate::kuna_stackmarkers::nonprinting(self, op) {
                     continue;
                 }
                 let opc = o.code();
@@ -1883,12 +1883,10 @@ impl FuncdataCastLocalExt for Funcdata {
 
     /// `ActionSetCasts::castOutput` (coreaction.cc:2624-2704).
     fn cast_output(&mut self, op: OpId, strat: &CastStrategyC) -> int4 {
-        if let Some((wide, unsigned)) =
-            crate::p4_calls::kuna_voidret::narrowed_call_result(self, op)
-        {
+        if let Some((wide, unsigned)) = crate::kuna_voidret::narrowed_call_result(self, op) {
             return self.cast_narrowed_call(op, wide, unsigned);
         }
-        if let Some(float) = crate::p4_calls::kuna_callrettype::float_held_as_bits(self, op) {
+        if let Some(float) = crate::kuna_callrettype::float_held_as_bits(self, op) {
             return self.cast_narrowed_call(op, float, false);
         }
         let tokenct = get_output_token(self, strat, op);
@@ -1912,10 +1910,10 @@ impl FuncdataCastLocalExt for Funcdata {
     /// (kuna `voidret`) Make the call `op` write its callee's whole result,
     /// typed `wide`, into a temporary its output then truncates with a CAST,
     /// which prints the conversion, to an unsigned word where `unsigned` asks
-    /// ([`crate::p4_calls::kuna_voidret::narrowed_call_result`]).  (kuna
+    /// ([`crate::kuna_voidret::narrowed_call_result`]).  (kuna
     /// `callrettype`) A float the caller holds as bits goes through the same
     /// CAST at its own width, which prints the reinterpretation
-    /// ([`crate::p4_calls::kuna_callrettype::float_held_as_bits`]).
+    /// ([`crate::kuna_callrettype::float_held_as_bits`]).
     fn cast_narrowed_call(&mut self, op: OpId, wide: Rc<Datatype>, unsigned: bool) -> int4 {
         let Some((outvn, addr)) = self
             .obank()

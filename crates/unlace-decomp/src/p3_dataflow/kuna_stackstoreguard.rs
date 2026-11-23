@@ -43,7 +43,7 @@ pub(super) fn frame_unresolved(
             })
         })
         .collect();
-    !stores.is_empty() && crate::p6_variables::kuna_storereach::frame_unresolved(fd, spc, &stores)
+    !stores.is_empty() && crate::kuna_storereach::frame_unresolved(fd, spc, &stores)
 }
 
 /// May an indexed stack STORE overwrite a value this function wrote to the
@@ -80,9 +80,9 @@ fn store_bound(
     guard: &crate::heritage::LoadGuard,
     bounds: &mut StoreBounds,
 ) -> Option<(u64, u64)> {
-    *bounds.entry(guard.op).or_insert_with(|| {
-        crate::p6_variables::kuna_storereach::store_window(fd, guard.op, &guard.spc)
-    })
+    *bounds
+        .entry(guard.op)
+        .or_insert_with(|| crate::kuna_storereach::store_window(fd, guard.op, &guard.spc))
 }
 
 /// Can this STORE overlap `[lo, lo + size)`? Unanalyzed guards may write

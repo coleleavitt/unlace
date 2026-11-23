@@ -56,7 +56,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::fspec::{FuncCallSpecs, OFFSET_UNKNOWN, ParamTrial, ProtoParameter};
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_exclusivearguse::MAX_VISIT;
+use crate::kuna_exclusivearguse::MAX_VISIT;
 
 /// Cap on Varnodes the reader walk visits.
 const MAX_VALUES: usize = 256;

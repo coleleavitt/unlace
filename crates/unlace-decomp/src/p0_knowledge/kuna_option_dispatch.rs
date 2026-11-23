@@ -64,7 +64,7 @@ kuna_options! { self, p1;
     },
     "compareform" => registered!(crate::kuna_compareform::PresentLessequal),
     "wrapadd" => registered!(crate::kuna_widenedadd::WrapAdd),
-    "armconstshift" => registered!(crate::p9_emit::kuna_armconstantshift::ConstShiftMode),
+    "armconstshift" => registered!(crate::kuna_armconstantshift::ConstShiftMode),
     "armshiftguard" => registered!(crate::kuna_armregistershift::ArmShiftGuard),
     "rustarrayzero" => registered!(crate::kuna_rustarrayzero::RustArrayZero),
     "arraynotation" => {
@@ -126,10 +126,10 @@ kuna_options! { self, p1;
     "returnbranch" => registered!(crate::kuna_returnbranch::ReturnBranch),
     "globalarrayanchor" => registered!(crate::kuna_globalarrayanchor::GlobalArrayAnchor),
     "opaquepredicate" => registered!(crate::kuna_coreoptions::OpaquePredicate),
-    "callresultuse" => registered!(crate::p4_calls::kuna_callresultuse::CallResultUse),
+    "callresultuse" => registered!(crate::kuna_callresultuse::CallResultUse),
     "signedness" => registered!(crate::kuna_typeround::SignPolicy),
     "retsplitglobal" => registered!(crate::kuna_coreoptions::RetSplitGlobal),
-    "retsplitlimit" => registered!(crate::p8_structure::kuna_retsplitlimit::RetSplitLimit),
+    "retsplitlimit" => registered!(crate::kuna_retsplitlimit::RetSplitLimit),
     "v850indirectbranch" => registered!(crate::kuna_v850indbranch::V850IndirectBranch),
     "ptrauthtrap" => registered!(crate::kuna_coreoptions::PtrauthTrap),
     "relronoreturn" => registered!(crate::decompile_drive::RelroNoreturn),
@@ -176,13 +176,13 @@ kuna_options! { self, p1;
     "calleefilledarg" => registered!(crate::kuna_calleefilledarg::CalleeFilledArg),
     "callwide" => {
         let (enabled, msg) = <crate::kuna_callwide::CallWide as crate::kuna_optionset::KunaOption>::parse(p1)?;
-        self.kuna_tables.get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>().clear();
+        self.kuna_tables.get_mut::<crate::kuna_callwide::ProofSlot>().clear();
         self.kuna_options.set(enabled);
         Ok(msg)
     },
     "bejoin" => {
         let (mode, msg) = crate::kuna_bejoin::BeJoinMode::parse(p1)?;
-        self.kuna_tables.get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>().clear();
+        self.kuna_tables.get_mut::<crate::kuna_callwide::ProofSlot>().clear();
         self.kuna_options.set(mode);
         Ok(msg)
     },
@@ -251,7 +251,7 @@ kuna_options! { self, p1;
     "narrowext" => {
         let (mode, msg) = <crate::kuna_narrowext::NarrowExtMode as crate::kuna_optionset::KunaOption>::parse(p1)?;
         if mode != self.kuna_options.get::<crate::kuna_narrowext::NarrowExtMode>() {
-            self.kuna_tables.get_mut::<crate::p4_calls::kuna_callwide::ProofSlot>().clear();
+            self.kuna_tables.get_mut::<crate::kuna_callwide::ProofSlot>().clear();
         }
         self.kuna_options.set(mode);
         Ok(msg)
@@ -263,11 +263,11 @@ kuna_options! { self, p1;
     "varargsharedfloat" => registered!(crate::kuna_varargsharedfloat::VarargSharedFloat),
     "calloverlap" => registered!(crate::kuna_calloverlap::CallOverlap),
     "spillargtrial" => registered!(crate::kuna_spillargtrial::SpillArgTrial),
-    "indexaliasguard" => registered!(crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard),
+    "indexaliasguard" => registered!(crate::kuna_indexaliasguard::IndexAliasGuard),
     "callarrayextent" => registered!(crate::kuna_callarrayextent::CallArrayExtent),
     "stackstruct" => registered!(crate::kuna_stackstruct::StackStruct),
-    "arrayextent" => registered!(crate::p6_variables::kuna_arrayextent::ArrayExtent),
-    "arraysize" => registered!(crate::p6_variables::kuna_arraysize::ArraySize),
+    "arrayextent" => registered!(crate::kuna_arrayextent::ArrayExtent),
+    "arraysize" => registered!(crate::kuna_arraysize::ArraySize),
     "devectorize" => registered!(crate::kuna_devectorize::DevectorizeReduction),
     "strlenscan" => registered!(crate::kuna_strlenscan::StrlenScan),
     "repstring" => registered!(crate::kuna_repstring::RepString),
@@ -280,10 +280,10 @@ kuna_options! { self, p1;
     "regionlooprefine" => registered!(crate::region_structurer::RegionLoopRefine),
     "regionedgeorder" => registered!(crate::region_structurer::RegionEdgeOrder),
     "outline" => registered!(crate::kuna_outline::OutlineOption),
-    "condfold" => registered!(crate::p8_structure::kuna_condfold::CondFold),
+    "condfold" => registered!(crate::kuna_condfold::CondFold),
     "implweight" => registered!(crate::coreaction_cleanup::ImplWeight),
-    "condstmts" => registered!(crate::p8_structure::kuna_condstmts::CondStmts),
-    "gotoreduce" => registered!(crate::p8_structure::kuna_gotoreduce::GotoReduceMode),
+    "condstmts" => registered!(crate::kuna_condstmts::CondStmts),
+    "gotoreduce" => registered!(crate::kuna_gotoreduce::GotoReduceMode),
     "ifelseflatten" => registered!(crate::kuna_ifelseflatten::FlattenIfelse),
     "crossjumprevert" => registered!(crate::kuna_crossjumpreverter::RevertCrossJumps),
     "dedupitetail" => registered!(crate::kuna_dedupitetail::DedupIteTail),
@@ -375,7 +375,7 @@ kuna_options! { self, p1;
     "charbyte" => registered!(crate::kuna_charbyte::CharByte),
     "castarith" => registered!(crate::kuna_coreoptions::CastArith),
     "castindex" => registered!(crate::kuna_coreoptions::CastIndex),
-    "ptrfromuse" => registered!(crate::p5_types::kuna_ptrfromuse::PtrFromUseMode),
+    "ptrfromuse" => registered!(crate::kuna_ptrfromuse::PtrFromUseMode),
     "charptr" => registered!(crate::kuna_charptr::CharPtr),
     "cstringconst" => registered!(crate::kuna_cstringconst::CstringConst),
     "elemptr" => registered!(crate::kuna_elemptr::ElemPtr),

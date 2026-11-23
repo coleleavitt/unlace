@@ -1729,10 +1729,10 @@ pub struct PrintC {
     /// (kuna `gotonext`) The gotos left out or printed as `break;`, and the labels
     /// only they reached.  Computed per function at the top of
     /// [`emit_function_body`](PrintC::emit_function_body).
-    goto_rewrites: crate::p8_structure::kuna_gotonext::GotoRewrites,
+    goto_rewrites: crate::kuna_gotonext::GotoRewrites,
     /// (kuna `switchmerge`) The printed arms of each C `switch` whose arms differ
     /// from its own cases.  Computed per function with `goto_rewrites`.
-    switch_plans: crate::p8_structure::kuna_switchmerge::SwitchPlans,
+    switch_plans: crate::kuna_switchmerge::SwitchPlans,
     /// (kuna) Resolved `realtypes` rendering context for the function currently
     /// being printed — the the registered option `Realtypes` gate plus the data-model fact
     /// (`long` is 8 bytes) needed to relabel residual `TYPE_UNKNOWN` (`xunknownN`)
@@ -4823,7 +4823,7 @@ impl PrintC {
             .0
             && c_switch
         {
-            let facts = crate::p8_structure::kuna_switchmerge::PrintFacts {
+            let facts = crate::kuna_switchmerge::PrintFacts {
                 prints_nothing: &|head| self.header_prints_nothing(fd, head),
                 labels: &|sw| self.switch_label_set(fd, arch, sw),
                 arm_labels: &|sw, index| {
@@ -4835,13 +4835,13 @@ impl PrintC {
                 },
                 block_prints_nothing: &|bb| self.ops_print_nothing(fd, bb),
             };
-            crate::p8_structure::kuna_switchmerge::switch_plans(fd, sroot, &facts)
+            crate::kuna_switchmerge::switch_plans(fd, sroot, &facts)
         } else {
             Default::default()
         };
         self.goto_rewrites =
             if arch.kuna_options.get::<crate::funcdata_block::GotoNext>().0 && c_switch {
-                crate::p8_structure::kuna_gotonext::goto_rewrites(
+                crate::kuna_gotonext::goto_rewrites(
                     fd.sblocks_ref(),
                     sroot,
                     arch.kuna_options
@@ -4972,8 +4972,7 @@ impl PrintC {
 
             if self.out_lang == crate::kuna_lang::OutLang::Go
                 && opc == OpCode::CPUI_BOOL_AND
-                && crate::p9_emit::kuna_goorderedcompare::redundant_right(fd, arch, b0, b1)
-                    .is_some()
+                && crate::kuna_goorderedcompare::redundant_right(fd, arch, b0, b1).is_some()
                 && !self.cond_block_emits_statements(fd, b1)
             {
                 self.emit_block(fd, arch, b0);
@@ -6043,11 +6042,11 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         blk: BlockId,
-    ) -> Option<crate::p8_structure::kuna_iteregion::IteAssignMatch> {
+    ) -> Option<crate::kuna_iteregion::IteAssignMatch> {
         if self.out_lang == crate::kuna_lang::OutLang::Go {
             return None;
         }
-        let m = crate::p8_structure::kuna_iteregion::match_ite_assignment(fd, blk)?;
+        let m = crate::kuna_iteregion::match_ite_assignment(fd, blk)?;
         let marked = fd
             .obank()
             .get(m.cbranch)
@@ -6186,7 +6185,7 @@ impl PrintC {
         if self.oslog_hidden.contains(&op) {
             return true;
         }
-        crate::p9_emit::kuna_stackmarkers::nonprinting(fd, op)
+        crate::kuna_stackmarkers::nonprinting(fd, op)
     }
 
     /// (kuna) Is `blk` a `0`/`1` select diamond that the S8 `iteboolean` pass
@@ -6200,8 +6199,8 @@ impl PrintC {
         &self,
         fd: &Funcdata,
         blk: BlockId,
-    ) -> Option<crate::p8_structure::kuna_iteboolean::IteBoolMatch> {
-        let m = crate::p8_structure::kuna_iteboolean::match_ite_boolean(fd, blk)?;
+    ) -> Option<crate::kuna_iteboolean::IteBoolMatch> {
+        let m = crate::kuna_iteboolean::match_ite_boolean(fd, blk)?;
         let marked = fd
             .obank()
             .get(m.cbranch)
@@ -6226,7 +6225,7 @@ impl PrintC {
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
-        m: crate::p8_structure::kuna_iteboolean::IteBoolMatch,
+        m: crate::kuna_iteboolean::IteBoolMatch,
     ) {
         use crate::prettyprint::Emit;
 
@@ -6305,7 +6304,7 @@ impl PrintC {
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
-        m: crate::p8_structure::kuna_iteregion::IteAssignMatch,
+        m: crate::kuna_iteregion::IteAssignMatch,
     ) {
         use crate::prettyprint::Emit;
 
@@ -6519,7 +6518,7 @@ impl PrintC {
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
-        arm: crate::p8_structure::kuna_switchmerge::PlannedCase,
+        arm: crate::kuna_switchmerge::PlannedCase,
     ) {
         let blk = arm.owner;
         let case = fd.sblocks_ref().block(blk).switch_caseblocks()[arm.index].clone();
@@ -6665,20 +6664,20 @@ impl PrintC {
         &self,
         fd: &Funcdata,
         blk: BlockId,
-    ) -> Vec<crate::p8_structure::kuna_switchmerge::PlannedCase> {
+    ) -> Vec<crate::kuna_switchmerge::PlannedCase> {
         if let Some(arms) = self.switch_plans.plans.get(&blk) {
             return arms.clone();
         }
         let n = fd.sblocks_ref().block(blk).switch_caseblocks().len();
         (0..n)
-            .map(|index| crate::p8_structure::kuna_switchmerge::PlannedCase::new(blk, index))
+            .map(|index| crate::kuna_switchmerge::PlannedCase::new(blk, index))
             .collect()
     }
 
     /// (kuna `switchmerge`) Print a switch arm from the `skip`th block of its
     /// list, keeping the trailing jump of a `BlockGoto` around the list.
     fn emit_arm_rest(&mut self, fd: &Funcdata, arch: &Architecture, caseblk: BlockId, skip: usize) {
-        let (list, _) = crate::p8_structure::kuna_switchmerge::arm_list(fd.sblocks_ref(), caseblk);
+        let (list, _) = crate::kuna_switchmerge::arm_list(fd.sblocks_ref(), caseblk);
         if list.is_empty() {
             return;
         }
@@ -6737,7 +6736,7 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         sw: BlockId,
-    ) -> Option<crate::p8_structure::kuna_switchmerge::LabelSet> {
+    ) -> Option<crate::kuna_switchmerge::LabelSet> {
         let mut values = std::collections::BTreeSet::new();
         let mut form = None;
         for case in fd
@@ -7498,9 +7497,8 @@ impl PrintC {
         if opc == OpCode::CPUI_INT_LEFT
             && self.out_lang == crate::kuna_lang::OutLang::C
             && !self.context.is_set(modifiers::NEGATETOKEN)
-            && (crate::p9_emit::kuna_armregistershift::plan_arm_register_lsl(fd, arch, op)
-                .is_some()
-                || crate::p9_emit::kuna_armconstantshift::plan_arm_constant_lsl(fd, arch, op)
+            && (crate::kuna_armregistershift::plan_arm_register_lsl(fd, arch, op).is_some()
+                || crate::kuna_armconstantshift::plan_arm_constant_lsl(fd, arch, op)
                     .or_else(|| self.fixed64_shift_plan(fd, arch, op))
                     .is_some())
         {
@@ -7578,7 +7576,7 @@ impl PrintC {
                 self.emit_byte_assignment_ir(fd, arch, op, assignment);
                 return;
             }
-            if let Some(assignment) = crate::p9_emit::kuna_stackassign::assignment(fd, op) {
+            if let Some(assignment) = crate::kuna_stackassign::assignment(fd, op) {
                 self.emit_storage_assignment_ir(fd, arch, op, assignment);
                 return;
             }
@@ -7640,14 +7638,14 @@ impl PrintC {
         let storage_cast = (self.out_lang == crate::kuna_lang::OutLang::C && !self.options.nocasts)
             .then(|| {
                 outvn.and_then(|out| {
-                    crate::p9_emit::kuna_pointerstorecast::target(fd, op, || {
+                    crate::kuna_pointerstorecast::target(fd, op, || {
                         self.partial_piece_type(fd, arch, out, op, -1)
                     })
                 })
             })
             .flatten();
         if let Some(target) = &storage_cast {
-            if crate::p9_emit::kuna_pointerstorecast::null_source(fd, op) {
+            if crate::kuna_pointerstorecast::null_source(fd, op) {
                 self.push_constant_ir_fmt_sign(
                     0,
                     target.get_size(),
@@ -8052,9 +8050,7 @@ impl PrintC {
         if self.out_lang == crate::kuna_lang::OutLang::C
             && !self.context.is_set(modifiers::NEGATETOKEN)
         {
-            if let Some(plan) =
-                crate::p9_emit::kuna_armregistershift::plan_arm_register_lsl(fd, arch, op)
-            {
+            if let Some(plan) = crate::kuna_armregistershift::plan_arm_register_lsl(fd, arch, op) {
                 self.emit_arm_register_lsl(fd, arch, op, plan);
                 return;
             }
@@ -8074,7 +8070,7 @@ impl PrintC {
             }
             if tok.print1 == "<<" {
                 if let Some(plan) =
-                    crate::p9_emit::kuna_armconstantshift::plan_arm_constant_lsl(fd, arch, op)
+                    crate::kuna_armconstantshift::plan_arm_constant_lsl(fd, arch, op)
                         .or_else(|| self.fixed64_shift_plan(fd, arch, op))
                 {
                     self.emit_constant_lsl(fd, arch, op, plan);
@@ -8197,10 +8193,10 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         op: OpId,
-        plan: crate::p9_emit::kuna_armregistershift::ArmRegisterLslPlan,
+        plan: crate::kuna_armregistershift::ArmRegisterLslPlan,
     ) {
         use crate::printlanguage::SyntaxHighlight;
-        let crate::p9_emit::kuna_armregistershift::ArmRegisterLslPlan {
+        let crate::kuna_armregistershift::ArmRegisterLslPlan {
             lhs,
             count,
             lhs_type,
@@ -8213,7 +8209,7 @@ impl PrintC {
                 fd,
                 arch,
                 op,
-                crate::p9_emit::kuna_constantshift::ConstantLslPlan {
+                crate::kuna_constantshift::ConstantLslPlan {
                     lhs,
                     count,
                     unsigned_type: lhs_type,
@@ -8276,8 +8272,8 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         op: OpId,
-    ) -> Option<crate::p9_emit::kuna_constantshift::ConstantLslPlan> {
-        crate::p9_emit::kuna_constantshift::plan_fixed64_lsl(fd, arch, op, |vn| {
+    ) -> Option<crate::kuna_constantshift::ConstantLslPlan> {
+        crate::kuna_constantshift::plan_fixed64_lsl(fd, arch, op, |vn| {
             self.printed_operand_type(fd, vn, op)
         })
     }
@@ -8287,10 +8283,8 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         op: OpId,
-    ) -> Option<crate::p9_emit::kuna_widenedadd::WidenedAddPlan> {
-        crate::p9_emit::kuna_widenedadd::plan(fd, arch, op, |vn| {
-            self.printed_operand_type(fd, vn, op)
-        })
+    ) -> Option<crate::kuna_widenedadd::WidenedAddPlan> {
+        crate::kuna_widenedadd::plan(fd, arch, op, |vn| self.printed_operand_type(fd, vn, op))
     }
 
     /// Emit each fixed-shift operand once, converting the shiftee before LSL.
@@ -8299,7 +8293,7 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         op: OpId,
-        plan: crate::p9_emit::kuna_constantshift::ConstantLslPlan,
+        plan: crate::kuna_constantshift::ConstantLslPlan,
     ) {
         if let Some(result_type) = &plan.signed_result_type {
             self.push_cast_open(result_type, op);
@@ -8481,7 +8475,7 @@ impl PrintC {
         if self.out_lang != crate::kuna_lang::OutLang::C {
             return false;
         }
-        let Some(plan) = crate::p9_emit::kuna_partialconcat::preserved_prefix(fd, op) else {
+        let Some(plan) = crate::kuna_partialconcat::preserved_prefix(fd, op) else {
             return false;
         };
         let types = arch.types_rc();
@@ -9301,8 +9295,8 @@ impl PrintC {
         let (Some(input), Some(output)) = (cast.get_in(0), cast.get_out()) else {
             return false;
         };
-        if crate::p3_dataflow::kuna_floatquiet::can_elide(fd, input)
-            || !crate::p3_dataflow::kuna_floatquiet::feeds_round_trip(fd, op)
+        if crate::kuna_floatquiet::can_elide(fd, input)
+            || !crate::kuna_floatquiet::feeds_round_trip(fd, op)
         {
             return false;
         }
@@ -9914,12 +9908,12 @@ impl PrintC {
                 }
             }
         }
-        if let Some(slice) = crate::p9_emit::kuna_floatslice::recognize(fd, op) {
+        if let Some(slice) = crate::kuna_floatslice::recognize(fd, op) {
             self.op_float_slice_ir(fd, arch, op, slice);
             return;
         }
         if self.out_lang == crate::kuna_lang::OutLang::C {
-            if let Some((slice, cast)) = crate::p9_emit::kuna_bytearrayslice::recognize(fd, op) {
+            if let Some((slice, cast)) = crate::kuna_bytearrayslice::recognize(fd, op) {
                 self.push_word_slice_ir(fd, arch, op, slice, cast);
                 return;
             }
@@ -9967,7 +9961,7 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         op: OpId,
-        slice: crate::p9_emit::kuna_floatslice::Slice,
+        slice: crate::kuna_floatslice::Slice,
     ) {
         use crate::printlanguage::SyntaxHighlight;
         static C_BITS: OpToken =
@@ -9998,7 +9992,7 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         op: OpId,
-        slice: crate::p9_emit::kuna_floatslice::Slice,
+        slice: crate::kuna_floatslice::Slice,
         cast_source: bool,
     ) {
         self.push_cast_open(&slice.target_word, op);
@@ -10305,7 +10299,7 @@ impl PrintC {
         &self,
         fd: &Funcdata,
         arch: &Architecture,
-        m: &crate::p8_structure::kuna_iteregion::IteAssignMatch,
+        m: &crate::kuna_iteregion::IteAssignMatch,
     ) -> Vec<OpId> {
         if !self.cast_implied.arms_enabled() || !self.lang().caps.ternary {
             return Vec::new();
@@ -11917,7 +11911,7 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         op: OpId,
-    ) -> Option<crate::p9_emit::kuna_stackassign::Assignment> {
+    ) -> Option<crate::kuna_stackassign::Assignment> {
         let operation = fd.obank().get(op)?;
         if !matches!(operation.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) {
             return None;
@@ -11935,7 +11929,7 @@ impl PrintC {
             return None;
         }
         let (name, _) = self.local_byte_array_name(fd, arch, output)?;
-        Some(crate::p9_emit::kuna_stackassign::Assignment {
+        Some(crate::kuna_stackassign::Assignment {
             output,
             operand: Some(input),
             raw_constant: false,
@@ -11952,7 +11946,7 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         op: OpId,
-        assignment: crate::p9_emit::kuna_stackassign::Assignment,
+        assignment: crate::kuna_stackassign::Assignment,
     ) {
         use crate::printlanguage::SyntaxHighlight;
         static COMPOUND: OpToken = op_token("", " }", 2, 66, false, TokenType::Postsurround, 0, 0);
@@ -11960,8 +11954,8 @@ impl PrintC {
             .then(|| {
                 assignment
                     .operand
-                    .and_then(|input| crate::p9_emit::kuna_stackassign::loaded_bytes(fd, input))
-                    .or_else(|| crate::p9_emit::kuna_stackassign::load_pointer(fd, op))
+                    .and_then(|input| crate::kuna_stackassign::loaded_bytes(fd, input))
+                    .or_else(|| crate::kuna_stackassign::load_pointer(fd, op))
             })
             .flatten();
         let (front, back) = declarator_parts(&assignment.datatype, self.rt_ctx.clone());
@@ -11994,7 +11988,7 @@ impl PrintC {
         self.push_storage_pointer_ir(fd, arch, op, &access, mods);
         if let Some((pointer, load, pointer_size)) = array_source {
             let (pointer, reader, cast) =
-                crate::p9_emit::kuna_stackassign::memmove_source(fd, pointer, load)
+                crate::kuna_stackassign::memmove_source(fd, pointer, load)
                     .unwrap_or((pointer, load, true));
             if cast {
                 let types = fd.get_arch().types().unwrap();
@@ -14197,8 +14191,7 @@ impl PrintC {
         mods: uint4,
         pointer: &std::rc::Rc<crate::dtype::Datatype>,
     ) {
-        let cast =
-            !self.options.nocasts && crate::p9_emit::kuna_memberbase::needs_cast(fd, base, pointer);
+        let cast = !self.options.nocasts && crate::kuna_memberbase::needs_cast(fd, base, pointer);
         if cast {
             if self.out_lang == crate::kuna_lang::OutLang::Go {
                 self.push_go_conversion(pointer, &fd.vn_type_read_facing(base, op), op);

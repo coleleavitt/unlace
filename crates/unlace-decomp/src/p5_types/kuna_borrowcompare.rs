@@ -801,7 +801,7 @@ impl crate::action::Rule for RuleDoubleInputPair {
 
 /// (kuna) Join two adjacent input words a borrow or carry chain links into
 /// one double-precision input (option `pairparam`).  See
-/// [`crate::p5_types::kuna_borrowcompare::RuleDoubleInputPair`].
+/// [`crate::kuna_borrowcompare::RuleDoubleInputPair`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PairParams(pub bool);
 

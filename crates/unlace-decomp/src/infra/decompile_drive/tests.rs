@@ -409,7 +409,7 @@ fn a_budget_probe_stays_spent_for_its_drive_and_names_no_site() {
 
 #[test]
 fn region_identification_stops_at_the_budget_and_names_itself() {
-    use crate::p7_regions::kuna_regionid::KunaRegionIdentifier;
+    use crate::kuna_regionid::KunaRegionIdentifier;
     let build = || {
         let mut ri = KunaRegionIdentifier::new();
         let n: Vec<_> = (1..=4).map(|a| ri.add_synthetic_block(a)).collect();

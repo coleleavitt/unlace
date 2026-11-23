@@ -32,20 +32,20 @@
 //!
 //! Only the callee can say whether it wanted the register, and the statement
 //! this pass reads is the one `argclobber` reads in the other direction: the
-//! callee's own RECOVERED prototype, which [`crate::p4_calls::kuna_protoorder`]
+//! callee's own RECOVERED prototype, which [`crate::kuna_protoorder`]
 //! states for every callee `decompile-all` decompiled before its callers. For a
 //! register `R` at a direct, unlocked, non-variadic call ([`stated_width`]):
 //!
 //! * the stated prototype has a parameter starting at `R`, and the list is one
 //!   `protoorder`'s locking mode would accept as an arity claim
-//!   ([`crate::p4_calls::kuna_protoorder::RecoveredTypes::arity_sound`]): all in
+//!   ([`crate::kuna_protoorder::RecoveredTypes::arity_sound`]): all in
 //!   registers, the callee's body does not read the register the next parameter
 //!   would arrive in (a variadic's register-save prologue does), the list does not
 //!   end on the last argument register, and it sits where the convention puts
 //!   those types -- or else every register the list names is one the callee's
 //!   body takes;
 //! * the callee's own body READS `R` before writing it on some path, for a value
-//!   that reaches something ([`crate::p4_calls::kuna_calleedeadarg`]'s
+//!   that reaches something ([`crate::kuna_calleedeadarg`]'s
 //!   `proves_input`), or hands it on to a declared parameter or a callee that
 //!   takes it; where that bounded walk cannot finish, the registers the callee's
 //!   first heritage saw it read ([`crate::kuna_entryreads::callee_takes`]). A
@@ -53,9 +53,9 @@
 //!   not a recovery artifact of the callee;
 //!   a body that hands `R` unwritten to a direct call whose target takes it
 //!   on these same terms (`call f; ret`) reads it too, up to three calls deep
-//!   ([`crate::p4_calls::kuna_calleedeadarg::reads_through_calls`]);
+//!   ([`crate::kuna_calleedeadarg::reads_through_calls`]);
 //! * that read is for something other than a variadic tail
-//!   ([`crate::p4_calls::kuna_varargtail`]): a callee whose parameter only
+//!   ([`crate::kuna_varargtail`]): a callee whose parameter only
 //!   reaches an argument slot the ABI lets a caller leave unset says nothing
 //!   about what its callers put there -- openssh `xcalloc`'s third parameter is
 //!   gcc's `push %rdx` alignment filler at a variadic call, gnulib `open_safer`'s
@@ -482,7 +482,7 @@ fn reads_the_vararg_count(data: &Funcdata) -> bool {
 
 /// [`reads_the_vararg_count`] without a read that only stores the register:
 /// clang's `push %rax` reserves an aligned stack slot, and is no
-/// `test %al,%al`. Read by [`crate::p4_calls::kuna_calleereadarg`].
+/// `test %al,%al`. Read by [`crate::kuna_calleereadarg`].
 pub(crate) fn tests_the_vararg_count(data: &Funcdata) -> bool {
     vararg_count_read(data, false)
 }
@@ -953,7 +953,7 @@ fn own_input_varnode(data: &Funcdata, addr: &Address, size: int4) -> Option<Varn
 /// anything put a value in them. Every earlier stated register must therefore be
 /// one this function could be carrying -- already claimed here (so forwarded
 /// untouched), or one its own entry does not WRITE before reading on every path
-/// ([`crate::p4_calls::kuna_calleedeadarg::CalleeEntryDead::proves_dead`],
+/// ([`crate::kuna_calleedeadarg::CalleeEntryDead::proves_dead`],
 /// asked of this function's own body). A register the function loads for itself
 /// before the call is not a parameter, and a claim reaching across it prints an
 /// argument-less slot: the `protoorder` fixture's `overrec` sets `rsi` to 16 and
@@ -1031,7 +1031,7 @@ pub(crate) fn producing_call(data: &Funcdata, ret: OpId) -> Option<OpId> {
 /// Under `mixedtailret`, a RETURN reached from no call is no refusal when at
 /// least one RETURN is such a tail call and the value it returns in that one
 /// register is the one the function wrote and branched on to choose between
-/// them ([`crate::p4_calls::kuna_mixedtailret::returns_decided_value`]); the
+/// them ([`crate::kuna_mixedtailret::returns_decided_value`]); the
 /// register may then be touched anywhere. An argument register is taken only
 /// when no claimed callee reads it.
 fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId>, bool)> {
@@ -1127,11 +1127,10 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
     }
     if mixed {
         let argument = pieces.iter().any(|(a, s)| !return_only(proto, a, *s));
-        if (argument
-            && crate::p4_calls::kuna_mixedtailret::feeds_tail_call(data, &producers, &pieces))
-            || !own.iter().all(|&r| {
-                crate::p4_calls::kuna_mixedtailret::returns_decided_value(data, r, &pieces, &paths)
-            })
+        if (argument && crate::kuna_mixedtailret::feeds_tail_call(data, &producers, &pieces))
+            || !own
+                .iter()
+                .all(|&r| crate::kuna_mixedtailret::returns_decided_value(data, r, &pieces, &paths))
         {
             return None;
         }
@@ -1351,7 +1350,7 @@ fn is_tail_return_piece(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// function's. And the claim yields to a value the function computes itself in
 /// another storage class ([`returns_own_value`]), unless the claim also
 /// covers a value the function returns itself
-/// ([`crate::p4_calls::kuna_mixedtailret::claimed_beside_own`]). Inert with the
+/// ([`crate::kuna_mixedtailret::claimed_beside_own`]). Inert with the
 /// option off.
 pub fn keep_tail_return_whole(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
     if !data
@@ -1371,7 +1370,7 @@ pub fn keep_tail_return_whole(data: &Funcdata, active: &mut crate::fspec::ParamA
             )
         })
         .collect();
-    let own = !crate::p4_calls::kuna_mixedtailret::claimed_beside_own(data)
+    let own = !crate::kuna_mixedtailret::claimed_beside_own(data)
         && returns_own_value(data, active, &claimed);
     if claimed.iter().any(|&i| !active.get_trial(i).is_active()) || own {
         for i in claimed {
@@ -1849,7 +1848,7 @@ pub fn neutral_in_chain(active: &ParamActive, i: int4, is_spacebase: bool) -> bo
 /// result in `r8` across `call sink` with `rsi`, `rdx` and `rcx` forwarded in
 /// front of it, and `sink` keeps its one argument), not the stack-protector
 /// wipe ([`set_before_branch`]), and not a register reloaded from the frame
-/// ([`crate::p4_calls::kuna_reloadarg`]): FreeRTOS `xTaskIncrementTick` is
+/// ([`crate::kuna_reloadarg`]): FreeRTOS `xTaskIncrementTick` is
 /// `push {r3,lr}; ...; ldmia sp!,{r3,lr}; b.w part`, and the r3 the pop
 /// restores is the function's own, not a fourth argument behind r0..r2.
 pub fn anchors_neutral_run(active: &ParamActive, trial: &ParamTrial, is_spacebase: bool) -> bool {
@@ -2189,7 +2188,7 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 /// (kuna `passthrough`) The register ranges `ActionFuncLink` made visible to heritage for a
 /// call whose callee states them, with the calls that own each; reset by `Funcdata::clear`.
 #[derive(Default)]
-struct ClaimsSlot(Vec<crate::p4_calls::kuna_passthrough::PassThroughClaim>);
+struct ClaimsSlot(Vec<crate::kuna_passthrough::PassThroughClaim>);
 crate::kuna_func_state!(ClaimsSlot, keep_across_clear: false);
 
 /// The `kuna_passthrough` pass's methods on [`Funcdata`], as an extension trait so the type can
@@ -2198,29 +2197,29 @@ pub trait FuncdataPassthroughExt {
     /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
     fn kuna_set_passthrough_claims(
         &mut self,
-        claims: Vec<crate::p4_calls::kuna_passthrough::PassThroughClaim>,
+        claims: Vec<crate::kuna_passthrough::PassThroughClaim>,
     );
     /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
-    fn kuna_passthrough_claims(&self) -> &[crate::p4_calls::kuna_passthrough::PassThroughClaim];
+    fn kuna_passthrough_claims(&self) -> &[crate::kuna_passthrough::PassThroughClaim];
 }
 
 impl FuncdataPassthroughExt for crate::funcdata::Funcdata {
     /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
     fn kuna_set_passthrough_claims(
         &mut self,
-        claims: Vec<crate::p4_calls::kuna_passthrough::PassThroughClaim>,
+        claims: Vec<crate::kuna_passthrough::PassThroughClaim>,
     ) {
         self.kuna_state_mut::<ClaimsSlot>().0 = claims;
     }
     /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
-    fn kuna_passthrough_claims(&self) -> &[crate::p4_calls::kuna_passthrough::PassThroughClaim] {
+    fn kuna_passthrough_claims(&self) -> &[crate::kuna_passthrough::PassThroughClaim] {
         &self.kuna_state::<ClaimsSlot>().0
     }
 }
 
 /// (kuna) A register forwarded untouched to a callee whose recovered
 /// prototype reads it becomes a parameter (option `passthrough`).  See
-/// [`crate::p4_calls::kuna_passthrough`].
+/// [`crate::kuna_passthrough`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PassThrough(pub bool);
 
@@ -2237,7 +2236,7 @@ impl crate::kuna_optionset::KunaOption for PassThrough {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p4_calls::kuna_passthrough::OptionPassThrough.apply(value)?;
+        let (v, msg) = crate::kuna_passthrough::OptionPassThrough.apply(value)?;
         Ok((PassThrough(v), msg))
     }
 }

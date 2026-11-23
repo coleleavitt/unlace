@@ -357,7 +357,7 @@ impl Action for ActionStackByteCopy {
             || fd
                 .get_arch()
                 .kuna_options
-                .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+                .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
                 .0
                 == super::kuna_indexaliasguard::LEVEL_OFF
             || fd.get_heritage_pass() != 0

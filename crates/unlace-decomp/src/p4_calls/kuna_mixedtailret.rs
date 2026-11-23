@@ -193,7 +193,7 @@ fn write_of(data: &Funcdata, op: OpId, addr: &Address, size: int4) -> Write {
         return Write::None;
     };
     if !overlaps(out.get_addr(), out.get_size(), addr, size)
-        || crate::p4_calls::kuna_passthrough::is_injected_noop(data, op)
+        || crate::kuna_passthrough::is_injected_noop(data, op)
     {
         return Write::None;
     }
@@ -323,7 +323,7 @@ fn decided_origin(
             }
             let out = o.get_out().and_then(|v| data.vbank().get(v));
             if out.is_some_and(|v| overlaps(v.get_addr(), v.get_size(), &tracked.0, tracked.1))
-                && !crate::p4_calls::kuna_passthrough::is_injected_noop(data, op)
+                && !crate::kuna_passthrough::is_injected_noop(data, op)
             {
                 match register_copy_source(data, op) {
                     Some(source) => tracked = source,
@@ -785,7 +785,7 @@ fn condition_feeders(data: &Funcdata, bl: BlockId) -> Vec<OpId> {
 
 /// (kuna) A value a function returns beside a claimed tail-call result is
 /// its return value too (option `mixedtailret`).  See
-/// [`crate::p4_calls::kuna_mixedtailret`].
+/// [`crate::kuna_mixedtailret`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct MixedTailRet(pub bool);
 
@@ -802,7 +802,7 @@ impl crate::kuna_optionset::KunaOption for MixedTailRet {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p4_calls::kuna_mixedtailret::OptionMixedTailRet.apply(value)?;
+        let (v, msg) = crate::kuna_mixedtailret::OptionMixedTailRet.apply(value)?;
         Ok((MixedTailRet(v), msg))
     }
 }

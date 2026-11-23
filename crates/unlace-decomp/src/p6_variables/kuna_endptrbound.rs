@@ -867,7 +867,7 @@ impl crate::kuna_optionset::KunaOption for EndPtrBound {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p6_variables::kuna_endptrbound::OptionEndPtrBound.apply(value)?;
+        let (v, msg) = crate::kuna_endptrbound::OptionEndPtrBound.apply(value)?;
         Ok((EndPtrBound(v), msg))
     }
 }

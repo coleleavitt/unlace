@@ -12,7 +12,7 @@
 //! a model whose own `<prototype extrapop="unknown">` declines to. Nothing in
 //! the tree called it, so a locked prototype left the call at
 //! `extrapop_unknown`, `StackSolver` fell through to a guess, and
-//! [`crate::p6_variables::kuna_calleepop`]'s guess reads the push run in front of
+//! [`crate::kuna_calleepop`]'s guess reads the push run in front of
 //! the call. That run is not always the callee's: a Win32 image stages the
 //! arguments of one API and calls a second, argument-less one in the middle of
 //! the run, and every staged push is then credited to the wrong callee. The

@@ -624,7 +624,7 @@ impl Rule for RuleAllocaProbe {
 
 crate::kuna_flag!(
     /// (kuna) A dynamic stack allocation becomes `alloca(size)` (option
-    /// `alloca`). See [`crate::p3_dataflow::kuna_alloca`].
+    /// `alloca`). See [`crate::kuna_alloca`].
     AllocaCalls,
     "alloca",
     "dynamic stack allocation as alloca(size)",

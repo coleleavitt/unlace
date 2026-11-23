@@ -143,7 +143,7 @@ impl crate::kuna_optionset::KunaOption for GuardArm {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p8_structure::kuna_ifnoexit::OptionGuardArm.apply(value)?;
+        let (v, msg) = crate::kuna_ifnoexit::OptionGuardArm.apply(value)?;
         Ok((GuardArm(v), msg))
     }
 }
@@ -168,7 +168,7 @@ impl crate::kuna_optionset::KunaOption for LoopCondHoist {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p8_structure::kuna_ifnoexit::OptionLoopCondHoist.apply(value)?;
+        let (v, msg) = crate::kuna_ifnoexit::OptionLoopCondHoist.apply(value)?;
         Ok((LoopCondHoist(v), msg))
     }
 }

@@ -1,7 +1,7 @@
 use super::single_family;
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p6_variables::funcdata_spacebase::spacebase_tests::{build_fd, reg_addr};
+use crate::funcdata_spacebase::spacebase_tests::{build_fd, reg_addr};
 use unlace_num::opcodes::OpCode;
 
 struct Fixture {

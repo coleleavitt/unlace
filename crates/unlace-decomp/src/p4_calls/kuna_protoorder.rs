@@ -159,7 +159,7 @@ pub struct RecoveredTypes {
     /// not end on the register-file boundary a variadic's register-save prologue
     /// leaves, and it is where the convention would put those types?  Computed
     /// only when `option passthrough` is on, the one reader that moves arity on
-    /// a stated list ([`crate::p4_calls::kuna_passthrough`]); `false` otherwise.
+    /// a stated list ([`crate::kuna_passthrough`]); `false` otherwise.
     pub arity_sound: bool,
     /// The recovered return value -- storage, size and type -- when it is not
     /// `void`. Recorded when `option passthrough` is on for tail-call recovery
@@ -172,9 +172,9 @@ pub struct RecoveredTypes {
     pub result: Option<(Address, int4)>,
     /// The storage of every parameter in [`Self::inputs`] the callee's body only
     /// ever feeds to a variadic tail
-    /// ([`crate::p4_calls::kuna_varargtail`]): read by the callee, but only
+    /// ([`crate::kuna_varargtail`]): read by the callee, but only
     /// where the ABI lets a caller leave the register unset, so
-    /// [`crate::p4_calls::kuna_passthrough`] never claims it.  Recorded only when
+    /// [`crate::kuna_passthrough`] never claims it.  Recorded only when
     /// `option passthrough` is on; empty otherwise.
     pub vararg_tail: Vec<Address>,
     /// The incoming registers the body reads, itself or through a callee it
@@ -251,8 +251,7 @@ fn vote_holds(
 ) -> Option<bool> {
     if class_of(ct).is_none()
         || ct.get_size() > arg_size
-        || crate::p5_types::kuna_ptrdepth::pointer_depth(ct, 3)
-            > crate::p5_types::kuna_ptrdepth::MAX_INFERRED_PTR_DEPTH
+        || crate::kuna_ptrdepth::pointer_depth(ct, 3) > crate::kuna_ptrdepth::MAX_INFERRED_PTR_DEPTH
     {
         return Some(false);
     }

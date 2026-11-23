@@ -341,7 +341,7 @@ pub fn callind_cleanup(arch: &Architecture, call_at: &Address) -> u32 {
     if virtual_this(arch).is_none() {
         return 0;
     }
-    crate::p4_calls::kuna_calleepurge::own_cleanup(arch, call_at)
+    crate::kuna_calleepurge::own_cleanup(arch, call_at)
 }
 
 /// Ops [`virtual_call`] reads back from the call.
@@ -552,7 +552,7 @@ pub fn skips_read_operands(data: &Funcdata) -> bool {
     data.call_specs()
         .iter()
         .any(|fc| fc.callee_reg_model().is_some())
-        && !crate::p4_calls::kuna_calleepurge::every_pop_settled(data)
+        && !crate::kuna_calleepurge::every_pop_settled(data)
 }
 
 /// Is `vn`, read by the call `op` while its trials are scored, the operand of

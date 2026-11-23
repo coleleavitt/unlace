@@ -536,7 +536,7 @@ pub fn reconcile(fd: &mut Funcdata) {
 
 /// (kuna) A frame object whose address only fills declared `T *` parameters
 /// is declared `T` (option `castobject`).  See
-/// [`crate::p6_variables::kuna_castobject`].
+/// [`crate::kuna_castobject`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct CastObject(pub bool);
 
@@ -553,7 +553,7 @@ impl crate::kuna_optionset::KunaOption for CastObject {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p6_variables::kuna_castobject::OptionCastObject.apply(value)?;
+        let (v, msg) = crate::kuna_castobject::OptionCastObject.apply(value)?;
         Ok((CastObject(v), msg))
     }
 }

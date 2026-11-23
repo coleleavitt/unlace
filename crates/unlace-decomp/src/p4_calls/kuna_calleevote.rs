@@ -942,7 +942,7 @@ fn table_address(data: &Funcdata, op: crate::context::OpId, off: uintb, size: in
     if off < spc.get_pointer_lower_bound() || off > spc.get_pointer_upper_bound() {
         return false;
     }
-    if crate::p5_types::kuna_charptr::value_is_string(data, op, off, size) {
+    if crate::kuna_charptr::value_is_string(data, op, off, size) {
         return false;
     }
     let Some(point) = data.obank().get(op).map(|o| o.get_addr().clone()) else {

@@ -296,7 +296,5 @@ fn highslice_guard_preserves_unsigned_signed_and_wrapping_ranges() {
 fn highslice_guard_requires_explicit_enablement() {
     let (fd, shift, slice) = pair_with_gate(8, 4, 4, 32, false);
     assert_match(&fd, shift, slice, 0);
-    assert!(crate::p2_lift::kuna_highslice_guard::matches(
-        &fd, shift, slice
-    ));
+    assert!(crate::kuna_highslice_guard::matches(&fd, shift, slice));
 }

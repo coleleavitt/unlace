@@ -34,7 +34,7 @@ use unlace_num::pcoderaw::VarnodeData;
 use crate::architecture::Architecture;
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_protoorder::RecoveredTypes;
+use crate::kuna_protoorder::RecoveredTypes;
 
 const ARG_REGS: [&str; 6] = ["RDI", "RSI", "RDX", "RCX", "R8", "R9"];
 const LOOK_BACK: usize = 16;
@@ -245,7 +245,7 @@ pub fn seed(arch: &mut Architecture, data: &Funcdata) {
             continue;
         }
         let stub = fc.get_entry_address().clone();
-        let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(&stub) else {
+        let Some(key) = crate::kuna_protoorder::stated_key(&stub) else {
             continue;
         };
         if arch

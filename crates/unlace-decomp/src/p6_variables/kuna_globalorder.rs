@@ -30,7 +30,7 @@ pub fn copy_moves_write(data: &Funcdata, global: HighVariableId, value: HighVari
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {

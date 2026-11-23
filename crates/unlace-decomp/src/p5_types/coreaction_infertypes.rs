@@ -703,11 +703,11 @@ fn call_output_type_local(data: &Funcdata, op: OpId, opcode: OpCode) -> Option<R
             .get_out()
             .and_then(|v| data.vbank().get(v))
             .map(|v| v.get_size())?;
-        return crate::p4_calls::kuna_passthrough::tail_return_type(data, op, size)
-            .or_else(|| crate::p4_calls::kuna_slotargs::declared_result_type(data, op, fc, size))
-            .or_else(|| crate::p4_calls::kuna_callrettype::stated_return_type(data, op, fc))
+        return crate::kuna_passthrough::tail_return_type(data, op, size)
+            .or_else(|| crate::kuna_slotargs::declared_result_type(data, op, fc, size))
+            .or_else(|| crate::kuna_callrettype::stated_return_type(data, op, fc))
             .or_else(|| crate::kuna_swiftinfer::pair_output_type(data, op))
-            .or_else(|| crate::p4_calls::kuna_narrowret::stated_type(data, op, fc, size))
+            .or_else(|| crate::kuna_narrowret::stated_type(data, op, fc, size))
             .or_else(|| crate::kuna_floatreg::jump_result_type(data, op, size));
     }
     let ct = proto.get_output_type()?;
@@ -1048,9 +1048,8 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
         Some(t) => t,
         None => return false,
     };
-    let backing_store = crate::p5_types::kuna_stackwordtypes::backing_store(
-        data, op, inslot, outslot, invn, &alttype,
-    );
+    let backing_store =
+        crate::kuna_stackwordtypes::backing_store(data, op, inslot, outslot, invn, &alttype);
     // (C++ coreaction.cc:5335-5341)  Always give the incoming union/relative-pointer
     // a chance to resolve so the field choice is cached for later facing lookups,
     // but only adopt the resolved type for the propagation when `op` is not a MULTIEQUAL
@@ -1066,7 +1065,7 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
         }
     }
     if backing_store {
-        alttype = crate::p5_types::kuna_stackwordtypes::stored_word(data, invn, alttype);
+        alttype = crate::kuna_stackwordtypes::stored_word(data, invn, alttype);
     }
 
     // Resolve the outgoing Varnode.

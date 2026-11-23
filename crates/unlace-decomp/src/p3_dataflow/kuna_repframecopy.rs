@@ -22,7 +22,7 @@
 //! callee reads into it or its pop releases it. A callee whose stack effect the
 //! walk cannot settle still releases it when its reached returns pop the block
 //! (`ret 0x20`), every one alike and none past the callee's own code (see
-//! [`crate::p4_calls::kuna_calleepurge::callee_return_pop`]); what the caller
+//! [`crate::kuna_calleepurge::callee_return_pop`]); what the caller
 //! removes after the call does not count, since
 //! it can be the caller's own locals or a later call's arguments. That pop is
 //! then stated on the call, and an earlier call whose pushes the block reuses
@@ -1054,7 +1054,7 @@ fn expand_with(fd: &mut Funcdata, returned: bool) -> i32 {
         || fd
             .get_arch()
             .kuna_options
-            .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+            .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
             .0
             == super::kuna_indexaliasguard::LEVEL_OFF
     {

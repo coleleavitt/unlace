@@ -18,14 +18,14 @@
 //! The rule is limited to the shape `calloverlap auto` recovers: a four-byte
 //! trial in the low word of a named eight-byte register on a truncated 32-bit
 //! address target, such as an e500 GPR. Reachability is
-//! [`exclusivearguse`](crate::p4_calls::kuna_exclusivearguse)'s bounded walk,
+//! [`exclusivearguse`](crate::kuna_exclusivearguse)'s bounded walk,
 //! which declines once its bound is exceeded.
 
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p4_calls::kuna_exclusivearguse::{MAX_VISIT, def_block, reaches};
+use crate::kuna_exclusivearguse::{MAX_VISIT, def_block, reaches};
 
 /// Whether the trial matched at `opmatch` has the narrow scalar shape the rule
 /// covers. Independent of the use being scored, so it is computed once per walk.

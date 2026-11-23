@@ -88,7 +88,7 @@
 //! `condfold` reproduces exactly that relaxation, and **only** that relaxation.  It
 //! widens the single `is_complex(orblock)` decline inside the short-circuit schema of
 //! *both* structurers ([`CollapseStructure::rule_block_or`](crate::blockaction) and
-//! [`RegionStructurer::try_block_or`](crate::p8_structure::region_structurer)): a
+//! [`RegionStructurer::try_block_or`](crate::region_structurer)): a
 //! *complex* sibling is accepted anyway when it satisfies one of the two admission
 //! rules below.  Every other precondition `ruleBlockOr` enforces is untouched.
 //!

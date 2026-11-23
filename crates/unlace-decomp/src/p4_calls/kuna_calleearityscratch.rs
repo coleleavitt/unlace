@@ -1,5 +1,5 @@
 //! (kuna) Let a boundary register the caller only used as SCRATCH end a
-//! [`calleearitycut`](crate::p4_calls::kuna_calleearitycut) run.
+//! [`calleearitycut`](crate::kuna_calleearitycut) run.
 //!
 //! # The gap
 //!
@@ -64,7 +64,7 @@
 
 use unlace_base::marshal::ElementId;
 
-use crate::p4_calls::kuna_calleearitybody::BodyTrial;
+use crate::kuna_calleearitybody::BodyTrial;
 
 /// Marshaling element `<calleearityscratch>` (kuna 4000+ range; 4155 = indirectanchor).
 pub const ELEM_CALLEEARITYSCRATCH: ElementId = ElementId::new("calleearityscratch", 4156);
@@ -72,7 +72,7 @@ pub const ELEM_CALLEEARITYSCRATCH: ElementId = ElementId::new("calleearityscratc
 /// Is the register this run stops at one the caller only used as scratch?
 ///
 /// `bound` is the trial immediately past the run, exactly as
-/// [`crate::p4_calls::kuna_calleearitycut::accepts_cut_run`] found it.
+/// [`crate::kuna_calleearitycut::accepts_cut_run`] found it.
 pub fn boundary_is_caller_scratch(bound: &BodyTrial) -> bool {
     bound.caller_checked && !bound.caller_active && !bound.caller_constant
 }

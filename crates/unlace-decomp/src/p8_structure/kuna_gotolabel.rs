@@ -7,9 +7,9 @@
 //! flag [`BlockGraph::mark_unstructured`](crate::block::BlockGraph::mark_unstructured)
 //! sets on each goto target, and the three goto-reduction passes that convert a
 //! `goto` into a duplicated tail
-//! ([`kuna_gotoreduce`](crate::p8_structure::kuna_gotoreduce),
-//! [`kuna_taildup`](crate::p8_structure::kuna_taildup),
-//! [`kuna_crossjumpreverter`](crate::p8_structure::kuna_crossjumpreverter)) clear
+//! ([`kuna_gotoreduce`](crate::kuna_gotoreduce),
+//! [`kuna_taildup`](crate::kuna_taildup),
+//! [`kuna_crossjumpreverter`](crate::kuna_crossjumpreverter)) clear
 //! that flag once the converted target is no longer reached by an unstructured
 //! edge.  Each pass carried its own copy of the "still reached" test, and all
 //! three copies looked at `BlockGoto`/`BlockIf` goto targets only — so a target

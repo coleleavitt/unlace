@@ -78,12 +78,12 @@
 //!   which a helper that clobbers only scratch never does — MSVC's out-of-line
 //!   stack probe writes `RSP`/`R10`/`R11` and `x86-64-win.cspec` names none of
 //!   them. That body is admitted on a second, independent mark instead, by
-//!   [`calleescratchbody`](crate::p4_calls::kuna_calleescratchbody).
+//!   [`calleescratchbody`](crate::kuna_calleescratchbody).
 //! * **The return register needs its own evidence.** The gate above asks the
 //!   callee to have written a register the convention promises is *preserved*,
 //!   which a helper that clobbers only what it is allowed to never does. The
 //!   call's return storage is therefore
-//!   [`calleeretpreserves`](crate::p4_calls::kuna_calleeretpreserves)'s
+//!   [`calleeretpreserves`](crate::kuna_calleeretpreserves)'s
 //!   question, on a different positive finding.
 //! * **An explicitly overridden prototype wins.** A call whose `FuncProto`
 //!   carries its own effect list (a decoded `<unaffected>`/`<killedbycall>`
@@ -154,7 +154,7 @@ pub fn callee_preserves_range(
         return false;
     }
     body_departs_from_convention(data, fc, w)
-        || crate::p4_calls::kuna_calleescratchbody::scratch_body_is_a_body(data, w)
+        || crate::kuna_calleescratchbody::scratch_body_is_a_body(data, w)
 }
 
 /// Does the decoded body demonstrably depart from the convention the effect list
@@ -173,7 +173,7 @@ pub fn callee_preserves_range(
 ///
 /// A helper that clobbers only scratch registers is invisible to this reading
 /// and is admitted by
-/// [`calleescratchbody`](crate::p4_calls::kuna_calleescratchbody) instead.
+/// [`calleescratchbody`](crate::kuna_calleescratchbody) instead.
 fn body_departs_from_convention(
     data: &Funcdata,
     fc: &FuncCallSpecs,

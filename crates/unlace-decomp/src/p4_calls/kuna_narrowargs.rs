@@ -352,7 +352,7 @@ fn trace() -> bool {
 
 /// (kuna `narrowargs`) Declare a register parameter at the width its uses read
 /// (`body`), and a 32-bit ARM parameter every caller passes narrow (`callers`,
-/// [`crate::p4_calls::kuna_callerargs`]).
+/// [`crate::kuna_callerargs`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NarrowArgs {
     pub body: bool,

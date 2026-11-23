@@ -346,7 +346,7 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 /// (option `spillargtrial`).  `0` = off (upstream-faithful: every
 /// `CPUI_STORE` makes the trial inactive), `1` = spill/reload pairs only,
 /// `2` = any caller-frame store of the value.  See
-/// [`crate::p4_calls::kuna_spillargtrial`].
+/// [`crate::kuna_spillargtrial`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpillArgTrial(pub int4);
 
@@ -363,7 +363,7 @@ impl crate::kuna_optionset::KunaOption for SpillArgTrial {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p4_calls::kuna_spillargtrial::OptionSpillArgTrial.apply(value)?;
+        let (v, msg) = crate::kuna_spillargtrial::OptionSpillArgTrial.apply(value)?;
         Ok((SpillArgTrial(v), msg))
     }
 }

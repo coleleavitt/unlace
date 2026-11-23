@@ -433,7 +433,7 @@ pub fn unsigned_vote(
 
 /// (kuna) Declare a register-local web whose values all fit a narrower low
 /// part at that width (option `regnarrow`).  See
-/// [`crate::p3_dataflow::kuna_regnarrow`].
+/// [`crate::kuna_regnarrow`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NarrowLocals(pub bool);
 
@@ -458,7 +458,7 @@ impl crate::kuna_optionset::KunaOption for NarrowLocals {
 
 /// (kuna) Also narrow a register-local web whose values are all sign
 /// extensions of a narrower part (option `regsigned`).  See
-/// [`crate::p3_dataflow::kuna_regnarrow`].
+/// [`crate::kuna_regnarrow`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NarrowSigned(pub bool);
 

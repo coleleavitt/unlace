@@ -1,7 +1,7 @@
 //! (kuna `callrettype`) A call returns the type its callee declares.
 //!
 //! `unlace decompile-all` decompiles callees before callers
-//! ([`crate::p4_calls::kuna_protoorder`]).  That channel carries a callee's
+//! ([`crate::kuna_protoorder`]).  That channel carries a callee's
 //! recovered PARAMETER types to its call sites; this one carries the RETURN.
 //! Without it a call to a function the same listing declares
 //! `char *sub_43ee(unsigned long *a0)` still produces an untyped value at the
@@ -184,8 +184,8 @@ fn states(ct: &Rc<Datatype>) -> bool {
         _ => false,
     };
     scalar
-        && crate::p5_types::kuna_ptrdepth::pointer_depth(ct, 3)
-            <= crate::p5_types::kuna_ptrdepth::MAX_INFERRED_PTR_DEPTH
+        && crate::kuna_ptrdepth::pointer_depth(ct, 3)
+            <= crate::kuna_ptrdepth::MAX_INFERRED_PTR_DEPTH
 }
 
 /// What the function filed under `k` states it returns, for [`restore`].

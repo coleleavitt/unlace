@@ -464,7 +464,7 @@ fn rewrite(data: &mut Funcdata, run: &Run) -> KunaResult<()> {
 
 crate::kuna_flag!(
     /// (kuna) Collapse an unrolled element-copy run into `memcpy` (option
-    /// `copyrun`).  See [`crate::p3_dataflow::kuna_copyrun`].
+    /// `copyrun`).  See [`crate::kuna_copyrun`].
     CopyRun,
     "copyrun",
     "unrolled element-copy runs as memcpy",

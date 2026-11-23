@@ -54,7 +54,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::VarnodeId;
 use crate::dtype::type_class;
 use crate::funcdata::Funcdata;
-use crate::p5_types::kuna_ptrfromuse::is_float_op;
+use crate::kuna_ptrfromuse::is_float_op;
 
 /// Whether the register range at `addr` (`size` bytes, widest access `maxw`) is
 /// an integer register pair to refine at its midpoint (kuna `pairrefine`).

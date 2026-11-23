@@ -106,7 +106,7 @@ pub(crate) fn moves_write(fd: &Funcdata, storage: HighVariableId, value: HighVar
                 continue;
             }
             let Some(definition) =
-                crate::p6_variables::kuna_globalorder::value_definition(fd, high.get_instance(i))
+                crate::kuna_globalorder::value_definition(fd, high.get_instance(i))
             else {
                 continue;
             };

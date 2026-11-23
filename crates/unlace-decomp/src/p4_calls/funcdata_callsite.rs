@@ -41,21 +41,21 @@ use crate::varmap::AliasChecker;
 /// (kuna) The deferred argument-list retry one finalized call leaves behind.
 ///
 /// At most one of the two is ever set: a call whose list came out EMPTY is
-/// [`crate::p4_calls::kuna_calleearityfwd`]'s, one whose list came out SHORT is
-/// [`crate::p4_calls::kuna_calleearitylive`]'s. Both are replayed at the end of
+/// [`crate::kuna_calleearityfwd`]'s, one whose list came out SHORT is
+/// [`crate::kuna_calleearitylive`]'s. Both are replayed at the end of
 /// `ActionActiveParam::apply`, when every spec in the pass is final.
 #[derive(Default)]
 pub struct PendingCallFixup {
     /// The empty-list rescue candidate (`calleearityfwd`).
-    pub rescue: Option<crate::p4_calls::kuna_calleearityfwd::PendingRescue>,
+    pub rescue: Option<crate::kuna_calleearityfwd::PendingRescue>,
     /// The short-list extension candidate (`calleearitylive`).
-    pub extend: Option<crate::p4_calls::kuna_calleearitylive::PendingExtend>,
+    pub extend: Option<crate::kuna_calleearitylive::PendingExtend>,
     /// The no-sibling body-recovery candidate (`calleearitybody`).
-    pub body: Option<crate::p4_calls::kuna_calleearitybody::PendingBodyArgs>,
+    pub body: Option<crate::kuna_calleearitybody::PendingBodyArgs>,
     /// The forwarded-register extension candidate (`passthrough`).
-    pub pass_through: Option<crate::p4_calls::kuna_passthrough::PendingPassThrough>,
+    pub pass_through: Option<crate::kuna_passthrough::PendingPassThrough>,
     /// The callee-read extension candidate (`calleereadarg`).
-    pub read_arg: Option<crate::p4_calls::kuna_calleereadarg::PendingReadArg>,
+    pub read_arg: Option<crate::kuna_calleereadarg::PendingReadArg>,
 }
 
 /// C++ `FuncCallSpecs::checkInputTrialUse` (`fspec.cc:5592`).
@@ -70,7 +70,7 @@ pub fn check_input_trial_use(
     idx: int4,
     data: &mut Funcdata,
     aliascheck: &mut AliasChecker,
-    held: &mut crate::p4_calls::kuna_calleestackargs::Contenders,
+    held: &mut crate::kuna_calleestackargs::Contenders,
 ) {
     // INDEX-BASED (CORRECTION-7 #3): the call spec stays in `data.qlst` so the
     // ancestor walk (`ancestor_op_use` -> `only_op_use` -> `check_call_double_use`)
@@ -104,7 +104,7 @@ pub fn check_input_trial_use(
     }
 
     // (kuna `calleeargs`) What the callee reads bounds its stack arguments.
-    // See [`crate::p4_calls::kuna_calleestackargs`].
+    // See [`crate::kuna_calleestackargs`].
     let stack_args = data.get_call_specs(idx).callee_stack_arg_bytes();
     let stack_args = stack_args
         .filter(|_| !(0..data.num_calls()).any(|j| data.get_call_specs(j).callee_moves_stack()));
@@ -113,10 +113,8 @@ pub fn check_input_trial_use(
     let read_end = stack_args.map(|a| 4 + a.read as i64);
 
     // (kuna) The registers a variadic call's caller counts as filled (`al`, CR6).
-    let counted =
-        crate::p4_calls::kuna_varargretreg::counted_float_arguments(data, data.get_call_specs(idx));
-    let format_arguments =
-        crate::p4_calls::kuna_varargformat::arguments(data, data.get_call_specs(idx));
+    let counted = crate::kuna_varargretreg::counted_float_arguments(data, data.get_call_specs(idx));
+    let format_arguments = crate::kuna_varargformat::arguments(data, data.get_call_specs(idx));
     let num_trials = data
         .get_call_specs_mut(idx)
         .get_active_input()
@@ -137,7 +135,7 @@ pub fn check_input_trial_use(
                 .get_trial(i)
                 .is_active()
             {
-                crate::p4_calls::kuna_varargformat::activate_trial(data, idx, i, &format_arguments);
+                crate::kuna_varargformat::activate_trial(data, idx, i, &format_arguments);
             }
             continue;
         }
@@ -171,7 +169,7 @@ pub fn check_input_trial_use(
         };
         if is_spacebase
             && arg_bound.is_some_and(|bound| trial_start >= bound)
-            && !crate::p4_calls::kuna_calleestackargs::contested(data, idx, vn, held)
+            && !crate::kuna_calleestackargs::contested(data, idx, vn, held)
         {
             data.get_call_specs_mut(idx)
                 .get_active_input()
@@ -184,19 +182,19 @@ pub fn check_input_trial_use(
                     let mut access = data.alias_gather_access();
                     aliascheck.has_local_alias(Some((vn_space.clone(), vn_offset)), &mut access)
                 }
-                && crate::p4_calls::kuna_directalias::aliases(data, aliascheck, vn_offset, vn_size);
+                && crate::kuna_directalias::aliases(data, aliascheck, vn_offset, vn_size);
             // C++ keeps these two no-use conditions as separate branches
             // (fspec.cc:5616-5619): a stack alias, OR a stack location outside the
             // CALLER's local range, both mean "not a parameter".  The range test is
             // on the argument Varnode's caller-relative address, not the trial's
-            // callee-relative one (kuna, [`crate::p4_calls::kuna_callsitestackargs`]).
+            // callee-relative one (kuna, [`crate::kuna_callsitestackargs`]).
             #[allow(clippy::if_same_then_else)]
             if has_alias {
                 data.get_call_specs_mut(idx)
                     .get_active_input()
                     .get_trial_mut(i)
                     .mark_no_use();
-            } else if crate::p4_calls::kuna_callsitestackargs::outside_caller_local_range(
+            } else if crate::kuna_callsitestackargs::outside_caller_local_range(
                 data.get_func_proto().get_local_range(),
                 &vn_space,
                 vn_offset,
@@ -275,7 +273,7 @@ pub fn check_input_trial_use(
         } else if {
             // (kuna `calleereginputs`) The callee's own code reads it.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::p4_calls::kuna_calleereginputs::reads_register(
+            crate::kuna_calleereginputs::reads_register(
                 data.get_call_specs(idx),
                 t.get_address(),
                 t.get_size(),
@@ -288,19 +286,14 @@ pub fn check_input_trial_use(
             trial.set_ancestor_realistic();
             trial.set_ancestor_solid();
             trial.mark_active();
-        } else if crate::p4_calls::kuna_swiftinfer::carries_async_target(data, idx, slot) {
+        } else if crate::kuna_swiftinfer::carries_async_target(data, idx, slot) {
             data.get_call_specs_mut(idx)
                 .get_active_input()
                 .get_trial_mut(i)
                 .mark_no_use();
         } else if {
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::p4_calls::kuna_swiftinfer::passes_context(
-                data,
-                idx,
-                t.get_address(),
-                t.get_size(),
-            )
+            crate::kuna_swiftinfer::passes_context(data, idx, t.get_address(), t.get_size())
         } {
             let trial = data
                 .get_call_specs_mut(idx)
@@ -318,7 +311,7 @@ pub fn check_input_trial_use(
                 .get_active_input()
                 .get_trial_mut(i)
                 .mark_no_use();
-        } else if crate::p4_calls::kuna_passthrough::is_call_target(data, op, vn) {
+        } else if crate::kuna_passthrough::is_call_target(data, op, vn) {
             data.get_call_specs_mut(idx)
                 .get_active_input()
                 .get_trial_mut(i)
@@ -327,7 +320,7 @@ pub fn check_input_trial_use(
             // (kuna) `passthrough`: a trial on a range the pass claimed is left
             // where the option-off run's hole-filling trial would start.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::p4_calls::kuna_passthrough::claimed_range(data, t.get_address(), t.get_size())
+            crate::kuna_passthrough::claimed_range(data, t.get_address(), t.get_size())
         } {
             let trial = data
                 .get_call_specs_mut(idx)
@@ -339,13 +332,7 @@ pub fn check_input_trial_use(
             // (kuna `swiftcall`) A `swiftself` value set for an earlier call is
             // not an argument of a struct member that may not take it.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::p4_calls::kuna_swiftcall::stale_self(
-                data,
-                idx,
-                slot,
-                t.get_address(),
-                t.get_size(),
-            )
+            crate::kuna_swiftcall::stale_self(data, idx, slot, t.get_address(), t.get_size())
         } {
             data.get_call_specs_mut(idx)
                 .get_active_input()
@@ -355,13 +342,7 @@ pub fn check_input_trial_use(
             // (kuna `swiftcall`) An indirect call passes `swiftself` exactly
             // when it dispatches on the value the register holds.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::p4_calls::kuna_swiftcall::indirect_self(
-                data,
-                idx,
-                slot,
-                t.get_address(),
-                t.get_size(),
-            )
+            crate::kuna_swiftcall::indirect_self(data, idx, slot, t.get_address(), t.get_size())
         } {
             let trial = data
                 .get_call_specs_mut(idx)
@@ -377,13 +358,7 @@ pub fn check_input_trial_use(
         } else if {
             // (kuna `swiftcall`) The caller's own `self`, handed on untouched.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::p4_calls::kuna_swiftcall::passes_own_self(
-                data,
-                idx,
-                slot,
-                t.get_address(),
-                t.get_size(),
-            )
+            crate::kuna_swiftcall::passes_own_self(data, idx, slot, t.get_address(), t.get_size())
         } {
             let trial = data
                 .get_call_specs_mut(idx)
@@ -402,7 +377,7 @@ pub fn check_input_trial_use(
                 let t = data.get_call_specs(idx).active_input().get_trial(i);
                 (t.get_address().clone(), t.get_size())
             };
-            crate::p4_calls::kuna_calleedeadarg::trial_is_dead_in_callee(
+            crate::kuna_calleedeadarg::trial_is_dead_in_callee(
                 data,
                 idx,
                 slot,
@@ -417,7 +392,7 @@ pub fn check_input_trial_use(
         } else if {
             let t = data.get_call_specs(idx).active_input().get_trial(i);
             (t.get_size() == 8 && counted.contains(t.get_address()))
-                || crate::p4_calls::kuna_varargforward::forwards_declared_value(
+                || crate::kuna_varargforward::forwards_declared_value(
                     data,
                     idx,
                     slot,
@@ -432,7 +407,7 @@ pub fn check_input_trial_use(
             trial.set_ancestor_realistic();
             trial.set_ancestor_solid();
             trial.mark_active();
-        } else if crate::p4_calls::kuna_stackaddrargtrial::carries_stack_address(data, vn) {
+        } else if crate::kuna_stackaddrargtrial::carries_stack_address(data, vn) {
             let trial = data
                 .get_call_specs_mut(idx)
                 .get_active_input()
@@ -459,7 +434,7 @@ pub fn check_input_trial_use(
             if realistic || solid {
                 let mut trial = data.get_call_specs(idx).active_input().get_trial(i).clone();
                 let only = data.ancestor_op_use(maxancestor, vn, op, &mut trial, 0, 0)
-                    || crate::p4_calls::kuna_varargsharedfloat::feeds_earlier_argument(
+                    || crate::kuna_varargsharedfloat::feeds_earlier_argument(
                         data,
                         idx,
                         vn,
@@ -475,8 +450,8 @@ pub fn check_input_trial_use(
                         .get_active_input()
                         .get_trial_mut(i)
                         .mark_active();
-                    crate::p4_calls::kuna_reloadarg::note(data, idx, i, ancestor.solid_loads());
-                    crate::p4_calls::kuna_varargforward::narrow_undeclared_upper(data, idx, i);
+                    crate::kuna_reloadarg::note(data, idx, i, ancestor.solid_loads());
+                    crate::kuna_varargforward::narrow_undeclared_upper(data, idx, i);
                     if data
                         .get_call_specs_mut(idx)
                         .get_active_input()
@@ -487,24 +462,15 @@ pub fn check_input_trial_use(
                             .get_active_input()
                             .mark_needs_final_check();
                     }
-                } else if !crate::p4_calls::kuna_varargformat::activate_trial(
-                    data,
-                    idx,
-                    i,
-                    &format_arguments,
-                ) {
+                } else if !crate::kuna_varargformat::activate_trial(data, idx, i, &format_arguments)
+                {
                     data.get_call_specs_mut(idx)
                         .get_active_input()
                         .get_trial_mut(i)
                         .mark_inactive();
-                    crate::p4_calls::kuna_varargforward::narrow_undeclared_upper(data, idx, i);
+                    crate::kuna_varargforward::narrow_undeclared_upper(data, idx, i);
                 }
-            } else if crate::p4_calls::kuna_varargformat::activate_trial(
-                data,
-                idx,
-                i,
-                &format_arguments,
-            ) {
+            } else if crate::kuna_varargformat::activate_trial(data, idx, i, &format_arguments) {
             } else if vn_is_input || {
                 // (kuna) `passthrough`: the incoming register carried past calls
                 // that leave it alone, to a callee whose recovered prototype
@@ -515,8 +481,8 @@ pub fn check_input_trial_use(
                     .kuna_options
                     .get::<crate::kuna_passthrough::PassThrough>()
                     .0
-                    && crate::p4_calls::kuna_passthrough::forwarded_own_input(data, vn, &addr, size)
-                    && crate::p4_calls::kuna_passthrough::stated_width(
+                    && crate::kuna_passthrough::forwarded_own_input(data, vn, &addr, size)
+                    && crate::kuna_passthrough::stated_width(
                         data,
                         data.get_call_specs(idx),
                         &addr,
@@ -554,11 +520,8 @@ pub fn check_input_trial_use(
                 )
             };
             if (inactive
-                && crate::p4_calls::kuna_passthrough::forwarded_in_place(
-                    data, op, slot, &addr, size,
-                ))
-                || (active
-                    && crate::p4_calls::kuna_passthrough::saves_own_register(data, op, slot, &addr))
+                && crate::kuna_passthrough::forwarded_in_place(data, op, slot, &addr, size))
+                || (active && crate::kuna_passthrough::saves_own_register(data, op, slot, &addr))
             {
                 data.get_call_specs_mut(idx)
                     .get_active_input()
@@ -570,8 +533,8 @@ pub fn check_input_trial_use(
                     .kuna_options
                     .get::<crate::kuna_passthrough::PassThrough>()
                     .0
-                && (crate::p4_calls::kuna_passthrough::survives_call(data, op, vn)
-                    || crate::p4_calls::kuna_passthrough::set_before_branch(data, op, vn))
+                && (crate::kuna_passthrough::survives_call(data, op, vn)
+                    || crate::kuna_passthrough::set_before_branch(data, op, vn))
             {
                 data.get_call_specs_mut(idx)
                     .get_active_input()
@@ -584,8 +547,8 @@ pub fn check_input_trial_use(
                     .kuna_options
                     .get::<crate::kuna_passthrough::PassThrough>()
                     .0
-                && crate::p4_calls::kuna_stackarggap::address_is_spacebase(&addr)
-                && crate::p4_calls::kuna_passthrough::holds_constant(data, vn)
+                && crate::kuna_stackarggap::address_is_spacebase(&addr)
+                && crate::kuna_passthrough::holds_constant(data, vn)
             {
                 data.get_call_specs_mut(idx)
                     .get_active_input()
@@ -596,7 +559,7 @@ pub fn check_input_trial_use(
 
         // (kuna) `hiddenretarg`: an active hidden-return register is no argument
         // when no callee could be returning through it.
-        crate::p4_calls::kuna_hiddenretarg::rescore_active_trial(data, idx, i);
+        crate::kuna_hiddenretarg::rescore_active_trial(data, idx, i);
 
         // If definitely not used, free up the dataflow.
         if data
@@ -607,7 +570,7 @@ pub fn check_input_trial_use(
         {
             let c = data.new_constant(vn_size, 0);
             let _ = data.op_set_input(op, c, slot);
-            crate::p4_calls::kuna_directalias::refresh(data, aliascheck, vn);
+            crate::kuna_directalias::refresh(data, aliascheck, vn);
         }
     }
 }
@@ -664,7 +627,7 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
     // (kuna) `passthrough`: capture the forwarded registers the call may still
     // take, and retire the trials the pass registered, before any other rule
     // reads the trials.  Inert with the option off.
-    let pass_through = crate::p4_calls::kuna_passthrough::capture(fc, data);
+    let pass_through = crate::kuna_passthrough::capture(fc, data);
     let mut newparam: Vec<VarnodeId> = Vec::new();
     // Preserve the fspec parameter (in0).
     if let Some(in0) = data.obank().get(op).and_then(|o| o.get_in(0)) {
@@ -689,13 +652,13 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
     // (kuna) `calleearity`: before the argument list is written, reconcile it
     // with a sibling call to the same callee whose list is already final, so one
     // callee does not render with two arities in one function.  See
-    // [`crate::p4_calls::kuna_calleearity`].
-    crate::p4_calls::kuna_calleearity::unify_with_sibling_call(fc, data);
+    // [`crate::kuna_calleearity`].
+    crate::kuna_calleearity::unify_with_sibling_call(fc, data);
     // (kuna) `argclobber`: and after it, the subtractive direction -- a trailing
     // register argument a previous call's clobber put there is dropped, unless a
     // sibling the additive rule above could read really passed one at that
-    // storage.  Inert with the option off.  See [`crate::p4_calls::kuna_argclobber`].
-    crate::p4_calls::kuna_argclobber::drop_clobber_tail_arg(fc, data);
+    // storage.  Inert with the option off.  See [`crate::kuna_argclobber`].
+    crate::kuna_argclobber::drop_clobber_tail_arg(fc, data);
 
     let stackoffset = fc.get_stackoffset();
     let num_trials = fc.get_active_input().get_num_trials();
@@ -775,7 +738,7 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
     }
     // (kuna) `calleearityfwd` / `calleearitylive`: capture the retry candidate
     // while the trials and the CALL's pre-rewrite inputs are both still there.
-    let read_arg = crate::p4_calls::kuna_calleereadarg::capture(fc, data);
+    let read_arg = crate::kuna_calleereadarg::capture(fc, data);
     // (kuna `swiftcall`) A call passing only a Swift `self` is, for the
     // callee-body rule, one that recovered nothing.
     let only_self = newparam.len() == 2 && {
@@ -783,29 +746,29 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
             .map(|i| fc.active_input().get_trial(i))
             .find(|t| t.is_used());
         t.is_some_and(|t| {
-            crate::p4_calls::kuna_swiftcall::is_self_storage(data, t.get_address(), t.get_size())
+            crate::kuna_swiftcall::is_self_storage(data, t.get_address(), t.get_size())
         })
     };
     let pending = if newparam.len() < 2 {
         PendingCallFixup {
-            rescue: crate::p4_calls::kuna_calleearityfwd::capture_empty_call(fc, data),
+            rescue: crate::kuna_calleearityfwd::capture_empty_call(fc, data),
             extend: None,
-            body: crate::p4_calls::kuna_calleearitybody::capture_lone_call(fc, data),
+            body: crate::kuna_calleearitybody::capture_lone_call(fc, data),
             pass_through,
             read_arg,
         }
     } else if only_self {
         PendingCallFixup {
-            rescue: crate::p4_calls::kuna_calleearityfwd::capture_empty_call(fc, data),
-            extend: crate::p4_calls::kuna_calleearitylive::capture_partial_call(fc, data),
-            body: crate::p4_calls::kuna_calleearitybody::capture_lone_call(fc, data),
+            rescue: crate::kuna_calleearityfwd::capture_empty_call(fc, data),
+            extend: crate::kuna_calleearitylive::capture_partial_call(fc, data),
+            body: crate::kuna_calleearitybody::capture_lone_call(fc, data),
             pass_through,
             read_arg,
         }
     } else {
         PendingCallFixup {
             rescue: None,
-            extend: crate::p4_calls::kuna_calleearitylive::capture_partial_call(fc, data),
+            extend: crate::kuna_calleearitylive::capture_partial_call(fc, data),
             body: None,
             pass_through,
             read_arg,
@@ -911,7 +874,7 @@ pub fn build_output_from_trials(
     data: &mut Funcdata,
     trialvn: &[Option<VarnodeId>],
 ) {
-    if crate::p4_calls::kuna_callretpair::build_partial_pair(fc, data, trialvn)
+    if crate::kuna_callretpair::build_partial_pair(fc, data, trialvn)
         || crate::kuna_bejoin::build_high_read(fc, data, trialvn)
     {
         return;
@@ -953,12 +916,8 @@ pub fn build_output_from_trials(
         // that render as locals the function never assigns.
         let entry = fc.get_entry_address().clone();
         let order = crate::kuna_bejoin::call_join_order(data, fc.get_active_output(), Some(&entry));
-        let order = crate::p4_calls::kuna_bejoinpass::call_order(
-            data,
-            fc.get_active_output(),
-            trialvn,
-            order,
-        );
+        let order =
+            crate::kuna_bejoinpass::call_order(data, fc.get_active_output(), trialvn, order);
         if crate::kuna_rustabi::build_call_output_pair(
             op,
             data,

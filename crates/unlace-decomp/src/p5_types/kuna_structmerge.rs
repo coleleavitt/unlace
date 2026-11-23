@@ -104,7 +104,7 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::int4;
 
 use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
-use crate::p5_types::kuna_structsynth::ledger::{self, Layout, Member};
+use crate::kuna_structsynth::ledger::{self, Layout, Member};
 
 /// How many claims two layouts must share before the union is evidence, when one
 /// of the shared claims is a pointer with a pointee.

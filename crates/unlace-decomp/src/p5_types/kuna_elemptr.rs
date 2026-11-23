@@ -3344,7 +3344,7 @@ fn sign_extend(v: uintb, size: int4) -> intb {
 
 /// (kuna `elemptr`) Declare a pointer-width value used only as an array of
 /// one element type as a pointer to that element; option `elemptr on|off`.
-/// The rule lives in [`kuna_elemptr`](crate::p5_types::kuna_elemptr).
+/// The rule lives in [`kuna_elemptr`](crate::kuna_elemptr).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ElemPtr(pub bool);
 
@@ -3361,7 +3361,7 @@ impl crate::kuna_optionset::KunaOption for ElemPtr {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p5_types::kuna_elemptr::OptionElemPtr.apply(value)?;
+        let (v, msg) = crate::kuna_elemptr::OptionElemPtr.apply(value)?;
         Ok((ElemPtr(v), msg))
     }
 }

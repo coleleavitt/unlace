@@ -466,7 +466,7 @@ fn rewrite(data: &mut Funcdata, s: &Scan) -> unlace_base::error::KunaResult<()> 
 
 crate::kuna_flag!(
     /// (kuna) Collapse an inline `repnz scasb` string length into `strlen`
-    /// (option `strlenscan`).  See [`crate::p3_dataflow::kuna_strlenscan`].
+    /// (option `strlenscan`).  See [`crate::kuna_strlenscan`].
     StrlenScan,
     "strlenscan",
     "inline repnz scasb string length as strlen",

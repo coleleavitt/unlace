@@ -66,7 +66,7 @@ pub fn complex_blocks(data: &Funcdata) -> BTreeSet<BlockId> {
 }
 
 fn is_overlong(data: &Funcdata, bb: BlockId, cap: int4) -> bool {
-    crate::p8_structure::kuna_condfold::printed_shape(data, &data.bb_ops(bb))
+    crate::kuna_condfold::printed_shape(data, &data.bb_ops(bb))
         .is_some_and(|shape| shape.stmts - 1 > cap)
 }
 

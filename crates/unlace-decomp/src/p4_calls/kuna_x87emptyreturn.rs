@@ -172,7 +172,7 @@ pub fn capture(data: &mut Funcdata) {
         .get::<crate::kuna_x87depth::X87Depth>()
         .0
     {
-        let facts = crate::p4_calls::kuna_x87depth::facts(data, &storage);
+        let facts = crate::kuna_x87depth::facts(data, &storage);
         data.kuna_x87_empty_returns = facts.empty_returns;
         data.kuna_x87_float_returns = facts.float_returns;
         data.kuna_x87_float_calls = facts.float_calls;
@@ -274,7 +274,7 @@ pub fn drop_empty(data: &Funcdata, active: &mut ParamActive, returns: &[OpId]) {
         );
         if trial.get_address() == &addr
             && trial.get_size() == storage.top.size as i32
-            && !crate::p4_calls::kuna_voidret::forced(data, trial.get_address(), trial.get_size())
+            && !crate::kuna_voidret::forced(data, trial.get_address(), trial.get_size())
         {
             active.get_trial_mut(i).mark_inactive();
         }

@@ -10,7 +10,7 @@ pub fn declines(data: &Funcdata, op: OpId, vn: VarnodeId, input: VarnodeId) -> b
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {
@@ -49,6 +49,6 @@ pub fn declines(data: &Funcdata, op: OpId, vn: VarnodeId, input: VarnodeId) -> b
     };
     copy.1.code() == OpCode::CPUI_COPY
         && !copy.1.is_return_copy()
-        && crate::p6_variables::kuna_globalorder::write_moves(data, copy.0, input)
+        && crate::kuna_globalorder::write_moves(data, copy.0, input)
         && !crate::kuna_globalstorekeep::old_value_read_after(data, vn)
 }

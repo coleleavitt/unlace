@@ -1079,7 +1079,7 @@ pub fn seed_callee_return_writes(
 ///
 /// The gate belongs to the caller: this is shared by
 /// [`seed_callee_return_writes`] and
-/// [`crate::p4_calls::kuna_calleepreserves::seed_callee_preserves`], and the
+/// [`crate::kuna_calleepreserves::seed_callee_preserves`], and the
 /// per-image cache means whichever runs first pays for the decode.
 pub fn seed_callee_write_probe(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
     let userops = ProbeUserOps {
@@ -1100,8 +1100,7 @@ pub fn seed_callee_write_probe(arch: &mut crate::architecture::Architecture, dat
     for e in entries {
         let Some(sp) = e.get_space() else { continue };
         let key = (sp.get_index(), e.get_offset());
-        let no_return =
-            |target: &Address| crate::p4_calls::kuna_calleenoreturn::is_no_return(arch, target);
+        let no_return = |target: &Address| crate::kuna_calleenoreturn::is_no_return(arch, target);
         let reusable = arch
             .kuna_tables
             .get::<crate::kuna_rustabi::CalleeWriteCache>()
@@ -1161,7 +1160,7 @@ fn fastfail_swi_userop(arch: &crate::architecture::Architecture) -> Option<u32> 
 ///
 /// [`ParamActive::join_pair_order`]: crate::fspec::ParamActive::join_pair_order
 ///
-/// The arm is open on every image ([`crate::p4_calls::kuna_callretpair`]);
+/// The arm is open on every image ([`crate::kuna_callretpair`]);
 /// `option rustabi auto|always` also governs the producer-side pair.
 pub fn build_call_output_pair(
     callop: OpId,

@@ -39,7 +39,7 @@ pub fn crosses_global_write(
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {

@@ -17,9 +17,9 @@
 //! A correctness-over-completeness PoC that proves the whole boundary end-to-end:
 //!
 //! 1. **Region post-order walk + replace** (angr `recursive_structurer._analyze`):
-//!    the [`KunaRegionIdentifier`](crate::p7_regions::kuna_regionid) (the ported
+//!    the [`KunaRegionIdentifier`](crate::kuna_regionid) (the ported
 //!    angr `RegionIdentifier`) runs over the real CFG via
-//!    [`build_from_block_graph`](crate::p7_regions::kuna_regionid::KunaRegionIdentifier::build_from_block_graph),
+//!    [`build_from_block_graph`](crate::kuna_regionid::KunaRegionIdentifier::build_from_block_graph),
 //!    proving the W7 adapter on a live function.  The structuring itself then runs
 //!    on the seeded `sblocks` graph (a `BlockCopy` mirror of `bblocks`, same
 //!    topology) with the region tree as guidance.
@@ -85,7 +85,7 @@ use unlace_base::marshal::ElementId;
 pub const ELEM_REGIONSTRUCTURE: ElementId = ElementId::new("regionstructure", 4102);
 
 /// Guard cap on structuring rounds: `2*n^2 + 64`, computed in 64-bit (mirrors the
-/// [`kuna_guard_cap`](crate::p7_regions::kuna_regionid) caps).  The virtualize
+/// [`kuna_guard_cap`](crate::kuna_regionid) caps).  The virtualize
 /// fallback removes one edge per round so the real bound is `O(edges)`; the cap is
 /// only a hang-guard turning a mis-port into a clean failure instead of a loop.
 fn round_cap(num_nodes: int4) -> i64 {
@@ -107,7 +107,7 @@ const POSTDOM_MAX_GRAPH_SIZE: int4 = 50;
 
 /// The `--option regionstructure on|off` parser (kuna control surface).
 ///
-/// Mirrors [`OptionGotoReduce`](crate::p8_structure::kuna_gotoreduce::OptionGotoReduce):
+/// Mirrors [`OptionGotoReduce`](crate::kuna_gotoreduce::OptionGotoReduce):
 /// parse `on`/`off`, returning the bool + a confirmation message.  The flag is
 /// stored as the registered option `RegionStructure` (and copied to the boundary in
 /// `build_arch_handle`).
@@ -134,7 +134,7 @@ impl OptionRegionStructure {
 /// `data.install_switch_defaults()` and `data.seed_sblocks_copy()` have run, so
 /// `sblocks` is a `BlockCopy` mirror of `bblocks` with the same edges.
 ///
-/// 1. Runs the [`KunaRegionIdentifier`](crate::p7_regions::kuna_regionid) over the
+/// 1. Runs the [`KunaRegionIdentifier`](crate::kuna_regionid) over the
 ///    real CFG (proves the W7 adapter; its node order guides the virtualize
 ///    fallback).
 /// 2. Collapses the `sblocks` graph to a single structured root using the acyclic
@@ -158,7 +158,7 @@ pub fn run_region_structurer(
     // deterministic node order (by block start address) the virtualize fallback
     // uses for tie-breaking.  A failure to identify regions is non-fatal: the
     // structurer still runs on the sblocks topology (honest-partial).
-    let mut ri = crate::p7_regions::kuna_regionid::KunaRegionIdentifier::new();
+    let mut ri = crate::kuna_regionid::KunaRegionIdentifier::new();
     let _ = ri
         .build_from_block_graph(data)
         .and_then(|()| ri.compute().map(|_| ()));
@@ -190,16 +190,16 @@ pub fn run_region_structurer(
     // a short-circuit operand, rendered as a C comma expression (angr Phoenix's
     // `MultiStatementExpression`).  Read while we still hold `&Funcdata`; empty
     // (and unbuilt) when the option is off, so OFF is byte-identical.
-    let condfold_sets = crate::p8_structure::kuna_condfold::compute_condfold_sets(
+    let condfold_sets = crate::kuna_condfold::compute_condfold_sets(
         data,
-        crate::p8_structure::kuna_condstmts::condfold_budget(
+        crate::kuna_condstmts::condfold_budget(
             data.get_arch()
                 .kuna_options
-                .get::<crate::p8_structure::kuna_condfold::CondFold>()
+                .get::<crate::kuna_condfold::CondFold>()
                 .0,
             data.get_arch()
                 .kuna_options
-                .get::<crate::p8_structure::kuna_condstmts::CondStmts>()
+                .get::<crate::kuna_condstmts::CondStmts>()
                 .0,
         ),
     );
@@ -333,7 +333,7 @@ fn compute_switch_maps(
 /// through [`RegionStructurer::is_complex`] (the kuna analog of
 /// `CollapseStructure::is_complex`, gating `ruleBlockOr`).
 fn compute_complex_blocks(data: &Funcdata) -> std::collections::BTreeSet<BlockId> {
-    let mut complex_blocks = crate::p8_structure::kuna_condstmts::complex_blocks(data);
+    let mut complex_blocks = crate::kuna_condstmts::complex_blocks(data);
     let nbb = data.bblocks_get_size();
     for i in 0..nbb {
         let bb = data.bblocks_get_block(i);
@@ -374,8 +374,8 @@ struct RegionStructurer<'a> {
     /// comment-free printed-statement prefix in front of the trailing CBRANCH
     /// (Rule A) or pass the statement-shape allowlist (Rule B) — angr Phoenix's
     /// `MultiStatementExpression` relaxation; see
-    /// [`crate::p8_structure::kuna_condfold`].  Empty (and dead) when off.
-    condfold_sets: crate::p8_structure::kuna_condfold::CondFoldSets,
+    /// [`crate::kuna_condfold`].  Empty (and dead) when off.
+    condfold_sets: crate::kuna_condfold::CondFoldSets,
     /// (kuna, `option condfold`) structuring nodes produced by a condfold-relaxed
     /// [`try_block_or`](Self::try_block_or) fold — reported complex unconditionally
     /// by [`is_complex`](Self::is_complex) so the loop schemas never lift a comma
@@ -398,8 +398,7 @@ struct RegionStructurer<'a> {
     /// by `refine_loop_edges` to pick the loop body / single normal exit grounded
     /// in the region identifier's analysis rather than the narrower structural
     /// natural-loop walk.
-    cyclic_loops:
-        std::collections::BTreeMap<uintb, crate::p7_regions::kuna_regionid::KunaCyclicLoop>,
+    cyclic_loops: std::collections::BTreeMap<uintb, crate::kuna_regionid::KunaCyclicLoop>,
     /// bblocks `BlockBasic` id → start offset, so a live `sblocks` component's
     /// front-leaf `BlockCopy` (whose `copy` is a bblocks id) resolves to its
     /// address — the key the `cyclic_loops` body/exit sets use.  Populated only
@@ -462,7 +461,7 @@ impl<'a> RegionStructurer<'a> {
     fn with_loop_refine(
         mut self,
         loop_refine: bool,
-        cyclic_loops: Vec<crate::p7_regions::kuna_regionid::KunaCyclicLoop>,
+        cyclic_loops: Vec<crate::kuna_regionid::KunaCyclicLoop>,
         bb_addr: std::collections::BTreeMap<BlockId, uintb>,
     ) -> Self {
         self.loop_refine = loop_refine;
@@ -502,10 +501,7 @@ impl<'a> RegionStructurer<'a> {
 
     /// (kuna, `option condfold`) attach the precomputed admission-rule verdicts.
     /// Mirrors [`CollapseStructure::with_condfold_sets`](crate::blockaction::CollapseStructure).
-    fn with_condfold_sets(
-        mut self,
-        condfold_sets: crate::p8_structure::kuna_condfold::CondFoldSets,
-    ) -> Self {
+    fn with_condfold_sets(mut self, condfold_sets: crate::kuna_condfold::CondFoldSets) -> Self {
         self.condfold_sets = condfold_sets;
         self
     }
@@ -526,7 +522,7 @@ impl<'a> RegionStructurer<'a> {
         if self.graph.block(orblock).get_type() == BlockType::Copy {
             if let Some(basic) = self.graph.block(orblock).get_copy() {
                 if self.condfold_sets.prefix.contains(&basic) {
-                    crate::p8_structure::kuna_condfold::trace_admit_fold(
+                    crate::kuna_condfold::trace_admit_fold(
                         "region_structurer",
                         "prefix",
                         bl,
@@ -544,7 +540,7 @@ impl<'a> RegionStructurer<'a> {
     /// condition as a **comma-separated multi-statement operand** under the
     /// statement-shape allowlist?  Identical to
     /// [`CollapseStructure::is_shape_foldable`](crate::blockaction::CollapseStructure);
-    /// see [`kuna_condfold`](crate::p8_structure::kuna_condfold) for the preconditions
+    /// see [`kuna_condfold`](crate::kuna_condfold) for the preconditions
     /// and for why a Rule-A-only leaf is deliberately not admitted here.
     fn is_shape_foldable(&self, bl: BlockId) -> bool {
         use crate::block::BlockType;
@@ -583,7 +579,7 @@ impl<'a> RegionStructurer<'a> {
     /// per-block maximum, so the sum is an upper bound).
     fn cond_stmt_count(&self, bl: BlockId) -> int4 {
         use crate::block::BlockType;
-        let cap = crate::p8_structure::kuna_condfold::MAX_SHAPE_STMTS;
+        let cap = crate::kuna_condfold::MAX_SHAPE_STMTS;
         match self.graph.block(bl).get_type() {
             BlockType::Condition => {
                 let b0 = self.graph.block(bl).get_block(0);
@@ -614,21 +610,16 @@ impl<'a> RegionStructurer<'a> {
             return false;
         }
         if self.cond_leaf_count(bl) + self.cond_leaf_count(orblock)
-            > crate::p8_structure::kuna_condfold::MAX_JOIN_LEAVES
+            > crate::kuna_condfold::MAX_JOIN_LEAVES
         {
             return false;
         }
         if self.cond_stmt_count(bl) + self.cond_stmt_count(orblock)
-            > crate::p8_structure::kuna_condfold::MAX_JOIN_TOTAL_STMTS
+            > crate::kuna_condfold::MAX_JOIN_TOTAL_STMTS
         {
             return false;
         }
-        crate::p8_structure::kuna_condfold::trace_admit_fold(
-            "region_structurer",
-            "shape",
-            bl,
-            orblock,
-        );
+        crate::kuna_condfold::trace_admit_fold("region_structurer", "shape", bl, orblock);
         true
     }
 
@@ -2994,9 +2985,8 @@ impl<'a> RegionStructurer<'a> {
         // `networkx.immediate_dominators(full_graph, head)`).  Reuse the ported
         // Cooper-Harvey-Kennedy engine; a synthetic head guarantees every node is
         // reachable (matches angr adding a temporary head for multi-entry graphs).
-        let fdoms = crate::p7_regions::kuna_regiongraph::KunaIncrementalDominators::new(
-            &pool, &graph, head, false,
-        )?;
+        let fdoms =
+            crate::kuna_regiongraph::KunaIncrementalDominators::new(&pool, &graph, head, false)?;
         let dominance = super::kuna_domindex::DominanceIndex::new(&fdoms, &graph);
 
         // Bucket the candidate edges by the dominance relationship.
@@ -3034,12 +3024,9 @@ impl<'a> RegionStructurer<'a> {
     /// tiebreak.  Returns the single best edge (the first of the final ordering).
     fn sailr_order_within_bucket<'e>(
         &self,
-        pool: &crate::p7_regions::kuna_regiongraph::KunaNodePool,
-        graph: &crate::p7_regions::kuna_regiongraph::KunaRegionGraph,
-        id_of: &std::collections::BTreeMap<
-            BlockId,
-            crate::p7_regions::kuna_regiongraph::KunaNodeId,
-        >,
+        pool: &crate::kuna_regiongraph::KunaNodePool,
+        graph: &crate::kuna_regiongraph::KunaRegionGraph,
+        id_of: &std::collections::BTreeMap<BlockId, crate::kuna_regiongraph::KunaNodeId>,
         edges: &[&'e Edge],
     ) -> &'e Edge {
         if edges.len() == 1 {
@@ -3132,19 +3119,16 @@ impl<'a> RegionStructurer<'a> {
     /// be built (then H2 is simply skipped).
     fn sailr_h2_postdom<'e>(
         &self,
-        pool: &crate::p7_regions::kuna_regiongraph::KunaNodePool,
-        graph: &crate::p7_regions::kuna_regiongraph::KunaRegionGraph,
-        id_of: &std::collections::BTreeMap<
-            BlockId,
-            crate::p7_regions::kuna_regiongraph::KunaNodeId,
-        >,
+        pool: &crate::kuna_regiongraph::KunaNodePool,
+        graph: &crate::kuna_regiongraph::KunaRegionGraph,
+        id_of: &std::collections::BTreeMap<BlockId, crate::kuna_regiongraph::KunaNodeId>,
         edges: &[&'e Edge],
     ) -> Option<Vec<&'e Edge>> {
-        use crate::p7_regions::kuna_regiongraph::{KunaRegionGraph, kuna_immediate_dominators};
+        use crate::kuna_regiongraph::{KunaRegionGraph, kuna_immediate_dominators};
         // The reversed-graph synthetic tail (post-dom root): connect every original
         // sink (out_degree == 0) to it, then add edges dst->src for every original
         // edge, so forward idoms over this graph == post-dominators of the original.
-        let real_nodes: Vec<crate::p7_regions::kuna_regiongraph::KunaNodeId> =
+        let real_nodes: Vec<crate::kuna_regiongraph::KunaNodeId> =
             id_of.values().copied().collect();
         let mut counts: Vec<(usize, &Edge)> = Vec::with_capacity(edges.len());
         let mut max_count: usize = 0;
@@ -3156,11 +3140,7 @@ impl<'a> RegionStructurer<'a> {
             // cloning it).  To avoid mutating the shared pool we route the synthetic
             // node through a fresh node added to a local pool copy.
             let mut lpool = pool.clone();
-            let tail = lpool.make(
-                crate::p7_regions::kuna_regiongraph::NodeKind::Dummy,
-                u64::MAX,
-                u32::MAX,
-            );
+            let tail = lpool.make(crate::kuna_regiongraph::NodeKind::Dummy, u64::MAX, u32::MAX);
             for &nid in &real_nodes {
                 rev.add_node(&lpool, nid);
             }
@@ -3186,8 +3166,8 @@ impl<'a> RegionStructurer<'a> {
                 }
             }
             let mut idom: std::collections::BTreeMap<
-                crate::p7_regions::kuna_regiongraph::KunaNodeId,
-                crate::p7_regions::kuna_regiongraph::KunaNodeId,
+                crate::kuna_regiongraph::KunaNodeId,
+                crate::kuna_regiongraph::KunaNodeId,
             > = std::collections::BTreeMap::new();
             if kuna_immediate_dominators(&lpool, &rev, tail, &mut idom).is_err() {
                 return None;
@@ -3291,12 +3271,12 @@ impl<'a> RegionStructurer<'a> {
     fn build_component_graph(
         &self,
     ) -> (
-        crate::p7_regions::kuna_regiongraph::KunaNodePool,
-        crate::p7_regions::kuna_regiongraph::KunaRegionGraph,
-        crate::p7_regions::kuna_regiongraph::KunaNodeId,
-        std::collections::BTreeMap<BlockId, crate::p7_regions::kuna_regiongraph::KunaNodeId>,
+        crate::kuna_regiongraph::KunaNodePool,
+        crate::kuna_regiongraph::KunaRegionGraph,
+        crate::kuna_regiongraph::KunaNodeId,
+        std::collections::BTreeMap<BlockId, crate::kuna_regiongraph::KunaNodeId>,
     ) {
-        use crate::p7_regions::kuna_regiongraph::{KunaNodePool, KunaRegionGraph, NodeKind};
+        use crate::kuna_regiongraph::{KunaNodePool, KunaRegionGraph, NodeKind};
         let mut pool = KunaNodePool::new();
         let mut graph = KunaRegionGraph::new();
         let mut id_of: std::collections::BTreeMap<BlockId, _> = std::collections::BTreeMap::new();
@@ -3342,21 +3322,18 @@ impl<'a> RegionStructurer<'a> {
     /// synthetic head, mapped from component `BlockId` to its sequence value.
     fn compute_node_seq(
         &self,
-        pool: &crate::p7_regions::kuna_regiongraph::KunaNodePool,
-        graph: &crate::p7_regions::kuna_regiongraph::KunaRegionGraph,
-        id_of: &std::collections::BTreeMap<
-            BlockId,
-            crate::p7_regions::kuna_regiongraph::KunaNodeId,
-        >,
+        pool: &crate::kuna_regiongraph::KunaNodePool,
+        graph: &crate::kuna_regiongraph::KunaRegionGraph,
+        id_of: &std::collections::BTreeMap<BlockId, crate::kuna_regiongraph::KunaNodeId>,
     ) -> std::collections::BTreeMap<BlockId, int4> {
-        use crate::p7_regions::kuna_regiongraph::kuna_dfs_postorder_deterministic;
+        use crate::kuna_regiongraph::kuna_dfs_postorder_deterministic;
         // The head is the unique zero-in-degree node (built by build_component_graph);
         // recover it as the node id not present in id_of's value set with in-degree 0.
         // Simpler: re-derive from the graph — the synthetic head has the largest
         // ident (u32::MAX) and addr 0; but we do not have it here.  Instead, find the
         // single node with in_degree 0 over the whole snapshot (the synthetic head).
         let mut head = None;
-        let mut all: Vec<crate::p7_regions::kuna_regiongraph::KunaNodeId> = Vec::new();
+        let mut all: Vec<crate::kuna_regiongraph::KunaNodeId> = Vec::new();
         graph.get_nodes(&mut all);
         for nid in all {
             if graph.size_in(nid).unwrap_or(0) == 0 {
@@ -3369,7 +3346,7 @@ impl<'a> RegionStructurer<'a> {
             Some(h) => h,
             None => return seq, // no acyclic source; node_seq stays empty (all 0)
         };
-        let mut postorder: Vec<crate::p7_regions::kuna_regiongraph::KunaNodeId> = Vec::new();
+        let mut postorder: Vec<crate::kuna_regiongraph::KunaNodeId> = Vec::new();
         if kuna_dfs_postorder_deterministic(pool, graph, head, &mut postorder).is_err() {
             return seq;
         }
@@ -3380,10 +3357,8 @@ impl<'a> RegionStructurer<'a> {
         // value `len`, and a node finishing first (pi = 0) gets 1 — exactly angr's
         // "destinations closer to the head are virtualized first" (key `-node_seq`).
         // Invert id_of for the lookup.
-        let mut block_of: std::collections::BTreeMap<
-            crate::p7_regions::kuna_regiongraph::KunaNodeId,
-            BlockId,
-        > = std::collections::BTreeMap::new();
+        let mut block_of: std::collections::BTreeMap<crate::kuna_regiongraph::KunaNodeId, BlockId> =
+            std::collections::BTreeMap::new();
         for (&bl, &nid) in id_of {
             block_of.insert(nid, bl);
         }
@@ -3476,7 +3451,7 @@ crate::kuna_flag!(
 );
 
 /// (kuna) Region-based (Phoenix/SAILR) structurer: structure the CFG by
-/// walking the [`KunaRegionIdentifier`](crate::p7_regions::kuna_regionid)
+/// walking the [`KunaRegionIdentifier`](crate::kuna_regionid)
 /// region tree and matching Phoenix acyclic schemas instead of running
 /// Ghidra's `CollapseStructure` (option `regionstructure`, DIV-12 default-on:
 /// the primary structuring path; falls back to `CollapseStructure` on irreducible code).
@@ -3496,8 +3471,7 @@ impl crate::kuna_optionset::KunaOption for RegionStructure {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) =
-            crate::p8_structure::region_structurer::OptionRegionStructure.apply(value)?;
+        let (v, msg) = crate::region_structurer::OptionRegionStructure.apply(value)?;
         Ok((RegionStructure(v), msg))
     }
 }

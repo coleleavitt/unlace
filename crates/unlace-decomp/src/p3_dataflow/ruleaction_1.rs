@@ -54,7 +54,7 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, VarnodeId};
 use crate::expression::TermOrder;
 use crate::funcdata::Funcdata;
-use crate::p3_dataflow::kuna_volatileload;
+use crate::kuna_volatileload;
 
 /// `sizeof(uintb)` from the C++ — the rules cap at 8-byte precision
 /// (`if (size > sizeof(uintb)) return 0`).
@@ -119,7 +119,7 @@ impl Rule for RuleEarlyRemoval {
         // Get rid of unused op
         data.note_dead_removal(op);
         if data.dead_cascade_now() {
-            crate::p3_dataflow::kuna_deadcascade::remove(data, op, Self::removable);
+            crate::kuna_deadcascade::remove(data, op, Self::removable);
         } else {
             data.op_destroy(op);
         }
@@ -492,7 +492,7 @@ impl Rule for RuleSelectCse {
             .get(op)
             .expect("RuleSelectCse: stale op")
             .code();
-        if crate::p3_dataflow::ruleaction_7::RulePtrFlow::is_live(data) {
+        if crate::ruleaction_7::RulePtrFlow::is_live(data) {
             if let Some(out) = data
                 .obank()
                 .get(op)
@@ -2938,8 +2938,8 @@ impl Rule for RulePushMulti {
                 return 0;
             }
             // (kuna) a global's join of stores kept for its loads stays; see
-            // [`crate::p3_dataflow::kuna_pointeestorekeep::keeps_join`].
-            if crate::p3_dataflow::kuna_pointeestorekeep::keeps_join(data, op) {
+            // [`crate::kuna_pointeestorekeep::keeps_join`].
+            if crate::kuna_pointeestorekeep::keeps_join(data, op) {
                 return 0;
             }
             let substitute =

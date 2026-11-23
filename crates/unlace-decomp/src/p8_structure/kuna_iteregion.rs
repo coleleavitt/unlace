@@ -34,7 +34,7 @@
 //!
 //! Running once after [`ActionFinalStructure`](crate::blockaction::ActionFinalStructure)
 //! (the structured tree is final and goto targets are labelled) — alongside
-//! [`ActionDedupIteTail`](crate::p8_structure::kuna_dedupitetail::ActionDedupIteTail)
+//! [`ActionDedupIteTail`](crate::kuna_dedupitetail::ActionDedupIteTail)
 //! and the other post-structuring rewrites — [`ActionIteRegion`] finds every
 //! narrow, unambiguous assignment diamond and marks it for ternary rendering:
 //!
@@ -279,14 +279,11 @@ pub(crate) fn leaf_bblock(data: &Funcdata, id: BlockId) -> Option<BlockId> {
 ///
 /// A multi-component condition `BlockList` is descended to its last component
 /// first
-/// ([`cond_list_tail`](crate::p8_structure::kuna_itecondlist::cond_list_tail)) — the
+/// ([`cond_list_tail`](crate::kuna_itecondlist::cond_list_tail)) — the
 /// same tolerance across a block boundary, and the reason a chain of diamonds no
 /// longer folds only every other one.
 fn cond_cbranch(data: &Funcdata, id: BlockId) -> Option<OpId> {
-    let bb = leaf_bblock(
-        data,
-        crate::p8_structure::kuna_itecondlist::cond_list_tail(data, id),
-    )?;
+    let bb = leaf_bblock(data, crate::kuna_itecondlist::cond_list_tail(data, id))?;
     let ops = printed_ops(data, bb);
     let op = *ops.last()?;
     if data.obank().get(op)?.code() != OpCode::CPUI_CBRANCH {
@@ -463,7 +460,7 @@ impl crate::kuna_optionset::KunaOption for Iteregion {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::p8_structure::kuna_iteregion::OptionIteRegion.apply(value)?;
+        let (v, msg) = crate::kuna_iteregion::OptionIteRegion.apply(value)?;
         Ok((Iteregion(v), msg))
     }
 }

@@ -39,7 +39,7 @@
 //! trial for it. The caller's `xor eax,eax` is then dead, the trial is used by
 //! the `RET`, and the call acquires a return value the machine never computes.
 //!
-//! [`calleepreserves`](crate::p4_calls::kuna_calleepreserves) is the pass that
+//! [`calleepreserves`](crate::kuna_calleepreserves) is the pass that
 //! narrows `killedbycall` from the callee's own decoded body, and it declines
 //! here for its own reason: its positive-evidence gate asks the callee to have
 //! written a register the convention promises is *preserved*, which is the

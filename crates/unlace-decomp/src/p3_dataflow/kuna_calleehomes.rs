@@ -154,7 +154,7 @@ fn overlaps(start: i64, size: i32, other_start: i64, other_size: i32) -> bool {
 }
 
 fn frame_range(fd: &Funcdata, pointer: VarnodeId, width: i32) -> Option<(i64, i64)> {
-    let address = crate::p6_variables::kuna_stackranges::frame_address(fd, pointer)?;
+    let address = crate::kuna_stackranges::frame_address(fd, pointer)?;
     let (start, size) = address.extent(width)?;
     let start = signed(start, u32::try_from(address.pointer_size).ok()?)?;
     Some((start, start.checked_add(i64::from(size))?))
@@ -211,7 +211,7 @@ fn stack_access_width(fd: &Funcdata, op: OpId, code: OpCode) -> Option<i32> {
 }
 
 fn frame_value_overlaps(fd: &Funcdata, vn: VarnodeId, start: i64, size: i32) -> Option<bool> {
-    let address = crate::p6_variables::kuna_stackranges::frame_address(fd, vn)?;
+    let address = crate::kuna_stackranges::frame_address(fd, vn)?;
     let (frame_start, frame_size) = address.extent(1)?;
     let frame_start = signed(frame_start, u32::try_from(address.pointer_size).ok()?)?;
     Some(overlaps(frame_start, frame_size, start, size))
@@ -263,8 +263,7 @@ fn strict_other_call_unobserved(fd: &Funcdata, id: OpId, start: u64, size: i32) 
     let Some(mask) = 1u32.checked_shl(size as u32).map(|bits| bits - 1) else {
         return false;
     };
-    crate::p3_dataflow::kuna_calleememory::unobserved_strict(fd, id, start, size, mask)
-        == Some(mask)
+    crate::kuna_calleememory::unobserved_strict(fd, id, start, size, mask) == Some(mask)
 }
 
 /// Check caller operations for reads, forwarding, or unresolved aliases of a
@@ -345,9 +344,8 @@ pub(crate) fn caller_home_unobserved(
                                     |data| space.get_offset() == data.get_index() as u64,
                                 )
                         });
-            let access_space =
-                crate::p3_dataflow::ruleaction_4::RuleLoadVarnode::check_spacebase(fd, id)
-                    .map(|(space, _)| space);
+            let access_space = crate::ruleaction_4::RuleLoadVarnode::check_spacebase(fd, id)
+                .map(|(space, _)| space);
             if let Some((first, end)) = pointer_range {
                 if overlaps(first, (end - first) as i32, start_signed, size) {
                     if op.code() == OpCode::CPUI_LOAD {
@@ -396,8 +394,7 @@ pub(crate) fn caller_home_unobserved(
                         return false;
                     };
                     if !pointer_temporary(fd, out_id)
-                        || crate::p6_variables::kuna_stackranges::frame_address(fd, out_id)
-                            .is_none()
+                        || crate::kuna_stackranges::frame_address(fd, out_id).is_none()
                     {
                         return false;
                     }

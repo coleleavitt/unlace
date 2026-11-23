@@ -56,6 +56,6 @@
 <stringmatch name="wasm #13: i64 rotate and multiply" min="1" max="1">return a1 \* -0x61c8864680b583ebULL \^ rotl\(a0,7\);</stringmatch>
 <stringmatch name="wasm #14: f64 parameters, arithmetic and result" min="1" max="1">return \(a0 \+ a1\) \* 0.5;</stringmatch>
 <stringmatch name="wasm #15: rustc call_indirect in a loop" min="3" max="3">= \(\*table0\[v7\]\)\(v6</stringmatch>
-<stringmatch name="wasm #16: rustc loop with a select" min="1" max="1">\} while \(a0 != 1\);</stringmatch>
+<stringmatch name="wasm #16: rustc loop with a select" min="1" max="1">while \(a0 != 1\) \{</stringmatch>
 <stringmatch name="wasm #17: every body was lowered" min="0" max="0">unsupported\(\)</stringmatch>
 </decompilertest>

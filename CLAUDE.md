@@ -84,6 +84,9 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   and bumps the corpus count in `unlace-base/src/xml.rs`.
 - **Edition 2024 and rustfmt**: the workspace is edition 2024; run `cargo fmt --all`
   (2024 style, `rustfmt.toml`) before committing. CI and the `fast` gate check it.
+- **IDA/Hex-Rays material is allowed** (since 2026-11-23): unlace has diverged from upstream kuna
+  and sends nothing to Noelo-Lab/kuna, so IDA-informed features, readers for IDA formats (TIL,
+  `.sig`/FLIRT, Lumina), IDA comparison output and IDA-derived notes may be committed.
 - **Comments are rare**: file header or function header only; inline only for a genuinely
   confusing hack. New functionality → new modules matching surrounding conventions (ported
   files name methods after their C++ originals).

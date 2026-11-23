@@ -1842,7 +1842,8 @@ impl Heritage {
         })
     }
 
-    pub(crate) fn rebound_frame_base_seen(&self) -> bool {
+    #[doc(hidden)]
+    pub fn rebound_frame_base_seen(&self) -> bool {
         self.protostack_frame_reload == Some(true)
     }
 
@@ -7208,15 +7209,15 @@ crate::kuna_flag!(
 /// once per heritage pass.
 #[derive(Debug, Default)]
 pub struct MemoryOps {
-    pub(crate) space: Option<i32>,
-    pub(crate) loads: Vec<crate::context::OpId>,
-    pub(crate) stores: Vec<crate::context::OpId>,
-    pub(crate) returns: Vec<crate::context::OpId>,
+    pub space: Option<i32>,
+    pub loads: Vec<crate::context::OpId>,
+    pub stores: Vec<crate::context::OpId>,
+    pub returns: Vec<crate::context::OpId>,
 }
 
 /// The calls that keep their guard for one stack range.
 pub struct LiveCalls {
-    pub(crate) keep: crate::kuna_fasthash::FxHashSet<crate::context::OpId>,
+    pub keep: crate::kuna_fasthash::FxHashSet<crate::context::OpId>,
 }
 
 /// The bytes `[lo, last]` each indexed STORE may write by its pointer's own
@@ -7225,10 +7226,10 @@ pub type StoreBounds = std::collections::HashMap<crate::context::OpId, Option<(u
 
 #[derive(Debug)]
 pub struct Guard {
-    pub(crate) addr: unlace_base::address::Address,
-    pub(crate) size: unlace_base::types::int4,
-    pub(crate) writes: Vec<crate::context::VarnodeId>,
-    pub(crate) loads: Vec<crate::context::OpId>,
+    pub addr: unlace_base::address::Address,
+    pub size: unlace_base::types::int4,
+    pub writes: Vec<crate::context::VarnodeId>,
+    pub loads: Vec<crate::context::OpId>,
 }
 
 /// Parse a `readonlycalls`/`persistcalls` value: `off`, `on` (one guard) or

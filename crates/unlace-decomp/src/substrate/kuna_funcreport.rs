@@ -84,6 +84,7 @@ pub struct TypeInfo {
 /// `getStorage().getStackOffset()`, which the decbench `type_match` metric
 /// calibrates per binary against DWARF.  Stack spaces are byte-addressed
 /// (`word_size == 1`), so no `byte_to_address` scaling is needed.
-pub(crate) fn signed_space_offset(space: &Rc<AddrSpace>, off: u64) -> i64 {
+#[doc(hidden)]
+pub fn signed_space_offset(space: &Rc<AddrSpace>, off: u64) -> i64 {
     unlace_base::address::sign_extend(off as i64, space.get_addr_size() as i32 * 8 - 1)
 }

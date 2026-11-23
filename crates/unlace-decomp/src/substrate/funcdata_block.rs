@@ -3406,7 +3406,8 @@ impl Funcdata {
     /// Split the epilog of the function (C++ `ActionReturnSplit::apply`,
     /// `blockaction.cc:2265`).  Returns the number of edges split (the action's
     /// change count).
-    pub(crate) fn return_split_apply(&mut self) -> int4 {
+    #[doc(hidden)]
+    pub fn return_split_apply(&mut self) -> int4 {
         let mut count = 0;
         if self.sblocks_get_size() == 0 {
             return 0; // Some other restructuring happened first
@@ -3589,7 +3590,8 @@ impl Funcdata {
         }
     }
 
-    pub(crate) fn returndup_apply(&mut self, max_splits: int4, max_inedges: int4) -> int4 {
+    #[doc(hidden)]
+    pub fn returndup_apply(&mut self, max_splits: int4, max_inedges: int4) -> int4 {
         let mut count = 0;
 
         // Collect the candidate RETURN blocks up front — `node_split` mutates the CFG
@@ -3804,7 +3806,8 @@ impl Funcdata {
     /// (kuna, `earlyreturn`) Peel the const guard arm(s) of a **narrow** shared-return
     /// diamond (`if (c) return K; body; return <var>;`) — the ActionEarlyReturn driver.
     /// Thin wrapper over [`Self::const_return_peel`] with earlyreturn's caps (≤16 in-edges).
-    pub(crate) fn earlyreturn_apply(&mut self, max_splits: int4, max_inedges: int4) -> int4 {
+    #[doc(hidden)]
+    pub fn earlyreturn_apply(&mut self, max_splits: int4, max_inedges: int4) -> int4 {
         self.const_return_peel(max_splits, max_inedges)
     }
 
@@ -3818,7 +3821,8 @@ impl Funcdata {
     /// only ever splits a **constant** arm (never a `return <variable>` share), it inherits
     /// earlyreturn's safety: it cannot cause the variable-return over-firing that made broad
     /// `returndup` regress the aggregate.
-    pub(crate) fn switchreturn_apply(&mut self, max_splits: int4, max_inedges: int4) -> int4 {
+    #[doc(hidden)]
+    pub fn switchreturn_apply(&mut self, max_splits: int4, max_inedges: int4) -> int4 {
         self.const_return_peel(max_splits, max_inedges)
     }
 
@@ -3966,7 +3970,8 @@ impl Funcdata {
     /// The root graph node of `bblocks` (public-within-crate wrapper so the
     /// funcdata_block methods can reach it without re-deriving).
     #[inline]
-    pub(crate) fn bblocks_root_pub(&self) -> BlockId {
+    #[doc(hidden)]
+    pub fn bblocks_root_pub(&self) -> BlockId {
         self.bblocks_ref()
             .root
             .expect("bblocks root not constructed (internal invariant)")
@@ -4562,7 +4567,8 @@ impl Funcdata {
     /// flip enables; with it correct, all switch datatests hold when that flip is
     /// turned on (the flip is staged-off pending the Gp Test #1 over-merge — see
     /// `Funcdata::sync_varnodes_with_symbols`).
-    pub(crate) fn protect_switch_paths(&mut self) {
+    #[doc(hidden)]
+    pub fn protect_switch_paths(&mut self) {
         let nblocks = self.bblocks_get_size();
         let mut branchinds: Vec<OpId> = Vec::new();
         for i in 0..nblocks {

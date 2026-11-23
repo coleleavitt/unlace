@@ -202,7 +202,7 @@ pub enum Containment {
 #[derive(Debug, Clone)]
 pub struct ParamEntry {
     /// A declared extension beyond the logical parameter slot.
-    pub(crate) register_extension: Option<crate::p4_calls::kuna_registerslots::Extension>,
+    pub register_extension: Option<crate::p4_calls::kuna_registerslots::Extension>,
     /// Boolean properties of the parameter (C++ `flags`).
     flags: uint4,
     /// Data-type storage class that this entry must match (C++ `type`).
@@ -731,7 +731,8 @@ impl ParamEntry {
     /// per-piece extra checks overlap resolution gave it, and let it share the
     /// first-in-class standing of its low `s` entry, so a value a call left in
     /// it is judged as it would be in that `s` register.
-    pub(crate) fn kuna_whole_register(&mut self, first: bool) {
+    #[doc(hidden)]
+    pub fn kuna_whole_register(&mut self, first: bool) {
         self.flags &= !(param_entry_flags::EXTRACHECK_LOW | param_entry_flags::EXTRACHECK_HIGH);
         if first {
             self.flags |= param_entry_flags::FIRST_STORAGE;
@@ -740,7 +741,8 @@ impl ParamEntry {
 
     /// (kuna) Take `other`'s extension of a value narrower than the entry (the
     /// spec's `extension` attribute).
-    pub(crate) fn kuna_copy_extension(&mut self, other: &ParamEntry) {
+    #[doc(hidden)]
+    pub fn kuna_copy_extension(&mut self, other: &ParamEntry) {
         use param_entry_flags::*;
         let mask = SMALLSIZE_ZEXT | SMALLSIZE_SEXT | SMALLSIZE_INTTYPE | SMALLSIZE_FLOATEXT;
         self.flags = (self.flags & !mask) | (other.flags & mask);
@@ -2300,12 +2302,14 @@ impl ParamListStandard {
 
     /// (kuna) `armfloatreturn`: let a whole double trial fill both of its
     /// single-register groups, so the s-register it covers is no hole.
-    pub(crate) fn preserve_whole_float_groups(&mut self) {
+    #[doc(hidden)]
+    pub fn preserve_whole_float_groups(&mut self) {
         self.whole_float_groups = true;
     }
 
     /// (kuna) `armfloatargs`: leave the back-fill slot below a double unfilled.
-    pub(crate) fn skip_backfill_holes(&mut self) {
+    #[doc(hidden)]
+    pub fn skip_backfill_holes(&mut self) {
         self.backfill_holes = true;
     }
 
@@ -2379,7 +2383,8 @@ impl ParamListStandard {
 
     /// (kuna) The parameter entries, for a builder that derives one model from
     /// another.
-    pub(crate) fn kuna_entries_mut(&mut self) -> &mut [ParamEntry] {
+    #[doc(hidden)]
+    pub fn kuna_entries_mut(&mut self) -> &mut [ParamEntry] {
         &mut self.entry
     }
 
@@ -4160,7 +4165,8 @@ impl ParamListStandard {
     /// (kuna) Put `rules` ahead of the decoded ones, for a model derived from
     /// another.  `rules` carry no `fillinOutputMap` action, so the fallback
     /// [`Self::initialize`] chose stands.
-    pub(crate) fn kuna_prepend_model_rules(&mut self, rules: Vec<ModelRule>) {
+    #[doc(hidden)]
+    pub fn kuna_prepend_model_rules(&mut self, rules: Vec<ModelRule>) {
         self.model_rules.splice(0..0, rules);
     }
 
@@ -9046,8 +9052,8 @@ fn overlap_addr(addr: &Address, size: int4, op: &Address, opsize: int4) -> int4 
 #[derive(Clone, Debug)]
 pub struct Extension {
     pub input: VarnodeData,
-    pub(crate) output: VarnodeData,
-    pub(crate) opcode: OpCode,
+    pub output: VarnodeData,
+    pub opcode: OpCode,
 }
 
 /// Which forwarded registers at one call site [`neutral_in_chain`](crate::kuna_passthrough::neutral_in_chain) lets out of
@@ -9080,7 +9086,8 @@ pub enum Widen {
 /// the fspec-space side table ([`FuncCallSpecs::register_in_fspec_space`]).  The
 /// handle is never used as a `qlst` index (call specs are looked up by op), so a
 /// simple ever-increasing id is sufficient and stable across `sortCallSpecs`.
-pub(crate) fn next_fspec_handle() -> unlace_base::types::uintb {
+#[doc(hidden)]
+pub fn next_fspec_handle() -> unlace_base::types::uintb {
     use std::sync::atomic::{AtomicU64, Ordering};
     // Start above 0 so the handle is never confused with a null offset; the high
     // bit is left clear so the value is a valid (small) address offset.

@@ -15,7 +15,8 @@ pub struct Receiver {
 }
 
 impl Receiver {
-    pub(crate) fn matches(&self, arch: &Architecture, proto: &FuncProto) -> bool {
+    #[doc(hidden)]
+    pub fn matches(&self, arch: &Architecture, proto: &FuncProto) -> bool {
         if !proto.has_store()
             || proto.get_model_name() != "abi-internal"
             || !proto.is_input_locked()

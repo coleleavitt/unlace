@@ -1236,7 +1236,8 @@ impl Merge {
     /// [`BUDGET_STRIDE`]th one asking the clock, and once a probe has seen the
     /// budget spent every later step fails at once. The merge actions drop the
     /// error and the drive reports the budget.
-    pub(crate) fn budget(&mut self) -> KunaResult<()> {
+    #[doc(hidden)]
+    pub fn budget(&mut self) -> KunaResult<()> {
         if !self.spent {
             self.probes = self.probes.wrapping_add(1);
             self.spent = self.probes % BUDGET_STRIDE == 0
@@ -2353,7 +2354,8 @@ impl Merge {
 
     /// Check if `subOp` is a redundant COPY relative to dominant `domOp` (C++
     /// `Merge::checkCopyPair`, `merge.cc:1112-1136`).
-    pub(crate) fn check_copy_pair<C: MergeContext + ?Sized>(
+    #[doc(hidden)]
+    pub fn check_copy_pair<C: MergeContext + ?Sized>(
         ctx: &C,
         high: HighVariableId,
         dom_op: OpId,

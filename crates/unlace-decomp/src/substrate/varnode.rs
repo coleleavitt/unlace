@@ -579,7 +579,8 @@ thread_local! {
 /// skeleton the first time its type is read, so a Varnode whose type is
 /// replaced or never read costs no type allocation, and each skeleton still
 /// belongs to one Varnode.
-pub(crate) fn unknown_skeleton() -> Rc<Datatype> {
+#[doc(hidden)]
+pub fn unknown_skeleton() -> Rc<Datatype> {
     UNKNOWN_SKELETON.with(Rc::clone)
 }
 
@@ -678,7 +679,8 @@ impl Varnode {
     }
     /// Get the additional boolean attribute word (C++ `Varnode::addlflags`),
     /// used by the block-split clone (`CloneBlockOps::buildVarnodeOutput`).
-    pub(crate) fn get_addlflags(&self) -> uint2 {
+    #[doc(hidden)]
+    pub fn get_addlflags(&self) -> uint2 {
         self.addlflags
     }
     /// Get the Datatype (C++ `getType`).
@@ -1039,10 +1041,12 @@ impl Varnode {
         (self.addlflags & addl_flags::ptrcheck) != 0
     }
     #[inline]
-    pub(crate) fn is_synthetic_literal(&self) -> bool {
+    #[doc(hidden)]
+    pub fn is_synthetic_literal(&self) -> bool {
         self.addlflags & addl_flags::synthetic_literal != 0
     }
-    pub(crate) fn set_synthetic_literal(&mut self, value: bool) {
+    #[doc(hidden)]
+    pub fn set_synthetic_literal(&mut self, value: bool) {
         if value {
             self.addlflags |= addl_flags::synthetic_literal;
         } else {
@@ -1301,7 +1305,8 @@ impl Varnode {
     /// (C++ `CloneBlockOps::buildVarnodeOutput`, `funcdata_block.cc:1008-1016`):
     /// the boolean attribute subset that survives a block-split clone, plus the
     /// addl-flag subset.  `src_flags`/`src_addl` are the source's raw flag words.
-    pub(crate) fn copy_clone_flags(&mut self, src_flags: uint4, src_addl: uint2) {
+    #[doc(hidden)]
+    pub fn copy_clone_flags(&mut self, src_flags: uint4, src_addl: uint2) {
         let vflags = src_flags
             & (varnode_flags::externref
                 | varnode_flags::volatil
@@ -1341,7 +1346,8 @@ impl Varnode {
     /// `vn->setFlags(Varnode::annotation)` directly).  `set_flags` is private to
     /// this module, so this `pub(crate)` sliver is the single primitive the
     /// `funcdata_varnode` factories use to set the bit (LOSS-077 restoration).
-    pub(crate) fn set_annotation(&mut self) {
+    #[doc(hidden)]
+    pub fn set_annotation(&mut self) {
         self.set_flags(varnode_flags::annotation);
     }
     /// Test helper: mark this Varnode as \e inserted (output of an op / input /
@@ -1349,12 +1355,14 @@ impl Varnode {
     /// xref/heritage paths (W3-op's `setInput`/`setDef`); the W7 cover tests need
     /// the bit set directly without the full xref dance.
     #[cfg(test)]
-    pub(crate) fn set_insert_for_test(&mut self) {
+    #[doc(hidden)]
+    pub fn set_insert_for_test(&mut self) {
         self.set_flags(varnode_flags::insert);
     }
     /// Test helper: mark this Varnode as an \e input (W7 cover tests).
     #[cfg(test)]
-    pub(crate) fn set_input_for_test(&mut self) {
+    #[doc(hidden)]
+    pub fn set_input_for_test(&mut self) {
         self.set_input_flag();
     }
     /// C++ `setInput` (the private bank helper): mark as input + coverdirty.
@@ -1835,14 +1843,16 @@ impl VarnodeBank {
         self.create(s, addr, ct)
     }
 
-    pub(crate) fn reserve_unique(&mut self, size: int4) -> Address {
+    #[doc(hidden)]
+    pub fn reserve_unique(&mut self, size: int4) -> Address {
         let addr = Address::new(Rc::clone(&self.uniq_space), self.uniqid as u64);
         self.uniqid = self.uniqid.wadd(size as uintm);
         addr
     }
 
     /// Check deletion eligibility before any cross-bank cleanup.
-    pub(crate) fn check_destroy(&self, vn: VarnodeId) -> KunaResult<()> {
+    #[doc(hidden)]
+    pub fn check_destroy(&self, vn: VarnodeId) -> KunaResult<()> {
         let v = &self.arena[vn];
         if v.def.is_some() || !v.has_no_descend() {
             return Err(KunaError::lowlevel("Deleting integrated varnode"));
@@ -1990,7 +2000,8 @@ impl VarnodeBank {
 
     /// Clear a definition for immediate destruction, retaining the indexed key.
     /// Teardown must not query either index before calling `destroy`.
-    pub(crate) fn make_free_for_destroy(&mut self, vn: VarnodeId) {
+    #[doc(hidden)]
+    pub fn make_free_for_destroy(&mut self, vn: VarnodeId) {
         let v = &mut self.arena[vn];
         v.lociter.as_ref().expect("make_free: missing lociter");
         v.set_free();

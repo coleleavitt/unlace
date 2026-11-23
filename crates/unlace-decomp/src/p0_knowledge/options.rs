@@ -620,11 +620,13 @@ pub trait ArchOption {
 }
 
 /// Read a loader toggle, retaining its default for unknown or non-Unicode values.
-pub(crate) fn env_toggle(name: &str, default: bool) -> bool {
+#[doc(hidden)]
+pub fn env_toggle(name: &str, default: bool) -> bool {
     std::env::var(name).map_or(default, |value| parse_env_toggle(&value, default))
 }
 
-pub(crate) fn parse_env_toggle(value: &str, default: bool) -> bool {
+#[doc(hidden)]
+pub fn parse_env_toggle(value: &str, default: bool) -> bool {
     match value.trim().to_ascii_lowercase().as_str() {
         "off" | "0" | "false" => false,
         "on" | "1" | "true" | "" => true,

@@ -1392,7 +1392,8 @@ impl ScopeLocal {
         self.encode_with_storage(wire_symbols, &std::collections::BTreeMap::new(), encoder)
     }
 
-    pub(crate) fn encode_with_storage(
+    #[doc(hidden)]
+    pub fn encode_with_storage(
         &self,
         wire_symbols: &[crate::database::WireSymbol],
         wrapped_storage: &std::collections::BTreeMap<u64, (Address, int4)>,
@@ -3510,22 +3511,22 @@ impl MapState {
     }
 
     /// (kuna `arrayextent`) Record the arrays `extend_unbounded` lengthened.
-    pub(crate) fn set_extended(
-        &mut self,
-        extended: Vec<crate::p6_variables::kuna_arrayextent::Extended>,
-    ) {
+    #[doc(hidden)]
+    pub fn set_extended(&mut self, extended: Vec<crate::p6_variables::kuna_arrayextent::Extended>) {
         self.extended = extended;
     }
 
     /// (kuna `arrayextent`) Take the recorded lengthened arrays.
-    pub(crate) fn take_extended(&mut self) -> Vec<crate::p6_variables::kuna_arrayextent::Extended> {
+    #[doc(hidden)]
+    pub fn take_extended(&mut self) -> Vec<crate::p6_variables::kuna_arrayextent::Extended> {
         std::mem::take(&mut self.extended)
     }
 
     /// (kuna `arraysize`) Record what calls say per escaped start, the sorted
     /// offsets of index bases whose reach is not proven, and where the accesses
     /// through each escaped address land.
-    pub(crate) fn set_stated_sizes(
+    #[doc(hidden)]
+    pub fn set_stated_sizes(
         &mut self,
         sizes: std::collections::BTreeMap<intb, Evidence>,
         unproven_indexes: Vec<intb>,
@@ -3537,18 +3538,21 @@ impl MapState {
     }
 
     /// (kuna `arraysize`) Where the accesses through each escaped address land.
-    pub(crate) fn reaches(&self) -> &[Reach] {
+    #[doc(hidden)]
+    pub fn reaches(&self) -> &[Reach] {
         &self.reaches
     }
 
     /// (kuna `arraysize`) What calls and accesses say about the address at `sstart`.
-    pub(crate) fn stated_sizes(&self, sstart: intb) -> Option<&Evidence> {
+    #[doc(hidden)]
+    pub fn stated_sizes(&self, sstart: intb) -> Option<&Evidence> {
         self.stated_sizes.get(&sstart)
     }
 
     /// (kuna `arraysize`) Does an index base whose reach is not proven start in
     /// `[lo, hi)`?
-    pub(crate) fn unproven_index_in(&self, lo: intb, hi: intb) -> bool {
+    #[doc(hidden)]
+    pub fn unproven_index_in(&self, lo: intb, hi: intb) -> bool {
         let i = self.unproven_indexes.partition_point(|&o| o < lo);
         self.unproven_indexes.get(i).is_some_and(|&o| o < hi)
     }
@@ -3600,11 +3604,11 @@ impl MapState {
 /// element size, and its high index before and after.
 #[derive(Clone, Copy)]
 pub struct Extended {
-    pub(crate) start: uintb,
-    pub(crate) sstart: intb,
-    pub(crate) elem: int4,
-    pub(crate) from: int4,
-    pub(crate) to: int4,
+    pub start: uintb,
+    pub sstart: intb,
+    pub elem: int4,
+    pub from: int4,
+    pub to: int4,
 }
 
 /// What a call's byte count says about the buffer it receives.
@@ -3633,7 +3637,7 @@ pub enum Says {
 pub struct Evidence {
     /// The byte counts calls state for the start, what each says, and whether
     /// it already includes a terminator byte at the call's result.
-    pub(crate) counts: Vec<(intb, Says, bool)>,
+    pub counts: Vec<(intb, Says, bool)>,
 }
 
 /// Where the accesses through one escaped address land, as signed frame
@@ -3641,18 +3645,18 @@ pub struct Evidence {
 #[derive(Clone, Copy, Debug)]
 pub struct Reach {
     /// The frame offset of the address.
-    pub(crate) offset: intb,
+    pub offset: intb,
     /// The lowest byte a constant-offset access through it touches.
-    pub(crate) lo: intb,
+    pub lo: intb,
     /// One past the highest byte a constant-offset access through it touches.
-    pub(crate) hi: intb,
+    pub hi: intb,
     /// Some access may land anywhere above the address: a loop advances it, a
     /// non-constant offset other than a terminator is added, a library call
     /// receives it with a non-constant length.
-    pub(crate) open_up: bool,
+    pub open_up: bool,
     /// Some access may land anywhere below the address (a loop walks it down,
     /// or a non-constant offset is added).
-    pub(crate) open_down: bool,
+    pub open_down: bool,
 }
 
 #[cfg(test)]

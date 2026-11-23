@@ -128,7 +128,8 @@ impl Funcdata {
     /// callers that do not carry a resolved [`TypeOp`] (e.g. the stack-pointer
     /// flow LOAD->COPY / spurious-add rewrites in `coreaction_stackptr`).
     #[inline]
-    pub(crate) fn op_set_opcode_code(&mut self, op: OpId, opc: OpCode) {
+    #[doc(hidden)]
+    pub fn op_set_opcode_code(&mut self, op: OpId, opc: OpCode) {
         self.op_set_opcode(op, Self::w6_type_op(opc));
     }
 
@@ -441,7 +442,8 @@ impl Funcdata {
     /// forced display format is carried by the Symbol itself, so reusing the
     /// existing binding (without retyping `dst`) preserves the render facet while
     /// avoiding a spurious size-1 retype of the collapsed constant.
-    pub(crate) fn copy_symbol(&mut self, dst: VarnodeId, src: VarnodeId) {
+    #[doc(hidden)]
+    pub fn copy_symbol(&mut self, dst: VarnodeId, src: VarnodeId) {
         let sym = match self.vbank().get(src).and_then(|v| v.kuna_symbol_entry()) {
             Some(s) => s,
             None => return,

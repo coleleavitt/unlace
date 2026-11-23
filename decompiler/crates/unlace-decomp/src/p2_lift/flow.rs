@@ -548,6 +548,15 @@ pub trait FlowEnvironment {
         None
     }
 
+    /// (kuna `spsolve`) What the returns of the function at the direct-call
+    /// `entry` do to the stack pointer. See [`crate::p4_calls::kuna_spsolve`].
+    fn query_call_returns(
+        &self,
+        _entry: &Address,
+    ) -> Option<crate::p4_calls::kuna_spsolve::CalleeReturns> {
+        None
+    }
+
     /// The model the register inputs of the function at the direct-call `entry`
     /// select. See [`crate::p4_calls::kuna_calleereginputs`].
     fn query_call_register_model(
@@ -3776,7 +3785,12 @@ truncating the fall-through here"
         // envs that carry it only there (the W4-era `query_call_no_return` hook).
         let mut no_return = is_no_return
             || (!entry.is_invalid()
-                && (self.env.query_call_no_return(entry) || self.call_site_no_return(op, entry)));
+                && (self.env.query_call_no_return(entry) || self.call_site_no_return(op, entry)))
+            || self
+                .data
+                .obank()
+                .get(op)
+                .is_some_and(|o| self.data.get_override().is_no_return_call(o.get_addr()));
         if !no_return && self.trap_follows_call(op) {
             if !entry.is_invalid() {
                 if let Some(idx) = self.data.get_call_specs_index(op) {
@@ -4043,6 +4057,7 @@ truncating the fall-through here"
             fc.set_callee_reg_model(self.env.query_call_register_model(&callee));
             fc.set_callee_arg_registers(self.env.query_call_arg_registers(&callee));
             fc.set_callee_purge(self.env.query_call_extra_pop(&callee));
+            fc.set_callee_returns(self.env.query_call_returns(&callee));
             let call_at = self.data.obank().get(op).map(|o| o.get_addr().clone());
             if let Some(call_at) = call_at {
                 let args = self.env.query_call_stack_arg_bytes(&callee, &call_at);

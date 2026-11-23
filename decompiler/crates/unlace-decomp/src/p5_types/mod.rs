@@ -10,6 +10,7 @@ pub mod double;
 pub mod funcdata_union;
 pub mod kuna_aggregatefields;
 pub mod kuna_boolbyte; // (kuna) type a byte that is only ever a truth value as bool
+pub mod kuna_borrowcompare; // (kuna) a branchless two-word borrow compare folds to one double-precision compare
 pub mod kuna_calltargettype; // (kuna) an indirect call's target takes the function-pointer type the call states
 pub mod kuna_charbyte; // (kuna) keep char for a byte loaded through a char pointer
 pub mod kuna_charptr; // (kuna) commit a pointer used only on characters to char *

@@ -39,6 +39,7 @@ fn binding(name: &str) -> Option<(&'static str, Encoding)> {
             Trimmed,
         ),
         "goabi" => (kuna_goabi::GOABI_ENV, DefaultOn),
+        "cil" => (unlace_decomp::kuna_cil::CIL_ENV, DefaultOn),
         "symbolnamechars" => (kuna_symbolnamechars::SYMBOLNAMECHARS_ENV, SymbolNameChars),
         "libctypes" => (kuna_libctypes::LIBCTYPES_ENV, LibcTypes),
         "dwarfscopes" => (
@@ -407,6 +408,7 @@ mod tests {
             ("objcivars".into(), "off".into()),
             ("macho-arm64e".into(), "off".into()),
             ("dyldcrossrefs".into(), "off".into()),
+            ("cil".into(), "off".into()),
             ("sourcelang".into(), "auto".into()),
             ("unrelated".into(), "on".into()),
         ];
@@ -423,6 +425,7 @@ mod tests {
                 ("KUNA_MACHO_ARM64E", Some("off")),
                 ("KUNA_MACHO_SLICE", Some("arm64")),
                 ("KUNA_DYLDCROSSREFS", Some("off")),
+                ("KUNA_CIL", Some("off")),
                 (kuna_sourcelang::SOURCELANG_ENV, None),
                 (unlace_analysis::passes::LOAD_OBJC_ENV, Some("on")),
                 (unlace_analysis::passes::LOAD_STRINGS_ENV, Some("on")),

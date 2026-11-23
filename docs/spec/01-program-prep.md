@@ -1904,6 +1904,112 @@ body (issue #1288); the note sends a PKLITE file to `unlace unpack`. Surfaces th
 need an `object::File` refuse an `MZ` input with a capability error, as they do
 a TE.
 
+(kuna) **PS-X EXE, N64 ROM, a.out, Amiga hunk and PEF executables load from
+their own headers.** These five containers hold code for processors kuna
+decodes, but the `object` crate reads none of them, so each was refused as an
+unknown format and had to be mapped by hand as a headerless image, which for
+the three relocatable ones is also wrong: a flat mapping leaves every
+relocated word holding a link-time value. Each has a bounded parser under
+`decompiler/crates/unlace-analysis/src/loader/kuna_retroimage.rs (parse)` that
+turns the file into one description: a contiguous module of bytes as the
+platform's loader would leave them in memory, its base address, the SLEIGH
+language, the entry point, the mapped ranges with their kind, the names the
+container gives addresses, and any register the container fixes for the whole
+image. The dispatcher
+(`decompiler/crates/unlace-console/src/engine/kuna_retroimage.rs (bootstrap_retro_bytes)`)
+hands that module to the raw-image path, so discovery, naming and every option
+behave as they do for a headerless image; what the command line supplies there
+(`--target`, `--base`, `--entry`) the header supplies here. `--target` still
+overrides the language. The ranges are published as the load image's sections
+in place of the single whole-file code range, so the call sweep of
+`rawdiscover` reads only the ranges that hold code, and a read-only range is
+marked so. Every named code address is a discovery seed and takes the
+container's name; a named data address becomes a global of that name. There is
+no option: before this the same file was an error.
+
+The format is claimed from the first 32 bytes
+(`decompiler/crates/unlace-analysis/src/loader/kuna_retroimage.rs (is_retro_image)`),
+after the TE probe and before the MZ and object-file ones. Every size and
+offset is untrusted: arithmetic is checked, a module may not exceed 256 MiB,
+and what a parser cannot honor (a relocation outside its segment, a malformed
+relocation program) is skipped and reported on stderr rather than guessed.
+
+- **PS-X EXE** (`psx.rs`): the magic `PS-X EXE`, then little-endian `pc0`,
+  `gp0`, `t_addr`, `t_size` and the bss range in a 0x800-byte header. The text
+  that follows the header is mapped at `t_addr` (clamped to the bytes the file
+  holds), the bss range after it as zero fill, `pc0` is the entry and must lie
+  in the stored text, and a nonzero `gp0` is `gp`'s tracked value over the
+  image, so a `gp`-relative access folds to its address. The language is
+  `MIPS:LE:32:default`.
+- **N64 ROM** (`n64.rs`): the first word is the PI configuration word
+  `0x80371240`, whose stored byte order tells a big-endian (`.z64`),
+  byte-swapped (`.v64`) or little-endian (`.n64`) dump; the latter two are
+  converted. The boot code at ROM offset 0x40 copies up to one megabyte from
+  ROM offset 0x1000 to the entry address in header word 2 and jumps there, so
+  that segment is the one mapped range and its first byte the entry. Two
+  revisions of the boot code subtract 0x100000 or 0x200000 from the header
+  word first; they are told apart by the CRC-32 of the boot code. Code the
+  boot segment later copies from elsewhere in the ROM is not mapped. The
+  language is `MIPS:BE:64:64-32addr`.
+- **a.out** (`aout.rs`): a 32-byte header whose first word is the magic
+  (OMAGIC 0407, NMAGIC 0410, ZMAGIC 0413, QMAGIC 0314) and a machine id, in
+  one of three dialects: NetBSD's network-order `flags, mid, magic`; SunOS's
+  big-endian word with its machine type (1 to 3) below a toolchain version;
+  and the host-order word of Linux and the i386 BSDs. A file is claimed only
+  when the machine id is one of the table's (m68k, i386, SPARC, ARM), which
+  also picks the byte order of the rest of the header, the page size and the
+  language. Where the text starts in the file and in memory follows the
+  dialect and the magic; when the entry point is not inside the text at that
+  address, the text is placed at the page the entry is in. Data follows the
+  text (on the next page boundary unless OMAGIC), then bss as zero fill. The
+  `nlist` symbols of the text, data and bss name their addresses, less the
+  leading underscore and without debugger records, object-file names and
+  assembler-local labels. A file with no entry address and with relocation
+  records is a relocatable object: it is loaded at 0, each undefined or
+  common symbol is given a slot in a range appended after the bss, and each
+  external relocation record of m68k and i386 adds its symbol's slot address
+  to the field it names, so a call to an undefined function is a call to a
+  named address. Section-relative records need nothing at base 0. SPARC and
+  ARM relocation records are not applied, and the load says so.
+- **Amiga hunk** (`hunk.rs`): `HUNK_HEADER` (0x3f3) with no resident library
+  names and the memory size of each hunk, then each hunk's blocks to its
+  `HUNK_END`. AmigaDOS allocates the hunks separately; here they are placed
+  one after another from 0x10000. `HUNK_CODE` and `HUNK_DATA` contents are
+  copied, `HUNK_BSS` and the part of a hunk past its stored contents are zero
+  fill, and each `HUNK_RELOC32`, `HUNK_RELOC32SHORT` and `HUNK_DREL32` entry
+  adds its target hunk's address to the word it names. `HUNK_SYMBOL` names
+  are kept, `HUNK_NAME` and `HUNK_DEBUG` skipped. The entry is the first byte
+  of the first hunk, which must be code. An overlay tree ends the load with a
+  note; a library or object unit (`HUNK_UNIT`) is not claimed. The language is
+  `68000:BE:32:default`.
+- **PEF** (`pef.rs`): the tag `Joy!peff` with architecture `pwpc`; a CFM-68K
+  fragment is refused. Each instantiated section (code, data,
+  pattern-initialized data, constant) is placed in header order from
+  0x10000000 at its alignment, pattern-initialized data is expanded by
+  running its five-opcode pattern program, and one eight-byte slot per
+  imported symbol follows the sections. Each section's relocation program
+  from the loader section is then run: the instructions add a section's
+  address, or an import's slot address, to successive words, with the
+  position, the import index and the two section variables as state, and the
+  two repeat instructions replaying the blocks before them. A program is
+  bounded by a step budget and by its section, and one that leaves either is
+  cut short with a note. The main symbol of a PowerPC fragment is a
+  transition vector in the data section: its first word is the entry and its
+  second the TOC, which is `r2`'s tracked value over the image, so a
+  TOC-relative load reads its slot. Code is named from the export table (a
+  transition-vector export names the code its first word points at), from the
+  traceback table after each function (a zero word, flags with the
+  offset-present and name-present bits, the distance back to the function
+  start and the name), and from the import table: an import names its slot,
+  and each cross-fragment glue stub (`lwz r12,d(r2)` followed by the fixed
+  five-instruction tail that saves the TOC and jumps through the vector) takes
+  the name of the import whose slot its TOC entry holds. `r2` is known at each
+  function's entry only: after a cross-fragment call the caller reloads it
+  from the linkage area the glue stored it in, and that store is not modeled.
+
+Surfaces that need an `object::File` refuse these inputs with the capability
+error a TE or MZ input gets.
+
 (kuna) **An MS-DOS executable's functions start with DS holding its data
 segment** (`mzdgroup`, default on, `MZ` loads in real mode only). A near data
 pointer is an offset into the segment DS holds, and a function's DS is an input
@@ -1964,6 +2070,96 @@ DAZZLE.EXE of issue #1288 (Turbo C, DGROUP `3af3`) 1,388 near-pointer
 dereferences in 136 of 295 functions become 44 (the entry point's PSP reads
 and code that loads DS from memory), and 1,537 named global references replace
 29.
+
+(kuna) **A managed .NET assembly loads from its CIL method bodies** (`cil`,
+default on, a PE with a CLI header only). The native code of a managed PE is
+one jump to `_CorExeMain`; the program is ECMA-335 metadata and CIL, so read
+as x86 the image has one function. The dispatcher
+(`decompiler/crates/unlace-console/src/engine.rs (bootstrap_cil)`) takes a file
+whose PE data directory 14 names a CLI header, whose metadata reads and which
+has at least one method body, unless the caller names a target language or
+sets `cil off`
+(`decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_cil.rs (cil_enabled)`);
+every other input keeps the object path. The image
+(`decompiler/crates/unlace-analysis/src/loadimage_cil.rs (CilImage)`) is the PE
+mapped by RVA at 0x400000, through the raw-image path as the language
+`CIL:LE:64:default`. Only the extent the file backs is mapped, and a section
+table that spreads that extent past 64 times the file size (the alignment
+ratio of a managed image is 16) or past 1 GiB is refused, so a small file
+cannot ask for a large allocation.
+`decompiler/crates/unlace-analysis/src/loadimage_cil/metadata.rs (Metadata)`
+reads the metadata root, the `#Strings`, `#US` and `#Blob` heaps and every
+table of the `#~` stream: the row size of a table depends on the row counts of
+the tables its columns index, so all 45 schemas are stated even though the
+loader consumes eleven. Each method with a body is one function. It starts at
+the first instruction, after the tiny or fat header, is named
+`Namespace.Type::Method` (a nested type under its enclosing type, joined with
+`.`), and takes its prototype from its signature
+(`decompiler/crates/unlace-analysis/src/loadimage_cil/sig.rs (method_sig)`): a
+reference is a pointer, an array reference a pointer to its element, a string
+a pointer to UTF-16 text, an enum its underlying type. Overloads share a
+name and are told apart by address.
+
+CIL leaves two things out of the instruction bytes that a decoder needs, and
+the loader supplies both before anything is decoded. The first is operand
+types: `add` adds whatever the evaluation stack holds.
+`decompiler/crates/unlace-analysis/src/loadimage_cil/body.rs (type_body)` walks
+each body's control flow from its first instruction carrying the stack as a
+list of kinds (int32, int64 or native or reference, float32, float64), as the
+verifier does, and records for each reached instruction the depth before it,
+the class of its operands and a call's argument count. Those are painted over
+the instruction as the decode context `cilctx`; an instruction the walk did
+not reach keeps the default and decodes as unimplemented. The second is what
+a metadata token names. Each token operand is rewritten in the mapped image:
+a `call`, `callvirt`, `newobj` or `ldftn` to the address of the method, a
+static field access to the field's address, an instance field access to the
+field's offset, `ldstr` to a NUL-terminated UTF-16 copy of the `#US` string
+laid out after the image, and `ldtoken` of a field with initial data to that
+data. A method of another assembly, or one with no body, gets an address in an
+unmapped range from 0x10000; it is named and prototyped but is not a function
+of the inventory. A generic parameter in the signature of such a member is
+replaced by the argument its `TypeSpec` parent or `MethodSpec` instantiates it
+with, so `List<int>::get_Item` returns an int32. `throw` calls a no-return
+helper at 0x1000.
+
+The runtime, not the image, lays out a class, so the loader gives each class
+of the assembly a layout of its own (`CilImage::layout`): the instance fields
+in declaration order, each at the next naturally aligned offset after an
+8-byte object header or after a base class of the same assembly, and from
+offset 0 in a value type. The same layout becomes a struct type the method's
+`this` and every reference of that class point at, so a field access prints
+`this->field` and the offset never shows. A class with an explicit layout, an
+interface and an enum get none, and an access to a field of one refuses the
+body.
+
+A body the walk cannot follow is refused whole and left unpainted, so it is
+listed and decodes as unimplemented instead of as a guess: one with an
+exception-handling clause (a `finally` runs on every exit, which a branch
+does not say), a value type on the stack whose size the assembly does not
+give, `ldarga`, `calli`, `jmp`, a checked conversion or arithmetic (`.ovf`),
+`localloc`, the object-copy instructions, a vararg call site, more than 16
+arguments or 64 stack slots, and a stack that differs between two paths into
+one instruction. Two methods may share one body, but a body whose bytes only
+partly coincide with another's is refused as well: every body is typed from
+the bytes as the file holds them, before any token is rewritten, and two
+overlapping bodies would otherwise paint and rewrite each other.
+
+A method's extent is its body. The bytes between two bodies are the next
+method's header and alignment, and metadata follows the last one, so the
+bootstrap states each method's end and the inventory, the listing and the
+size filters report the body's own length instead of the distance to the
+next entry. A stated end is not a flow that stopped short, so the notes a
+real-mode image prints about one (`ConsoleProgram::extent_cut_by_flow`) stay
+silent. The load image
+(`decompiler/crates/unlace-analysis/src/loadimage_cil/image.rs (CilLoadImage)`)
+answers every read as the raw image does and replaces its section table: the
+raw image is one buffer, which its loader reports as one code section, while
+here the method bodies of each PE section are one code run and the PE
+headers, the CLI header, the metadata and what the loader lays out after the
+image are data. A sweep of the code sections, as the project export's
+assembly listing makes, therefore lists the methods and the few header bytes
+between them rather than the whole file. The string inventory still scans
+the PE's sections, so it lists the names in the metadata heaps.
 
 (kuna) **UEFI TE images take a bounded container path of their own.**
 `decompiler/crates/unlace-analysis/src/loadimage_te.rs (TeLoadImage)` parses a
@@ -8305,7 +8501,61 @@ both
   in a call the Listing does not know never returns can lose its match,
   because the Listing decodes the padding after that call and the bounded
   record does not.
-  `unlace fid query` exposes full-hash candidates as a read-only lookup. It
+  (kuna) **Prototypes.** A record may carry the function's prototype as one C
+  declaration and the type declarations it needs
+  (`decompiler/crates/unlace-analysis/src/analyzers/fid/db.rs`, format version 2:
+  each record adds a prototype offset and a run in a table of declaration
+  offsets, so records share a declaration's text). A version-1 file loads as
+  before, and a database none of whose records has a prototype is still written
+  as version 1, byte for byte what the builder wrote before. A load decodes each
+  distinct run once and every record naming it shares that one copy, as does
+  every match of such a record, so a database built from many variants of one
+  library (each optimization level a new record over the same declarations)
+  costs memory in proportion to its distinct text, and a binary with many
+  identical functions does not copy a record's declarations once per match.
+  Records name their strings by offset, so a small file can still name one long
+  string many times, in names or in overlapping runs; a load stops with
+  `invalid` once the text it has decoded (each distinct run counted once) passes
+  the larger of 64 MiB and 128 bytes per byte of the file. `unlace fid build`
+  fills a record from the prototype the object's own committed analysis parked
+  on the function symbol of that name, which is its DWARF signature
+  (`decompiler/crates/unlace-analysis/src/analyzers/fid/kuna_fidproto.rs
+  (describe)`; the hashes are taken before that commit), and from `--assert
+  'prototype <name> <declaration>'` with any `--assert 'typedef …'`, which
+  replace what was read. The types of every match land in one program, so a
+  record type that two objects define differently is left as its forward
+  declaration in every record and named on stderr (`drop_disputed`), and an
+  enumeration two objects define differently is left out of every record, so a
+  prototype naming it no longer parses and is dropped at the match. The check
+  runs over every input record before records with the same hashes and name
+  are merged, so the definitions it compares, and the database written, do not
+  depend on the order of the objects in the archive or on the command line; a
+  type one
+  object defines and another only declares (an opaque handle a library casts
+  to its own private state) is defined for both, so a function of the second
+  object reads the first object's members. On a match the pass emits the
+  prototype of the record
+  the specific hash and code-unit count single out, else the one prototype all
+  describing records of the bucket agree on (`pick`), as a `FidProtoFact`. The
+  commit applies it last
+  (`decompiler/crates/unlace-console/src/kuna_fidproto.rs (apply)`): only to a
+  function that carries the record's name, whether FID renamed it or the symbol
+  table already said so, and only when nothing else parked a prototype there, so
+  DWARF and every library table win and a later `--assert` replaces it. The
+  type declarations are parsed first; one that redefines a type the program
+  already has is rejected by the parser and the program's definition stands. A
+  prototype that does not parse is dropped with a header warning on the
+  function, and so is one that passes or returns a structure or union by value
+  whose definition the record left out (`opaque_by_value`): an opaque type has
+  no size to assign storage from, and a sizeless return would be taken for a
+  hidden return buffer, inventing a first parameter and shifting the real ones.
+  A declaration whose brackets nest deeper than 64 is not handed
+  to the parser at all, since the text comes from a file and the parser
+  recurses once per level. The applied prototype is parked like a DWARF one, so
+  the function's callers copy it too, and the drive checks it against the body
+  (04 §4.2 "Seeding").
+  `unlace fid query` exposes full-hash candidates as a read-only lookup, each
+  with its record's `prototype`. It
   reports whether the entry was discovered or supplied by the caller, the
   Listing's instruction-boundary classification, and that identity is unverified;
   `single_candidate` means one distinct name, not a confirmed match. ARM32 odd

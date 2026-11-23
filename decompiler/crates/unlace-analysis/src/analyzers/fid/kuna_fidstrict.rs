@@ -21,6 +21,8 @@ mod tests {
             specific_addl: 0,
             flags: 0,
             name: "candidate".into(),
+            prototype: None,
+            typedefs: Default::default(),
         }
     }
 

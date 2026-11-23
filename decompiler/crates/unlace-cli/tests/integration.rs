@@ -229,12 +229,17 @@ mod dos_pcmemory_cli;
 #[path = "dos_mz_cli.rs"]
 mod dos_mz_cli;
 
+#[path = "retro_formats_cli.rs"]
+mod retro_formats_cli;
+
 #[path = "wasm_cli.rs"]
 mod wasm_cli;
 
 #[path = "dos_exit_cli.rs"]
 mod dos_exit_cli;
 
+#[path = "cil_cli.rs"]
+mod cil_cli;
 #[path = "dos_extent_cli.rs"]
 mod dos_extent_cli;
 
@@ -303,6 +308,8 @@ mod fid_cli;
 
 #[path = "fid_db_status_cli.rs"]
 mod fid_db_status_cli;
+#[path = "fid_proto_cli.rs"]
+mod fid_proto_cli;
 
 #[path = "flirt_make_cli.rs"]
 mod flirt_make_cli;

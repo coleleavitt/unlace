@@ -199,6 +199,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "chkstkdarwin" => on_off!(chkstk_darwin, "Darwin stack-probe call removal"),
+    "spsolve" => on_off!(sp_solve, "x86-32 stack-pointer delta solve"),
 
     "arithhelpers" => on_off!(arith_helpers, "arithmetic runtime-helper call-fixups"),
     "objcarc" => on_off!(objc_arc, "Objective-C ARC call hiding"),
@@ -437,6 +438,10 @@ kuna_options! { self, p1;
     "regnarrow" => {
         self.narrow_locals = on_or_off(p1)?;
         Ok(format!("Narrow register local recovery turned {p1}"))
+    },
+    "pairparam" => {
+        self.pair_params = on_or_off(p1)?;
+        Ok(format!("Double-precision input pairing turned {p1}"))
     },
     "narrowret" => {
         self.narrow_ret = on_or_off(p1)?;
@@ -985,6 +990,11 @@ kuna_options! { self, p1;
         self.analysis_debuglink = val;
         crate::kuna_debuglink::set_debuglink_env(val);
         Ok(format!("separate debug file lookup turned {}", if val { "on" } else { "off" }))
+    },
+    "cil" => {
+        let msg = crate::kuna_cil::set_cil(p1)?;
+        self.load_options_mut().cil = crate::options::on_or_off(p1)?;
+        Ok(msg)
     },
     "dyldcrossrefs" => {
         let msg = crate::kuna_dyldcache::set_dyldcrossrefs(p1)?;

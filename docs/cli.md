@@ -1552,6 +1552,41 @@ refused. `decompile`, `decompile-all`, `functions`, `disassemble`/`read`,
 `xrefs` and `decompile-graph` need an object-file view and refuse it with a
 capability error, as for a TE.
 
+### PS-X EXE, N64 ROM, a.out, Amiga hunk and PEF executables
+
+These five formats load without `--raw-image`; the header supplies the
+language, the load address, the entry and, where the format has them, symbols
+and relocations:
+
+```bash
+unlace functions GAME.EXE                    # PS-X EXE: MIPS R3000 LE at t_addr, entry pc0, gp set
+unlace functions game.z64                    # N64 ROM (.z64/.v64/.n64): boot segment at the header entry
+unlace decompile a.out main                  # a.out: m68k, i386, SPARC or ARM, by machine id
+unlace decompile-all prog                    # Amiga hunk load file: hunks relocated from 0x10000
+unlace decompile app.pef main                # PEF (classic Mac OS, PowerPC): TOC in r2, imports named
+```
+
+| Format | Language | Mapped | Names |
+|---|---|---|---|
+| PS-X EXE | `MIPS:LE:32:default` | text at `t_addr`, bss | none |
+| N64 ROM | `MIPS:BE:64:64-32addr` | up to 1 MiB from ROM 0x1000 at the header entry | none |
+| a.out | by machine id | text, data, bss; undefined symbols of an object | `nlist` symbols |
+| Amiga hunk | `68000:BE:32:default` | every hunk, one after another from 0x10000 | `HUNK_SYMBOL` |
+| PEF | `PowerPC:BE:32:default` | code and data sections from 0x10000000, one slot per import | exports, imports, traceback tables |
+
+`--target` names another language (an a.out for a 68000 without the 68020
+addressing modes, say). An N64 ROM maps only the segment its boot code copies;
+code that segment loads later from elsewhere in the ROM needs `--raw-image`
+with the address it runs at. A relocatable a.out object loads at 0 with its
+m68k or i386 relocations applied; SPARC and ARM relocations are not. A PEF
+function knows its TOC at entry, so its globals resolve, but not after a call
+into another fragment, where `r2` is reloaded from the stack. A relocation or
+pattern program kuna cannot follow is cut short and reported on stderr.
+`decompile`, `decompile-all`, `functions`, `disassemble`/`read`,
+`decompile-project` and the console support these inputs; `strings`, `xrefs`,
+`decompile-graph` and the graph-backed `--summary`/`--reachable-from` need an
+object-file view and refuse them with a capability error, as for a TE.
+
 ### Headerless raw images
 
 `--raw-image` loads a file that has no object header. It is separate from
@@ -2194,7 +2229,7 @@ function application uses the in-process engine for text and JSON and rejects
 
   | `id` | Recognized by | `hint` |
   |---|---|---|
-  | `dotnet` | PE data directory 14 (CLR header) non-zero | `managed .NET assembly: native decompilation shows only the stub; use ilspycmd` |
+  | `dotnet` | PE data directory 14 (CLR header) non-zero | `managed .NET assembly: decompiled from its CIL method bodies; a body the lift does not cover is marked unimplemented` (not actionable), or with `--option cil off` or `--target`: `managed .NET assembly: native decompilation shows only the stub; the default `--option cil on` without --target decompiles its methods` |
   | `nativeaot` | an ELF with sections named `__managedcode` and `.dotnet_eh_table`, or a PE that exports `DotNetRuntimeDebugHeader` or has `.unbox` and `.modules` sections; `version` is the ILC release in the `.comment` section | `NativeAOT (ILC 10.0.2) image: native code from C#; decompiles as native C, but method names need the .dbg sidecar or a NativeAOT metadata tool` |
   | `pyinstaller` | the `MEI\x0c\x0b\x0a\x0b\x0e` CArchive cookie; `version` is its Python version | `PyInstaller bundle (Python 3.12): extract with pyinstxtractor-ng` |
   | `nuitka` | `NUITKA_ONEFILE_PARENT` / `__nuitka_binary_dir` | `Nuitka-compiled Python: …; extract a onefile payload with nuitka-extractor` |
@@ -5241,8 +5276,8 @@ limited to 1 GiB.
 
 ## `unlace fid` — function identification by fingerprint
 
-`unlace fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>` writes a kuna
-`.fid` database of FID fingerprints; `--option listing on --option fid on` with the
+`unlace fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id> [--assert <directive | @file>]..`
+writes a kuna `.fid` database of FID fingerprints; `--option listing on --option fid on` with the
 `kuna_fid_db` environment variable naming it renames matching stripped functions
 (see `docs/options.md`, option `fid`). Use `--option fid strict` to require
 the same record to match the specific hash and code-unit count as well. Strict
@@ -5317,6 +5352,34 @@ the next-entry approximation. Rebuilding an older database can change its
 records because trailing padding is no longer included; existing databases
 remain readable, but need rebuilding to benefit from the new extents.
 
+A record also keeps its function's prototype, parameter names and the types
+they need when the builder knows them. It reads them from the object's debug
+information, and `--assert` states them for an object without any, in the
+syntax of `unlace decompile --assert`: `prototype <name> <declaration>` for a
+function and `typedef <declaration>` for each type the prototypes use, one
+directive per line in `@file`. A stated prototype replaces a read one, and one
+naming no record is reported. The summary line counts the described records.
+A structure or union two objects define differently is kept only as a forward
+declaration in every record, an enumeration they define differently is left
+out, and its name is listed on stderr, whatever order the objects come in.
+
+```
+$ clang -O2 -g -c fidlib.c && unlace fid build fidlib.o -o fidlib.fid --lang x86:LE:64:default --cspec gcc
+unlace fid build: wrote fidlib.fid (1 record(s), 1 with a prototype, 222 bytes)
+$ kuna_fid_db=fidlib.fid unlace decompile-all stripped --option fid on
+int parse_header(unsigned char *buf,unsigned int len,hdr *out)
+```
+
+On a match the prototype declares the function that has the record's name,
+and its callers type their arguments from it. Debug information and every
+other prototype source of the image come first, and an `--assert` of the run
+replaces it. Two things drop it, each with a warning in the function's header
+(and in the `warnings` of its JSON record): a declaration that does not parse
+against the image's types, and a body that reads a parameter the prototype
+does not declare. A database with prototypes is format version 2, which an
+older kuna reports as `invalid`; one without is still written as version 1,
+and version-1 files load unchanged.
+
 ### `unlace fid query` — candidates for an address, without renaming
 
 `unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json`
@@ -5337,7 +5400,8 @@ Status `single_candidate` means the full-hash bucket has one distinct name;
 `ambiguous` means multiple names and `no_match` an empty bucket. These three also
 carry `database_format` (`kuna_fid`), `language`, `match_basis` (`full_hash`) and
 the function's own `full_hash`, `specific_hash` and `code_unit_size`; each candidate
-is `{name, specific_hash, specific_hash_matches, code_unit_size, code_unit_size_matches}`, sorted by name.
+is `{name, specific_hash, specific_hash_matches, code_unit_size, code_unit_size_matches, prototype}`, sorted by name;
+`prototype` is the record's C declaration, or `null` when it carries none.
 `identity_verified` is always false: even a single candidate can be wrong, and
 functions whose masked bodies are identical share a bucket, so one name can be
 reported at several addresses. Specific hashes are reported for comparison and do

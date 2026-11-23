@@ -1098,6 +1098,11 @@ pub fn universal_sched_hooked(
             crate::double::RuleDoubleStore::new("doubleprecis")
         ),
         rrow!(
+            "doubleinputpair",
+            "doubleprecis",
+            crate::kuna_borrowcompare::RuleDoubleInputPair::new("doubleprecis")
+        ),
+        rrow!(
             "doublein",
             "doubleprecis",
             crate::double::RuleDoubleIn::new("doubleprecis")

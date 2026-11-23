@@ -357,6 +357,9 @@ pub struct RawLoadImage {
     /// (kuna) The mapped runs of a segmented image, ascending and disjoint;
     /// empty when the whole file is one run.
     segments: Vec<RawSegment>,
+    /// (kuna) The ranges a container names over a one-run image, as
+    /// `(offset from the first byte, size, flags)`; empty for a headerless file.
+    sections: Vec<(u64, u64, u32)>,
 }
 
 /// (kuna) One mapped run of a segmented [`RawLoadImage`]: `bytes` at `offset`
@@ -380,7 +383,14 @@ impl RawLoadImage {
             spaceid: None,
             cursection: Cell::new(0),
             segments: Vec::new(),
+            sections: Vec::new(),
         }
+    }
+
+    /// (kuna) Publish `sections`, `(offset from the first byte, size, flags)`,
+    /// in place of the one whole-file code section.
+    pub fn set_sections(&mut self, sections: Vec<(u64, u64, u32)>) {
+        self.sections = sections;
     }
 
     /// (kuna) An already-open image over bytes built in memory, such as a DOS
@@ -605,12 +615,18 @@ impl LoadImage for RawLoadImage {
     fn get_next_section(&self, record: &mut LoadImageSection) -> bool {
         let index = self.cursection.get();
         self.cursection.set(index.saturating_add(1));
-        let (offset, size, flags, count) = match self.segments.get(index) {
-            Some(s) => (s.offset, s.bytes.len() as u64, s.flags, self.segments.len()),
-            None if index == 0 && self.segments.is_empty() => {
+        let named = if self.segments.is_empty() && self.filesize != 0 {
+            self.sections.get(index).copied()
+        } else {
+            None
+        };
+        let (offset, size, flags, count) = match (self.segments.get(index), named) {
+            (Some(s), _) => (s.offset, s.bytes.len() as u64, s.flags, self.segments.len()),
+            (None, Some((offset, size, flags))) => (offset, size, flags, self.sections.len()),
+            (None, None) if index == 0 && self.segments.is_empty() && self.sections.is_empty() => {
                 (0, self.filesize, section_flags::CODE, 1)
             }
-            None => return false,
+            _ => return false,
         };
         if size == 0 {
             return false;

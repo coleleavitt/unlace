@@ -233,6 +233,7 @@ Three tiers:
 | a uint8_t loop counter prints as unsigned int v with v = v + 1 & 0xff | [`regnarrow`](#regnarrow----on--off-default-on) |
 | a byte loaded with ldrb is declared unsigned int and used as an index | [`regnarrow`](#regnarrow----on--off-default-on) |
 | an int local prints as unsigned long on x86-64 though every value is a zero-extended 32-bit result | [`regnarrow`](#regnarrow----on--off-default-on) |
+| a long long parameter on i386 or 32-bit ARM prints as two int parameters | [`pairparam`](#pairparam----on--off-default-on) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -577,6 +578,10 @@ Three tiers:
 | an os_log call prints a stack buffer address and a byte count instead of its arguments | [`oslog`](#oslog----on--off-default-on) |
 | _os_log_impl(0x100000000,...,&v1,8) with v1 = 0x4000100 before it | [`oslog`](#oslog----on--off-default-on) |
 | the first argument of _os_log_impl or _os_log_internal is a raw image address | [`oslog`](#oslog----on--off-default-on) |
+| a 32-bit ELF function declares a `// esp` variable and writes call arguments through it, e.g. *(int *)&v6[-8] = v3; | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
+| a call to a function that returns a struct prints with no arguments, e.g. mk();, and the next call takes the wrong local | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
+| code after a call to an abort or assert-failure helper is merged into the other branch with a v = &Stack... assignment | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
+| a parameter read after a call through a function pointer prints as an unassigned local | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -747,6 +752,7 @@ Three tiers:
 | prologue-only functions in a raw image are never discovered | [`objectview`](#objectview----on--off-default-on) |
 | stripped static-linked library function stays sub_<addr> although its fingerprint is known | [`fid`](#fid----on--off--strict-default-off) |
 | no .fid database renames applied in a stripped binary | [`fid`](#fid----on--off--strict-default-off) |
+| a function named from a .fid database keeps a0/a1 parameters and recovered types | [`fid`](#fid----on--off--strict-default-off) |
 | a stripped static binary lists libc functions as sub_<addr> | [`flirt`](#flirt----on--off-default-off) |
 | kuna cannot use flirt .sig signatures | [`flirt`](#flirt----on--off-default-off) |
 | memcpy and printf in a static binary have no names | [`flirt`](#flirt----on--off-default-off) |
@@ -847,6 +853,9 @@ Three tiers:
 | a stripped mach-o dylib's exported functions are unnamed although its export trie lists them | [`exporttrie`](#exporttrie----on--off-default-on) |
 | a dyld cache call is named after the implementation (_platform_memmove) instead of the imported name (memmove) | [`exporttrie`](#exporttrie----on--off-default-on) |
 | re-exported symbols resolve to the wrong name | [`exporttrie`](#exporttrie----on--off-default-on) |
+| managed .NET assembly: native decompilation shows only the stub | [`cil`](#cil----on--off-default-on) |
+| unlace functions lists only _CorExeMain for a .dll or .exe built by dotnet | [`cil`](#cil----on--off-default-on) |
+| a c# or unity Assembly-CSharp.dll decompiles to a single jump | [`cil`](#cil----on--off-default-on) |
 | rust binary renders with c output and no rust abi handling because a stripped image lost its language signals | [`sourcelang`](#sourcelang----auto--c--rust--go--swift-default-auto) |
 | a c binary is detected as another language and language-gated rules misfire | [`sourcelang`](#sourcelang----auto--c--rust--go--swift-default-auto) |
 | go runtime passes do not run on a go binary whose buildinfo section was stripped | [`sourcelang`](#sourcelang----auto--c--rust--go--swift-default-auto) |
@@ -1749,6 +1758,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P3/simplification-quiescence · kuna · type-inference · ty17-narrow-register-locals
 - **Example:** `option regnarrow on`
 
+### `pairparam` -- on | off, default `on`
+
+- **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters.
+- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow or carry links them.
+- **When to flip:** On by default.
+- **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
+- **Example:** `option pairparam off`
+
 ### `regsigned` -- on | off, default `off`
 
 - **Symptoms:** a signed char loaded with ldrsb is declared int; a short counter prints as int with (int)(short) casts at every use; an int local prints as long on x86-64 though every value is a movsxd.
@@ -2477,6 +2494,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P9/os-log-format · kuna · presentation-default · kuna-oslog
 - **Example:** `option oslog off`
 
+### `spsolve` -- on | off, default `on` (destructive opt-in)
+
+- **Symptoms:** a 32-bit ELF function declares a `// esp` variable and writes call arguments through it, e.g. *(int *)&v6[-8] = v3;; a call to a function that returns a struct prints with no arguments, e.g. mk();, and the next call takes the wrong local; code after a call to an abort or assert-failure helper is merged into the other branch with a v = &Stack... assignment; a parameter read after a call through a function pointer prints as an unassigned local.
+- **What it does:** x86-32 ELF images only (a loaded file; inert under the XML `<binaryimage>` bootstrap, whose stated model is the whole contract), under a compiler spec whose default model states its extrapop (`x86gcc.cspec`'s `__cdecl`; inert on every other language and under `x86win.cspec`, whose default extrapop is unknown and is solved by ActionStackPtrFlow): before ActionExtraPopSetup plants `ESP = ESP + 4` after every call, check that the function's stack-pointer deltas agree, and where they do not, solve them. Two kinds of call break the constant: a callee that pops more than its return address (a function returning an aggregate pops the hidden result pointer with `ret 4`; a `stdcall` or `fastcall` callee pops its arguments), and a callee that does not return and is not known as such, so that the code laid out after the call belongs to another path and expects that path's stack pointer. Either way two predecessors reach a block with different stack pointers, or a return is reached away from the return address; the stack pointer then stays a variable (`char *v6; // esp`), arguments are written through it (`*(int *)&v6[-8] = v3;`) and passed as nothing (`mk();`), and stack references after the call are displaced by the bytes nobody accounted for. The pass walks the raw p-code with the stack pointer, and each register or temporary holding a stack address, as a linear form over the entry stack pointer: a constant, one unknown per call for what it moves the stack pointer by beyond the model, and one unknown per place the stack pointer is set to something unreadable (an alignment mask, a runtime reservation). Each constraint is one equation: a block has one stack pointer on entry whichever predecessor reaches it; a return, or a jump that leaves the function, starts at the entry stack pointer; a direct callee whose own returns prove its extrapop contributes that constant, and a callee whose extrapop `option extrapop <n> <name>` states contributes that one and is never changed. With every unknown at zero the system usually holds, and nothing but the proven extrapops is applied. Otherwise it is solved exactly over the rationals. A call followed by code of its own block returned, so its unknown is a pop: zero or more, and it is applied when the system gives it exactly one value that is a multiple of 4 no larger than 0x400 and the callee's reached returns, if its code was read, pop that much. A call that ends its block and falls into a block with another predecessor may not have returned; it is marked no-return when the system has no solution in which it did (its unknown would have to be negative, or differ from what its callee's returns pop, with every other pop zero or more - decided by the first phase of the simplex method). The call sites are kept on the function's override and the function is flowed again without their fall-through. A direct callee with no reachable return is not followed in the first place. Refusals: an import or indirect call that ends its block with a positive multiple of 4 is both a callee popping its arguments and a call that does not return, and is left alone; an unknown with several solutions stays at zero; a call that returned with a value no callee pops discards every pop of the function; a function over 8192 blocks or 1024 unknowns is not solved. Destructive: the code after a call found not to return is no longer decoded as that call's continuation.
+- **When to flip:** On by default on x86-32 ELF. Keep it on when a 32-bit function prints a `// esp` variable and writes call arguments through it, when a call to a function returning a struct prints without its arguments, or when the code after a call to an abort-style helper reads as part of the wrong branch. Flip OFF to see every call under the model's extrapop and every fall-through decoded, for instance when a call marked `// no-return` does return (a callee that pops its own arguments reached only through an import or a pointer, on a path nothing else constrains).
+- **Where / provenance:** P4/extrapop · kuna · new-analysis · kuna-spsolve
+- **Example:** `option spsolve off`
+
 ## Analysis & loader passes
 
 Program-prep enablement: what is discovered, decoded, and named before any function is decompiled.
@@ -2835,8 +2860,8 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 
 ### `fid` -- on | off | strict, default `off`
 
-- **Symptoms:** stripped static-linked library function stays sub_<addr> although its fingerprint is known; no .fid database renames applied in a stripped binary.
-- **What it does:** Run the FID fingerprint matcher (a Listing/xref consumer): the kuna analog of Ghidra's FID (Function-ID) identification analyzer. Over the built Listing, fingerprint each function with the byte-exact operand-masked FNV-1a64 hash (the MessageDigestFidHasher port, driving Sleigh::instruction_mask) and look the full hash up in a kuna `.fid` fingerprint database (named by the `kuna_fid_db` environment variable). When the full-hash bucket collapses to exactly one name (conservative — never guess on a tie), RENAME the matched function — but only when it still carries an engine FUN_*/sub_* placeholder (the label gate; a real .symtab/DWARF name is never overwritten). This re-identifies a function in a STRIPPED binary purely by its instruction-stream fingerprint (e.g. sub_4017c0 -> kuna_crc32). The optional strict mode also requires a specific-hash and code-unit-count match for the same record; matching evidence is not identity proof. Requires the Listing (option listing on) and a configured `.fid` DB — a no-op when either is absent. DISABLED by default (real-ELF path only, so every parity gate is byte-identical).
+- **Symptoms:** stripped static-linked library function stays sub_<addr> although its fingerprint is known; no .fid database renames applied in a stripped binary; a function named from a .fid database keeps a0/a1 parameters and recovered types.
+- **What it does:** Run the FID fingerprint matcher (a Listing/xref consumer): the kuna analog of Ghidra's FID (Function-ID) identification analyzer. Over the built Listing, fingerprint each function with the byte-exact operand-masked FNV-1a64 hash (the MessageDigestFidHasher port, driving Sleigh::instruction_mask) and look the full hash up in a kuna `.fid` fingerprint database (named by the `kuna_fid_db` environment variable). When the full-hash bucket collapses to exactly one name (conservative — never guess on a tie), RENAME the matched function — but only when it still carries an engine FUN_*/sub_* placeholder (the label gate; a real .symtab/DWARF name is never overwritten). This re-identifies a function in a STRIPPED binary purely by its instruction-stream fingerprint (e.g. sub_4017c0 -> kuna_crc32). The optional strict mode also requires a specific-hash and code-unit-count match for the same record; matching evidence is not identity proof. A record built from an object with debug information, or with `unlace fid build --assert`, also carries the function's prototype, parameter names and the types they need: the function that has the record's name is then declared with it, unless DWARF or another source already declares it or an `--assert` does, and a prototype the body reads past (a parameter it does not declare) is dropped with a header warning. Requires the Listing (option listing on) and a configured `.fid` DB — a no-op when either is absent. DISABLED by default (real-ELF path only, so every parity gate is byte-identical).
 - **When to flip:** Off (default; no Listing consumer runs and there is zero behavior change). Flip on (with option listing on, and `kuna_fid_db` pointing at a `.fid` database built by `unlace fid build`) to re-identify library functions in a STRIPPED real-ELF target by full-hash fingerprint — renaming a FUN_*/sub_* placeholder back to its known library name. Use strict to require matching specific hash and code-unit count when the database comes from the same link as the target: the specific hash folds in operand values that differ between links, so against a libc.a database strict keeps about 3% of the correct names.
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · unlace-analysis-fid
 - **Example:** `option listing on --option fid on`
@@ -3048,6 +3073,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** Leave on. Turn off to see cross-image calls named after the target image's own symbols (the implementation name) and a stripped dylib's exports unnamed.
 - **Where / provenance:** P1/environment-binding · kuna · analysis-enablement · unlace-analysis-exporttrie
 - **Example:** `--option exporttrie off`
+
+### `cil` -- on | off, default `on`
+
+- **Symptoms:** managed .NET assembly: native decompilation shows only the stub; unlace functions lists only _CorExeMain for a .dll or .exe built by dotnet; a c# or unity Assembly-CSharp.dll decompiles to a single jump.
+- **What it does:** A managed .NET assembly (a PE with a CLI header) decodes from its CIL method bodies. The PE's only native code is the jump to _CorExeMain; the program is ECMA-335 metadata and CIL, which kuna used to leave unread. With the option on (default) the loader maps the PE by RVA at 0x400000 as the CIL:LE:64:default language, reads the metadata tables and heaps, and makes one function per method body, named Namespace.Type::Method and prototyped from its signature. CIL names no operand types and its calls name metadata tokens, so the loader walks each body as the verifier does, paints the evaluation-stack depth and operand class over every instruction as decode context, and rewrites each token operand to the address of the method, static field, instance-field offset or string it resolves to. The evaluation stack lifts to the registers s0..s63, arguments to a0..a15 and locals to cells below SP; managed arrays index from element 0 and ldlen, newarr, newobj, box, unbox and isinst are operators. Classes of the assembly get struct types laid out from their field order, so a field access renders this->field. A body the walk does not cover (an exception-handling clause, a value type on the stack, ldarga, a checked conversion, calli) is listed and decodes as unimplemented instead of as a guess. Inert on every input without a CLI header, and on an explicit --target.
+- **When to flip:** Leave on: `unlace functions` and `decompile-all` cover the managed methods of a .NET Framework, .NET Core or Unity assembly. Turn off (or pass --target) to read the PE as native code, for example the ReadyToRun or mixed-mode native code beside the CIL.
+- **Where / provenance:** P1/environment-binding · kuna · analysis-enablement · kuna-1633
+- **Example:** `option cil off`
 
 ### `sourcelang` -- auto | c | rust | go | swift, default `auto`
 

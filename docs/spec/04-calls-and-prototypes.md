@@ -1464,6 +1464,39 @@ one 16-byte return, and the result is a `char[16]` whose high half is whatever
 uninitialized value `RDX` happened to hold. A known `int` return never enters
 that machinery.
 
+(kuna `fid`) A parked prototype that came from a `.fid` record (01 §1.4;
+`Architecture::fid_prototypes` holds those entries) is the one parked
+prototype the drive checks after the fact, because a fingerprint match is
+evidence and not identity
+(`decompiler/crates/unlace-decomp/src/p4_calls/kuna_fidproto.rs
+(reads_undeclared_parameter)`). The function is decompiled against it like any
+other; in the finished function, an input Varnode that still has a reader, lies
+in storage the model can pass a parameter in and overlaps no declared
+parameter means the body reads an argument the prototype does not have. The
+drive then decompiles the function once more with no prototype, removes the
+parked pieces so later callers stop copying them, and records a header warning
+at the entry (`the .fid prototype was dropped: the body reads parameter
+storage it does not declare`). A declared parameter the body never reads is not
+a disagreement, since an unused parameter is ordinary C, and a variadic
+prototype is not checked. A caller decompiled before the function itself has
+already copied the prototype; the callee-first order of a serial batch run
+puts the check first, while a single-function run of the caller, or a `--jobs`
+worker that does not decompile the callee itself, does not. The same module
+writes a prototype as the text a record stores (`declaration`): sized core
+names, a forward `typedef struct N N;` for each record so pointers among them
+parse in any order, then each definition before its first by-value use, with
+gaps as `uint1 _pad<off>[N]` members. A record is stored by its forward
+declaration alone (an opaque type at the match) unless the parser, laying the
+definition out afresh, puts every member where the object has it
+(`laid_out_again`): no bitfields, which the definition text moves to the end,
+every member on its natural alignment after the one before, and a size its
+alignment divides (a union: the size of its largest member). An enumeration is
+written with its width as a C23 underlying type (`typedef enum N : uint1 { … }
+N;`, `sized_enum`), since the parser otherwise makes it `int`-wide and a packed
+or `-fshort-enums` member would move every member after it. A record left
+opaque that the prototype passes or returns by value costs the whole prototype
+at the match (01 §1.4).
+
 ### Setup (once, before fullloop)
 
 - **`ActionPrototypeTypes`** (`coreaction_protos.rs (ActionPrototypeTypes)`)
@@ -1852,6 +1885,92 @@ that machinery.
   `__thiscall` callee, which shifts each later stack offset by the arguments
   the callee popped, so later calls lose stack arguments and locals whose
   address is taken alias outgoing-argument slots.
+  On x86-32 under a compiler spec whose default model *states* its extrapop
+  (`x86gcc.cspec`'s `__cdecl`, extrapop 4), the constant is planted after
+  every call and nothing checks it. In a loaded ELF image
+  (`Architecture::image_elf`, a load-time fact) `option spsolve` (default on)
+  checks it first
+  (`decompiler/crates/unlace-decomp/src/p4_calls/kuna_spsolve.rs (settle)`).
+  Two kinds of call break the constant. A callee that pops more than its
+  return address: a function returning an aggregate pops the hidden result
+  pointer with `ret 4`, and a `stdcall` or `fastcall` callee pops its
+  arguments. And a callee that does not return and is not known as such: the
+  code laid out after the call belongs to another path and expects that
+  path's stack pointer. Either way two predecessors reach a block with
+  different stack pointers, or a return is reached away from the return
+  address; the stack pointer then stays a variable (`char *v5; // esp`),
+  arguments are stored through it (`*(int *)&v5[-4] = v1;`), calls print
+  without them (`mk();`) and every stack reference after the call is
+  displaced.
+
+  The pass walks the raw p-code block by block (`kuna_spsolve.rs (Tracker)`)
+  with the stack pointer, and each register or temporary that holds a constant
+  or a stack address, as a linear form over the entry stack pointer: a
+  constant, plus one unknown per call for what the call moves the stack
+  pointer by beyond its model's extrapop, plus one unknown per place the stack
+  pointer is set to something the walk cannot read (an alignment mask, a
+  runtime reservation, a call under a model with no extrapop, a software
+  interrupt). Registers the call's prototype does not preserve are forgotten
+  at the call. Blocks are visited in reverse postorder; a block starts from
+  the stack pointer its spanning-tree predecessor left and from the registers
+  every walked predecessor agrees on, and the walk repeats until the register
+  state settles (eight passes at most). Each constraint is then one equation:
+  a block has one stack pointer on entry whichever predecessor reaches it; a
+  return starts at the entry stack pointer, and so does a jump out of the
+  function that flow turned into a call followed by a return it planted. A
+  direct callee whose own returns prove its extrapop (the walk of
+  `kuna_calleepurge.rs` described above, asked for at flow time through
+  `kuna_spsolve.rs (callee_returns)`) contributes that constant instead of an
+  unknown, and so does a callee whose reached returns all pop only the return
+  address when code of the caller's own block follows the call. A callee whose
+  extrapop `option extrapop <n> <name>` states contributes that value, which
+  the call spec already carries, and the pass never changes it
+  (`kuna_spsolve.rs (stated)`).
+
+  With every call unknown at zero the system usually holds; then only the
+  proven extrapops are applied and nothing else changes. Otherwise each
+  remaining call is one of two kinds (`kuna_spsolve.rs (classify)`). Code of
+  its own block follows it: it returned, and its unknown is a pop, zero or
+  more. Or it ends its block and falls into a block with another predecessor:
+  it may not have returned. A call of the second kind is marked no-return when
+  the system has no solution in which it returned, that is with its own
+  unknown zero or more (exactly zero, when its callee's reached returns pop
+  only the return address) and every pop zero or more. The unrestricted
+  unknowns are eliminated exactly over the rationals and the first phase of
+  the simplex method, with Bland's rule, decides the rest
+  (`kuna_spsolve.rs (feasible)`). The remaining system is solved by Gaussian
+  elimination (`kuna_spsolve.rs (eliminate)`), with one rule the sign adds:
+  pops that sum to nothing are each nothing. A call whose unknown then has
+  exactly one value, a positive multiple of 4 no larger than 0x400 that the
+  callee's reached returns do not contradict, takes the model's extrapop plus
+  that value. A verdict the system pins for one direct call is the callee's,
+  so the other direct calls to the same callee in the function take it too
+  when the pinned ones agree.
+
+  The call sites found not to return are recorded on the function's override
+  (`decompiler/crates/unlace-decomp/src/p0_knowledge/overrides.rs
+  (insert_no_return_call)`), a restart is requested, and the next flow ends
+  those calls where it ends a call to a named no-return function; a site
+  already recorded asks for no further restart. A direct callee with no
+  reachable return at all is not followed in the first place
+  (`kuna_spsolve.rs (callee_never_returns)`, asked by flow's no-return
+  query), which is what keeps an assertion-failure helper's callers from
+  running into the next function.
+
+  The pass refuses rather than guesses. A call that ends its block and whose
+  callee's code is not available (an import, a call through a pointer) may
+  pop its arguments or not return; when a pop explains the system it is left
+  alone. An unknown with several solutions stays at zero. A call that
+  returned with a value no callee pops (negative, not a multiple of 4)
+  discards every pop of the function. A function over 8192 blocks or 1024
+  unknowns, a feasibility test over 128 rows or 256 columns, and arithmetic
+  that leaves 64 bits change nothing. Under a model whose extrapop is unknown
+  (`x86win.cspec`) the pass is inert and `ActionStackPtrFlow`'s solver keeps
+  its role. Under the XML `<binaryimage>` bootstrap it is inert too: there the
+  stated model is the whole contract, as it is for Ghidra's decompiler when
+  no analysis has recorded a callee's `RET n` in its prototype, and a callee
+  that pops its arguments is described with `option extrapop <n> <name>`. `option spsolve off` restores the planted constants and the
+  decoded fall-throughs.
 - **`ActionFuncLink`** (`coreaction_protos.rs (ActionFuncLink)`) arms each
   call site. Unlocked or varargs prototype → input recovery on
   (`init_active_input`). Locked prototype → one pre-marked trial per declared

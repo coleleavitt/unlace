@@ -51,6 +51,7 @@ pub mod kuna_directalias; // (kuna) a direct access at a known stack offset alia
 pub mod kuna_entryreads; // (kuna) the incoming registers a function's own body reads
 pub mod kuna_exclusivearguse; // (kuna) a dereference on the other arm of a branch does not compete with a call on this one
 pub mod kuna_exclusivecallret; // (kuna) a call and a return on mutually exclusive arms do not compete
+pub mod kuna_fidproto; // (kuna) the prototype a .fid record carries, and its check against the body
 pub mod kuna_formattail; // (kuna) a resolved format call keeps an open tail through trial scoring
 pub mod kuna_formatwitness; // (kuna) equal constant formats can witness a partial call's arity
 pub mod kuna_gobool; // (kuna) Go boolean-return stale-high narrowing (docs/multilang.md W4)
@@ -82,6 +83,7 @@ pub mod kuna_rustabi; // (kuna) the rustc two-register return: keep the pair, co
 pub mod kuna_sharedpush; // (kuna) a push above a branch is the argument of the call on each arm
 pub mod kuna_slotargs; // (kuna) a call through an import slot takes the declared parameters its caller's writes back
 pub mod kuna_spillargtrial;
+pub mod kuna_spsolve; // (kuna) an x86-32 function's stack-pointer deltas solved for the calls that pop or do not return
 pub mod kuna_stackaddrargtrial;
 pub mod kuna_stackarggap; // (kuna) an unwritten argument register ends a call site's argument list
 pub mod kuna_stackcookie; // (kuna) the frame cookie MSVC stores on the stack is no argument

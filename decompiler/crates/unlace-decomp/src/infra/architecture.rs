@@ -622,6 +622,10 @@ pub struct Architecture {
     /// FACT, not an option: written once at `load file` and the thing `option
     /// linuxsyscall auto` tests.  The XML `<binaryimage>` bootstrap never sets it.
     pub image_linux_elf: bool,
+    /// (kuna) Is the image an ELF?  A FACT, not an option: written once at
+    /// `load file` and the target gate of `option spsolve`.  The XML
+    /// `<binaryimage>` bootstrap never sets it.
+    pub image_elf: bool,
     /// (kuna) Is the image an Apple container (Mach-O, fat Mach-O or a dyld
     /// shared cache)?  A FACT, not an option: written once at `load file` and
     /// the target gate of `option chkstkdarwin`.  The XML `<binaryimage>`
@@ -632,6 +636,11 @@ pub struct Architecture {
     /// (`p2_lift/kuna_chkstkdarwin.rs`), so the argument registers it preserves
     /// keep their values across it. Default on.
     pub chkstk_darwin: bool,
+    /// (kuna `spsolve`) In an x86-32 ELF under a compiler spec whose default model
+    /// states its extrapop, solve each function's stack-pointer deltas for the
+    /// calls that pop arguments or do not return
+    /// (`p4_calls/kuna_spsolve.rs`). Default on.
+    pub sp_solve: bool,
 
     /// (kuna `arithhelpers`) Install the arithmetic runtime-helper call-fixups
     /// (`p2_lift/kuna_arithhelpers.rs`) so a 32-bit call to `__udivdi3`,
@@ -1077,6 +1086,10 @@ pub struct Architecture {
     /// part at that width (option `regnarrow`).  See
     /// [`crate::p3_dataflow::kuna_regnarrow`].
     pub narrow_locals: bool,
+    /// (kuna) Join two adjacent input words a borrow or carry chain links into
+    /// one double-precision input (option `pairparam`).  See
+    /// [`crate::p5_types::kuna_borrowcompare::RuleDoubleInputPair`].
+    pub pair_params: bool,
     /// (kuna) Make a call to a callee that returns a narrow value zero-extended
     /// read that value (option `narrowret`).  See
     /// [`crate::p4_calls::kuna_narrowret`].
@@ -2027,6 +2040,9 @@ pub struct Architecture {
     /// and types the parameters `main`'s own analysis recovers
     /// ([`crate::kuna_elfmaindecl`]).
     pub elfmain_main_decl: Option<(Address, crate::fspec::PrototypePieces)>,
+    /// (kuna `fid`) The entries whose parked prototype came from a `.fid`
+    /// record ([`crate::kuna_fidproto`]).
+    pub fid_prototypes: std::collections::BTreeSet<u64>,
     /// (kuna `formatstring`) The call points, among the prototype overrides of
     /// the drive in progress, whose override a resolved format string produced.
     /// Set by the console's decompile step around each drive; the flow build
@@ -2835,6 +2851,7 @@ impl Architecture {
             syscall_regs: crate::kuna_syscallregs::SyscallRegsMode::Off, // (kuna) option syscallregs; reset_defaults sets the shipped default
             image_os_userland: false, // (kuna) a load-time fact; set by the console's `load file`
             image_linux_elf: false,   // (kuna) a load-time fact; set by the console's `load file`
+            image_elf: false,         // (kuna) a load-time fact; set by the console's `load file`
             image_apple: false,       // (kuna) a load-time fact; set by the console's `load file`
 
             tls_layout: None,
@@ -2847,6 +2864,7 @@ impl Architecture {
             field_type: false, // (kuna) option fieldtype; reset_defaults sets the shipped default
             image_windows_user: false, // (kuna) a load-time fact; set by the console's `load file`
             chkstk_darwin: false, // (kuna) option chkstkdarwin; reset_defaults sets the shipped default
+            sp_solve: false,      // (kuna) option spsolve; reset_defaults sets the shipped default
 
             arith_helpers: false, // (kuna) option arithhelpers; reset_defaults sets the shipped default
             objc_arc: false,      // (kuna) option objcarc; reset_defaults sets the shipped default
@@ -2970,6 +2988,7 @@ impl Architecture {
             narrow_args: true,
             narrow_args_callers: true,
             narrow_locals: true,
+            pair_params: true,
             narrow_ret: true,
             narrow_signed: false,
             vararg_shared_float: false,
@@ -3159,6 +3178,7 @@ impl Architecture {
             format_call_overrides: std::collections::BTreeMap::new(),
             format_stack_args: std::rc::Rc::new(std::collections::BTreeMap::new()),
             elfmain_main_decl: None,
+            fid_prototypes: std::collections::BTreeSet::new(),
             format_override_callpoints: std::collections::BTreeSet::new(),
             kuna_callee_overrides: std::collections::BTreeMap::new(),
             kuna_callsite_protos: std::collections::BTreeMap::new(),
@@ -3324,6 +3344,7 @@ impl Architecture {
         self.field_type = false; // (kuna) option fieldtype default-off: the flip moves which record the layout ledger shares between readers (fields-only layout precision .8713 -> .8693); docs/features/fieldtype/default-on-evaluation.md
         self.struct_headless = crate::kuna_structheadless::StructHeadlessMode::Off; // (kuna) structheadless default `off`: a closed function's parameter read at two or more constant offsets, none of them zero, is declared `struct_N *` with filler over the bytes before its first access; `option structheadless closed` turns it on
         self.chkstk_darwin = true; // (kuna) default-on, Darwin AArch64 only (`image_apple` and an AArch64 language): inert unless a call reaches `___chkstk_darwin`; 0/675 datatests
+        self.sp_solve = true; // (kuna) default-on, a loaded x86-32 ELF under a default model with a stated extrapop: inert unless a function's stack-pointer deltas disagree or a direct callee's returns pop arguments; 0/675 datatests
 
         self.relro_noreturn = true; // (kuna) option relronoreturn: default on, a speed trade (see its catalog row)
         self.arith_helpers = true; // (kuna) default-on: x86-32 and ARM32 only, inert unless the binary names a helper; 0/675 datatests name one
@@ -3420,6 +3441,7 @@ impl Architecture {
         self.narrow_args = true; // (kuna) option narrowargs default-on: a register parameter whose uses read only its low 1, 2 or 4 bytes is declared that wide, and a callee's stated narrow parameter caps how much of the argument its callers consume (0/675 datatests)
         self.narrow_signed = false; // (kuna) option regsigned default-off: rebuilding a sign-extended register-local web at its low 1, 2 or 4 bytes moves decbench type_match by +0 to +4 perfect functions and adds casts elsewhere
         self.narrow_locals = true; // (kuna) option regnarrow default-on: a register-local web whose values the nonzero-bit analysis proves fit a low 1, 2 or 4 bytes, entered only through zero extensions, masks, constants and copies, is rebuilt at that width
+        self.pair_params = true; // (kuna) option pairparam default-on: two adjacent input words a borrow or carry chain links are one 8-byte parameter
         self.narrow_ret = true; // (kuna) option narrowret default-on: a call to a callee that returns a narrow value zero-extended reads that value
         self.vararg_shared_float = false; // (kuna) default-off: the register-choice reading holds only for -O0 code (post-RA scheduling defeats it at -O1+)
         self.call_overlap = crate::kuna_calloverlap::LEVEL_AUTO;
@@ -4286,6 +4308,7 @@ impl Architecture {
         ctx.chkstk_darwin = self.chkstk_darwin
             && self.image_apple
             && crate::kuna_chkstkdarwin::applies_to(&self.archid);
+        ctx.sp_solve = crate::p4_calls::kuna_spsolve::applies(self);
         ctx.type_vote = self.type_vote;
         ctx.go_bool = self.go_bool;
         ctx.go_write_barrier = self.go_write_barrier;
@@ -4423,6 +4446,7 @@ impl Architecture {
         ctx.kuna_custom_reg_models = Rc::clone(&self.kuna_custom_reg_models);
         ctx.narrow_args = self.narrow_args; // narrowargs
         ctx.narrow_locals = self.narrow_locals; // regnarrow
+        ctx.pair_params = self.pair_params; // pairparam
         ctx.narrow_ret = self.narrow_ret; // narrowret
         ctx.narrow_signed = self.narrow_signed; // regsigned
         ctx.vararg_shared_float = self.vararg_shared_float; // varargsharedfloat

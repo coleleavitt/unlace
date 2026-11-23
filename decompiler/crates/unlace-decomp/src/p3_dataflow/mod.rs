@@ -50,6 +50,10 @@ pub mod kuna_mulblob; // (kuna) keep a widened multiply operand a value, not an 
 pub(crate) mod kuna_multiregargs;
 pub mod kuna_narrowload; // (kuna) a narrow LOAD keeps its own width
 pub mod kuna_octeoneffects;
+pub mod kuna_opaquearms;
+pub mod kuna_opaquedomain;
+pub mod kuna_opaqueglobals;
+pub mod kuna_opaqueimplied;
 pub mod kuna_opaquepredicate;
 pub mod kuna_ovlesssimplify;
 pub mod kuna_pairrefine;

@@ -52,6 +52,7 @@ mod kuna_gotcall;
 mod kuna_insnindex;
 mod kuna_insnstore;
 pub mod kuna_mzsweep;
+pub mod kuna_opaqueglobals;
 mod kuna_pcform;
 pub mod kuna_pdecode;
 mod kuna_picbase;

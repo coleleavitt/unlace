@@ -1,5 +1,6 @@
-//! `ar` archive inputs: list a static library's members, select one, and stage
-//! it for the path-based loader.
+//! Archive inputs: list the members of an `ar` static library, a tar or zip
+//! archive or a U-Boot FIT image, select one, and stage it for the path-based
+//! loader.
 //!
 //! ```text
 //!   unlace <command> <lib.a> --member            # list the members
@@ -17,6 +18,14 @@
 //!
 //! Members are not linked against each other: a call into another member
 //! stays an external reference, as it is in the `.o` on its own.
+//!
+//! A tar archive (plain or gzip-compressed), a zip archive and a FIT image
+//! (`unlace_analysis::loader::firmware::bundles`) take the same spellings; a
+//! member is named by its stored path, or its `/images` node name. A FIT
+//! with no member named loads the image its default configuration boots, and
+//! an image that states a load address is handed to the firmware front end
+//! as a flat image at that address. A tar or zip archive that holds no
+//! object file passes through unless a member is named.
 
 use std::borrow::Cow;
 use std::cell::OnceCell;
@@ -27,11 +36,14 @@ use std::process::Command;
 
 use object::read::archive::ArchiveFile;
 use object::{Object, ObjectSymbol};
+use unlace_analysis::loader::firmware::bundles::{self, Bundle, Entry, Kind};
+use unlace_analysis::loader::firmware::containers::Flat;
 
 use crate::jsonfmt::{Json, dumps_indent2};
 
 const MAGIC: &[u8] = b"!<arch>\n";
 const THIN_MAGIC: &[u8] = b"!<thin>\n";
+const NOT_ARCHIVE: &str = "--member applies to an archive input (ar, tar, zip or FIT image)";
 
 /// The subcommands whose input is one loadable image.
 const IMAGE_COMMANDS: &[&str] = &[
@@ -61,6 +73,8 @@ pub(crate) enum Resolved {
     Run(Option<tempfile::TempDir>),
     /// The archive itself was the answer; exit with this status.
     Done(i32),
+    /// The first argument is a FIT whose selected image loads as this flat image.
+    Flat(Box<Flat>),
 }
 
 /// One member: `name` is how it is selected (`stored`, or `stored#K` when
@@ -71,15 +85,17 @@ struct Member<'a> {
     stored: String,
     data: &'a [u8],
     file: Option<PathBuf>,
+    packed: Option<(&'a Bundle<'a>, &'a Entry)>,
     size: u64,
     object: OnceCell<bool>,
 }
 
 impl Member<'_> {
     fn bytes(&self) -> std::io::Result<Cow<'_, [u8]>> {
-        match &self.file {
-            Some(file) => std::fs::read(file).map(Cow::Owned),
-            None => Ok(Cow::Borrowed(self.data)),
+        match (&self.file, self.packed) {
+            (Some(file), _) => std::fs::read(file).map(Cow::Owned),
+            (None, Some((bundle, entry))) => bundle.unpack(entry).map_err(std::io::Error::other),
+            (None, None) => Ok(Cow::Borrowed(self.data)),
         }
     }
 
@@ -123,11 +139,16 @@ fn take_request(argv: &mut Vec<String>) -> Option<Request> {
 
 fn is_archive(path: &str) -> bool {
     use std::io::Read;
-    let mut head = [0u8; 8];
+    let mut head = Vec::with_capacity(512);
     std::fs::metadata(path).is_ok_and(|m| m.is_file())
         && std::fs::File::open(path)
-            .and_then(|mut f| f.read_exact(&mut head))
-            .is_ok_and(|()| head == MAGIC || head == THIN_MAGIC)
+            .and_then(|f| f.take(512).read_to_end(&mut head))
+            .is_ok()
+        && (is_ar(&head) || bundles::sniff(&head))
+}
+
+fn is_ar(bytes: &[u8]) -> bool {
+    bytes.starts_with(MAGIC) || bytes.starts_with(THIN_MAGIC)
 }
 
 /// The first argument naming an archive, as `(index, archive path, member)`;
@@ -186,12 +207,35 @@ fn members<'a>(path: &str, bytes: &'a [u8]) -> Result<Vec<Member<'a>>, String> {
             stored,
             data,
             file,
+            packed: None,
             size,
             object: OnceCell::new(),
         });
     }
+    number_repeats(&mut out);
+    Ok(out)
+}
+
+/// The members of a tar or zip archive or a FIT image.
+fn bundle_members<'a>(bundle: &'a Bundle<'a>) -> Vec<Member<'a>> {
+    let member = |entry: &'a Entry| Member {
+        name: entry.name.clone(),
+        stored: entry.name.clone(),
+        data: &[],
+        file: None,
+        packed: Some((bundle, entry)),
+        size: entry.size,
+        object: OnceCell::new(),
+    };
+    let mut out: Vec<Member<'a>> = bundle.entries.iter().map(member).collect();
+    number_repeats(&mut out);
+    out
+}
+
+/// Spell the K-th member storing a repeated name `NAME#K`.
+fn number_repeats(out: &mut [Member<'_>]) {
     let mut total: BTreeMap<String, usize> = BTreeMap::new();
-    for m in &out {
+    for m in out.iter() {
         *total.entry(m.stored.clone()).or_default() += 1;
     }
     let mut seen: BTreeMap<String, usize> = BTreeMap::new();
@@ -200,7 +244,23 @@ fn members<'a>(path: &str, bytes: &'a [u8]) -> Result<Vec<Member<'a>>, String> {
         *k += 1;
         m.name = format!("{}#{k}", m.stored);
     }
-    Ok(out)
+}
+
+/// What a FIT image node states, as listing fields.
+fn fit_fields(member: &Member<'_>) -> Vec<(String, Json)> {
+    let Some(fit) = member.packed.and_then(|(_, entry)| entry.fit.as_ref()) else {
+        return Vec::new();
+    };
+    let address = |v: Option<u64>| v.map_or(Json::Null, |v| Json::Str(format!("{v:#x}")));
+    let or_none = |s: &str| if s.is_empty() { "none" } else { s }.to_string();
+    vec![
+        ("type".into(), Json::Str(fit.kind.clone())),
+        ("arch".into(), Json::Str(fit.arch.clone())),
+        ("os".into(), Json::Str(fit.os.clone())),
+        ("compression".into(), Json::Str(or_none(&fit.compression))),
+        ("load".into(), address(fit.load)),
+        ("entry".into(), address(fit.entry)),
+    ]
 }
 
 fn list(path: &str, members: &[Member<'_>], json: bool) -> i32 {
@@ -208,11 +268,13 @@ fn list(path: &str, members: &[Member<'_>], json: bool) -> i32 {
         let rows = members
             .iter()
             .map(|m| {
-                Json::Object(vec![
+                let mut row = vec![
                     ("name".into(), Json::Str(m.name.clone())),
                     ("size".into(), Json::Number(m.size.to_string())),
                     ("object".into(), Json::Bool(m.is_object())),
-                ])
+                ];
+                row.extend(fit_fields(m));
+                Json::Object(row)
             })
             .collect();
         let root = Json::Object(vec![
@@ -223,7 +285,16 @@ fn list(path: &str, members: &[Member<'_>], json: bool) -> i32 {
     } else {
         members
             .iter()
-            .map(|m| format!("{}\t{}\n", m.name, m.size))
+            .map(|m| {
+                let facts: String = fit_fields(m)
+                    .iter()
+                    .filter_map(|(key, value)| match value {
+                        Json::Str(s) if !s.is_empty() => Some(format!("\t{key}={s}")),
+                        _ => None,
+                    })
+                    .collect();
+                format!("{}\t{}{facts}\n", m.name, m.size)
+            })
             .collect()
     };
     crate::output::emit_with_status(&text, 0)
@@ -261,6 +332,7 @@ fn select<'m, 'a>(
     path: &str,
     members: &'m [Member<'a>],
     name: Option<&str>,
+    default: Option<&str>,
     argv: &[String],
     at: usize,
 ) -> Result<&'m Member<'a>, String> {
@@ -279,8 +351,22 @@ fn select<'m, 'a>(
             )
         });
     }
+    if let Some(one) = default.and_then(|d| members.iter().find(|m| m.stored == d)) {
+        eprintln!(
+            "note: {path}: using member {} of the default configuration",
+            one.name
+        );
+        return Ok(one);
+    }
+    let loads = |m: &&Member<'_>| {
+        m.packed
+            .is_some_and(|(_, e)| e.fit.as_ref().is_some_and(|f| f.load.is_some()))
+    };
     let objects: Vec<&Member<'_>> = members.iter().filter(|m| m.is_object()).collect();
-    if let [one] = objects.as_slice() {
+    if let ([one], _) | ([], [one]) = (
+        objects.as_slice(),
+        members.iter().filter(loads).collect::<Vec<_>>().as_slice(),
+    ) {
         return Ok(one);
     }
     if objects.is_empty() {
@@ -328,7 +414,7 @@ fn stage(archive: &str, member: &Member<'_>) -> std::io::Result<(tempfile::TempD
     let inner = dir.path().join(base(archive, "archive"));
     std::fs::create_dir(&inner)?;
     let path = inner.join(base(&member.stored, "member.o"));
-    std::fs::File::create(&path)?.write_all(member.data)?;
+    std::fs::File::create(&path)?.write_all(&member.bytes()?)?;
     Ok((dir, path))
 }
 
@@ -409,7 +495,7 @@ pub(crate) fn resolve(sub: &str, argv: &mut Vec<String>) -> Result<Resolved, Str
     let request = take_request(argv);
     let Some((at, path, inline)) = find_archive(argv) else {
         return match request {
-            Some(_) => Err("--member applies to an ar archive input".into()),
+            Some(_) => Err(NOT_ARCHIVE.into()),
             None => Ok(Resolved::Run(None)),
         };
     };
@@ -417,7 +503,18 @@ pub(crate) fn resolve(sub: &str, argv: &mut Vec<String>) -> Result<Resolved, Str
         return Err("--apply-rust-signatures requires a standalone linked ELF image; archive inputs and member selection are unsupported".into());
     }
     let bytes = std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?;
-    let members = members(&path, &bytes)?;
+    let bundle = if is_ar(&bytes) {
+        None
+    } else {
+        Bundle::parse(&bytes).map_err(|e| format!("{path}: {e}"))?
+    };
+    let members = match &bundle {
+        Some(bundle) => bundle_members(bundle),
+        None if is_ar(&bytes) => members(&path, &bytes)?,
+        None if request.is_some() || inline.is_some() => return Err(NOT_ARCHIVE.into()),
+        None => return Ok(Resolved::Run(None)),
+    };
+    let fit = bundle.as_ref().filter(|b| b.kind == Kind::Fit);
     let name = match request {
         Some(Request::List) => {
             return Ok(Resolved::Done(list(
@@ -430,10 +527,25 @@ pub(crate) fn resolve(sub: &str, argv: &mut Vec<String>) -> Result<Resolved, Str
         None => inline,
     };
     let listing = sub == "functions" && !argv.iter().any(|a| a == "--summary");
-    if name.is_none() && listing && members.iter().any(Member::is_object) {
+    if name.is_none() && fit.is_none() && listing && members.iter().any(Member::is_object) {
         return Ok(Resolved::Done(functions_of_all(&path, &members, argv)));
     }
-    let member = select(&path, &members, name.as_deref(), argv, at)?;
+    if name.is_none() && bundle.is_some() && fit.is_none() && !members.iter().any(Member::is_object)
+    {
+        return Ok(Resolved::Run(None));
+    }
+    let default = fit.and_then(|b| b.default.as_deref());
+    let member = select(&path, &members, name.as_deref(), default, argv, at)?;
+    if let Some((bundle, entry)) = member.packed
+        && at == 0
+        && crate::rawfront::RAW_COMMANDS.contains(&sub)
+        && let Some(flat) = bundle
+            .flat(entry)
+            .map_err(|e| format!("{path}: {e}"))?
+            .filter(|f| !is_object(&f.bytes))
+    {
+        return Ok(Resolved::Flat(Box::new(flat)));
+    }
     if let Some(file) = &member.file {
         let stored = Path::new(&member.stored);
         if stored.is_absolute() || stored.components().any(|c| c == Component::ParentDir) {

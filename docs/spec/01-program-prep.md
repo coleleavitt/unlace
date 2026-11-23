@@ -354,6 +354,15 @@ them across the call, and declaring them killed would cut those values off.
 The floating-point, DSP and 64-bit instruction groups are not decoded yet; an
 image that uses them stops at the first such instruction. No option controls
 any of this, and an image for any other machine is unaffected.
+(kuna, GH-1632) A Synopsys ARC ELF has no architecture in the object reader, so
+its machine is read from the ELF header
+(`decompiler/crates/unlace-analysis/src/loader/kuna_arctarget.rs`).
+`EM_ARC_COMPACT2` (195, ARC EM and HS) selects `ARC:LE:32:ARCv2` or
+`ARC:BE:32:ARCv2` by the image's byte order (§2). `EM_ARC_COMPACT` (93,
+ARC600/ARC700) is not mapped: its 16-bit encodings differ and it has no
+language yet, so it still needs an explicit `--target`. A relocatable ARC
+object loads, but its relocation types are not applied; a call to an undefined
+symbol keeps the unrelocated displacement.
 
 (kuna) PowerPC32 ELF APU requirements are read by
 `decompiler/crates/unlace-analysis/src/loader/kuna_ppcaputarget.rs` when the
@@ -2505,7 +2514,7 @@ and every body lowers. Checked by compiling the printed C of functions from
 random inputs (`decompiler/crates/unlace-cli/tests/wasm_cli.rs`), and by
 `tests/stages/kuna-wasm-module.xml`.
 (kuna) **The Device memory of an M-profile image is volatile** (always on;
-`decompiler/crates/kuna-analysis/src/loader/kuna_cortexmdevice.rs (paint_volatile)`).
+`decompiler/crates/unlace-analysis/src/loader/kuna_cortexmdevice.rs (paint_volatile)`).
 The ARMv7-M and ARMv8-M memory maps make two regions Device memory on every
 part: the Peripheral region (0x40000000-0x5FFFFFFF), where a vendor maps its
 on-chip peripherals, and the System region (0xE0000000-0xFFFFFFFF), the Private
@@ -10474,6 +10483,13 @@ only the ARM inventories change: 37 entries fewer in all, 23 of them right after
 predicated call and the rest mid-body entries that sat in the functions those
 entries had cut short, with no symbol-table start lost.
 
+(kuna, GH-1632) The same holds for any other branch a returning call instruction
+carries. The instruction at the end of an ARC zero-overhead loop is prefixed
+with the branch back to the loop start (§2); when that instruction is a `bl`,
+the back-edge is a jump inside the caller, not a second callee, so a call
+instruction that falls through keeps only its `CALL` targets. The loop body is
+still reached by the fall-through of `lp`.
+
 The instruction model stores records in 1,024-row chunks. Its private address
 index groups sorted `(address, row number)` pairs into 4 KiB pages, with a B-tree
 of populated page keys for ordered lookup
@@ -13640,7 +13656,31 @@ earlier one and padding gaps. The CLI asserts the structure (`typedef`), the
 peripheral as a typed global at its base (`data`) and its register range as
 volatile, and names IRQ handlers from the interrupts.
 
-(lowest to highest loaded address, gaps filled, at most 256 MiB) with
+`bundles.rs (Bundle::parse)` lists the members of the inputs that hold several
+images, without decoding them. A tar archive is recognized by its first
+header's checksum, so a pre-POSIX archive without the `ustar` magic is one
+too; members are the regular files up to the first all-zero block, named by
+the `ustar` prefix and name, a GNU long-name record or a pax `path` record,
+with sizes in octal or the base-256 form. A gzip stream whose first 512
+inflated bytes are a tar header is inflated whole and read as that tar. A zip
+archive is read from its central directory (the end record is searched in the
+last 64 KiB; the zip64 end record and extended-information field are
+followed); a member's data is located through its local header, stored (0) and
+deflate (8) members decode, and an inflated member must match its stated size
+and CRC-32. A flattened device tree with an `/images` node is a U-Boot FIT:
+each child node is a member with its `type`, `arch`, `os`, `compression`,
+`load` and `entry` properties (one or two cells), its data inline (`data`) or
+external (`data-position`, or `data-offset` from the 4-byte-aligned end of the
+tree, with `data-size`), and the member the default configuration's `kernel`
+(else `firmware`) property names is the default. `Bundle::flat` turns an image
+with a load address into the same flat image a U-Boot legacy image becomes,
+with the processor from `arch`, the base from `load` and the entry from
+`entry`; `gzip` data is inflated and any other compression is refused when the
+member is selected. Offsets, sizes and counts come from the input and are
+checked against it: a decoded member is at most 1 GiB, a listing at most
+2^20 members, a device tree at most 32 levels deep. Member selection is the
+CLI's (chapter [00](00-overview.md), `armember.rs (resolve)`).
+
 (kuna) **Espressif application images and `esprom`.** An ESP32-family or
 ESP8266 application image (`esp.rs (parse)`: `0xE9`, a segment count, the
 entry, on ESP32-family parts a 16-byte extended header with the chip id, then

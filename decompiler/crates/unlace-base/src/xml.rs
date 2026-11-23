@@ -2324,10 +2324,11 @@ mod tests {
         // and kuna-iokitcxx / IOKit classes typed like C++ classes (option iokitclasses on)
         // and kuna-relswitch-a64 / an arm64e hardened jump table is a switch; its inline table is no function start
         // and kuna-mba-solve / constant operands, a shared complement, a complemented sum and bit logic alone simplify
+        // and kuna-opaquepredicate-proofs / narrow inputs, dominating branches, identical arms and never-written globals fold
         // and kuna-objcstructabi / an Objective-C method passing or returning a union, an unnamed struct or bit-fields by value keeps its prototype
         // and kuna-objcblocksx86 / x86-64 Objective-C stack blocks named and typed from their creators
         // and kuna-objcsdksend / a send to a class the image only imports resolves from the SDK headers
-        assert_eq!(count, 992, "corpus file count drifted");
+        assert_eq!(count, 994, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

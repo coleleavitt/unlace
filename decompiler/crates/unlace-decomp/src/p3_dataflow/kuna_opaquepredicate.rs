@@ -359,7 +359,19 @@ fn prove_linear(data: &Funcdata, in0: VarnodeId, in1: VarnodeId) -> Option<bool>
     difference.map(|delta| delta == 0)
 }
 
-/// The constant value of comparison `op`, if one of the two proofs finds it.
+/// The `(fold, read unwritten globals)` pair an `opaquepredicate` value selects.
+pub fn parse_mode(value: &str) -> unlace_base::error::KunaResult<(bool, bool)> {
+    match value {
+        "off" => Ok((false, false)),
+        "on" => Ok((true, false)),
+        "globals" => Ok((true, true)),
+        other => Err(unlace_base::error::KunaError::parse(format!(
+            "opaquepredicate: expected off, on or globals, got {other}"
+        ))),
+    }
+}
+
+/// The constant value of comparison `op`, if one of the proofs finds it.
 fn constant_result(data: &Funcdata, op: OpId) -> Option<bool> {
     let o = data.obank().get(op)?;
     let (code, in0, in1) = (o.code(), o.get_in(0)?, o.get_in(1)?);
@@ -370,7 +382,15 @@ fn constant_result(data: &Funcdata, op: OpId) -> Option<bool> {
             return Some(equal == (code == OpCode::CPUI_INT_EQUAL));
         }
     }
-    prove_low_bits(data, code, in0, in1)
+    let signed = matches!(code, OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL);
+    let low_bits = if signed {
+        None
+    } else {
+        prove_low_bits(data, code, in0, in1)
+    };
+    low_bits
+        .or_else(|| crate::kuna_opaquedomain::prove(data, op))
+        .or_else(|| crate::kuna_opaqueimplied::prove(data, op))
 }
 
 /// Replace a comparison that is constant for every input by that constant.
@@ -393,6 +413,9 @@ impl Rule for RuleOpaquePredicate {
             OpCode::CPUI_INT_NOTEQUAL,
             OpCode::CPUI_INT_LESS,
             OpCode::CPUI_INT_LESSEQUAL,
+            OpCode::CPUI_INT_SLESS,
+            OpCode::CPUI_INT_SLESSEQUAL,
+            OpCode::CPUI_CBRANCH,
         ]
     }
 
@@ -405,6 +428,26 @@ impl Rule for RuleOpaquePredicate {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data.get_arch().opaque_predicate || data.is_jumptable_recovery_on() {
             return 0;
+        }
+        if data
+            .obank()
+            .get(op)
+            .is_some_and(|o| o.code() == OpCode::CPUI_CBRANCH)
+        {
+            let decided = data
+                .obank()
+                .get(op)
+                .and_then(|o| o.get_in(1))
+                .and_then(|c| data.vbank().get(c));
+            if decided.is_none_or(|c| c.is_constant())
+                || !crate::kuna_opaquearms::identical(data, op)
+            {
+                return 0;
+            }
+            let constant = data.new_constant(1, 0);
+            data.op_set_input(op, constant, 1)
+                .expect("RuleOpaquePredicate: opSetInput");
+            return 1;
         }
         let Some(result) = constant_result(data, op) else {
             return 0;

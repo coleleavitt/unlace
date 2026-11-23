@@ -1,4 +1,6 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
+#[path = "arcv2_loops.rs"]
+mod arcv2_loops;
 mod common;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
@@ -52,6 +54,9 @@ mod declared_bytes_cli;
 
 #[path = "argument_errors_cli.rs"]
 mod argument_errors_cli;
+
+#[path = "archive_inputs_cli.rs"]
+mod archive_inputs_cli;
 
 #[path = "archive_members_cli.rs"]
 mod archive_members_cli;

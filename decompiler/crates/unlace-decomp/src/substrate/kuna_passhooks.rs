@@ -24,14 +24,19 @@ use unlace_num::pcoderaw::VarnodeData;
 use crate::architecture::Architecture;
 use crate::context::{ArchContext, BlockId, HighVariableId, OpId, VarnodeId};
 use crate::database::SymbolEntry;
-use crate::dtype::Datatype;
-use crate::fspec::{FuncCallSpecs, FuncProto, ParamTrial, ProtoModel, PrototypePieces};
+use crate::dtype::{Datatype, TypeFactory};
+use crate::fspec::{
+    FuncCallSpecs, FuncProto, ParamActive, ParamEntry, ParamListStandard, ParamTrial,
+    ParameterPieces, ProtoModel, PrototypePieces,
+};
 use crate::funcdata::Funcdata;
 use crate::jumptable::LoadTable;
 use crate::kuna_fasthash::FxHashMap;
 use crate::merge::MergeContext;
+use crate::op::PcodeOpBank;
 use crate::variable::HighIntersectTest;
-use crate::varmap::{AliasChecker, LinkEntryInfo};
+use crate::varmap::{AliasChecker, LinkEntryInfo, MapState, RangeHint};
+use crate::varnode::VarnodeBank;
 
 macro_rules! declare_hooks {
     ($($(#[$attr:meta])* $name:ident: $ty:ty;)*) => {
@@ -325,4 +330,32 @@ declare_hooks! {
     vectorabi_model: fn(&Rc<ProtoModel>, &AddrSpaceManager) -> Rc<ProtoModel>;
     /// `kuna_vfpvariadic::applies`.
     vfpvariadic_applies: fn(&Architecture) -> bool;
+    /// `kuna_floatregister::storage_size`.
+    floatregister_storage_size: fn(&ParamEntry, &Datatype, &AddrSpaceManager) -> i32;
+    /// `kuna_inputparamgap::trial_is_protected`.
+    inputparamgap_trial_is_protected: fn(&ParamActive, &ParamTrial, &[ParamEntry]) -> bool;
+    /// `kuna_inputrefinement::span_straddles_join`.
+    inputrefinement_span_straddles_join: fn((usize, usize), usize, usize, usize) -> bool;
+    /// `kuna_inputstorage::assign`.
+    inputstorage_assign: fn(&ParamListStandard, &PrototypePieces, &dyn TypeFactory, &mut Vec<ParameterPieces>, &AddrSpaceManager, &mut [i32]) -> KunaResult<()>;
+    /// `kuna_narrowext::mark`.
+    narrowext_mark: fn(&mut Funcdata, OpId);
+    /// `kuna_nulterminator::close_at_terminator`.
+    nulterminator_close_at_terminator: fn(&RangeHint, &RangeHint, Option<&RangeHint>, &MapState) -> Option<RangeHint>;
+    /// `kuna_revisitrefine::spanned`.
+    revisitrefine_spanned: fn(&[(usize, usize)], usize) -> bool;
+    /// `kuna_stackaddrargtrial::trial_is_protected`.
+    stackaddrargtrial_trial_is_protected: fn(&ParamActive, &ParamTrial, &[ParamEntry]) -> bool;
+    /// `kuna_stackarggap::address_is_spacebase`.
+    stackarggap_address_is_spacebase: fn(&Address) -> bool;
+    /// `kuna_stackparamalign::effective_alignment`.
+    stackparamalign_effective_alignment: fn(u32, i32, i32) -> i32;
+    /// `kuna_swifterror::is_error_op`.
+    swifterror_is_error_op: fn(&PcodeOpBank, &VarnodeBank, OpId) -> bool;
+    /// `kuna_syscallregs::is_error_flag_op`.
+    syscallregs_is_error_flag_op: fn(&PcodeOpBank, &VarnodeBank, OpId) -> bool;
+    /// `kuna_typequal::is_volatile`.
+    typequal_is_volatile: fn(&Datatype) -> bool;
+    /// `kuna_varargstackargs::stack_section_split`.
+    varargstackargs_stack_section_split: fn(&ParamActive, int4, int4) -> Option<int4>;
 }

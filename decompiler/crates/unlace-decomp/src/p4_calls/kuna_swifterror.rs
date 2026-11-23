@@ -192,3 +192,8 @@ impl Action for ActionSwiftError {
         changed
     }
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.swifterror_is_error_op = Some(is_error_op);
+}

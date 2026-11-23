@@ -95,7 +95,7 @@ the universal invalidation. There are also three proven timing windows:
 - **sblocks/emit-time** (gotoreduce family, iteregion flags): for rendering
   choices that keep the IR intact.
 
-**Proposal: `infra/idiom.rs` + one `ActionIdiomReduce` per window**, driven by
+**Proposal: `substrate/idiom.rs` + one `ActionIdiomReduce` per window**, driven by
 declarative per-language rule tables:
 
 ```rust
@@ -339,7 +339,7 @@ Foundation round (each its own PR, each green on all four gates):
    the 7-call-site consolidation. No output change by itself.
 2. **F2** `AnalysisOutput` image-fact + model-binding streams
    (`(addr, model_name)`), honored by `callee_proto_model`.
-3. **F3** `infra/idiom.rs` + the pre-SSA/post-SSA `ActionIdiomReduce` hosts,
+3. **F3** `substrate/idiom.rs` + the pre-SSA/post-SSA `ActionIdiomReduce` hosts,
    shipping with **one** witness row: Go `morestack` (option `gomorestack`,
    two-pass stage test: off = entry-phi soup, on = clean params).
 4. **F4** `LangFacet` table + speller/cast consultation + the `(ptr,len)`

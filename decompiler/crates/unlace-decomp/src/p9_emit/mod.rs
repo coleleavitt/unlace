@@ -4,7 +4,6 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod cast;
-pub mod comment;
 pub mod coreaction_casts;
 pub mod coreaction_render;
 pub(crate) mod kuna_acleintrinsics; // (kuna) AArch64 barrier, hint and memory-tagging user ops as ACLE intrinsics

@@ -41,7 +41,7 @@ pub(crate) mod kuna_inputrefinement;
 pub mod kuna_inputtile;
 pub mod kuna_intfloatround;
 pub mod kuna_latecse;
-mod kuna_leafmemory;
+pub(crate) mod kuna_leafmemory;
 pub(crate) mod kuna_loadguardreads;
 pub mod kuna_loopcounterstore;
 pub mod kuna_mba; // (kuna `mba`) linear mixed boolean-arithmetic simplification

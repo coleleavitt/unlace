@@ -207,6 +207,11 @@ fn body_departs_from_convention(
     false
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.calleepreserves_callee_preserves_range = Some(callee_preserves_range);
+}
+
 #[cfg(test)]
 #[path = "kuna_calleepreserves/tests.rs"]
 mod tests;

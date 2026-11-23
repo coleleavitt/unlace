@@ -965,6 +965,11 @@ fn for_call<'a>(
     Some(summary)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.calleememory_preserves = Some(preserves);
+}
+
 #[cfg(test)]
 pub(crate) fn test_call_summary_is_usable(
     fd: &Funcdata,

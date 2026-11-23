@@ -291,5 +291,13 @@ pub fn above_callee_frame(offset: uintb, size: int4, addr_size: int4, floor: int
     signed >= floor as i64 && signed.checked_add(size as i64).is_some()
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.calleeprotostack_above_callee_frame = Some(above_callee_frame);
+    hooks.calleeprotostack_declared_caller_frame_floor = Some(declared_caller_frame_floor);
+    hooks.calleeprotostack_pointer_input_may_alias = Some(pointer_input_may_alias);
+    hooks.calleeprotostack_rebound_frame_base = Some(rebound_frame_base);
+}
+
 #[cfg(test)]
 mod tests;

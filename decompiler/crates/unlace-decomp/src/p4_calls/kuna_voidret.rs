@@ -2570,6 +2570,7 @@ pub fn returned_use(
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.voidret_planted_overlaps = Some(planted_overlaps);
     hooks.voidret_returned_use = Some(returned_use);
     hooks.voidret_scoring_return = Some(scoring_return);
 }

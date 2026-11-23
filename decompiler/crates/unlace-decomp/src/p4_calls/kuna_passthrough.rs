@@ -2124,6 +2124,11 @@ pub(crate) fn truncate_before(
     Some(out)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.passthrough_suppresses_return_trial = Some(suppresses_return_trial);
+}
+
 #[cfg(test)]
 #[path = "kuna_passthrough/tests.rs"]
 mod tests;

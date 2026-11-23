@@ -281,3 +281,9 @@ fn vector_count(fd: &Funcdata, call: OpId) -> Option<u64> {
     }
     None
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.varargretreg_argument_in_own_output = Some(argument_in_own_output);
+    hooks.varargretreg_counted_float_entry = Some(counted_float_entry);
+}

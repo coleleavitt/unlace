@@ -24,7 +24,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe</com>
   <com>read symbols</com>
   <com>load function sub_1400011a0</com>
   <com>decompile</com>

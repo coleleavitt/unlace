@@ -30,7 +30,7 @@ Consequences worth knowing:
 Compute it locally:
 
 ```bash
-make version          # or: bash scripts/version.sh
+bash scripts/version.sh
 ```
 
 The script needs the release tags (the minor is read from them) and errors out
@@ -147,7 +147,7 @@ the tree already unpacked. Old trees are never removed automatically; deleting
 the cache directory is always safe, and the next run unpacks again.
 
 (Inside a repo checkout none of this applies — a plain `cargo build` carries no
-specs, and they are found from the repo root. `make specs` then
+specs, and they are found from the repo root. `target/release/slacomp -a specs` then
 `cargo build --release -p unlace-cli --features embed-specs` builds the
 self-contained binary locally.)
 

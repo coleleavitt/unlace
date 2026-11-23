@@ -14,7 +14,7 @@
 
     The XML wrapper only supplies the harness architecture. Each pass clears it
     and loads a real x86-64 ELF fixture
-    (`decompiler/crates/unlace-analysis/tests/fixtures/dwarfvariants_x86_64`,
+    (`crates/unlace-analysis/tests/fixtures/dwarfvariants_x86_64`,
     `rustc 1.90.0 -C debuginfo=2 -C opt-level=1`, source vendored beside it),
     because a `bytechunk` carries no DWARF at all and this decision is made
     inside `load file`.
@@ -57,7 +57,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfvariants_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfvariants_x86_64</com>
   <com>read symbols</com>
   <com>load function ret_result</com>
   <com>decompile</com>
@@ -72,7 +72,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/dwarfvariants_overlay_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/dwarfvariants_overlay_x86_64</com>
   <com>read symbols</com>
   <com>load function put_res</com>
   <com>decompile</com>

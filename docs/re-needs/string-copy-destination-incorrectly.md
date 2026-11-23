@@ -14,7 +14,7 @@ rounds: [3]
 first_seen_round: 3
 attempts: 0
 covered_by_option: libproto
-touches: [decompiler/crates/unlace-analysis]
+touches: [crates/unlace-analysis]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/575

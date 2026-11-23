@@ -33,7 +33,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_icf_elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/swift_icf_elf</com>
   <com>option swiftmetadata off</com>
   <com>read symbols</com>
   <com>load addr 0x27f0</com>
@@ -43,7 +43,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/swift_icf_elf</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/swift_icf_elf</com>
   <com>option swiftmetadata on</com>
   <com>read symbols</com>
   <com>load addr 0x27f0</com>

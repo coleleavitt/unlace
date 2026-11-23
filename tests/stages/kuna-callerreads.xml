@@ -25,7 +25,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/callerreads_x86_64_gcc_O2</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/callerreads_x86_64_gcc_O2</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function triple</com>

@@ -215,7 +215,7 @@ function renderPhaseCard(phase, isShared) {
 function coverageNote(id) {
   const percent = coverageByFolder[id];
   if (percent === undefined) return "";
-  return `<span class="sizes" title="line coverage (make coverage)">· <a href="./coverage.html"
+  return `<span class="sizes" title="line coverage (bash scripts/coverage.sh)">· <a href="./coverage.html"
     style="color:inherit">${percent.toFixed(1)}% covered</a></span>`;
 }
 

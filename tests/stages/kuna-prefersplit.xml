@@ -21,7 +21,7 @@
   </binaryimage>
   <script>
     <com>clear architecture</com>
-    <com>load file decompiler/crates/unlace-analysis/tests/fixtures/prefersplit_a64.o</com>
+    <com>load file crates/unlace-analysis/tests/fixtures/prefersplit_a64.o</com>
     <com>read symbols</com>
     <com>option protoorder off</com>
     <com>load function ccw_entry</com><com>decompile</com><com>print C</com>

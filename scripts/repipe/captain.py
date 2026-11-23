@@ -184,11 +184,11 @@ def preflight():
             bad.append("missing tool: %s" % tool)
     bad.extend(config.role_policy_problems())
     if not config.kuna_bin().exists():
-        bad.append("no kuna binary at %s (run `make binaries`)" % config.kuna_bin())
+        bad.append("no kuna binary at %s (run `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`)" % config.kuna_bin())
     if not config.dataset_root().exists():
         bad.append("no dataset at %s" % config.dataset_root())
     if not list(config.specs_dir().rglob("*.sla"))[:1]:
-        bad.append("no compiled .sla under %s (run `make specs`)" % config.specs_dir())
+        bad.append("no compiled .sla under %s (run `target/release/slacomp -a specs`)" % config.specs_dir())
     if config.sandbox_mode() != "bwrap":
         if os.environ.get("REPIPE_SANDBOX") == "none":
             # An explicit, recorded choice is allowed -- but it is never the default, and

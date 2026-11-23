@@ -38,7 +38,7 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolfallthru_arm_le32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/poolfallthru_arm_le32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>option funcboundflow off</com>
@@ -49,7 +49,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolfallthru_arm_be32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/poolfallthru_arm_be32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>option funcboundflow off</com>
@@ -60,7 +60,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolguards_arm_le32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/poolguards_arm_le32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function cond_call</com>
@@ -112,7 +112,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolguards_arm_le32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/poolguards_arm_le32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>option funcboundflow off</com>
@@ -123,7 +123,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolguards_arm_be32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/poolguards_arm_be32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function cond_call</com>
@@ -175,7 +175,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/poolguards_arm_be32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/poolguards_arm_be32</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>option funcboundflow off</com>

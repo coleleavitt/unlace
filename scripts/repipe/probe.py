@@ -612,9 +612,9 @@ def _allowed_realpaths():
     paths = set()
     from . import config as _cfg
     for cand in (_cfg.kuna_bin(),
-                 _cfg.repo_root() / "decompiler" / "target" / "release" / "decomp_dbg",
-                 _cfg.repo_root() / "decompiler" / "target" / "release" / "decomp_test_dbg",
-                 _cfg.repo_root() / "decompiler" / "target" / "release" / "slacomp",
+                 _cfg.repo_root() / "target" / "release" / "decomp_dbg",
+                 _cfg.repo_root() / "target" / "release" / "decomp_test_dbg",
+                 _cfg.repo_root() / "target" / "release" / "slacomp",
                  _cfg.decompiler_cli()):
         try:
             if os.path.exists(str(cand)):

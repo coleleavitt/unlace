@@ -38,7 +38,7 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_stubs_stripped_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_stubs_stripped_arm64</com>
   <com>option stubbinds off</com>
   <com>read symbols</com>
   <com>load function _probe_stub</com>
@@ -48,7 +48,7 @@ c0035fd6
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_stubs_stripped_arm64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_stubs_stripped_arm64</com>
   <com>read symbols</com>
   <com>load function _probe_stub</com>
   <com>decompile</com>

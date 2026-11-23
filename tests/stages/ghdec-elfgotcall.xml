@@ -49,7 +49,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elf_got_noreturn_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/elf_got_noreturn_x86_64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function check</com>
@@ -65,13 +65,13 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elf_got_slotaddr_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/elf_got_slotaddr_x86_64</com>
   <com>read symbols</com>
   <com>load function pickx</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/elf_got_noreturn_aarch64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/elf_got_noreturn_aarch64</com>
   <com>option listing on</com>
   <com>read symbols</com>
   <com>load function die</com>

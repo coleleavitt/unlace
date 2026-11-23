@@ -16,14 +16,14 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/itaniumeh/eh_x86_64_cold.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/itaniumeh/eh_x86_64_cold.elf</com>
   <com>option itaniumeh off</com>
   <com>read symbols</com>
   <com>load addr 0x4013e0</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/itaniumeh/eh_x86_64_cold.elf</com>
+  <com>load file crates/unlace-cli/tests/fixtures/itaniumeh/eh_x86_64_cold.elf</com>
   <com>option itaniumeh on</com>
   <com>read symbols</com>
   <com>load addr 0x4013e0</com>

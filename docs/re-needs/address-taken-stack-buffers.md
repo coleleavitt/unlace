@@ -14,7 +14,7 @@ rounds: [12]
 first_seen_round: 12
 attempts: 1
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: 619

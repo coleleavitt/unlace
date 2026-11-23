@@ -45,7 +45,7 @@ without disturbing the WASI path.
 ## 2. Shape: a front-end crate + a browser harness
 
 ```
-decompiler/crates/unlace-wasm/     the wasm (and native) binary: `unlace_wasm`
+crates/unlace-wasm/     the wasm (and native) binary: `unlace_wasm`
 integrations/web/                the project site + browser harness (assembles a static dist/)
 ```
 
@@ -60,10 +60,10 @@ new external dependency or wasm-only stage-model option. Like the native file
 front-ends, it resolves the default `auto` mode from the input byte length and
 uses the core `fast_funcdisc` option for rooted whole-image inventory recovery
 with conservative pointer validation.
-`make binaries` builds a
+`cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli` builds a
 fixed crate list that does not include it, and
 `check_spec.py` only scans `unlace-decomp`/`unlace-analysis`, so the only gate that touches it
-is `make rust-test` (`cargo test --workspace`), which compiles it natively and
+is `cargo nextest run --workspace --exclude unlace-wasm --profile ci` (`cargo test --workspace`), which compiles it natively and
 runs its frontend tests.
 
 `unlace_wasm` runs `unlace decompile-all`'s core loop via the **shared decompile-project
@@ -505,7 +505,7 @@ start level. It is whitespace, and only before a column-0 `{` — the committed 
 byte-verbatim, which is what `--verify` checks against.
 
 **Hosting on GitHub Pages.** `.github/workflows/pages.yml` runs this same build in CI
-(stable Rust + `wasm32-wasip1`, `binaryen` for `wasm-opt`, `make specs` to compile the
+(stable Rust + `wasm32-wasip1`, `binaryen` for `wasm-opt`, `target/release/slacomp -a specs` to compile the
 whole `.sla` tree), runs the tests on the single bundle, and then splits it with
 `integrations/web/split-sites.sh`, because one repository's Pages has only one custom
 domain:
@@ -1322,7 +1322,7 @@ skips it as too costly):
    **`test/decompile-replay.mjs`** exports sessions (made alone, and shared with the
    birth order) and replays each file through the native CLI (`unlace decompile … --assert
    @file`): a type used by a later type, two prototypes of one function (the later
-   wins) and a rename chain all apply; it skips without `decompiler/target/release/unlace`.
+   wins) and a rename chain all apply; it skips without `target/release/unlace`.
 5. **`test/decompile-browser.mjs`** — the real page in headless Chrome over the DevTools
    protocol (Node's built-in `WebSocket`, no `puppeteer`; skips when there is no Chrome or
    the Node has no `WebSocket`): it checks the welcome screen (its two lines of text, the
@@ -1447,8 +1447,8 @@ benign PE is committed because this environment has no PE linker.
   default is recorded as DIV-40, the corrected fast inventory as DIV-41, and the
   single discovery policy shared by `list`/`decompile`/`project` as DIV-53, in
   `docs/history.md`.
-- The four gates (`make test`, `make test-stages`, `make rust-test`, `make
-  check-spec`) remain mandatory. Native/WASI parity and browser-glue tests cover
+- The four gates (`cargo test -p unlace-cli --test parity datatests`, `cargo test -p unlace-cli --test parity stage_tests`, `cargo nextest run --workspace --exclude unlace-wasm --profile ci`,
+  `python3 tools/check_spec.py`) remain mandatory. Native/WASI parity and browser-glue tests cover
   the additional frontend policy.
 - The Worker keeps mode resolution and every engine entrypoint in the Rust/WASI front-end:
   upload uses the inventory command, a click uses explicit-address decompilation, and
@@ -1509,8 +1509,8 @@ benign PE is committed because this environment has no PE linker.
   `integrations/web/test/decompile-*.mjs`, the CDP
   driver `test/cdp-client.mjs`, the
   fixture generator `test/make-inspect-fixtures.mjs`
-- The crate: `decompiler/crates/unlace-wasm/{Cargo.toml, src/lib.rs, src/main.rs}`
+- The crate: `crates/unlace-wasm/{Cargo.toml, src/lib.rs, src/main.rs}`
   (the per-function `kind` classifier lives in `unlace-console/src/classify.rs`)
-- The shared decompile loop + artifact builders: `decompiler/crates/unlace-console/src/project.rs`
-  (the CLI wrappers: `decompiler/crates/unlace-cli/src/{decompile_all.rs, decompile_project.rs}`)
+- The shared decompile loop + artifact builders: `crates/unlace-console/src/project.rs`
+  (the CLI wrappers: `crates/unlace-cli/src/{decompile_all.rs, decompile_project.rs}`)
 - The engine entry it reuses: `unlace_console::engine::bootstrap_from_object`

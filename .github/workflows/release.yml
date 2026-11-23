@@ -113,11 +113,10 @@ jobs:
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: decompiler
           key: ${{ matrix.target }}
 
       # The compiled SLEIGH tree, laid over the checkout's specs/ so the
-      # embed-specs build script finds every .sla where `make specs` leaves it.
+      # embed-specs build script finds every .sla where `slacomp -a specs` leaves it.
       - uses: actions/download-artifact@v4
         with:
           name: unlace-specs
@@ -130,7 +129,6 @@ jobs:
       # `unlace` is the whole release: the console and the SLEIGH compiler are
       # built in, and embed-specs carries the compiled SLEIGH tree.
       - name: Build release binaries
-        working-directory: decompiler
         shell: bash
         run: cargo build --release --target ${{ matrix.target }} -p unlace-cli -p unlace-ghidra --features unlace-cli/embed-specs
 
@@ -141,7 +139,7 @@ jobs:
         run: |
           ext=""
           if [ "${{ runner.os }}" = "Windows" ]; then ext=".exe"; fi
-          out="$(./decompiler/target/${{ matrix.target }}/release/unlace$ext --version)"
+          out="$(./target/${{ matrix.target }}/release/unlace$ext --version)"
           echo "$out"
           [ "$out" = "unlace ${{ needs.version.outputs.version }}" ]
 
@@ -154,8 +152,8 @@ jobs:
           ext=""
           if [ "${{ runner.os }}" = "Windows" ]; then ext=".exe"; fi
           alone="$(mktemp -d)"
-          cp "decompiler/target/${{ matrix.target }}/release/unlace$ext" "$alone/"
-          fixture="$PWD/decompiler/crates/unlace-analysis/tests/fixtures/fauxware"
+          cp "target/${{ matrix.target }}/release/unlace$ext" "$alone/"
+          fixture="$PWD/crates/unlace-analysis/tests/fixtures/fauxware"
           cd "$alone"
           out="$(env -u KUNA_SPECS -u SLEIGHHOME -u KUNA_ROOT ./unlace$ext decompile "$fixture" main)"
           echo "$out"
@@ -165,7 +163,7 @@ jobs:
         shell: bash
         run: |
           ver="${{ needs.version.outputs.version }}"
-          bindir="decompiler/target/${{ matrix.target }}/release"
+          bindir="target/${{ matrix.target }}/release"
           pkg="unlace-v${ver}-${{ matrix.name }}"
           ext=""
           if [ "${{ runner.os }}" = "Windows" ]; then ext=".exe"; fi
@@ -196,7 +194,7 @@ jobs:
           ext=""
           if [ "${{ runner.os }}" = "Windows" ]; then ext=".exe"; fi
           mkdir -p ghidra-bin
-          cp "decompiler/target/${{ matrix.target }}/release/unlace_ghidra$ext" ghidra-bin/
+          cp "target/${{ matrix.target }}/release/unlace_ghidra$ext" ghidra-bin/
 
       - uses: actions/upload-artifact@v4
         with:
@@ -221,11 +219,9 @@ jobs:
 
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: decompiler
 
       - name: Compile every .slaspec -> .sla
-        run: make specs
+        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
 
       - name: Package the runtime SLEIGH tree
         run: |

@@ -10,7 +10,7 @@ from pathlib import Path
 from scripts.observatory import common
 from scripts.paths import specs_dir
 
-FIXTURE = "decompiler/crates/unlace-analysis/tests/fixtures/aliasoverlap_x86_64"
+FIXTURE = "crates/unlace-analysis/tests/fixtures/aliasoverlap_x86_64"
 FUNCTION = "main"
 TIMEOUT = 120
 
@@ -30,7 +30,7 @@ def _kuna_bin(root: Path) -> Path:
     if override:
         return Path(override)
     profile = os.environ.get("KUNA_RUST_PROFILE", "release")
-    return root / "decompiler" / "target" / profile / "unlace"
+    return root / "target" / profile / "unlace"
 
 
 def _run(cmd: list, env: dict, cwd: Path, stdin: str | None = None) -> str:

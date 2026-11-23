@@ -14,7 +14,7 @@ rounds: [10]
 first_seen_round: 10
 attempts: 0
 covered_by_option: libcsigs
-touches: [decompiler/crates/unlace-analysis]
+touches: [crates/unlace-analysis]
 scope: small
 regression_of: null
 pr: 575
@@ -66,11 +66,11 @@ refutation established a different cause; see **Split disposition** below.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/libcsigs_pe_x86_64.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/libcsigs_pe_x86_64.exe",
     "binary_sha256": "9334121f1d2710f13b313d0ebcdce71c568b4bf501862b0cb7e87e18e5c63117",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/libcsigs_pe_x86_64.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/libcsigs_pe_x86_64.exe",
     "selector": "0x140001000",
     "selector_kind": "addr"
   },
@@ -107,11 +107,11 @@ refutation established a different cause; see **Split disposition** below.
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/libcsigs_pe_x86_64.exe",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/libcsigs_pe_x86_64.exe",
     "binary_sha256": "9334121f1d2710f13b313d0ebcdce71c568b4bf501862b0cb7e87e18e5c63117",
     "binary_size": 1536,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/libcsigs_pe_x86_64.exe",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/libcsigs_pe_x86_64.exe",
     "selector": "0x140001000",
     "selector_kind": "addr"
   },

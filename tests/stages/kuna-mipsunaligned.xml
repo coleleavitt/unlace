@@ -21,7 +21,7 @@
 
     Stage: P2 lift and flow (decode-context), kuna_mipsunaligned.
 
-    Images: decompiler/crates/unlace-analysis/tests/fixtures/bejoin_mipsunal
+    Images: crates/unlace-analysis/tests/fixtures/bejoin_mipsunal
     (bejoin_mipsunal.S; see bejoin_mipspic.provenance) and mipsunaligned_eb.o
     and mipsunaligned_el.o (mipsunaligned.c; see mipsunaligned.provenance).
 
@@ -36,14 +36,14 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/bejoin_mipsunal</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/bejoin_mipsunal</com>
   <com>option typevote off</com>
   <com>read symbols</com>
   <com>lo fu c_unal</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/mipsunaligned_eb.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/mipsunaligned_eb.o</com>
   <com>option typevote off</com>
   <com>read symbols</com>
   <com>lo fu get_word</com>
@@ -53,7 +53,7 @@
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/mipsunaligned_el.o</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/mipsunaligned_el.o</com>
   <com>option typevote off</com>
   <com>read symbols</com>
   <com>lo fu get_word</com>

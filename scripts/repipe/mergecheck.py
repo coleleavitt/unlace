@@ -56,7 +56,7 @@ KEEPBOTH_PATHS = (
     REL_BASELINE_STAGES,
     "tests/stages/README.md",
     "docs/options.md",
-    "decompiler/crates/unlace-decomp/phases.toml",
+    "crates/unlace-decomp/phases.toml",
 )
 
 REJECT, WARN, INFO = "reject", "warn", "info"
@@ -326,7 +326,7 @@ def assert_keepboth(path, base_ref="origin/main", repo=None):
         out.append(Finding("C", "assert-keepboth", REJECT, "line-removed", rel, 0,
                            "... and {} more removed lines".format(len(removed) - 20)))
 
-    if rel == "decompiler/crates/unlace-decomp/phases.toml":
+    if rel == "crates/unlace-decomp/phases.toml":
         base_rows = collections.Counter(_toml_array_blocks(base_text))
         head_rows = collections.Counter(_toml_array_blocks(head_text))
         twice = [(row, n) for row, n in head_rows.items()
@@ -335,7 +335,7 @@ def assert_keepboth(path, base_ref="origin/main", repo=None):
         twice = [(l, n) for l, n in head_c.items() if n >= 2 and n > base_c.get(l, 0)]
     for line, n in sorted(twice)[:20]:
         was = (base_rows.get(line, 0)
-               if rel == "decompiler/crates/unlace-decomp/phases.toml"
+               if rel == "crates/unlace-decomp/phases.toml"
                else base_c.get(line, 0))
         out.append(Finding("C", "assert-keepboth", REJECT, "line-added-twice", rel, 0,
                            "line appears {}x (was {}x on {})".format(

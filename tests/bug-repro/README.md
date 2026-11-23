@@ -4,8 +4,8 @@ Binaries that reproduce open output bugs, kept here so an issue can be acted on
 without reconstructing a corpus first (same idea as `tests/hang-repro/`, which
 holds the binaries for the fixed decompile hang).
 
-These are **not** a test gate. Nothing under `make test` / `make rust-test` /
-`make test-stages` reads this directory — the pinned regression for a fixed bug
+These are **not** a test gate. Nothing under `cargo test -p unlace-cli --test parity datatests` / `cargo nextest run --workspace --exclude unlace-wasm --profile ci` /
+`cargo test -p unlace-cli --test parity stage_tests` reads this directory — the pinned regression for a fixed bug
 belongs in `tests/stages/` or the cargo suite. This is evidence for an issue.
 
 ## Provenance
@@ -34,7 +34,7 @@ of the fixture's file size; stripped ARM firmware needs that tier to find the
 function at all.
 
 ```bash
-K=decompiler/target/release/unlace
+K=target/release/unlace
 
 # #180 — overflow guard rendered against the post-add value
 $K decompile-all tests/bug-repro/grep --mode reliable --addr 0x7c90                        # grep nlscan

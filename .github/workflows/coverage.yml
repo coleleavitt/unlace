@@ -60,7 +60,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: decompiler
           key: coverage
           cache-on-failure: true
 
@@ -69,11 +68,11 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: specs/**/*.sla
-          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'decompiler/Cargo.lock', 'decompiler/crates/unlace-slacomp/**', 'decompiler/crates/unlace-sleigh/**', 'decompiler/crates/unlace-base/**', 'decompiler/crates/unlace-num/**') }}
+          key: sla-v1-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
       - name: Compile the SLEIGH specs
         if: steps.sla.outputs.cache-hit != 'true'
-        run: make specs
+        run: cargo build --release -p unlace-slacomp && ./target/release/slacomp -a specs
 
       - name: Verify the compiled spec tree is complete
         run: |
@@ -89,12 +88,12 @@ jobs:
 
       - name: Workspace suite under coverage
         run: |
-          cd decompiler && cargo llvm-cov --no-report --workspace \
+          cargo llvm-cov --no-report --workspace \
             ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }} --no-fail-fast
 
       - name: Write lcov.info
         if: always()
-        run: cd decompiler && cargo llvm-cov report --lcov --output-path ../lcov.info
+        run: cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage to Repowise
         if: always()
@@ -123,7 +122,7 @@ jobs:
         if: always()
         run: |
           df -h /
-          du -sh decompiler/target 2>/dev/null || true
+          du -sh target 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         if: always()

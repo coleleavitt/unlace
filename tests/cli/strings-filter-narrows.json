@@ -12,11 +12,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/midstring_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/midstring_x86_64",
     "binary_sha256": "1a4cc3ca2bc124f6228923046c0859465234c2269dae6d4bfe5c1554feb2c682",
     "binary_size": 16072,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/midstring_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/midstring_x86_64",
     "selector": null,
     "selector_kind": "none"
   },

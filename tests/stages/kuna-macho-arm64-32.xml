@@ -26,7 +26,7 @@ c0035fd6
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/macho_arm64_32</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/macho_arm64_32</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>load function _add3</com>

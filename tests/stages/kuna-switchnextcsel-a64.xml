@@ -4,7 +4,7 @@
     A byte-masked compact jump table that is its function's last, followed
     by the table of a function whose index a csel/csinc chain selects;
     assembled from
-    decompiler/crates/unlace-analysis/tests/fixtures/switchnextcsel_aarch64.s
+    crates/unlace-analysis/tests/fixtures/switchnextcsel_aarch64.s
     (the .text and .rodata of switchnextcsel_aarch64).
 
     `name_of` indexes tab_names (3 bytes at 0x11084) with `x0 & 0xff`, so

@@ -49,13 +49,13 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/msvcsig_protos_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/msvcsig_protos_i386.exe</com>
   <com>read symbols</com>
   <com>load addr 0x401020</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/msvcbyval_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/msvcbyval_i386.exe</com>
   <com>read symbols</com>
   <com>load addr 0x401000</com>
   <com>decompile</com>
@@ -70,7 +70,7 @@ c3
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/msvcbyval_ce_i386.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/msvcbyval_ce_i386.exe</com>
   <com>read symbols</com>
   <com>load addr 0x401000</com>
   <com>decompile</com>

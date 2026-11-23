@@ -15,11 +15,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/gh657_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/gh657_x86_64",
     "binary_sha256": "0066d6d5e2684842e45057208307f4483d9fba9b5e69039b03a6f5aa8d422ec0",
     "binary_size": 5000,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/gh657_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/gh657_x86_64",
     "selector": "target",
     "selector_kind": "name"
   },

@@ -41,7 +41,7 @@ import traceback
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 KUNA_GHIDRA = os.environ.get(
     "KUNA_GHIDRA_EXE",
-    os.path.join(REPO, "decompiler", "target", "release", "unlace_ghidra"),
+    os.path.join(REPO, "target", "release", "unlace_ghidra"),
 )
 BINARY = os.environ.get("KUNA_SMOKE_BINARY")
 FUNCTION = os.environ.get("KUNA_SMOKE_FUNCTION", "main")

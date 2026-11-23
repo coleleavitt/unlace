@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-cli/src/assertdecl.rs, decompiler/crates/unlace-cli/src/decompile.rs]
+touches: [crates/unlace-cli/src/assertdecl.rs, crates/unlace-cli/src/decompile.rs]
 scope: medium
 regression_of: null
 pr: null

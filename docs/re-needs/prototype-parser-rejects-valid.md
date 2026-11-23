@@ -14,7 +14,7 @@ rounds: [8]
 first_seen_round: 8
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-console/src/grammar, decompiler/crates/unlace-cli/src/assertdecl.rs]
+touches: [crates/unlace-console/src/grammar, crates/unlace-cli/src/assertdecl.rs]
 scope: small
 regression_of: null
 pr: null
@@ -80,11 +80,11 @@ Specify the interpreter's code pointer through a prototype assertion.
   "probe_id": "a-555cfdcc80e2",
   "kind": "cli",
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/fauxware",
     "binary_sha256": "c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b",
     "binary_size": 8776,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/fauxware",
     "selector": "authenticate",
     "selector_kind": "name"
   },

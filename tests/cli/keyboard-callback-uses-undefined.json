@@ -16,11 +16,11 @@
   "timeout_s": 60,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/inputparamgap_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/inputparamgap_x86_64",
     "binary_sha256": "9fb193df2cf9964358d27c024ee346e48f36e359437329d1fed59a266da70848",
     "binary_size": 15872,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/inputparamgap_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/inputparamgap_x86_64",
     "selector": "0x401180",
     "selector_kind": "addr"
   },

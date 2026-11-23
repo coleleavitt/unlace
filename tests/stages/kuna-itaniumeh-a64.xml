@@ -14,14 +14,14 @@
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/itaniumeh/eh_aarch64.so</com>
+  <com>load file crates/unlace-cli/tests/fixtures/itaniumeh/eh_aarch64.so</com>
   <com>option itaniumeh off</com>
   <com>read symbols</com>
   <com>load function catcher</com>
   <com>decompile</com>
   <com>print C</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-cli/tests/fixtures/itaniumeh/eh_aarch64.so</com>
+  <com>load file crates/unlace-cli/tests/fixtures/itaniumeh/eh_aarch64.so</com>
   <com>option itaniumeh on</com>
   <com>read symbols</com>
   <com>load function catcher</com>

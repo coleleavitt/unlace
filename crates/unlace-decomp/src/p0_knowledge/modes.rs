@@ -1,0 +1,801 @@
+//! P0 -- decompiler MODES: named presets over the runtime option surface.
+//!
+//! A concrete *mode* is a named, ordered list of `(option, value)` overrides
+//! layered on top of the shipped defaults, applied *before* any explicit user
+//! `--option` (last-write-wins, so a user `--option` always overrides the
+//! mode). A mode is **not** a `[[settable]]` row -- it references existing
+//! option names and lives entirely in this table, so it never touches
+//! `phases.toml` / `SETTABLE_TABLE` / the catalog count+tier gates. File
+//! frontends resolve an omitted mode as the size-driven `auto` policy.
+//!
+//! Four modes ship:
+//!   - **`auto`** -- a frontend policy that selects a concrete preset from the
+//!     input binary's file size and layers its own presentation overrides
+//!     ([`AUTO_OVERRIDES`]) under that preset. It is not itself applicable to an
+//!     [`Architecture`](crate::architecture::Architecture), which has no input
+//!     file metadata.
+//!   - **`reliable`** -- the shipped, well-tested defaults (a stable, named
+//!     alias with an empty override list). Anchors the "give me the safe output"
+//!     product surface and future-proofs the preset if defaults later drift.
+//!   - **`aggressive`** -- turn on every off-by-default quality/recovery/analysis
+//!     pass for the most-recovered (and slowest, most speculative) output. Two
+//!     options are excluded (see [`AGGRESSIVE_OVERRIDES`]).
+//!   - **`fast`** -- replace exhaustive discovery with a rooted recursive pass
+//!     plus conservative pointer validation while retaining per-function transforms.
+//!
+//! Concrete presets are applied through `Architecture::apply_mode` (which fans
+//! out to `set_kuna_option`). File frontends resolve `auto` from binary
+//! metadata with [`resolve_overrides_for_size`], which also returns `auto`'s own
+//! overrides; the interactive console has no file-size policy and accepts only
+//! concrete presets.
+
+/// A named preset over the option surface.
+pub struct Mode {
+    /// The mode token (`auto`, `reliable`, `aggressive`, `fast`).
+    pub name: &'static str,
+    /// One-line human/LLM description.
+    pub summary: &'static str,
+    /// Whether this is a frontend policy that must first select a concrete
+    /// preset using input metadata.
+    pub automatic: bool,
+    /// Ordered `(option, value)` overrides. Applied in order; a later
+    /// `set_kuna_option` (another override, or a user `--option`) wins. For an
+    /// automatic policy these are applied before the overrides of whichever
+    /// preset it selects; an empty concrete list is the shipped defaults.
+    pub overrides: &'static [(&'static str, &'static str)],
+}
+
+/// First file size at which `auto` stops selecting `aggressive`.
+pub const AUTO_RELIABLE_MIN_BYTES: u64 = 500 * 1024;
+
+/// First file size at which `auto` selects `fast`.
+pub const AUTO_FAST_MIN_BYTES: u64 = 2 * 1024 * 1024;
+
+/// The four shipped modes.
+pub const MODE_TABLE: &[Mode] = &[
+    Mode {
+        name: "auto",
+        summary: "Select aggressive below 500 KiB, reliable from 500 KiB up to \
+                  2 MiB, and fast at 2 MiB or larger, using the input file size; \
+                  every size spells core types as C (ctypes on).",
+        automatic: true,
+        overrides: AUTO_OVERRIDES,
+    },
+    Mode {
+        name: "reliable",
+        summary: "The shipped, well-tested defaults -- the safe, stable baseline \
+                  with no extra transform overrides.",
+        automatic: false,
+        overrides: RELIABLE_OVERRIDES,
+    },
+    Mode {
+        name: "aggressive",
+        summary: "Maximum recovery: turn on every off-by-default quality, \
+                  structuring, and analysis pass except v850indirectbranch and \
+                  dwarf_lines. Slower and more speculative (may over-recover); \
+                  best for readability and the benchmark ceiling, not for \
+                  guaranteed faithfulness.",
+        automatic: false,
+        overrides: AGGRESSIVE_OVERRIDES,
+    },
+    Mode {
+        name: "fast",
+        summary: "Speed-first whole-binary analysis: replace exhaustive Listing, \
+                  prologue-pattern, and AIF discovery with rooted recursive \
+                  function discovery plus conservative pointer validation; core \
+                  types spell as C (ctypes on).",
+        automatic: false,
+        overrides: FAST_OVERRIDES,
+    },
+];
+
+/// `reliable` = the shipped defaults. Deliberately empty: pinning any option
+/// here (e.g. `listing off`) would *change* behaviour vs the defaults -- in
+/// particular `decompile` and `decompile-all` auto-enable the Listing, so an
+/// explicit `listing off` would change them. An empty list leaves every surface
+/// default untouched.
+const RELIABLE_OVERRIDES: &[(&str, &str)] = &[];
+
+/// `aggressive` = every off-by-default option flipped ON, **except**
+/// `dwarf_lines`. The options that became shipped defaults stay listed
+/// (`returndup` since DIV-54, `pdb` since DIV-129, the presentation defaults
+/// `partialaccess`, `voidtailreturn`, `importdata`, `calltargettype` and
+/// `libcnames`, and the target-gated passes -- `rtti`=PE,
+/// `itaniumrtti`=ELF/Mach-O-with-RTTI, `objc`/`macho-arm64e`=Mach-O,
+/// `sparcstructret`=SPARC, `v850indirectbranch`=V850, the ARM entry and
+/// hard-float passes -- all inert off their target): the preset owns the option
+/// outright, so a user `--option returndup off` earlier on the command line is
+/// re-enabled by the preset and the contract survives any later default drift.
+///
+/// The default-off options are safe to blanket-enable except that one:
+///
+///   - `dwarf_lines` recovers nothing. It annotates every instruction with its
+///     `.debug_line` `file:line` and those comments survive into the C body, so
+///     on any binary built with `-g` it buries the code under interleaved
+///     `/* src.c:NNN */` lines (`auto` picks `aggressive` under 500 KiB, which
+///     made that the *default* rendering for small debug binaries).
+///
+/// It stays a manual per-run opt-in (`--option dwarf_lines on`) even under
+/// `--mode aggressive`.
+///
+/// `formatstring` used to be a third exclusion, for cost: its
+/// decompile->override->re-decompile loop paid a **second full decompile** of
+/// every caller whose printf/scanf call sites yielded an override, and those are
+/// the expensive functions -- `decompile-all` measured +77.5% (cronie
+/// `crontab`), +55.1% (gnutls `psktool`), +43.7% (`gzip`) -- while the recovery
+/// it bought was real (decbench C `type_match` perfects 80 -> 88 of 1,133). The
+/// loop is now the option's `full` value; its `static` default reads the same
+/// format constants out of the IMAGE at load, so the typing arrives before the
+/// first decompile and there is no second one. `static` needs the Listing, which
+/// this preset supplies, so the preset is where it delivers.
+const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
+    // transform-tier default-off recovery/structuring passes.
+    ("switchmodbound", "on"),
+    // (kuna) Itanium try/catch for the landing pads with a catch clause: +0.5%
+    // instructions on a 252 KB g++ binary (`itaniumeh on`, every cleanup pad
+    // too, costs +25%).
+    ("itaniumeh", "catch"),
+    // (kuna) Recover a CMOV/predicated indirect dispatch over constant code
+    // addresses. The default `reentry` recovers only re-entered dispatcher loops,
+    // because a conditional tail call between two nearby function entries has the
+    // same shape and recovering it splices both callee bodies into the caller;
+    // preset membership is the delivery route for `on`, since the only
+    // alternative on a real dispatch is losing the whole body behind the branch
+    // to a `(*v)()` call.
+    ("constselectjump", "on"),
+    ("switchguardbound", "on"), // speed-expensive
+    ("unrolledguard", "on"),    // speed-expensive
+    ("globalarrayanchor", "on"),
+    ("opaquepredicate", "on"),
+    ("sparcstructret", "on"),     // SPARC-idiom-gated; no-op off-SPARC
+    ("v850indirectbranch", "on"), // V850-gated (kuna_v850indbranch::applies); no-op off-V850
+    ("regionedgeorder", "on"),
+    ("returndup", "on"), // default-ON since DIV-54; kept so the preset owns it
+    // (kuna) Decline the returndup split at the join of a one-block `if`, so
+    // `if (c) f(); return 0;` is not printed as `if (!c) return 0; f(); return 0;`.
+    // Shipped OFF because the decbench O2 sample moved aggregate GED by +60 (it is
+    // -163 and +56 GED-perfect at O0); preset membership delivers it to the page.
+    ("rettriangle", "on"),
+    ("iteexpr", "on"), // angr-style ?: recovery over computed-expression arms (readability)
+    // Recover the scalar loop for readability. Kept in aggressive mode because
+    // this hides the compiler's vector stride and duplicated loop body.
+    ("devectorize", "on"),
+    // (kuna) Valid per-architecture C type spelling. The shipped catalog default
+    // is OFF because 42 XML datatest assertions pin the Ghidra spellings, and the
+    // parity harness applies no mode -- so preset membership (with `fast` and
+    // `AUTO_OVERRIDES`) is what makes valid C the default RENDERING for every
+    // real binary without touching the corpus.
+    ("ctypes", "on"),
+    // (kuna) Print a partial access no member names as a typed pointer access
+    // instead of Ghidra's `name._<off>_<size>_`. A shipped default; kept so the
+    // preset owns it.
+    ("partialaccess", "on"),
+    // (kuna) Lay out an address-taken frame record read at several widths as
+    // one synthesized structure. Shipped OFF because the structure is a layout
+    // hypothesis and its program-wide name renumbers later synthesized
+    // structures; 0/675 datatest assertions move with it on.
+    ("stackstruct", "on"),
+    // (kuna DIV-98) Elide a void function's trailing bare `return;`, the statement
+    // the C source it came from does not have. A shipped default; kept so the
+    // preset owns it.
+    ("voidtailreturn", "on"),
+    ("importdata", "on"), // a shipped default; kept so the preset owns it
+    // (kuna, DIV-99) Fold the Cortex-M `isCurrentModePrivileged()` guard the
+    // vendored ARM SLEIGH wraps around every VERSION_7M MRS/MSR. A shipped
+    // default, kept so the preset owns it. Structurally inert everywhere else --
+    // the fixup is registered only on a language that declares the user-op, and
+    // only 12 Thumb-2 constructors emit it.
+    ("cortexmpriv", "on"),
+    ("x64syscall", "on"),
+    // (kuna, DIV-108) Cap the pointer nesting `ActionInferTypes` will adopt. A
+    // small-string-optimized C++ object writes the unsatisfiable equation
+    // `T == ptr(T)` into the type lattice, so the propagation adds one pointer
+    // level per pass up to its seven-pass settle ceiling and declares the object
+    // `unsigned long long *****`. Shipped default OFF because it changes INFERRED
+    // types and the XML datatest corpus pins the upstream spellings while applying
+    // no mode; preset membership is what makes the cap the default rendering for
+    // every real binary. Inert on anything whose types already settle -- the rule
+    // is upstream's own `getTypePointerNoDepth`, and depth 1/2 over a concrete base
+    // (`char **argv`) is untouched. Corpus sweep: 90 binaries / 22,307 functions,
+    // 103 change (0.46%), `***` occurrences 1,617 -> 28 and functions carrying one
+    // 80 -> 17, ZERO call sites lost or gained. Speed is paid only where it fires:
+    // -0.12% on a 1,027-function binary whose output is byte-identical on both
+    // arms, +5.3% on the witness binary where 1 of 144 functions changes.
+    ("ptrdepthcap", "on"),
+    // (kuna, GH-869) Give an indirect call's target the function-pointer type
+    // the call states. A shipped default; kept so the preset owns it.
+    ("calltargettype", "on"),
+    // (kuna) Name a local after the library call that returns it or takes it
+    // whole (`fd = open(...)`, `read(fd, ...)`). A shipped default; kept so the
+    // preset owns it.
+    ("libcnames", "on"),
+    // (kuna) ARM hard-float scalar VFP contracts: a double returned whole in d0
+    // and float/double parameters in their s/d registers on both sides of a
+    // call. Shipped defaults, kept so the preset owns them; inert unless the ELF
+    // container states the VFP procedure-call standard, so soft-float, softfp and raw
+    // images print byte-identically. `armfloatargs` needs `armfloatreturn`.
+    // Measured over a 42-binary gcc/clang ABI corpus (hard, softfp and soft
+    // float; -O0/-O2/-Os) and 84 hard-float decbench firmware slices; see the
+    // options' catalog rows.
+    ("armfloatreturn", "on"),
+    ("armfloatargs", "on"),
+    // analysis-tier default-off discovery/markup passes. `listing` is the master
+    // gate that enables the Listing-consuming passes (fid/aif/discovered-noreturn).
+    ("listing", "on"),
+    ("fast_funcdisc", "on"),
+    ("eh_frame_full", "on"),
+    ("funcstart_patterns", "on"),
+    ("addrtable", "on"),
+    ("operand_refs", "on"),
+    // (kuna) The 4-byte string width: an int table of character codes is
+    // byte-for-byte a wide literal, so it ships off and plants only what the image
+    // backs as a string (an operand or pointer at the start that no code indexes,
+    // a 4-byte mergeable string section).
+    ("widestrings32", "on"),
+    ("fid", "on"),
+    ("flirt", "on"),       // inert without KUNA_FLIRT_SIGS
+    ("rtti", "on"),        // PE-only; no-op off-PE
+    ("itaniumrtti", "on"), // ELF and Mach-O, inert without __cxxabiv1 typeinfo anchors
+    // The speculative gap-walk ("may create bad code") with the aligned gap cursor
+    // (GH-299). Every number in its catalog row was measured under this preset,
+    // and the aligned cursor is a net win in BOTH directions there (mid-body
+    // entries -38.9%, recall +344 over 110 stripped non-x86-64 binaries) but misses
+    // the acceptance bar pre-registered for becoming the shipped default, so preset
+    // membership is how it reaches the default path. Not `precise`: its
+    // corroboration test (GH-313) costs more real functions than it removes
+    // phantoms on every corpus measured.
+    ("aif", "strict"),
+    // (kuna, DIV-93) The four-step ARM entry-discovery sequence (#248 / #255 /
+    // #259 / #278). `cortexmvectors`, `ptrentry` and `tailcallentry` carry an
+    // explicit `object::Architecture::Arm` early return; `poolentry` has no arch
+    // gate but is ARM-only IN EFFECT, because it keys on PC-relative literal
+    // pools, which x86-64 (RIP-relative loads target .rodata, not .text
+    // interstices) and i386 (no PC-relative addressing) do not produce. Either
+    // way the no-op is proven rather than assumed: over 90 x86-64 decbench twins
+    // and the 12 i386 PE images inside the ARM corpus the entry sets are
+    // IDENTICAL, and emitted C over 8 x86-64 binaries is byte-identical. They
+    // COMPOSE, so preset
+    // membership was one joint evaluation, measured over the 110 stripped
+    // non-x86-64 decbench twins (50,724 symbol-table function starts):
+    // recall 44,957 -> 47,330 (88.63% -> 93.31%, +2,373) while mid-body false
+    // entries FALL 8,333 -> 7,117. 98.8% of the 2,402 added entries are real
+    // function starts and ZERO ground-truth entries are lost -- `poolentry`
+    // retires 1,217 phantom entries, none of them ground truth.
+    // `ptrentry`/`tailcallentry`/`poolentry` are Listing consumers and are inert
+    // without `listing` + `aif`; the preset supplies both, which is what makes
+    // the flip deliver anything at all (these are flag writes, so their position
+    // in this list carries no ordering semantics -- the dependency is at run time).
+    ("cortexmvectors", "on"),
+    ("ptrentry", "on"),
+    ("tailcallentry", "on"),
+    ("poolentry", "on"),
+    ("objc", "on"),          // Mach-O-only; no-op off-Mach-O
+    ("swiftmetadata", "on"), // Mach-O/ELF with swift5_* sections only; no-op elsewhere
+    ("cfstrings", "on"),     // Mach-O-only; no-op off-Mach-O
+    ("pdb", "on"),           // PE-only; no-op off-PE (a shipped default since DIV-129)
+    ("macho-arm64e", "on"),  // Mach-O arm64e-only; no-op elsewhere
+];
+
+/// `fast` = avoid the three exhaustive program-wide discovery paths that dominate
+/// large-binary latency, while retaining rooted recursive discovery and
+/// conservative pointer validation for a usable whole-binary project.
+///
+/// `ctypes` is the printer's C spelling of the core types. It costs nothing, so
+/// a speed preset has no reason to print `int8` where `aggressive` prints
+/// `long long` (GH-1063).
+const FAST_OVERRIDES: &[(&str, &str)] = &[
+    ("listing", "off"),
+    ("funcstart_patterns", "off"),
+    ("aif", "off"),
+    ("fast_funcdisc", "on"),
+    ("ctypes", "on"),
+];
+
+/// `auto`'s own overrides, applied under every preset it selects. The size
+/// policy trades discovery and recovery depth for latency; the spelling of the
+/// emitted C is not part of that trade, so `ctypes` holds at every size,
+/// including the `reliable` tier between 500 KiB and 2 MiB. An explicit
+/// `--mode reliable` stays the catalog defaults.
+const AUTO_OVERRIDES: &[(&str, &str)] = &[("ctypes", "on")];
+
+/// Select the concrete preset for `size_bytes` under the `auto` policy.
+pub fn auto_mode_for_size(size_bytes: u64) -> &'static str {
+    if size_bytes < AUTO_RELIABLE_MIN_BYTES {
+        "aggressive"
+    } else if size_bytes < AUTO_FAST_MIN_BYTES {
+        "reliable"
+    } else {
+        "fast"
+    }
+}
+
+/// Resolve an omitted or named frontend mode to a concrete preset name only;
+/// the overrides to apply come from [`resolve_overrides_for_size`].
+///
+/// Omission selects `auto`. Explicit concrete presets ignore `size_bytes`.
+/// Returns `None` for an unknown name.
+pub fn resolve_mode_for_size(requested: Option<&str>, size_bytes: u64) -> Option<&'static str> {
+    let requested = requested.unwrap_or("auto");
+    let mode = MODE_TABLE.iter().find(|mode| mode.name == requested)?;
+    if mode.automatic {
+        Some(auto_mode_for_size(size_bytes))
+    } else {
+        Some(mode.name)
+    }
+}
+
+/// Resolve an omitted or named frontend mode to its concrete preset and the
+/// ordered overrides a frontend applies for it: an automatic policy's own
+/// overrides, then the selected preset's. Returns `None` for an unknown name.
+pub fn resolve_overrides_for_size(
+    requested: Option<&str>,
+    size_bytes: u64,
+) -> Option<(&'static str, Vec<(&'static str, &'static str)>)> {
+    let requested = requested.unwrap_or("auto");
+    let mode = MODE_TABLE.iter().find(|mode| mode.name == requested)?;
+    let concrete = resolve_mode_for_size(Some(requested), size_bytes)?;
+    let mut overrides = if mode.automatic {
+        mode.overrides.to_vec()
+    } else {
+        Vec::new()
+    };
+    overrides.extend_from_slice(mode_overrides(concrete)?);
+    Some((concrete, overrides))
+}
+
+/// Whether `name` identifies a frontend policy rather than a static preset.
+pub fn mode_is_automatic(name: &str) -> bool {
+    MODE_TABLE.iter().any(|m| m.name == name && m.automatic)
+}
+
+/// The override list for a static `name`, or `None` if `name` is unknown or
+/// automatic. A frontend applies [`resolve_overrides_for_size`] instead, which
+/// also carries `auto`'s own overrides; this list alone drops them.
+pub fn mode_overrides(name: &str) -> Option<&'static [(&'static str, &'static str)]> {
+    MODE_TABLE
+        .iter()
+        .find(|m| m.name == name && !m.automatic)
+        .map(|m| m.overrides)
+}
+
+/// The shipped mode names, in table order.
+pub fn mode_names() -> impl Iterator<Item = &'static str> {
+    MODE_TABLE.iter().map(|m| m.name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::options::KUNA_OPTION_NAMES;
+
+    #[test]
+    fn every_override_names_a_real_option() {
+        for m in MODE_TABLE {
+            for (opt, _val) in m.overrides {
+                assert!(
+                    KUNA_OPTION_NAMES.contains(opt),
+                    "mode `{}` references unknown option `{}`",
+                    m.name,
+                    opt
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn reliable_is_a_no_op_alias() {
+        assert!(mode_overrides("reliable").unwrap().is_empty());
+    }
+
+    #[test]
+    fn auto_uses_exact_binary_size_boundaries() {
+        assert_eq!(auto_mode_for_size(0), "aggressive");
+        assert_eq!(
+            auto_mode_for_size(AUTO_RELIABLE_MIN_BYTES - 1),
+            "aggressive"
+        );
+        assert_eq!(auto_mode_for_size(AUTO_RELIABLE_MIN_BYTES), "reliable");
+        assert_eq!(auto_mode_for_size(AUTO_FAST_MIN_BYTES - 1), "reliable");
+        assert_eq!(auto_mode_for_size(AUTO_FAST_MIN_BYTES), "fast");
+        assert_eq!(auto_mode_for_size(u64::MAX), "fast");
+    }
+
+    #[test]
+    fn frontend_resolution_defaults_to_auto_and_preserves_concrete_modes() {
+        assert_eq!(resolve_mode_for_size(None, 0), Some("aggressive"));
+        assert_eq!(
+            resolve_mode_for_size(Some("auto"), AUTO_RELIABLE_MIN_BYTES),
+            Some("reliable")
+        );
+        assert_eq!(resolve_mode_for_size(Some("fast"), 0), Some("fast"));
+        assert_eq!(
+            resolve_mode_for_size(Some("aggressive"), u64::MAX),
+            Some("aggressive")
+        );
+        assert_eq!(resolve_mode_for_size(Some("turbo"), 0), None);
+    }
+
+    #[test]
+    fn auto_is_dynamic_not_a_static_override_list() {
+        assert!(mode_is_automatic("auto"));
+        assert!(!mode_is_automatic("reliable"));
+        assert!(mode_overrides("auto").is_none());
+    }
+
+    #[test]
+    fn aggressive_excludes_dwarf_lines_but_includes_the_rest() {
+        let agg = mode_overrides("aggressive").unwrap();
+        // The one intentional exclusion: source-line comment noise over every
+        // statement of a `-g` binary.
+        assert!(
+            !agg.iter().any(|(o, _)| *o == "dwarf_lines"),
+            "aggressive must NOT enable dwarf_lines (buries `-g` output in /* src.c:N */)"
+        );
+        // Representative members that MUST be on.
+        for want in [
+            "listing",
+            "switchguardbound",
+            "returndup",
+            "sparcstructret",
+            "v850indirectbranch",
+            "globalarrayanchor",
+        ] {
+            assert!(
+                agg.iter().any(|(o, v)| *o == want && *v == "on"),
+                "aggressive must enable `{want}`"
+            );
+        }
+        // Every aggressive override turns its option on; `aif` takes its aligned cursor
+        // and `itaniumeh` its cheap level (pads with a catch clause only).
+        assert!(
+            agg.contains(&("aif", "strict")),
+            "aggressive must set `aif strict`"
+        );
+        assert!(agg.iter().all(|(o, v)| *v == "on"
+            || (*o, *v) == ("aif", "strict")
+            || (*o, *v) == ("itaniumeh", "catch")));
+    }
+
+    /// The preset's headline contract, enforced rather than sampled: **every**
+    /// default-off option is in `aggressive` except the two documented exclusions.
+    ///
+    /// The sampled test above passes whether or not a newly added default-off
+    /// option was ever put in the list, and a default-off option outside the list
+    /// is *unreachable in practice* — `auto` selects `aggressive` for anything
+    /// under 500 KiB, which is the default path for essentially every invocation,
+    /// so such an option never runs for `decompile-all`, the web front-end, or the
+    /// benchmark. That is exactly how `itaniumrtti` was first shipped inert. This
+    /// test makes the omission a build failure instead of a silent no-feature.
+    #[test]
+    fn aggressive_carries_every_default_off_option() {
+        use crate::kuna_phases::{kuna_num_settables, kuna_settable_by_index};
+
+        /// The DELIBERATE exclusions, each with its reason recorded on
+        /// `AGGRESSIVE_OVERRIDES`: `dwarf_lines` buries a `-g` binary's C under
+        /// per-instruction `/* src.c:N */` comments, and `formatstring` costs a second full
+        /// decompile of every caller that yields a varargs override -- measured
+        /// +43.7% to +77.5% on whole-binary `decompile-all`, far over the 5% speed
+        /// budget, so standing requirement 4 holds it to an opt-in (DIV-66).
+        /// `nulterminator` folds a lone unread zero after an open stack `char`
+        /// array into the array, and the same frame shape is the struct-first-member
+        /// idiom (`strncpy(u.name, s, N); u.active = 0; f(&u);`): measured on gcc and
+        /// clang-12 at `-O0`/`-O2`, it grows a correctly-sized `char name[32]` to
+        /// `[33]` by absorbing the sibling field, and no frame-level signal separates
+        /// that field from a genuine terminator. In the preset it would be the
+        /// default output under 500 KiB, which is exactly what it is opt-in to avoid.
+        /// `msvcstrappend` deletes an inlined MSVC `std::string` append's fast arm and
+        /// names the grow call `std::string::push_back`/`append` on the strength of
+        /// the call's argument shape; the callee body is never read. That trust is a
+        /// judgement the operator makes about the binary, not one the preset should
+        /// make as the default output under 500 KiB.
+        /// `structdefs` prints the definitions of the composites a function
+        /// references above it. Nothing about it is wrong output -- the body is
+        /// byte-identical either way, and the corpus sweep in
+        /// `docs/features/structdefs/` shows 523 hunks over six binaries with zero
+        /// deleted lines. It is excluded because of what the preset IS: the default
+        /// output under 500 KiB, which is the text a caller diffs, feeds to a
+        /// matcher, or reads one function of. A preamble in front of every function
+        /// that touches a `FILE *` is noise there (36 of fmt's 151 functions repeat
+        /// the same `typedef struct FILE FILE;`), and on an unstripped binary it is
+        /// 8,071 added lines on `ls` alone. Who wants to see a layout is a reader's
+        /// choice, not a size threshold's.
+        ///
+        /// `indirectonly` is the upstream `Funcdata::markIndirectOnly` body, and
+        /// turning it on lets a register merge into a frame slot whose entry value
+        /// only ever reached call INDIRECTs. That is right when the machine really
+        /// does store into the slot and wrong when it only loads it: in the second
+        /// case the emitted C mutates memory the machine never writes, and a later
+        /// call handed the enclosing object reads a value that never existed
+        /// (`bzip2` -O2 `sub_3890`, `kmod` -O2-noinline `sub_97b0`; stock Ghidra
+        /// emits the same fabricated store). Nothing at HighVariable level tells the
+        /// two apart -- a CPUI_INDIRECT is attached only where the storage is still
+        /// live in the SSA, so a slot that is dead after its last read carries no
+        /// guard at any later call -- so fabricating a store as the default output
+        /// under 500 KiB is the operator's judgement, not the preset's.
+        ///
+        /// `stackalias` now preserves physical frame writes that escaped pointers
+        /// can observe. Retaining those writes changes stack layout and declaration
+        /// types; recovery stays explicit until the memory/view chain is complete.
+        /// `stackviews` likewise remains manual while bounded coverage is completed.
+        ///
+        /// `protoorder` is a whole-binary RUN ORDER, not a pass, and its own
+        /// default (`cycles`) already turns it on where it means anything: a
+        /// serial `unlace decompile-all`. The other surfaces cannot act on it, so
+        /// preset membership would change nothing.
+        ///
+        /// `bejoin on` joins a big-endian or AVR two-register value high word
+        /// first when its low word looks returned on purpose. The rule reads the
+        /// instructions, not a type, and an `int` that works over the high half
+        /// of a 64-bit temporary compiles to the `long long`'s registers, so with
+        /// it on that correct `int` prints as a wrong `long long` (GH-904). In
+        /// the preset it would be the default output under 500 KiB, which is
+        /// exactly what it is opt-in to avoid; every mode keeps the default,
+        /// `callers`, which joins that way only on proof.
+        /// `mixedtailret` returns a value a function tested beside a tail call,
+        /// and a `void` guard that leaves the tested value in the return
+        /// register compiles to the same bytes (clang's ARM `thr`/`keep`), so
+        /// in the preset it would give such guards a return they do not have.
+        ///
+        /// `varargsharedfloat` reads a PowerPC register choice that only -O0
+        /// code preserves: on clang -O2 and -Os batteries it adds 23 arguments
+        /// the source never passed for 11 it restores.
+        ///
+        /// `callarrayextent` preserves call-written aliases by declaring the
+        /// available frame region as an array, but a pointer parameter does not
+        /// establish the source array's exact length. Keep that representation
+        /// choice per-run rather than enabling it in a preset.
+        ///
+        /// `armconstshift` makes signed ARM constant shifts defined C at the
+        /// cost of a cast pair on every sign-bit test (`x << 0x18 < 0`), which
+        /// firmware uses for nearly every register flag check. `wrapadd` makes a
+        /// widened four-byte sum wrap the same way, at the cost of a cast pair on
+        /// every such sum (`return a0 + 3;`).
+        ///
+        /// `x86listingswitch` reaches valid cases but ordinary tail jumps from
+        /// them can hide independent function entries from the AIF gap walk;
+        /// the i386 corpus lost seven true starts, so it remains explicit.
+        ///
+        /// `regsigned` declares a sign-extended register local at its narrow
+        /// width. On decbench type_match it gained a few perfect functions on
+        /// ARM firmware and none on x86-64, and a narrowed value that a wider
+        /// reader takes back gains a cast (`(long)(int)v` on AArch64).
+        ///
+        /// `callwide` requires complete caller evidence and remains an explicit
+        /// opt-in until its default validation is complete.
+        /// `ppc32picimports` proves PIC caller bases but adds significant load
+        /// cost on large import inventories, so it requires an explicit option.
+        /// `rustfmt all` (the String and Stdout write! recoveries) is deliberately
+        /// not in the preset for speed: neither writer cleared its speed study.
+        /// `rustfmt` is multi-valued, so it is outside this invariant's scope.
+        /// `rustprobestack` did not clear its default wall-time confidence bounds.
+        /// `highsliceguard` added 10.8% CPU time when recovering the upstream table.
+        /// `rustarrayzero` missed the initial default-on CPU median budget.
+        /// `ppcapu` selects the e500 model, whose scalar call arguments are not
+        /// yet recovered, so it requires an explicit option.
+        const EXCLUDED_ON_PURPOSE: &[&str] = &[
+            "dwarf_lines",
+            "nulterminator",
+            "msvcstrappend",
+            "structdefs",
+            "indirectonly",
+            "protoorder",
+            "stackalias",
+            "stackviews",
+            "bejoin",
+            "mixedtailret",
+            "varargsharedfloat",
+            "callarrayextent",
+            "armconstshift",
+            "wrapadd",
+            "regsigned",
+            "x86listingswitch",
+            "callwide",
+            "ppc32picimports",
+            "ppcapu",
+            "rustprobestack",
+            "highsliceguard",
+            "rustarrayzero",
+            // `lazyfuncs` changes no output, but its saving is a single-function
+            // property: the whole-binary surfaces the presets drive (decompile-all,
+            // the web front-end, the benchmark) materialize every target they walk
+            // anyway, so preset membership would buy nothing there and has not been
+            // measured on them. Flip it into the preset with that measurement.
+            "lazyfuncs",
+            // `libgccsigs` costs a SPARC32 caller that returns arithmetic on
+            // the `__divdi3` quotient its low word or its whole return (see its
+            // catalog row), so the preset must not turn it on.
+            "libgccsigs",
+            // `latecse` lengthens the output (shared values become temporaries)
+            // and `dirtypool` reaches a different fixpoint (stage folds lost);
+            // see their catalog rows.
+            "latecse",
+            "dirtypool",
+            // `relronoreturn` trades structure for speed (it skips a restart
+            // whose second pass renders better), the opposite of this preset.
+            "relronoreturn",
+            // `mba` targets obfuscated code; on ordinary code it can only
+            // refold arithmetic the compiler already chose.
+            "mba",
+            // `contextnames` renames loop counters and returned locals that the
+            // CLI tests of other features, which run under `auto`, spell as
+            // `vN`; it joins the preset once those are re-pinned.
+            "contextnames",
+            // `mapglobalsyms` makes a function's output depend on which functions
+            // were decompiled before it in the same run; in the preset that would
+            // make every `decompile-all` under 500 KiB order-dependent.
+            "mapglobalsyms",
+            // `varargsave` and `dynalloca` are fallbacks for the default-on
+            // `vastart` and `alloca`, which fold the same code; turning both on
+            // only adds a second pass over it.
+            "varargsave",
+            "dynalloca",
+        ];
+
+        /// Default-off options that predate this test and are **not** in the preset,
+        /// i.e. are currently unreachable on the default path. Each is a genuine open
+        /// question rather than a decision: preset membership changes emitted C on
+        /// the binaries the option fires for, so each needs its own sweep, speed
+        /// measurement and PR (`paramcopyhoist`'s own catalog row already records
+        /// that its flip regresses a stage assertion and was deferred). Listed here
+        /// so the invariant can be enforced for *new* options without silently
+        /// flipping the existing ones; shrinking this list is the follow-up.
+        ///
+        /// The four ARM entry options (`cortexmvectors`, `ptrentry`, `tailcallentry`,
+        /// `poolentry`) came OFF this list in DIV-93. The joint evaluation this entry
+        /// asked for was run over the 110 stripped non-x86-64 decbench twins and all
+        /// four passed it, so they are in `AGGRESSIVE_OVERRIDES` above.
+        /// `godwarfsig` remains explicit while aggregate ABI interactions and
+        /// `gopairreturns` remains explicit while aggregate ABI interactions across
+        /// Go corpus sizes are evaluated for automatic selection.
+        const UNEVALUATED: &[&str] = &[
+            // Landed with fixture measurements only: `funcchunks` changes only FID's
+            // input, `tailcallentryall` was measured on Lua and the LLVM tools, and
+            "funcchunks",
+            "tailcallentryall",
+            // `dwarfglobaltypes` was turned off by default in its own branch after
+            // landing; it has no preset sweep yet.
+            "dwarfglobaltypes",
+            // Stack-address liveness can be incidental; synthetic regressions and
+            // a local speed measurement do not justify a broad preset flip.
+            "stackaddrargtrial",
+            "paramcopyhoist",
+            // `guardarm` / `loopcondhoist` land as opt-ins with their whole-O0
+            // bidirectional sweep already recorded in their catalog rows; preset
+            // membership makes them the default output, which is a DIV-recorded
+            // default change and gets its own PR (the 0/675 ablation and the speed
+            // number are the two things that PR has to add).
+            "guardarm",
+            "loopcondhoist",
+            // `cmpmerge` moves 5/675 datatest assertions; a preset flip needs a
+            // decbench sweep first.
+            "cmpmerge",
+            // `switchselector` is the one entry here whose evaluation is already
+            // done and recorded (its catalog row carries the 0/675 datatest
+            // ablation and the whole-corpus sweep: one function changes across
+            // seventeen binaries, a `switch(0)` with five unreachable cases
+            // becoming a five-branch if/else-if chain over the recovered
+            // parameter). What it is waiting on is the thing this list exists to
+            // hold back -- preset membership is a DIV-recorded default change,
+            // and the DIV registry is not this change's to write.
+            "switchselector",
+            // (kuna `charptr`) Commit a pointer the program only ever uses on
+            // characters to `char *`. The sweep says no: once a constant PTRADD
+            // index counts as a field offset (as a literal INT_ADD always did), 444
+            // slices / 10,748 functions move none onto perfect `type_match`, 2 up
+            // and 4 down, aggregate -0.57. Nearly all of the earlier +4.93 was the
+            // skip-the-first-character idiom, which is indistinguishable from a
+            // struct field. The preset run of `PYTHONPATH=. python3 -m scripts.repipe.clitests` also moves six probes
+            // that pin the pointer spelling `protoorder` and `ptrfromuse` produce.
+            // Full evaluation: docs/features/charptr/default-on-evaluation.md.
+            "charptr",
+            // (kuna `fieldtype`) Declare a synthesized field some access holds as
+            // a pointer as that pointer. Every flip criterion passes (0/675,
+            // stages, test-cli, the 444-slice typesweep unmoved, 191 casts fewer
+            // on the shared set) except fields-only layout precision, .8713 ->
+            // .8693: the layout ledger shares a record only on exact field-type
+            // agreement, and a field re-typed in one reader and not another moves
+            // which record the other is answered with. Full evaluation:
+            // docs/features/fieldtype/default-on-evaluation.md.
+            "fieldtype",
+            // `bytearrayc` changes the C emitted for mapped global integer
+            // accesses. This PR adds focused compiler fixtures, not the broad
+            // preset sweep or speed measurement needed before changing the
+            // default output for every aggressive-mode decompile.
+            "bytearrayc",
+        ];
+
+        let agg = mode_overrides("aggressive").unwrap();
+        let mut missing: Vec<&str> = Vec::new();
+        for i in 0..kuna_num_settables() {
+            let st = kuna_settable_by_index(i);
+            // Only ON/OFF options with a shipped default of `off` are in scope;
+            // a multi-valued option (e.g. `cppsig = off|proven|inferred`) has no
+            // single "on" the preset could pin.
+            if st.shipped != "off" || st.values != "on|off" {
+                continue;
+            }
+            if EXCLUDED_ON_PURPOSE.contains(&st.option) {
+                assert!(
+                    !agg.iter().any(|(o, _)| *o == st.option),
+                    "`{}` is a documented exclusion and must NOT be in aggressive",
+                    st.option
+                );
+                continue;
+            }
+            if UNEVALUATED.contains(&st.option) {
+                continue;
+            }
+            if !agg.iter().any(|(o, v)| *o == st.option && *v == "on") {
+                missing.push(st.option);
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "these default-off options are absent from AGGRESSIVE_OVERRIDES and are \
+             therefore unreachable on the default path (`auto` picks `aggressive` \
+             under 500 KiB, so `decompile-all`, the web front-end and the benchmark \
+             never run them): {missing:?}. Either add each to the preset -- with a \
+             sweep and a speed measurement -- or list it in EXCLUDED_ON_PURPOSE / \
+             UNEVALUATED here with the reason."
+        );
+        // The bookkeeping lists must stay honest: an entry that IS in the preset,
+        // or that names no option at all, is stale.
+        for name in EXCLUDED_ON_PURPOSE.iter().chain(UNEVALUATED) {
+            assert!(
+                (0..kuna_num_settables()).any(|i| kuna_settable_by_index(i).option == *name),
+                "`{name}` is listed here but is not a registered option"
+            );
+        }
+        for name in UNEVALUATED {
+            assert!(
+                !agg.iter().any(|(o, _)| o == name),
+                "`{name}` is now IN the preset -- remove it from UNEVALUATED"
+            );
+        }
+    }
+
+    #[test]
+    fn fast_replaces_exhaustive_with_bounded_discovery() {
+        assert_eq!(
+            mode_overrides("fast").unwrap(),
+            &[
+                ("listing", "off"),
+                ("funcstart_patterns", "off"),
+                ("aif", "off"),
+                ("fast_funcdisc", "on"),
+                ("ctypes", "on")
+            ]
+        );
+    }
+
+    #[test]
+    fn auto_spells_c_at_every_size_and_explicit_presets_keep_their_lists() {
+        for size in [0, AUTO_RELIABLE_MIN_BYTES, AUTO_FAST_MIN_BYTES, u64::MAX] {
+            for requested in [None, Some("auto")] {
+                let (concrete, overrides) = resolve_overrides_for_size(requested, size).unwrap();
+                assert_eq!(concrete, auto_mode_for_size(size));
+                let own = AUTO_OVERRIDES.len();
+                assert_eq!(&overrides[..own], AUTO_OVERRIDES, "auto at {size}");
+                assert_eq!(&overrides[own..], mode_overrides(concrete).unwrap());
+            }
+        }
+        for name in ["reliable", "aggressive", "fast"] {
+            let (concrete, overrides) = resolve_overrides_for_size(Some(name), 0).unwrap();
+            assert_eq!(concrete, name);
+            assert_eq!(overrides, mode_overrides(name).unwrap());
+        }
+        assert!(resolve_overrides_for_size(Some("turbo"), 0).is_none());
+    }
+
+    #[test]
+    fn unknown_mode_is_none() {
+        assert!(mode_overrides("turbo").is_none());
+        assert!(mode_overrides("").is_none());
+    }
+
+    #[test]
+    fn mode_names_lists_all() {
+        let names: Vec<_> = mode_names().collect();
+        assert_eq!(names, vec!["auto", "reliable", "aggressive", "fast"]);
+    }
+}

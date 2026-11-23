@@ -17,11 +17,11 @@
   "timeout_s": 120,
   "repeat": 1,
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/passthrough_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/passthrough_x86_64",
     "binary_sha256": "e74292f2d09e3051b18a994569efe68958c29d4fe0cceb06bcf1accbe47668bc",
     "binary_size": 8568,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/passthrough_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/passthrough_x86_64",
     "selector": "sub_401019",
     "selector_kind": "name"
   },

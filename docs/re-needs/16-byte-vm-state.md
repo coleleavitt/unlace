@@ -14,7 +14,7 @@ rounds: [4]
 first_seen_round: 4
 attempts: 0
 covered_by_option: null
-touches: [decompiler/crates/unlace-decomp/src/p9_emit/printc.rs, decompiler/crates/unlace-decomp/src/p6_variables]
+touches: [crates/unlace-decomp/src/p9_emit/printc.rs, crates/unlace-decomp/src/p6_variables]
 scope: small
 regression_of: null
 pr: null

@@ -5,7 +5,7 @@ Scope: research only, no kuna code changes. Companion to `notes/ida-apple-mechan
 area is repeated here. Every IDA mechanism is described in our own words; addresses are offsets inside the IDA 9.5
 Linux modules, read from the idb-rs SQLite exports in `~/SiteResearch/ida-pro/sqlite/<category>__<module>.sqlite`
 (pseudocode, strings, xrefs) and from `~/.local/share/ida/9.5/cfg/*.cfg`. kuna side: branch `all`, catalog of
-308 options (`decompiler/target/debug/unlace catalog --json`), `unlace-analysis/src/analyzers/`, phase folders of
+308 options (`target/debug/unlace catalog --json`), `unlace-analysis/src/analyzers/`, phase folders of
 `unlace-decomp`. "Live kuna" means a run of the debug `unlace decompile` on a small clang/gcc test written for this
 survey (sources in the research session's scratchpad, not in the repo).
 

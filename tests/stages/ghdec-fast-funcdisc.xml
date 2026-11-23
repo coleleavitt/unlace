@@ -27,14 +27,14 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/pdb_prog.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/pdb_prog.exe</com>
   <com>mode fast</com>
   <com>option fast_funcdisc off</com>
   <com>option pdb off</com>
   <com>read symbols</com>
   <com>functions</com>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/pdb_prog.exe</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/pdb_prog.exe</com>
   <com>mode fast</com>
   <com>option pdb off</com>
   <com>read symbols</com>

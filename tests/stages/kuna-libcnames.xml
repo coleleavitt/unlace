@@ -14,7 +14,7 @@
     keeps its number, so every other local is numbered exactly as with the
     option off, and a directive reaches it by either name.
 
-    The fixture is decompiler/crates/unlace-analysis/tests/fixtures/libcnames_x86_64
+    The fixture is crates/unlace-analysis/tests/fixtures/libcnames_x86_64
     (gcc 11 -O2 -fno-inline, source beside it).
 
     Pass 1 sets the option off: every local of `copy_file` is a `vN`.  Pass 2
@@ -38,7 +38,7 @@ c3
 </binaryimage>
 <script>
   <com>clear architecture</com>
-  <com>load file decompiler/crates/unlace-analysis/tests/fixtures/libcnames_x86_64</com>
+  <com>load file crates/unlace-analysis/tests/fixtures/libcnames_x86_64</com>
   <com>read symbols</com>
   <com>option helperroles off</com>
   <com>option libcnames off</com>

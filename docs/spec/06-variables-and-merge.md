@@ -2,7 +2,7 @@
 
 ```yaml
 Anchors:
-  - decompiler/crates/unlace-decomp/src/p6_variables
+  - crates/unlace-decomp/src/p6_variables
 ```
 
 This phase turns SSA values into *human variables*: it decides which Varnodes
@@ -17,27 +17,27 @@ and `stackstall`'s `ActionStackPtrFlow` plus the `stackvars` rules, followed
 by `ActionRestrictLocalSavedLanes` after `stackstall`), while the
 *committing* merge phalanx (`ActionAssignHigh` through `ActionCopyMarker`) is a
 one-shot tail after `fullloop` exits — the exact order is the pass tree in
-`decompiler/crates/unlace-decomp/src/infra/universalaction.rs (universal_sched)`.
+`crates/unlace-decomp/src/infra/universalaction.rs (universal_sched)`.
 
 Option defaults and flip guidance for every option named below live in the
 generated catalog ([docs/options.md](../options.md)); the rows are defined in
-`decompiler/crates/unlace-decomp/phases.toml` and the intentional
+`crates/unlace-decomp/phases.toml` and the intentional
 default-divergences are DIV-3/14 in `docs/history.md`.
 
 > Scope note: several actions of this phase live outside the `p6_variables`
 > folder for file-lineage reasons — `ActionRestructureVarnode`,
 > `ActionMappedLocalSync`, `ActionDynamicMapping`, `ActionDynamicSymbols`, and
 > the `ActionStackPtrFlow` wrapper are in
-> `decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs`, and
+> `crates/unlace-decomp/src/p9_emit/coreaction_render.rs`, and
 > `ActionRestrictLocal` is in
-> `decompiler/crates/unlace-decomp/src/p4_calls/coreaction_protos.rs`. Conversely
-> `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_facing.rs` (the
+> `crates/unlace-decomp/src/p4_calls/coreaction_protos.rs`. Conversely
+> `crates/unlace-decomp/src/p6_variables/funcdata_facing.rs` (the
 > "facing type" a merged HighVariable presents at each read/write) is consumed
 > by the cast placement of chapter [09 — Emission](09-emission.md).
 
 ## 6.1 HighVariables & Cover
 
-**The artifact.** A `decompiler/crates/unlace-decomp/src/p6_variables/variable.rs
+**The artifact.** A `crates/unlace-decomp/src/p6_variables/variable.rs
 (HighVariable)` is an ordered list of member Varnodes that will render as one
 named variable. Its derived state — boolean properties, data-type, name
 representative, cover — is *lazily* recomputed under dirty bits
@@ -115,7 +115,7 @@ dynamic dataflow anchor instead of accepting an ambiguous storage mapping.
 
 **Cover.** A variable can only absorb another if their live ranges do not
 collide, and the live range is the
-`decompiler/crates/unlace-decomp/src/p6_variables/cover.rs (Cover)`: per basic
+`crates/unlace-decomp/src/p6_variables/cover.rs (Cover)`: per basic
 block, one interval from a start point to a stop point in the block's op order
 (sentinels for block-begin/block-end/function-input). Interval comparison
 returns a three-level verdict — 0 no overlap, 1 boundary-touch only, 2 real
@@ -131,7 +131,7 @@ and output Varnodes, and their owning HighVariables, must be marked dirty.
 The next merge comparison rebuilds those ranges using the new positions.
 The renumbering walks the block once and marks each Varnode as it meets it,
 skipping one already marked that has no HighVariable, since marking it again
-changes nothing (`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+changes nothing (`crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::bb_set_order_within)`). Heritage inserts one INDIRECT per guarded
 range in front of every call, which renumbers a large block about once every
 dozen insertions at each call; collecting the block's Varnodes into a set at
@@ -140,7 +140,7 @@ every renumbering spent 47 s of `tests/hang-repro/escaped_locals`' 95 s
 
 A Cover is keyed by block index; its walk over the CFG resolves an index to its
 block through a table built once per walk, the first block in list order with
-that index (`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+that index (`crates/unlace-decomp/src/substrate/funcdata.rs
 (FuncdataCoverCtx::block_id_of_index)`), rather than by rescanning the block list
 at every step, which made each Cover quadratic in the function's blocks.
 
@@ -219,7 +219,7 @@ Refreshing the positions preserves the boundary exclusion and the actual PHI
 dataflow. Calls genuinely inside the range still veto the merge.
 
 **What makes two Varnodes mergeable.** The gate is a three-rung test ladder in
-`decompiler/crates/unlace-decomp/src/p6_variables/merge.rs`, and the rung used
+`crates/unlace-decomp/src/p6_variables/merge.rs`, and the rung used
 determines how aggressive the merge may be:
 
 - `merge.rs (Merge::merge_test_basic)` — can this Varnode ever be part of a
@@ -292,13 +292,13 @@ secondary test:
 - Blocks where the two covers overlap at level 2 are re-examined per instance
   pair, and an overlap is *forgiven* when the two Varnodes are copy shadows —
   provably the same value (`merge.rs (MergeIntersect::test_block_intersection)`,
-  through `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_merge.rs
+  through `crates/unlace-decomp/src/p6_variables/funcdata_merge.rs
   (MergeContext for Funcdata)` to `Varnode::copy_shadow`); overlap-group pieces
   are tested at their relative offsets with partial shadows. A partial shadow
   between two constants compares the smaller one with the larger one truncated
   by the relative byte offset; a constant wider than 8 bytes holds zero above
   bit 63, so a truncation of 8 or more bytes compares against 0
-  (`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+  (`crates/unlace-decomp/src/substrate/funcdata.rs
   (Funcdata::find_subpiece_shadow)`).
 - If the covers are disjoint but exactly one high is address-tied, the
   *untied-call* test runs (`merge.rs
@@ -325,7 +325,7 @@ secondary test:
   `0xd1ee1`) then prints a loop whose increment writes another variable.
 
 **Forced merges** (`coreaction_cleanup.rs (ActionMergeRequired)` — all files
-in this section under `decompiler/crates/unlace-decomp/src/p6_variables/` unless
+in this section under `crates/unlace-decomp/src/p6_variables/` unless
 pathed). Three passes run in fixed order, and *must* succeed — where the cover
 forbids a forced merge, the machinery edits the data flow until it doesn't:
 
@@ -338,7 +338,7 @@ forbids a forced merge, the machinery edits the data flow until it doesn't:
    block for an input Varnode, otherwise directly after the defining op — with
    one carve-out: a value defined by an INDIRECT gets its COPY after the op
    *causing* the effect (the call or store iop-encoded in the INDIRECT's
-   input 1; `decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+   input 1; `crates/unlace-decomp/src/substrate/funcdata.rs
    (Funcdata::do_snip_reads_insert_point)`), never at the INDIRECT marker
    itself, which sits *before* that op in block order. Without the carve-out
    an out-parameter's post-call copy lands textually above the call that
@@ -417,7 +417,7 @@ instead of one per predecessor.
 
 *(kuna perf)* A merge pass edits ops but never blocks, so while one runs
 every Cover walk shares a single block-index table built on first use
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::cover_blocks)`,
+(`crates/unlace-decomp/src/substrate/funcdata.rs (Funcdata::cover_blocks)`,
 set and dropped by `funcdata_merge.rs (Funcdata::with_covermerge)`) instead of
 each walk rebuilding it from the block list. The intersection tests read the
 highs' and members' covers in place instead of copying them
@@ -504,7 +504,7 @@ decides per Varnode via `coreaction_cleanup.rs (base_explicit)`: explicit
 (but see `foldcallret`, §6.4), belongs to a multi-instance high, is
 address-tied or mapped or a proto-partial, has no or too many readers —
 more than `max_implied_ref` descendants, which ships at 2
-(`decompiler/crates/unlace-decomp/src/infra/architecture.rs
+(`crates/unlace-decomp/src/infra/architecture.rs
 (reset_defaults_internal)`; a PTRSUB off the spacebase lifts the cap to
 1000000 so stack addresses always fold). A multi-reader implied candidate is
 then re-examined for *term duplication*
@@ -730,7 +730,7 @@ same storage is called redundant and silenced, the emitted C returns the call's
 result on a path where the binary returns the parameter.
 
 The copy marker also runs
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_undefinedcopy.rs` for trim
+`crates/unlace-decomp/src/p6_variables/kuna_undefinedcopy.rs` for trim
 copies whose source is an INDIRECT creation explicitly marked as killed by a
 call, rather than a possible return value. Predicated loads can leave such a
 source on an unused phi edge: `if (valid) p = load(); if (valid && pending) use(p)`
@@ -907,7 +907,7 @@ distinct highs, such as a list element held across an inner loop and the loop's
 current element when both are passed to one `consume(Node *object)`, both
 become `object`. The walk now carries the set of names it has already bound to
 HighVariables, and a callee's parameter name is made unique against that set as
-well as the scope (`decompiler/crates/unlace-decomp/src/p6_variables/varmap.rs
+well as the scope (`crates/unlace-decomp/src/p6_variables/varmap.rs
 (ScopeLocal::make_local_name_unique_among)`), continuing the same `_00`, `_01`,
 ... sequence. Two highs that denote one object are unaffected: they share a
 name through their shared Symbol, never through a recommendation.
@@ -917,7 +917,7 @@ name through their shared Symbol, never through a recommendation.
 carries the library's names for its parameters and result (chapter 01), which the
 recommendation above never sees: they are not `innames` and lock nothing. The
 library name is a second name for a numbered local, never a replacement for
-its number. `decompiler/crates/unlace-decomp/src/p6_variables/kuna_libcnames.rs
+its number. `crates/unlace-decomp/src/p6_variables/kuna_libcnames.rs
 (candidates)` reads the evidence before the naming walk, the walk numbers
 every local exactly as it does with the option off and records that numbering
 for a directive replay, and only then does `kuna_libcnames.rs (apply)` give a
@@ -951,7 +951,7 @@ whether or not the function reads it), the scope holds, a callee or the
 function itself has.
 
 A directive reaches such a local by either name.
-`decompiler/crates/unlace-console/src/kuna_hightarget.rs (library_number)`
+`crates/unlace-console/src/kuna_hightarget.rs (library_number)`
 reads a library name as the number it stands for, and the printed-local lookup
 answers a number for the local printed under its library name, so a replay
 record and the stable numbering above only ever see numbers, and a directive
@@ -973,7 +973,7 @@ still `fd_2` and no local becomes `fd`; after `name v5 n`, read's result prints
 `v3` and `name v3 got` reaches it.
 
 **A loop counter and the returned local are named from their shape
-(`contextnames`, default off).** `decompiler/crates/unlace-decomp/src/p6_variables/kuna_contextnames.rs
+(`contextnames`, default off).** `crates/unlace-decomp/src/p6_variables/kuna_contextnames.rs
 (evidence)` adds two kinds of evidence to the `libcnames` walk above, so they
 are aliases of the same kind: the walk numbers every local as with the option
 off, the name is printed over the number afterwards, a directive reaches the
@@ -1003,7 +1003,7 @@ structure or scalar whose own address is a library argument
 `ReadFile(hFile,Buffer,0x200,&NumberOfBytesRead,NULL)`) is not a value the
 argument evidence above can reach: the argument is a `PTRSUB` of the frame's
 spacebase, and the object is the stack Symbol it addresses.
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_libcnames.rs
+`crates/unlace-decomp/src/p6_variables/kuna_libcnames.rs
 (addressed_object)` reads that Symbol at the address the naming walk links the
 reference to (`Funcdata::resolve_spacebase_ref_addr`), and takes it only when
 the reference addresses its first byte, its name is still undefined (a DWARF,
@@ -1099,7 +1099,7 @@ looking at the scope, so after `name v3 v1` the untouched local that came first
 in location order also became `v1`, and the printer's collision suffix then
 turned one of the two -- often the caller's -- into `v1_1`: the requested name
 landed on a variable nobody named. Every default now comes from
-`decompiler/crates/unlace-decomp/src/p6_variables/varmap.rs
+`crates/unlace-decomp/src/p6_variables/varmap.rs
 (ScopeLocal::next_default_name)`, which advances `base` past any name a
 name-locked Symbol of the local scope already holds. A default index is still
 consumed per local, so a function with no such Symbol numbers its locals exactly
@@ -1121,7 +1121,7 @@ old `v10` printed as `v9`, and a later directive naming `v9` (the web page sends
 every edit as a directive naming what the first decompile printed) reached a
 different variable than the one the caller saw. A retype that splits or merges a
 variable shifted the numbers the same way.
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stablenames.rs (snapshot)`
+`crates/unlace-decomp/src/p6_variables/kuna_stablenames.rs (snapshot)`
 now records which name each local got as the naming pass hands it out, when the
 caller may replay a directive against the function (the CLI's and the web page's
 first pass when a `name`/`type` directive targets it, and every console
@@ -1404,18 +1404,18 @@ inserted bridge bypass the additional speculative-merge scans.
 
 Stack locals do not exist until this phase builds them; before it, the frame
 is anonymous memory reached through the stack pointer. The promotion chain has
-three links. First `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs
+three links. First `crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs
 (Funcdata::spacebase)` (driven by `ActionSpacebase` in `mainloop`) marks every
 Varnode holding the stack-pointer value `spacebase` and types the input
 register as a pointer into the stack space. Second, the `stackvars` rules in
 `mainloop`'s second op pool, `oppool2` (`RuleLoadVarnode`/`RuleStoreVarnode`, registered in
-`decompiler/crates/unlace-decomp/src/infra/universalaction.rs (universal_sched)`)
+`crates/unlace-decomp/src/infra/universalaction.rs (universal_sched)`)
 rewrite `LOAD/STORE` through a spacebase-relative pointer into direct
 `(stack, offset)` Varnodes. Third, the stack-pointer *flow* itself is kept
 affine by `ActionStackPtrFlow` (§6.5). Everything below consumes the
 `(stack, offset)` Varnodes those links produce.
 
-**Keeping non-locals out** (`decompiler/crates/unlace-decomp/src/p4_calls/coreaction_protos.rs
+**Keeping non-locals out** (`crates/unlace-decomp/src/p4_calls/coreaction_protos.rs
 (ActionRestrictLocal)` → `funcdata_spacebase.rs (Funcdata::restrict_local)`,
 in `mainloop`). Stack storage that belongs to someone else is marked
 *not-mapped* before layout ever runs: the stack homes of locked parameters of
@@ -1428,7 +1428,7 @@ have its address taken or later hold another value, and an excluded slot loses
 both its declaration and its stores. The cost is that a function which
 also pushes such a register to save it, and whose frame escapes, can keep the
 push slot as a dead local assignment of the parameter. The same
-mechanism (`decompiler/crates/unlace-decomp/src/p6_variables/varmap.rs
+mechanism (`crates/unlace-decomp/src/p6_variables/varmap.rs
 (ScopeLocal::mark_not_mapped)`) later excludes an unaliased return-value
 staging slot (`funcdata_spacebase.rs (Funcdata::check_unaliased_return)`).
 
@@ -1505,7 +1505,7 @@ the right choice for the emitted C. On a machine-readable surface it is the wron
 one: it asserts an element type the recovery never established, where the
 program's own type may as well be `_Bool`, `unsigned char`, a one-byte enum or one
 byte of a struct nobody split.
-`decompiler/crates/unlace-decomp/src/p9_emit/kuna_bytehonest.rs
+`crates/unlace-decomp/src/p9_emit/kuna_bytehonest.rs
 (exported_type_name)` reports the width instead — `undefined1`, the spelling
 Ghidra uses for the same fact and the analogue of IDA's `_BYTE`. The predicate
 (`is_uncommitted_byte`) reads the datatype's own metatype and size, never its
@@ -1529,7 +1529,7 @@ that pass ran before type recovery committed anything, so at -O0 almost every
 filler slot reads `undefined8` while the C body prints the value that lived in
 it as `char *`. The value is still in the final function; only the link from
 the slot to it is gone.
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_slotptr.rs (record_pass)`
+`crates/unlace-decomp/src/p6_variables/kuna_slotptr.rs (record_pass)`
 runs beside the union at the tail of every `restructure_varnode` and notes, per
 exact `(offset, size)`, every value stored into the frame by its durable
 identity: the root op that computed it (walked back through COPY chains; an
@@ -1582,7 +1582,7 @@ them had a row: a consumer could not read their types, and decbench's
 index, then stack offset, then instruction-address overlap, scored every
 register-resident DWARF local as a miss. `extract_variables` appends a fourth
 section,
-`decompiler/crates/unlace-decomp/src/p9_emit/kuna_reglocals.rs
+`crates/unlace-decomp/src/p9_emit/kuna_reglocals.rs
 (register_locals)`: the declarations the printer emitted for the function
 (`printc.rs (DeclaredLocal)`), in declaration order, minus every declaration whose
 printed name a parameter or frame row already carries and every one that is
@@ -1644,7 +1644,7 @@ stack Symbol, so it is spelled by width: `local_c undefined4`. At -O0 the value
 in such a slot is usually a printed local that merged a register with its
 spill, declared `char *v1; // r0 | stack - 0xc`. The filler row keeps its frame name, offset and size and takes the
 type the C declares there, from
-`decompiler/crates/unlace-decomp/src/p9_emit/kuna_slotreport.rs
+`crates/unlace-decomp/src/p9_emit/kuna_slotreport.rs
 (covering_type)`. The candidates are the printer's declarations for the
 function (the same `DeclaredLocal` list and naming check `reglocals` uses)
 whose declared type is as wide as the slot and one of whose storage homes
@@ -1702,7 +1702,7 @@ what follows it) reaches the rows as one `undefinedN`: `local_18 undefined12`
 although the C declares `double v1; // stack - 0x18 | ...` at its start. Such
 a row is cut at the homes of the printed
 declarations lying wholly inside it, from
-`decompiler/crates/unlace-decomp/src/p9_emit/kuna_slotsplit.rs
+`crates/unlace-decomp/src/p9_emit/kuna_slotsplit.rs
 (split_rows)`. The homes are the `DeclaredSlots` index `slotreport` builds
 (`kuna_slotreport.rs (homes_within)`): a declaration's stack homes at its
 declared width, over its high and the highs declared through it. Each declared
@@ -1733,7 +1733,7 @@ now name (`CodeProvenance::apply_to_variables`) attaches to them as it does to
 any stack row. Every piece after a row's first is marked `split_piece`. The
 callee-vote redo check keeps a redo only when its frame rows match the first
 decompile's by count
-(`decompiler/crates/unlace-cli/src/decompile_all/callee_first.rs (same_arity)`),
+(`crates/unlace-cli/src/decompile_all/callee_first.rs (same_arity)`),
 and it counts rows without the mark, so the split, which follows the declared
 types a redo may change, never decides which C is kept. The option changes no
 p-code and no emitted C; the rows reach the same surfaces as `slotreport`'s
@@ -1766,7 +1766,7 @@ the end of the home area, the `code *local_res18 [2]` the stock decompiler
 prints, and a spill there that nothing reads is a dead local store.
 
 **RangeHint gathering.** Each `mainloop` pass,
-`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (ActionRestructureVarnode)` rebuilds the frame layout from scratch:
 `funcdata_spacebase.rs (Funcdata::restructure_varnode)` clears the unlocked
 auto-recovered stack symbols (a stale early-pass symbol must not outvote the
@@ -1845,7 +1845,7 @@ only, data-types) onto the Varnodes. Unmapped locations gain `nolocalalias`
 only when the caller enables alias checking and the local map proves the
 location unaliased. The first restructuring pass disables this check;
 later passes and the final sync enable it. After `fullloop` exits,
-`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (ActionMappedLocalSync)` runs that final data-type-updating sync once; its
 failure mode is tolerance, not an abort — the layout keeps the conceded
 unknowns (upstream additionally emits a "Could not reconcile some variable
@@ -1874,7 +1874,7 @@ This preserves a minimum footprint, not the original source declaration's
 capacity. The existing frame-window and next-object boundaries still close
 the array; padding may remain part of its inferred capacity. Dynamic stack
 allocation and source VLA reconstruction are not added by this rule.
-`decompiler/crates/unlace-cli/tests/indexed_stack_stores.rs` exercises tail
+`crates/unlace-cli/tests/indexed_stack_stores.rs` exercises tail
 halves, a narrower prefix view, an interior first-cell read, and an
 already-wide predicate control against authored native machine code and
 independent arithmetic at both compiler optimization levels.
@@ -1916,7 +1916,7 @@ storage retains its earlier values and aliases. The qualifying post-call read
 is still recognized relative to the original passed address, not the expanded
 parent base. Parameters and positive frame offsets are excluded. Explicit local
 types remain authoritative. The implementation is
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_callarrayextent.rs`.
+`crates/unlace-decomp/src/p6_variables/kuna_callarrayextent.rs`.
 
 **Address-taken frame records (kuna `stackstruct`, default `off`, on in
 `aggressive`).** A local record whose address is handed to a callee keeps no
@@ -1993,7 +1993,7 @@ printed as seven scalars -- and renumbers the synthesized structures of the
 later functions in that run. With the option on
 in default mode no datatest assertion and no other stage file's assertion
 moves. The implementation is
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackstruct.rs`.
+`crates/unlace-decomp/src/p6_variables/kuna_stackstruct.rs`.
 
 
 **An indexed array's extent (kuna `arrayextent`, default `on`).** The [0,3]
@@ -2010,7 +2010,7 @@ indices that their known bits bound (the same walk `stackstoreguard` uses,
 `kuna_storereach.rs (pointer_pieces)`), and which the function only
 dereferences or offsets (no call, store, compare or phi takes it),
 gets room for every element those LOAD and STORE ops may touch:
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_arrayextent.rs
+`crates/unlace-decomp/src/p6_variables/kuna_arrayextent.rs
 (bounded_items)` raises the base's open hint to cover `[base, lo + reach +
 width)`, stopping at the closest other pointer base above it
 (`kuna_arrayextent.rs (next_base)`). Inside that span the binary can address
@@ -2102,7 +2102,7 @@ the value-set refinement no range to lock. With the option on,
 slot a constant COPY writes, whether each such write is a zero that no op reads
 directly (`varmap.rs (MapState::note_terminator_store)`), and after
 `attempt_join` declines a hint,
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_nulterminator.rs
+`crates/unlace-decomp/src/p6_variables/kuna_nulterminator.rs
 (close_at_terminator)` closes the open range into a *fixed* range ending one
 element after that hint -- when the range is open and unlocked with one- or
 two-byte integer elements, the hint is a plain fixed constant-COPY slot of
@@ -2138,7 +2138,7 @@ no array covers it) prints as `char buf[8200]`, `char buf[1001]` as
 buf[32]`. The source size is anywhere in the last 16 bytes of the gap, and the
 frame alone cannot say where. The call that receives the buffer often can.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_arraysize.rs (gather)`
+`crates/unlace-decomp/src/p6_variables/kuna_arraysize.rs (gather)`
 runs in `restructure_varnode` after the open hints are gathered. For every call
 it reads the argument a library buffer function takes the buffer in and the
 byte count it states for it (`kuna_arraysize.rs (LENGTH_CALLS)`), and what that
@@ -2247,7 +2247,7 @@ bytes). The trip count, which is the buffer size, is not recoverable from the
 C. (A constant initializer that writes the buffer in wider pieces keeps that
 form, `v1._0_4_ = ...`, whichever way the buffer is declared.)
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_endptrbound.rs
+`crates/unlace-decomp/src/p6_variables/kuna_endptrbound.rs
 (find_pointer_walks)` accepts a walk during `restructure_varnode` only when it
 can prove that every dereference through the pointer lands in `[start, end)`.
 The candidates are the `MULTIEQUAL`s that some LOAD or STORE reads through,
@@ -2335,7 +2335,7 @@ object, so a read of it never sees the store. Two layout decisions broke that.
 The first is the reach. Two four-byte constant slots written by `u.w[0]` and
 `u.w[1]` produce two fixed hints, and the store's own open hint only claims the
 first few bytes, so the store indexes one local and reads the next one.
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_storereach.rs
+`crates/unlace-decomp/src/p6_variables/kuna_storereach.rs
 (prepare_hints)` runs in `restructure_varnode` after the three gathers and
 before `endptrbound`. It takes each STORE of a one-byte value that a guard
 INDIRECT on the stack names as its effect, and resolves its pointer as the
@@ -2575,7 +2575,7 @@ signed, so a stack local the body reads with bit tests comes back `unsigned int`
 even where the callee that fills it declares `int *`: `waitpid`'s status prints
 as `unsigned int v5;` and the call as `waitpid(v2,(int *)&v5,0)`, with the
 arithmetic shift of `WEXITSTATUS` casting the value back (`(int)v5 >> 8`).
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_castobject.rs
+`crates/unlace-decomp/src/p6_variables/kuna_castobject.rs
 (declare_out_params)` runs in `restructure_varnode` after the three gathers and
 before the layout decision. From the alias checker's additive bases
 (`kuna_castobject.rs (frame_refs)`) it keeps an offset only when every base that
@@ -2644,7 +2644,7 @@ queued outgoing parameters would always sit "after" the locals). On every
 pass but the first (`ActionRestructureVarnode`'s `aliasyes = numpass != 0` —
 first-pass aliases are unreliable because the pointer forms haven't
 simplified yet), the sorted alias list drives
-`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
+`crates/unlace-decomp/src/p0_knowledge/database.rs
 (Database::mark_unaliased)`: every stack Symbol *not* crossed by an alias
 (walked in lock-step with the mapped ranges; symbols are visited by increasing
 end offset because overlapping entries can appear in a different record-list
@@ -2713,17 +2713,17 @@ category-less symbol at the pass head — so its *name* survives separately: C++
 harvests such symbols into `ScopeLocal::nameRecommend` records and re-applies
 them at naming time (`recoverNameRecommendationsForSymbols`, varmap.cc:1050 —
 run at the top of `ActionNameVars::apply`).  The kuna port carries the record
-type (`decompiler/crates/unlace-decomp/src/p6_variables/varmap.rs
+type (`crates/unlace-decomp/src/p6_variables/varmap.rs
 (NameRecommend)`) with a list on the scope
 (`ScopeLocal::add_recommend_name`/`ScopeLocal::name_recommendations`) and
 applies it in the `ActionNameVars` port
-(`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
+(`crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
 (recommended_name_for)`): a high whose name representative matches a record's
 storage + size wins the recommended name — the use-address selects the arm
 (invalid = address-tied whole, `entry-1` = a function input, else the defining
 write's address) — before both the container bind and the `vN` allocator.
 The address-tied arm is upstream's at the Symbol level too
-(`decompiler/crates/unlace-decomp/src/p6_variables/varmap.rs
+(`crates/unlace-decomp/src/p6_variables/varmap.rs
 (ScopeLocal::recover_addrtied_name_recommendations)`, run at the head of the
 naming pass): the address-tied Symbol whose entry starts at the recorded
 address is renamed whatever its size, and the per-high arm then defers to it.
@@ -2734,7 +2734,7 @@ A variable whose storage is a HASH rather than an address needs the parallel
 list: C++ keeps `dynRecommend` and re-applies it through
 `DynamicHash::findVarnode` (varmap.cc:1557-1573).  kuna ports that too
 (`ScopeLocal::add_recommend_dynamic` /
-`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+`crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::kuna_apply_dynamic_recommendations)`): the recorded hash resolves
 back to its Varnode, and when that Varnode's high is still unnamed it takes the
 recommended name AND a dynamic Symbol carrying the same hash — so the
@@ -2774,10 +2774,10 @@ entry.
 
 **The scope wire encode.** The whole local scope marshals out for the
 ghidra-mode `decompileAt` response as the `<localdb>` element
-(`decompiler/crates/unlace-decomp/src/p6_variables/varmap.rs
+(`crates/unlace-decomp/src/p6_variables/varmap.rs
 (ScopeLocal::encode)`, the varmap.cc:462 port): the `main=` stack space and
 `lock=` attributes, then the `<scope>` document
-(`decompiler/crates/unlace-decomp/src/p0_knowledge/database.rs
+(`crates/unlace-decomp/src/p0_knowledge/database.rs
 (Database::encode_scope)`) — the positional `<parent>` + `<rangelist>` pair
 (Java's `LocalSymbolMap.decodeScope` skips its first two scope children
 blind, so both are always written; the parentless private database writes its
@@ -2801,7 +2801,7 @@ decompiler-internal temporary or a constant has no storage that survives
 re-decompilation, so an assertion attached to it ("this constant is an
 equate", "this union access uses field X") needs a different identity. The
 identity is a 64-bit hash of the value's *local data-flow neighborhood*
-(`decompiler/crates/unlace-decomp/src/p6_variables/dynamic.rs (DynamicHash)`):
+(`crates/unlace-decomp/src/p6_variables/dynamic.rs (DynamicHash)`):
 starting from the root Varnode, grow the sub-graph one edge layer at a time
 (four methods of increasing reach for Varnodes, methods 0–3; three for op/slot
 roots, methods 4–6), fold every edge through CRC32 in a deterministic order,
@@ -2820,7 +2820,7 @@ method reaches uniqueness, the champion list's *position* and *total* are
 packed into dedicated bit fields of the hash (bits 49–51 and 52–54), making
 "the 3rd of 5 identical values at this address" a stable identity. When even
 that fails — every method's list overflows the budget — the hash is 0 and the
-consumer errors: `decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+consumer errors: `crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::build_dynamic_symbol)` aborts the request with "Unable to find
 unique hash for varnode".
 
@@ -2828,13 +2828,13 @@ unique hash for varnode".
 hard-codes the collision budget at 8, which dense unrolled AArch64/Go NEON
 loops overflow, turning the whole decompilation into that abort. kuna's own
 analysis uses 16
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_dynamichashmax.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_dynamichashmax.rs
 (MAX_DUPLICATES)`, always on): collision lists of up to 8 still encode exactly in
 the 3-bit position/total fields, and a 9–16-entry champion escapes the
 "Unable to find unique hash" abort — its overflowing position/total then makes
 re-binding fail dormant rather than mis-bind. The budget is passed to
 `unique_hash` at the call sites (e.g.
-`decompiler/crates/unlace-console/src/ifacedecomp.rs` for the console
+`crates/unlace-console/src/ifacedecomp.rs` for the console
 `force varnode` path).
 
 **Addressing across re-decompilations.** A dynamic Symbol persists as
@@ -2843,7 +2843,7 @@ re-binding fail dormant rather than mis-bind. The budget is passed to
 re-computes their hashes with the recorded method, and re-binds on match; an
 IR that simplified differently simply fails to match, and the assertion lies
 dormant rather than mis-attaching. Two scheduled consumers do the binding:
-`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (ActionDynamicMapping)` inside `mainloop` — the *early* mapping, which pins
 the matched Varnode as mapped storage precisely so copy-propagation cannot
 dissolve the value before anyone sees it — and `(ActionDynamicSymbols)` in the
@@ -2851,14 +2851,14 @@ post-fixpoint tail (twice: once inside the merge phalanx, once before naming)
 for the final attachment the printer reads. Because kuna's fullloop *does*
 collapse the carrier COPY that upstream preserves, `ActionMergeRequired`
 re-runs the (idempotent) early mapping right after the forced merges
-re-materialize those COPYs (`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
+re-materialize those COPYs (`crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
 (ActionMergeRequired)`), so the Symbol guard of `merge_test_required` (§6.1)
 still sees the binding and keeps the dynamic temporary a distinct variable.
 
 ## 6.4 kuna extensions
 
 Shipped defaults below are the `phases.toml` settable rows (mirrored into
-`decompiler/crates/unlace-decomp/src/infra/architecture.rs
+`crates/unlace-decomp/src/infra/architecture.rs
 (reset_defaults_internal)`); module doc-comments in this folder predate the
 default flips and may state stale defaults — `phases.toml` is the source of
 truth.
@@ -2868,7 +2868,7 @@ truth.
 (`base_explicit`'s call arm, §6.1), so a call result always spills:
 `v5 = timespec_cmp(...); if (v5 <= -1)`. angr folds a single-use call return
 into its consumer. The kuna port
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
 (call_output_foldable)`) relaxes the forced-explicit rule only when the fold
 is provably order-safe — marking a call output implied *moves the call's
 evaluation* to the use site, so the predicate demands: exactly one descendant
@@ -2897,11 +2897,11 @@ can read". Heritage promotes a write to a fixed global address into a plain
 return t + k;` once folded to `k = 0x2a; return f(7) + 0x2a;` — the binary
 returns 50, that C reads 91 (kuna GH-657). The barrier set is therefore stated
 in storage as well as opcodes
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
 (op_is_barrier)`): a barrier is a call, a `CPUI_LOAD`/`CPUI_STORE`/
 `CPUI_CALLOTHER`, **or** any op whose output varnode is persistent or
 address-tied
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
 (op_writes_tied_storage)`). A global's output is persistent; a frame slot's is
 tied to its stack address, and the callee can reach one whenever the frame
 address escaped into it — an escaped slot is *not* held back as a `CPUI_STORE`,
@@ -2910,7 +2910,7 @@ callee could not have reached.
 
 One op with a tied output writes nothing: a `CPUI_COPY` back into the storage
 its input already occupies
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
 (op_is_self_copy)`). `RuleIndirectCollapse` leaves that shape behind — `glob =
 COPY glob` — wherever a call turns out not to write a global it carried an
 INDIRECT for, and it stores the value that is already there, so it is exempt
@@ -2920,19 +2920,19 @@ That span ends at the single use, which is the call's textual home only when the
 use op is itself a statement; when the use op's own output is *implied* the
 expression keeps travelling and is evaluated wherever that value is finally
 consumed. So the call output is re-examined in `ActionMarkImplied`
-(`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
+(`crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
 (check_implied_cover)`), where the descendants-first walk has already classified
 the chain below the use and the landing statement is therefore derivable
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
 (print_chain)`); a landing statement in another block, or one with a write in
 between, keeps the call spilled
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
 (fold_print_point_is_order_safe)`). The ops of that chain are themselves exempt:
 each consumes the previous one's value, so the call is evaluated before them in
 the folded text exactly as it is in the binary.
 
 Over that second span the question narrows to **writes**
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
 (op_is_write_barrier)`): a call, a `CPUI_STORE` or `CPUI_CALLOTHER`, or a write
 to persistent or address-tied storage. `CPUI_LOAD` is a barrier only up to the
 use. Both halves of that split are measured on the 37-binary sweep in
@@ -2977,7 +2977,7 @@ every op of the chain can sit in the call's own block, but the printer emits
 them as C's `&&` and `||`, which skip the right-hand operand whenever the
 left-hand one decides. So a fold whose value reaches input 1 of a `BOOL_AND` or
 `BOOL_OR` anywhere along the chain keeps the call in its own statement
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
 (chain_reaches_short_circuit_rhs)`). gcc -O0 compiles `int r = tick(a); if ((r
 == 0) & (a > 5)) puts("A");` to one block (`call tick; cmpl $0,-4(%rbp); sete
 %dl; cmpl $5,-0x14(%rbp); setg %al; and %edx,%eax`), and the fold used to print
@@ -3028,7 +3028,7 @@ globals as an argument (`v3 = sub_3700(stdin,v7); v1 = 1; v12 &= v3;`) is enough
 to put a second version of the operand's high over the call output's cover. The
 colliding version is produced by the very call being moved.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_foldcallretphi.rs
+`crates/unlace-decomp/src/p6_variables/kuna_foldcallretphi.rs
 (conflict_is_self_call_effect)` discounts exactly that case: the rejection is
 ignored only when at least one instance of the operand's high collides and
 *every* colliding instance is the output of an INDIRECT whose effect op is this
@@ -3041,7 +3041,7 @@ discounted. Second, a use op that itself reads an INDIRECT effect of the call
 declines, since the folded text would otherwise name the operand's high both as
 the call's argument (pre-call) and as an operand of the use (post-call). Third,
 the call's output has to carry everything the callee returns
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_foldcallretphi.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_foldcallretphi.rs
 (call_output_is_full_width)`). A locked output is the callee's declared type and
 qualifies. An unlocked one qualifies only when no wider return storage contains
 it. An unlocked `eax` read out of `rax` does not qualify: the callee may write
@@ -3066,14 +3066,14 @@ carry `__int128` or a two-word struct, and counting them would mark every
 
 How far the call travels is the rest of this option's question, and it is asked
 here rather than borrowed from `foldcallret`
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_foldcallretphi.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_foldcallretphi.rs
 (print_point_is_order_safe)`): from the call up to the landing statement nothing
 may be a barrier — any opcode in `foldcallret`'s first set, or any op writing
 persistent or address-tied storage, the self-copy exemption not applied — and
 nothing up to and including that statement may read a value the call writes
 indirectly. Nor may the call's value reach a `BOOL_AND` or `BOOL_OR` as its
 right-hand operand anywhere along the chain the expression travels through
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_callretfold.rs
 (chain_reaches_short_circuit_rhs)`, the rule `foldcallret` asks of its own
 folds). Both ops evaluate both operands, and every
 op of the chain can sit in the call's own block, but C prints them as `&&` and
@@ -3148,10 +3148,10 @@ the frame SSA values, so dead-code elimination can erase the writes that the
 physical memory read needs. The general heritage delay fixes GH-8500's original
 control but does not cover this escape.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackalias.rs`
+`crates/unlace-decomp/src/p6_variables/kuna_stackalias.rs`
 (`holds_store`) identifies physical `stack_store` writes in the local frame
 space. With `stackalias on`, `deadcode_apply` in
-`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs` holds them
+`crates/unlace-decomp/src/p9_emit/coreaction_render.rs` holds them
 live before its consumption walk. `ActionVarnodeProps` retains these holds
 instead of clearing and re-seeding them on every iteration; clearing them
 would report a fresh change forever. The option reaches the per-function
@@ -3179,11 +3179,11 @@ option-on body keeps the physical initialization and overwrite.
 
 **(kuna, Ghidra issue GH-9218) The symmetric input-container widening** (always
 on). When parameter recovery widens an unjustified input container
-(`decompiler/crates/unlace-decomp/src/p9_emit/coreaction_render.rs
+(`crates/unlace-decomp/src/p9_emit/coreaction_render.rs
 (ActionUnjustifiedParams)`), upstream only absorbs earlier inputs that
 overlap the container's *low* end; an input overlapping the *high* end (mc68k
 `link`/`unlk` overlapping stack params) survives to
-`decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs
+`crates/unlace-decomp/src/substrate/funcdata_varnode.rs
 (Funcdata::adjust_input_varnodes)`, which refuses with "Cannot properly
 adjust input varnodes" (upstream that throw kills the whole function; kuna's
 driver skips the adjustment and leaves the overlapping inputs unrecombined).
@@ -3209,7 +3209,7 @@ sub-cases both route here: two-or-more trimmed slots (later collapsed by
 `buildDominantCopy`) and exactly one trimmed slot (no dominant-copy pass at all,
 so the single `opInsertEnd` is final).
 
-When on, `decompiler/crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs
+When on, `crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs
 (ActionParamCopyHoist)` relocates the COPY to the end of the entry block. It is
 the **last** action in `universal_sched`, and that position is load-bearing:
 taking the decision inside `Merge::trimOpInput` defeats the trim's own purpose
@@ -3235,7 +3235,7 @@ definitions sit today, so two definitions of one variable can both be admitted
 even though, once both have moved, the second kills the first on every path.
 
 **(kuna, issue #767) A pointer stored to a global keeps its own variable**
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_pointeevalue.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_pointeevalue.rs
 (keeps_apart)`, a strict fix, no option). `Merge` joins a register value with the
 persistent global it is copied to whenever their Covers allow it, and the joined
 value prints as a read of the global. When the value is a pointer the binary
@@ -3296,7 +3296,7 @@ after the loop the C is wrong, not only misleading: an in-place lowercase loop
 followed by `strcmp(buf, name)` compares an empty string in the C, because every
 iteration stored into `buf[0]`.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_tiedphitrim.rs
+`crates/unlace-decomp/src/p6_variables/kuna_tiedphitrim.rs
 (tied_slots)` runs inside `merge_op` after upstream's own trims. It fires on a
 MULTIEQUAL whose output is not address-tied when every address-tied input reads
 one location a pointer can observe and arrives from outside the loop, and some
@@ -3421,11 +3421,11 @@ either refusal keeps the value apart.
 ## 6.5 Cleanup
 
 **What runs after the Band-B fixpoint.** When `fullloop` reports quiescence,
-the one-shot tail runs in tree order (`decompiler/crates/unlace-decomp/src/infra/universalaction.rs
+the one-shot tail runs in tree order (`crates/unlace-decomp/src/infra/universalaction.rs
 (universal_sched)`): the final symbol sync (`ActionMappedLocalSync`, §6.2),
-then `decompiler/crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs
+then `crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs
 (ActionStartCleanUp)` — which snapshots the Varnode creation index
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+(`crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::start_clean_up)`) so later passes can tell cleanup-born values from
 analyzed ones — then the 22-rule `cleanup` pool (a repeat-pool: it still runs
 to its own local fixpoint, just outside the analysis loop), then structuring
@@ -3435,9 +3435,9 @@ casts, and final structure.
 **Why the cleanup pool must not run inside the fixpoint.** Its rules trade
 analyzability for readability, and several are literal inverses of `oppool1`
 normalizations: the main pool canonicalizes `V - W` into `V + W*-1`
-(`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_3.rs
+(`crates/unlace-decomp/src/p3_dataflow/ruleaction_3.rs
 (RuleSub2Add)`) so one ADD-shaped matcher set covers all additive flow, and
-the cleanup pool converts it back (`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs
+the cleanup pool converts it back (`crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs
 (Rule2Comp2Sub)`, plus `RuleMultNegOne` for the `*-1` residue). Inside one
 pool the pair would oscillate and the repeat-group would never quiesce;
 outside, each direction fires exactly once per function. The same one-way
@@ -3451,7 +3451,7 @@ sequences the rule pools deliberately kept elementwise.
 action is `rule_onceperfunc` — it commits, it does not iterate. Three facts
 force the placement: (1) HighVariables do not exist until `ActionAssignHigh`
 turns them on, and downstream surfaces hard-refuse earlier
-(`decompiler/crates/unlace-decomp/src/substrate/funcdata.rs
+(`crates/unlace-decomp/src/substrate/funcdata.rs
 (Funcdata::build_dynamic_symbol)` errors "Cannot create dynamic symbols until
 decompile has completed"); (2) a Cover is only meaningful over a stable CFG
 and stable SSA — any further heritage pass or block edit would silently
@@ -3459,12 +3459,12 @@ invalidate every merge the intersection cache blessed; (3) the trim COPYs the
 forced merges insert (§6.1) are exactly the kind of copy `RulePropagateCopy`
 exists to delete — inside the loop the pool would collapse them and re-fuse
 what the merge just separated (the live tree documents precisely this
-interaction at `decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
+interaction at `crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs
 (ActionMergeRequired)`, which has to re-bind dynamic symbols because the
 fullloop already collapsed the upstream-preserved carrier COPY once).
 
 **The exception that proves the rule.** One resident of this folder runs
-*inside* the fixpoint: `decompiler/crates/unlace-decomp/src/p6_variables/coreaction_stackptr.rs`
+*inside* the fixpoint: `crates/unlace-decomp/src/p6_variables/coreaction_stackptr.rs`
 (the realized body of `ActionStackPtrFlow`, scheduled in `stackstall`). It is
 analysis, not commitment — the stack-variable promotion of §6.2 only works
 while the stack pointer remains a tractable affine expression, so this pass
@@ -3512,7 +3512,7 @@ never finished.
 
 A runtime-sized reservation has no constant solution, and kuna keeps the solve
 from inventing one
-(`decompiler/crates/unlace-decomp/src/p6_variables/coreaction_stackptr.rs
+(`crates/unlace-decomp/src/p6_variables/coreaction_stackptr.rs
 (StackSolver::confirm_dynamic, StackSolver::spread_dynamic)`, always on).
 Upstream's MULTIEQUAL equation equates every input of a stack-pointer merge, so
 where one path lowers the stack pointer by a register (`sub sp,ax`: Open
@@ -3522,7 +3522,7 @@ constant, the rewrite turns `sp - ax` into `sp_in + c`, and the allocated
 pointer prints as a fixed frame local; two allocations then share one address
 and the writes into them overflow it. An adjustment whose amount is neither the stack pointer nor a
 value that evaluates to a constant
-(`decompiler/crates/unlace-decomp/src/p4_calls/kuna_bejoin.rs (literal_value)`; a
+(`crates/unlace-decomp/src/p4_calls/kuna_bejoin.rs (literal_value)`; a
 PTRADD's element size is not an amount) is a candidate. A trial solve with the
 upstream equations keeps a candidate the solve gives a nonzero move as an
 ordinary adjustment, because such a register often holds a constant on that
@@ -3562,7 +3562,7 @@ upstream's guess, except in a function where every call's pop is stated or
 proven by its callee's own returns: there no call reaches the guess at all
 (chapter [04](04-calls-and-prototypes.md), `ActionExtraPopSetup`). For an import the argument bytes are counted off the caller's
 own push run
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_calleepopslot.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_calleepopslot.rs
 (guess_extra_pop)`): back from the return-address slot in pointer-sized steps,
 stopping at the first push that stores a register's own input Varnode (a
 prologue callee-save) or at a step that is no push at all (a bare `sub esp,n`).
@@ -3580,7 +3580,7 @@ argument is dropped, which is visible on deep-frame MSVC CRT helpers.
 The constant itself is measured rather than assumed:
 upstream's `4` is the x86-32 return-address size, and the guess's base is now
 the bytes the call instruction itself stores
-(`decompiler/crates/unlace-decomp/src/p6_variables/kuna_calleepop.rs
+(`crates/unlace-decomp/src/p6_variables/kuna_calleepop.rs
 (return_address_bytes)`), counted over the live STOREs at the call's address and
 the COPYs into the stack space that `RuleStoreVarnode` already made of them. An
 x86 16-bit near call stores two bytes and a far call four, so a callee that pops
@@ -3636,7 +3636,7 @@ use a dynamic-symbol anchor instead of a physical address. The console verifies
 that hashing and resolving the selected representative returns the same high and
 width; a missing or ambiguous anchor rejects the assertion. Both the CLI's second
 pass and later console decompiles carry these symbols and their isolation flags.
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_dynamiclocals.rs` applies a
+`crates/unlace-decomp/src/p6_variables/kuna_dynamiclocals.rs` applies a
 locked dynamic type before propagation and merging, then refreshes the symbol on
 a rebuilt high without rebinding another symbol's value. The late mapping follows
 CASTs to the explicit value. Analysis-local arena identities are never replay keys.
@@ -3656,7 +3656,7 @@ native and emitted C agree for inputs with both zero and nonzero upper words.
 The fallback that ties a return register across its marker definitions requires
 one connected SSA value family, whether the return contract is declared or
 inferred.
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_registerepochs.rs`
+`crates/unlace-decomp/src/p6_variables/kuna_registerepochs.rs`
 walks same-width COPY, CAST, MULTIEQUAL and non-creating INDIRECT edges in both
 directions, excluding constants and the INDIRECT operation annotation. Unrelated
 loads or computations occupying the register do not join that family. The walk
@@ -3676,7 +3676,7 @@ modes.
 
 ### Shared stack-object views
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackuses.rs` reads declared
+`crates/unlace-decomp/src/p6_variables/kuna_stackuses.rs` reads declared
 pointer contracts from calls, typed assignments, and volatile writes as well as
 declared pointer returns. The same contracts drive backing views and logical
 object identities. Global assignments require a locked storage type; unknown
@@ -3688,7 +3688,7 @@ copy and pointer-offset chains back to the locked declaration. Inferred pointer
 types alone do not create a contract. Interior views retain their displacement
 when selecting a backing member.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackvalueviews.rs` selects
+`crates/unlace-decomp/src/p6_variables/kuna_stackvalueviews.rs` selects
 scalar members for register instances coalesced with a shared frame symbol.
 The selection follows the high variable's symbol and byte offset, and preserves
 existing scalar resolutions and declared aggregate views. A generated backing's
@@ -3697,7 +3697,7 @@ value. Definitions and reads both receive field edges;
 a loop counter merged with its stack copy must not lose its scalar member just
 because the counter's own storage is a register.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackvaluecopies.rs` prevents
+`crates/unlace-decomp/src/p6_variables/kuna_stackvaluecopies.rs` prevents
 generated frame types from becoming standalone scalar snapshot types. Unlocked,
 untied values without a backing symbol retain their one-, two-, four-, or
 eight-byte unsigned representation. Locked declarations and physical storage
@@ -3708,7 +3708,7 @@ retains a declared pointer view when every byte at that use comes from its one
 native stack store. Conflicting pointer contracts keep the unsigned fallback;
 locked source declarations and incoming values remain authoritative.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackvalueorder.rs` prevents
+`crates/unlace-decomp/src/p6_variables/kuna_stackvalueorder.rs` prevents
 a register value from merging into shared frame storage when that would publish
 its bytes before the native store. For an original stack-store COPY into a
 generated backing, the defining value must be in the same block and have no
@@ -3724,7 +3724,7 @@ lets another input alias the frame: reading an object pointer must not overwrite
 the object before its kind or key is examined. The guard runs only with
 `stackviews`.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackloadcover.rs` keeps a load
+`crates/unlace-decomp/src/p6_variables/kuna_stackloadcover.rs` keeps a load
 explicit when its live cover spans a physical frame write. Such writes can be
 COPY or arithmetic operations after lifting, so the ordinary STORE-only alias
 check is insufficient. Known frame ranges use byte overlap; unresolved pointers
@@ -3732,7 +3732,7 @@ may observe locally aliased storage, while literal global addresses cannot name
 this frame. Marker versions are not writes. The check is enabled by stackviews.
 
 The bounded local policy (always on) is
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_localstackviews.rs`.
+`crates/unlace-decomp/src/p6_variables/kuna_localstackviews.rs`.
 Full `stackviews` takes precedence: the bounded local policy records no evidence
 and supplies no preservation, publication or mapping facts while that broader
 option is enabled. Its existing view collection remains authoritative.
@@ -3917,7 +3917,7 @@ parameter-variants fixture checks scalar escape, equal-width double reuse,
 multiple formals, replacement inside their shared extent and a partial read of
 an incoming word; logical name/type replay preserves the native results.
 
-`decompiler/crates/unlace-console/src/kuna_paramasserts.rs` synchronizes a named
+`crates/unlace-console/src/kuna_paramasserts.rs` synchronizes a named
 parameter's scope symbol with its internal prototype. The category slot and
 complete storage must agree before a directive applies; a retype preserves the
 native width. Rebuilds carry the locked input descriptions, retaining storage,
@@ -3929,7 +3929,7 @@ and name swaps preserve the original parameter slots. The console
 `kassert P9 naming-policy` directive uses the same local-assertion path as
 `rename`, so its parameter edits also survive prototype reconstruction.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackranges.rs` follows
+`crates/unlace-decomp/src/p6_variables/kuna_stackranges.rs` follows
 same-width copies, casts and additive pointer expressions back to the input
 spacebase. It retains byte scales, constant displacements and bounded index
 terms. Native-width scalar additions, subtractions, negations and constant
@@ -3962,7 +3962,7 @@ spelling consults the same facing type used to request the cast, rather than the
 SSA type that originally occupied the register or slot. Global destinations also
 keep their declared scalar type when a frame address escapes into them.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackobjects.rs` records
+`crates/unlace-decomp/src/p6_variables/kuna_stackobjects.rs` records
 logical object identities at complete, locked pointee uses when `stackviews` is
 enabled. Each identity retains its physical range, declared views, native use
 points and the reaching definition family of each byte. Equal defined families
@@ -3993,7 +3993,7 @@ for scoping object assertions, not a claim that a C or C++ lifetime ended. It
 neither removes memory versions nor allocates separate addresses: an escaped
 pointer continues to observe the shared backing.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackobjectasserts.rs`
+`crates/unlace-decomp/src/p6_variables/kuna_stackobjectasserts.rs`
 consumes these identities for `name` and `type` directives. An assertion retains
 native call addresses, argument slots, its physical range and byte-definition
 families across rebuilds; it contains no operation or high-variable identifiers.
@@ -4022,13 +4022,13 @@ varnode. Explicit retypes still lock the datatype. This distinction matters for
 wide integer temporaries represented internally by a fallback byte-array type:
 naming the operand does not declare that it is an aggregate in memory.
 
-`decompiler/crates/unlace-decomp/src/p9_emit/kuna_stackobjectinfo.rs` exports
+`crates/unlace-decomp/src/p9_emit/kuna_stackobjectinfo.rs` exports
 logical selectors, asserted names, signed frame ranges, defined/uncertain state
 and declared native uses without exposing analysis-local identifiers. CLI results
 carry these records through batch workers. `--no-vars` suppresses their extraction;
 empty collections do not add a JSON field to ordinary runs.
 
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_stackobjectalias.rs` binds a
+`crates/unlace-decomp/src/p6_variables/kuna_stackobjectalias.rs` binds a
 logical assertion through an existing mapped layout when no matching generated
 union member is available. Its whole extent must fit both the physical entry and
 its complete datatype, with an exact byte displacement. A typed `<name>_view`
@@ -4052,7 +4052,7 @@ credited with popping all three; for the second call the cleanup and its one
 push cancel, so its return-address slot is the first call's result itself and
 the guess gives up at `4`. The class size is not in the mangled name, so a
 demangled prototype cannot settle the second cleanup either.
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_calleepopslot.rs
+`crates/unlace-decomp/src/p6_variables/kuna_calleepopslot.rs
 (guess_extra_pop)` reads the caller's stack depth for consistency instead.
 A push through a stack-pointer value strictly above the call's own result —
 which only a raise followed by a push produces — vetoes a callee pop: had the
@@ -4092,7 +4092,7 @@ count, the guess stays at `4`, and the `sub` then lowers the solved stack
 pointer by the popped bytes, so an incoming argument read after the call
 resolves to a local and a slot whose address an earlier call was handed is
 read back from a different one.
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_calleepopframe.rs
+`crates/unlace-decomp/src/p6_variables/kuna_calleepopframe.rs
 (guess_extra_pop)` guesses `4 + n` when the first write to the stack pointer
 after the call in its block is the call's result lowered by `n` (positive, at
 most 256, a multiple of the pointer size) and every pointer-sized slot of
@@ -4124,7 +4124,7 @@ alignment slots are never written.
 A declared struct parameter split across registers and the entry stack can be
 spilled contiguously beside its incoming stack tail. The spill then crosses
 entry SP=0, so the ordinary local-only range cannot describe the whole object.
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_wrappedstackaggregate.rs`
+`crates/unlace-decomp/src/p6_variables/kuna_wrappedstackaggregate.rs`
 recovers one local struct only from a nonindexed typed stack reference whose
 wrapping extent exactly matches a type-locked joined parameter of the same
 struct type. The logical tail must map to stack offset zero, consume the

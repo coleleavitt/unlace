@@ -3,7 +3,7 @@
 
 Checks (run from the repo root; exit 1 on any failure):
   1. Anchor paths resolve: every path inside a chapter's ```yaml Anchors:``` block,
-     and every `decompiler/crates/...` path mentioned anywhere in docs/spec/ prose,
+     and every `crates/...` path mentioned anywhere in docs/spec/ prose,
      exists on disk.
   2. Folder coverage: every top-level directory under unlace-decomp/src and
      unlace-analysis/src is owned by exactly one chapter's Anchors block.
@@ -38,7 +38,7 @@ def anchor_block(text):
 
 
 # --- 1. anchors + inline paths resolve -------------------------------------
-inline_path = re.compile(r"\bdecompiler/crates/[A-Za-z0-9_\-./]+")
+inline_path = re.compile(r"\bcrates/[A-Za-z0-9_\-./]+")
 owned = {}  # top-level dir -> [chapter]
 for name, text in chapters():
     anchors = anchor_block(text)
@@ -56,14 +56,14 @@ for name, text in chapters():
         # substrate/dtype.rs cross-referenced from the types chapter) does not.
         if not os.path.isdir(os.path.join(ROOT, a)):
             continue
-        for src_root in ("decompiler/crates/unlace-decomp/src", "decompiler/crates/unlace-analysis/src"):
+        for src_root in ("crates/unlace-decomp/src", "crates/unlace-analysis/src"):
             if a == src_root or a.startswith(src_root + "/"):
                 rel = a[len(src_root):].strip("/")
                 top = rel.split("/")[0] if rel else "*"
                 owned.setdefault((src_root, top), []).append(name)
 
 # --- 2. folder coverage ------------------------------------------------------
-for src_root in ("decompiler/crates/unlace-decomp/src", "decompiler/crates/unlace-analysis/src"):
+for src_root in ("crates/unlace-decomp/src", "crates/unlace-analysis/src"):
     full = os.path.join(ROOT, src_root)
     whole_crate_owners = owned.get((src_root, "*"), [])
     for entry in sorted(os.listdir(full)):
@@ -77,7 +77,7 @@ for src_root in ("decompiler/crates/unlace-decomp/src", "decompiler/crates/unlac
 
 # --- 3. option mention (strict) ----------------------------------------------
 if STRICT:
-    toml = open(os.path.join(ROOT, "decompiler/crates/unlace-decomp/phases.toml"), encoding="utf-8").read()
+    toml = open(os.path.join(ROOT, "crates/unlace-decomp/phases.toml"), encoding="utf-8").read()
     spec_all = " ".join(t for _, t in chapters())
     in_settable = False
     for line in toml.splitlines():

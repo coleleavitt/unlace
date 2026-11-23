@@ -14,7 +14,7 @@ rounds: [8]
 first_seen_round: 8
 attempts: 0
 covered_by_option: tailcallsaved
-touches: [decompiler/crates/unlace-decomp]
+touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/560

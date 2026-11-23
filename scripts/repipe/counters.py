@@ -29,7 +29,7 @@ The test function NAMES are checked as sites in their own right. They encode the
 compiler or test run disagrees with a stale one, and `settable_count_is_117` guarding an
 `assert_eq!(..., 127)` is exactly the artifact a silent auto-merge leaves behind.
 
-`decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json` is NOT rewritten here. It
+`crates/unlace-decomp/tests/fixtures/phase_catalog.json` is NOT rewritten here. It
 is *captured bytes* -- guessing at them is how the byte-compat gate stops meaning anything.
 When it disagrees with the derived settable count this module reports an unfixable drift and
 prints the recapture recipe, read out of catalog_bytecompat.rs's own module header so the
@@ -62,12 +62,12 @@ ELEMENT_ID_BASE = int(os.environ.get("REPIPE_ELEMENT_ID_BASE", "4000"))
 
 CORPUS_DIRS = ("tests/datatests", "tests/stages")
 
-REL_PHASES_TOML = "decompiler/crates/unlace-decomp/phases.toml"
-REL_TESTS_RS = "decompiler/crates/unlace-decomp/src/p0_knowledge/kuna_phases/tests.rs"
-REL_BYTECOMPAT_RS = "decompiler/crates/unlace-decomp/tests/catalog_bytecompat.rs"
-REL_CATALOG_FIXTURE = "decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json"
+REL_PHASES_TOML = "crates/unlace-decomp/phases.toml"
+REL_TESTS_RS = "crates/unlace-decomp/src/p0_knowledge/kuna_phases/tests.rs"
+REL_BYTECOMPAT_RS = "crates/unlace-decomp/tests/catalog_bytecompat.rs"
+REL_CATALOG_FIXTURE = "crates/unlace-decomp/tests/fixtures/phase_catalog.json"
 REL_CATALOG_XML = "tests/stages/kuna-catalog.xml"
-REL_BASE_XML_RS = "decompiler/crates/unlace-base/src/xml.rs"
+REL_BASE_XML_RS = "crates/unlace-base/src/xml.rs"
 
 TIERS = ("core", "transform", "analysis")
 
@@ -268,7 +268,7 @@ _ELEMENT_ID_RX = re.compile(r'ElementId::new\(\s*"([A-Za-z0-9_]+)"\s*,\s*(\d+)\s
 
 def element_ids(repo=None) -> dict:
     """Every kuna-range ElementId in the crates, so the next free one can be handed out."""
-    crates = _root(repo) / "decompiler" / "crates"
+    crates = _root(repo) / "crates"
     if not crates.is_dir():
         raise DeriveError("crates dir missing: {}".format(crates))
     used = {}
@@ -465,7 +465,7 @@ def recapture_recipe(repo=None) -> str:
     idx = doc.find("## Regenerating the fixture")
     body = doc[idx:] if idx >= 0 else doc
     fences = re.findall(r"```sh\n(.*?)```", body, re.S)
-    lead = ("Recapture decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json.\n"
+    lead = ("Recapture crates/unlace-decomp/tests/fixtures/phase_catalog.json.\n"
             "It is CAPTURED BYTES, with NO PROGRAM LOADED so kunaLiveValue returns \"\" and no\n"
             "`current` field is emitted. Never hand-edit it, and never re-capture with a program\n"
             "loaded -- `current` is architecture-dependent and is not a byte contract.\n")

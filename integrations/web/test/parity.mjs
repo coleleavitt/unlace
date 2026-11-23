@@ -28,9 +28,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../../..'); // integrations/web/test -> repo root
 
 const WASM = process.env.WASM ||
-  join(repo, 'decompiler/target/wasm32-wasip1/release/unlace_wasm.wasm');
+  join(repo, 'target/wasm32-wasip1/release/unlace_wasm.wasm');
 const NATIVE = process.env.NATIVE ||
-  join(repo, 'decompiler/target/release/unlace_wasm');
+  join(repo, 'target/release/unlace_wasm');
 const SPECS = process.env.SPECS || join(repo, 'specs');
 const RUN_WASM = join(here, 'run-wasm.mjs');
 
@@ -95,7 +95,7 @@ const FIXTURES = [
 function fail(msg) { console.error(`\x1b[31mFAIL\x1b[0m ${msg}`); process.exit(1); }
 
 for (const [label, p] of [['wasm', WASM], ['native', NATIVE], ['specs', SPECS]]) {
-  if (!existsSync(p)) fail(`missing ${label}: ${p}\n  (build first: integrations/web/build.sh, and \`make specs\` for the .sla)`);
+  if (!existsSync(p)) fail(`missing ${label}: ${p}\n  (build first: integrations/web/build.sh, and \`target/release/slacomp -a specs\` for the .sla)`);
 }
 
 const normalize = (s) => s.replace(/"binary":\s*"[^"]*"/g, '"binary": "<binary>"').trim();

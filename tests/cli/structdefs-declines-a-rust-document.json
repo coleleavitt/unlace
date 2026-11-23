@@ -42,11 +42,11 @@
     ]
   },
   "target": {
-    "binary_rel": "decompiler/crates/unlace-analysis/tests/fixtures/dwarfstructs_x86_64",
+    "binary_rel": "crates/unlace-analysis/tests/fixtures/dwarfstructs_x86_64",
     "binary_sha256": "452f01173b159dcca385e0f00e075dab4fec8e4472b349a240725ce1b37faec5",
     "binary_size": 21808,
     "binary_source": "in-repo",
-    "in_repo_path": "decompiler/crates/unlace-analysis/tests/fixtures/dwarfstructs_x86_64",
+    "in_repo_path": "crates/unlace-analysis/tests/fixtures/dwarfstructs_x86_64",
     "selector": "walk_list",
     "selector_kind": "name"
   },

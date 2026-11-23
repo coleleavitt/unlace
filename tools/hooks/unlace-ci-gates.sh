@@ -2,7 +2,7 @@
 # unlace CI gates, run locally on dev binaries. Mirrors .github/workflows/tests.yml
 # (the "parity gates" job; LEVEL=full adds the "cargo workspace suite").
 #   tools/hooks/unlace-ci-gates.sh [fast|parity|full]        (default: parity)
-# Env: CARGO_TARGET_DIR (default: where decompiler/target points when it is a symlink, else
+# Env: CARGO_TARGET_DIR (default: where target points when it is a symlink, else
 #      ../unlace-target/<checkout name minus unlace-wt->),
 #      UNLACE_GATES_SKIP="lint ghidra ..." to skip named steps,
 #      UNLACE_GATES_WEB=1 to also run the opt-in browser front-end tests (integrations/web).
@@ -17,13 +17,13 @@ LEVEL="${1:-parity}"
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 # Only an unlace checkout has these gates.
-if [ ! -d "$ROOT/decompiler" ] || [ ! -f "$ROOT/Makefile" ]; then
+if [ ! -f "$ROOT/Cargo.toml" ] || [ ! -d "$ROOT/crates/unlace-cli" ]; then
   echo "ci-gates: $ROOT is not an unlace checkout; no gates to run"; exit 0
 fi
 # Under a git hook GIT_DIR/GIT_INDEX_FILE etc. are exported; tests that make temp repos would write into this one.
 unset $(git rev-parse --local-env-vars)
 NAME="$(basename "$ROOT")"; TAG="${NAME#unlace-wt-}"; [ "$NAME" = unlace ] && TAG=main
-if [ -z "${CARGO_TARGET_DIR:-}" ] && [ -L decompiler/target ]; then CARGO_TARGET_DIR="$(readlink -f decompiler/target)"; fi
+if [ -z "${CARGO_TARGET_DIR:-}" ] && [ -L target ]; then CARGO_TARGET_DIR="$(readlink -f target)"; fi
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$(dirname "$ROOT")/unlace-target/$TAG}"
 export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-rustc-rdr-main}" CARGO_UNSTABLE_PUBLIC_API_HASH=true
 export CARGO_PROFILE_DEV_OPT_LEVEL=1 CARGO_PROFILE_DEV_DEBUG=line-tables-only CARGO_PROFILE_TEST_DEBUG=line-tables-only
@@ -56,23 +56,23 @@ forbidden_words() {
 }
 ignored_fixtures() {
   local hits; hits="$(git ls-files --others --ignored --exclude-standard -- \
-     'tests/stages' 'tests/fixtures' 'decompiler/crates/*/tests/fixtures' 'integrations/web/test/fixtures' 2>/dev/null \
+     'tests/stages' 'tests/fixtures' 'crates/*/tests/fixtures' 'integrations/web/test/fixtures' 2>/dev/null \
      | grep -vE '(^|/)core(\.[0-9]+)?$|\.sla$')"
   local f bad=""
   for f in $hits; do git grep -qF "$(basename "$f")" -- '*.rs' '*.xml' '*.md' '*.mjs' && bad+="$f"$'\n'; done
   [ -z "$bad" ] || { echo "ignored by the global gitignore but read by a tracked test (git add -f them):"; printf '%s' "$bad"; return 1; }
 }
-fmt() { (cd decompiler && cargo fmt --all --check >/dev/null) || { echo "run: cd decompiler && cargo fmt --all"; return 1; }; }
-build() { (cd decompiler && cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli); }
+fmt() { (cargo fmt --all --check >/dev/null) || { echo "run: cargo fmt --all"; return 1; }; }
+build() { (cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli); }
 specs() {
   local want got; want=$(find specs -name '*.slaspec' | wc -l); got=$(find specs -name '*.sla' | wc -l)
   if [ "$got" -ne "$want" ]; then "$BIN/slacomp" -a specs >/dev/null || return 1; got=$(find specs -name '*.sla' | wc -l); fi
   echo "compiled $got of $want .slaspec"; [ "$got" -eq "$want" ] && [ "$got" -gt 0 ]
 }
-lint() { (cd decompiler && cargo clippy -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings -A unfulfilled-lint-expectations); }
+lint() { (cargo clippy -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings -A unfulfilled-lint-expectations); }
 options_md() { "$BIN/unlace" catalog --markdown | diff -u docs/options.md - ; }
 counters() { PYTHONPATH="$ROOT" python3 -m scripts.repipe.counters --check --kuna "$BIN/unlace"; }
-ghidra() { (cd decompiler && cargo test -p unlace-ghidra -- --nocapture); }
+ghidra() { (cargo test -p unlace-ghidra -- --nocapture); }
 web() {
   local t ok=0
   for t in cdp-client-startup decompile-render decompile-wrap decompile-session decompile-bytes decompile-learn \
@@ -81,7 +81,7 @@ web() {
     [ -f "integrations/web/test/$t.mjs" ] && { node "integrations/web/test/$t.mjs" >/dev/null || { echo "web $t FAILED"; ok=1; }; }
   done
   # decompile-replay drives the native CLI at target/release/unlace and silently skips without it.
-  local rel="decompiler/target/release/unlace" made=""
+  local rel="target/release/unlace" made=""
   if [ ! -e "$rel" ]; then mkdir -p "$(dirname "$rel")" 2>/dev/null && ln -s "$BIN/unlace" "$rel" && made=1; fi
   node integrations/web/test/decompile-replay.mjs || ok=1
   [ -n "$made" ] && rm -f "$rel"
@@ -92,7 +92,8 @@ web() {
 }
 rusttest() {
   # The workspace suite reads <repo>/specs; worktree specs are built above.
-  make rust-test WEB="${UNLACE_GATES_WEB:-0}"
+  local web=(--exclude unlace-wasm); [ "${UNLACE_GATES_WEB:-0}" = 1 ] && web=()
+  cargo nextest run --workspace "${web[@]}" --profile ci
 }
 
 step forbidden-words forbidden_words
@@ -101,13 +102,13 @@ step test-layout python3 scripts/check_test_layout.py
 step fmt fmt
 if [ "$LEVEL" != fast ]; then
   # CI has no global gitignore; the repo tooling tests create a.exe / x.obj and expect git to see them.
-  step test-tools env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.excludesFile GIT_CONFIG_VALUE_0=/dev/null make test-tools
+  step test-tools env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.excludesFile GIT_CONFIG_VALUE_0=/dev/null PYTHONPATH="$ROOT" python3 -m unittest discover -s scripts/tests -p 'test_*.py'
   step build build
   step specs specs
   step lint lint
-  step make-test "${SLOT[@]}" make test BINDIR="$BIN"
-  step make-test-stages "${SLOT[@]}" make test-stages BINDIR="$BIN"
-  step check-spec make check-spec
+  # tests/datatests and tests/stages vs their baselines (PARITY OK), through the build above.
+  step parity "${SLOT[@]}" cargo test -p unlace-cli --test parity
+  step check-spec python3 tools/check_spec.py
   step test-cli "${SLOT[@]}" env PYTHONPATH="$ROOT" python3 -m scripts.repipe.clitests
   step catalog-check "$BIN/unlace" catalog --check
   step counters counters

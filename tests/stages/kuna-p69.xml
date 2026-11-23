@@ -12,7 +12,7 @@
     P6 "variable-merging" (implweight).
 
     The bytes are the gcc build of
-    decompiler/crates/unlace-analysis/tests/fixtures/gotonext.c (see
+    crates/unlace-analysis/tests/fixtures/gotonext.c (see
     kuna-gotonext.xml).  Pass 1 is the default; pass 2 turns all three on and
     must print the same switch arms, division and loop.
 -->

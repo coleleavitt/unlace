@@ -8,7 +8,7 @@ from scripts.paths import repo_root
 class SpecMapTests(unittest.TestCase):
     def test_every_decomp_folder_has_one_chapter(self):
         owners = specmap.folder_chapters()
-        src = repo_root() / "decompiler" / "crates" / "unlace-decomp" / "src"
+        src = repo_root() / "crates" / "unlace-decomp" / "src"
         for entry in sorted(src.iterdir()):
             if not entry.is_dir():
                 continue

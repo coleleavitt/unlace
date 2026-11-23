@@ -242,6 +242,7 @@ def upward_edges(root: Path) -> set[tuple[str, str]]:
                     and (i == 0 or tokens[i - 1] != "::"):
                 for path in use_paths(tokens, i):
                     target = resolve(path, here, modules)
+                    target_band = -1
                     if target in FOLDER_BAND and (src / target).is_dir():
                         # a path that stops at a phase folder names this crate's folder
                         rootrel = str(src.relative_to(root))

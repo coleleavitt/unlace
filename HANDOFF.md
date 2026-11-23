@@ -421,6 +421,13 @@ about 0.5 s per middle edit. Numbers and the decision are in `notes/crate-archit
   No behaviour change. Next candidates: more passes stating what they rely on through
   `debug_assert_settled!` (the band-b crates, after the bandb split settles).
 
+### C syntax tree (ctree), 2026-11-23
+- Design: `docs/architecture/ctree.md` (a tree built from the final block tree, between
+  `unlace-structure` and `unlace-emit`, new crate `unlace-ctree`; the print-time decisions
+  `iteregion`, `iteboolean`, `switchmerge`, `gotonext`, `voidtailreturn` and backlog #8/#9/#10
+  become tree rewrites). Introduced behind `ctree` (default off) with a byte-identical proof before
+  any rewrite moves. Section 9 of the doc is the order of the work.
+
 ### CI and tests
 - 2026-11-23, after the stop: every finished Tests run on `main` since 2026-11-22 20:57 had failed
   the workspace suite (11 real failures), and queued main runs were replaced by newer pushes, so most

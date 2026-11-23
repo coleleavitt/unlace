@@ -545,19 +545,6 @@ pub struct Architecture {
     /// returns, instead of after `ActionDeindirect` and a restart. Default off
     /// (`option relronoreturn`).
     pub relro_noreturn: bool,
-    /// (kuna `int3pad`) How a decoded `int3` is handled.  x86 SLEIGH lifts it to
-    /// `intloc = swi(3); call [intloc]`, which the printer renders as an ordinary
-    /// indirect call; `warn` (the default) buffers the `// int3-pad` warning that
-    /// names the pad, and `halt` additionally ends the flow at it.  See
-    /// [`kuna_int3pad`](crate::kuna_int3pad).
-    pub int3_pad: crate::kuna_int3pad::Int3PadMode,
-    /// (kuna `x64syscall`) What register effects the x86-64 `SYSCALL` user-op
-    /// carries.  `off` (the default) is the vendored SLEIGH model, a
-    /// zero-input/zero-output CALLOTHER; `on` reads `RAX` plus every argument
-    /// register the block provably sets up and writes `RAX`; `abi` reads all six
-    /// argument registers unconditionally.  See
-    /// [`kuna_x64syscall`](crate::kuna_x64syscall).
-    pub x64_syscall: crate::kuna_x64syscall::X64SyscallMode,
     /// (kuna) The compiled `<segmentop>` definitions by address-space index
     /// (C++ `userops.segmentop`), built at the end of boot.  See
     /// [`kuna_segmentize`](crate::kuna_segmentize).
@@ -707,15 +694,6 @@ pub struct Architecture {
     /// resolves a call to one of those names.  See
     /// [`crate::p2_lift::kuna_cleanupcode`].
     pub remove_cleanup_code: bool,
-    /// (kuna `linuxsyscall`) Rewrite a 32-bit Linux `int 0x80` from the indirect
-    /// call through the `swi` userop that x86 SLEIGH lowers it to into a named
-    /// call on the syscall the constant in `EAX` selects, with the ABI argument
-    /// registers as its arguments (`option linuxsyscall off|auto|on`).  x86 only;
-    /// `auto` also requires the loaded image to be a Linux ELF
-    /// ([`image_linux_elf`](Self::image_linux_elf)), and every mode declines a
-    /// number that is not a locally-resolvable constant with a vetted table
-    /// entry.  See [`crate::p2_lift::kuna_linuxsyscall`].
-    pub linux_syscall: crate::kuna_linuxsyscall::LinuxSyscallMode,
     /// (kuna `msvcstrappend`) Collapse each inlined MSVC x64 `std::string`
     /// `push_back` / literal `append` capacity diamond into one call on a locked
     /// `std::string::push_back` / `std::string::append` prototype (`option
@@ -875,17 +853,9 @@ pub struct Architecture {
     /// string literal's two constant words as the literal. Default auto (act
     /// when `source_lang` is Swift).
     pub swift_str: u8,
-    /// (kuna) `option gomorestack` mode (`GoMorestackMode` as u8): fold the Go
-    /// stack-growth entry guard.  Default auto (fold when `source_lang` is Go).
-    pub go_morestack: u8,
-    pub rust_probestack: crate::kuna_rustprobestack::RustProbestackMode,
     /// (kuna) `option gobool` mode (`GoBoolMode` as u8): narrow a Go boolean
     /// return's stale-high concatenation.  Default auto.
     pub go_bool: u8,
-    /// (kuna) `option gowritebarrier` mode (`GoWriteBarrierMode` as u8): fold
-    /// the Go GC write-barrier diamond.  Default auto (fold when `source_lang`
-    /// is Go).
-    pub go_write_barrier: u8,
     /// (kuna) `option gonewtype`: type a `runtime.newobject` result from its
     /// descriptor argument through the per-call-site output type lock.
     /// Default on (structurally inert off Go images).
@@ -905,9 +875,6 @@ pub struct Architecture {
     /// at the next jump table its function dispatches through
     /// (`p2_lift/kuna_switchextent.rs`, and the Listing's AArch64 table read).
     pub switch_extent: bool,
-    /// (kuna) When a `BRANCHIND` whose destination is a select over constant
-    /// addresses is recovered (`p2_lift/kuna_constselectjump.rs`).
-    pub const_select_jump: crate::kuna_constselectjump::ConstSelectMode,
     /// (kuna, angr `test_decompiling_missing_function_call`) Bound a LOAD-table
     /// jumptable index by an out-of-band CBRANCH range guard the basic model's
     /// guard analysis could not turn into a bound (C++ `switch_guard_bound`).
@@ -2845,8 +2812,6 @@ impl Architecture {
             v850_indirect_branch: false,
 
             relro_noreturn: false, // (kuna) option relronoreturn, default off
-            int3_pad: crate::kuna_int3pad::Int3PadMode::Off, // (kuna) option int3pad; reset_defaults sets the shipped default
-            x64_syscall: crate::kuna_x64syscall::X64SyscallMode::Off, // (kuna) option x64syscall; reset_defaults sets the shipped default
             fpu_emu: 0, // (kuna) option fpuemu; reset_defaults sets the shipped default (auto)
             fpu_emu_evidence: false,
             mz_dgroup_on: true,
@@ -2887,7 +2852,6 @@ impl Architecture {
             mapped_flow_boundary_image: false,
             overlap_branch: false, // (kuna) option overlapbranch; reset_defaults sets the shipped default
             remove_cleanup_code: false, // (kuna) option cleanupcode; reset_defaults sets the shipped default
-            linux_syscall: crate::kuna_linuxsyscall::LinuxSyscallMode::Off, // (kuna) option linuxsyscall; reset_defaults sets the shipped default
             msvc_str_append: false, // (kuna) option msvcstrappend; reset_defaults sets the shipped default
             switch_selector_guard: false, // (kuna) option switchselector; reset_defaults sets the shipped default
             lowered_switch_linear: false, // (kuna) option loweredswitch linear|all
@@ -2938,17 +2902,13 @@ impl Architecture {
             source_lang_forced: None, // (kuna) option sourcelang; reset_defaults restores auto
             fat_str: 0, // (kuna) option fatstr; reset_defaults sets the shipped default (auto)
             swift_str: 0, // (kuna) option swiftstr; reset_defaults sets the shipped default (auto)
-            go_morestack: 0, // (kuna) option gomorestack; reset_defaults sets the shipped default (auto)
-            rust_probestack: crate::kuna_rustprobestack::RustProbestackMode::Off,
             go_bool: 0, // (kuna) option gobool; reset_defaults sets the shipped default (auto)
-            go_write_barrier: 0, // (kuna) option gowritebarrier; reset_defaults sets the shipped default (auto)
             go_new_type: false, // (kuna) option gonewtype; reset_defaults sets the shipped default (on)
             ptrauth_trap: false, // (kuna) option ptrauthtrap; reset_defaults sets the shipped default (on)
 
             outlined_inline: false, // (kuna) option outlinedinline; reset_defaults sets the shipped default (on)
             switch_modulo_bound: false,
             switch_extent: false, // (kuna) option switchextent; reset_defaults sets the shipped default (on)
-            const_select_jump: crate::kuna_constselectjump::ConstSelectMode::Off,
             highslice_guard: false,
             switch_guard_bound: false,
             switch_shared_case: false,
@@ -3335,9 +3295,7 @@ impl Architecture {
         self.memset_recover = true; // (kuna) DIV-2 default-on (GH-9230/1537)
         self.rodata_string = true; // (kuna) DIV-113 default-on: a read-only string block copy collapses to builtin_strncpy instead of the invalid-C partial-symbol slice assignments. Byte-identical (0/675) — the corpus carries no data symbols, so the covering-string-symbol guard never fires. Restore the slice assignments with `option rodatastring off`
         self.v850_indirect_branch = true; // (kuna) GH-8817: V850-gated in kuna_v850indbranch::applies, so inert on every other language
-        self.int3_pad = crate::kuna_int3pad::Int3PadMode::Warn; // (kuna) DIV-128 default `warn`: ADDS A COMMENT ONLY. Names the `int3` pad control ran into, which x86 SLEIGH lifts to `intloc = swi(3); call [intloc]` and the printer renders as an ordinary indirect call. Shape-gated on a `swi` CALLOTHER with the 1-byte constant vector 3, so it is structurally inert wherever no `int3` is decoded and byte-identical on the datatest corpus (0/675); `option int3pad halt` also ends the flow at the pad, `option int3pad off` restores the unannotated rendering
         self.syscall_regs = crate::kuna_syscallregs::SyscallRegsMode::Auto; // (kuna) default `auto`: on an image the loader identified as an operating system's user-space program, the system call writes its result register and reads the number register and the leading argument registers the function writes on every path to it. Gated on that loader fact, which the XML bootstrap never sets, so it is structurally inert on the datatest corpus (0/675); `option syscallregs on` acts on any image, `off` restores the zero-effect CALLOTHER
-        self.x64_syscall = crate::kuna_x64syscall::X64SyscallMode::On; // (kuna) default `on`: x86-64-gated; the bounded backward walk reads only the argument registers the block provably sets up, `abi` reads all six
         self.apply_segmentize();
         self.fpu_emu = crate::kuna_fpuemu::FpuEmuMode::Auto.as_u8(); // (kuna #1288) decode the 8087 emulator's INT 34h-3Dh as x87 where the loader found emulator code (MS-DOS executables); only x86-16.sla has the fpuEmu context bit, so every other input and every datatest is unchanged; `option fpuemu off` keeps the interrupts
         crate::kuna_fpuemu::apply(self);
@@ -3366,7 +3324,6 @@ impl Architecture {
         self.remove_cleanup_code = true; // (kuna) DIV-81 default-on: REMOVES CODE. Deletes the Rust drop/deallocate call sites (`core::ptr::drop_in_place`, `Drop::drop`, `alloc::raw_vec::RawVecInner::deallocate`, `__rust_dealloc`) and the argument setup that only feeds them. Structurally inert outside a Rust binary (no C ELF resolves a call to one of those names), so byte-identical (0/675) on the datatest corpus; keep the drop glue with `option cleanupcode off`
         self.switch_selector_guard = false; // (kuna) option switchselector, default-off: re-rolling a parameter-dispatch cascade into a switch is the better default; ON narrows `loweredswitch` to cascades whose selector the function itself computes
         self.msvc_str_append = false; // (kuna) option msvcstrappend, default-off: it deletes the inlined fast path's stores and renames the grow call, and no MSVC C++ corpus in the tree can measure it
-        self.linux_syscall = crate::kuna_linuxsyscall::LinuxSyscallMode::Auto; // (kuna) default `auto`: name an x86 `int 0x80` only on an image the loader identified as a Linux ELF; `on` acts on any x86 image, `off` keeps the swi() call
         self.sparc_struct_return = true; // (kuna) GH-6882: gated on the SPARC-only IllegalInstructionTrap user-op, so inert on every other language
 
         self.mba = false;
@@ -3393,10 +3350,7 @@ impl Architecture {
         self.source_lang_forced = None; // (kuna) option sourcelang default auto; the detected fact survives resets
         self.fat_str = crate::kuna_fatstr::FatStrMode::Auto.as_u8(); // (kuna) bounded (ptr,len) literals on Rust/Go images
         self.swift_str = crate::kuna_fatstr::FatStrMode::Auto.as_u8(); // (kuna) Swift two-word string literals on Swift images
-        self.go_morestack = crate::kuna_gomorestack::GoMorestackMode::Auto.as_u8(); // (kuna) fold the Go entry guard on Go images
-        self.rust_probestack = crate::kuna_rustprobestack::RustProbestackMode::Off;
         self.go_bool = crate::kuna_gobool::GoBoolMode::Auto.as_u8(); // (kuna) narrow Go boolean returns on Go images
-        self.go_write_barrier = crate::kuna_gowritebarrier::GoWriteBarrierMode::Auto.as_u8(); // (kuna) fold the Go write barrier on Go images
         self.go_new_type = true; // (kuna) type runtime.newobject results from their descriptors on Go images
 
         self.ptrauth_trap = true; // (kuna) drop arm64e pointer-auth failure checks; inert unless a brk #0xc47x trap's guard is the return-address bit test, 0/675 datatests
@@ -3405,7 +3359,6 @@ impl Architecture {
         self.chkstk_darwin = true; // (kuna) drop the Darwin stack probe; inert without a ___chkstk_darwin callee, 0/675 datatests
         self.switch_modulo_bound = false; // (kuna) default: upstream byte-identical (GH-9191)
         self.switch_extent = true; // (kuna) a table with no range check ends at the function's next table; inert where a guard bounds it, 0/675 datatests
-        self.const_select_jump = crate::kuna_constselectjump::ConstSelectMode::Reentry; // (kuna) option constselectjump default `reentry`: only a single-target jump its own target code re-enters with another local constant; 0/675 datatest assertions move
         self.highslice_guard = false;
         self.switch_guard_bound = false; // (kuna) default: upstream byte-identical (angr opt-in)
         self.switch_shared_case = true; // (kuna) DIV-14 default-on (angr loop-carried-guard PIC switch recovery; slower on the functions it recovers, kept on for quality; 0/675 byte-identical)
@@ -4309,15 +4262,12 @@ impl Architecture {
         ctx.source_lang = self.source_lang();
         ctx.fat_str = self.fat_str;
         ctx.swift_str = self.swift_str;
-        ctx.go_morestack = self.go_morestack;
-        ctx.rust_probestack = self.rust_probestack;
         ctx.chkstk_darwin = self.chkstk_darwin
             && self.image_apple
             && crate::kuna_chkstkdarwin::applies_to(&self.archid);
         ctx.sp_solve = crate::p4_calls::kuna_spsolve::applies(self);
         ctx.type_vote = self.type_vote;
         ctx.go_bool = self.go_bool;
-        ctx.go_write_barrier = self.go_write_barrier;
         ctx.go_new_type = self.go_new_type;
         ctx.outlined_inline = self.outlined_inline;
         ctx.swift_metadata_results = self.analysis_swifttypes;
@@ -4493,7 +4443,7 @@ impl Architecture {
         ctx.region_edge_order = self.region_edge_order; // regionedgeorder
         ctx.outline_spec = self.outline_spec.clone(); // outline
         ctx.remove_cleanup_code = self.remove_cleanup_code; // cleanupcode
-        ctx.linux_syscall = self.linux_syscall.fires(self.image_linux_elf); // (kuna) linuxsyscall
+        ctx.image_linux_elf = self.image_linux_elf; // (kuna) linuxsyscall
         ctx.msvc_str_append = self.msvc_str_append; // msvcstrappend
         ctx.octeon_effects = self.octeon_effects; // octeoneffects
         ctx.octeon_memory_userops = crate::kuna_octeoneffects::userop_ids(
@@ -4501,7 +4451,6 @@ impl Architecture {
             self.octeon_effects,
             &self.octeon_upstream_inject,
         );
-        ctx.x64_syscall = self.x64_syscall; // (kuna) x64syscall
         ctx.x64_syscall_memory_target = self.archid == "x86:LE:64:default:gcc";
         ctx.syscall_regs = self.syscall_regs.fires(self.image_os_userland); // (kuna) syscallregs
         ctx.syscall_regs_family = crate::kuna_syscallregs::SyscallFamily::from_archid(&self.archid);
@@ -4592,9 +4541,6 @@ impl Architecture {
         ctx.switch_modulo_bound = self.switch_modulo_bound;
         ctx.switch_extent = self.switch_extent;
         ctx.lazy_entry_starts = Rc::clone(&self.lazy_entry_starts);
-        // (kuna) carry the constant-select indirect-branch gate
-        // (`option constselectjump`) so `JumpTable::recoverModel` reaches it.
-        ctx.const_select_jump = self.const_select_jump;
         // (kuna, angr) carry the CBRANCH-guard jump-table index-bound gate
         // (`option switchguardbound`) so `JumpBasic::recoverModel` reaches it.
         ctx.highslice_guard = self.highslice_guard;

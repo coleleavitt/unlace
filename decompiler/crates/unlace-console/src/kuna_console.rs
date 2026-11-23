@@ -258,7 +258,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // (kuna `syscallregs`) Three-valued, so it reports its own token.
         "syscallregs" => conf.syscall_regs.as_str(),
         // (kuna `linuxsyscall`) Three-valued, so it reports its own token.
-        "linuxsyscall" => conf.linux_syscall.as_str(),
+        "linuxsyscall" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_linuxsyscall::LinuxSyscallMode>()
+            .as_str(),
         // (kuna `callmechanisms`) Three-valued, so it reports its own token.
         "callmechanisms" => conf.call_mechanism_mode.as_str(),
         // (kuna `rustabi`) Three-valued, so it reports its own token.
@@ -271,17 +274,21 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // (kuna `fpuemu`) Three-valued, so it reports its own token.
         "fpuemu" => unlace_decomp::kuna_fpuemu::FpuEmuMode::from_u8(conf.fpu_emu).as_str(),
         "mzdgroup" => on_off(conf.mz_dgroup_on),
-        "rustprobestack" => conf.rust_probestack.as_str(),
+        "rustprobestack" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_rustprobestack::RustProbestackMode>()
+            .as_str(),
         "rustfmt" => conf.rust_fmt.as_str(),
         // (kuna `gomorestack`) Three-valued, so it reports its own token.
-        "gomorestack" => {
-            unlace_decomp::kuna_gomorestack::GoMorestackMode::from_u8(conf.go_morestack).as_str()
-        }
+        "gomorestack" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_gomorestack::GoMorestackMode>()
+            .as_str(),
         // (kuna `gowritebarrier`) Three-valued, so it reports its own token.
-        "gowritebarrier" => {
-            unlace_decomp::kuna_gowritebarrier::GoWriteBarrierMode::from_u8(conf.go_write_barrier)
-                .as_str()
-        }
+        "gowritebarrier" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_gowritebarrier::GoWriteBarrierMode>()
+            .as_str(),
         "gonewtype" => on_off(conf.go_new_type),
         // (kuna `sourcelang`) Reports the OPTION state, not the detected fact:
         // `auto` until a run forces a language.
@@ -299,7 +306,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "stackviews" => on_off(conf.stack_views),
         "v850indirectbranch" => on_off(conf.v850_indirect_branch),
         "switchmodbound" => on_off(conf.switch_modulo_bound),
-        "constselectjump" => conf.const_select_jump.as_str(),
+        "constselectjump" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_constselectjump::ConstSelectMode>()
+            .as_str(),
         "switchsharedcase" => on_off(conf.switch_shared_case),
         "realtypes" => on_off(conf.realtypes),
         // (kuna `calloverlap`) Report the selected overlap policy.

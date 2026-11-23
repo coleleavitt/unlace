@@ -54,8 +54,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::funcdata::Funcdata;
 use crate::idiom::match_guarded_cold_call;
 
-/// The three-valued `gowritebarrier` gate, stored on the `Architecture` as a
-/// `u8` (the `gomorestack`/`rustabi` pattern).
+/// The three-valued `gowritebarrier` gate.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GoWriteBarrierMode {
     /// Keep the write-barrier diamond.
@@ -67,6 +66,23 @@ pub enum GoWriteBarrierMode {
     Always,
 }
 
+impl crate::kuna_optionset::KunaOption for GoWriteBarrierMode {
+    const NAME: &'static str = "gowritebarrier";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        GoWriteBarrierMode::Auto
+    }
+
+    fn shipped() -> Self {
+        GoWriteBarrierMode::Auto
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        parse_gowritebarrier_mode(value).map_err(unlace_base::error::KunaError::parse)
+    }
+}
+
 impl GoWriteBarrierMode {
     /// The catalog `current` token.
     pub fn as_str(self) -> &'static str {
@@ -74,24 +90,6 @@ impl GoWriteBarrierMode {
             GoWriteBarrierMode::Off => "off",
             GoWriteBarrierMode::Auto => "auto",
             GoWriteBarrierMode::Always => "always",
-        }
-    }
-
-    /// Stored form for the `Architecture` field.
-    pub fn as_u8(self) -> u8 {
-        match self {
-            GoWriteBarrierMode::Off => 0,
-            GoWriteBarrierMode::Auto => 1,
-            GoWriteBarrierMode::Always => 2,
-        }
-    }
-
-    /// Inverse of [`GoWriteBarrierMode::as_u8`] (unknown values read as `Off`).
-    pub fn from_u8(v: u8) -> GoWriteBarrierMode {
-        match v {
-            1 => GoWriteBarrierMode::Auto,
-            2 => GoWriteBarrierMode::Always,
-            _ => GoWriteBarrierMode::Off,
         }
     }
 }
@@ -138,7 +136,7 @@ pub fn is_write_barrier_name(name: &str) -> bool {
 
 /// Is the fold live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match GoWriteBarrierMode::from_u8(data.get_arch().go_write_barrier) {
+    match data.get_arch().kuna_options.get::<GoWriteBarrierMode>() {
         GoWriteBarrierMode::Off => false,
         GoWriteBarrierMode::Auto => data.get_arch().source_lang.is_go(),
         GoWriteBarrierMode::Always => true,

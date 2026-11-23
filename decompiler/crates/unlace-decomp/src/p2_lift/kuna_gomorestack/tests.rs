@@ -42,7 +42,7 @@ fn build_fd(mode: GoMorestackMode, lang: SourceLang) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.go_morestack = mode.as_u8();
+    ctx.kuna_options.set(mode);
     ctx.source_lang = lang;
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
@@ -51,7 +51,7 @@ fn build_fd(mode: GoMorestackMode, lang: SourceLang) -> Funcdata {
 }
 
 #[test]
-fn mode_parses_and_round_trips() {
+fn mode_parses() {
     for (tok, mode) in [
         ("off", GoMorestackMode::Off),
         ("auto", GoMorestackMode::Auto),
@@ -61,11 +61,9 @@ fn mode_parses_and_round_trips() {
         let (m, msg) = parse_gomorestack_mode(tok).expect("parses");
         assert_eq!(m, mode, "{tok}");
         assert!(msg.contains(m.as_str()));
-        assert_eq!(GoMorestackMode::from_u8(m.as_u8()), m);
     }
     assert!(parse_gomorestack_mode("sometimes").is_err());
     assert_eq!(GoMorestackMode::default(), GoMorestackMode::Auto);
-    assert_eq!(GoMorestackMode::from_u8(99), GoMorestackMode::Off);
 }
 
 #[test]

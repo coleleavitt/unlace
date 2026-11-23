@@ -67,13 +67,13 @@ fn surface_count_is_101() {
 }
 
 #[test]
-fn settable_count_is_324() {
-    assert_eq!(kuna_num_settables(), 324);
-    assert_eq!(SETTABLE_TABLE.len(), 324);
+fn settable_count_is_325() {
+    assert_eq!(kuna_num_settables(), 325);
+    assert_eq!(SETTABLE_TABLE.len(), 325);
 }
 
 #[test]
-fn tier_counts_are_66_core_158_transform_100_analysis() {
+fn tier_counts_are_66_core_159_transform_100_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -85,7 +85,7 @@ fn tier_counts_are_66_core_158_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (66, 158, 100));
+    assert_eq!((core, transform, analysis), (66, 159, 100));
 }
 
 #[test]
@@ -973,7 +973,7 @@ fn option_values_live_value_present_for_129() {
     // `kuna_live_value`, like `narrowargs`/`protoorder`.
     // Recounted after merging upstream/main (2026-11-22): the fork's live-field rows plus upstream's.
     // +1 for `oslog` (live_field = os_log_args).
-    assert_eq!(with_live, 136);
+    assert_eq!(with_live, 137);
 }
 
 #[test]
@@ -1298,7 +1298,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
     // +1 for `oslog`; its P9 row.
     // +1 for `callresultuse`; its P4 row.
-    assert_eq!(json.matches("},\n").count(), 323);
+    assert_eq!(json.matches("},\n").count(), 324);
 }
 
 #[test]

@@ -33,7 +33,7 @@
 //! name-independent match pass, and the blast radius is one declaration per
 //! function instead of one per local.
 //!
-//! Gated by [`Architecture::ptr_from_use`](crate::architecture::Architecture)
+//! Gated by the registered option [`PtrFromUseMode`]
 //! (option `ptrfromuse off|byte|void`, shipped `void`); with the option off nothing
 //! in this module is reachable.
 
@@ -63,6 +63,23 @@ pub enum PtrFromUseMode {
     /// Point at nothing (`void *`).  The shipped default.
     #[default]
     Void,
+}
+
+impl crate::kuna_optionset::KunaOption for PtrFromUseMode {
+    const NAME: &'static str = "ptrfromuse";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        PtrFromUseMode::Void
+    }
+
+    fn shipped() -> Self {
+        PtrFromUseMode::Void
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionPtrFromUse.apply(value)
+    }
 }
 
 impl PtrFromUseMode {

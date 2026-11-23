@@ -758,7 +758,8 @@ impl FlowEnvironment for ArchFlowEnv {
         // `fastfailnoreturn`'s, read for vector 3.  No language gate: the shape
         // itself is x86's, so no other processor reaches the match.
         let arch = self.arch();
-        if !arch.int3_pad.warns() {
+        let int3_pad = arch.kuna_options.get::<crate::kuna_int3pad::Int3PadMode>();
+        if !int3_pad.warns() {
             // Fast-path the gate without touching the IR.
             return None;
         }
@@ -772,7 +773,7 @@ impl FlowEnvironment for ArchFlowEnv {
         let addr = fd.obank().get(op)?.get_addr().clone();
         Some(crate::kuna_int3pad::Int3PadSite {
             run: crate::kuna_int3pad::pad_run_length(fd, &addr),
-            halt: arch.int3_pad.halts(),
+            halt: int3_pad.halts(),
         })
     }
 

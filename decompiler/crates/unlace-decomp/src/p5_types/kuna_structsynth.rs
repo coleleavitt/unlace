@@ -1224,7 +1224,11 @@ fn wants_settle_pass(data: &mut Funcdata) -> bool {
     {
         return false;
     }
-    let headless = data.get_arch().struct_headless.fires();
+    let headless = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_structheadless::StructHeadlessMode>()
+        .fires();
     let raw = collect(data);
     raw.iter().any(|(base, e)| {
         let e = e.pruned();
@@ -1251,7 +1255,9 @@ fn answer(
             size,
             unclaimed,
             selfs,
-            data.get_arch().struct_merge,
+            data.get_arch()
+                .kuna_options
+                .get::<crate::kuna_structmerge::StructMergeMode>(),
         ),
     }
 }

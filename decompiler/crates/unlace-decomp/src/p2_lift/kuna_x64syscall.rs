@@ -125,6 +125,23 @@ pub enum X64SyscallMode {
     Abi,
 }
 
+impl crate::kuna_optionset::KunaOption for X64SyscallMode {
+    const NAME: &'static str = "x64syscall";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        X64SyscallMode::Off
+    }
+
+    fn shipped() -> Self {
+        X64SyscallMode::On
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionX64Syscall.apply(value)
+    }
+}
+
 impl X64SyscallMode {
     /// Is the rewrite applied at all?
     pub fn rewrites(self) -> bool {
@@ -345,14 +362,21 @@ fn is_marked_syscall(data: &Funcdata, op: OpId) -> bool {
 
 /// Enabled, uninjected x86-64 system calls in the supported SysV memory model.
 pub fn is_memory_call(data: &Funcdata, op: OpId) -> bool {
-    data.get_arch().x64_syscall.rewrites()
+    data.get_arch()
+        .kuna_options
+        .get::<X64SyscallMode>()
+        .rewrites()
         && memory_abi_supported(data)
         && is_marked_syscall(data, op)
 }
 
 /// Enabled, uninjected x86-64 system calls in the supported SysV memory model.
 pub fn memory_calls(data: &Funcdata) -> Vec<OpId> {
-    if !data.get_arch().x64_syscall.rewrites()
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<X64SyscallMode>()
+        .rewrites()
         || data.get_arch().x64_syscall_userops.is_empty()
         || !memory_abi_supported(data)
     {
@@ -422,7 +446,7 @@ impl Action for ActionX64Syscall {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        let mode = data.get_arch().x64_syscall;
+        let mode = data.get_arch().kuna_options.get::<X64SyscallMode>();
         if !mode.rewrites() || data.get_arch().x64_syscall_userops.is_empty() {
             return 0;
         }

@@ -20,6 +20,14 @@
 //!   `passthrough` gives the call the registers the caller forwards and the
 //!   caller the callee's return value.
 //!
+//! A single-function drive has no callee-first run behind it, so it keeps a
+//! ledger of its own ([`begin_single`]): after a decompile that followed a
+//! one-destination table into a known function, [`single_step`] has the drive
+//! decompile that callee first (bounded, as it does a tail-called callee) and
+//! file it, then decompile the function again so the jump takes the tail call;
+//! a tail call that lost what the copied-in body shows is refused the same way
+//! and the body copied in once more.
+//!
 //! The reference walk behind decompile-all's callee-first plan does not see
 //! these jumps (a MIPS `$gp` slot is not a constant it reads), so the callee is
 //! often planned after its caller. [`record`] files such a caller beside the
@@ -229,7 +237,7 @@ fn loses(arch: &Architecture, data: &Funcdata, callee: Key) -> bool {
 /// `Some(stated)` when a tail call to this function loses nothing: it takes
 /// and returns nothing (`false`), or its statement fixes what it takes and
 /// what it returns (`true`).
-fn callable_by_recovery(
+pub(crate) fn callable_by_recovery(
     arch: &mut Architecture,
     entry: &Address,
     data: &Funcdata,
@@ -367,6 +375,128 @@ impl Ledger {
         }
         self.waiting.retain(|_, callers| !callers.is_empty());
         out
+    }
+}
+
+/// The most callees one single-function drive decompiles first for its
+/// one-destination tables.
+pub const MAX_SINGLE_CALLEES: usize = 4;
+
+/// What a single-function drive does after one decompile under its own ledger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SingleStep {
+    /// The decompile stands.
+    Done,
+    /// Decompile the function again: a callee is newly filed, or a tail call
+    /// it took is now refused.
+    Redo,
+}
+
+/// Give a single-function drive a ledger of its own, unless a callee-first run
+/// is already recording. Returns the ledger to put back with [`end_single`].
+pub fn begin_single(arch: &mut Architecture) -> Option<Ledger> {
+    if arch.kuna_gottailcall.recording {
+        return None;
+    }
+    let own = Ledger {
+        recording: true,
+        ..Ledger::default()
+    };
+    Some(std::mem::replace(&mut arch.kuna_gottailcall, own))
+}
+
+/// Put back the ledger [`begin_single`] replaced.
+pub fn end_single(arch: &mut Architecture, saved: Ledger) {
+    arch.kuna_gottailcall = saved;
+}
+
+/// After one decompile of the function entered at `entry` under a
+/// single-function ledger: refuse each tail call it took that lost what the
+/// copied-in body shows, or else file each known function it followed a
+/// one-destination table into (by its flow, or, when the flow was followed
+/// before the ledger began, by the one-destination tables `data` still holds),
+/// by `recover` (the drive's bounded callee decompile). `tried` holds the callees already asked, so each is decompiled
+/// at most once and at most [`MAX_SINGLE_CALLEES`] are.
+pub fn single_step(
+    arch: &mut Architecture,
+    entry: &Address,
+    data: &Funcdata,
+    tried: &mut BTreeSet<Key>,
+    mut recover: impl FnMut(&mut Architecture, &Address) -> Option<Callee>,
+) -> SingleStep {
+    let Some(own) = key(entry) else {
+        return SingleStep::Done;
+    };
+    let taken: Vec<Key> = {
+        let mut t = arch.kuna_gottailcall.taken.borrow_mut();
+        let mine = t
+            .iter()
+            .filter(|(c, _)| *c == own)
+            .map(|(_, k)| *k)
+            .collect();
+        t.retain(|(c, _)| *c != own);
+        mine
+    };
+    let followed: BTreeSet<Key> = {
+        let mut f = arch.kuna_gottailcall.followed.borrow_mut();
+        let mine = f
+            .iter()
+            .filter(|(c, _)| *c == own)
+            .map(|(_, k)| *k)
+            .chain(
+                (0..data.num_jump_tables())
+                    .filter_map(|i| {
+                        crate::kuna_tailcalljump::kuna_sole_table_destination(
+                            data.get_jump_table(i),
+                        )
+                    })
+                    .filter_map(|a| key(&a)),
+            )
+            .filter(|k| *k != own)
+            .collect();
+        f.retain(|(c, _)| *c != own);
+        mine
+    };
+    let lost: Vec<Key> = taken
+        .into_iter()
+        .filter(|k| loses(arch, data, *k))
+        .collect();
+    if !lost.is_empty() {
+        for k in lost {
+            arch.kuna_gottailcall.refused.insert((own, k));
+        }
+        return SingleStep::Redo;
+    }
+    let mut filed = false;
+    for k in followed {
+        if tried.len() >= MAX_SINGLE_CALLEES || !tried.insert(k) {
+            continue;
+        }
+        if arch.kuna_gottailcall.callable.contains_key(&k)
+            || arch.kuna_gottailcall.refused.contains(&(own, k))
+        {
+            continue;
+        }
+        let Some(space) = arch.manage().get_space(k.0).cloned() else {
+            continue;
+        };
+        let dest = Address::new(space, k.1);
+        if arch
+            .symboltab
+            .function_display_name_across_scopes(&dest)
+            .is_none()
+        {
+            continue;
+        }
+        if let Some(callee) = recover(arch, &dest) {
+            arch.kuna_gottailcall.callable.insert(k, callee);
+            filed = true;
+        }
+    }
+    if filed {
+        SingleStep::Redo
+    } else {
+        SingleStep::Done
     }
 }
 

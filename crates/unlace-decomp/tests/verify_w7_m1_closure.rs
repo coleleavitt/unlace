@@ -33,9 +33,9 @@ use std::rc::Rc;
 use unlace_decomp::dtype::{Datatype, DatatypeKind, flags, type_metatype};
 
 fn repo_root() -> PathBuf {
-    // CARGO_MANIFEST_DIR = crates/unlace-decomp ; repo root is 3 up.
+    // CARGO_MANIFEST_DIR = crates/unlace-decomp ; repo root is 2 up.
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for _ in 0..3 {
+    for _ in 0..2 {
         p.pop();
     }
     p

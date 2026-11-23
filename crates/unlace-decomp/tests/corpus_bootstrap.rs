@@ -334,17 +334,13 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
     let resolved_sla = specs
         .slafile
         .ok_or("build_spec_file did not resolve a .sla")?;
-    // Sanity: the resolved sla file basename matches the fixture's sla.
-    if !resolved_sla.ends_with(
-        std::path::Path::new(&fix.sla_rel)
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap(),
-    ) {
+    // Sanity: the resolved sla file is the fixture's sla (through the .sla cache).
+    let expected_sla = unlace_slacomp::slacache::sla_path(specs_root.join(&fix.sla_rel))
+        .map_err(|e| format!("{}: {e}", fix.sla_rel))?;
+    if std::path::Path::new(&resolved_sla) != expected_sla {
         return Err(format!(
-            "build_spec_file resolved {resolved_sla}, expected basename of {}",
-            fix.sla_rel
+            "build_spec_file resolved {resolved_sla}, expected {}",
+            expected_sla.display()
         ));
     }
 

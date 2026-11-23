@@ -106,7 +106,12 @@ impl Drop for ProofSlot {
 
 /// Copy previously frozen facts into a fresh drive without discovering a fact.
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
-    let proof = if arch.call_wide && arch.be_join.proves() {
+    let proof = if arch.call_wide
+        && arch
+            .kuna_options
+            .get::<crate::kuna_bejoin::BeJoinMode>()
+            .proves()
+    {
         arch.kuna_callwide
             .0
             .as_ref()
@@ -498,7 +503,13 @@ pub fn publish_mips(
     declarations: &[Declaration],
 ) -> usize {
     arch.kuna_callwide.clear();
-    if !arch.call_wide || !arch.be_join.proves() || arch.archid != "MIPS:BE:32:default:default" {
+    if !arch.call_wide
+        || !arch
+            .kuna_options
+            .get::<crate::kuna_bejoin::BeJoinMode>()
+            .proves()
+        || arch.archid != "MIPS:BE:32:default:default"
+    {
         return 0;
     }
     let Some(completed) = mips::closed_image(entry, regions, functions, observed_calls) else {

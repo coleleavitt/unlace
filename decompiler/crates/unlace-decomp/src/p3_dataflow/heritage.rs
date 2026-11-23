@@ -1766,7 +1766,11 @@ impl Heritage {
             // `<nohighptr>` element, which only the PIC families set; for every
             // other processor the range list is empty and the test reduces to the
             // space-type check below.
-            let level = fd.get_arch().index_alias_guard;
+            let level = fd
+                .get_arch()
+                .kuna_options
+                .get::<crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard>()
+                .0;
             let high_ptr_possible = level != LEVEL_OFF
                 && addr
                     .get_space()
@@ -1912,7 +1916,11 @@ impl Heritage {
         let mut pruned = false;
         // (kuna) `option calloverlap off|auto|in|full` — the two upstream partial-range
         // overlap guards.  See [`crate::p3_dataflow::kuna_calloverlap`].
-        let overlap_level = fd.get_arch().call_overlap;
+        let overlap_level = fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::p3_dataflow::kuna_calloverlap::CallOverlap>()
+            .0;
         // Lift the call specs out so each trial-registering mutation can also take
         // `&mut Funcdata` (the C++ mutates `fd` through the `FuncCallSpecs *`).
         let mut qlst = fd.take_call_specs();

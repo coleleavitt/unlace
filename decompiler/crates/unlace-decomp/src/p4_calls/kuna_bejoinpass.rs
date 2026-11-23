@@ -71,6 +71,23 @@ pub enum BeJoinPassMode {
     High,
 }
 
+impl crate::kuna_optionset::KunaOption for BeJoinPassMode {
+    const NAME: &'static str = "bejoinpass";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        BeJoinPassMode::Off
+    }
+
+    fn shipped() -> Self {
+        BeJoinPassMode::Whole
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        BeJoinPassMode::parse(value)
+    }
+}
+
 impl BeJoinPassMode {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -100,7 +117,7 @@ impl BeJoinPassMode {
 }
 
 fn mode(data: &Funcdata) -> BeJoinPassMode {
-    data.get_arch().be_join_pass
+    data.get_arch().kuna_options.get::<BeJoinPassMode>()
 }
 
 /// The model's pair, when it is two four-byte registers the ABI returns high

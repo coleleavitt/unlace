@@ -9,7 +9,6 @@ architecture -> kuna_armfloatargs
 architecture -> kuna_armfloatreturn
 architecture -> kuna_avxintrin
 architecture -> kuna_bejoin
-architecture -> kuna_bejoinpass
 architecture -> kuna_callbacktype
 architecture -> kuna_calleedeadarg
 architecture -> kuna_calleememory
@@ -18,7 +17,6 @@ architecture -> kuna_calleereginputs
 architecture -> kuna_calleevote
 architecture -> kuna_callerargs
 architecture -> kuna_callmechanisms
-architecture -> kuna_calloverlap
 architecture -> kuna_callresultuse
 architecture -> kuna_callrettype
 architecture -> kuna_callwide
@@ -35,11 +33,9 @@ architecture -> kuna_fatstr
 architecture -> kuna_floatglobals
 architecture -> kuna_formatstring
 architecture -> kuna_fpuemu
-architecture -> kuna_gobool
 architecture -> kuna_goreg
 architecture -> kuna_gottailcall
 architecture -> kuna_hooks
-architecture -> kuna_indexaliasguard
 architecture -> kuna_inputhints
 architecture -> kuna_itaniumeh
 architecture -> kuna_jumpassist
@@ -100,10 +96,7 @@ architecture -> stringmanage
 architecture -> universalaction
 architecture -> userop
 context -> cpool
-context -> kuna_bejoin
-context -> kuna_bejoinpass
 context -> kuna_callmechanisms
-context -> kuna_calloverlap
 context -> kuna_callresultuse
 context -> kuna_deadcascade
 context -> kuna_floatglobals

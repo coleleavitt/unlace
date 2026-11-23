@@ -248,7 +248,7 @@ fn take(
     pair: &WidePair,
     key: Entry,
 ) -> bool {
-    if arch.be_join == super::BeJoinMode::Callers {
+    if arch.kuna_options.get::<super::BeJoinMode>() == super::BeJoinMode::Callers {
         by_callers(arch, cache, model, pair, key)
     } else {
         verdict(arch, &mut cache.map, model, pair, key)
@@ -662,7 +662,7 @@ pub fn wide_pair(
 /// Inert unless `option bejoin` is `evidence` and the image's model joins its
 /// pair high word first.
 pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
-    if !arch.be_join.proves() {
+    if !arch.kuna_options.get::<super::BeJoinMode>().proves() {
         return;
     }
     let Some(model) = arch.default_fp().cloned() else {
@@ -862,7 +862,9 @@ fn proves_wide(
 /// path end, the pair a proven callee left in place as that callee's whole
 /// value ([`crate::kuna_bejoinpass::settle_return`])?
 fn hands_back_whole(arch: &Architecture, pair: &WidePair) -> bool {
-    arch.be_join_pass == crate::kuna_bejoinpass::BeJoinPassMode::Whole
+    arch.kuna_options
+        .get::<crate::kuna_bejoinpass::BeJoinPassMode>()
+        == crate::kuna_bejoinpass::BeJoinPassMode::Whole
         && pair.hi.1 == 4
         && pair.lo.1 == 4
 }

@@ -206,7 +206,7 @@ kuna_options! { self, p1;
     "bejoin" => {
         let (mode, msg) = crate::kuna_bejoin::BeJoinMode::parse(p1)?;
         self.kuna_callwide.clear();
-        self.be_join = mode;
+        self.kuna_options.set(mode);
         Ok(msg)
     },
     "octeoneffects" => {
@@ -216,10 +216,10 @@ kuna_options! { self, p1;
     },
     "bejoinpass" => {
         let (mode, msg) = crate::kuna_bejoinpass::BeJoinPassMode::parse(p1)?;
-        if mode != self.be_join_pass {
+        if mode != self.kuna_options.get::<crate::kuna_bejoinpass::BeJoinPassMode>() {
             self.kuna_wide.forget_verdicts();
         }
-        self.be_join_pass = mode;
+        self.kuna_options.set(mode);
         Ok(msg)
     },
     "rustabi" => {
@@ -237,11 +237,7 @@ kuna_options! { self, p1;
         self.swift_str = mode.as_u8();
         Ok(msg)
     },
-    "gobool" => {
-        let (mode, msg) = crate::kuna_gobool::parse_gobool_mode(p1).map_err(KunaError::parse)?;
-        self.go_bool = mode.as_u8();
-        Ok(msg)
-    },
+    "gobool" => registered!(crate::kuna_gobool::GoBoolMode),
     "gonewtype" => on_off!(go_new_type, "Go newobject result typing"),
     "rustprobestack" => registered!(crate::kuna_rustprobestack::RustProbestackMode),
     "gomorestack" => registered!(crate::kuna_gomorestack::GoMorestackMode),
@@ -434,24 +430,14 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "varargsharedfloat" => on_off!(vararg_shared_float, "variadic doubles that also feed an earlier argument"),
-    "calloverlap" => {
-        let (val, msg) =
-            crate::p3_dataflow::kuna_calloverlap::OptionCallOverlap.apply(p1)?;
-        self.call_overlap = val;
-        Ok(msg)
-    },
+    "calloverlap" => registered!(crate::p3_dataflow::kuna_calloverlap::CallOverlap),
     "spillargtrial" => {
         let (val, msg) =
             crate::p4_calls::kuna_spillargtrial::OptionSpillArgTrial.apply(p1)?;
         self.spill_arg_trial = val;
         Ok(msg)
     },
-    "indexaliasguard" => {
-        let (val, msg) =
-            crate::p3_dataflow::kuna_indexaliasguard::OptionIndexAliasGuard.apply(p1)?;
-        self.index_alias_guard = val;
-        Ok(msg)
-    },
+    "indexaliasguard" => registered!(crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard),
     "callarrayextent" => on_off!(call_array_extent, "Call-escaped frame array extent"),
     "stackstruct" => on_off!(stack_struct, "Address-taken frame record layout"),
     "arrayextent" => registered!(crate::p6_variables::kuna_arrayextent::ArrayExtent),

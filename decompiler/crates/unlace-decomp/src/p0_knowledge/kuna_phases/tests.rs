@@ -706,10 +706,10 @@ fn option_values_live_value_present_for_129() {
                             | "callmechanisms"
                             // (kuna) `bejoin` takes a MODE (`off|evidence|on`)
                             // over an enum field, for the same reason.  Its live
-                            // value is `Architecture::be_join`.
+                            // value is the registered option `BeJoinMode`.
                             | "bejoin"
                             // (kuna) `bejoinpass` likewise (`off|whole|high`);
-                            // its live value is `Architecture::be_join_pass`.
+                            // its live value is the registered option `BeJoinPassMode`.
                             | "bejoinpass"
                             // (kuna) `octeoneffects` likewise
                             // (`off|atomic|ordered`); its live value is
@@ -748,7 +748,7 @@ fn option_values_live_value_present_for_129() {
                             | "rustprobestack"
                             | "rustfmt"
                             // (kuna) `gobool` takes the same MODE shape; its
-                            // live value is `Architecture::go_bool`.
+                            // live value is the registered option `GoBoolMode`.
                             | "gobool"
                             // (kuna) `fpuemu` takes the same MODE shape; its
                             // live value is `Architecture::fpu_emu`.
@@ -973,7 +973,8 @@ fn option_values_live_value_present_for_129() {
     // `kuna_live_value`, like `narrowargs`/`protoorder`.
     // Recounted after merging upstream/main (2026-11-22): the fork's live-field rows plus upstream's.
     // +1 for `oslog` (live_field = os_log_args).
-    assert_eq!(with_live, 137);
+    // 137 -> 138: `spsolve` (#70) added a live_field row without the bump.
+    assert_eq!(with_live, 138);
 }
 
 #[test]

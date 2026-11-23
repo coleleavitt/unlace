@@ -3822,7 +3822,10 @@ mod tests {
         ] {
             let manage = build_manager();
             let mut glb = ArchContext::new(manage);
-            glb.index_alias_guard = level;
+            glb.kuna_options
+                .set(crate::p3_dataflow::kuna_indexaliasguard::IndexAliasGuard(
+                    level,
+                ));
             let glb = Rc::new(glb);
             let memory = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
             let mut data = Funcdata::new(

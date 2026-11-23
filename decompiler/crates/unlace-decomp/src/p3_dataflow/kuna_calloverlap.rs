@@ -57,6 +57,29 @@ pub const LEVEL_IN: int4 = 2;
 /// (`tryOutputOverlapGuard`); complete register partitions are independent.
 pub const LEVEL_FULL: int4 = 3;
 
+/// The `calloverlap` level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CallOverlap(pub int4);
+
+impl crate::kuna_optionset::KunaOption for CallOverlap {
+    const NAME: &'static str = "calloverlap";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        CallOverlap(LEVEL_AUTO)
+    }
+
+    fn shipped() -> Self {
+        CallOverlap(LEVEL_AUTO)
+    }
+
+    fn parse(value: &str) -> KunaResult<(Self, String)> {
+        OptionCallOverlap
+            .apply(value)
+            .map(|(v, msg)| (CallOverlap(v), msg))
+    }
+}
+
 /// `option calloverlap auto|off|in|full` (C++ has no equivalent — upstream is
 /// unconditionally `full`).
 pub struct OptionCallOverlap;

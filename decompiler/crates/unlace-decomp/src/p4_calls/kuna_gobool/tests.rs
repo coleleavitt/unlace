@@ -38,7 +38,7 @@ fn build_fd(mode: GoBoolMode, lang: SourceLang) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.go_bool = mode.as_u8();
+    ctx.kuna_options.set(mode);
     ctx.source_lang = lang;
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
@@ -57,11 +57,9 @@ fn mode_parses_and_round_trips() {
         let (m, msg) = parse_gobool_mode(tok).expect("parses");
         assert_eq!(m, mode, "{tok}");
         assert!(msg.contains(m.as_str()));
-        assert_eq!(GoBoolMode::from_u8(m.as_u8()), m);
     }
     assert!(parse_gobool_mode("sometimes").is_err());
     assert_eq!(GoBoolMode::default(), GoBoolMode::Auto);
-    assert_eq!(GoBoolMode::from_u8(77), GoBoolMode::Off);
 }
 
 #[test]

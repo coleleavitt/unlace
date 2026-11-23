@@ -2569,5 +2569,49 @@ impl crate::kuna_optionset::KunaOption for ProtoOrderMode {
     }
 }
 
+/// (kuna `protoorder types`) The recovered parameter types of each callee this function calls,
+/// copied off the `Architecture` after the flow build (the type-inference seam cannot reach it),
+/// keyed by `(space index, entry offset)`; kept across `Funcdata::clear`.
+#[derive(Default)]
+struct TypesSlot(
+    std::collections::HashMap<
+        (unlace_base::types::int4, unlace_base::types::uintb),
+        std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
+    >,
+);
+crate::kuna_func_state!(TypesSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `protoorder types`) Record the types a callee's own recovery stated
+    /// for the function entered at `entry`.
+    pub fn kuna_set_protoorder_types(
+        &mut self,
+        entry: &unlace_base::address::Address,
+        stated: std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
+    ) {
+        if let Some(sp) = entry.get_space() {
+            self.kuna_state_mut::<TypesSlot>()
+                .0
+                .insert((sp.get_index(), entry.get_offset()), stated);
+        }
+    }
+
+    /// (kuna `protoorder types`) The types a callee's own recovery stated for
+    /// the function entered at `entry`, if any were stated.
+    pub fn kuna_protoorder_types(
+        &self,
+        entry: &unlace_base::address::Address,
+    ) -> Option<&crate::kuna_protoorder::RecoveredTypes> {
+        let types = &self.kuna_state::<TypesSlot>().0;
+        if types.is_empty() {
+            return None;
+        }
+        let sp = entry.get_space()?;
+        types
+            .get(&(sp.get_index(), entry.get_offset()))
+            .map(|r| r.as_ref())
+    }
+}
+
 #[cfg(test)]
 mod tests;

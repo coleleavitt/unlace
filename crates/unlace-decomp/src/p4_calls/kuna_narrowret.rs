@@ -742,3 +742,58 @@ impl crate::kuna_optionset::KunaOption for NarrowRet {
         Ok((NarrowRet(v), msg))
     }
 }
+
+/// (kuna `narrowret`) The narrow value each callee this function calls returns zero-extended,
+/// copied off the `Architecture`; kept across `Funcdata::clear`.
+#[derive(Default)]
+struct ReturnsSlot(crate::kuna_narrowret::NarrowReturns);
+crate::kuna_func_state!(ReturnsSlot, keep_across_clear: true);
+
+/// (kuna `narrowret`) What this function computed with, and read, of each call output
+/// `narrowret` narrowed, before it narrowed it; reset by `Funcdata::clear`.
+#[derive(Default)]
+struct ReadsSlot(
+    std::collections::HashMap<crate::context::OpId, crate::kuna_narrowret::ReadBefore>,
+);
+crate::kuna_func_state!(ReadsSlot, keep_across_clear: false);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `narrowret`) Record the narrow value the callee filed under `key` returns.
+    pub fn kuna_set_narrowret(
+        &mut self,
+        key: (unlace_base::types::int4, unlace_base::types::uintb),
+        stated: std::rc::Rc<crate::kuna_narrowret::NarrowReturn>,
+    ) {
+        self.kuna_state_mut::<ReturnsSlot>().0.insert(key, stated);
+    }
+
+    /// (kuna `narrowret`) The narrow value the callee filed under `key` returns.
+    pub fn kuna_narrowret(
+        &self,
+        key: (unlace_base::types::int4, unlace_base::types::uintb),
+    ) -> Option<&crate::kuna_narrowret::NarrowReturn> {
+        self.kuna_state::<ReturnsSlot>()
+            .0
+            .get(&key)
+            .map(|r| r.as_ref())
+    }
+
+    /// (kuna `narrowret`) Note what this function read of the output of the
+    /// CALL `op` before `narrowret` narrowed it.
+    pub fn kuna_note_narrowret_read(
+        &mut self,
+        op: crate::context::OpId,
+        before: crate::kuna_narrowret::ReadBefore,
+    ) {
+        self.kuna_state_mut::<ReadsSlot>().0.insert(op, before);
+    }
+
+    /// (kuna `narrowret`) What this function read of the output of the CALL
+    /// `op` before `narrowret` narrowed it, if it did.
+    pub fn kuna_narrowret_read(
+        &self,
+        op: crate::context::OpId,
+    ) -> Option<&crate::kuna_narrowret::ReadBefore> {
+        self.kuna_state::<ReadsSlot>().0.get(&op)
+    }
+}

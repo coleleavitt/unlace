@@ -511,16 +511,6 @@ pub struct Funcdata {
     /// Index into [`Self::kuna_wire_symbols`] per HighVariable.
     pub(crate) kuna_wire_symbol_for_high:
         std::collections::BTreeMap<crate::context::HighVariableId, usize>,
-    /// (kuna `rustabi`) Per direct-call-target evidence about the registers the
-    /// callee is *proven* not to write, keyed by `(space index, entry offset)`.
-    /// Seeded by the driver after the flow build — the only place the disassembly
-    /// engine is still reachable — and read at the call-output seam
-    /// ([`crate::kuna_rustabi::classify_call_output_pair`]).  Empty unless
-    /// `option rustabi` is live for this function.
-    kuna_callee_ret_writes: std::collections::HashMap<
-        (int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
-    >,
     /// (kuna `calleeretpurge`) Per direct-call-target extrapop read off the
     /// callee's own `ret imm16`, keyed by `(space index, entry offset)`.
     kuna_callee_purge: std::collections::HashMap<(int4, unlace_base::types::uintb), int4>,
@@ -531,16 +521,6 @@ pub struct Funcdata {
     /// `va_start`, by `(space index, entry offset)`; `None` when the target does
     /// not pass variadic arguments the Apple way.
     kuna_darwin_variadic: Option<std::collections::BTreeSet<(int4, unlace_base::types::uintb)>>,
-    /// (kuna `calleedeadarg`) Per direct-call-target evidence about the registers
-    /// the callee is *proven* never to read before writing, keyed by
-    /// `(space index, entry offset)`.  Seeded by the driver after the flow build
-    /// — the only place the disassembly engine is still reachable — and read at
-    /// the input-trial scoring seam
-    /// ([`crate::kuna_calleedeadarg::trial_is_dead_in_callee`]).
-    kuna_callee_entry_dead: std::collections::HashMap<
-        (int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>,
-    >,
     /// (kuna `swiftcall`) Direct callees whose bodies do not read `swiftself`
     /// before writing it, by `(space index, entry offset)`; seeded by
     /// [`crate::kuna_swiftcall::seed_self_readers`].
@@ -550,33 +530,6 @@ pub struct Funcdata {
     /// [`crate::kuna_hiddenretarg::value_leaves`] finds. Cleared with the
     /// Varnodes on a restart.
     kuna_hiddenret_vetoed: std::collections::HashSet<VarnodeId>,
-    /// (kuna `armfloatargs`) The same probe of this function's own body, read by
-    /// its own input recovery ([`crate::kuna_armfloatargs::mark_own_reads`]).
-    kuna_own_entry_dead: Option<std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>>,
-    /// (kuna `passthrough`) The same probes with what each direct call's target
-    /// takes added ([`crate::kuna_calleedeadarg::reads_through_calls`]), for the
-    /// callees `protoorder` stated a prototype for.  Read only by
-    /// [`crate::p4_calls::kuna_passthrough::stated_width`].
-    kuna_callee_entry_through: std::collections::HashMap<
-        (int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>,
-    >,
-    /// (kuna `argclobber`) What a value the caller leaves in a register can reach
-    /// once each called callee has it, resolved on the `Architecture` after the
-    /// flow build and read at the trial-scoring seam
-    /// ([`crate::kuna_argclobber`]).  Empty unless `option argclobber` is live
-    /// with a prototype parked.
-    kuna_callee_forward: std::collections::HashMap<
-        (int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_calleedeadarg::ForwardTransfer>,
-    >,
-    /// (kuna `protoorder types`) The recovered parameter types of each callee this
-    /// function calls, copied off the `Architecture` after the flow build (the
-    /// type-inference seam cannot reach it), keyed by `(space index, entry offset)`.
-    kuna_protoorder_types: std::collections::HashMap<
-        (int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
-    >,
     /// (kuna callee-contract) May this drive bootstrap direct callees from the P4
     /// active-input trial storage?  Armed only by a single-function drive on a
     /// compiler spec that states `<prefersplit>`; every other surface keeps its
@@ -586,19 +539,6 @@ pub struct Funcdata {
     /// preferred-split register, queued by `ActionActiveParam` for the drive's
     /// bootstrap (its pause).
     kuna_callee_split_calls: Vec<Address>,
-    /// (kuna `callrettype`) The recovered return value of each callee this
-    /// function calls, copied off the `Architecture` like `kuna_protoorder_types`.
-    kuna_callret_types: crate::kuna_callrettype::StatedReturns,
-    /// (kuna `narrowret`) The narrow value each callee this function calls
-    /// returns zero-extended, copied off the `Architecture`.
-    kuna_narrowret: crate::kuna_narrowret::NarrowReturns,
-    /// (kuna `narrowret`) What this function computed with, and read, of each
-    /// call output `narrowret` narrowed, before it narrowed it.
-    kuna_narrowret_reads:
-        std::collections::HashMap<crate::context::OpId, crate::kuna_narrowret::ReadBefore>,
-    /// (kuna `floatreg`) The statements this caller refused: what its callees
-    /// still declare their results to be.
-    kuna_callret_withdrawn: crate::kuna_callrettype::StatedReturns,
     /// (kuna `callrettype`) The loader's data ranges, for telling an address
     /// from a number ([`crate::kuna_callrettype::contradicted`]).
     kuna_callret_data: std::rc::Rc<Vec<(u64, u64)>>,
@@ -624,9 +564,6 @@ pub struct Funcdata {
     /// (kuna `voidret`) The zero-extended word the RETURN pull trimmed the return
     /// to, and whether its sign bit may be set.
     kuna_zext_word: Option<(Address, int4, bool)>,
-    /// (kuna `voidret`) What each callee's last decompile recovered it returns.
-    kuna_callee_returns:
-        std::collections::BTreeMap<(int4, unlace_base::types::uintb), crate::kuna_voidret::Returns>,
     /// (kuna `floatbits`) The callees whose float return the bits of a
     /// float-register input made one.
     kuna_callee_float_bits: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
@@ -679,43 +616,6 @@ pub struct Funcdata {
     kuna_swift_async_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
     /// (kuna `calleevote fields`) Every caller of this function is a known direct call.
     kuna_calleevote_closed: bool,
-    /// (kuna `elemptr`) The globals this function must not type as element
-    /// pointers: another function of the batch disagrees about them.
-    kuna_elemptr_blocked: Option<std::rc::Rc<std::collections::BTreeSet<crate::kuna_elemptr::Obj>>>,
-    /// (kuna `elemptr`) The sign this function reads an object's elements at,
-    /// where its own choice was only the default and another function's rests
-    /// on evidence.
-    kuna_elemptr_adopt: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
-    /// (kuna `elemptr`) The element signs evidence has settled in the batch so
-    /// far; this function reads them where its own sign is only the default.
-    kuna_elemptr_settled: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
-    /// (kuna `elemptr`) What this function's last type pass said about each
-    /// global and table.
-    kuna_elemptr_verdicts: std::cell::RefCell<
-        std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict>,
-    >,
-    /// (kuna `elemptr`) The constant addresses this function's walks typed as an
-    /// element pointer.
-    kuna_elemptr_constants: std::cell::RefCell<std::collections::BTreeSet<u64>>,
-    /// (kuna `elemptr`) The parameters and call returns a type pass typed as
-    /// element pointers (`false`), and those a later pass found indexing
-    /// another base (`true`), never typed again.  Survives [`Funcdata::clear`],
-    /// so the restart that follows a dispute starts without the candidate.
-    kuna_elemptr_inputs:
-        std::cell::RefCell<std::collections::BTreeMap<crate::kuna_elemptr::InputKey, bool>>,
-    /// (kuna `elemptr`) A later type pass disputed an earlier one's candidate.
-    kuna_elemptr_disputed: std::cell::Cell<bool>,
-    /// (kuna `elemptr`) The Varnodes this type pass gave an element pointer.
-    kuna_elemptr_typed: std::cell::RefCell<std::collections::HashSet<crate::context::VarnodeId>>,
-    /// (kuna `elemptr`) This function is one of several decompiled with no
-    /// batch to agree on globals and tables: it types neither.
-    kuna_elemptr_no_objects: bool,
-    /// (kuna `elemptr`) What each callee decompiled earlier stated about the
-    /// parameters and return an element pointer typed.
-    kuna_elemptr_stated: std::collections::HashMap<
-        (int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_elemptr::Stated>,
-    >,
     pub(crate) kuna_atomic_xadds: Vec<crate::p2_lift::kuna_atomicxadd::Instruction>,
     /// The kuna passes' per-function state ([`crate::kuna_funcstate`]).
     kuna_states: crate::kuna_funcstate::FuncStates,
@@ -897,30 +797,19 @@ impl Funcdata {
             kuna_wire_symbols: Vec::new(),
             kuna_wrapped_wire_storage: std::collections::BTreeMap::new(),
             kuna_wire_symbol_for_high: std::collections::BTreeMap::new(),
-            kuna_callee_ret_writes: std::collections::HashMap::new(),
             kuna_callee_purge: std::collections::HashMap::new(),
             kuna_stack_exit_anchors: Vec::new(),
-            kuna_callee_entry_dead: std::collections::HashMap::new(),
             kuna_darwin_variadic: None,
             kuna_swift_self_unread: std::collections::HashSet::new(),
             kuna_hiddenret_vetoed: std::collections::HashSet::new(),
-            kuna_own_entry_dead: None,
-            kuna_callee_entry_through: std::collections::HashMap::new(),
-            kuna_callee_forward: std::collections::HashMap::new(),
-            kuna_protoorder_types: std::collections::HashMap::new(),
             kuna_callee_contract_armed: false,
             kuna_callee_split_calls: Vec::new(),
-            kuna_callret_types: std::collections::HashMap::new(),
-            kuna_narrowret: std::collections::HashMap::new(),
-            kuna_narrowret_reads: std::collections::HashMap::new(),
-            kuna_callret_withdrawn: std::collections::HashMap::new(),
             kuna_callret_data: std::rc::Rc::new(Vec::new()),
             kuna_forced_return: Vec::new(),
             kuna_forced_return_planted: Vec::new(),
             kuna_callresultuse_planted: None,
             kuna_float_return_withdrawn: false,
             kuna_float_bits_return: false,
-            kuna_callee_returns: std::collections::BTreeMap::new(),
             kuna_callee_float_bits: std::collections::BTreeSet::new(),
             kuna_callee_params: std::collections::BTreeMap::new(),
             kuna_callee_return_storage: std::collections::BTreeMap::new(),
@@ -941,16 +830,6 @@ impl Funcdata {
             kuna_swift_self_callees: std::collections::BTreeSet::new(),
             kuna_swift_async_callees: std::collections::BTreeSet::new(),
             kuna_calleevote_closed: false,
-            kuna_elemptr_blocked: None,
-            kuna_elemptr_adopt: None,
-            kuna_elemptr_settled: None,
-            kuna_elemptr_verdicts: std::cell::RefCell::new(std::collections::BTreeMap::new()),
-            kuna_elemptr_constants: std::cell::RefCell::new(std::collections::BTreeSet::new()),
-            kuna_elemptr_inputs: std::cell::RefCell::new(std::collections::BTreeMap::new()),
-            kuna_elemptr_disputed: std::cell::Cell::new(false),
-            kuna_elemptr_typed: std::cell::RefCell::new(std::collections::HashSet::new()),
-            kuna_elemptr_no_objects: false,
-            kuna_elemptr_stated: std::collections::HashMap::new(),
             kuna_atomic_xadds: Vec::new(),
             kuna_states: Default::default(),
         })
@@ -1242,19 +1121,6 @@ impl Funcdata {
         self.kuna_name_snapshot = snapshot;
     }
 
-    /// (kuna `rustabi`) Record what a probe of `entry`'s body proved about the
-    /// registers it writes.
-    pub fn kuna_set_callee_ret_writes(
-        &mut self,
-        entry: &Address,
-        writes: std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
-    ) {
-        if let Some(sp) = entry.get_space() {
-            self.kuna_callee_ret_writes
-                .insert((sp.get_index(), entry.get_offset()), writes);
-        }
-    }
-
     /// (kuna `stackexitanchor`) Record the epilogue anchors.
     pub fn kuna_set_stack_exit_anchors(&mut self, anchors: Vec<(OpId, int4)>) {
         self.kuna_stack_exit_anchors = anchors;
@@ -1281,17 +1147,6 @@ impl Funcdata {
             .copied()
     }
 
-    /// (kuna `rustabi`) The recorded probe of `entry`'s body, if one was taken.
-    pub fn kuna_callee_ret_writes(
-        &self,
-        entry: &Address,
-    ) -> Option<&crate::kuna_rustabi::CalleeReturnWrites> {
-        let sp = entry.get_space()?;
-        self.kuna_callee_ret_writes
-            .get(&(sp.get_index(), entry.get_offset()))
-            .map(|r| r.as_ref())
-    }
-
     /// (kuna `varargstackargs`) Record the callees seen running Apple's `va_start`.
     pub fn kuna_set_darwin_variadic(
         &mut self,
@@ -1306,19 +1161,6 @@ impl Funcdata {
         &self,
     ) -> Option<&std::collections::BTreeSet<(int4, unlace_base::types::uintb)>> {
         self.kuna_darwin_variadic.as_ref()
-    }
-
-    /// (kuna `calleedeadarg`) Record what a probe of `entry`'s body proved about
-    /// the registers it never reads before writing.
-    pub fn kuna_set_callee_entry_dead(
-        &mut self,
-        entry: &Address,
-        dead: std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>,
-    ) {
-        if let Some(sp) = entry.get_space() {
-            self.kuna_callee_entry_dead
-                .insert((sp.get_index(), entry.get_offset()), dead);
-        }
     }
 
     /// (kuna `swiftcall`) Record that `entry`'s body does not read `swiftself`
@@ -1338,30 +1180,6 @@ impl Funcdata {
         })
     }
 
-    /// (kuna `calleedeadarg`) The recorded entry-liveness probe of `entry`'s
-    /// body, if one was taken.
-    pub fn kuna_callee_entry_dead(
-        &self,
-        entry: &Address,
-    ) -> Option<&crate::kuna_calleedeadarg::CalleeEntryDead> {
-        let sp = entry.get_space()?;
-        self.kuna_callee_entry_dead
-            .get(&(sp.get_index(), entry.get_offset()))
-            .map(|r| r.as_ref())
-    }
-
-    /// (kuna `calleefilledarg`) The same probe, shared, for a `ParamActive` to
-    /// hold through `fillinMap`.
-    pub fn kuna_callee_entry_dead_shared(
-        &self,
-        entry: &Address,
-    ) -> Option<std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>> {
-        let sp = entry.get_space()?;
-        self.kuna_callee_entry_dead
-            .get(&(sp.get_index(), entry.get_offset()))
-            .cloned()
-    }
-
     /// (kuna `hiddenretarg`) Remember the leaves of a value vetoed from a call.
     pub fn kuna_note_hiddenret_vetoed(&mut self, leaves: &[VarnodeId]) {
         self.kuna_hiddenret_vetoed.extend(leaves.iter().copied());
@@ -1370,71 +1188,6 @@ impl Funcdata {
     /// (kuna `hiddenretarg`) Was `vn` part of a value vetoed from a call?
     pub fn kuna_hiddenret_vetoed(&self, vn: VarnodeId) -> bool {
         self.kuna_hiddenret_vetoed.contains(&vn)
-    }
-
-    /// (kuna `armfloatargs`) Record the entry-liveness probe of this function's
-    /// own body.
-    pub fn kuna_set_own_entry_dead(
-        &mut self,
-        dead: std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>,
-    ) {
-        self.kuna_own_entry_dead = Some(dead);
-    }
-
-    /// (kuna `armfloatargs`) The entry-liveness probe of this function's own
-    /// body, if one was taken.
-    pub fn kuna_own_entry_dead(&self) -> Option<&crate::kuna_calleedeadarg::CalleeEntryDead> {
-        self.kuna_own_entry_dead.as_deref()
-    }
-
-    /// (kuna `passthrough`) Record the probe of `entry`'s body with what its
-    /// direct calls' targets take added.
-    pub fn kuna_set_callee_entry_through(
-        &mut self,
-        entry: &Address,
-        facts: std::rc::Rc<crate::kuna_calleedeadarg::CalleeEntryDead>,
-    ) {
-        if let Some(sp) = entry.get_space() {
-            self.kuna_callee_entry_through
-                .insert((sp.get_index(), entry.get_offset()), facts);
-        }
-    }
-
-    /// (kuna `passthrough`) The probe of `entry`'s body with what its direct
-    /// calls' targets take added, if one was taken.
-    pub fn kuna_callee_entry_through(
-        &self,
-        entry: &Address,
-    ) -> Option<&crate::kuna_calleedeadarg::CalleeEntryDead> {
-        let sp = entry.get_space()?;
-        self.kuna_callee_entry_through
-            .get(&(sp.get_index(), entry.get_offset()))
-            .map(|r| r.as_ref())
-    }
-
-    /// (kuna `argclobber`) Record what a caller's value in a register can reach
-    /// once the callee entered at `entry` has it.
-    pub fn kuna_set_callee_forward(
-        &mut self,
-        entry: &Address,
-        fwd: std::rc::Rc<crate::kuna_calleedeadarg::ForwardTransfer>,
-    ) {
-        if let Some(sp) = entry.get_space() {
-            self.kuna_callee_forward
-                .insert((sp.get_index(), entry.get_offset()), fwd);
-        }
-    }
-
-    /// (kuna `argclobber`) The forwarding resolution recorded for `entry`, if
-    /// one was taken.
-    pub fn kuna_callee_forward(
-        &self,
-        entry: &Address,
-    ) -> Option<&crate::kuna_calleedeadarg::ForwardTransfer> {
-        let sp = entry.get_space()?;
-        self.kuna_callee_forward
-            .get(&(sp.get_index(), entry.get_offset()))
-            .map(|r| r.as_ref())
     }
 
     /// (kuna callee-contract) Arm or disarm the P4 trial-storage bootstrap for
@@ -1461,85 +1214,6 @@ impl Funcdata {
         std::mem::take(&mut self.kuna_callee_split_calls)
     }
 
-    /// (kuna `protoorder types`) Record the types a callee's own recovery stated
-    /// for the function entered at `entry`.
-    pub fn kuna_set_protoorder_types(
-        &mut self,
-        entry: &Address,
-        stated: std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
-    ) {
-        if let Some(sp) = entry.get_space() {
-            self.kuna_protoorder_types
-                .insert((sp.get_index(), entry.get_offset()), stated);
-        }
-    }
-
-    /// (kuna `callrettype`) Record what the callee filed under `key` returns.
-    pub fn kuna_set_callret_type(
-        &mut self,
-        key: (int4, unlace_base::types::uintb),
-        stated: std::rc::Rc<crate::kuna_callrettype::StatedReturn>,
-    ) {
-        self.kuna_callret_types.insert(key, stated);
-    }
-
-    /// (kuna `narrowret`) Record the narrow value the callee filed under `key` returns.
-    pub fn kuna_set_narrowret(
-        &mut self,
-        key: (int4, unlace_base::types::uintb),
-        stated: std::rc::Rc<crate::kuna_narrowret::NarrowReturn>,
-    ) {
-        self.kuna_narrowret.insert(key, stated);
-    }
-
-    /// (kuna `narrowret`) The narrow value the callee filed under `key` returns.
-    pub fn kuna_narrowret(
-        &self,
-        key: (int4, unlace_base::types::uintb),
-    ) -> Option<&crate::kuna_narrowret::NarrowReturn> {
-        self.kuna_narrowret.get(&key).map(|r| r.as_ref())
-    }
-
-    /// (kuna `narrowret`) Note what this function read of the output of the
-    /// CALL `op` before `narrowret` narrowed it.
-    pub fn kuna_note_narrowret_read(
-        &mut self,
-        op: crate::context::OpId,
-        before: crate::kuna_narrowret::ReadBefore,
-    ) {
-        self.kuna_narrowret_reads.insert(op, before);
-    }
-
-    /// (kuna `narrowret`) What this function read of the output of the CALL
-    /// `op` before `narrowret` narrowed it, if it did.
-    pub fn kuna_narrowret_read(
-        &self,
-        op: crate::context::OpId,
-    ) -> Option<&crate::kuna_narrowret::ReadBefore> {
-        self.kuna_narrowret_reads.get(&op)
-    }
-
-    /// (kuna `floatreg`) Record a statement this caller refused.
-    pub fn kuna_set_callret_withdrawn(
-        &mut self,
-        key: (int4, unlace_base::types::uintb),
-        stated: std::rc::Rc<crate::kuna_callrettype::StatedReturn>,
-    ) {
-        self.kuna_callret_withdrawn.insert(key, stated);
-    }
-
-    /// (kuna `floatreg`) What the callee at `key` stated it returns, whether
-    /// or not this caller took the statement.
-    pub fn kuna_callret_stated(
-        &self,
-        key: (int4, unlace_base::types::uintb),
-    ) -> Option<&crate::kuna_callrettype::StatedReturn> {
-        self.kuna_callret_types
-            .get(&key)
-            .or_else(|| self.kuna_callret_withdrawn.get(&key))
-            .map(|r| r.as_ref())
-    }
-
     /// (kuna `callrettype`) Record the loader's data ranges.
     pub fn kuna_set_callret_data(&mut self, ranges: std::rc::Rc<Vec<(u64, u64)>>) {
         self.kuna_callret_data = ranges;
@@ -1553,17 +1227,6 @@ impl Funcdata {
     /// (kuna `voidret`) The return storage this function's callers read, by register.
     pub fn kuna_forced_return(&self) -> &[(Address, int4)] {
         &self.kuna_forced_return
-    }
-
-    /// (kuna `voidret`) Record what each callee's last decompile recovered it returns.
-    pub fn kuna_set_callee_returns(
-        &mut self,
-        returns: std::collections::BTreeMap<
-            (int4, unlace_base::types::uintb),
-            crate::kuna_voidret::Returns,
-        >,
-    ) {
-        self.kuna_callee_returns = returns;
     }
 
     /// (kuna `voidret`) Note a `void` callee's result this function's return would be.
@@ -1622,14 +1285,6 @@ impl Funcdata {
     /// bits of its float-register input?
     pub fn kuna_callee_float_bits(&self, key: (int4, unlace_base::types::uintb)) -> bool {
         self.kuna_callee_float_bits.contains(&key)
-    }
-
-    /// (kuna `voidret`) What the callee at `key` was last recovered to return.
-    pub fn kuna_callee_returns(
-        &self,
-        key: (int4, unlace_base::types::uintb),
-    ) -> Option<crate::kuna_voidret::Returns> {
-        self.kuna_callee_returns.get(&key).copied()
     }
 
     /// (kuna `voidret`) Record the storage each callee's last decompile returned a value in.
@@ -1749,21 +1404,6 @@ impl Funcdata {
         &self.kuna_callret_data
     }
 
-    /// (kuna `callrettype`) Whether any callee stated what it returns.
-    pub fn kuna_has_callret_types(&self) -> bool {
-        !self.kuna_callret_types.is_empty()
-    }
-
-    /// (kuna `callrettype`) Whether any callee stated an integer return.
-    pub fn kuna_has_integer_callret_types(&self) -> bool {
-        self.kuna_callret_types.values().any(|s| {
-            matches!(
-                s.ct.get_metatype(),
-                crate::dtype::type_metatype::TYPE_INT | crate::dtype::type_metatype::TYPE_UINT
-            )
-        })
-    }
-
     /// (kuna `callrettype`) Record an extension the returned value was narrowed
     /// back through.
     pub fn kuna_note_callret_returned(&mut self, ext: (bool, int4)) {
@@ -1776,14 +1416,6 @@ impl Funcdata {
     /// through: whether each extends at the sign, and from what width.
     pub fn kuna_callret_returned(&self) -> &[(bool, int4)] {
         &self.kuna_callret_returned
-    }
-
-    /// (kuna `callrettype`) What the callee filed under `key` stated it returns.
-    pub fn kuna_callret_type(
-        &self,
-        key: (int4, unlace_base::types::uintb),
-    ) -> Option<&crate::kuna_callrettype::StatedReturn> {
-        self.kuna_callret_types.get(&key).map(|r| r.as_ref())
     }
 
     pub(crate) fn set_go_string_input(
@@ -1835,173 +1467,6 @@ impl Funcdata {
     /// (kuna `calleevote fields`) Are all of this function's callers known direct calls?
     pub fn kuna_calleevote_closed(&self) -> bool {
         self.kuna_calleevote_closed
-    }
-
-    /// (kuna `elemptr`) Set the globals and tables this function must not type.
-    pub fn kuna_set_elemptr_blocked(
-        &mut self,
-        blocked: Option<std::rc::Rc<std::collections::BTreeSet<crate::kuna_elemptr::Obj>>>,
-    ) {
-        self.kuna_elemptr_blocked = blocked;
-    }
-
-    /// (kuna `elemptr`) Set the element signs this function adopts: the ones
-    /// the batch decided for it, and the ones evidence has settled so far.
-    pub fn kuna_set_elemptr_adopt(
-        &mut self,
-        adopt: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
-        settled: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
-    ) {
-        self.kuna_elemptr_adopt = adopt;
-        self.kuna_elemptr_settled = settled;
-    }
-
-    /// (kuna `elemptr`) The element shape and sign (`true` signed) this
-    /// function reads `obj`'s elements at, when the batch decided it.
-    pub fn kuna_elemptr_adopted(&self, obj: crate::kuna_elemptr::Obj) -> Option<(String, bool)> {
-        [&self.kuna_elemptr_adopt, &self.kuna_elemptr_settled]
-            .into_iter()
-            .find_map(|m| m.as_ref().and_then(|a| a.get(&obj).cloned()))
-    }
-
-    /// (kuna `elemptr`) Is `obj` one this function must not type?
-    pub fn kuna_elemptr_blocked(&self, obj: crate::kuna_elemptr::Obj) -> bool {
-        self.kuna_elemptr_blocked
-            .as_ref()
-            .is_some_and(|b| b.contains(&obj))
-    }
-
-    /// (kuna `elemptr`) Set whether this function may type globals and tables.
-    pub fn kuna_set_elemptr_objects(&mut self, on: bool) {
-        self.kuna_elemptr_no_objects = !on;
-    }
-
-    /// (kuna `elemptr`) May this function type globals and tables?
-    pub fn kuna_elemptr_objects(&self) -> bool {
-        !self.kuna_elemptr_no_objects
-    }
-
-    /// (kuna `elemptr`) Record what the callee entered at `entry` stated.
-    pub fn kuna_set_elemptr_stated(
-        &mut self,
-        entry: &Address,
-        stated: std::rc::Rc<crate::kuna_elemptr::Stated>,
-    ) {
-        if let Some(sp) = entry.get_space() {
-            self.kuna_elemptr_stated
-                .insert((sp.get_index(), entry.get_offset()), stated);
-        }
-    }
-
-    /// (kuna `elemptr`) What the callee entered at `entry` stated, if anything.
-    pub fn kuna_elemptr_stated(&self, entry: &Address) -> Option<&crate::kuna_elemptr::Stated> {
-        if self.kuna_elemptr_stated.is_empty() {
-            return None;
-        }
-        let sp = entry.get_space()?;
-        self.kuna_elemptr_stated
-            .get(&(sp.get_index(), entry.get_offset()))
-            .map(|r| r.as_ref())
-    }
-
-    /// (kuna `elemptr`) What this function's last type pass said about `obj`.
-    pub fn kuna_elemptr_verdict(
-        &self,
-        obj: crate::kuna_elemptr::Obj,
-    ) -> Option<crate::kuna_elemptr::GlobalVerdict> {
-        self.kuna_elemptr_verdicts.borrow().get(&obj).cloned()
-    }
-
-    /// (kuna `elemptr`) Forget what the previous type pass said: the verdicts
-    /// and typed tables describe the pass whose types the function keeps.
-    pub fn kuna_elemptr_begin_pass(&self) {
-        self.kuna_elemptr_verdicts.borrow_mut().clear();
-        self.kuna_elemptr_constants.borrow_mut().clear();
-        self.kuna_elemptr_typed.borrow_mut().clear();
-    }
-
-    /// (kuna `elemptr`) This pass gave `vn` an element pointer.
-    pub fn kuna_elemptr_note_typed(&self, vn: crate::context::VarnodeId) {
-        self.kuna_elemptr_typed.borrow_mut().insert(vn);
-    }
-
-    /// (kuna `elemptr`) Did this pass give `vn` an element pointer?
-    pub fn kuna_elemptr_typed(&self, vn: crate::context::VarnodeId) -> bool {
-        self.kuna_elemptr_typed.borrow().contains(&vn)
-    }
-
-    /// (kuna `elemptr`) Fold one walk's verdict about `obj` in.
-    pub fn kuna_elemptr_note(
-        &self,
-        obj: crate::kuna_elemptr::Obj,
-        verdict: crate::kuna_elemptr::GlobalVerdict,
-    ) {
-        let mut m = self.kuna_elemptr_verdicts.borrow_mut();
-        let merged = match m.remove(&obj) {
-            Some(prev) => prev.merge(verdict),
-            None => verdict,
-        };
-        m.insert(obj, merged);
-    }
-
-    /// (kuna `elemptr`) Note a constant address a walk typed as an element pointer.
-    pub fn kuna_elemptr_note_constant(&self, addr: u64) {
-        self.kuna_elemptr_constants.borrow_mut().insert(addr);
-    }
-
-    /// (kuna `elemptr`) Did a walk type the constant address `addr`?
-    pub fn kuna_elemptr_typed_constant(&self, addr: u64) -> bool {
-        self.kuna_elemptr_constants.borrow().contains(&addr)
-    }
-
-    /// (kuna `elemptr`) What an earlier pass of this decompile did with the
-    /// parameter or call return `key`: `Some(false)` typed it, `Some(true)` it
-    /// is blocked.
-    pub fn kuna_elemptr_input(&self, key: crate::kuna_elemptr::InputKey) -> Option<bool> {
-        self.kuna_elemptr_inputs.borrow().get(&key).copied()
-    }
-
-    /// (kuna `elemptr`) A pass typed the parameter or call return `key`.
-    pub fn kuna_elemptr_note_input(&self, key: crate::kuna_elemptr::InputKey) {
-        self.kuna_elemptr_inputs
-            .borrow_mut()
-            .entry(key)
-            .or_insert(false);
-    }
-
-    /// (kuna `elemptr`) A later pass found `key`, typed by an earlier one, to be
-    /// the index of another base: block it and ask for a restart.
-    pub fn kuna_elemptr_dispute_input(&self, key: crate::kuna_elemptr::InputKey) {
-        self.kuna_elemptr_inputs.borrow_mut().insert(key, true);
-        self.kuna_elemptr_disputed.set(true);
-    }
-
-    /// (kuna `elemptr`) Was a candidate disputed since the last call?
-    pub fn kuna_elemptr_take_disputed(&self) -> bool {
-        self.kuna_elemptr_disputed.replace(false)
-    }
-
-    /// (kuna `elemptr`) What this function's walks said about each global.
-    pub fn kuna_elemptr_verdicts(
-        &self,
-    ) -> std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict>
-    {
-        self.kuna_elemptr_verdicts.borrow().clone()
-    }
-
-    /// (kuna `protoorder types`) The types a callee's own recovery stated for
-    /// the function entered at `entry`, if any were stated.
-    pub fn kuna_protoorder_types(
-        &self,
-        entry: &Address,
-    ) -> Option<&crate::kuna_protoorder::RecoveredTypes> {
-        if self.kuna_protoorder_types.is_empty() {
-            return None;
-        }
-        let sp = entry.get_space()?;
-        self.kuna_protoorder_types
-            .get(&(sp.get_index(), entry.get_offset()))
-            .map(|r| r.as_ref())
     }
 
     /// (kuna `passthrough`) Record the CALL ops set up as variadic calls.
@@ -4883,7 +4348,6 @@ impl Funcdata {
         self.kuna_float_pair_halves.clear();
         self.kuna_forced_claims.clear();
         self.kuna_zext_word = None;
-        self.kuna_narrowret_reads.clear();
         self.kuna_pairs_first_low = false;
     }
 

@@ -1046,3 +1046,76 @@ crate::kuna_flag!(
     unset: false,
     shipped: true
 );
+
+/// (kuna `callrettype`) The recovered return value of each callee this function calls, copied
+/// off the `Architecture` (`types`), and the statements this caller refused (`withdrawn`,
+/// `floatreg`); kept across `Funcdata::clear`.
+#[derive(Default)]
+struct StatedSlot {
+    types: crate::kuna_callrettype::StatedReturns,
+    withdrawn: crate::kuna_callrettype::StatedReturns,
+}
+crate::kuna_func_state!(StatedSlot, keep_across_clear: true);
+
+impl crate::funcdata::Funcdata {
+    /// (kuna `callrettype`) Record what the callee filed under `key` returns.
+    pub fn kuna_set_callret_type(
+        &mut self,
+        key: (unlace_base::types::int4, unlace_base::types::uintb),
+        stated: std::rc::Rc<crate::kuna_callrettype::StatedReturn>,
+    ) {
+        self.kuna_state_mut::<StatedSlot>()
+            .types
+            .insert(key, stated);
+    }
+
+    /// (kuna `floatreg`) Record a statement this caller refused.
+    pub fn kuna_set_callret_withdrawn(
+        &mut self,
+        key: (unlace_base::types::int4, unlace_base::types::uintb),
+        stated: std::rc::Rc<crate::kuna_callrettype::StatedReturn>,
+    ) {
+        self.kuna_state_mut::<StatedSlot>()
+            .withdrawn
+            .insert(key, stated);
+    }
+
+    /// (kuna `floatreg`) What the callee at `key` stated it returns, whether
+    /// or not this caller took the statement.
+    pub fn kuna_callret_stated(
+        &self,
+        key: (unlace_base::types::int4, unlace_base::types::uintb),
+    ) -> Option<&crate::kuna_callrettype::StatedReturn> {
+        let slot = self.kuna_state::<StatedSlot>();
+        slot.types
+            .get(&key)
+            .or_else(|| slot.withdrawn.get(&key))
+            .map(|r| r.as_ref())
+    }
+
+    /// (kuna `callrettype`) Whether any callee stated what it returns.
+    pub fn kuna_has_callret_types(&self) -> bool {
+        !self.kuna_state::<StatedSlot>().types.is_empty()
+    }
+
+    /// (kuna `callrettype`) Whether any callee stated an integer return.
+    pub fn kuna_has_integer_callret_types(&self) -> bool {
+        self.kuna_state::<StatedSlot>().types.values().any(|s| {
+            matches!(
+                s.ct.get_metatype(),
+                crate::dtype::type_metatype::TYPE_INT | crate::dtype::type_metatype::TYPE_UINT
+            )
+        })
+    }
+
+    /// (kuna `callrettype`) What the callee filed under `key` stated it returns.
+    pub fn kuna_callret_type(
+        &self,
+        key: (unlace_base::types::int4, unlace_base::types::uintb),
+    ) -> Option<&crate::kuna_callrettype::StatedReturn> {
+        self.kuna_state::<StatedSlot>()
+            .types
+            .get(&key)
+            .map(|r| r.as_ref())
+    }
+}

@@ -6866,7 +6866,11 @@ impl JumpTable {
         // re-entered the code before it, the destination may still be a select over
         // constants -- a set both models prune away at the MULTIEQUAL rather than
         // lose.  See `p2_lift/kuna_constselectjump.rs`.
-        if self.kuna_admits_const_select(fd.get_arch().const_select_jump) {
+        if self.kuna_admits_const_select(
+            fd.get_arch()
+                .kuna_options
+                .get::<crate::kuna_constselectjump::ConstSelectMode>(),
+        ) {
             let mut jconst = crate::kuna_constselectjump::JumpModelConstSelect::new();
             if self.reentered {
                 jconst.kuna_admit_return(self.target_encoding);

@@ -67,6 +67,23 @@ pub enum StructHeadlessMode {
     Closed,
 }
 
+impl crate::kuna_optionset::KunaOption for StructHeadlessMode {
+    const NAME: &'static str = "structheadless";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        StructHeadlessMode::Off
+    }
+
+    fn shipped() -> Self {
+        StructHeadlessMode::Off
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        OptionStructHeadless.apply(value)
+    }
+}
+
 impl StructHeadlessMode {
     /// Does the rule act at all?
     pub fn fires(self) -> bool {
@@ -101,7 +118,10 @@ impl OptionStructHeadless {
 /// `closed`, that did not take the type those callers pass?  A caller's `char **`
 /// read only at `argv[1]` and `argv[2]` is the vector, not a record past its start.
 pub(crate) fn admits(data: &Funcdata, base: VarnodeId, ct: &Datatype) -> bool {
-    data.get_arch().struct_headless.fires()
+    data.get_arch()
+        .kuna_options
+        .get::<StructHeadlessMode>()
+        .fires()
         && data.kuna_calleevote_closed()
         && data.vbank().get(base).is_some_and(|v| v.is_input())
         && !crate::kuna_calleevote::took_stated_type(data, base, ct)
@@ -119,7 +139,11 @@ pub(crate) fn yields_to_a_declared_pointer(
     vn: VarnodeId,
     vote: &Datatype,
 ) -> bool {
-    if !data.get_arch().struct_headless.fires()
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<StructHeadlessMode>()
+        .fires()
         || !crate::kuna_structsynth::points_at_synthesized_record(vote)
     {
         return false;
@@ -169,7 +193,11 @@ pub(crate) fn yields_to_a_declared_pointer(
 /// record. It stands in for a headless record only: any other refused record
 /// is one `off` refuses too, where the vote says nothing.
 pub(crate) fn bare_pointer_for(data: &Funcdata, vote: &Datatype) -> Option<std::rc::Rc<Datatype>> {
-    if !data.get_arch().struct_headless.fires()
+    if !data
+        .get_arch()
+        .kuna_options
+        .get::<StructHeadlessMode>()
+        .fires()
         || !crate::kuna_structsynth::points_at_headless_record(vote)
     {
         return None;
@@ -202,7 +230,10 @@ pub(crate) fn types_a_pointer_as_a_word(
     vote: &Datatype,
     member: &Datatype,
 ) -> bool {
-    data.get_arch().struct_headless.fires()
+    data.get_arch()
+        .kuna_options
+        .get::<StructHeadlessMode>()
+        .fires()
         && data
             .get_arch()
             .types()

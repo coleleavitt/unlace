@@ -121,7 +121,9 @@ tidy/clippy/parity are green, then the next one.
     design, but ugly). Turning such jumps into tail calls is a `tailcalljump` design change.
   - patchelf: two `SysError` handlers are found but print as a plain `if`, not `try`
     (structuring gap).
-  - `project_named_globals` failed once in CI and did not reproduce locally; watch it.
+  - `project_named_globals` was not flaky: Ubuntu 26.04's gcc emits AVX (`vmulsd`/`vmovsd`), and
+    `vexzeroupper` left scalar VEX results as whole-`zmm0` writes, so `grow` lost its `double`
+    return. Fixed on `ci/fast-tests` (fixture `vexret_avx_x86_64`).
   - The live-value pin above passed in a full local run on 692e5ae40c; recheck before bumping it.
 - Landings in this round went in on compile checks only (Cole's rule: `cargo check` + build +
   clippy + fmt, no local test runs; CI runs the tests). 18 upward edges slipped in that way and were

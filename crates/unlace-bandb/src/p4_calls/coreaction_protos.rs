@@ -2291,6 +2291,7 @@ impl Action for ActionInputPrototype {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Dataflow);
         // C++ coreaction.cc:4941 — ActionInputPrototype::apply: the function's OWN
         // input-parameter recovery + typing (the type-plane SEED for an unlocked
         // prototype).
@@ -2571,6 +2572,7 @@ impl Action for ActionOutputPrototype {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Merge);
         // C++ coreaction.cc:4999 — ActionOutputPrototype::apply.
         // The real `fspec::FuncProto` is now on `Funcdata` (proto-recovery wave).
         // Where the W4 ScopeLocal would attach a `ProtoStoreSymbol`, the merged
@@ -2703,6 +2705,7 @@ impl Action for ActionPrototypeWarnings {
         }))
     }
     fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(_data, Casts);
         // C++ coreaction.cc:5140 — ActionPrototypeWarnings::apply. Generate override
         // messages via data.getOverride().generateOverrideMessages(msgs, getArch())
         // and warningHeader each. Then, for ourproto = data.getFuncProto():

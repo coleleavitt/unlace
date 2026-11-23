@@ -2041,6 +2041,7 @@ impl Action for ActionMapGlobals {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Prototype);
         map_globals(data);
         0
     }

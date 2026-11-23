@@ -8574,6 +8574,8 @@ fn commit_analysis_output(
         );
     }
 
+    crate::kuna_fidproto::apply(prog, code_space, out.fid_prototypes);
+
     // 10. (kuna `thunknames`) A renamed jump thunk takes its target's prototype,
     //     after every prototype stream above has parked its own.
     kuna_thunknames::inherit_prototypes(prog, code_space, &jump_thunks, &renamed_thunks);

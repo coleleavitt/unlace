@@ -2382,10 +2382,14 @@ fn decompile_func_full_with_objects_inner(
         };
     let mapped_params = mapped_params.as_slice();
     let input_hints = arch.loader_input_hints.get(&funcaddr).cloned();
+    // (kuna `fid`) Is the prototype parked on this function a `.fid` record's?
+    let fid_declared =
+        pending_proto.is_none() && arch.fid_prototypes.contains(&funcaddr.get_offset());
     let mut attempt = |prefollowed: Option<Funcdata>,
                        unguarded: bool,
                        condstmts_seed: &std::collections::BTreeSet<Address>,
-                       elfmain: Option<&crate::kuna_elfmaindecl::Runtime>|
+                       elfmain: Option<&crate::kuna_elfmaindecl::Runtime>,
+                       fid_withdrawn: bool|
      -> KunaResult<Funcdata> {
         // Kept for the parked-prototype lookup below (the flow build consumes the
         // address).
@@ -2444,7 +2448,7 @@ fn decompile_func_full_with_objects_inner(
         // (kuna `swiftcall`) Which direct callees, and whether this function,
         // read `swiftself` on entry.
         let (reads_swiftself, reads_swiftasync) = crate::kuna_swiftinfer::seed(arch, &mut fd);
-        let recovered_proto = if pending_proto.is_none() {
+        let recovered_proto = if pending_proto.is_none() && !fid_withdrawn {
             arch.symboltab
                 .function_proto_pieces_across_scopes(&entry_addr)
                 .cloned()
@@ -2709,15 +2713,16 @@ fn decompile_func_full_with_objects_inner(
     // runtime seed typed and named is decompiled again without the seed.
     let mut prefollowed = prefollowed;
     let mut elfmain = elfmain_rt.as_ref();
+    let mut fid_withdrawn = false;
     let result = loop {
         // (kuna `stackstoreguard`) A function whose final layout spoiled what the
         // guard needs is analyzed again from scratch without it.
         let mut seed = std::collections::BTreeSet::new();
         let mut unguarded = false;
-        let mut result = match attempt(prefollowed.take(), false, &seed, elfmain) {
+        let mut result = match attempt(prefollowed.take(), false, &seed, elfmain, fid_withdrawn) {
             Ok(fd) if fd.stack_store_guard_spoiled() => {
                 unguarded = true;
-                attempt(None, true, &seed, elfmain)
+                attempt(None, true, &seed, elfmain, fid_withdrawn)
             }
             other => other,
         };
@@ -2729,7 +2734,7 @@ fn decompile_func_full_with_objects_inner(
                 break;
             };
             seed = next;
-            match attempt(None, unguarded, &seed, elfmain) {
+            match attempt(None, unguarded, &seed, elfmain, fid_withdrawn) {
                 Ok(fd) => result = Ok(fd),
                 Err(_) => break,
             }
@@ -2738,8 +2743,22 @@ fn decompile_func_full_with_objects_inner(
             elfmain = None;
             continue;
         }
+        // (kuna `fid`) A `.fid` prototype the body reads past is withdrawn and
+        // the function decompiled again as it is without one.
+        if fid_declared
+            && !fid_withdrawn
+            && result
+                .as_ref()
+                .is_ok_and(crate::kuna_fidproto::reads_undeclared_parameter)
+        {
+            fid_withdrawn = true;
+            continue;
+        }
         break result;
     };
+    if fid_withdrawn {
+        crate::kuna_fidproto::withdraw(arch, &funcaddr);
+    }
     // (unlace decompile-all watchdog) Disarm the deadline once the drive is over so
     // no later, non-drive pipeline run (console sub-queries) consults a stale one;
     // what is left of it goes with the function to bound its rendering.

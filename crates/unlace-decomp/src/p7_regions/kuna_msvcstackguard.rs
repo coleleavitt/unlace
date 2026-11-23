@@ -385,7 +385,8 @@ pub fn cookie_cancel(
 }
 
 /// Classify the exact direct, unread-output, one-cookie-cancel call this pass strips.
-fn cookie_check_op(
+#[doc(hidden)]
+pub fn cookie_check_op(
     data: &Funcdata,
     op: OpId,
     sp: &(Rc<AddrSpace>, uintb, int4),
@@ -422,7 +423,8 @@ fn cookie_check_op(
 }
 
 /// The CALL op to strip, with the entry-side scramble ops feeding it.
-fn call_has_locked_void_output(data: &Funcdata, op: OpId) -> bool {
+#[doc(hidden)]
+pub fn call_has_locked_void_output(data: &Funcdata, op: OpId) -> bool {
     let Some(index) = data.get_call_specs_index(op) else {
         return false;
     };

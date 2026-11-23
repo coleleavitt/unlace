@@ -2330,7 +2330,8 @@ mod tests {
         // and kuna-objcsdksend / a send to a class the image only imports resolves from the SDK headers
         // and kuna-itaniumeh-arm / ARM EHABI landing pads print as try/catch (option itaniumeh)
         // and kuna-itaniumeh-clang / a clang call-site range that starts before its call (option itaniumeh)
-        assert_eq!(count, 1000, "corpus file count drifted");
+        // and kuna-itaniumeh-sharedpad / a landing pad folded into the handler it jumps to prints as a try
+        assert_eq!(count, 1001, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

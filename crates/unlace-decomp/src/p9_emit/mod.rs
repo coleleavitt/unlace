@@ -17,10 +17,10 @@ pub mod kuna_bitcast;
 pub mod kuna_braceelide;
 pub mod kuna_bytearrayc;
 pub(crate) mod kuna_bytearrayslice;
+pub mod kuna_bytehonest;
 pub(crate) mod kuna_callargextend;
 pub mod kuna_callerstack;
 pub(crate) mod kuna_callresult;
-pub mod kuna_calltransport;
 pub mod kuna_castarith; // (kuna) pointer arithmetic stays in pointer terms
 pub mod kuna_castimplied; // (kuna) casts C's own conversions already perform
 pub mod kuna_castnarrow; // (kuna) a narrowing C's own assignment, argument or return conversion performs keeps no cast
@@ -62,7 +62,6 @@ pub mod kuna_langtypes; // (kuna) the type-spelling seam (TypeSpeller + SpellCtx
 pub mod kuna_mapglobalsyms; // (kuna `mapglobalsyms`) keep mapGlobals' DAT_ Symbols in the global scope
 pub(crate) mod kuna_memberbase;
 pub mod kuna_namedglobals;
-pub mod kuna_namespaces; // (kuna) which namespaces print in front of a name
 pub mod kuna_narrowselector; // (kuna) a switch on a narrow expression casts it to its own width
 pub mod kuna_oslog;
 pub mod kuna_paramrefdecl;
@@ -111,7 +110,6 @@ pub mod kuna_truthycond;
 pub mod kuna_typeround; // (kuna) the declared-signedness rounding decision
 pub mod kuna_unknowncasts;
 pub mod kuna_unsignedread; // (kuna) an unsigned read of an expression C evaluates as signed casts it
-pub mod kuna_varsources;
 pub mod kuna_warnstyle;
 pub mod kuna_widelocal;
 pub mod prettyprint;
@@ -129,7 +127,12 @@ pub mod kuna_callprototypes;
 pub(crate) mod kuna_gostorevalue;
 
 pub(crate) mod kuna_constantshift;
+pub mod kuna_fidproto; // (kuna) the prototype a .fid record carries, and its check against the body
+pub mod kuna_reglocals;
 
 pub mod kuna_widenedadd;
 
 pub mod kuna_returnselector;
+pub mod kuna_slotreport; // (kuna) a frame slot a printed local lives in is reported as that local
+pub mod kuna_slotsplit; // (kuna) a frame row a narrower printed declaration lives inside is split at it
+pub mod kuna_stackobjectinfo;

@@ -127,10 +127,13 @@ tidy/clippy/parity are green, then the next one.
 - Known follow-ups:
   - `kuna_phases::tests::option_values_live_value_present_for_129` pins 137 options with a live
     field; the tree has 138 (spsolve added one without bumping it). Fix: pin 138.
-  - XNUTABLES #13/#14 print a one-case `switch` for a GOT slot (intended by the `gottailcall`
-    design, but ugly). Turning such jumps into tail calls is a `tailcalljump` design change.
-  - patchelf: two `SysError` handlers are found but print as a plain `if`, not `try`
-    (structuring gap).
+  - Done: a GOT-slot stub prints as a tail call in a single-function decompile
+    (`tailcalljump on` now files the callee itself; XNUTABLES #15). The patchelf `SysError`
+    handlers print as `try` (pads folded into a shared handler, `kuna-itaniumeh-sharedpad`).
+  - Still open: a call whose exceptional edge structures as a loop condition prints
+    `while (readFile(...), !eh_unwinding()) { ... }` with the pad after the loop, not a
+    `try` (`eh4_x86_64.elf` `probe`); a negated edge whose pad falls out of an enclosing
+    `if` (g++ `-fno-reorder-blocks-and-partition` build of the same source) stays an `if` too.
   - `project_named_globals` was not flaky: Ubuntu 26.04's gcc emits AVX (`vmulsd`/`vmovsd`), and
     `vexzeroupper` left scalar VEX results as whole-`zmm0` writes, so `grow` lost its `double`
     return. Fixed on `ci/fast-tests` (fixture `vexret_avx_x86_64`).

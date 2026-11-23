@@ -1859,7 +1859,7 @@ fn bootstrap_split_callees(
             break;
         }
         *budget -= 1;
-        if let Some((stated, calls)) = recover_one_contract(arch, &prior, &entry, None) {
+        if let Some((stated, calls, _)) = recover_one_contract(arch, &prior, &entry, None, false) {
             recovered.push((entry, stated, calls));
         }
     }
@@ -1894,6 +1894,11 @@ fn bootstrap_split_callees(
         crate::p4_calls::kuna_calleereadarg::record_variadic_setups(root);
     }
 }
+
+/// How many times a single-function drive decompiles its function again for
+/// the GOT-slot rule: once with the filed callees, once more if a tail call
+/// then lost what the copied-in body shows.
+const MAX_GOT_ROUNDS: u32 = 2;
 
 /// How many tail-called callees a single-function drive decompiles first.
 const MAX_TAIL_CONTRACTS: usize = 4;
@@ -1940,9 +1945,13 @@ fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
         if deadline_passed() {
             break;
         }
-        if let Some((Some(types), _)) =
-            recover_one_contract(arch, &prior, &entry, Some(MAX_TAIL_CALLEE_INSTRUCTIONS))
-        {
+        if let Some((Some(types), _, _)) = recover_one_contract(
+            arch,
+            &prior,
+            &entry,
+            Some(MAX_TAIL_CALLEE_INSTRUCTIONS),
+            false,
+        ) {
             if let Some(key) = crate::p4_calls::kuna_protoorder::stated_key(&entry) {
                 stated.push((key, types));
             }
@@ -1950,6 +1959,34 @@ fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
     }
     arch.kuna_protoorder_types = prior;
     arch.kuna_protoorder_types.extend(stated);
+}
+
+/// (kuna `gottailcall`, single-function drive) Decompile `entry`, a known
+/// function a one-destination table of the root reached, as a tail-called
+/// callee is decompiled first, and say what a tail call to it rests on.  Its
+/// statement, when it makes one, stays for the root's next decompile.
+fn recover_got_callee(
+    arch: &mut Architecture,
+    entry: &Address,
+) -> Option<crate::kuna_gottailcall::Callee> {
+    if deadline_passed() {
+        return None;
+    }
+    let prior = std::mem::take(&mut arch.kuna_protoorder_types);
+    let got = recover_one_contract(
+        arch,
+        &prior,
+        entry,
+        Some(MAX_TAIL_CALLEE_INSTRUCTIONS),
+        true,
+    );
+    arch.kuna_protoorder_types = prior;
+    let (stated, _, callee) = got?;
+    if let (Some(types), Some(key)) = (stated, crate::p4_calls::kuna_protoorder::stated_key(entry))
+    {
+        arch.kuna_protoorder_types.insert(key, types);
+    }
+    callee
 }
 
 /// Decompile one callee far enough to state its recovered parameter types, then
@@ -1961,15 +1998,19 @@ fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
 /// and the one-shot staged prototype list was consumed by the outer drive.  A
 /// panic or a declined recovery leaves the table untouched.  The callee sees only
 /// `prior` statements, never one this pass just parked.  With `instruction_limit`
-/// a larger callee fails while its flow is followed and states nothing.
+/// a larger callee fails while its flow is followed and states nothing.  With
+/// `file_got` it also answers what a tail call to the callee rests on
+/// ([`crate::kuna_gottailcall::callable_by_recovery`]).
 fn recover_one_contract(
     arch: &mut Architecture,
     prior: &StatedMap,
     entry: &Address,
     instruction_limit: Option<u32>,
+    file_got: bool,
 ) -> Option<(
     Option<Rc<crate::kuna_protoorder::RecoveredTypes>>,
     Vec<Address>,
+    Option<crate::kuna_gottailcall::Callee>,
 )> {
     arch.kuna_protoorder_types = prior.clone();
     let saved_deadline = arch.kuna_fn_deadline;
@@ -2007,7 +2048,12 @@ fn recover_one_contract(
         );
         let stated = crate::p4_calls::kuna_protoorder::stated_key(entry)
             .and_then(|key| arch.kuna_protoorder_types.get(&key).cloned());
-        Some((stated, calls))
+        let got = if file_got {
+            crate::kuna_gottailcall::callable_by_recovery(arch, entry, &callee)
+        } else {
+            None
+        };
+        Some((stated, calls, got))
     }));
     CONTRACT_DEPTH.with(|depth| depth.set(depth.get() - 1));
     arch.kuna_fn_deadline = saved_deadline;
@@ -2424,11 +2470,12 @@ fn decompile_func_full_with_objects_inner(
     // (kuna `fid`) Is the prototype parked on this function a `.fid` record's?
     let fid_declared =
         pending_proto.is_none() && arch.fid_prototypes.contains(&funcaddr.get_offset());
-    let mut attempt = |prefollowed: Option<Funcdata>,
-                       unguarded: bool,
-                       condstmts_seed: &std::collections::BTreeSet<Address>,
-                       elfmain: Option<&crate::kuna_elfmaindecl::Runtime>,
-                       fid_withdrawn: bool|
+    let attempt = |arch: &mut Architecture,
+                   prefollowed: Option<Funcdata>,
+                   unguarded: bool,
+                   condstmts_seed: &std::collections::BTreeSet<Address>,
+                   elfmain: Option<&crate::kuna_elfmaindecl::Runtime>,
+                   fid_withdrawn: bool|
      -> KunaResult<Funcdata> {
         // Kept for the parked-prototype lookup below (the flow build consumes the
         // address).
@@ -2759,15 +2806,32 @@ fn decompile_func_full_with_objects_inner(
     let mut prefollowed = prefollowed;
     let mut elfmain = elfmain_rt.as_ref();
     let mut fid_withdrawn = false;
+    // (kuna `tailcalljump on`, the GOT-slot rule) A drive with no callee-first
+    // run behind it files the callees its one-destination tables reach itself.
+    let got_ledger = ((purpose == DrivePurpose::SingleFunction || arch.kuna_tail_callee_batch)
+        && CONTRACT_DEPTH.with(|d| d.get()) == 0
+        && arch.tail_call_tables
+        && arch.protoorder.is_on())
+    .then(|| crate::kuna_gottailcall::begin_single(arch))
+    .flatten();
+    let mut got_tried = std::collections::BTreeSet::new();
+    let mut got_rounds = 0;
     let result = loop {
         // (kuna `stackstoreguard`) A function whose final layout spoiled what the
         // guard needs is analyzed again from scratch without it.
         let mut seed = std::collections::BTreeSet::new();
         let mut unguarded = false;
-        let mut result = match attempt(prefollowed.take(), false, &seed, elfmain, fid_withdrawn) {
+        let mut result = match attempt(
+            arch,
+            prefollowed.take(),
+            false,
+            &seed,
+            elfmain,
+            fid_withdrawn,
+        ) {
             Ok(fd) if fd.stack_store_guard_spoiled() => {
                 unguarded = true;
-                attempt(None, true, &seed, elfmain, fid_withdrawn)
+                attempt(arch, None, true, &seed, elfmain, fid_withdrawn)
             }
             other => other,
         };
@@ -2779,7 +2843,7 @@ fn decompile_func_full_with_objects_inner(
                 break;
             };
             seed = next;
-            match attempt(None, unguarded, &seed, elfmain, fid_withdrawn) {
+            match attempt(arch, None, unguarded, &seed, elfmain, fid_withdrawn) {
                 Ok(fd) => result = Ok(fd),
                 Err(_) => break,
             }
@@ -2799,8 +2863,26 @@ fn decompile_func_full_with_objects_inner(
             fid_withdrawn = true;
             continue;
         }
+        if got_ledger.is_some() && got_rounds < MAX_GOT_ROUNDS {
+            if let Ok(fd) = &result {
+                let step = crate::kuna_gottailcall::single_step(
+                    arch,
+                    &funcaddr,
+                    fd,
+                    &mut got_tried,
+                    recover_got_callee,
+                );
+                if step == crate::kuna_gottailcall::SingleStep::Redo {
+                    got_rounds += 1;
+                    continue;
+                }
+            }
+        }
         break result;
     };
+    if let Some(saved) = got_ledger {
+        crate::kuna_gottailcall::end_single(arch, saved);
+    }
     if fid_withdrawn {
         crate::kuna_fidproto::withdraw(arch, &funcaddr);
     }

@@ -458,14 +458,7 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
     Ok(())
 }
 
-/// One emitted operation before it is installed into function IR.
-#[derive(Debug, Clone)]
-pub struct Operation {
-    pub address: unlace_base::address::Address,
-    pub opcode: unlace_num::opcodes::OpCode,
-    pub output: Option<unlace_num::pcoderaw::VarnodeData>,
-    pub inputs: Vec<unlace_num::pcoderaw::VarnodeData>,
-}
+pub use crate::kuna_emittedop::Operation;
 
 #[derive(Default)]
 struct Operations(Vec<Operation>);

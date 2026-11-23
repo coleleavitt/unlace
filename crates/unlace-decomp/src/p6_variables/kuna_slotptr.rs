@@ -201,7 +201,7 @@ fn declared_type(fd: &Funcdata, arch: &Architecture, vn: VarnodeId) -> Option<Rc
     let v = fd.vbank().get(vn)?;
     let rep = v
         .get_high()
-        .and_then(|h| crate::printc::decl_type_representative(fd, arch, h))
+        .and_then(|h| (fd.hooks().printc_decl_type_representative)(fd, arch, h))
         .unwrap_or(vn);
     Some(Rc::clone(fd.vbank().get(rep)?.get_type()))
 }
@@ -251,7 +251,7 @@ pub fn slot_pointer_type(
             continue;
         }
         let ty = value_type(fd, arch, store).ok_or(Decline::Untraced)?;
-        let spelled = crate::printc::type_to_c_string(arch, &ty);
+        let spelled = (fd.hooks().printc_type_to_c_string)(arch, &ty);
         match &found {
             Some((s, _)) if *s != spelled => return Err(Decline::Disagree),
             Some(_) => {}

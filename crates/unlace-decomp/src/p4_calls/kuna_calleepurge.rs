@@ -160,16 +160,7 @@ pub fn moves_stack(arch: &Architecture, entry: &Address) -> bool {
     applies(arch) && !entry.is_invalid() && summary(arch, entry, DEPTH).effect == Effect::Unbalanced
 }
 
-/// (`calleeargs`) What a direct call's callee does with the stack above its
-/// return address, in bytes from the first argument slot.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct StackArgs {
-    /// The bytes its code touches.
-    pub read: u32,
-    /// The bytes that can be its arguments at this call: `read`, widened to
-    /// what its returns pop and what the caller removes right after the call.
-    pub bound: u32,
-}
+pub use crate::kuna_calleefacts::StackArgs;
 
 /// The bytes the caller takes off the stack after the call at `call_at`, read
 /// along the straight-line code that follows it: how far above where the call

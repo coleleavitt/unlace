@@ -1325,12 +1325,33 @@ statement in hand. Waiting for the last callee keeps a `switch` whose cases
 tail-call many functions through their slots to one redo instead of one per
 callee, each copying in the callees still to come. A refused caller is
 redone at once. That is the call-graph edge the walk misses, learned from
-the caller's own decompile. The ledger lives only for the length of a
-callee-first run. A single-function `unlace decompile`, `--jobs N`, `protoorder
-off` and a run narrowed past the callee file nothing and keep the copied-in
-body. `tailcalljump off` keeps the copied-in body for these jumps too.
+the caller's own decompile. The callee-first ledger lives only for the
+length of a callee-first run.
+
+A single-function drive (the console's `decompile`, `unlace decompile` of
+named targets) has no callee-first run behind it, so it keeps a ledger of
+its own for the length of one function
+(`kuna_gottailcall.rs (begin_single, single_step)`, driven from
+`decompile_drive.rs (decompile_func_full_with_objects_inner)`). After a
+decompile it collects the known functions a one-destination table reached:
+the ones the flow followed, and, because the console follows the flow before
+the drive starts, the sole destinations of the jump tables the function still
+holds. It decompiles each of them first, bounded the way a tail-called callee
+is (`decompile_drive.rs (recover_got_callee)`, at most four callees of at
+most 512 instructions), files the ones `record` would file, keeps their
+`protoorder` statements, and decompiles the function again, so the jump
+takes the tail call: a kernel-extension stub `adrp x16; ldr x16,[x16,#slot];
+br x16` to `Base::m1` prints `v1 = Base::m1(); // tail-call` instead of
+`switch(Base::m1_ptr) { case ...: return 1; }`. A tail call that then loses
+what the copied-in body shows (`loses`) is refused and the function
+decompiled once more with the body copied in. Only a drive where some
+one-destination table reached a known function pays for the extra
+decompiles. A nested drive (a callee being decompiled for its contract),
+`protoorder off` and `tailcalljump direct|off` keep the copied-in body.
 `tests/stages/kuna-gottailcall.xml` pins the extern arm, with
-an unmapped non-function and a jump to the function's own code as controls, and
+an unmapped non-function and a jump to the function's own code as controls,
+`tests/stages/kuna-xnutables.xml` (#15) and `tests/stages/kuna-veneer-tailcall.xml`
+(#10) the single-function arm, and
 `tests/cli/gottailcall-*.json` pin the callee-first arm on an x86-64
 `-fno-plt` library and a MIPS PIC object.
 
@@ -4555,7 +4576,15 @@ CBRANCH prints as `try { <condition-block statements> } catch (..) { <pad> }`:
   through the pad;
 - inside a `try`, an exceptional edge to the same pad
   (`eh_open_pad`, compared with the CBRANCH target) prints as its plain
-  statements: the calls of one try region share it.
+  statements: the calls of one try region share it;
+- when neither branch starts at a landing pad, because the pad only loads the
+  exception registers and jumps on into handler code it shares with another
+  pad and its own block was folded into that code (g++'s hot/cold split,
+  patchelf's `catch (SysError &)` in `shrinkRPath`), the pad is the one the
+  call-site record of the edge's call names, and the handler is the branch
+  whose first block is the edge's own successor: the CBRANCH's true out-edge,
+  or its false out-edge when the condition is `eh_unwinding()` negated
+  (`printc.rs (eh_if_arms)`).
 
 The header lists the pad's caught types in handler order, joined by ` | `:
 `catch (std::runtime_error | ...)`, with `...` for a catch-all or a type no
@@ -4572,7 +4601,8 @@ fixture), `tests/stages/kuna-itaniumeh-cold.xml` (the partitioned build),
 `tests/stages/kuna-itaniumeh-arm.xml` (ARM32 and stripped Thumb EHABI tables,
 a type named only by its `type_info` string) and
 `tests/stages/kuna-itaniumeh-clang.xml` (clang ranges that start before the
-call, the multi-clause header).
+call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`
+(pads folded into a shared handler).
 
 ## 2.13 VEX zero-upper writes and per-lane vector p-code
 

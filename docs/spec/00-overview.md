@@ -805,7 +805,7 @@ Four front-ends drive one engine assembly:
   as its bare name plus the host id of its namespace, and the namespace chain
   is printed the way upstream's
   `PrintC::pushSymbolScope` prints it
-  (`crates/unlace-decomp/src/p9_emit/kuna_namespaces.rs`): a call
+  (`crates/unlace-decomp/src/substrate/kuna_namespaces.rs`): a call
   carries the scopes Ghidra's namespace strategy (Minimal by default) needs
   from the calling function's namespace, its own declaration carries its whole
   path, and each scope is a separate token so Java renders the `::`.  The

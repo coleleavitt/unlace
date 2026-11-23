@@ -454,6 +454,22 @@ declare_hooks! {
     switchrunon_own_rows: fn(u64, &[u64], &dyn Fn(u64) -> Option<u64>) -> Option<usize>;
     /// `kuna_x87intrinsic::decode_prototype`.
     x87intrinsic_decode_prototype: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
+    /// `kuna_retpushedhalf::observe_instruction`.
+    retpushedhalf_observe_instruction: fn(&mut Funcdata, &[OpId]);
+    /// `kuna_armfloatreturn::declared_helper_model`.
+    armfloatreturn_declared_helper_model: fn(&ArchContext, &str) -> Option<Rc<ProtoModel>>;
+    /// `kuna_calleeprotostack::resolve_declared_extra_pop`.
+    calleeprotostack_resolve_declared_extra_pop: fn(&mut FuncProto);
+    /// `kuna_localstackviews::record_native`.
+    localstackviews_record_native: fn(&mut Funcdata, OpId);
+    /// `kuna_passthrough::claim_after_go_stack_guard`.
+    passthrough_claim_after_go_stack_guard: fn(&mut Funcdata);
+    /// `kuna_bitcast::reinterprets_to_float`.
+    bitcast_reinterprets_to_float: fn(&Funcdata, VarnodeId) -> bool;
+    /// `printc::decl_type_representative`.
+    printc_decl_type_representative: fn(&Funcdata, &Architecture, HighVariableId) -> Option<VarnodeId>;
+    /// `printc::type_to_c_string`.
+    printc_type_to_c_string: fn(&Architecture, &Rc<Datatype>) -> String;
     /// `kuna_arithhelpers::decode_payloads`.
     arithhelpers_decode_payloads: fn(HelperAbi, &mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
     /// `kuna_arithhelpers::helper_abi`.

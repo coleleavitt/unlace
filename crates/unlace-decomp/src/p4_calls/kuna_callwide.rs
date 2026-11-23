@@ -297,7 +297,7 @@ fn export_return_integer(ty: &crate::dtype::Datatype) -> Option<bool> {
             && !ty.is_char_print()
             && !ty.is_enum_type()
             && !ty.is_variable_length()
-            && crate::kuna_lang::OutLang::C
+            && crate::kuna_outlang::OutLang::C
                 .speller()
                 .unknown_base(8, false, false)
                 .as_deref()

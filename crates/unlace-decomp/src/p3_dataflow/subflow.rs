@@ -588,7 +588,7 @@ impl SubvariableFlow {
         }
         let r = self.rv(rvn);
         if r.vn
-            .is_some_and(|vn| crate::kuna_truncarg::drops_only_zero_bits(data, vn, r.mask))
+            .is_some_and(|vn| drops_only_zero_bits(data, vn, r.mask))
         {
             self.zext_pulls.push((op, slot));
         }
@@ -3073,7 +3073,7 @@ impl SubvariableFlow {
                     let v = self.get_replace_varnode(data, in1)?;
                     data.op_set_input(pullop, v, slot)?;
                     let zext = self.zext_pulls.contains(&(pullop, slot));
-                    crate::kuna_truncarg::note_trimmed_arg(data, pullop, slot, zext);
+                    note_trimmed_arg(data, pullop, slot, zext);
                     let unsigned = self.zext_returns.contains(&pullop);
                     crate::kuna_zextreturn::note_trimmed_return(data, pullop, unsigned);
                 }
@@ -8284,6 +8284,40 @@ pub fn specs() -> Vec<RuleSpec> {
             ctor: || Box::new(RuleSubfloatConvert::new("subfloat_convert_grp")),
         },
     ]
+}
+
+/// Did narrowing the call input `vn` to the logical value under `mask` drop only
+/// bits known to be zero?  Then the binary passed that value zero-extended.
+pub(crate) fn drops_only_zero_bits(data: &Funcdata, vn: VarnodeId, mask: u64) -> bool {
+    mask & 1 != 0
+        && data
+            .vbank()
+            .get(vn)
+            .is_some_and(|v| v.get_nz_mask() & !mask == 0)
+}
+
+/// Record on the call's spec that input `slot` of `op` was just trimmed, and
+/// whether the trim dropped only known-zero bits.
+pub(crate) fn note_trimmed_arg(data: &mut Funcdata, op: OpId, slot: int4, zext: bool) {
+    let Some(o) = data.obank().get(op) else {
+        return;
+    };
+    if !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
+        return;
+    }
+    let ninputs = o.num_input();
+    let Some(size) = o
+        .get_in(slot)
+        .and_then(|v| data.vbank().get(v))
+        .map(|v| v.get_size())
+    else {
+        return;
+    };
+    let Some(i) = data.get_call_specs_index(op) else {
+        return;
+    };
+    data.get_call_specs_mut(i)
+        .note_trimmed_input(slot, size, ninputs, zext);
 }
 
 // =============================================================================

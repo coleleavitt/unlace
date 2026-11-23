@@ -92,7 +92,7 @@ use crate::p0_knowledge::options::on_or_off;
 /// Marshalling element id for the option (kuna 4000+ range).
 pub const ELEM_RETSPLITGLOBAL: ElementId = ElementId::new("retsplitglobal", 4143);
 
-/// The `retsplitglobal on|off` option (`Architecture::ret_split_global`).
+/// The `retsplitglobal on|off` option (`kuna_coreoptions::RetSplitGlobal`).
 pub struct OptionRetSplitGlobal;
 
 impl OptionRetSplitGlobal {
@@ -100,7 +100,7 @@ impl OptionRetSplitGlobal {
     pub const NAME: &'static str = "retsplitglobal";
 
     /// Resolve the flag and its confirmation message; the caller writes it into
-    /// `Architecture::ret_split_global`.
+    /// the registered option `RetSplitGlobal`.
     pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
@@ -151,7 +151,7 @@ pub fn is_global_store(
 
 /// Does a block carrying `stores` observable global stores stay splittable?
 ///
-/// `gate` is the resolved `Architecture::ret_split_global`; with it off the
+/// `gate` is the resolved `retsplitglobal` option; with it off the
 /// answer is always true and the upstream predicate is unchanged.
 pub fn split_is_declined(gate: bool, stores: usize) -> bool {
     gate && stores > MAX_CLONED_GLOBAL_STORES

@@ -3383,7 +3383,10 @@ impl Funcdata {
         // (kuna `retsplitglobal`) a bare epilogue is cheap to clone; one that
         // stores to more globals than the bound is not one.
         !(self.hooks().retsplitglobal_split_is_declined)(
-            self.get_arch().ret_split_global,
+            self.get_arch()
+                .kuna_options
+                .get::<crate::kuna_coreoptions::RetSplitGlobal>()
+                .0,
             global_stores,
         )
     }
@@ -3626,7 +3629,11 @@ impl Funcdata {
             // (kuna, `option rettriangle`) The join of a one-block `if` is no
             // guard: splitting it prints `if (!c) return K; f(); return K;` for
             // `if (c) f(); return K;`.
-            if self.get_arch().returndup_triangle
+            if self
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_coreoptions::RetTriangle>()
+                .0
                 && (self.hooks().rettriangle_is_triangle_join)(self, parent)
             {
                 continue;

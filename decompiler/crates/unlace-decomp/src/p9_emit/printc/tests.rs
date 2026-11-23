@@ -3582,7 +3582,9 @@ mod w10_printc_cast_render {
     #[test]
     fn integer_storage_view_overrides_a_float_declaration() {
         let mut context = ContextArch::new(build_manager());
-        context.stack_views = true;
+        context
+            .kuna_options
+            .set(crate::kuna_coreoptions::StackViews(true));
         let types = Rc::new(crate::dtype::TypeFactoryImpl::new());
         types.set_size_of_int(4);
         types.set_size_of_float(4);

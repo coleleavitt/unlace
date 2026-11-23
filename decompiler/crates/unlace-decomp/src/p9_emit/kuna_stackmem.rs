@@ -49,7 +49,13 @@ pub(crate) fn access(fd: &Funcdata, op: OpId) -> Option<Access> {
         _ => return None,
     };
     let address = byte_address(fd, pointer, size);
-    if !fd.get_arch().stack_views && address.is_none() {
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
+        && address.is_none()
+    {
         return None;
     }
     let indexed = address

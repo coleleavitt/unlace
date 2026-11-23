@@ -439,8 +439,13 @@ impl PrintC {
             let default_name;
             let mut name = param.get_name();
             if name.is_empty() {
-                default_name =
-                    crate::database::kuna_materialized_param_name(arch.name_style_angr, i, "");
+                default_name = crate::database::kuna_materialized_param_name(
+                    arch.kuna_options
+                        .get::<crate::kuna_coreoptions::NameStyleAngr>()
+                        .0,
+                    i,
+                    "",
+                );
                 name = default_name.as_str();
             }
             let ty = match param.get_type() {

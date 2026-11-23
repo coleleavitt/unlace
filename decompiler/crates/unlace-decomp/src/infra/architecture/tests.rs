@@ -124,7 +124,11 @@ fn kuna_anchor_flags_default_to_div_values() {
             .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
             .enabled()
     );
-    assert!(arch.name_style_angr);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .0
+    );
     assert!(
         arch.kuna_options
             .get::<crate::kuna_compareform::PresentLessequal>()
@@ -437,14 +441,19 @@ fn name_function_angr_vs_upstream() {
     let addr = Address::new(Rc::new(ram), 0x401000);
 
     // angr-style on by default: sub_<addr> (kuna_function_name).
-    assert!(arch.name_style_angr);
+    assert!(
+        arch.kuna_options
+            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .0
+    );
     let n_angr = arch.name_function(&addr);
     assert!(n_angr.starts_with("sub_"), "angr name was {n_angr}");
 
     // upstream style: func_<raw-addr>, where raw-addr is C++ Address::printRaw
     // (AddrSpace::printRaw): zero-padded to the address width (4 bytes -> 8 hex
     // digits), no space-name prefix, word-size division (wordsize 1 here).
-    arch.name_style_angr = false;
+    arch.kuna_options
+        .set(crate::kuna_coreoptions::NameStyleAngr(false));
     let n_up = arch.name_function(&addr);
     assert_eq!(n_up, "func_0x00401000", "upstream name was {n_up}");
 }

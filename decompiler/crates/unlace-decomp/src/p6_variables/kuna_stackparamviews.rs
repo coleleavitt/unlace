@@ -79,7 +79,14 @@ fn eligible_extent(fd: &Funcdata, start: u64, size: i32) -> bool {
 
 /// Retain physical-store evidence before heritage can narrow or combine it.
 pub(crate) fn record_store(fd: &mut Funcdata, address: &Address, size: i32) {
-    if fd.get_arch().stack_views || size <= 0 || !fd.get_func_proto().has_store() {
+    if fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
+        || size <= 0
+        || !fd.get_func_proto().has_store()
+    {
         return;
     }
     let Some(stack) = fd.get_arch().manage().get_stack_space() else {
@@ -678,7 +685,12 @@ pub(crate) fn prepare_casts(fd: &mut Funcdata) {
     };
     let objects = fd.stack_objects.clone();
     let mut initialized = BTreeSet::new();
-    if !fd.get_arch().stack_views {
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
+    {
         let mut backings = BTreeMap::new();
         if let Some(space) = fd.get_arch().manage().get_stack_space() {
             for id in fd.vbank().loc_space_ids(space) {

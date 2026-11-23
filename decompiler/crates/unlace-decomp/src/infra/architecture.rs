@@ -400,9 +400,6 @@ pub struct Architecture {
     pub infer_ptr_spaces: Vec<Rc<AddrSpace>>,
 
     // --- kuna anchor flags (architecture.hh:179-201, the `(kuna)` members) -
-    /// (kuna `floatglobals`) Let a float vote accept a global the program only
-    /// moves through float registers (`kuna_floatglobals`).
-    pub float_globals: bool,
     /// (kuna `floatglobals`) What the whole-program scan reads; `None` on every
     /// path without a loaded image.
     pub kuna_float_scan: Option<Rc<crate::kuna_floatglobals::FloatScan>>,
@@ -441,12 +438,6 @@ pub struct Architecture {
     /// (kuna `mzdgroup`) The data segment the MS-DOS loader read off the startup
     /// code, when it could.
     pub mz_dgroup: Option<crate::kuna_mzdgroup::MzDataSegment>,
-    /// (kuna `syscallregs`) When the ARM/AArch64/RISC-V/MIPS/PowerPC system-call
-    /// user-op writes its result register and reads the registers the function
-    /// sets up for it: `off`, `auto` (the default: only on an image the loader
-    /// identified as an operating system's user-space program) or `on`.  See
-    /// [`kuna_syscallregs`](crate::kuna_syscallregs).
-    pub syscall_regs: crate::kuna_syscallregs::SyscallRegsMode,
     /// (kuna) `tlsnames`: the static TLS block the loader committed.
     pub tls_layout: Option<std::rc::Rc<crate::p5_types::kuna_tlsnames::TlsLayout>>,
     /// (kuna `dwarfscopes`) Register-held DWARF locals by function entry:
@@ -456,9 +447,6 @@ pub struct Architecture {
     /// (kuna `structsynth`) A `--jobs` worker's ledger hook: records every lookup,
     /// or answers each from the parent's replay. `None` outside a worker.
     pub struct_synth_shard: Option<crate::kuna_structsynth::shard::ShardHandle>,
-    /// (kuna `fieldtype`) Is a synthesized field some access holds as a pointer
-    /// declared as that pointer?  See [`kuna_fieldtype`](crate::kuna_fieldtype).
-    pub field_type: bool,
     /// (kuna) Did the loader identify the image as a Windows GUI/console PE?  A
     /// FACT, not an option: written once at `load file` and the thing `option
     /// pebnames auto` tests.  The XML `<binaryimage>` bootstrap never sets it.
@@ -503,10 +491,6 @@ pub struct Architecture {
     /// (kuna `opaquepredicate globals`) The scan's answer, once a function
     /// asked for it.
     pub kuna_opaque_globals: Option<Rc<crate::kuna_opaqueglobals::UnwrittenGlobals>>,
-    /// (kuna) Refuse to split a shared RETURN block that stores to GLOBALS, so
-    /// a 72-store epilogue is not cloned into each predecessor (option
-    /// `retsplitglobal`).  See [`crate::p8_structure::kuna_retsplitglobal`].
-    pub ret_split_global: bool,
     /// (kuna `octeoneffects`) The inject ids of the upstream-lifting fixups this
     /// architecture registered for its Octeon reservation and ordering
     /// operations; `decompile_drive::is_injected_userop` applies them only under
@@ -550,8 +534,6 @@ pub struct Architecture {
     /// verdict and the catalog `current` reports the option, not the image.
     pub source_lang_forced: Option<crate::kuna_sourcelang::SourceLang>,
 
-    /// Operation-specific typed views over shared physical frame storage.
-    pub stack_views: bool,
     /// (kuna `msvcbyval`) The MSVC declarations with one by-value class of
     /// unstated size, by entry `(space index, offset)`; filled by the analysis
     /// commit while `msvcsig` applies.
@@ -588,13 +570,6 @@ pub struct Architecture {
     /// `[start, end)`, sorted, committed by the analysis tier.
     pub kuna_fde_extents: Rc<Vec<(u64, u64)>>,
 
-    /// (kuna) `rettriangle`: decline a `duplicate_shared_returns` split whose
-    /// shared RETURN block is the join of a one-block `if`.  Read by
-    /// [`crate::p8_structure::kuna_rettriangle::is_triangle_join`].
-    pub returndup_triangle: bool,
-    /// (kuna) Use angr-style default naming (vN/aN/dat_/sub_/label_ + comments)
-    /// (C++ `name_style_angr`).
-    pub name_style_angr: bool,
     /// (kuna, Phase 3) Ghidra-convention default naming (`FUN_`/`DAT_`/`LAB_` +
     /// `%08x`) for entities no Symbol covers — set (with `name_style_angr` off)
     /// by the ghidra-mode registerProgram so kuna's fallback names match what
@@ -602,19 +577,6 @@ pub struct Architecture {
     /// (ghidra_arch.cc:928-947).  Never set on the standalone path.  Takes
     /// precedence over `name_style_angr` in [`Self::kuna_name_style`].
     pub name_style_ghidra: bool,
-    /// (kuna `ctypes`) Spell the NAMED core types as the target's own C type
-    /// names -- `int4` -> `int`, `uint1` -> `unsigned char`, `float8` -> `double`,
-    /// `code *` -> `void *` -- resolved against the compiler spec's decoded
-    /// `<data_organization>`, so an 8-byte integer reads `long` on LP64 and
-    /// `long long` on ILP32/LLP64.  Extends [`realtypes`](Self::realtypes), which
-    /// covers only residual `TYPE_UNKNOWN`; that split is why one function can
-    /// today declare `unsigned int v3;` and `int4 v1;` in the same block.
-    /// Default OFF in the catalog (the datatest corpus pins the Ghidra spellings
-    /// in 42 assertions) but ON in the `aggressive` and `fast` presets and at
-    /// every `auto` size -- i.e. the default rendering of the CLI, the web
-    /// front-end and the benchmark.  Read by the printc declarator chokepoints
-    /// (`RealTypeCtx`).
-    pub ctypes: bool,
     /// (kuna `importdata`) `(space index, offset)` of each import slot whose
     /// import is a data object (`machodataslots`): a read of the slot's own
     /// value renders `&<import>`.
@@ -1416,7 +1378,6 @@ impl Architecture {
             loadersymbols_parsed: false,
             infer_ptr_spaces: Vec::new(),
 
-            float_globals: true, // (kuna) option floatglobals; reset_defaults sets the shipped default
             kuna_float_scan: None,
             kuna_function_bodies: Vec::new(),
             kuna_float_globals: None,
@@ -1431,7 +1392,6 @@ impl Architecture {
             fpu_emu_evidence: false,
             mz_dgroup: None,
             segment_defs: Vec::new(),
-            syscall_regs: crate::kuna_syscallregs::SyscallRegsMode::Off, // (kuna) option syscallregs; reset_defaults sets the shipped default
             image_os_userland: false, // (kuna) a load-time fact; set by the console's `load file`
             image_linux_elf: false,   // (kuna) a load-time fact; set by the console's `load file`
             image_elf: false,         // (kuna) a load-time fact; set by the console's `load file`
@@ -1440,7 +1400,6 @@ impl Architecture {
             tls_layout: None,
             dwarf_reg_locals: std::collections::BTreeMap::new(),
             struct_synth_shard: None,
-            field_type: false, // (kuna) option fieldtype; reset_defaults sets the shipped default
             image_windows_user: false, // (kuna) a load-time fact; set by the console's `load file`
 
             kuna_objc_classes: Rc::new(Default::default()),
@@ -1450,7 +1409,6 @@ impl Architecture {
             mapped_flow_boundary_image: false,
 
             kuna_opaque_globals: None,
-            ret_split_global: false,
             octeon_upstream_inject: Vec::new(), // (kuna) set by init_userops_and_fixups on an Octeon language
             call_wide: false,
             kuna_mips_pairs: None,
@@ -1469,7 +1427,6 @@ impl Architecture {
             go_chanrecv_status_sites: Default::default(),
             source_lang_forced: None, // (kuna) option sourcelang; reset_defaults restores auto
 
-            stack_views: false,
             msvc_byval_decls: Rc::new(Default::default()),
             msvc_builders: Rc::new(Default::default()),
             arm_float_args: false, // (kuna) option armfloatargs
@@ -1479,11 +1436,7 @@ impl Architecture {
 
             kuna_fde_extents: Rc::new(Vec::new()),
 
-            returndup_triangle: false, // (kuna) option rettriangle; reset_defaults sets the shipped default
-
-            name_style_angr: false,
             name_style_ghidra: false,
-            ctypes: false, // (kuna) option ctypes; reset_defaults sets the shipped default
             data_import_slots: std::collections::BTreeSet::new(),
             cortexmpriv_inject: None, // (kuna) set by init_userops_and_fixups when the language declares the user-op
             kuna_fn_budget: None,     // (kuna) decompile-all watchdog: no budget by default
@@ -1647,25 +1600,14 @@ impl Architecture {
         self.flowoptions = flow_flags::error_toomanyinstructions;
         self.max_instructions = 100000;
         self.infer_pointers = true;
-        self.syscall_regs = crate::kuna_syscallregs::SyscallRegsMode::Auto; // (kuna) default `auto`: on an image the loader identified as an operating system's user-space program, the system call writes its result register and reads the number register and the leading argument registers the function writes on every path to it. Gated on that loader fact, which the XML bootstrap never sets, so it is structurally inert on the datatest corpus (0/675); `option syscallregs on` acts on any image, `off` restores the zero-effect CALLOTHER
         self.apply_segmentize();
         self.fpu_emu = crate::kuna_fpuemu::FpuEmuMode::Auto.as_u8(); // (kuna #1288) decode the 8087 emulator's INT 34h-3Dh as x87 where the loader found emulator code (MS-DOS executables); only x86-16.sla has the fpuEmu context bit, so every other input and every datatest is unchanged; `option fpuemu off` keeps the interrupts
         (self.pass_hooks().fpuemu_apply)(self);
         (self.pass_hooks().mzdgroup_apply)(self);
-        self.field_type = false; // (kuna) option fieldtype default-off: the flip moves which record the layout ledger shares between readers (fields-only layout precision .8713 -> .8693); docs/features/fieldtype/default-on-evaluation.md
 
-        self.ret_split_global = true; // (kuna) DIV-PENDING default-on: a shared RETURN block that stores to GLOBALS is not the bare epilogue `ActionReturnSplit::isSplittable` assumes, so it is no longer cloned into every predecessor. One-directional (it can only decline a split) and byte-identical (0/675) on the datatest corpus; restore the upstream predicate with `option retsplitglobal off`
         self.call_wide = false;
         self.kuna_callwide.clear();
         self.source_lang_forced = None; // (kuna) option sourcelang default auto; the detected fact survives resets
-
-        self.stack_views = false;
-
-        self.returndup_triangle = false; // (kuna) option rettriangle default-off: decbench sample O0 -163 GED / +56 perfect, O2 +60 GED / +1 perfect; on in the aggressive preset
-        self.name_style_angr = true; // (kuna) default-on: angr-style default naming
-        self.ctypes = false; // (kuna) DIV-75: default-OFF in the catalog because the datatest corpus pins `int4`/`float8` spellings in 42 assertions; ON in the `aggressive` and `fast` presets and at every `auto` size, so valid C is the default RENDERING everywhere a real binary is decompiled
-
-        self.float_globals = true; // (kuna) option floatglobals default-on
 
         self.arm_float_args = true; // (kuna) option armfloatargs: default-ON with armfloatreturn; inert unless the ELF states the VFP procedure-call standard
         self.arm_float_return = true; // (kuna) option armfloatreturn: default-ON; inert unless the ELF states the VFP procedure-call standard
@@ -2018,7 +1960,11 @@ impl Architecture {
     pub fn kuna_name_style(&self) -> crate::database::KunaNameStyle {
         if self.name_style_ghidra {
             crate::database::KunaNameStyle::Ghidra
-        } else if self.name_style_angr {
+        } else if self
+            .kuna_options
+            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .0
+        {
             crate::database::KunaNameStyle::Angr
         } else {
             crate::database::KunaNameStyle::Func
@@ -2040,7 +1986,11 @@ impl Architecture {
             // (kuna, Phase 3) ghidra-mode: FUN_%08x (the Java-side dynamic shape)
             return crate::database::ghidra_function_name(addr);
         }
-        if self.name_style_angr {
+        if self
+            .kuna_options
+            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .0
+        {
             // (kuna) angr-style: sub_<addr>
             return crate::database::kuna_function_name(addr);
         }
@@ -2386,7 +2336,10 @@ impl Architecture {
             .flatten()
             .map(|u| u.get_index() as unlace_base::types::uint4);
         ctx.arm64e = self.archid.starts_with("AARCH64:LE:64:AppleSilicon:");
-        ctx.name_style_angr = self.name_style_angr;
+        ctx.name_style_angr = self
+            .kuna_options
+            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .0;
         ctx.name_style_ghidra = self.name_style_ghidra;
         // (kuna) carry the duplicate-declaration collapse gate so `emit_local_var_decls`
         // (which reads the ArchContext `arch`) sees `option dedupvardecls`.
@@ -2414,7 +2367,6 @@ impl Architecture {
             ctx.opaque_globals_pending =
                 self.kuna_opaque_globals.is_none() && self.kuna_float_scan.is_some();
         }
-        ctx.ret_split_global = self.ret_split_global; // retsplitglobal
         // (kuna) resolve the byte-shuffle user-op ids ONCE per program, so the
         // rule can name a CALLOTHER through the ArchSeam (the boundary
         // ArchContext carries no userop table).
@@ -2454,7 +2406,7 @@ impl Architecture {
                 self.kuna_options
                     .get::<crate::kuna_coreoptions::CallTargetType>()
                     .0
-                    && self.ctypes,
+                    && self.kuna_options.get::<crate::kuna_coreoptions::CTypes>().0,
             )); // (kuna) calltargettype: only C's own spelling needs it
         ctx.call_target_c = ctx
             .kuna_options
@@ -2462,7 +2414,11 @@ impl Architecture {
             .0
             && self.print.out_lang() == crate::kuna_lang::OutLang::C; // (kuna) calltargettype
         ctx.java_casts = self.print.out_lang() == crate::kuna_lang::OutLang::Java;
-        if self.float_globals {
+        if self
+            .kuna_options
+            .get::<crate::kuna_coreoptions::FloatGlobalsOn>()
+            .0
+        {
             ctx.float_globals = self.kuna_float_globals.clone(); // (kuna) floatglobals
             ctx.float_globals_pending =
                 self.kuna_float_globals.is_none() && self.kuna_float_scan.is_some();
@@ -2498,7 +2454,6 @@ impl Architecture {
         // same per-callee models its callers' flow does.
         ctx.kuna_custom_reg_callers = Rc::clone(&self.kuna_custom_reg_callers);
         ctx.kuna_custom_reg_models = Rc::clone(&self.kuna_custom_reg_models);
-        ctx.stack_views = self.stack_views;
 
         ctx.do_while_continue = self.print.out_lang().profile().forms.do_while
             != crate::kuna_lang::DoWhileForm::RustLoopBreakIf;
@@ -2516,7 +2471,10 @@ impl Architecture {
             &self.octeon_upstream_inject,
         );
         ctx.x64_syscall_memory_target = self.archid == "x86:LE:64:default:gcc";
-        ctx.syscall_regs = self.syscall_regs.fires(self.image_os_userland); // (kuna) syscallregs
+        ctx.syscall_regs = self
+            .kuna_options
+            .get::<crate::kuna_syscallregs::SyscallRegsMode>()
+            .fires(self.image_os_userland); // (kuna) syscallregs
         ctx.syscall_regs_family = crate::kuna_syscallregs::SyscallFamily::from_archid(&self.archid);
         ctx.syscall_regs_userops =
             crate::kuna_syscallregs::userop_ids(&self.userops, ctx.syscall_regs_family);
@@ -2525,7 +2483,6 @@ impl Architecture {
         ctx.image_windows_user = self.image_windows_user;
         ctx.tls_layout = self.tls_layout.clone(); // (kuna) tlsnames
         ctx.struct_synth_shard = self.struct_synth_shard.clone();
-        ctx.field_type = self.field_type; // (kuna) fieldtype
         // (kuna) resolve the `SYSCALL` user-op ids ONCE per program, for the same
         // reason `simd_shuffle_userops` above is resolved here: the boundary
         // ArchContext carries no userop table.  An op a compiler spec has
@@ -2537,7 +2494,6 @@ impl Architecture {
             .filter(|u| u.get_inject_id().is_none())
             .map(|u| vec![u.get_index() as unlace_base::types::uint4])
             .unwrap_or_default();
-        ctx.returndup_triangle = self.returndup_triangle; // rettriangle (one-block-if join)
         ctx.go_keep_divide_checks = self.archid.starts_with("AARCH64:");
         // (kuna) carry the whiledo->for reroll gate (C++ `glb->analyze_for_loops`)
         // so `ActionStructureTransform` reaches it for

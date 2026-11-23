@@ -319,7 +319,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_nulterminator::NulTerminator>()
                 .0,
         ),
-        "retsplitglobal" => on_off(conf.ret_split_global),
+        "retsplitglobal" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::RetSplitGlobal>()
+                .0,
+        ),
         // (kuna `protoorder`) Three-valued, so it reports its own token.
         "protoorder" => conf
             .kuna_options
@@ -366,7 +370,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .get::<unlace_decomp::kuna_narrowext::NarrowExtMode>()
             .as_str(),
         // (kuna `syscallregs`) Three-valued, so it reports its own token.
-        "syscallregs" => conf.syscall_regs.as_str(),
+        "syscallregs" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_syscallregs::SyscallRegsMode>()
+            .as_str(),
         // (kuna `linuxsyscall`) Three-valued, so it reports its own token.
         "linuxsyscall" => conf
             .kuna_options
@@ -461,7 +468,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::heritage::StackAliasDeadstore>()
                 .0,
         ),
-        "stackviews" => on_off(conf.stack_views),
+        "stackviews" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::StackViews>()
+                .0,
+        ),
         "v850indirectbranch" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_v850indbranch::V850IndirectBranch>()

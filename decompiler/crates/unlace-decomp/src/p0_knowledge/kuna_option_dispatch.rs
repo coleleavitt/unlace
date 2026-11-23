@@ -111,12 +111,7 @@ kuna_options! { self, p1;
     "opaquepredicate" => registered!(crate::kuna_coreoptions::OpaquePredicate),
     "callresultuse" => registered!(crate::p4_calls::kuna_callresultuse::CallResultUse),
     "signedness" => registered!(crate::kuna_typeround::SignPolicy),
-    "retsplitglobal" => {
-        let (val, msg) =
-            crate::p8_structure::kuna_retsplitglobal::OptionRetSplitGlobal.apply(p1)?;
-        self.ret_split_global = val;
-        Ok(msg)
-    },
+    "retsplitglobal" => registered!(crate::kuna_coreoptions::RetSplitGlobal),
     "retsplitlimit" => registered!(crate::p8_structure::kuna_retsplitlimit::RetSplitLimit),
     "v850indirectbranch" => registered!(crate::kuna_v850indbranch::V850IndirectBranch),
     "ptrauthtrap" => registered!(crate::kuna_coreoptions::PtrauthTrap),
@@ -138,20 +133,12 @@ kuna_options! { self, p1;
         crate::kuna_mzdgroup::apply(self);
         msg
     },
-    "syscallregs" => {
-        let (mode, msg) = crate::kuna_syscallregs::OptionSyscallRegs.apply(p1)?;
-        self.syscall_regs = mode;
-        Ok(msg)
-    },
+    "syscallregs" => registered!(crate::kuna_syscallregs::SyscallRegsMode),
     "pebnames" => registered!(crate::kuna_pebnames::PebNamesMode),
     "structsynth" => registered!(crate::kuna_structsynth::StructSynthMode),
     "structmerge" => registered!(crate::kuna_structmerge::StructMergeMode),
     "structheadless" => registered!(crate::kuna_structheadless::StructHeadlessMode),
-    "fieldtype" => {
-        let (val, msg) = crate::kuna_fieldtype::OptionFieldType.apply(p1)?;
-        self.field_type = val;
-        Ok(msg)
-    },
+    "fieldtype" => registered!(crate::kuna_coreoptions::FieldType),
     "chkstkdarwin" => registered!(crate::kuna_coreoptions::ChkstkDarwin),
     "spsolve" => registered!(crate::kuna_coreoptions::SpSolve),
 
@@ -222,11 +209,7 @@ kuna_options! { self, p1;
     "stackalias" => registered!(crate::heritage::StackAliasDeadstore),
     "readonlycalls" => registered!(crate::heritage::ReadonlyCalls),
     "persistcalls" => registered!(crate::heritage::PersistCalls),
-    "stackviews" => {
-        let (value, message) = crate::kuna_stackviews::OptionStackViews.apply(p1)?;
-        self.stack_views = value;
-        Ok(message)
-    },
+    "stackviews" => registered!(crate::kuna_coreoptions::StackViews),
     "memsetrecover" => registered!(crate::kuna_memsetsequence::MemsetRecover),
     "rodatastring" => registered!(crate::kuna_rodatastring::RodataString),
     "switchmodbound" => registered!(crate::jumptable::SwitchModuloBound),
@@ -302,11 +285,7 @@ kuna_options! { self, p1;
     "iteboolean" => registered!(crate::kuna_iteboolean::Iteboolean),
     "paramcopyhoist" => registered!(crate::kuna_paramcopyhoist::ParamCopyHoist),
     "returndup" => registered!(crate::kuna_returndup::ReturnDup),
-    "rettriangle" => {
-        let (val, msg) = crate::p8_structure::kuna_rettriangle::OptionRetTriangle.apply(p1)?;
-        self.returndup_triangle = val;
-        Ok(msg)
-    },
+    "rettriangle" => registered!(crate::kuna_coreoptions::RetTriangle),
     "earlyreturn" => registered!(crate::kuna_earlyreturn::EarlyReturn),
     "switchreturn" => registered!(crate::kuna_switchreturn::SwitchReturn),
     "foldcallret" => registered!(crate::kuna_callretfold::FoldCallReturns),
@@ -343,13 +322,9 @@ kuna_options! { self, p1;
     },
     "branchflip" => registered!(crate::blockaction::BranchFlip),
     "loopbreak_recovery" => registered!(crate::kuna_loopbreak_recovery::RecoverLoopBreak),
-    "namestyle" => {
-        let (val, msg) = crate::kuna_naming::OptionNameStyle.apply(p1)?;
-        self.name_style_angr = val;
-        Ok(msg)
-    },
+    "namestyle" => registered!(crate::kuna_coreoptions::NameStyleAngr),
     "realtypes" => registered!(crate::printc::Realtypes),
-    "ctypes" => on_off!(ctypes, "valid-C core type spelling"),
+    "ctypes" => registered!(crate::kuna_coreoptions::CTypes),
     "callmechanisms" => registered!(crate::kuna_callmechanisms::CallMechanismMode),
     "dexmodel" => registered!(crate::kuna_coreoptions::DexModel),
     "jumpassist" => registered!(crate::kuna_coreoptions::JumpAssist),
@@ -376,7 +351,7 @@ kuna_options! { self, p1;
     "castwiden" => registered!(crate::kuna_castwiden::CastWidenMode),
     "ptrdepthcap" => registered!(crate::coreaction_infertypes::Ptrdepthcap),
     "calltargettype" => registered!(crate::kuna_coreoptions::CallTargetType),
-    "floatglobals" => on_off!(float_globals, "float typing of globals moved only through float registers"),
+    "floatglobals" => registered!(crate::kuna_coreoptions::FloatGlobalsOn),
     "itaniumeh" => registered!(crate::kuna_itaniumeh::ItaniumEh),
     "vexzeroupper" => registered!(crate::kuna_coreoptions::VexZeroUpper),
     "vectorabi" => registered!(crate::kuna_coreoptions::VectorAbi),

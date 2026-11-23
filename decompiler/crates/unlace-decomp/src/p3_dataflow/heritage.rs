@@ -1866,7 +1866,11 @@ impl Heritage {
         if (fd.hooks().stack_slot_aliased)(fd, checker, spc, offset) {
             return true;
         }
-        if fd.get_arch().stack_views
+        if fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::StackViews>()
+            .0
             || fd
                 .get_arch()
                 .kuna_options

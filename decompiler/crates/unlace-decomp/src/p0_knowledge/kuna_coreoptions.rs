@@ -332,3 +332,88 @@ impl crate::kuna_optionset::KunaOption for OpaquePredicate {
         ))
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `stackviews`) Operation-specific typed views over shared physical frame storage.
+    StackViews,
+    "stackviews",
+    "Shared stack-object views",
+    unset: false,
+    shipped: false
+);
+
+/// (kuna `namestyle`) angr-style default names (`angr`) instead of upstream's
+/// (`ghidra`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NameStyleAngr(pub bool);
+
+impl crate::kuna_optionset::KunaOption for NameStyleAngr {
+    const NAME: &'static str = "namestyle";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        NameStyleAngr(false)
+    }
+
+    fn shipped() -> Self {
+        NameStyleAngr(true)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let val = match value {
+            "angr" => true,
+            "ghidra" => false,
+            _ => {
+                return Err(unlace_base::error::KunaError::parse(
+                    "namestyle must be \"angr\" or \"ghidra\"",
+                ));
+            }
+        };
+        Ok((NameStyleAngr(val), format!("Naming scheme set to {value}")))
+    }
+}
+
+crate::kuna_flag!(
+    /// (kuna `rettriangle`) Decline a `returndup` split whose shared RETURN block is the join of a one-block `if`.
+    RetTriangle,
+    "rettriangle",
+    "One-block-if return duplication decline",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna `retsplitglobal`) Refuse to split a shared RETURN block that stores to globals.
+    RetSplitGlobal,
+    "retsplitglobal",
+    "Global-writing shared-epilogue split refusal",
+    unset: false,
+    shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna `fieldtype`) Type a pointer by the field it is read through.
+    FieldType,
+    "fieldtype",
+    "Pointer field typing",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna `ctypes`) Spell the named core types as the target's own C types.
+    CTypes,
+    "ctypes",
+    "valid-C core type spelling",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna `floatglobals`) Type globals moved only through float registers as floats.
+    FloatGlobalsOn,
+    "floatglobals",
+    "float typing of globals moved only through float registers",
+    unset: true,
+    shipped: true
+);

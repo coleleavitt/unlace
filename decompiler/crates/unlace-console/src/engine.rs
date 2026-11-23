@@ -7479,7 +7479,11 @@ fn commit_analysis_output(
     for &vma in &out.entries {
         if lazy_funcs
             && !eager.contains(&vma)
-            && prog.arch().name_style_angr
+            && prog
+                .arch()
+                .kuna_options
+                .get::<unlace_decomp::kuna_coreoptions::NameStyleAngr>()
+                .0
             && !named_placeholders.contains(&vma)
             && prog.thumb_normalized(vma) == vma
         {

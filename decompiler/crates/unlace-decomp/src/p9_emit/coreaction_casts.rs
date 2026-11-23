@@ -458,7 +458,12 @@ fn get_input_cast_op(
             if data.vbank().get(invn)?.is_annotation() {
                 return None;
             }
-            let contract = (data.get_arch().stack_views && opc == OpCode::CPUI_CALLOTHER)
+            let contract = (data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_coreoptions::StackViews>()
+                .0
+                && opc == OpCode::CPUI_CALLOTHER)
                 .then(|| crate::p6_variables::kuna_stackuses::input_contract(data, op, slot))
                 .flatten();
             let declared_storage = contract.is_some();

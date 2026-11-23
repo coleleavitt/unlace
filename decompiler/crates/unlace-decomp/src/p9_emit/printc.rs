@@ -3627,8 +3627,13 @@ impl PrintC {
                 let default_name;
                 let mut name = param.get_name();
                 if name.is_empty() {
-                    default_name =
-                        crate::database::kuna_materialized_param_name(arch.name_style_angr, i, "");
+                    default_name = crate::database::kuna_materialized_param_name(
+                        arch.kuna_options
+                            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+                            .0,
+                        i,
+                        "",
+                    );
                     name = default_name.as_str();
                 }
                 self.signature_param_names.insert(i, name.to_string());
@@ -3733,7 +3738,9 @@ impl PrintC {
                         let n = p.get_name();
                         let nm = if n.is_empty() {
                             crate::database::kuna_materialized_param_name(
-                                arch.name_style_angr,
+                                arch.kuna_options
+                                    .get::<crate::kuna_coreoptions::NameStyleAngr>()
+                                    .0,
                                 i,
                                 "",
                             )
@@ -4085,7 +4092,11 @@ impl PrintC {
                     array_count = a.clone();
                 }
                 let array_sig = array_count.as_ref().map(|(t, c)| (t.clone(), *c));
-                let comment_sig = if arch.name_style_angr {
+                let comment_sig = if arch
+                    .kuna_options
+                    .get::<crate::kuna_coreoptions::NameStyleAngr>()
+                    .0
+                {
                     comment.as_ref().map(|(c, _, off)| (c.clone(), *off))
                 } else {
                     None
@@ -4174,10 +4185,16 @@ impl PrintC {
         crate::kuna_declorder::order_decls(
             &mut decls,
             arch.kuna_options.get::<crate::kuna_declorder::DeclOrder>(),
-            arch.name_style_angr,
+            arch.kuna_options
+                .get::<crate::kuna_coreoptions::NameStyleAngr>()
+                .0,
         );
         let mut source_comments = std::collections::HashMap::new();
-        if arch.name_style_angr {
+        if arch
+            .kuna_options
+            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .0
+        {
             for (high, _) in &decls {
                 if let Some(comment) = crate::kuna_varsources::high_comment(fd, arch, *high) {
                     source_comments.insert(*high, comment);
@@ -4327,7 +4344,11 @@ impl PrintC {
             self.emit.end_var_decl(id);
             self.emit
                 .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
-            if arch.name_style_angr {
+            if arch
+                .kuna_options
+                .get::<crate::kuna_coreoptions::NameStyleAngr>()
+                .0
+            {
                 if let Some((ctext, spc, off)) = comment {
                     self.emit.spaces(1, 0);
                     self.emit.tag_comment(
@@ -16264,7 +16285,7 @@ impl RealTypeCtx {
             lang,
             enabled: arch.kuna_options.get::<crate::printc::Realtypes>().0,
             long_is_8: arch.types().get_size_of_long() == 8,
-            ctypes: arch.ctypes,
+            ctypes: arch.kuna_options.get::<crate::kuna_coreoptions::CTypes>().0,
             model: crate::kuna_ctypes::CDataModel::from_types(&*arch.types()),
             c_type_definition: false,
             go_package: None,
@@ -16694,7 +16715,7 @@ fn cast_strategy_for(arch: &Architecture) -> Option<CastStrategyC> {
         .kuna_options
         .get::<crate::kuna_coreoptions::CallTargetType>()
         .0
-        && arch.ctypes
+        && arch.kuna_options.get::<crate::kuna_coreoptions::CTypes>().0
         && arch.print().out_lang() == crate::kuna_lang::OutLang::C;
     let java = arch.print().out_lang() == crate::kuna_lang::OutLang::Java;
     Some(

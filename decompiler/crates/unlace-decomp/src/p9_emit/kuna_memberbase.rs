@@ -7,7 +7,11 @@ use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
 pub(crate) fn needs_cast(fd: &Funcdata, base: VarnodeId, pointer: &Rc<Datatype>) -> bool {
-    if !fd.get_arch().stack_views
+    if !fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::StackViews>()
+        .0
         || !fd.get_func_proto().has_store()
         || pointer.is_formal_pointer_rel()
     {

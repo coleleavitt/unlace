@@ -22,7 +22,11 @@ pub fn holds_store(fd: &Funcdata, id: VarnodeId) -> bool {
         .kuna_options
         .get::<crate::heritage::StackAliasDeadstore>()
         .0
-        || fd.get_arch().stack_views;
+        || fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::StackViews>()
+            .0;
     if !full
         && !crate::kuna_localstackviews::active(fd)
         && fd
@@ -57,7 +61,11 @@ pub fn prepare(fd: &mut Funcdata) -> i32 {
         .kuna_options
         .get::<crate::heritage::StackAliasDeadstore>()
         .0
-        || fd.get_arch().stack_views;
+        || fd
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::StackViews>()
+            .0;
     if !full
         && !crate::kuna_localstackviews::active(fd)
         && fd

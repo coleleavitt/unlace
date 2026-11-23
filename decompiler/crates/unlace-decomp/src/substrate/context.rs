@@ -831,7 +831,7 @@ pub struct ArchContext {
     pub arm64e: bool,
     /// (kuna) angr-style default naming: an unknown callee / global prints as
     /// `sub_<addr>` / `dat_<addr>` rather than `func_<addr>` (C++
-    /// `Architecture::name_style_angr`, default-on).  Read by the call-spec
+    /// option `namestyle`, default `angr`).  Read by the call-spec
     /// printed-name resolution ([`FuncCallSpecs::fspec_printed_name`](crate::fspec::FuncCallSpecs::fspec_printed_name)).
     pub name_style_angr: bool,
     /// (kuna, Phase 3) Ghidra-convention fallback naming (`FUN_`/`DAT_`/`LAB_`),
@@ -854,11 +854,6 @@ pub struct ArchContext {
     /// (kuna `opaquepredicate globals`) A comparison asked while the scan was
     /// pending.
     pub opaque_globals_wanted: std::cell::Cell<bool>,
-    /// (kuna) refuse to split a shared RETURN block that stores to GLOBALS
-    /// (`retsplitglobal`).  Read by
-    /// [`Funcdata::return_split_is_splittable`](crate::funcdata::Funcdata),
-    /// the predicate both `ActionReturnSplit` and `ActionReturnDup` consult.
-    pub ret_split_global: bool,
 
     /// (kuna) CALLOTHER user-op ids the architecture registered under a byte
     /// shuffle name ([`SHUFFLE_USEROP_NAMES`](crate::kuna_simdlane::SHUFFLE_USEROP_NAMES)),
@@ -970,9 +965,6 @@ pub struct ArchContext {
     pub kuna_custom_reg_callers: Rc<std::collections::HashMap<u64, u16>>,
     pub kuna_custom_reg_models: Rc<std::collections::HashMap<u16, Rc<crate::fspec::ProtoModel>>>,
 
-    /// Operation-specific typed views over shared physical frame storage.
-    pub stack_views: bool,
-
     /// (kuna `loopcontinue`) The output language's do-while runs its test on
     /// `continue;`: C `do..while` and Go's `for` post statement do, Rust's
     /// `loop { ..; if !(c) { break; } }` restarts the body instead.
@@ -1018,14 +1010,6 @@ pub struct ArchContext {
     /// (kuna `structsynth`) The engine Architecture's `--jobs` worker ledger hook,
     /// shared: `None` outside a worker.
     pub struct_synth_shard: Option<crate::p5_types::kuna_structsynth::shard::ShardHandle>,
-    /// (kuna) `option fieldtype`: is a synthesized field some access holds as a
-    /// pointer declared as that pointer?  See
-    /// [`kuna_fieldtype`](crate::p5_types::kuna_fieldtype).
-    pub field_type: bool,
-    /// (kuna) `rettriangle`: decline a `returndup` split at the join of a
-    /// one-block `if` -- see `Architecture::returndup_triangle`.  Read by
-    /// `Funcdata::returndup_apply`.
-    pub returndup_triangle: bool,
     /// AArch64 integer division returns zero for a zero divisor.
     pub go_keep_divide_checks: bool,
     /// Attempt conversion of `whiledo` loops to `for` loops (C++
@@ -1297,7 +1281,6 @@ impl ArchContext {
             opaque_globals: None,
             opaque_globals_pending: false,
             opaque_globals_wanted: std::cell::Cell::new(false),
-            ret_split_global: false, // retsplitglobal (the ArchSeam carries the real default)
             simd_shuffle_userops: Vec::new(),
             x87_float_to_int_userops: Vec::new(),
             x87_integer_userops: Vec::new(),
@@ -1308,12 +1291,11 @@ impl ArchContext {
             float_globals_pending: false,
             float_globals_wanted: std::cell::Cell::new(false),
             struct_synth_shard: None,
-            field_type: false, // (kuna) option fieldtype, copied from Architecture
             unknown_byte_is_char: false, // (kuna) realtypes + C output
-            unknown_is_integer: false, // (kuna) realtypes, or not C output
-            int_promotion: true, // (kuna) LangCaps::integer_promotion (C)
+            unknown_is_integer: false,   // (kuna) realtypes, or not C output
+            int_promotion: true,         // (kuna) LangCaps::integer_promotion (C)
             elem_ptr_ranges: std::rc::Rc::new(Vec::new()), // (kuna) elemptr
-            libctypes: false,  // (kuna) option libctypes, copied from Architecture
+            libctypes: false,            // (kuna) option libctypes, copied from Architecture
             // endptrbound only re-expresses an address the walk already compares
             // against, so the fixture seam carries the real default.
             // castobject only re-types a slot whose readers agree, so the fixture
@@ -1340,7 +1322,6 @@ impl ArchContext {
             vtable_types: false,
             kuna_custom_reg_callers: Rc::default(),
             kuna_custom_reg_models: Rc::default(),
-            stack_views: false, // stackviews (opt-in)
 
             do_while_continue: true,
             image_linux_elf: false,
@@ -1354,7 +1335,6 @@ impl ArchContext {
             windows_cspec: false,
             image_windows_user: false,
             tls_layout: None,
-            returndup_triangle: false, // rettriangle (one-block-if join, copied from the Architecture)
 
             go_keep_divide_checks: false,
             // C++ Architecture default: analyze_for_loops = true (architecture.cc).

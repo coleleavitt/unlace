@@ -142,7 +142,11 @@ pub fn high_comment(
     arch: &Architecture,
     high: HighVariableId,
 ) -> Option<StorageComment> {
-    if !arch.name_style_angr {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_coreoptions::NameStyleAngr>()
+        .0
+    {
         return None;
     }
     let (homes, fallback) = high_homes(fd, arch, high)?;

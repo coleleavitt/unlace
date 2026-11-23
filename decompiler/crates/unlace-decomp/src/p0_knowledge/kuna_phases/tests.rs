@@ -693,7 +693,7 @@ fn option_values_live_value_present_for_129() {
                             // (kuna) `syscallregs` takes a MODE
                             // (`off|auto|on`) over an enum field, for the
                             // same reason.  Its live value is
-                            // `Architecture::syscall_regs`.
+                            // the registered option `SyscallRegsMode`.
                             | "syscallregs"
                             // (kuna) `linuxsyscall` takes the same MODE
                             // (`off|auto|on`) over an enum field; its live

@@ -742,7 +742,12 @@ fn vn_type(data: &mut Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
 /// Walk the op bank once and accumulate the access evidence per base.
 fn collect(data: &mut Funcdata) -> BTreeMap<VarnodeId, Evidence> {
     let mut ev: BTreeMap<VarnodeId, Evidence> = BTreeMap::new();
-    let keep_values = data.get_arch().field_type || crate::kuna_fieldtype::trace_on();
+    let keep_values = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::FieldType>()
+        .0
+        || crate::kuna_fieldtype::trace_on();
 
     for opc in [OpCode::CPUI_LOAD, OpCode::CPUI_STORE] {
         let ops: Vec<_> = data.obank().iter_code(opc).collect();
@@ -1117,7 +1122,11 @@ fn synthesize(data: &mut Funcdata) -> bool {
         .nests();
     let ptrsize = types.get_size_of_pointer();
     let mut asks = Vec::new();
-    let field_type = data.get_arch().field_type;
+    let field_type = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_coreoptions::FieldType>()
+        .0;
     for (base, e) in by_creation(data, &raw) {
         let mut e = e.pruned();
         if !accepts(data, *base, &e) {

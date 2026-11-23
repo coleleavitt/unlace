@@ -135,6 +135,7 @@
 //! itself in another storage class ([`returns_own_value`]): `bl f;
 //! vadd.f32 s0,s16,s16; pop {r4,pc}` returns `s0`, not `f`'s leftover `r0`.
 
+pub use crate::fspec::NeutralScope;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::ElementId;
@@ -1854,21 +1855,6 @@ fn shares_byte(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
         && b.get_offset() < a.get_offset().wrapping_add(asize.max(0) as u64)
 }
 
-/// Which forwarded registers at one call site [`neutral_in_chain`] lets out of
-/// the inactive-chain count.
-#[derive(Debug, Clone, Default)]
-pub struct NeutralScope {
-    /// No other call can run before this one ([`first_calls`]), so an argument
-    /// register no op names, or one this pass claimed, still holds the
-    /// function's own input here.
-    pub unref: bool,
-    /// The argument registers a direct callee is known not to take: its own
-    /// body never reads them
-    /// ([`crate::kuna_calleedeadarg::CalleeEntryDead::never_takes`]), or its
-    /// `protoorder` statement leaves them out.
-    pub untaken: Vec<(Address, int4)>,
-}
-
 /// The [`NeutralScope`] of the call `fc`, `None` with the option off. `first`
 /// caches [`first_calls`] across the calls of one `ActionActiveParam` pass.
 pub fn neutral_scope(
@@ -2126,6 +2112,9 @@ pub(crate) fn truncate_before(
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.passthrough_anchors_neutral_run = Some(anchors_neutral_run);
+    hooks.passthrough_ends_rescued_run = Some(ends_rescued_run);
+    hooks.passthrough_neutral_in_chain = Some(neutral_in_chain);
     hooks.passthrough_suppresses_return_trial = Some(suppresses_return_trial);
 }
 

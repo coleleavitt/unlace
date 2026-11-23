@@ -12,6 +12,7 @@ pub mod context;
 pub mod cpool;
 pub mod dtype;
 pub mod expression;
+pub mod flow_flags;
 pub mod funcdata;
 pub mod funcdata_block;
 pub mod funcdata_encode;
@@ -28,6 +29,7 @@ pub mod kuna_hostmem;
 pub mod kuna_optionset;
 pub mod kuna_passhooks;
 pub mod kuna_regioneval;
+pub mod kuna_typequal; // (kuna) C type qualifiers on their own type layer
 pub mod op;
 pub mod pcodeinject;
 pub mod rangeutil;

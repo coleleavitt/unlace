@@ -1,4 +1,5 @@
 //! Explicit extensions from an ABI parameter slot to its wider physical register.
+pub use crate::fspec::Extension;
 use crate::{
     fspec::{ParamEntry, param_entry_flags},
     funcdata::Funcdata,
@@ -6,13 +7,6 @@ use crate::{
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
-
-#[derive(Clone, Debug)]
-pub(crate) struct Extension {
-    pub input: VarnodeData,
-    output: VarnodeData,
-    opcode: OpCode,
-}
 
 fn overlaps(extension: &Extension, entry: &ParamEntry) -> bool {
     let container = extension.output.get_addr();
@@ -333,6 +327,8 @@ pub(crate) fn guard_output(
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.registerslots_assumed = Some(assumed);
+    hooks.registerslots_decode = Some(decode);
     hooks.registerslots_guard_output = Some(guard_output);
     hooks.registerslots_input_slot = Some(input_slot);
 }

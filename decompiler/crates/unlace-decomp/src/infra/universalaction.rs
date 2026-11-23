@@ -132,7 +132,6 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p4_calls::kuna_stackaddrargtrial::provide(&mut slots);
     crate::p4_calls::kuna_stackarggap::provide(&mut slots);
     crate::p4_calls::kuna_swifterror::provide(&mut slots);
-    crate::p5_types::kuna_typequal::provide(&mut slots);
     crate::p4_calls::kuna_varargstackargs::provide(&mut slots);
     crate::p3_dataflow::kuna_calloverlap::provide(&mut slots);
     crate::p3_dataflow::kuna_partialglobalload::provide(&mut slots);
@@ -153,6 +152,13 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p2_lift::kuna_switchguardrange::provide(&mut slots);
     crate::p4_calls::modelrules::provide(&mut slots);
     crate::p4_calls::kuna_customreturn::provide(&mut slots);
+    crate::p6_variables::kuna_arrayextent::provide(&mut slots);
+    crate::p4_calls::kuna_varargsave::provide(&mut slots);
+    crate::p4_calls::kuna_x87emptyreturn::provide(&mut slots);
+    crate::p6_variables::kuna_arraysize::provide(&mut slots);
+    crate::p4_calls::kuna_condexeretuse::provide(&mut slots);
+    crate::p2_lift::kuna_loweredswitchvalue::provide(&mut slots);
+    crate::p4_calls::kuna_bejoin::provide(&mut slots);
     slots
         .finish()
         .unwrap_or_else(|missing| panic!("pass hooks with no provider: {}", missing.join(", ")))

@@ -15,23 +15,26 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
-use unlace_base::types::{int4, uint4, uintb};
+use unlace_base::types::{int4, intb, uint4, uintb};
 
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::IdRegistry;
 use unlace_base::xml::Element;
+use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::architecture::{Architecture, HelperAbi};
+use crate::architecture::{Architecture, GoLayout, HelperAbi, Regs, Storage, VarargFloats};
 use crate::context::{ArchContext, BlockId, HighVariableId, OpId, VarnodeId};
 use crate::database::SymbolEntry;
 use crate::dtype::{Datatype, TypeFactory};
 use crate::fspec::{
-    FuncCallSpecs, FuncProto, ParamActive, ParamEntry, ParamListStandard, ParamTrial,
-    ParameterPieces, ProtoModel, PrototypePieces,
+    Extension, FuncCallSpecs, FuncProto, ParamActive, ParamEntry, ParamListStandard, ParamTrial,
+    ParameterPieces, ProtoModel, PrototypePieces, Widen,
 };
 use crate::funcdata::Funcdata;
-use crate::heritage::{Guard, LiveCalls, LoadGuard, MemoryOps, StoreBounds};
+use crate::funcdata_block::HeadOperand;
+use crate::funcdata_varnode::{Forced, Reach};
+use crate::heritage::{Guard, LiveCalls, LoadGuard, MemoryOps, StoreBounds, WidePair};
 use crate::jumptable::{GuardRecord, LoadTable};
 use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 use crate::merge::MergeContext;
@@ -357,8 +360,6 @@ declare_hooks! {
     swifterror_is_error_op: fn(&PcodeOpBank, &VarnodeBank, OpId) -> bool;
     /// `kuna_syscallregs::is_error_flag_op`.
     syscallregs_is_error_flag_op: fn(&PcodeOpBank, &VarnodeBank, OpId) -> bool;
-    /// `kuna_typequal::is_volatile`.
-    typequal_is_volatile: fn(&Datatype) -> bool;
     /// `kuna_varargstackargs::stack_section_split`.
     varargstackargs_stack_section_split: fn(&ParamActive, int4, int4) -> Option<int4>;
     /// `kuna_calloverlap::auto_register`.
@@ -450,4 +451,40 @@ declare_hooks! {
         &'a PrototypePieces,
         &dyn TypeFactory,
     ) -> KunaResult<std::borrow::Cow<'a, PrototypePieces>>;
+    /// `kuna_arrayextent::settle`.
+    arrayextent_settle: fn(&mut MapState, &Rc<AddrSpace>, &dyn TypeFactory);
+    /// `kuna_goreg::g_pointer_type`.
+    goreg_g_pointer_type: fn(&dyn TypeFactory, GoLayout) -> KunaResult<std::rc::Rc<Datatype>>;
+    /// `kuna_narrowext::or_model`.
+    narrowext_or_model: fn(Option<Widen>, &ParamListStandard, &Address, i32, Option<&Datatype>, &mut VarnodeData) -> (OpCode, bool);
+    /// `kuna_passthrough::anchors_neutral_run`.
+    passthrough_anchors_neutral_run: fn(&ParamActive, &ParamTrial, bool) -> bool;
+    /// `kuna_passthrough::ends_rescued_run`.
+    passthrough_ends_rescued_run: fn(&ParamActive, &ParamTrial, bool) -> bool;
+    /// `kuna_passthrough::neutral_in_chain`.
+    passthrough_neutral_in_chain: fn(&ParamActive, int4, bool) -> bool;
+    /// `kuna_registerslots::assumed`.
+    registerslots_assumed: fn(&[ParamEntry], &Address, i32, &mut VarnodeData) -> Option<OpCode>;
+    /// `kuna_registerslots::decode`.
+    registerslots_decode: fn(&Element, Option<VarnodeData>, i32, i32, u32) -> KunaResult<Option<Extension>>;
+    /// `kuna_varargretreg::image_vararg_floats`.
+    varargretreg_image_vararg_floats: fn(&Architecture) -> VarargFloats;
+    /// `kuna_varargsave::regs`.
+    varargsave_regs: fn(&Architecture) -> Option<Regs>;
+    /// `kuna_x87emptyreturn::storage`.
+    x87emptyreturn_storage: fn(&Architecture) -> Option<Storage>;
+    /// `kuna_arraysize::fit`.
+    arraysize_fit: fn(&RangeHint, intb, intb, &MapState) -> Option<int4>;
+    /// `kuna_condexeretuse::any_retest_merge`.
+    condexeretuse_any_retest_merge: fn(&Funcdata, &[(OpId, VarnodeId)]) -> bool;
+    /// `kuna_condexeretuse::applies`.
+    condexeretuse_applies: fn(&Funcdata, OpId) -> bool;
+    /// `kuna_condexeretuse::cannot_arrive`.
+    condexeretuse_cannot_arrive: fn(&Funcdata, Forced, OpId, &mut Reach) -> bool;
+    /// `kuna_condexeretuse::carried`.
+    condexeretuse_carried: fn(&Funcdata, OpId, VarnodeId, Option<Forced>) -> Option<Forced>;
+    /// `kuna_loweredswitchvalue::head_compare_operand`.
+    loweredswitchvalue_head_compare_operand: fn(&Funcdata, BlockId, OpId, &Address, int4) -> Option<HeadOperand>;
+    /// `kuna_bejoin::wide_pair`.
+    bejoin_wide_pair: fn(&ProtoModel, &AddrSpaceManager) -> Option<WidePair>;
 }

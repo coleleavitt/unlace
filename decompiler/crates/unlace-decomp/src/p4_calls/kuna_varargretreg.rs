@@ -19,6 +19,7 @@
 //! arguments whatever their value, a result of another call included.
 //! [`counted_float_entry`] names such a register for heritage when the range
 //! being guarded is the whole `xmm` register or a lane of it.
+pub use crate::architecture::VarargFloats;
 use crate::{
     context::OpId,
     dtype::{type_class, type_metatype},
@@ -31,23 +32,6 @@ use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
-
-/// How an image passes a floating-point value in the variadic part of a call.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum VarargFloats {
-    /// Where the prototype model's rules put it.
-    #[default]
-    InModel,
-    /// Where the model puts it, with the number of vector registers used in `al`
-    /// (x86-64 SysV).
-    VectorCount,
-    /// Where the model puts it, with CR bit 6 set when any FPR is used (32-bit
-    /// PowerPC SysV).
-    ConditionBit,
-    /// In general registers or on the stack; a floating-point register holds at
-    /// most a copy (64-bit PowerPC).
-    Shadowed,
-}
 
 /// The image's [`VarargFloats`], from its language id.
 pub fn image_vararg_floats(arch: &Architecture) -> VarargFloats {
@@ -284,6 +268,7 @@ fn vector_count(fd: &Funcdata, call: OpId) -> Option<u64> {
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.varargretreg_image_vararg_floats = Some(image_vararg_floats);
     hooks.varargretreg_argument_in_own_output = Some(argument_in_own_output);
     hooks.varargretreg_counted_float_entry = Some(counted_float_entry);
 }

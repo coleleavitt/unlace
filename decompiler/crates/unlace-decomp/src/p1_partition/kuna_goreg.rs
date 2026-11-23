@@ -38,6 +38,7 @@
 //! (`archid` compiler field `golang`), which only `goabi auto` on a
 //! Go-detected image composes.
 
+pub use crate::architecture::GoLayout;
 use unlace_base::error::KunaResult;
 use unlace_base::types::{int4, uint4};
 
@@ -50,18 +51,6 @@ use crate::dtype::{TypeFactory, TypeField, type_metatype};
 /// cspec decode, upstream of every per-image fact write. Absent or
 /// unparsable means the go1.22 register-ABI baseline.
 pub const GOVERSION_ENV: &str = "KUNA_GOVERSION";
-
-/// The release-dependent pieces of the runtime layouts: go1.23 inserted
-/// `g.syscallbp`, go1.25 dropped `gobuf.ret` (verified against the vendored
-/// go1.22.10 and go1.25.3 sources; 1.23/1.24 carry `syscallbp` with the
-/// seven-word gobuf).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct GoLayout {
-    /// `runtime.gobuf`'s word count: 7 through go1.24, 6 from go1.25.
-    pub gobuf_words: int4,
-    /// `g.syscallbp` present (go1.23+).
-    pub syscallbp: bool,
-}
 
 impl GoLayout {
     /// The go1.22 register-ABI baseline (also the unknown-version fallback).
@@ -399,6 +388,7 @@ pub fn g_symbol_flags() -> uint4 {
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.goreg_g_pointer_type = Some(g_pointer_type);
     hooks.goreg_g_symbol_flags = Some(g_symbol_flags);
     hooks.goreg_goroutine_register = Some(goroutine_register);
     hooks.goreg_register_abi = Some(register_abi);

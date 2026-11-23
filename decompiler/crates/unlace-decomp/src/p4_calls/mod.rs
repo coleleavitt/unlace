@@ -38,6 +38,7 @@ pub mod kuna_callerargs; // (kuna) a 32-bit ARM parameter every caller passes na
 pub mod kuna_callerptr; // (kuna) a parameter every caller passes a pointer is a pointer
 pub mod kuna_callerreads; // (kuna) a function decompiled alone returns what its callers read
 pub mod kuna_callpush; // (kuna) a call's own return-address push is part of the call
+pub mod kuna_callresultuse; // (kuna) an unknown callee's result read by the next call or the RETURN is that call's result
 pub mod kuna_callretpair; // (kuna) complete the two-register CALL output arm on any image, not just a Rust one
 pub mod kuna_callrettype; // (kuna) a call returns the type its callee's recovery gave it
 pub mod kuna_callsitestackargs;

@@ -381,10 +381,13 @@ fn stated_registers(data: &Funcdata, entry: &Address) -> Option<Vec<Address>> {
 
 /// Does `[addr, addr+size)` hold nothing a call takes but something it gives
 /// back -- the return register on a convention that passes no argument in it?
+/// A range that only overlaps an argument register is not one: AArch64's `q0`,
+/// zeroed by `movi v0.16b,#0` to clear a local struct, holds `d0`.
 fn return_only(proto: &crate::fspec::FuncProto, addr: &Address, size: int4) -> bool {
     is_register(addr)
         && proto.characterize_as_output(addr, size) != crate::fspec::Containment::NoContainment
-        && !proto.possible_input_param(addr, size)
+        && proto.model().characterize_as_input_param(addr, size)
+            == crate::fspec::Containment::NoContainment
 }
 
 /// Did the caller set call spec `idx` up as a variadic call?
@@ -594,7 +597,7 @@ pub(crate) fn is_injected_noop(data: &Funcdata, op: OpId) -> bool {
 /// A register no op of the function touches reaches such a call as the
 /// function's own input; at any other call it may be a clobber, or the return
 /// value, of the call before it.
-fn first_calls(data: &Funcdata) -> Vec<OpId> {
+pub(crate) fn first_calls(data: &Funcdata) -> Vec<OpId> {
     let n = data.bblocks_get_size();
     let is_call = |op: OpId| {
         data.obank()
@@ -1351,7 +1354,7 @@ pub fn keep_tail_return_whole(data: &Funcdata, active: &mut crate::fspec::ParamA
 /// value; and a value that is zero at every RETURN ([`is_zero`]), which is also
 /// what `-fzero-call-used-regs` leaves in every call-used register the function
 /// does not return in (openssh's `call f; ...; pxor %xmm0,%xmm0; ret`).
-fn returns_own_value(
+pub(crate) fn returns_own_value(
     data: &Funcdata,
     active: &crate::fspec::ParamActive,
     claimed: &[int4],

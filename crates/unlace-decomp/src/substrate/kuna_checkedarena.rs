@@ -26,7 +26,8 @@ impl<V> Slot<V> {
     }
 }
 
-pub(crate) struct Arena<K: Key, V> {
+#[doc(hidden)]
+pub struct Arena<K: Key, V> {
     slots: Vec<Slot<V>>,
     free_head: u32,
     _k: PhantomData<fn(K) -> K>,
@@ -38,7 +39,8 @@ fn encode(version: u32, low: u32) -> u64 {
 }
 
 impl<K: Key, V> Arena<K, V> {
-    pub(crate) fn with_key() -> Self {
+    #[doc(hidden)]
+    pub fn with_key() -> Self {
         Self {
             slots: vec![Slot {
                 value: MaybeUninit::uninit(),
@@ -49,7 +51,8 @@ impl<K: Key, V> Arena<K, V> {
         }
     }
 
-    pub(crate) fn insert(&mut self, value: V) -> K {
+    #[doc(hidden)]
+    pub fn insert(&mut self, value: V) -> K {
         let idx = self.free_head;
         if let Some(slot) = self.slots.get_mut(idx as usize) {
             let next = slot.key as u32;
@@ -80,7 +83,8 @@ impl<K: Key, V> Arena<K, V> {
         value
     }
 
-    pub(crate) fn remove(&mut self, id: K) -> Option<V> {
+    #[doc(hidden)]
+    pub fn remove(&mut self, id: K) -> Option<V> {
         let encoded = id.data().as_ffi();
         let idx = encoded as u32 as usize;
         if self.slots.get(idx)?.key != encoded {
@@ -89,7 +93,8 @@ impl<K: Key, V> Arena<K, V> {
         Some(self.take(idx))
     }
 
-    pub(crate) fn clear(&mut self) {
+    #[doc(hidden)]
+    pub fn clear(&mut self) {
         for idx in 1..self.slots.len() {
             if self.slots[idx].occupied() {
                 drop(self.take(idx));
@@ -98,7 +103,8 @@ impl<K: Key, V> Arena<K, V> {
     }
 
     #[inline(always)]
-    pub(crate) fn get(&self, id: K) -> Option<&V> {
+    #[doc(hidden)]
+    pub fn get(&self, id: K) -> Option<&V> {
         let encoded = id.data().as_ffi();
         let slot = self.slots.get(encoded as u32 as usize)?;
         if slot.key != encoded {
@@ -108,7 +114,8 @@ impl<K: Key, V> Arena<K, V> {
     }
 
     #[inline(always)]
-    pub(crate) fn get_mut(&mut self, id: K) -> Option<&mut V> {
+    #[doc(hidden)]
+    pub fn get_mut(&mut self, id: K) -> Option<&mut V> {
         let encoded = id.data().as_ffi();
         let slot = self.slots.get_mut(encoded as u32 as usize)?;
         if slot.key != encoded {
@@ -118,7 +125,8 @@ impl<K: Key, V> Arena<K, V> {
     }
 
     #[cfg(test)]
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (K, &V)> {
+    #[doc(hidden)]
+    pub fn iter(&self) -> impl Iterator<Item = (K, &V)> {
         self.slots
             .iter()
             .filter(|slot| slot.occupied())

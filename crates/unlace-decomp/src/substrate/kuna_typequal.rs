@@ -28,7 +28,8 @@ impl DatatypeQualExt for Datatype {
 }
 
 /// Keep the shape visible to inference, but retain the qualified layer for spelling.
-pub(crate) fn qualified_type(base: Rc<Datatype>, qualifiers: u8) -> Rc<Datatype> {
+#[doc(hidden)]
+pub fn qualified_type(base: Rc<Datatype>, qualifiers: u8) -> Rc<Datatype> {
     if qualifiers == 0 {
         return base;
     }
@@ -61,7 +62,8 @@ pub fn spelling(qualifiers: u8) -> String {
 }
 
 /// Qualifiers on a typedef are inherited without expanding its printed name.
-pub(crate) fn effective_qualifiers(mut ty: &Datatype) -> u8 {
+#[doc(hidden)]
+pub fn effective_qualifiers(mut ty: &Datatype) -> u8 {
     let mut qualifiers = 0;
     for _ in 0..64 {
         qualifiers |= ty.c_qualifiers();
@@ -73,7 +75,8 @@ pub(crate) fn effective_qualifiers(mut ty: &Datatype) -> u8 {
     qualifiers
 }
 
-pub(crate) fn unqualified_shape(mut ty: &Datatype) -> &Datatype {
+#[doc(hidden)]
+pub fn unqualified_shape(mut ty: &Datatype) -> &Datatype {
     for _ in 0..64 {
         if effective_qualifiers(ty) == 0 {
             break;
@@ -92,7 +95,8 @@ pub fn is_volatile(ty: &Datatype) -> bool {
 }
 
 /// Converting a pointer to `current` into a pointer to `required` drops `volatile`.
-pub(crate) fn discards_volatile(required: &Datatype, current: &Datatype) -> bool {
+#[doc(hidden)]
+pub fn discards_volatile(required: &Datatype, current: &Datatype) -> bool {
     is_volatile(current) && !is_volatile(required)
 }
 
@@ -111,7 +115,8 @@ pub fn unqualified_value(mut ty: Rc<Datatype>) -> Rc<Datatype> {
 }
 
 /// Recover a declared pointer through address expressions before type inference runs.
-pub(crate) fn address_type(
+#[doc(hidden)]
+pub fn address_type(
     data: &crate::funcdata::Funcdata,
     id: crate::context::VarnodeId,
     budget: &mut u32,

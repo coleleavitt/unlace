@@ -269,7 +269,8 @@ pub fn enter_environment() -> LoadScope {
 
 /// Whether some options are in force on this thread. Unlike [`scoped`], asking
 /// does not count as an environment read.
-pub(crate) fn options_in_force() -> bool {
+#[doc(hidden)]
+pub fn options_in_force() -> bool {
     current(|options| options.is_some())
 }
 

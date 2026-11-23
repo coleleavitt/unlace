@@ -4,7 +4,8 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::int4;
 
-pub(crate) fn pieces(addr: &Address, size: int4) -> Option<[(Address, int4, int4); 2]> {
+#[doc(hidden)]
+pub fn pieces(addr: &Address, size: int4) -> Option<[(Address, int4, int4); 2]> {
     let space = addr.get_space()?;
     if !space.is_formal_stack_space() || space.get_word_size() != 1 || size <= 0 {
         return None;
@@ -27,7 +28,8 @@ pub(crate) fn pieces(addr: &Address, size: int4) -> Option<[(Address, int4, int4
     ])
 }
 
-pub(crate) fn is_wrapped_join(join: &unlace_base::space::JoinRecord) -> bool {
+#[doc(hidden)]
+pub fn is_wrapped_join(join: &unlace_base::space::JoinRecord) -> bool {
     if join.num_pieces() != 2 {
         return false;
     }
@@ -45,7 +47,8 @@ pub(crate) fn is_wrapped_join(join: &unlace_base::space::JoinRecord) -> bool {
     })
 }
 
-pub(crate) fn is_wrapped_address(addr: &Address) -> bool {
+#[doc(hidden)]
+pub fn is_wrapped_address(addr: &Address) -> bool {
     addr.is_join()
         && addr
             .get_space()
@@ -53,7 +56,8 @@ pub(crate) fn is_wrapped_address(addr: &Address) -> bool {
             .is_some_and(|join| is_wrapped_join(&join))
 }
 
-pub(crate) fn is_wrapped_in_space(addr: &Address, index: usize) -> bool {
+#[doc(hidden)]
+pub fn is_wrapped_in_space(addr: &Address, index: usize) -> bool {
     is_wrapped_address(addr)
         && addr
             .get_space()
@@ -66,7 +70,8 @@ pub(crate) fn is_wrapped_in_space(addr: &Address, index: usize) -> bool {
             })
 }
 
-pub(crate) fn whole_address(
+#[doc(hidden)]
+pub fn whole_address(
     db: &crate::database::Database,
     scope: crate::database::ScopeId,
     piece: &crate::database::SymbolEntry,
@@ -88,7 +93,8 @@ pub(crate) fn whole_address(
 }
 
 /// Ghidra's awkward-JOIN fallback shares unique:0x20000000 for equal-size joins.
-pub(crate) fn wire_storage(fd: &mut crate::funcdata::Funcdata) {
+#[doc(hidden)]
+pub fn wire_storage(fd: &mut crate::funcdata::Funcdata) {
     let specs = fd
         .get_scope_local()
         .map(|scope| scope.database().wrapped_stack_wire_specs(scope.scope_id()))
@@ -98,7 +104,8 @@ pub(crate) fn wire_storage(fd: &mut crate::funcdata::Funcdata) {
     }
 }
 
-pub(crate) fn reserve_wire_storage(fd: &mut crate::funcdata::Funcdata, id: u64, size: int4) {
+#[doc(hidden)]
+pub fn reserve_wire_storage(fd: &mut crate::funcdata::Funcdata, id: u64, size: int4) {
     if fd
         .kuna_wrapped_wire_storage
         .get(&id)

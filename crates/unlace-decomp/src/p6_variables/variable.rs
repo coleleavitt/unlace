@@ -1235,17 +1235,20 @@ impl HighIntersectTest {
     /// Open a run of tests between which nothing edits the function or merges
     /// a HighVariable: until [`Self::end_instance_blocks`], a high's instances
     /// can be looked up by block.
-    pub(crate) fn begin_instance_blocks(&mut self) {
+    #[doc(hidden)]
+    pub fn begin_instance_blocks(&mut self) {
         self.instance_blocks = Some(Default::default());
     }
 
     /// Close the run [`Self::begin_instance_blocks`] opened.
-    pub(crate) fn end_instance_blocks(&mut self) {
+    #[doc(hidden)]
+    pub fn end_instance_blocks(&mut self) {
         self.instance_blocks = None;
     }
 
     /// `high`'s instances by block while a run is open, built by `build` on first use.
-    pub(crate) fn instance_blocks(
+    #[doc(hidden)]
+    pub fn instance_blocks(
         &mut self,
         high: HighVariableId,
         build: impl FnOnce() -> InstanceBlocks,
@@ -1264,7 +1267,8 @@ impl HighIntersectTest {
     }
 
     /// Discard positions and decisions collected before an IR layout change.
-    pub(crate) fn sync_affecting_ops(&mut self, revision: u64) {
+    #[doc(hidden)]
+    pub fn sync_affecting_ops(&mut self, revision: u64) {
         if self.affecting_ops_revision == revision {
             return;
         }

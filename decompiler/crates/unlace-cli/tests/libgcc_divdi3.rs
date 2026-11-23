@@ -210,7 +210,9 @@ int main(void) {{
 
 #[test]
 fn declared_wide_results_survive_caller_return_recovery() {
-    if Command::new("clang").arg("--version").output().is_err() {
+    if Command::new("clang").arg("--version").output().is_err()
+        || !common::host::cc_targets("clang", "sparc-linux-gnu")
+    {
         return;
     }
     let root = tempfile::tempdir().unwrap();

@@ -19,12 +19,14 @@ fn kuna(args: &[&str]) -> String {
     stdout
 }
 
-/// The `functions` inventory as `(address, name)` rows.
+/// The `functions` inventory as `(address, name)` rows; an entry's aliases,
+/// which follow its name on the same line, are dropped.
 fn functions(name: &str) -> Vec<(u64, String)> {
     kuna(&["functions", &fixture(name)])
         .lines()
         .map(|line| {
-            let (address, name) = line.split_once('\t').expect("address<TAB>name");
+            let (address, rest) = line.split_once('\t').expect("address<TAB>name");
+            let name = rest.split('\t').next().unwrap_or(rest);
             (
                 u64::from_str_radix(address.trim_start_matches("0x"), 16).unwrap(),
                 name.to_owned(),

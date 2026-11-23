@@ -110,11 +110,15 @@ fn same(a: &VarnodeData, b: &VarnodeData) -> bool {
 /// to, as an AArch64 `stp` does)? Every path from the entry is walked up to its
 /// first return, indirect branch, trap or write of the register; a call does
 /// not end a path, since every convention preserves `reg` across it (a call
-/// that does not return is followed by a trap on Apple targets). A body the
-/// walk cannot cover within [`MAX_PROBE`] instructions answers no.
+/// that does not return is followed by a trap on Apple targets). A path ends
+/// where it leaves the function's extent, its entry up to `end` (the next
+/// known entry): a flow that runs on into a neighbour's body reads that
+/// body's registers, not this function's. A body the walk cannot cover within
+/// [`MAX_PROBE`] instructions answers no.
 fn probe_reads<T: unlace_sleigh::translate::Translate + ?Sized>(
     tr: &T,
     entry: &Address,
+    end: u64,
     reg: &VarnodeData,
 ) -> bool {
     let hits = |v: &VarnodeData| {
@@ -206,7 +210,11 @@ fn probe_reads<T: unlace_sleigh::translate::Translate + ?Sized>(
             return true;
         }
         if !written {
-            todo.extend(next);
+            let start = entry.get_offset();
+            todo.extend(
+                next.into_iter()
+                    .filter(|a| (start..end).contains(&a.get_offset())),
+            );
         }
     }
     false
@@ -224,6 +232,7 @@ enum Probe {
 fn reads_entry(
     arch: &mut crate::architecture::Architecture,
     entry: &Address,
+    end: Option<u64>,
     probe: Probe,
 ) -> bool {
     let Some(abi) = arch.loader_swift_abi.clone() else {
@@ -249,7 +258,7 @@ fn reads_entry(
         offset: addr.get_offset(),
         size: *size as u32,
     };
-    let r = probe_reads(arch.translate(), entry, &reg);
+    let r = probe_reads(arch.translate(), entry, end.unwrap_or(u64::MAX), &reg);
     match probe {
         Probe::SelfReg => arch.kuna_swift_self_reads.insert(k, r),
         Probe::AsyncReg => arch.kuna_swift_async_reads.insert(k, r),
@@ -274,6 +283,7 @@ pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) -
     for i in 0..data.num_calls() {
         let e = data.get_call_specs(i).get_entry_address().clone();
         let Some(k) = key(&e) else { continue };
+        let end = data.get_arch().function_entry_after(&e);
         if e.is_invalid() || callees.contains(&k) || async_callees.contains(&k) {
             continue;
         }
@@ -281,11 +291,11 @@ pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) -
         if !bound
             .as_ref()
             .is_some_and(|m| !m.get_name().starts_with("__swift") || is_async_model(m))
-            && reads_entry(arch, &e, Probe::AsyncReg)
+            && reads_entry(arch, &e, end, Probe::AsyncReg)
         {
             async_callees.insert(k);
         }
-        if bound.is_none() && reads_entry(arch, &e, Probe::SelfReg) {
+        if bound.is_none() && reads_entry(arch, &e, end, Probe::SelfReg) {
             callees.insert(k);
         }
     }
@@ -295,13 +305,14 @@ pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) -
     let Some(k) = key(&own) else {
         return (false, false);
     };
+    let end = data.get_arch().function_entry_after(&own);
     let bound = arch.loader_proto_models.get(&k).cloned();
     let reads_async = !bound
         .as_ref()
         .is_some_and(|m| !m.get_name().starts_with("__swift") || is_async_model(m))
-        && reads_entry(arch, &own, Probe::AsyncReg);
+        && reads_entry(arch, &own, end, Probe::AsyncReg);
     (
-        bound.is_none() && reads_entry(arch, &own, Probe::SelfReg),
+        bound.is_none() && reads_entry(arch, &own, end, Probe::SelfReg),
         reads_async,
     )
 }

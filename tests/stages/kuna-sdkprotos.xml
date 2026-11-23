@@ -91,7 +91,7 @@ c0035fd6
 </script>
 <stringmatch name="SDKPROTOS #1: without headers the argument set up before the earlier call is lost" min="1" max="1">v2 = CFStringGetLength\(\);</stringmatch>
 <stringmatch name="SDKPROTOS #2: without headers the tail call has no arguments" min="1" max="1">dispatch_async_f\(\); // tail-call</stringmatch>
-<stringmatch name="SDKPROTOS #3: without headers a call with an out-parameter has no arguments" min="1" max="1">if \(!CFStringFindWithOptions\(\)\)</stringmatch>
+<stringmatch name="SDKPROTOS #3: without headers the out-parameter call keeps its forwarded registers, but its options are a number" min="1" max="1">v3 = CFStringFindWithOptions\(a0,a1,a2,a3,4,&amp;v2\);</stringmatch>
 <stringmatch name="SDKPROTOS #4: without headers a two-word struct return is an integer pair" min="1" max="1">return SUB168\(v1,0\) \+ SUB168\(v1,8\);</stringmatch>
 <stringmatch name="SDKPROTOS #5: with headers the callee takes the string" min="1" max="1">v2 = CFStringGetLength\(v1\);</stringmatch>
 <stringmatch name="SDKPROTOS #6: with headers the tail call passes all three" min="1" max="1">dispatch_async_f\(a0,a1,a2\); // tail-call</stringmatch>

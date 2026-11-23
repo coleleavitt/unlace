@@ -5289,7 +5289,10 @@ indirect branch, trap (a `CALLOTHER`) or write of the register, and at most
 register across it, so a closure that calls a function before it reads its
 context (`opaque() &+ b.v`, a type's metadata accessor first) reads the
 value it was called with; a call that does not return is followed by a trap
-on Apple targets. A read of the register on such a path is evidence unless it only
+on Apple targets. A path also ends where it leaves the function's extent, its
+entry up to the next known entry: a flow that runs on into a neighbour's body
+(`tests/stages/kuna-swiftasyncextent.xml`) reads that body's registers, not
+this function's. A read of the register on such a path is evidence unless it only
 stores the register: a `STORE` of it, or of the temporary its own instruction
 copied it into (an AArch64 `stp x20, x19`, an x86 `push %r13`). No C or
 Objective-C function reads a preserved register it has not written for

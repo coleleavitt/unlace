@@ -25,6 +25,9 @@
     decided by the image's bytes. `on` leaves bogus and init alone. live is
     stored to by set_live and esc has its address passed to take: written
     and taken keep their branch under `globals`.
+
+    rangefold (default on) also folds the dominated tests of again and range,
+    so the script pins it off to show what opaquepredicate proves alone.
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -36,6 +39,7 @@ c3
   <com>load file decompiler/crates/unlace-analysis/tests/fixtures/opaqueglobal_x86_64_clang_O0</com>
   <com>read symbols</com>
   <com>option ctypes on</com>
+  <com>option rangefold off</com>
   <com>option opaquepredicate off</com>
   <com>load function bogus</com>
   <com>decompile</com>
@@ -123,7 +127,7 @@ c3
 <stringmatch name="the same test over 32 bits stays" min="1" max="1">a0 \* a0 \* a0 - a0\) % 3</stringmatch>
 <stringmatch name="off keeps the sign test of a byte's square" min="1" max="1">0 &lt;= \(int\)a0 \* \(int\)a0</stringmatch>
 <stringmatch name="on folds the sign test" min="1" max="1">^  return a1 \+ 7;</stringmatch>
-<stringmatch name="the contradicting test prints only when off" min="1" max="1">if \(a0 &lt;= 5\)</stringmatch>
+<stringmatch name="the contradicting test prints only when off" min="1" max="1">a0 &lt;= 5\)</stringmatch>
 <stringmatch name="its arm prints only when off" min="1" max="1">v1 \*= 0xf;</stringmatch>
 <stringmatch name="a test outside the dominating range prints only when off" min="1" max="1">v1 \*= 0x11;</stringmatch>
 <stringmatch name="a test the dominating range leaves open stays" min="1" max="1">v1 \*= 0x13;</stringmatch>

@@ -172,7 +172,12 @@ pub fn probe_return_purge<T: unlace_sleigh::translate::Translate + ?Sized>(
 /// Record the return purge of every direct callee of `data`, decoding each
 /// distinct callee once per image. A no-op unless `option calleeretpurge` is on.
 pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
-    if !arch.callee_ret_purge || arch.get_description().contains("windows") {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_calleeretpurge::CalleeRetPurge>()
+        .0
+        || arch.get_description().contains("windows")
+    {
         return;
     }
     for i in 0..data.num_calls() {
@@ -222,3 +227,13 @@ pub fn effective_extra_pop(data: &Funcdata, i: int4) -> int4 {
     data.kuna_callee_purge(fc.get_entry_address())
         .unwrap_or_else(|| fc.get_extra_pop())
 }
+
+crate::kuna_flag!(
+    /// (kuna) Take a direct callee's extrapop from its own `ret imm16`
+    /// (option `calleeretpurge`).  See [`crate::p4_calls::kuna_calleeretpurge`].
+    CalleeRetPurge,
+    "calleeretpurge",
+    "Callee `ret imm16` extrapop",
+    unset: true,
+    shipped: true
+);

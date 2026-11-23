@@ -888,7 +888,11 @@ fn build_localtypes(data: &mut Funcdata) {
         // the call.  Folded by `type_order`, and allowed to refine only a pointer
         // vote that points at nothing (`void *`, `undefined1 *`).  See `kuna_charptr`.
         let ct = {
-            let on = data.get_arch().char_ptr;
+            let on = data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_charptr::CharPtr>()
+                .0;
             if from_seed {
                 ct
             } else {
@@ -919,7 +923,14 @@ fn build_localtypes(data: &mut Funcdata) {
         // vote, folded by `type_order` (`SUB_BOOL` 10 beats `SUB_INT_CHAR` 19 and
         // `SUB_UINT_PLAIN` 16) so a locked callee parameter type still wins.  See
         // `kuna_boolbyte`.
-        let ct = if data.get_arch().bool_byte && vn_size == 1 && !from_seed {
+        let ct = if data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_boolbyte::BoolByte>()
+            .0
+            && vn_size == 1
+            && !from_seed
+        {
             match crate::kuna_boolbyte::truth_value_type(data, vn, &ct) {
                 Some(cand) => cand,
                 None => ct,

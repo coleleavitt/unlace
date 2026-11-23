@@ -2990,16 +2990,27 @@ impl PrintC {
         );
         let promotes = !self.options.nocasts && self.out_lang.profile().caps.integer_promotion;
         self.cast_implied.begin(
-            arch.cast_implied && promotes,
+            arch.kuna_options
+                .get::<crate::kuna_castimplied::CastImplied>()
+                .0
+                && promotes,
             cast_sign,
-            arch.cast_ternary && promotes && arch.types().get_size_of_int() == 4,
+            arch.kuna_options
+                .get::<crate::kuna_castternary::CastTernary>()
+                .0
+                && promotes
+                && arch.types().get_size_of_int() == 4,
             if promotes && arch.types().get_size_of_int() == 4 {
                 arch.kuna_options
                     .get::<crate::kuna_castwiden::CastWidenMode>()
             } else {
                 crate::kuna_castwiden::CastWidenMode::Off
             },
-            arch.cast_narrow && promotes && arch.types().get_size_of_int() == 4,
+            arch.kuna_options
+                .get::<crate::kuna_castnarrow::CastNarrow>()
+                .0
+                && promotes
+                && arch.types().get_size_of_int() == 4,
         );
         self.stmt_op = None;
         // (kuna) Publish the fd for the fd-free RPN leaf emitters (emit_atom /
@@ -3410,7 +3421,8 @@ impl PrintC {
         if self.out_lang == crate::kuna_lang::OutLang::Java {
             if let Some((scope, base)) = display.rsplit_once("::") {
                 // (kuna javanew) A constructor is declared by its class name.
-                java_ctor = arch.java_new && (base == "<init>" || base.starts_with("<init>_"));
+                java_ctor = arch.kuna_options.get::<crate::kuna_javanew::JavaNew>().0
+                    && (base == "<init>" || base.starts_with("<init>_"));
                 display = if java_ctor {
                     let class = scope.rsplit("::").next().unwrap_or(scope);
                     class.rsplit('$').next().unwrap_or(class).to_string()
@@ -4761,7 +4773,9 @@ impl PrintC {
         } else {
             None
         };
-        if self.out_lang == crate::kuna_lang::OutLang::Java && arch.java_new {
+        if self.out_lang == crate::kuna_lang::OutLang::Java
+            && arch.kuna_options.get::<crate::kuna_javanew::JavaNew>().0
+        {
             self.java_new = crate::kuna_javanew::pairs(fd);
             self.java_ctor_calls = crate::kuna_javanew::ctor_calls(fd);
         }
@@ -9981,7 +9995,7 @@ impl PrintC {
         // prints the raw `SUB41(x,0)` intrinsic -- an undeclared identifier, the
         // class `subright` exists to keep out of the output.
         match crate::kuna_boolbyte::truncation_form(
-            arch.bool_byte,
+            arch.kuna_options.get::<crate::kuna_boolbyte::BoolByte>().0,
             &outtype,
             &intype,
             offset,

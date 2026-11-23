@@ -175,7 +175,12 @@ impl Action for ActionTypeVote {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().type_vote {
+        if !data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_typevote::TypeVote>()
+            .0
+        {
             return 0;
         }
         let mut seen = std::collections::BTreeSet::new();
@@ -233,3 +238,13 @@ impl Action for ActionTypeVote {
         0
     }
 }
+
+crate::kuna_flag!(
+    /// (kuna `typevote`) A variable left `undefinedN` takes the type the ops
+    /// on it vote for (`p5_types/kuna_typevote.rs`). Default on.
+    TypeVote,
+    "typevote",
+    "Type vote for leftover undefined variables",
+    unset: false,
+    shipped: true
+);

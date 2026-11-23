@@ -37,7 +37,8 @@ fn build_fd(go_new_type: bool) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.go_new_type = go_new_type;
+    ctx.kuna_options
+        .set(crate::kuna_gonewtype::GoNewType(go_new_type));
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let addr = Address::new(ram, 0x1000);

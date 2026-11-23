@@ -720,7 +720,11 @@ fn callee_vote_rounds(
                 Some((slots.lines(index), key))
             })
             .collect();
-        let caller_ptr = prog.arch().caller_ptr;
+        let caller_ptr = prog
+            .arch()
+            .kuna_options
+            .get::<unlace_decomp::kuna_callerptr::CallerPtr>()
+            .0;
         let (pointers_only, queue): (Vec<_>, Vec<_>) = queue
             .into_iter()
             .partition(|(_, key)| caller_ptr && prog.arch().kuna_calleevote.pointers_only(*key));

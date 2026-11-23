@@ -914,6 +914,19 @@ pub(crate) fn preserves(src: &Datatype, dst: &Datatype) -> bool {
     }
 }
 
+crate::kuna_flag!(
+    /// (kuna `castimplied`) Leave out a cast C's own conversion rules already
+    /// perform: a value-preserving integer widening passed to a trusted
+    /// parameter, assigned to or returned as exactly its type, or stacked under
+    /// another conversion that fixes the result type.  See
+    /// [`crate::kuna_castimplied`].
+    CastImplied,
+    "castimplied",
+    "C-implied cast elision",
+    unset: false,
+    shipped: true
+);
+
 #[cfg(test)]
 #[path = "kuna_castimplied/tests.rs"]
 mod tests;

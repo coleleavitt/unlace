@@ -7150,6 +7150,46 @@ every other binary's pass list is byte-identical to before the pass existed):
     runs both fixtures with the options off and on; `unlace-cli`'s
     `xrefs_objc_resolved` test asks both directions.
 
+    Classes the image only imports come from the SDK headers `objcsdk` names
+    (`decompiler/crates/unlace-analysis/src/analyzers/objc/kuna_objcsdk.rs (read)`,
+    `decompiler/crates/unlace-analysis/src/analyzers/objc/mod.rs (add_sdk_classes)`).
+    Each `@interface` gives its class a superclass and the methods and
+    properties it declares (a category's are merged into its class;
+    `@property (class)` is a class method), each with its declared result when
+    that is `instancetype` or a class pointer. The table takes the classes the
+    image imports (an undefined `_OBJC_CLASS_$_<name>`) or subclasses, closed
+    over their superclasses, and declares an opaque record for each of them
+    and for every class one of their methods returns, so a result typed by one
+    is `NSURL *` without an interned layout. A method of such a class has no
+    IMP: it names the callee (`+[NSNumber numberWithLongLong:]`) and is never
+    retargeted. The engine adds the class receivers the loader binds: a
+    `machodataslots` data import slot named `_OBJC_CLASS_$_<name>`
+    (`decompiler/crates/unlace-console/src/engine.rs (commit_analysis_output)`)
+    is a class receiver while it holds the value the loader put there (the
+    same test as `importdata`'s `&<import>`). A receiver is followed by its
+    value (`decompiler/crates/unlace-decomp/src/p5_types/kuna_objcrettype.rs (class_value)`):
+    through copies and casts, a value a call leaves alone (`INDIRECT`), a join
+    whose inputs all name the same class (an input that leads back to the join
+    adds nothing), and the runtime functions that return their argument
+    (`objc_opt_self`, `objc_retain`, `objc_autorelease` and the
+    autoreleased-return claims), so Swift's
+    `[objc_opt_self(&OBJC_CLASS_$_NSBundle) mainBundle]` resolves. Besides the
+    linked frameworks, an SDK root's `usr/include/objc` is read for the root
+    class `NSObject`. Under `objcrettype` a class send then types its result
+    from the declaration along the chain (`instancetype` is the receiver class,
+    a class pointer that class), or, undeclared, from a factory selector whose
+    leading noun, before `With`, is the class name's tail case-insensitively
+    (`numberWithInt:` on `NSNumber`, `stringWithFormat:` on
+    `NSMutableString`); an instance send takes its declared result the same
+    way. `objc_msgSendSuper2(&super, sel)` is looked up from the superclass of
+    the sending method's class (its label `-[Foo bar]` names it), `[super
+    init…]` returns that class, and a super send is never retargeted either,
+    since its first argument is the `objc_super`. On a 390-function sample of
+    a 72 MB iOS app this resolves 88 more sends (64 to 152) and types 13 more
+    locals as class pointers (108 to 121); `tests/stages/kuna-objcsdksend.xml`
+    runs a fixture that sends to an imported class with `objcresolve` and
+    `objcrettype` off and on.
+
   - **By-value aggregates and global blocks**
     (`decompiler/crates/unlace-analysis/src/analyzers/objc/encoding.rs (struct_leaves)`,
     `decompiler/crates/unlace-analysis/src/analyzers/objc/kuna_objcblocks.rs (emit)`,

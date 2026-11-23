@@ -2326,7 +2326,8 @@ mod tests {
         // and kuna-mba-solve / constant operands, a shared complement, a complemented sum and bit logic alone simplify
         // and kuna-objcstructabi / an Objective-C method passing or returning a union, an unnamed struct or bit-fields by value keeps its prototype
         // and kuna-objcblocksx86 / x86-64 Objective-C stack blocks named and typed from their creators
-        assert_eq!(count, 991, "corpus file count drifted");
+        // and kuna-objcsdksend / a send to a class the image only imports resolves from the SDK headers
+        assert_eq!(count, 992, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

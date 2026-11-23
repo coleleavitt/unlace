@@ -1782,6 +1782,13 @@ struct SymbolSnapshots {
 /// snapshot, shared rather than copied per function.
 type CalleeProtoSnapshot = Rc<Vec<(int4, uintb, crate::fspec::PrototypePieces)>>;
 
+/// The helper calling convention of a language, or `None` when it has none here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HelperAbi {
+    X86,
+    Arm { big_endian: bool },
+}
+
 /// The pass hooks every [`ArchContext`] starts with: the default pipeline's, composed with the
 /// universal action tree it schedules ([`crate::kuna_passhooks`]).
 pub fn default_pass_hooks() -> &'static crate::kuna_passhooks::KunaHooks {
@@ -3272,8 +3279,9 @@ impl Architecture {
                 });
                 let fused = (self.pass_hooks().lanefuse_builtins)()
                     .into_iter()
-                    .chain(crate::kuna_lanefuse::mask_builtins(
-                        self.userops.named_ops(),
+                    .chain((crate::architecture::default_pass_hooks()
+                        .lanefuse_mask_builtins)(
+                        &mut self.userops.named_ops()
                     ))
                     .filter_map(|(i, nm)| {
                         let (intr, _) = (self.pass_hooks().avxintrin_intrinsic)(&nm, 32)
@@ -4088,7 +4096,11 @@ impl Architecture {
             &resolve,
             code_addr_size,
         );
-        let helpers = crate::kuna_arithhelpers::helper_abi(resolve, code_addr_size, big_endian);
+        let helpers = (crate::architecture::default_pass_hooks().arithhelpers_helper_abi)(
+            &resolve,
+            code_addr_size,
+            big_endian,
+        );
         let objc_arc = (crate::architecture::default_pass_hooks().objcarc_payload_xml)(
             &resolve,
             code_addr_size,
@@ -4119,7 +4131,10 @@ impl Architecture {
             (crate::architecture::default_pass_hooks().msvcftol_decode_payload)(&mut register)?;
         }
         if let Some(abi) = helpers {
-            crate::kuna_arithhelpers::decode_payloads(abi, &mut register)?;
+            (crate::architecture::default_pass_hooks().arithhelpers_decode_payloads)(
+                abi,
+                &mut register,
+            )?;
         }
         Ok(())
     }
@@ -4443,9 +4458,9 @@ impl Architecture {
                 .named_ops()
                 .map(|(i, nm)| (i, nm.to_vec()))
                 .collect();
-            for (id, name) in
-                crate::kuna_lanefuse::mask_builtins(named.iter().map(|(i, nm)| (*i, nm.as_slice())))
-            {
+            for (id, name) in (crate::architecture::default_pass_hooks().lanefuse_mask_builtins)(
+                &mut named.iter().map(|(i, nm)| (*i, nm.as_slice())),
+            ) {
                 userops.register_named_builtin(id, &name);
             }
             // (kuna itaniumeh, swiftcall) the exceptional-edge test, the pad values
@@ -6249,7 +6264,7 @@ impl Architecture {
         if !rule_els.is_empty() {
             let manager = self.manage();
             let mut registry = unlace_base::marshal::IdRegistry::with_base_ids();
-            crate::modelrules::register_ids(&mut registry);
+            (crate::architecture::default_pass_hooks().modelrules_register_ids)(&mut registry);
             for rule_el in rule_els.iter() {
                 let rule = {
                     let mut decoder = unlace_base::marshal::XmlDecode::new_with_root(

@@ -4,7 +4,7 @@ use super::*;
 
 fn parsed(abi: HelperAbi) -> Vec<(String, Vec<String>)> {
     let mut out = Vec::new();
-    decode_payloads(abi, |root| {
+    decode_payloads(abi, &mut |root| {
         let name = String::from_utf8_lossy(root.get_attribute_value("name")?).into_owned();
         let mut targets = Vec::new();
         for child in root.get_children().iter() {
@@ -57,11 +57,11 @@ fn arm_pairs_follow_the_byte_order() {
 fn guard_admits_32_bit_x86_and_arm_only() {
     let all = |_: &[u8]| true;
     let arm = |n: &[u8]| ARM_REGISTERS.iter().any(|r| r.as_bytes() == n);
-    assert_eq!(helper_abi(all, 4, false), Some(HelperAbi::X86));
-    assert_eq!(helper_abi(all, 8, false), None);
+    assert_eq!(helper_abi(&all, 4, false), Some(HelperAbi::X86));
+    assert_eq!(helper_abi(&all, 8, false), None);
     assert_eq!(
-        helper_abi(arm, 4, true),
+        helper_abi(&arm, 4, true),
         Some(HelperAbi::Arm { big_endian: true })
     );
-    assert_eq!(helper_abi(|_| false, 4, false), None);
+    assert_eq!(helper_abi(&|_| false, 4, false), None);
 }

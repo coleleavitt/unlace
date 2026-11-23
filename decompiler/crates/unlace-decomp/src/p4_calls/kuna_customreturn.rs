@@ -15,3 +15,8 @@ pub(crate) fn input_assignment<'a>(
     inputs.outtype = Some(types.get_type_void()?);
     Ok(Cow::Owned(inputs))
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.customreturn_input_assignment = Some(input_assignment);
+}

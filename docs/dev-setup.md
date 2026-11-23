@@ -121,8 +121,7 @@ target/release/unlace` and `bash scripts/coverage.sh` (docs/observatory.md).
 tools/hooks/unlace-ci-gates.sh [fast|parity|full]   # default parity
 ```
 
-- `fast`: rustfmt, forbidden words (no IDA/Hex-Rays text in a branch meant for Noelo-Lab/kuna;
-  skipped on `main`), ignored fixtures, `scripts/check_test_layout.py`.
+- `fast`: rustfmt, ignored fixtures, `scripts/check_test_layout.py`.
 - `parity` adds: the Python tooling tests, build, specs, lint, the parity target,
   `tools/check_spec.py`, the CLI probes, `unlace catalog --check`, the repipe counters,
   `docs/options.md` freshness and unlace-ghidra. A full pass records the

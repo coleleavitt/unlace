@@ -56,10 +56,10 @@ const DIRECTION_FLAG: &[u8] = b"DF";
 /// `None` on a language that has no such register, which is how every non-x86
 /// target falls out. The exact lookup must not be used here — in ghidra mode it
 /// is a host query that throws on an undefined name (GH-388).
-pub fn assert_direction_flag_unaffected<F>(model: &mut ProtoModel, lookup: F)
-where
-    F: FnOnce(&[u8]) -> Option<unlace_num::pcoderaw::VarnodeData>,
-{
+pub fn assert_direction_flag_unaffected(
+    model: &mut ProtoModel,
+    lookup: &dyn Fn(&[u8]) -> Option<unlace_num::pcoderaw::VarnodeData>,
+) {
     let Some(df) = lookup(DIRECTION_FLAG) else {
         return; // not an x86 language
     };
@@ -72,4 +72,9 @@ where
         return;
     }
     model.push_effect(EffectRecord::from_varnode(df, effect_type::UNAFFECTED));
+}
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.dfunaffected_assert_direction_flag_unaffected = Some(assert_direction_flag_unaffected);
 }

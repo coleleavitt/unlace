@@ -1928,7 +1928,8 @@ impl BlockGraph {
     /// Add a component FlowBlock and make `graph_id` the parent
     /// (C++ `BlockGraph::addBlock`, `block.cc:862`).  Updates the graph index to
     /// the minimum over all components.
-    fn add_block(&mut self, graph_id: BlockId, bl: BlockId) {
+    #[doc(hidden)]
+    pub fn add_block(&mut self, graph_id: BlockId, bl: BlockId) {
         let min = self.arena[bl].index;
         // C++: if (list.empty()) index=min; else if (min<index) index=min;
         // both arms assign min, so the combined guard is faithful.

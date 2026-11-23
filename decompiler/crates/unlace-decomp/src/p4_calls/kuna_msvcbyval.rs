@@ -731,5 +731,11 @@ pub fn keeps_slot_mapped(data: &Funcdata, op: OpId, param: int4) -> bool {
         .any(|s| s.call == op && s.param as int4 == param && s.mapped)
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.msvcbyval_constructed_ranges = Some(constructed_ranges);
+    hooks.msvcbyval_constructs = Some(constructs);
+}
+
 #[cfg(test)]
 mod tests;

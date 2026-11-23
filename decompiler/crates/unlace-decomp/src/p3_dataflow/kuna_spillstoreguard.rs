@@ -385,6 +385,14 @@ fn offset(
     }
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.spillstoreguard_bounds = Some(bounds);
+    hooks.spillstoreguard_build = Some(build);
+    hooks.spillstoreguard_prune = Some(prune);
+    hooks.spillstoreguard_within_budget = Some(within_budget);
+}
+
 #[cfg(test)]
 #[path = "kuna_spillstoreguard/tests.rs"]
 mod tests;

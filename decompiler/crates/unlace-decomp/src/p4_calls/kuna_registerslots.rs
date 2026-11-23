@@ -331,6 +331,12 @@ pub(crate) fn guard_output(
     true
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.registerslots_guard_output = Some(guard_output);
+    hooks.registerslots_input_slot = Some(input_slot);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

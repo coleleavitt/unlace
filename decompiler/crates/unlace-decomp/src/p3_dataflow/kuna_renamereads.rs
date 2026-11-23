@@ -131,3 +131,12 @@ pub(crate) fn finish(fd: &mut Funcdata, pending: &mut Vec<(OpId, uint4)>) {
         }
     }
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.renamereads_finish = Some(finish);
+    hooks.renamereads_mark = Some(mark);
+    hooks.renamereads_new_indirect = Some(new_indirect);
+    hooks.renamereads_pending = Some(pending);
+    hooks.renamereads_storage = Some(storage);
+}

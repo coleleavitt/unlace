@@ -73,6 +73,28 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
     crate::p8_structure::kuna_retsplitglobal::provide(&mut slots);
     crate::p8_structure::kuna_retsplitlimit::provide(&mut slots);
     crate::p8_structure::kuna_rettriangle::provide(&mut slots);
+    crate::p4_calls::kuna_armfloatargs::provide(&mut slots);
+    crate::p4_calls::kuna_armfloatreturn::provide(&mut slots);
+    crate::p3_dataflow::kuna_calleememory::provide(&mut slots);
+    crate::p4_calls::kuna_calleepreserves::provide(&mut slots);
+    crate::p4_calls::kuna_calleeprotostack::provide(&mut slots);
+    crate::p4_calls::kuna_calleeretpreserves::provide(&mut slots);
+    crate::p3_dataflow::kuna_inputtile::provide(&mut slots);
+    crate::p6_variables::kuna_localstackviews::provide(&mut slots);
+    crate::p4_calls::kuna_msvcbyval::provide(&mut slots);
+    crate::p3_dataflow::kuna_pairrefine::provide(&mut slots);
+    crate::p4_calls::kuna_passthrough::provide(&mut slots);
+    crate::p4_calls::kuna_registerslots::provide(&mut slots);
+    crate::p3_dataflow::kuna_splitstorekeep::provide(&mut slots);
+    crate::p3_dataflow::kuna_stackeffects::provide(&mut slots);
+    crate::p3_dataflow::kuna_stackreadscope::provide(&mut slots);
+    crate::p4_calls::kuna_varargretreg::provide(&mut slots);
+    crate::p3_dataflow::kuna_haltloopguard::provide(&mut slots);
+    crate::p3_dataflow::kuna_leafmemory::provide(&mut slots);
+    crate::p3_dataflow::kuna_memoryguard::provide(&mut slots);
+    crate::p3_dataflow::kuna_renamereads::provide(&mut slots);
+    crate::p3_dataflow::kuna_spillstoreguard::provide(&mut slots);
+    crate::p3_dataflow::kuna_wrapsplit::provide(&mut slots);
     slots
         .finish()
         .unwrap_or_else(|missing| panic!("pass hooks with no provider: {}", missing.join(", ")))

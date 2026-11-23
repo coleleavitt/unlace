@@ -257,3 +257,9 @@ pub fn straddles_middle(fd: &Funcdata, vn: VarnodeId, addr: &Address, size: int4
         start < half && start + v.get_size() as u64 > half
     })
 }
+
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.pairrefine_split_pair = Some(split_pair);
+    hooks.pairrefine_straddles_middle = Some(straddles_middle);
+}

@@ -107,6 +107,11 @@ pub(super) fn preserves(fd: &Funcdata, call: &FuncCallSpecs, address: &Address, 
     })
 }
 
+/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
+pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+    hooks.leafmemory_preserves = Some(preserves);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

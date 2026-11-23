@@ -1,0 +1,318 @@
+//! (kuna `ctree`) The C syntax tree of one printed function (`docs/architecture/ctree.md`).
+//!
+//! Hex-Rays' ctree is the model: statements (`cinsn_t`) and expressions (`cexpr_t`) in one tree
+//! whose maturity (`ctree_maturity_t`) only rises. Here the nodes live in two arenas indexed by
+//! [`StmtId`] and [`ExprId`]. An expression leaf names the op or the condition block the printer
+//! renders with its existing expression code; only the shapes a statement rewrite creates (`!`,
+//! `&&`, `||`, `?:`, an assignment of one, a constant) are nodes of their own. Every statement
+//! keeps the structured block it was built from, so markup, comments, labels and the fallback
+//! printer key on it.
+
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+
+use unlace_base::types::uint4;
+
+use crate::context::{BlockId, OpId, VarnodeId};
+
+/// A statement of a [`CTree`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StmtId(u32);
+
+/// An expression of a [`CTree`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ExprId(u32);
+
+impl StmtId {
+    /// The arena index.
+    pub fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl ExprId {
+    /// The arena index.
+    pub fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// How far the tree has been taken. It only rises: printing never restarts analysis, and each
+/// print builds a new tree.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CMaturity {
+    /// One statement per structured block (Hex-Rays `CMAT_BUILT`).
+    #[default]
+    Built,
+    /// Each leaf is split into the statements it prints (`CMAT_TRANS1`).
+    Statements,
+    /// The structural rewrites have run (`CMAT_TRANS2`/`CMAT_TRANS3`).
+    Rewritten,
+    /// The function's tail and its labels are settled: ready to print (`CMAT_FINAL`).
+    Final,
+}
+
+impl CMaturity {
+    /// The level's name, as `phase status` prints it.
+    pub fn name(self) -> &'static str {
+        match self {
+            CMaturity::Built => "built",
+            CMaturity::Statements => "statements",
+            CMaturity::Rewritten => "rewritten",
+            CMaturity::Final => "final",
+        }
+    }
+}
+
+/// A statement.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Stmt {
+    pub kind: StmtKind,
+    /// The structured block it was built from.
+    pub origin: Option<BlockId>,
+}
+
+/// The statement kinds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StmtKind {
+    /// A `BlockList` or `BlockGraph`: statements in order.
+    Seq(Vec<StmtId>),
+    /// A basic-block leaf whose statements the printer still selects from its ops.
+    Ops { leaf: BlockId },
+    /// One expression statement.
+    Expr(ExprId),
+    /// `if`. `pre` holds the statements printed above the test (the condition block's
+    /// statements before its branch).
+    If {
+        pre: Option<StmtId>,
+        cond: ExprId,
+        then: StmtId,
+        els: Option<StmtId>,
+    },
+    /// `while` (top-tested loop).
+    While {
+        pre: Option<StmtId>,
+        cond: ExprId,
+        body: StmtId,
+    },
+    /// `do { } while` (bottom-tested loop).
+    DoWhile { body: StmtId, cond: ExprId },
+    /// `for`, from a top-tested loop with an initializer and an iterator op.
+    For {
+        init: OpId,
+        cond: ExprId,
+        step: OpId,
+        body: StmtId,
+    },
+    /// An infinite loop.
+    Loop { body: StmtId },
+    /// An unstructured branch: `goto`, `break` or `continue` by the block-goto flags in
+    /// `gototype`.
+    Goto { target: BlockId, gototype: uint4 },
+    /// `return`.
+    Return(Option<ExprId>),
+    /// Not modelled yet: printed from its origin block.
+    Opaque,
+}
+
+/// An expression.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Expr {
+    pub kind: ExprKind,
+}
+
+/// The expression kinds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ExprKind {
+    /// The expression rooted at an op, printed by the existing expression printer.
+    Op(OpId),
+    /// The branch test of a condition block (a `CBRANCH`, or a `BlockCondition` chain).
+    Branch(BlockId),
+    Not(ExprId),
+    And(ExprId, ExprId),
+    Or(ExprId, ExprId),
+    Ternary(ExprId, ExprId, ExprId),
+    Assign {
+        dest: VarnodeId,
+        value: ExprId,
+    },
+    Const {
+        value: u64,
+        size: u32,
+    },
+}
+
+/// The C syntax tree of one function.
+#[derive(Clone, Debug, Default)]
+pub struct CTree {
+    stmts: Vec<Stmt>,
+    exprs: Vec<Expr>,
+    root: Option<StmtId>,
+    maturity: CMaturity,
+    by_origin: BTreeMap<BlockId, StmtId>,
+}
+
+impl CTree {
+    /// An empty tree at [`CMaturity::Built`].
+    pub fn new() -> CTree {
+        CTree::default()
+    }
+
+    /// Add a statement. The first statement added for an origin block is the one
+    /// [`node_for`](CTree::node_for) answers.
+    pub fn add_stmt(&mut self, kind: StmtKind, origin: Option<BlockId>) -> StmtId {
+        let id = StmtId(u32::try_from(self.stmts.len()).expect("ctree statement count"));
+        self.stmts.push(Stmt { kind, origin });
+        if let Some(block) = origin {
+            self.by_origin.entry(block).or_insert(id);
+        }
+        id
+    }
+
+    /// Add an expression.
+    pub fn add_expr(&mut self, kind: ExprKind) -> ExprId {
+        let id = ExprId(u32::try_from(self.exprs.len()).expect("ctree expression count"));
+        self.exprs.push(Expr { kind });
+        id
+    }
+
+    /// Set the function body.
+    pub fn set_root(&mut self, root: StmtId) {
+        self.root = Some(root);
+    }
+
+    /// The function body, once built.
+    pub fn root(&self) -> Option<StmtId> {
+        self.root
+    }
+
+    pub fn stmt(&self, id: StmtId) -> &Stmt {
+        &self.stmts[id.index()]
+    }
+
+    pub fn stmt_mut(&mut self, id: StmtId) -> &mut Stmt {
+        &mut self.stmts[id.index()]
+    }
+
+    pub fn expr(&self, id: ExprId) -> &Expr {
+        &self.exprs[id.index()]
+    }
+
+    pub fn expr_mut(&mut self, id: ExprId) -> &mut Expr {
+        &mut self.exprs[id.index()]
+    }
+
+    /// The number of statements.
+    pub fn stmt_count(&self) -> usize {
+        self.stmts.len()
+    }
+
+    /// The number of expressions.
+    pub fn expr_count(&self) -> usize {
+        self.exprs.len()
+    }
+
+    /// The statement built from a structured block.
+    pub fn node_for(&self, block: BlockId) -> Option<StmtId> {
+        self.by_origin.get(&block).copied()
+    }
+
+    pub fn maturity(&self) -> CMaturity {
+        self.maturity
+    }
+
+    /// Record that the tree reached `level`; a lower level changes nothing.
+    pub fn advance(&mut self, level: CMaturity) {
+        if level > self.maturity {
+            self.maturity = level;
+        }
+    }
+
+    /// The tree as indented text, one statement per line, for the console and tests.
+    pub fn dump(&self) -> String {
+        let mut out = String::new();
+        let _ = writeln!(out, "ctree ({})", self.maturity.name());
+        if let Some(root) = self.root {
+            let mut stack = vec![(root, 1usize)];
+            while let Some((id, depth)) = stack.pop() {
+                let stmt = self.stmt(id);
+                let _ = writeln!(
+                    out,
+                    "{:indent$}{}",
+                    "",
+                    self.stmt_line(stmt),
+                    indent = depth * 2
+                );
+                for child in self.children(id).into_iter().rev() {
+                    stack.push((child, depth + 1));
+                }
+            }
+        }
+        out
+    }
+
+    /// The statements directly under `id`, in print order.
+    pub fn children(&self, id: StmtId) -> Vec<StmtId> {
+        match &self.stmt(id).kind {
+            StmtKind::Seq(list) => list.clone(),
+            StmtKind::If { pre, then, els, .. } => {
+                pre.iter().copied().chain([*then]).chain(*els).collect()
+            }
+            StmtKind::While { pre, body, .. } => pre.iter().copied().chain([*body]).collect(),
+            StmtKind::DoWhile { body, .. }
+            | StmtKind::For { body, .. }
+            | StmtKind::Loop { body } => vec![*body],
+            StmtKind::Ops { .. }
+            | StmtKind::Expr(_)
+            | StmtKind::Goto { .. }
+            | StmtKind::Return(_)
+            | StmtKind::Opaque => Vec::new(),
+        }
+    }
+
+    fn stmt_line(&self, stmt: &Stmt) -> String {
+        let head = match &stmt.kind {
+            StmtKind::Seq(list) => format!("seq[{}]", list.len()),
+            StmtKind::Ops { .. } => "ops".to_string(),
+            StmtKind::Expr(e) => format!("expr {}", self.expr_text(*e)),
+            StmtKind::If { cond, els, .. } => format!(
+                "if {}{}",
+                self.expr_text(*cond),
+                if els.is_some() { " else" } else { "" }
+            ),
+            StmtKind::While { cond, .. } => format!("while {}", self.expr_text(*cond)),
+            StmtKind::DoWhile { cond, .. } => format!("do-while {}", self.expr_text(*cond)),
+            StmtKind::For { cond, .. } => format!("for {}", self.expr_text(*cond)),
+            StmtKind::Loop { .. } => "loop".to_string(),
+            StmtKind::Goto { gototype, .. } => format!("goto type={gototype:#x}"),
+            StmtKind::Return(None) => "return".to_string(),
+            StmtKind::Return(Some(e)) => format!("return {}", self.expr_text(*e)),
+            StmtKind::Opaque => "opaque".to_string(),
+        };
+        match stmt.origin {
+            Some(block) => format!("{head} @{block:?}"),
+            None => head,
+        }
+    }
+
+    fn expr_text(&self, id: ExprId) -> String {
+        match &self.expr(id).kind {
+            ExprKind::Op(op) => format!("op{op:?}"),
+            ExprKind::Branch(block) => format!("branch{block:?}"),
+            ExprKind::Not(e) => format!("!{}", self.expr_text(*e)),
+            ExprKind::And(a, b) => format!("({} && {})", self.expr_text(*a), self.expr_text(*b)),
+            ExprKind::Or(a, b) => format!("({} || {})", self.expr_text(*a), self.expr_text(*b)),
+            ExprKind::Ternary(c, a, b) => format!(
+                "({} ? {} : {})",
+                self.expr_text(*c),
+                self.expr_text(*a),
+                self.expr_text(*b)
+            ),
+            ExprKind::Assign { dest, value } => format!("{dest:?} = {}", self.expr_text(*value)),
+            ExprKind::Const { value, size } => format!("{value:#x}:{size}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

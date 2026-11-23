@@ -1,6 +1,7 @@
 # A C syntax tree between structuring and printing (ctree)
 
-Status: design (2026-11-23). Nothing here is implemented yet; section 9 is the order of the work.
+Status (2026-11-23): design, with section 9 step 2 started: `crates/unlace-ctree` holds the types,
+`CMaturity` and the builder at `built`; nothing calls it yet.
 
 Today the printer walks the structured block graph and the p-code ops directly and writes text as it
 goes. Every C-level cleanup (a diamond printed as a ternary, an if-chain printed as a switch, a goto
@@ -241,8 +242,8 @@ unlace-middle ─┬─ unlace-structure ─┐
   implied-varnode filter). Those predicates move down into `unlace-ctree` when the `statements` level
   is built, as one function both paths call, so they cannot drift apart. Ones that read printer state
   (`oslog_hidden`, the Java filters) become inputs to the builder.
-- `scripts/check_layers.py` gets a `ctree` band between `bandb` and `emit`; the `unlace-decomp`
-  facade re-exports the crate like the other bands.
+- The crate boundary enforces the layering, so `scripts/check_layers.py` needs no new band; the
+  `unlace-decomp` facade reaches the crate through `unlace-emit`'s re-exports.
 
 ## 8. Risks
 
@@ -265,8 +266,8 @@ unlace-middle ─┬─ unlace-structure ─┐
 ## 9. Order of work
 
 1. This document.
-2. `unlace-ctree`: the types and `CMaturity` (no callers).
-3. The `ctree` option (`phases.toml` row and dispatch, default `off`) and the builder at `built`.
+2. `unlace-ctree`: the types, `CMaturity` and the builder at `built` (no callers).
+3. The `ctree` option (`phases.toml` row and dispatch, default `off`).
 4. The tree printer for `Seq`, `Ops` and plain `If`, `Opaque` for the rest, selected by `ctree on`.
 5. The corpus proof (section 6.3), then node kinds out of `Opaque` one at a time, then `statements`,
    then the rewrites of section 4.

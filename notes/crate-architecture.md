@@ -336,8 +336,9 @@ split: an option PR no longer edits the three most conflicted files.
 
 ## 8. Outcome (2026-11-23)
 
-Steps 1, 2 and 4-9 landed on coleleavitt/unlace; the workspace now has six decompiler crates. Step 3 (the dev
-dylib) was not needed: step 0 was never run, and the split plus thin LTO recovered the speed without it.
+Steps 0-2 and 4-10 landed on coleleavitt/unlace; the workspace now has eight decompiler crates (step 10 split
+`unlace-bandb` into `unlace-bandb-base`, `unlace-bandb-core` and `unlace-bandb`). Step 3 (the dev dylib) was not
+needed: the split plus thin LTO recovered the speed without it, and step 0's numbers below show the rebuild gain.
 
 **Crates** (lines of `src/**/*.rs`, in-tree unit tests included, at 38ede1720c):
 
@@ -392,13 +393,21 @@ scheduler's progress, with no behaviour change: `unlace-middle`'s `kuna_maturity
 complete, facts, `is_settled`, `debug_assert_settled!`), marked on ten schedule nodes by the
 driver, reset by a restart, reported by `phase status` (spec §0.10).
 
-**Left:**
-- Step 0: the build-time measurement (`cargo build --timings`, `-Zself-profile` for an edit in each band)
-  was never taken, so the incremental-rebuild gain is estimated in section 5, not measured.
-- Step 10: splitting `unlace-bandb` (249k, the largest crate) into calls / types / dataflow+vars through hooks,
-  and lifting heritage/merge/jumptable out of middle. Only if step 0's numbers justify it.
-- Unit tests in the band crates that reach a driver-provided hook panic ("not linked into this test", 1141 on
-  38ede1720c); they need the driver's hook table installed in the test or a move to the driver crate.
+**Left** (as of 2026-11-23; step 0 is measured and step 10 done, both below; the hook-panicking band-crate
+unit tests were fixed in #185, which installs the real pass hooks in each band crate's tests):
+- Tidy `unlace-middle`'s layout: the modules reclassified into middle (#112, #118, #142, #146) still sit in
+  phase folders (`p2_lift/`, `p3_dataflow/`, `p4_calls/`, `p5_types/`, `p9_emit/`) that don't describe
+  them; move them to `substrate/`, `infra/` or a new topic folder, no behaviour change.
+- Maturity follow-ups: replace ad-hoc "has phase X run" checks (heritage counters, calls-recovered,
+  high-level and structured flags) with `is_settled`/the level where exactly equivalent, add
+  `debug_assert_settled!` where a pass silently relies on an earlier phase, and show the level in
+  `unlace decompile --trace`.
+- Step 6 track: lift heritage, fspec, jumptable, merge and varmap out of `unlace-middle` into the band that
+  owns them (being analysed; middle keeps only what every band needs).
+- The ctree track (a C AST between structuring and emit, with its own maturity levels, per
+  `docs/architecture/decompiler-ir-landscape.md`) and the perf track (runtime after the split, #183; the
+  remaining cross-crate inlining) continue separately.
+- Not planned: cutting `unlace-bandb-core`'s cycle (about 0.5 s per rebuild, see step 10).
 
 ### Step 0, measured after the split (2026-11-23)
 

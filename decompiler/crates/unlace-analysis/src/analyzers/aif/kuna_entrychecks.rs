@@ -30,7 +30,10 @@ pub(crate) fn run(
     memo: Option<&Rc<crate::listing::kuna_decodememo::DecodeMemo>>,
 ) -> CheckedAif {
     let mut straight_line = std::collections::BTreeSet::new();
-    let poolslide = (arch.analysis_aifpoolslide
+    let poolslide = (arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
+        .0
         && crate::loadimage_object::is_arm32_language(&arch.archid))
     .then_some(arch);
     let mut entries = if let Some(prior) = pre_frame {
@@ -60,7 +63,11 @@ pub(crate) fn run(
         )
     };
     let mut pool_entries = Vec::new();
-    if arch.analysis_poolentry {
+    if arch
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Poolentry>()
+        .0
+    {
         let checked = super::kuna_poolentry::run_pool_pass(
             arch,
             listing,

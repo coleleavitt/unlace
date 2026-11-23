@@ -1002,7 +1002,10 @@ impl AnalysisPass for LibProtoPass {
             types,
             word_size,
             L,
-            ctx.arch.analysis_nameladder,
+            ctx.arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
+                .0,
         );
         seed_resolved_prototypes(&mut out, &imports, LIBC, types, word_size, L);
         if ctx.arch.analysis_cppsig.enabled() {
@@ -1013,7 +1016,10 @@ impl AnalysisPass for LibProtoPass {
                 types,
                 word_size,
                 L,
-                ctx.arch.analysis_nameladder,
+                ctx.arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
+                    .0,
             );
             seed_resolved_prototypes(&mut out, &imports, CXX_ALLOC, types, word_size, L);
         }

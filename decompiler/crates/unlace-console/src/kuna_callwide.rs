@@ -254,7 +254,9 @@ mod tests {
         use crate::engine::EntrySelector;
         let mut prog = image_program("mips32_be_dwarf.elf");
         prog.arch_mut().call_wide = true;
-        prog.arch_mut().analysis_dwarf = true;
+        prog.arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_analysisgates::Dwarf(true));
         prog.arch_mut().narrow_ext = unlace_decomp::kuna_narrowext::NarrowExtMode::Compiler;
         prog.commit_pending_analysis().unwrap();
         let producer = prog
@@ -315,7 +317,9 @@ mod tests {
         use crate::engine::EntrySelector;
         let mut prog = image_program("mips32_be_dwarf.elf");
         prog.arch_mut().call_wide = true;
-        prog.arch_mut().analysis_dwarf = true;
+        prog.arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_analysisgates::Dwarf(true));
         prog.arch_mut().narrow_ext = unlace_decomp::kuna_narrowext::NarrowExtMode::Compiler;
         prog.commit_pending_analysis().unwrap();
         let caller = prog
@@ -395,7 +399,9 @@ mod tests {
         for mode in [NarrowExtMode::Abi, NarrowExtMode::Off] {
             let mut prog = image_program("mips32_be_dwarf.elf");
             prog.arch_mut().call_wide = true;
-            prog.arch_mut().analysis_dwarf = true;
+            prog.arch_mut()
+                .kuna_options
+                .set(unlace_decomp::kuna_analysisgates::Dwarf(true));
             prog.arch_mut().narrow_ext = mode;
             prog.commit_pending_analysis().unwrap();
             let caller = prog
@@ -446,7 +452,9 @@ mod tests {
         crate::kuna_console::register_kuna_commands(&mut status);
         let mut prog = program();
         prog.arch_mut().call_wide = true;
-        prog.arch_mut().analysis_dwarf = false;
+        prog.arch_mut()
+            .kuna_options
+            .set(unlace_decomp::kuna_analysisgates::Dwarf(false));
         status
             .get_data_mut(DECOMPILE_MODULE)
             .unwrap()
@@ -830,7 +838,11 @@ fn ingest_dwarf(prog: &mut ConsoleProgram) {
             });
     prog.callwide.declaration_names = names;
     prog.callwide.declaration_bytes = bytes;
-    if !prog.arch().analysis_dwarf
+    if !prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Dwarf>()
+        .0
         || !prog.callwide.supported()
         || prog.callwide.unavailable.is_some()
     {

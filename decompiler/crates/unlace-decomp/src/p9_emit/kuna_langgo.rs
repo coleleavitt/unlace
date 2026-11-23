@@ -424,7 +424,10 @@ impl PrintC {
         self.emit.print("func ", SyntaxHighlight::KeywordColor);
         let proto = fd.get_func_proto();
         let mut first = 0;
-        if arch.analysis_godwarfsig
+        if arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::Godwarfsig>()
+            .0
             && fd.kuna_go_receiver.as_ref().is_some_and(|receiver| {
                 receiver.symbol == display
                     && receiver.matches(arch, proto)

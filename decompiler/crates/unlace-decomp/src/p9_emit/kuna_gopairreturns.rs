@@ -60,7 +60,11 @@ fn call_fields(cx: &SpellCtx, fd: &Funcdata, op: OpId) -> Option<[Rc<Datatype>; 
 }
 
 pub(crate) fn call_projection(fd: &Funcdata, arch: &Architecture, op: OpId) -> Option<usize> {
-    if !arch.analysis_godwarfsig {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_analysisgates::Godwarfsig>()
+        .0
+    {
         return None;
     }
     let value = fd.vbank().get(fd.obank().get(op)?.get_out()?)?;

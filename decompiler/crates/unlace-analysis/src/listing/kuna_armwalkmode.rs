@@ -66,7 +66,10 @@ impl ArmWalkMode {
         arch: &Architecture,
         painter: &ContextPainter,
     ) -> Option<ArmWalkMode> {
-        if !arch.analysis_armwalkmode
+        if !arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Armwalkmode>()
+            .0
             || arch.input_arm_isa_override
             || file.format() != object::BinaryFormat::Elf
             || file.architecture() != object::Architecture::Arm

@@ -924,7 +924,12 @@ impl AnalysisPass for OperandRefsPass {
             Some(s) => Rc::clone(s),
             None => return AnalysisOutput::default(),
         };
-        if !ctx.arch.analysis_widestrings32 {
+        if !ctx
+            .arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::Widestrings32>()
+            .0
+        {
             return emit_facts(
                 ctx.file,
                 &scan_scalar_refs(ctx.file, ctx.arch.translate(), &code_space),

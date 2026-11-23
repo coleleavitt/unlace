@@ -125,7 +125,12 @@ impl AnalysisPass for NoReturnPropagatePass {
         // `error`/`error_at_line` entry addresses (PLT stubs + any defined funcsym)
         // so the propagation rule can treat a `call error(nonzero)` tail as terminal.
         let imports = crate::loader::format::resolve_imports(ctx.file, ctx.bytes);
-        let error_recog = if ctx.arch.analysis_noreturn_known {
+        let error_recog = if ctx
+            .arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+            .0
+        {
             ErrorRecognizer::from_imports(&imports, listing)
         } else {
             ErrorRecognizer::disabled()
@@ -136,7 +141,11 @@ impl AnalysisPass for NoReturnPropagatePass {
         // no-return calls, dead returns, and switch-of-no-return. Its own flag
         // (`--option noreturn_reach`, default-on, DIV-19); Listing-gated like the rest,
         // so every parity gate stays byte-identical.
-        let reach = ctx.arch.analysis_noreturn_reach;
+        let reach = ctx
+            .arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::NoreturnReach>()
+            .0;
         let resuming_entry = crate::pclntab::kuna_gomcall::resuming_entry(ctx, listing);
         let slot_calls = terminal_slot_calls(listing, ctx.file);
         for fact in propagate_noreturn(

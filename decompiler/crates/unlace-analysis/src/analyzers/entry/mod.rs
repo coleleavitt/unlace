@@ -225,7 +225,7 @@ impl AnalysisPass for EntryDiscoveryPass {
 ///
 /// Like every other analysis pass it RUNS at load (the facts are cheap to compute
 /// and are stashed per-pass); the **commit** is gated by `--option eh_frame_full
-/// on` (`engine.rs::analysis_pass_enabled` → `arch.analysis_eh_frame_full`). So a
+/// on` (`engine.rs::analysis_pass_enabled` → `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::EhFrameFull>().0`). So a
 /// default run computes but never COMMITS the landing pads, and the discovery set
 /// is byte-identical to the FDE-pcBegin-only behavior — every parity gate is
 /// structurally untouched. Output-changing (adds entries) ⇒ default-off.

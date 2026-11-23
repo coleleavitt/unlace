@@ -15,7 +15,10 @@ pub(crate) fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
     }
     let name = arch.symboltab.function_display_name_across_scopes(entry);
     if let Some(name) = name.as_deref() {
-        if arch.analysis_noreturn_known
+        if arch
+            .kuna_options
+            .get::<crate::kuna_analysisgates::NoreturnKnown>()
+            .0
             && crate::kuna_noreturn_externmatch::is_known_noreturn_name(name)
         {
             return true;
@@ -35,7 +38,11 @@ pub(crate) fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
             return true;
         }
     }
-    if arch.analysis_noreturn_known {
+    if arch
+        .kuna_options
+        .get::<crate::kuna_analysisgates::NoreturnKnown>()
+        .0
+    {
         let name = arch
             .remote_scope
             .as_ref()
@@ -61,7 +68,9 @@ pub(crate) fn is_proxy_no_return_at(
     use crate::kuna_noreturn_externmatch::{
         call_ends_function, is_proxy_noreturn_name, is_stub_body,
     };
-    arch.analysis_noreturn_known
+    arch.kuna_options
+        .get::<crate::kuna_analysisgates::NoreturnKnown>()
+        .0
         && call_ends_function(arch, call, fallthrough)
         && arch
             .symboltab

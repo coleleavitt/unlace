@@ -30,6 +30,7 @@ from pcode_emu import State, Unmodeled, step  # noqa: E402
 from slaregs import register_map  # noqa: E402
 import qemu_backend  # noqa: E402
 import rvv_backend  # noqa: E402
+import llvmgen  # noqa: E402
 
 PAGE = 0x1000
 
@@ -261,7 +262,11 @@ def main():
                     help="riscv64v: RISC-V vector instructions against QEMU (tools/difffuzz/rvv_backend.py)")
     ap.add_argument("--vlen", type=int, default=128, help="riscv64v: QEMU's VLEN in bits (128..256)")
     ap.add_argument("--objdump", default="llvm-objdump", help="riscv64v: an llvm-objdump with the RISC-V vector extensions")
-    ap.add_argument("--only", help="riscv64v: a regex the mnemonic must match")
+    ap.add_argument("--only", help="riscv64v, --llvm-mattr: a regex the mnemonic must match")
+    ap.add_argument("--lang", help="lift with this SLEIGH language id instead of the architecture's (RISCV:LE:64:Zcmp)")
+    ap.add_argument("--qemu-cpu", help="--oracle qemu: the -cpu value (riscv64 Zcmp: rv64,zcd=false,zcmp=true,zcmt=true)")
+    ap.add_argument("--llvm-mattr", help="riscv64: generate the words llvm-objdump (--objdump) decodes with this -mattr "
+                    "instead of the ones Capstone decodes (for extensions Capstone does not know)")
     ap.add_argument("--count", type=int, default=1000, help="instructions to generate")
     ap.add_argument("--trials", type=int, default=3, help="random input states per instruction")
     ap.add_argument("--seed", type=int, default=1)
@@ -284,6 +289,10 @@ def main():
         sys.exit("--arch riscv64v needs --oracle qemu")
     if args.oracle == "qemu" and not qemu_backend.available(arch):
         sys.exit(f"--oracle qemu: no QEMU user harness or binary for {arch.name}")
+    if args.lang:
+        arch.lang = args.lang
+    if args.qemu_cpu:
+        qemu_backend.CPU_OVERRIDE = args.qemu_cpu
     regs, big = register_map(arch.lang)
     arch.big = big
     rng = random.Random(args.seed)
@@ -296,6 +305,8 @@ def main():
             cands.append({"bytes": b, "mnemonic": ins.mnemonic if ins else "?", "op_str": ins.op_str if ins else ""})
     elif vector:
         cands = rvv_backend.generate(rng, args.count, args.objdump, args.only)
+    elif args.llvm_mattr:
+        cands = llvmgen.generate(rng, args.count, args.objdump, args.llvm_mattr, args.only, 64 if arch.elf64 else 32)
     else:
         cands = generate(arch, rng, args.count)
     dis = arch.capstone()
@@ -323,9 +334,9 @@ def main():
                 if row is None:
                     counts["not-lifted"] += 1
                     continue
-                at = None if vector else next(dis.disasm(c["bytes"], c["addr"]), None)
+                at = None if vector or args.llvm_mattr else next(dis.disasm(c["bytes"], c["addr"]), None)
                 cap_ops = at.op_str if at else c["op_str"]
-                why = None if vector else arch.operand_mismatch(cap_ops, row["operands"]) if c["mnemonic"] == row["mnemonic"].lower() else None
+                why = None if vector or args.llvm_mattr else arch.operand_mismatch(cap_ops, row["operands"]) if c["mnemonic"] == row["mnemonic"].lower() else None
                 if why:
                     counts["operand"] += 1
                     findings.append({"kind": "operand", "bytes": c["bytes"].hex(), "capstone": f"{c['mnemonic']} {c['op_str']}",

@@ -139,6 +139,11 @@ copy, `f-` or `abs()`. `--unbox exact` NaN-unboxes single-precision sources. The
 the value is known boxed (`boxedcompare`, and `fpargboxed` for argument registers and call
 results). This gives 0 words wrong against QEMU instead of 13 for reading the low bits.
 
+`decode` also takes 16-bit encodings: a compressed word fills the low half of its 4-byte slot and
+a `c.nop` the high half. A word the spec cannot decode prints as `.byte` and can pull unlace's
+listing out of step with the slots, so the listing restarts at the next slot after one. That
+costs a process per undecodable word, so compare extensions in groups.
+
 To compare another variant, copy `specs/Ghidra/Processors/RISCV/data/languages` into
 `<dir>/Ghidra/Processors/RISCV/data/languages`, replace `riscv.zb.sinc`, compile with
 `slacomp`, and pass `--sleighpath <dir>` to `unlace`.

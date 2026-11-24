@@ -38,6 +38,9 @@ def _mmap_min_addr():
 # QEMU user mode maps guest pages one-to-one onto the host's, so it cannot map below this
 MIN_ADDR = _mmap_min_addr()
 
+# --qemu-cpu: replaces the harness's -cpu value
+CPU_OVERRIDE = None
+
 
 def fill_byte(addr, seed):
     x = (addr * 0x9E3779B97F4A7C15 + seed * 0xC2B2AE3D27D4EB4F) & 0xFFFFFFFFFFFFFFFF
@@ -1712,7 +1715,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         f.write(build(segs, PROLOGUE, h.machine, h.big, getattr(h, "flags", 0), align=align))
     os.chmod(path, 0o755)
     try:
-        cmd = [path] if h.qemu is None else [qemu_path(h.qemu[0]), *h.qemu[1], path]
+        qargs = ["-cpu", CPU_OVERRIDE] if CPU_OVERRIDE and h.qemu is not None else (h.qemu[1] if h.qemu else [])
+        cmd = [path] if h.qemu is None else [qemu_path(h.qemu[0]), *qargs, path]
         p = subprocess.run(cmd, capture_output=True, timeout=10)
     except subprocess.TimeoutExpired:
         return {"status": "ref-exception", "why": "qemu timeout"}

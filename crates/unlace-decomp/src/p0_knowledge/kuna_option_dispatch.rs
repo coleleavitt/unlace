@@ -288,6 +288,7 @@ kuna_options! { self, p1;
     "regionedgeorder" => registered!(crate::region_structurer::RegionEdgeOrder),
     "outline" => registered!(crate::kuna_outline::OutlineOption),
     "condfold" => registered!(crate::kuna_condfold::CondFold),
+    "orchainlive" => registered!(crate::kuna_orchain::OrchainLive),
     "implweight" => registered!(crate::coreaction_cleanup::ImplWeight),
     "condstmts" => registered!(crate::kuna_condstmts::CondStmts),
     "gotoreduce" => registered!(crate::kuna_gotoreduce::GotoReduceMode),
@@ -543,6 +544,7 @@ kuna_options! { self, p1;
     "goitabcalls" => registered!(crate::kuna_goitabcalls::GoItabCalls),
     "cppsig" => registered!(crate::kuna_cppsig::CppSigMode),
     "dwarfglobaltypes" => registered!(crate::kuna_analysisgates::Dwarfglobaltypes),
+    "dwarfdecls" => registered!(crate::kuna_analysisgates::Dwarfdecls),
     "dwarfscopes" => {
         let (val, msg) = <crate::kuna_analysisgates::DwarfScopes as crate::kuna_optionset::KunaOption>::parse(p1)?;
         // FIXME: Audit that the environment access only happens in single-threaded code.

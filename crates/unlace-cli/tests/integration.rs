@@ -20,6 +20,10 @@ mod huc6280;
 mod kr1878_raw;
 #[path = "m6800_family.rs"]
 mod m6800_family;
+#[path = "m88k_raw.rs"]
+mod m88k_raw;
+#[path = "mep.rs"]
+mod mep;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "nios2_raw.rs"]
@@ -58,6 +62,8 @@ mod sparc_prologue_start;
 mod stm8_raw;
 #[path = "upd7725.rs"]
 mod upd7725;
+#[path = "v810.rs"]
+mod v810;
 #[path = "w65816_raw.rs"]
 mod w65816_raw;
 #[path = "x86_amx.rs"]

@@ -5730,7 +5730,18 @@ moves.
   drops the untyped entry for those addresses and maps the typed one,
   typelocked and namelocked, first among the typed data facts, so
   `cfg._12_4_ + cfg._8_4_` reads `cfg.flags + cfg.port` and
-  `*(char **)&modes[i * 8L]` reads `modes[i]`. (kuna) When neither `.comment`
+  `*(char **)&modes[i * 8L]` reads `modes[i]`. (kuna `dwarfdecls`, default off) A
+  declaration-only `DW_TAG_subprogram` (`DW_AT_declaration`, no `DW_AT_low_pc`) is kept
+  when its linkage name, or else its name, is an ELF import with PLT entries, no DWARF
+  definition of it exists in the file, it is prototyped, and every unit declaring it
+  agrees on return type, parameter types and variadic slot
+  (`dwarf/kuna_dwarfdecls.rs`); it is emitted at each PLT entry
+  (`pass.rs (AnalysisOutput::dwarf_decl_prototypes)`), and with the option on the
+  commit adds it to the address-keyed prototypes where no by-name prototype names the
+  import and no address-keyed one sits at that entry, so library signatures, type
+  libraries and DWARF definitions keep precedence. Calls to the import then take its
+  types: an enum parameter prints a constant argument as its member
+  (`gnutls_bye(s,GNUTLS_SHUT_WR)`). (kuna) When neither `.comment`
   nor the other signals name the toolchain, ELF and Mach-O detection falls back
   to the debug info (`analyzers/sourcelang/kuna_dwarfproducer.rs (dwarf_compiler)`):
   the first 16 compile units' `DW_AT_language` (Rust, Go, Swift) or

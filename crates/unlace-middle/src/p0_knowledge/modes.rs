@@ -647,6 +647,8 @@ mod tests {
         /// `gopairreturns` remains explicit while aggregate ABI interactions across
         /// Go corpus sizes are evaluated for automatic selection.
         const UNEVALUATED: &[&str] = &[
+            // `orchainlive` (issue #10) is swept in its own PR; preset membership waits on it.
+            "orchainlive",
             // `phithread` (issue #20) landed without a corpus sweep.
             "phithread",
             // `phiarm` (issue #20) landed without a corpus sweep.
@@ -660,6 +662,8 @@ mod tests {
             // `dwarfglobaltypes` was turned off by default in its own branch after
             // landing; it has no preset sweep yet.
             "dwarfglobaltypes",
+            // `dwarfdecls` lands as an opt-in with its decbench sweep in its catalog row.
+            "dwarfdecls",
             // Stack-address liveness can be incidental; synthetic regressions and
             // a local speed measurement do not justify a broad preset flip.
             "stackaddrargtrial",

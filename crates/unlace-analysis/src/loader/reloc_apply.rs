@@ -20,7 +20,8 @@
 //! `WDISP30`/`WPLT30` calls, the `HI22`/`LO10` and `PC22`/`PC10` `sethi`/`or`
 //! pairs, and `DISP32`, plus on SPARC64 the `H44`/`M44`/`L44` and
 //! `HH22`/`HM10`/`LM22` address parts, `DISP64` and the `WDISP22`/`WDISP19`/
-//! `WDISP16` branches; and eBPF `64_64` (the two `imm` halves of `lddw`),
+//! `WDISP16` branches; LoongArch `PCALA_HI20`/`PCALA_LO12`, `CALL36` and the
+//! `B26`/`B21`/`B16` branches; and eBPF `64_64` (the two `imm` halves of `lddw`),
 //! `64_32` (the subprogram `call` displacement) and the `ABS`/`NODYLD` data
 //! words. Generic
 //! absolute, relative, PLT-relative, and image-offset relocations support
@@ -83,6 +84,10 @@ enum Specific {
     SparcSimm { shift: u8, mask: u16 },
     SparcDisp { bits: u8 },
     SparcWdisp16,
+    LarchPcalaHi20,
+    LarchLo12,
+    LarchCall36,
+    LarchBranch { bits: u8 },
     Aarch64AdrLo21,
     Aarch64Imm19 { load: bool },
     Aarch64Imm14,
@@ -229,6 +234,8 @@ impl RelocationSpec {
                     | Specific::SparcWdisp30
                     | Specific::SparcDisp { .. }
                     | Specific::SparcWdisp16
+                    | Specific::LarchCall36
+                    | Specific::LarchBranch { .. }
                     | Specific::Aarch64Imm19 { load: false }
                     | Specific::Aarch64Imm14
                     | Specific::RiscvCall
@@ -545,6 +552,28 @@ fn classify_info(
             Some((Specific::PcRelativeData, false))
         }
 
+        (
+            Architecture::LoongArch32 | Architecture::LoongArch64,
+            Some(elf::R_LARCH_NONE | elf::R_LARCH_RELAX | elf::R_LARCH_ALIGN),
+        ) => return Ok(None),
+        (Architecture::LoongArch32 | Architecture::LoongArch64, Some(elf::R_LARCH_PCALA_HI20)) => {
+            Some((Specific::LarchPcalaHi20, false))
+        }
+        (Architecture::LoongArch32 | Architecture::LoongArch64, Some(elf::R_LARCH_PCALA_LO12)) => {
+            Some((Specific::LarchLo12, false))
+        }
+        (Architecture::LoongArch32 | Architecture::LoongArch64, Some(elf::R_LARCH_CALL36)) => {
+            Some((Specific::LarchCall36, true))
+        }
+        (Architecture::LoongArch32 | Architecture::LoongArch64, Some(elf::R_LARCH_B26)) => {
+            Some((Specific::LarchBranch { bits: 26 }, false))
+        }
+        (Architecture::LoongArch32 | Architecture::LoongArch64, Some(elf::R_LARCH_B21)) => {
+            Some((Specific::LarchBranch { bits: 21 }, false))
+        }
+        (Architecture::LoongArch32 | Architecture::LoongArch64, Some(elf::R_LARCH_B16)) => {
+            Some((Specific::LarchBranch { bits: 16 }, false))
+        }
         (Architecture::Bpf, Some(elf::R_BPF_NONE)) => return Ok(None),
         (Architecture::Bpf, Some(elf::R_BPF_64_64)) => Some((Specific::BpfImm64, false)),
         (Architecture::Bpf, Some(elf::R_BPF_64_32)) => Some((Specific::BpfCall, true)),
@@ -594,7 +623,10 @@ fn classify_info(
         let width = match specific {
             Specific::Ppc64Toc16 { .. } | Specific::PpcHalf16 { .. } => 2,
             Specific::RiscvRvcBranch | Specific::RiscvRvcJump => 2,
-            Specific::Ppc64Toc64 | Specific::RiscvCall | Specific::BpfCall => 8,
+            Specific::Ppc64Toc64
+            | Specific::RiscvCall
+            | Specific::BpfCall
+            | Specific::LarchCall36 => 8,
             Specific::BpfImm64 => 16,
             Specific::Data { bytes, .. } => usize::from(bytes),
             Specific::RiscvAddSub { .. } | Specific::RiscvSet | Specific::Riscv6 { .. } => {
@@ -735,6 +767,10 @@ fn apply_info(
             sparc_disp(field, little_endian, reloc, symbol, place, bits)
         }
         Specific::SparcWdisp16 => sparc_wdisp16(field, little_endian, reloc, symbol, place),
+        Specific::LarchPcalaHi20 => larch_pcala_hi20(field, reloc, symbol, place),
+        Specific::LarchLo12 => larch_lo12(field, reloc, symbol),
+        Specific::LarchCall36 => larch_call36(field, reloc, symbol, place),
+        Specific::LarchBranch { bits } => larch_branch(field, reloc, symbol, place, bits),
         Specific::Aarch64AdrLo21 => aarch64_adr_lo21(field, little_endian, reloc, symbol, place),
         Specific::Aarch64Imm19 { .. } => {
             aarch64_pcrel_imm(field, little_endian, reloc, symbol, place, 19)
@@ -1691,6 +1727,102 @@ fn sparc_wdisp16(
     let words = (value >> 2) as u32;
     insn = (insn & !0x0030_3fff) | (((words >> 14) & 3) << 20) | (words & 0x3fff);
     write_u32(field, le, insn);
+    Ok(())
+}
+
+/// `PCALA_HI20`: `pcalau12i rd, si20` (si20 at bits 24..5), the page delta
+/// `((S + A + 0x800) & !0xfff) - (P & !0xfff)` rounded so the paired signed
+/// low 12 bits land on `S + A`. LoongArch instructions are little-endian.
+fn larch_pcala_hi20(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+    place: u64,
+) -> Result<(), RelocationFailure> {
+    let mut insn = read_u32(field, true);
+    if insn & 0xfe00_0000 != 0x1a00_0000 || reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let target = symbol as i128 + reloc.addend as i128;
+    let value = ((target + 0x800) & !0xfff) - (place as i128 & !0xfff);
+    require_signed(value, 32)?;
+    insn = (insn & !(0xf_ffff << 5)) | ((((value >> 12) as u32) & 0xf_ffff) << 5);
+    write_u32(field, true, insn);
+    Ok(())
+}
+
+/// `PCALA_LO12`: the low 12 bits of `S + A` into si12/ui12 (bits 21..10) of
+/// `addi`, a load or a store.
+fn larch_lo12(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+) -> Result<(), RelocationFailure> {
+    if reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let mut insn = read_u32(field, true);
+    let lo = ((symbol as i128 + reloc.addend as i128) as u32) & 0xfff;
+    insn = (insn & !(0xfff << 10)) | (lo << 10);
+    write_u32(field, true, insn);
+    Ok(())
+}
+
+/// `CALL36`: `pcaddu18i ra, si20; jirl ra, ra, offs16`, the 8-byte pair whose
+/// 38-bit displacement `S + A - P` splits as `(v + 0x20000) >> 18` and the
+/// signed word count of its low 18 bits.
+fn larch_call36(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+    place: u64,
+) -> Result<(), RelocationFailure> {
+    let mut hi = read_u32(&field[..4], true);
+    let mut lo = read_u32(&field[4..], true);
+    if hi & 0xfe00_0000 != 0x1e00_0000 || lo & 0xfc00_0000 != 0x4c00_0000 || reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let value = symbol as i128 + reloc.addend as i128 - place as i128;
+    require_aligned(value, 4)?;
+    require_signed(value + 0x2_0000, 38)?;
+    hi = (hi & !(0xf_ffff << 5)) | (((((value + 0x2_0000) >> 18) as u32) & 0xf_ffff) << 5);
+    lo = (lo & !(0xffff << 10)) | ((((value >> 2) as u32) & 0xffff) << 10);
+    write_u32(&mut field[..4], true, hi);
+    write_u32(&mut field[4..], true, lo);
+    Ok(())
+}
+
+/// `B26` (`b`/`bl`), `B21` (`beqz`/`bnez`/`bceqz`/`bcnez`) and `B16` (the
+/// two-register compares and `jirl`): the word displacement's low 16 bits at
+/// bits 25..10 and, for B26 and B21, its high 10 or 5 bits at bit 0.
+fn larch_branch(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+    place: u64,
+    bits: u8,
+) -> Result<(), RelocationFailure> {
+    let mut insn = read_u32(field, true);
+    let op = insn >> 26;
+    let form = match bits {
+        26 => matches!(op, 0x14 | 0x15),
+        21 => matches!(op, 0x10..=0x12),
+        _ => matches!(op, 0x13 | 0x16..=0x1b),
+    };
+    if !form || reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let value = symbol as i128 + reloc.addend as i128 - place as i128;
+    require_aligned(value, 4)?;
+    require_signed(value, bits + 2)?;
+    let words = (value >> 2) as u32;
+    let high = match bits {
+        26 => 0x3ff,
+        21 => 0x1f,
+        _ => 0,
+    };
+    insn = (insn & !(0xffff << 10) & !high) | ((words & 0xffff) << 10) | ((words >> 16) & high);
+    write_u32(field, true, insn);
     Ok(())
 }
 
@@ -3069,6 +3201,104 @@ mod tests {
             );
             assert_eq!(field, before);
         }
+    }
+}
+
+#[cfg(test)]
+mod loongarch_tests {
+    use super::*;
+
+    fn patch(r_type: u32, addend: i64, bytes: &[u8], symbol: u64, place: u64) -> Vec<u8> {
+        let info = RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend,
+            implicit_addend: false,
+            r_type: Some(r_type),
+        };
+        let spec = classify_info(Architecture::LoongArch64, info)
+            .unwrap()
+            .expect("not a no-op");
+        let mut field = bytes.to_vec();
+        assert_eq!(field.len(), spec.width());
+        apply_info(spec, info, &mut field, true, symbol, place, None, None).unwrap();
+        field
+    }
+
+    fn word(v: u32) -> Vec<u8> {
+        v.to_le_bytes().to_vec()
+    }
+
+    // Words as ld.lld --no-relax writes them for the sweep's loongarch64 object.
+    #[test]
+    fn pcala_pair_and_call36_match_the_linker() {
+        assert_eq!(
+            patch(
+                elf::R_LARCH_PCALA_HI20,
+                76,
+                &word(0x1a00_0005),
+                0x2_0630,
+                0x1_00dc
+            ),
+            word(0x1a00_0205)
+        );
+        assert_eq!(
+            patch(
+                elf::R_LARCH_PCALA_LO12,
+                76,
+                &word(0x02c0_00a5),
+                0x2_0630,
+                0x1_00e0
+            ),
+            word(0x02d9_f0a5)
+        );
+        let call = [word(0x1e00_0014), word(0x4c00_0280)].concat();
+        assert_eq!(
+            patch(elf::R_LARCH_CALL36, 0, &call, 0x1_01a0, 0x1_015c),
+            [word(0x1e00_0014), word(0x4c00_4680)].concat()
+        );
+    }
+
+    #[test]
+    fn branches_split_their_word_displacement() {
+        assert_eq!(
+            patch(elf::R_LARCH_B26, 0, &word(0x5400_0000), 0x1100, 0x1000),
+            word(0x5401_0000)
+        );
+        assert_eq!(
+            patch(
+                elf::R_LARCH_B26,
+                0,
+                &word(0x5400_0000),
+                0x20_0000,
+                0x30_0000
+            ),
+            word(0x5400_03fc)
+        );
+        assert_eq!(
+            patch(elf::R_LARCH_B21, 0, &word(0x4000_0080), 0x1040, 0x1000),
+            word(0x4000_4080)
+        );
+        assert_eq!(
+            patch(elf::R_LARCH_B16, 0, &word(0x5800_0085), 0x0ff0, 0x1000),
+            word(0x5bff_f085)
+        );
+        assert!(
+            classify_info(
+                Architecture::LoongArch64,
+                RelocationInfo {
+                    kind: RelocationKind::Unknown,
+                    encoding: RelocationEncoding::Unknown,
+                    size: 0,
+                    addend: 0,
+                    implicit_addend: false,
+                    r_type: Some(elf::R_LARCH_RELAX),
+                },
+            )
+            .unwrap()
+            .is_none()
+        );
     }
 }
 

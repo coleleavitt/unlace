@@ -1273,7 +1273,14 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   displacements `WDISP22` (`Bicc`/`FBfcc`), `WDISP19` (`BPcc`/`FBPfcc`) and
   `WDISP16` (`BPr`, split d16hi/d16lo), range-checked; a `WDISP30` call whose
   ends do not fit 32 bits is range-checked as a signed 32-bit displacement.
-  GOT/TLS forms that need linker-built tables remain unsupported. eBPF objects are REL-only and every program ships as one,
+  GOT/TLS forms that need linker-built tables remain unsupported. LoongArch
+  (unlace#677) covers the `PCALA_HI20`/`PCALA_LO12` pair (`pcalau12i` takes the
+  page delta of `S + A + 0x800`, so the signed low twelve bits land on the
+  target), the 8-byte `CALL36` `pcaddu18i`+`jirl` pair, and the `B26`, `B21`
+  and `B16` branch displacements, each encoding-checked; `RELAX` and `ALIGN`
+  are no-ops, since the layout keeps the assembler's bytes. The `object`
+  crate's generic `LoongArchBranch` reading of `B16`/`B21`/`B26` (a plain
+  integer field) is never used. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from

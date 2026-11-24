@@ -16,7 +16,7 @@ and effects refuse. Flow overrides do not acquire a record. The record is
 cleared on restart and cannot authorize a later rendering without the final
 whole-function SSA proof described in chapter 09.
 
-**(kuna) Atomic instructions — `option atomics`, default off,
+**(kuna) Atomic instructions — `option atomics auto|msvc|gcc|off`, default off,
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rewrite)`.**
 SLEIGH lifts an x86 `lock`-prefixed read-modify-write as `LOCK()`, a load, an
 update, a store and `UNLOCK()`; an AArch64 LSE atomic (`ldadd`, `ldclr`,
@@ -80,6 +80,23 @@ points to, or else an integer of its width (unsigned for `and`/`or`/`xor`,
 signed otherwise); the address operand points to it, the result and the other
 operands have it, and a constant address operand may become an address
 reference.
+
+The option's value chooses the spelling (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (spelled)`).
+`gcc` prints the `__sync` builtins above; `msvc` prints the MSVC intrinsics
+Hex-Rays prints: `_InterlockedExchangeAdd`, `_InterlockedAnd`,
+`_InterlockedOr`, `_InterlockedXor`, `_InterlockedExchange` and
+`_InterlockedCompareExchange`, suffixed `8`, `16`, nothing or `64` by the
+location's width; `auto` prints the MSVC ones on a Windows image (a Windows
+compiler spec, or a PE the loader identified as Windows user mode) and the GCC
+ones elsewhere. Each intrinsic returns the old value, as its builtin does.
+MSVC has no fetch-and-subtract: a subtraction of a constant becomes
+`_InterlockedExchangeAdd` of its negation, a subtraction of a value becomes
+`_InterlockedExchangeAdd` of its two's complement where that operand can be
+built in front of the instruction, and otherwise keeps
+`__sync_fetch_and_sub`. `_InterlockedCompareExchange(p, N, E)` takes the new
+value before the expected one, as MSVC declares it. The same spelling applies
+to the builtins `llscfold` produces. The 128-bit pairs (`cmpxchg16b`, `casp`)
+stay declined: the evaluation tracks values of at most 8 bytes.
 
 **(kuna) Load/store-exclusive loops — `option llscfold`, default off,
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (ActionLlscLoop)`.**
@@ -898,8 +915,16 @@ instruction named from the decoder's `Unimpl` text (mnemonic and operands, else
 `instruction`). The decompile drive does the same for a DWARF register local
 that `seed_dwarf_register_locals` could not bind (chapter 01): a header warning
 `debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its
-register reaches it`. Both tags are lowercase, so the printer's warning
-records file them under the kinds `notmodelled` and `debuginfo`, and the CLI's
+register reaches it`. A prototype the load withheld is recorded once per image
+in the architecture table `WithheldPrototypes` (by entry address, else by name,
+with its cause): a library signature declaring a `float` or `double` on a
+target whose convention does not return a `double` whole (the libc tables'
+load-time partition, a declared libc function, the ARM list `armfloatreturn`
+does not apply), and a DWARF signature `build_pieces` could not type. The
+decompile's seed (`kuna_honestgaps.rs (seed)`) names it as
+`withheldproto: ...; not applied` in the header of the function it belongs to
+and at each call whose callee it is. The tags are lowercase, so the printer's warning
+records file them under the kinds `notmodelled`, `debuginfo` and `withheldproto`, and the CLI's
 `--json` lists them with the rest and totals every kind in `warning_kinds`
 (`docs/cli.md`). Off by default because the extra comments change the text of
 every function with such a gap; the losses that already print (decode-failure
@@ -989,7 +1014,7 @@ which is why it is not the default.
 
 (kuna `guarddispatch`, on by default) A CALLIND through a Control Flow Guard
 dispatch slot calls the register the dispatch routine jumps to
-(`decompiler/crates/kuna-decomp/src/p2_lift/kuna_guarddispatch.rs
+(`crates/unlace-lift/src/p2_lift/kuna_guarddispatch.rs
 (calls_through_slot)`). An image built with `/guard:cf` makes every
 function-pointer call as `mov rax, target; call [__guard_dispatch_icall_fptr]`;
 the routine in the slot validates `rax` and jumps to it with the argument

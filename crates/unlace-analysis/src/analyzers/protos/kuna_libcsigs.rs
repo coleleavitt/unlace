@@ -5472,6 +5472,13 @@ impl AnalysisPass for LibcSigsPass {
                     .chain(libm.prototypes_at)
                     .map(|(at, p)| (Some(at), p));
                 out.arm_float_prototypes.extend(float.chain(float_at));
+            } else {
+                let cause = unlace_decomp::kuna_honestgaps::WithheldCause::FloatConvention;
+                let named = float.into_iter().map(|p| (None, p.name, cause));
+                let at = float_at
+                    .into_iter()
+                    .map(|(at, p)| (Some(at), p.name, cause));
+                out.withheld_prototypes.extend(named.chain(at));
             }
         }
         out

@@ -33,6 +33,7 @@ MODULE_BAND = {
     "action": "middle", "architecture": "middle", "kuna_fasthash": "middle",
     "fspec": "middle", "varmap": "middle", "heritage": "middle", "merge": "middle", "jumptable": "middle",
     "kuna_typemerge": "middle", "kuna_phiarm": "middle",
+    "kuna_calleesaved": "middle",
     "remote_provider": "middle",
     "kuna_calloverlap": "middle", "kuna_loadguardreads": "middle", "kuna_revisitrefine": "middle",
 }

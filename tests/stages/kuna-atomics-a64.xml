@@ -66,7 +66,7 @@ Source (the C of tests/stages/kuna-atomics-x86.xml), built by clang 22
 <symbol space="ram" offset="0x210150" name="x_counter"/>
 </binaryimage>
 <script>
-<com>option atomics on</com>
+<com>option atomics auto</com>
 <com>option llscfold on</com>
 <com>load function fetch_add</com>
 <com>decompile</com>

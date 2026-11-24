@@ -3905,8 +3905,12 @@ unboxing dies. Exact, so always on.
 **maskjoin** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_maskjoin.rs (RuleMaskJoin)`, oppool1, fires on
 `INT_ADD`, `INT_OR` and `INT_XOR`. *Pattern:* both inputs are `INT_AND`s of one non-constant
-value `x` (through `COPY`s) with constants `m1` and `m2` that share no bit, at a width of at
-most eight bytes. The masked values then share no set bit, so the sum, the or and the exclusive
+value `x` (through `COPY`s) with constants `m1` and `m2` that share no bit, or a zero-extended
+piece of `x` moved back into place, which keeps the same bits: `zext(SUB(x, k)) << 8k` (no
+shift for `k` 0), the piece also read as `SUB(x >> 8k, 0)` (`kuna_maskjoin.rs (piece_of)`).
+A soft-float ARM caller that keeps a returned `double`'s high word in its own register printed
+`(unsigned long long)v1 << 0x20 | x & 0xffffffff` with `v1 = x >> 0x20`. The value is at most eight bytes
+wide. The masked values then share no set bit, so the sum, the or and the exclusive
 or are the same value. *Rewrite:* the op becomes `COPY x` when `m1 | m2` covers every bit of
 `x`, else `INT_AND x, m1 | m2`. ARM's `vmov d0, r0, r1` lifts as
 `(zext(r1) << 32) + zext(r0)`; after a call returning a `double` in r0:r1 its halves simplify to

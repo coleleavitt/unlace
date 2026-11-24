@@ -5050,8 +5050,8 @@ compares `feq.h`/`flt.h`/`fle.h`, `fmv.x.h`/`fmv.h.x`, `fclass.h`, and
 the conversions between half and single, double, 32-bit and (RV64) 64-bit
 integers. Before, every one of them was a bad instruction. A half value is
 the low 16 bits of an f register: `frs1H`/`frs2H`/`frs3H` read them, and a
-write zero-extends the 2-byte result into the register as the single-precision
-forms do (`fassignS`; the ISA's NaN-boxing is not modelled, as for F).
+write NaN-boxes the 2-byte result into the register (`fassignH`: bits above 15
+set to one), as the single-precision forms do with `fassignS`.
 Arithmetic, square root, compares and conversions are the ordinary p-code
 float operations on 2-byte varnodes (`FLOAT_ADD`, `FLOAT2FLOAT`,
 `FLOAT_INT2FLOAT`, `FLOAT_TRUNC`, ...); the translator has no 2-byte float
@@ -5341,6 +5341,17 @@ Found by `tools/difffuzz` against Unicorn and checked against the Arm ARM.
 - The fixed-point `FCVTZU d,d,#fbits` and `FCVTZU h,h,#fbits`, `SCVTF`/`UCVTF` `.4H`/`.8H`
   `#fbits` and scalar `URSHR d,d,#shift` decode their shift with the element size of the
   destination (`Imm_shr_imm64`/`Imm_shr_imm16`); `fcvtzu d22,d5,#50` printed `#-0xe`.
+
+### RISC-V NaN-boxing of narrower float results (#549)
+
+With D (FLEN 64) every single-precision result written to an `f` register is NaN-boxed:
+bits 63:32 are set to one (ISA manual, "NaN Boxing of Narrower Values"). `fassignS`
+(`riscv.table.sinc`) writes `zext(src) | ~zext(0xffffffff:4)`, and every single-precision
+write goes through it: the F arithmetic, `flw`, `fmv.w.x`, the conversions to `.s` including
+`fcvt.s.d`, `fsgnj*.s`, `fmin`/`fmax.s`, and RV32's `c.flw`/`c.flwsp` (the generated Zfa forms box
+in their own p-code). `fassignH` boxes a Zfh half result the same way (bits 63:16). A single-precision read still
+takes the low 32 bits without checking that the register is boxed (the ISA reads an
+unboxed value as the canonical NaN). Found by `tools/difffuzz`.
 
 ### RISC-V compressed indirect jumps clear bit 0
 

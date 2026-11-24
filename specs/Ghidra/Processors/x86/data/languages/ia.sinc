@@ -487,6 +487,10 @@ define context contextreg
   apxNDD32=(24,28)
   apxNDD16=(24,28)
   apxNDD8=(24,28)
+@else
+@ifndef IA16
+  rexX4=(49,49)         # EVEX.U inverted (P1 bit 2): 1 selects the 256-bit AVX10.2 {sae} forms
+@endif
 @endif
 
 ;
@@ -2572,6 +2576,7 @@ macro fucompe(val1, val2) {
 :^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover=0 & byte=0xC5; vex_r=1 & vex_x=1 & vex_vvvv & vex_l & vex_pp=3; instruction
                        [ instrPhase=1; vexMode=1; vexVVVV=~vex_vvvv; vexL=vex_l; vexMMMMM=0x1; prefix_f2=1; ] {}
 
+@ifdef IA16
 :^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
                  vex_w & vex_vvvv & evex_res2=1 & vex_pp=0; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
                        [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp;  evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; ] {}
@@ -2584,6 +2589,20 @@ macro fucompe(val1, val2) {
 :^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
                  vex_w & vex_vvvv & evex_res2=1 & vex_pp=3; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
                        [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; prefix_f2=1; ] {}
+@else
+:^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=0; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                       [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp;  evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; rexX4=~evex_res2; ] {}
+:^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=1; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                       [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; rexX4=~evex_res2; prefix_66=1; ] {}
+:^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=2; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                       [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; rexX4=~evex_res2; prefix_f3=1; ] {}
+:^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=3; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                       [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; rexX4=~evex_res2; prefix_f2=1; ] {}
+@endif
 
 # Many of the multimedia instructions have a "mandatory" prefix, either 0x66, 0xf2 or 0xf3
 # where the prefix really becomes part of the encoding.  We collect the three possible prefixes of this

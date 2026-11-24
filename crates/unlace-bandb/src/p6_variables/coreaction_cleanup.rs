@@ -2174,8 +2174,14 @@ impl Action for ActionMergeType {
             .unlace_options
             .get::<crate::calleesaved::CalleeSavedSplit>()
             .0;
+        let coalesce_cap = data
+            .get_arch()
+            .unlace_options
+            .get::<crate::coalescecap::CoalesceCap>()
+            .0;
         data.with_covermerge(|merge, data| {
             merge.set_callee_saved_split(callee_saved);
+            merge.set_coalesce_cap(coalesce_cap);
             let _ = merge.merge_by_datatype(data, &range, mode);
         });
         0

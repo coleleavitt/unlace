@@ -4,6 +4,7 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod calleesaved;
+pub mod coalescecap;
 pub mod merge;
 pub mod phiarm;
 pub mod typemerge;

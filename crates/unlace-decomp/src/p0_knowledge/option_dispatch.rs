@@ -321,6 +321,7 @@ unlace_options! { self, p1;
     "typemerge" => registered!(crate::typemerge::TypeMergeMode),
     "phiarm" => registered!(crate::phiarm::PhiArmSplit),
     "calleesaved" => registered!(crate::calleesaved::CalleeSavedSplit),
+    "coalescecap" => registered!(crate::coalescecap::CoalesceCap),
     "impliedrefs" => {
         let (val, msg) = crate::impliedrefs::OptionImpliedRefs.apply(p1)?;
         self.max_implied_ref = val;

@@ -33,7 +33,7 @@ MODULE_BAND = {
     "action": "middle", "architecture": "middle", "fasthash": "middle",
     "fspec": "middle", "varmap": "middle", "heritage": "middle", "merge": "middle", "jumptable": "middle",
     "typemerge": "middle", "phiarm": "middle", "armpairparam": "middle",
-    "calleesaved": "middle",
+    "calleesaved": "middle", "coalescecap": "middle",
     "remote_provider": "middle",
     "calloverlap": "middle", "loadguardreads": "middle", "revisitrefine": "middle",
 }

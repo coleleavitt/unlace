@@ -1,0 +1,41 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'sign_scale' },
+    { space = 'ram', offset = '0x100020', name = 'narrow_sum' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '480fbec6488d04c74883c040c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = '4080c60b480fbec64801f8c3'
+
+[script]
+commands = [
+    'option outlang rust',
+    'parse line extern long sign_scale(long a, unsigned long b);',
+    'parse line extern long narrow_sum(long a, unsigned long b);',
+    'lo fu sign_scale',
+    'decompile',
+    'print C',
+    'lo fu narrow_sum',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust signed byte interpretation precedes widening'
+count = 2
+literal = 'as i8'
+
+[[match]]
+name = 'Rust retains explicit widening after narrow arithmetic'
+count = 2
+literal = 'as i64'

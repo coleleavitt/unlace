@@ -61,7 +61,12 @@ the instruction writes are still computed from `Old`. On the success path of
 an x86 `cmpxchg`, where the accumulator equals `Old`, the store's op is reused
 to assign `Old` to the accumulator, so both paths agree on it; the branch then
 only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
-zero-extends only on failure. An operand that no storage holds at the first
+zero-extends only on failure. A 32-bit `xadd` or `xchg` on x86-64 ends with
+`RAX = ZEXT(EAX)` after `UNLOCK()` (the hardware clear of the upper half);
+an instruction with no branch whose ops after the envelope are only such
+register-into-containing-register zero-extensions is rewritten without them,
+and they then extend the builtin's result
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (register_zext_tail)`). An operand that no storage holds at the first
 load (`~X` for `ldclr`, `imm + CF` for `adc`) is rebuilt with new ops in front
 of it, which is allowed only when the instruction updates memory through a
 pointer and none of its relative branches targets its end: a new op is
@@ -4417,6 +4422,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
 | `Nova` | Data General Nova (Nova 1200/800/2, Nova 3, Nova 4) | `Nova:BE:16:default` | written for unlace from the DG Nova programmer's references, Apache-2.0 |
 | `SH5` | SuperH SH-5 (SHmedia) | `SH5:LE:64:SHmedia`, `SH5:BE:64:SHmedia` | written for unlace from the SH-5 CPU Core Architecture manual (SHmedia); decode checked against `sh64-elf-objdump` 2.29.1, Apache-2.0 |
+| `ND100` | Norsk Data ND-100 (NORD-10, ND-110) | `ND100:BE:16:default` | written for unlace from the ND-100 Reference Manual (ND-06.014.02), Apache-2.0 |
 <!-- vendor-rows -->
 
 ### Data General Nova (#98)
@@ -4447,6 +4453,20 @@ The decode agrees with `sh64-elf-objdump` (binutils 2.29.1) on a 6,639-word prob
 except the reserved odd FP register forms. Exercised by the `sh5` and `sh5-be`
 families of `unlace-cli/tests/processors.toml` (add, signed max, absolute load,
 direct call and float add routines built with `sh64-elf-as`).
+
+### Norsk Data ND-100 (#98)
+
+`specs/Ghidra/Processors/ND100` is a SLEIGH module written for unlace from the
+ND-100 Reference Manual (ND-06.014.02); the only prior SLEIGH carries no licence
+and was not opened: `ND100:BE:16:default`. Memory is word addressed. Memory
+reference instructions take the eight ,X / I / ,B modes relative to the
+instruction's own address; ROP is one constructor per sub-instruction code of
+the manual's table (CLD, CM1, AD1, ADC, RAD), a P destination jumps and `EXIT`
+(COPY SL DP) returns; JPL links in L. SKP tests dr - sr; the status flags are
+registers for the bit operations. The ND 48-bit floating point, I/O and system
+instructions are user ops. Exercised by the `nd100` family of
+`unlace-cli/tests/processors.toml` (hand-assembled add, signed max, P-relative
+load/store, call, shift and add-argument routines).
 
 ### IBM ROMP (#98)
 
@@ -4548,6 +4568,21 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 AVX-512 base-spec decode fixes (#98)
+
+Four wrong AVX-512 decodes in the Ghidra-derived tables are fixed in every x86
+language. VPBROADCASTB/W/D/Q from a GPR now read their `Rmr32`/`Rmr64` source
+(before, the operand was missing and the lift called the user operation with no
+input). The EVEX gathers and scatters address through the VSIB tables, with
+EVEX.V' selecting index registers 16-31, so `vpgatherdd zmm0{k1}, [rdi +
+4*zmm1 + 64]` lifts to the vector-indexed address (before, RCX was used as a
+scalar index). A memory broadcast prints `{1toN}`. Disp8*N is right for 16-bit
+broadcast elements: three tuple rows in `ia.sinc` (full, half and quarter
+vector with a word broadcast) give N, and the register-or-memory operand tables
+no longer evaluate `evexDisp8N` a second time, which had read tuple bits the
+first evaluation overwrote. Exercised by `unlace-cli/tests/x86_avx10.rs`
+(`base_fixes`) and the `x86_64_avx512_base` row of `processors.toml`.
+
 ### x86-64 AVX10.2 (#98)
 
 `specs/Ghidra/Processors/x86/data/languages/avx10_2.sinc` decodes AVX10.2 in
@@ -4629,6 +4664,9 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a) shader ISA, one-lane lift | `AMDGPU:LE:64:GFX9` | LLVM AMDGPU encodings (`llvm-mc -show-encoding`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/amdgpu_raw.rs` |
 | `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/kvx_raw.rs` |
 | `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
+| `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
+| `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
+| `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5081,9 +5119,9 @@ written to `rd` with `assignW`. A destination table that exports a temporary
 copy of the register would drop the write, which made these conversions
 produce no value at all. The fix is in the RISC-V SLEIGH sources, so
 `riscv.lp64d.sla`, `riscv.ilp32d.sla` and `andestar_v5.sla` must be rebuilt.
-Exercised by `tests/stages/gh831-riscv-fpmove.xml` (RV64: a call result moved
+Exercised by `tests/stages/gh831-riscv-fpmove.toml` (RV64: a call result moved
 by `fmv.x.d` and `fmv.x.w`, and all four conversions) and
-`tests/stages/gh831-riscv32-fpmove.xml` (the RV32 forms).
+`tests/stages/gh831-riscv32-fpmove.toml` (the RV32 forms).
 
 The x87 `FIST` and `FISTP` lifts preserve integer conversion as width-specific
 `x87_float_to_int16`, `x87_float_to_int32`, or `x87_float_to_int64` user operations.
@@ -5133,7 +5171,7 @@ the same operand (`vMem32z`), so the qword-index gathers still decode in
 `VPSCATTERQ*`) are still built for 64-bit mode only. An index in
 `ZMM16`..`ZMM31` (`EVEX.V'`) still reads as `ZMM0`..`ZMM15`, as for every EVEX
 VSIB operand. Exercised by
-`tests/stages/gh1627-x86-senduipi-gatherpf.xml`.
+`tests/stages/gh1627-x86-senduipi-gatherpf.toml`.
 
 In 64-bit mode the x86 spec also decodes Intel AMX (`amx.sinc`, #98):
 AMX-TILE `LDTILECFG`, `STTILECFG`, `TILERELEASE`, `TILEZERO`, `TILELOADD`,
@@ -5166,7 +5204,7 @@ decode whatever `REX.W` says, since their operand size is fixed at 64 bits
 there and compilers encode them without the prefix. `VMFUNC` and `VMCALL`
 write no flags: `VMFUNC` leaves them unchanged, and the flags after a guest's
 `VMCALL` are whatever the hypervisor returns. Exercised by
-`tests/stages/gh1628-x86-vmx-decode-flags.xml`.
+`tests/stages/gh1628-x86-vmx-decode-flags.toml`.
 
 For the bounded local policy (`kuna_localstackviews.rs`), the `FlowEmit::dump` seam in
 `crates/unlace-lift/src/p2_lift/flow.rs` records original STORE and
@@ -5251,7 +5289,9 @@ confirmed on hardware before the spec changed.
   `MOVBE r32,m32`, `MOVMSKPS`/`MOVMSKPD`, MMX `PEXTRW`, `LSL`, `RDRAND`/`RDSEED r32`,
   the VEX and EVEX `VCVT[T]SS2SI`/`VCVT[T]SD2SI`/`VCVT[T]S[SDH]2USI`/`VCVT[T]SH2SI`,
   `VMOVMSKPS`/`VMOVMSKPD`, `VPEXTRW` and `KMOV[BWD] r32`; before, `lock xadd [rdi],eax`
-  left the old upper half of RAX in place.
+  left the old upper half of RAX in place. In the locked `XADD`/`XCHG` the zero extension is
+  built right after the register write, inside the `LOCK()`..`UNLOCK()` envelope, so the
+  `atomics` fold, which requires `UNLOCK()` to be the instruction's last op, still applies.
 - `MOV r32,Sreg` and `MOV r64,Sreg` (`8C` with a register operand) zero-extend the selector
   into the whole register; only the 16-bit form writes 16 bits.
 - `90` with a REX prefix that lacks REX.B (`44 90`, `4C 90`, ...) is `NOP`, not
@@ -5285,6 +5325,17 @@ Found by `tools/difffuzz` against Unicorn and checked against the Arm ARM.
 `c.jr`, `c.jalr` and `ret` (`riscv.rvc.sinc`) expand to `jalr`, which clears bit 0 of the
 target; they now jump to `rs1 & ~1` as the `jalr` constructors in `riscv.rv32i.sinc` already
 did. Found by `tools/difffuzz`.
+
+### ARM lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz` against Unicorn.
+
+- `STRHT` (`ARMinstructions.sinc`) builds its `addrmode3` after `COND`, so a failing
+  condition no longer writes the base register back, and stores `Rd:2` (it stored all 4 bytes).
+- The T32 `AND`, `BIC`, `MOV.W` and `MVN` immediate forms and the `AND.W` and `MVN.W`
+  shifted-register forms (`ARMTHUMBinstructions.sinc`) take `thSBIT_CZN` and
+  `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
+  as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
 
 ## 2.9 Go stack-growth prologue folding
 

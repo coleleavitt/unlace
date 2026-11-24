@@ -256,6 +256,26 @@ shipped default**, so it is no longer an `aggressive`-only pass at all — the
 preset merely keeps naming it. See
 `docs/decbench/returndup-regression-triage.md`.
 
+## Obfuscated code (suggested option set, not a mode)
+
+`mba` and `egraph` stay out of every preset: on compiler output they can only
+refold arithmetic the compiler already chose (0 of 332 functions in
+`/usr/bin/patchelf` and 0 of 84 in `/usr/bin/bzip2` change under either), and
+`egraph` runs a saturation per mixed tree. For code from an MBA obfuscator
+(OLLVM instruction substitution, Tigress `EncodeArithmetic`, Apple's CoreADI)
+turn both on, over any mode:
+
+```sh
+unlace decompile-all <binary> --option mba on --option egraph on
+```
+
+`mba` solves the closed-form classes (linear, polynomial, small nonlinear),
+and `egraph` composes those forms with ring, boolean and MBA identities where
+substitutions are stacked. On the synthetic corpus of
+docs/spec/03-ssa-and-simplification.md ("Equality saturation over MBA trees"),
+the pair solves as many functions as `mba` alone or more in every column, and
+more than `egraph` alone.
+
 ## `fast`
 
 `fast` applies exactly five overrides:

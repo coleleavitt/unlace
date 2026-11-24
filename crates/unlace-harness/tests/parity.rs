@@ -1,6 +1,11 @@
 //! The parity gates: the datatest corpus (`tests/datatests`) against `docs/baseline.json` and
 //! the stage corpus (`tests/stages`) against `docs/baseline-stages.json`.
 //!
+//! A TOML stage test (`tests/stages/*.toml`) is its own baseline: every assertion in it must
+//! pass, and its names are not in `docs/baseline-stages.json`. The baseline holds the passing
+//! assertions of the XML files only, keyed as before (a repeated name's `@dupN` counts over
+//! the whole corpus, TOML files included, so converting a file never renames another's keys).
+//!
 //! Each corpus runs in this process through the harness's datatest runner
 //! ([`run_test_files_with_specs`], the engine `decomp_test_dbg` drives), and its passing
 //! assertions are compared with the baseline's `data:` keys. A test fails when a baseline
@@ -17,7 +22,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use unlace_harness::testfunction::run_test_files_with_specs;
+use unlace_harness::testfunction::{describe_test_file, run_test_files_each};
 
 /// The engine keeps a few process-wide settings; the two corpora run one after the other.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -33,6 +38,8 @@ fn repo_root() -> PathBuf {
 #[derive(Debug, Default)]
 struct DataResult {
     passing: Vec<String>,
+    /// Indices into `passing` of the assertions that came from TOML stage tests.
+    in_toml: BTreeSet<usize>,
     failing: Vec<String>,
     errors: Vec<String>,
     applied: i64,
@@ -69,9 +76,10 @@ fn parse_data_error(line: &str) -> Option<String> {
     let t = line.trim_start();
     for kw in ["Error parsing ", "Error executing "] {
         if let Some(rest) = t.strip_prefix(kw)
-            && let Some(idx) = rest.find(".xml: ")
+            && let Some(idx) = rest.find(".xml: ").or_else(|| rest.find(".toml: "))
         {
-            return Some(rest[..idx + 4].to_string());
+            let end = rest[idx..].find(':').map_or(rest.len(), |c| idx + c);
+            return Some(rest[..end].to_string());
         }
     }
     for kw in [
@@ -80,7 +88,7 @@ fn parse_data_error(line: &str) -> Option<String> {
         "Execution failed for ",
     ] {
         if let Some(rest) = t.strip_prefix(kw)
-            && rest.ends_with(".xml")
+            && (rest.ends_with(".xml") || rest.ends_with(".toml"))
         {
             return Some(rest.to_string());
         }
@@ -88,20 +96,25 @@ fn parse_data_error(line: &str) -> Option<String> {
     None
 }
 
-/// Baseline keys: `data:<name>`, the Nth repeat of a name `data:<name> @dupN`.
-fn dedup_keys(prefix: &str, names: &[String]) -> BTreeSet<String> {
+/// Baseline keys in run order: `data:<name>`, the Nth repeat of a name `data:<name> @dupN`.
+fn dedup_list(prefix: &str, names: &[String]) -> Vec<String> {
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
-    let mut keys = BTreeSet::new();
-    for n in names {
-        let count = seen.entry(n).or_insert(0);
-        *count += 1;
-        keys.insert(if *count == 1 {
-            format!("{prefix}{n}")
-        } else {
-            format!("{prefix}{n} @dup{count}")
-        });
-    }
-    keys
+    names
+        .iter()
+        .map(|n| {
+            let count = seen.entry(n).or_insert(0);
+            *count += 1;
+            if *count == 1 {
+                format!("{prefix}{n}")
+            } else {
+                format!("{prefix}{n} @dup{count}")
+            }
+        })
+        .collect()
+}
+
+fn dedup_keys(prefix: &str, names: &[String]) -> BTreeSet<String> {
+    dedup_list(prefix, names).into_iter().collect()
 }
 
 /// The baseline's passing set; a record without a string-array `passing` is an error, never empty.
@@ -121,13 +134,13 @@ fn baseline_passing(text: &str) -> Result<BTreeSet<String>, String> {
         .collect()
 }
 
-/// Every `*.xml` directly in `dir`, sorted (the harness's `gatherDataTests`).
+/// Every `*.xml` and `*.toml` test directly in `dir`, sorted (the harness's `gatherDataTests`).
 fn corpus_files(dir: &Path) -> Vec<String> {
     let mut files: Vec<String> = std::fs::read_dir(dir)
         .unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
         .flatten()
         .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e == "xml"))
+        .filter(|p| p.extension().is_some_and(|e| e == "xml" || e == "toml"))
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
     files.sort();
@@ -156,29 +169,43 @@ fn run_corpus(root: &Path, corpus: &Path) -> DataResult {
         "specs/ holds no SLEIGH sources (.slaspec)"
     );
     let files = corpus_files(corpus);
-    assert!(
-        !files.is_empty(),
-        "{} holds no *.xml tests",
-        corpus.display()
-    );
+    assert!(!files.is_empty(), "{} holds no tests", corpus.display());
     let mut specs = vec![root.join("specs").to_string_lossy().into_owned()];
     if let Ok(home) = std::env::var("SLEIGHHOME")
         && !home.is_empty()
     {
         specs.push(home);
     }
-    let out = std::thread::Builder::new()
+    let runs = std::thread::Builder::new()
         .name("parity".into())
         .stack_size(256 << 20)
-        .spawn(move || {
-            let mut out = String::new();
-            run_test_files_with_specs(&files, &specs, &mut out);
-            out
-        })
+        .spawn(move || run_test_files_each(&files, &specs))
         .expect("spawn the corpus thread")
         .join()
         .unwrap_or_else(|_| panic!("the engine panicked on {}", corpus.display()));
-    parse_data(&out)
+    let mut r = DataResult::default();
+    for run in runs {
+        let mut text = run.output;
+        for f in &run.failures {
+            text.push_str(f);
+            text.push('\n');
+        }
+        let d = parse_data(&text);
+        if run.file.ends_with(".toml") {
+            r.in_toml
+                .extend(r.passing.len()..r.passing.len() + d.passing.len());
+        }
+        r.passing.extend(d.passing);
+        r.failing.extend(d.failing);
+        for e in d.errors {
+            if !r.errors.contains(&e) {
+                r.errors.push(e);
+            }
+        }
+        r.applied += i64::from(run.applied);
+        r.succeeded += i64::from(run.succeeded);
+    }
+    r
 }
 
 /// The re-recorded baseline: this run's `data:` keys and footer, every other key kept.
@@ -218,7 +245,12 @@ fn parity(corpus: &str, baseline: &str) {
     // Test scripts load their fixtures by repository-relative path.
     std::env::set_current_dir(&root).expect("enter the repository root");
     let r = run_corpus(&root, &root.join(corpus));
-    let now = dedup_keys("data:", &r.passing);
+    let now: BTreeSet<String> = dedup_list("data:", &r.passing)
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| !r.in_toml.contains(i))
+        .map(|(_, k)| k)
+        .collect();
     let baseline_path = root.join(baseline);
     let text = std::fs::read_to_string(&baseline_path).ok();
     let broken = r.errors.len() + r.failing.len();
@@ -250,8 +282,10 @@ fn parity(corpus: &str, baseline: &str) {
     let regressed: Vec<&String> = base.difference(&now).collect();
     let newly: Vec<&String> = now.difference(&base).collect();
     let mut report = format!(
-        "{corpus}: {}/{} assertions passed\n",
-        r.succeeded, r.applied
+        "{corpus}: {}/{} assertions passed ({} of them in TOML tests)\n",
+        r.succeeded,
+        r.applied,
+        r.in_toml.len()
     );
     for n in &r.failing {
         report += &format!("  [data] {n}\n");
@@ -290,6 +324,62 @@ fn stage_tests_match_the_baseline() {
     parity("tests/stages", "docs/baseline-stages.json");
 }
 
+/// Every TOML stage test loads exactly like the XML file it was converted from, read from git at
+/// `UNLACE_STAGE_XML_REV` (default `HEAD`, so run it before committing a conversion):
+/// `cargo test -p unlace-harness --test parity -- --ignored converted`.
+#[test]
+#[ignore = "run when converting stage tests (scripts/stage_toml.py)"]
+fn converted_stage_tests_load_like_their_xml() {
+    let root = repo_root();
+    let rev = std::env::var("UNLACE_STAGE_XML_REV").unwrap_or_else(|_| "HEAD".into());
+    let scratch = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("stage-xml-ref");
+    std::fs::create_dir_all(&scratch).expect("create the scratch directory");
+    let mut compared = 0usize;
+    let mut diffs = Vec::new();
+    for toml in corpus_files(&root.join("tests/stages")) {
+        let Some(stem) = toml
+            .strip_suffix(".toml")
+            .and_then(|s| s.rsplit('/').next())
+        else {
+            continue;
+        };
+        let show = std::process::Command::new("git")
+            .args(["show", &format!("{rev}:tests/stages/{stem}.xml")])
+            .current_dir(&root)
+            .output()
+            .expect("run git show");
+        if !show.status.success() {
+            continue;
+        }
+        let xml = scratch.join(format!("{stem}.xml"));
+        std::fs::write(&xml, &show.stdout).expect("write the XML original");
+        let want = describe_test_file(&xml.to_string_lossy());
+        let have = describe_test_file(&toml);
+        compared += 1;
+        if want != have {
+            let (w, h) = (want.unwrap_or_else(|e| e), have.unwrap_or_else(|e| e));
+            let at = w.lines().zip(h.lines()).position(|(a, b)| a != b);
+            let line = |s: &str| at.and_then(|i| s.lines().nth(i)).unwrap_or("").to_string();
+            diffs.push(format!(
+                "{stem}:\n  xml:  {}\n  toml: {}",
+                line(&w),
+                line(&h)
+            ));
+        }
+    }
+    assert!(
+        compared > 0,
+        "no TOML stage test has an XML original at {rev}"
+    );
+    assert!(
+        diffs.is_empty(),
+        "{} of {compared} converted stage tests differ from their XML:\n{}",
+        diffs.len(),
+        diffs.join("\n")
+    );
+    println!("{compared} converted stage tests load like their XML at {rev}");
+}
+
 #[test]
 fn the_datatest_stream_parses() {
     let d = parse_data(
@@ -315,6 +405,14 @@ fn the_datatest_stream_parses() {
     assert_eq!(
         parse_data_error("  Execution failed for e.xml").as_deref(),
         Some("e.xml")
+    );
+    assert_eq!(
+        parse_data_error("Error parsing f.toml: no [image] table").as_deref(),
+        Some("f.toml")
+    );
+    assert_eq!(
+        parse_data_error("  Execution failed for g.toml").as_deref(),
+        Some("g.toml")
     );
     assert_eq!(parse_data_error("Success -- a thing"), None);
 }

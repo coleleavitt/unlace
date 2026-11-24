@@ -1,0 +1,72 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'read_port' },
+    { space = 'ram', offset = '0x100020', name = 'read_variable' },
+    { space = 'ram', offset = '0x100040', name = 'write_port' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'e4310fb6c0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = '89faec0fb6c0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100040'
+readonly = true
+hex = '89fa89f0eec3'
+
+[script]
+commands = [
+    'option outlang rust',
+    'parse line extern unsigned int read_port(void);',
+    'parse line extern unsigned int read_variable(unsigned int port);',
+    'parse line extern void write_port(unsigned int port, unsigned char data);',
+    'lo fu read_port',
+    'decompile',
+    'print C',
+    'lo fu read_variable',
+    'decompile',
+    'print C',
+    'lo fu write_port',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/rust-userop/mips.xml',
+    'option outlang rust',
+    'parse line extern unsigned int packed_abs(unsigned int lanes);',
+    'lo fu packed_abs',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust keyword machine operations keep their callee identity'
+count = 2
+literal = 'r#in('
+
+# The ordinary call stays unchanged and the dotted call keeps its operand.
+[[match]]
+name = 'Ordinary machine operation names retain their spelling'
+count = 1
+regex = [
+    '^unsafe fn write_port\(',
+    '^\{$',
+    '^  out\(port as i16,data\);$',
+    '^\}$',
+    '^$',
+    '^$',
+    '^#\[allow\(',
+    '^unsafe fn packed_abs\(',
+    '^\{$',
+    '^  return __kuna_userop_3e_ABSQ_S_PH\(lanes\);$',
+    '^\}$',
+]

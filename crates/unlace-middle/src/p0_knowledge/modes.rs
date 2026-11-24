@@ -671,10 +671,6 @@ mod tests {
             // `dwarfglobaltypes` was turned off by default in its own branch after
             // landing; it has no preset sweep yet.
             "dwarfglobaltypes",
-            // `dwarfdecls` lands as an opt-in with its decbench sweep in its catalog row.
-            "dwarfdecls",
-            // `dwarfenumtypedef` lands as an opt-in beside it.
-            "dwarfenumtypedef",
             // Stack-address liveness can be incidental; synthetic regressions and
             // a local speed measurement do not justify a broad preset flip.
             "stackaddrargtrial",

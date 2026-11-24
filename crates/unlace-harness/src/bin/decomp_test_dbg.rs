@@ -141,7 +141,7 @@ fn usage() -> ExitCode {
 }
 
 /// C++ `gatherDataTests(dirname, testNames, testFiles)`: build the list of
-/// absolute paths of the `.xml` test files to run.
+/// absolute paths of the `.xml` (and TOML stage) test files to run.
 ///
 /// If `test_names` is non-empty, only the files whose absolute path matches
 /// `<dirname>/<name>` are taken; otherwise every `.xml` in `dirname` is taken.
@@ -162,7 +162,10 @@ fn gather_data_tests(dirname: &str, test_names: &[String]) -> Vec<String> {
     if let Ok(entries) = std::fs::read_dir(dirname) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("xml") {
+            if matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("xml" | "toml")
+            ) {
                 if let Some(s) = path.to_str() {
                     all_xml.push(s.to_string());
                 }

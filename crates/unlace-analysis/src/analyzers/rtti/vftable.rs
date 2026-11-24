@@ -50,6 +50,9 @@ use super::refkind::RefKind;
 pub struct TextRanges {
     /// `(start, end)` half-open VMA ranges of every executable section, sorted.
     ranges: Vec<(u64, u64)>,
+    /// The words a PE's base-relocation table lists, when it lists every one
+    /// ([`TextRanges::with_relocations`]); `None` gates nothing.
+    relocated: Option<std::collections::HashSet<u64>>,
 }
 
 impl TextRanges {
@@ -75,7 +78,37 @@ impl TextRanges {
             ranges.push((start, start.saturating_add(size)));
         }
         ranges.sort_by_key(|&(s, _)| s);
-        TextRanges { ranges }
+        TextRanges {
+            ranges,
+            relocated: None,
+        }
+    }
+
+    /// [`TextRanges::new`], also keeping every word a relocatable PE's
+    /// base-relocation table lists. The loader fixes up every vftable slot of such
+    /// an image, so a word it does not list is not a slot, whatever it holds: a
+    /// UTF-16 string after the last vftable of `.rdata` reads as `0x0065006e`,
+    /// inside a large `.text`. An image with no relocation table (`/FIXED`), or one
+    /// whose table cannot be read whole, keeps the executable-section test alone.
+    pub fn with_relocations(file: &object::File, bytes: &[u8]) -> Self {
+        let mut text = Self::new(file);
+        if file.format() == object::BinaryFormat::Pe {
+            let listed = crate::loader::kuna_dataptrs::data_pointers(file, bytes);
+            if matches!(
+                listed.coverage,
+                crate::loader::kuna_dataptrs::Coverage::Complete(_)
+            ) && !listed.pointers.is_empty()
+            {
+                text.relocated = Some(listed.pointers.iter().map(|p| p.slot).collect());
+            }
+        }
+        text
+    }
+
+    /// May the word at `slot` be a vftable slot? Every word, unless the image's
+    /// complete base-relocation table says which words hold addresses.
+    pub fn may_hold_pointer(&self, slot: u64) -> bool {
+        self.relocated.as_ref().is_none_or(|r| r.contains(&slot))
     }
 
     /// Is `vma` inside any executable section? (A vftable slot must point into code.)
@@ -88,7 +121,10 @@ impl TextRanges {
     #[cfg(test)]
     pub fn for_test(mut ranges: Vec<(u64, u64)>) -> Self {
         ranges.sort_by_key(|&(s, _)| s);
-        TextRanges { ranges }
+        TextRanges {
+            ranges,
+            relocated: None,
+        }
     }
 }
 
@@ -133,6 +169,9 @@ pub fn walk_vftable(
     let mut slots = Vec::new();
     let mut slot_addr = base;
     for _ in 0..MAX_SLOTS {
+        if !text.may_hold_pointer(slot_addr) {
+            break; // the loader fixes up no address here: not a slot
+        }
         let Some(bytes) = img.read(slot_addr, rk.ptr_size()) else {
             break; // ran off the end of the loaded image
         };
@@ -173,8 +212,19 @@ mod tests {
         put_u64(&mut rdata, 0x28, ib + 0x2000);
         let ranges = TextRanges {
             ranges: vec![(ib + 0x1000, ib + 0x1080)],
+            relocated: None,
         };
         (rdata, rk, ranges)
+    }
+
+    #[test]
+    fn a_word_the_relocation_table_does_not_list_ends_the_table() {
+        let (rdata, rk, mut ranges) = x64_img();
+        let ib = 0x1_4000_0000u64;
+        ranges.relocated = Some([ib + 0x2010].into_iter().collect());
+        let img = ImageBytes::from_spans(vec![(ib + 0x2000, &rdata)]);
+        let vt = walk_vftable(&img, &rk, &ranges, ib + 0x2010).unwrap();
+        assert_eq!(vt.slots, vec![ib + 0x1040]);
     }
 
     #[test]
@@ -206,6 +256,7 @@ mod tests {
         // 0x08 NULL terminator.
         let ranges = TextRanges {
             ranges: vec![(ib + 0x1000, ib + 0x1080)],
+            relocated: None,
         };
         let img = ImageBytes::from_spans(vec![(ib + 0x2010, &rdata)]);
         let vt = walk_vftable(&img, &rk, &ranges, ib + 0x2010).unwrap();

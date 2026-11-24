@@ -1,0 +1,84 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/go-mcall-resumption/mcall-elf',
+    'option listing on',
+    'read symbols',
+    'load function main.yield',
+    'decompile',
+    'print C',
+    'load function main.stop',
+    'decompile',
+    'print C',
+    'load function main.mcall',
+    'decompile',
+    'print C',
+    'option noreturn runtime.mcall true',
+    'load function main.yield',
+    'decompile',
+    'print raw',
+    'option noreturn runtime.mcall false',
+    'load function main.yield',
+    'override flow 0x401017 callreturn',
+    'decompile',
+    'print raw',
+]
+
+[[match]]
+name = 'Go mcall retains the resumed caller continuation'
+count = 1
+regex = [
+    '^void main\.yield\(void\)$',
+    '^\{$',
+    '^\s+runtime\.mcall\(0x402000\);$',
+    '^\s+dat_[[:xdigit:]]+ = 0x5a;$',
+    '^\}$',
+]
+
+[[match]]
+name = 'Go mcall lookalike still propagates terminal flow to its caller'
+count = 1
+regex = [
+    '^void main\.stop\(void\)$',
+    '^\{$',
+    '^\s+main\.mcall\(\); // no-return$',
+    '^\}$',
+]
+
+[[match]]
+name = 'Go mcall correction preserves the terminal goexit0 callback'
+count = 1
+regex = [
+    '^void main\.mcall\(void\)$',
+    '^\{$',
+    '^\s+runtime\.goexit0\(\); // no-return$',
+    '^\}$',
+]
+
+[[match]]
+name = 'Go mcall explicit no-return assertion cuts the continuation'
+count = 1
+regex = [
+    '^0x00401017:[[:xdigit:]]+:\s+call fruntime\.mcall\(free\)\(#0x402000\)$',
+    '^0x00401017:[[:xdigit:]]+:\s+return\(#0x1:4\)$',
+]
+
+[[match]]
+name = 'Go mcall explicit call-site flow override cuts the continuation'
+count = 1
+regex = [
+    '^0x00401017:[[:xdigit:]]+:\s+call fruntime\.mcall\(free\)\(#0x402000\)$',
+    '^0x00401017:[[:xdigit:]]+:\s+return\(#0x0:1\)$',
+]

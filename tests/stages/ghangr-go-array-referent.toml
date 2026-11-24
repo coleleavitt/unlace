@@ -1,0 +1,101 @@
+# angr Go type spelling and offset access, reduced to a typed Go array.
+# P9 strict address expression correction. Each pointer-producing base,
+# load/store extent, and index scale remains part of the Go expression.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/go-array-referent/amd64',
+    'read symbols',
+    'option outlang go',
+    'map prototype main.Read uint1 Read(uint1 (*p)[16],uint8 i);',
+    'map prototype main.Write void Write(uint1 (*p)[16],uint8 i,uint1 value);',
+    'map prototype main.ReadWord uint2 ReadWord(uint2 (*p)[8],uint8 i);',
+    'map prototype main.Indirect uint1 Indirect(uint1 (**slot)[16],uint8 i);',
+    'map prototype main.PointerValue uint1 *PointerValue(uint1 *(*p)[16],uint8 i);',
+    'map prototype main.TruePointerLoad uint1 TruePointerLoad(uint1 **slot,uint8 i);',
+    'load function main.Read',
+    'decompile',
+    'print C',
+    'load function main.Write',
+    'decompile',
+    'print C',
+    'load function main.ReadWord',
+    'decompile',
+    'print C',
+    'load function main.Indirect',
+    'decompile',
+    'print C',
+    'load function main.PointerValue',
+    'decompile',
+    'print C',
+    'load function main.TruePointerLoad',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go array byte read uses the original pointer address'
+count = 1
+regex = [
+    '',
+    '^func Read\(p \*\[16\]byte, i uint64\) byte \{$',
+    '^  return \*\(\*byte\)\(unsafe\.Add\(unsafe\.Pointer\(p\),[^\n]* \* 1\)\)$',
+]
+
+[[match]]
+name = 'Go array byte store writes through the original pointer'
+count = 1
+regex = [
+    '',
+    '^func Write\(p \*\[16\]byte, i uint64, value byte\) \{$',
+    '^  \*\(\*byte\)\(unsafe\.Add\(unsafe\.Pointer\(p\),[^\n]* \* 1\)\) = value$',
+]
+
+[[match]]
+name = 'Go array word read scales the original pointer by two bytes'
+count = 1
+regex = [
+    '',
+    '^func ReadWord\(p \*\[8\]uint16, i uint64\) uint16 \{$',
+    '^  return \*\(\*uint16\)\(unsafe\.Add\(unsafe\.Pointer\(p\),[^\n]* \* 2\)\)$',
+]
+
+[[match]]
+name = 'Go array through a loaded pointer keeps precisely that load'
+count = 1
+regex = [
+    '',
+    '^func Indirect\(slot \*\*\[16\]byte, i uint64\) byte \{$',
+    '^  return \*\(\*byte\)\(unsafe\.Add\(unsafe\.Pointer\(\*slot\),[^\n]* \* 1\)\)$',
+]
+
+[[match]]
+name = 'Go pointer element keeps word stride and pointer result'
+count = 1
+regex = [
+    '',
+    '^func PointerValue\(p \*\[16\]\*byte, i uint64\) \*byte \{$',
+    '^  return \*\(\*\*byte\)\(unsafe\.Add\(unsafe\.Pointer\(p\),[^\n]* \* 8\)\)$',
+]
+
+[[match]]
+name = 'Go real pointer valued load remains a dereference'
+count = 1
+regex = [
+    '',
+    '^func TruePointerLoad\(slot \*\*byte, i uint64\) byte \{$',
+    '^  return \*\(\*byte\)\(unsafe\.Add\(unsafe\.Pointer\(\*slot\),[^\n]* \* 1\)\)$',
+]

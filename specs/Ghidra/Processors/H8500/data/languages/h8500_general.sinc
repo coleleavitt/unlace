@@ -1,0 +1,553 @@
+
+EABr1: earB is eamode=0xa & eaw=0 & earB { export earB; }
+EABm1: "@"^ear is eamode=0xd & eaw=0 & ear & rpg { local a:$(ASZ); mkaddr(a, rpg, ear); export *:1 a; }
+EABm1: "@-"^ear is eamode=0xb & eaw=0 & ear & rpg { ear = ear - 1; local a:$(ASZ); mkaddr(a, rpg, ear); export *:1 a; }
+EABm1: "@"^ear^"+" is eamode=0xc & eaw=0 & ear & rpg { local a:$(ASZ); mkaddr(a, rpg, ear); ear = ear + 1; export *:1 a; }
+EABm2: "@("^simm8^","^ear^")" is eamode=0xe & eaw=0 & ear & rpg; simm8 { local o:2 = ear + simm8; local a:$(ASZ); mkaddr(a, rpg, o); export *:1 a; }
+EABm3: "@("^imm16^","^ear^")" is eamode=0xf & eaw=0 & ear & rpg; imm16 { local o:2 = ear + imm16; local a:$(ASZ); mkaddr(a, rpg, o); export *:1 a; }
+EABm2: "@"^imm8^":8" is ealo=0x05; imm8 { local o:2 = (zext(BR) << 8) | imm8; local a:$(ASZ); mkaddr(a, 0:1, o); export *:1 a; }
+EABm3: "@"^imm16^":16" is ealo=0x15; imm16 { local a:$(ASZ); mkaddr(a, DP, imm16:2); export *:1 a; }
+IMMB2: "#"^imm8 is ealo=0x04; imm8 { export *[const]:1 imm8; }
+
+EAWr1: earW is eamode=0xa & eaw=1 & earW { export earW; }
+EAWm1: "@"^ear is eamode=0xd & eaw=1 & ear & rpg { local a:$(ASZ); mkaddr(a, rpg, ear); export *:2 a; }
+EAWm1: "@-"^ear is eamode=0xb & eaw=1 & ear & rpg { ear = ear - 2; local a:$(ASZ); mkaddr(a, rpg, ear); export *:2 a; }
+EAWm1: "@"^ear^"+" is eamode=0xc & eaw=1 & ear & rpg { local a:$(ASZ); mkaddr(a, rpg, ear); ear = ear + 2; export *:2 a; }
+EAWm2: "@("^simm8^","^ear^")" is eamode=0xe & eaw=1 & ear & rpg; simm8 { local o:2 = ear + simm8; local a:$(ASZ); mkaddr(a, rpg, o); export *:2 a; }
+EAWm3: "@("^imm16^","^ear^")" is eamode=0xf & eaw=1 & ear & rpg; imm16 { local o:2 = ear + imm16; local a:$(ASZ); mkaddr(a, rpg, o); export *:2 a; }
+EAWm2: "@"^imm8^":8" is ealo=0x0d; imm8 { local o:2 = (zext(BR) << 8) | imm8; local a:$(ASZ); mkaddr(a, 0:1, o); export *:2 a; }
+EAWm3: "@"^imm16^":16" is ealo=0x1d; imm16 { local a:$(ASZ); mkaddr(a, DP, imm16:2); export *:2 a; }
+IMMW3: "#"^imm16 is ealo=0x0c; imm16 { export *[const]:2 imm16; }
+
+EAB1: EABm1 is EABm1 { export EABm1; }
+EAB2: EABm2 is EABm2 { export EABm2; }
+EAB3: EABm3 is EABm3 { export EABm3; }
+EAB1: EABr1 is EABr1 { export EABr1; }
+SRCB1: EAB1 is EAB1 { export EAB1; }
+SRCB2: EAB2 is EAB2 { export EAB2; }
+SRCB3: EAB3 is EAB3 { export EAB3; }
+SRCB2: IMMB2 is IMMB2 { export IMMB2; }
+EAW1: EAWm1 is EAWm1 { export EAWm1; }
+EAW2: EAWm2 is EAWm2 { export EAWm2; }
+EAW3: EAWm3 is EAWm3 { export EAWm3; }
+EAW1: EAWr1 is EAWr1 { export EAWr1; }
+SRCW1: EAW1 is EAW1 { export EAW1; }
+SRCW2: EAW2 is EAW2 { export EAW2; }
+SRCW3: EAW3 is EAW3 { export EAW3; }
+SRCW3: IMMW3 is IMMW3 { export IMMW3; }
+:ADD.B SRCB1, gRB is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x04 & gRB { local src:1 = SRCB1; addflags(gRB, src); gRB = gRB + src; setNZ(gRB); }
+:ADD.B SRCB2, gRB is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x04 & gRB { local src:1 = SRCB2; addflags(gRB, src); gRB = gRB + src; setNZ(gRB); }
+:ADD.B SRCB2, gRB is ealo=0x05 ... & SRCB2; g5=0x04 & gRB { local src:1 = SRCB2; addflags(gRB, src); gRB = gRB + src; setNZ(gRB); }
+:ADD.B SRCB2, gRB is ealo=0x04 ... & SRCB2; g5=0x04 & gRB { local src:1 = SRCB2; addflags(gRB, src); gRB = gRB + src; setNZ(gRB); }
+:ADD.B SRCB3, gRB is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x04 & gRB { local src:1 = SRCB3; addflags(gRB, src); gRB = gRB + src; setNZ(gRB); }
+:ADD.B SRCB3, gRB is ealo=0x15 ... & SRCB3; g5=0x04 & gRB { local src:1 = SRCB3; addflags(gRB, src); gRB = gRB + src; setNZ(gRB); }
+:SUB.B SRCB1, gRB is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x06 & gRB { local src:1 = SRCB1; subflags(gRB, src); gRB = gRB - src; setNZ(gRB); }
+:SUB.B SRCB2, gRB is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x06 & gRB { local src:1 = SRCB2; subflags(gRB, src); gRB = gRB - src; setNZ(gRB); }
+:SUB.B SRCB2, gRB is ealo=0x05 ... & SRCB2; g5=0x06 & gRB { local src:1 = SRCB2; subflags(gRB, src); gRB = gRB - src; setNZ(gRB); }
+:SUB.B SRCB2, gRB is ealo=0x04 ... & SRCB2; g5=0x06 & gRB { local src:1 = SRCB2; subflags(gRB, src); gRB = gRB - src; setNZ(gRB); }
+:SUB.B SRCB3, gRB is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x06 & gRB { local src:1 = SRCB3; subflags(gRB, src); gRB = gRB - src; setNZ(gRB); }
+:SUB.B SRCB3, gRB is ealo=0x15 ... & SRCB3; g5=0x06 & gRB { local src:1 = SRCB3; subflags(gRB, src); gRB = gRB - src; setNZ(gRB); }
+:CMP.B SRCB1, gRB is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x0e & gRB { local src:1 = SRCB1; subflags(gRB, src); local t:1 = gRB - src; setNZ(t); }
+:CMP.B SRCB2, gRB is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x0e & gRB { local src:1 = SRCB2; subflags(gRB, src); local t:1 = gRB - src; setNZ(t); }
+:CMP.B SRCB2, gRB is ealo=0x05 ... & SRCB2; g5=0x0e & gRB { local src:1 = SRCB2; subflags(gRB, src); local t:1 = gRB - src; setNZ(t); }
+:CMP.B SRCB2, gRB is ealo=0x04 ... & SRCB2; g5=0x0e & gRB { local src:1 = SRCB2; subflags(gRB, src); local t:1 = gRB - src; setNZ(t); }
+:CMP.B SRCB3, gRB is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x0e & gRB { local src:1 = SRCB3; subflags(gRB, src); local t:1 = gRB - src; setNZ(t); }
+:CMP.B SRCB3, gRB is ealo=0x15 ... & SRCB3; g5=0x0e & gRB { local src:1 = SRCB3; subflags(gRB, src); local t:1 = gRB - src; setNZ(t); }
+:OR.B SRCB1, gRB is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x08 & gRB { local src:1 = SRCB1; gRB = gRB | src; setNZ(gRB); $(V) = 0; }
+:OR.B SRCB2, gRB is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x08 & gRB { local src:1 = SRCB2; gRB = gRB | src; setNZ(gRB); $(V) = 0; }
+:OR.B SRCB2, gRB is ealo=0x05 ... & SRCB2; g5=0x08 & gRB { local src:1 = SRCB2; gRB = gRB | src; setNZ(gRB); $(V) = 0; }
+:OR.B SRCB2, gRB is ealo=0x04 ... & SRCB2; g5=0x08 & gRB { local src:1 = SRCB2; gRB = gRB | src; setNZ(gRB); $(V) = 0; }
+:OR.B SRCB3, gRB is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x08 & gRB { local src:1 = SRCB3; gRB = gRB | src; setNZ(gRB); $(V) = 0; }
+:OR.B SRCB3, gRB is ealo=0x15 ... & SRCB3; g5=0x08 & gRB { local src:1 = SRCB3; gRB = gRB | src; setNZ(gRB); $(V) = 0; }
+:AND.B SRCB1, gRB is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x0a & gRB { local src:1 = SRCB1; gRB = gRB & src; setNZ(gRB); $(V) = 0; }
+:AND.B SRCB2, gRB is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x0a & gRB { local src:1 = SRCB2; gRB = gRB & src; setNZ(gRB); $(V) = 0; }
+:AND.B SRCB2, gRB is ealo=0x05 ... & SRCB2; g5=0x0a & gRB { local src:1 = SRCB2; gRB = gRB & src; setNZ(gRB); $(V) = 0; }
+:AND.B SRCB2, gRB is ealo=0x04 ... & SRCB2; g5=0x0a & gRB { local src:1 = SRCB2; gRB = gRB & src; setNZ(gRB); $(V) = 0; }
+:AND.B SRCB3, gRB is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x0a & gRB { local src:1 = SRCB3; gRB = gRB & src; setNZ(gRB); $(V) = 0; }
+:AND.B SRCB3, gRB is ealo=0x15 ... & SRCB3; g5=0x0a & gRB { local src:1 = SRCB3; gRB = gRB & src; setNZ(gRB); $(V) = 0; }
+:XOR.B SRCB1, gRB is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x0c & gRB { local src:1 = SRCB1; gRB = gRB ^ src; setNZ(gRB); $(V) = 0; }
+:XOR.B SRCB2, gRB is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x0c & gRB { local src:1 = SRCB2; gRB = gRB ^ src; setNZ(gRB); $(V) = 0; }
+:XOR.B SRCB2, gRB is ealo=0x05 ... & SRCB2; g5=0x0c & gRB { local src:1 = SRCB2; gRB = gRB ^ src; setNZ(gRB); $(V) = 0; }
+:XOR.B SRCB2, gRB is ealo=0x04 ... & SRCB2; g5=0x0c & gRB { local src:1 = SRCB2; gRB = gRB ^ src; setNZ(gRB); $(V) = 0; }
+:XOR.B SRCB3, gRB is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x0c & gRB { local src:1 = SRCB3; gRB = gRB ^ src; setNZ(gRB); $(V) = 0; }
+:XOR.B SRCB3, gRB is ealo=0x15 ... & SRCB3; g5=0x0c & gRB { local src:1 = SRCB3; gRB = gRB ^ src; setNZ(gRB); $(V) = 0; }
+:MOV.B SRCB1, gRB is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x10 & gRB { local src:1 = SRCB1; gRB = src; setNZ(gRB); $(V) = 0; }
+:MOV.B SRCB2, gRB is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x10 & gRB { local src:1 = SRCB2; gRB = src; setNZ(gRB); $(V) = 0; }
+:MOV.B SRCB2, gRB is ealo=0x05 ... & SRCB2; g5=0x10 & gRB { local src:1 = SRCB2; gRB = src; setNZ(gRB); $(V) = 0; }
+:MOV.B SRCB2, gRB is ealo=0x04 ... & SRCB2; g5=0x10 & gRB { local src:1 = SRCB2; gRB = src; setNZ(gRB); $(V) = 0; }
+:MOV.B SRCB3, gRB is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x10 & gRB { local src:1 = SRCB3; gRB = src; setNZ(gRB); $(V) = 0; }
+:MOV.B SRCB3, gRB is ealo=0x15 ... & SRCB3; g5=0x10 & gRB { local src:1 = SRCB3; gRB = src; setNZ(gRB); $(V) = 0; }
+:ADDS.B SRCB1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x05 & gRW { local src:1 = SRCB1; gRW = gRW + sext(src); }
+:ADDS.B SRCB2, gRW is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x05 & gRW { local src:1 = SRCB2; gRW = gRW + sext(src); }
+:ADDS.B SRCB2, gRW is ealo=0x05 ... & SRCB2; g5=0x05 & gRW { local src:1 = SRCB2; gRW = gRW + sext(src); }
+:ADDS.B SRCB2, gRW is ealo=0x04 ... & SRCB2; g5=0x05 & gRW { local src:1 = SRCB2; gRW = gRW + sext(src); }
+:ADDS.B SRCB3, gRW is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x05 & gRW { local src:1 = SRCB3; gRW = gRW + sext(src); }
+:ADDS.B SRCB3, gRW is ealo=0x15 ... & SRCB3; g5=0x05 & gRW { local src:1 = SRCB3; gRW = gRW + sext(src); }
+:SUBS.B SRCB1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x07 & gRW { local src:1 = SRCB1; gRW = gRW - sext(src); }
+:SUBS.B SRCB2, gRW is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x07 & gRW { local src:1 = SRCB2; gRW = gRW - sext(src); }
+:SUBS.B SRCB2, gRW is ealo=0x05 ... & SRCB2; g5=0x07 & gRW { local src:1 = SRCB2; gRW = gRW - sext(src); }
+:SUBS.B SRCB2, gRW is ealo=0x04 ... & SRCB2; g5=0x07 & gRW { local src:1 = SRCB2; gRW = gRW - sext(src); }
+:SUBS.B SRCB3, gRW is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x07 & gRW { local src:1 = SRCB3; gRW = gRW - sext(src); }
+:SUBS.B SRCB3, gRW is ealo=0x15 ... & SRCB3; g5=0x07 & gRW { local src:1 = SRCB3; gRW = gRW - sext(src); }
+:ADDX.B SRCB1, gRB is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x14 & gRB { local src:1 = SRCB1; local c:1 = zext($(C)); local t:1 = gRB + src; $(C) = carry(gRB, src) || carry(t, c); $(V) = scarry(gRB, src) ^^ scarry(t, c); gRB = t + c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:ADDX.B SRCB2, gRB is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x14 & gRB { local src:1 = SRCB2; local c:1 = zext($(C)); local t:1 = gRB + src; $(C) = carry(gRB, src) || carry(t, c); $(V) = scarry(gRB, src) ^^ scarry(t, c); gRB = t + c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:ADDX.B SRCB2, gRB is ealo=0x05 ... & SRCB2; g5=0x14 & gRB { local src:1 = SRCB2; local c:1 = zext($(C)); local t:1 = gRB + src; $(C) = carry(gRB, src) || carry(t, c); $(V) = scarry(gRB, src) ^^ scarry(t, c); gRB = t + c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:ADDX.B SRCB2, gRB is ealo=0x04 ... & SRCB2; g5=0x14 & gRB { local src:1 = SRCB2; local c:1 = zext($(C)); local t:1 = gRB + src; $(C) = carry(gRB, src) || carry(t, c); $(V) = scarry(gRB, src) ^^ scarry(t, c); gRB = t + c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:ADDX.B SRCB3, gRB is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x14 & gRB { local src:1 = SRCB3; local c:1 = zext($(C)); local t:1 = gRB + src; $(C) = carry(gRB, src) || carry(t, c); $(V) = scarry(gRB, src) ^^ scarry(t, c); gRB = t + c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:ADDX.B SRCB3, gRB is ealo=0x15 ... & SRCB3; g5=0x14 & gRB { local src:1 = SRCB3; local c:1 = zext($(C)); local t:1 = gRB + src; $(C) = carry(gRB, src) || carry(t, c); $(V) = scarry(gRB, src) ^^ scarry(t, c); gRB = t + c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:SUBX.B SRCB1, gRB is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x16 & gRB { local src:1 = SRCB1; local c:1 = zext($(C)); local t:1 = gRB - src; $(C) = (gRB < src) || (t < c); $(V) = sborrow(gRB, src) ^^ sborrow(t, c); gRB = t - c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:SUBX.B SRCB2, gRB is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x16 & gRB { local src:1 = SRCB2; local c:1 = zext($(C)); local t:1 = gRB - src; $(C) = (gRB < src) || (t < c); $(V) = sborrow(gRB, src) ^^ sborrow(t, c); gRB = t - c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:SUBX.B SRCB2, gRB is ealo=0x05 ... & SRCB2; g5=0x16 & gRB { local src:1 = SRCB2; local c:1 = zext($(C)); local t:1 = gRB - src; $(C) = (gRB < src) || (t < c); $(V) = sborrow(gRB, src) ^^ sborrow(t, c); gRB = t - c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:SUBX.B SRCB2, gRB is ealo=0x04 ... & SRCB2; g5=0x16 & gRB { local src:1 = SRCB2; local c:1 = zext($(C)); local t:1 = gRB - src; $(C) = (gRB < src) || (t < c); $(V) = sborrow(gRB, src) ^^ sborrow(t, c); gRB = t - c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:SUBX.B SRCB3, gRB is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x16 & gRB { local src:1 = SRCB3; local c:1 = zext($(C)); local t:1 = gRB - src; $(C) = (gRB < src) || (t < c); $(V) = sborrow(gRB, src) ^^ sborrow(t, c); gRB = t - c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:SUBX.B SRCB3, gRB is ealo=0x15 ... & SRCB3; g5=0x16 & gRB { local src:1 = SRCB3; local c:1 = zext($(C)); local t:1 = gRB - src; $(C) = (gRB < src) || (t < c); $(V) = sborrow(gRB, src) ^^ sborrow(t, c); gRB = t - c; $(N) = gRB s< 0; $(Z) = $(Z) && (gRB == 0); }
+:MULXU.B SRCB1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x15 & gRW & gRB { local src:1 = SRCB1; gRW = zext(gRB) * zext(src); $(N) = gRW s< 0; $(Z) = gRW == 0; $(V) = 0; $(C) = 0; }
+:MULXU.B SRCB2, gRW is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x15 & gRW & gRB { local src:1 = SRCB2; gRW = zext(gRB) * zext(src); $(N) = gRW s< 0; $(Z) = gRW == 0; $(V) = 0; $(C) = 0; }
+:MULXU.B SRCB2, gRW is ealo=0x05 ... & SRCB2; g5=0x15 & gRW & gRB { local src:1 = SRCB2; gRW = zext(gRB) * zext(src); $(N) = gRW s< 0; $(Z) = gRW == 0; $(V) = 0; $(C) = 0; }
+:MULXU.B SRCB2, gRW is ealo=0x04 ... & SRCB2; g5=0x15 & gRW & gRB { local src:1 = SRCB2; gRW = zext(gRB) * zext(src); $(N) = gRW s< 0; $(Z) = gRW == 0; $(V) = 0; $(C) = 0; }
+:MULXU.B SRCB3, gRW is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x15 & gRW & gRB { local src:1 = SRCB3; gRW = zext(gRB) * zext(src); $(N) = gRW s< 0; $(Z) = gRW == 0; $(V) = 0; $(C) = 0; }
+:MULXU.B SRCB3, gRW is ealo=0x15 ... & SRCB3; g5=0x15 & gRW & gRB { local src:1 = SRCB3; gRW = zext(gRB) * zext(src); $(N) = gRW s< 0; $(Z) = gRW == 0; $(V) = 0; $(C) = 0; }
+:DIVXU.B SRCB1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x17 & gRW { local d:2 = zext(SRCB1); local q:2 = gRW / d; local rm:2 = gRW % d; $(V) = q > 0xff; $(C) = 0; gRW = (rm << 8) | (q & 0xff); $(N) = q:1 s< 0; $(Z) = q:1 == 0; }
+:DIVXU.B SRCB2, gRW is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x17 & gRW { local d:2 = zext(SRCB2); local q:2 = gRW / d; local rm:2 = gRW % d; $(V) = q > 0xff; $(C) = 0; gRW = (rm << 8) | (q & 0xff); $(N) = q:1 s< 0; $(Z) = q:1 == 0; }
+:DIVXU.B SRCB2, gRW is ealo=0x05 ... & SRCB2; g5=0x17 & gRW { local d:2 = zext(SRCB2); local q:2 = gRW / d; local rm:2 = gRW % d; $(V) = q > 0xff; $(C) = 0; gRW = (rm << 8) | (q & 0xff); $(N) = q:1 s< 0; $(Z) = q:1 == 0; }
+:DIVXU.B SRCB2, gRW is ealo=0x04 ... & SRCB2; g5=0x17 & gRW { local d:2 = zext(SRCB2); local q:2 = gRW / d; local rm:2 = gRW % d; $(V) = q > 0xff; $(C) = 0; gRW = (rm << 8) | (q & 0xff); $(N) = q:1 s< 0; $(Z) = q:1 == 0; }
+:DIVXU.B SRCB3, gRW is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x17 & gRW { local d:2 = zext(SRCB3); local q:2 = gRW / d; local rm:2 = gRW % d; $(V) = q > 0xff; $(C) = 0; gRW = (rm << 8) | (q & 0xff); $(N) = q:1 s< 0; $(Z) = q:1 == 0; }
+:DIVXU.B SRCB3, gRW is ealo=0x15 ... & SRCB3; g5=0x17 & gRW { local d:2 = zext(SRCB3); local q:2 = gRW / d; local rm:2 = gRW % d; $(V) = q > 0xff; $(C) = 0; gRW = (rm << 8) | (q & 0xff); $(N) = q:1 s< 0; $(Z) = q:1 == 0; }
+:LDC.B SRCB1, "CCR" is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x11 & grn=1 { CCR = SRCB1; unpackCCR(); }
+:LDC.B SRCB2, "CCR" is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x11 & grn=1 { CCR = SRCB2; unpackCCR(); }
+:LDC.B SRCB2, "CCR" is ealo=0x05 ... & SRCB2; g5=0x11 & grn=1 { CCR = SRCB2; unpackCCR(); }
+:LDC.B SRCB2, "CCR" is ealo=0x04 ... & SRCB2; g5=0x11 & grn=1 { CCR = SRCB2; unpackCCR(); }
+:LDC.B SRCB3, "CCR" is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x11 & grn=1 { CCR = SRCB3; unpackCCR(); }
+:LDC.B SRCB3, "CCR" is ealo=0x15 ... & SRCB3; g5=0x11 & grn=1 { CCR = SRCB3; unpackCCR(); }
+:LDC.B SRCB1, crB is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & SRCB1; g5=0x11 & crB { crB = SRCB1; }
+:LDC.B SRCB2, crB is (eamode=0xe & eaw=0) ... & SRCB2; g5=0x11 & crB { crB = SRCB2; }
+:LDC.B SRCB2, crB is ealo=0x05 ... & SRCB2; g5=0x11 & crB { crB = SRCB2; }
+:LDC.B SRCB2, crB is ealo=0x04 ... & SRCB2; g5=0x11 & crB { crB = SRCB2; }
+:LDC.B SRCB3, crB is (eamode=0xf & eaw=0) ... & SRCB3; g5=0x11 & crB { crB = SRCB3; }
+:LDC.B SRCB3, crB is ealo=0x15 ... & SRCB3; g5=0x11 & crB { crB = SRCB3; }
+:STC.B "CCR", EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g5=0x13 & grn=1 { packCCR(); EAB1 = CCR; }
+:STC.B "CCR", EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g5=0x13 & grn=1 { packCCR(); EAB2 = CCR; }
+:STC.B "CCR", EAB2 is ealo=0x05 ... & EAB2; g5=0x13 & grn=1 { packCCR(); EAB2 = CCR; }
+:STC.B "CCR", EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g5=0x13 & grn=1 { packCCR(); EAB3 = CCR; }
+:STC.B "CCR", EAB3 is ealo=0x15 ... & EAB3; g5=0x13 & grn=1 { packCCR(); EAB3 = CCR; }
+:STC.B crB, EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g5=0x13 & crB { EAB1 = crB; }
+:STC.B crB, EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g5=0x13 & crB { EAB2 = crB; }
+:STC.B crB, EAB2 is ealo=0x05 ... & EAB2; g5=0x13 & crB { EAB2 = crB; }
+:STC.B crB, EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g5=0x13 & crB { EAB3 = crB; }
+:STC.B crB, EAB3 is ealo=0x15 ... & EAB3; g5=0x13 & crB { EAB3 = crB; }
+:MOV.B gRB, EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g5=0x12 & gRB { EAB1 = gRB; setNZ(gRB); $(V) = 0; }
+:MOV.B gRB, EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g5=0x12 & gRB { EAB2 = gRB; setNZ(gRB); $(V) = 0; }
+:MOV.B gRB, EAB2 is ealo=0x05 ... & EAB2; g5=0x12 & gRB { EAB2 = gRB; setNZ(gRB); $(V) = 0; }
+:MOV.B gRB, EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g5=0x12 & gRB { EAB3 = gRB; setNZ(gRB); $(V) = 0; }
+:MOV.B gRB, EAB3 is ealo=0x15 ... & EAB3; g5=0x12 & gRB { EAB3 = gRB; setNZ(gRB); $(V) = 0; }
+:CMP.B "#"^imm8, EABm1 is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EABm1; op=0x04; imm8 { local t:1 = EABm1; subflags(t, imm8:1); t = t - imm8; setNZ(t); }
+:CMP.B "#"^imm8, EABm2 is (eamode=0xe & eaw=0) ... & EABm2; op=0x04; imm8 { local t:1 = EABm2; subflags(t, imm8:1); t = t - imm8; setNZ(t); }
+:CMP.B "#"^imm8, EABm2 is ealo=0x05 ... & EABm2; op=0x04; imm8 { local t:1 = EABm2; subflags(t, imm8:1); t = t - imm8; setNZ(t); }
+:CMP.B "#"^imm8, EABm3 is (eamode=0xf & eaw=0) ... & EABm3; op=0x04; imm8 { local t:1 = EABm3; subflags(t, imm8:1); t = t - imm8; setNZ(t); }
+:CMP.B "#"^imm8, EABm3 is ealo=0x15 ... & EABm3; op=0x04; imm8 { local t:1 = EABm3; subflags(t, imm8:1); t = t - imm8; setNZ(t); }
+:MOV.B "#"^imm8, EABm1 is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EABm1; op=0x06; imm8 { EABm1 = imm8; setNZ(EABm1); $(V) = 0; }
+:MOV.B "#"^imm8, EABm2 is (eamode=0xe & eaw=0) ... & EABm2; op=0x06; imm8 { EABm2 = imm8; setNZ(EABm2); $(V) = 0; }
+:MOV.B "#"^imm8, EABm2 is ealo=0x05 ... & EABm2; op=0x06; imm8 { EABm2 = imm8; setNZ(EABm2); $(V) = 0; }
+:MOV.B "#"^imm8, EABm3 is (eamode=0xf & eaw=0) ... & EABm3; op=0x06; imm8 { EABm3 = imm8; setNZ(EABm3); $(V) = 0; }
+:MOV.B "#"^imm8, EABm3 is ealo=0x15 ... & EABm3; op=0x06; imm8 { EABm3 = imm8; setNZ(EABm3); $(V) = 0; }
+:ORC.B "#"^imm8, "CCR" is ealo=0x04; imm8; g5=0x09 & grn=1 { packCCR(); CCR = CCR | imm8; unpackCCR(); }
+:ANDC.B "#"^imm8, "CCR" is ealo=0x04; imm8; g5=0x0b & grn=1 { packCCR(); CCR = CCR & imm8; unpackCCR(); }
+:XORC.B "#"^imm8, "CCR" is ealo=0x04; imm8; g5=0x0d & grn=1 { packCCR(); CCR = CCR ^ imm8; unpackCCR(); }
+:ORC.B "#"^imm8, crB is ealo=0x04; imm8; g5=0x09 & crB { crB = crB | imm8; }
+:ANDC.B "#"^imm8, crB is ealo=0x04; imm8; g5=0x0b & crB { crB = crB & imm8; }
+:XORC.B "#"^imm8, crB is ealo=0x04; imm8; g5=0x0d & crB { crB = crB ^ imm8; }
+:DADD.B earB, gRB is eamode=0xa & eaw=0 & earB; op=0x00; g4b=0xa & gRB { gRB = dadd(gRB, earB, $(C)); }
+:DSUB.B earB, gRB is eamode=0xa & eaw=0 & earB; op=0x00; g4b=0xb & gRB { gRB = dsub(gRB, earB, $(C)); }
+:EXTS.B EABr1 is eamode=0xa & eaw=0 & EABr1; op=0x11 & earB { local t:2 = sext(earB); earB = t:1; $(V) = 0; $(C) = 0; }
+:EXTU.B EABr1 is eamode=0xa & eaw=0 & EABr1; op=0x12 & earB {  $(V) = 0; $(C) = 0; }
+:CLR.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x13 { EAB1 = 0; $(N) = 0; $(Z) = 1; $(V) = 0; $(C) = 0; }
+:CLR.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x13 { EAB2 = 0; $(N) = 0; $(Z) = 1; $(V) = 0; $(C) = 0; }
+:CLR.B EAB2 is ealo=0x05 ... & EAB2; op=0x13 { EAB2 = 0; $(N) = 0; $(Z) = 1; $(V) = 0; $(C) = 0; }
+:CLR.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x13 { EAB3 = 0; $(N) = 0; $(Z) = 1; $(V) = 0; $(C) = 0; }
+:CLR.B EAB3 is ealo=0x15 ... & EAB3; op=0x13 { EAB3 = 0; $(N) = 0; $(Z) = 1; $(V) = 0; $(C) = 0; }
+:NEG.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x14 { local t:1 = EAB1; subflags(0:1, t); t = -t; EAB1 = t; setNZ(t); }
+:NEG.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x14 { local t:1 = EAB2; subflags(0:1, t); t = -t; EAB2 = t; setNZ(t); }
+:NEG.B EAB2 is ealo=0x05 ... & EAB2; op=0x14 { local t:1 = EAB2; subflags(0:1, t); t = -t; EAB2 = t; setNZ(t); }
+:NEG.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x14 { local t:1 = EAB3; subflags(0:1, t); t = -t; EAB3 = t; setNZ(t); }
+:NEG.B EAB3 is ealo=0x15 ... & EAB3; op=0x14 { local t:1 = EAB3; subflags(0:1, t); t = -t; EAB3 = t; setNZ(t); }
+:NOT.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x15 { local t:1 = ~EAB1; EAB1 = t; setNZ(t); $(V) = 0; }
+:NOT.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x15 { local t:1 = ~EAB2; EAB2 = t; setNZ(t); $(V) = 0; }
+:NOT.B EAB2 is ealo=0x05 ... & EAB2; op=0x15 { local t:1 = ~EAB2; EAB2 = t; setNZ(t); $(V) = 0; }
+:NOT.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x15 { local t:1 = ~EAB3; EAB3 = t; setNZ(t); $(V) = 0; }
+:NOT.B EAB3 is ealo=0x15 ... & EAB3; op=0x15 { local t:1 = ~EAB3; EAB3 = t; setNZ(t); $(V) = 0; }
+:TST.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x16 { local t:1 = EAB1; setNZ(t); $(V) = 0; $(C) = 0; }
+:TST.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x16 { local t:1 = EAB2; setNZ(t); $(V) = 0; $(C) = 0; }
+:TST.B EAB2 is ealo=0x05 ... & EAB2; op=0x16 { local t:1 = EAB2; setNZ(t); $(V) = 0; $(C) = 0; }
+:TST.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x16 { local t:1 = EAB3; setNZ(t); $(V) = 0; $(C) = 0; }
+:TST.B EAB3 is ealo=0x15 ... & EAB3; op=0x16 { local t:1 = EAB3; setNZ(t); $(V) = 0; $(C) = 0; }
+:TAS.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x17 { local t:1 = EAB1; setNZ(t); $(V) = 0; $(C) = 0; EAB1 = t | (1 << 7); }
+:TAS.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x17 { local t:1 = EAB2; setNZ(t); $(V) = 0; $(C) = 0; EAB2 = t | (1 << 7); }
+:TAS.B EAB2 is ealo=0x05 ... & EAB2; op=0x17 { local t:1 = EAB2; setNZ(t); $(V) = 0; $(C) = 0; EAB2 = t | (1 << 7); }
+:TAS.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x17 { local t:1 = EAB3; setNZ(t); $(V) = 0; $(C) = 0; EAB3 = t | (1 << 7); }
+:TAS.B EAB3 is ealo=0x15 ... & EAB3; op=0x17 { local t:1 = EAB3; setNZ(t); $(V) = 0; $(C) = 0; EAB3 = t | (1 << 7); }
+:SHAL.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x18 { local t:1 = EAB1; $(C) = t s< 0; local r:1 = t << 1; $(V) = (r s< 0) != $(C); EAB1 = r; setNZ(r); }
+:SHAL.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x18 { local t:1 = EAB2; $(C) = t s< 0; local r:1 = t << 1; $(V) = (r s< 0) != $(C); EAB2 = r; setNZ(r); }
+:SHAL.B EAB2 is ealo=0x05 ... & EAB2; op=0x18 { local t:1 = EAB2; $(C) = t s< 0; local r:1 = t << 1; $(V) = (r s< 0) != $(C); EAB2 = r; setNZ(r); }
+:SHAL.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x18 { local t:1 = EAB3; $(C) = t s< 0; local r:1 = t << 1; $(V) = (r s< 0) != $(C); EAB3 = r; setNZ(r); }
+:SHAL.B EAB3 is ealo=0x15 ... & EAB3; op=0x18 { local t:1 = EAB3; $(C) = t s< 0; local r:1 = t << 1; $(V) = (r s< 0) != $(C); EAB3 = r; setNZ(r); }
+:SHAR.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x19 { local t:1 = EAB1; $(C) = (t & 1) != 0; local r:1 = t s>> 1; EAB1 = r; setNZ(r); $(V) = 0; }
+:SHAR.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x19 { local t:1 = EAB2; $(C) = (t & 1) != 0; local r:1 = t s>> 1; EAB2 = r; setNZ(r); $(V) = 0; }
+:SHAR.B EAB2 is ealo=0x05 ... & EAB2; op=0x19 { local t:1 = EAB2; $(C) = (t & 1) != 0; local r:1 = t s>> 1; EAB2 = r; setNZ(r); $(V) = 0; }
+:SHAR.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x19 { local t:1 = EAB3; $(C) = (t & 1) != 0; local r:1 = t s>> 1; EAB3 = r; setNZ(r); $(V) = 0; }
+:SHAR.B EAB3 is ealo=0x15 ... & EAB3; op=0x19 { local t:1 = EAB3; $(C) = (t & 1) != 0; local r:1 = t s>> 1; EAB3 = r; setNZ(r); $(V) = 0; }
+:SHLL.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x1a { local t:1 = EAB1; $(C) = t s< 0; local r:1 = t << 1; EAB1 = r; setNZ(r); $(V) = 0; }
+:SHLL.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x1a { local t:1 = EAB2; $(C) = t s< 0; local r:1 = t << 1; EAB2 = r; setNZ(r); $(V) = 0; }
+:SHLL.B EAB2 is ealo=0x05 ... & EAB2; op=0x1a { local t:1 = EAB2; $(C) = t s< 0; local r:1 = t << 1; EAB2 = r; setNZ(r); $(V) = 0; }
+:SHLL.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x1a { local t:1 = EAB3; $(C) = t s< 0; local r:1 = t << 1; EAB3 = r; setNZ(r); $(V) = 0; }
+:SHLL.B EAB3 is ealo=0x15 ... & EAB3; op=0x1a { local t:1 = EAB3; $(C) = t s< 0; local r:1 = t << 1; EAB3 = r; setNZ(r); $(V) = 0; }
+:SHLR.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x1b { local t:1 = EAB1; $(C) = (t & 1) != 0; local r:1 = t >> 1; EAB1 = r; setNZ(r); $(V) = 0; }
+:SHLR.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x1b { local t:1 = EAB2; $(C) = (t & 1) != 0; local r:1 = t >> 1; EAB2 = r; setNZ(r); $(V) = 0; }
+:SHLR.B EAB2 is ealo=0x05 ... & EAB2; op=0x1b { local t:1 = EAB2; $(C) = (t & 1) != 0; local r:1 = t >> 1; EAB2 = r; setNZ(r); $(V) = 0; }
+:SHLR.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x1b { local t:1 = EAB3; $(C) = (t & 1) != 0; local r:1 = t >> 1; EAB3 = r; setNZ(r); $(V) = 0; }
+:SHLR.B EAB3 is ealo=0x15 ... & EAB3; op=0x1b { local t:1 = EAB3; $(C) = (t & 1) != 0; local r:1 = t >> 1; EAB3 = r; setNZ(r); $(V) = 0; }
+:ROTL.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x1c { local t:1 = EAB1; $(C) = t s< 0; local r:1 = (t << 1) | (t >> 7); EAB1 = r; setNZ(r); $(V) = 0; }
+:ROTL.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x1c { local t:1 = EAB2; $(C) = t s< 0; local r:1 = (t << 1) | (t >> 7); EAB2 = r; setNZ(r); $(V) = 0; }
+:ROTL.B EAB2 is ealo=0x05 ... & EAB2; op=0x1c { local t:1 = EAB2; $(C) = t s< 0; local r:1 = (t << 1) | (t >> 7); EAB2 = r; setNZ(r); $(V) = 0; }
+:ROTL.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x1c { local t:1 = EAB3; $(C) = t s< 0; local r:1 = (t << 1) | (t >> 7); EAB3 = r; setNZ(r); $(V) = 0; }
+:ROTL.B EAB3 is ealo=0x15 ... & EAB3; op=0x1c { local t:1 = EAB3; $(C) = t s< 0; local r:1 = (t << 1) | (t >> 7); EAB3 = r; setNZ(r); $(V) = 0; }
+:ROTR.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x1d { local t:1 = EAB1; $(C) = (t & 1) != 0; local r:1 = (t >> 1) | (t << 7); EAB1 = r; setNZ(r); $(V) = 0; }
+:ROTR.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x1d { local t:1 = EAB2; $(C) = (t & 1) != 0; local r:1 = (t >> 1) | (t << 7); EAB2 = r; setNZ(r); $(V) = 0; }
+:ROTR.B EAB2 is ealo=0x05 ... & EAB2; op=0x1d { local t:1 = EAB2; $(C) = (t & 1) != 0; local r:1 = (t >> 1) | (t << 7); EAB2 = r; setNZ(r); $(V) = 0; }
+:ROTR.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x1d { local t:1 = EAB3; $(C) = (t & 1) != 0; local r:1 = (t >> 1) | (t << 7); EAB3 = r; setNZ(r); $(V) = 0; }
+:ROTR.B EAB3 is ealo=0x15 ... & EAB3; op=0x1d { local t:1 = EAB3; $(C) = (t & 1) != 0; local r:1 = (t >> 1) | (t << 7); EAB3 = r; setNZ(r); $(V) = 0; }
+:ROTXL.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x1e { local t:1 = EAB1; local c:1 = zext($(C)); $(C) = t s< 0; local r:1 = (t << 1) | c; EAB1 = r; setNZ(r); $(V) = 0; }
+:ROTXL.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x1e { local t:1 = EAB2; local c:1 = zext($(C)); $(C) = t s< 0; local r:1 = (t << 1) | c; EAB2 = r; setNZ(r); $(V) = 0; }
+:ROTXL.B EAB2 is ealo=0x05 ... & EAB2; op=0x1e { local t:1 = EAB2; local c:1 = zext($(C)); $(C) = t s< 0; local r:1 = (t << 1) | c; EAB2 = r; setNZ(r); $(V) = 0; }
+:ROTXL.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x1e { local t:1 = EAB3; local c:1 = zext($(C)); $(C) = t s< 0; local r:1 = (t << 1) | c; EAB3 = r; setNZ(r); $(V) = 0; }
+:ROTXL.B EAB3 is ealo=0x15 ... & EAB3; op=0x1e { local t:1 = EAB3; local c:1 = zext($(C)); $(C) = t s< 0; local r:1 = (t << 1) | c; EAB3 = r; setNZ(r); $(V) = 0; }
+:ROTXR.B EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x1f { local t:1 = EAB1; local c:1 = zext($(C)); $(C) = (t & 1) != 0; local r:1 = (t >> 1) | (c << 7); EAB1 = r; setNZ(r); $(V) = 0; }
+:ROTXR.B EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x1f { local t:1 = EAB2; local c:1 = zext($(C)); $(C) = (t & 1) != 0; local r:1 = (t >> 1) | (c << 7); EAB2 = r; setNZ(r); $(V) = 0; }
+:ROTXR.B EAB2 is ealo=0x05 ... & EAB2; op=0x1f { local t:1 = EAB2; local c:1 = zext($(C)); $(C) = (t & 1) != 0; local r:1 = (t >> 1) | (c << 7); EAB2 = r; setNZ(r); $(V) = 0; }
+:ROTXR.B EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x1f { local t:1 = EAB3; local c:1 = zext($(C)); $(C) = (t & 1) != 0; local r:1 = (t >> 1) | (c << 7); EAB3 = r; setNZ(r); $(V) = 0; }
+:ROTXR.B EAB3 is ealo=0x15 ... & EAB3; op=0x1f { local t:1 = EAB3; local c:1 = zext($(C)); $(C) = (t & 1) != 0; local r:1 = (t >> 1) | (c << 7); EAB3 = r; setNZ(r); $(V) = 0; }
+:ADD.B "#1", EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x08 { local t:1 = EAB1; addflags(t, 1:1); t = t + 1; EAB1 = t; setNZ(t); }
+:ADD.B "#1", EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x08 { local t:1 = EAB2; addflags(t, 1:1); t = t + 1; EAB2 = t; setNZ(t); }
+:ADD.B "#1", EAB2 is ealo=0x05 ... & EAB2; op=0x08 { local t:1 = EAB2; addflags(t, 1:1); t = t + 1; EAB2 = t; setNZ(t); }
+:ADD.B "#1", EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x08 { local t:1 = EAB3; addflags(t, 1:1); t = t + 1; EAB3 = t; setNZ(t); }
+:ADD.B "#1", EAB3 is ealo=0x15 ... & EAB3; op=0x08 { local t:1 = EAB3; addflags(t, 1:1); t = t + 1; EAB3 = t; setNZ(t); }
+:ADD.B "#2", EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x09 { local t:1 = EAB1; addflags(t, 2:1); t = t + 2; EAB1 = t; setNZ(t); }
+:ADD.B "#2", EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x09 { local t:1 = EAB2; addflags(t, 2:1); t = t + 2; EAB2 = t; setNZ(t); }
+:ADD.B "#2", EAB2 is ealo=0x05 ... & EAB2; op=0x09 { local t:1 = EAB2; addflags(t, 2:1); t = t + 2; EAB2 = t; setNZ(t); }
+:ADD.B "#2", EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x09 { local t:1 = EAB3; addflags(t, 2:1); t = t + 2; EAB3 = t; setNZ(t); }
+:ADD.B "#2", EAB3 is ealo=0x15 ... & EAB3; op=0x09 { local t:1 = EAB3; addflags(t, 2:1); t = t + 2; EAB3 = t; setNZ(t); }
+:ADD.B "#-1", EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x0c { local t:1 = EAB1; addflags(t, -1:1); t = t - 1; EAB1 = t; setNZ(t); }
+:ADD.B "#-1", EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x0c { local t:1 = EAB2; addflags(t, -1:1); t = t - 1; EAB2 = t; setNZ(t); }
+:ADD.B "#-1", EAB2 is ealo=0x05 ... & EAB2; op=0x0c { local t:1 = EAB2; addflags(t, -1:1); t = t - 1; EAB2 = t; setNZ(t); }
+:ADD.B "#-1", EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x0c { local t:1 = EAB3; addflags(t, -1:1); t = t - 1; EAB3 = t; setNZ(t); }
+:ADD.B "#-1", EAB3 is ealo=0x15 ... & EAB3; op=0x0c { local t:1 = EAB3; addflags(t, -1:1); t = t - 1; EAB3 = t; setNZ(t); }
+:ADD.B "#-2", EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; op=0x0d { local t:1 = EAB1; addflags(t, -2:1); t = t - 2; EAB1 = t; setNZ(t); }
+:ADD.B "#-2", EAB2 is (eamode=0xe & eaw=0) ... & EAB2; op=0x0d { local t:1 = EAB2; addflags(t, -2:1); t = t - 2; EAB2 = t; setNZ(t); }
+:ADD.B "#-2", EAB2 is ealo=0x05 ... & EAB2; op=0x0d { local t:1 = EAB2; addflags(t, -2:1); t = t - 2; EAB2 = t; setNZ(t); }
+:ADD.B "#-2", EAB3 is (eamode=0xf & eaw=0) ... & EAB3; op=0x0d { local t:1 = EAB3; addflags(t, -2:1); t = t - 2; EAB3 = t; setNZ(t); }
+:ADD.B "#-2", EAB3 is ealo=0x15 ... & EAB3; op=0x0d { local t:1 = EAB3; addflags(t, -2:1); t = t - 2; EAB3 = t; setNZ(t); }
+:BSET.B gRW, EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g4=0x4 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB1; $(Z) = (x & m) == 0; EAB1 = x | m; }
+:BSET.B gRW, EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g4=0x4 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x | m; }
+:BSET.B gRW, EAB2 is ealo=0x05 ... & EAB2; g4=0x4 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x | m; }
+:BSET.B gRW, EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g4=0x4 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x | m; }
+:BSET.B gRW, EAB3 is ealo=0x15 ... & EAB3; g4=0x4 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x | m; }
+:BSET.B "#"^bitn, EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g4=0xc & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB1; $(Z) = (x & m) == 0; EAB1 = x | m; }
+:BSET.B "#"^bitn, EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g4=0xc & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x | m; }
+:BSET.B "#"^bitn, EAB2 is ealo=0x05 ... & EAB2; g4=0xc & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x | m; }
+:BSET.B "#"^bitn, EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g4=0xc & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x | m; }
+:BSET.B "#"^bitn, EAB3 is ealo=0x15 ... & EAB3; g4=0xc & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x | m; }
+:BCLR.B gRW, EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g4=0x5 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB1; $(Z) = (x & m) == 0; EAB1 = x & ~m; }
+:BCLR.B gRW, EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g4=0x5 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x & ~m; }
+:BCLR.B gRW, EAB2 is ealo=0x05 ... & EAB2; g4=0x5 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x & ~m; }
+:BCLR.B gRW, EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g4=0x5 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x & ~m; }
+:BCLR.B gRW, EAB3 is ealo=0x15 ... & EAB3; g4=0x5 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x & ~m; }
+:BCLR.B "#"^bitn, EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g4=0xd & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB1; $(Z) = (x & m) == 0; EAB1 = x & ~m; }
+:BCLR.B "#"^bitn, EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g4=0xd & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x & ~m; }
+:BCLR.B "#"^bitn, EAB2 is ealo=0x05 ... & EAB2; g4=0xd & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x & ~m; }
+:BCLR.B "#"^bitn, EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g4=0xd & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x & ~m; }
+:BCLR.B "#"^bitn, EAB3 is ealo=0x15 ... & EAB3; g4=0xd & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x & ~m; }
+:BNOT.B gRW, EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g4=0x6 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB1; $(Z) = (x & m) == 0; EAB1 = x ^ m; }
+:BNOT.B gRW, EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g4=0x6 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x ^ m; }
+:BNOT.B gRW, EAB2 is ealo=0x05 ... & EAB2; g4=0x6 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x ^ m; }
+:BNOT.B gRW, EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g4=0x6 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x ^ m; }
+:BNOT.B gRW, EAB3 is ealo=0x15 ... & EAB3; g4=0x6 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x ^ m; }
+:BNOT.B "#"^bitn, EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g4=0xe & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB1; $(Z) = (x & m) == 0; EAB1 = x ^ m; }
+:BNOT.B "#"^bitn, EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g4=0xe & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x ^ m; }
+:BNOT.B "#"^bitn, EAB2 is ealo=0x05 ... & EAB2; g4=0xe & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB2; $(Z) = (x & m) == 0; EAB2 = x ^ m; }
+:BNOT.B "#"^bitn, EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g4=0xe & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x ^ m; }
+:BNOT.B "#"^bitn, EAB3 is ealo=0x15 ... & EAB3; g4=0xe & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB3; $(Z) = (x & m) == 0; EAB3 = x ^ m; }
+:BTST.B gRW, EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g4=0x7 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB1; $(Z) = (x & m) == 0; }
+:BTST.B gRW, EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g4=0x7 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB2; $(Z) = (x & m) == 0; }
+:BTST.B gRW, EAB2 is ealo=0x05 ... & EAB2; g4=0x7 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB2; $(Z) = (x & m) == 0; }
+:BTST.B gRW, EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g4=0x7 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB3; $(Z) = (x & m) == 0; }
+:BTST.B gRW, EAB3 is ealo=0x15 ... & EAB3; g4=0x7 & g3=1 & gRW { local m:1 = 1 << (gRW:1 & 7); local x:1 = EAB3; $(Z) = (x & m) == 0; }
+:BTST.B "#"^bitn, EAB1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EAB1; g4=0xf & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB1; $(Z) = (x & m) == 0; }
+:BTST.B "#"^bitn, EAB2 is (eamode=0xe & eaw=0) ... & EAB2; g4=0xf & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB2; $(Z) = (x & m) == 0; }
+:BTST.B "#"^bitn, EAB2 is ealo=0x05 ... & EAB2; g4=0xf & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB2; $(Z) = (x & m) == 0; }
+:BTST.B "#"^bitn, EAB3 is (eamode=0xf & eaw=0) ... & EAB3; g4=0xf & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB3; $(Z) = (x & m) == 0; }
+:BTST.B "#"^bitn, EAB3 is ealo=0x15 ... & EAB3; g4=0xf & bitn & g3=0 { local m:1 = 1 << bitn; local x:1 = EAB3; $(Z) = (x & m) == 0; }
+:MOVFPE.B EABm1, gRB is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EABm1; op=0x00; g4b=0x8 & g3=0 & gRB { gRB = movfpeB(EABm1); }
+:MOVFPE.B EABm2, gRB is (eamode=0xe & eaw=0) ... & EABm2; op=0x00; g4b=0x8 & g3=0 & gRB { gRB = movfpeB(EABm2); }
+:MOVFPE.B EABm2, gRB is ealo=0x05 ... & EABm2; op=0x00; g4b=0x8 & g3=0 & gRB { gRB = movfpeB(EABm2); }
+:MOVFPE.B EABm3, gRB is (eamode=0xf & eaw=0) ... & EABm3; op=0x00; g4b=0x8 & g3=0 & gRB { gRB = movfpeB(EABm3); }
+:MOVFPE.B EABm3, gRB is ealo=0x15 ... & EABm3; op=0x00; g4b=0x8 & g3=0 & gRB { gRB = movfpeB(EABm3); }
+:MOVTPE.B gRB, EABm1 is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=0 & EABm1; op=0x00; g4b=0x9 & g3=0 & gRB { movtpe(gRB, EABm1); }
+:MOVTPE.B gRB, EABm2 is (eamode=0xe & eaw=0) ... & EABm2; op=0x00; g4b=0x9 & g3=0 & gRB { movtpe(gRB, EABm2); }
+:MOVTPE.B gRB, EABm2 is ealo=0x05 ... & EABm2; op=0x00; g4b=0x9 & g3=0 & gRB { movtpe(gRB, EABm2); }
+:MOVTPE.B gRB, EABm3 is (eamode=0xf & eaw=0) ... & EABm3; op=0x00; g4b=0x9 & g3=0 & gRB { movtpe(gRB, EABm3); }
+:MOVTPE.B gRB, EABm3 is ealo=0x15 ... & EABm3; op=0x00; g4b=0x9 & g3=0 & gRB { movtpe(gRB, EABm3); }
+:ADD.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x04 & gRW { local src:2 = SRCW1; addflags(gRW, src); gRW = gRW + src; setNZ(gRW); }
+:ADD.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x04 & gRW { local src:2 = SRCW2; addflags(gRW, src); gRW = gRW + src; setNZ(gRW); }
+:ADD.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x04 & gRW { local src:2 = SRCW2; addflags(gRW, src); gRW = gRW + src; setNZ(gRW); }
+:ADD.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x04 & gRW { local src:2 = SRCW3; addflags(gRW, src); gRW = gRW + src; setNZ(gRW); }
+:ADD.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x04 & gRW { local src:2 = SRCW3; addflags(gRW, src); gRW = gRW + src; setNZ(gRW); }
+:ADD.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x04 & gRW { local src:2 = SRCW3; addflags(gRW, src); gRW = gRW + src; setNZ(gRW); }
+:SUB.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x06 & gRW { local src:2 = SRCW1; subflags(gRW, src); gRW = gRW - src; setNZ(gRW); }
+:SUB.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x06 & gRW { local src:2 = SRCW2; subflags(gRW, src); gRW = gRW - src; setNZ(gRW); }
+:SUB.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x06 & gRW { local src:2 = SRCW2; subflags(gRW, src); gRW = gRW - src; setNZ(gRW); }
+:SUB.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x06 & gRW { local src:2 = SRCW3; subflags(gRW, src); gRW = gRW - src; setNZ(gRW); }
+:SUB.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x06 & gRW { local src:2 = SRCW3; subflags(gRW, src); gRW = gRW - src; setNZ(gRW); }
+:SUB.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x06 & gRW { local src:2 = SRCW3; subflags(gRW, src); gRW = gRW - src; setNZ(gRW); }
+:CMP.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x0e & gRW { local src:2 = SRCW1; subflags(gRW, src); local t:2 = gRW - src; setNZ(t); }
+:CMP.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x0e & gRW { local src:2 = SRCW2; subflags(gRW, src); local t:2 = gRW - src; setNZ(t); }
+:CMP.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x0e & gRW { local src:2 = SRCW2; subflags(gRW, src); local t:2 = gRW - src; setNZ(t); }
+:CMP.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x0e & gRW { local src:2 = SRCW3; subflags(gRW, src); local t:2 = gRW - src; setNZ(t); }
+:CMP.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x0e & gRW { local src:2 = SRCW3; subflags(gRW, src); local t:2 = gRW - src; setNZ(t); }
+:CMP.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x0e & gRW { local src:2 = SRCW3; subflags(gRW, src); local t:2 = gRW - src; setNZ(t); }
+:OR.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x08 & gRW { local src:2 = SRCW1; gRW = gRW | src; setNZ(gRW); $(V) = 0; }
+:OR.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x08 & gRW { local src:2 = SRCW2; gRW = gRW | src; setNZ(gRW); $(V) = 0; }
+:OR.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x08 & gRW { local src:2 = SRCW2; gRW = gRW | src; setNZ(gRW); $(V) = 0; }
+:OR.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x08 & gRW { local src:2 = SRCW3; gRW = gRW | src; setNZ(gRW); $(V) = 0; }
+:OR.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x08 & gRW { local src:2 = SRCW3; gRW = gRW | src; setNZ(gRW); $(V) = 0; }
+:OR.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x08 & gRW { local src:2 = SRCW3; gRW = gRW | src; setNZ(gRW); $(V) = 0; }
+:AND.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x0a & gRW { local src:2 = SRCW1; gRW = gRW & src; setNZ(gRW); $(V) = 0; }
+:AND.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x0a & gRW { local src:2 = SRCW2; gRW = gRW & src; setNZ(gRW); $(V) = 0; }
+:AND.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x0a & gRW { local src:2 = SRCW2; gRW = gRW & src; setNZ(gRW); $(V) = 0; }
+:AND.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x0a & gRW { local src:2 = SRCW3; gRW = gRW & src; setNZ(gRW); $(V) = 0; }
+:AND.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x0a & gRW { local src:2 = SRCW3; gRW = gRW & src; setNZ(gRW); $(V) = 0; }
+:AND.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x0a & gRW { local src:2 = SRCW3; gRW = gRW & src; setNZ(gRW); $(V) = 0; }
+:XOR.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x0c & gRW { local src:2 = SRCW1; gRW = gRW ^ src; setNZ(gRW); $(V) = 0; }
+:XOR.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x0c & gRW { local src:2 = SRCW2; gRW = gRW ^ src; setNZ(gRW); $(V) = 0; }
+:XOR.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x0c & gRW { local src:2 = SRCW2; gRW = gRW ^ src; setNZ(gRW); $(V) = 0; }
+:XOR.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x0c & gRW { local src:2 = SRCW3; gRW = gRW ^ src; setNZ(gRW); $(V) = 0; }
+:XOR.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x0c & gRW { local src:2 = SRCW3; gRW = gRW ^ src; setNZ(gRW); $(V) = 0; }
+:XOR.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x0c & gRW { local src:2 = SRCW3; gRW = gRW ^ src; setNZ(gRW); $(V) = 0; }
+:MOV.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x10 & gRW { local src:2 = SRCW1; gRW = src; setNZ(gRW); $(V) = 0; }
+:MOV.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x10 & gRW { local src:2 = SRCW2; gRW = src; setNZ(gRW); $(V) = 0; }
+:MOV.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x10 & gRW { local src:2 = SRCW2; gRW = src; setNZ(gRW); $(V) = 0; }
+:MOV.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x10 & gRW { local src:2 = SRCW3; gRW = src; setNZ(gRW); $(V) = 0; }
+:MOV.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x10 & gRW { local src:2 = SRCW3; gRW = src; setNZ(gRW); $(V) = 0; }
+:MOV.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x10 & gRW { local src:2 = SRCW3; gRW = src; setNZ(gRW); $(V) = 0; }
+:ADDS.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x05 & gRW { local src:2 = SRCW1; gRW = gRW + src; }
+:ADDS.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x05 & gRW { local src:2 = SRCW2; gRW = gRW + src; }
+:ADDS.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x05 & gRW { local src:2 = SRCW2; gRW = gRW + src; }
+:ADDS.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x05 & gRW { local src:2 = SRCW3; gRW = gRW + src; }
+:ADDS.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x05 & gRW { local src:2 = SRCW3; gRW = gRW + src; }
+:ADDS.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x05 & gRW { local src:2 = SRCW3; gRW = gRW + src; }
+:SUBS.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x07 & gRW { local src:2 = SRCW1; gRW = gRW - src; }
+:SUBS.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x07 & gRW { local src:2 = SRCW2; gRW = gRW - src; }
+:SUBS.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x07 & gRW { local src:2 = SRCW2; gRW = gRW - src; }
+:SUBS.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x07 & gRW { local src:2 = SRCW3; gRW = gRW - src; }
+:SUBS.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x07 & gRW { local src:2 = SRCW3; gRW = gRW - src; }
+:SUBS.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x07 & gRW { local src:2 = SRCW3; gRW = gRW - src; }
+:ADDX.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x14 & gRW { local src:2 = SRCW1; local c:2 = zext($(C)); local t:2 = gRW + src; $(C) = carry(gRW, src) || carry(t, c); $(V) = scarry(gRW, src) ^^ scarry(t, c); gRW = t + c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:ADDX.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x14 & gRW { local src:2 = SRCW2; local c:2 = zext($(C)); local t:2 = gRW + src; $(C) = carry(gRW, src) || carry(t, c); $(V) = scarry(gRW, src) ^^ scarry(t, c); gRW = t + c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:ADDX.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x14 & gRW { local src:2 = SRCW2; local c:2 = zext($(C)); local t:2 = gRW + src; $(C) = carry(gRW, src) || carry(t, c); $(V) = scarry(gRW, src) ^^ scarry(t, c); gRW = t + c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:ADDX.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x14 & gRW { local src:2 = SRCW3; local c:2 = zext($(C)); local t:2 = gRW + src; $(C) = carry(gRW, src) || carry(t, c); $(V) = scarry(gRW, src) ^^ scarry(t, c); gRW = t + c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:ADDX.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x14 & gRW { local src:2 = SRCW3; local c:2 = zext($(C)); local t:2 = gRW + src; $(C) = carry(gRW, src) || carry(t, c); $(V) = scarry(gRW, src) ^^ scarry(t, c); gRW = t + c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:ADDX.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x14 & gRW { local src:2 = SRCW3; local c:2 = zext($(C)); local t:2 = gRW + src; $(C) = carry(gRW, src) || carry(t, c); $(V) = scarry(gRW, src) ^^ scarry(t, c); gRW = t + c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:SUBX.W SRCW1, gRW is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x16 & gRW { local src:2 = SRCW1; local c:2 = zext($(C)); local t:2 = gRW - src; $(C) = (gRW < src) || (t < c); $(V) = sborrow(gRW, src) ^^ sborrow(t, c); gRW = t - c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:SUBX.W SRCW2, gRW is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x16 & gRW { local src:2 = SRCW2; local c:2 = zext($(C)); local t:2 = gRW - src; $(C) = (gRW < src) || (t < c); $(V) = sborrow(gRW, src) ^^ sborrow(t, c); gRW = t - c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:SUBX.W SRCW2, gRW is ealo=0x0d ... & SRCW2; g5=0x16 & gRW { local src:2 = SRCW2; local c:2 = zext($(C)); local t:2 = gRW - src; $(C) = (gRW < src) || (t < c); $(V) = sborrow(gRW, src) ^^ sborrow(t, c); gRW = t - c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:SUBX.W SRCW3, gRW is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x16 & gRW { local src:2 = SRCW3; local c:2 = zext($(C)); local t:2 = gRW - src; $(C) = (gRW < src) || (t < c); $(V) = sborrow(gRW, src) ^^ sborrow(t, c); gRW = t - c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:SUBX.W SRCW3, gRW is ealo=0x1d ... & SRCW3; g5=0x16 & gRW { local src:2 = SRCW3; local c:2 = zext($(C)); local t:2 = gRW - src; $(C) = (gRW < src) || (t < c); $(V) = sborrow(gRW, src) ^^ sborrow(t, c); gRW = t - c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:SUBX.W SRCW3, gRW is ealo=0x0c ... & SRCW3; g5=0x16 & gRW { local src:2 = SRCW3; local c:2 = zext($(C)); local t:2 = gRW - src; $(C) = (gRW < src) || (t < c); $(V) = sborrow(gRW, src) ^^ sborrow(t, c); gRW = t - c; $(N) = gRW s< 0; $(Z) = $(Z) && (gRW == 0); }
+:MULXU.W SRCW1, gRR is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x15 & gRR & gRW { local src:2 = SRCW1; gRR = zext(gRW) * zext(src); $(N) = gRR s< 0; $(Z) = gRR == 0; $(V) = 0; $(C) = 0; }
+:MULXU.W SRCW2, gRR is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x15 & gRR & gRW { local src:2 = SRCW2; gRR = zext(gRW) * zext(src); $(N) = gRR s< 0; $(Z) = gRR == 0; $(V) = 0; $(C) = 0; }
+:MULXU.W SRCW2, gRR is ealo=0x0d ... & SRCW2; g5=0x15 & gRR & gRW { local src:2 = SRCW2; gRR = zext(gRW) * zext(src); $(N) = gRR s< 0; $(Z) = gRR == 0; $(V) = 0; $(C) = 0; }
+:MULXU.W SRCW3, gRR is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x15 & gRR & gRW { local src:2 = SRCW3; gRR = zext(gRW) * zext(src); $(N) = gRR s< 0; $(Z) = gRR == 0; $(V) = 0; $(C) = 0; }
+:MULXU.W SRCW3, gRR is ealo=0x1d ... & SRCW3; g5=0x15 & gRR & gRW { local src:2 = SRCW3; gRR = zext(gRW) * zext(src); $(N) = gRR s< 0; $(Z) = gRR == 0; $(V) = 0; $(C) = 0; }
+:MULXU.W SRCW3, gRR is ealo=0x0c ... & SRCW3; g5=0x15 & gRR & gRW { local src:2 = SRCW3; gRR = zext(gRW) * zext(src); $(N) = gRR s< 0; $(Z) = gRR == 0; $(V) = 0; $(C) = 0; }
+:DIVXU.W SRCW1, gRR is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x17 & gRR { local d:4 = zext(SRCW1); local q:4 = gRR / d; local rm:4 = gRR % d; $(V) = q > 0xffff; $(C) = 0; gRR = (rm << 16) | (q & 0xffff); $(N) = q:2 s< 0; $(Z) = q:2 == 0; }
+:DIVXU.W SRCW2, gRR is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x17 & gRR { local d:4 = zext(SRCW2); local q:4 = gRR / d; local rm:4 = gRR % d; $(V) = q > 0xffff; $(C) = 0; gRR = (rm << 16) | (q & 0xffff); $(N) = q:2 s< 0; $(Z) = q:2 == 0; }
+:DIVXU.W SRCW2, gRR is ealo=0x0d ... & SRCW2; g5=0x17 & gRR { local d:4 = zext(SRCW2); local q:4 = gRR / d; local rm:4 = gRR % d; $(V) = q > 0xffff; $(C) = 0; gRR = (rm << 16) | (q & 0xffff); $(N) = q:2 s< 0; $(Z) = q:2 == 0; }
+:DIVXU.W SRCW3, gRR is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x17 & gRR { local d:4 = zext(SRCW3); local q:4 = gRR / d; local rm:4 = gRR % d; $(V) = q > 0xffff; $(C) = 0; gRR = (rm << 16) | (q & 0xffff); $(N) = q:2 s< 0; $(Z) = q:2 == 0; }
+:DIVXU.W SRCW3, gRR is ealo=0x1d ... & SRCW3; g5=0x17 & gRR { local d:4 = zext(SRCW3); local q:4 = gRR / d; local rm:4 = gRR % d; $(V) = q > 0xffff; $(C) = 0; gRR = (rm << 16) | (q & 0xffff); $(N) = q:2 s< 0; $(Z) = q:2 == 0; }
+:DIVXU.W SRCW3, gRR is ealo=0x0c ... & SRCW3; g5=0x17 & gRR { local d:4 = zext(SRCW3); local q:4 = gRR / d; local rm:4 = gRR % d; $(V) = q > 0xffff; $(C) = 0; gRR = (rm << 16) | (q & 0xffff); $(N) = q:2 s< 0; $(Z) = q:2 == 0; }
+:LDC.W SRCW1, "SR" is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & SRCW1; g5=0x11 & grn=0 { SR = SRCW1; unpackCCR(); }
+:LDC.W SRCW2, "SR" is (eamode=0xe & eaw=1) ... & SRCW2; g5=0x11 & grn=0 { SR = SRCW2; unpackCCR(); }
+:LDC.W SRCW2, "SR" is ealo=0x0d ... & SRCW2; g5=0x11 & grn=0 { SR = SRCW2; unpackCCR(); }
+:LDC.W SRCW3, "SR" is (eamode=0xf & eaw=1) ... & SRCW3; g5=0x11 & grn=0 { SR = SRCW3; unpackCCR(); }
+:LDC.W SRCW3, "SR" is ealo=0x1d ... & SRCW3; g5=0x11 & grn=0 { SR = SRCW3; unpackCCR(); }
+:LDC.W SRCW3, "SR" is ealo=0x0c ... & SRCW3; g5=0x11 & grn=0 { SR = SRCW3; unpackCCR(); }
+:STC.W "SR", EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; g5=0x13 & grn=0 { packCCR(); EAW1 = SR; }
+:STC.W "SR", EAW2 is (eamode=0xe & eaw=1) ... & EAW2; g5=0x13 & grn=0 { packCCR(); EAW2 = SR; }
+:STC.W "SR", EAW2 is ealo=0x0d ... & EAW2; g5=0x13 & grn=0 { packCCR(); EAW2 = SR; }
+:STC.W "SR", EAW3 is (eamode=0xf & eaw=1) ... & EAW3; g5=0x13 & grn=0 { packCCR(); EAW3 = SR; }
+:STC.W "SR", EAW3 is ealo=0x1d ... & EAW3; g5=0x13 & grn=0 { packCCR(); EAW3 = SR; }
+:MOV.W gRW, EAWm1 is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAWm1; g5=0x12 & gRW { EAWm1 = gRW; setNZ(gRW); $(V) = 0; }
+:MOV.W gRW, EAWm2 is (eamode=0xe & eaw=1) ... & EAWm2; g5=0x12 & gRW { EAWm2 = gRW; setNZ(gRW); $(V) = 0; }
+:MOV.W gRW, EAWm2 is ealo=0x0d ... & EAWm2; g5=0x12 & gRW { EAWm2 = gRW; setNZ(gRW); $(V) = 0; }
+:MOV.W gRW, EAWm3 is (eamode=0xf & eaw=1) ... & EAWm3; g5=0x12 & gRW { EAWm3 = gRW; setNZ(gRW); $(V) = 0; }
+:MOV.W gRW, EAWm3 is ealo=0x1d ... & EAWm3; g5=0x12 & gRW { EAWm3 = gRW; setNZ(gRW); $(V) = 0; }
+:XCH.W earW, gRW is eamode=0xa & eaw=1 & earW; g5=0x12 & gRW { local t:2 = earW; earW = gRW; gRW = t; }
+:CMP.W "#"^simm8, EAWm1 is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAWm1; op=0x04; simm8 { local t:2 = EAWm1; local i:2 = simm8; subflags(t, i); t = t - i; setNZ(t); }
+:CMP.W "#"^simm8, EAWm2 is (eamode=0xe & eaw=1) ... & EAWm2; op=0x04; simm8 { local t:2 = EAWm2; local i:2 = simm8; subflags(t, i); t = t - i; setNZ(t); }
+:CMP.W "#"^simm8, EAWm2 is ealo=0x0d ... & EAWm2; op=0x04; simm8 { local t:2 = EAWm2; local i:2 = simm8; subflags(t, i); t = t - i; setNZ(t); }
+:CMP.W "#"^simm8, EAWm3 is (eamode=0xf & eaw=1) ... & EAWm3; op=0x04; simm8 { local t:2 = EAWm3; local i:2 = simm8; subflags(t, i); t = t - i; setNZ(t); }
+:CMP.W "#"^simm8, EAWm3 is ealo=0x1d ... & EAWm3; op=0x04; simm8 { local t:2 = EAWm3; local i:2 = simm8; subflags(t, i); t = t - i; setNZ(t); }
+:CMP.W "#"^imm16, EAWm1 is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAWm1; op=0x05; imm16 { local t:2 = EAWm1; subflags(t, imm16:2); t = t - imm16; setNZ(t); }
+:CMP.W "#"^imm16, EAWm2 is (eamode=0xe & eaw=1) ... & EAWm2; op=0x05; imm16 { local t:2 = EAWm2; subflags(t, imm16:2); t = t - imm16; setNZ(t); }
+:CMP.W "#"^imm16, EAWm2 is ealo=0x0d ... & EAWm2; op=0x05; imm16 { local t:2 = EAWm2; subflags(t, imm16:2); t = t - imm16; setNZ(t); }
+:CMP.W "#"^imm16, EAWm3 is (eamode=0xf & eaw=1) ... & EAWm3; op=0x05; imm16 { local t:2 = EAWm3; subflags(t, imm16:2); t = t - imm16; setNZ(t); }
+:CMP.W "#"^imm16, EAWm3 is ealo=0x1d ... & EAWm3; op=0x05; imm16 { local t:2 = EAWm3; subflags(t, imm16:2); t = t - imm16; setNZ(t); }
+:MOV.W "#"^simm8, EAWm1 is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAWm1; op=0x06; simm8 { EAWm1 = simm8; setNZ(EAWm1); $(V) = 0; }
+:MOV.W "#"^simm8, EAWm2 is (eamode=0xe & eaw=1) ... & EAWm2; op=0x06; simm8 { EAWm2 = simm8; setNZ(EAWm2); $(V) = 0; }
+:MOV.W "#"^simm8, EAWm2 is ealo=0x0d ... & EAWm2; op=0x06; simm8 { EAWm2 = simm8; setNZ(EAWm2); $(V) = 0; }
+:MOV.W "#"^simm8, EAWm3 is (eamode=0xf & eaw=1) ... & EAWm3; op=0x06; simm8 { EAWm3 = simm8; setNZ(EAWm3); $(V) = 0; }
+:MOV.W "#"^simm8, EAWm3 is ealo=0x1d ... & EAWm3; op=0x06; simm8 { EAWm3 = simm8; setNZ(EAWm3); $(V) = 0; }
+:MOV.W "#"^imm16, EAWm1 is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAWm1; op=0x07; imm16 { EAWm1 = imm16; setNZ(EAWm1); $(V) = 0; }
+:MOV.W "#"^imm16, EAWm2 is (eamode=0xe & eaw=1) ... & EAWm2; op=0x07; imm16 { EAWm2 = imm16; setNZ(EAWm2); $(V) = 0; }
+:MOV.W "#"^imm16, EAWm2 is ealo=0x0d ... & EAWm2; op=0x07; imm16 { EAWm2 = imm16; setNZ(EAWm2); $(V) = 0; }
+:MOV.W "#"^imm16, EAWm3 is (eamode=0xf & eaw=1) ... & EAWm3; op=0x07; imm16 { EAWm3 = imm16; setNZ(EAWm3); $(V) = 0; }
+:MOV.W "#"^imm16, EAWm3 is ealo=0x1d ... & EAWm3; op=0x07; imm16 { EAWm3 = imm16; setNZ(EAWm3); $(V) = 0; }
+:ORC.W "#"^imm16, "SR" is ealo=0x0c; imm16; op=0x48 { packCCR(); SR = SR | imm16; unpackCCR(); }
+:ANDC.W "#"^imm16, "SR" is ealo=0x0c; imm16; op=0x58 { packCCR(); SR = SR & imm16; unpackCCR(); }
+:XORC.W "#"^imm16, "SR" is ealo=0x0c; imm16; op=0x68 { packCCR(); SR = SR ^ imm16; unpackCCR(); }
+:SWAP.W EAWr1 is eamode=0xa & eaw=1 & EAWr1; op=0x10 { local t:2 = EAWr1; EAWr1 = (t << 8) | (t >> 8); setNZ(EAWr1); }
+:EXTS.W EAWr1 is eamode=0xa & eaw=1 & EAWr1; op=0x11 & earW & earB { earW = sext(earB); setNZ(earW); $(V) = 0; $(C) = 0; }
+:EXTU.W EAWr1 is eamode=0xa & eaw=1 & EAWr1; op=0x12 & earW & earB { earW = zext(earB); setNZ(earW); $(V) = 0; $(C) = 0; }
+:CLR.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x13 { EAW1 = 0; $(N) = 0; $(Z) = 1; $(V) = 0; $(C) = 0; }
+:CLR.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x13 { EAW2 = 0; $(N) = 0; $(Z) = 1; $(V) = 0; $(C) = 0; }
+:CLR.W EAW2 is ealo=0x0d ... & EAW2; op=0x13 { EAW2 = 0; $(N) = 0; $(Z) = 1; $(V) = 0; $(C) = 0; }
+:CLR.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x13 { EAW3 = 0; $(N) = 0; $(Z) = 1; $(V) = 0; $(C) = 0; }
+:CLR.W EAW3 is ealo=0x1d ... & EAW3; op=0x13 { EAW3 = 0; $(N) = 0; $(Z) = 1; $(V) = 0; $(C) = 0; }
+:NEG.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x14 { local t:2 = EAW1; subflags(0:2, t); t = -t; EAW1 = t; setNZ(t); }
+:NEG.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x14 { local t:2 = EAW2; subflags(0:2, t); t = -t; EAW2 = t; setNZ(t); }
+:NEG.W EAW2 is ealo=0x0d ... & EAW2; op=0x14 { local t:2 = EAW2; subflags(0:2, t); t = -t; EAW2 = t; setNZ(t); }
+:NEG.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x14 { local t:2 = EAW3; subflags(0:2, t); t = -t; EAW3 = t; setNZ(t); }
+:NEG.W EAW3 is ealo=0x1d ... & EAW3; op=0x14 { local t:2 = EAW3; subflags(0:2, t); t = -t; EAW3 = t; setNZ(t); }
+:NOT.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x15 { local t:2 = ~EAW1; EAW1 = t; setNZ(t); $(V) = 0; }
+:NOT.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x15 { local t:2 = ~EAW2; EAW2 = t; setNZ(t); $(V) = 0; }
+:NOT.W EAW2 is ealo=0x0d ... & EAW2; op=0x15 { local t:2 = ~EAW2; EAW2 = t; setNZ(t); $(V) = 0; }
+:NOT.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x15 { local t:2 = ~EAW3; EAW3 = t; setNZ(t); $(V) = 0; }
+:NOT.W EAW3 is ealo=0x1d ... & EAW3; op=0x15 { local t:2 = ~EAW3; EAW3 = t; setNZ(t); $(V) = 0; }
+:TST.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x16 { local t:2 = EAW1; setNZ(t); $(V) = 0; $(C) = 0; }
+:TST.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x16 { local t:2 = EAW2; setNZ(t); $(V) = 0; $(C) = 0; }
+:TST.W EAW2 is ealo=0x0d ... & EAW2; op=0x16 { local t:2 = EAW2; setNZ(t); $(V) = 0; $(C) = 0; }
+:TST.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x16 { local t:2 = EAW3; setNZ(t); $(V) = 0; $(C) = 0; }
+:TST.W EAW3 is ealo=0x1d ... & EAW3; op=0x16 { local t:2 = EAW3; setNZ(t); $(V) = 0; $(C) = 0; }
+:TAS.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x17 { local t:2 = EAW1; setNZ(t); $(V) = 0; $(C) = 0; EAW1 = t | (1 << 15); }
+:TAS.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x17 { local t:2 = EAW2; setNZ(t); $(V) = 0; $(C) = 0; EAW2 = t | (1 << 15); }
+:TAS.W EAW2 is ealo=0x0d ... & EAW2; op=0x17 { local t:2 = EAW2; setNZ(t); $(V) = 0; $(C) = 0; EAW2 = t | (1 << 15); }
+:TAS.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x17 { local t:2 = EAW3; setNZ(t); $(V) = 0; $(C) = 0; EAW3 = t | (1 << 15); }
+:TAS.W EAW3 is ealo=0x1d ... & EAW3; op=0x17 { local t:2 = EAW3; setNZ(t); $(V) = 0; $(C) = 0; EAW3 = t | (1 << 15); }
+:SHAL.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x18 { local t:2 = EAW1; $(C) = t s< 0; local r:2 = t << 1; $(V) = (r s< 0) != $(C); EAW1 = r; setNZ(r); }
+:SHAL.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x18 { local t:2 = EAW2; $(C) = t s< 0; local r:2 = t << 1; $(V) = (r s< 0) != $(C); EAW2 = r; setNZ(r); }
+:SHAL.W EAW2 is ealo=0x0d ... & EAW2; op=0x18 { local t:2 = EAW2; $(C) = t s< 0; local r:2 = t << 1; $(V) = (r s< 0) != $(C); EAW2 = r; setNZ(r); }
+:SHAL.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x18 { local t:2 = EAW3; $(C) = t s< 0; local r:2 = t << 1; $(V) = (r s< 0) != $(C); EAW3 = r; setNZ(r); }
+:SHAL.W EAW3 is ealo=0x1d ... & EAW3; op=0x18 { local t:2 = EAW3; $(C) = t s< 0; local r:2 = t << 1; $(V) = (r s< 0) != $(C); EAW3 = r; setNZ(r); }
+:SHAR.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x19 { local t:2 = EAW1; $(C) = (t & 1) != 0; local r:2 = t s>> 1; EAW1 = r; setNZ(r); $(V) = 0; }
+:SHAR.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x19 { local t:2 = EAW2; $(C) = (t & 1) != 0; local r:2 = t s>> 1; EAW2 = r; setNZ(r); $(V) = 0; }
+:SHAR.W EAW2 is ealo=0x0d ... & EAW2; op=0x19 { local t:2 = EAW2; $(C) = (t & 1) != 0; local r:2 = t s>> 1; EAW2 = r; setNZ(r); $(V) = 0; }
+:SHAR.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x19 { local t:2 = EAW3; $(C) = (t & 1) != 0; local r:2 = t s>> 1; EAW3 = r; setNZ(r); $(V) = 0; }
+:SHAR.W EAW3 is ealo=0x1d ... & EAW3; op=0x19 { local t:2 = EAW3; $(C) = (t & 1) != 0; local r:2 = t s>> 1; EAW3 = r; setNZ(r); $(V) = 0; }
+:SHLL.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x1a { local t:2 = EAW1; $(C) = t s< 0; local r:2 = t << 1; EAW1 = r; setNZ(r); $(V) = 0; }
+:SHLL.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x1a { local t:2 = EAW2; $(C) = t s< 0; local r:2 = t << 1; EAW2 = r; setNZ(r); $(V) = 0; }
+:SHLL.W EAW2 is ealo=0x0d ... & EAW2; op=0x1a { local t:2 = EAW2; $(C) = t s< 0; local r:2 = t << 1; EAW2 = r; setNZ(r); $(V) = 0; }
+:SHLL.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x1a { local t:2 = EAW3; $(C) = t s< 0; local r:2 = t << 1; EAW3 = r; setNZ(r); $(V) = 0; }
+:SHLL.W EAW3 is ealo=0x1d ... & EAW3; op=0x1a { local t:2 = EAW3; $(C) = t s< 0; local r:2 = t << 1; EAW3 = r; setNZ(r); $(V) = 0; }
+:SHLR.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x1b { local t:2 = EAW1; $(C) = (t & 1) != 0; local r:2 = t >> 1; EAW1 = r; setNZ(r); $(V) = 0; }
+:SHLR.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x1b { local t:2 = EAW2; $(C) = (t & 1) != 0; local r:2 = t >> 1; EAW2 = r; setNZ(r); $(V) = 0; }
+:SHLR.W EAW2 is ealo=0x0d ... & EAW2; op=0x1b { local t:2 = EAW2; $(C) = (t & 1) != 0; local r:2 = t >> 1; EAW2 = r; setNZ(r); $(V) = 0; }
+:SHLR.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x1b { local t:2 = EAW3; $(C) = (t & 1) != 0; local r:2 = t >> 1; EAW3 = r; setNZ(r); $(V) = 0; }
+:SHLR.W EAW3 is ealo=0x1d ... & EAW3; op=0x1b { local t:2 = EAW3; $(C) = (t & 1) != 0; local r:2 = t >> 1; EAW3 = r; setNZ(r); $(V) = 0; }
+:ROTL.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x1c { local t:2 = EAW1; $(C) = t s< 0; local r:2 = (t << 1) | (t >> 15); EAW1 = r; setNZ(r); $(V) = 0; }
+:ROTL.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x1c { local t:2 = EAW2; $(C) = t s< 0; local r:2 = (t << 1) | (t >> 15); EAW2 = r; setNZ(r); $(V) = 0; }
+:ROTL.W EAW2 is ealo=0x0d ... & EAW2; op=0x1c { local t:2 = EAW2; $(C) = t s< 0; local r:2 = (t << 1) | (t >> 15); EAW2 = r; setNZ(r); $(V) = 0; }
+:ROTL.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x1c { local t:2 = EAW3; $(C) = t s< 0; local r:2 = (t << 1) | (t >> 15); EAW3 = r; setNZ(r); $(V) = 0; }
+:ROTL.W EAW3 is ealo=0x1d ... & EAW3; op=0x1c { local t:2 = EAW3; $(C) = t s< 0; local r:2 = (t << 1) | (t >> 15); EAW3 = r; setNZ(r); $(V) = 0; }
+:ROTR.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x1d { local t:2 = EAW1; $(C) = (t & 1) != 0; local r:2 = (t >> 1) | (t << 15); EAW1 = r; setNZ(r); $(V) = 0; }
+:ROTR.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x1d { local t:2 = EAW2; $(C) = (t & 1) != 0; local r:2 = (t >> 1) | (t << 15); EAW2 = r; setNZ(r); $(V) = 0; }
+:ROTR.W EAW2 is ealo=0x0d ... & EAW2; op=0x1d { local t:2 = EAW2; $(C) = (t & 1) != 0; local r:2 = (t >> 1) | (t << 15); EAW2 = r; setNZ(r); $(V) = 0; }
+:ROTR.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x1d { local t:2 = EAW3; $(C) = (t & 1) != 0; local r:2 = (t >> 1) | (t << 15); EAW3 = r; setNZ(r); $(V) = 0; }
+:ROTR.W EAW3 is ealo=0x1d ... & EAW3; op=0x1d { local t:2 = EAW3; $(C) = (t & 1) != 0; local r:2 = (t >> 1) | (t << 15); EAW3 = r; setNZ(r); $(V) = 0; }
+:ROTXL.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x1e { local t:2 = EAW1; local c:2 = zext($(C)); $(C) = t s< 0; local r:2 = (t << 1) | c; EAW1 = r; setNZ(r); $(V) = 0; }
+:ROTXL.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x1e { local t:2 = EAW2; local c:2 = zext($(C)); $(C) = t s< 0; local r:2 = (t << 1) | c; EAW2 = r; setNZ(r); $(V) = 0; }
+:ROTXL.W EAW2 is ealo=0x0d ... & EAW2; op=0x1e { local t:2 = EAW2; local c:2 = zext($(C)); $(C) = t s< 0; local r:2 = (t << 1) | c; EAW2 = r; setNZ(r); $(V) = 0; }
+:ROTXL.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x1e { local t:2 = EAW3; local c:2 = zext($(C)); $(C) = t s< 0; local r:2 = (t << 1) | c; EAW3 = r; setNZ(r); $(V) = 0; }
+:ROTXL.W EAW3 is ealo=0x1d ... & EAW3; op=0x1e { local t:2 = EAW3; local c:2 = zext($(C)); $(C) = t s< 0; local r:2 = (t << 1) | c; EAW3 = r; setNZ(r); $(V) = 0; }
+:ROTXR.W EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x1f { local t:2 = EAW1; local c:2 = zext($(C)); $(C) = (t & 1) != 0; local r:2 = (t >> 1) | (c << 15); EAW1 = r; setNZ(r); $(V) = 0; }
+:ROTXR.W EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x1f { local t:2 = EAW2; local c:2 = zext($(C)); $(C) = (t & 1) != 0; local r:2 = (t >> 1) | (c << 15); EAW2 = r; setNZ(r); $(V) = 0; }
+:ROTXR.W EAW2 is ealo=0x0d ... & EAW2; op=0x1f { local t:2 = EAW2; local c:2 = zext($(C)); $(C) = (t & 1) != 0; local r:2 = (t >> 1) | (c << 15); EAW2 = r; setNZ(r); $(V) = 0; }
+:ROTXR.W EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x1f { local t:2 = EAW3; local c:2 = zext($(C)); $(C) = (t & 1) != 0; local r:2 = (t >> 1) | (c << 15); EAW3 = r; setNZ(r); $(V) = 0; }
+:ROTXR.W EAW3 is ealo=0x1d ... & EAW3; op=0x1f { local t:2 = EAW3; local c:2 = zext($(C)); $(C) = (t & 1) != 0; local r:2 = (t >> 1) | (c << 15); EAW3 = r; setNZ(r); $(V) = 0; }
+:ADD.W "#1", EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x08 { local t:2 = EAW1; addflags(t, 1:2); t = t + 1; EAW1 = t; setNZ(t); }
+:ADD.W "#1", EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x08 { local t:2 = EAW2; addflags(t, 1:2); t = t + 1; EAW2 = t; setNZ(t); }
+:ADD.W "#1", EAW2 is ealo=0x0d ... & EAW2; op=0x08 { local t:2 = EAW2; addflags(t, 1:2); t = t + 1; EAW2 = t; setNZ(t); }
+:ADD.W "#1", EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x08 { local t:2 = EAW3; addflags(t, 1:2); t = t + 1; EAW3 = t; setNZ(t); }
+:ADD.W "#1", EAW3 is ealo=0x1d ... & EAW3; op=0x08 { local t:2 = EAW3; addflags(t, 1:2); t = t + 1; EAW3 = t; setNZ(t); }
+:ADD.W "#2", EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x09 { local t:2 = EAW1; addflags(t, 2:2); t = t + 2; EAW1 = t; setNZ(t); }
+:ADD.W "#2", EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x09 { local t:2 = EAW2; addflags(t, 2:2); t = t + 2; EAW2 = t; setNZ(t); }
+:ADD.W "#2", EAW2 is ealo=0x0d ... & EAW2; op=0x09 { local t:2 = EAW2; addflags(t, 2:2); t = t + 2; EAW2 = t; setNZ(t); }
+:ADD.W "#2", EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x09 { local t:2 = EAW3; addflags(t, 2:2); t = t + 2; EAW3 = t; setNZ(t); }
+:ADD.W "#2", EAW3 is ealo=0x1d ... & EAW3; op=0x09 { local t:2 = EAW3; addflags(t, 2:2); t = t + 2; EAW3 = t; setNZ(t); }
+:ADD.W "#-1", EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x0c { local t:2 = EAW1; addflags(t, -1:2); t = t - 1; EAW1 = t; setNZ(t); }
+:ADD.W "#-1", EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x0c { local t:2 = EAW2; addflags(t, -1:2); t = t - 1; EAW2 = t; setNZ(t); }
+:ADD.W "#-1", EAW2 is ealo=0x0d ... & EAW2; op=0x0c { local t:2 = EAW2; addflags(t, -1:2); t = t - 1; EAW2 = t; setNZ(t); }
+:ADD.W "#-1", EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x0c { local t:2 = EAW3; addflags(t, -1:2); t = t - 1; EAW3 = t; setNZ(t); }
+:ADD.W "#-1", EAW3 is ealo=0x1d ... & EAW3; op=0x0c { local t:2 = EAW3; addflags(t, -1:2); t = t - 1; EAW3 = t; setNZ(t); }
+:ADD.W "#-2", EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; op=0x0d { local t:2 = EAW1; addflags(t, -2:2); t = t - 2; EAW1 = t; setNZ(t); }
+:ADD.W "#-2", EAW2 is (eamode=0xe & eaw=1) ... & EAW2; op=0x0d { local t:2 = EAW2; addflags(t, -2:2); t = t - 2; EAW2 = t; setNZ(t); }
+:ADD.W "#-2", EAW2 is ealo=0x0d ... & EAW2; op=0x0d { local t:2 = EAW2; addflags(t, -2:2); t = t - 2; EAW2 = t; setNZ(t); }
+:ADD.W "#-2", EAW3 is (eamode=0xf & eaw=1) ... & EAW3; op=0x0d { local t:2 = EAW3; addflags(t, -2:2); t = t - 2; EAW3 = t; setNZ(t); }
+:ADD.W "#-2", EAW3 is ealo=0x1d ... & EAW3; op=0x0d { local t:2 = EAW3; addflags(t, -2:2); t = t - 2; EAW3 = t; setNZ(t); }
+:BSET.W gRW, EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; g4=0x4 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW1; $(Z) = (x & m) == 0; EAW1 = x | m; }
+:BSET.W gRW, EAW2 is (eamode=0xe & eaw=1) ... & EAW2; g4=0x4 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x | m; }
+:BSET.W gRW, EAW2 is ealo=0x0d ... & EAW2; g4=0x4 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x | m; }
+:BSET.W gRW, EAW3 is (eamode=0xf & eaw=1) ... & EAW3; g4=0x4 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x | m; }
+:BSET.W gRW, EAW3 is ealo=0x1d ... & EAW3; g4=0x4 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x | m; }
+:BSET.W "#"^bitn, EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; g4=0xc & bitn { local m:2 = 1 << bitn; local x:2 = EAW1; $(Z) = (x & m) == 0; EAW1 = x | m; }
+:BSET.W "#"^bitn, EAW2 is (eamode=0xe & eaw=1) ... & EAW2; g4=0xc & bitn { local m:2 = 1 << bitn; local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x | m; }
+:BSET.W "#"^bitn, EAW2 is ealo=0x0d ... & EAW2; g4=0xc & bitn { local m:2 = 1 << bitn; local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x | m; }
+:BSET.W "#"^bitn, EAW3 is (eamode=0xf & eaw=1) ... & EAW3; g4=0xc & bitn { local m:2 = 1 << bitn; local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x | m; }
+:BSET.W "#"^bitn, EAW3 is ealo=0x1d ... & EAW3; g4=0xc & bitn { local m:2 = 1 << bitn; local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x | m; }
+:BCLR.W gRW, EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; g4=0x5 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW1; $(Z) = (x & m) == 0; EAW1 = x & ~m; }
+:BCLR.W gRW, EAW2 is (eamode=0xe & eaw=1) ... & EAW2; g4=0x5 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x & ~m; }
+:BCLR.W gRW, EAW2 is ealo=0x0d ... & EAW2; g4=0x5 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x & ~m; }
+:BCLR.W gRW, EAW3 is (eamode=0xf & eaw=1) ... & EAW3; g4=0x5 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x & ~m; }
+:BCLR.W gRW, EAW3 is ealo=0x1d ... & EAW3; g4=0x5 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x & ~m; }
+:BCLR.W "#"^bitn, EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; g4=0xd & bitn { local m:2 = 1 << bitn; local x:2 = EAW1; $(Z) = (x & m) == 0; EAW1 = x & ~m; }
+:BCLR.W "#"^bitn, EAW2 is (eamode=0xe & eaw=1) ... & EAW2; g4=0xd & bitn { local m:2 = 1 << bitn; local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x & ~m; }
+:BCLR.W "#"^bitn, EAW2 is ealo=0x0d ... & EAW2; g4=0xd & bitn { local m:2 = 1 << bitn; local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x & ~m; }
+:BCLR.W "#"^bitn, EAW3 is (eamode=0xf & eaw=1) ... & EAW3; g4=0xd & bitn { local m:2 = 1 << bitn; local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x & ~m; }
+:BCLR.W "#"^bitn, EAW3 is ealo=0x1d ... & EAW3; g4=0xd & bitn { local m:2 = 1 << bitn; local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x & ~m; }
+:BNOT.W gRW, EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; g4=0x6 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW1; $(Z) = (x & m) == 0; EAW1 = x ^ m; }
+:BNOT.W gRW, EAW2 is (eamode=0xe & eaw=1) ... & EAW2; g4=0x6 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x ^ m; }
+:BNOT.W gRW, EAW2 is ealo=0x0d ... & EAW2; g4=0x6 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x ^ m; }
+:BNOT.W gRW, EAW3 is (eamode=0xf & eaw=1) ... & EAW3; g4=0x6 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x ^ m; }
+:BNOT.W gRW, EAW3 is ealo=0x1d ... & EAW3; g4=0x6 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x ^ m; }
+:BNOT.W "#"^bitn, EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; g4=0xe & bitn { local m:2 = 1 << bitn; local x:2 = EAW1; $(Z) = (x & m) == 0; EAW1 = x ^ m; }
+:BNOT.W "#"^bitn, EAW2 is (eamode=0xe & eaw=1) ... & EAW2; g4=0xe & bitn { local m:2 = 1 << bitn; local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x ^ m; }
+:BNOT.W "#"^bitn, EAW2 is ealo=0x0d ... & EAW2; g4=0xe & bitn { local m:2 = 1 << bitn; local x:2 = EAW2; $(Z) = (x & m) == 0; EAW2 = x ^ m; }
+:BNOT.W "#"^bitn, EAW3 is (eamode=0xf & eaw=1) ... & EAW3; g4=0xe & bitn { local m:2 = 1 << bitn; local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x ^ m; }
+:BNOT.W "#"^bitn, EAW3 is ealo=0x1d ... & EAW3; g4=0xe & bitn { local m:2 = 1 << bitn; local x:2 = EAW3; $(Z) = (x & m) == 0; EAW3 = x ^ m; }
+:BTST.W gRW, EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; g4=0x7 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW1; $(Z) = (x & m) == 0; }
+:BTST.W gRW, EAW2 is (eamode=0xe & eaw=1) ... & EAW2; g4=0x7 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW2; $(Z) = (x & m) == 0; }
+:BTST.W gRW, EAW2 is ealo=0x0d ... & EAW2; g4=0x7 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW2; $(Z) = (x & m) == 0; }
+:BTST.W gRW, EAW3 is (eamode=0xf & eaw=1) ... & EAW3; g4=0x7 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW3; $(Z) = (x & m) == 0; }
+:BTST.W gRW, EAW3 is ealo=0x1d ... & EAW3; g4=0x7 & g3=1 & gRW { local m:2 = 1 << (gRW:2 & 15); local x:2 = EAW3; $(Z) = (x & m) == 0; }
+:BTST.W "#"^bitn, EAW1 is (eamode=0xa | eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAW1; g4=0xf & bitn { local m:2 = 1 << bitn; local x:2 = EAW1; $(Z) = (x & m) == 0; }
+:BTST.W "#"^bitn, EAW2 is (eamode=0xe & eaw=1) ... & EAW2; g4=0xf & bitn { local m:2 = 1 << bitn; local x:2 = EAW2; $(Z) = (x & m) == 0; }
+:BTST.W "#"^bitn, EAW2 is ealo=0x0d ... & EAW2; g4=0xf & bitn { local m:2 = 1 << bitn; local x:2 = EAW2; $(Z) = (x & m) == 0; }
+:BTST.W "#"^bitn, EAW3 is (eamode=0xf & eaw=1) ... & EAW3; g4=0xf & bitn { local m:2 = 1 << bitn; local x:2 = EAW3; $(Z) = (x & m) == 0; }
+:BTST.W "#"^bitn, EAW3 is ealo=0x1d ... & EAW3; g4=0xf & bitn { local m:2 = 1 << bitn; local x:2 = EAW3; $(Z) = (x & m) == 0; }
+:MOVFPE.W EAWm1, gRW is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAWm1; op=0x00; g4b=0x8 & g3=0 & gRW { gRW = movfpeW(EAWm1); }
+:MOVFPE.W EAWm2, gRW is (eamode=0xe & eaw=1) ... & EAWm2; op=0x00; g4b=0x8 & g3=0 & gRW { gRW = movfpeW(EAWm2); }
+:MOVFPE.W EAWm2, gRW is ealo=0x0d ... & EAWm2; op=0x00; g4b=0x8 & g3=0 & gRW { gRW = movfpeW(EAWm2); }
+:MOVFPE.W EAWm3, gRW is (eamode=0xf & eaw=1) ... & EAWm3; op=0x00; g4b=0x8 & g3=0 & gRW { gRW = movfpeW(EAWm3); }
+:MOVFPE.W EAWm3, gRW is ealo=0x1d ... & EAWm3; op=0x00; g4b=0x8 & g3=0 & gRW { gRW = movfpeW(EAWm3); }
+:MOVTPE.W gRW, EAWm1 is (eamode=0xb | eamode=0xc | eamode=0xd) & eaw=1 & EAWm1; op=0x00; g4b=0x9 & g3=0 & gRW { movtpe(gRW, EAWm1); }
+:MOVTPE.W gRW, EAWm2 is (eamode=0xe & eaw=1) ... & EAWm2; op=0x00; g4b=0x9 & g3=0 & gRW { movtpe(gRW, EAWm2); }
+:MOVTPE.W gRW, EAWm2 is ealo=0x0d ... & EAWm2; op=0x00; g4b=0x9 & g3=0 & gRW { movtpe(gRW, EAWm2); }
+:MOVTPE.W gRW, EAWm3 is (eamode=0xf & eaw=1) ... & EAWm3; op=0x00; g4b=0x9 & g3=0 & gRW { movtpe(gRW, EAWm3); }
+:MOVTPE.W gRW, EAWm3 is ealo=0x1d ... & EAWm3; op=0x00; g4b=0x9 & g3=0 & gRW { movtpe(gRW, EAWm3); }

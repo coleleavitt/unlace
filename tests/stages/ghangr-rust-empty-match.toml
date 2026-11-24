@@ -1,0 +1,64 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_empty_match_x86_64',
+    'option setlanguage rust-language',
+    'read symbols',
+    'parse line extern int4 empty_case(uint8 x);',
+    'load function empty_case',
+    'decompile',
+    'print C',
+    'parse line extern int4 empty_default(uint8 x);',
+    'load function empty_default',
+    'decompile',
+    'print C',
+    'parse line extern int4 empty_shared(uint8 x);',
+    'load function empty_shared',
+    'decompile',
+    'print C',
+    'parse line extern int4 empty_loop(uint8 x,int4 n);',
+    'load function empty_loop',
+    'decompile',
+    'print C',
+    'parse line extern int4 loop_break_control(int4 x,int4 n);',
+    'load function loop_break_control',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'four switches render as matches'
+count = 4
+literal = 'match x >> 0x20'
+
+[[match]]
+name = 'only the two real loop exits break'
+count = 2
+literal = 'break;'
+
+[[match]]
+name = 'shared empty arm retains both labels'
+count = 1
+literal = '0 | 1 =>'
+
+[[match]]
+name = 'all five functions remain'
+count = 5
+literal = 'unsafe fn '
+
+[[match]]
+name = 'no unrecovered transfer'
+count = 0
+literal = 'jump-as-call'

@@ -562,6 +562,11 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // (kuna `delphi`) Borland/Delphi VMTs, method names, type info and
         // interface tables. Commit gated, default-OFF.
         passes.push(Box::new(crate::delphi::DelphiPass));
+        // (kuna `delphiabi`) Under the Delphi spec, Win32 imports stay
+        // `__stdcall`. Inert unless the gate is on.
+        passes.push(Box::new(
+            crate::delphi::kuna_delphiabiimports::DelphiAbiImportsPass,
+        ));
     }
 
     // S1 Mach-O Core Foundation constant strings (CFStringPass): when the binary

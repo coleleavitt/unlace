@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="EVM"
+            endian="big"
+            size="32"
+            variant="Cancun"
+            version="1.0"
+            slafile="evm.sla"
+            processorspec="evm.pspec"
+            id="EVM:BE:32:Cancun">
+    <description>Ethereum Virtual Machine bytecode, Cancun opcode set</description>
+    <compiler name="default" spec="evm.cspec" id="default"/>
+  </language>
+</language_definitions>

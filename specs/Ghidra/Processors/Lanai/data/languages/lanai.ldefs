@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="lanai"
+    endian="big"
+    size="32"
+    variant="default"
+    version="1.0"
+    slafile="lanai.sla"
+    processorspec="lanai.pspec"
+    id="lanai:BE:32:default">
+    <description>Lanai v11</description>
+    <compiler name="default" spec="lanai.cspec" id="default"/>
+    <external_name tool="gnu" name="lanai"/>
+  </language>
+</language_definitions>

@@ -1,0 +1,304 @@
+# Epson S1C33000 core (S1C33 32-bit microcontrollers).
+# Written for unlace (#98) from the Epson S1C33000 Core CPU Manual (MF1097-03).
+# Instructions are 16-bit little-endian words in eight classes; registers are 32 bits.
+# The ext prefix is modelled by the noflow context fields extc/eH/eL that each ext
+# commits to the next instruction.
+
+define endian=little;
+define alignment=2;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+define register offset=0x40 size=4 [ sp pc psr alr ahr ];
+define register offset=0x60 size=1 [ C V Z N IE DS MO IL ];
+define register offset=0x80 size=4 [ contextreg ];
+
+define context contextreg
+  extc = (0,1) noflow
+  eH   = (2,14) noflow
+  eL   = (15,27) noflow
+;
+
+define token instr(16)
+  cls    = (13,15)
+  op1_0  = (9,12)
+  d8     = (8,8)
+  op2_0  = (6,7)
+  z45    = (4,5)
+  lo4    = (0,3)
+  imm2   = (0,1)
+  simm8  = (0,7) signed
+  imm8   = (0,7)
+  op1    = (10,12)
+  op2    = (8,9)
+  rb     = (4,7)
+  rs     = (4,7)
+  rd     = (0,3)
+  rsl    = (0,3)
+  imm6   = (4,9)
+  simm6  = (4,9) signed
+  imm10  = (0,9)
+  imm4   = (4,7)
+  sd     = (0,3)
+  ss     = (4,7)
+  imm3   = (0,2)
+  b3     = (3,3)
+  imm13  = (0,12)
+  w16    = (0,15)
+;
+
+attach variables [ rb rs rd rsl ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+
+define pcodeop halt;
+define pcodeop sleep;
+define pcodeop software_exception;
+define pcodeop debug_break;
+define pcodeop debug_return;
+define pcodeop scan0;
+define pcodeop scan1;
+define pcodeop mirror;
+define pcodeop div0s;
+define pcodeop div0u;
+define pcodeop div1;
+define pcodeop div2s;
+define pcodeop div3s;
+define pcodeop mac;
+
+macro packPSR() {
+  psr = (zext(IL) << 8) | (zext(MO) << 7) | (zext(DS) << 6) | (zext(IE) << 4) | (zext(C) << 3)
+      | (zext(V) << 2) | (zext(Z) << 1) | zext(N);
+}
+
+macro unpackPSR(v) {
+  psr = v;
+  IL = v[8,4]; MO = v[7,1]; DS = v[6,1]; IE = v[4,1]; C = v[3,1]; V = v[2,1]; Z = v[1,1]; N = v[0,1];
+}
+
+macro resZN(r) { Z = (r == 0); N = (r s< 0); }
+macro addFlags(a, b, r) { C = carry(a, b); V = scarry(a, b); resZN(r); }
+macro subFlags(a, b, r) { C = a < b; V = sborrow(a, b); resZN(r); }
+
+# ---- extended immediates -------------------------------------------------
+
+U19: imm6 is extc=0 & imm6 { export *[const]:4 imm6; }
+U19: val is extc=1 & imm6 [ val = (eL << 6) | imm6; ] { export *[const]:4 val; }
+U19: val is extc=2 & imm6 [ val = ((eH << 19) | (eL << 6) | imm6) & 0xffffffff; ] { export *[const]:4 val; }
+
+S19: simm6 is extc=0 & simm6 { export *[const]:4 simm6; }
+S19: val is extc=1 & imm6 [ val = ((((eL << 6) | imm6) ^ 0x40000) - 0x40000); ] { export *[const]:4 val; }
+S19: val is extc=2 & imm6 [ val = ((eH << 19) | (eL << 6) | imm6) & 0xffffffff; ] { export *[const]:4 val; }
+
+Src1: is extc=0 & rd { export rd; }
+Src1: is rs { export rs; }
+Src2: rs is extc=0 & rs { export rs; }
+Src2: rs, val is extc=1 & rs [ val = eL; ] { export *[const]:4 val; }
+Src2: rs, val is extc=2 & rs [ val = (eH << 13) | eL; ] { export *[const]:4 val; }
+
+Rb: [rb] is extc=0 & rb { export rb; }
+Rb: [rb+val] is extc=1 & rb [ val = eL; ] { a:4 = rb + val; export a; }
+Rb: [rb+val] is extc=2 & rb [ val = (eH << 13) | eL; ] { a:4 = rb + val; export a; }
+SpB: ["sp"+imm6] is extc=0 & imm6 { a:4 = sp + imm6; export a; }
+SpB: ["sp"+val] is extc=1 & imm6 [ val = (eL << 6) | imm6; ] { a:4 = sp + val; export a; }
+SpB: ["sp"+val] is extc=2 & imm6 [ val = ((eH << 19) | (eL << 6) | imm6) & 0xffffffff; ] { a:4 = sp + val; export a; }
+SpH: ["sp"+val] is extc=0 & imm6 [ val = imm6 << 1; ] { a:4 = sp + val; export a; }
+SpH: ["sp"+val] is extc=1 & imm6 [ val = (eL << 6) | imm6; ] { a:4 = sp + val; export a; }
+SpH: ["sp"+val] is extc=2 & imm6 [ val = ((eH << 19) | (eL << 6) | imm6) & 0xffffffff; ] { a:4 = sp + val; export a; }
+SpW: ["sp"+val] is extc=0 & imm6 [ val = imm6 << 2; ] { a:4 = sp + val; export a; }
+SpW: ["sp"+val] is extc=1 & imm6 [ val = (eL << 6) | imm6; ] { a:4 = sp + val; export a; }
+SpW: ["sp"+val] is extc=2 & imm6 [ val = ((eH << 19) | (eL << 6) | imm6) & 0xffffffff; ] { a:4 = sp + val; export a; }
+
+# ---- class 1: register indirect transfers ----------------------------------
+
+:ld.b rd, Rb   is cls=1 & op1=0 & op2=0 & Rb & rd { rd = sext(*:1 Rb); }
+:ld.ub rd, Rb  is cls=1 & op1=1 & op2=0 & Rb & rd { rd = zext(*:1 Rb); }
+:ld.h rd, Rb   is cls=1 & op1=2 & op2=0 & Rb & rd { rd = sext(*:2 Rb); }
+:ld.uh rd, Rb  is cls=1 & op1=3 & op2=0 & Rb & rd { rd = zext(*:2 Rb); }
+:ld.w rd, Rb   is cls=1 & op1=4 & op2=0 & Rb & rd { rd = *:4 Rb; }
+:ld.b Rb, rsl  is cls=1 & op1=5 & op2=0 & Rb & rsl { *:1 Rb = rsl:1; }
+:ld.h Rb, rsl  is cls=1 & op1=6 & op2=0 & Rb & rsl { *:2 Rb = rsl:2; }
+:ld.w Rb, rsl  is cls=1 & op1=7 & op2=0 & Rb & rsl { *:4 Rb = rsl; }
+
+:ld.b rd, [rb]+  is cls=1 & op1=0 & op2=1 & rb & rd { a:4 = rb; rb = rb + 1; rd = sext(*:1 a); }
+:ld.ub rd, [rb]+ is cls=1 & op1=1 & op2=1 & rb & rd { a:4 = rb; rb = rb + 1; rd = zext(*:1 a); }
+:ld.h rd, [rb]+  is cls=1 & op1=2 & op2=1 & rb & rd { a:4 = rb; rb = rb + 2; rd = sext(*:2 a); }
+:ld.uh rd, [rb]+ is cls=1 & op1=3 & op2=1 & rb & rd { a:4 = rb; rb = rb + 2; rd = zext(*:2 a); }
+:ld.w rd, [rb]+  is cls=1 & op1=4 & op2=1 & rb & rd { a:4 = rb; rb = rb + 4; rd = *:4 a; }
+:ld.b [rb]+, rsl is cls=1 & op1=5 & op2=1 & rb & rsl { *:1 rb = rsl:1; rb = rb + 1; }
+:ld.h [rb]+, rsl is cls=1 & op1=6 & op2=1 & rb & rsl { *:2 rb = rsl:2; rb = rb + 2; }
+:ld.w [rb]+, rsl is cls=1 & op1=7 & op2=1 & rb & rsl { *:4 rb = rsl; rb = rb + 4; }
+
+# ---- class 1: register-register arithmetic and logic -----------------------
+
+:add rd, Src2 is cls=1 & op1=0 & op2=2 & rd & Src1 & Src2 { a:4 = Src1; b:4 = Src2; r:4 = a + b; addFlags(a, b, r); rd = r; }
+:sub rd, Src2 is cls=1 & op1=1 & op2=2 & rd & Src1 & Src2 { a:4 = Src1; b:4 = Src2; r:4 = a - b; subFlags(a, b, r); rd = r; }
+:cmp rd, Src2 is cls=1 & op1=2 & op2=2 & rd & Src1 & Src2 { a:4 = Src1; b:4 = Src2; r:4 = a - b; subFlags(a, b, r); }
+:ld.w rd, rs  is cls=1 & op1=3 & op2=2 & rd & rs { rd = rs; }
+:and rd, Src2 is cls=1 & op1=4 & op2=2 & rd & Src1 & Src2 { r:4 = Src1 & Src2; resZN(r); rd = r; }
+:or rd, Src2  is cls=1 & op1=5 & op2=2 & rd & Src1 & Src2 { r:4 = Src1 | Src2; resZN(r); rd = r; }
+:xor rd, Src2 is cls=1 & op1=6 & op2=2 & rd & Src1 & Src2 { r:4 = Src1 ^ Src2; resZN(r); rd = r; }
+:not rd, rs   is cls=1 & op1=7 & op2=2 & rd & rs { r:4 = ~rs; resZN(r); rd = r; }
+
+# ---- class 2: SP-relative transfers ----------------------------------------
+
+:ld.b rd, SpB  is cls=2 & op1=0 & SpB & rd { rd = sext(*:1 SpB); }
+:ld.ub rd, SpB is cls=2 & op1=1 & SpB & rd { rd = zext(*:1 SpB); }
+:ld.h rd, SpH  is cls=2 & op1=2 & SpH & rd { rd = sext(*:2 SpH); }
+:ld.uh rd, SpH is cls=2 & op1=3 & SpH & rd { rd = zext(*:2 SpH); }
+:ld.w rd, SpW  is cls=2 & op1=4 & SpW & rd { rd = *:4 SpW; }
+:ld.b SpB, rsl is cls=2 & op1=5 & SpB & rsl { *:1 SpB = rsl:1; }
+:ld.h SpH, rsl is cls=2 & op1=6 & SpH & rsl { *:2 SpH = rsl:2; }
+:ld.w SpW, rsl is cls=2 & op1=7 & SpW & rsl { *:4 SpW = rsl; }
+
+# ---- class 3: 6-bit immediates ---------------------------------------------
+
+:add rd, U19  is cls=3 & op1=0 & rd & U19 { a:4 = rd; r:4 = a + U19; addFlags(a, U19, r); rd = r; }
+:sub rd, U19  is cls=3 & op1=1 & rd & U19 { a:4 = rd; r:4 = a - U19; subFlags(a, U19, r); rd = r; }
+:cmp rd, S19  is cls=3 & op1=2 & rd & S19 { a:4 = rd; r:4 = a - S19; subFlags(a, S19, r); }
+:ld.w rd, S19 is cls=3 & op1=3 & rd & S19 { rd = S19; }
+:and rd, S19  is cls=3 & op1=4 & rd & S19 { r:4 = rd & S19; resZN(r); rd = r; }
+:or rd, S19   is cls=3 & op1=5 & rd & S19 { r:4 = rd | S19; resZN(r); rd = r; }
+:xor rd, S19  is cls=3 & op1=6 & rd & S19 { r:4 = rd ^ S19; resZN(r); rd = r; }
+:not rd, S19  is cls=3 & op1=7 & rd & S19 { r:4 = ~S19; resZN(r); rd = r; }
+
+# ---- class 4: SP arithmetic, shifts, rotates, division ---------------------
+
+SpImm: val is imm10 [ val = imm10 << 2; ] { export *[const]:4 val; }
+:add "sp", SpImm is cls=4 & op1=0 & SpImm { sp = sp + SpImm; }
+:sub "sp", SpImm is cls=4 & op1=1 & SpImm { sp = sp - SpImm; }
+
+Cnt: imm4 is op2=0 & imm4 { c:4 = imm4; c = c + zext(c > 8) * (8 - c); export c; }
+Cnt: rs   is op2=1 & rs { c:4 = rs; c = c + zext(c > 8) * (8 - c); export c; }
+
+:srl rd, Cnt is cls=4 & op1=2 & (op2=0 | op2=1) & rd & Cnt { r:4 = rd >> Cnt; resZN(r); rd = r; }
+:sll rd, Cnt is cls=4 & op1=3 & (op2=0 | op2=1) & rd & Cnt { r:4 = rd << Cnt; resZN(r); rd = r; }
+:sra rd, Cnt is cls=4 & op1=4 & (op2=0 | op2=1) & rd & Cnt { r:4 = rd s>> Cnt; resZN(r); rd = r; }
+:sla rd, Cnt is cls=4 & op1=5 & (op2=0 | op2=1) & rd & Cnt { r:4 = rd << Cnt; resZN(r); rd = r; }
+:rr rd, Cnt  is cls=4 & op1=6 & (op2=0 | op2=1) & rd & Cnt { r:4 = (rd >> Cnt) | (rd << ((32 - Cnt) & 31)); resZN(r); rd = r; }
+:rl rd, Cnt  is cls=4 & op1=7 & (op2=0 | op2=1) & rd & Cnt { r:4 = (rd << Cnt) | (rd >> ((32 - Cnt) & 31)); resZN(r); rd = r; }
+
+:scan0 rd, rs  is cls=4 & op1=2 & op2=2 & rd & rs { r:4 = scan0(rs); rd = r; C = (r == 8); V = 0; Z = (r == 0); N = 0; }
+:scan1 rd, rs  is cls=4 & op1=3 & op2=2 & rd & rs { r:4 = scan1(rs); rd = r; C = (r == 8); V = 0; Z = (r == 0); N = 0; }
+:swap rd, rs   is cls=4 & op1=4 & op2=2 & rd & rs { rd = (rs << 24) | ((rs & 0xff00) << 8) | ((rs >> 8) & 0xff00) | (rs >> 24); }
+:mirror rd, rs is cls=4 & op1=5 & op2=2 & rd & rs { rd = mirror(rs); }
+
+:div0s rs is cls=4 & op1=2 & op2=3 & rs & rsl=0 { div0s(rs); }
+:div0u rs is cls=4 & op1=3 & op2=3 & rs & rsl=0 { div0u(rs); }
+:div1 rs  is cls=4 & op1=4 & op2=3 & rs & rsl=0 { div1(rs); }
+:div2s rs is cls=4 & op1=5 & op2=3 & rs & rsl=0 { div2s(rs); }
+:div3s    is cls=4 & op1=6 & op2=3 & rs=0 & rsl=0 { div3s(); }
+
+# ---- class 5: special registers, bit operations, multiply ------------------
+
+:ld.w "psr", rs is cls=5 & op1=0 & op2=0 & rs & sd=0 { unpackPSR(rs); }
+:ld.w "sp", rs  is cls=5 & op1=0 & op2=0 & rs & sd=1 { sp = rs; }
+:ld.w "alr", rs is cls=5 & op1=0 & op2=0 & rs & sd=2 { alr = rs; }
+:ld.w "ahr", rs is cls=5 & op1=0 & op2=0 & rs & sd=3 { ahr = rs; }
+:ld.w rd, "psr" is cls=5 & op1=1 & op2=0 & rd & ss=0 { packPSR(); rd = psr; }
+:ld.w rd, "sp"  is cls=5 & op1=1 & op2=0 & rd & ss=1 { rd = sp; }
+:ld.w rd, "alr" is cls=5 & op1=1 & op2=0 & rd & ss=2 { rd = alr; }
+:ld.w rd, "ahr" is cls=5 & op1=1 & op2=0 & rd & ss=3 { rd = ahr; }
+
+:btst Rb, imm3 is cls=5 & op1=2 & op2=0 & Rb & b3=0 & imm3 { Z = ((*:1 Rb >> imm3) & 1) == 0; }
+:bclr Rb, imm3 is cls=5 & op1=3 & op2=0 & Rb & b3=0 & imm3 { *:1 Rb = *:1 Rb & ~(1 << imm3); }
+:bset Rb, imm3 is cls=5 & op1=4 & op2=0 & Rb & b3=0 & imm3 { *:1 Rb = *:1 Rb | (1 << imm3); }
+:bnot Rb, imm3 is cls=5 & op1=5 & op2=0 & Rb & b3=0 & imm3 { *:1 Rb = *:1 Rb ^ (1 << imm3); }
+
+:adc rd, rs is cls=5 & op1=6 & op2=0 & rd & rs { a:4 = rd; t:4 = a + rs; r:4 = t + zext(C); C = carry(a, rs) || carry(t, zext(C)); V = scarry(a, rs) ^^ scarry(t, zext(C)); resZN(r); rd = r; }
+:sbc rd, rs is cls=5 & op1=7 & op2=0 & rd & rs { a:4 = rd; t:4 = a - rs; r:4 = t - zext(C); C = (a < rs) || (t < zext(C)); V = sborrow(a, rs) ^^ sborrow(t, zext(C)); resZN(r); rd = r; }
+
+:ld.b rd, rs  is cls=5 & op1=0 & op2=1 & rd & rs { rd = sext(rs:1); }
+:ld.ub rd, rs is cls=5 & op1=1 & op2=1 & rd & rs { rd = zext(rs:1); }
+:ld.h rd, rs  is cls=5 & op1=2 & op2=1 & rd & rs { rd = sext(rs:2); }
+:ld.uh rd, rs is cls=5 & op1=3 & op2=1 & rd & rs { rd = zext(rs:2); }
+
+:mlt.h rd, rs  is cls=5 & op1=0 & op2=2 & rd & rs { alr = sext(rd:2) * sext(rs:2); }
+:mltu.h rd, rs is cls=5 & op1=1 & op2=2 & rd & rs { alr = zext(rd:2) * zext(rs:2); }
+:mlt.w rd, rs  is cls=5 & op1=2 & op2=2 & rd & rs { p:8 = sext(rd) * sext(rs); alr = p:4; ahr = p(4); }
+:mltu.w rd, rs is cls=5 & op1=3 & op2=2 & rd & rs { p:8 = zext(rd) * zext(rs); alr = p:4; ahr = p(4); }
+:mac rs        is cls=5 & op1=4 & op2=2 & rs & rsl=0 { mac(rs); }
+
+# ---- class 6: immediate extension ------------------------------------------
+
+:ext imm13 is cls=6 & imm13 & extc=0 [ extc = 1; eL = imm13; globalset(inst_next, extc); globalset(inst_next, eL); ] { }
+:ext imm13 is cls=6 & imm13 [ eH = eL; eL = imm13; extc = 2; globalset(inst_next, extc); globalset(inst_next, eH); globalset(inst_next, eL); ] { }
+
+# ---- class 0: branches and system ------------------------------------------
+
+Rel9: dest is extc=0 & simm8 [ dest = (inst_start + simm8 * 2) & 0xffffffff; ] { export *[ram]:1 dest; }
+Rel9: dest is extc=1 & imm8 [ dest = (inst_start + ((((eL << 9) | (imm8 << 1)) ^ 0x200000) - 0x200000)) & 0xffffffff; ] { export *[ram]:1 dest; }
+Rel9: dest is extc=2 & imm8 [ dest = (inst_start + (((eH >> 3) << 22) | (eL << 9) | (imm8 << 1))) & 0xffffffff; ] { export *[ram]:1 dest; }
+:jrgt Rel9 is cls=0 & op1_0=4 & d8=0 & Rel9 { if (!Z && (N == V)) goto Rel9; }
+:jrgt.d Rel9 is cls=0 & op1_0=4 & d8=1 & Rel9 { tst:1 = !Z && (N == V); delayslot(1); if (tst) goto Rel9; }
+:jrge Rel9 is cls=0 & op1_0=5 & d8=0 & Rel9 { if (N == V) goto Rel9; }
+:jrge.d Rel9 is cls=0 & op1_0=5 & d8=1 & Rel9 { tst:1 = N == V; delayslot(1); if (tst) goto Rel9; }
+:jrlt Rel9 is cls=0 & op1_0=6 & d8=0 & Rel9 { if (N != V) goto Rel9; }
+:jrlt.d Rel9 is cls=0 & op1_0=6 & d8=1 & Rel9 { tst:1 = N != V; delayslot(1); if (tst) goto Rel9; }
+:jrle Rel9 is cls=0 & op1_0=7 & d8=0 & Rel9 { if (Z || (N != V)) goto Rel9; }
+:jrle.d Rel9 is cls=0 & op1_0=7 & d8=1 & Rel9 { tst:1 = Z || (N != V); delayslot(1); if (tst) goto Rel9; }
+:jrugt Rel9 is cls=0 & op1_0=8 & d8=0 & Rel9 { if (!Z && !C) goto Rel9; }
+:jrugt.d Rel9 is cls=0 & op1_0=8 & d8=1 & Rel9 { tst:1 = !Z && !C; delayslot(1); if (tst) goto Rel9; }
+:jruge Rel9 is cls=0 & op1_0=9 & d8=0 & Rel9 { if (!C) goto Rel9; }
+:jruge.d Rel9 is cls=0 & op1_0=9 & d8=1 & Rel9 { tst:1 = !C; delayslot(1); if (tst) goto Rel9; }
+:jrult Rel9 is cls=0 & op1_0=10 & d8=0 & Rel9 { if (C) goto Rel9; }
+:jrult.d Rel9 is cls=0 & op1_0=10 & d8=1 & Rel9 { tst:1 = C; delayslot(1); if (tst) goto Rel9; }
+:jrule Rel9 is cls=0 & op1_0=11 & d8=0 & Rel9 { if (Z || C) goto Rel9; }
+:jrule.d Rel9 is cls=0 & op1_0=11 & d8=1 & Rel9 { tst:1 = Z || C; delayslot(1); if (tst) goto Rel9; }
+:jreq Rel9 is cls=0 & op1_0=12 & d8=0 & Rel9 { if (Z) goto Rel9; }
+:jreq.d Rel9 is cls=0 & op1_0=12 & d8=1 & Rel9 { tst:1 = Z; delayslot(1); if (tst) goto Rel9; }
+:jrne Rel9 is cls=0 & op1_0=13 & d8=0 & Rel9 { if (!Z) goto Rel9; }
+:jrne.d Rel9 is cls=0 & op1_0=13 & d8=1 & Rel9 { tst:1 = !Z; delayslot(1); if (tst) goto Rel9; }
+
+:call Rel9   is cls=0 & op1_0=14 & d8=0 & Rel9 { sp = sp - 4; *:4 sp = inst_next; call Rel9; }
+:call.d Rel9 is cls=0 & op1_0=14 & d8=1 & Rel9 { sp = sp - 4; ra:4 = inst_start + 4; *:4 sp = ra; delayslot(1); call Rel9; }
+:jp Rel9     is cls=0 & op1_0=15 & d8=0 & Rel9 { goto Rel9; }
+:jp.d Rel9   is cls=0 & op1_0=15 & d8=1 & Rel9 { delayslot(1); goto Rel9; }
+
+:call rsl   is cls=0 & op1_0=3 & d8=0 & op2_0=0 & z45=0 & rsl { t:4 = rsl; sp = sp - 4; *:4 sp = inst_next; call [t]; }
+:call.d rsl is cls=0 & op1_0=3 & d8=1 & op2_0=0 & z45=0 & rsl { t:4 = rsl; sp = sp - 4; ra:4 = inst_start + 4; *:4 sp = ra; delayslot(1); call [t]; }
+:ret        is cls=0 & op1_0=3 & d8=0 & op2_0=1 & z45=0 & lo4=0 { t:4 = *:4 sp; sp = sp + 4; return [t]; }
+:ret.d      is cls=0 & op1_0=3 & d8=1 & op2_0=1 & z45=0 & lo4=0 { t:4 = *:4 sp; sp = sp + 4; delayslot(1); return [t]; }
+:jp rsl     is cls=0 & op1_0=3 & d8=0 & op2_0=2 & z45=0 & rsl { goto [rsl]; }
+:jp.d rsl   is cls=0 & op1_0=3 & d8=1 & op2_0=2 & z45=0 & rsl { t:4 = rsl; delayslot(1); goto [t]; }
+
+:brk       is w16=0x0400 { debug_break(); }
+:retd      is w16=0x0440 { t:4 = debug_return(); return [t]; }
+:int imm2  is cls=0 & op1_0=2 & d8=0 & op2_0=2 & z45=0 & lo4 < 4 & imm2 { sp = sp - 4; *:4 sp = inst_next; packPSR(); sp = sp - 4; *:4 sp = psr; IE = 0; software_exception(imm2:1); }
+:reti      is w16=0x04c0 { w:4 = *:4 sp; sp = sp + 4; unpackPSR(w); t:4 = *:4 sp; sp = sp + 4; return [t]; }
+
+:nop  is w16=0x0000 { }
+:slp  is w16=0x0040 { sleep(); }
+:halt is w16=0x0080 { halt(); }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=0 { sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=0 { r0 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=1 { sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=1 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=2 { sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=2 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=3 { sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=3 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=4 { sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=4 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=5 { sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=5 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=6 { sp = sp - 4; *:4 sp = r6; sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=6 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; r6 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=7 { sp = sp - 4; *:4 sp = r7; sp = sp - 4; *:4 sp = r6; sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=7 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; r6 = *:4 sp; sp = sp + 4; r7 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=8 { sp = sp - 4; *:4 sp = r8; sp = sp - 4; *:4 sp = r7; sp = sp - 4; *:4 sp = r6; sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=8 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; r6 = *:4 sp; sp = sp + 4; r7 = *:4 sp; sp = sp + 4; r8 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=9 { sp = sp - 4; *:4 sp = r9; sp = sp - 4; *:4 sp = r8; sp = sp - 4; *:4 sp = r7; sp = sp - 4; *:4 sp = r6; sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=9 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; r6 = *:4 sp; sp = sp + 4; r7 = *:4 sp; sp = sp + 4; r8 = *:4 sp; sp = sp + 4; r9 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=10 { sp = sp - 4; *:4 sp = r10; sp = sp - 4; *:4 sp = r9; sp = sp - 4; *:4 sp = r8; sp = sp - 4; *:4 sp = r7; sp = sp - 4; *:4 sp = r6; sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=10 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; r6 = *:4 sp; sp = sp + 4; r7 = *:4 sp; sp = sp + 4; r8 = *:4 sp; sp = sp + 4; r9 = *:4 sp; sp = sp + 4; r10 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=11 { sp = sp - 4; *:4 sp = r11; sp = sp - 4; *:4 sp = r10; sp = sp - 4; *:4 sp = r9; sp = sp - 4; *:4 sp = r8; sp = sp - 4; *:4 sp = r7; sp = sp - 4; *:4 sp = r6; sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=11 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; r6 = *:4 sp; sp = sp + 4; r7 = *:4 sp; sp = sp + 4; r8 = *:4 sp; sp = sp + 4; r9 = *:4 sp; sp = sp + 4; r10 = *:4 sp; sp = sp + 4; r11 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=12 { sp = sp - 4; *:4 sp = r12; sp = sp - 4; *:4 sp = r11; sp = sp - 4; *:4 sp = r10; sp = sp - 4; *:4 sp = r9; sp = sp - 4; *:4 sp = r8; sp = sp - 4; *:4 sp = r7; sp = sp - 4; *:4 sp = r6; sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=12 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; r6 = *:4 sp; sp = sp + 4; r7 = *:4 sp; sp = sp + 4; r8 = *:4 sp; sp = sp + 4; r9 = *:4 sp; sp = sp + 4; r10 = *:4 sp; sp = sp + 4; r11 = *:4 sp; sp = sp + 4; r12 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=13 { sp = sp - 4; *:4 sp = r13; sp = sp - 4; *:4 sp = r12; sp = sp - 4; *:4 sp = r11; sp = sp - 4; *:4 sp = r10; sp = sp - 4; *:4 sp = r9; sp = sp - 4; *:4 sp = r8; sp = sp - 4; *:4 sp = r7; sp = sp - 4; *:4 sp = r6; sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=13 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; r6 = *:4 sp; sp = sp + 4; r7 = *:4 sp; sp = sp + 4; r8 = *:4 sp; sp = sp + 4; r9 = *:4 sp; sp = sp + 4; r10 = *:4 sp; sp = sp + 4; r11 = *:4 sp; sp = sp + 4; r12 = *:4 sp; sp = sp + 4; r13 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=14 { sp = sp - 4; *:4 sp = r14; sp = sp - 4; *:4 sp = r13; sp = sp - 4; *:4 sp = r12; sp = sp - 4; *:4 sp = r11; sp = sp - 4; *:4 sp = r10; sp = sp - 4; *:4 sp = r9; sp = sp - 4; *:4 sp = r8; sp = sp - 4; *:4 sp = r7; sp = sp - 4; *:4 sp = r6; sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=14 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; r6 = *:4 sp; sp = sp + 4; r7 = *:4 sp; sp = sp + 4; r8 = *:4 sp; sp = sp + 4; r9 = *:4 sp; sp = sp + 4; r10 = *:4 sp; sp = sp + 4; r11 = *:4 sp; sp = sp + 4; r12 = *:4 sp; sp = sp + 4; r13 = *:4 sp; sp = sp + 4; r14 = *:4 sp; sp = sp + 4; }
+:pushn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=0 & z45=0 & rsl & lo4=15 { sp = sp - 4; *:4 sp = r15; sp = sp - 4; *:4 sp = r14; sp = sp - 4; *:4 sp = r13; sp = sp - 4; *:4 sp = r12; sp = sp - 4; *:4 sp = r11; sp = sp - 4; *:4 sp = r10; sp = sp - 4; *:4 sp = r9; sp = sp - 4; *:4 sp = r8; sp = sp - 4; *:4 sp = r7; sp = sp - 4; *:4 sp = r6; sp = sp - 4; *:4 sp = r5; sp = sp - 4; *:4 sp = r4; sp = sp - 4; *:4 sp = r3; sp = sp - 4; *:4 sp = r2; sp = sp - 4; *:4 sp = r1; sp = sp - 4; *:4 sp = r0; }
+:popn rsl is cls=0 & op1_0=1 & d8=0 & op2_0=1 & z45=0 & rsl & lo4=15 { r0 = *:4 sp; sp = sp + 4; r1 = *:4 sp; sp = sp + 4; r2 = *:4 sp; sp = sp + 4; r3 = *:4 sp; sp = sp + 4; r4 = *:4 sp; sp = sp + 4; r5 = *:4 sp; sp = sp + 4; r6 = *:4 sp; sp = sp + 4; r7 = *:4 sp; sp = sp + 4; r8 = *:4 sp; sp = sp + 4; r9 = *:4 sp; sp = sp + 4; r10 = *:4 sp; sp = sp + 4; r11 = *:4 sp; sp = sp + 4; r12 = *:4 sp; sp = sp + 4; r13 = *:4 sp; sp = sp + 4; r14 = *:4 sp; sp = sp + 4; r15 = *:4 sp; sp = sp + 4; }

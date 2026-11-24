@@ -49,5 +49,8 @@ fn sbpf_v1_syscall_is_named() {
 #[test]
 fn sbpf_v2_pqr_and_moved_memory_ops_decompile() {
     let out = decompile("v2_pqr.bin", "0x1000", "sBPF:LE:64:v2");
-    assert!(out.contains("a0->field_0x8 = (a0->field_0x0 / 10) * a1;"), "{out}");
+    assert!(
+        out.contains("a0->field_0x8 = (a0->field_0x0 / 10) * a1;"),
+        "{out}"
+    );
 }

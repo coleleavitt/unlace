@@ -1,18 +1,10 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
-#[path = "aarch64_rme.rs"]
-mod aarch64_rme;
-#[path = "aarch64_sme.rs"]
-mod aarch64_sme;
-#[path = "aarch64_sve2.rs"]
-mod aarch64_sve2;
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
 #[path = "blackfin_raw.rs"]
 mod blackfin_raw;
 #[path = "c28x_raw.rs"]
 mod c28x_raw;
-#[path = "cdp1802_raw.rs"]
-mod cdp1802_raw;
 #[path = "chip8.rs"]
 mod chip8;
 #[path = "clipper_raw.rs"]
@@ -20,6 +12,8 @@ mod clipper_raw;
 mod common;
 #[path = "epiphany_raw.rs"]
 mod epiphany_raw;
+#[path = "evm.rs"]
+mod evm;
 #[path = "fr_raw.rs"]
 mod fr_raw;
 #[path = "frv_raw.rs"]
@@ -30,14 +24,14 @@ mod ft32_raw;
 mod hexagon_hmx;
 #[path = "huc6280.rs"]
 mod huc6280;
-#[path = "i4004_raw.rs"]
-mod i4004_raw;
 #[path = "iq2000_raw.rs"]
 mod iq2000_raw;
 #[path = "konami.rs"]
 mod konami;
 #[path = "kr1878_raw.rs"]
 mod kr1878_raw;
+#[path = "lanai_raw.rs"]
+mod lanai_raw;
 #[path = "lua54.rs"]
 mod lua54;
 #[path = "m32r_raw.rs"]
@@ -48,6 +42,8 @@ mod m6800_family;
 mod m88k_raw;
 #[path = "mep.rs"]
 mod mep;
+#[path = "meta_raw.rs"]
+mod meta_raw;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "moxie_raw.rs"]
@@ -56,6 +52,19 @@ mod moxie_raw;
 mod nios2_raw;
 #[path = "pdp11_raw.rs"]
 mod pdp11_raw;
+#[path = "rabbit_raw.rs"]
+mod rabbit_raw;
+
+#[path = "aarch64_rme.rs"]
+mod aarch64_rme;
+#[path = "aarch64_sme.rs"]
+mod aarch64_sme;
+#[path = "aarch64_sve2.rs"]
+mod aarch64_sve2;
+#[path = "cdp1802_raw.rs"]
+mod cdp1802_raw;
+#[path = "i4004_raw.rs"]
+mod i4004_raw;
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
 #[path = "riscv_bitmanip.rs"]
@@ -84,20 +93,28 @@ mod riscv_zfh;
 mod romp_raw;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
+#[path = "s1c_raw.rs"]
+mod s1c_raw;
 #[path = "s2650_raw.rs"]
 mod s2650_raw;
+mod sam8_raw;
 #[path = "sbpf.rs"]
 mod sbpf;
 #[path = "scmp_raw.rs"]
 mod scmp_raw;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
+#[path = "st20_raw.rs"]
+mod st20_raw;
+
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
 #[path = "tilegx_raw.rs"]
 mod tilegx_raw;
 #[path = "tlcs90_raw.rs"]
 mod tlcs90_raw;
+#[path = "tms320c3x_raw.rs"]
+mod tms320c3x_raw;
 #[path = "tms9900_raw.rs"]
 mod tms9900_raw;
 #[path = "tricore_tc18.rs"]
@@ -116,6 +133,8 @@ mod visium_raw;
 mod w65816_raw;
 #[path = "x86_amx.rs"]
 mod x86_amx;
+#[path = "x86_apx.rs"]
+mod x86_apx;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

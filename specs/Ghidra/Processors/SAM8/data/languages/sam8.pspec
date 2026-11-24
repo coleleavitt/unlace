@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Samsung SAM8 (S3C8 series): reset address 0100h, where RP0 = C0h and RP1 = C8h
+     (S3C8 user's manual, chapters 2 and 6). 0000h-00FFh holds the 16-bit interrupt vectors.
+     Set 1 (sr space) holds the CPU and peripheral control registers. -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <context_data>
+    <context_set space="code">
+      <set name="rp0v" val="0" description="1 when RP0 below is known"/>
+      <set name="rp0" val="0" description="RP0[7:3]"/>
+      <set name="rp1v" val="0" description="1 when RP1 below is known"/>
+      <set name="rp1" val="0" description="RP1[7:3]"/>
+      <set name="bank" val="0" description="FLAGS.BA, set 1 bank"/>
+    </context_set>
+    <context_set space="code" first="0x0100" last="0x0100">
+      <set name="rp0v" val="1" description="RP0 resets to C0h"/>
+      <set name="rp0" val="0x18"/>
+      <set name="rp1v" val="1" description="RP1 resets to C8h"/>
+      <set name="rp1" val="0x19"/>
+    </context_set>
+  </context_data>
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="sr" first="0x00d0" last="0x00d4"/>
+    <range space="sr" first="0x00dc" last="0x00dd"/>
+    <range space="sr" first="0x00e0" last="0x01ff"/>
+  </volatile>
+  <default_symbols>
+    <symbol name="IRQ" address="sr:00DC"/>
+    <symbol name="IMR" address="sr:00DD"/>
+    <symbol name="SYM" address="sr:00DE"/>
+    <symbol name="PP" address="sr:00DF"/>
+    <symbol name="RESET" address="code:0100" entry="true"/>
+  </default_symbols>
+  <default_memory_blocks>
+    <memory_block name="REGS" start_address="rf:00" length="0x100" initialized="false"/>
+    <memory_block name="SET1" start_address="sr:00D0" length="0x130" initialized="false"/>
+  </default_memory_blocks>
+</processor_spec>

@@ -20,6 +20,7 @@ lzma-rs = "0.3"
 brotli-decompressor = "5"
 smallvec = "1.15"
 slotmap = "1.0"
+egg = { version = "0.11", default-features = false, features = ["deterministic"] }
 object = { version = "0.39", default-features = false, features = ["read_core", "elf", "pe", "macho", "coff", "std", "compression"] }
 regex = "1"
 memchr = "2"

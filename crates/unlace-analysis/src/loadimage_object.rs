@@ -2188,6 +2188,19 @@ fn language_id_for(
     } else {
         model
     };
+    // (kuna `delphiabi`) A 32-bit Delphi PE takes the vendored Delphi compiler
+    // spec, whose default model is the `register` convention (EAX, EDX, ECX,
+    // then the stack). Under the `windows` model those three registers are not
+    // inputs, so every method loses `Self` and its first arguments.
+    let model = if unlace_decomp::kuna_delphiabi::delphiabi_enabled()
+        && arch == Architecture::I386
+        && file.format() == object::BinaryFormat::Pe
+        && crate::delphi::is_delphi_image(file)
+    {
+        Some("borlanddelphi")
+    } else {
+        model
+    };
     let id: String = match compose_language_id(arch, endian, model) {
         Some(id) => id,
         None => {
@@ -2500,6 +2513,10 @@ pub fn elf_language_ids() -> Vec<String> {
         if let Some(id) = compose_language_id(arch, "LE", Some("golang")) {
             out.push(id);
         }
+    }
+    // (kuna `delphiabi`) The Delphi-model id a Delphi PE composes.
+    if let Some(id) = compose_language_id(Architecture::I386, "LE", Some("borlanddelphi")) {
+        out.push(id);
     }
     out.extend(crate::loader::kuna_arctarget::language_ids());
     out.extend(crate::loader::kuna_ppcaputarget::language_ids());

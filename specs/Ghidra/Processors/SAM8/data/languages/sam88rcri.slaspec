@@ -1,0 +1,3 @@
+# Samsung SAM88RCRI (S3C9 / S3F9 series): working registers fixed at C0-CF, reduced instruction set
+@define SAM88RCRI ""
+@include "sam8.sinc"

@@ -1,0 +1,2 @@
+# Rabbit 2000 (also the base Rabbit 3000 instruction set)
+@include "rabbit.sinc"

@@ -135,6 +135,7 @@
 # ISA-cmt: efdcfsid - Convert Floating-Point Double-Precision from Signed Integer Doubleword
 # ISA-info: efdcfsid - Form "EVX" Page 580 Category "SP.FD"
 # binutils: e500.d:   70:	10 a0 22 e3 	efdcfsid r5,r4
+@ifndef SPE2
 :efdcfsid D,B is OP=4 & D & BITS_16_20=0 & B & XOP_0_10=739 
 {
    # check if negative
@@ -162,6 +163,7 @@
 
    D = tmpB;
 }
+@endif
 
 
 # =================================================================
@@ -213,6 +215,7 @@
 # ISA-cmt: efdcfuid - Convert Floating-Point Double-Precision from Unsigned Integer Doubleword
 # ISA-info: efdcfuid - Form "EVX" Page 580 Category "SP.FD"
 # binutils: e500.d:   78:	10 a0 22 e2 	efdcfuid r5,r4
+@ifndef SPE2
 :efdcfuid D,B is OP=4 & D & BITS_16_20=0 & B & XOP_0_10=738
 {
    tmp:8 = int2float( B );
@@ -222,6 +225,7 @@
 
    D = tmp;
 }
+@endif
 
 
 # =================================================================
@@ -394,6 +398,7 @@
 # ISA-info: efdctsidz - Form "EVX" Page 581 Category "SP.FD"
 # binutils: e500.d:   88:	10 a0 22 eb 	efdctsidz r5,r4
 # Note: This may not work correctly as the number approaches saturation; too little (16 digits) precision in mantissa
+@ifndef SPE2
 :efdctsidz D,B is OP=4 & D & BITS_16_20=0 & B & XOP_0_10=747
 {
    # create zero float constant
@@ -455,6 +460,7 @@
 
    D = tmpB;
 }
+@endif
 
 
 # =================================================================
@@ -612,6 +618,7 @@
 # ISA-cmt: efdctuidz - Convert Floating-Point Double-Precision to Unsigned Integer Doubleword with Round toward Zero
 # ISA-info: efdctuidz - Form "EVX" Page 581 Category "SP.FD"
 # binutils: e500.d:   94:	10 a0 22 ea 	efdctuidz r5,r4
+@ifndef SPE2
 :efdctuidz D,B is OP=4 & D & BITS_16_20=0 & B & XOP_0_10=746
 {
    tmpB:8 = B;
@@ -636,6 +643,7 @@
 
    D = tmpB;
 }
+@endif
 
 
 # =================================================================

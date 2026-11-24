@@ -4532,6 +4532,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/st20_raw.rs` |
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/tilegx_raw.rs` |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/v60.rs` |
+| `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -4707,6 +4708,27 @@ with LLVM 23's disassembler, 102 rows RV64 and 80 RV32), LLVM-selected
 `th.lrd`/`th.lrw`, `th.extu`, `th.mvnez` and `th.mula` functions, and a
 raw RV64 image. Gaps (XTheadVector, Vdot, Fmv, Int) are listed in
 `specs/Ghidra/Processors/RISCV/README.md`.
+
+### PowerPC SPE2 and EFS2 (#98)
+
+A new language `PowerPC:BE:32:e200-SPE2` (`ppc_32_e200_spe2_be.slaspec`) adds
+`SPE2.sinc` to the Power ISA embedded + VLE language: the SPE2 and EFS2
+instructions of the NXP e200z4/e200z7 cores (MPC56xx/MPC57xx), with encodings from
+the binutils opcode table and names from the SPE2 intrinsics. Every SPE2/EFS2 row
+decodes (a probe of 2428 words agrees with `objdump -M spe2 -M efs2`). Lane add,
+subtract, negate, absolute value, min and max, extends, splats, `evmar` and the
+addressing of every load and store lift exactly: immediate offsets are scaled by
+the access size with rA read as 0 for r0, the `u` forms write the address back to
+rA, the modulo `mx` forms access at rA and then advance it through `__circinc`.
+The rest are named pcodeops that read and write `ACC` as the mnemonic says (an
+`a` suffix writes it, the `aa`/`an` forms also read it, the `3` forms read rD
+instead). Under `@define SPE2` the encodings SPE2 and EFS2 reuse are left out of
+the included files (`maddhd`/`maddhdu`/`maddld`, `evmwhusiaaw`/`evmwhusianw`,
+`efdcfuid`/`efdcfsid`/`efdctuidz`/`efdctsidz`), so the other PowerPC languages are
+unchanged. A raw `evlbbsplatbx r3,r3,r4; evaddd r3,r3,r5; blr` decompiles to
+`return *(unsigned char *)(a0 + a1) * 0x101010101010101ULL + a2;`. Exercised by
+`unlace-cli/tests/ppc_spe2.rs`; gaps (record-form CR updates, encodings binutils
+rejects) in `specs/Ghidra/Processors/PowerPC/README.md`.
 
 ### RISC-V Zacas register pairs (#98)
 

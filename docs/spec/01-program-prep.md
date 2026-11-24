@@ -14430,7 +14430,15 @@ every case callee has `dispatch` as caller in `unlace xrefs`
 `crates/unlace-analysis/src/listing/kuna_x86listingswitch.rs`) extends
 the discovery Listing for linked little-endian i386 ELF and PE images. It
 recognizes a computed jump whose own p-code loads a four-byte destination from
-`table + index * 4`. An unsigned guard on that exact whole 32-bit index must
+`table + index * 4`, or from `table + byte * 4` where the byte is read from
+`index_table + index` (MSVC's two-level form, `movzx edx, byte [ecx+idx];
+jmp [edx*4+table]`). The index bytes are read for exactly the proved range,
+and the pointer table for every entry up to the largest byte read. A word
+loaded from a frame slot (`[ebp-0x8b4]`) is an index of its own, the same at
+every load of that slot. Unoptimized MSVC code compares the slot and reloads
+it for the jump (`cmp dword ptr [ebp-0x8b4],0x64; ja; mov ecx,[ebp-0x8b4]`),
+so the guard bounds the reloaded value too. Once such a slot is read, a store
+anywhere later in the path refuses the proof. An unsigned guard on that exact whole 32-bit index must
 constrain the dispatch along one local predecessor chain, with at most sixteen
 instructions and 256 p-code operations. The proof tracks machine-width values,
 flag arithmetic, and supported normalization; it refuses unrelated comparisons,

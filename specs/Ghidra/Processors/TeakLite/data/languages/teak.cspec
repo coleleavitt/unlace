@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<compiler_spec>
+  <global>
+    <range space="CODE"/>
+    <range space="DATA"/>
+  </global>
+  <stackpointer register="sp" space="DATA" growth="negative"/>
+  <returnaddress>
+    <varnode space="stack" offset="1" size="4"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__stdcall" extrapop="0" stackshift="0">
+      <input>
+        <pentry minsize="1" maxsize="5">
+          <register name="a0"/>
+        </pentry>
+        <pentry minsize="1" maxsize="5">
+          <register name="a1"/>
+        </pentry>
+        <pentry minsize="1" maxsize="5">
+          <register name="b0"/>
+        </pentry>
+        <pentry minsize="1" maxsize="5">
+          <register name="b1"/>
+        </pentry>
+        <pentry minsize="1" maxsize="500">
+          <addr offset="0" space="stack"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="5">
+          <register name="a0"/>
+        </pentry>
+      </output>
+      <unaffected>
+      <!-- TODO: -->
+        <register name="sp"/>
+        <register name="r0"/>
+        <register name="r1"/>
+        <register name="r2"/>
+        <register name="r3"/>
+        <register name="r4"/>
+        <register name="r5"/>
+        <register name="r6"/>
+        <register name="r7"/>
+        <register name="x0"/>
+        <register name="y0"/>
+        <register name="x1"/>
+        <register name="y1"/>
+      </unaffected>
+      <killedbycall>
+          <register name="a0"/>
+          <register name="a1"/>
+          <register name="b0"/>
+          <register name="b1"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

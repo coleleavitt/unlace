@@ -1,0 +1,495 @@
+# ---------------------------------------------------------------------------------------------------
+# Accumulator arithmetic.  Accumulator values travel as 8 byte quantities that hold the 40 bit value
+# sign extended, like the reference model.
+# ---------------------------------------------------------------------------------------------------
+
+macro SignExt40(v)
+{
+    v = (v << 24) s>> 24;
+}
+
+# zero, negative, extension and normalization flags of a 40 bit value
+macro AccFlags(v)
+{
+    Z = (v == 0);
+    M = (v s< 0);
+    E = (v != sext(v:4));
+    N = Z || ((E == 0) && (v[31,1] != v[30,1]));
+}
+
+# saturate to 32 bits; LM is set when the value changed
+macro SatAcc(v)
+{
+    local ov:1 = (v != sext(v:4));
+    local neg:1 = (v s< 0);
+    if (ov == 0) goto <done>;
+    LM = 1;
+    v = 0x7fffffff;
+    if (neg == 0) goto <done>;
+    v = 0xffffffff80000000;
+  <done>
+}
+
+# saturate on read (mov etc.): honours the SAT bit and sets LM
+macro GetSatAcc(out, acc)
+{
+    out = sext(acc);
+    if (SAT != 0) goto <done>;
+    SatAcc(out);
+  <done>
+}
+
+# the same without touching LM
+macro GetSatAccNoFlag(out, acc)
+{
+    out = sext(acc);
+    if (SAT != 0) goto <done>;
+    local ov:1 = (out != sext(out:4));
+    local neg:1 = (out s< 0);
+    if (ov == 0) goto <done>;
+    out = 0x7fffffff;
+    if (neg == 0) goto <done>;
+    out = 0xffffffff80000000;
+  <done>
+}
+
+macro SetAccAndFlag(acc, v)
+{
+    AccFlags(v);
+    acc = v:5;
+}
+
+macro SatAndSetAccAndFlag(acc, v)
+{
+    AccFlags(v);
+    if (SATA != 0) goto <ns>;
+    SatAcc(v);
+  <ns>
+    acc = v:5;
+}
+
+# r = a + b, r = a - b with carry (C), overflow (V) and the latched overflow (VL)
+macro AddAcc(r, a, b)
+{
+    local am:8 = a & 0xffffffffff;
+    local bm:8 = b & 0xffffffffff;
+    local t:8 = am + bm;
+    C = t[40,1];
+    local ov:8 = (~(am ^ bm)) & (am ^ t);
+    V = ov[39,1];
+    VL = VL | V;
+    r = (t << 24) s>> 24;
+}
+
+macro SubAcc(r, a, b)
+{
+    local am:8 = a & 0xffffffffff;
+    local bm:8 = b & 0xffffffffff;
+    local t:8 = am - bm;
+    C = t[40,1];
+    local ov:8 = (am ^ bm) & (am ^ t);
+    V = ov[39,1];
+    VL = VL | V;
+    r = (t << 24) s>> 24;
+}
+
+# ---------------------------------------------------------------------------------------------------
+# Products
+# ---------------------------------------------------------------------------------------------------
+
+# the product register as a 40 bit value after the product shifter
+macro P40(r, p, pe, ps)
+{
+    local v:8 = zext(p) | (zext(pe) << 32);
+    if (ps == 0) goto <ps0>;
+    if (ps == 1) goto <ps1>;
+    if (ps == 2) goto <ps2>;
+    v = v << 2;
+    r = (v << 29) s>> 29;
+    goto <done>;
+  <ps0>
+    r = (v << 31) s>> 31;
+    goto <done>;
+  <ps1>
+    v = v >> 1;
+    r = (v << 32) s>> 32;
+    goto <done>;
+  <ps2>
+    v = v << 1;
+    r = (v << 30) s>> 30;
+  <done>
+}
+
+macro P40_0(r) { P40(r, p0, P0E, PS0); }
+macro P40_1(r) { P40(r, p1, P1E, PS1); }
+
+# ---------------------------------------------------------------------------------------------------
+# Address registers
+# ---------------------------------------------------------------------------------------------------
+
+macro BitRev16(out, v)
+{
+    local t:2 = ((v >> 1) & 0x5555) | ((v & 0x5555) << 1);
+    t = ((t >> 2) & 0x3333) | ((t & 0x3333) << 2);
+    t = ((t >> 4) & 0x0f0f) | ((t & 0x0f0f) << 4);
+    out = (t >> 8) | (t << 8);
+}
+
+# r[unit] for a unit that is only known at run time
+macro RGet(out, unit)
+{
+    local rp:4 = &r0 + (zext(unit) * 2);
+    out = *[register]:2 rp;
+}
+
+macro RSet(unit, val)
+{
+    local rp:4 = &r0 + (zext(unit) * 2);
+    *[register]:2 rp = val;
+}
+
+# One modulo step of the reference model (address in/out, s: step, mod: modulus)
+macro ModStepOnce(address, s, mod, legacy, mode2)
+{
+    local mask:2 = 0;
+    local nxt:2 = 0;
+    local m:2 = mod;
+    if (legacy != 0 || mode2 != 0) goto <old>;
+    # TeakLite II/Teak new style
+    mask = mod;
+    mask = mask | (mask >> 1);
+    mask = mask | (mask >> 2);
+    mask = mask | (mask >> 4);
+    mask = mask | (mask >> 8);
+    if (s s< 0) goto <neg>;
+    nxt = (address + s) & mask;
+    if (nxt != ((mod + 1) & mask)) goto <set>;
+    nxt = 0;
+    goto <set>;
+  <neg>
+    nxt = address & mask;
+    if (nxt != 0) goto <neg2>;
+    nxt = mod + 1;
+  <neg2>
+    nxt = (nxt + s) & mask;
+    goto <set>;
+  <old>
+    if (s s>= 0) goto <pos>;
+    m = mod | (~s);
+    goto <msk>;
+  <pos>
+    m = mod | s;
+  <msk>
+    mask = m;
+    mask = mask | (mask >> 1);
+    mask = mask | (mask >> 2);
+    mask = mask | (mask >> 4);
+    mask = mask | (mask >> 8);
+    if (s s< 0) goto <oneg>;
+    if ((address & mask) != mod) goto <oadd>;
+    if (mode2 != 0 && mod == mask) goto <oadd>;
+    nxt = 0;
+    goto <set>;
+  <oneg>
+    if ((address & mask) != 0) goto <oadd>;
+    if (mode2 != 0 && mod == mask) goto <oadd>;
+    nxt = mod;
+    goto <set>;
+  <oadd>
+    nxt = (address + s) & mask;
+  <set>
+    address = (address & ~mask) | nxt;
+}
+
+# Address after stepping unit by step (0: +0, 1: +1, 2: -1, 3: +s, 4..7: +-2 modes) with modulo / bit-reverse
+# addressing.  dmod: 1 disables the modulo arithmetic for this step.
+macro StepAddrFull(newaddr, unit, address, step, dmod)
+{
+    local u2:2 = zext(unit);
+    local mb:2 = (mod2 >> u2) & 1;
+    local bb:2 = (mod2 >> (u2 + 8)) & 1;
+    local legacy:1 = CMD;
+    local s:2 = 0;
+    local mode1:1 = 0;
+    local mode2:1 = 0;
+    local cfg:2 = cfgi;
+    local si0:2 = stepi0;
+    if (unit < 4) goto <isi>;
+    cfg = cfgj;
+    si0 = stepj0;
+  <isi>
+    newaddr = address;
+    if (step == 0) goto <stepped>;
+    if (step >= 4) goto <s47>;
+    s = 1;
+    if (step == 1) goto <sdone>;
+    s = 0xffff;
+    if (step == 2) goto <sdone>;
+    s = ((cfg & 0x7f) << 9) s>> 9;
+    if (bb == 0 || mb != 0) goto <notbr>;
+    s = si0;
+  <notbr>
+    if (STP16 == 0 || legacy != 0) goto <sdone>;
+    s = si0;
+    if (mb == 0) goto <sdone>;
+    s = (s << 7) s>> 7;
+    goto <sdone>;
+  <s47>
+    s = 2;
+    if ((step & 1) == 0) goto <e47>;
+    s = 0xfffe;
+  <e47>
+    if (legacy != 0) goto <sdone>;
+    if (step < 6) goto <m1>;
+    mode2 = 1;
+    goto <sdone>;
+  <m1>
+    mode1 = 1;
+  <sdone>
+    if (s == 0) goto <stepped>;
+    if (dmod != 0 || bb != 0 || mb == 0) goto <plain>;
+    local mod:2 = (cfg >> 7) & 0x1ff;
+    if (mod == 0) goto <stepped>;
+    if (mod == 1 && mode2 != 0) goto <stepped>;
+    if (mode1 == 0) goto <once>;
+    s = ((s >> 1) << 1) s>> 1;
+    ModStepOnce(newaddr, s, mod, legacy, mode2);
+  <once>
+    ModStepOnce(newaddr, s, mod, legacy, mode2);
+    goto <stepped>;
+  <plain>
+    newaddr = address + s;
+  <stepped>
+}
+
+# RnAndModify + RnAddress: returns the address to access and updates r[unit]
+macro RnAddrFull(addr, unit, step, dmod)
+{
+    local old:2;
+    RGet(old, unit);
+    local nw:2 = old;
+    local u2:2 = zext(unit);
+    local mb:2 = (mod2 >> u2) & 1;
+    local bb:2 = (mod2 >> (u2 + 8)) & 1;
+    if (step >= 4) goto <stp>;
+    if (unit != 3 || EPI == 0) goto <epj>;
+    nw = 0;
+    goto <upd>;
+  <epj>
+    if (unit != 7 || EPJ == 0) goto <stp>;
+    nw = 0;
+    goto <upd>;
+  <stp>
+    StepAddrFull(nw, unit, old, step, dmod);
+  <upd>
+    RSet(unit, nw);
+    addr = old;
+    if (bb == 0 || mb != 0) goto <done>;
+    BitRev16(addr, old);
+  <done>
+}
+
+# Offset address (second word of a double access) for a unit known at run time.  offset: 0 +0, 1 +1, 2 -1, 3 -1.
+macro OffAddrSimple(out, address, off)
+{
+    out = address;
+    if (off == 0) goto <done>;
+    out = address + 1;
+    if (off == 1) goto <done>;
+    out = address - 1;
+  <done>
+}
+
+macro OffAddrFull(out, unit, address, off, dmod)
+{
+    out = address;
+    if (off == 0) goto <done>;
+    out = address - 1;
+    if (off == 3) goto <done>;
+    local u2:2 = zext(unit);
+    local mb:2 = (mod2 >> u2) & 1;
+    local bb:2 = (mod2 >> (u2 + 8)) & 1;
+    if (dmod != 0 || mb == 0 || bb != 0) goto <plain>;
+    # emod: modulo addressing is active
+    local cfg:2 = cfgi;
+    if (unit < 4) goto <isi>;
+    cfg = cfgj;
+  <isi>
+    local mod:2 = (cfg >> 7) & 0x1ff;
+    local mask:2 = mod | 1;
+    mask = mask | (mask >> 1);
+    mask = mask | (mask >> 2);
+    mask = mask | (mask >> 4);
+    mask = mask | (mask >> 8);
+    if (off != 1) goto <done>;
+    out = address + 1;
+    if ((address & mask) != mod) goto <done>;
+    out = address & ~mask;
+    goto <done>;
+  <plain>
+    out = address + 1;
+    if (off == 1) goto <done>;
+    out = address - 1;
+  <done>
+}
+
+# +s, +-1, +-2 for plain (no modulo) stepping
+macro StepSimple(s, unit, step)
+{
+    s = 0;
+    if (step == 0) goto <done>;
+    s = 1;
+    if (step == 1) goto <done>;
+    s = 0xffff;
+    if (step == 2) goto <done>;
+    if (step >= 4) goto <s47>;
+    local cfg:2 = cfgi;
+    if (unit < 4) goto <isi>;
+    cfg = cfgj;
+  <isi>
+    s = ((cfg & 0x7f) << 9) s>> 9;
+    goto <done>;
+  <s47>
+    s = 2;
+    if ((step & 1) == 0) goto <done>;
+    s = 0xfffe;
+  <done>
+}
+
+# ar0/ar1 fields: unit (arrn), step (arstep) and offset (aroffset) selected by the operand indices
+macro ArFields(unit, step, off, rni, sti)
+{
+    local v:2 = ar0;
+    local w:2 = ar0;
+    if (rni < 2) goto <rsel>;
+    v = ar1;
+  <rsel>
+    if ((rni & 1) == 0) goto <re>;
+    local q1:2 = (v >> 10) & 7;
+    unit = q1:1;
+    goto <rd>;
+  <re>
+    local q2:2 = (v >> 13) & 7;
+    unit = q2:1;
+  <rd>
+    if (sti < 2) goto <ssel>;
+    w = ar1;
+  <ssel>
+    if ((sti & 1) == 0) goto <se>;
+    local q3:2 = w & 7;
+    step = q3:1;
+    local q4:2 = (w >> 3) & 3;
+    off = q4:1;
+    goto <sd>;
+  <se>
+    local q5:2 = (w >> 5) & 7;
+    step = q5:1;
+    local q6:2 = (w >> 8) & 3;
+    off = q6:1;
+  <sd>
+}
+
+# arp0..arp3 fields: rn units of the i/j pair selected by rn, steps and offsets selected by si and sj
+macro ArpFields(ui, uj, stepi, stepj, offi, offj, rn, si, sj)
+{
+    local pr:4 = &arp0 + (zext(rn) * 2);
+    local v:2 = *[register]:2 pr;
+    local q7:2 = (v >> 10) & 3;
+    ui = q7:1;
+    local q8:2 = ((v >> 13) & 3) + 4;
+    uj = q8:1;
+    local pi:4 = &arp0 + (zext(si) * 2);
+    v = *[register]:2 pi;
+    local q9:2 = v & 7;
+    stepi = q9:1;
+    local q10:2 = (v >> 3) & 3;
+    offi = q10:1;
+    local pj:4 = &arp0 + (zext(sj) * 2);
+    v = *[register]:2 pj;
+    local q11:2 = (v >> 5) & 7;
+    stepj = q11:1;
+    local q12:2 = (v >> 8) & 3;
+    offj = q12:1;
+}
+
+# ---------------------------------------------------------------------------------------------------
+# Shifter: value (40 bit sign extended in 8 bytes) shifted by the signed amount sv (positive: left) into dest
+# ---------------------------------------------------------------------------------------------------
+macro ShiftBus40(dest, value, sv)
+{
+    local vm:8 = value & 0xffffffffff;
+    local osign:1 = vm[39,1];
+    local sh:8 = 0;
+    local ext:8 = 0;
+    if (sv s< 0) goto <right>;
+    if (sv >= 40) goto <bigl>;
+    if (S != 0) goto <lsh>;
+    sh = zext(sv) + 24;
+    ext = (vm << sh) s>> sh;
+    V = (value != ext);
+    VL = VL | V;
+  <lsh>
+    vm = vm << zext(sv);
+    C = vm[40,1];
+    goto <tail>;
+  <bigl>
+    if (S != 0) goto <bigl2>;
+    V = (vm != 0);
+    VL = VL | V;
+  <bigl2>
+    vm = 0;
+    C = 0;
+    goto <tail>;
+  <right>
+    local nsv:8 = zext(0 - sv);
+    if (nsv >= 40) goto <bigr>;
+    local tb:8 = vm >> (nsv - 1);
+    C = tb[0,1];
+    vm = vm >> nsv;
+    if (S != 0) goto <tail>;
+    sh = nsv + 24;
+    vm = (vm << sh) s>> sh;
+    V = 0;
+    goto <tail>;
+  <bigr>
+    if (S != 0) goto <bigr2>;
+    V = 0;
+    C = vm[39,1];
+    vm = 0;
+    if (C == 0) goto <tail>;
+    vm = 0xffffffffff;
+    goto <tail>;
+  <bigr2>
+    vm = 0;
+    C = 0;
+  <tail>
+    local res:8 = (vm << 24) s>> 24;
+    AccFlags(res);
+    if (S != 0) goto <done>;
+    if (SATA != 0) goto <done>;
+    local ovl:1 = (V != 0) || (res != sext(res:4));
+    if (ovl == 0) goto <done>;
+    LM = 1;
+    res = 0x7fffffff;
+    if (osign == 0) goto <done>;
+    res = 0xffffffff80000000;
+  <done>
+    dest = res:5;
+}
+
+# number of leading sign bits below the sign of a 40 bit value, minus 8
+macro Exp40(out, v)
+{
+    local sg:8 = (v >> 39) & 1;
+    local cnt:2 = 0;
+    local bt:8 = 38;
+  <loop>
+    local cb:8 = (v >> bt) & 1;
+    if (cb != sg) goto <done>;
+    cnt = cnt + 1;
+    if (bt == 0) goto <done>;
+    bt = bt - 1;
+    goto <loop>;
+  <done>
+    out = cnt - 8;
+}

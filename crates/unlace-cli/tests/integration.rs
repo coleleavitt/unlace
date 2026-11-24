@@ -6,6 +6,8 @@ mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "fr_raw.rs"]
+mod fr_raw;
 #[path = "hexagon_hmx.rs"]
 mod hexagon_hmx;
 #[path = "m32r_raw.rs"]
@@ -16,8 +18,14 @@ mod ft32_raw;
 mod huc6280;
 #[path = "kr1878_raw.rs"]
 mod kr1878_raw;
+#[path = "lua54.rs"]
+mod lua54;
 #[path = "m6800_family.rs"]
 mod m6800_family;
+#[path = "m88k_raw.rs"]
+mod m88k_raw;
+#[path = "mep.rs"]
+mod mep;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "nios2_raw.rs"]
@@ -56,6 +64,8 @@ mod sparc_prologue_start;
 mod stm8_raw;
 #[path = "upd7725.rs"]
 mod upd7725;
+#[path = "v810.rs"]
+mod v810;
 #[path = "w65816_raw.rs"]
 mod w65816_raw;
 #[path = "x86_amx.rs"]
@@ -66,6 +76,8 @@ mod aarch64_rme;
 mod i4004_raw;
 #[path = "s2650_raw.rs"]
 mod s2650_raw;
+#[path = "cdp1802_raw.rs"]
+mod cdp1802_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

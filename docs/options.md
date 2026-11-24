@@ -636,6 +636,8 @@ Three tiers:
 | nested if per call result where the source has one if (a && b && c) | [`condcallpush`](#condcallpush----on--off-default-on) |
 | an x86 test of a call result is not folded into the && chain with its neighbours | [`condcallpush`](#condcallpush----on--off-default-on) |
 | condfold on and --mode aggressive do not fold a chain of call-result tests | [`condcallpush`](#condcallpush----on--off-default-on) |
+| an if condition assigns a call result with a comma operand where the source wrote a separate statement and guard | [`orchainlive`](#orchainlive----on--off-default-off) |
+| guard clauses returning the same constant print as one && chain | [`orchainlive`](#orchainlive----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2742,6 +2744,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default: x86 tests of call results fold into the `&&`/`||` chain the source wrote, `if (*s && strlen(s) <= 0xff && !strchr(s,0x2f))` instead of one nested `if` per call. DecBench O2-noinline (33,396 functions, DecBench GED): sum -2,062, GED=0 39.09% -> 39.20%, 417 functions better and 158 worse; the worst losses are early returns that now print as one if/else with a single return (openssh sshbuf_find 5 -> 18). Turn it off to count the push as Ghidra does (one nested `if` per call-result test). Other architectures do not push a return address and are unchanged.
 - **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
 - **Example:** `option condcallpush off`
+
+### `orchainlive` -- on | off, default `off`
+
+- **Symptoms:** an if condition assigns a call result with a comma operand where the source wrote a separate statement and guard; guard clauses returning the same constant print as one && chain.
+- **What it does:** Narrow the short-circuit protection that stops `returndup` from splitting a shared constant return (`kuna_orchain.rs`, DIV-69): an operand block that computes a value read outside it (a call's result kept in a variable, `v1 = lseek64(fd,0,1)`) does not count as a fold the split would destroy. Such an operand is a statement the source wrote before its own guard (`offset = LSEEK(...); if (offset == -1) return -1;`), not part of a boolean expression, so the shared return is split and each test prints as its own early return instead of one chain with a comma operand (`if ((A || B) && (v1 = lseek64(...), v1 != -1))`). Operands that only test values keep the protection.
+- **When to flip:** Turn on when guard clauses that return the same constant print as one `&&`/`||` chain whose operand assigns a call result used later. Leave off to keep the DIV-69 protection for every fold.
+- **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
+- **Example:** `option orchainlive on`
 
 ## Analysis & loader passes
 

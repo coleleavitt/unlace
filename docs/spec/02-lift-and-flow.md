@@ -4932,16 +4932,20 @@ Notes in `specs/Ghidra/Processors/RISCV/README.md`.
 
 ### RISC-V Zabha (#98)
 
-`riscv.zabha.sinc` decodes Zabha 1.0, the byte (funct3 000) and halfword
+`riscv.zabha.sinc`, generated from the Sail model's `AMO` clause
+(`zaamo_insts.sail`, `--only` the byte and halfword forms) by `tools/gen_riscv_sail.py`
+under its abstract memory model (no translation faults, triggers or misalignment traps;
+a read is a RAM load and a write a RAM store), decodes Zabha 1.0, the byte (funct3 000) and halfword
 (funct3 001) forms of every A-extension AMO (`amoswap`, `amoadd`, `amoxor`,
 `amoand`, `amoor`, `amomin`, `amomax`, `amominu`, `amomaxu`) and, with
 Zacas, `amocas.b`/`amocas.h`, with the `.aq`/`.rl`/`.aqrl` suffixes, in RV32
 and RV64. They lift like the word forms: `rd` receives the old memory value
 sign-extended to the register, the arithmetic and logical forms store the
-combined value, min/max store `rs2` only when it wins the (signed or
-unsigned) comparison, and `amocas` stores `rs2` only when memory equals the
-low byte or halfword of the old `rd`. Before, all of them were bad
-instructions. Exercised by `unlace-cli/tests/riscv_zabha.rs`: one probe row
+combined value, min/max store whichever of `rs2` and the old value wins the
+(signed or unsigned) comparison, as Sail always writes back, and `amocas` stores `rs2` only when memory equals the
+low byte or halfword of the old `rd`. The ordering bits `aq`/`rl` change only the
+mnemonic. The generated file decodes every word the hand-written one did, and both
+agree with QEMU. Before the hand-written file, all of them were bad instructions. Exercised by `unlace-cli/tests/riscv_zabha.rs`: one probe row
 per encoding against LLVM's names, RV32 and RV64, and LLVM-selected 8- and
 16-bit `atomicrmw`/`cmpxchg` functions that decompile with no bad or
 unimplemented instruction.

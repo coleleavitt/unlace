@@ -607,6 +607,9 @@ One directive per `--assert`, keyed by intent rather than by phase:
 | `volatile <addr>+<size>` | device memory: every access is a real access |
 | `bytes <addr> <hex\|@FILE>` | the bytes mapped here are these, whatever the file holds |
 | `register <name> <hex value> [<addr>+<size>]` | the register holds this value on entry to code in the range (everywhere without one), a tracked register as a processor spec's `tracked_set` states it: `register CS 0xf000 0xf0000+0x10000` |
+| `split [<func>::]<addr> <storage>` | the merged local at this use is split off from the variable it shares a merge with. Parsed, and reported as not applied until a merge stage takes it |
+| `map [<func>::]<symbol> <symbol>` | the first local is merged onto the second. Parsed, and reported as not applied until a merge stage takes it |
+| `noprop [<func>::]<addr>` | the definition at this instruction is not copied forward by propagation. Parsed, and reported as not applied until a propagation stage takes it |
 | `noreturn <func>` | the function (a name or a `0x` entry address) never returns: each caller stops at its calls to it; a function is declared at an entry nothing starts at. Every surface applies it; the console script spells it `function noreturn <func>` |
 
 Storage is a register name (`RDI`), the console's `%RDI`, or its address grammar

@@ -4235,3 +4235,5 @@ source prints as a stack reference, as an `sp(i) + c` already does: a local
 array at offset 0 (MIPS o32's home area for `a0`..`a3`) or `&Stack00000000`.
 Off, no op is added and the phi keeps the stack pointer's storage name. Stage
 tests `spphistack-{mips,aarch64,hexagon,or1k}.toml` pin both settings.
+
+**User variable directives.** `split`, `map` and `noprop` are in the `--assert` grammar and are stored in a project as verbatim rows, so a project written today keeps its meaning when the stages land. No stage applies them yet: each one is reported on its own row with the reason `parsed, but no engine stage applies it yet`, and the output of the run is unchanged. A directive is never dropped silently.

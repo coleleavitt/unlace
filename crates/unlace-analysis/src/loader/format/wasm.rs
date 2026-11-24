@@ -676,10 +676,13 @@ impl Module {
         Ok(())
     }
 
-    /// The `name` section, when it parses; a damaged one only loses names.
+    /// The `name` section, or the symbol table of an object file's `linking`
+    /// section, when it parses; a damaged one only loses names.
     fn custom_section(&mut self, bytes: &[u8], section: &mut Reader) {
-        if section.name().as_deref() != Ok("name") {
-            return;
+        match section.name().as_deref() {
+            Ok("name") => {}
+            Ok("linking") => return self.linking_section(bytes, section),
+            _ => return,
         }
         while !section.is_empty() {
             let Ok(id) = section.byte() else { return };
@@ -699,6 +702,66 @@ impl Module {
                     break;
                 };
                 names.insert(index, name);
+            }
+        }
+    }
+
+    /// The `WASM_SYMBOL_TABLE` subsection (8) of a relocatable object's
+    /// `linking` section (version 2): the names of its function and global
+    /// symbols, for the indices the `name` section does not name. A symbol
+    /// entry is `kind, flags`, then for a function, global, tag or table its
+    /// index and (when defined, or flagged `WASM_SYM_EXPLICIT_NAME`) its name;
+    /// for data its name and, when defined, segment, offset and size; for a
+    /// section its index.
+    fn linking_section(&mut self, bytes: &[u8], section: &mut Reader) {
+        const SYMBOL_TABLE: u8 = 8;
+        const UNDEFINED: u32 = 0x10;
+        const EXPLICIT_NAME: u32 = 0x40;
+        if section.u32() != Ok(2) {
+            return;
+        }
+        while !section.is_empty() {
+            let Ok(id) = section.byte() else { return };
+            // cast: u32 to usize widens
+            let Ok(range) = section.u32().and_then(|size| section.take(size as usize)) else {
+                return;
+            };
+            if id != SYMBOL_TABLE {
+                continue;
+            }
+            let mut sub = Reader::new(bytes, range);
+            let Ok(count) = sub.count(2) else { return };
+            for _ in 0..count {
+                let (Ok(kind), Ok(flags)) = (sub.byte(), sub.u32()) else {
+                    return;
+                };
+                let defined = flags & UNDEFINED == 0;
+                match kind {
+                    0 | 2 | 4 | 5 => {
+                        let Ok(index) = sub.u32() else { return };
+                        if !defined && flags & EXPLICIT_NAME == 0 {
+                            continue;
+                        }
+                        let Ok(name) = sub.name() else { return };
+                        let names = match kind {
+                            0 => &mut self.function_names,
+                            2 => &mut self.global_names,
+                            _ => continue,
+                        };
+                        names.entry(index).or_insert(name);
+                    }
+                    1 => {
+                        if sub.name().is_err() || (defined && (0..3).any(|_| sub.u32().is_err())) {
+                            return;
+                        }
+                    }
+                    3 => {
+                        if sub.u32().is_err() {
+                            return;
+                        }
+                    }
+                    _ => return,
+                }
             }
         }
     }
@@ -1036,6 +1099,52 @@ mod tests {
         assert_eq!(module.elements[0].funcs, vec![Some(1)]);
         assert_eq!(&bytes[module.data[0].bytes.clone()], b"kuna");
         assert_eq!(module.exports.last().unwrap().kind, ExportKind::Table);
+    }
+
+    #[test]
+    fn an_object_files_linking_symbols_name_its_functions_and_globals() {
+        use super::synthetic::uleb;
+        let name = |s: &str| [uleb(s.len() as u64), s.as_bytes().to_vec()].concat();
+        let entries = [
+            [vec![0], uleb(0x10), uleb(0)].concat(),
+            [
+                vec![1],
+                uleb(0),
+                name("g_table"),
+                uleb(0),
+                uleb(0),
+                uleb(52),
+            ]
+            .concat(),
+            [vec![0], uleb(0), uleb(3), name("sum_array")].concat(),
+            [vec![2], uleb(0), uleb(1), name("g_sink")].concat(),
+            [vec![3], uleb(0), uleb(4)].concat(),
+            [vec![0], uleb(0x40 | 0x10), uleb(1), name("memset")].concat(),
+        ]
+        .concat();
+        let symbols = [uleb(entries.len() as u64), entries.concat()].concat();
+        let table = [vec![8], uleb(symbols.len() as u64), symbols].concat();
+        let payload = [name("linking"), uleb(2), table].concat();
+        let mut bytes = WASM_MAGIC.to_vec();
+        bytes.extend([vec![0], uleb(payload.len() as u64), payload].concat());
+        let module = Module::parse(&bytes).unwrap();
+        assert_eq!(
+            module.function_names.get(&3).map(String::as_str),
+            Some("sum_array")
+        );
+        assert_eq!(
+            module.function_names.get(&1).map(String::as_str),
+            Some("memset")
+        );
+        assert_eq!(
+            module.function_names.get(&0),
+            None,
+            "undefined, no explicit name"
+        );
+        assert_eq!(
+            module.global_names.get(&1).map(String::as_str),
+            Some("g_sink")
+        );
     }
 
     #[test]

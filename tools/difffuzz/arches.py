@@ -12,6 +12,7 @@ import capstone as cs
 import unicorn as uc
 from unicorn import arm64_const as a64
 from unicorn import riscv_const as rv
+from unicorn import s390x_const as sz
 from unicorn import x86_const as x86
 
 
@@ -695,6 +696,54 @@ class Ppc64leIsa(Ppc64le):
     lang = "PowerPC:LE:64:A2ALT"
 
 
+S390X_DENY = re.compile(
+    r"^(svc|ex|exrl|diag|sigp|lpswe?|ssm|stnsm|stosm|lctlg?|stctlg?|ptlb|ipte|idte|sske|iske|rrbe|rrbm|"
+    r"lra[y g]?|lurag?|sturg?|stpx|spx|stap|stidp|sck|sckc|stckc|spt|stpt|stck[ef]?|ecag|ectg|stfle|stfl|"
+    r"stsi|stcps|stcrw|tsch|ssch|msch|csch|hsch|rsch|xsch|chsc|rchp|sal|schm|tpi|tpei|siga|"
+    r"mc|trap[24]|tbegin.*|tend|tabort|etnd|ntstg|ppa|niai|bpp|bprp|pfd|pfdrl|"
+    r"sar|ear|lam|lamy|stam|stamy|cpya|sacf|sac|ipk|spka|pt|pti|pc|pr|bsg|bsa|bakr|ereg|eregg|esea|epar|epair|esar|"
+    r"esta|msta|mvcp|mvcs|mvcdk|mvcsk|mvcos|mvpg|mvcl|mvcle|mvclu|clcl|clcle|clclu|"
+    r"cu[0-9]+|cu[a-z]+|tre|troo|trot|trto|trtt|srst|srstu|cuse|cmpsc|kmc|km|kimd|klmd|kmac|kmctr|kmf|kmo|pcc|kma|"
+    r"prno|kdsa|dfltcc|sortl|nnpa.*|[lst]ctlg?|.*[\._]?fpc|sfasr|srnmb?|srnmt|lfas|efpc|sfpc|lfpc|stfpc|"
+    r"[a-z]*dt[a-z]*|[a-z]*xt[a-z]*|v.*|wf.*|lcbb)$"
+)
+
+
+class S390x(Arch):
+    """IBM z/Architecture (QEMU oracle: qemu-s390x -cpu max). The condition code is one-hot in
+    CC0..CC3 with CCA = cc >= 2 and CCB = cc & 1."""
+    name = "s390x"
+    lang = "s390x:BE:64:default"
+    elf_machine = 22
+    big = True
+    pc = "PC"
+    max_len = 6
+    gprs = [(f"r{i}", getattr(sz, f"UC_S390X_REG_R{i}")) for i in range(16)]
+    vecs = [(f"f{i}", getattr(sz, f"UC_S390X_REG_F{i}")) for i in range(16)]
+    pc_const = sz.UC_S390X_REG_PC
+    deny = S390X_DENY
+    qemu_bits = ("CC0", "CC1", "CC2", "CC3", "CCA", "CCB")
+
+    def qemu_bit_values(self, rng):
+        cc = rng.randrange(4)
+        out = {f"CC{k}": int(cc == k) for k in range(4)}
+        out["CCA"], out["CCB"] = int(cc >= 2), cc & 1
+        return out
+
+    def unicorn(self):
+        return uc.Uc(uc.UC_ARCH_S390X, uc.UC_MODE_BIG_ENDIAN)
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_SYSZ, cs.CS_MODE_BIG_ENDIAN)
+
+    def gen(self, rng):
+        return rng.getrandbits(48).to_bytes(6, "big")
+
+    def skip(self, cand):
+        # QEMU 10.2 stores the low word shifted left by 32 (zero) for STMH, not bits 0-31
+        return cand["mnemonic"] == "stmh"
+
+
 TC_DENY = re.compile(
     r"^(j.*|call.*|ret|rfe|rfm|syscall|debug|trap.*|isync|dsync|svlcx|rslcx|bisr|ldlcx|lducx|stlcx|stucx|"
     r"mfcr|mtcr|enable|disable|wait|nop|cachea.*|cachei.*|loop.*|fcall.*|fret|cmpswap.*|swap.*|ldmst|.*\.f|q.*)$"
@@ -942,4 +991,4 @@ class Sh4(Arch32):
         return {"S", "Q", "M"}
 
 
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), TriCore(), Nios2(), Sh4())}
+ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), TriCore(), Nios2(), Sh4())}

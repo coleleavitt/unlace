@@ -1121,6 +1121,8 @@ mod types_header;
 #[path = "typelib.rs"]
 mod typelib;
 
+#[path = "calleeargsmsvc_cli.rs"]
+mod calleeargsmsvc_cli;
 #[path = "msvccookie_return_cli.rs"]
 mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]

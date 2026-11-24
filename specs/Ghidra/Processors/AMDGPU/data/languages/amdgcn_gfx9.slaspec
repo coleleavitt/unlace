@@ -2322,3 +2322,7 @@ DSA: "["^jv0^"+"^dsoff16^"]" is dsoff16 ; jv0 { a:4 = jv0 + dsoff16; export a; }
 :v_cmp_class_f64_e64 i0_spd, F64_j0, V32_j9 is e6=0x34 ... & vop3op=18 ... & i0_h=0 ... & i0_spd ... & F64_j0 ... & (e6 ; V32_j9 ...) ... { c:1 = cmp_class(F64_j0, V32_j9); i0_spd = zext(c); }
 :v_cmp_class_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=16 ... & V32_i0 ... & i9_vg ... { c:1 = cmp_class(V32_i0, i9_vg); vcc = zext(c); }
 :v_cmp_class_f32_e64 i0_spd, F32_j0, V32_j9 is e6=0x34 ... & vop3op=16 ... & i0_h=0 ... & i0_spd ... & F32_j0 ... & (e6 ; V32_j9 ...) ... { c:1 = cmp_class(F32_j0, V32_j9); i0_spd = zext(c); }
+
+# Generated: the VOP3 forms LLVM decodes for gfx900 that the constructors above lack, and VOP3P.
+@include "amdgcn_gfx9_valu.sinc"
+@include "amdgcn_gfx9_vop3p.sinc"

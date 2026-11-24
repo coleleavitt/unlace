@@ -1,0 +1,248 @@
+# SLEIGH specification for the Zilog eZ80 CPU (ADL and Z80 memory modes).
+# Clean-room: written from the Zilog eZ80 CPU User Manual (UM0077); the flag macros are
+# adapted from Ghidra's Z80 specification (Apache-2.0).
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=3  default;
+define space io       type=ram_space      size=2;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ F A ];
+define register offset=0x00 size=2 [ AF ];
+define register offset=0x04 size=1 [ C B BCU _  E D DEU _  L H HLU _  IXL IXH IXU _  IYL IYH IYU _ ];
+define register offset=0x04 size=2 [ BCs _ DEs _ HLs _ IXs _ IYs _ ];
+define register offset=0x04 size=4 [ BC4 DE4 HL4 IX4 IY4 ];
+define register offset=0x18 size=2 [ SPS ];
+define register offset=0x1c size=4 [ SPL4 ];
+define register offset=0x20 size=4 [ PC4 ];
+define register offset=0x24 size=2 [ I ];
+define register offset=0x26 size=1 [ R MB ADLF MADL IEF1 IEF2 ];
+define register offset=0x40 size=1 [ F_ A_ ];
+define register offset=0x40 size=2 [ AF_ ];
+define register offset=0x44 size=1 [ C_ B_ BCU_ _  E_ D_ DEU_ _  L_ H_ HLU_ _ ];
+define register offset=0x44 size=2 [ BCs_ _ DEs_ _ HLs_ _ ];
+define register offset=0x44 size=4 [ BC4_ DE4_ HL4_ ];
+
+# 24-bit views of the register pairs (low three bytes of each 4-byte slot)
+define register offset=0x04 size=3 [ BC ];
+define register offset=0x08 size=3 [ DE ];
+define register offset=0x0c size=3 [ HL ];
+define register offset=0x10 size=3 [ IX ];
+define register offset=0x14 size=3 [ IY ];
+define register offset=0x1c size=3 [ SPL ];
+define register offset=0x20 size=3 [ PC ];
+define register offset=0x44 size=3 [ BC_ ];
+define register offset=0x48 size=3 [ DE_ ];
+define register offset=0x4c size=3 [ HL_ ];
+
+define register offset=0xf0 size=4 contextreg;
+define context contextreg
+  phase = (0,0)
+  adl   = (1,1)
+  lm    = (2,2)
+  im    = (3,3)
+  mbase = (8,15)
+;
+
+@define C_flag  "F[0,1]"
+@define N_flag  "F[1,1]"
+@define PV_flag "F[2,1]"
+@define H_flag  "F[4,1]"
+@define Z_flag  "F[6,1]"
+@define S_flag  "F[7,1]"
+
+define token opbyte (8)
+  op0_8  = (0,7)
+  op6_2  = (6,7)
+  rp4_2  = (4,5)
+  bit4_1 = (4,4)
+  bit3_1 = (3,3)
+  reg3_3 = (3,5)
+  bits3_3 = (3,5)
+  bits0_4 = (0,3)
+  reg0_3 = (0,2)
+  bits0_3 = (0,2)
+;
+
+define token data8 (8)
+  imm8  = (0,7)
+  sign8 = (7,7)
+  simm8 = (0,7) signed
+;
+
+define token data16 (16)
+  imm16 = (0,15)
+;
+
+define token data24 (24)
+  imm24 = (0,23)
+;
+
+attach variables [ reg0_3 reg3_3 ] [ B C D E H L _ A ];
+
+define pcodeop BCDadjust;
+define pcodeop disableMaskableInterrupts;
+define pcodeop enableMaskableInterrupts;
+define pcodeop setInterruptMode;
+define pcodeop sleep;
+define pcodeop halt;
+define pcodeop returnFromInterrupt;
+define pcodeop returnFromNMI;
+define pcodeop blockIO;
+define pcodeop setMixedMode;
+define pcodeop resetMixedMode;
+
+macro setResultFlags(result) {
+  $(Z_flag) = (result == 0);
+  $(S_flag) = (result s< 0);
+}
+
+macro setParity(in_byte) {
+  local tmp = in_byte ^ (in_byte >> 1);
+  tmp = tmp ^ (tmp >> 2);
+  tmp = (tmp ^ (tmp >> 4)) & 1;
+  $(PV_flag) = (tmp == 0);
+}
+
+macro additionFlags(operand1, operand2) {
+  local AFmask = -1 >> 4;
+  $(H_flag) = (((operand1 & AFmask) + (operand2 & AFmask)) & (AFmask + 1)) != 0;
+  $(PV_flag) = scarry(operand1, operand2);
+  $(N_flag) = 0;
+  $(C_flag) = carry(operand1, operand2);
+}
+
+macro additionFlagsNoPV(operand1, operand2) {
+  $(H_flag) = (((operand1 & 0xfff) + (operand2 & 0xfff)) & 0x1000) != 0;
+  $(N_flag) = 0;
+  $(C_flag) = carry(operand1, operand2);
+}
+
+macro additionWithCarry(operand1, operand2, result) {
+  local Ccopy = zext($(C_flag));
+  local AFmask = -1 >> 4;
+  $(H_flag) = (((operand1 & AFmask) + (operand2 & AFmask) + Ccopy) & (AFmask + 1)) != 0;
+  $(PV_flag) = scarry(operand1, operand2);
+  $(N_flag) = 0;
+  $(C_flag) = carry(operand1, operand2);
+  local tempResult = operand1 + operand2;
+  $(C_flag) = $(C_flag) || carry(tempResult, Ccopy);
+  $(PV_flag) = $(PV_flag) ^^ scarry(tempResult, Ccopy);
+  result = tempResult + Ccopy;
+}
+
+macro subtractionFlags(operand1, operand2) {
+  local AFmask = -1 >> 4;
+  $(H_flag) = (((operand1 & AFmask) - (operand2 & AFmask)) & (AFmask + 1)) != 0;
+  $(PV_flag) = sborrow(operand1, operand2);
+  $(N_flag) = 1;
+  $(C_flag) = operand1 < operand2;
+}
+
+macro subtractionWithCarry(operand1, operand2, result) {
+  local Ccopy = zext($(C_flag));
+  local AFmask = -1 >> 4;
+  $(H_flag) = (((operand1 & AFmask) - (operand2 & AFmask) - Ccopy) & (AFmask + 1)) != 0;
+  $(PV_flag) = sborrow(operand1, operand2);
+  $(N_flag) = 1;
+  $(C_flag) = operand1 < operand2;
+  local tempResult = operand1 - operand2;
+  $(C_flag) = $(C_flag) || (tempResult < Ccopy);
+  $(PV_flag) = $(PV_flag) ^^ sborrow(tempResult, Ccopy);
+  result = tempResult - Ccopy;
+}
+
+macro logicFlags(res, hval) {
+  setResultFlags(res);
+  setParity(res);
+  $(H_flag) = hval;
+  $(N_flag) = 0;
+  $(C_flag) = 0;
+}
+
+################################################################
+# Shared operands (independent of the data width)
+################################################################
+
+# MBASE as a disassembly-time constant: the upper address byte in Z80 mode
+MBc: is mbase [ mbv = mbase << 16; ] { export *[const]:3 mbv; }
+
+# 24-bit (IL) or 16-bit (IS) direct addresses
+Addr: imm24 is im=1; imm24 { export *:1 imm24; }
+Addr: loc   is im=0 & mbase; imm16 [ loc = (mbase << 16) | imm16; ] { export *:1 loc; }
+
+MemA: (imm24) is im=1; imm24 { export *[const]:3 imm24; }
+MemA: (loc)   is im=0 & mbase; imm16 [ loc = (mbase << 16) | imm16; ] { export *[const]:3 loc; }
+
+Imm: imm24 is im=1; imm24 { export *[const]:3 imm24; }
+Imm: imm16 is im=0; imm16 { export *[const]:3 imm16; }
+
+RelAddr8: loc is simm8 [ loc = inst_next + simm8; ] { export *:1 loc; }
+
+RstAddr: loc is bits3_3 [ loc = bits3_3 << 3; ] { export *:1 loc; }
+
+IOAddr8: (imm8) is imm8 { export *[const]:2 imm8; }
+
+cc: "NZ" is bits3_3=0 { c:1 = !$(Z_flag); export c; }
+cc: "Z"  is bits3_3=1 { c:1 = $(Z_flag); export c; }
+cc: "NC" is bits3_3=2 { c:1 = !$(C_flag); export c; }
+cc: "C"  is bits3_3=3 { c:1 = $(C_flag); export c; }
+cc: "PO" is bits3_3=4 { c:1 = !$(PV_flag); export c; }
+cc: "PE" is bits3_3=5 { c:1 = $(PV_flag); export c; }
+cc: "P"  is bits3_3=6 { c:1 = !$(S_flag); export c; }
+cc: "M"  is bits3_3=7 { c:1 = $(S_flag); export c; }
+
+cc2: "NZ" is bits3_3=4 { c:1 = !$(Z_flag); export c; }
+cc2: "Z"  is bits3_3=5 { c:1 = $(Z_flag); export c; }
+cc2: "NC" is bits3_3=6 { c:1 = !$(C_flag); export c; }
+cc2: "C"  is bits3_3=7 { c:1 = $(C_flag); export c; }
+
+################################################################
+# Mode selection: the data width (lm) and immediate width (im) of an
+# instruction come from ADL, unless a .SIS/.LIS/.SIL/.LIL suffix byte
+# (40/49/52/5B) overrides them for the next instruction.
+################################################################
+
+:^instruction     is phase=0 & adl & instruction [ phase=1; lm=adl; im=adl; ] {}
+:SIS^" "^instruction is phase=0 & op0_8=0x40; instruction [ phase=1; lm=0; im=0; ] {}
+:LIS^" "^instruction is phase=0 & op0_8=0x49; instruction [ phase=1; lm=1; im=0; ] {}
+:SIL^" "^instruction is phase=0 & op0_8=0x52; instruction [ phase=1; lm=0; im=1; ] {}
+:LIL^" "^instruction is phase=0 & op0_8=0x5b; instruction [ phase=1; lm=1; im=1; ] {}
+
+with : phase=1 {
+@include "ez80_common.sinc"
+}
+
+@define X "L"
+@define W "3"
+@define BCr "BC"
+@define DEr "DE"
+@define HLr "HL"
+@define IXr "IX"
+@define IYr "IY"
+@define SPr "SPL"
+with : phase=1 & lm=1 {
+@include "ez80_wide.sinc"
+}
+
+@undef X
+@undef W
+@undef BCr
+@undef DEr
+@undef HLr
+@undef IXr
+@undef IYr
+@undef SPr
+@define X "S"
+@define W "2"
+@define BCr "BCs"
+@define DEr "DEs"
+@define HLr "HLs"
+@define IXr "IXs"
+@define IYr "IYs"
+@define SPr "SPS"
+with : phase=1 & lm=0 {
+@include "ez80_wide.sinc"
+}

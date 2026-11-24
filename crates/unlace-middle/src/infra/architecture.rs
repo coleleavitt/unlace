@@ -2892,6 +2892,13 @@ impl Architecture {
             } else if nm == "range" {
                 // C++ `Range::Range` range branch: resolve the space, widen the
                 // empty form to spc->getHighest().  No register lookup needed.
+                // A range over a space that only a cspec `<spacebase>` declares
+                // (not modelled here) is skipped rather than failing the load.
+                if let Some(space_name) = attr_str(child, "space") {
+                    if self.manage().get_space_by_name(&space_name).is_none() {
+                        continue;
+                    }
+                }
                 let mut decoder = XmlDecode::new_with_root(&manager, &registry, child, 0);
                 let mut props = RangeProperties::new();
                 props.decode(&mut decoder)?;
@@ -6125,8 +6132,10 @@ impl crate::userop::UseropTypeArchitecture for BuiltinTypeArch {
             .expect("builtin: getBase(INT)")
     }
     fn get_type_char(&self) -> Rc<crate::dtype::Datatype> {
+        let size = self.types.get_size_of_char();
         self.types
-            .get_type_char(self.types.get_size_of_char())
+            .get_type_char(size)
+            .or_else(|_| self.types.get_base(size, type_metatype::TYPE_INT))
             .expect("builtin: getTypeChar")
     }
     fn get_type_wchar(&self) -> Rc<crate::dtype::Datatype> {

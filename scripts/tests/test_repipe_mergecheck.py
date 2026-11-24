@@ -2,11 +2,16 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+import tomllib
 import unittest
 from unittest import mock
 import xml.etree.ElementTree as ET
 
 from scripts.repipe import counters, mergecheck
+
+# A JSON record with a data_footer and a passing list: the shape keep-both merges are checked
+# against. It is a fixture path only; no real baseline has this name.
+FOOTER_FIXTURE = "docs/footer-fixture.json"
 
 
 class CatalogCountRenameTests(unittest.TestCase):
@@ -16,8 +21,8 @@ class CatalogCountRenameTests(unittest.TestCase):
         self.repo = Path(temporary.name)
         self.git("init", "-q")
         self.snapshot(321)
-        self.write(mergecheck.REL_BASELINE, self.read(mergecheck.REL_BASELINE_STAGES))
-        self.write("docs/other-baseline.json", self.read(mergecheck.REL_BASELINE_STAGES))
+        self.write(mergecheck.REL_BASELINE, self.read(FOOTER_FIXTURE))
+        self.write("docs/other-baseline.json", self.read(FOOTER_FIXTURE))
         self.commit()
         self.snapshot(322)
 
@@ -44,18 +49,26 @@ class CatalogCountRenameTests(unittest.TestCase):
     def replace(self, rel, old, new):
         self.write(rel, self.read(rel).replace(old, new))
 
+    def fixture_rows(self):
+        return tomllib.loads(self.read(counters.REL_CATALOG_FIXTURE)).get("option", [])
+
+    def write_fixture(self, rows):
+        """A phase_catalog.toml in the shape the capture writes: one [[option]] table per row."""
+        self.write(counters.REL_CATALOG_FIXTURE, "".join(
+            "[[option]]\noption = {}\ntier = \"core\"\nsymptoms = [\"a symptom\"]\n\n".format(
+                json.dumps(row["option"])) for row in rows))
+
     def baseline(self, change):
-        data = json.loads(self.read(mergecheck.REL_BASELINE_STAGES))
+        data = json.loads(self.read(FOOTER_FIXTURE))
         change(data)
-        self.write(mergecheck.REL_BASELINE_STAGES, json.dumps(data, indent=2) + "\n")
+        self.write(FOOTER_FIXTURE, json.dumps(data, indent=2) + "\n")
 
     def snapshot(self, count):
         options = ["returnpair", "fast_funcdisc", "armframes", "bytearrayc"]
         options += ["option-{}".format(i) for i in range(count - len(options))]
         self.write(counters.REL_PHASES_TOML, "\n".join(
             '[[settable]]\noption = "{}"'.format(option) for option in options) + "\n")
-        self.write(counters.REL_CATALOG_FIXTURE, json.dumps(
-            [{"option": option} for option in options], indent=2) + "\n")
+        self.write_fixture([{"option": option} for option in options])
         name = "UNLACE-CATALOG #15: {} registry rows plus six individual queries".format(count)
         queries = ["returnpair", "fast_funcdisc", "armframes", "armframes",
                    "bytearrayc", "bytearrayc"]
@@ -65,12 +78,12 @@ class CatalogCountRenameTests(unittest.TestCase):
                    + '</script><stringmatch name="{}" min="{}" max="{}">'.format(
                        name, count + 6, count + 6)
                    + '"option": </stringmatch></decompilertest>\n')
-        self.write(mergecheck.REL_BASELINE_STAGES, json.dumps({
+        self.write(FOOTER_FIXTURE, json.dumps({
             "data_footer": [2, 2], "passing": ["data:" + name, "data:OTHER #1: keep this key"],
             "returncode": 0, "unit_footer": None,
         }, indent=2) + "\n")
 
-    def findings(self, rel=mergecheck.REL_BASELINE_STAGES):
+    def findings(self, rel=FOOTER_FIXTURE):
         return mergecheck.assert_keepboth(rel, "HEAD", repo=self.repo)
 
     def assert_rejected(self, finding="line-removed"):
@@ -78,21 +91,10 @@ class CatalogCountRenameTests(unittest.TestCase):
         self.assertIn(finding, [item.id for item in mergecheck.rejects(findings)], findings)
         return findings
 
-    def test_valid_321_to_322_rename_is_reported_without_rejecting(self):
-        with mock.patch.object(mergecheck, "_catalog_count_rename", return_value=None):
-            previous = self.assert_rejected()
-            self.assertIn('"data:UNLACE-CATALOG #15: 321 registry rows plus six individual queries"',
-                          next(item.detail for item in previous if item.id == "line-removed"))
-        findings = self.findings()
-        self.assertEqual(mergecheck.rejects(findings), [])
-        self.assertEqual([item.id for item in findings], ["catalog-count-renamed"])
-        self.assertIn("321 registry rows", findings[0].detail)
-        self.assertIn("322 registry rows", findings[0].detail)
-
-    def test_additional_keys_are_preserved_alongside_the_rename(self):
-        self.baseline(lambda data: (data["passing"].append("data:NEW #1: a new assertion"),
-                                    data.update(data_footer=[3, 3])))
-        self.assertEqual(mergecheck.rejects(self.findings()), [])
+    def test_a_catalog_count_change_rejects_with_no_rename_exception(self):
+        previous = self.assert_rejected()
+        self.assertIn('"data:UNLACE-CATALOG #15: 321 registry rows plus six individual queries"',
+                      next(item.detail for item in previous if item.id == "line-removed"))
 
     def test_unrelated_removed_key_still_rejects(self):
         self.baseline(lambda data: (data["passing"].pop(), data.update(data_footer=[1, 1])))
@@ -117,10 +119,9 @@ class CatalogCountRenameTests(unittest.TestCase):
 
     def test_incorrect_head_label_source_or_capture_rejects(self):
         mutations = [
-            lambda: self.replace(mergecheck.REL_BASELINE_STAGES, "322 registry", "323 registry"),
+            lambda: self.replace(FOOTER_FIXTURE, "322 registry", "323 registry"),
             lambda: self.replace(counters.REL_PHASES_TOML, "[[settable]]", "[[group]]"),
-            lambda: self.write(counters.REL_CATALOG_FIXTURE,
-                               json.dumps(json.loads(self.read(counters.REL_CATALOG_FIXTURE))[:-1])),
+            lambda: self.write_fixture(self.fixture_rows()[:-1]),
             lambda: self.replace(counters.REL_CATALOG_XML, "322 registry", "323 registry"),
         ]
         for index, mutation in enumerate(mutations):
@@ -131,9 +132,9 @@ class CatalogCountRenameTests(unittest.TestCase):
 
     def test_incorrect_base_evidence_also_rejects(self):
         for rel, old, new in (
-            (mergecheck.REL_BASELINE_STAGES, "321 registry", "320 registry"),
+            (FOOTER_FIXTURE, "321 registry", "320 registry"),
             (counters.REL_PHASES_TOML, "[[settable]]", "[[group]]"),
-            (counters.REL_CATALOG_FIXTURE, '"option"', '"not-option"'),
+            (counters.REL_CATALOG_FIXTURE, "option = ", "not-option = "),
             (counters.REL_CATALOG_XML, 'min="327"', 'min="326"'),
         ):
             with self.subTest(rel=rel):
@@ -171,9 +172,9 @@ class CatalogCountRenameTests(unittest.TestCase):
                 self.assert_rejected()
 
     def test_duplicate_catalog_rows_or_xml_assertions_reject(self):
-        rows = json.loads(self.read(counters.REL_CATALOG_FIXTURE))
+        rows = self.fixture_rows()
         rows[-1] = rows[0]
-        self.write(counters.REL_CATALOG_FIXTURE, json.dumps(rows))
+        self.write_fixture(rows)
         self.assert_rejected()
         self.snapshot(322)
         tree = ET.fromstring(self.read(counters.REL_CATALOG_XML))
@@ -188,40 +189,40 @@ class CatalogCountRenameTests(unittest.TestCase):
                 self.snapshot(322)
                 (self.repo / rel).unlink()
                 self.assert_rejected()
-        for rel, text in ((counters.REL_CATALOG_FIXTURE, "[]"),
-                          (counters.REL_CATALOG_FIXTURE, "[null]"),
-                          (counters.REL_CATALOG_FIXTURE, '{}'),
-                          (counters.REL_CATALOG_FIXTURE, '[{"option": 322}]'),
-                          (counters.REL_CATALOG_FIXTURE, "{broken"),
+        for rel, text in ((counters.REL_CATALOG_FIXTURE, ""),
+                          (counters.REL_CATALOG_FIXTURE, "[[option]]\n"),
+                          (counters.REL_CATALOG_FIXTURE, '[[option]\noption = "x"\n'),
+                          (counters.REL_CATALOG_FIXTURE, "[[option]]\noption = 322\n"),
+                          (counters.REL_CATALOG_FIXTURE, 'option = "x"\n'),
                           (counters.REL_CATALOG_XML, "<broken"),
                           (counters.REL_CATALOG_XML, "<other/>"),
-                          (mergecheck.REL_BASELINE_STAGES, "null"),
-                          (mergecheck.REL_BASELINE_STAGES, "[]"),
-                          (mergecheck.REL_BASELINE_STAGES, '{"passing": null}'),
-                          (mergecheck.REL_BASELINE_STAGES, '{"passing": "not a list"}'),
-                          (mergecheck.REL_BASELINE_STAGES, "{broken")):
+                          (FOOTER_FIXTURE, "null"),
+                          (FOOTER_FIXTURE, "[]"),
+                          (FOOTER_FIXTURE, '{"passing": null}'),
+                          (FOOTER_FIXTURE, '{"passing": "not a list"}'),
+                          (FOOTER_FIXTURE, "{broken")):
             with self.subTest(rel=rel, text=text):
                 self.snapshot(322)
                 self.write(rel, text)
                 self.assert_rejected()
 
     def test_empty_or_invalid_catalog_option_identity_rejects(self):
-        for option in ("", " ", " option", "option ", None, 7):
+        for option in ("", " ", " option", "option ", 7):
             with self.subTest(option=option):
                 self.snapshot(322)
-                rows = json.loads(self.read(counters.REL_CATALOG_FIXTURE))
+                rows = self.fixture_rows()
                 rows[-1]["option"] = option
-                self.write(counters.REL_CATALOG_FIXTURE, json.dumps(rows))
+                self.write_fixture(rows)
                 self.assert_rejected()
 
     def test_same_count_does_not_authorize_a_label_change(self):
         self.snapshot(321)
-        self.replace(mergecheck.REL_BASELINE_STAGES, "321 registry", "322 registry")
+        self.replace(FOOTER_FIXTURE, "321 registry", "322 registry")
         self.replace(counters.REL_CATALOG_XML, "321 registry", "322 registry")
         self.replace(counters.REL_CATALOG_XML, '="327"', '="328"')
         self.assert_rejected()
 
-    def test_nonstring_passing_entries_deny_the_rename(self):
+    def test_nonstring_passing_entries_reject(self):
         for invalid in (None, 322, {"key": "not a string"}, []):
             with self.subTest(invalid=invalid):
                 self.snapshot(322)
@@ -236,7 +237,7 @@ class CatalogCountRenameTests(unittest.TestCase):
     def test_other_baselines_and_upstream_baseline_remain_protected(self):
         for rel in ("docs/other-baseline.json", mergecheck.REL_BASELINE):
             with self.subTest(rel=rel):
-                self.write(rel, self.read(mergecheck.REL_BASELINE_STAGES))
+                self.write(rel, self.read(FOOTER_FIXTURE))
                 self.assertTrue(mergecheck.rejects(self.findings(rel)))
         findings = mergecheck.assert_baseline_untouched("HEAD", repo=self.repo)
         self.assertEqual([item.id for item in findings], ["baseline-repinned"])
@@ -244,7 +245,7 @@ class CatalogCountRenameTests(unittest.TestCase):
     def test_original_merge_hazards_remain_detected(self):
         result = mergecheck.self_test()
         self.assertTrue(result["ok"], result)
-        self.assertEqual([case["case"] for case in result["cases"]], ["B", "C", "C2"])
+        self.assertEqual([case["case"] for case in result["cases"]], ["B", "C2"])
 
 
 if __name__ == "__main__":

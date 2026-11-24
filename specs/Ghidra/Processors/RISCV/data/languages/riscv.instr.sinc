@@ -49,6 +49,7 @@
 @include "riscv.hints.sinc"
 @if FPSIZE == "32" || FPSIZE == "64" || FPSIZE == "128"
 @include "riscv.zfh.sinc"
+@include "riscv.zfa.sinc"
 @endif
 @include "riscv.rvv.sinc"
 @include "riscv.zi.sinc"

@@ -1,0 +1,179 @@
+# Zfa additional floating-point instructions (RISC-V Zfa 1.0), beyond fli.s
+# (riscv.rv32f.sinc): fli.d and fli.h, the NaN-propagating fminm/fmaxm, the
+# round-to-integral fround/froundnx, the modular fcvtmod.w.d, the quiet
+# compares fleq/fltq, and on RV32 the double-word moves fmvh.x.d/fmvp.d.x.
+# The half-precision forms use riscv.zfh.sinc's frs1H/frs2H. Encodings checked
+# against LLVM's RISC-V assembler and disassembler.
+
+define pcodeop fround;
+define pcodeop froundnx;
+
+:fli.h frd,fliConstS is frd & fliConstS & op0006=0x53 & funct3=0x0 & funct7=0x7a & op2024=0x1
+{
+	fli(frd, fliConstS:1);
+}
+
+:fminm.s frd,frs1S,frs2S is frs1S & frd & frs2S & op0006=0x53 & funct3=0x2 & funct7=0x14
+{
+	local a:$(SFLEN) = frs1S;
+	local b:$(SFLEN) = frs2S;
+	fassignS(frd, a);
+	if (nan(a)) goto inst_next;
+	fassignS(frd, b);
+	if (nan(b)) goto inst_next;
+	if (b f<= a) goto inst_next;
+	fassignS(frd, a);
+}
+
+:fmaxm.s frd,frs1S,frs2S is frs1S & frd & frs2S & op0006=0x53 & funct3=0x3 & funct7=0x14
+{
+	local a:$(SFLEN) = frs1S;
+	local b:$(SFLEN) = frs2S;
+	fassignS(frd, a);
+	if (nan(a)) goto inst_next;
+	fassignS(frd, b);
+	if (nan(b)) goto inst_next;
+	if (b f>= a) goto inst_next;
+	fassignS(frd, a);
+}
+
+:fminm.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x2 & funct7=0x16
+{
+	local a:$(HFLEN) = frs1H;
+	local b:$(HFLEN) = frs2H;
+	frd = zext(a);
+	if (nan(a)) goto inst_next;
+	frd = zext(b);
+	if (nan(b)) goto inst_next;
+	if (b f<= a) goto inst_next;
+	frd = zext(a);
+}
+
+:fmaxm.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x3 & funct7=0x16
+{
+	local a:$(HFLEN) = frs1H;
+	local b:$(HFLEN) = frs2H;
+	frd = zext(a);
+	if (nan(a)) goto inst_next;
+	frd = zext(b);
+	if (nan(b)) goto inst_next;
+	if (b f>= a) goto inst_next;
+	frd = zext(a);
+}
+
+:fround.s frd,frs1S,FRM is frs1S & frd & FRM & op0006=0x53 & funct7=0x20 & op2024=0x4
+{
+	local tmp:$(SFLEN) = fround(frs1S, FRM);
+	fassignS(frd, tmp);
+}
+
+:froundnx.s frd,frs1S,FRM is frs1S & frd & FRM & op0006=0x53 & funct7=0x20 & op2024=0x5
+{
+	local tmp:$(SFLEN) = froundnx(frs1S, FRM);
+	fassignS(frd, tmp);
+}
+
+:fround.h frd,frs1H,FRM is frs1H & frd & FRM & op0006=0x53 & funct7=0x22 & op2024=0x4
+{
+	local tmp:$(HFLEN) = fround(frs1H, FRM);
+	frd = zext(tmp);
+}
+
+:froundnx.h frd,frs1H,FRM is frs1H & frd & FRM & op0006=0x53 & funct7=0x22 & op2024=0x5
+{
+	local tmp:$(HFLEN) = froundnx(frs1H, FRM);
+	frd = zext(tmp);
+}
+
+:fleq.s rd,frs1S,frs2S is frs1S & frs2S & rd & op0006=0x53 & funct3=0x4 & funct7=0x50
+{
+	rd = zext(frs1S f<= frs2S);
+}
+
+:fltq.s rd,frs1S,frs2S is frs1S & frs2S & rd & op0006=0x53 & funct3=0x5 & funct7=0x50
+{
+	rd = zext(frs1S f< frs2S);
+}
+
+:fleq.h rd,frs1H,frs2H is frs1H & frs2H & rd & op0006=0x53 & funct3=0x4 & funct7=0x52
+{
+	rd = zext(frs1H f<= frs2H);
+}
+
+:fltq.h rd,frs1H,frs2H is frs1H & frs2H & rd & op0006=0x53 & funct3=0x5 & funct7=0x52
+{
+	rd = zext(frs1H f< frs2H);
+}
+
+@if FPSIZE == "64" || FPSIZE == "128"
+:fli.d frd,fliConstS is frd & fliConstS & op0006=0x53 & funct3=0x0 & funct7=0x79 & op2024=0x1
+{
+	fli(frd, fliConstS:1);
+}
+
+:fminm.d frd,frs1D,frs2D is frs1D & frd & frs2D & op0006=0x53 & funct3=0x2 & funct7=0x15
+{
+	local a:$(DFLEN) = frs1D;
+	local b:$(DFLEN) = frs2D;
+	frd = a;
+	if (nan(a)) goto inst_next;
+	frd = b;
+	if (nan(b)) goto inst_next;
+	if (b f<= a) goto inst_next;
+	frd = a;
+}
+
+:fmaxm.d frd,frs1D,frs2D is frs1D & frd & frs2D & op0006=0x53 & funct3=0x3 & funct7=0x15
+{
+	local a:$(DFLEN) = frs1D;
+	local b:$(DFLEN) = frs2D;
+	frd = a;
+	if (nan(a)) goto inst_next;
+	frd = b;
+	if (nan(b)) goto inst_next;
+	if (b f>= a) goto inst_next;
+	frd = a;
+}
+
+:fround.d frd,frs1D,FRM is frs1D & frd & FRM & op0006=0x53 & funct7=0x21 & op2024=0x4
+{
+	local tmp:$(DFLEN) = fround(frs1D, FRM);
+	frd = tmp;
+}
+
+:froundnx.d frd,frs1D,FRM is frs1D & frd & FRM & op0006=0x53 & funct7=0x21 & op2024=0x5
+{
+	local tmp:$(DFLEN) = froundnx(frs1D, FRM);
+	frd = tmp;
+}
+
+:fcvtmod.w.d rd,frs1D,FRM is frs1D & rd & FRM & op0006=0x53 & funct3=0x1 & funct7=0x61 & op2024=0x8
+{
+	local wide:8 = trunc(frs1D);
+	local tmp:4 = wide:4;
+	assignW(rd, tmp);
+}
+
+:fleq.d rd,frs1D,frs2D is frs1D & frs2D & rd & op0006=0x53 & funct3=0x4 & funct7=0x51
+{
+	rd = zext(frs1D f<= frs2D);
+}
+
+:fltq.d rd,frs1D,frs2D is frs1D & frs2D & rd & op0006=0x53 & funct3=0x5 & funct7=0x51
+{
+	rd = zext(frs1D f< frs2D);
+}
+
+@if ADDRSIZE == "32"
+:fmvh.x.d rd,frs1D is frs1D & rd & op0006=0x53 & funct3=0x0 & funct7=0x71 & op2024=0x1
+{
+	local hi:4 = frs1D(4);
+	rd = hi;
+}
+
+:fmvp.d.x frd,rs1,rs2 is frd & rs1 & rs2 & op0006=0x53 & funct3=0x0 & funct7=0x59
+{
+	frd = (zext(rs2) << 32) | zext(rs1);
+}
+@endif
+@endif

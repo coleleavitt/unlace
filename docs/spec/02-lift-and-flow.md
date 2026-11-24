@@ -4206,7 +4206,6 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `PicoBlaze` | Xilinx PicoBlaze (KCPSM) | `KCPSM3:BE:24:default`, `KCPSM6:BE:24:default` | aleph-void/ghidra-picoblaze-kcpsm @ `ba271a21d6`, Apache-2.0 |
 | `MC68HC16` | Motorola MC68HC16 | `68HC16:BE:24:cpu16`, `68HC16:BE:24:default`, `68HC16:BE:24:JTEC` | aleph-void/Ghidra-Processor-MC68HC16Z (fork of HausRummel/Ghidra-Processor-MC68HC16Z) @ `974d796590`, Apache-2.0 |
 | `GCDSP` | Nintendo GameCube DSP | `GCDSP:BE:16:default`, `GCDSP:BE:16:exact` | aleph-void/ghidra-gcdsp-lang (fork of Pokechu22/ghidra-gcdsp-lang) @ `4fc59950c6`, Apache-2.0 |
-||||||| e949085348
 | `RadeonF32` | AMD Radeon F32 microengine | `F32:BE:64:default`, `F32:LE:64:default` | aleph-void/ghidra-radeon-f32 (fork of cyrozap/ghidra-radeon-f32) @ `104e93f7af`, Apache-2.0 |
 | `RL78` | Renesas RL78 | `RL78:LE:16:default`, `RL78:LE:16:S2` | aleph-void/ghidra-rl78 (fork of CUB3D/ghidra-rl78) @ `b870c6eaf0`, Apache-2.0 |
 | `N64RSP` | Nintendo 64 RSP | `RSP:BE:32:default` | aleph-void/Ghidra-RSP (fork of Random06457/Ghidra-RSP) @ `35d58e76ea`, MIT |
@@ -4250,6 +4249,18 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `TopSM` | TI TopSM RF core | `topsm:LE:16:default` | antoniovazquezblanco/GhidraTopSM @ `3f45fd9d28`, MIT |
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
 <!-- vendor-rows -->
+
+### Processor modules written for unlace (#98)
+
+These processor directories hold SLEIGH written for unlace from public ISA documentation
+(no prior SLEIGH, or only an unlicensed one that was not consulted). Each directory's README
+lists its sources, what the p-code models and the gaps. They are compiled and counted like
+the vendored modules, and each has a CLI test that decompiles a small raw image.
+
+| Directory | Processors | Languages | Sources | Test |
+|---|---|---|---|---|
+| `CHIP8` | CHIP-8 (COSMAC VIP) and SUPER-CHIP 1.1 | `CHIP8:BE:16:VIP`, `CHIP8:BE:16:SCHIP` | COSMAC VIP manual, SUPER-CHIP 1.1 notes | `unlace-cli/tests/chip8.rs` |
+<!-- native-rows -->
 
 ### WDC 65816 (#98)
 

@@ -1526,6 +1526,71 @@ expect = [
     "*a2->field_0x0 = v4;",
 ]
 
+[[family]]
+name = "amdgpu_gfx10"
+language = "AMDGPU:LE:64:GFX10"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1030_kernels.bin"
+
+# `fixtures/amdgpu/gfx900_kernels.cl` built for gfx1030 (wave32): `scale` guards the store
+# with v_cmp + s_and_saveexec_b32 + s_cbranch_execz on EXEC_LO, `sum` is the scalar loop.
+[[family.function]]
+test = "amdgpu_gfx10_guarded_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a5 < a2->field_0x14)",
+    "* 3 + a2->field_0x10;",
+]
+
+[[family.function]]
+test = "amdgpu_gfx10_scalar_loop_decompiles"
+address = "0x100"
+expect = [
+    "while (v5) {",
+    "v4 = *(int *)CONCAT44(v3,v2) + v4;",
+    "*a2->field_0x0 = v4;",
+]
+
+[[family]]
+name = "amdgpu_gfx11"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_kernels.bin"
+
+# The same kernels built for gfx1100 (RDNA3 opcodes, s_load_b32/global_load_b32 names).
+[[family.function]]
+test = "amdgpu_gfx11_guarded_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a5 < a0->field_0x14)",
+    "* 3 + a0->field_0x10;",
+]
+
+[[family.function]]
+test = "amdgpu_gfx11_scalar_loop_decompiles"
+address = "0x100"
+expect = [
+    "while (v5) {",
+    "*a0->field_0x0 = v4;",
+]
+
+[[family]]
+name = "amdgpu_gfx11_vopd"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_vopd.bin"
+
+# `fixtures/amdgpu/gfx1100_vopd.cl` at -O3: float math the compiler pairs into four VOPD
+# (v_dual_*) instructions; both halves read their sources before either writes.
+[[family.function]]
+test = "amdgpu_gfx11_vopd_decompiles"
+address = "0x0"
+expect = [
+    "v3 = v6 - v5;",
+    "*(float *)(v2 + 8) = v4 + v4;",
+    "v6 = v5 + 1.0f;",
+]
+
 # The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:
 # fast locals become parameters and variables, the value stack folds away, and objects,
 # names and operators are named user-ops (fixtures from `fixtures/cpython/source.py`).

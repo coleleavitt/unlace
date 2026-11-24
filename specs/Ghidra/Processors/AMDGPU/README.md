@@ -37,11 +37,41 @@ Gaps: SDWA and DPP operand forms, VOP3P (packed math), VINTRP, MIMG, MTBUF, EXP 
 atomics are not decoded; VOP3 clamp and output modifiers and op_sel are ignored; MUBUF does
 not add the buffer resource base or handle IDXEN; transcendental operations, bit reversal,
 find-first-bit and the cross-lane operations are user-ops; the wave-wide meaning of a mask
-(`s_bcnt1` of EXEC, ballots) is lost in the one-lane model. RDNA (gfx10/gfx11) encodings
-differ and have no language yet.
+(`s_bcnt1` of EXEC, ballots) is lost in the one-lane model. RDNA has its own languages (below).
 
 Oracle: `clang -target amdgcn-amd-amdhsa -mcpu=gfx900 -O2` (LLVM 22) compiled the fixture
 kernels (`fixtures/amdgpu/gfx900_kernels.cl`) and four more test kernels (float saxpy, an
 LDS reduction with barriers, f64/i64 arithmetic, 16-bit arithmetic); every function of
 both objects decompiles with no bad instruction, and `llvm-objdump` lists no mnemonic the
 spec lacks. Tests: `crates/unlace-cli/tests/amdgpu_raw.rs`.
+
+## RDNA: `AMDGPU:LE:64:GFX10` and `AMDGPU:LE:64:GFX11`
+
+`amdgcn_gfx10.slaspec` (RDNA 1/2, gfx1010-gfx1036) and `amdgcn_gfx11.slaspec` (RDNA 3, gfx1100-gfx1103)
+are the GFX9 module re-encoded. The opcode of every mnemonic in every format was read back by
+running `llvm-mc --disassemble` (LLVM 22, `-mcpu=gfx1030` / `-mcpu=gfx1100`) over each opcode
+value of each format; each GFX9 constructor keeps its semantics under the RDNA opcode and
+mnemonic (`v_add_nc_u32`, `v_add_co_ci_u32`, `v_fmac_f32`; on gfx11 also `s_load_b32`,
+`global_load_b32`, `ds_load_b32`, `s_and_not1_b32`, `v_clz_i32_u32`, ...). Layout changes taken
+from the same encodings: VOP3 is bits 31-26 = 110101 and may carry a 32-bit literal after its
+second word; SMEM is 111101 and adds a 21-bit offset and an SGPR (null = 0x7d on gfx10, 0x7c on
+gfx11, which also swaps M0 and null); FLAT offsets are 11/12 bits (gfx10) or 12/13 bits (gfx11,
+segment in bits 16-17); DS opcodes are bits 18-25; gfx11 MUBUF has an 8-bit opcode and moves
+OFFEN/IDXEN to the second word.
+
+Both languages are wave32: VCC and compare, carry and select masks are 32-bit (`vcc_lo` or one
+SGPR), `s_and_saveexec_b32` and the other `*_saveexec_b32`/`*_wrexec_b32` forms work on
+EXEC_LO, and the EXECZ/VCCZ branches test the low halves. gfx11 adds VOPD (two `v_dual_*`
+operations that read all sources before writing), the D16 global loads into one register half,
+and the true16 `v_mov_b16`/`v_not_b16` with `.l`/`.h` halves. The scheduling, wait and
+cache-control instructions new in these generations (`s_clause`, `s_delay_alu`,
+`s_waitcnt_*cnt`, `s_inst_prefetch`, ...) decode as no-ops.
+
+Gaps beyond GFX9's: wave64 code (64-bit lane masks) is decoded as wave32; most true16 VOP3
+forms and op_sel, MIMG/NSA, the gfx11 export and LDS-direct instructions and the RDNA-only
+dot/WMMA operations are not decoded.
+
+Oracle: `fixtures/amdgpu/gfx900_kernels.cl` and the four GFX9 test kernels built with clang
+-O2 for gfx1030 and gfx1100, plus `fixtures/amdgpu/gfx1100_vopd.cl` at -O3 (four VOPD
+instructions): every function decompiles with no bad instruction and `llvm-objdump` lists no
+mnemonic the specs lack.

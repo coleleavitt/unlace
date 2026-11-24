@@ -20,6 +20,20 @@
   
   <language processor="RISCV"
             endian="little"
+            size="64"
+            variant="GQ"
+            version="1.4"
+            slafile="riscv.lp64q.sla"
+            processorspec="RV64.pspec"
+            id="RISCV:LE:64:GQ">
+    <description>RISC-V 64 little with Q (FLEN 128)</description>
+    <compiler name="gcc" spec="riscv64-fp.cspec" id="gcc"/>
+    <external_name tool="DWARF.register.mapping.file" name="riscv64.dwarf"/>
+    <external_name tool="gnu" name="riscv:rv64"/>
+  </language>
+
+  <language processor="RISCV"
+            endian="little"
             size="32"
             variant="default"
             version="1.4"

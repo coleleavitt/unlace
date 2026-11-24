@@ -128,7 +128,12 @@ fn a_double_moved_back_to_d0_prints_whole() {
 /// the RETURN is the return value.
 #[test]
 fn a_pure_helper_result_handed_back_is_returned_without_debug_info() {
-    for object in ["arm-nodebug.o", "armeb-nodebug.o", "thumbv7m-nodebug.o", "thumbv6m-nodebug.o"] {
+    for object in [
+        "arm-nodebug.o",
+        "armeb-nodebug.o",
+        "thumbv7m-nodebug.o",
+        "thumbv6m-nodebug.o",
+    ] {
         for (function, line) in [
             ("fadd", "return __aeabi_fadd(a0,a1);"),
             ("fmul", "return __aeabi_fmul(a0,a1);"),
@@ -161,5 +166,24 @@ fn a_register_pair_read_only_whole_is_one_parameter() {
             assert!(!out.contains("CONCAT44"), "{object} {function}: {out}");
             assert!(!out.contains(" a3"), "{object} {function}: {out}");
         }
+    }
+}
+
+/// `libm.c` without debug information: `fmod` and `sin` are a relocatable
+/// object's undefined symbols. On an image that states the base standard their
+/// built-in `<math.h>` prototypes are laid out in core registers.
+#[test]
+fn a_base_standard_object_types_its_libm_calls() {
+    for object in ["libm-arm.o", "libm-thumbv6m.o"] {
+        let wrap = decompile_with(object, "wrap", &[]);
+        assert!(wrap.contains("fmod(a"), "{object}: {wrap}");
+        assert!(!wrap.contains("fmod()"), "{object}: {wrap}");
+        assert!(!wrap.contains("CONCAT44"), "{object}: {wrap}");
+        let wave = decompile_with(object, "wave", &[]);
+        assert!(wave.contains("sin(a0)"), "{object}: {wave}");
+        assert!(
+            wave.starts_with("double wave(double a0)"),
+            "{object}: {wave}"
+        );
     }
 }

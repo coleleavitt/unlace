@@ -83,3 +83,26 @@ fn shared_return_tail_is_called() {
     assert_eq!(map.tails.get(&0x0d), Some(&0x0e));
     assert_eq!(map.tail_args.get(&0x0e), Some(&1));
 }
+
+/// A `JUMPI` into the revert block the instruction before it also falls into: the
+/// two arrive at different stack depths, so the conditional edge calls the tail.
+#[test]
+fn conditional_jump_into_fallthrough_tail_is_called() {
+    let code = [
+        0x36, // CALLDATASIZE
+        0x60, 0x0b, // PUSH1 0x0b (tail)
+        0x57, // JUMPI
+        0x60, 0x07, // PUSH1 7
+        0x60, 0x2a, // PUSH1 42
+        0x60, 0x0b, // PUSH1 0x0b (tail)
+        0x57, // JUMPI; falls into the tail with 7 still on the stack
+        0x5b, // 0x0b: JUMPDEST
+        0x5f, // PUSH0
+        0x80, // DUP1
+        0xfd, // REVERT
+    ];
+    let map = classify(&code);
+    assert_eq!(map.tails.get(&3), Some(&0x0b));
+    assert_eq!(map.tails.get(&0x0a), Some(&0x0b));
+    assert_eq!(map.tail_args.get(&0x0b), Some(&0));
+}

@@ -39,6 +39,9 @@ CONFIGS = [
     ("microblazeel", "qemu"), ("or1k", "qemu"),
     ("x86-64-native", "native"), ("x86-64-x87", "native"),
     ("x86-32-native", "native"), ("x86-16", "unicorn"),
+    ("xtensa", "qemu"), ("ppc64-p10", "qemu"), ("ppc64le-p10", "qemu"),
+    ("moxie", "gdbsim"), ("ft32", "gdbsim"), ("iq2000", "gdbsim"), ("lm32", "gdbsim"), ("m32r", "gdbsim"),
+    ("frv", "gdbsim"), ("h8300h", "gdbsim"), ("mn10300", "gdbsim"), ("v850", "gdbsim"),
 ]
 FAILING = ("mismatch", "length", "missing-output", "missing-input")
 KNOWN = HERE / "sweep_known.json"
@@ -76,6 +79,9 @@ def available(arch, oracle, objdump):
     if oracle in ("qemu", "native"):
         import qemu_backend
         return None if qemu_backend.available(arches.ARCHES[arch]) else "no QEMU user binary"
+    if oracle == "gdbsim":
+        import gdbsim_backend
+        return None if gdbsim_backend.available(arches.ARCHES[arch]) else "no dfsim driver (DIFFFUZZ_GDBSIM_DIR)"
     return None
 
 

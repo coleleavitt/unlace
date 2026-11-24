@@ -71,8 +71,6 @@ mod sbpf;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
 
-#[path = "starcore_raw.rs"]
-mod starcore_raw;
 #[path = "tricore_tc18.rs"]
 mod tricore_tc18;
 #[path = "upd7725.rs"]

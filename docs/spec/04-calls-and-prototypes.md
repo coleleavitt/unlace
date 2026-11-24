@@ -5682,20 +5682,30 @@ refuses the trial at any LOAD on the way: a register whose value addresses
 memory is read as a pointer the function was handed. A loop counter that is
 also the return register falls to that test whenever the loop indexes memory
 with it, which on BPF (`r0`) and SASS makes `while (s[n]) n++; return n;`
-print `void` (unlace#865). With option `retindexuse` (`off`, `bpf`, `on`;
-default `bpf`),
+print `void` (unlace#865). With option `retindexuse` (`off`, `bpf`, `bpfsass`, `on`;
+default `bpfsass`),
 `crates/unlace-middle/src/p4_calls/retindexuse.rs (index_only_load)`
 exempts, for a RETURN trial only, a LOAD whose address is the walked value
 plus a value the walk did not reach (a base pointer), constant offsets folded
-on the way: that LOAD is an index use, and the walk goes on without it. Every
-other LOAD, and every LOAD on an argument trial, still refuses. `bpf`, the
-default, applies this only when the language is eBPF (it names `R0`..`R10`
-and `PC`, eight bytes each, and no `R11`). On BPF, SASS, x86-64 and Thumb-2
--O2 builds of the same C it gained two returns on BPF, both real, and changed
-nothing else there; SASS gained none and widened one `int` return to a
-register pair, and Thumb-2 widened nine `int` returns to `unsigned long long`
-and gave one `void` function a return, so the other targets keep upstream's
-test unless `on` is set.
+on the way: that LOAD is an index use, and the walk goes on without it. The
+address is followed down through `COPY`, and through the low input of a
+`PIECE`: SASS forms a 64-bit address as two 32-bit adds into a register pair
+(`IADD3 R6, P0, R4, R3`, `IMAD.X R7, ..., P0`) that the load reads back as
+one `PIECE`. An operand computed from constants only counts as a constant
+offset (SASS `IMAD.MOV R6, RZ, RZ, R5` is `RZ * RZ + R5`), and when the
+walked operand of the add is a `PIECE` whose low input the walk did not
+reach, the returned value is the high word of the base pointer and the LOAD
+still refuses. Every other LOAD, and every LOAD on an argument trial, still
+refuses. `bpf` applies this only when the language is eBPF (it names
+`R0`..`R10` and `PC`, eight bytes each, and no `R11`); `bpfsass`, the
+default, also when it is SASS (`R0`..`R254` and `RZ` four bytes each,
+`URZ`, `RETPC`). On BPF, SASS, x86-64 and Thumb-2 -O2 builds of the same C
+it gained two returns on BPF, both real, and changed nothing else there; on 92
+sm_80 cubins (284 functions) it gained six returns, all strlen-like loops and
+all real, and changed nothing else. Thumb-2 widened nine `int` returns to
+`unsigned long long` and gave one `void` function a return (measured before
+the constant-offset and high-word checks), so the other targets keep
+upstream's test unless `on` is set.
 
 ### (unlace) `carryuse` — a returned sum that is also tested for its carry
 

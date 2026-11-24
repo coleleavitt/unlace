@@ -1,0 +1,2 @@
+# Samsung SAM8 (S3C8 / S3F8 series): register pointers RP0/RP1, set 1 banks, full instruction set
+@include "sam8.sinc"

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="sBPF"
+            endian="little"
+            size="64"
+            variant="v1"
+            version="1.0"
+            slafile="sbpf_v1.sla"
+            processorspec="sbpf.pspec"
+            id="sBPF:LE:64:v1">
+    <description>Solana sBPF, SBPFv0/v1 opcode map</description>
+    <compiler name="default" spec="sbpf.cspec" id="default"/>
+  </language>
+  <language processor="sBPF"
+            endian="little"
+            size="64"
+            variant="v2"
+            version="1.0"
+            slafile="sbpf_v2.sla"
+            processorspec="sbpf.pspec"
+            id="sBPF:LE:64:v2">
+    <description>Solana sBPF, SBPFv2 opcode map</description>
+    <compiler name="default" spec="sbpf.cspec" id="default"/>
+  </language>
+</language_definitions>

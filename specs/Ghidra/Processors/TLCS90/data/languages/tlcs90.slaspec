@@ -1,0 +1,797 @@
+# Toshiba TLCS-90 (TMP90C840, TMP90C841, TMP90C844, TMP90C845, TMP90CM40 ...)
+# Written for this repository from the Toshiba TLCS-90 series data book instruction
+# tables; MAME's tlcs90 core (BSD-3-Clause) was read for flag behaviour only.
+# Little-endian, 16-bit address space. Flags are kept as separate one-byte registers
+# and packed into F only where software can see F (PUSH/POP AF, EX AF,AF', RETI).
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=2  default;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ F A C B E D L H ];
+define register offset=0x00 size=2 [ AF BC DE HL ];
+define register offset=0x10 size=1 [ F_ A_ C_ B_ E_ D_ L_ H_ ];
+define register offset=0x10 size=2 [ AF_ BC_ DE_ HL_ ];
+define register offset=0x20 size=2 [ IX IY SP PC ];
+define register offset=0x30 size=1 [ fS fZ fI fH fX fV fN fC ];
+
+define token op0 (8)
+  b0     = (0,7)
+  b0_hi4 = (4,7)
+  b0_hi5 = (3,7)
+  b0_hi6 = (2,7)
+  b0_r8  = (0,2)
+  b0_r16 = (0,2)
+  b0_qq  = (0,2)
+  b0_ixs = (0,1)
+  b0_bit = (0,2)
+  b0_cc  = (0,3)
+  b0_alu = (0,2)
+;
+define token op1 (8)
+  b1     = (0,7)
+  b1_hi4 = (4,7)
+  b1_hi5 = (3,7)
+  b1_hi6 = (2,7)
+  b1_r8  = (0,2)
+  b1_r16 = (0,2)
+  b1_ixs = (0,1)
+  b1_bit = (0,2)
+  b1_cc  = (0,3)
+  b1_alu = (0,2)
+;
+define token d8 (8)
+  n8    = (0,7)
+  simm8 = (0,7) signed
+  sgn8  = (7,7)
+;
+define token d16 (16)
+  n16    = (0,15)
+  simm16 = (0,15) signed
+;
+
+attach variables [ b0_r8 b1_r8 ] [ B C D E H L A _ ];
+attach variables [ b0_r16 b1_r16 ] [ BC DE HL _ IX IY SP _ ];
+attach variables [ b0_qq ] [ BC DE HL _ IX IY _ _ ];
+attach variables [ b0_ixs b1_ixs ] [ IX IY SP _ ];
+
+define pcodeop halt;
+define pcodeop softwareInterrupt;
+define pcodeop decimalAdjust;
+define pcodeop decimalAdjustCarry;
+define pcodeop divideByZero;
+
+macro packF() {
+  F = (fS << 7) | (fZ << 6) | (fI << 5) | (fH << 4) | (fX << 3) | (fV << 2) | (fN << 1) | fC;
+}
+macro unpackF() {
+  fS = (F >> 7) & 1; fZ = (F >> 6) & 1; fI = (F >> 5) & 1; fH = (F >> 4) & 1;
+  fX = (F >> 3) & 1; fV = (F >> 2) & 1; fN = (F >> 1) & 1; fC = F & 1;
+}
+macro push16(v) { SP = SP - 2; *:2 SP = v; }
+macro pop16(v) { v = *:2 SP; SP = SP + 2; }
+macro parity8(r) {
+  local t:1 = r ^ (r >> 4);
+  t = t ^ (t >> 2);
+  t = t ^ (t >> 1);
+  fV = (t & 1) == 0;
+}
+macro szp8(r) { fS = r s< 0; fZ = r == 0; parity8(r); }
+
+macro add8(a, b) {
+  local r:1 = a + b;
+  fH = ((a & 0xf) + (b & 0xf)) > 0xf; fV = scarry(a, b); fC = carry(a, b); fX = fC; fN = 0;
+  fS = r s< 0; fZ = r == 0; a = r;
+}
+macro adc8(a, b) {
+  local c:1 = fC;
+  local t:1 = a + b;
+  local r:1 = t + c;
+  fH = ((a & 0xf) + (b & 0xf) + c) > 0xf;
+  fV = scarry(a, b) ^^ scarry(t, c); fC = carry(a, b) || carry(t, c); fX = fC; fN = 0;
+  fS = r s< 0; fZ = r == 0; a = r;
+}
+macro sub8(a, b) {
+  local r:1 = a - b;
+  fH = (a & 0xf) < (b & 0xf); fV = sborrow(a, b); fC = a < b; fX = fC; fN = 1;
+  fS = r s< 0; fZ = r == 0; a = r;
+}
+macro sbc8(a, b) {
+  local c:1 = fC;
+  local t:1 = a - b;
+  local r:1 = t - c;
+  fH = (a & 0xf) < ((b & 0xf) + c);
+  fV = sborrow(a, b) ^^ sborrow(t, c); fC = (a < b) || (t < c); fX = fC; fN = 1;
+  fS = r s< 0; fZ = r == 0; a = r;
+}
+macro cp8(a, b) {
+  local r:1 = a - b;
+  fH = (a & 0xf) < (b & 0xf); fV = sborrow(a, b); fC = a < b; fX = fC; fN = 1;
+  fS = r s< 0; fZ = r == 0;
+}
+macro and8(a, b) { a = a & b; szp8(a); fH = 1; fN = 0; fC = 0; fX = 0; }
+macro xor8(a, b) { a = a ^ b; szp8(a); fH = 0; fN = 0; fC = 0; fX = 0; }
+macro or8(a, b)  { a = a | b; szp8(a); fH = 0; fN = 0; fC = 0; fX = 0; }
+
+macro add16(a, b) {
+  local r:2 = a + b;
+  fH = ((a & 0xfff) + (b & 0xfff)) > 0xfff; fV = scarry(a, b); fC = carry(a, b); fX = fC; fN = 0;
+  fS = r s< 0; fZ = r == 0; a = r;
+}
+macro add16r(a, b) {
+  fH = ((a & 0xfff) + (b & 0xfff)) > 0xfff; fC = carry(a, b); fX = fC; fN = 0;
+  a = a + b;
+}
+macro adc16(a, b) {
+  local c:2 = zext(fC);
+  local t:2 = a + b;
+  local r:2 = t + c;
+  fH = ((a & 0xfff) + (b & 0xfff) + c) > 0xfff;
+  fV = scarry(a, b) ^^ scarry(t, c); fC = carry(a, b) || carry(t, c); fX = fC; fN = 0;
+  fS = r s< 0; fZ = r == 0; a = r;
+}
+macro sub16(a, b) {
+  local r:2 = a - b;
+  fH = (a & 0xfff) < (b & 0xfff); fV = sborrow(a, b); fC = a < b; fX = fC; fN = 1;
+  fS = r s< 0; fZ = r == 0; a = r;
+}
+macro sbc16(a, b) {
+  local c:2 = zext(fC);
+  local t:2 = a - b;
+  local r:2 = t - c;
+  fH = (a & 0xfff) < ((b & 0xfff) + c);
+  fV = sborrow(a, b) ^^ sborrow(t, c); fC = (a < b) || (t < c); fX = fC; fN = 1;
+  fS = r s< 0; fZ = r == 0; a = r;
+}
+macro cp16(a, b) {
+  local r:2 = a - b;
+  fH = (a & 0xfff) < (b & 0xfff); fV = sborrow(a, b); fC = a < b; fX = fC; fN = 1;
+  fS = r s< 0; fZ = r == 0;
+}
+macro and16(a, b) { a = a & b; fS = a s< 0; fZ = a == 0; fH = 1; fV = 0; fN = 0; fC = 0; fX = 0; }
+macro xor16(a, b) { a = a ^ b; fS = a s< 0; fZ = a == 0; fH = 0; fV = 0; fN = 0; fC = 0; fX = 0; }
+macro or16(a, b)  { a = a | b; fS = a s< 0; fZ = a == 0; fH = 0; fV = 0; fN = 0; fC = 0; fX = 0; }
+
+macro inc8(a) {
+  local r:1 = a + 1;
+  fH = (a & 0xf) == 0xf; fV = a == 0x7f; fN = 0; fS = r s< 0; fZ = r == 0; fX = fZ; a = r;
+}
+macro dec8(a) {
+  local r:1 = a - 1;
+  fH = (a & 0xf) == 0; fV = a == 0x80; fN = 1; fS = r s< 0; fZ = r == 0; fX = fZ; a = r;
+}
+macro incw(a) {
+  local r:2 = a + 1;
+  fH = (a & 0xfff) == 0xfff; fV = a == 0x7fff; fN = 0; fS = r s< 0; fZ = r == 0; fX = fZ; a = r;
+}
+macro decw(a) {
+  local r:2 = a - 1;
+  fH = (a & 0xfff) == 0; fV = a == 0x8000; fN = 1; fS = r s< 0; fZ = r == 0; fX = fZ; a = r;
+}
+
+macro rlc8(a) { fC = a >> 7; a = (a << 1) | (a >> 7); }
+macro rrc8(a) { fC = a & 1; a = (a >> 1) | (a << 7); }
+macro rl8(a)  { local c:1 = fC; fC = a >> 7; a = (a << 1) | c; }
+macro rr8(a)  { local c:1 = fC; fC = a & 1; a = (a >> 1) | (c << 7); }
+macro sla8(a) { fC = a >> 7; a = a << 1; }
+macro sra8(a) { fC = a & 1; a = a s>> 1; }
+macro sll8(a) { fC = a >> 7; a = a << 1; }
+macro srl8(a) { fC = a & 1; a = a >> 1; }
+
+macro bitTest(v, n) {
+  local m:1 = v & (1 << n);
+  fZ = m == 0; fS = (m & 0x80) != 0; fV = fZ; fH = 1; fN = 0; fX = 0;
+}
+
+Cc0: "F" is b0_cc=0 { export 0:1; }
+Cc0: "LT" is b0_cc=1 { local t:1 = fS ^^ fV; export t; }
+Cc0: "LE" is b0_cc=2 { local t:1 = fZ || (fS ^^ fV); export t; }
+Cc0: "ULE" is b0_cc=3 { local t:1 = fC || fZ; export t; }
+Cc0: "OV" is b0_cc=4 { local t:1 = fV; export t; }
+Cc0: "MI" is b0_cc=5 { local t:1 = fS; export t; }
+Cc0: "Z" is b0_cc=6 { local t:1 = fZ; export t; }
+Cc0: "C" is b0_cc=7 { local t:1 = fC; export t; }
+Cc0: "T" is b0_cc=8 { export 1:1; }
+Cc0: "GE" is b0_cc=9 { local t:1 = !(fS ^^ fV); export t; }
+Cc0: "GT" is b0_cc=10 { local t:1 = !(fZ || (fS ^^ fV)); export t; }
+Cc0: "UGT" is b0_cc=11 { local t:1 = !(fC || fZ); export t; }
+Cc0: "NOV" is b0_cc=12 { local t:1 = !fV; export t; }
+Cc0: "PL" is b0_cc=13 { local t:1 = !fS; export t; }
+Cc0: "NZ" is b0_cc=14 { local t:1 = !fZ; export t; }
+Cc0: "NC" is b0_cc=15 { local t:1 = !fC; export t; }
+Cc1: "F" is b1_cc=0 { export 0:1; }
+Cc1: "LT" is b1_cc=1 { local t:1 = fS ^^ fV; export t; }
+Cc1: "LE" is b1_cc=2 { local t:1 = fZ || (fS ^^ fV); export t; }
+Cc1: "ULE" is b1_cc=3 { local t:1 = fC || fZ; export t; }
+Cc1: "OV" is b1_cc=4 { local t:1 = fV; export t; }
+Cc1: "MI" is b1_cc=5 { local t:1 = fS; export t; }
+Cc1: "Z" is b1_cc=6 { local t:1 = fZ; export t; }
+Cc1: "C" is b1_cc=7 { local t:1 = fC; export t; }
+Cc1: "T" is b1_cc=8 { export 1:1; }
+Cc1: "GE" is b1_cc=9 { local t:1 = !(fS ^^ fV); export t; }
+Cc1: "GT" is b1_cc=10 { local t:1 = !(fZ || (fS ^^ fV)); export t; }
+Cc1: "UGT" is b1_cc=11 { local t:1 = !(fC || fZ); export t; }
+Cc1: "NOV" is b1_cc=12 { local t:1 = !fV; export t; }
+Cc1: "PL" is b1_cc=13 { local t:1 = !fS; export t; }
+Cc1: "NZ" is b1_cc=14 { local t:1 = !fZ; export t; }
+Cc1: "NC" is b1_cc=15 { local t:1 = !fC; export t; }
+
+Disp: "+"^simm8 is simm8 & sgn8=0 { export *[const]:2 simm8; }
+Disp: "-"^neg is simm8 & sgn8=1 [ neg = -simm8; ] { export *[const]:2 simm8; }
+Rel8: addr is simm8 [ addr = (inst_next + simm8) & 0xffff; ] { export *:2 addr; }
+Rel16: addr is simm16 [ addr = (inst_next + simm16) & 0xffff; ] { export *:2 addr; }
+Abs16: n16 is n16 { export *:2 n16; }
+Dir: "("^addr^")" is n8 [ addr = 0xff00 + n8; ] { export *[const]:2 addr; }
+
+# source memory operands: prefix E0-E7 / F0-F3, the operation byte follows
+SrcGG: "("^b0_r16^")" is b0_hi5=0x1c & b0_r16 { export b0_r16; }
+SrcMN: "("^n16^")" is b0=0xe3 ; n16 { export *[const]:2 n16; }
+SrcIX: "("^b0_ixs^Disp^")" is b0_hi6=0x3c & b0_ixs ; Disp { local ea:2 = b0_ixs + Disp; export ea; }
+SrcHA: "(HL+A)" is b0=0xf3 { local ea:2 = HL + zext(A); export ea; }
+SrcD: Dir is b0=0xe7 ; Dir { export Dir; }
+
+# destination memory operands: prefix E8-EF / F4-F7
+DstGG: "("^b0_r16^")" is b0_hi5=0x1d & b0_r16 { export b0_r16; }
+DstMN: "("^n16^")" is b0=0xeb ; n16 { export *[const]:2 n16; }
+DstIX: "("^b0_ixs^Disp^")" is b0_hi6=0x3d & b0_ixs ; Disp { local ea:2 = b0_ixs + Disp; export ea; }
+DstHA: "(HL+A)" is b0=0xf7 { local ea:2 = HL + zext(A); export ea; }
+DstD: Dir is b0=0xef ; Dir { export Dir; }
+
+# computed jump/call targets and LDA operands (no parentheses)
+JpGG: b0_r16 is b0_hi5=0x1d & b0_r16 { export b0_r16; }
+JpIX: b0_ixs^Disp is b0_hi6=0x3d & b0_ixs ; Disp { local ea:2 = b0_ixs + Disp; export ea; }
+JpHA: "HL+A" is b0=0xf7 { local ea:2 = HL + zext(A); export ea; }
+
+# register operand group F8-FE
+G8: b0_r8 is b0_hi5=0x1f & b0_r8 { export b0_r8; }
+G16: b0_r16 is b0_hi5=0x1f & b0_r16 { export b0_r16; }
+
+
+:NOP is b0=0x00 { }
+:HALT is b0=0x01 { halt(); }
+:DI is b0=0x02 { fI = 0; }
+:EI is b0=0x03 { fI = 1; }
+:INCX Dir is b0=0x07 ; Dir { if (fX == 0) goto inst_next; local v:1 = *:1 Dir; inc8(v); *:1 Dir = v; }
+:DECX Dir is b0=0x0f ; Dir { if (fX == 0) goto inst_next; local v:1 = *:1 Dir; dec8(v); *:1 Dir = v; }
+:EX "DE","HL" is b0=0x08 { local t:2 = DE; DE = HL; HL = t; }
+:EX "AF","AF'" is b0=0x09 { packF(); local t:2 = AF; AF = AF_; AF_ = t; unpackF(); }
+:EXX is b0=0x0a {
+  local t:2 = BC; BC = BC_; BC_ = t;
+  t = DE; DE = DE_; DE_ = t;
+  t = HL; HL = HL_; HL_ = t;
+}
+:DAA "A" is b0=0x0b {
+  packF();
+  local c:1 = decimalAdjustCarry(A, F);
+  A = decimalAdjust(A, F);
+  szp8(A); fC = c; fX = c;
+}
+:RCF is b0=0x0c { fC = 0; fX = 0; fH = 0; fN = 0; }
+:SCF is b0=0x0d { fC = 1; fX = 1; fH = 0; fN = 0; }
+:CCF is b0=0x0e { fH = fC; fC = !fC; fX = fC; fN = 0; }
+:CPL "A" is b0=0x10 { A = ~A; fH = 1; fN = 1; }
+:NEG "A" is b0=0x11 { local z:1 = 0; sub8(z, A); A = z; }
+:MUL "HL",n8 is b0=0x12 ; n8 { HL = zext(L) * n8; }
+:DIV "HL",n8 is b0=0x13 ; n8 {
+  local d:2 = n8;
+  if (d == 0) goto <dz>;
+  local q:2 = HL / d;
+  local r:2 = HL % d;
+  fV = q > 0xff;
+  L = q:1; H = r:1;
+  goto inst_next;
+<dz>
+  fV = 1;
+  HL = divideByZero(HL);
+}
+:ADD b0_ixs,n16 is b0_hi6=0x05 & b0_ixs ; n16 { add16(b0_ixs, n16); }
+:LDAR "HL",Rel16 is b0=0x17 ; Rel16 { HL = &Rel16; }
+:DJNZ Rel8 is b0=0x18 ; Rel8 { B = B - 1; if (B != 0) goto Rel8; }
+:DJNZ "BC",Rel8 is b0=0x19 ; Rel8 { BC = BC - 1; if (BC != 0) goto Rel8; }
+:JP Abs16 is b0=0x1a ; Abs16 { goto Abs16; }
+:JRL Rel16 is b0=0x1b ; Rel16 { goto Rel16; }
+:CALL Abs16 is b0=0x1c ; Abs16 { push16(&:2 inst_next); call Abs16; }
+:CALR Rel16 is b0=0x1d ; Rel16 { push16(&:2 inst_next); call Rel16; }
+:RET is b0=0x1e { local r:2 = 0; pop16(r); return [r]; }
+:RETI is b0=0x1f { local r:2 = 0; pop16(AF); unpackF(); pop16(r); return [r]; }
+:LD "A",b0_r8 is b0_hi5=0x04 & b0_r8 { A = b0_r8; }
+:LD "A",Dir is b0=0x27 ; Dir { A = *:1 Dir; }
+:LD b0_r8,"A" is b0_hi5=0x05 & b0_r8 { b0_r8 = A; }
+:LD Dir,"A" is b0=0x2f ; Dir { *:1 Dir = A; }
+:LD b0_r8,n8 is b0_hi5=0x06 & b0_r8 ; n8 { b0_r8 = n8; }
+:LD Dir,n8 is b0=0x37 ; Dir ; n8 { *:1 Dir = n8; }
+:LD b0_r16,n16 is b0_hi5=0x07 & b0_r16 ; n16 { b0_r16 = n16; }
+:LDW Dir,n16 is b0=0x3f ; Dir ; n16 { *:2 Dir = n16; }
+:LD "HL",b0_r16 is b0_hi5=0x08 & b0_r16 { HL = b0_r16; }
+:LD "HL",Dir is b0=0x47 ; Dir { HL = *:2 Dir; }
+:LD b0_r16,"HL" is b0_hi5=0x09 & b0_r16 { b0_r16 = HL; }
+:LD Dir,"HL" is b0=0x4f ; Dir { *:2 Dir = HL; }
+:PUSH b0_qq is b0_hi5=0x0a & b0_qq { push16(b0_qq); }
+:PUSH "AF" is b0=0x56 { packF(); push16(AF); }
+:POP b0_qq is b0_hi5=0x0b & b0_qq { pop16(b0_qq); }
+:POP "AF" is b0=0x5e { pop16(AF); unpackF(); }
+:INC b0_r8 is b0_hi5=0x10 & b0_r8 { inc8(b0_r8); }
+:INC Dir is b0=0x87 ; Dir { local v:1 = *:1 Dir; inc8(v); *:1 Dir = v; }
+:DEC b0_r8 is b0_hi5=0x11 & b0_r8 { dec8(b0_r8); }
+:DEC Dir is b0=0x8f ; Dir { local v:1 = *:1 Dir; dec8(v); *:1 Dir = v; }
+:INC b0_r16 is b0_hi5=0x12 & b0_r16 { b0_r16 = b0_r16 + 1; fX = b0_r16 == 0; }
+:INCW Dir is b0=0x97 ; Dir { local v:2 = *:2 Dir; incw(v); *:2 Dir = v; }
+:DEC b0_r16 is b0_hi5=0x13 & b0_r16 { b0_r16 = b0_r16 - 1; fX = b0_r16 == 0; }
+:DECW Dir is b0=0x9f ; Dir { local v:2 = *:2 Dir; decw(v); *:2 Dir = v; }
+:JR Rel8 is b0=0xc8 ; Rel8 { goto Rel8; }
+:JR Cc0,Rel8 is b0_hi4=0xc & Cc0 ; Rel8 { if (Cc0) goto Rel8; }
+:SWI is b0=0xff { softwareInterrupt(&:2 inst_next); }
+
+:ADD "A",Dir is b0=0x60 ; Dir { local v:1 = *:1 Dir; add8(A, v); }
+:ADD "A",n8 is b0=0x68 ; n8 { local v:1 = n8; add8(A, v); }
+:ADD "HL",Dir is b0=0x70 ; Dir { local v:2 = *:2 Dir; add16(HL, v); }
+:ADD "HL",n16 is b0=0x78 ; n16 { local v:2 = n16; add16(HL, v); }
+:ADD "A",SrcGG is SrcGG ; b1=0x60 { local v:1 = *:1 SrcGG; add8(A, v); }
+:ADD "A",SrcMN is SrcMN ; b1=0x60 { local v:1 = *:1 SrcMN; add8(A, v); }
+:ADD "A",SrcIX is SrcIX ; b1=0x60 { local v:1 = *:1 SrcIX; add8(A, v); }
+:ADD "A",SrcHA is SrcHA ; b1=0x60 { local v:1 = *:1 SrcHA; add8(A, v); }
+:ADD "HL",SrcGG is SrcGG ; b1=0x70 { local v:2 = *:2 SrcGG; add16(HL, v); }
+:ADD "HL",SrcMN is SrcMN ; b1=0x70 { local v:2 = *:2 SrcMN; add16(HL, v); }
+:ADD "HL",SrcIX is SrcIX ; b1=0x70 { local v:2 = *:2 SrcIX; add16(HL, v); }
+:ADD "HL",SrcHA is SrcHA ; b1=0x70 { local v:2 = *:2 SrcHA; add16(HL, v); }
+:ADD DstGG,n8 is DstGG ; b1=0x68 ; n8 { local v:1 = *:1 DstGG; local w:1 = n8; add8(v, w); *:1 DstGG = v; }
+:ADD DstMN,n8 is DstMN ; b1=0x68 ; n8 { local v:1 = *:1 DstMN; local w:1 = n8; add8(v, w); *:1 DstMN = v; }
+:ADD DstIX,n8 is DstIX ; b1=0x68 ; n8 { local v:1 = *:1 DstIX; local w:1 = n8; add8(v, w); *:1 DstIX = v; }
+:ADD DstHA,n8 is DstHA ; b1=0x68 ; n8 { local v:1 = *:1 DstHA; local w:1 = n8; add8(v, w); *:1 DstHA = v; }
+:ADD DstD,n8 is DstD ; b1=0x68 ; n8 { local v:1 = *:1 DstD; local w:1 = n8; add8(v, w); *:1 DstD = v; }
+:ADD "A",G8 is G8 ; b1=0x60 { add8(A, G8); }
+:ADD G8,n8 is G8 ; b1=0x68 ; n8 { local w:1 = n8; add8(G8, w); }
+:ADD "HL",G16 is G16 ; b1=0x70 { add16r(HL, G16); }
+:ADC "A",Dir is b0=0x61 ; Dir { local v:1 = *:1 Dir; adc8(A, v); }
+:ADC "A",n8 is b0=0x69 ; n8 { local v:1 = n8; adc8(A, v); }
+:ADC "HL",Dir is b0=0x71 ; Dir { local v:2 = *:2 Dir; adc16(HL, v); }
+:ADC "HL",n16 is b0=0x79 ; n16 { local v:2 = n16; adc16(HL, v); }
+:ADC "A",SrcGG is SrcGG ; b1=0x61 { local v:1 = *:1 SrcGG; adc8(A, v); }
+:ADC "A",SrcMN is SrcMN ; b1=0x61 { local v:1 = *:1 SrcMN; adc8(A, v); }
+:ADC "A",SrcIX is SrcIX ; b1=0x61 { local v:1 = *:1 SrcIX; adc8(A, v); }
+:ADC "A",SrcHA is SrcHA ; b1=0x61 { local v:1 = *:1 SrcHA; adc8(A, v); }
+:ADC "HL",SrcGG is SrcGG ; b1=0x71 { local v:2 = *:2 SrcGG; adc16(HL, v); }
+:ADC "HL",SrcMN is SrcMN ; b1=0x71 { local v:2 = *:2 SrcMN; adc16(HL, v); }
+:ADC "HL",SrcIX is SrcIX ; b1=0x71 { local v:2 = *:2 SrcIX; adc16(HL, v); }
+:ADC "HL",SrcHA is SrcHA ; b1=0x71 { local v:2 = *:2 SrcHA; adc16(HL, v); }
+:ADC DstGG,n8 is DstGG ; b1=0x69 ; n8 { local v:1 = *:1 DstGG; local w:1 = n8; adc8(v, w); *:1 DstGG = v; }
+:ADC DstMN,n8 is DstMN ; b1=0x69 ; n8 { local v:1 = *:1 DstMN; local w:1 = n8; adc8(v, w); *:1 DstMN = v; }
+:ADC DstIX,n8 is DstIX ; b1=0x69 ; n8 { local v:1 = *:1 DstIX; local w:1 = n8; adc8(v, w); *:1 DstIX = v; }
+:ADC DstHA,n8 is DstHA ; b1=0x69 ; n8 { local v:1 = *:1 DstHA; local w:1 = n8; adc8(v, w); *:1 DstHA = v; }
+:ADC DstD,n8 is DstD ; b1=0x69 ; n8 { local v:1 = *:1 DstD; local w:1 = n8; adc8(v, w); *:1 DstD = v; }
+:ADC "A",G8 is G8 ; b1=0x61 { adc8(A, G8); }
+:ADC G8,n8 is G8 ; b1=0x69 ; n8 { local w:1 = n8; adc8(G8, w); }
+:ADC "HL",G16 is G16 ; b1=0x71 { adc16(HL, G16); }
+:SUB "A",Dir is b0=0x62 ; Dir { local v:1 = *:1 Dir; sub8(A, v); }
+:SUB "A",n8 is b0=0x6a ; n8 { local v:1 = n8; sub8(A, v); }
+:SUB "HL",Dir is b0=0x72 ; Dir { local v:2 = *:2 Dir; sub16(HL, v); }
+:SUB "HL",n16 is b0=0x7a ; n16 { local v:2 = n16; sub16(HL, v); }
+:SUB "A",SrcGG is SrcGG ; b1=0x62 { local v:1 = *:1 SrcGG; sub8(A, v); }
+:SUB "A",SrcMN is SrcMN ; b1=0x62 { local v:1 = *:1 SrcMN; sub8(A, v); }
+:SUB "A",SrcIX is SrcIX ; b1=0x62 { local v:1 = *:1 SrcIX; sub8(A, v); }
+:SUB "A",SrcHA is SrcHA ; b1=0x62 { local v:1 = *:1 SrcHA; sub8(A, v); }
+:SUB "HL",SrcGG is SrcGG ; b1=0x72 { local v:2 = *:2 SrcGG; sub16(HL, v); }
+:SUB "HL",SrcMN is SrcMN ; b1=0x72 { local v:2 = *:2 SrcMN; sub16(HL, v); }
+:SUB "HL",SrcIX is SrcIX ; b1=0x72 { local v:2 = *:2 SrcIX; sub16(HL, v); }
+:SUB "HL",SrcHA is SrcHA ; b1=0x72 { local v:2 = *:2 SrcHA; sub16(HL, v); }
+:SUB DstGG,n8 is DstGG ; b1=0x6a ; n8 { local v:1 = *:1 DstGG; local w:1 = n8; sub8(v, w); *:1 DstGG = v; }
+:SUB DstMN,n8 is DstMN ; b1=0x6a ; n8 { local v:1 = *:1 DstMN; local w:1 = n8; sub8(v, w); *:1 DstMN = v; }
+:SUB DstIX,n8 is DstIX ; b1=0x6a ; n8 { local v:1 = *:1 DstIX; local w:1 = n8; sub8(v, w); *:1 DstIX = v; }
+:SUB DstHA,n8 is DstHA ; b1=0x6a ; n8 { local v:1 = *:1 DstHA; local w:1 = n8; sub8(v, w); *:1 DstHA = v; }
+:SUB DstD,n8 is DstD ; b1=0x6a ; n8 { local v:1 = *:1 DstD; local w:1 = n8; sub8(v, w); *:1 DstD = v; }
+:SUB "A",G8 is G8 ; b1=0x62 { sub8(A, G8); }
+:SUB G8,n8 is G8 ; b1=0x6a ; n8 { local w:1 = n8; sub8(G8, w); }
+:SUB "HL",G16 is G16 ; b1=0x72 { sub16(HL, G16); }
+:SBC "A",Dir is b0=0x63 ; Dir { local v:1 = *:1 Dir; sbc8(A, v); }
+:SBC "A",n8 is b0=0x6b ; n8 { local v:1 = n8; sbc8(A, v); }
+:SBC "HL",Dir is b0=0x73 ; Dir { local v:2 = *:2 Dir; sbc16(HL, v); }
+:SBC "HL",n16 is b0=0x7b ; n16 { local v:2 = n16; sbc16(HL, v); }
+:SBC "A",SrcGG is SrcGG ; b1=0x63 { local v:1 = *:1 SrcGG; sbc8(A, v); }
+:SBC "A",SrcMN is SrcMN ; b1=0x63 { local v:1 = *:1 SrcMN; sbc8(A, v); }
+:SBC "A",SrcIX is SrcIX ; b1=0x63 { local v:1 = *:1 SrcIX; sbc8(A, v); }
+:SBC "A",SrcHA is SrcHA ; b1=0x63 { local v:1 = *:1 SrcHA; sbc8(A, v); }
+:SBC "HL",SrcGG is SrcGG ; b1=0x73 { local v:2 = *:2 SrcGG; sbc16(HL, v); }
+:SBC "HL",SrcMN is SrcMN ; b1=0x73 { local v:2 = *:2 SrcMN; sbc16(HL, v); }
+:SBC "HL",SrcIX is SrcIX ; b1=0x73 { local v:2 = *:2 SrcIX; sbc16(HL, v); }
+:SBC "HL",SrcHA is SrcHA ; b1=0x73 { local v:2 = *:2 SrcHA; sbc16(HL, v); }
+:SBC DstGG,n8 is DstGG ; b1=0x6b ; n8 { local v:1 = *:1 DstGG; local w:1 = n8; sbc8(v, w); *:1 DstGG = v; }
+:SBC DstMN,n8 is DstMN ; b1=0x6b ; n8 { local v:1 = *:1 DstMN; local w:1 = n8; sbc8(v, w); *:1 DstMN = v; }
+:SBC DstIX,n8 is DstIX ; b1=0x6b ; n8 { local v:1 = *:1 DstIX; local w:1 = n8; sbc8(v, w); *:1 DstIX = v; }
+:SBC DstHA,n8 is DstHA ; b1=0x6b ; n8 { local v:1 = *:1 DstHA; local w:1 = n8; sbc8(v, w); *:1 DstHA = v; }
+:SBC DstD,n8 is DstD ; b1=0x6b ; n8 { local v:1 = *:1 DstD; local w:1 = n8; sbc8(v, w); *:1 DstD = v; }
+:SBC "A",G8 is G8 ; b1=0x63 { sbc8(A, G8); }
+:SBC G8,n8 is G8 ; b1=0x6b ; n8 { local w:1 = n8; sbc8(G8, w); }
+:SBC "HL",G16 is G16 ; b1=0x73 { sbc16(HL, G16); }
+:AND "A",Dir is b0=0x64 ; Dir { local v:1 = *:1 Dir; and8(A, v); }
+:AND "A",n8 is b0=0x6c ; n8 { local v:1 = n8; and8(A, v); }
+:AND "HL",Dir is b0=0x74 ; Dir { local v:2 = *:2 Dir; and16(HL, v); }
+:AND "HL",n16 is b0=0x7c ; n16 { local v:2 = n16; and16(HL, v); }
+:AND "A",SrcGG is SrcGG ; b1=0x64 { local v:1 = *:1 SrcGG; and8(A, v); }
+:AND "A",SrcMN is SrcMN ; b1=0x64 { local v:1 = *:1 SrcMN; and8(A, v); }
+:AND "A",SrcIX is SrcIX ; b1=0x64 { local v:1 = *:1 SrcIX; and8(A, v); }
+:AND "A",SrcHA is SrcHA ; b1=0x64 { local v:1 = *:1 SrcHA; and8(A, v); }
+:AND "HL",SrcGG is SrcGG ; b1=0x74 { local v:2 = *:2 SrcGG; and16(HL, v); }
+:AND "HL",SrcMN is SrcMN ; b1=0x74 { local v:2 = *:2 SrcMN; and16(HL, v); }
+:AND "HL",SrcIX is SrcIX ; b1=0x74 { local v:2 = *:2 SrcIX; and16(HL, v); }
+:AND "HL",SrcHA is SrcHA ; b1=0x74 { local v:2 = *:2 SrcHA; and16(HL, v); }
+:AND DstGG,n8 is DstGG ; b1=0x6c ; n8 { local v:1 = *:1 DstGG; local w:1 = n8; and8(v, w); *:1 DstGG = v; }
+:AND DstMN,n8 is DstMN ; b1=0x6c ; n8 { local v:1 = *:1 DstMN; local w:1 = n8; and8(v, w); *:1 DstMN = v; }
+:AND DstIX,n8 is DstIX ; b1=0x6c ; n8 { local v:1 = *:1 DstIX; local w:1 = n8; and8(v, w); *:1 DstIX = v; }
+:AND DstHA,n8 is DstHA ; b1=0x6c ; n8 { local v:1 = *:1 DstHA; local w:1 = n8; and8(v, w); *:1 DstHA = v; }
+:AND DstD,n8 is DstD ; b1=0x6c ; n8 { local v:1 = *:1 DstD; local w:1 = n8; and8(v, w); *:1 DstD = v; }
+:AND "A",G8 is G8 ; b1=0x64 { and8(A, G8); }
+:AND G8,n8 is G8 ; b1=0x6c ; n8 { local w:1 = n8; and8(G8, w); }
+:AND "HL",G16 is G16 ; b1=0x74 { and16(HL, G16); }
+:XOR "A",Dir is b0=0x65 ; Dir { local v:1 = *:1 Dir; xor8(A, v); }
+:XOR "A",n8 is b0=0x6d ; n8 { local v:1 = n8; xor8(A, v); }
+:XOR "HL",Dir is b0=0x75 ; Dir { local v:2 = *:2 Dir; xor16(HL, v); }
+:XOR "HL",n16 is b0=0x7d ; n16 { local v:2 = n16; xor16(HL, v); }
+:XOR "A",SrcGG is SrcGG ; b1=0x65 { local v:1 = *:1 SrcGG; xor8(A, v); }
+:XOR "A",SrcMN is SrcMN ; b1=0x65 { local v:1 = *:1 SrcMN; xor8(A, v); }
+:XOR "A",SrcIX is SrcIX ; b1=0x65 { local v:1 = *:1 SrcIX; xor8(A, v); }
+:XOR "A",SrcHA is SrcHA ; b1=0x65 { local v:1 = *:1 SrcHA; xor8(A, v); }
+:XOR "HL",SrcGG is SrcGG ; b1=0x75 { local v:2 = *:2 SrcGG; xor16(HL, v); }
+:XOR "HL",SrcMN is SrcMN ; b1=0x75 { local v:2 = *:2 SrcMN; xor16(HL, v); }
+:XOR "HL",SrcIX is SrcIX ; b1=0x75 { local v:2 = *:2 SrcIX; xor16(HL, v); }
+:XOR "HL",SrcHA is SrcHA ; b1=0x75 { local v:2 = *:2 SrcHA; xor16(HL, v); }
+:XOR DstGG,n8 is DstGG ; b1=0x6d ; n8 { local v:1 = *:1 DstGG; local w:1 = n8; xor8(v, w); *:1 DstGG = v; }
+:XOR DstMN,n8 is DstMN ; b1=0x6d ; n8 { local v:1 = *:1 DstMN; local w:1 = n8; xor8(v, w); *:1 DstMN = v; }
+:XOR DstIX,n8 is DstIX ; b1=0x6d ; n8 { local v:1 = *:1 DstIX; local w:1 = n8; xor8(v, w); *:1 DstIX = v; }
+:XOR DstHA,n8 is DstHA ; b1=0x6d ; n8 { local v:1 = *:1 DstHA; local w:1 = n8; xor8(v, w); *:1 DstHA = v; }
+:XOR DstD,n8 is DstD ; b1=0x6d ; n8 { local v:1 = *:1 DstD; local w:1 = n8; xor8(v, w); *:1 DstD = v; }
+:XOR "A",G8 is G8 ; b1=0x65 { xor8(A, G8); }
+:XOR G8,n8 is G8 ; b1=0x6d ; n8 { local w:1 = n8; xor8(G8, w); }
+:XOR "HL",G16 is G16 ; b1=0x75 { xor16(HL, G16); }
+:OR "A",Dir is b0=0x66 ; Dir { local v:1 = *:1 Dir; or8(A, v); }
+:OR "A",n8 is b0=0x6e ; n8 { local v:1 = n8; or8(A, v); }
+:OR "HL",Dir is b0=0x76 ; Dir { local v:2 = *:2 Dir; or16(HL, v); }
+:OR "HL",n16 is b0=0x7e ; n16 { local v:2 = n16; or16(HL, v); }
+:OR "A",SrcGG is SrcGG ; b1=0x66 { local v:1 = *:1 SrcGG; or8(A, v); }
+:OR "A",SrcMN is SrcMN ; b1=0x66 { local v:1 = *:1 SrcMN; or8(A, v); }
+:OR "A",SrcIX is SrcIX ; b1=0x66 { local v:1 = *:1 SrcIX; or8(A, v); }
+:OR "A",SrcHA is SrcHA ; b1=0x66 { local v:1 = *:1 SrcHA; or8(A, v); }
+:OR "HL",SrcGG is SrcGG ; b1=0x76 { local v:2 = *:2 SrcGG; or16(HL, v); }
+:OR "HL",SrcMN is SrcMN ; b1=0x76 { local v:2 = *:2 SrcMN; or16(HL, v); }
+:OR "HL",SrcIX is SrcIX ; b1=0x76 { local v:2 = *:2 SrcIX; or16(HL, v); }
+:OR "HL",SrcHA is SrcHA ; b1=0x76 { local v:2 = *:2 SrcHA; or16(HL, v); }
+:OR DstGG,n8 is DstGG ; b1=0x6e ; n8 { local v:1 = *:1 DstGG; local w:1 = n8; or8(v, w); *:1 DstGG = v; }
+:OR DstMN,n8 is DstMN ; b1=0x6e ; n8 { local v:1 = *:1 DstMN; local w:1 = n8; or8(v, w); *:1 DstMN = v; }
+:OR DstIX,n8 is DstIX ; b1=0x6e ; n8 { local v:1 = *:1 DstIX; local w:1 = n8; or8(v, w); *:1 DstIX = v; }
+:OR DstHA,n8 is DstHA ; b1=0x6e ; n8 { local v:1 = *:1 DstHA; local w:1 = n8; or8(v, w); *:1 DstHA = v; }
+:OR DstD,n8 is DstD ; b1=0x6e ; n8 { local v:1 = *:1 DstD; local w:1 = n8; or8(v, w); *:1 DstD = v; }
+:OR "A",G8 is G8 ; b1=0x66 { or8(A, G8); }
+:OR G8,n8 is G8 ; b1=0x6e ; n8 { local w:1 = n8; or8(G8, w); }
+:OR "HL",G16 is G16 ; b1=0x76 { or16(HL, G16); }
+:CP "A",Dir is b0=0x67 ; Dir { local v:1 = *:1 Dir; cp8(A, v); }
+:CP "A",n8 is b0=0x6f ; n8 { local v:1 = n8; cp8(A, v); }
+:CP "HL",Dir is b0=0x77 ; Dir { local v:2 = *:2 Dir; cp16(HL, v); }
+:CP "HL",n16 is b0=0x7f ; n16 { local v:2 = n16; cp16(HL, v); }
+:CP "A",SrcGG is SrcGG ; b1=0x67 { local v:1 = *:1 SrcGG; cp8(A, v); }
+:CP "A",SrcMN is SrcMN ; b1=0x67 { local v:1 = *:1 SrcMN; cp8(A, v); }
+:CP "A",SrcIX is SrcIX ; b1=0x67 { local v:1 = *:1 SrcIX; cp8(A, v); }
+:CP "A",SrcHA is SrcHA ; b1=0x67 { local v:1 = *:1 SrcHA; cp8(A, v); }
+:CP "HL",SrcGG is SrcGG ; b1=0x77 { local v:2 = *:2 SrcGG; cp16(HL, v); }
+:CP "HL",SrcMN is SrcMN ; b1=0x77 { local v:2 = *:2 SrcMN; cp16(HL, v); }
+:CP "HL",SrcIX is SrcIX ; b1=0x77 { local v:2 = *:2 SrcIX; cp16(HL, v); }
+:CP "HL",SrcHA is SrcHA ; b1=0x77 { local v:2 = *:2 SrcHA; cp16(HL, v); }
+:CP DstGG,n8 is DstGG ; b1=0x6f ; n8 { local v:1 = *:1 DstGG; local w:1 = n8; cp8(v, w); }
+:CP DstMN,n8 is DstMN ; b1=0x6f ; n8 { local v:1 = *:1 DstMN; local w:1 = n8; cp8(v, w); }
+:CP DstIX,n8 is DstIX ; b1=0x6f ; n8 { local v:1 = *:1 DstIX; local w:1 = n8; cp8(v, w); }
+:CP DstHA,n8 is DstHA ; b1=0x6f ; n8 { local v:1 = *:1 DstHA; local w:1 = n8; cp8(v, w); }
+:CP DstD,n8 is DstD ; b1=0x6f ; n8 { local v:1 = *:1 DstD; local w:1 = n8; cp8(v, w); }
+:CP "A",G8 is G8 ; b1=0x67 { cp8(A, G8); }
+:CP G8,n8 is G8 ; b1=0x6f ; n8 { local w:1 = n8; cp8(G8, w); }
+:CP "HL",G16 is G16 ; b1=0x77 { cp16(HL, G16); }
+:RLC "A" is b0=0xa0 { rlc8(A); fX = fC; fH = 0; fN = 0; }
+:RLC SrcGG is SrcGG ; b1=0xa0 { local v:1 = *:1 SrcGG; rlc8(v); *:1 SrcGG = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RLC SrcMN is SrcMN ; b1=0xa0 { local v:1 = *:1 SrcMN; rlc8(v); *:1 SrcMN = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RLC SrcIX is SrcIX ; b1=0xa0 { local v:1 = *:1 SrcIX; rlc8(v); *:1 SrcIX = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RLC SrcHA is SrcHA ; b1=0xa0 { local v:1 = *:1 SrcHA; rlc8(v); *:1 SrcHA = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RLC SrcD is SrcD ; b1=0xa0 { local v:1 = *:1 SrcD; rlc8(v); *:1 SrcD = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RLC G8 is G8 ; b1=0xa0 { rlc8(G8); szp8(G8); fX = fC; fH = 0; fN = 0; }
+:RRC "A" is b0=0xa1 { rrc8(A); fX = fC; fH = 0; fN = 0; }
+:RRC SrcGG is SrcGG ; b1=0xa1 { local v:1 = *:1 SrcGG; rrc8(v); *:1 SrcGG = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RRC SrcMN is SrcMN ; b1=0xa1 { local v:1 = *:1 SrcMN; rrc8(v); *:1 SrcMN = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RRC SrcIX is SrcIX ; b1=0xa1 { local v:1 = *:1 SrcIX; rrc8(v); *:1 SrcIX = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RRC SrcHA is SrcHA ; b1=0xa1 { local v:1 = *:1 SrcHA; rrc8(v); *:1 SrcHA = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RRC SrcD is SrcD ; b1=0xa1 { local v:1 = *:1 SrcD; rrc8(v); *:1 SrcD = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RRC G8 is G8 ; b1=0xa1 { rrc8(G8); szp8(G8); fX = fC; fH = 0; fN = 0; }
+:RL "A" is b0=0xa2 { rl8(A); fX = fC; fH = 0; fN = 0; }
+:RL SrcGG is SrcGG ; b1=0xa2 { local v:1 = *:1 SrcGG; rl8(v); *:1 SrcGG = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RL SrcMN is SrcMN ; b1=0xa2 { local v:1 = *:1 SrcMN; rl8(v); *:1 SrcMN = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RL SrcIX is SrcIX ; b1=0xa2 { local v:1 = *:1 SrcIX; rl8(v); *:1 SrcIX = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RL SrcHA is SrcHA ; b1=0xa2 { local v:1 = *:1 SrcHA; rl8(v); *:1 SrcHA = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RL SrcD is SrcD ; b1=0xa2 { local v:1 = *:1 SrcD; rl8(v); *:1 SrcD = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RL G8 is G8 ; b1=0xa2 { rl8(G8); szp8(G8); fX = fC; fH = 0; fN = 0; }
+:RR "A" is b0=0xa3 { rr8(A); fX = fC; fH = 0; fN = 0; }
+:RR SrcGG is SrcGG ; b1=0xa3 { local v:1 = *:1 SrcGG; rr8(v); *:1 SrcGG = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RR SrcMN is SrcMN ; b1=0xa3 { local v:1 = *:1 SrcMN; rr8(v); *:1 SrcMN = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RR SrcIX is SrcIX ; b1=0xa3 { local v:1 = *:1 SrcIX; rr8(v); *:1 SrcIX = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RR SrcHA is SrcHA ; b1=0xa3 { local v:1 = *:1 SrcHA; rr8(v); *:1 SrcHA = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RR SrcD is SrcD ; b1=0xa3 { local v:1 = *:1 SrcD; rr8(v); *:1 SrcD = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:RR G8 is G8 ; b1=0xa3 { rr8(G8); szp8(G8); fX = fC; fH = 0; fN = 0; }
+:SLA "A" is b0=0xa4 { sla8(A); fX = fC; fH = 0; fN = 0; }
+:SLA SrcGG is SrcGG ; b1=0xa4 { local v:1 = *:1 SrcGG; sla8(v); *:1 SrcGG = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SLA SrcMN is SrcMN ; b1=0xa4 { local v:1 = *:1 SrcMN; sla8(v); *:1 SrcMN = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SLA SrcIX is SrcIX ; b1=0xa4 { local v:1 = *:1 SrcIX; sla8(v); *:1 SrcIX = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SLA SrcHA is SrcHA ; b1=0xa4 { local v:1 = *:1 SrcHA; sla8(v); *:1 SrcHA = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SLA SrcD is SrcD ; b1=0xa4 { local v:1 = *:1 SrcD; sla8(v); *:1 SrcD = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SLA G8 is G8 ; b1=0xa4 { sla8(G8); szp8(G8); fX = fC; fH = 0; fN = 0; }
+:SRA "A" is b0=0xa5 { sra8(A); fX = fC; fH = 0; fN = 0; }
+:SRA SrcGG is SrcGG ; b1=0xa5 { local v:1 = *:1 SrcGG; sra8(v); *:1 SrcGG = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SRA SrcMN is SrcMN ; b1=0xa5 { local v:1 = *:1 SrcMN; sra8(v); *:1 SrcMN = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SRA SrcIX is SrcIX ; b1=0xa5 { local v:1 = *:1 SrcIX; sra8(v); *:1 SrcIX = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SRA SrcHA is SrcHA ; b1=0xa5 { local v:1 = *:1 SrcHA; sra8(v); *:1 SrcHA = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SRA SrcD is SrcD ; b1=0xa5 { local v:1 = *:1 SrcD; sra8(v); *:1 SrcD = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SRA G8 is G8 ; b1=0xa5 { sra8(G8); szp8(G8); fX = fC; fH = 0; fN = 0; }
+:SLL "A" is b0=0xa6 { sll8(A); fX = fC; fH = 0; fN = 0; }
+:SLL SrcGG is SrcGG ; b1=0xa6 { local v:1 = *:1 SrcGG; sll8(v); *:1 SrcGG = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SLL SrcMN is SrcMN ; b1=0xa6 { local v:1 = *:1 SrcMN; sll8(v); *:1 SrcMN = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SLL SrcIX is SrcIX ; b1=0xa6 { local v:1 = *:1 SrcIX; sll8(v); *:1 SrcIX = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SLL SrcHA is SrcHA ; b1=0xa6 { local v:1 = *:1 SrcHA; sll8(v); *:1 SrcHA = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SLL SrcD is SrcD ; b1=0xa6 { local v:1 = *:1 SrcD; sll8(v); *:1 SrcD = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SLL G8 is G8 ; b1=0xa6 { sll8(G8); szp8(G8); fX = fC; fH = 0; fN = 0; }
+:SRL "A" is b0=0xa7 { srl8(A); fX = fC; fH = 0; fN = 0; }
+:SRL SrcGG is SrcGG ; b1=0xa7 { local v:1 = *:1 SrcGG; srl8(v); *:1 SrcGG = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SRL SrcMN is SrcMN ; b1=0xa7 { local v:1 = *:1 SrcMN; srl8(v); *:1 SrcMN = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SRL SrcIX is SrcIX ; b1=0xa7 { local v:1 = *:1 SrcIX; srl8(v); *:1 SrcIX = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SRL SrcHA is SrcHA ; b1=0xa7 { local v:1 = *:1 SrcHA; srl8(v); *:1 SrcHA = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SRL SrcD is SrcD ; b1=0xa7 { local v:1 = *:1 SrcD; srl8(v); *:1 SrcD = v; szp8(v); fX = fC; fH = 0; fN = 0; }
+:SRL G8 is G8 ; b1=0xa7 { srl8(G8); szp8(G8); fX = fC; fH = 0; fN = 0; }
+
+:BIT b0_bit,Dir is b0_hi5=0x15 & b0_bit ; Dir { local v:1 = *:1 Dir; bitTest(v, b0_bit); }
+:RES b0_bit,Dir is b0_hi5=0x16 & b0_bit ; Dir { local v:1 = *:1 Dir; v = v & ~(1 << b0_bit); *:1 Dir = v; }
+:SET b0_bit,Dir is b0_hi5=0x17 & b0_bit ; Dir { local v:1 = *:1 Dir; v = v | (1 << b0_bit); *:1 Dir = v; }
+
+# ---- source memory group (E0-E7, F0-F3)
+:RLD SrcGG is SrcGG ; b1=0x10 {
+  local v:1 = *:1 SrcGG; local a:1 = A;
+  *:1 SrcGG = (v << 4) | (a & 0xf);
+  A = (a & 0xf0) | (v >> 4);
+  szp8(A); fH = 0; fN = 0; fX = 0;
+}
+:RLD SrcMN is SrcMN ; b1=0x10 {
+  local v:1 = *:1 SrcMN; local a:1 = A;
+  *:1 SrcMN = (v << 4) | (a & 0xf);
+  A = (a & 0xf0) | (v >> 4);
+  szp8(A); fH = 0; fN = 0; fX = 0;
+}
+:RLD SrcIX is SrcIX ; b1=0x10 {
+  local v:1 = *:1 SrcIX; local a:1 = A;
+  *:1 SrcIX = (v << 4) | (a & 0xf);
+  A = (a & 0xf0) | (v >> 4);
+  szp8(A); fH = 0; fN = 0; fX = 0;
+}
+:RLD SrcHA is SrcHA ; b1=0x10 {
+  local v:1 = *:1 SrcHA; local a:1 = A;
+  *:1 SrcHA = (v << 4) | (a & 0xf);
+  A = (a & 0xf0) | (v >> 4);
+  szp8(A); fH = 0; fN = 0; fX = 0;
+}
+:RLD SrcD is SrcD ; b1=0x10 {
+  local v:1 = *:1 SrcD; local a:1 = A;
+  *:1 SrcD = (v << 4) | (a & 0xf);
+  A = (a & 0xf0) | (v >> 4);
+  szp8(A); fH = 0; fN = 0; fX = 0;
+}
+:RRD SrcGG is SrcGG ; b1=0x11 {
+  local v:1 = *:1 SrcGG; local a:1 = A;
+  *:1 SrcGG = (v >> 4) | (a << 4);
+  A = (a & 0xf0) | (v & 0xf);
+  szp8(A); fH = 0; fN = 0; fX = 0;
+}
+:RRD SrcMN is SrcMN ; b1=0x11 {
+  local v:1 = *:1 SrcMN; local a:1 = A;
+  *:1 SrcMN = (v >> 4) | (a << 4);
+  A = (a & 0xf0) | (v & 0xf);
+  szp8(A); fH = 0; fN = 0; fX = 0;
+}
+:RRD SrcIX is SrcIX ; b1=0x11 {
+  local v:1 = *:1 SrcIX; local a:1 = A;
+  *:1 SrcIX = (v >> 4) | (a << 4);
+  A = (a & 0xf0) | (v & 0xf);
+  szp8(A); fH = 0; fN = 0; fX = 0;
+}
+:RRD SrcHA is SrcHA ; b1=0x11 {
+  local v:1 = *:1 SrcHA; local a:1 = A;
+  *:1 SrcHA = (v >> 4) | (a << 4);
+  A = (a & 0xf0) | (v & 0xf);
+  szp8(A); fH = 0; fN = 0; fX = 0;
+}
+:RRD SrcD is SrcD ; b1=0x11 {
+  local v:1 = *:1 SrcD; local a:1 = A;
+  *:1 SrcD = (v >> 4) | (a << 4);
+  A = (a & 0xf0) | (v & 0xf);
+  szp8(A); fH = 0; fN = 0; fX = 0;
+}
+:MUL "HL",SrcGG is SrcGG ; b1=0x12 { local v:1 = *:1 SrcGG; HL = zext(L) * zext(v); }
+:MUL "HL",SrcMN is SrcMN ; b1=0x12 { local v:1 = *:1 SrcMN; HL = zext(L) * zext(v); }
+:MUL "HL",SrcIX is SrcIX ; b1=0x12 { local v:1 = *:1 SrcIX; HL = zext(L) * zext(v); }
+:MUL "HL",SrcHA is SrcHA ; b1=0x12 { local v:1 = *:1 SrcHA; HL = zext(L) * zext(v); }
+:MUL "HL",SrcD is SrcD ; b1=0x12 { local v:1 = *:1 SrcD; HL = zext(L) * zext(v); }
+:DIV "HL",SrcGG is SrcGG ; b1=0x13 {
+  local d:2 = zext(*:1 SrcGG);
+  if (d == 0) goto <dz>;
+  local q:2 = HL / d;
+  local r:2 = HL % d;
+  fV = q > 0xff;
+  L = q:1; H = r:1;
+  goto inst_next;
+<dz>
+  fV = 1;
+  HL = divideByZero(HL);
+}
+:DIV "HL",SrcMN is SrcMN ; b1=0x13 {
+  local d:2 = zext(*:1 SrcMN);
+  if (d == 0) goto <dz>;
+  local q:2 = HL / d;
+  local r:2 = HL % d;
+  fV = q > 0xff;
+  L = q:1; H = r:1;
+  goto inst_next;
+<dz>
+  fV = 1;
+  HL = divideByZero(HL);
+}
+:DIV "HL",SrcIX is SrcIX ; b1=0x13 {
+  local d:2 = zext(*:1 SrcIX);
+  if (d == 0) goto <dz>;
+  local q:2 = HL / d;
+  local r:2 = HL % d;
+  fV = q > 0xff;
+  L = q:1; H = r:1;
+  goto inst_next;
+<dz>
+  fV = 1;
+  HL = divideByZero(HL);
+}
+:DIV "HL",SrcHA is SrcHA ; b1=0x13 {
+  local d:2 = zext(*:1 SrcHA);
+  if (d == 0) goto <dz>;
+  local q:2 = HL / d;
+  local r:2 = HL % d;
+  fV = q > 0xff;
+  L = q:1; H = r:1;
+  goto inst_next;
+<dz>
+  fV = 1;
+  HL = divideByZero(HL);
+}
+:DIV "HL",SrcD is SrcD ; b1=0x13 {
+  local d:2 = zext(*:1 SrcD);
+  if (d == 0) goto <dz>;
+  local q:2 = HL / d;
+  local r:2 = HL % d;
+  fV = q > 0xff;
+  L = q:1; H = r:1;
+  goto inst_next;
+<dz>
+  fV = 1;
+  HL = divideByZero(HL);
+}
+:ADD b1_ixs,SrcGG is SrcGG ; b1_hi6=0x05 & b1_ixs { local v:2 = *:2 SrcGG; add16(b1_ixs, v); }
+:ADD b1_ixs,SrcMN is SrcMN ; b1_hi6=0x05 & b1_ixs { local v:2 = *:2 SrcMN; add16(b1_ixs, v); }
+:ADD b1_ixs,SrcIX is SrcIX ; b1_hi6=0x05 & b1_ixs { local v:2 = *:2 SrcIX; add16(b1_ixs, v); }
+:ADD b1_ixs,SrcHA is SrcHA ; b1_hi6=0x05 & b1_ixs { local v:2 = *:2 SrcHA; add16(b1_ixs, v); }
+:ADD b1_ixs,SrcD is SrcD ; b1_hi6=0x05 & b1_ixs { local v:2 = *:2 SrcD; add16(b1_ixs, v); }
+:TSET b1_bit,SrcGG is SrcGG ; b1_hi5=0x03 & b1_bit { local v:1 = *:1 SrcGG; bitTest(v, b1_bit); *:1 SrcGG = v | (1 << b1_bit); }
+:TSET b1_bit,SrcMN is SrcMN ; b1_hi5=0x03 & b1_bit { local v:1 = *:1 SrcMN; bitTest(v, b1_bit); *:1 SrcMN = v | (1 << b1_bit); }
+:TSET b1_bit,SrcIX is SrcIX ; b1_hi5=0x03 & b1_bit { local v:1 = *:1 SrcIX; bitTest(v, b1_bit); *:1 SrcIX = v | (1 << b1_bit); }
+:TSET b1_bit,SrcHA is SrcHA ; b1_hi5=0x03 & b1_bit { local v:1 = *:1 SrcHA; bitTest(v, b1_bit); *:1 SrcHA = v | (1 << b1_bit); }
+:TSET b1_bit,SrcD is SrcD ; b1_hi5=0x03 & b1_bit { local v:1 = *:1 SrcD; bitTest(v, b1_bit); *:1 SrcD = v | (1 << b1_bit); }
+:LD b1_r8,SrcGG is SrcGG ; b1_hi5=0x05 & b1_r8 { b1_r8 = *:1 SrcGG; }
+:LD b1_r8,SrcMN is SrcMN ; b1_hi5=0x05 & b1_r8 { b1_r8 = *:1 SrcMN; }
+:LD b1_r8,SrcIX is SrcIX ; b1_hi5=0x05 & b1_r8 { b1_r8 = *:1 SrcIX; }
+:LD b1_r8,SrcHA is SrcHA ; b1_hi5=0x05 & b1_r8 { b1_r8 = *:1 SrcHA; }
+:LD b1_r8,SrcD is SrcD ; b1_hi5=0x05 & b1_r8 { b1_r8 = *:1 SrcD; }
+:LD b1_r16,SrcGG is SrcGG ; b1_hi5=0x09 & b1_r16 { b1_r16 = *:2 SrcGG; }
+:LD b1_r16,SrcMN is SrcMN ; b1_hi5=0x09 & b1_r16 { b1_r16 = *:2 SrcMN; }
+:LD b1_r16,SrcIX is SrcIX ; b1_hi5=0x09 & b1_r16 { b1_r16 = *:2 SrcIX; }
+:LD b1_r16,SrcHA is SrcHA ; b1_hi5=0x09 & b1_r16 { b1_r16 = *:2 SrcHA; }
+:LD b1_r16,SrcD is SrcD ; b1_hi5=0x09 & b1_r16 { b1_r16 = *:2 SrcD; }
+:EX SrcGG,b1_r16 is SrcGG ; b1_hi5=0x0a & b1_r16 { local t:2 = *:2 SrcGG; *:2 SrcGG = b1_r16; b1_r16 = t; }
+:EX SrcMN,b1_r16 is SrcMN ; b1_hi5=0x0a & b1_r16 { local t:2 = *:2 SrcMN; *:2 SrcMN = b1_r16; b1_r16 = t; }
+:EX SrcIX,b1_r16 is SrcIX ; b1_hi5=0x0a & b1_r16 { local t:2 = *:2 SrcIX; *:2 SrcIX = b1_r16; b1_r16 = t; }
+:EX SrcHA,b1_r16 is SrcHA ; b1_hi5=0x0a & b1_r16 { local t:2 = *:2 SrcHA; *:2 SrcHA = b1_r16; b1_r16 = t; }
+:EX SrcD,b1_r16 is SrcD ; b1_hi5=0x0a & b1_r16 { local t:2 = *:2 SrcD; *:2 SrcD = b1_r16; b1_r16 = t; }
+:INC SrcGG is SrcGG ; b1=0x87 { local v:1 = *:1 SrcGG; inc8(v); *:1 SrcGG = v; }
+:INC SrcMN is SrcMN ; b1=0x87 { local v:1 = *:1 SrcMN; inc8(v); *:1 SrcMN = v; }
+:INC SrcIX is SrcIX ; b1=0x87 { local v:1 = *:1 SrcIX; inc8(v); *:1 SrcIX = v; }
+:INC SrcHA is SrcHA ; b1=0x87 { local v:1 = *:1 SrcHA; inc8(v); *:1 SrcHA = v; }
+:DEC SrcGG is SrcGG ; b1=0x8f { local v:1 = *:1 SrcGG; dec8(v); *:1 SrcGG = v; }
+:DEC SrcMN is SrcMN ; b1=0x8f { local v:1 = *:1 SrcMN; dec8(v); *:1 SrcMN = v; }
+:DEC SrcIX is SrcIX ; b1=0x8f { local v:1 = *:1 SrcIX; dec8(v); *:1 SrcIX = v; }
+:DEC SrcHA is SrcHA ; b1=0x8f { local v:1 = *:1 SrcHA; dec8(v); *:1 SrcHA = v; }
+:INCW SrcGG is SrcGG ; b1=0x97 { local v:2 = *:2 SrcGG; incw(v); *:2 SrcGG = v; }
+:INCW SrcMN is SrcMN ; b1=0x97 { local v:2 = *:2 SrcMN; incw(v); *:2 SrcMN = v; }
+:INCW SrcIX is SrcIX ; b1=0x97 { local v:2 = *:2 SrcIX; incw(v); *:2 SrcIX = v; }
+:INCW SrcHA is SrcHA ; b1=0x97 { local v:2 = *:2 SrcHA; incw(v); *:2 SrcHA = v; }
+:DECW SrcGG is SrcGG ; b1=0x9f { local v:2 = *:2 SrcGG; decw(v); *:2 SrcGG = v; }
+:DECW SrcMN is SrcMN ; b1=0x9f { local v:2 = *:2 SrcMN; decw(v); *:2 SrcMN = v; }
+:DECW SrcIX is SrcIX ; b1=0x9f { local v:2 = *:2 SrcIX; decw(v); *:2 SrcIX = v; }
+:DECW SrcHA is SrcHA ; b1=0x9f { local v:2 = *:2 SrcHA; decw(v); *:2 SrcHA = v; }
+:BIT b1_bit,SrcGG is SrcGG ; b1_hi5=0x15 & b1_bit { local v:1 = *:1 SrcGG; bitTest(v, b1_bit); }
+:BIT b1_bit,SrcMN is SrcMN ; b1_hi5=0x15 & b1_bit { local v:1 = *:1 SrcMN; bitTest(v, b1_bit); }
+:BIT b1_bit,SrcIX is SrcIX ; b1_hi5=0x15 & b1_bit { local v:1 = *:1 SrcIX; bitTest(v, b1_bit); }
+:BIT b1_bit,SrcHA is SrcHA ; b1_hi5=0x15 & b1_bit { local v:1 = *:1 SrcHA; bitTest(v, b1_bit); }
+:RES b1_bit,SrcGG is SrcGG ; b1_hi5=0x16 & b1_bit { local v:1 = *:1 SrcGG; *:1 SrcGG = v & ~(1 << b1_bit); }
+:RES b1_bit,SrcMN is SrcMN ; b1_hi5=0x16 & b1_bit { local v:1 = *:1 SrcMN; *:1 SrcMN = v & ~(1 << b1_bit); }
+:RES b1_bit,SrcIX is SrcIX ; b1_hi5=0x16 & b1_bit { local v:1 = *:1 SrcIX; *:1 SrcIX = v & ~(1 << b1_bit); }
+:RES b1_bit,SrcHA is SrcHA ; b1_hi5=0x16 & b1_bit { local v:1 = *:1 SrcHA; *:1 SrcHA = v & ~(1 << b1_bit); }
+:SET b1_bit,SrcGG is SrcGG ; b1_hi5=0x17 & b1_bit { local v:1 = *:1 SrcGG; *:1 SrcGG = v | (1 << b1_bit); }
+:SET b1_bit,SrcMN is SrcMN ; b1_hi5=0x17 & b1_bit { local v:1 = *:1 SrcMN; *:1 SrcMN = v | (1 << b1_bit); }
+:SET b1_bit,SrcIX is SrcIX ; b1_hi5=0x17 & b1_bit { local v:1 = *:1 SrcIX; *:1 SrcIX = v | (1 << b1_bit); }
+:SET b1_bit,SrcHA is SrcHA ; b1_hi5=0x17 & b1_bit { local v:1 = *:1 SrcHA; *:1 SrcHA = v | (1 << b1_bit); }
+
+# ---- destination memory group (E8-EF, F4-F7)
+:LD DstGG,b1_r8 is DstGG ; b1_hi5=0x04 & b1_r8 { *:1 DstGG = b1_r8; }
+:LD DstMN,b1_r8 is DstMN ; b1_hi5=0x04 & b1_r8 { *:1 DstMN = b1_r8; }
+:LD DstIX,b1_r8 is DstIX ; b1_hi5=0x04 & b1_r8 { *:1 DstIX = b1_r8; }
+:LD DstHA,b1_r8 is DstHA ; b1_hi5=0x04 & b1_r8 { *:1 DstHA = b1_r8; }
+:LD DstD,b1_r8 is DstD ; b1_hi5=0x04 & b1_r8 { *:1 DstD = b1_r8; }
+:LD DstGG,n8 is DstGG ; b1=0x37 ; n8 { *:1 DstGG = n8; }
+:LD DstMN,n8 is DstMN ; b1=0x37 ; n8 { *:1 DstMN = n8; }
+:LD DstIX,n8 is DstIX ; b1=0x37 ; n8 { *:1 DstIX = n8; }
+:LD DstHA,n8 is DstHA ; b1=0x37 ; n8 { *:1 DstHA = n8; }
+:LDA b1_r16,JpIX is JpIX ; b1_hi5=0x07 & b1_r16 { b1_r16 = JpIX; }
+:LDA b1_r16,JpHA is JpHA ; b1_hi5=0x07 & b1_r16 { b1_r16 = JpHA; }
+:LDW DstGG,n16 is DstGG ; b1=0x3f ; n16 { *:2 DstGG = n16; }
+:LDW DstMN,n16 is DstMN ; b1=0x3f ; n16 { *:2 DstMN = n16; }
+:LDW DstIX,n16 is DstIX ; b1=0x3f ; n16 { *:2 DstIX = n16; }
+:LDW DstHA,n16 is DstHA ; b1=0x3f ; n16 { *:2 DstHA = n16; }
+:LD DstGG,b1_r16 is DstGG ; b1_hi5=0x08 & b1_r16 { *:2 DstGG = b1_r16; }
+:LD DstMN,b1_r16 is DstMN ; b1_hi5=0x08 & b1_r16 { *:2 DstMN = b1_r16; }
+:LD DstIX,b1_r16 is DstIX ; b1_hi5=0x08 & b1_r16 { *:2 DstIX = b1_r16; }
+:LD DstHA,b1_r16 is DstHA ; b1_hi5=0x08 & b1_r16 { *:2 DstHA = b1_r16; }
+:LD DstD,b1_r16 is DstD ; b1_hi5=0x08 & b1_r16 { *:2 DstD = b1_r16; }
+:JP JpGG is JpGG ; b1=0xc8 { goto [JpGG]; }
+:JP JpIX is JpIX ; b1=0xc8 { goto [JpIX]; }
+:JP JpHA is JpHA ; b1=0xc8 { goto [JpHA]; }
+:JP Cc1,JpGG is JpGG ; b1_hi4=0xc & Cc1 { if (!Cc1) goto inst_next; goto [JpGG]; }
+:JP Cc1,JpIX is JpIX ; b1_hi4=0xc & Cc1 { if (!Cc1) goto inst_next; goto [JpIX]; }
+:JP Cc1,JpHA is JpHA ; b1_hi4=0xc & Cc1 { if (!Cc1) goto inst_next; goto [JpHA]; }
+:CALL JpGG is JpGG ; b1=0xd8 { local t:2 = JpGG; push16(&:2 inst_next); call [t]; }
+:CALL JpIX is JpIX ; b1=0xd8 { local t:2 = JpIX; push16(&:2 inst_next); call [t]; }
+:CALL JpHA is JpHA ; b1=0xd8 { local t:2 = JpHA; push16(&:2 inst_next); call [t]; }
+:CALL Cc1,JpGG is JpGG ; b1_hi4=0xd & Cc1 { if (!Cc1) goto inst_next; local t:2 = JpGG; push16(&:2 inst_next); call [t]; }
+:CALL Cc1,JpIX is JpIX ; b1_hi4=0xd & Cc1 { if (!Cc1) goto inst_next; local t:2 = JpIX; push16(&:2 inst_next); call [t]; }
+:CALL Cc1,JpHA is JpHA ; b1_hi4=0xd & Cc1 { if (!Cc1) goto inst_next; local t:2 = JpHA; push16(&:2 inst_next); call [t]; }
+:JP Abs16 is b0=0xeb ; Abs16 ; b1=0xc8 { goto Abs16; }
+:JP Cc1,Abs16 is b0=0xeb ; Abs16 ; b1_hi4=0xc & Cc1 { if (Cc1) goto Abs16; }
+:CALL Abs16 is b0=0xeb ; Abs16 ; b1=0xd8 { push16(&:2 inst_next); call Abs16; }
+:CALL Cc1,Abs16 is b0=0xeb ; Abs16 ; b1_hi4=0xd & Cc1 { if (!Cc1) goto inst_next; push16(&:2 inst_next); call Abs16; }
+
+# ---- register group (F8-FE)
+:MUL "HL",G8 is G8 ; b1=0x12 { HL = zext(L) * zext(G8); }
+:DIV "HL",G8 is G8 ; b1=0x13 {
+  local d:2 = zext(G8);
+  if (d == 0) goto <dz>;
+  local q:2 = HL / d;
+  local r:2 = HL % d;
+  fV = q > 0xff;
+  L = q:1; H = r:1;
+  goto inst_next;
+<dz>
+  fV = 1;
+  HL = divideByZero(HL);
+}
+:ADD b1_ixs,G16 is G16 ; b1_hi6=0x05 & b1_ixs { add16r(b1_ixs, G16); }
+:TSET b1_bit,G8 is G8 ; b1_hi5=0x03 & b1_bit { bitTest(G8, b1_bit); G8 = G8 | (1 << b1_bit); }
+:LD b1_r8,G8 is G8 ; b1_hi5=0x06 & b1_r8 { b1_r8 = G8; }
+:LD b1_r16,G16 is G16 ; b1_hi5=0x07 & b1_r16 { b1_r16 = G16; }
+:BIT b1_bit,G8 is G8 ; b1_hi5=0x15 & b1_bit { bitTest(G8, b1_bit); }
+:RES b1_bit,G8 is G8 ; b1_hi5=0x16 & b1_bit { G8 = G8 & ~(1 << b1_bit); }
+:SET b1_bit,G8 is G8 ; b1_hi5=0x17 & b1_bit { G8 = G8 | (1 << b1_bit); }
+:LDI is b0=0xfe ; b1=0x58 { *:1 DE = *:1 HL; DE = DE + 1; HL = HL + 1; BC = BC - 1; fH = 0; fN = 0; fV = BC != 0; }
+:LDIR is b0=0xfe ; b1=0x59 { *:1 DE = *:1 HL; DE = DE + 1; HL = HL + 1; BC = BC - 1; fH = 0; fN = 0; fV = BC != 0; if (BC != 0) goto inst_start; }
+:LDD is b0=0xfe ; b1=0x5a { *:1 DE = *:1 HL; DE = DE - 1; HL = HL - 1; BC = BC - 1; fH = 0; fN = 0; fV = BC != 0; }
+:LDDR is b0=0xfe ; b1=0x5b { *:1 DE = *:1 HL; DE = DE - 1; HL = HL - 1; BC = BC - 1; fH = 0; fN = 0; fV = BC != 0; if (BC != 0) goto inst_start; }
+:CPI is b0=0xfe ; b1=0x5c { local v:1 = *:1 HL; local a:1 = A; local fc:1 = fC; cp8(a, v); fC = fc; fX = 0; HL = HL + 1; BC = BC - 1; fV = BC != 0; }
+:CPIR is b0=0xfe ; b1=0x5d { local v:1 = *:1 HL; local a:1 = A; local fc:1 = fC; cp8(a, v); fC = fc; fX = 0; HL = HL + 1; BC = BC - 1; fV = BC != 0; if (BC != 0 && fZ == 0) goto inst_start; }
+:CPD is b0=0xfe ; b1=0x5e { local v:1 = *:1 HL; local a:1 = A; local fc:1 = fC; cp8(a, v); fC = fc; fX = 0; HL = HL - 1; BC = BC - 1; fV = BC != 0; }
+:CPDR is b0=0xfe ; b1=0x5f { local v:1 = *:1 HL; local a:1 = A; local fc:1 = fC; cp8(a, v); fC = fc; fX = 0; HL = HL - 1; BC = BC - 1; fV = BC != 0; if (BC != 0 && fZ == 0) goto inst_start; }
+:RET is b0=0xfe ; b1=0xd8 { local r:2 = 0; pop16(r); return [r]; }
+:RET Cc1 is b0=0xfe ; b1_hi4=0xd & Cc1 { if (!Cc1) goto inst_next; local r:2 = 0; pop16(r); return [r]; }
+

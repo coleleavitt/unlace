@@ -4,7 +4,7 @@
 Usage:
   llvm-tblgen --dump-json -I <llvm>/include -I <llvm>/lib/Target/AArch64 \
       <llvm>/lib/Target/AArch64/AArch64.td -o aarch64.json
-  gen_aarch64_ext.py aarch64.json <Predicate,...> <prefix> <OP_> out.sinc [probe.json]
+  gen_aarch64_ext.py aarch64.json <Predicate,...> <prefix> <OP_> out.sinc [probe.json [<ExcludedPredicate,...>]]
 
 Every non-pseudo 32-bit instruction record carrying one of the predicates is
 emitted. Its fixed bits become token-field constraints. Each operand field is
@@ -131,7 +131,18 @@ def emit(data, P, OPP, skip=()):
     TOK = P + 'tok'
 
     def parse_tmpl(asm):
-        asm = asm.replace('\\{', '{').replace('\\}', '}')
+        out, depth, alt = '', 0, False
+        i = 0
+        while i < len(asm):
+            c = asm[i]
+            if c == '\\' and i + 1 < len(asm):
+                out += asm[i:i + 2]; i += 2; continue
+            if c == '{': depth += 1; alt = False
+            elif c == '}': depth -= 1; alt = False
+            elif c == '|' and depth: alt = True
+            elif not alt: out += c
+            i += 1
+        asm = out.replace('\\{', '{').replace('\\}', '}')
         m = re.match(r'(\S+)(?:[ \t]+(.*))?$', asm, re.S)
         mn, rest = m.group(1), (m.group(2) or '')
         pieces = []
@@ -148,7 +159,7 @@ def emit(data, P, OPP, skip=()):
         rx = ''
         for i, (k, v) in enumerate(pieces):
             if k == 'lit': rx += re.escape(v).replace('\\ ', '\\s*').replace(' ', '\\s*')
-            elif i + 1 < len(pieces) and pieces[i + 1][0] == 'op': rx += r'([^\[\s,]+)'
+            elif i + 1 < len(pieces) and pieces[i + 1][0] == 'op': rx += r'(\{[^{}]*\}|[^\[\s,]+)'
             else: rx += GRP
         return re.compile('^' + rx + '$')
 
@@ -188,13 +199,17 @@ def emit(data, P, OPP, skip=()):
 
     def export_of(text):
         t = text.strip()
+        if 'za' in t or t.startswith('zt'):
+            return None
         m = re.match(r'^\{?\s*(z|pn|p|x|w|q|v|d|s|h|b)(\d+)\b', t)
         if m:
             k, n = m.group(1), int(m.group(2))
             if k == 'pn': k = 'p'
             if k == 'v': k = 'q'
             return '%s%d' % (k, n)
-        if re.match(r'^(xzr|wzr|sp|wsp)\b', t): return t.split()[0].rstrip(',')
+        if re.match(r'^xzr\b', t): return '0:8'
+        if re.match(r'^wzr\b', t): return '0:4'
+        if re.match(r'^(sp|wsp)\b', t): return t.split()[0].rstrip(',')
         m = re.search(r'#?(-?0x[0-9a-f]+|-?\d+)(?![.\d])', t)
         if m and not re.match(r'^#?-?\d+\.\d', t):
             v = int(m.group(1), 0)
@@ -202,6 +217,7 @@ def emit(data, P, OPP, skip=()):
         return None
 
     subtabs = {}
+    isreg = {}
     sublines = []
     def subtable(bits, table):
         # table: value -> (display text, export)
@@ -209,6 +225,7 @@ def emit(data, P, OPP, skip=()):
         if key in subtabs: return subtabs[key]
         n = '%so_%d' % (P, len(subtabs))
         subtabs[key] = n
+        isreg[n] = all(':' not in e for d, e in table.values())
         rs = runs(bits)
         for v, (disp, exp) in sorted(table.items()):
             cs = []
@@ -223,6 +240,7 @@ def emit(data, P, OPP, skip=()):
         if s in clones: return clones[s]
         n = s + 'b'
         clones[s] = n
+        isreg[n] = isreg[s]
         for l in list(sublines):
             if l.startswith(s + ': '):
                 sublines.append(n + l[len(s):])
@@ -256,6 +274,15 @@ def emit(data, P, OPP, skip=()):
             idx = slot_i; slot_i += 1
             var = srcvar(v)
             if var is None:
+                for cand, tab in r['tabs'].items():
+                    seen_t = set()
+                    for asm in tab.values():
+                        mm = rx.match(split_text(asm)[1])
+                        if mm: seen_t.add(mm.group(idx + 1))
+                    if len(seen_t) > 1:
+                        var = cand
+                        break
+            if var is None:
                 opsym.setdefault(v, None)
                 continue
             tab = {}
@@ -267,6 +294,9 @@ def emit(data, P, OPP, skip=()):
                 if e is None: e = '0x%x:8' % int(x)
                 tab[int(x)] = (t, e)
             if not tab: bad = True; break
+            outnames = {n for n, c in r['outs']} | {ties.get(n) for n, c in r['outs']}
+            if v in outnames:
+                tab = {x: (t, {'0:8': 'xzr', '0:4': 'wzr'}.get(e, e)) for x, (t, e) in tab.items()}
             sym = subtable([tuple(b) for b in vars_[var]], tab)
             opsym[(v, idx)] = sym
             used_subs.append(sym)
@@ -315,6 +345,9 @@ def emit(data, P, OPP, skip=()):
             s = sym_for(n)
             if s and s not in ins: ins.append(s)
         outs = [o for o in outs if o]
+        for o in [o for o in outs if not isreg.get(o)][::-1]:
+            if o not in ins: ins.insert(0, o)
+        outs = [o for o in outs if isreg.get(o)]
         body = []
         call = '%s(%s)' % (op, ', '.join(ins))
         if outs:
@@ -348,7 +381,8 @@ def emit(data, P, OPP, skip=()):
 
 if __name__ == '__main__':
     J = load(sys.argv[1])
-    data = sample(J, set(sys.argv[2].split(',')), set())
+    excl = set(sys.argv[7].split(',')) if len(sys.argv) > 7 else set()
+    data = sample(J, set(sys.argv[2].split(',')), excl)
     del J
     open(sys.argv[5], 'w').write(emit(data, sys.argv[3], sys.argv[4]))
     if len(sys.argv) > 6:

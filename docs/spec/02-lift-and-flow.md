@@ -4320,6 +4320,13 @@ Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
 encodings against LLVM's syntax and a raw image with one instruction per
 packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
 
+### AArch64 RMIF
+
+`rmif xn,#shift,#mask` (`AARCH64base.sinc`) rotates `xn` right by `shift` and copies bits
+3..0 of the result into N, Z, C and V where `mask` has a 1; the `set_NZCV` macro
+(`AARCH64instructions.sinc`) now leaves the other flags unchanged (it used to copy N into
+them), and the source is rotated, not shifted. Found by `tools/difffuzz --oracle qemu`.
+
 ### AArch64 SVE matrix multiply and BFloat16 (#98)
 
 `AARCH64_svemm.sinc` decodes the SVE forms of FEAT_F64MM (`ld1ro*`, `fmmla .d`, the

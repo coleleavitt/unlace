@@ -348,3 +348,37 @@ fn dummy_rule_registers_and_dispatches_only_on_its_opcode() {
             .is_none()
     );
 }
+
+/// A rule that reports a change on every COPY it sees, so its pool never
+/// reaches a fixpoint.
+struct AlwaysChanges;
+
+impl Rule for AlwaysChanges {
+    fn apply_op(&mut self, _op: OpId, _data: &mut Funcdata) -> int4 {
+        1
+    }
+    fn get_op_list(&self) -> Vec<OpCode> {
+        vec![OpCode::CPUI_COPY]
+    }
+    fn clone_rule(&self, _g: &ActionGroupList) -> Option<Box<dyn Rule>> {
+        Some(Box::new(AlwaysChanges))
+    }
+}
+
+#[test]
+fn repeatapply_pool_that_never_settles_stops_at_the_repeat_cap() {
+    let mut fd = build_fd();
+    make_op(&mut fd, 0x1000, OpCode::CPUI_COPY);
+    let mut pool = ActionPool::new(ruleflags::rule_repeatapply, "pool");
+    pool.add_rule(
+        RuleState::new("analysis", 0, "always"),
+        Box::new(AlwaysChanges),
+    );
+    let mut ctx = ActionContext::new();
+    let res = pool.perform(&mut fd, &mut ctx);
+    assert!(res > 0);
+    assert_eq!(ctx.repeats, MAX_REPEATS + 1);
+    let warnings = fd.drain_pending_comments();
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].2.contains("Stopped repeating"));
+}

@@ -1,0 +1,74 @@
+# unlace option spphistack (unlace#975): a va_list walk that starts at the
+# incoming stack pointer is a local holding a stack address, not the stack
+# pointer register.
+#
+# Hexagon passes the variadic arguments on the stack at the incoming sp
+# (r29); the unrolled walk's pointer is a phi of sp(i) and the stack address
+# after the unrolled part, and printed
+#     Register00000074 = (int4 *)&Stack00000020; ... v3 = *(int4 *)Register00000074;
+#
+# Stage: P6 variables and merge (merge-aggressiveness), option spphistack
+# off|on.  Pass 1 (off) pins the old print, where the loop pointer takes the
+# stack pointer's addrtied storage name; pass 2 (on, the default) merges the
+# phi with PTRSUB(sp, 0), which prints as a stack reference.
+#
+# Source (zig cc -target hexagon-freestanding -O2 -c, .text):
+#     #include <stdarg.h>
+#     int v2(int n, ...) { va_list ap; va_start(ap, n); int s = 0;
+#         for (int i = 0; i < n; i++) s += va_arg(ap, int); va_end(ap); return s; }
+#
+# Assert #1: off, the loop pointer prints under the stack pointer's storage.
+# Assert #2: only the off pass names that storage at all.
+# Assert #3: on, the walk starts from a stack reference held in a local.
+
+[image]
+arch = 'Hexagon:LE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'v2' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '''
+00404075103c017000421db001d2bda100400078aac0205ce240017686674111
+23c09d91844003b0854103b001d4bda1ff7fff0700470176044103b006c08391
+0140007801449da127c083912043008c044203b001459da145c08391274106ef
+844203b001449da168c08391044303b0814303b001449da189c0839120408075
+e07fe0bf01449da1a4c08391284705ef014403b001419da1c5c0839108410060
+244809ef01419da1e0c0839138c0205c204405ef844001b02340819101d4bda1
+044101b00540819101d4bda1234005ef844101b04640819101d4bda1044201b0
+804301b06740819101d6bda1274306ef844201b08840819101d4bda1044301b0
+c540819101d4bda1100814c5248708ef014401b0e040819101d4bda1204405ef
+03c06170004002751ed81e96814003b0e37fe2bf2040827501d6bda108410360
+824001b01240205ce1ff819700c0007f008001f3824002b0e17f829701c29da1
+00c001f31ec01e96
+'''
+
+[script]
+commands = [
+    'lo fu v2',
+    'option spphistack off',
+    'decompile',
+    'print C',
+    'option spphistack on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'spphistack hexagon #1: off, the walk is named after the stack pointer'
+count = 1
+literal = 'v3 = *(int4 *)Register00000074;'
+
+[[match]]
+name = 'spphistack hexagon #2: only the off pass names the stack pointer storage'
+count = 6
+literal = 'Register000'
+
+[[match]]
+name = 'spphistack hexagon #3: on, the walk starts at a stack reference'
+count = 1
+literal = 'v3 = (int4 *)(unsigned int)&Stack00000000;'

@@ -155,7 +155,11 @@ fn load_cases(text: &str, root: &Path) -> Result<Vec<Case>, String> {
                     "{test}: a `loader` row picks its language; drop `language`"
                 ));
             }
-            let langs = if loaded { vec!["auto".to_owned()] } else { langs };
+            let langs = if loaded {
+                vec!["auto".to_owned()]
+            } else {
+                langs
+            };
             if langs.is_empty() {
                 return Err(format!(
                     "{test}: no `language` on the function or its family"
@@ -292,6 +296,13 @@ fn the_manifest_rejects_unknown_keys() {
                   [[family.function]]\ntest = \"t\"\naddress = \"main\"\n";
     let cases = load_cases(loaded, &root).unwrap();
     assert!(cases[0].loaded && cases[0].language == "auto");
-    let typed = loaded.replace("loader = \"auto\"\n", "loader = \"auto\"\nlanguage = \"a\"\n");
-    assert!(load_cases(&typed, &root).unwrap_err().contains("drop `language`"));
+    let typed = loaded.replace(
+        "loader = \"auto\"\n",
+        "loader = \"auto\"\nlanguage = \"a\"\n",
+    );
+    assert!(
+        load_cases(&typed, &root)
+            .unwrap_err()
+            .contains("drop `language`")
+    );
 }

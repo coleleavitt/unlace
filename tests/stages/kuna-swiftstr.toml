@@ -1,0 +1,76 @@
+# Swift string literals (`option swiftstr off|auto|always`).
+#
+# Issue: a Swift.String literal is two constant words, so a getter that
+# returns "shape" reads `0xe500000000000000` and `0x6570616873`, and a
+# class initializer that stores "animal" into a field stores
+# `0xe600000000000000` beside `0x6c616d696e61`.
+#
+# Stage / sub-stage: P5 const-pointer, `RuleSwiftString`
+# (`unlace-decomp/src/p5_types/kuna_swiftstr.rs`), beside `fatstr`.
+#
+# P0 assertion: `option swiftstr off|auto|always` (default auto: act on a
+# Swift image).
+#
+# Both passes load the real fixture `swift_types_elf` (x86-64 ELF, swiftc
+# 6.3, stripped) with `swiftmetadata on` for the names. Pass 1 (`option
+# swiftstr off`) shows the words; pass 2 (the default) the literals: the
+# object word of the small string is `"shape"` where the two words meet in
+# the return register pair, and `"animal"` where the initializer stores it.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_types_elf',
+    'option swiftmetadata on',
+    'option swiftstr off',
+    'read symbols',
+    'load addr 0x2ce0',
+    'decompile',
+    'print C',
+    'load addr 0x3940',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_types_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x2ce0',
+    'decompile',
+    'print C',
+    'load addr 0x3940',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "swiftstr off: the small string's object word is a constant (on: it is the text)"
+count = 1
+literal = '= 0xe500000000000000;'
+
+[[match]]
+name = "swiftstr off: the stored string's object word is a constant"
+count = 1
+literal = '= 0xe600000000000000;'
+
+[[match]]
+name = 'swiftstr on: the returned small string is its text'
+count = 1
+literal = '"shape"'
+
+[[match]]
+name = 'swiftstr on: the stored small string is its text'
+count = 1
+literal = '"animal"'

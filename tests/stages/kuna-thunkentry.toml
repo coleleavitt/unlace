@@ -1,0 +1,72 @@
+# kuna issue testcase: the target of a jump thunk is a function entry.
+#
+# Issue:      kuna GH-992 - functions behind `jmp rel32` thunks are never
+#             function starts (MSVC /INCREMENTAL).  The Listing walk makes a
+#             function only at a CALL target, so a routine reached only
+#             through a `jmp` thunk was attributed to the thunk.
+# Stage:      P1 code/data partition - the Listing walk's committed function
+#             set (`listing/kuna_thunkentry.rs`, folded into `fast_funcdisc`
+#             and `funcdisc_recursive`).
+#
+# The XML wrapper only provides the harness architecture.  Every pass clears
+# it and loads `thunk_table_pe_i386.exe` (source `thunk_table_pe_i386.asm`
+# beside it): three 5-byte `jmp rel32` thunks at 0x401000 / 0x401005 /
+# 0x40100a, then sum at 0x401010 (push ebp frame), leaf at 0x401030 (no
+# frame) and start at 0x401040.  The entry point and every call go to a
+# thunk; nothing calls a body directly.
+#
+# Before the rule the `mode fast` inventory was the three thunks and no
+# body, and `mode aggressive` found sum and start only through the prologue
+# scan, missing leaf, which has no prologue.  Pass 1 (`mode fast`) lists
+# sum, leaf and start, and leaf decompiles to its own body.  Pass 2 (`mode
+# aggressive`) finds leaf too.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/thunk_table_pe_i386.exe',
+    'mode fast',
+    'read symbols',
+    'functions',
+    'load function sub_401030',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/thunk_table_pe_i386.exe',
+    'mode aggressive',
+    'read symbols',
+    'functions',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-THUNKENTRY #1: every thunk is a function in both passes'
+count = 6
+regex = '0x40100[05a] sub_40100[05a]'
+
+[[match]]
+name = 'KUNA-THUNKENTRY #2: sum and start are functions in both passes'
+count = 4
+regex = '0x4010[14]0 sub_4010[14]0'
+
+[[match]]
+name = 'KUNA-THUNKENTRY #3: leaf is a function in fast and aggressive mode'
+count = 2
+literal = '0x401030 sub_401030'
+
+[[match]]
+name = 'KUNA-THUNKENTRY #4: leaf decompiles to its own body'
+count = 1
+literal = 'return a0 + 7;'

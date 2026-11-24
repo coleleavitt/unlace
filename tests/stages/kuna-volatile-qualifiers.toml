@@ -1,0 +1,66 @@
+# Authored ARM: ldr r1,[r0]; ldr r0,[r0]; add r0,r1,r0; bx lr.
+
+[image]
+arch = 'ARM:LE:32:v5t'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'ReadTwice' },
+    { space = 'ram', offset = '0x1010', name = 'ReadPointer' },
+    { space = 'ram', offset = '0x1020', name = 'UnusedReads' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '001090e5000090e5000081e01eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1010'
+hex = '001090e5000090e5000081e01eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1020'
+hex = '001090e5001090e50000a0e31eff2fe1'
+
+[script]
+commands = [
+    'set context TMode 0 [ram,0x1000] [ram,0x1030]',
+    'parse line extern uint4 ReadTwice(volatile uint4 *control);',
+    'load function ReadTwice',
+    'decompile',
+    'print C',
+    'parse line extern uint4 ReadPointer(uint4 * volatile control);',
+    'load function ReadPointer',
+    'decompile',
+    'print C',
+    'parse line extern uint4 UnusedReads(volatile uint4 *control);',
+    'load function UnusedReads',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'volatile pointee survives'
+count = 1
+literal = 'ReadTwice(volatile uint4 *control)'
+
+[[match]]
+name = 'volatile pointer stays on pointer'
+count = 1
+literal = 'ReadPointer(uint4 * volatile control)'
+
+[[match]]
+name = 'volatile reads remain separate'
+count = 2
+literal = 'return *control + *control;'
+
+[[match]]
+name = 'unused volatile pointee survives'
+count = 1
+literal = 'UnusedReads(volatile uint4 *control)'
+
+[[match]]
+name = 'unused volatile reads remain'
+count = 2
+literal = '= *control;'

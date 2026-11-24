@@ -1,0 +1,49 @@
+# Type tree order. The factory keeps its types in a tree whose comparison
+# ordered two distinct sub-types (what a pointer points at, a field's type)
+# by heap address, so the order `print C types` and a project header declare
+# them in changed with the allocator and with what was allocated before.
+# Distinct types now order by id, then by their own dependency order, and
+# only then by address: the Rust enums of the dwarfvariants fixture come
+# out in one order everywhere.
+#
+# Before (glibc malloc): fx::Multi ahead of fx::Three, Option<u32> ahead of
+# Result<u32, u32>; under another allocator the order below.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarfvariants_x86_64',
+    'read symbols',
+    'print C types',
+]
+
+[[match]]
+name = 'typeorder #1: fx::Three is declared ahead of fx::Multi'
+count = 1
+regex = [
+    '^typedef struct fx__Three fx__Three;',
+    '^typedef struct fx__Multi fx__Multi;',
+]
+
+[[match]]
+name = 'typeorder #2: Result is declared ahead of Option'
+count = 1
+regex = [
+    '^typedef struct core__result__Result_u32__u32_ core__result__Result_u32__u32_;',
+    '^typedef struct core__option__Option_u32_ core__option__Option_u32_;',
+]
+
+[[match]]
+name = 'typeorder #3: fx::Multi is defined after fx::Three'
+count = 1
+regex = [
+    '^struct fx__Three \{',
+    '^    fx__Three__Discriminant tag;',
+    '^    fx__Three__payload payload;',
+    '^\};',
+    '^$',
+    '^/\* renamed from "fx::Multi::Discriminant" \*/',
+]

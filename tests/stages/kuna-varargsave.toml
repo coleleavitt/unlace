@@ -1,0 +1,81 @@
+# kuna varargsave: a System V variadic function's register save area.
+#
+# Source (gcc -O2):
+#
+#     void log_msg(const char *fmt, ...) {
+#       va_list ap; va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap);
+#     }
+#
+#     401174  sub  rsp,0xd8
+#     40117b  mov  [rsp+0x28],rsi ... mov [rsp+0x48],r9   ; save+8*i
+#     401194  test al,al
+#     401196  je   4011cf
+#     401198  movaps [rsp+0x50],xmm0 ... [rsp+0xc0],xmm7  ; save+48+16*j
+#     4011cf  ...va_start, then __vfprintf_chk(stderr,1,fmt,&ap)
+#
+# Every save-area store reads an argument register, so input recovery gave
+# log_msg fourteen parameters (all six integer and eight vector argument
+# registers), the body opened with their copies, and `if (al)` tested an
+# undefined byte.
+#
+# Stage: P4 prototype (ActionStart, before heritage), option varargsave
+# off|on.  Pass 1 (off, the default) pins the bug, pass 2 (on) the fix.
+#
+# `vastart` (default on) also folds the va_start prologue, so this test runs
+# with it off; varargsave is its default-off fallback.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401170', name = 'log_msg' },
+    { space = 'ram', offset = '0x401040', name = '__vfprintf_chk' },
+    { space = 'ram', offset = '0x404020', name = 'stderr' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401170'
+hex = 'f30f1efa4881ecd80000004889742428488954243048894c24384c894424404c894c244884c074370f294424500f294c24600f295424700f299c24800000000f29a424900000000f29ac24a00000000f29b424b00000000f29bc24c0000000488d8424e00000004889fa488b3d3f2e0000488d4c24084889442410be01000000488d442420c744240808000000c744240c300000004889442418e831feffff4881c4d8000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401040'
+hex = 'c3'
+
+[script]
+commands = [
+    'option vastart off',
+    'option varargsave off',
+    'lo fu log_msg',
+    'decompile',
+    'print C',
+    'option varargsave on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'VARARGSAVE #1: off, every argument register is a parameter'
+count = 1
+regex = 'log_msg\([^)]*a13\)'
+
+[[match]]
+name = 'VARARGSAVE #2: on, one named parameter and the ellipsis'
+count = 1
+regex = 'void log_msg\(\w[\w ]*\*?\w+,\.\.\.\)'
+
+[[match]]
+name = 'VARARGSAVE #3: on, no test of the vector count'
+count = 1
+literal = 'if ('
+
+[[match]]
+name = 'VARARGSAVE #4: on, the va_list set-up is va_start on a local'
+count = 1
+regex = 'va_start\(&?\w+\);'
+
+[[match]]
+name = 'VARARGSAVE #5: both passes, the callee receives the va_list'
+count = 2
+regex = '__vfprintf_chk\(\w+,1,\w+,&?\w+\);'

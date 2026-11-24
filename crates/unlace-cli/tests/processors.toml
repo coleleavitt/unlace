@@ -114,6 +114,9 @@ x86_64_avx512_disp8 = """
 x86_64_avx512_round = """
 62f17c7858c1c3
 """
+x86_64_movdr_mod = """
+0f2327c3
+"""
 
 [[family]]
 name = "blackfin"
@@ -2224,3 +2227,15 @@ expect = [
     "*(short *)(v2 + 3) = *(short *)(v2 + 3) + 1;",
     "*(unsigned short *)(v2 + 5) = v1;",
 ]
+
+# MOV DRn, r64 ignores ModRM.mod (Intel SDM): 0f 23 27 is mov dr4, rdi although mod=0.
+[[family]]
+name = "x86_64_movdr_mod"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_movdr_mod"
+
+[[family.function]]
+test = "x86_mov_dr_ignores_mod"
+address = "0x0"
+expect = ["return;"]

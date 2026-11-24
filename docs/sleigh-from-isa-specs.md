@@ -120,7 +120,7 @@ slot and compares `rd` and that doubleword after the word runs. On RV64 all 74
 sampled Zabha/Zacas words agree with QEMU over 64 vectors each.
 
 `riscv.fd.sinc` comes from `extensions/FD/fext_insts.sail,extensions/FD/dext_insts.sail` with
-`--exts rv_f,rv64_f,rv_d,rv64_d --opaque-fallback --unbox truncate --dyn-rounding rne
+`--exts rv_f,rv64_f,rv_d,rv64_d --opaque-fallback --unbox exact --dyn-rounding rne
 --field-table LOAD_FP.imm=immI,STORE_FP.imm=immS --only '^(?!f[ls]h\b)'
 --drop-display '^fcvt\.d\.(s|w|wu)$=rne'
 --idiom fmv.s=copy,fneg.s=neg,fabs.s=abs,fmv.d=copy,fneg.d=neg,fabs.d=abs`. The generator
@@ -128,9 +128,10 @@ lowers the softfloat wrappers to p-code float operations where the rounding mode
 exact. `--field-table` lets an existing subtable (`immI`, `immS`) decode, display and export a
 sign-extended immediate, including one split across the encoding. `--drop-display` follows
 LLVM in leaving out `rne` on the exact conversions. `--idiom` lifts the `rs2 = rs1` aliases as a
-copy, `f-` or `abs()`. `--unbox truncate` reads single-precision sources as their low bits;
-`exact` would add a NaN-unbox check to every read (0 words wrong against QEMU instead of 13 on
-unboxed inputs, but about 13% more decompiled lines on a musl subset).
+copy, `f-` or `abs()`. `--unbox exact` NaN-unboxes single-precision sources. The decompiler folds the check where
+the value is known boxed (`boxedcompare`, and `fpargboxed` for argument registers). On a musl
+subset that leaves 1.5% more lines than reading the low bits, all of it unboxing of call
+results, with 0 words wrong against QEMU instead of 13.
 
 To compare another variant, copy `specs/Ghidra/Processors/RISCV/data/languages` into
 `<dir>/Ghidra/Processors/RISCV/data/languages`, replace `riscv.zb.sinc`, compile with

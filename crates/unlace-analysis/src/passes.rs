@@ -991,6 +991,7 @@ pub fn run_listing_consumers_replaying_observed(
     // names, where the `gopclntab` pass ran and commits them: the pass set
     // follows the load-time verdict, not a later `sourcelang` force.
     // See `pclntab::function_entries`.
+    let mut go_entries: Vec<u64> = Vec::new();
     if arch
         .kuna_options
         .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
@@ -1001,8 +1002,8 @@ pub fn run_listing_consumers_replaying_observed(
             .0
         && arch.source_lang_detected == unlace_decomp::kuna_sourcelang::SourceLang::Go
     {
-        let go = crate::pclntab::function_entries(&file);
-        seeds.retain(|seed| go.binary_search(seed).is_err());
+        go_entries = crate::pclntab::function_entries(&file);
+        seeds.retain(|seed| go_entries.binary_search(seed).is_err());
     }
     let bracket_evidence = std::cell::OnceCell::new();
     let bracket =
@@ -1674,6 +1675,7 @@ pub fn run_listing_consumers_replaying_observed(
         }
     }
     let mut fast_pointer_seeds = Vec::new();
+    let mut fast_walked: Vec<u64> = Vec::new();
     if arch
         .kuna_options
         .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
@@ -1685,6 +1687,40 @@ pub fn run_listing_consumers_replaying_observed(
                 &listing,
                 translate,
                 std::rc::Rc::clone(code_space),
+            );
+        }
+        // (kuna) An accepted pointer-table target is a function, and so is an
+        // entry a load-time pass committed (a Delphi VMT method), so their
+        // direct calls are functions too: the walk resumes from them. A Delphi
+        // image's memory-manager record (`GetMem`/`FreeMem`/`ReallocMem`,
+        // reached only through that writable record) otherwise lists the
+        // three without any of the allocator they call. The functions the
+        // walk had before are kept, so the resume only adds entries.
+        // A Go image's pclntab functions stay out of the roots, as above.
+        let execs = crate::entry::executable_sections(&file);
+        let before = seeds.len();
+        seeds.extend(
+            fast_pointer_seeds.iter().copied().chain(
+                committed_entries
+                    .iter()
+                    .copied()
+                    .filter(|&vma| crate::entry::in_executable_section(&execs, vma))
+                    .filter(|vma| go_entries.binary_search(vma).is_err()),
+            ),
+        );
+        seeds.sort_unstable();
+        seeds.dedup();
+        if seeds.len() != before {
+            fast_walked = listing.functions().map(|(&vma, _)| vma).collect();
+            listing = listing.resume(
+                &file,
+                arch,
+                translate,
+                &seeds,
+                &funcsym_seeds,
+                &seed_names,
+                detail,
+                plan,
             );
         }
     }
@@ -1981,6 +2017,7 @@ pub fn run_listing_consumers_replaying_observed(
         fast_out.entries = listing
             .functions()
             .map(|(&vma, _)| vma)
+            .chain(fast_walked)
             .chain(fast_pointer_seeds)
             .chain(thunk_targets)
             .collect();

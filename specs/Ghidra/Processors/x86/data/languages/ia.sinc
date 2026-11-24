@@ -4243,8 +4243,8 @@ define pcodeop TaskRegister;
 @endif
 }
 @ifdef IA64
-:MOV debugreg, Rmr64    is $(LONGMODE_ON) & vexMode=0 & bit64=1 & byte=0xf; byte=0x23; Rmr64 & debugreg & mod=3      { debugreg = Rmr64; }
-:MOV debugreg_x, Rmr64  is $(LONGMODE_ON) & vexMode=0 & bit64=1 & rexRprefix=1 & byte=0xf; byte=0x23; Rmr64 & debugreg_x & mod=3     { debugreg_x = Rmr64; }
+:MOV debugreg, Rmr64    is $(LONGMODE_ON) & vexMode=0 & bit64=1 & byte=0xf; byte=0x23; Rmr64 & debugreg      { debugreg = Rmr64; }
+:MOV debugreg_x, Rmr64  is $(LONGMODE_ON) & vexMode=0 & bit64=1 & rexRprefix=1 & byte=0xf; byte=0x23; Rmr64 & debugreg_x     { debugreg_x = Rmr64; }
 @endif
 
 @ifndef IA64

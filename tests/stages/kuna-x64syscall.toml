@@ -1,0 +1,153 @@
+# RE-friction round 12, need `x86-64-syscall-wrapper` (challenge
+# 652e6f896e7e520ff1c3db3c): a three-argument x86-64 Linux syscall wrapper
+# decompiles to
+#
+#     long kernel_call(long number,long address,long length)
+#     { syscall(); return number; }
+#
+# even with an explicit prototype and every argument-recovery option on.  The
+# return value is a false statement about the program: it is the syscall
+# NUMBER the caller passed in, not the syscall's result.
+#
+# Root cause (P2, flow classification).  ia.sinc:4836 lowers the instruction as
+# `RCX = inst_next; R11 = rflags; syscall();` - a CALLOTHER with NO inputs and
+# NO output - and that one fact produces both halves.  No inputs: the register
+# writes that set the call up have no reader, the dead-code fixpoint collects
+# them, and the op prints with empty parens.  No output: nothing redefines RAX
+# across the instruction, so the RAX stored afterwards is still the one loaded
+# from `number`, and copy propagation is right to return it.
+#
+# `linuxsyscall` does not cover this.  There is no CALLIND to retarget (a bare
+# CALLOTHER, not the `int 0x80` `intloc = swi(0x80); call [intloc]` pair), the
+# number is a runtime parameter rather than a constant it could look up, and it
+# is gated to x86-32.
+#
+# Stage / sub-stage: P2 "flow-classification".  The P0 assertion
+# `option x64syscall off|on|abi` decides what register effects the user-op
+# carries. The empty-call expectation also counts the new pointer witness.
+#
+# Four functions: register recovery controls and a memory-order witness:
+#
+#     kernel_call   the witness, all setup in the syscall's own block
+#     plain_add     the control, no SYSCALL at all
+#     split_setup   RDI is set two blocks back, RAX in the immediate preds
+#     pointer_before saves *p before read() replaces it, then returns old * 5 + *p
+#
+# Pass 1 (`off`) reproduces the bug.  Pass 2 (`on`) takes only the registers
+# the block provably sets up, so kernel_call is whole and split_setup keeps RAX
+# alone.  Pass 3 (`abi`) takes all six unconditionally, which recovers
+# split_setup's RDI at the price of three registers nothing writes.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'kernel_call' },
+    { space = 'ram', offset = '0x100030', name = 'plain_add' },
+    { space = 'ram', offset = '0x100060', name = 'split_setup' },
+    { space = 'ram', offset = '0x100100', name = 'pointer_before' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+hex = '''
+554889e548897de8488975e0488955d8488b45e8488b55e0488b75d84889d70f
+05488945f8488b45f85dc30000000000554889e548897de8488975e0488b45e8
+488b55e04801d0488945f8488b45f85dc3000000000000000000000000000000
+554889e54889f74885d2750948c7c03c000000eb0748c7c0e70000000f055dc3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+hex = 'f30f1efa4989f8448b0f31c0bf110000004c89c6ba040000000f05438d0489410300c3'
+
+[script]
+commands = [
+    'option partialaccess off',
+    'option x64syscall off',
+    'lo fu kernel_call',
+    'decompile',
+    'print C',
+    'lo fu plain_add',
+    'decompile',
+    'print C',
+    'lo fu split_setup',
+    'decompile',
+    'print C',
+    'lo fu pointer_before',
+    'decompile',
+    'print C',
+    'option x64syscall on',
+    'lo fu kernel_call',
+    'decompile',
+    'print C',
+    'lo fu plain_add',
+    'decompile',
+    'print C',
+    'lo fu split_setup',
+    'decompile',
+    'print C',
+    'lo fu pointer_before',
+    'decompile',
+    'print C',
+    'option x64syscall abi',
+    'lo fu kernel_call',
+    'decompile',
+    'print C',
+    'lo fu plain_add',
+    'decompile',
+    'print C',
+    'lo fu split_setup',
+    'decompile',
+    'print C',
+    'lo fu pointer_before',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'x64syscall #1: with the option off the user-op reads nothing, so it prints with empty parens in both syscall-bearing functions -- the bug'
+count = 3
+literal = 'syscall();'
+
+[[match]]
+name = 'x64syscall #2: and nothing redefines RAX, so kernel_call returns the RAX:RDX pair it was handed instead of a result'
+count = 1
+regex = 'return v[0-9]+\._0_16_;'
+
+[[match]]
+name = "x64syscall #3: on, kernel_call recovers the number and all three arguments, and returns the syscall's own result"
+count = 1
+regex = 'return syscall\(a[0-9]+,a[0-9]+,a[0-9]+,a[0-9]+\);'
+
+[[match]]
+name = 'x64syscall #4: on, split_setup keeps RAX alone -- its RDI is set two blocks back, which the in-block walk does not claim'
+count = 1
+regex = 'return syscall\(v[0-9]+\);'
+
+[[match]]
+name = "x64syscall #5: abi takes all six argument registers, recovering split_setup's RDI at the price of the ones nothing writes"
+count = 1
+regex = 'return syscall\(v[0-9]+,a[0-9]+,a[0-9]+,a[0-9]+,v[0-9]+,a[0-9]+,a[0-9]+\);'
+
+[[match]]
+name = 'x64syscall #6: the no-SYSCALL control is byte-identical in all three passes'
+count = 3
+regex = 'return a[0-9]+ \+ a[0-9]+;'
+
+[[match]]
+name = 'x64syscall #7: on and abi save the pointer value before the system call'
+count = 2
+regex = 'v[0-9]+ = \*a[0-9]+;'
+
+[[match]]
+name = 'x64syscall #8: on and abi combine the saved value with the reloaded buffer'
+count = 2
+regex = 'return v[0-9]+ \* 5 \+ \*a[0-9]+;'
+
+[[match]]
+name = 'x64syscall #9: off keeps the old pointer value motion'
+count = 1
+regex = 'return \*a[0-9]+ \* 5 \+ \*a[0-9]+;'

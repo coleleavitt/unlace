@@ -211,5 +211,19 @@ to and from a GPR printed a 16-bit register (LLVM: r32, or r64 with EVEX.W).
 
 Checked with `tools/x86_avx512_sweep.py --forms reg`: of the 806 register-form records that
 differed from `llvm-objdump`, 798 match and none regressed (the 8 left are the `vfpclassph/sh` class
-names); the memory-form sweep, every AVX10.2 record in 64- and 32-bit mode, libcrypto.so.3 and
+names, now printed as the immediate, see below); the memory-form sweep, every AVX10.2 record in 64- and 32-bit mode, libcrypto.so.3 and
 32-bit libc.so.6 `.text`, and `decompile-all /usr/bin/ls` are unchanged.
+
+## Remaining difffuzz decodes and VFPCLASSPH/SH
+
+- `MOV DRn, r64` (`0f 23`) ignores ModRM.mod as the SDM states (`0f 23 27` is `mov dr4, rdi`); the
+  `0f 21` and control-register moves already did. Prefixes before it were already ignored.
+- `66 0f 52/53` (`rsqrtps`/`rcpps` with a 66 prefix, which LLVM and Capstone accept) and SSE4a
+  `extrq xmm, imm, imm` with ModRM.reg != 0 (`66 0f 78 /1..7`) stay bad instructions on purpose: the
+  SDM and AMD manuals leave them undefined and the difffuzz reference (Unicorn/QEMU) raises #UD for
+  both, so decoding them would invent semantics. They are the two `decode` findings difffuzz still
+  reports on x86-64 (seed 7, 4000 encodings).
+- `vfpclassph`/`vfpclasssh` printed the class mask as names (`{QNAN,PosZero}`); they now print the
+  immediate like `vfpclassps`/`vfpclasspd` and LLVM, so the whole spec agrees and both AVX-512
+  sweeps (`tools/x86_avx512_sweep.py`, memory and register forms) report no differences. The lifted
+  user operation takes the same constant either way.

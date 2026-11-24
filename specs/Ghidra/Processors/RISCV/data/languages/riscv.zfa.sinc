@@ -753,7 +753,8 @@ define pcodeop froundnx_s;
 
 :fround.h frd,frs1,"rne" is frd & frs1 & op0006=0x53 & funct3=0x0 & op2031=0x444
 {
-	frd = fround_h(frs1);
+	local sg1:2 = fround_h(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fround.h frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x444
@@ -827,12 +828,14 @@ define pcodeop froundnx_s;
 
 :fround.h frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x444
 {
-	frd = fround_h(frs1);
+	local sg1:2 = fround_h(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :froundnx.h frd,frs1,"rne" is frd & frs1 & op0006=0x53 & funct3=0x0 & op2031=0x445
 {
-	frd = froundnx_h(frs1);
+	local sg1:2 = froundnx_h(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :froundnx.h frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x445
@@ -906,12 +909,14 @@ define pcodeop froundnx_s;
 
 :froundnx.h frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x445
 {
-	frd = froundnx_h(frs1);
+	local sg1:2 = froundnx_h(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fround.s frd,frs1,"rne" is frd & frs1 & op0006=0x53 & funct3=0x0 & op2031=0x404
 {
-	frd = fround_s(frs1);
+	local sg1:4 = fround_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fround.s frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x404
@@ -985,12 +990,14 @@ define pcodeop froundnx_s;
 
 :fround.s frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x404
 {
-	frd = fround_s(frs1);
+	local sg1:4 = fround_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :froundnx.s frd,frs1,"rne" is frd & frs1 & op0006=0x53 & funct3=0x0 & op2031=0x405
 {
-	frd = froundnx_s(frs1);
+	local sg1:4 = froundnx_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :froundnx.s frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x405
@@ -1064,7 +1071,8 @@ define pcodeop froundnx_s;
 
 :froundnx.s frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x405
 {
-	frd = froundnx_s(frs1);
+	local sg1:4 = froundnx_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fround.d frd,frs1,"rne" is frd & frs1 & op0006=0x53 & funct3=0x0 & op2031=0x424
@@ -2014,7 +2022,8 @@ define pcodeop froundnx_s;
 
 :fround.h frd,frs1,"rne" is frd & frs1 & op0006=0x53 & funct3=0x0 & op2031=0x444
 {
-	frd = fround_h(frs1);
+	local sg1:2 = fround_h(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fround.h frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x444
@@ -2088,12 +2097,14 @@ define pcodeop froundnx_s;
 
 :fround.h frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x444
 {
-	frd = fround_h(frs1);
+	local sg1:2 = fround_h(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :froundnx.h frd,frs1,"rne" is frd & frs1 & op0006=0x53 & funct3=0x0 & op2031=0x445
 {
-	frd = froundnx_h(frs1);
+	local sg1:2 = froundnx_h(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :froundnx.h frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x445
@@ -2167,12 +2178,14 @@ define pcodeop froundnx_s;
 
 :froundnx.h frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x445
 {
-	frd = froundnx_h(frs1);
+	local sg1:2 = froundnx_h(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fround.s frd,frs1,"rne" is frd & frs1 & op0006=0x53 & funct3=0x0 & op2031=0x404
 {
-	frd = fround_s(frs1);
+	local sg1:4 = fround_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fround.s frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x404
@@ -2246,12 +2259,14 @@ define pcodeop froundnx_s;
 
 :fround.s frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x404
 {
-	frd = fround_s(frs1);
+	local sg1:4 = fround_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :froundnx.s frd,frs1,"rne" is frd & frs1 & op0006=0x53 & funct3=0x0 & op2031=0x405
 {
-	frd = froundnx_s(frs1);
+	local sg1:4 = froundnx_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :froundnx.s frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x405
@@ -2325,7 +2340,8 @@ define pcodeop froundnx_s;
 
 :froundnx.s frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x405
 {
-	frd = froundnx_s(frs1);
+	local sg1:4 = froundnx_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fround.d frd,frs1,"rne" is frd & frs1 & op0006=0x53 & funct3=0x0 & op2031=0x424

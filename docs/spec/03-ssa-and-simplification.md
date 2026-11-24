@@ -3577,6 +3577,21 @@ outcome reaches. A `CALLOTHER` is inserted after the merge block's
 no-overflow outcome, a threshold that is not `(2^W - 1) / c`, or a guard over
 other factors is left alone.
 
+**minmax** (unlace) —
+`crates/unlace-bandb-base/src/p3_dataflow/minmax.rs (RuleMinMax)`, group `analysis`
+(`option minmax`, default off). A compiler lowers `a < b ? a : b` without a branch
+to the sign of `d = a - b`: `s = d >> (W - 1)` is arithmetic, all ones when `d` is
+negative, so `b + (d & s)` is `min(a, b)` and `a - (d & s)` is `max(a, b)`. The rule
+fires on an `INT_ADD` with one input `d & s` (either order) whose other input is the
+subtrahend `b` of `d = a - b`, and on an `INT_SUB` whose second input is `d & s` and
+whose first input is the minuend `a`. `s` must be `INT_SRIGHT(d, W - 1)` of the same
+`d` with a constant amount. The op becomes `CALLOTHER(BUILTIN_MIN or BUILTIN_MAX, a, b)`
+in place, so every reader of its output keeps its value; `d` and `s` are left to
+dead-code removal. The builtins are signed (`BUILTIN_MIN` / `BUILTIN_MAX`, printed as
+`min` / `max`): the sign of `d` decides the choice, so the result is the signed min or
+max only when `a - b` does not overflow, which is why the option defaults off. Not yet
+exercised by a stage test.
+
 **bitfieldarith** (unlace) —
 `crates/unlace-bandb-base/src/p3_dataflow/bitfieldarith.rs (RuleBitFieldArith)`,
 group `analysis` (`option bitfieldarith`, default off). Main recovers a bitfield

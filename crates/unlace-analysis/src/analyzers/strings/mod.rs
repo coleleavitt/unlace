@@ -321,10 +321,7 @@ impl AnalysisPass for StringLiteralPass {
         let mut strings = scan_strings(
             ctx.file,
             self.min_len,
-            ctx.arch
-                .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Codestrings>()
-                .0,
+            unlace_decomp::kuna_loadoptions::codestrings_enabled(),
         );
         strings.retain(|fact| !slots.holds_address(fact.addr));
         AnalysisOutput {

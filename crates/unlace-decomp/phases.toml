@@ -8463,3 +8463,22 @@ inspiration = "unlace issue 10 (DecBench O2-noinline iproute2 invalid_name: five
 change_kind = "structure-recovery"
 tier = "transform"
 symptoms = "nested if per call result where the source has one if (a && b && c)|an x86 test of a call result is not folded into the && chain with its neighbours|condfold on and --mode aggressive do not fold a chain of call-result tests"
+
+[[settable]]
+option = "orchainlive"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P8"
+subphase = "goto-quality"
+strength = "HARD"
+rewind = "P8"
+issue = "unlace-10-andorchain"
+summary = "Narrow the short-circuit protection that stops `returndup` from splitting a shared constant return (`kuna_orchain.rs`, DIV-69): an operand block that computes a value read outside it (a call's result kept in a variable, `v1 = lseek64(fd,0,1)`) does not count as a fold the split would destroy. Such an operand is a statement the source wrote before its own guard (`offset = LSEEK(...); if (offset == -1) return -1;`), not part of a boolean expression, so the shared return is split and each test prints as its own early return instead of one chain with a comma operand (`if ((A || B) && (v1 = lseek64(...), v1 != -1))`). Operands that only test values keep the protection."
+use_when = "Turn on when guard clauses that return the same constant print as one `&&`/`||` chain whose operand assigns a call result used later. Leave off to keep the DIV-69 protection for every fold."
+example = "option orchainlive on"
+source_decompiler = "kuna"
+inspiration = "unlace issue 10, calls folded into conditions: DecBench O2-noinline zlib gzoffset64 (kuna 2, IDA 0) and 938 functions where kuna prints more comma operands in conditions than IDA"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = "an if condition assigns a call result with a comma operand where the source wrote a separate statement and guard|guard clauses returning the same constant print as one && chain"

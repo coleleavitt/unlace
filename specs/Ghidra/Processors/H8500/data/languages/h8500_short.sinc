@@ -1,0 +1,141 @@
+# Short format, branches and control instructions (MAME h8500dasm.cpp disassemble()/dasm_misc()).
+
+define token rltok (8)
+  rl0 = (0,0) rl1 = (1,1) rl2 = (2,2) rl3 = (3,3) rl4 = (4,4) rl5 = (5,5) rl6 = (6,6) rl7 = (7,7)
+;
+
+@if defined(MAXMODE)
+macro pageof(res, off) { res = (inst_start & 0xff0000) | zext(off); }
+@else
+macro pageof(res, off) { res = off; }
+@endif
+
+macro popret() { local t:2; pop16(t); local a:$(ASZ); pageof(a, t); return [a]; }
+
+rel8: reloc is simm8 [ reloc = ((inst_next + simm8) & 0xffff) | (inst_next & 0xff0000); ] { export *:$(ASZ) reloc; }
+rel16: reloc is simm16 [ reloc = ((inst_next + simm16) & 0xffff) | (inst_next & 0xff0000); ] { export *:$(ASZ) reloc; }
+abs16: reloc is imm16 [ reloc = (inst_start & 0xff0000) | imm16; ] { export *:$(ASZ) reloc; }
+
+cc: "RA" is cond=0x0 { export 1:1; }
+cc: "RN" is cond=0x1 { export 0:1; }
+cc: "HI" is cond=0x2 { local t:1 = !$(C) && !$(Z); export t; }
+cc: "LS" is cond=0x3 { local t:1 = $(C) || $(Z); export t; }
+cc: "CC" is cond=0x4 { local t:1 = !$(C); export t; }
+cc: "CS" is cond=0x5 { export $(C); }
+cc: "NE" is cond=0x6 { local t:1 = !$(Z); export t; }
+cc: "EQ" is cond=0x7 { export $(Z); }
+cc: "VC" is cond=0x8 { local t:1 = !$(V); export t; }
+cc: "VS" is cond=0x9 { export $(V); }
+cc: "PL" is cond=0xa { local t:1 = !$(N); export t; }
+cc: "MI" is cond=0xb { export $(N); }
+cc: "GE" is cond=0xc { local t:1 = $(N) == $(V); export t; }
+cc: "LT" is cond=0xd { local t:1 = $(N) != $(V); export t; }
+cc: "GT" is cond=0xe { local t:1 = !$(Z) && ($(N) == $(V)); export t; }
+cc: "LE" is cond=0xf { local t:1 = $(Z) || ($(N) != $(V)); export t; }
+
+:BRA rel8 is eamode=2 & cond=0; rel8 { goto rel8; }
+:BRA rel16 is eamode=3 & cond=0; rel16 { goto rel16; }
+:B^cc rel8 is eamode=2 & cc; rel8 { if (cc) goto rel8; }
+:B^cc rel16 is eamode=3 & cc; rel16 { if (cc) goto rel16; }
+
+:CMP.B "#"^imm8, srB is eamode=4 & eaw=0 & srB; imm8 { local s:1 = imm8; subflags(srB, s); local r:1 = srB - s; setNZ(r); }
+:CMP.W "#"^imm16, srW is eamode=4 & eaw=1 & srW; imm16 { local s:2 = imm16; subflags(srW, s); local r:2 = srW - s; setNZ(r); }
+:MOV.B "#"^imm8, srB is eamode=5 & eaw=0 & srB; imm8 { srB = imm8; setNZ(srB); $(V) = 0; }
+:MOV.W "#"^imm16, srW is eamode=5 & eaw=1 & srW; imm16 { srW = imm16; setNZ(srW); $(V) = 0; }
+
+aa8B: "@"^imm8^":8" is imm8 { local o:2 = (zext(BR) << 8) | imm8; local a:$(ASZ); mkaddr(a, 0:1, o); export *:1 a; }
+aa8W: "@"^imm8^":8" is imm8 { local o:2 = (zext(BR) << 8) | imm8; local a:$(ASZ); mkaddr(a, 0:1, o); export *:2 a; }
+fpB: "@("^simm8^",R6)" is simm8 { local o:2 = R6 + simm8; local a:$(ASZ); mkaddr(a, TP, o); export *:1 a; }
+fpW: "@("^simm8^",R6)" is simm8 { local o:2 = R6 + simm8; local a:$(ASZ); mkaddr(a, TP, o); export *:2 a; }
+
+:MOV.B aa8B, srB is eamode=6 & eaw=0 & srB; aa8B { srB = aa8B; setNZ(srB); $(V) = 0; }
+:MOV.W aa8W, srW is eamode=6 & eaw=1 & srW; aa8W { srW = aa8W; setNZ(srW); $(V) = 0; }
+:MOV.B srB, aa8B is eamode=7 & eaw=0 & srB; aa8B { aa8B = srB; setNZ(srB); $(V) = 0; }
+:MOV.W srW, aa8W is eamode=7 & eaw=1 & srW; aa8W { aa8W = srW; setNZ(srW); $(V) = 0; }
+:MOV.B fpB, srB is eamode=8 & eaw=0 & srB; fpB { srB = fpB; setNZ(srB); $(V) = 0; }
+:MOV.W fpW, srW is eamode=8 & eaw=1 & srW; fpW { srW = fpW; setNZ(srW); $(V) = 0; }
+:MOV.B srB, fpB is eamode=9 & eaw=0 & srB; fpB { fpB = srB; setNZ(srB); $(V) = 0; }
+:MOV.W srW, fpW is eamode=9 & eaw=1 & srW; fpW { fpW = srW; setNZ(srW); $(V) = 0; }
+
+:NOP is op=0x00 { }
+:BSR rel8 is op=0x0e; rel8 { local ra:$(ASZ) = inst_next; push16(ra:2); call rel8; }
+:BSR rel16 is op=0x1e; rel16 { local ra:$(ASZ) = inst_next; push16(ra:2); call rel16; }
+:JMP "@"^abs16 is op=0x10; abs16 { goto abs16; }
+:JSR "@"^abs16 is op=0x18; abs16 { local ra:$(ASZ) = inst_next; push16(ra:2); call abs16; }
+
+jea1: "@"^ear is eamode=0xd & ear { export ear; }
+jea2: "@("^simm8^","^ear^")" is eamode=0xe & ear; simm8 { local o:2 = ear + simm8; export o; }
+jea3: "@("^imm16^","^ear^")" is eamode=0xf & ear; imm16 { local o:2 = ear + imm16; export o; }
+:JMP jea1 is op=0x11; g3=0 & jea1 { local a:$(ASZ); pageof(a, jea1); goto [a]; }
+:JSR jea1 is op=0x11; g3=1 & jea1 { local a:$(ASZ); pageof(a, jea1); local ra:$(ASZ) = inst_next; push16(ra:2); call [a]; }
+:JMP jea2 is op=0x11; g3=0 ... & jea2 { local a:$(ASZ); pageof(a, jea2); goto [a]; }
+:JSR jea2 is op=0x11; g3=1 ... & jea2 { local a:$(ASZ); pageof(a, jea2); local ra:$(ASZ) = inst_next; push16(ra:2); call [a]; }
+:JMP jea3 is op=0x11; g3=0 ... & jea3 { local a:$(ASZ); pageof(a, jea3); goto [a]; }
+:JSR jea3 is op=0x11; g3=1 ... & jea3 { local a:$(ASZ); pageof(a, jea3); local ra:$(ASZ) = inst_next; push16(ra:2); call [a]; }
+
+:RTS is op=0x19 { popret(); }
+:RTD "#"^imm8 is op=0x14; imm8 { local t:2; pop16(t); R7 = R7 + imm8; local a:$(ASZ); pageof(a, t); return [a]; }
+:RTD "#"^imm16 is op=0x1c; imm16 { local t:2; pop16(t); R7 = R7 + imm16; local a:$(ASZ); pageof(a, t); return [a]; }
+:RTE is op=0x0a { pop16(SR); unpackCCR(); popret(); }
+:LINK "FP", "#"^simm8 is op=0x17; simm8 { push16(R6); R6 = R7; R7 = R7 + simm8; }
+:LINK "FP", "#"^simm16 is op=0x1f; simm16 { push16(R6); R6 = R7; R7 = R7 + simm16; }
+:UNLK "FP" is op=0x0f { R7 = R6; pop16(R6); }
+:TRAPA "#"^bitn is op=0x08; g4=1 & bitn { trapa(bitn:1); }
+:TRAP"/VS" is op=0x09 { if (!$(V)) goto inst_next; trapvs(); }
+:SLEEP is op=0x1a { sleep(); }
+
+scbc: "F" is op=0x01 { export 0:1; }
+scbc: "NE" is op=0x06 { local t:1 = !$(Z); export t; }
+scbc: "EQ" is op=0x07 { export $(Z); }
+:SCB"/"^scbc srW, rel8 is (op=0x01 | op=0x06 | op=0x07) & scbc; eamode=0xb & eaw=1 & srW; rel8 { if (scbc) goto inst_next; srW = srW - 1; if (srW != 0xffff) goto rel8; }
+
+ld0: "R0" is rl0=1 { pop16(R0); }
+ld0: is rl0=0 { }
+ld1: "R1" is rl1=1 { pop16(R1); }
+ld1: is rl1=0 { }
+ld2: "R2" is rl2=1 { pop16(R2); }
+ld2: is rl2=0 { }
+ld3: "R3" is rl3=1 { pop16(R3); }
+ld3: is rl3=0 { }
+ld4: "R4" is rl4=1 { pop16(R4); }
+ld4: is rl4=0 { }
+ld5: "R5" is rl5=1 { pop16(R5); }
+ld5: is rl5=0 { }
+ld6: "R6" is rl6=1 { pop16(R6); }
+ld6: is rl6=0 { }
+ld7: "R7" is rl7=1 { pop16(R7); }
+ld7: is rl7=0 { }
+st0: "R0" is rl0=1 { push16(R0); }
+st0: is rl0=0 { }
+st1: "R1" is rl1=1 { push16(R1); }
+st1: is rl1=0 { }
+st2: "R2" is rl2=1 { push16(R2); }
+st2: is rl2=0 { }
+st3: "R3" is rl3=1 { push16(R3); }
+st3: is rl3=0 { }
+st4: "R4" is rl4=1 { push16(R4); }
+st4: is rl4=0 { }
+st5: "R5" is rl5=1 { push16(R5); }
+st5: is rl5=0 { }
+st6: "R6" is rl6=1 { push16(R6); }
+st6: is rl6=0 { }
+st7: "R7" is rl7=1 { push16(R7); }
+st7: is rl7=0 { }
+:LDM.W "@R7+", "("^ld0^ld1^ld2^ld3^ld4^ld5^ld6^ld7^")" is op=0x02; ld0 & ld1 & ld2 & ld3 & ld4 & ld5 & ld6 & ld7 {
+  build ld0; build ld1; build ld2; build ld3; build ld4; build ld5; build ld6; build ld7;
+}
+:STM.W "("^st0^st1^st2^st3^st4^st5^st6^st7^")", "@-R7" is op=0x12; st0 & st1 & st2 & st3 & st4 & st5 & st6 & st7 {
+  build st7; build st6; build st5; build st4; build st3; build st2; build st1; build st0;
+}
+
+@if defined(MAXMODE)
+abs24: reloc is imm8; imm16 [ reloc = (imm8 << 16) | imm16; ] { export *:3 reloc; }
+abspg: is imm8 { export *[const]:1 imm8; }
+:PJMP "@"^abs24 is op=0x13; abs24 & abspg ... { CP = abspg; goto abs24; }
+:PJSR "@"^abs24 is op=0x03; abs24 & abspg ... { local ra:$(ASZ) = inst_next; push16(ra:2); local p:2 = zext(CP); push16(p); CP = abspg; call abs24; }
+:PJMP "@"^gRR is op=0x11; g4=0xc & g3=0 & gRR { local a:3 = gRR:3; CP = a[16,8]; goto [a]; }
+:PJSR "@"^gRR is op=0x11; g4=0xc & g3=1 & gRR { local ra:$(ASZ) = inst_next; push16(ra:2); local p:2 = zext(CP); push16(p); local a:3 = gRR:3; CP = a[16,8]; call [a]; }
+:PRTS is op=0x11; op=0x19 { local p:2; pop16(p); local t:2; pop16(t); CP = p:1; local a:3 = (zext(CP) << 16) | zext(t); return [a]; }
+:PRTD "#"^imm8 is op=0x11; op=0x14; imm8 { local p:2; pop16(p); local t:2; pop16(t); R7 = R7 + imm8; CP = p:1; local a:3 = (zext(CP) << 16) | zext(t); return [a]; }
+:PRTD "#"^imm16 is op=0x11; op=0x1c; imm16 { local p:2; pop16(p); local t:2; pop16(t); R7 = R7 + imm16; CP = p:1; local a:3 = (zext(CP) << 16) | zext(t); return [a]; }
+@endif

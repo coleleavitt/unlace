@@ -264,7 +264,7 @@ fn cpp_render(stem: &str) -> Option<String> {
         .arg(&datatests)
         .arg("datatests")
         .arg(format!("{stem}.xml"))
-        .env("KUNA_DUMP", "1")
+        .env("UNLACE_DUMP", "1")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);

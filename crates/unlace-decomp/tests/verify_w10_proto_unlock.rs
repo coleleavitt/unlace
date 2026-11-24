@@ -21,7 +21,7 @@
 //!      tied EAX group (Promotion on compare #2).
 //!
 //! These are END-TO-END tests: they drive the committed Rust `decomp_test_dbg`
-//! on the real datatests, slice the `KUNA_DUMP` `print C` block, and where the
+//! on the real datatests, slice the `UNLACE_DUMP` `print C` block, and where the
 //! built C++ oracle + `.sla` are present, run the SAME datatest through the C++
 //! `decomp_test_dbg` for a direction check (the recovered shape must move
 //! TOWARD the oracle, never special-cased away from it).  They SKIP (never
@@ -72,7 +72,7 @@ fn cpp_oracle_bin() -> PathBuf {
         .unwrap_or_else(|| repo_root().join("decompiler/cpp/decomp_test_dbg"))
 }
 
-/// Drive a `decomp_test_dbg` binary on one datatest with `KUNA_DUMP=1` and
+/// Drive a `decomp_test_dbg` binary on one datatest with `UNLACE_DUMP=1` and
 /// return the first dumped `print C` block (header line stripped).  `None` if
 /// the binary is missing or produced no dump (no spec/`.sla`).
 fn dump_body(bin: &PathBuf, stem: &str) -> Option<String> {
@@ -86,7 +86,7 @@ fn dump_body(bin: &PathBuf, stem: &str) -> Option<String> {
         .arg(datatests_dir())
         .arg("datatests")
         .arg(format!("{stem}.xml"))
-        .env("KUNA_DUMP", "1")
+        .env("UNLACE_DUMP", "1")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout).into_owned();

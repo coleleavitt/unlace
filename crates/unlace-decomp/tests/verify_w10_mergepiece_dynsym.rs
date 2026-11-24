@@ -40,7 +40,7 @@ fn datatests_root() -> PathBuf {
         .unwrap_or_else(|| repo_root().join("tests/datatests"))
 }
 
-/// The committed Rust `decomp_test_dbg`.  Honors `KUNA_RUST_DECOMP_TEST`, else
+/// The committed Rust `decomp_test_dbg`.  Honors `UNLACE_RUST_DECOMP_TEST`, else
 /// the workspace target dir for the active profile.
 fn rust_oracle() -> Option<PathBuf> {
     if let Some(p) = unlace_base::env::var_os("UNLACE_RUST_DECOMP_TEST") {

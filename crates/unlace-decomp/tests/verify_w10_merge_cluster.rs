@@ -32,9 +32,9 @@
 //!        negative (`return glob1.a + 10;` must NOT appear) stays satisfied.
 //!
 //! Driven through the committed Rust `decomp_test_dbg` (the engine under test) with
-//! `KUNA_DUMP=1` — the same full pipeline the datatest harness scores — because the
+//! `UNLACE_DUMP=1` — the same full pipeline the datatest harness scores — because the
 //! gate fires deep inside ActionMergeRequired/mergeMarker; an in-process bootstrap
-//! that skips the merge would be a false negative.  Honors `KUNA_RUST_DECOMP_TEST`
+//! that skips the merge would be a false negative.  Honors `UNLACE_RUST_DECOMP_TEST`
 //! to point at an out-of-tree (branch) build.  All assertions are derived from the
 //! C++ oracle B5, not from the Rust output.  Committed with the verdict regardless
 //! of outcome (verification.md "Adversarial pass").
@@ -70,7 +70,7 @@ fn datatests_root() -> PathBuf {
 }
 
 /// The committed Rust `decomp_test_dbg` (the engine under test).  Honors
-/// `KUNA_RUST_DECOMP_TEST`, else the workspace target dir for the active profile.
+/// `UNLACE_RUST_DECOMP_TEST`, else the workspace target dir for the active profile.
 fn rust_oracle() -> Option<PathBuf> {
     if let Some(p) = unlace_base::env::var_os("UNLACE_RUST_DECOMP_TEST") {
         let pb = PathBuf::from(p);
@@ -88,7 +88,7 @@ fn rust_oracle() -> Option<PathBuf> {
     None
 }
 
-/// Drive the Rust engine over one datatest file and slice the first KUNA_DUMP
+/// Drive the Rust engine over one datatest file and slice the first UNLACE_DUMP
 /// `print C` block.  `None` when the binary/specs are unavailable (test skips).
 fn rust_print_c_for(file: &str) -> Option<String> {
     rust_print_c_in(&datatests_root(), file)
@@ -123,8 +123,8 @@ fn rust_print_c_in(dir: &std::path::Path, file: &str) -> Option<String> {
         .arg(dir)
         .arg("datatests")
         .arg(file)
-        .env("KUNA_DUMP", "1")
-        .env("KUNA_ENGINE", "rust")
+        .env("UNLACE_DUMP", "1")
+        .env("UNLACE_ENGINE", "rust")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
@@ -135,7 +135,7 @@ fn rust_print_c_in(dir: &std::path::Path, file: &str) -> Option<String> {
 }
 
 /// Extract a single function body (from `name(` through the matching closing brace
-/// at column 0) out of the multi-function KUNA_DUMP block.
+/// at column 0) out of the multi-function UNLACE_DUMP block.
 fn slice_function(block: &str, name: &str) -> Option<String> {
     let sig = format!(" {name}(");
     let lines: Vec<&str> = block.lines().collect();
@@ -222,7 +222,7 @@ fn w10_mc_a2_boolless_constant_join_stays_tied_byte_identical() {
         .unwrap_or_else(|| panic!("boolless not in dump:\n{block}"));
     eprintln!("=== RUST boolless ===\n{body}");
 
-    // The C++ oracle B5 for boolless (KUNA_DUMP, cpp engine).  The `acc` register
+    // The C++ oracle B5 for boolless (UNLACE_DUMP, cpp engine).  The `acc` register
     // stays an explicit whole-function local `v1` (NOT folded into `dat_52`).
     // (Header gap adjusted for the kuna DIV-34 brace-placement default.)
     const CPP: &str = "uint1 boolless(void)\n\

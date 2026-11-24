@@ -1,7 +1,7 @@
 //! Tests for `rport/w10-emptyblock-orform`.
 //!
 //! Drive the SAME full pipeline the datatest harness uses — the committed Rust
-//! `decomp_test_dbg` binary as a subprocess with `KUNA_DUMP=1` — because the
+//! `decomp_test_dbg` binary as a subprocess with `UNLACE_DUMP=1` — because the
 //! empty-block splice (`removeDoNothingBlock`) only fires after the merge/trim and
 //! `ActionDominantCopy` have emptied the redundant COPY blocks, and the `&&`
 //! `BlockCondition` (`ruleBlockOr`) only forms once `ActionBlockStructure` re-runs
@@ -49,7 +49,7 @@ fn datatests_root() -> PathBuf {
 }
 
 /// The committed Rust `decomp_test_dbg` (the engine under test).  Honors
-/// `KUNA_RUST_DECOMP_TEST`, else the workspace target dir for the active profile.
+/// `UNLACE_RUST_DECOMP_TEST`, else the workspace target dir for the active profile.
 fn rust_oracle() -> Option<PathBuf> {
     if let Some(p) = unlace_base::env::var_os("UNLACE_RUST_DECOMP_TEST") {
         let pb = PathBuf::from(p);
@@ -67,7 +67,7 @@ fn rust_oracle() -> Option<PathBuf> {
     None
 }
 
-/// Drive the Rust engine over one datatest file and slice the first KUNA_DUMP
+/// Drive the Rust engine over one datatest file and slice the first UNLACE_DUMP
 /// `print C` block.  `None` when the binary/specs are unavailable (test skips).
 fn rust_print_c_for(file: &str) -> Option<String> {
     let bin = rust_oracle()?;
@@ -81,8 +81,8 @@ fn rust_print_c_for(file: &str) -> Option<String> {
         .arg(datatests_root())
         .arg("datatests")
         .arg(file)
-        .env("KUNA_DUMP", "1")
-        .env("KUNA_ENGINE", "rust")
+        .env("UNLACE_DUMP", "1")
+        .env("UNLACE_ENGINE", "rust")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
@@ -93,7 +93,7 @@ fn rust_print_c_for(file: &str) -> Option<String> {
 }
 
 /// Extract a single function body (from `name(` through the matching closing
-/// brace at column 0) out of the multi-function KUNA_DUMP block.
+/// brace at column 0) out of the multi-function UNLACE_DUMP block.
 fn slice_function(block: &str, name: &str) -> Option<String> {
     let sig = format!(" {name}(");
     let start = block.lines().position(|l| l.contains(&sig))?;
@@ -161,7 +161,7 @@ fn w10_eob_condconst_conn_forms_andand_byte_identical() {
     };
     let body = slice_function(&block, "condconst_conn")
         .unwrap_or_else(|| panic!("condconst_conn not in dump:\n{block}"));
-    // The C++ oracle B5 for condconst_conn (from `decomp_test_dbg KUNA_DUMP=1`);
+    // The C++ oracle B5 for condconst_conn (from `decomp_test_dbg UNLACE_DUMP=1`);
     // header gap adjusted for the kuna DIV-34 brace-placement default
     // (`braceformat function next`; semantic content unchanged).
     const CPP: &str = "int4 condconst_conn(int4 x,int4 y)\n\

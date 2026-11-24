@@ -12,7 +12,7 @@
 //! `decompile_func` call (no script) decompiles raw lifted p-code and never
 //! reaches the member render (see `printc_parity.rs`'s LOSS-130 note).  So these
 //! tests drive the SAME `decomp_test_dbg` harness the parity runner uses, with
-//! `KUNA_DUMP=1`, and slice the rendered `print C` block — then byte-compare the
+//! `UNLACE_DUMP=1`, and slice the rendered `print C` block — then byte-compare the
 //! Rust render against the C++ oracle per function.
 //!
 //! The fragile / REJECT-prone spots each test pins:
@@ -62,7 +62,7 @@ fn datatests_dir() -> PathBuf {
 }
 
 /// The Rust harness binary under test (the same `decomp_test_dbg` the parity
-/// runner drives).  Honors `KUNA_DECOMP_TEST_RUST`, else the release build.
+/// runner drives).  Honors `UNLACE_DECOMP_TEST_RUST`, else the release build.
 fn rust_harness() -> PathBuf {
     if let Some(p) = unlace_base::env::var_os("UNLACE_DECOMP_TEST_RUST") {
         return PathBuf::from(p);
@@ -75,7 +75,7 @@ fn rust_harness() -> PathBuf {
         .join("decomp_test_dbg")
 }
 
-/// The committed C++ oracle binary.  Honors `KUNA_DECOMP_TEST`, else the
+/// The committed C++ oracle binary.  Honors `UNLACE_DECOMP_TEST`, else the
 /// in-tree build under `decompiler/cpp/`.
 fn cpp_oracle() -> PathBuf {
     if let Some(p) = unlace_base::env::var_os("UNLACE_DECOMP_TEST") {
@@ -84,7 +84,7 @@ fn cpp_oracle() -> PathBuf {
     repo_root().join("decompiler/cpp/decomp_test_dbg")
 }
 
-/// Drive `bin` on `stem`.xml with `KUNA_DUMP=1`, return the sliced bulk
+/// Drive `bin` on `stem`.xml with `UNLACE_DUMP=1`, return the sliced bulk
 /// `print C` block (the `===KUNA_DUMP_BEGIN===..===KUNA_DUMP_MID===` body), or
 /// `None` if the binary or its `.sla` is unavailable.
 fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
@@ -99,7 +99,7 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
         .arg(datatests_dir())
         .arg("datatests")
         .arg(format!("{stem}.xml"))
-        .env("KUNA_DUMP", "1")
+        .env("UNLACE_DUMP", "1")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);

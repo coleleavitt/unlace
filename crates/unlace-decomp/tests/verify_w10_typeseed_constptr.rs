@@ -64,7 +64,7 @@ fn cpp_oracle() -> PathBuf {
     repo_root().join("decompiler/cpp/decomp_test_dbg")
 }
 
-/// Drive `bin` on `stem`.xml with `KUNA_DUMP=1`, returning the sliced bulk
+/// Drive `bin` on `stem`.xml with `UNLACE_DUMP=1`, returning the sliced bulk
 /// `print C` body (between `===KUNA_DUMP_BEGIN===` and `===KUNA_DUMP_MID===`),
 /// or `None` if the binary / `.sla` is unavailable (the test SKIPs).
 fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
@@ -79,11 +79,11 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
         .arg(datatests_dir())
         .arg("datatests")
         .arg(format!("{stem}.xml"))
-        .env("KUNA_DUMP", "1")
+        .env("UNLACE_DUMP", "1")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
-    // A missing `.sla` aborts the file (no KUNA_DUMP block); SKIP cleanly.
+    // A missing `.sla` aborts the file (no UNLACE_DUMP block); SKIP cleanly.
     let begin = text.find("===KUNA_DUMP_BEGIN")?;
     let after_begin = text[begin..].find('\n')? + begin + 1;
     let mid = text[after_begin..].find("===KUNA_DUMP_MID===")? + after_begin;

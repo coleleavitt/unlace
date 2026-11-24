@@ -797,6 +797,24 @@ indistinguishable from a function that returns normally. The fourth cause,
 `noreturn`, is not a decode failure and is deliberately untouched: it is already
 reported on the call it follows.
 
+**(kuna) Silent losses named (`kuna_honestgaps.rs`, `option honestgaps`, default off).**
+Under the `ignoreunimplemented` policy `handle_decode_error` steps over an
+instruction SLEIGH decodes but has no p-code for, as a no-op, and only the
+once-per-function header said the function ignored unimplemented instructions,
+never which. With the option on it also buffers `notmodelled: <insn> has no
+p-code semantics; stepped over as a no-op` at the instruction's address, the
+instruction named from the decoder's `Unimpl` text (mnemonic and operands, else
+`instruction`). The decompile drive does the same for a DWARF register local
+that `seed_dwarf_register_locals` could not bind (chapter 01): a header warning
+`debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its
+register reaches it`. Both tags are lowercase, so the printer's warning
+records file them under the kinds `notmodelled` and `debuginfo`, and the CLI's
+`--json` lists them with the rest and totals every kind in `warning_kinds`
+(`docs/cli.md`). Off by default because the extra comments change the text of
+every function with such a gap; the losses that already print (decode-failure
+halts, `funcboundflow`, budget and out-of-bounds truncation, unrecovered jump
+tables) are unchanged either way.
+
 When the generic `PowerPC:BE:64:default` or `PowerPC:LE:64:default` decoder
 fails on an aligned `isel` encoding, the halt also names the selected target
 and suggests an explicit `--target PowerPC:<endian>:64:A2ALT` for AltiVec code.
@@ -877,6 +895,26 @@ Rust panic helper that way, so the restart roughly doubled the cost of such a
 function; the option removes it, at the price of the second pass's other
 benefits (every other call the first pass bound is direct from its flow on),
 which is why it is not the default.
+
+(kuna `guarddispatch`, on by default) A CALLIND through a Control Flow Guard
+dispatch slot calls the register the dispatch routine jumps to
+(`decompiler/crates/kuna-decomp/src/p2_lift/kuna_guarddispatch.rs
+(calls_through_slot)`). An image built with `/guard:cf` makes every
+function-pointer call as `mov rax, target; call [__guard_dispatch_icall_fptr]`;
+the routine in the slot validates `rax` and jumps to it with the argument
+registers untouched. Taken literally the call prints as a call of the slot and
+the real target, which only the routine reads, drops out of the output. The PE
+load configuration names the slots (01, `kuna_peloadconfig`), and the commit
+records `__guard_dispatch_icall_fptr` and `__guard_xfg_dispatch_icall_fptr`.
+When the call's target is the word its own instruction reads from one of them
+(the same constant-address test as `msvcsig` above), input 0 becomes the target
+register, `RAX`. Only the x86-64 ABI calls through the dispatch slot; x86 and
+AArch64 call the check routine and then the target directly. The call stays indirect, so its prototype is recovered as for any call through a pointer.
+The validation itself is not shown, as with the compiler spec's
+`_guard_dispatch_icall` call-fixup, which covers a direct call of the routine but
+not a call through its slot. The flag is the reading choice; `option
+guarddispatch off` prints the call through the slot as the instructions state it.
+Only a PE commit fills the slot set, so the rule is inert on every other input.
 
 (kuna `--assert callee`) The reader can plant the same indirect override. A
 front-end parks `call site -> callee entry` facts on the architecture, keyed
@@ -4021,8 +4059,56 @@ through whatever `ra` held, so the saves, the stack adjustment and the return
 were lost. Exercised by `tests/stages/kuna-riscv-zcmp.xml` (the issue's
 `keep`, hand-written `swapcall`/`zret`/`popsep`, the raw push/popret p-code)
 and `unlace-cli/tests/riscv_zcmp.rs` (one decode per encoding shape against
-LLVM's names, RV32 and RV64). Zcb, Zicond and the T-Head vendor extensions
-the issue also lists are not decoded.
+LLVM's names, RV32 and RV64). Zcb and the T-Head vendor extensions the
+issue also lists are not decoded; Zicond is in the next section.
+
+### RISC-V ratified bit manipulation and Zicond (#98)
+
+`riscv.rv32b.sinc` (forms common to RV32 and RV64) and `riscv.rv64b.sinc`
+(RV64-only forms) decode the ratified Zba, Zbb, Zbc and Zbs extensions
+(Bitmanip 1.0.0), Zbkb and Zbkx (Scalar Crypto 1.0.1) and Zicond (1.0). They
+replace the 0.92 bitmanip draft those files carried, whose constructors were
+all `unimpl` and whose names and encodings differ from the ratified ones: the
+RVA22 profile's `cpop` decoded as the draft `pcnt`, `bset` as `sbset`,
+`rev8` and `orc.b` as `grevi`/`gorci`, and Zicond's `czero.eqz` as the
+draft `cmov`, each an unimplemented instruction that cut the function's
+data flow. The draft-only instructions (`bdep`, `bfp`, `cmix`, `fsl`,
+`shfl`, `slo`, `crc32.*`, `bmat*`, `addwu` and the rest) were never
+ratified and no longer decode.
+
+Each instruction lifts to ordinary p-code where p-code has the operation:
+`sh1add`/`sh2add`/`sh3add` (and the `.uw` forms, which zero-extend the
+low word of `rs1` first) are a shift and an add, `add.uw`/`zext.w`,
+`slli.uw`, `sext.b`, `sext.h` and `zext.h` are extensions, `andn`, `orn`
+and `xnor` are their bitwise forms, `clz` is LZCOUNT, `cpop` is POPCOUNT,
+and `ctz` is `POPCOUNT((x & -x) - 1)`, which is the register width for
+`x = 0` as the ISA requires; the `w` forms work on the low 32 bits and
+sign-extend (`clzw`, `ctzw`, `cpopw` produce a count, which is never
+negative). `rol`, `ror`, `rori` and their `w` forms are the shift pair
+`(x << n) | (x >> (W - n))`, `rev8` is the byte-reversing shift-and-mask
+tree, the shapes `bitidioms` folds to `bswap` (and, for a constant amount,
+to a rotate) on other architectures. The Zbs single-bit operations mask the register shift amount
+to the register width. `pack`, `packh` and `packw` concatenate the low
+halves (bytes for `packh`; `packw` sign-extends its 32-bit result).
+`max`, `maxu`, `min`, `minu` and Zicond's `czero.eqz`/`czero.nez` lift
+as a write of one operand and a conditional branch to the next instruction
+around a write of the other, the shape x86 `cmov` lifts to, so the
+structurer prints a conditional assignment. Operations p-code cannot state in
+a few operators are user operations that keep the data flow:
+`clmul`, `clmulh`, `clmulr` (carry-less multiply), `orc_b`, `brev8`,
+`zip`, `unzip` (RV32 only), `xperm4` and `xperm8`.
+
+The encodings that depend on XLEN are guarded by `ADDRSIZE`: `rev8` is
+`0x698` on RV32 and `0x6b8` on RV64, `zext.h` is `pack rd, rs1, x0` on
+RV32 (OP) and `packw rd, rs1, x0` on RV64 (OP-32), and the immediate shifts
+take a 6-bit amount whose top bit must be clear on RV32 (`shamt6`). The
+default RISC-V languages decode all of them, as the GNU and LLVM
+disassemblers do without an `-march` restriction, because no other standard
+or draft instruction in these languages shares their encodings. Exercised by
+`unlace-cli/tests/riscv_bitmanip.rs`: one probe row per encoding, RV32 and
+RV64, against `llvm-objdump`'s names, and LLVM-selected `max`, `minu`,
+`cpop`, `clz`, `ctz`, `czero.eqz`, `rev8`, `andn`, `bset` and
+`sh3add.uw` functions that decompile with no unimplemented instruction.
 
 ### RISC-V moves and conversions from FP to integer registers (GH-831)
 

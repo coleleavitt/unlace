@@ -39,10 +39,15 @@
 //! the convention both MSVC and LLVM write); an x64 frame register (`RBP`,
 //! `R13`) points where the function's unwind data puts it
 //! ([`super::kuna_pdbframe`]); and an i386 `EBP` frame pointer is the entry stack
-//! pointer less the pushed `EBP`. An i386 stack pointer and the virtual `$T0`
-//! frame depend on the prologue's shape, so a slot relative to one of them is left
-//! out, as is an x64 frame-register slot of a function with no unwind data. Locals
-//! of inlined call sites belong to the inlinee and are skipped.
+//! pointer less the pushed `EBP`. Under i386 frame-pointer omission the virtual
+//! frame `$T0` is the address of the return address, and the stack pointer is
+//! placed like the x64 one, both only when the locals and the parameters share a
+//! base: a realigned frame (locals off `$T0`, parameters off `EBP`) addresses its
+//! locals off a stack pointer whose distance from the entry is known only at run
+//! time. An x64 frame-register slot of a function with no unwind data is left
+//! out, and so is a variable spilled in pieces (`spilledUdtMember` or a nonzero
+//! `offsetParent`) or one whose slot would reach the return address. Locals of
+//! inlined call sites belong to the inlinee and are skipped.
 //!
 //! Inert unless `pdb` locates a fingerprint-matching `.pdb` beside a PE. Run at
 //! the commit (a deferred pass) and only under `option pdbtypes on` (default
@@ -156,11 +161,23 @@ impl FrameProc {
             (Family::X64, 1) => Some(Base::StackPointer),
             (Family::X64, 2) => Some(Base::Register(334)),
             (Family::X64, 3) => Some(Base::Register(341)),
+            (Family::X86, 1) => Some(Base::Register(CV_VFRAME)),
             (Family::X86, 2) => Some(Base::Register(22)),
             _ => None,
         }
     }
+
+    /// Whether the locals and the parameters share one base, i.e. the frame
+    /// was not realigned: a realigned frame addresses its locals off a stack
+    /// pointer whose distance from the entry one is only known at run time.
+    fn unaligned(&self) -> bool {
+        (self.flags >> 14) & 3 == (self.flags >> 16) & 3
+    }
 }
+
+/// CodeView's `CV_ALLREG_VFRAME`, the i386 virtual frame `$T0` that frame-pointer
+/// omission defines as the address of the return address (`$T0 .raSearch =`).
+const CV_VFRAME: u16 = 30006;
 
 /// The base a CodeView register number names.
 fn register_base(family: Family, reg: u16) -> Option<Base> {
@@ -190,6 +207,11 @@ pub(crate) fn base_offset(
             .filter(|&(r, _)| r == reg)
             .map(|(_, offset)| offset),
         (Family::X86, Base::Register(22)) => Some(-4),
+        (Family::X86, Base::Register(CV_VFRAME)) => frame.filter(|f| f.unaligned()).map(|_| 0),
+        (Family::X86, Base::StackPointer) => {
+            let f = frame.filter(|f| f.unaligned())?;
+            Some(-(i64::from(f.frame) + i64::from(f.saved_regs)))
+        }
         _ => None,
     }
 }
@@ -350,9 +372,18 @@ pub(crate) fn module_procs(
             }
             S_DEFRANGE_REGISTER_REL => {
                 let Some(i) = pending else { continue };
-                let (Some(reg), Some(off)) = (read_u16(raw, 2), read_i32(raw, 6)) else {
+                let (Some(reg), Some(flags), Some(off)) =
+                    (read_u16(raw, 2), read_u16(raw, 4), read_i32(raw, 6))
+                else {
                     continue;
                 };
+                // A spilled piece of an aggregate (`spilledUdtMember`, or a
+                // nonzero `offsetParent`): the pieces need not be contiguous,
+                // so the variable has no single slot.
+                if flags & 1 != 0 || flags >> 4 != 0 {
+                    pending = None;
+                    continue;
+                }
                 let loc = place(register_base(family, reg), i64::from(off));
                 if let Some(var) = proc.vars.get_mut(i).filter(|v| v.loc == Loc::Unknown) {
                     var.loc = loc;
@@ -372,7 +403,7 @@ pub(crate) fn module_procs(
                     var.loc = Loc::Register(reg, at);
                 }
             }
-            S_DEFRANGE_SUBFIELD_REGISTER => {}
+            S_DEFRANGE_SUBFIELD_REGISTER => pending = None,
             _ if inline_depth > 0 => pending = None,
             S_BPREL32 => {
                 pending = None;
@@ -557,6 +588,9 @@ fn emit_proc(proc: &Proc, family: Family, tpi: &mut TpiMapper<'_, '_>, out: &mut
                 let Some(t) = tpi.map(var.type_index).filter(|t| t.get_size() > 0) else {
                     continue;
                 };
+                if off.saturating_add(i64::from(t.get_size())) > 0 {
+                    continue;
+                }
                 out.locals.push(LocalFact {
                     func_addr: proc.start,
                     name: names.unique(&var.name),
@@ -854,7 +888,47 @@ mod tests {
         );
         assert_eq!(
             base_offset(Family::X86, Base::StackPointer, Some(&f), None),
+            Some(-40)
+        );
+        let vframe = Base::Register(CV_VFRAME);
+        assert_eq!(f.base(Family::X86, false), Some(vframe));
+        assert_eq!(base_offset(Family::X86, vframe, Some(&f), None), Some(0));
+        // A realigned frame: locals off `$T0`, parameters off `EBP`.
+        let realigned = FrameProc {
+            flags: (1 << 14) | (2 << 16),
+            ..f
+        };
+        assert_eq!(
+            base_offset(Family::X86, vframe, Some(&realigned), None),
             None
+        );
+        assert_eq!(
+            base_offset(Family::X86, Base::StackPointer, Some(&realigned), None),
+            None
+        );
+    }
+
+    /// i386 frame-pointer omission: arguments off `$T0` sit above the return
+    /// address, an array split into scattered pieces gets no slot, and a
+    /// realigned frame's `$T0` locals are left alone while its `EBP` argument
+    /// is placed.
+    #[test]
+    fn x86_vframe_slots() {
+        let procs = procs("fpo_i386.pdb", Family::X86);
+        assert_eq!(
+            vars(&procs, "sum_buf"),
+            [
+                ("n".to_string(), Loc::Stack(4)),
+                ("k".to_string(), Loc::Stack(8)),
+                ("buf".to_string(), Loc::Unknown),
+            ]
+        );
+        assert_eq!(
+            vars(&procs, "aligned"),
+            [
+                ("n".to_string(), Loc::Stack(4)),
+                ("a".to_string(), Loc::Unknown),
+            ]
         );
     }
 

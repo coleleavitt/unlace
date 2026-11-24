@@ -8894,9 +8894,17 @@ both
   after `UWOP_SET_FPREG` ran before it, so the register is the entry stack pointer
   less their pushes and allocations plus `16 * FrameOffset`
   (`crates/unlace-analysis/src/analyzers/pdb/kuna_pdbframe.rs`); a chained record,
-  an epilog code or an unknown one leaves it unknown. An i386 stack pointer and the
-  virtual `$T0` frame depend on the prologue and are skipped. A
-  slot below the return address becomes a named, typed stack local (the DWARF
+  an epilog code or an unknown one leaves it unknown. Under i386 frame-pointer
+  omission (`S_FRAMEPROC` naming `VFRAME` for both locals and parameters) the
+  virtual frame `$T0` is the address of the return address (the frame data's
+  `$T0 .raSearch =`), and the i386 stack pointer is placed like the x64 one; a
+  realigned frame (locals off `$T0`, parameters off `EBP`, as clang writes for an
+  over-aligned local) leaves both unknown, since its locals sit at a run-time
+  distance from the entry. A variable spilled in pieces (`S_DEFRANGE_REGISTER_REL`
+  with `spilledUdtMember` or a nonzero `offsetParent`, or a subfield range) has no
+  single slot and is skipped: clang scatters a scalarized array's elements in
+  descending addresses. A slot below the return address that does not reach it
+  becomes a named, typed stack local (the DWARF
   `LocalFact` channel); a register range of a non-parameter becomes a
   register-held local from the range's start; locals of an inlined call site
   belong to the inlinee and are skipped. `S_GDATA32`/`S_LDATA32` with a complete

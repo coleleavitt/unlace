@@ -1,0 +1,8 @@
+# PMS134 (PMS133 / PMS134, 15 bit code words): PDK15 instruction set.
+# Instruction patterns: pdk15_tok.sinc / pdk15_ops.sinc (generated, see tools/gen_pdk.py).
+# I/O registers: pms134_regs.sinc / pms134_attach.sinc (generated, see tools/gen_chips.py).
+@include "pdk_common.sinc"
+@include "pms134_regs.sinc"
+@include "pdk15_tok.sinc"
+@include "pms134_attach.sinc"
+@include "pdk15_ops.sinc"

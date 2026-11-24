@@ -1,0 +1,8 @@
+# PMC884 (PMC884 and relatives (FPPA, 16 bit code words)): PDK16 instruction set.
+# Instruction patterns: pdk16_tok.sinc / pdk16_ops.sinc (generated, see tools/gen_pdk.py).
+# I/O registers: pmc884_regs.sinc / pmc884_attach.sinc (generated, see tools/gen_chips.py).
+@include "pdk_common.sinc"
+@include "pmc884_regs.sinc"
+@include "pdk16_tok.sinc"
+@include "pmc884_attach.sinc"
+@include "pdk16_ops.sinc"

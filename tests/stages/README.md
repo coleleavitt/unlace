@@ -254,7 +254,16 @@ separate directory so the upstream baseline (`docs/baseline.json`) is never touc
 cargo test -p unlace-harness --test parity stage_tests
 ```
 
-After adding a testcase, re-record the stages baseline (never `docs/baseline.json`):
+The corpus runs across up to eight `decomp_test_dbg -worker` processes (load-time options
+travel in environment variables, so files never share a process at the same time), and the
+results merge back in file order, so the stream matches a one-process run byte for byte.
+`UNLACE_PARITY_JOBS=N` picks the worker count (`1` runs in the test process). The same
+mode is `decomp_test_dbg -j N ... datatests`. Each run records per-file times in
+`$TMPDIR/unlace-datatest-times.tsv` and hands the slowest files out first next time;
+`UNLACE_DATATEST_TIMES=1` prints them. A worker that crashes fails only the file it was running.
+
+A TOML stage test needs no baseline. Only an XML one (none are left) would need the stages
+baseline re-recorded (never `docs/baseline.json`):
 
 ```bash
 UNLACE_BLESS=1 cargo test -p unlace-harness --test parity stage_tests

@@ -1475,6 +1475,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P9/literal-format · unlace · presentation-default · unlace-charnum
 - **Example:** `option charnum on`
 
+### `partmacro` -- on | off, default `off`
+
+- **Symptoms:** (uint1)(x >> 8) where the source reads BYTE1(x); a 16-bit part of a 32-bit value printed as a cast of a shift; LOBYTE(HIWORD(x)) where the source reads BYTE2(x).
+- **What it does:** Print a part of an integer value as the part macro that names it: LOBYTE(x), BYTE1(x) to BYTE7(x), LOWORD(x), HIWORD(x), WORD1(x) to WORD3(x), LODWORD(x) and HIDWORD(x). A truncation of a 2-, 4- or 8-byte integer to 1, 2 or 4 bytes at an aligned byte offset, and the truncation of a right shift by a whole number of bytes, print as the macro: the truncation of x >> 8 to one byte prints BYTE1(x). A nested part folds into the most direct one, so LOBYTE(HIWORD(x)) prints BYTE2(x). A part that reads past the value after folding, such as a byte of an arithmetic shift past the top, keeps its cast. Printing only; C output only, and the recompile prelude defines the macros when the option is on.
+- **When to flip:** Turn on to read byte and half-word unpacking the way IDA prints it (LOBYTE, BYTE1, HIWORD, LODWORD). Leave off to keep the plain casts and shifts, which every existing output and expected text uses.
+- **Where / provenance:** P9/part-macro · unlace · presentation-default · unlace-partmacro
+- **Example:** `option partmacro on`
+
 ### `constright` -- on | off, default `off`
 
 - **Symptoms:** if (0x3b < x) where the source reads if (x > 59); constant on the left of an ordered comparison.

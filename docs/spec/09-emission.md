@@ -6163,3 +6163,33 @@ through `emit_block`. At `built` each of these prints exactly the calls the
 block printer makes for the same block, so the output with the option on is the
 output with it off; a difference is a bug. The tree is dropped when the body is
 printed.
+
+## (unlace) Part macros (`partmacro`) -- `option partmacro`, default off
+
+With `option partmacro on` (C output; default off), a SUBPIECE that takes a part of an
+integer prints as the IDA part macro that names it (`partmacro.rs`, `macro_name`):
+`LOBYTE`, `BYTEn` for one byte at byte offset `n`, `LOWORD`/`WORDn` for two bytes,
+`HIWORD` for a two-byte part at offset 2 of a four-byte value, `LODWORD` and
+`HIDWORD` for four bytes at offset 0 or 4 of an eight-byte value. A part is named only when
+its offset is a multiple of its width and it lies inside the value (2, 4 or 8 bytes, a
+scalar integer or unknown type, not a float, pointer, bool or aggregate).
+
+Nested parts fold before naming. A SUBPIECE whose input is a SUBPIECE, or a whole-byte
+`INT_RIGHT`/`INT_SRIGHT` by a constant, is read from its source with the byte offsets
+added, so `LOBYTE(HIWORD(x))` prints `BYTE2(x)` and `(uint1)(x >> 8)` prints `BYTE1(x)`.
+A step is taken only when the part still lies inside the value it reads: a byte past the
+top of an arithmetic shift keeps its cast, since its bits are sign fill. The fold stops
+at the first step that would leave the window, and the macro names the part of the
+value it has reached.
+
+The printer pushes the macro as a one-argument function call from
+`op_subpiece_ir`, after the struct-member, byte-array and bit-cast arms, so those keep
+their own spelling. With the option on, `print_c_recompile_prelude` defines every macro
+the naming can produce, each under `#ifndef`, so a `decompile-project` header compiles.
+Single-function output carries no definitions; the names are IDA's, so a reader who
+knows them can read the text without the header.
+
+The option is off by default because it changes the text of every truncation of a
+scalar; the stage and datatest corpora were not measured with it on. Its catalog row is
+`crates/unlace-decomp/phases.toml`, and the dispatch arm is
+`crates/unlace-decomp/src/p0_knowledge/option_dispatch.rs`.

@@ -10434,7 +10434,7 @@ call-site indices, not code ranges, in its table. So every LSDA walker skips it
 personality whose name cannot be read is read as Itanium. With `itaniumeh` on,
 the pads are shown and no note is attached.
 
-**(kuna) MFC message-map handlers are functions** (`mfcmsgmap`, default-**off**;
+**(kuna) MFC message-map handlers are functions** (`mfcmsgmap`, default-**on**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_mfcmsgmap.rs`). An MFC window
 class routes messages through a static `AFX_MSGMAP` in `.rdata`
 (`pfnGetBaseMap`, `lpEntries`), and its `AFX_MSGMAP_ENTRY` array (`nMessage,
@@ -10452,7 +10452,7 @@ handlers. Every handler is an IDA 9.5 function start, and 194 were missing
 from the inventory before.
 
 **(kuna) A relocated pointer to an MSVC frame prologue is a function**
-(`msvcptrentry`, default-**off**;
+(`msvcptrentry`, default-**on**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvcptrentry.rs`). C++ code reaches
 much of itself only through pointers: vtable slots, MFC tables, callbacks pushed for
 the Win32 API, thread procedures. On a 32-bit PE the base-relocation table lists
@@ -10464,7 +10464,10 @@ continuations, SEH handlers) do not start with a frame. GCC and MinGW encode
 `mov ebp,esp` as `89 E5`, so their SJLJ landing pads never match either; those
 are why `addrtakenentry` stays x86-64-only. On PEGRP32F.dll it finds 1,255
 targets, every one an IDA 9.5 function start, and 452 of them were missing from
-the inventory. Code built with frame-pointer omission gives it nothing.
+the inventory. Code built with frame-pointer omission gives it nothing. Both
+passes ship on. With them, PEGRP32F's inventory misses 544 of IDA's 6,255
+starts instead of 1,437, with 2 more functions that IDA does not list, and 226
+of IDA's 277 switch tables are recovered instead of 195.
 
 **(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).

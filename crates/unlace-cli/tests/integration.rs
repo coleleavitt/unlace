@@ -6,6 +6,8 @@ mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "ft32_raw.rs"]
+mod ft32_raw;
 #[path = "huc6280.rs"]
 mod huc6280;
 #[path = "kr1878_raw.rs"]
@@ -14,6 +16,8 @@ mod kr1878_raw;
 mod m6800_family;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
+#[path = "pdp11_raw.rs"]
+mod pdp11_raw;
 #[path = "moxie_raw.rs"]
 mod moxie_raw;
 #[path = "return_branch_cli.rs"]
@@ -44,12 +48,16 @@ mod rust_signature_summary;
 mod sparc_prologue_start;
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
+#[path = "upd7725.rs"]
+mod upd7725;
 #[path = "w65816_raw.rs"]
 mod w65816_raw;
 #[path = "x86_amx.rs"]
 mod x86_amx;
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
+#[path = "i4004_raw.rs"]
+mod i4004_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

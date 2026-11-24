@@ -1,0 +1,373 @@
+# SLEIGH specification for the Intel 4004 and 4040 (MCS-4 / MCS-40)
+#
+# Written from the Intel MCS-4 Micro Computer Set Users Manual (rev. 1973) and the
+# MCS-40 Users Manual (1974).  Registers are 4 bits wide; each one lives in a byte
+# register and every result is masked to 4 bits.  ROM addresses are 12 bits (the
+# 4040 bank select DB0/DB1 is a user op).  The 3-level (4040: 7-level) on-chip
+# address stack is modelled as a downward stack in the top of the ROM space,
+# which no 12-bit program address reaches.  4002 RAM main characters live in the
+# "ram" space at (CM << 8) | SRC, status characters in "ramstat" at
+# (CM << 6) | (SRC >> 4) << 2 | n, ROM and RAM output ports in "port".
+
+define endian=little;
+define alignment=1;
+
+define space rom      type=ram_space      size=2 default;
+define space ram      type=ram_space      size=2;
+define space ramstat  type=ram_space      size=2;
+define space port     type=ram_space      size=1;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 ];
+define register offset=0x10 size=1 [ A CY SRC CM ];
+define register offset=0x20 size=2 [ PC SP ];
+
+define token op8 (8)
+	op    = (0,7)
+	opHi  = (4,7)
+	opLo  = (0,3)
+	rr    = (0,3)
+	pp    = (1,3) dec
+	prHi  = (1,3)
+	prLo  = (1,3)
+	pbit  = (0,0)
+	imm4  = (0,3)
+	c1    = (3,3)
+	c2    = (2,2)
+	c3    = (1,1)
+	c4    = (0,0)
+	cond  = (0,3)
+	stn   = (0,1) dec
+;
+
+define token data8 (8)
+	byte2 = (0,7)
+;
+
+attach variables [ rr ] [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 ];
+attach variables [ prHi ] [ R0 R2 R4 R6 R8 R10 R12 R14 ];
+attach variables [ prLo ] [ R1 R3 R5 R7 R9 R11 R13 R15 ];
+
+define pcodeop test_pin;
+define pcodeop halt;
+define pcodeop keyboard_process;
+define pcodeop select_rom_bank;
+define pcodeop select_register_bank;
+define pcodeop enable_interrupt;
+define pcodeop disable_interrupt;
+define pcodeop write_program_memory;
+define pcodeop read_program_memory;
+define pcodeop return_from_interrupt;
+define pcodeop read_command_register;
+
+macro pushRet(v) {
+	SP = SP - 2;
+	*:2 SP = v;
+}
+
+macro popRet(v) {
+	v = *:2 SP;
+	SP = SP + 2;
+}
+
+macro pairValue(res, hi, lo) {
+	res = (hi << 4) | lo;
+}
+
+macro ramAddr(res) {
+	res = (zext(CM) << 8) | zext(SRC);
+}
+
+macro statAddr(res, n) {
+	res = (zext(CM) << 6) | (zext(SRC >> 4) << 2) | n;
+}
+
+macro addNibble(x, cin) {
+	local s:1 = A + x + cin;
+	CY = s >> 4;
+	A = s & 0xF;
+}
+
+pair: "P"^pp is pp & prHi & prLo { local v:1 = (prHi << 4) | prLo; export v; }
+
+addr12: a is opLo ; byte2 [ a = (opLo << 8) | byte2; ] { export *:1 a; }
+pageTarget: a is byte2 [ a = (inst_next & 0xF00) | byte2; ] { export *:1 a; }
+
+t2: is c2=0 { local f:1 = 0; export f; }
+t2: is c2=1 { local f:1 = (A == 0); export f; }
+t3: is c3=0 { local f:1 = 0; export f; }
+t3: is c3=1 { local f:1 = (CY == 1); export f; }
+t4: is c4=0 { local f:1 = 0; export f; }
+t4: is c4=1 { local p:1 = test_pin(); local f:1 = (p == 0); export f; }
+
+cc: cond is cond & c1=0 & t2 & t3 & t4 { local f:1 = t2 || t3 || t4; export f; }
+cc: cond is cond & c1=1 & t2 & t3 & t4 { local f:1 = !(t2 || t3 || t4); export f; }
+
+:NOP is op=0x00 { }
+
+:JCN cc, pageTarget is opHi=0x1 & cc ; pageTarget {
+	if (cc) goto pageTarget;
+}
+
+:FIM pair, "#"^byte2 is opHi=0x2 & pbit=0 & pair & prHi & prLo ; byte2 {
+	prHi = byte2 >> 4;
+	prLo = byte2 & 0xF;
+}
+
+:SRC pair is opHi=0x2 & pbit=1 & pair {
+	SRC = pair;
+}
+
+:FIN pair is opHi=0x3 & pbit=0 & pair & prHi & prLo {
+	local idx:1;
+	pairValue(idx, R0, R1);
+	local a:2 = (inst_next & 0xF00) | zext(idx);
+	local v:1 = *:1 a;
+	prHi = v >> 4;
+	prLo = v & 0xF;
+}
+
+:JIN pair is opHi=0x3 & pbit=1 & pair {
+	local a:2 = (inst_next & 0xF00) | zext(pair);
+	goto [a];
+}
+
+:JUN addr12 is opHi=0x4 ... & addr12 {
+	goto addr12;
+}
+
+:JMS addr12 is opHi=0x5 ... & addr12 {
+	local ret:2 = inst_next;
+	pushRet(ret);
+	call addr12;
+}
+
+:INC rr is opHi=0x6 & rr {
+	rr = (rr + 1) & 0xF;
+}
+
+:ISZ rr, pageTarget is opHi=0x7 & rr ; pageTarget {
+	rr = (rr + 1) & 0xF;
+	if (rr != 0) goto pageTarget;
+}
+
+:ADD rr is opHi=0x8 & rr {
+	addNibble(rr, CY);
+}
+
+:SUB rr is opHi=0x9 & rr {
+	local x:1 = (~rr) & 0xF;
+	local cin:1 = CY ^ 1;
+	addNibble(x, cin);
+}
+
+:LD rr is opHi=0xA & rr {
+	A = rr;
+}
+
+:XCH rr is opHi=0xB & rr {
+	local t:1 = A;
+	A = rr;
+	rr = t;
+}
+
+:BBL "#"^imm4 is opHi=0xC & imm4 {
+	A = imm4;
+	local ret:2;
+	popRet(ret);
+	return [ret];
+}
+
+:LDM "#"^imm4 is opHi=0xD & imm4 {
+	A = imm4;
+}
+
+:WRM is op=0xE0 {
+	local a:2;
+	ramAddr(a);
+	*[ram]:1 a = A;
+}
+
+:WMP is op=0xE1 {
+	local p:1 = 0x10 | (CM << 2) | (SRC >> 6);
+	*[port]:1 p = A;
+}
+
+:WRR is op=0xE2 {
+	local p:1 = SRC >> 4;
+	*[port]:1 p = A;
+}
+
+:WPM is op=0xE3 {
+	write_program_memory(A, SRC);
+}
+
+:WR^stn is op>=0xE4 & op<=0xE7 & stn {
+	local a:2;
+	statAddr(a, stn);
+	*[ramstat]:1 a = A;
+}
+
+:SBM is op=0xE8 {
+	local a:2;
+	ramAddr(a);
+	local m:1 = *[ram]:1 a;
+	local x:1 = (~m) & 0xF;
+	local cin:1 = CY ^ 1;
+	addNibble(x, cin);
+}
+
+:RDM is op=0xE9 {
+	local a:2;
+	ramAddr(a);
+	A = *[ram]:1 a;
+}
+
+:RDR is op=0xEA {
+	local p:1 = SRC >> 4;
+	A = *[port]:1 p;
+}
+
+:ADM is op=0xEB {
+	local a:2;
+	ramAddr(a);
+	local m:1 = *[ram]:1 a;
+	addNibble(m, CY);
+}
+
+:RD^stn is op>=0xEC & op<=0xEF & stn {
+	local a:2;
+	statAddr(a, stn);
+	A = *[ramstat]:1 a;
+}
+
+:CLB is op=0xF0 {
+	A = 0;
+	CY = 0;
+}
+
+:CLC is op=0xF1 {
+	CY = 0;
+}
+
+:IAC is op=0xF2 {
+	local s:1 = A + 1;
+	CY = s >> 4;
+	A = s & 0xF;
+}
+
+:CMC is op=0xF3 {
+	CY = CY ^ 1;
+}
+
+:CMA is op=0xF4 {
+	A = (~A) & 0xF;
+}
+
+:RAL is op=0xF5 {
+	local s:1 = (A << 1) | CY;
+	CY = s >> 4;
+	A = s & 0xF;
+}
+
+:RAR is op=0xF6 {
+	local n:1 = (A >> 1) | (CY << 3);
+	CY = A & 1;
+	A = n;
+}
+
+:TCC is op=0xF7 {
+	A = CY;
+	CY = 0;
+}
+
+:DAC is op=0xF8 {
+	local s:1 = A + 0xF;
+	CY = s >> 4;
+	A = s & 0xF;
+}
+
+:TCS is op=0xF9 {
+	A = 9 + CY;
+	CY = 0;
+}
+
+:STC is op=0xFA {
+	CY = 1;
+}
+
+:DAA is op=0xFB {
+	local adj:1 = (A > 9) || (CY == 1);
+	local s:1 = A + (6 * adj);
+	CY = CY | (s >> 4);
+	A = s & 0xF;
+}
+
+:KBP is op=0xFC {
+	A = keyboard_process(A);
+}
+
+:DCL is op=0xFD {
+	CM = A & 7;
+}
+
+# 4040 additions (opcodes 0x01-0x0E are unused on the 4004)
+
+:HLT is op=0x01 {
+	halt();
+}
+
+:BBS is op=0x02 {
+	SRC = return_from_interrupt(SRC);
+	local ret:2;
+	popRet(ret);
+	return [ret];
+}
+
+:LCR is op=0x03 {
+	A = read_command_register();
+}
+
+:OR4 is op=0x04 {
+	A = A | R4;
+}
+
+:OR5 is op=0x05 {
+	A = A | R5;
+}
+
+:AN6 is op=0x06 {
+	A = A & R6;
+}
+
+:AN7 is op=0x07 {
+	A = A & R7;
+}
+
+:DB0 is op=0x08 {
+	select_rom_bank(0:1);
+}
+
+:DB1 is op=0x09 {
+	select_rom_bank(1:1);
+}
+
+:SB0 is op=0x0A {
+	select_register_bank(0:1);
+}
+
+:SB1 is op=0x0B {
+	select_register_bank(1:1);
+}
+
+:EIN is op=0x0C {
+	enable_interrupt();
+}
+
+:DIN is op=0x0D {
+	disable_interrupt();
+}
+
+:RPM is op=0x0E {
+	A = read_program_memory(SRC);
+}

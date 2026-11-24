@@ -1,0 +1,4 @@
+# NEC uPD96050: 16384-word program ROM, 2048-word data ROM, 2048-word data RAM.
+@define ROMMASK "0x7ff"
+@define RAMMASK "0x7ff"
+@include "upd7725.sinc"

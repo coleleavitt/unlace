@@ -99,6 +99,8 @@ mod verify_coldentry;
 
 #[path = "verify_ehcold.rs"]
 mod verify_ehcold;
+#[path = "verify_functails.rs"]
+mod verify_functails;
 
 #[path = "verify_importvote.rs"]
 mod verify_importvote;

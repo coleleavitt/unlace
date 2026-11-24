@@ -3708,6 +3708,14 @@ funcsym stream:
   calls `os_unfair_lock_lock_with_options` through an island on iOS 16 and
   through `HomeKit`'s rewritten stub on iOS 14, and both render the name.
 
+- **Empty functions** (kuna `nullsubs`, default off,
+  `crates/unlace-console/src/engine/kuna_thunknames.rs (name_nullsubs)`): after
+  the thunks are named, a discovered function still named by a placeholder whose
+  first instruction, after at most one that emits no p-code (`endbr64`, `bti`), is
+  a return doing nothing but its own stack and link-register work (`LOAD`,
+  `INT_ADD`, `INT_AND`, `COPY`) becomes `nullsub_<addr>` with the placeholder's
+  address spelling, IDA's `AF_NULLSUB`. On MIPS and SPARC those ops would be the
+  delay slot's, so the return must be alone. A name in use is left alone.
 - **Jump thunks** (kuna `thunknames`, default on,
   `crates/unlace-console/src/engine/kuna_thunknames.rs`): a function
   whose first instruction is a direct unconditional branch is a thunk (a
@@ -6914,6 +6922,25 @@ moves.
   Each entry is committed as a function symbol under its CRT name (plus a
   placeholder rename for one another fact already installed) and as a call-fixup
   fact; a match only names and tags, and a near miss of any one byte is no match.
+  On a little-endian ARM PE it also recognizes the Windows on ARM `/GS` helpers
+  `__security_push_cookie` and `__security_pop_cookie` by their bytes
+  (`crates/unlace-analysis/src/analyzers/callfixup/kuna_armgscookiesig.rs`), with the
+  `movw`/`movt` immediates of `__security_cookie`'s address masked out, as IDA 9.5's
+  `arm.so` does. The push helper allocates the word below its caller's stack pointer that
+  holds the scrambled cookie and returns with `sp` four bytes lower; the pop helper checks
+  and releases it. `ARM_win.cspec`'s `security_push_cookie` and `security_pop_cookie`
+  fixups model exactly that stack effect (`sp = sp - 4`, `sp = sp + 4`); as plain calls
+  every stack reference of the caller after the push was four bytes off, and its first
+  stack argument read as its second. With the fixups the cookie word and its check leave
+  the C, as `msvcstackguard` removes the x86 cookie.
+  The same pass names the MSVC 64-bit arithmetic helpers the `kuna_arithhelpers`
+  fixups target (`__allmul`, `__alldiv`, `__allrem`, `__alldvrm`, `__aulldiv`,
+  `__aullrem`, `__aulldvrm`, `__allshl`, `__allshr`, `__aullshr`) by their complete
+  instruction streams up to the last `ret`
+  (`crates/unlace-analysis/src/analyzers/callfixup/kuna_msvcarithsig.rs`); the
+  objects carry no relocation, so nothing is wildcarded. Without it a stripped
+  i386 PE prints each `long long` multiply, divide or shift as a call with four
+  32-bit words.
   On a 32-bit ARM image the pass likewise recognizes libgcc's Thumb-1 switch
   helpers (`__gnu_thumb1_case_uqi`, `_sqi`, `_uhi`, `_shi`, `_si`) by their
   instructions
@@ -10566,6 +10593,24 @@ FDE). The commit drops every discovered entry inside such a body, its start
 included, after the `coldentry` entries are added. A cold throw path reached by
 an ordinary branch (`may_throw.cold`) is not a landing-pad target and stays a
 function. x86/x86-64 ELF only.
+
+**(kuna) Or any other single-owner cold part** (`functails`, default off;
+`crates/unlace-analysis/src/analyzers/entry/kuna_ehcold.rs (cold_tails)`). The
+same test without the landing pad takes every `.cold` part IDA keeps as a
+function tail (`AF_FTAIL`, libida `append_func_tail`): a lone `ud2` after an
+assertion, an error call, an unlikely branch. An FDE body qualifies when no
+function symbol names its start, no direct `call rel32` targets it, every direct
+`jmp`/`jcc rel32` into it comes from one other FDE body (its owner), it lies
+before that owner, and its start is off the 16-byte alignment GCC and Clang give
+a function at -O2 but not a cold part. The last two tests keep a real function
+that only one other function tail-calls. The bodies go out on the `ehcold`
+channel, so the commit drops every entry inside one; the owner's flow decodes
+the part as before. Against IDA 9.5's own databases of its loaders, the IDA
+tail chunks kuna lists as functions drop from 9/51/4/18 to 2/12/0/5
+(pe/elf/coff/dex.so), and one function IDA keeps is lost (pe.so 0x62fe). The
+owners' C does not change, since their flow already decoded the parts; the parts
+stop being decompiled as functions of their own.
+x86/x86-64 ELF only.
 
 **(kuna) The pads that stay hidden are named** (`ehnote`, default-**on**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_itaniumeh.rs (eh_notes)`).

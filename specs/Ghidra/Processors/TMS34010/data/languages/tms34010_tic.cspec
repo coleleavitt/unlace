@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- TMS34010 C environment (TMS34010 C Compiler Reference Guide, section 5):
+     SP is the system stack (return addresses and saved registers, grows down),
+     A14 (STK) the program stack for arguments and locals (grows up), A13 (FP) the frame pointer.
+     Integers and pointers are returned in A8; every other register is preserved by the callee.
+     Arguments are pushed on the program stack (A14), which holds bit addresses, so Ghidra
+     cannot map them to stack parameters: functions get no automatic parameters. -->
+<compiler_spec>
+  <!-- TI TMS34010 C compiler: FS1 (field size 1) is 32 throughout a C function, so the
+       decompiler may assume it at function entry (C Compiler Reference Guide 5.2.1). -->
+  <context_data>
+    <tracked_set space="ram">
+      <set name="FS1" val="0"/>
+    </tracked_set>
+  </context_data>
+  <data_organization>
+    <absolute_max_alignment value="0"/>
+    <machine_alignment value="2"/>
+    <default_alignment value="1"/>
+    <default_pointer_alignment value="2"/>
+    <pointer_size value="4"/>
+    <wchar_size value="2"/>
+    <short_size value="2"/>
+    <integer_size value="4"/>
+    <long_size value="4"/>
+    <long_long_size value="8"/>
+    <float_size value="4"/>
+    <double_size value="8"/>
+    <long_double_size value="8"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="2"/>
+      <entry size="4" alignment="2"/>
+      <entry size="8" alignment="2"/>
+    </size_alignment_map>
+  </data_organization>
+  <global>
+    <range space="ram"/>
+  </global>
+  <stackpointer register="SP" space="ram" growth="negative"/>
+  <default_proto>
+    <prototype name="__stdcall" extrapop="0" stackshift="0">
+      <input>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="4">
+          <register name="A8"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="A0"/><register name="A1"/><register name="A2"/><register name="A3"/>
+        <register name="A4"/><register name="A5"/><register name="A6"/><register name="A7"/>
+        <register name="A9"/><register name="A10"/><register name="A11"/><register name="A12"/>
+        <register name="A13"/><register name="A14"/><register name="SP"/>
+        <register name="B0"/><register name="B1"/><register name="B2"/><register name="B3"/>
+        <register name="B4"/><register name="B5"/><register name="B6"/><register name="B7"/>
+        <register name="B8"/><register name="B9"/><register name="B10"/><register name="B11"/>
+        <register name="B12"/><register name="B13"/><register name="B14"/>
+        <register name="FS1"/><register name="FE1"/>
+      </unaffected>
+      <killedbycall>
+        <register name="A8"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

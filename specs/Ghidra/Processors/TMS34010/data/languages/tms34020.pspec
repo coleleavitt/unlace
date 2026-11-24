@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- TMS34020. Ghidra addresses are bit addresses divided by 8 (see tms34010.slaspec). The I/O
+     register names and order are the TMS34020's (64 registers; video timing registers moved). -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <register_data>
+    <register name="MMP" hidden="true"/>
+    <register name="STX" hidden="true"/>
+    <register name="_B15" hidden="true"/>
+  </register_data>
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="ram" first="0x18000000" last="0x1800007f"/>
+  </volatile>
+  <default_symbols>
+    <symbol name="VESYNC" address="ram:0x18000000"/>
+    <symbol name="HESYNC" address="ram:0x18000002"/>
+    <symbol name="VEBLNK" address="ram:0x18000004"/>
+    <symbol name="HEBLNK" address="ram:0x18000006"/>
+    <symbol name="VSBLNK" address="ram:0x18000008"/>
+    <symbol name="HSBLNK" address="ram:0x1800000a"/>
+    <symbol name="VTOTAL" address="ram:0x1800000c"/>
+    <symbol name="HTOTAL" address="ram:0x1800000e"/>
+    <symbol name="DPYCTL" address="ram:0x18000010"/>
+    <symbol name="DPYSTRT" address="ram:0x18000012"/>
+    <symbol name="DPYINT" address="ram:0x18000014"/>
+    <symbol name="CONTROL" address="ram:0x18000016"/>
+    <symbol name="HSTDATA" address="ram:0x18000018"/>
+    <symbol name="HSTADRL" address="ram:0x1800001a"/>
+    <symbol name="HSTADRH" address="ram:0x1800001c"/>
+    <symbol name="HSTCTLL" address="ram:0x1800001e"/>
+    <symbol name="HSTCTLH" address="ram:0x18000020"/>
+    <symbol name="INTENB" address="ram:0x18000022"/>
+    <symbol name="INTPEND" address="ram:0x18000024"/>
+    <symbol name="CONVSP" address="ram:0x18000026"/>
+    <symbol name="CONVDP" address="ram:0x18000028"/>
+    <symbol name="PSIZE" address="ram:0x1800002a"/>
+    <symbol name="PMASKL" address="ram:0x1800002c"/>
+    <symbol name="PMASKH" address="ram:0x1800002e"/>
+    <symbol name="CONVMP" address="ram:0x18000030"/>
+    <symbol name="CONTROL2" address="ram:0x18000032"/>
+    <symbol name="CONFIG" address="ram:0x18000034"/>
+    <symbol name="DPYTAP" address="ram:0x18000036"/>
+    <symbol name="VCOUNT" address="ram:0x18000038"/>
+    <symbol name="HCOUNT" address="ram:0x1800003a"/>
+    <symbol name="DPYADR" address="ram:0x1800003c"/>
+    <symbol name="REFADR" address="ram:0x1800003e"/>
+    <symbol name="DPYSTL" address="ram:0x18000040"/>
+    <symbol name="DPYSTH" address="ram:0x18000042"/>
+    <symbol name="DPYNXL" address="ram:0x18000044"/>
+    <symbol name="DPYNXH" address="ram:0x18000046"/>
+    <symbol name="DINCL" address="ram:0x18000048"/>
+    <symbol name="DINCH" address="ram:0x1800004a"/>
+    <symbol name="RESERVED_260" address="ram:0x1800004c"/>
+    <symbol name="HESERR" address="ram:0x1800004e"/>
+    <symbol name="RESERVED_280" address="ram:0x18000050"/>
+    <symbol name="RESERVED_290" address="ram:0x18000052"/>
+    <symbol name="RESERVED_2A0" address="ram:0x18000054"/>
+    <symbol name="RESERVED_2B0" address="ram:0x18000056"/>
+    <symbol name="SCOUNT" address="ram:0x18000058"/>
+    <symbol name="BSFLTST" address="ram:0x1800005a"/>
+    <symbol name="DPYMSK" address="ram:0x1800005c"/>
+    <symbol name="RESERVED_2F0" address="ram:0x1800005e"/>
+    <symbol name="SETVCNT" address="ram:0x18000060"/>
+    <symbol name="SETHCNT" address="ram:0x18000062"/>
+    <symbol name="BSFLTDL" address="ram:0x18000064"/>
+    <symbol name="BSFLTDH" address="ram:0x18000066"/>
+    <symbol name="RESERVED_340" address="ram:0x18000068"/>
+    <symbol name="RESERVED_350" address="ram:0x1800006a"/>
+    <symbol name="RESERVED_360" address="ram:0x1800006c"/>
+    <symbol name="RESERVED_370" address="ram:0x1800006e"/>
+    <symbol name="IHOST1L" address="ram:0x18000070"/>
+    <symbol name="IHOST1H" address="ram:0x18000072"/>
+    <symbol name="IHOST2L" address="ram:0x18000074"/>
+    <symbol name="IHOST2H" address="ram:0x18000076"/>
+    <symbol name="IHOST3L" address="ram:0x18000078"/>
+    <symbol name="IHOST3H" address="ram:0x1800007a"/>
+    <symbol name="IHOST4L" address="ram:0x1800007c"/>
+    <symbol name="IHOST4H" address="ram:0x1800007e"/>
+    <symbol name="VECTOR_RESET" address="ram:0x1ffffffc"/>
+    <symbol name="VECTOR_INT1" address="ram:0x1ffffff8"/>
+    <symbol name="VECTOR_INT2" address="ram:0x1ffffff4"/>
+    <symbol name="VECTOR_TRAP3" address="ram:0x1ffffff0"/>
+    <symbol name="VECTOR_TRAP4" address="ram:0x1fffffec"/>
+    <symbol name="VECTOR_TRAP5" address="ram:0x1fffffe8"/>
+    <symbol name="VECTOR_TRAP6" address="ram:0x1fffffe4"/>
+    <symbol name="VECTOR_TRAP7" address="ram:0x1fffffe0"/>
+    <symbol name="VECTOR_NMI" address="ram:0x1fffffdc"/>
+    <symbol name="VECTOR_HI" address="ram:0x1fffffd8"/>
+    <symbol name="VECTOR_DI" address="ram:0x1fffffd4"/>
+    <symbol name="VECTOR_WV" address="ram:0x1fffffd0"/>
+    <symbol name="VECTOR_TRAP12" address="ram:0x1fffffcc"/>
+    <symbol name="VECTOR_TRAP13" address="ram:0x1fffffc8"/>
+    <symbol name="VECTOR_TRAP14" address="ram:0x1fffffc4"/>
+    <symbol name="VECTOR_TRAP15" address="ram:0x1fffffc0"/>
+    <symbol name="VECTOR_TRAP16" address="ram:0x1fffffbc"/>
+    <symbol name="VECTOR_TRAP17" address="ram:0x1fffffb8"/>
+    <symbol name="VECTOR_TRAP18" address="ram:0x1fffffb4"/>
+    <symbol name="VECTOR_TRAP19" address="ram:0x1fffffb0"/>
+    <symbol name="VECTOR_TRAP20" address="ram:0x1fffffac"/>
+    <symbol name="VECTOR_TRAP21" address="ram:0x1fffffa8"/>
+    <symbol name="VECTOR_TRAP22" address="ram:0x1fffffa4"/>
+    <symbol name="VECTOR_TRAP23" address="ram:0x1fffffa0"/>
+    <symbol name="VECTOR_TRAP24" address="ram:0x1fffff9c"/>
+    <symbol name="VECTOR_TRAP25" address="ram:0x1fffff98"/>
+    <symbol name="VECTOR_TRAP26" address="ram:0x1fffff94"/>
+    <symbol name="VECTOR_TRAP27" address="ram:0x1fffff90"/>
+    <symbol name="VECTOR_TRAP28" address="ram:0x1fffff8c"/>
+    <symbol name="VECTOR_TRAP29" address="ram:0x1fffff88"/>
+    <symbol name="VECTOR_ILLOP" address="ram:0x1fffff84"/>
+    <symbol name="VECTOR_TRAP31" address="ram:0x1fffff80"/>
+    <symbol name="VECTOR_SINGLESTEP" address="ram:0x1fffff7c"/>
+    <symbol name="VECTOR_BUSFAULT" address="ram:0x1fffff78"/>
+  </default_symbols>
+  <default_memory_blocks>
+    <memory_block name="IO" start_address="ram:0x18000000" length="0x80" initialized="false" mode="rwv"/>
+  </default_memory_blocks>
+</processor_spec>

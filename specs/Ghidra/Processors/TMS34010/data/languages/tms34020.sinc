@@ -1,0 +1,607 @@
+# TMS34020 instructions (included by tms34010.sinc when TMS34020 is defined).
+#
+# Opcode map and text follow MAME's TMS34020 disassembler (34010dsm.cpp) and which opcodes are
+# valid follows MAME's TMS34020 opcode table (34010tbl.hxx), except FLINE and LINIT: MAME's core
+# has handlers for them but its table does not list them; the TMS34020 User's Guide gives their
+# encodings (DE1Ah/DE9Ah and 0C57h), and the rows holding those words decode here.
+# Semantics follow the TMS34020 User's Guide (TI 2564006-9721, August 1990), chapter 13; MAME's
+# core implements only a few of these instructions (see GHIDRA-RARE.md).
+#
+# Syntax differences from MAME's disassembler (which the test normalises):
+#   CMOVCM -*Rd / CMOVMC -*Rs (MAME prints *-Rd)
+#   CMOVCS command,ID (MAME prints a leading comma)
+#   TRAPL N (MAME prints TRAPL and does not read the N word)
+
+attach variables [ cp_r ]  [ A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 SP ];
+attach variables [ cp_rB ] [ B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 B10 B11 B12 B13 B14 SP ];
+CpR: cp_r  is cp_rf=0 & cp_r  { export cp_r; }
+CpR: cp_rB is cp_rf=1 & cp_rB { export cp_rB; }
+
+# The coprocessor (e.g. a TMS34082) is external hardware: commands and the data it returns or
+# accepts are pcodeops. The TMS34020 side (registers, memory transfers, pointer updates, status)
+# is p-code.
+define pcodeop coprocessor_command;   # (ID, 21-bit command, size): command cycle
+define pcodeop coprocessor_write;     # (ID, 32-bit value): value sent to the coprocessor
+define pcodeop coprocessor_read;      # (ID) -> 32-bit value from the coprocessor
+define pcodeop wait_for_interrupt;    # IDLE
+
+macro cpcmd(id, cmd, sz) {
+	local i:1 = id; local c:4 = cmd; local z:1 = sz;
+	coprocessor_command(i, c, z);
+}
+
+# =============================================================================================
+# Arithmetic, bit search, swap
+# =============================================================================================
+
+:CMPK K32,Rd is op6=0x0d & K32 & Rd {
+	local a:4 = Rd; local b:4 = K32; local r:4 = a - b;
+	subflags(a, b, r);
+}
+
+# RMO: bit number of the rightmost 1 of Rs (0 and Z=1 if Rs is 0)
+:RMO Rs,Rd is op7=0x3d & Rs & Rd {
+	local s:4 = Rs;
+	Z = s == 0;
+	local low:4 = s & (0 - s);
+	local lz:4 = lzcount(low);
+	Rd = zext(s != 0) * (31 - lz);
+}
+
+:ADDXYI il1,Rd is op11=0x060 & Rd; il1 {
+	local imm:4 = il1; local sx:2 = imm:2; local sy:2 = imm(2); local dx:2; local dy:2;
+	getx(dx, Rd); gety(dy, Rd);
+	dx = dx + sx; dy = dy + sy;
+	N = dx == 0; C = dy s< 0; Z = dy == 0; V = dx s< 0;
+	setxy(Rd, dx, dy);
+}
+
+# SWAPF *Rs,Rd,0: exchange Rd with the field 0 (FS0/FE0) at *Rs; status from the new Rd
+:SWAPF *Rs,Rd,"0" is op7=0x3f & Rs & Rd {
+	local old:4; rfield(old, Rs, FS0, FE0);
+	wfield(Rs, FS0, Rd);
+	Rd = old;
+	setnz(Rd); V = 0;
+}
+
+# =============================================================================================
+# Program control
+# =============================================================================================
+
+# TRAPL N: vector at bit address FFFFFFE0h - 32 * N (N signed 16 bits); TRAPL 0 pushes PC and
+# ST like every other trap (unlike TRAP 0)
+:TRAPL iw1s is op12=0x080; iw1s {
+	local ra:4 = inst_next; push32(ra << 3);
+	local st:4; getst(st); push32(st);
+	resetst();
+	local n:4 = sext(iw1s:2);
+	local vec:4 = (0xffffffe0 - (n << 5)) >> 3;
+	local t:4 = *:4 vec;
+	local a:4; codeaddr(a, t);
+	call [a];
+}
+
+# RETM ends a single-step trap routine: it pops ST and PC like RETI (it also bypasses the
+# instruction cache, which has no effect here)
+:RETM is op12=0x086 {
+	local st:4; pop32(st);
+	local t:4; pop32(t);
+	putst(st);
+	local a:4; codeaddr(a, t);
+	return [a];
+}
+
+# IDLE waits for an interrupt; the interrupt returns to the next instruction
+:IDLE is op12=0x004 { wait_for_interrupt(); }
+# MWAIT waits for pending writes to complete; memory accesses here are never pending
+:MWAIT is op12=0x008 { }
+
+# =============================================================================================
+# Block move
+# =============================================================================================
+
+# BLMOVE S,D: move B7 bits from B0 to B2 (S/D only state whether B0/B2 may be unaligned); B0 and
+# B2 end up advanced by the count, B7 at 0
+:BLMOVE b1,rd0 is op12=0x00f & b1 & rd0 {
+	local n:4 = B7; local s:4 = B0; local d:4 = B2;
+<loop>
+	if (n < 32) goto <tail>;
+	local v:4; rfield(v, s, 0:1, 0:1); wfield(d, 0:1, v);
+	s = s + 32; d = d + 32; n = n - 32;
+	goto <loop>;
+<tail>
+	if (n == 0) goto <done>;
+	local sz:1 = n:1;
+	local t:4; rfield(t, s, sz, 0:1); wfield(d, sz, t);
+	s = s + n; d = d + n;
+<done>
+	B0 = s; B2 = d; B7 = 0;
+}
+
+# =============================================================================================
+# Pixel size, pitch conversion and XY-to-linear conversion
+# =============================================================================================
+
+:GETPS Rd is op11=0x016 & Rd { Rd = zext(*:2 $(PSIZE)); }
+:EXGPS Rd is op11=0x015 & Rd {
+	local old:4 = zext(*:2 $(PSIZE));
+	*:2 $(PSIZE) = Rd:2;
+	Rd = old;
+}
+
+# RPIX: replicate the right-justified pixel in Rd throughout the register
+:RPIX Rd is op11=0x014 & Rd {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local m:4 = (1:4 << ps) - 1;
+	local rep:4 = 0xffffffff / m;
+	Rd = (Rd & m) * rep;
+}
+
+# SETCSP/SETCDP/SETCMP: CONVxP from xPTCH: the LMO (31 - bit number) of a power of 2; for a sum of
+# two powers of 2 the LMO of the larger one in bits 4-0 and of the smaller in bits 12-8;
+# otherwise 0 (arbitrary pitch)
+macro setconv(res, p) {
+	local c:4 = popcount(p);
+	local lz1:4 = lzcount(p);
+	local p2:4 = p & ~(0x80000000 >> lz1);
+	local lz2:4 = lzcount(p2);
+	res = zext(c == 1) * lz1 + zext(c == 2) * ((lz2 << 8) | lz1);
+}
+:SETCSP is op12=0x025 { local v:4; setconv(v, B1); *:2 $(CONVSP) = v:2; }
+:SETCDP is op12=0x027 { local v:4; setconv(v, B3); *:2 $(CONVDP) = v:2; }
+:SETCMP is op12=0x02f { local v:4; setconv(v, B11); *:2 $(CONVMP) = v:2; }
+
+# CVSXYL Rs,Rd: Y * source pitch + X * PSIZE + Rs
+:CVSXYL Rs,Rd is op7=0x75 & Rs & Rd {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local cv:4 = zext(*:2 $(CONVSP));
+	local f:4; pitchfac(f, cv, B1);
+	local xx:2 = Rd:2; local yy:2 = Rd(2);
+	Rd = sext(yy) * f + (sext(xx) << psh) + Rs;
+}
+# CVDXYL Rd: Y * destination pitch + X * PSIZE + OFFSET of Rd's file (A4 or B4)
+:CVDXYL Rd is op11=0x054 & rf=0 & Rd {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local cv:4 = zext(*:2 $(CONVDP));
+	local f:4; pitchfac(f, cv, B3);
+	local xx:2 = Rd:2; local yy:2 = Rd(2);
+	Rd = sext(yy) * f + (sext(xx) << psh) + A4;
+}
+:CVDXYL Rd is op11=0x054 & rf=1 & Rd {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local cv:4 = zext(*:2 $(CONVDP));
+	local f:4; pitchfac(f, cv, B3);
+	local xx:2 = Rd:2; local yy:2 = Rd(2);
+	Rd = sext(yy) * f + (sext(xx) << psh) + B4;
+}
+# CVMXYL Rd: Y * mask pitch + X (the mask array has one bit per pixel; no offset)
+:CVMXYL Rd is op11=0x053 & Rd {
+	local cv:4 = zext(*:2 $(CONVMP));
+	local f:4; pitchfac(f, cv, B11);
+	local xx:2 = Rd:2; local yy:2 = Rd(2);
+	Rd = sext(yy) * f + sext(xx);
+}
+
+# =============================================================================================
+# Window clipping and line setup
+# =============================================================================================
+
+# CLIP: clip the XY array DADDR (B2), DYDX (B7) to the window WSTART (B5) - WEND (B6).
+# Entirely outside: Z=1, V=1, registers unchanged. Otherwise Z=0, V=1 if anything was cut off,
+# and DADDR/DYDX describe the part inside. Computed in 32 bits, so arrays whose far corner
+# overflows 16 bits are handled.
+:CLIP is op12=0x08f {
+	local t:2;
+	local x0:4 = sext(B2:2); t = B2(2); local y0:4 = sext(t);
+	local w:4 = sext(B7:2); t = B7(2); local h:4 = sext(t);
+	local sx:4 = sext(B5:2); t = B5(2); local sy:4 = sext(t);
+	local ex:4 = sext(B6:2); t = B6(2); local ey:4 = sext(t);
+	local x1:4 = x0 + w - 1; local y1:4 = y0 + h - 1;
+	local cx0:4 = x0 + zext(sx s> x0) * (sx - x0);
+	local cy0:4 = y0 + zext(sy s> y0) * (sy - y0);
+	local cx1:4 = x1 - zext(x1 s> ex) * (x1 - ex);
+	local cy1:4 = y1 - zext(y1 s> ey) * (y1 - ey);
+	if (cx0 s> cx1 || cy0 s> cy1) goto <outside>;
+	Z = 0;
+	V = (cx0 != x0) || (cy0 != y0) || (cx1 != x1) || (cy1 != y1);
+	B2 = (cy0 << 16) | (cx0 & 0xffff);
+	B7 = ((cy1 - cy0 + 1) << 16) | ((cx1 - cx0 + 1) & 0xffff);
+	goto inst_next;
+<outside>
+	Z = 1; V = 1;
+}
+
+# LINIT: set up LINE/FLINE from the start point (B2, XY) and end point (B7, XY):
+# a = major and b = minor extent, B0 = 2b - a, B7 = b:a, B10 = a + 1, B11 = diagonal (minor axis)
+# increment, B12 = dominant (major axis) increment. X is the major axis when |dx| >= |dy|.
+# Status: N = vertical (x0 = x1), Z = horizontal (y0 = y1), C = both end points beyond the same
+# window edge (CPW outcodes ANDed nonzero: trivially rejected), V = an end point outside.
+macro outcode(res, xy) {
+	local x:2 = xy:2; local y:2 = xy(2);
+	res = (zext(B5:2 s> x) << 5) | (zext(x s> B6:2) << 6) |
+	      (zext(B5(2) s> y) << 7) | (zext(y s> B6(2)) << 8);
+}
+:LINIT is op12=0x0c5 {
+	local t:2;
+	local x0:4 = sext(B2:2); t = B2(2); local y0:4 = sext(t);
+	local x1:4 = sext(B7:2); t = B7(2); local y1:4 = sext(t);
+	local dx:4 = x1 - x0; local dy:4 = y1 - y0;
+	local adx:4 = dx - zext(dx s< 0) * 2 * dx;
+	local ady:4 = dy - zext(dy s< 0) * 2 * dy;
+	local sx:4 = zext(dx s> 0) - zext(dx s< 0);
+	local sy:4 = zext(dy s> 0) - zext(dy s< 0);
+	local xmaj:4 = zext(adx s>= ady);
+	local a:4 = xmaj * adx + (1 - xmaj) * ady;
+	local b:4 = xmaj * ady + (1 - xmaj) * adx;
+	local o0:4; outcode(o0, B2);
+	local o1:4; outcode(o1, B7);
+	N = dx == 0; Z = dy == 0;
+	C = (o0 & o1) != 0; V = (o0 | o1) != 0;
+	B0 = 2 * b - a;
+	B7 = (b << 16) | (a & 0xffff);
+	B10 = a + 1;
+	B11 = (sy << 16) | (sx & 0xffff);
+	B12 = xmaj * (sx & 0xffff) + (1 - xmaj) * (sy << 16);
+}
+
+# =============================================================================================
+# Lines, fills and transfers
+# =============================================================================================
+
+# FLINE 0/1: LINE with a linear DADDR (B2) and no window checking. The XY increments in B11/B12
+# are converted to linear with CONVDP (and DPTCH for an arbitrary pitch) and PSIZE.
+# Pixels are COLOR1 (B9) or COLOR0 (B8) as bit 0 of PATTERN (B13) is 1 or 0; PATTERN is rotated
+# right by one bit per pixel.
+:FLINE LineZ is op8=0xde & LineZ & b4_6=1 {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local cv:4 = zext(*:2 $(CONVDP));
+	local f:4; pitchfac(f, cv, B3);
+	local t:2;
+	t = B11(2); local i1:4 = sext(t) * f + (sext(B11:2) << psh);
+	t = B12(2); local i2:4 = sext(t) * f + (sext(B12:2) << psh);
+	local a2:4 = zext(B7:2) << 1;
+	t = B7(2); local b2:4 = zext(t) << 1;
+<loop>
+	if (B10 s<= 0) goto <done>;
+	local diag:1 = B0 s>= LineZ;
+	B10 = B10 - 1;
+	local lc:4 = zext((B13 & 1) == 1) * B9 + zext((B13 & 1) == 0) * B8;
+	wpix(B2, lc);
+	B13 = (B13 >> 1) | (B13 << 31);
+	B0 = B0 + b2 - zext(diag) * a2;
+	B2 = B2 + zext(diag) * i1 + zext(!diag) * i2;
+	goto <loop>;
+<done>
+	PBX = 0;
+}
+
+# PFILL XY: fill DADDR/DYDX with COLOR1/COLOR0 pixels as the PATTERN (B13) bits are 1/0. The
+# first pixel of each row is controlled by bit n, n = its pixel number within its 32-bit word,
+# and the following pixels by the next bits, cyclically. Window checking as FILL XY.
+:PFILL "XY" is op12=0x0a3 {
+	local dyh:2 = B7(2);
+	local dx:4 = sext(B7:2); local dy:4 = sext(dyh);
+	if (dx s<= 0 || dy s<= 0) goto inst_next;
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local ox:4 = 0; local oy:4 = 0;
+	local da:4; dxytol(da, B2);
+	local go:1;
+	local ax:2 = B2:2; local ay:2 = B2(2);
+	arraywin(go, ax, ay, dx, dy, ox, oy);
+	if (!go) goto inst_next;
+	da = da + (ox << psh) + oy * B3;
+	local row:4 = da;
+	local y:4 = 0;
+<rowloop>
+	local x:4 = 0;
+	local a:4 = row;
+	local n0:4 = (row & 31) >> psh;
+<pixloop>
+	local bit:4 = (B13 >> ((n0 + x) & 31)) & 1;
+	local sh:4 = a & 31 & ~(ps - 1);
+	wpix(a, (bit * B9 + (1 - bit) * B8) >> sh);
+	a = a + ps;
+	x = x + 1;
+	if (x s< dx) goto <pixloop>;
+	row = row + B3;
+	y = y + 1;
+	if (y s< dy) goto <rowloop>;
+	PBX = 0;
+}
+
+# TFILL XY: draw one trapezoid row from X1 (B0, 16.16 fixed point) up to, not including, X2
+# (B7, fixed point) on row Y (B11, fixed point) with COLOR1, then X1 += DX1 (B1), X2 += DX2
+# (B10), Y += 1. Nothing is drawn when X2 <= X1. B2 is the instruction's working register: it is
+# left at the XY address of the row's first pixel. Window: W=3 draws the pixels inside, W=1
+# draws nothing and sets WVP if a pixel is inside, W=2 stops with WVP at the first pixel outside.
+# The status bits are unaffected.
+:TFILL "XY" is op12=0x0ef {
+	local w:2 = (*:2 $(CONTROL) >> 6) & 3;
+	local x1:4 = B0 s>> 16; local x2:4 = B7 s>> 16; local y:4 = B11 s>> 16;
+	B2 = (y << 16) | (x1 & 0xffff);
+	local x:4 = x1;
+	local sx:2 = B5:2; local sy:2 = B5(2); local ex:2 = B6:2; local ey:2 = B6(2);
+	local yy:2 = y:2;
+<loop>
+	if (x s>= x2) goto <adv>;
+	local xx:2 = x:2;
+	local out:1 = (xx s< sx) || (xx s> ex) || (yy s< sy) || (yy s> ey);
+	if (w == 1 && !out) goto <wvp>;
+	if (w == 2 && out) goto <wvp>;
+	if (w == 3 && out) goto <next>;
+	if (w == 1) goto <next>;
+	local xy:4 = (y << 16) | (x & 0xffff);
+	local a:4; dxytol(a, xy);
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local sh:4 = a & 31 & ~(ps - 1);
+	wpix(a, B9 >> sh);
+<next>
+	x = x + 1;
+	goto <loop>;
+<wvp>
+	local ip:2 = *:2 $(INTPEND);
+	*:2 $(INTPEND) = ip | 0x800;
+<adv>
+	B0 = B0 + B1; B7 = B7 + B10; B11 = B11 + 0x10000;
+	PBX = 0;
+}
+
+# FPIXEQ / FPIXNE: search from MADDR (B10) for MPTCH (B11) pixels for the first pixel equal /
+# not equal to the COLOR0 pixel (both read through the plane mask). MPTCH > 0 searches upwards
+# (MADDR is left after the pixel found), MPTCH < 0 downwards (MADDR is left at the pixel found);
+# MPTCH counts towards 0. Z = 1 if a pixel was found.
+:FPIXEQ is op12=0x0ab {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local m:4 = (1:4 << ps) - 1;
+	Z = 0;
+<loop>
+	if (B11 == 0) goto inst_next;
+	local a:4 = B10;
+	if (B11 s< 0) goto <dec>;
+	B10 = B10 + ps; B11 = B11 - 1;
+	goto <test>;
+<dec>
+	B10 = B10 - ps; B11 = B11 + 1; a = B10;
+<test>
+	local p:4; rpix(p, a);
+	local sh:4 = a & 31 & ~(ps - 1);
+	local pm:4 = *:4 $(PMASK) >> sh;
+	local c:4 = (B8 >> sh) & m & ~pm;
+	if (p != c) goto <loop>;
+	Z = 1;
+}
+:FPIXNE is op12=0x0ad {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local m:4 = (1:4 << ps) - 1;
+	Z = 0;
+<loop>
+	if (B11 == 0) goto inst_next;
+	local a:4 = B10;
+	if (B11 s< 0) goto <dec>;
+	B10 = B10 + ps; B11 = B11 - 1;
+	goto <test>;
+<dec>
+	B10 = B10 - ps; B11 = B11 + 1; a = B10;
+<test>
+	local p:4; rpix(p, a);
+	local sh:4 = a & 31 & ~(ps - 1);
+	local pm:4 = *:4 $(PMASK) >> sh;
+	local c:4 = (B8 >> sh) & m & ~pm;
+	if (p == c) goto <loop>;
+	Z = 1;
+}
+
+# PIXBLT L,M,L: linear source (B0, pitch B1) to linear destination (B2, pitch B3) where the bit
+# of the binary mask array (B10, pitch B11) is 1, with pixel processing, transparency and plane
+# masking; PBH/PBV reverse the traversal from the corners software supplies, as PIXBLT L,L. At
+# the end B0, B2 and B10 point one row past their arrays (as PIXBLT L,L leaves SADDR/DADDR).
+:PIXBLT "L,M,L" is op12=0x0e1 {
+	local dyh:2 = B7(2);
+	local dx:4 = sext(B7:2); local dy:4 = sext(dyh);
+	if (dx s<= 0 || dy s<= 0) goto inst_next;
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local ctl:2 = *:2 $(CONTROL);
+	local pbh:4 = zext(((ctl >> 8) & 1) == 1);
+	local pbv:4 = zext(((ctl >> 9) & 1) == 1);
+	local sfinal:4 = B0 + dy * B1;
+	local dfinal:4 = B2 + dy * B3;
+	local mfinal:4 = B10 + dy * B11;
+	local sa:4 = B0 - pbh * ps;
+	local da:4 = B2 - pbh * ps;
+	local ma:4 = B10 - pbh;
+	local step:4 = ps - pbh * 2 * ps;
+	local mstep:4 = 1 - pbh * 2;
+	local srow:4 = B1 - pbv * 2 * B1;
+	local drow:4 = B3 - pbv * 2 * B3;
+	local mrow:4 = B11 - pbv * 2 * B11;
+	local y:4 = 0;
+<rowloop>
+	local x:4 = 0;
+	local s:4 = sa; local d:4 = da; local mk:4 = ma;
+<pixloop>
+	local mw:2 = *:2 ((mk & 0xfffffff0) >> 3);
+	if (((mw >> (mk & 15)) & 1) == 0) goto <skip>;
+	local p:4; rpix(p, s);
+	wpix(d, p);
+<skip>
+	s = s + step; d = d + step; mk = mk + mstep;
+	x = x + 1;
+	if (x s< dx) goto <pixloop>;
+	sa = sa + srow; da = da + drow; ma = ma + mrow;
+	y = y + 1;
+	if (y s< dy) goto <rowloop>;
+	B0 = sfinal; B2 = dfinal; B10 = mfinal;
+	PBX = 0;
+}
+
+# VRAM block-write instructions. VLCOL loads COLOR1 into the colour registers of the VRAMs
+# (VCOLOR here); VFILL L and VBLT B,L then write those colour pixels with the plane mask (the
+# VRAM write mask) and no pixel processing or transparency. The User's Guide gives no final
+# register values for VFILL/VBLT; they are left unchanged here.
+macro vpix(a) {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local m:4 = (1:4 << ps) - 1;
+	local sh:4 = a & 31 & ~(ps - 1);
+	local wa:4 = (a & 0xffffffe0) >> 3;
+	local w:4 = *:4 wa;
+	local pm:4 = (*:4 $(PMASK) >> sh) & m;
+	local nw:4 = (w & ~((m & ~pm) << sh)) | ((((VCOLOR >> sh) & m) & ~pm) << sh);
+	*:4 wa = nw;
+}
+
+:VLCOL is op12=0x0a0 { VCOLOR = B9; }
+
+:VFILL "L" is op12=0x0a5 {
+	local dyh:2 = B7(2);
+	local dx:4 = sext(B7:2); local dy:4 = sext(dyh);
+	if (dx s<= 0 || dy s<= 0) goto inst_next;
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local row:4 = B2;
+	local y:4 = 0;
+<rowloop>
+	local x:4 = 0;
+	local a:4 = row;
+<pixloop>
+	vpix(a);
+	a = a + ps;
+	x = x + 1;
+	if (x s< dx) goto <pixloop>;
+	row = row + B3;
+	y = y + 1;
+	if (y s< dy) goto <rowloop>;
+	PBX = 0;
+}
+
+:VBLT "B,L" is op12=0x085 {
+	local dyh:2 = B7(2);
+	local dx:4 = sext(B7:2); local dy:4 = sext(dyh);
+	if (dx s<= 0 || dy s<= 0) goto inst_next;
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local srow:4 = B0; local drow:4 = B2;
+	local y:4 = 0;
+<rowloop>
+	local x:4 = 0;
+	local s:4 = srow; local d:4 = drow;
+<pixloop>
+	local sw:2 = *:2 ((s & 0xfffffff0) >> 3);
+	if (((sw >> (s & 15)) & 1) == 0) goto <skip>;
+	vpix(d);
+<skip>
+	s = s + 1; d = d + ps;
+	x = x + 1;
+	if (x s< dx) goto <pixloop>;
+	srow = srow + B1; drow = drow + B3;
+	y = y + 1;
+	if (y s< dy) goto <rowloop>;
+	PBX = 0;
+}
+
+# =============================================================================================
+# Coprocessor interface
+# =============================================================================================
+
+:CEXEC cp_sz,cp_cmd,cp_id is op12=0x060; cp_sz & cp_cmd & cp_id {
+	cpcmd(cp_id, cp_cmd, cp_sz);
+}
+# Short form: command bits 4-0 from the opcode, bits 20-5 from the second word (MAME's layout)
+:CEXEC rd0,scmd,iw1id is op9=0x1b0 & rd0 & cs5; iw1 & iw1id [ scmd = ((iw1 << 5) & 0x1fffe0) | cs5; ] {
+	cpcmd(iw1id, scmd, rd0);
+}
+
+:CMOVGC Rd,cp_cmd,cp_id is op11=0x031 & Rd; cp_sz & cp_cmd & cp_id {
+	cpcmd(cp_id, cp_cmd, cp_sz);
+	local i:1 = cp_id;
+	coprocessor_write(i, Rd);
+}
+:CMOVGC Rd,CpR,cp_sz,cp_cmd,cp_id is op11=0x032 & Rd; CpR & cp_sz & cp_cmd & cp_id {
+	cpcmd(cp_id, cp_cmd, cp_sz);
+	local i:1 = cp_id;
+	coprocessor_write(i, Rd);
+	coprocessor_write(i, CpR);
+}
+
+# CMOVCS: the 4 MSBs of the coprocessor value go to N, C, Z, V
+:CMOVCS cp_cmd,cp_id is op16=0x0660; cp_lo8=1 & cp_cmd & cp_id {
+	cpcmd(cp_id, cp_cmd, 0:1);
+	local i:1 = cp_id;
+	local v:4 = coprocessor_read(i);
+	N = v[31,1]; C = v[30,1]; Z = v[29,1]; V = v[28,1];
+}
+# CMOVCG Rd1,Rd2,size: one value (size 0) to Rd1, or two (size 1) to Rd1 then Rd2; N and Z from
+# the last value, V cleared
+:CMOVCG Rd,CpR,cp_sz,cp_cmd,cp_id is op11=0x033 & Rd; CpR & cp_sz & cp_cmd & cp_id {
+	cpcmd(cp_id, cp_cmd, cp_sz);
+	local i:1 = cp_id;
+	local v:4 = coprocessor_read(i);
+	Rd = v;
+	local sz:1 = cp_sz;
+	if (sz == 0) goto <st>;
+	v = coprocessor_read(i);
+	CpR = v;
+<st>
+	setnz(v); V = 0;
+}
+
+# Memory transfers: the count field is the number of 32-bit transfers (0 means 32; the assembler
+# doubles the count for 64-bit values). Values are 32-bit fields at any bit address.
+:CMOVMC *CpR^"+",low5,cp_sz,cp_cmd,cp_id is op11=0x034 & low5; CpR & cp_sz & cp_cmd & cp_id {
+	cpcmd(cp_id, cp_cmd, cp_sz);
+	local i:1 = cp_id;
+	local n:4 = low5;
+	n = n + zext(n == 0) * 32;
+<loop>
+	local v:4; rfield(v, CpR, 0:1, 0:1);
+	coprocessor_write(i, v);
+	CpR = CpR + 32;
+	n = n - 1;
+	if (n != 0) goto <loop>;
+}
+:CMOVMC -*CpR,low5,cp_sz,cp_cmd,cp_id is op11=0x041 & low5; CpR & cp_sz & cp_cmd & cp_id {
+	cpcmd(cp_id, cp_cmd, cp_sz);
+	local i:1 = cp_id;
+	local n:4 = low5;
+	n = n + zext(n == 0) * 32;
+<loop>
+	CpR = CpR - 32;
+	local v:4; rfield(v, CpR, 0:1, 0:1);
+	coprocessor_write(i, v);
+	n = n - 1;
+	if (n != 0) goto <loop>;
+}
+# Register count: the low 5 bits of Rd (0 means 32)
+:CMOVMC *CpR^"+",Rd,cp_sz,cp_cmd,cp_id is op11=0x037 & Rd; CpR & cp_sz & cp_cmd & cp_id {
+	cpcmd(cp_id, cp_cmd, cp_sz);
+	local i:1 = cp_id;
+	local n:4 = Rd & 31;
+	n = n + zext(n == 0) * 32;
+<loop>
+	local v:4; rfield(v, CpR, 0:1, 0:1);
+	coprocessor_write(i, v);
+	CpR = CpR + 32;
+	n = n - 1;
+	if (n != 0) goto <loop>;
+}
+:CMOVCM *Rd^"+",cp_n,cp_sz,cp_cmd,cp_id is op11=0x035 & Rd; cp_n & cp_sz & cp_cmd & cp_id {
+	cpcmd(cp_id, cp_cmd, cp_sz);
+	local i:1 = cp_id;
+	local n:4 = cp_n;
+	n = n + zext(n == 0) * 32;
+<loop>
+	local v:4 = coprocessor_read(i);
+	wfield(Rd, 0:1, v);
+	Rd = Rd + 32;
+	n = n - 1;
+	if (n != 0) goto <loop>;
+}
+:CMOVCM -*Rd,cp_n,cp_sz,cp_cmd,cp_id is op11=0x036 & Rd; cp_n & cp_sz & cp_cmd & cp_id {
+	cpcmd(cp_id, cp_cmd, cp_sz);
+	local i:1 = cp_id;
+	local n:4 = cp_n;
+	n = n + zext(n == 0) * 32;
+<loop>
+	Rd = Rd - 32;
+	local v:4 = coprocessor_read(i);
+	wfield(Rd, 0:1, v);
+	n = n - 1;
+	if (n != 0) goto <loop>;
+}

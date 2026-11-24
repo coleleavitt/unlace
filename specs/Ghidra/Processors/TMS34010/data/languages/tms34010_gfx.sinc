@@ -1,0 +1,482 @@
+# TMS34010 graphics instructions: CPW, CVXYL, PIXT, DRAV, LINE, FILL, PIXBLT.
+#
+# Implied operands (User's Guide section 7 and 12):
+#   B0 SADDR, B1 SPTCH, B2 DADDR, B3 DPTCH, B4 OFFSET, B5 WSTART, B6 WEND, B7 DYDX,
+#   B8 COLOR0, B9 COLOR1, B10-B14 line-draw and PIXBLT working registers.
+#   I/O: CONTROL (PPOP bits 14-10, PBH 9, PBV 8, W bits 7-6, T bit 5), CONVSP, CONVDP, PSIZE,
+#   PMASK, INTPEND (WVP bit 11).
+# Pixel processing, transparency and plane masking follow User's Guide section 7.6-7.9:
+#   protected (PMASK=1) bits read as 0 from memory, the PPOP result is checked for 0 when T=1,
+#   and protected destination bits are never written.
+
+@define INTPEND "0x18000024:4"
+
+# Memory word the pixel instructions work in: 16 bits on the TMS34010, 32 on the TMS34020
+# (whose pixels can be 32 bits; COLOR0/COLOR1 and PMASK are 32 bits wide).
+@ifdef TMS34020
+@define WMASK "31"
+@else
+@define WMASK "15"
+@endif
+
+# Pixel size in bits (PSIZE: 1, 2, 4, 8 or 16) and its log2
+macro pixsize(ps, shift) {
+	ps = zext(*:2 $(PSIZE));
+	local lz:4 = lzcount(ps);
+	shift = 31 - lz;
+}
+
+# Pixel processing: r = PPOP(s, d) for pixels of mask m (s and d already masked)
+macro ppop(r, op, s, d, m) {
+	# truth tables of the 16 Boolean operations: nibble per code,
+	# bit3 = f(S=1,D=1), bit2 = f(1,0), bit1 = f(0,1), bit0 = f(0,0)
+	local tt:8 = 0x37bf26ae159d048c;
+	local t:8 = tt >> (zext(op & 15) * 4);
+	local t11:4 = zext((t & 8) != 0) * 0xffffffff;
+	local t10:4 = zext((t & 4) != 0) * 0xffffffff;
+	local t01:4 = zext((t & 2) != 0) * 0xffffffff;
+	local t00:4 = zext((t & 1) != 0) * 0xffffffff;
+	local bool:4 = (s & d & t11) | (s & ~d & t10) | (~s & d & t01) | (~s & ~d & t00);
+	local add:4 = s + d;
+	local sat:1 = carry(s, d) || (add > m);
+	local adds:4 = add - zext(sat) * (add - m);
+	local sub:4 = d - s;
+	local subs:4 = zext(d > s) * (d - s);
+	local mx:4 = d + zext(s > d) * (s - d);
+	local mn:4 = d - zext(s < d) * (d - s);
+	r = zext(op < 16) * bool + zext(op == 16) * add + zext(op == 17) * adds +
+	    zext(op == 18) * sub + zext(op == 19) * subs + zext(op == 20) * mx +
+	    zext(op == 21) * mn + zext(op > 21) * s;
+	r = r & m;
+}
+
+# Read the pixel at bit address a (plane-masked)
+@ifdef TMS34020
+macro rpix(res, a) {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local m:4 = (1:4 << ps) - 1;
+	local sh:4 = a & 31 & ~(ps - 1);
+	local w:4 = *:4 ((a & 0xffffffe0) >> 3);
+	local pm:4 = *:4 $(PMASK);
+	res = (w >> sh) & m & ~(pm >> sh);
+}
+
+# Write pixel src to bit address a with pixel processing, transparency and plane masking.
+# TMS34020 transparency modes, TM = CONTROL bits 2-0 (User's Guide 12.9): 000 and 100 transparent
+# when the result is 0, 001 when the source pixel equals the COLOR0 pixel, 101 when the
+# destination pixel equals the COLOR0 pixel (both as read through the plane mask).
+macro wpix(a, src) {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local m:4 = (1:4 << ps) - 1;
+	local sh:4 = a & 31 & ~(ps - 1);
+	local wa:4 = (a & 0xffffffe0) >> 3;
+	local w:4 = *:4 wa;
+	local pm:4 = (*:4 $(PMASK) >> sh) & m;
+	local d:4 = (w >> sh) & m & ~pm;
+	local ctl:4 = zext(*:2 $(CONTROL));
+	local sp:4 = src & m;
+	local r:4; ppop(r, (ctl >> 10) & 0x1f, sp, d, m);
+	local c0:4 = (B8 >> sh) & m;
+	local tm:4 = ctl & 5;
+	local tr:1 = ((tm & 1) == 0 && r == 0) || (tm == 1 && sp == c0) || (tm == 5 && d == (c0 & ~pm));
+	local keep:4 = zext(((ctl & 0x20) != 0) && tr);
+	local nw:4 = (w & ~(m << sh)) | ((((r & ~pm) | ((w >> sh) & pm)) & m) << sh);
+	nw = keep * w + (1:4 - keep) * nw;
+	*:4 wa = nw;
+}
+@else
+macro rpix(res, a) {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local m:4 = (1:4 << ps) - 1;
+	local sh:4 = a & 15 & ~(ps - 1);
+	local w:4 = zext(*:2 ((a & 0xfffffff0) >> 3));
+	local pm:4 = zext(*:2 $(PMASK));
+	res = (w >> sh) & m & ~(pm >> sh);
+}
+
+# Write pixel src (a register or plane-masked memory value) to bit address a with pixel
+# processing, transparency and plane masking
+macro wpix(a, src) {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local m:4 = (1:4 << ps) - 1;
+	local sh:4 = a & 15 & ~(ps - 1);
+	local wa:4 = (a & 0xfffffff0) >> 3;
+	local w:4 = zext(*:2 wa);
+	local pm:4 = (zext(*:2 $(PMASK)) >> sh) & m;
+	local d:4 = (w >> sh) & m & ~pm;
+	local ctl:4 = zext(*:2 $(CONTROL));
+	local r:4; ppop(r, (ctl >> 10) & 0x1f, src & m, d, m);
+	local keep:4 = zext(((ctl & 0x20) != 0) && (r == 0));
+	local nw:4 = (w & ~(m << sh)) | ((((r & ~pm) | ((w >> sh) & pm)) & m) << sh);
+	nw = keep * w + (1:4 - keep) * nw;
+	*:2 wa = nw:2;
+}
+@endif
+
+# XY address -> linear bit address with the destination (CONVDP) or source (CONVSP) pitch
+@ifdef TMS34020
+# TMS34020 CONVxP (User's Guide 12.12): bits 4-0 nonzero: the pitch is 2^(~bits 4-0), plus
+# 2^(~bits 12-8) if those are nonzero (a sum of two powers of 2); bits 4-0 zero: any pitch, the
+# Y half is multiplied by the pitch register itself (DPTCH B3, SPTCH B1, MPTCH B11).
+macro pitchfac(res, cv, ptch) {
+	local lo:4 = cv & 31; local hi:4 = (cv >> 8) & 31;
+	local f:4 = (1:4 << (~cv & 31)) + zext(hi != 0) * (1:4 << (~(cv >> 8) & 31));
+	res = zext(lo != 0) * f + zext(lo == 0) * ptch;
+}
+macro dxytol(res, xy) {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local cv:4 = zext(*:2 $(CONVDP));
+	local f:4; pitchfac(f, cv, B3);
+	local xx:2 = xy:2; local yy:2 = xy(2);
+	local x:4 = sext(xx); local y:4 = sext(yy);
+	res = y * f + (x << psh) + B4;
+}
+macro sxytol(res, xy) {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local cv:4 = zext(*:2 $(CONVSP));
+	local f:4; pitchfac(f, cv, B1);
+	local xx:2 = xy:2; local yy:2 = xy(2);
+	local x:4 = sext(xx); local y:4 = sext(yy);
+	res = y * f + (x << psh) + B4;
+}
+@else
+macro dxytol(res, xy) {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local cv:4 = zext(*:2 $(CONVDP));
+	local xx:2 = xy:2; local yy:2 = xy(2);
+	local x:4 = sext(xx); local y:4 = sext(yy);
+	res = (y << (~cv & 31)) + (x << psh) + B4;
+}
+macro sxytol(res, xy) {
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local cv:4 = zext(*:2 $(CONVSP));
+	local xx:2 = xy:2; local yy:2 = xy(2);
+	local x:4 = sext(xx); local y:4 = sext(yy);
+	res = (y << (~cv & 31)) + (x << psh) + B4;
+}
+@endif
+
+# Window check of XY address xy for PIXT/DRAV/LINE: draw = 1 if the pixel may be written.
+# W=0: no check, V unaffected. W=1 (hit): never draw, V = outside. W=2 (miss): V = outside,
+# outside also sets WVP in INTPEND and aborts. W=3 (clip): V = outside, outside aborts.
+macro wincheck(draw, xy) {
+	local w:2 = (*:2 $(CONTROL) >> 6) & 3;
+	local x:2 = xy:2; local y:2 = xy(2);
+	local sx:2 = B5:2; local sy:2 = B5(2); local ex:2 = B6:2; local ey:2 = B6(2);
+	local out:1 = (x s< sx) || (x s> ex) || (y s< sy) || (y s> ey);
+	V = (V && (w == 0)) || ((w != 0) && out);
+	local ip:2 = *:2 $(INTPEND);
+	local wvp:2 = zext((w == 2) && out);
+	*:2 $(INTPEND) = ip | (wvp << 11);
+	draw = (w == 0) || ((w != 1) && !out);
+}
+
+:CPW Rs,Rd is op7=0x73 & Rs & Rd {
+	local x:2 = Rs:2; local y:2 = Rs(2);
+	local res:4 = (zext(B5:2 s> x) << 5) | (zext(x s> B6:2) << 6) |
+	              (zext(B5(2) s> y) << 7) | (zext(y s> B6(2)) << 8);
+	Rd = res;
+	V = res != 0;
+}
+
+:CVXYL Rs,Rd is op7=0x74 & Rs & Rd { local a:4; dxytol(a, Rs); Rd = a; }
+
+:PIXT Rs,*Rd is op7=0x7c & Rs & Rd { wpix(Rd, Rs); }
+:PIXT Rs,*Rd^".XY" is op7=0x78 & Rs & Rd {
+	local draw:1; wincheck(draw, Rd);
+	if (!draw) goto inst_next;
+	local a:4; dxytol(a, Rd);
+	wpix(a, Rs);
+}
+@ifdef TMS34020
+# TMS34020: the status is unaffected
+:PIXT *Rs,Rd is op7=0x7d & Rs & Rd {
+	local p:4; rpix(p, Rs);
+	Rd = p;
+}
+:PIXT *Rs^".XY",Rd is op7=0x79 & Rs & Rd {
+	local a:4; sxytol(a, Rs);
+	local p:4; rpix(p, a);
+	Rd = p;
+}
+@else
+:PIXT *Rs,Rd is op7=0x7d & Rs & Rd {
+	local p:4; rpix(p, Rs);
+	Rd = p; V = p != 0;
+}
+:PIXT *Rs^".XY",Rd is op7=0x79 & Rs & Rd {
+	local a:4; sxytol(a, Rs);
+	local p:4; rpix(p, a);
+	Rd = p; V = p != 0;
+}
+@endif
+:PIXT *Rs,*Rd is op7=0x7e & Rs & Rd {
+	local p:4; rpix(p, Rs);
+	wpix(Rd, p);
+}
+:PIXT *Rs^".XY",*Rd^".XY" is op7=0x7a & Rs & Rd {
+	local draw:1; wincheck(draw, Rd);
+	if (!draw) goto inst_next;
+	local sa:4; sxytol(sa, Rs);
+	local p:4; rpix(p, sa);
+	local a:4; dxytol(a, Rd);
+	wpix(a, p);
+}
+
+# DRAV: draw COLOR1 at Rd (XY, window checked), then add Rs to Rd in XY mode
+:DRAV Rs,Rd is op7=0x7b & Rs & Rd {
+	local draw:1; wincheck(draw, Rd);
+	if (!draw) goto <adv>;
+	local a:4; dxytol(a, Rd);
+	wpix(a, B9);
+<adv>
+	local x:2 = Rd:2 + Rs:2; local y:2 = Rd(2) + Rs(2);
+	setxy(Rd, x, y);
+}
+
+# ---------------------------------------------------------------------------------------------
+# LINE (User's Guide 12-99): inner loop of Bresenham's algorithm.
+#   B0 d, B2 DADDR (XY), B7 b:a, B9 COLOR1, B10 COUNT, B11 INC1 (diagonal), B12 INC2 (major).
+#   While COUNT > 0: COUNT--, draw, then d >= 0 (LINE 0) / d > 0 (LINE 1) -> d += 2b-2a, DADDR +=
+#   INC1, else d += 2b, DADDR += INC2 (XY addition).
+# Window: W=0 draw all; W=1 draw nothing, stop with WVP set and V=0 at the first pixel inside
+# the window (V=1 if none); W=2 draw until the first pixel outside, then stop with WVP and V set
+# (V=0 if none); W=3 draw only pixels inside, V = last pixel outside. A stop leaves B2/B10 at the
+# pixel that caused it and B0 already updated for the pixel after it.
+# The real CPU can be interrupted between pixels (PBX); here the loop always runs to the end.
+# ---------------------------------------------------------------------------------------------
+LineZ: "0" is z7=0 { export 0:4; }
+LineZ: "1" is z7=1 { export 1:4; }
+
+:LINE LineZ is op8=0xdf & LineZ & b4_6=1 {
+	local w:2 = (*:2 $(CONTROL) >> 6) & 3;
+	local a2:4 = zext(B7:2) << 1;
+	local bb:2 = B7(2);
+	local b2:4 = zext(bb) << 1;
+<loop>
+	if (B10 s<= 0) goto <done>;
+	local x:2 = B2:2; local y:2 = B2(2);
+	local wsy:2 = B5(2); local wey:2 = B6(2);
+	local out:1 = (x s< B5:2) || (x s> B6:2) || (y s< wsy) || (y s> wey);
+	# decision for the pixel after this one
+	local diag:1 = B0 s>= LineZ;
+	local nd:4 = B0 + b2 - zext(diag) * a2;
+	if (w == 1 && !out) goto <hit>;
+	if (w == 2 && out) goto <miss>;
+	V = (V && (w != 3)) || ((w == 3) && out);
+	B10 = B10 - 1;
+	if (w == 1 || (w == 3 && out)) goto <step>;
+	local la:4; dxytol(la, B2);
+@ifdef TMS34020
+	# TMS34020: bit 0 of PATTERN (B13) selects COLOR1 (1) or COLOR0 (0)
+	local lc:4 = zext((B13 & 1) == 1) * B9 + zext((B13 & 1) == 0) * B8;
+	wpix(la, lc);
+@else
+	wpix(la, B9);
+@endif
+<step>
+@ifdef TMS34020
+	# PATTERN is rotated right by one bit for every pixel of the line
+	B13 = (B13 >> 1) | (B13 << 31);
+@endif
+	B0 = nd;
+	local i1y:2 = B11(2); local i2y:2 = B12(2);
+	local ix:2 = B11:2 * zext(diag) + B12:2 * zext(!diag);
+	local iy:2 = i1y * zext(diag) + i2y * zext(!diag);
+	x = x + ix; y = y + iy;
+	setxy(B2, x, y);
+	goto <loop>;
+<hit>
+	B0 = nd;
+	V = 0;
+	goto <wvp>;
+<miss>
+	B0 = nd;
+	V = 1;
+<wvp>
+	local ip:2 = *:2 $(INTPEND);
+	*:2 $(INTPEND) = ip | 0x800;
+	goto inst_next;
+<done>
+	if (w == 1) goto <nohit>;
+	if (w == 2) goto <inside>;
+	goto <end>;
+<nohit>
+	V = 1;
+	goto <end>;
+<inside>
+	V = 0;
+<end>
+	PBX = 0;
+}
+
+# ---------------------------------------------------------------------------------------------
+# FILL and PIXBLT (User's Guide 7.2, 7.10 and 12-80..12-86, 12-180..12-212).
+#   B0 SADDR, B1 SPTCH, B2 DADDR, B3 DPTCH, B4 OFFSET, B5 WSTART, B6 WEND, B7 DYDX (rows:cols),
+#   B8 COLOR0, B9 COLOR1.
+# A DX or DY of 0 (or negative as a signed 16-bit value) moves nothing and changes nothing.
+# FILL takes its source pixels from COLOR1 as a 16-bit pattern (the bits at the destination
+# pixel's position in its word); PIXBLT B expands each source bit to the COLOR1 (1) or COLOR0 (0)
+# pattern pixel. Full-colour PIXBLTs read source pixels through the plane mask.
+# Window checking (XY destinations only): W=1 draws nothing and, if the array meets the window,
+# clears V, sets WVP and leaves the common rectangle in DADDR/DYDX (V=1 otherwise); W=2 aborts
+# with V and WVP set unless the whole array is inside (V=0); W=3 draws the part inside the
+# window, moving source and destination by the clipped rows/columns, V=1 if anything was clipped.
+# PBH (CONTROL bit 8) / PBV (bit 9) reverse the X / Y traversal of the full-colour PIXBLTs (the
+# binary forms ignore them). With an XY operand the start corners are adjusted automatically;
+# PIXBLT L,L uses the corner addresses software supplies (one pixel past the right edge when
+# PBH=1, the bottom row when PBV=1).
+# On completion PBX is clear; PIXBLT leaves SADDR/DADDR at the linear address of the first pixel
+# of the row after the source/destination array, FILL leaves DADDR at the linear address of the
+# pixel after the last pixel of the last row (TI's text; MAME keeps XY addresses, see
+# GHIDRA-RARE.md). B10-B14 (working registers) are left unchanged. The real CPU can be
+# interrupted at word and row boundaries (PBX); here the transfer always runs to the end.
+# ---------------------------------------------------------------------------------------------
+
+# Source/destination kinds: 0 linear, 1 XY, 2 binary
+PbSrc: "L"  is op12=0x0f0 | op12=0x0f2 { export 0:1; }
+PbSrc: "XY" is op12=0x0f4 | op12=0x0f6 { export 1:1; }
+PbSrc: "B"  is op12=0x0f8 | op12=0x0fa { export 2:1; }
+PbDst: "L"  is op12=0x0f0 | op12=0x0f4 | op12=0x0f8 { export 0:1; }
+PbDst: "XY" is op12=0x0f2 | op12=0x0f6 | op12=0x0fa { export 1:1; }
+FillDst: "L"  is op12=0x0fc { export 0:1; }
+FillDst: "XY" is op12=0x0fe { export 1:1; }
+
+# Window clipping of an XY destination array. Sets go=0 if nothing is to be drawn.
+# On W=3 it returns the clipped origin (cx, cy) and size, and the pixel offsets (ox, oy).
+macro arraywin(go, x0, y0, dx, dy, ox, oy) {
+	local w:2 = (*:2 $(CONTROL) >> 6) & 3;
+	local x1:2 = x0 + dx:2 - 1; local y1:2 = y0 + dy:2 - 1;
+	local sx:2 = B5:2; local sy:2 = B5(2); local ex:2 = B6:2; local ey:2 = B6(2);
+	local cx0:2 = x0 + zext(sx s> x0) * (sx - x0);
+	local cy0:2 = y0 + zext(sy s> y0) * (sy - y0);
+	local cx1:2 = x1 - zext(x1 s> ex) * (x1 - ex);
+	local cy1:2 = y1 - zext(y1 s> ey) * (y1 - ey);
+	local meets:1 = (cx0 s<= cx1) && (cy0 s<= cy1);
+	local clipped:1 = (cx0 != x0) || (cy0 != y0) || (cx1 != x1) || (cy1 != y1);
+	local ip:2 = *:2 $(INTPEND);
+	local wv:1 = ((w == 1) && meets) || ((w == 2) && clipped);
+	*:2 $(INTPEND) = ip | (zext(wv) << 11);
+	V = (V && (w == 0)) || ((w == 1) && !meets) || ((w == 2) && clipped) || ((w == 3) && clipped);
+	go = (w == 0) || ((w == 2) && !clipped) || ((w == 3) && meets);
+	# W=1 hit: common rectangle in DADDR and DYDX
+	local hit:4 = zext((w == 1) && meets);
+	local cw:2 = cx1 - cx0 + 1; local ch:2 = cy1 - cy0 + 1;
+	local cxy:4 = (zext(cy0) << 16) | zext(cx0);
+	local cwh:4 = (zext(ch) << 16) | zext(cw);
+	B2 = hit * cxy + (1 - hit) * B2;
+	B7 = hit * cwh + (1 - hit) * B7;
+	local clip:4 = zext(w == 3);
+	ox = clip * sext(cx0 - x0);
+	oy = clip * sext(cy0 - y0);
+	dx = clip * sext(cw) + (1 - clip) * dx;
+	dy = clip * sext(ch) + (1 - clip) * dy;
+}
+
+:FILL FillDst is op8=0x0f & FillDst {
+	local dyh:2 = B7(2);
+	local dx:4 = sext(B7:2); local dy:4 = sext(dyh);
+	if (dx s<= 0 || dy s<= 0) goto inst_next;
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local ox:4 = 0; local oy:4 = 0;
+	local da:4 = B2;
+	if (FillDst == 0) goto <lin>;
+	dxytol(da, B2);
+	local go:1;
+	local ax:2 = B2:2; local ay:2 = B2(2);
+	arraywin(go, ax, ay, dx, dy, ox, oy);
+	if (!go) goto inst_next;
+<lin>
+	local start:4 = da;
+	local fdy:4 = dy; local fdx:4 = dx;
+	if (FillDst == 0) goto <rows>;
+	# W=3 clipped destination; final DADDR is still computed from the original array
+	fdx = sext(B7:2); local fdyh:2 = B7(2); fdy = sext(fdyh);
+	da = da + (ox << psh) + oy * B3;
+<rows>
+	local row:4 = da;
+	local y:4 = 0;
+<rowloop>
+	local x:4 = 0;
+	local a:4 = row;
+<pixloop>
+	local sh:4 = a & $(WMASK) & ~(ps - 1);
+	wpix(a, B9 >> sh);
+	a = a + ps;
+	x = x + 1;
+	if (x s< dx) goto <pixloop>;
+	row = row + B3;
+	y = y + 1;
+	if (y s< dy) goto <rowloop>;
+	B2 = start + (fdy - 1) * B3 + (fdx << psh);
+	PBX = 0;
+}
+
+:PIXBLT PbSrc,PbDst is op8=0x0f & (op12=0x0f0 | op12=0x0f2 | op12=0x0f4 | op12=0x0f6 | op12=0x0f8 | op12=0x0fa) & PbSrc & PbDst {
+	local dyh:2 = B7(2);
+	local dx:4 = sext(B7:2); local dy:4 = sext(dyh);
+	if (dx s<= 0 || dy s<= 0) goto inst_next;
+	local ps:4; local psh:4; pixsize(ps, psh);
+	local ctl:2 = *:2 $(CONTROL);
+	local binary:1 = PbSrc == 2;
+	local pbh:4 = zext(((ctl >> 8) & 1) == 1 && !binary);
+	local pbv:4 = zext(((ctl >> 9) & 1) == 1 && !binary);
+	# source bits per pixel
+	local sbpp:4 = zext(binary) + zext(!binary) * ps;
+	local sa:4 = B0;
+	if (PbSrc != 1) goto <src_done>;
+	sxytol(sa, B0);
+<src_done>
+	local da:4 = B2;
+	local ox:4 = 0; local oy:4 = 0;
+	local origdy:4 = dy;
+	if (PbDst == 0) goto <dst_done>;
+	dxytol(da, B2);
+	local go:1;
+	local ax:2 = B2:2; local ay:2 = B2(2);
+	arraywin(go, ax, ay, dx, dy, ox, oy);
+	if (!go) goto inst_next;
+<dst_done>
+	local sfinal:4 = sa + origdy * B1;
+	local dfinal:4 = da + origdy * B3;
+	# W=3 clipping moves both arrays by the excluded rows/columns
+	sa = sa + ox * sbpp + oy * B1;
+	da = da + (ox << psh) + oy * B3;
+	# traversal direction: with an XY operand the start corner is adjusted here; L,L uses the
+	# supplied corners (PBH: one pixel past the right edge, so step back first)
+	local auto:4 = zext(PbSrc == 1 || PbDst == 1);
+	sa = sa + auto * (pbv * (dy - 1) * B1 + pbh * (dx - 1) * sbpp) - (1 - auto) * pbh * sbpp;
+	da = da + auto * (pbv * (dy - 1) * B3 + pbh * (dx - 1) * ps) - (1 - auto) * pbh * ps;
+	local sstep:4 = sbpp - pbh * 2 * sbpp;
+	local dstep:4 = ps - pbh * 2 * ps;
+	local srow:4 = B1 - pbv * 2 * B1;
+	local drow:4 = B3 - pbv * 2 * B3;
+	local y:4 = 0;
+<rowloop>
+	local x:4 = 0;
+	local s:4 = sa;
+	local d:4 = da;
+<pixloop>
+	local p:4;
+	if (binary) goto <bin>;
+	rpix(p, s);
+	goto <put>;
+<bin>
+	local bit:2 = *:2 ((s & 0xfffffff0) >> 3);
+	local one:4 = zext(((bit >> (s & 15)) & 1) == 1);
+	local sh:4 = d & $(WMASK) & ~(ps - 1);
+	p = (one * B9 + (1 - one) * B8) >> sh;
+<put>
+	wpix(d, p);
+	s = s + sstep;
+	d = d + dstep;
+	x = x + 1;
+	if (x s< dx) goto <pixloop>;
+	sa = sa + srow;
+	da = da + drow;
+	y = y + 1;
+	if (y s< dy) goto <rowloop>;
+	B0 = sfinal;
+	B2 = dfinal;
+	PBX = 0;
+}

@@ -1,0 +1,10 @@
+# Texas Instruments TMS34020 Graphics System Processor
+#
+# The TMS34020 runs TMS34010 object code and adds instructions (tms34020.sinc). It shares the
+# TMS34010 specification; the differences are selected with TMS34020 (see tms34010.slaspec,
+# tms34010.sinc and tms34010_gfx.sinc). Semantics follow the TMS34020 User's Guide (TI
+# 2564006-9721, August 1990); see GHIDRA-RARE.md.
+
+@define TMS34020 ""
+
+@include "tms34010.slaspec"

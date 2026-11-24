@@ -1,0 +1,800 @@
+# TMS34010 instruction set.
+#
+# Opcode map, operand order and text follow MAME's TMS34010 disassembler (34010dsm.cpp); which
+# opcodes are valid follows MAME's TMS34010 opcode table (34010tbl.hxx: the low four bits of every
+# opcode are never checked, so "don't care" bits are accepted where MAME accepts them).
+# Semantics follow the TMS34010 User's Guide (SPVU001A), cross-checked with MAME's core
+# (34010ops.hxx); the places where MAME differs from the manual are listed in GHIDRA-RARE.md.
+#
+# Syntax differences from MAME's disassembler (which the test normalises):
+#   JRUC/JAUC  (MAME prints JR/JA for the unconditional forms)
+#   *Rd.XY     (MAME prints *Rd,XY)
+#   MMTM/MMFM list every register (MAME compresses runs into A0-A3)
+
+define token opw(16)
+	op16  = (0,15)
+	op12  = (4,15)
+	op11  = (5,15)
+	op10  = (6,15)
+	op8   = (8,15)
+	op7   = (9,15)
+	op6   = (10,15)
+	op5   = (11,15)
+	op4   = (12,15)
+	rd    = (0,3)
+	rdB   = (0,3)
+	rdX   = (0,3)
+	rdXB  = (0,3)
+	rdP   = (0,3)
+	rdPB  = (0,3)
+	rf    = (4,4)
+	rs    = (5,8)
+	rsB   = (5,8)
+	k5    = (5,9)
+	f9    = (9,9)
+	b8    = (8,8)
+	sub3  = (5,7)
+	sub2  = (6,7)
+	dir10 = (10,10)
+	cc    = (8,11)
+	low8  = (0,7)
+	rel8  = (0,7) signed
+	low5  = (0,4)
+	fe5   = (5,5)
+	z7    = (7,7)
+	b4_6  = (4,6)
+	rdi   = (0,3)
+	rsi   = (5,8)
+	rd0   = (0,0)
+	b1    = (1,1)
+	cs5   = (1,5)
+	op9   = (7,15)
+;
+
+# Extension words: up to four, in order. 16-bit words and 32-bit longs (LSW first).
+define token ext1(16) iw1 = (0,15) iw1s = (0,15) signed iw1id = (13,15);
+define token ext2(16) iw2 = (0,15) iw2s = (0,15) signed;
+# lng1 also carries the TMS34020 coprocessor instruction word: register or transfer count in bits
+# 4-0, size bit 7, the 21-bit command in bits 28-8 and the coprocessor ID in bits 31-29
+define token lng1(32) il1 = (0,31) il1lo = (0,3)
+	cp_r = (0,3) cp_rB = (0,3) cp_rf = (4,4) cp_n = (0,4) cp_lo8 = (0,7) cp_sz = (7,7)
+	cp_cmd = (8,28) cp_id = (29,31)
+;
+define token lng2(32) il2 = (0,31);
+# Register lists of MMTM (bit 15 = R0) and MMFM (bit 0 = R0)
+define token rlist(16)
+	l0=(0,0) l1=(1,1) l2=(2,2) l3=(3,3) l4=(4,4) l5=(5,5) l6=(6,6) l7=(7,7)
+	l8=(8,8) l9=(9,9) l10=(10,10) l11=(11,11) l12=(12,12) l13=(13,13) l14=(14,14) l15=(15,15)
+;
+
+attach variables [ rd rs ]   [ A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 SP ];
+attach variables [ rdB rsB ] [ B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 B10 B11 B12 B13 B14 SP ];
+# MOVE Rs,Rd across files: the destination is in the other file
+attach variables [ rdX ]  [ B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 B10 B11 B12 B13 B14 SP ];
+attach variables [ rdXB ] [ A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 SP ];
+# Rd|1: second register of the MPYS/MPYU product and of the DIVS/DIVU dividend
+attach variables [ rdP ]  [ A1 A1 A3 A3 A5 A5 A7 A7 A9 A9 A11 A11 A13 A13 SP SP ];
+attach variables [ rdPB ] [ B1 B1 B3 B3 B5 B5 B7 B7 B9 B9 B11 B11 B13 B13 SP SP ];
+
+Rd: rd   is rf=0 & rd   { export rd; }
+Rd: rdB  is rf=1 & rdB  { export rdB; }
+Rs: rs   is rf=0 & rs   { export rs; }
+Rs: rsB  is rf=1 & rsB  { export rsB; }
+RdX: rdX  is rf=0 & rdX  { export rdX; }
+RdX: rdXB is rf=1 & rdXB { export rdXB; }
+RdP: rdP  is rf=0 & rdP  { export rdP; }
+RdP: rdPB is rf=1 & rdPB { export rdPB; }
+
+
+define pcodeop emulate;
+
+# =============================================================================================
+# Helpers
+# =============================================================================================
+
+# Bit address -> Ghidra (byte) address of an instruction: the low four bits are ignored.
+macro codeaddr(dst, bitaddr) { dst = (bitaddr & 0xfffffff0) >> 3; }
+
+# Field read: sz is the field size register (0 means 32), ext 1 = sign extend.
+macro rfield(res, addr, sz, ext) {
+	local ba:4 = addr >> 3;
+	local sh:8 = zext(addr & 7);
+	local n:8 = zext(sz) + zext(sz == 0) * 32;
+	local w:5 = *:5 ba;
+	local v:8 = (zext(w) >> sh) & ((1:8 << n) - 1);
+	local sb:8 = 1:8 << (n - 1);
+	v = v - zext(ext != 0) * ((v & sb) << 1);
+	res = v:4;
+}
+
+# Field write of the low sz bits of val (sz 0 means 32).
+macro wfield(addr, sz, val) {
+	local ba:4 = addr >> 3;
+	local sh:8 = zext(addr & 7);
+	local n:8 = zext(sz) + zext(sz == 0) * 32;
+	local m:8 = ((1:8 << n) - 1) << sh;
+	local w:8 = zext(*:5 ba);
+	w = (w & ~m) | ((zext(val) << sh) & m);
+	*:5 ba = w:5;
+}
+
+# Field size in bits as a 4-byte value (1..32).
+macro fieldbits(res, sz) { res = zext(sz) + zext(sz == 0) * 32; }
+
+# Byte read (sign extended to 32 bits) and write at any bit address.
+macro rbyte(res, addr) {
+	local w:2 = *:2 (addr >> 3);
+	local b:2 = w >> (addr & 7);
+	res = sext(b:1);
+}
+macro wbyte(addr, val) {
+	local ba:4 = addr >> 3;
+	local sh:2 = zext(addr:1 & 7);
+	local m:2 = 0xff << sh;
+	local w:2 = *:2 ba;
+	w = (w & ~m) | ((zext(val:1) << sh) & m);
+	*:2 ba = w;
+}
+
+# 32-bit stack and register-list transfers. The pointer is assumed to be a multiple of 8 bits.
+macro push32(val) { SP = SP - 32; *:4 (SP >> 3) = val; }
+macro pop32(res)  { res = *:4 (SP >> 3); SP = SP + 32; }
+
+macro getst(res) {
+	res = (zext(N) << 31) | (zext(C) << 30) | (zext(Z) << 29) | (zext(V) << 28) |
+	      (zext(PBX) << 25) | (zext(IE) << 21) | (zext(FE1) << 11) | (zext(FS1) << 6) |
+	      (zext(FE0) << 5) | zext(FS0) | STX;
+}
+macro putst(val) {
+	local v:4 = val;
+	N = v[31,1]; C = v[30,1]; Z = v[29,1]; V = v[28,1];
+	PBX = v[25,1]; IE = v[21,1];
+	FE1 = v[11,1]; FS1 = v[6,5]; FE0 = v[5,1]; FS0 = v[0,5];
+	STX = v & 0x0ddff000;
+}
+# ST after reset, traps and interrupts: 00000010h
+macro resetst() {
+	N = 0; C = 0; Z = 0; V = 0; PBX = 0; IE = 0; FE1 = 0; FS1 = 0; FE0 = 0; FS0 = 0x10; STX = 0;
+}
+
+macro setnz(r) { N = r s< 0; Z = r == 0; }
+
+# MMTM status: the TMS34020 sets N to the sign of 0 - Rp (1 if Rp >= 0, as MAME's core and the
+# User's Guide's exceptions for 0 and 80000000h say); the TMS34010 leaves the status alone.
+@ifdef TMS34020
+macro mmtm_flags(rp) { N = rp s>= 0; }
+@else
+macro mmtm_flags(rp) { }
+@endif
+
+# a + b (+ cin): C is the carry out of bit 31, V the signed overflow
+macro addflags(a, b, r) {
+	C = carry(a, b);
+	V = ((~(a ^ b) & (a ^ r)) >> 31) != 0;
+	setnz(r);
+}
+# a - b (- cin): C is the borrow
+macro subflags(a, b, r) {
+	C = a < b;
+	V = (((a ^ b) & (a ^ r)) >> 31) != 0;
+	setnz(r);
+}
+
+# XY halves (X = bits 15-0, Y = bits 31-16, both signed)
+macro getx(res, r) { res = r:2; }
+macro gety(res, r) { res = r(2); }
+macro setxy(r, x, y) { r = (zext(y) << 16) | zext(x); }
+
+# =============================================================================================
+# Operand tables
+# =============================================================================================
+
+FS: is f9=0 { export FS0; }
+FS: is f9=1 { export FS1; }
+FE: is f9=0 { export FE0; }
+FE: is f9=1 { export FE1; }
+F: "0" is f9=0 { }
+F: "1" is f9=1 { }
+
+# Constant 1-32 (ADDK/SUBK/MOVK)
+K32: "0x20" is k5=0 { export 32:4; }
+K32: k5 is k5 { export *[const]:4 k5; }
+SetFS: "0x20" is low5=0 { }
+SetFS: low5 is low5 { }
+
+# PC-relative targets
+Rel8: tgt is rel8 [ tgt = inst_next + rel8 * 2; ] { export *[ram]:4 tgt; }
+Rel16: tgt is iw1s [ tgt = inst_next + iw1s * 2; ] { export *[ram]:4 tgt; }
+Abs32: tgt is il1 [ tgt = (il1 & 0xfffffff0) >> 3; ] { export *[ram]:4 tgt; }
+DsjsTgt: tgt is dir10=0 & k5 [ tgt = inst_next + k5 * 2; ] { export *[ram]:4 tgt; }
+DsjsTgt: tgt is dir10=1 & k5 [ tgt = inst_next - k5 * 2; ] { export *[ram]:4 tgt; }
+
+# Absolute data addresses (bit addresses)
+SAbs: "@"^il1 is il1 { export *[const]:4 il1; }
+DAbs2: "@"^il2 is il2 { export *[const]:4 il2; }
+DAbs: "@"^il1 is il1 { export *[const]:4 il1; }
+
+# Condition codes (cc=0, UC, has its own unconditional JRUC/JAUC constructors)
+CC: "P"  is cc=1  { local t:1 = !N && !Z; export t; }
+CC: "LS" is cc=2  { local t:1 = C || Z; export t; }
+CC: "HI" is cc=3  { local t:1 = !C && !Z; export t; }
+CC: "LT" is cc=4  { local t:1 = N != V; export t; }
+CC: "GE" is cc=5  { local t:1 = N == V; export t; }
+CC: "LE" is cc=6  { local t:1 = (N != V) || Z; export t; }
+CC: "GT" is cc=7  { local t:1 = (N == V) && !Z; export t; }
+CC: "C"  is cc=8  { export C; }
+CC: "NC" is cc=9  { local t:1 = !C; export t; }
+CC: "EQ" is cc=10 { export Z; }
+CC: "NE" is cc=11 { local t:1 = !Z; export t; }
+CC: "V"  is cc=12 { export V; }
+CC: "NV" is cc=13 { local t:1 = !V; export t; }
+CC: "N"  is cc=14 { export N; }
+CC: "NN" is cc=15 { local t:1 = !N; export t; }
+
+@include "tms34010_mm.sinc"
+
+# =============================================================================================
+# Arithmetic, logical and compare
+# =============================================================================================
+
+:ABS Rd is op11=0x01c & Rd {
+	local r:4 = 0 - Rd;
+	N = r s< 0; Z = r == 0; V = r == 0x80000000;
+	if (r s<= 0) goto <done>;
+	Rd = r;
+<done>
+}
+
+:ADD Rs,Rd is op7=0x20 & Rs & Rd {
+	local a:4 = Rs; local b:4 = Rd; local r:4 = a + b;
+	addflags(a, b, r); Rd = r;
+}
+
+:ADDC Rs,Rd is op7=0x21 & Rs & Rd {
+	local a:4 = Rs; local b:4 = Rd; local s:4 = a + b; local r:4 = s + zext(C);
+	local cout:1 = carry(a, b) || carry(s, zext(C));
+	addflags(a, b, r); C = cout; Rd = r;
+}
+
+:ADDI iw1s,Rd is op11=0x058 & Rd; iw1s {
+	local a:4 = iw1s; local b:4 = Rd; local r:4 = a + b;
+	addflags(a, b, r); Rd = r;
+}
+
+:ADDI il1,Rd is op11=0x059 & Rd; il1 {
+	local a:4 = il1; local b:4 = Rd; local r:4 = a + b;
+	addflags(a, b, r); Rd = r;
+}
+
+:ADDK K32,Rd is op6=0x04 & K32 & Rd {
+	local a:4 = K32; local b:4 = Rd; local r:4 = a + b;
+	addflags(a, b, r); Rd = r;
+}
+:INC Rd is op6=0x04 & k5=1 & Rd {
+	local b:4 = Rd; local r:4 = b + 1;
+	addflags(1:4, b, r); Rd = r;
+}
+
+:AND Rs,Rd is op7=0x28 & Rs & Rd { Rd = Rd & Rs; Z = Rd == 0; }
+:ANDN Rs,Rd is op7=0x29 & Rs & Rd { Rd = Rd & ~Rs; Z = Rd == 0; }
+:OR Rs,Rd is op7=0x2a & Rs & Rd { Rd = Rd | Rs; Z = Rd == 0; }
+:XOR Rs,Rd is op7=0x2b & Rs & Rd { Rd = Rd ^ Rs; Z = Rd == 0; }
+
+# ANDI stores the 1s complement of the mask (the assembler's ANDNI stores it as written)
+:ANDI val,Rd is op11=0x05c & Rd; il1 [ val = ~il1 & 0xffffffff; ] { Rd = Rd & ~il1; Z = Rd == 0; }
+:ORI il1,Rd is op11=0x05d & Rd; il1 { Rd = Rd | il1; Z = Rd == 0; }
+:XORI il1,Rd is op11=0x05e & Rd; il1 { Rd = Rd ^ il1; Z = Rd == 0; }
+:NOT Rd is op11=0x01f & Rd { Rd = ~Rd; Z = Rd == 0; }
+
+# BTST K: the opcode holds the 1s complement of the bit number
+:BTST bit,Rd is op6=0x07 & k5 & Rd [ bit = 31 - k5; ] {
+	Z = ((Rd >> bit) & 1) == 0;
+}
+:BTST Rs,Rd is op7=0x25 & Rs & Rd { Z = ((Rd >> (Rs & 31)) & 1) == 0; }
+
+:CMP Rs,Rd is op7=0x24 & Rs & Rd {
+	local a:4 = Rd; local b:4 = Rs; local r:4 = a - b;
+	subflags(a, b, r);
+}
+# CMPI stores the 1s complement of the value
+:CMPI val,Rd is op11=0x05a & Rd; iw1 [ val = (~iw1 & 0xffff) - 2 * ((~iw1) & 0x8000); ] {
+	local a:4 = Rd; local b:4 = sext(~iw1:2); local r:4 = a - b;
+	subflags(a, b, r);
+}
+:CMPI val,Rd is op11=0x05b & Rd; il1 [ val = ~il1 & 0xffffffff; ] {
+	local a:4 = Rd; local b:4 = ~il1; local r:4 = a - b;
+	subflags(a, b, r);
+}
+
+# DIVS/DIVU: with an even Rd the dividend is the 64-bit Rd:Rd+1 (quotient to Rd, remainder to
+# Rd+1); with an odd Rd it is Rd alone. On overflow or division by 0 only V is set.
+:DIVS Rs,Rd is op7=0x2c & Rs & Rd & RdP & rd0=0 {
+	N = 0; Z = 0; V = 0;
+	local d:4 = Rs;
+	if (d == 0) goto <ovf>;
+	local dividend:8 = (sext(Rd) << 32) | zext(RdP);
+	local q:8 = dividend s/ sext(d);
+	local rem:8 = dividend s% sext(d);
+	if (q != sext(q:4)) goto <ovf>;
+	Rd = q:4; RdP = rem:4;
+	setnz(Rd);
+	goto inst_next;
+<ovf>
+	V = 1;
+}
+:DIVS Rs,Rd is op7=0x2c & Rs & Rd & rd0=1 {
+	N = 0; Z = 0; V = 0;
+	local d:4 = Rs;
+	if (d == 0) goto <ovf>;
+	if (Rd == 0x80000000 && d == 0xffffffff) goto <ovf>;
+	Rd = Rd s/ d;
+	setnz(Rd);
+	goto inst_next;
+<ovf>
+	V = 1;
+}
+
+:DIVU Rs,Rd is op7=0x2d & Rs & Rd & RdP & rd0=0 {
+	Z = 0; V = 0;
+	local d:4 = Rs;
+	if (d == 0) goto <ovf>;
+	local dividend:8 = (zext(Rd) << 32) | zext(RdP);
+	local q:8 = dividend / zext(d);
+	local rem:8 = dividend % zext(d);
+	if (q > 0xffffffff) goto <ovf>;
+	Rd = q:4; RdP = rem:4;
+	Z = Rd == 0;
+	goto inst_next;
+<ovf>
+	V = 1;
+}
+:DIVU Rs,Rd is op7=0x2d & Rs & Rd & rd0=1 {
+	Z = 0; V = 0;
+	local d:4 = Rs;
+	if (d == 0) goto <ovf>;
+	Rd = Rd / d;
+	Z = Rd == 0;
+	goto inst_next;
+<ovf>
+	V = 1;
+}
+
+:LMO Rs,Rd is op7=0x35 & Rs & Rd {
+	local s:4 = Rs;
+	Z = s == 0;
+	local lz:4 = lzcount(s);
+	Rd = zext(s != 0) * lz;
+}
+
+:MODS Rs,Rd is op7=0x36 & Rs & Rd {
+	N = 0; Z = 0; V = 0;
+	if (Rs == 0) goto <ovf>;
+	if (Rs == 0xffffffff) goto <m1>;
+	Rd = Rd s% Rs;
+	setnz(Rd);
+	goto inst_next;
+<m1>
+	Rd = 0; Z = 1;
+	goto inst_next;
+<ovf>
+	V = 1;
+}
+
+:MODU Rs,Rd is op7=0x37 & Rs & Rd {
+	Z = 0; V = 0;
+	if (Rs == 0) goto <ovf>;
+	Rd = Rd % Rs;
+	Z = Rd == 0;
+	goto inst_next;
+<ovf>
+	V = 1;
+}
+
+# MPYS/MPYU: the multiplier is the low FS1 bits of Rs; the 64-bit product goes to Rd:Rd|1
+# (Rd gets the high half; if Rd is odd it ends up with the low half)
+:MPYS Rs,Rd is op7=0x2e & Rs & Rd & RdP {
+	local n:4; fieldbits(n, FS1);
+	local m:4 = Rs << (32 - n);
+	m = m s>> (32 - n);
+	local p:8 = sext(m) * sext(Rd);
+	Z = p == 0; N = p s< 0;
+	Rd = p(4);
+	RdP = p:4;
+}
+:MPYU Rs,Rd is op7=0x2f & Rs & Rd & RdP {
+	local n:4; fieldbits(n, FS1);
+	local m:4 = (Rs << (32 - n)) >> (32 - n);
+	local p:8 = zext(m) * zext(Rd);
+	Z = p == 0;
+	Rd = p(4);
+	RdP = p:4;
+}
+
+:NEG Rd is op11=0x01d & Rd {
+	local b:4 = Rd; local r:4 = 0 - b;
+	subflags(0:4, b, r); Rd = r;
+}
+:NEGB Rd is op11=0x01e & Rd {
+	local b:4 = Rd; local r:4 = 0 - b - zext(C);
+	local bout:1 = (b != 0) || C;
+	subflags(0:4, b, r); C = bout; Rd = r;
+}
+
+:SEXT Rd,F is op6=0x01 & b8=1 & sub3=0 & F & FS & Rd {
+	local n:4; fieldbits(n, FS);
+	Rd = Rd << (32 - n);
+	Rd = Rd s>> (32 - n);
+	setnz(Rd);
+}
+:ZEXT Rd,F is op6=0x01 & b8=1 & sub3=1 & F & FS & Rd {
+	local n:4; fieldbits(n, FS);
+	Rd = (Rd << (32 - n)) >> (32 - n);
+	Z = Rd == 0;
+}
+
+:SUB Rs,Rd is op7=0x22 & Rs & Rd {
+	local a:4 = Rd; local b:4 = Rs; local r:4 = a - b;
+	subflags(a, b, r); Rd = r;
+}
+:SUBB Rs,Rd is op7=0x23 & Rs & Rd {
+	local a:4 = Rd; local b:4 = Rs; local s:4 = a - b; local r:4 = s - zext(C);
+	local bout:1 = (a < b) || (s < zext(C));
+	subflags(a, b, r); C = bout; Rd = r;
+}
+# SUBI stores the 1s complement of the value
+:SUBI val,Rd is op11=0x05f & Rd; iw1 [ val = (~iw1 & 0xffff) - 2 * ((~iw1) & 0x8000); ] {
+	local a:4 = Rd; local b:4 = sext(~iw1:2); local r:4 = a - b;
+	subflags(a, b, r); Rd = r;
+}
+:SUBI val,Rd is op11=0x068 & Rd; il1 [ val = ~il1 & 0xffffffff; ] {
+	local a:4 = Rd; local b:4 = ~il1; local r:4 = a - b;
+	subflags(a, b, r); Rd = r;
+}
+:SUBK K32,Rd is op6=0x05 & K32 & Rd {
+	local a:4 = Rd; local b:4 = K32; local r:4 = a - b;
+	subflags(a, b, r); Rd = r;
+}
+:DEC Rd is op6=0x05 & k5=1 & Rd {
+	local a:4 = Rd; local r:4 = a - 1;
+	subflags(a, 1:4, r); Rd = r;
+}
+
+# =============================================================================================
+# Shifts and rotates (count 0 leaves the register alone and clears C)
+# =============================================================================================
+
+macro do_rl(r, k) {
+	local v:4 = r; local n:4 = k & 31;
+	C = 0;
+	if (n == 0) goto <z>;
+	C = ((v >> (32 - n)) & 1) != 0;
+	r = (v << n) | (v >> (32 - n));
+<z>
+	Z = r == 0;
+}
+macro do_sla(r, k) {
+	local v:4 = r; local n:4 = k & 31;
+	C = 0; V = 0;
+	if (n == 0) goto <z>;
+	local mask:4 = (0xffffffff << (31 - n)) & 0x7fffffff;
+	local t:4 = v ^ (zext(v s< 0) * mask);
+	V = (t & mask) != 0;
+	C = ((v >> (32 - n)) & 1) != 0;
+	r = v << n;
+<z>
+	setnz(r);
+}
+macro do_sll(r, k) {
+	local v:4 = r; local n:4 = k & 31;
+	C = 0;
+	if (n == 0) goto <z>;
+	C = ((v >> (32 - n)) & 1) != 0;
+	r = v << n;
+<z>
+	Z = r == 0;
+}
+macro do_sra(r, k) {
+	local v:4 = r; local n:4 = k & 31;
+	C = 0;
+	if (n == 0) goto <z>;
+	C = ((v >> (n - 1)) & 1) != 0;
+	r = v s>> n;
+<z>
+	setnz(r);
+}
+macro do_srl(r, k) {
+	local v:4 = r; local n:4 = k & 31;
+	C = 0;
+	if (n == 0) goto <z>;
+	C = ((v >> (n - 1)) & 1) != 0;
+	r = v >> n;
+<z>
+	Z = r == 0;
+}
+
+:RL k5,Rd  is op6=0x0c & k5 & Rd { do_rl(Rd, k5:4); }
+:SLA k5,Rd is op6=0x08 & k5 & Rd { do_sla(Rd, k5:4); }
+:SLL k5,Rd is op6=0x09 & k5 & Rd { do_sll(Rd, k5:4); }
+# SRA/SRL K: the opcode holds the 2s complement of the count
+:SRA cnt,Rd is op6=0x0a & k5 & Rd [ cnt = (32 - k5) & 31; ] { do_sra(Rd, (32 - k5:4)); }
+:SRL cnt,Rd is op6=0x0b & k5 & Rd [ cnt = (32 - k5) & 31; ] { do_srl(Rd, (32 - k5:4)); }
+:RL Rs,Rd  is op7=0x34 & Rs & Rd { do_rl(Rd, Rs); }
+:SLA Rs,Rd is op7=0x30 & Rs & Rd { do_sla(Rd, Rs); }
+:SLL Rs,Rd is op7=0x31 & Rs & Rd { do_sll(Rd, Rs); }
+# SRA/SRL Rs: the count is the 2s complement of the low 5 bits of Rs
+:SRA Rs,Rd is op7=0x32 & Rs & Rd { do_sra(Rd, 0 - Rs); }
+:SRL Rs,Rd is op7=0x33 & Rs & Rd { do_srl(Rd, 0 - Rs); }
+
+# =============================================================================================
+# Moves
+# =============================================================================================
+
+:MOVI iw1s,Rd is op11=0x04e & Rd; iw1s { Rd = iw1s; setnz(Rd); V = 0; }
+:MOVI il1,Rd is op11=0x04f & Rd; il1 { Rd = il1; setnz(Rd); V = 0; }
+:MOVK K32,Rd is op6=0x06 & K32 & Rd { Rd = K32; }
+
+:MOVE Rs,Rd is op7=0x26 & Rs & Rd { Rd = Rs; setnz(Rd); V = 0; }
+:MOVE Rs,RdX is op7=0x27 & Rs & RdX { RdX = Rs; setnz(RdX); V = 0; }
+
+:MOVX Rs,Rd is op7=0x76 & Rs & Rd { Rd = (Rd & 0xffff0000) | (Rs & 0xffff); }
+:MOVY Rs,Rd is op7=0x77 & Rs & Rd { Rd = (Rs & 0xffff0000) | (Rd & 0xffff); }
+
+# --- field moves: register to memory (no status change) ---
+:MOVE Rs,*Rd,F is op6=0x20 & F & FS & Rs & Rd { wfield(Rd, FS, Rs); }
+:MOVE Rs,*Rd+,F is op6=0x24 & F & FS & Rs & Rd {
+	local v:4 = Rs;
+	wfield(Rd, FS, v);
+	local n:4; fieldbits(n, FS); Rd = Rd + n;
+}
+:MOVE Rs,-*Rd,F is op6=0x28 & F & FS & Rs & Rd {
+	local v:4 = Rs;
+	local n:4; fieldbits(n, FS); Rd = Rd - n;
+	wfield(Rd, FS, v);
+}
+:MOVE Rs,*Rd(iw1s),F is op6=0x2c & F & FS & Rs & Rd; iw1s {
+	local a:4 = Rd + iw1s; wfield(a, FS, Rs);
+}
+:MOVE Rd,DAbs,F is op6=0x01 & b8=1 & sub3=4 & F & FS & Rd; DAbs {
+	wfield(DAbs, FS, Rd);
+}
+
+# --- field moves: memory to register (N and Z set, V cleared) ---
+:MOVE *Rs,Rd,F is op6=0x21 & F & FS & FE & Rs & Rd {
+	local v:4; rfield(v, Rs, FS, FE); Rd = v; setnz(Rd); V = 0;
+}
+:MOVE *Rs+,Rd,F is op6=0x25 & F & FS & FE & Rs & Rd {
+	local v:4; rfield(v, Rs, FS, FE);
+	local n:4; fieldbits(n, FS); Rs = Rs + n;
+	Rd = v; setnz(Rd); V = 0;
+}
+:MOVE -*Rs,Rd,F is op6=0x29 & F & FS & FE & Rs & Rd {
+	local n:4; fieldbits(n, FS); Rs = Rs - n;
+	local v:4; rfield(v, Rs, FS, FE);
+	Rd = v; setnz(Rd); V = 0;
+}
+:MOVE *Rs(iw1s),Rd,F is op6=0x2d & F & FS & FE & Rs & Rd; iw1s {
+	local a:4 = Rs + iw1s;
+	local v:4; rfield(v, a, FS, FE); Rd = v; setnz(Rd); V = 0;
+}
+:MOVE SAbs,Rd,F is op6=0x01 & b8=1 & sub3=5 & F & FS & FE & Rd; SAbs {
+	local v:4; rfield(v, SAbs, FS, FE); Rd = v; setnz(Rd); V = 0;
+}
+
+# --- field moves: memory to memory (no status change) ---
+:MOVE *Rs,*Rd,F is op6=0x22 & F & FS & FE & Rs & Rd {
+	local v:4; rfield(v, Rs, FS, FE); wfield(Rd, FS, v);
+}
+:MOVE *Rs+,*Rd+,F is op6=0x26 & F & FS & FE & Rs & Rd {
+	local v:4; rfield(v, Rs, FS, FE);
+	local n:4; fieldbits(n, FS); Rs = Rs + n;
+	wfield(Rd, FS, v); Rd = Rd + n;
+}
+:MOVE -*Rs,-*Rd,F is op6=0x2a & F & FS & FE & Rs & Rd {
+	local n:4; fieldbits(n, FS);
+	Rs = Rs - n;
+	local v:4; rfield(v, Rs, FS, FE);
+	Rd = Rd - n;
+	wfield(Rd, FS, v);
+}
+:MOVE *Rs(iw1s),*Rd+,F is op6=0x34 & F & FS & FE & Rs & Rd; iw1s {
+	local a:4 = Rs + iw1s;
+	local v:4; rfield(v, a, FS, FE);
+	wfield(Rd, FS, v);
+	local n:4; fieldbits(n, FS); Rd = Rd + n;
+}
+:MOVE *Rs(iw1s),*Rd(iw2s),F is op6=0x2e & F & FS & FE & Rs & Rd; iw1s; iw2s {
+	local a:4 = Rs + iw1s;
+	local v:4; rfield(v, a, FS, FE);
+	local b:4 = Rd + iw2s;
+	wfield(b, FS, v);
+}
+:MOVE SAbs,DAbs2,F is op6=0x01 & b8=1 & sub3=6 & rf=0 & F & FS & FE; SAbs; DAbs2 {
+	local v:4; rfield(v, SAbs, FS, FE); wfield(DAbs2, FS, v);
+}
+:MOVE SAbs,*Rd+,F is op6=0x35 & F & b8=0 & sub3=0 & FS & FE & Rd; SAbs {
+	local v:4; rfield(v, SAbs, FS, FE);
+	wfield(Rd, FS, v);
+	local n:4; fieldbits(n, FS); Rd = Rd + n;
+}
+
+# --- byte moves ---
+:MOVB Rs,*Rd is op7=0x46 & Rs & Rd { wbyte(Rd, Rs); }
+:MOVB *Rs,Rd is op7=0x47 & Rs & Rd { local v:4; rbyte(v, Rs); Rd = v; setnz(Rd); V = 0; }
+:MOVB *Rs,*Rd is op7=0x4e & Rs & Rd { local v:4; rbyte(v, Rs); wbyte(Rd, v); }
+:MOVB Rs,*Rd(iw1s) is op7=0x56 & Rs & Rd; iw1s { local a:4 = Rd + iw1s; wbyte(a, Rs); }
+:MOVB *Rs(iw1s),Rd is op7=0x57 & Rs & Rd; iw1s {
+	local a:4 = Rs + iw1s; local v:4; rbyte(v, a); Rd = v; setnz(Rd); V = 0;
+}
+:MOVB *Rs(iw1s),*Rd(iw2s) is op7=0x5e & Rs & Rd; iw1s; iw2s {
+	local a:4 = Rs + iw1s; local v:4; rbyte(v, a);
+	local b:4 = Rd + iw2s; wbyte(b, v);
+}
+:MOVB Rd,DAbs is op6=0x01 & b8=1 & sub3=7 & f9=0 & Rd; DAbs { wbyte(DAbs, Rd); }
+:MOVB SAbs,Rd is op6=0x01 & b8=1 & sub3=7 & f9=1 & Rd; SAbs {
+	local v:4; rbyte(v, SAbs); Rd = v; setnz(Rd); V = 0;
+}
+:MOVB SAbs,DAbs2 is op12=0x034; SAbs; DAbs2 { local v:4; rbyte(v, SAbs); wbyte(DAbs2, v); }
+
+# --- field parameters ---
+:SETF SetFS,fe5,F is op6=0x01 & b8=1 & sub2=1 & f9=0 & F & fe5 & low5 & SetFS {
+	FS0 = low5; FE0 = fe5;
+}
+:SETF SetFS,fe5,F is op6=0x01 & b8=1 & sub2=1 & f9=1 & F & fe5 & low5 & SetFS {
+	FS1 = low5; FE1 = fe5;
+}
+:EXGF Rd,F is op6=0x35 & F & b8=1 & sub3=0 & FS & FE & Rd {
+	local old:4 = zext(FS) | (zext(FE) << 5);
+	FS = Rd[0,5]; FE = Rd[5,1];
+	Rd = old;
+}
+
+# =============================================================================================
+# Program control and context switching
+# =============================================================================================
+
+:CALL Rd is op11=0x049 & Rd {
+	local t:4; codeaddr(t, Rd);
+	local ra:4 = inst_next; push32(ra << 3);
+	call [t];
+}
+:CALLA Abs32 is op12=0x0d5; Abs32 {
+	local ra:4 = inst_next; push32(ra << 3);
+	call Abs32;
+}
+:CALLR Rel16 is op12=0x0d3; Rel16 {
+	local ra:4 = inst_next; push32(ra << 3);
+	call Rel16;
+}
+
+:RETS is op11=0x04b & low5=0 {
+	local t:4; pop32(t);
+	local a:4; codeaddr(a, t);
+	return [a];
+}
+:RETS low5 is op11=0x04b & low5 {
+	local t:4; pop32(t);
+	SP = SP + low5 * 16;
+	local a:4; codeaddr(a, t);
+	return [a];
+}
+
+:RETI is op12=0x094 {
+	local st:4; pop32(st);
+	local t:4; pop32(t);
+	putst(st);
+	local a:4; codeaddr(a, t);
+	return [a];
+}
+
+# TRAP 0 is the reset vector: nothing is pushed and it does not return
+:TRAP "0" is op11=0x048 & low5=0 {
+	local vec:4 = 0x1ffffffc;
+	local t:4 = *:4 vec;
+	local a:4; codeaddr(a, t);
+	resetst();
+	goto [a];
+}
+:TRAP low5 is op11=0x048 & low5 {
+	local ra:4 = inst_next; push32(ra << 3);
+	local st:4; getst(st); push32(st);
+	resetst();
+	local vec:4 = 0x1ffffffc - low5 * 4;
+	local t:4 = *:4 vec;
+	local a:4; codeaddr(a, t);
+	call [a];
+}
+
+:JUMP Rd is op11=0x00b & Rd {
+	local t:4; codeaddr(t, Rd);
+	goto [t];
+}
+:EXGPC Rd is op11=0x009 & Rd {
+	local t:4; codeaddr(t, Rd);
+	local ra:4 = inst_next;
+	Rd = ra << 3;
+	call [t];
+}
+:GETPC Rd is op11=0x00a & Rd { local ra:4 = inst_next; Rd = ra << 3; }
+:GETST Rd is op11=0x00c & Rd { local st:4; getst(st); Rd = st; }
+:PUTST Rd is op11=0x00d & Rd { putst(Rd); }
+:PUSHST is op12=0x01e { local st:4; getst(st); push32(st); }
+:POPST is op12=0x01c { local st:4; pop32(st); putst(st); }
+
+:DINT is op12=0x036 { IE = 0; }
+:EINT is op12=0x0d6 { IE = 1; }
+:CLRC is op12=0x032 { C = 0; }
+:SETC is op12=0x0de { C = 1; }
+:NOP is op12=0x030 { }
+# EMU acts as a NOP unless the RUN/EMU pin selects emulation mode (an XDS emulator is attached)
+:EMU is op12=0x010 { }
+@ifdef TMS34020
+# REV: TMS34020 revision 1.0 returns 00000010h, revision 2.0 00000011h (User's Guide); this
+# module returns the later revision
+:REV Rd is op11=0x001 & Rd { Rd = 0x11; }
+@else
+# REV: revision number of the TMS34010 (User's Guide example: 00000008h)
+:REV Rd is op11=0x001 & Rd { Rd = 8; }
+@endif
+
+# --- jumps ---
+:JR^CC Rel8 is op4=0xc & CC & low8!=0 & low8!=0x80 & Rel8 {
+	if (CC) goto Rel8;
+}
+:JR^CC Rel16 is op4=0xc & CC & low8=0; Rel16 {
+	if (CC) goto Rel16;
+}
+:JA^CC Abs32 is op4=0xc & CC & low8=0x80; Abs32 {
+	if (CC) goto Abs32;
+}
+:JRUC Rel8 is op4=0xc & cc=0 & low8!=0 & low8!=0x80 & Rel8 { goto Rel8; }
+:JRUC Rel16 is op4=0xc & cc=0 & low8=0; Rel16 { goto Rel16; }
+:JAUC Abs32 is op4=0xc & cc=0 & low8=0x80; Abs32 { goto Abs32; }
+
+:DSJ Rd,Rel16 is op11=0x06c & Rd; Rel16 {
+	Rd = Rd - 1;
+	if (Rd != 0) goto Rel16;
+}
+:DSJEQ Rd,Rel16 is op11=0x06d & Rd; Rel16 {
+	if (!Z) goto inst_next;
+	Rd = Rd - 1;
+	if (Rd != 0) goto Rel16;
+}
+:DSJNE Rd,Rel16 is op11=0x06e & Rd; Rel16 {
+	if (Z) goto inst_next;
+	Rd = Rd - 1;
+	if (Rd != 0) goto Rel16;
+}
+:DSJS Rd,DsjsTgt is op5=0x07 & Rd & DsjsTgt {
+	Rd = Rd - 1;
+	if (Rd != 0) goto DsjsTgt;
+}
+
+# =============================================================================================
+# XY and graphics
+# =============================================================================================
+
+:ADDXY Rs,Rd is op7=0x70 & Rs & Rd {
+	local sx:2; local sy:2; local dx:2; local dy:2;
+	getx(sx, Rs); gety(sy, Rs); getx(dx, Rd); gety(dy, Rd);
+	dx = dx + sx; dy = dy + sy;
+	N = dx == 0; C = dy s< 0; Z = dy == 0; V = dx s< 0;
+	setxy(Rd, dx, dy);
+}
+:SUBXY Rs,Rd is op7=0x71 & Rs & Rd {
+	local sx:2; local sy:2; local dx:2; local dy:2;
+	getx(sx, Rs); gety(sy, Rs); getx(dx, Rd); gety(dy, Rd);
+	N = sx == dx; C = sy s> dy; Z = sy == dy; V = sx s> dx;
+	dx = dx - sx; dy = dy - sy;
+	setxy(Rd, dx, dy);
+}
+:CMPXY Rs,Rd is op7=0x72 & Rs & Rd {
+	local sx:2; local sy:2; local dx:2; local dy:2;
+	getx(sx, Rs); gety(sy, Rs); getx(dx, Rd); gety(dy, Rd);
+	local rx:2 = dx - sx; local ry:2 = dy - sy;
+	N = rx == 0; V = rx s< 0; Z = ry == 0; C = ry s< 0;
+}
+
+@include "tms34010_gfx.sinc"
+@ifdef TMS34020
+@include "tms34020.sinc"
+@endif

@@ -4297,6 +4297,13 @@ borrow for `.u`) instead of bit 63, and saturate on it; `msubs.u` multiplies (it
 The 32-bit `msub.q`/`msubs.q` (32x32 and 32x16) subtract at full precision and then drop the
 low bits, as `madd.q` does, so the result is `D[d] - ceil(product)` rather than
 `D[d] - floor(product)`, matching Unicorn's TriCore core.
+
+The packed multiply-accumulate forms (`madd(s).h`, `msub(s).h`, `maddsu(s).h`, `msubad(s).h`, the
+rounding `...r(s).h` and the multi-precision `...m(s).h` families) compute each half's result
+exactly: V is set when either 32-bit half (or the 64-bit `m` result) overflows, not from the halves'
+sign bits, and the saturating forms clamp the exact value. The rounding forms with a D[d]
+accumulator take `sext(D[d][31:16]) << 16` (the halfword was shifted inside its 16 bits, so it was
+0), and the `m` forms add `(mul_res1 +/- mul_res0) << 16` in 64 bits (the sum was truncated to 32).
 ### AArch64 SVE2 and SVE2.1 (#98)
 
 `specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_sve2.sinc` decodes

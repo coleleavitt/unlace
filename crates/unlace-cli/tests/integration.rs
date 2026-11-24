@@ -110,6 +110,7 @@ mod aarch64_sme;
 mod i4004_raw;
 #[path = "s2650_raw.rs"]
 mod s2650_raw;
+mod sam8_raw;
 #[path = "cdp1802_raw.rs"]
 mod cdp1802_raw;
 #[path = "scmp_raw.rs"]

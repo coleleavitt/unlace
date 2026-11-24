@@ -1,0 +1,10 @@
+@define FUC_VERSION "6"
+
+@define SUPPORT_FUC3P
+@define SUPPORT_FUC4P
+@define SUPPORT_FUC5P
+@define SUPPORT_FUC6P
+
+@define CRYPT_EXTENSION
+
+@include "base_falcon.sinc"

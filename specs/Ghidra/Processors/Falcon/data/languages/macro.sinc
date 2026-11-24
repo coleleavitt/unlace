@@ -1,0 +1,306 @@
+# Semantics follow the envytools Falcon ISA documentation (docs/hw/falcon/arith.rst, data.rst,
+# branch.rst; MIT): flags c (carry/borrow), o (signed overflow), s (sign), z (zero) are bits 8-11
+# of $flags (csw). Sized instructions take operands truncated to the operation size and write
+# only the low 8/16 bits of an 8/16-bit destination.
+
+macro todo_binop(dst, src1, src2) {
+  dst = todo(src1, src2);
+}
+
+macro store32(addr, value) {
+  *[dmem]:4 (addr) = value;
+}
+macro store16(addr, value) {
+  *[dmem]:2 (addr) = value;
+}
+macro store8(addr, value) {
+  *[dmem]:1 (addr) = value;
+}
+macro load32(dst1, addr) {
+  dst1 = *[dmem]:4 (addr);
+}
+macro load16(dst1, addr) {
+  dst1 = *[dmem]:2 (addr);
+}
+macro load8(dst1, addr) {
+  dst1 = *[dmem]:1 (addr);
+}
+
+# xbit (v3+): DST = SRC1 >> bit & 1, s = 0, z = (DST == 0)
+macro xbit(dst1, src1, bit1) {
+@if FUC_VERSION == "0"
+  # v0: only bit 0 of the destination changes, no flags
+  dst1 = (dst1 & 0xfffffffe) | ((src1 >> (bit1 & 0x1f)) & 1);
+@else
+  dst1 = (src1 >> (bit1 & 0x1f)) & 1;
+  $(S_flag) = 0;
+  $(Z_flag) = (dst1 == 0);
+@endif
+}
+
+# sext: bit index (masked to 5 bits) of the new sign bit; sets s and z
+macro op_sext(dst, src1, src2) {
+  local shift_distance = (31 - (src2 & 0x1F));
+  dst = (src1 << shift_distance) s>> shift_distance;
+  $(S_flag) = (dst s< 0);
+  $(Z_flag) = (dst == 0);
+}
+
+# extr / extrs: bitfield (low = bf & 31, size - 1 = bf >> 5 & 31); s = fill bit, z as usual
+macro extr(dst, src, bf) {
+  local low = bf & 0x1f;
+  local sizem1 = (bf >> 5) & 0x1f;
+  dst = (src >> low) & ((2 << sizem1) - 1);
+  $(S_flag) = 0;
+  $(Z_flag) = (dst == 0);
+}
+macro extrs(dst, src, bf) {
+  local low = bf & 0x1f;
+  local sizem1 = (bf >> 5) & 0x1f;
+  local v = (src >> low) & ((2 << sizem1) - 1);
+  local fill = (src >> ((low + sizem1) & 0x1f)) & 1;
+  dst = v | (zext(fill != 0) * (-(2 << sizem1)));
+  $(S_flag) = (fill != 0);
+  $(Z_flag) = (dst == 0);
+}
+# ins: insert the low bits of src into dst (no flags; no-op if the field leaves the register)
+macro ins(dst, src, bf) {
+  local low = bf & 0x1f;
+  local size = ((bf >> 5) & 0x1f) + 1;
+  local m = ((1 << size) - 1) << low;
+  local inb = (low + size) <= 32;
+  local nv = (dst & ~m) | ((src << low) & m);
+  dst = (zext(inb) * nv) + (zext(!inb) * dst);
+}
+
+macro bclr(reg1, bit1) {
+  reg1 = reg1 & ~(1 << (bit1 & 0x1f));
+}
+
+macro bset(reg1, bit1) {
+  reg1 = reg1 | (1 << (bit1 & 0x1f));
+}
+
+macro btgl(reg1, bit1) {
+  reg1 = reg1 ^ (1 << (bit1 & 0x1f));
+}
+
+# The stack grows down; sp points at the last pushed word.
+macro push32(val32) {
+  sp = sp - 4;
+  *[dmem]:4 sp = val32;
+}
+
+macro pop32(ret32) {
+  ret32 = *[dmem]:4 sp;
+  sp = sp + 4;
+}
+
+macro ret() {
+  local t:4;
+  pop32(t);
+  return [t];
+}
+
+macro setResultFlags(result) {
+  $(Z_flag) = (result == 0);
+  $(S_flag) = (result s< 0);
+}
+
+macro clear(dst) {
+  dst = 0;
+}
+
+macro mov(dst, src) {
+  dst = src;
+}
+
+# and/or/xor (v3+): c = o = 0, s and z from the result
+macro and(dst, src1, src2) {
+  dst = src1 & src2;
+@if FUC_VERSION != "0"
+  $(C_flag) = 0;
+  $(O_flag) = 0;
+  setResultFlags(dst);
+@endif
+}
+
+macro or(dst, src1, src2) {
+  dst = src1 | src2;
+@if FUC_VERSION != "0"
+  $(C_flag) = 0;
+  $(O_flag) = 0;
+  setResultFlags(dst);
+@endif
+}
+
+macro xor(dst, src1, src2) {
+  dst = src1 ^ src2;
+@if FUC_VERSION != "0"
+  $(C_flag) = 0;
+  $(O_flag) = 0;
+  setResultFlags(dst);
+@endif
+}
+
+# Shifts: the count is masked to 3/4/5 bits for 8/16/32-bit operations (mask = bits - 1);
+# c = last bit shifted out (0 for a zero count), o = 0, s and z from the result. shlc/shrc shift
+# the carry flag in as the first bit.
+macro shl_sz(dst, src1, src2, mask, bits) {
+  local n = src2 & mask;
+  local r = src1 << n;
+  local co = (src1 >> ((bits - n) & mask)) & 1;
+  $(C_flag) = (n != 0) && (co != 0);
+  dst = r;
+@if FUC_VERSION != "0"
+  $(O_flag) = 0;
+  setResultFlags(dst);
+@endif
+}
+macro shlc_sz(dst, src1, src2, mask, bits) {
+  local n = src2 & mask;
+  local r = src1 << n;
+  local cin = zext($(C_flag)) * zext(n != 0);
+  r = r | ((cin << ((n - 1) & mask)) * cin);
+  local co = (src1 >> ((bits - n) & mask)) & 1;
+  $(C_flag) = (n != 0) && (co != 0);
+  dst = r;
+@if FUC_VERSION != "0"
+  $(O_flag) = 0;
+  setResultFlags(dst);
+@endif
+}
+macro shr_sz(dst, src1, src2, mask) {
+  local n = src2 & mask;
+  local co = (src1 >> ((n - 1) & mask)) & 1;
+  $(C_flag) = (n != 0) && (co != 0);
+  dst = src1 >> n;
+@if FUC_VERSION != "0"
+  $(O_flag) = 0;
+  setResultFlags(dst);
+@endif
+}
+macro shrc_sz(dst, src1, src2, mask, bits) {
+  local n = src2 & mask;
+  local r = src1 >> n;
+  local cin = zext($(C_flag)) * zext(n != 0);
+  r = r | ((cin << ((bits - n) & mask)) * cin);
+  local co = (src1 >> ((n - 1) & mask)) & 1;
+  $(C_flag) = (n != 0) && (co != 0);
+  dst = r;
+@if FUC_VERSION != "0"
+  $(O_flag) = 0;
+  setResultFlags(dst);
+@endif
+}
+macro sar_sz(dst, src1, src2, mask) {
+  local n = src2 & mask;
+  local co = (src1 >> ((n - 1) & mask)) & 1;
+  $(C_flag) = (n != 0) && (co != 0);
+  dst = src1 s>> n;
+@if FUC_VERSION != "0"
+  $(O_flag) = 0;
+  setResultFlags(dst);
+@endif
+}
+
+# add/adc/sub/sbb: the doc's C(a, b, c) / O(a, b, c) on the sign bits of the operands and result
+macro addflags(a, b, res) {
+  local sa = a s< 0;
+  local sb = b s< 0;
+  local sr = res s< 0;
+  $(C_flag) = (sa && sb) || ((sa || sb) && !sr);
+  $(O_flag) = (sa == sb) && (sa != sr);
+  setResultFlags(res);
+}
+macro subflags(a, b, res) {
+  local sa = a s< 0;
+  local nb = !(b s< 0);
+  local sr = res s< 0;
+  $(C_flag) = !((sa && nb) || ((sa || nb) && !sr));
+  $(O_flag) = (sa == nb) && (sa != sr);
+  setResultFlags(res);
+}
+
+macro add(dst, src1, src2) {
+  local a = src1;
+  local b = src2;
+  local r = a + b;
+  addflags(a, b, r);
+  dst = r;
+}
+
+macro adc(dst, src1, src2) {
+  local a = src1;
+  local b = src2;
+  local r = a + b + zext($(C_flag));
+  addflags(a, b, r);
+  dst = r;
+}
+
+macro sub(dst, src1, src2) {
+  local a = src1;
+  local b = src2;
+  local r = a - b;
+  subflags(a, b, r);
+  dst = r;
+}
+
+macro sbb(dst, src1, src2) {
+  local a = src1;
+  local b = src2;
+  local r = a - b - zext($(C_flag));
+  subflags(a, b, r);
+  dst = r;
+}
+
+# cmp (v3+): all four flags like sub; cmpu: c and z only; cmps: z, and c = signed less-than
+macro cmp(src1, src2) {
+  local r = src1 - src2;
+  subflags(src1, src2, r);
+}
+
+macro cmpu(src1, src2) {
+  $(C_flag) = (src1 < src2);
+  $(Z_flag) = (src1 == src2);
+}
+
+macro cmps(src1, src2) {
+  $(C_flag) = (src1 s< src2);
+  $(Z_flag) = (src1 == src2);
+}
+
+# 16x16 -> 32 multiplications, no flags
+macro mulu(dst, src1, src2) {
+  local a:4 = src1;
+  local b:4 = src2;
+  dst = (a & 0xffff) * (b & 0xffff);
+}
+
+# hswap: rotate by half the operation size; s, z from the result, o = 0
+macro hswap_sz(dst, src, half) {
+  dst = (src >> half) | (src << half);
+  setResultFlags(dst);
+  $(O_flag) = 0;
+}
+
+macro not(dst, src) {
+  dst = ~src;
+  setResultFlags(dst);
+  $(O_flag) = 0;
+}
+
+# neg: o set iff the result is the most negative value
+macro neg(dst, src) {
+  local r = -src;
+  $(O_flag) = (r != 0) && (r == src);
+  dst = r;
+  setResultFlags(r);
+}
+
+# movf (v0): move and set s and z, o = 0
+macro movf(dst, src) {
+  dst = src;
+  setResultFlags(dst);
+  $(O_flag) = 0;
+}

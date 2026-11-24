@@ -582,6 +582,8 @@ Three tiers:
 | a call to a function that returns a struct prints with no arguments, e.g. mk();, and the next call takes the wrong local | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
 | code after a call to an abort or assert-failure helper is merged into the other branch with a v = &Stack... assignment | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
 | a parameter read after a call through a function pointer prints as an unassigned local | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
+| if (c) { return 1; } else { return 0; } where the source returns the comparison | [`boolreturn`](#boolreturn----on--off-default-off) |
+| a predicate function prints as an if/else of two constant returns | [`boolreturn`](#boolreturn----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2503,6 +2505,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default on x86-32 ELF. Keep it on when a 32-bit function prints a `// esp` variable and writes call arguments through it, when a call to a function returning a struct prints without its arguments, or when the code after a call to an abort-style helper reads as part of the wrong branch. Flip OFF to see every call under the model's extrapop and every fall-through decoded, for instance when a call marked `// no-return` does return (a callee that pops its own arguments reached only through an import or a pointer, on a path nothing else constrains).
 - **Where / provenance:** P4/extrapop · kuna · new-analysis · kuna-spsolve
 - **Example:** `option spsolve off`
+
+### `boolreturn` -- on | off, default `off`
+
+- **Symptoms:** if (c) { return 1; } else { return 0; } where the source returns the comparison; a predicate function prints as an if/else of two constant returns.
+- **What it does:** C output only: print an if/else whose body and else each print one statement, `return 1;` and `return 0;` in either order, as the one statement `return (cond);`, or `return !(cond);` when the body returns 0. Each arm must be a basic-block leaf with no label line and no comment whose only printed statement is a RETURN of the constant 0 or 1; the condition prints through the same render as the if header, and the statements in front of the test print above it as before. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function, as `option ctree on` does.
+- **When to flip:** Turn on when the source likely returned a comparison directly (predicates, `is_x` helpers, comparison callbacks), which compilers lower to two constant returns. Leave off to keep the if/else the binary literally has: the same object code comes from a source that wrote the if/else.
+- **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-boolreturn
+- **Example:** `option boolreturn on`
 
 ## Analysis & loader passes
 

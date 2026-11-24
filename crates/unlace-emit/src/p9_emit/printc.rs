@@ -4859,7 +4859,9 @@ impl PrintC {
                 Default::default()
             };
         self.assign_label_names(fd, sroot);
-        self.ctree = if arch.kuna_options.get::<crate::kuna_ctree::Ctree>().0 && !self.is_flat() {
+        let tree_on = arch.kuna_options.get::<crate::kuna_ctree::Ctree>().0
+            || arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0;
+        self.ctree = if tree_on && !self.is_flat() {
             crate::kuna_ctreebuild::build(fd)
         } else {
             None
@@ -5769,6 +5771,10 @@ impl PrintC {
             }
             None => {}
         }
+        if let Some((cond_block, ret_op, negate)) = self.return_form(blk) {
+            self.emit_block_if_return(fd, arch, cond_block, ret_op, negate);
+            return;
+        }
         let size = fd.sblocks_ref().block(blk).get_size();
         let cond_block = fd.sblocks_ref().block(blk).get_block(0);
 
@@ -6325,6 +6331,75 @@ impl PrintC {
             .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
         // (kuna warnstyle, DIV-39) condition-attached warnings land at the end of
         // the assignment line.
+        self.flush_eol_warnings();
+
+        if my_pending_indent >= 0 {
+            self.emit
+                .close_brace_indent(self.lang().kw_close_curly, my_pending_indent);
+        }
+        self.context.pop_mod();
+    }
+
+    /// (kuna `boolreturn`) Emit an `if` whose arms only return `1` and `0` as
+    /// `return ( cond );`, or `return !( cond );` when the body returns `0`. The
+    /// condition goes through the same `ONLY_BRANCH` render as the `if` header, and the
+    /// pending-brace and comment handling mirror [`emit_block_if_bool`].
+    fn emit_block_if_return(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        cond_block: BlockId,
+        ret_op: OpId,
+        negate: bool,
+    ) {
+        use crate::prettyprint::Emit;
+
+        let mut registered_pending = false;
+        let mut my_pending_gen = 0u64;
+        if self.context.is_set(modifiers::PENDING_BRACE) {
+            self.emit
+                .set_pending_brace(self.output_brace(self.options.brace_ifelse));
+            my_pending_gen = self.emit.pending_reg_gen();
+            registered_pending = true;
+        }
+        self.context.push_mod();
+        self.context
+            .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH | modifiers::PENDING_BRACE);
+
+        self.context.push_mod();
+        self.context.set_mod(modifiers::NO_BRANCH);
+        self.emit_block(fd, arch, cond_block);
+        self.context.pop_mod();
+        self.emit_comment_block_tree(fd, cond_block);
+
+        self.emit.tag_line();
+        let mut my_pending_indent = -1;
+        if registered_pending {
+            my_pending_indent = self.emit.pending_fired_indent(my_pending_gen);
+        }
+
+        let stmt_markup = self.op_markup(fd, ret_op);
+        let sid = self.emit.begin_statement(&stmt_markup);
+        self.emit.tag_op(
+            self.lang().kw_return,
+            SyntaxHighlight::KeywordColor,
+            &stmt_markup,
+        );
+        self.emit.spaces(1, 0);
+        if negate {
+            self.emit.tag_op(
+                tokens::BOOLEAN_NOT.print1,
+                SyntaxHighlight::NoColor,
+                &MarkupRef::none(),
+            );
+        }
+        self.context.push_mod();
+        self.context.set_mod(modifiers::ONLY_BRANCH);
+        self.emit_block(fd, arch, cond_block);
+        self.context.pop_mod();
+        self.emit.end_statement(sid);
+        self.emit
+            .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
         self.flush_eol_warnings();
 
         if my_pending_indent >= 0 {

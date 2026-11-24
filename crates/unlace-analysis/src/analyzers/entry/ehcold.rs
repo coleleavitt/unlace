@@ -91,8 +91,14 @@ impl AnalysisPass for FuncTailsPass {
         {
             return AnalysisOutput::default();
         }
+        let owners = cold_tail_owners(file, ctx.bytes);
         AnalysisOutput {
-            eh_cold: cold_tails(file, ctx.bytes),
+            eh_cold: owners.iter().map(|&(body, _)| body).collect(),
+            owned_tails: owners
+                .iter()
+                .filter(|&&(body, owner)| body.0 == owner.1)
+                .map(|&(body, owner)| (owner, body))
+                .collect(),
             ..AnalysisOutput::default()
         }
     }
@@ -116,18 +122,20 @@ pub fn eh_cold_parts(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
         .collect()
 }
 
-/// (unlace `functails`) The FDE bodies that are a tail of another function: entered
-/// only by direct jumps from one other FDE body (its owner), never called, with no
-/// function symbol at the start, laid out before the owner and starting off the
-/// 16-byte function alignment, where GCC's hot/cold split puts a `.cold` part.
-/// The landing-pad evidence [`eh_cold_parts`] needs is not asked for, so this also
-/// takes `ud2` traps, error paths and other unlikely blocks; the alignment and
-/// placement tests keep a real function that only one other function tail-calls.
-pub fn cold_tails(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
+/// (unlace `functails`) The FDE bodies that are a tail of another function, as
+/// `(body, owner)`: entered only by direct jumps from one other FDE body (its owner),
+/// never called, with no function symbol at the start, starting off the 16-byte
+/// function alignment where GCC's hot/cold split puts a `.cold` part, and either laid
+/// out before the owner or starting exactly where the owner's FDE ends (the part GCC
+/// places right after a block that falls into it). The landing-pad evidence
+/// [`eh_cold_parts`] needs is not asked for, so this also takes `ud2` traps, error
+/// paths and other unlikely blocks; the alignment and placement tests keep a real
+/// function that only one other function tail-calls.
+pub fn cold_tail_owners(file: &object::File, bytes: &[u8]) -> Vec<((u64, u64), (u64, u64))> {
     single_owner_parts(file, bytes)
         .into_iter()
-        .filter(|&((s, _), owner, _)| s % TAIL_ALIGN != 0 && s < owner.0)
-        .map(|(body, _, _)| body)
+        .filter(|&((s, _), owner, _)| s % TAIL_ALIGN != 0 && (s < owner.0 || s == owner.1))
+        .map(|(body, owner, _)| (body, owner))
         .collect()
 }
 

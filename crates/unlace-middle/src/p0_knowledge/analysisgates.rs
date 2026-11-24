@@ -279,7 +279,7 @@ crate::unlace_flag!(
 crate::unlace_flag!(
     /// (unlace) Keep every single-owner `.cold` part out of the function list, as IDA
     /// keeps a function tail (option `functails`). See
-    /// `unlace_analysis::entry::ehcold::cold_tails`.
+    /// `unlace_analysis::entry::ehcold::cold_tail_owners`.
     Functails,
     "functails",
     "Single-owner .cold parts kept as their owner's tails",

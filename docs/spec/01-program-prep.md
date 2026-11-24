@@ -10701,17 +10701,20 @@ an ordinary branch (`may_throw.cold`) is not a landing-pad target and stays a
 function. x86/x86-64 ELF only.
 
 **(unlace) Or any other single-owner cold part** (`functails`, default off;
-`crates/unlace-analysis/src/analyzers/entry/ehcold.rs (cold_tails)`). The
+`crates/unlace-analysis/src/analyzers/entry/ehcold.rs (cold_tail_owners)`). The
 same test without the landing pad takes every `.cold` part IDA keeps as a
 function tail (`AF_FTAIL`, libida `append_func_tail`): a lone `ud2` after an
 assertion, an error call, an unlikely branch. An FDE body qualifies when no
 function symbol names its start, no direct `call rel32` targets it, every direct
 `jmp`/`jcc rel32` into it comes from one other FDE body (its owner), it lies
-before that owner, and its start is off the 16-byte alignment GCC and Clang give
+before that owner or starts exactly where the owner's FDE ends (the part GCC lays
+right after a block that falls into it), and its start is off the 16-byte alignment
+GCC and Clang give
 a function at -O2 but not a cold part. The last two tests keep a real function
 that only one other function tail-calls. The bodies go out on the `ehcold`
 channel, so the commit drops every entry inside one; the owner's flow decodes
-the part as before. Against IDA 9.5's own databases of its loaders, the IDA
+the part as before. A tail that starts exactly where its owner's FDE ends is the owner's
+fall-through, so the owner's `fdeflowbound` extent (chapter 02) runs over it. Against IDA 9.5's own databases of its loaders, the IDA
 tail chunks unlace lists as functions drop from 9/51/4/18 to 2/12/0/5
 (pe/elf/coff/dex.so), and one function IDA keeps is lost (pe.so 0x62fe). The
 owners' C does not change, since their flow already decoded the parts; the parts

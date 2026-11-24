@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="CHIP8"
+            endian="big"
+            size="16"
+            variant="VIP"
+            version="1.0"
+            slafile="chip8_vip.sla"
+            processorspec="chip8.pspec"
+            id="CHIP8:BE:16:VIP">
+    <description>CHIP-8 interpreter bytecode, COSMAC VIP semantics</description>
+    <compiler name="default" spec="chip8.cspec" id="default"/>
+  </language>
+  <language processor="CHIP8"
+            endian="big"
+            size="16"
+            variant="SCHIP"
+            version="1.0"
+            slafile="chip8_schip.sla"
+            processorspec="chip8.pspec"
+            id="CHIP8:BE:16:SCHIP">
+    <description>SUPER-CHIP 1.1 interpreter bytecode</description>
+    <compiler name="default" spec="chip8.cspec" id="default"/>
+  </language>
+</language_definitions>

@@ -24,7 +24,7 @@
             slafile="c166.sla"
             processorspec="c167cs.pspec"
             manualindexfile="../manuals/C166.idx"
-            id="C166:CS:LE:16:default">
+            id="C166:LE:16:CS">
     <description>Infineon C167CS Dual CAN</description>
     <compiler name="tasking" spec="c166.cspec" id="tasking"/>
     <external_name tool="DWARF.register.mapping.file" name="c166.dwarf"/>

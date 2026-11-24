@@ -4,4 +4,6 @@ Vendored from aleph-void/c166-ghidra-module (https://github.com/aleph-void/c166-
 `data/languages` and `data/manuals` hold the upstream SLEIGH, processor, compiler
 and ldefs files unchanged; upstream build files, scripts and tests are not vendored.
 
-Languages: `C166:LE:16:default`, `tasking`, `C166:CS:LE:16:default`, `tasking`.
+Languages: `C166:LE:16:default`, `tasking`, `C166:LE:16:CS`, `tasking`.
+
+Local modification: the language id `C166:CS:LE:16:default` -> `C166:LE:16:CS` in `data/languages/c166.ldefs` (The upstream id C166:CS:LE:16:default has five parts, so the decompiler split it at the wrong colons and found no language). Nothing else in the upstream files changed.

@@ -2110,6 +2110,8 @@ impl Architecture {
                 .get::<crate::kuna_octeonops::OcteonEffectsMode>(),
             &self.octeon_upstream_inject,
         );
+        ctx.atomic_userops =
+            crate::kuna_atomicops::AtomicUserops::resolve(&self.archid, &self.userops);
         ctx.x64_syscall_memory_target = self.archid == "x86:LE:64:default:gcc";
         ctx.syscall_regs = self
             .kuna_options
@@ -3430,6 +3432,10 @@ impl Architecture {
                 BUILTIN_MEMSET64,
                 BUILTIN_MEMCMP,
             ] {
+                userops.register_builtin(id, &adapter)?;
+            }
+            // (kuna atomics) the locked and LSE read-modify-write builtins.
+            for (id, _) in crate::userop::ATOMIC_BUILTINS {
                 userops.register_builtin(id, &adapter)?;
             }
             Ok(())

@@ -398,6 +398,10 @@ declare_hooks! {
     octeoneffects_input_type: fn(&Funcdata, OpId, int4) -> Option<Rc<Datatype>>;
     /// `kuna_octeoneffects::output_type`.
     octeoneffects_output_type: fn(&Funcdata, OpId) -> Option<Rc<Datatype>>;
+    /// `kuna_atomics::input_type`.
+    atomics_input_type: fn(&Funcdata, OpId, int4) -> Option<Rc<Datatype>>;
+    /// `kuna_atomics::output_type`.
+    atomics_output_type: fn(&Funcdata, OpId) -> Option<Rc<Datatype>>;
     /// `kuna_segmentize::table_leaves_image`.
     segmentize_table_leaves_image: fn(&Funcdata, OpId, &[Address]) -> bool;
     /// `kuna_switchextent::table_read`.

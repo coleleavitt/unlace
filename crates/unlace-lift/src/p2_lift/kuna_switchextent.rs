@@ -540,7 +540,7 @@ impl Fold<'_> {
     }
 }
 
-/// Whether `vn` is an immediate within 64 KiB of zero (`1(%rdi)`, OCaml's
+/// Whether `vn` is an immediate within 4 KiB of zero (`1(%rdi)`, OCaml's
 /// `-0x8(%rbx)` header byte): an offset, never a table address.
 fn small_imm(vn: Option<&VarnodeData>) -> bool {
     vn.is_some_and(|vn| {
@@ -551,9 +551,9 @@ fn small_imm(vn: Option<&VarnodeData>) -> bool {
     })
 }
 
-/// Whether `v`, read as a signed `size`-byte value, lies within 64 KiB of zero.
+/// Whether `v`, read as a signed `size`-byte value, lies within 4 KiB of zero.
 fn is_small(v: u64, size: u32) -> bool {
-    (sign_extend(v, size) as i64).unsigned_abs() < 0x1_0000
+    (sign_extend(v, size) as i64).unsigned_abs() < 0x1000
 }
 
 fn key_of(vn: &VarnodeData) -> Option<Key> {

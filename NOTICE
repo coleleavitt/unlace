@@ -16,6 +16,10 @@ SLEIGH specifications of GhidraMC6800 (https://github.com/sigurasg/GhidraMC6800)
 released under the Apache License, Version 2.0, Copyright 2022-2025 Sigurdur
 Asgeirsson.
 
+specs/Ghidra/Processors/STM8 vendors the STM8 SLEIGH specification of ghidra_STM8
+(https://github.com/esaulenka/ghidra_STM8), released under the Apache License,
+Version 2.0 (its LICENSE is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

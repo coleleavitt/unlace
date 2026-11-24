@@ -2532,6 +2532,8 @@ mod tests {
             .set(unlace_decomp::kuna_analysisgates::Itaniumrtti(true));
         arch.kuna_options
             .set(unlace_decomp::kuna_formatstring::FormatStringMode::Off);
+        arch.kuna_options
+            .set(unlace_decomp::kuna_goitabcalls::GoItabCalls(false));
 
         let schedule: Vec<(&str, bool)> = listing_consumer_passes(&arch)
             .into_iter()

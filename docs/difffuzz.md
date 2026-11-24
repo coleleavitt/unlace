@@ -361,8 +361,8 @@ Full sweep (unlace-5dac424f4f, 37 configurations, all oracles installed): exit 0
 configuration `ok`, no mismatches beyond riscv64v's 15 known ones. The `decode` findings (s390x
 97, ppc 25, tricore 12, x86-64-native 7, a few elsewhere) are spec gaps or encodings Capstone
 accepts that the ISA leaves invalid. They are listed in #862. After the `isel` decode and the
-invalid-encoding filters (unlace-478ab58a5e), 10 `decode` findings remain, all spec gaps routed
-to other teams: TriCore 1.6.2 forms (8) and AMD FMA4 (2).
+invalid-encoding filters (unlace-478ab58a5e), the only `decode` findings left are AMD FMA4 on
+`x86-64-native` (2), a spec gap routed to the x86 team.
 
 ## How a case runs
 
@@ -405,8 +405,8 @@ to other teams: TriCore 1.6.2 forms (8) and AMD FMA4 (2).
   a 0F-map opcode that has no such form (Capstone decodes the same instruction without it); on
   32-bit PowerPC, 64-bit-only instructions, VSX and `isel`, which the 32-bit language and the
   7457 lack; on MIPS R6, the REGIMM trap-immediates R6 removed and the Cavium Octeon
-  instructions; on TriCore, RLC `MOV`/`MOVH`/`MOV.U`/`MOVH.A` with a non-zero s1 field and
-  RRPW `EXTR`/`EXTR.U` with a non-zero s2; on m68k, a full extension word for the opword's
+  instructions; on TriCore, an encoding with a reserved bit set that Capstone ignores, and the
+  TC1.6.2 additions the TC1.6.1 language lacks; on m68k, a full extension word for the opword's
   own effective address with bit 3 set, a zero base-displacement size or a reserved I/IS value.
 - ARM and Thumb on QEMU (`qemu-arm -cpu max`, QEMU 10; build it with
   `--target-list=arm-linux-user`): the A32 prologue sets NZCVQ and GE with `MSR APSR_nzcvqg`,

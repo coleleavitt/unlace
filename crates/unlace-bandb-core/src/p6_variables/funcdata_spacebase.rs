@@ -1040,6 +1040,14 @@ impl FuncdataSpacebaseExt for Funcdata {
                     } else {
                         0
                     };
+                    if crate::heritage::kuna_jt_trace() {
+                        eprintln!(
+                            "jt-trace sync unmapped off={:#x} size={} unaliased={}",
+                            ex_addr.get_offset(),
+                            ex_size,
+                            unaliased
+                        );
+                    }
                 } else {
                     fl = 0;
                 }

@@ -164,8 +164,8 @@ def main():
     ap.add_argument("--predicates", default=PREDICATES)
     ap.add_argument("--forms", default="mem")
     ap.add_argument("--mattr", default=MATTR)
-    ap.add_argument("--enc", default="EncEVEX", choices=("EncEVEX", "EncVEX", "EncNormal"),
-                    help="the encoding of the records to sweep (EncVEX/EncNormal with --predicates for the VEX and legacy forms)")
+    ap.add_argument("--enc", default="EncEVEX", choices=("EncEVEX", "EncVEX", "EncNormal", "EncXOP"),
+                    help="the encoding of the records to sweep (EncVEX/EncNormal/EncXOP with --predicates for the VEX, legacy and AMD XOP forms)")
     ap.add_argument("--work")
     ap.add_argument("--list", type=int, default=40)
     a = ap.parse_args()

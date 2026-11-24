@@ -2621,6 +2621,11 @@ impl Funcdata {
                         ) {
                             continue;
                         }
+                        // (kuna) `retindexuse`: a load the returned value only
+                        // indexes.  See `kuna_retindexuse`.
+                        if (self.hooks().retindexuse_index_only_load)(self, opmatch, op, vn) {
+                            continue;
+                        }
                         res = false;
                     }
                     OpCode::CPUI_STORE => {

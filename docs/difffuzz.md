@@ -197,6 +197,20 @@ afterwards. The register file is unchanged.
     reads zeros; TST.B/.S and ADDCC.B/.S work on 8/16 bits. Seed 8, 2500 encodings: 3592 matches.
   - IQ2000 (`--arch iq2000`): instructions at 0x80000000 + address, data below 8 MiB. Seed 5,
     2500 encodings: 5390 matches; no fix needed.
+  - V850 (`--arch v850`, `V850:LE:32:default`, simulator machine v850e2v3): the simulator has memory
+    below 2 MiB, so the instruction sits at 0x100000. Flags are PSW bits 0..4, compared as PSW.
+    Misaligned accesses are undefined (sim/v850 aligns them down). Simulator quirks: ADF/SBF leave
+    PSW alone (PSW not compared there); MAC/MACU drop a carry into the high word (skipped).
+    Fixed in `Instructions/Arithmetic.sinc`: DIVH divides signed by the sign-extended halfword
+    (it was an unsigned 32-bit division) and the three-operand DIVH takes Z/S from the quotient;
+    MULHI multiplies the sign-extended halfword of reg1; SATADD/SATSUB/SATSUBR/SATSUBI saturate
+    (`__saturate` was an empty pcodeop) and S/Z follow the saturated value. Seed 3, 3000
+    encodings: 6663 matches.
+  - MN10300 (`--arch mn10300`, `mn10300:LE:32:mn10300`): the simulator has memory below 1 MiB, so the
+    instruction sits at 0x10000; Z, N, C, V go through PSW. DIV/DIVU are undefined on overflow
+    (sim/mn10300 only tests a zero divisor). Fixed in `mn103_base.sinc`: the register forms of
+    ADD/SUB read the source register again for the flags after writing the destination, so
+    `add d3,d3` set C and V from the sum. Seed 2, 2000 encodings: 5190 matches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

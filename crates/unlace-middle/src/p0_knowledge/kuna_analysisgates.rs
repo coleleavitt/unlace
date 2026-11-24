@@ -220,6 +220,17 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) A relocated pointer to an MSVC frame prologue on a 32-bit PE is a
+    /// function entry (option `msvcptrentry`).  See
+    /// `unlace_analysis::entry::kuna_msvcptrentry`.
+    Msvcptrentry,
+    "msvcptrentry",
+    "Relocated MSVC prologue-pointer function discovery",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna) Withhold an exception-cleanup `.cold` fragment from the function
     /// list (option `ehcold`).  See `unlace_analysis::entry::kuna_ehcold`.
     Ehcold,

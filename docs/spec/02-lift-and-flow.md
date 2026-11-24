@@ -4313,8 +4313,15 @@ language except Octeon, with `lsa`/`dlsa` (MSA brought them in before Release 6)
 formats are unused otherwise). The 128-bit registers `w0`-`w31` are separate from the FPRs (the
 FR=1 aliasing is not modelled). Loads and stores move each element at its own address in the
 language's byte order (element 0 is the least significant), `copy_s`/`copy_u` and `move.v`,
-`cfcmsa`/`ctcmsa` and the `bz`/`bnz` branches (with their delay slot) have real p-code; every
-other instruction is a user operation named after its mnemonic (`msa_addv_w`) with the
+`cfcmsa`/`ctcmsa` and the `bz`/`bnz` branches (with their delay slot) have real p-code, and so
+do the element-wise groups: `addv`/`subv`/`mulv` (and `addvi`/`subvi`), the bitwise `.v` and `andi`/`ori`/
+`xori`/`nori`, `bmnz`/`bmz`/`bsel`, the shifts `sll`/`srl`/`sra` (and immediates; the count is the
+element's low bits), the compares `ceq`/`clt`/`cle` (and immediates; all-ones or zero elements),
+`min`/`max` (signed, unsigned, immediates), the saturating `adds_s`/`adds_u`/`subs_s`/`subs_u`,
+`div`/`mod` (a zero divisor gives what QEMU gives: the architecture leaves it UNPREDICTABLE),
+`pcnt`/`nlzc`/`nloc`, `fill`/`ldi`/`splat`/`splati`, and the `ilv*`/`pck*` permutations. Every
+other instruction (floating point, dot products, fixed-point `q` forms, `shf`, `vshf`, `sld`, ...)
+is a user operation named after its mnemonic (`msa_addv_w`) with the
 destination as output and the read operands (and the destination, for the accumulating forms)
 as inputs.
 

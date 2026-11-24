@@ -6495,7 +6495,13 @@ moves.
   dropping it would leave a leading `::`, an empty scope component the symbol
   table rejects outright. `<X as Y>` keeps the type `X` (so the method stays
   attached to the type that defines it), `<impl X as Y>` keeps the trait `Y`,
-  and `<impl Trait for Type>` keeps `Type`. Angle brackets nest, so this is a
+  and `<impl Trait for Type>` keeps `Type`. An inherent method's qualified self
+  type at the start of the name (`<serde_json::de::Deserializer<R>>::parse_integer`)
+  keeps its path too, and loses only its own generics
+  (`serde_json::de::Deserializer::parse_integer`); it was dropped like a generic list,
+  which left the bare `parse_integer` for 2,154 of fclones' 8,341 functions. A
+  self type with no path (`<[T]>::sort_unstable`, a reference, a tuple) still
+  resolves to nothing. Angle brackets nest, so this is a
   depth-tracking scan iterated to a fixed point rather than a pattern match.
 
   A this-adjusting thunk (`_ZTh`, `_ZTv`, `_ZTc`) is named for the function it

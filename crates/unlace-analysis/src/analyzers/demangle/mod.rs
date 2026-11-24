@@ -335,10 +335,18 @@ pub fn normalize_rust_name(name: &str) -> String {
             }
             // `<impl Trait for Type>::m` keeps the TYPE, for the same reason.
             Some((a, w, Sep::For)) => cur[a + w..close].trim().to_string(),
-            None => {
-                let _ = inner;
-                String::new()
+            // `<path::Type<A>>::m` at the start of the name is an inherent impl's
+            // qualified self type, not a generic list: keep the type, whose own
+            // generics the next round drops, so the method stays attached to it.
+            // A slice, reference or tuple self type (`<[T]>::sort`) has no path to
+            // keep and resolves to nothing as before.
+            None if open == 0
+                && cur[close + 1..].starts_with("::")
+                && inner.starts_with(|c: char| c.is_alphabetic() || c == '_') =>
+            {
+                inner.to_string()
             }
+            None => String::new(),
         };
         // A generic list may be introduced by a turbofish; drop that too so the
         // result does not end in a dangling `::`.
@@ -860,6 +868,12 @@ mod tests {
                 "cbc::decrypt::Decryptor::inner_iv_init",
             ),
             ("plain::name", "plain::name"),
+            (
+                "<serde_json::de::Deserializer<serde_json::read::IoRead<R>>>::parse_integer",
+                "serde_json::de::Deserializer::parse_integer",
+            ),
+            ("<alloc::vec::Vec<T, A>>::push", "alloc::vec::Vec::push"),
+            ("<[T]>::sort_unstable", "sort_unstable"),
             // A name that resolves to nothing in the middle must not leave an
             // empty component behind.
             ("a::<T>::b", "a::b"),

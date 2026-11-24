@@ -1649,6 +1649,60 @@ expect = [
     "v6 = v5 + 1.0f;",
 ]
 
+# Wave64 RDNA code (clang -mwavefrontsize64): lane masks are SGPR pairs. `vote` passes a
+# ballot (v_cmp into VCC, then vcc_lo and vcc_hi as a 64-bit argument); under the wave64
+# language the high half is the compare's zero, not a stale vcc_hi.
+[[family]]
+name = "amdgpu_gfx10_w64"
+language = "AMDGPU:LE:64:GFX10-W64"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1030_w64_ballot.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx10_w64_ballot_high_half_is_defined"
+address = "0x108"
+expect = ["0 < *(int *)"]
+forbid = ["vcc_hi"]
+
+[[family]]
+name = "amdgpu_gfx10_w64_kernels"
+language = "AMDGPU:LE:64:GFX10-W64"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1030_w64_kernels.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+# `fixtures/amdgpu/wave64_kernels.cl` for gfx1030 wave64: `sel` selects with
+# v_cndmask on a 64-bit VCC and builds addresses with VOP3b carries into VCC.
+[[family.function]]
+test = "amdgpu_gfx10_w64_select_decompiles"
+address = "0x2d8"
+expect = [
+    "if (v7 < v5)",
+    "v1 = v5 - v7;",
+]
+
+[[family]]
+name = "amdgpu_gfx11_w64"
+language = "AMDGPU:LE:64:GFX11-W64"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_w64_ballot.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx11_w64_ballot_decompiles"
+address = "0xfc"
+expect = ["CARRY4(a5,"]
+forbid = ["vcc_hi"]
+
+[[family.function]]
+test = "amdgpu_gfx11_w64_uniform_branch_decompiles"
+address = "0x400"
+expect = ["<= -1)"]
+
 # The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:
 # fast locals become parameters and variables, the value stack folds away, and objects,
 # names and operators are named user-ops (fixtures from `fixtures/cpython/source.py`).

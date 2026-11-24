@@ -156,7 +156,7 @@ before it calls, returns or jumps away
 (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (dead_after)`). ARM's `add`
 without `s` copies the carry into a scratch flag the next `mov` overwrites,
 which is the case this admits; and so does a compare's exit that branches back to the head after doing
-anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
+anything but `clrex`. An operand no storage holds at the load (`~x` for an outline `ldclr` helper's `bic`) is built with new ops in front of it. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
 `__sync_lock_test_and_set(p, X)` or `__sync_val_compare_and_swap(p, E, N)`, the
 monitor's pass and status become the constants 1 and 0, and the STORE a dead
 copy; dead-branch removal then deletes the back edge. A compare-exchange that
@@ -4229,7 +4229,9 @@ The operand mode bits select `a = b op c`, `a = b op u6`, `b = b op s12` or
 the conditional `b = b op c|u6`, whose condition skips the instruction when it
 fails. The `F` bit selects a second constructor that writes `Z`, `N`, `C` and
 `V`; carry on a subtraction is the borrow. A `.d` branch, jump or call
-evaluates its condition and target first, then runs the delay slot.
+evaluates its condition and target first, then runs the delay slot whether
+or not the condition holds, and only then branches. A delayed `bl`/`jl` links
+`blink` to the instruction after the delay slot.
 
 The zero-overhead loop is carried in the decode context. `lp end` records the
 address after itself in `lpstart` at address `end` and sets `lpend` there
@@ -4311,8 +4313,15 @@ language except Octeon, with `lsa`/`dlsa` (MSA brought them in before Release 6)
 formats are unused otherwise). The 128-bit registers `w0`-`w31` are separate from the FPRs (the
 FR=1 aliasing is not modelled). Loads and stores move each element at its own address in the
 language's byte order (element 0 is the least significant), `copy_s`/`copy_u` and `move.v`,
-`cfcmsa`/`ctcmsa` and the `bz`/`bnz` branches (with their delay slot) have real p-code; every
-other instruction is a user operation named after its mnemonic (`msa_addv_w`) with the
+`cfcmsa`/`ctcmsa` and the `bz`/`bnz` branches (with their delay slot) have real p-code, and so
+do the element-wise groups: `addv`/`subv`/`mulv` (and `addvi`/`subvi`), the bitwise `.v` and `andi`/`ori`/
+`xori`/`nori`, `bmnz`/`bmz`/`bsel`, the shifts `sll`/`srl`/`sra` (and immediates; the count is the
+element's low bits), the compares `ceq`/`clt`/`cle` (and immediates; all-ones or zero elements),
+`min`/`max` (signed, unsigned, immediates), the saturating `adds_s`/`adds_u`/`subs_s`/`subs_u`,
+`div`/`mod` (a zero divisor gives what QEMU gives: the architecture leaves it UNPREDICTABLE),
+`pcnt`/`nlzc`/`nloc`, `fill`/`ldi`/`splat`/`splati`, and the `ilv*`/`pck*` permutations. Every
+other instruction (floating point, dot products, fixed-point `q` forms, `shf`, `vshf`, `sld`, ...)
+is a user operation named after its mnemonic (`msa_addv_w`) with the
 destination as output and the read operands (and the destination, for the accumulating forms)
 as inputs.
 
@@ -4505,10 +4514,26 @@ TMS320C5x, TMS320C54x). Without that block, the self-referencing root never take
 over the ordinary constructors and the loop-back is silently dropped.
 
 C-SKY `bloop` needs none of this: it sits after the body it closes and is lifted as a
-decrement-and-branch. Not modelled: Epiphany (its loop registers are written with `movts`,
-not named by one instruction), StarCore `DOEN`/`DOSETUP` (not decoded), and Hexagon `endloop`
-(a branch through `SA0`/`SA1`, which resolves only where the decompiler propagates the
-`loop0`/`loop1` constants).
+decrement-and-branch.
+
+Hexagon is the other way round: the packet that ends the loop carries the mark (its parse
+bits, `:endloop0`/`:endloop1`), and only `loop0`/`loop1` names the start. Those
+instructions record the start in flowing (not `noflow`) context, `lp0sa`/`lp1sa`, set
+with `globalset(inst_next, ...)`, so it reaches every instruction the loop setup flows to.
+An end-of-loop packet that sees a recorded start counts `LC0`/`LC1` down and branches
+directly to it; with no recorded start (a loop set up in another function, or through
+`SA0`/`SA1` writes) it keeps the indirect branch through `SA0`/`SA1`. A packet that ends
+both loops at once keeps the indirect form.
+
+Epiphany names no loop in one instruction either: `movts ls`, `movts le` and `movts lc` write
+the loop start, the last loop instruction and the count from registers. `mov` and `movt` of a
+constant record the register and value in flowing context; `movts ls` from that register keeps
+the value, and `movts le` from it marks the instruction at its value with the kept start, so
+the root constructor adds the count-down-and-branch there as above (the test is `LC != 0`
+after the decrement). A write to that register by another instruction in between is not
+tracked; a loop register written from any other value marks nothing.
+
+Not modelled: StarCore `DOEN`/`DOSETUP` (not decoded).
 
 ### Vendored community processor modules (#98)
 

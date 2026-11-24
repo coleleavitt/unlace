@@ -100,7 +100,7 @@ pub fn gettext_msgid_slot(name: &str) -> Option<usize> {
 /// it decided, to stderr — the same shape as the `KUNA_CONDFOLD_DEBUG` /
 /// `KUNA_RS_DEBUG` decision traces. Read once per pass, never in the fold.
 fn trace_enabled() -> bool {
-    std::env::var_os("KUNA_FMTSTATIC_DEBUG").is_some()
+    unlace_base::env::var_os("UNLACE_FMTSTATIC_DEBUG").is_some()
 }
 
 /// Resolve printf/scanf-family format strings at load and emit the per-call-site

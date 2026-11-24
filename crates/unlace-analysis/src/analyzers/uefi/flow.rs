@@ -613,7 +613,7 @@ impl<'a, 'e> Walk<'a, 'e> {
             dry: false,
             fn_insns: BTreeMap::new(),
             fn_services: BTreeMap::new(),
-            trace: std::env::var_os("KUNA_UEFI_DEBUG").is_some(),
+            trace: unlace_base::env::var_os("UNLACE_UEFI_DEBUG").is_some(),
         };
         me.abi()?;
         me.lift();

@@ -373,7 +373,7 @@ pub(super) fn try_parallel(plan: &WalkPlan, inputs: &ParallelInputs<'_>) -> Opti
 
 /// Is the self-check on, and does a difference abort?
 pub(super) fn selfcheck() -> Option<bool> {
-    let v = std::env::var(DECODE_SELFCHECK_ENV).ok()?;
+    let v = unlace_base::env::var(DECODE_SELFCHECK_ENV).ok()?;
     match v.trim() {
         "" | "0" | "off" | "false" => None,
         "abort" => Some(true),
@@ -382,7 +382,11 @@ pub(super) fn selfcheck() -> Option<bool> {
 }
 
 fn env_usize(name: &str) -> Option<usize> {
-    std::env::var(name).ok()?.trim().parse::<usize>().ok()
+    unlace_base::env::var(name)
+        .ok()?
+        .trim()
+        .parse::<usize>()
+        .ok()
 }
 
 // --- the partition -----------------------------------------------------------
@@ -799,7 +803,7 @@ enum Fault {
 }
 
 fn fault_from_env() -> Option<Fault> {
-    let raw = std::env::var(DECODE_FAULT_ENV).ok()?;
+    let raw = unlace_base::env::var(DECODE_FAULT_ENV).ok()?;
     let raw = raw.trim();
     match raw.strip_prefix("spawn:") {
         Some(n) => n.trim().parse().ok().map(Fault::Spawn),
@@ -825,7 +829,7 @@ impl PanicHush {
     fn install() -> PanicHush {
         let debugging = [DECODE_STATS_ENV, DECODE_SELFCHECK_ENV, "RUST_BACKTRACE"]
             .iter()
-            .any(|name| std::env::var_os(name).is_some());
+            .any(|name| unlace_base::env::var_os(name).is_some());
         if debugging {
             return PanicHush(None);
         }

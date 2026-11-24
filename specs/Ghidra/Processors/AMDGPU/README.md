@@ -55,7 +55,22 @@ The row and bank masks are displayed but not modelled. Against `llvm-objdump --m
 random VOPC/VOP2/VOP1 SDWA probe and every VOP2 DPP probe prints the same text. VOP1 DPP misses only the forms
 with 64-bit operands.
 
-Gaps: VINTRP, MIMG, MTBUF, EXP and most atomics are not decoded; VOP3
+`amdgcn_gfx9_mem.sinc` (`tools/gen_amdgpu_gfx9_mem.py`) adds MIMG, MTBUF and VINTRP, and the VOP3
+`v_interp_*` forms.
+- MIMG: every opcode `amdgpu_cdna_probe.py mimg9` lists. The address range shown is the one LLVM prints,
+  because the GFX9 encoding does not carry the address size. The data count is the dmask's bit count
+  (four for gather4), halved with d16, plus one with tfe; the context fields `mi_vdn`/`mi_tf` pick the
+  data tuple. Each operation is a user-op on the resource, the sampler and the first address.
+- MTBUF: typed loads and stores move dwords at the resource base (low 48 bits) plus soffset (an SGPR or
+  an inline constant), offset, the offen VGPR and the idxen VGPR times the stride. They display
+  LLVM's `format:[...]` spellings.
+- VINTRP: `v_interp_p1/p2/mov_f32` and the VOP3 f16 forms are user-ops on the attribute and channel.
+
+Against `llvm-objdump --mcpu=gfx900`, every round-trip-valid MIMG (219), MTBUF (24), VINTRP and VOP3 interp
+probe prints the same text. DPP also covers the VOP1 forms with a 64-bit source or result, which print
+their pairs in the spec's `v2_3` style.
+
+Gaps: EXP and most atomics are not decoded; VOP3
 clamp and output modifiers are ignored, as is op_sel outside the opcodes above; MUBUF does
 not add the buffer resource base or handle IDXEN; transcendental operations, bit reversal,
 find-first-bit and the cross-lane operations are user-ops; the wave-wide meaning of a mask
@@ -107,7 +122,11 @@ data and result operands AGPRs. Each GFX9 memory constructor gets an acc=0 copy 
 the generated atomics. The GFX9 SDWA/DPP include is spliced in, and the CDNA VOP2 additions get SDWA/DPP
 forms too.
 
-Gaps: DPP forms with 64-bit operands (including gfx90a's row_newbcast f64 DPP), gfx942's
+The CDNA specs use `amdgcn_cdna_mem.sinc` (`gen_amdgpu_gfx9_mem.py --cdna`) in place of the GFX9 memory
+include. On CDNA, the bit GFX9 uses for tfe (MIMG word 0 bit 16, MTBUF word 1 bit 23) is acc, which makes the
+data operand AGPRs. gfx942 spells glc/slc as sc0/nt; the MTBUF forms print glc/slc there.
+
+Gaps: gfx90a's f64 DPP (row_newbcast), gfx942's
 `global_load_lds_*` and the cbsz/abid/blgp MFMA modifiers (decoded but not displayed).
 
 ## RDNA: `AMDGPU:LE:64:GFX10` and `AMDGPU:LE:64:GFX11`

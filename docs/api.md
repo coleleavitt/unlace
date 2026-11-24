@@ -49,9 +49,9 @@ Runnable versions: `cargo run -p unlace --example raw_blob` and
 | `.decompile_all()` | Every function with a body, address order, one load, one `Result` per function. | |
 | `.architecture()` | The SLEIGH language id the load chose. | |
 
-Both IDA methods read the database with idb-rs and lower it to the directives `unlace idb import`
-stores (`docs/cli.md`, "unlace idb"): IDA's C spellings rewritten into the engine's grammar,
-`__usercall` prototypes left out, comments not included.
+Both IDA methods read the database with `crates/unlace-idb` and lower it to the directives `unlace idb
+import` stores (`docs/cli.md`, "unlace idb"): types and prototypes rendered as C by unlace's TIL
+reader, a type C cannot spell left out, comments not included.
 
 Errors are `unlace::Error` (thiserror): `Io`, `NonUtf8Path`, `Request` (an option, bound,
 prototype or assertion that does not parse), `Load`, `NotFound`, `Decompile` (carries the

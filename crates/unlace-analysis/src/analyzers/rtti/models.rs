@@ -339,19 +339,24 @@ pub struct BaseClassDescriptor {
     pub addr: u64,
     /// Absolute VMA of this base's RTTI0 `TypeDescriptor` (resolved ref).
     pub p_type_descriptor: u64,
-    /// The `PMD` `(mdisp, pdisp)`: the base's displacement, and `-1` for a
-    /// non-virtual base or else the offset of the vbtable pointer, when readable.
-    pub pmd: Option<(i32, i32)>,
+    /// The `PMD` `(mdisp, pdisp, vdisp)`: the base's displacement; `-1` for a
+    /// non-virtual base, else the offset of the vbtable pointer; and the byte
+    /// offset of the base's entry in that vbtable, when readable.
+    pub pmd: Option<(i32, i32, i32)>,
 }
 
 impl BaseClassDescriptor {
     /// `pTypeDescriptor ref @0`, `numContainedBases u32 @4`, `mdisp i32 @8`,
-    /// `pdisp i32 @12`.
+    /// `pdisp i32 @12`, `vdisp i32 @16`.
     pub fn read(img: &ImageBytes, rk: &RefKind, addr: u64) -> Option<Self> {
         let p_type_descriptor = rk.resolve_ref(img.read(addr, rk.ref_size())?)?;
-        let pmd = img
-            .read(addr + 8, 8)
-            .map(|b| (rk.read_u32(b) as i32, rk.read_u32(&b[4..]) as i32));
+        let pmd = img.read(addr + 8, 12).map(|b| {
+            (
+                rk.read_u32(b) as i32,
+                rk.read_u32(&b[4..]) as i32,
+                rk.read_u32(&b[8..]) as i32,
+            )
+        });
         Some(BaseClassDescriptor {
             addr,
             p_type_descriptor,

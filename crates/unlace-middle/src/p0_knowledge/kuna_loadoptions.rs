@@ -34,6 +34,9 @@ pub const CALLTARGETTYPE_ENV: &str = "KUNA_CALLTARGETTYPE";
 pub const MACHO_SLICE_ENV: &str = "KUNA_MACHO_SLICE";
 /// The external `.pdb` file to apply.
 pub const PDB_PATH_ENV: &str = "kuna_pdb_path";
+/// A symbol store to look the `.pdb` up in, `<cache dir>` or
+/// `<cache dir>*<server URL>`; with a URL a missing `.pdb` is downloaded.
+pub const PDB_SYMSRV_ENV: &str = "kuna_pdb_symsrv";
 /// The external `.fid` function-ID database to apply.
 pub const FID_DB_ENV: &str = "kuna_fid_db";
 /// The FLIRT `.sig` files, or directories of them, to match.
@@ -85,6 +88,8 @@ pub struct LoadOptions {
     pub macho_slice: Option<String>,
     /// An external `.pdb` file to apply.
     pub pdb_path: Option<PathBuf>,
+    /// The symbol store (and optional server) to look the `.pdb` up in.
+    pub pdb_symsrv: Option<String>,
     /// An external `.fid` function-ID database to apply.
     pub fid_db: Option<PathBuf>,
     /// FLIRT `.sig` files, or directories whose `*.sig` files are all taken.
@@ -121,6 +126,7 @@ impl Default for LoadOptions {
             dyldcrossrefs: true,
             macho_slice: None,
             pdb_path: None,
+            pdb_symsrv: None,
             fid_db: None,
             flirt_sigs: Vec::new(),
             go_version: None,
@@ -154,6 +160,7 @@ impl LoadOptions {
             dyldcrossrefs: env::dyldcrossrefs(),
             macho_slice: env::macho_slice(),
             pdb_path: env::pdb_path(),
+            pdb_symsrv: env::pdb_symsrv(),
             fid_db: env::fid_db(),
             flirt_sigs: env::flirt_sigs(),
             go_version: env::go_version(),
@@ -419,6 +426,12 @@ pub mod env {
 
     pub fn pdb_path() -> Option<PathBuf> {
         path(PDB_PATH_ENV)
+    }
+
+    pub fn pdb_symsrv() -> Option<String> {
+        std::env::var(PDB_SYMSRV_ENV)
+            .ok()
+            .filter(|v| !v.trim().is_empty())
     }
 
     pub fn fid_db() -> Option<PathBuf> {

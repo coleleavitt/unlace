@@ -818,6 +818,24 @@ mod tests {
                 .iter()
                 .any(|c| c.func_addr == 0x1_4000_10c7 && c.text.contains("handler of 0x14000109f"))
         );
+        let renamed = |a: u64| {
+            out.fid_names
+                .iter()
+                .find(|m| m.addr == a)
+                .map(|m| m.name.clone())
+        };
+        assert_eq!(
+            renamed(0x1_4000_10c7).as_deref(),
+            Some("sub_14000109f$catch$0")
+        );
+        assert_eq!(
+            renamed(0x1_4000_110d).as_deref(),
+            Some("sub_14000109f$catch$2")
+        );
+        assert_eq!(
+            renamed(0x1_4000_114f).as_deref(),
+            Some("sub_14000112f$catch$0")
+        );
         for f in [0x1_4000_10c7, 0x1_4000_10eb, 0x1_4000_110d, 0x1_4000_114f] {
             assert!(out.entries.contains(&f), "{f:#x} not discovered");
         }

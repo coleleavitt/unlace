@@ -31,11 +31,13 @@
 //! A CodeView record gives an offset from a base register in the procedure body.
 //! The x64 stack pointer there is the entry stack pointer less the callee-saved
 //! pushes and the fixed allocation `S_FRAMEPROC` records (`cbSaveRegs + cbFrame`,
-//! the convention both MSVC and LLVM write), and an i386 `EBP` frame pointer is
-//! the entry stack pointer less the pushed `EBP`. An x64 frame pointer, an i386
-//! stack pointer and the virtual `$T0` frame depend on the prologue's shape, so a
-//! slot relative to one of them is left out. Locals of inlined call sites belong
-//! to the inlinee and are skipped.
+//! the convention both MSVC and LLVM write); an x64 frame register (`RBP`,
+//! `R13`) points where the function's unwind data puts it
+//! ([`super::kuna_pdbframe`]); and an i386 `EBP` frame pointer is the entry stack
+//! pointer less the pushed `EBP`. An i386 stack pointer and the virtual `$T0`
+//! frame depend on the prologue's shape, so a slot relative to one of them is left
+//! out, as is an x64 frame-register slot of a function with no unwind data. Locals
+//! of inlined call sites belong to the inlinee and are skipped.
 //!
 //! Inert unless `pdb` locates a fingerprint-matching `.pdb` beside a PE, and
 //! committed only under `option pdbtypes on` (default off).
@@ -108,11 +110,12 @@ impl Family {
     }
 }
 
-/// The base register of a frame-relative record.
+/// The base register of a frame-relative record: the stack pointer, or another
+/// register by its CodeView number.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Base {
     StackPointer,
-    FramePointer,
+    Register(u16),
 }
 
 /// The `S_FRAMEPROC` fields the frame math reads.
@@ -144,31 +147,42 @@ impl FrameProc {
         };
         match (family, encoded) {
             (Family::X64, 1) => Some(Base::StackPointer),
-            (Family::X64, 2) | (Family::X86, 2) => Some(Base::FramePointer),
+            (Family::X64, 2) => Some(Base::Register(334)),
+            (Family::X64, 3) => Some(Base::Register(341)),
+            (Family::X86, 2) => Some(Base::Register(22)),
             _ => None,
         }
     }
 }
 
-/// The base a CodeView register number names, when it is the stack or frame
-/// pointer.
+/// The base a CodeView register number names.
 fn register_base(family: Family, reg: u16) -> Option<Base> {
     match (family, reg) {
         (Family::X64, 335) | (Family::X86, 21) => Some(Base::StackPointer),
-        (Family::X64, 334) | (Family::X86, 22) => Some(Base::FramePointer),
+        (Family::X64 | Family::X86, _) => Some(Base::Register(reg)),
         _ => None,
     }
 }
 
 /// Where `base` points in kuna stack coordinates during the procedure body (0
-/// is the return-address slot), when the records alone fix it.
-pub(crate) fn base_offset(family: Family, base: Base, frame: Option<&FrameProc>) -> Option<i64> {
+/// is the return-address slot), when it is known: the x64 stack pointer from
+/// `S_FRAMEPROC`, the x64 frame register from the function's unwind data
+/// (`frame_register`, [`super::kuna_pdbframe`]), the i386 `EBP` frame.
+pub(crate) fn base_offset(
+    family: Family,
+    base: Base,
+    frame: Option<&FrameProc>,
+    frame_register: Option<(u16, i64)>,
+) -> Option<i64> {
     match (family, base) {
         (Family::X64, Base::StackPointer) => {
             let f = frame?;
             Some(-(i64::from(f.frame) + i64::from(f.saved_regs)))
         }
-        (Family::X86, Base::FramePointer) => Some(-4),
+        (Family::X64, Base::Register(reg)) => frame_register
+            .filter(|&(r, _)| r == reg)
+            .map(|(_, offset)| offset),
+        (Family::X86, Base::Register(22)) => Some(-4),
         _ => None,
     }
 }
@@ -234,6 +248,8 @@ pub(crate) struct Proc {
     pub name: String,
     pub type_index: pdb::TypeIndex,
     pub frame: Option<FrameProc>,
+    /// The x64 frame register and where it points, from the unwind data.
+    pub frame_register: Option<(u16, i64)>,
     pub vars: Vec<Var>,
 }
 
@@ -243,6 +259,7 @@ pub(crate) fn module_procs(
     map: &pdb::AddressMap<'_>,
     image_base: u64,
     family: Family,
+    frame_registers: &BTreeMap<u64, (u16, i64)>,
 ) -> Vec<Proc> {
     let mut out: Vec<Proc> = Vec::new();
     let mut current: Option<Proc> = None;
@@ -264,6 +281,7 @@ pub(crate) fn module_procs(
                             name: p.name.to_string().into_owned(),
                             type_index: p.type_index,
                             frame: None,
+                            frame_register: frame_registers.get(&start).copied(),
                             vars: Vec::new(),
                         });
                         depth = 1;
@@ -298,8 +316,9 @@ pub(crate) fn module_procs(
             continue;
         }
         let frame = proc.frame;
+        let frame_register = proc.frame_register;
         let place = |base: Option<Base>, off: i64| -> Loc {
-            base.and_then(|b| base_offset(family, b, frame.as_ref()))
+            base.and_then(|b| base_offset(family, b, frame.as_ref(), frame_register))
                 .and_then(|b| b.checked_add(off))
                 .map_or(Loc::Unknown, Loc::Stack)
         };
@@ -357,7 +376,10 @@ pub(crate) fn module_procs(
                     name: read_cstr(raw, 10),
                     type_index: pdb::TypeIndex(ti),
                     param: None,
-                    loc: place(Some(Base::FramePointer), i64::from(off)),
+                    loc: place(
+                        register_base(family, if family == Family::X64 { 334 } else { 22 }),
+                        i64::from(off),
+                    ),
                 });
             }
             _ => {
@@ -451,6 +473,11 @@ fn collect(
         return;
     };
     let (_, word_size) = ctx.arch.data_org();
+    let frame_registers = if family == Family::X64 {
+        super::kuna_pdbframe::x64_frame_registers(ctx.bytes)
+    } else {
+        BTreeMap::new()
+    };
     let mut tpi = TpiMapper::new(&info, ctx.arch.types(), word_size);
     let mut globals: BTreeMap<u64, TypedDataFact> = BTreeMap::new();
 
@@ -461,7 +488,13 @@ fn collect(
                 continue;
             };
             if let Ok(mut symbols) = module_info.symbols() {
-                procs.extend(module_procs(&mut symbols, &map, image_base, family));
+                procs.extend(module_procs(
+                    &mut symbols,
+                    &map,
+                    image_base,
+                    family,
+                    &frame_registers,
+                ));
             }
             if let Ok(mut symbols) = module_info.symbols() {
                 collect_data(&mut symbols, &map, image_base, &mut tpi, &mut globals);
@@ -684,7 +717,13 @@ mod tests {
                 continue;
             };
             let mut symbols = info.symbols().expect("symbols");
-            out.extend(module_procs(&mut symbols, &map, 0x1000, family));
+            out.extend(module_procs(
+                &mut symbols,
+                &map,
+                0x1000,
+                family,
+                &BTreeMap::new(),
+            ));
         }
         out
     }
@@ -745,13 +784,25 @@ mod tests {
             flags: (1 << 14) | (1 << 16),
         };
         assert_eq!(f.base(Family::X64, false), Some(Base::StackPointer));
+        let rbp = Base::Register(334);
         assert_eq!(
-            base_offset(Family::X64, Base::StackPointer, Some(&f)),
+            base_offset(Family::X64, Base::StackPointer, Some(&f), None),
             Some(-40)
         );
-        assert_eq!(base_offset(Family::X64, Base::FramePointer, Some(&f)), None);
-        assert_eq!(base_offset(Family::X86, Base::FramePointer, None), Some(-4));
-        assert_eq!(base_offset(Family::X86, Base::StackPointer, Some(&f)), None);
+        assert_eq!(base_offset(Family::X64, rbp, Some(&f), None), None);
+        assert_eq!(
+            base_offset(Family::X64, rbp, None, Some((334, -8))),
+            Some(-8)
+        );
+        assert_eq!(base_offset(Family::X64, rbp, None, Some((341, -8))), None);
+        assert_eq!(
+            base_offset(Family::X86, Base::Register(22), None, None),
+            Some(-4)
+        );
+        assert_eq!(
+            base_offset(Family::X86, Base::StackPointer, Some(&f), None),
+            None
+        );
     }
 
     #[test]

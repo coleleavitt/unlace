@@ -628,6 +628,11 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .get::<unlace_decomp::kuna_ppcapu::PpcApu>()
                 .0,
         ),
+        "delphiabi" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_delphiabi::DelphiAbi>()
+                .0,
+        ),
 
         "debuglink" => on_off(
             conf.kuna_options

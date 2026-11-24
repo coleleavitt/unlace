@@ -127,7 +127,7 @@ pub(crate) struct Image<'a> {
 }
 
 impl<'a> Image<'a> {
-    fn new(file: &'a object::File<'a>) -> Self {
+    fn new(file: &object::File<'a>) -> Self {
         let mut sections = Vec::new();
         let mut code = Vec::new();
         for sec in file.sections() {
@@ -878,6 +878,13 @@ fn interface_entries(
         out.push((vtable, guids.get(&g).cloned()));
     }
     out
+}
+
+/// Whether `file` holds Delphi classes: the `TObject` name and at least two
+/// VMTs under one layout. Read by the `delphiabi` language selection.
+pub fn is_delphi_image(file: &object::File) -> bool {
+    let img = Image::new(file);
+    !img.find_bytes(b"\x07TObject").is_empty() && find_vmts(&img).is_some()
 }
 
 /// Recover every Delphi fact the image holds.

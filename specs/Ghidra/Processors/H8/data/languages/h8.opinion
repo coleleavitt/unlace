@@ -1,0 +1,11 @@
+<opinions>
+  <constraint loader="Executable and Linking Format (ELF)" compilerSpecID="default">
+    <constraint primary="46" processor="H8/300" endian="big" size="16" variant="normal" secondary="0b.... .... 1000 0000 .... .... .... ...."/>
+    <constraint primary="46" processor="H8/300H" endian="big" size="32" variant="advanced" secondary="0b.... .... 1000 0001 .... .... .... ...."/>
+    <constraint primary="46" processor="H8S" endian="big" size="32" variant="advanced" secondary="0b.... .... 1000 0010 .... .... .... ...."/>
+    <constraint primary="46" processor="H8/300H" endian="big" size="32" variant="normal" secondary="0b.... .... 1000 0011 .... .... .... ...."/>
+    <constraint primary="46" processor="H8S" endian="big" size="32" variant="normal" secondary="0b.... .... 1000 0100 .... .... .... ...."/>
+    <constraint primary="46" processor="H8SX" endian="big" size="32" variant="advanced" secondary="0b.... .... 1000 0101 .... .... .... ...."/>
+    <constraint primary="46" processor="H8SX" endian="big" size="32" variant="normal" secondary="0b.... .... 1000 0110 .... .... .... ...."/>
+  </constraint>
+</opinions>

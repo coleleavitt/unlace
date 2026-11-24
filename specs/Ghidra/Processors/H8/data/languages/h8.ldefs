@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="H8/300" endian="big" size="16" variant="normal" version="1.0"
+            slafile="h8_300.sla" processorspec="h8_300.pspec" id="h8_300:BE:16:normal">
+    <description>Hitachi H8/300</description>
+    <compiler name="GCC" spec="h8_300.cspec" id="default"/>
+    <external_name tool="gnu" name="h8300"/>
+    <external_name tool="DWARF.register.mapping.file" name="h8_300.dwarf"/>
+  </language>
+  <language processor="H8/300L" endian="big" size="16" variant="normal" version="1.0"
+            slafile="h8_300l.sla" processorspec="h8_300l.pspec" id="h8_300l:BE:16:normal">
+    <description>Hitachi H8/300L (H8/300 without the E-clock MOVFPE/MOVTPE)</description>
+    <compiler name="GCC" spec="h8_300.cspec" id="default"/>
+    <external_name tool="gnu" name="h8300"/>
+    <external_name tool="DWARF.register.mapping.file" name="h8_300.dwarf"/>
+  </language>
+  <language processor="H8/300H" endian="big" size="32" variant="normal" version="1.0"
+            slafile="h8_300h_normal.sla" processorspec="h8_normal.pspec" id="h8_300h:BE:32:normal">
+    <description>Hitachi H8/300H, normal mode (64-Kbyte address space)</description>
+    <compiler name="GCC" spec="h8_normal.cspec" id="default"/>
+    <external_name tool="gnu" name="h8300hn"/>
+    <external_name tool="DWARF.register.mapping.file" name="h8_normal.dwarf"/>
+  </language>
+  <language processor="H8/300H" endian="big" size="32" variant="advanced" version="1.0"
+            slafile="h8_300h_advanced.sla" processorspec="h8_advanced24.pspec" id="h8_300h:BE:32:advanced">
+    <description>Hitachi H8/300H, advanced mode (16-Mbyte address space)</description>
+    <compiler name="GCC" spec="h8_advanced24.cspec" id="default"/>
+    <external_name tool="gnu" name="h8300h"/>
+    <external_name tool="DWARF.register.mapping.file" name="h8_advanced24.dwarf"/>
+  </language>
+  <language processor="H8S" endian="big" size="32" variant="normal" version="1.0"
+            slafile="h8s_normal.sla" processorspec="h8_normal.pspec" id="h8s:BE:32:normal">
+    <description>Renesas H8S/2000 and H8S/2600 (MAC), normal mode</description>
+    <compiler name="GCC" spec="h8_normal.cspec" id="default"/>
+    <external_name tool="gnu" name="h8300sn"/>
+    <external_name tool="DWARF.register.mapping.file" name="h8_normal.dwarf"/>
+  </language>
+  <language processor="H8S" endian="big" size="32" variant="advanced" version="1.0"
+            slafile="h8s_advanced.sla" processorspec="h8_advanced24.pspec" id="h8s:BE:32:advanced">
+    <description>Renesas H8S/2000 and H8S/2600 (MAC), advanced mode (16-Mbyte address space)</description>
+    <compiler name="GCC" spec="h8_advanced24.cspec" id="default"/>
+    <external_name tool="gnu" name="h8300s"/>
+    <external_name tool="DWARF.register.mapping.file" name="h8_advanced24.dwarf"/>
+  </language>
+  <language processor="H8SX" endian="big" size="32" variant="normal" version="1.0"
+            slafile="h8sx_normal.sla" processorspec="h8sx_normal.pspec" id="h8sx:BE:32:normal">
+    <description>Renesas H8SX, normal mode (64-Kbyte address space)</description>
+    <compiler name="GCC" spec="h8_normal.cspec" id="default"/>
+    <external_name tool="gnu" name="h8300sxn"/>
+    <external_name tool="DWARF.register.mapping.file" name="h8_normal.dwarf"/>
+  </language>
+  <language processor="H8SX" endian="big" size="32" variant="middle" version="1.0"
+            slafile="h8sx_middle.sla" processorspec="h8sx_middle.pspec" id="h8sx:BE:32:middle">
+    <description>Renesas H8SX, middle mode (16-Mbyte program area, 64-Kbyte data area)</description>
+    <compiler name="GCC" spec="h8_middle.cspec" id="default"/>
+    <external_name tool="gnu" name="h8300sx"/>
+    <external_name tool="DWARF.register.mapping.file" name="h8_middle.dwarf"/>
+  </language>
+  <language processor="H8SX" endian="big" size="32" variant="advanced" version="1.0"
+            slafile="h8sx_advanced.sla" processorspec="h8sx_advanced.pspec" id="h8sx:BE:32:advanced">
+    <description>Renesas H8SX, advanced mode (16-Mbyte program area, 4-Gbyte data area)</description>
+    <compiler name="GCC" spec="h8_advanced.cspec" id="default"/>
+    <external_name tool="gnu" name="h8300sx"/>
+    <external_name tool="DWARF.register.mapping.file" name="h8_advanced.dwarf"/>
+  </language>
+  <language processor="H8SX" endian="big" size="32" variant="maximum" version="1.0"
+            slafile="h8sx_maximum.sla" processorspec="h8sx_maximum.pspec" id="h8sx:BE:32:maximum">
+    <description>Renesas H8SX, maximum mode (4-Gbyte address space)</description>
+    <compiler name="GCC" spec="h8_advanced.cspec" id="default"/>
+    <external_name tool="gnu" name="h8300sx"/>
+    <external_name tool="DWARF.register.mapping.file" name="h8_advanced.dwarf"/>
+  </language>
+</language_definitions>

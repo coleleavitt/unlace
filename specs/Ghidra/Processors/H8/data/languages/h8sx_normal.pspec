@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<processor_spec>
+  <programcounter register="pc"/>
+  <!-- @aa:8 operands are SBR-relative; SBR resets to H'FFFFFF00 -->
+  <context_data>
+    <tracked_set space="ram">
+      <set name="sbr" val="0xffffff00"/>
+    </tracked_set>
+  </context_data>
+  <register_data>
+    <register name="I" group="CCR"/>
+    <register name="UI" group="CCR"/>
+    <register name="H" group="CCR"/>
+    <register name="U" group="CCR"/>
+    <register name="N" group="CCR"/>
+    <register name="Z" group="CCR"/>
+    <register name="V" group="CCR"/>
+    <register name="C" group="CCR"/>
+    <register name="macv" hidden="true"/>
+  </register_data>
+  <default_symbols>
+    <symbol name="RESET" address="ram:0x0000" type="code_ptr" entry="true"/>
+  </default_symbols>
+</processor_spec>

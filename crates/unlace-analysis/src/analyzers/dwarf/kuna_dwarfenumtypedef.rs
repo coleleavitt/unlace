@@ -7,12 +7,12 @@
 //! `gnutls_close_request_t` took `1` where the header has `GNUTLS_SHUT_WR`. With
 //! the option on (the default), an anonymous enumeration reached through a typedef is interned
 //! under the typedef's name, as an anonymous aggregate already is. A load-time env
-//! bridge (`KUNA_DWARFENUMTYPEDEF`), read while the DWARF pass builds its types.
+//! bridge (`UNLACE_DWARFENUMTYPEDEF`), read while the DWARF pass builds its types.
 
 use super::DieSnap;
 
 /// The load-time environment variable the CLI and the console set from the option.
-pub const DWARFENUMTYPEDEF_ENV: &str = "KUNA_DWARFENUMTYPEDEF";
+pub const DWARFENUMTYPEDEF_ENV: &str = "UNLACE_DWARFENUMTYPEDEF";
 
 /// Is the option on? On unless the bridge says `off`.
 pub fn enabled() -> bool {

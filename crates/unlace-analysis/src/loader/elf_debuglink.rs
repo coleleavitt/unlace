@@ -11,7 +11,7 @@
 //! - `.gnu_debuglink` (a file name plus a CRC32 of the file): next to the image,
 //!   in its `.debug/` directory, and under `<dir>/<image's directory>/`.
 //!
-//! `<dir>` is each entry of `KUNA_DEBUG_DIRS` (colon-separated), then
+//! `<dir>` is each entry of `UNLACE_DEBUG_DIRS` (colon-separated), then
 //! `/usr/lib/debug`. A candidate is accepted only if its build-id matches, or
 //! (for a debuglink) its CRC32 does. Fedora and RHEL also keep a function-only
 //! `.symtab` inside the stripped image, as an XZ-compressed ELF in
@@ -120,7 +120,7 @@ pub fn find_companion(file: &object::File, image: &Path) -> Option<(PathBuf, Vec
 /// packages' debug files share, which `DW_FORM_GNU_strp_alt` /
 /// `DW_FORM_strp_sup` and `DW_FORM_GNU_ref_alt` refer into. Searched at the
 /// path the section names (absolute, or relative to `near`'s directory, the
-/// file that carries the section), the same path under each `KUNA_DEBUG_DIRS`
+/// file that carries the section), the same path under each `UNLACE_DEBUG_DIRS`
 /// root in place of `/usr/lib/debug`, then by its build-id under each debug
 /// directory (`.build-id/<xx>/<rest>.debug`). A candidate is accepted only when
 /// its build-id is the one the section records.

@@ -96,9 +96,9 @@ pub fn gettext_msgid_slot(name: &str) -> Option<usize> {
         .map(|&(_, slot)| slot)
 }
 
-/// `KUNA_FMTSTATIC_DEBUG`: trace every call site the resolver considered and what
-/// it decided, to stderr — the same shape as the `KUNA_CONDFOLD_DEBUG` /
-/// `KUNA_RS_DEBUG` decision traces. Read once per pass, never in the fold.
+/// `UNLACE_FMTSTATIC_DEBUG`: trace every call site the resolver considered and what
+/// it decided, to stderr — the same shape as the `UNLACE_CONDFOLD_DEBUG` /
+/// `UNLACE_RS_DEBUG` decision traces. Read once per pass, never in the fold.
 fn trace_enabled() -> bool {
     unlace_base::env::var_os("UNLACE_FMTSTATIC_DEBUG").is_some()
 }

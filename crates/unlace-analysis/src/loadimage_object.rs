@@ -2183,7 +2183,7 @@ fn language_id_for(
     // a second return value is dead-coded away with the statements feeding it.
     // Cheap gates first: the env toggle (`option goabi off` clears it), the
     // arch allowlist, then language detection (which honours the
-    // `KUNA_SOURCELANG` force). Everything else keeps `model` untouched, and
+    // `UNLACE_SOURCELANG` force). Everything else keeps `model` untouched, and
     // the engine's default-model retry covers a spec that fails to load.
     let model = if unlace_decomp::kuna_goabi::goabi_env_enabled()
         && little

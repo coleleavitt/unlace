@@ -1,8 +1,8 @@
 use super::*;
 
 /// Accuracy against the symbols of a real kernelcache entry, recovering as if
-/// the image were stripped (manual run: `KUNA_KC=<kernelcache>
-/// KUNA_KC_ENTRY=<id> cargo test ... -- --ignored --nocapture`).
+/// the image were stripped (manual run: `UNLACE_KC=<kernelcache>
+/// UNLACE_KC_ENTRY=<id> cargo test ... -- --ignored --nocapture`).
 #[test]
 #[ignore]
 fn real_kernelcache_entry() {
@@ -261,7 +261,7 @@ fn reads_driverkit_class_records() {
 }
 
 /// `__got` slot names and kalloc views on a real kernelcache (manual run:
-/// `KUNA_KC=<kernelcache> KUNA_KC_ENTRY=<id> cargo test ... -- --ignored --nocapture`).
+/// `UNLACE_KC=<kernelcache> UNLACE_KC_ENTRY=<id> cargo test ... -- --ignored --nocapture`).
 #[test]
 #[ignore]
 fn real_kernelcache_tables() {

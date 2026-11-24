@@ -257,7 +257,7 @@ impl Compiler {
 
 /// The compiler verdict every consumer should act on: the load's forced
 /// `sourcelang` when it has one (`LoadOptions::sourcelang`, or the
-/// `KUNA_SOURCELANG` the CLI sets before `load file`), else detection.
+/// `UNLACE_SOURCELANG` the CLI sets before `load file`), else detection.
 pub fn effective_compiler(file: &object::File, bytes: &[u8]) -> Compiler {
     match unlace_decomp::kuna_sourcelang::forced() {
         Some(lang) => Compiler::from_forced_lang(lang),
@@ -1170,7 +1170,7 @@ mod tests {
         assert_eq!(detect_compiler(&file, &plain), Compiler::Unknown);
     }
 
-    /// The forced-language mapping both ways: what `KUNA_SOURCELANG` forces and
+    /// The forced-language mapping both ways: what `UNLACE_SOURCELANG` forces and
     /// what the engine fact records (the env read itself is covered end-to-end
     /// by the `tests/cli` probes — no process-global mutation here).
     #[test]

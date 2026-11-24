@@ -17,7 +17,7 @@ impl ImageBytes {
     /// Mapping requires the input file to remain unchanged while it is analyzed.
     /// A kernel collection (`MH_FILESET`) declines: its entry is selected into an
     /// owned copy.
-    /// The load's `load_mmap` option (`KUNA_LOAD_MMAP=off` outside a load)
+    /// The load's `load_mmap` option (`UNLACE_LOAD_MMAP=off` outside a load)
     /// selects the owned path.
     pub fn map_thin_macho(path: &str) -> KunaResult<Option<Self>> {
         use unlace_decomp::kuna_loadoptions::{env, scoped};

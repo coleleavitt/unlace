@@ -60,19 +60,19 @@ use super::walk::{
 
 /// How many decode lanes the walk should use. Set by `kuna --jobs N` for the
 /// duration of the load; absent means the serial walk.
-pub const DECODE_JOBS_ENV: &str = "KUNA_DECODE_JOBS";
+pub const DECODE_JOBS_ENV: &str = "UNLACE_DECODE_JOBS";
 /// Lower the [`Refusal::TooSmall`] floor (tests set `0`).
-pub const DECODE_MIN_BYTES_ENV: &str = "KUNA_DECODE_MIN_BYTES";
+pub const DECODE_MIN_BYTES_ENV: &str = "UNLACE_DECODE_MIN_BYTES";
 /// Override the intervals-per-lane cut (measurement / tests).
-pub const DECODE_INTERVALS_ENV: &str = "KUNA_DECODE_INTERVALS";
+pub const DECODE_INTERVALS_ENV: &str = "UNLACE_DECODE_INTERVALS";
 /// `1` compares the lanes against the serial walk and returns the serial
 /// result; `abort` panics on a difference.
-pub const DECODE_SELFCHECK_ENV: &str = "KUNA_DECODE_SELFCHECK";
+pub const DECODE_SELFCHECK_ENV: &str = "UNLACE_DECODE_SELFCHECK";
 /// `1` prints the lane/interval/round/crossing/decode counts.
-pub const DECODE_STATS_ENV: &str = "KUNA_DECODE_STATS";
+pub const DECODE_STATS_ENV: &str = "UNLACE_DECODE_STATS";
 /// Test-only: `<n>` panics once inside lane `n`, `spawn:<n>` makes lane `n`'s
 /// spawn fail, to exercise the two fallbacks.
-pub const DECODE_FAULT_ENV: &str = "KUNA_DECODE_FAULT";
+pub const DECODE_FAULT_ENV: &str = "UNLACE_DECODE_FAULT";
 
 /// The lane cap. Measured throughput knee on a 40-core box; deliberately
 /// distinct from the worker pool's `MAX_AUTO_JOBS`, because a decode lane costs
@@ -924,7 +924,7 @@ fn run(
         let mut seen_rounds = 0usize;
         loop {
             if fault_lane == Some(me) && fault_armed.swap(false, Ordering::SeqCst) {
-                panic!("KUNA_DECODE_FAULT: lane {me} injected fault");
+                panic!("UNLACE_DECODE_FAULT: lane {me} injected fault");
             }
             // Production: claim intervals from the cursor and run each to local
             // quiescence. The cursor hands each interval to exactly one lane per
@@ -1596,7 +1596,7 @@ mod tests {
         );
     }
 
-    /// `KUNA_DECODE_INTERVALS` is a knob this ships, and the gate's contract is
+    /// `UNLACE_DECODE_INTERVALS` is a knob this ships, and the gate's contract is
     /// that anything it cannot do falls back to the serial walk -- so a cut it
     /// cannot allocate has to collapse, not panic on the calling thread.
     #[test]

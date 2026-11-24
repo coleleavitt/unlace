@@ -30,7 +30,7 @@ use object::read::Object;
 /// does instead of rejecting the file outright.
 ///
 /// The slice is the one [`super::macho_fat::slice_pref`] resolves from the
-/// `KUNA_MACHO_SLICE` environment override, else the deterministic default; a
+/// `UNLACE_MACHO_SLICE` environment override, else the deterministic default; a
 /// caller holding an explicit `--slice`/`--target` token passes it through
 /// [`read_image_sliced`] instead.
 ///

@@ -658,7 +658,7 @@ fn walk_plain(
             let differences = super::kuna_pdecode::compare(&parallel, &serial);
             assert!(
                 differences == 0 || !abort,
-                "KUNA_DECODE_SELFCHECK=abort: {differences} differences against the serial walk"
+                "UNLACE_DECODE_SELFCHECK=abort: {differences} differences against the serial walk"
             );
             return serial;
         }

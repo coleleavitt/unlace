@@ -178,6 +178,15 @@ generation time, not something the model can settle.
   clauses use record fields and tuple-valued mappings the parser does not read. Loads, stores, branches, F/D/Q, V
   and the privileged instructions are therefore out of reach until the
   compiler learns Sail's memory and control-flow primitives.
+- **Floating point, atomics and vectors.** On `zfa_insts.sail` the generator emits
+  nothing (86 clauses skipped). The encodings use the `encdec_freg` and rounding-mode
+  mappings, and the execute clauses read and write `F_D`/`F_H` with NaN-boxing, pattern-match
+  `Some(rm')`, destructure softfloat tuples and accrue `fflags`. `zaamo_insts.sail`
+  (which holds Zabha) is a single width-generic `AMO` clause over memory, exceptions and
+  reservation state. The V files have the same needs plus register groups and `vtype`.
+  `riscv.zfa.sinc`, `riscv.zabha.sinc` and `riscv.rvv.sinc` therefore stay hand-written.
+  Generating them would need an FP register mapping, p-code float operations for the
+  softfloat calls, and memory reads and writes in the compiler.
 - **Readability is not in the model.** Sail states what an instruction does,
   not how a decompiler should show it. The `--budget` and `--opaque` knobs
   stand in for the choices a spec author makes by hand.

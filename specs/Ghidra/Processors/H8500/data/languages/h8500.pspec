@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Hitachi H8/500. The vector table starts at 0000: the reset vector is the first word
+     (minimum mode) or longword (maximum mode). R7 is the stack pointer, R6 the frame pointer. -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <register_data>
+    <register name="fN" group="Flags"/>
+    <register name="fZ" group="Flags"/>
+    <register name="fV" group="Flags"/>
+    <register name="fC" group="Flags"/>
+    <register name="fT" group="Flags"/>
+    <register name="CP" group="Page"/>
+    <register name="DP" group="Page"/>
+    <register name="EP" group="Page"/>
+    <register name="TP" group="Page"/>
+    <register name="BR" group="Page"/>
+  </register_data>
+</processor_spec>

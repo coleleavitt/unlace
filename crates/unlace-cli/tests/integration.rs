@@ -1067,3 +1067,5 @@ mod msvcexport_cli;
 mod processors;
 #[path = "vexzeroupper_cli.rs"]
 mod vexzeroupper_cli;
+#[path = "initterm_cli.rs"]
+mod initterm_cli;

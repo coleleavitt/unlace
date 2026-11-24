@@ -28,6 +28,7 @@
 //!    width). The checks guard the lowering in both directions; equality
 //!    itself follows from the rules being identities.
 
+use std::collections::BTreeSet;
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -350,10 +351,7 @@ fn bitwise_ops(e: &Expr) -> usize {
 
 /// The cheapest expression equal to `f` (`n` leaves, `bits` wide) that saturation
 /// finds, when it has fewer than `budget` ops and fewer than `bit_budget`
-/// bitwise ops and passes the checks. Removing a bitwise op is what keeps the
-/// rule from trading arithmetic forms with the core rules (`collect_terms`
-/// regroups a sum the e-graph has regrouped the other way): the arithmetic
-/// core rules do not add one, so every rewrite lowers a count they never raise.
+/// bitwise ops and passes the checks.
 pub(crate) fn saturate(
     f: &Expr,
     n: usize,
@@ -401,11 +399,17 @@ pub(crate) fn saturate(
 /// (kuna `egraph`) `RuleEgraphSimplify`.
 pub struct RuleEgraphSimplify {
     group: String,
+    /// Fingerprints of the trees rewritten in this function without removing
+    /// a bitwise op.
+    regrouped: BTreeSet<[u64; 4]>,
 }
 
 impl RuleEgraphSimplify {
     pub fn new(g: impl Into<String>) -> RuleEgraphSimplify {
-        RuleEgraphSimplify { group: g.into() }
+        RuleEgraphSimplify {
+            group: g.into(),
+            regrouped: BTreeSet::new(),
+        }
     }
 }
 
@@ -424,11 +428,13 @@ impl Rule for RuleEgraphSimplify {
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| {
-            Box::new(RuleEgraphSimplify {
-                group: self.group.clone(),
-            }) as Box<dyn Rule>
-        })
+        grouplist
+            .contains(&self.group)
+            .then(|| Box::new(RuleEgraphSimplify::new(self.group.clone())) as Box<dyn Rule>)
+    }
+
+    fn reset(&mut self, _data: &mut Funcdata) {
+        self.regrouped.clear();
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
@@ -470,9 +476,19 @@ impl Rule for RuleEgraphSimplify {
         // The ops under an op with several readers stay; count them all as bitwise.
         let kept = t.expr.ops().saturating_sub(t.budget);
         let bit_budget = bitwise_ops(&t.expr).saturating_sub(kept);
-        let Some(simple) = saturate(&t.expr, t.n, 8 * size as u32, t.budget, bit_budget) else {
+        let Some(simple) = saturate(&t.expr, t.n, 8 * size as u32, t.budget, usize::MAX) else {
             return 0;
         };
+        // A rewrite that keeps every bitwise op regroups arithmetic the core
+        // rules may regroup back, which would show this tree again: it is
+        // done once per tree value.
+        if bitwise_ops(&simple) >= bit_budget
+            && !self
+                .regrouped
+                .insert(t.fingerprint(kuna_mba::mask_of(size)))
+        {
+            return 0;
+        }
         let rw = t.into_rewrite(simple);
         kuna_mba::replace(data, op, &rw, size)
     }

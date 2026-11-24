@@ -1,0 +1,673 @@
+# CPython 3.12 bytecode (one code object's co_code), written for unlace from the CPython
+# 3.12 dis/opcode module tables (opcode numbers, inline cache counts, jump encodings), the
+# documentation of the dis module and Python/bytecodes.c (PSF licence; no text copied).
+# Each instruction is an opcode byte and an argument byte; EXTENDED_ARG prefixes widen the
+# argument. The inline CACHE words after an instruction decode as CACHE no-ops (an
+# instruction with nine cache words would pass the 16-byte instruction limit). The value
+# stack lives in the pystack space (SP addresses the top entry and a push moves it down by
+# 8); fast locals are the registers fast0..fast255; objects, names, attributes, calls and
+# operators are user-ops on 8-byte object references.
+
+define endian=little;
+define alignment=2;
+
+define space ram     type=ram_space      size=4 default;
+define space pystack type=ram_space      size=4;
+define space fastx   type=ram_space      size=4;
+define space register type=register_space size=4;
+
+define register offset=0x0000 size=4 [ PC SP ];
+define register offset=0x0010 size=8 [ RV KWNAMES ];
+define register offset=0x0100 size=8 [ fast0 fast1 fast2 fast3 fast4 fast5 fast6 fast7 fast8 fast9 fast10 fast11 fast12 fast13 fast14 fast15 fast16 fast17 fast18 fast19 fast20 fast21 fast22 fast23 fast24 fast25 fast26 fast27 fast28 fast29 fast30 fast31 fast32 fast33 fast34 fast35 fast36 fast37 fast38 fast39 fast40 fast41 fast42 fast43 fast44 fast45 fast46 fast47 fast48 fast49 fast50 fast51 fast52 fast53 fast54 fast55 fast56 fast57 fast58 fast59 fast60 fast61 fast62 fast63 fast64 fast65 fast66 fast67 fast68 fast69 fast70 fast71 fast72 fast73 fast74 fast75 fast76 fast77 fast78 fast79 fast80 fast81 fast82 fast83 fast84 fast85 fast86 fast87 fast88 fast89 fast90 fast91 fast92 fast93 fast94 fast95 fast96 fast97 fast98 fast99 fast100 fast101 fast102 fast103 fast104 fast105 fast106 fast107 fast108 fast109 fast110 fast111 fast112 fast113 fast114 fast115 fast116 fast117 fast118 fast119 fast120 fast121 fast122 fast123 fast124 fast125 fast126 fast127 fast128 fast129 fast130 fast131 fast132 fast133 fast134 fast135 fast136 fast137 fast138 fast139 fast140 fast141 fast142 fast143 fast144 fast145 fast146 fast147 fast148 fast149 fast150 fast151 fast152 fast153 fast154 fast155 fast156 fast157 fast158 fast159 fast160 fast161 fast162 fast163 fast164 fast165 fast166 fast167 fast168 fast169 fast170 fast171 fast172 fast173 fast174 fast175 fast176 fast177 fast178 fast179 fast180 fast181 fast182 fast183 fast184 fast185 fast186 fast187 fast188 fast189 fast190 fast191 fast192 fast193 fast194 fast195 fast196 fast197 fast198 fast199 fast200 fast201 fast202 fast203 fast204 fast205 fast206 fast207 fast208 fast209 fast210 fast211 fast212 fast213 fast214 fast215 fast216 fast217 fast218 fast219 fast220 fast221 fast222 fast223 fast224 fast225 fast226 fast227 fast228 fast229 fast230 fast231 fast232 fast233 fast234 fast235 fast236 fast237 fast238 fast239 fast240 fast241 fast242 fast243 fast244 fast245 fast246 fast247 fast248 fast249 fast250 fast251 fast252 fast253 fast254 fast255 ];
+define register offset=0x1000 size=4 [ contextreg ];
+
+define context contextreg
+  hiarg = (0,23)
+;
+
+define token instr(16)
+  op   = (0,7)
+  arg  = (8,15)
+  argb0 = (8,8)
+  argb1 = (9,9)
+  argb2 = (10,10)
+  argb3 = (11,11)
+  arghi = (12,15)
+  argf = (8,15)
+;
+define token cache1(16)
+  cw1 = (0,15)
+;
+define token cache2(16)
+  cw2 = (0,15)
+;
+define token cache3(16)
+  cw3 = (0,15)
+;
+define token cache4(16)
+  cw4 = (0,15)
+;
+define token cache5(16)
+  cw5 = (0,15)
+;
+define token cache6(16)
+  cw6 = (0,15)
+;
+define token cache7(16)
+  cw7 = (0,15)
+;
+define token cache8(16)
+  cw8 = (0,15)
+;
+define token cache9(16)
+  cw9 = (0,15)
+;
+attach variables [ argf ] [ fast0 fast1 fast2 fast3 fast4 fast5 fast6 fast7 fast8 fast9 fast10 fast11 fast12 fast13 fast14 fast15 fast16 fast17 fast18 fast19 fast20 fast21 fast22 fast23 fast24 fast25 fast26 fast27 fast28 fast29 fast30 fast31 fast32 fast33 fast34 fast35 fast36 fast37 fast38 fast39 fast40 fast41 fast42 fast43 fast44 fast45 fast46 fast47 fast48 fast49 fast50 fast51 fast52 fast53 fast54 fast55 fast56 fast57 fast58 fast59 fast60 fast61 fast62 fast63 fast64 fast65 fast66 fast67 fast68 fast69 fast70 fast71 fast72 fast73 fast74 fast75 fast76 fast77 fast78 fast79 fast80 fast81 fast82 fast83 fast84 fast85 fast86 fast87 fast88 fast89 fast90 fast91 fast92 fast93 fast94 fast95 fast96 fast97 fast98 fast99 fast100 fast101 fast102 fast103 fast104 fast105 fast106 fast107 fast108 fast109 fast110 fast111 fast112 fast113 fast114 fast115 fast116 fast117 fast118 fast119 fast120 fast121 fast122 fast123 fast124 fast125 fast126 fast127 fast128 fast129 fast130 fast131 fast132 fast133 fast134 fast135 fast136 fast137 fast138 fast139 fast140 fast141 fast142 fast143 fast144 fast145 fast146 fast147 fast148 fast149 fast150 fast151 fast152 fast153 fast154 fast155 fast156 fast157 fast158 fast159 fast160 fast161 fast162 fast163 fast164 fast165 fast166 fast167 fast168 fast169 fast170 fast171 fast172 fast173 fast174 fast175 fast176 fast177 fast178 fast179 fast180 fast181 fast182 fast183 fast184 fast185 fast186 fast187 fast188 fast189 fast190 fast191 fast192 fast193 fast194 fast195 fast196 fast197 fast198 fast199 fast200 fast201 fast202 fast203 fast204 fast205 fast206 fast207 fast208 fast209 fast210 fast211 fast212 fast213 fast214 fast215 fast216 fast217 fast218 fast219 fast220 fast221 fast222 fast223 fast224 fast225 fast226 fast227 fast228 fast229 fast230 fast231 fast232 fast233 fast234 fast235 fast236 fast237 fast238 fast239 fast240 fast241 fast242 fast243 fast244 fast245 fast246 fast247 fast248 fast249 fast250 fast251 fast252 fast253 fast254 fast255 ];
+
+macro push(v) {
+  SP = SP - 8;
+  *[pystack]:8 SP = v;
+}
+macro pop(v) {
+  v = *[pystack]:8 SP;
+  SP = SP + 8;
+}
+
+define pcodeop py_neg;
+define pcodeop py_not;
+define pcodeop py_invert;
+define pcodeop py_iter;
+define pcodeop py_len;
+define pcodeop py_yield_from_iter;
+define pcodeop py_awaitable;
+define pcodeop py_aiter;
+define pcodeop py_add;
+define pcodeop py_and;
+define pcodeop py_floor_divide;
+define pcodeop py_lshift;
+define pcodeop py_matrix_multiply;
+define pcodeop py_multiply;
+define pcodeop py_remainder;
+define pcodeop py_or;
+define pcodeop py_power;
+define pcodeop py_rshift;
+define pcodeop py_subtract;
+define pcodeop py_true_divide;
+define pcodeop py_xor;
+define pcodeop py_inplace_add;
+define pcodeop py_inplace_and;
+define pcodeop py_inplace_floor_divide;
+define pcodeop py_inplace_lshift;
+define pcodeop py_inplace_matrix_multiply;
+define pcodeop py_inplace_multiply;
+define pcodeop py_inplace_remainder;
+define pcodeop py_inplace_or;
+define pcodeop py_inplace_power;
+define pcodeop py_inplace_rshift;
+define pcodeop py_inplace_subtract;
+define pcodeop py_inplace_true_divide;
+define pcodeop py_inplace_xor;
+define pcodeop py_lt;
+define pcodeop py_le;
+define pcodeop py_eq;
+define pcodeop py_ne;
+define pcodeop py_gt;
+define pcodeop py_ge;
+define pcodeop py_bool;
+define pcodeop py_contains;
+define pcodeop py_getitem;
+define pcodeop py_setitem;
+define pcodeop py_delitem;
+define pcodeop py_getslice;
+define pcodeop py_setslice;
+define pcodeop py_const;
+define pcodeop py_name;
+define pcodeop py_store_name;
+define pcodeop py_del_name;
+define pcodeop py_global;
+define pcodeop py_store_global;
+define pcodeop py_del_global;
+define pcodeop py_method;
+define pcodeop py_getattr;
+define pcodeop py_setattr;
+define pcodeop py_delattr;
+define pcodeop py_load_deref;
+define pcodeop py_load_closure;
+define pcodeop py_load_from_dict;
+define pcodeop py_store_deref;
+define pcodeop py_del_deref;
+define pcodeop py_make_cell;
+define pcodeop py_copy_free_vars;
+define pcodeop py_truth;
+define pcodeop py_is_none;
+define pcodeop py_iter_done;
+define pcodeop py_iter_next;
+define pcodeop py_send;
+define pcodeop py_send_done;
+define pcodeop py_call;
+define pcodeop py_call_n;
+define pcodeop py_call_ex;
+define pcodeop py_intrinsic;
+define pcodeop py_build_tuple;
+define pcodeop py_build_list;
+define pcodeop py_build_set;
+define pcodeop py_build_string;
+define pcodeop py_build_map;
+define pcodeop py_build_const_key_map;
+define pcodeop py_build_slice;
+define pcodeop py_list_append;
+define pcodeop py_set_add;
+define pcodeop py_list_extend;
+define pcodeop py_set_update;
+define pcodeop py_dict_update;
+define pcodeop py_dict_merge;
+define pcodeop py_map_add;
+define pcodeop py_format;
+define pcodeop py_unpack;
+define pcodeop py_unpack_item;
+define pcodeop py_unpack_ex;
+define pcodeop py_import;
+define pcodeop py_import_from;
+define pcodeop py_make_function;
+define pcodeop py_raise;
+define pcodeop py_reraise;
+define pcodeop py_return_generator;
+define pcodeop py_yield;
+define pcodeop py_super_attr;
+define pcodeop py_interpreter_exit;
+define pcodeop py_reserved;
+define pcodeop py_match_mapping;
+define pcodeop py_match_sequence;
+define pcodeop py_match_keys;
+define pcodeop py_push_exc_info;
+define pcodeop py_check_exc_match;
+define pcodeop py_check_eg_match;
+define pcodeop py_with_except_start;
+define pcodeop py_get_anext;
+define pcodeop py_before_async_with;
+define pcodeop py_before_with;
+define pcodeop py_end_async_for;
+define pcodeop py_cleanup_throw;
+define pcodeop py_load_build_class;
+define pcodeop py_load_assertion_error;
+define pcodeop py_setup_annotations;
+define pcodeop py_load_locals;
+define pcodeop py_pop_except;
+define pcodeop py_match_class;
+
+ARGV: argv is arg [ argv = (hiarg << 8) | arg; ] { export *[const]:4 argv; }
+FAST: argf is hiarg=0 & argf { export argf; }
+FAST: argv is arg [ argv = (hiarg << 8) | arg; ] { a:4 = argv * 8; export *[fastx]:8 a; }
+:^instruction is op=144 & arg ; instruction [ hiarg = (hiarg << 8) | arg; ] { build instruction; }
+
+:NOP is op=9 {
+  
+}
+:RESUME ARGV is op=151 & ARGV {
+  
+}
+:CACHE is op=0 {
+  
+}
+:POP_TOP is op=1 {
+  SP = SP + 8;
+}
+:PUSH_NULL is op=2 {
+  push(0:8);
+}
+:END_FOR is op=4 {
+  SP = SP + 16;
+}
+:END_SEND is op=5 {
+  v:8 = 0; pop(v); *[pystack]:8 SP = v;
+}
+:COPY ARGV is op=120 & ARGV {
+  v:8 = *[pystack]:8 (SP + (ARGV - 1) * 8); push(v);
+}
+:SWAP ARGV is op=99 & ARGV {
+  a:8 = *[pystack]:8 SP; b:8 = *[pystack]:8 (SP + (ARGV - 1) * 8); *[pystack]:8 SP = b; *[pystack]:8 (SP + (ARGV - 1) * 8) = a;
+}
+:UNARY_NEGATIVE is op=11 {
+  v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_neg(v);
+}
+:UNARY_NOT is op=12 {
+  v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_not(v);
+}
+:UNARY_INVERT is op=15 {
+  v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_invert(v);
+}
+:GET_ITER is op=68 {
+  v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_iter(v);
+}
+:GET_LEN is op=30 {
+  v:8 = *[pystack]:8 SP; r:8 = py_len(v); push(r);
+}
+:GET_YIELD_FROM_ITER is op=69 {
+  v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_yield_from_iter(v);
+}
+:GET_AWAITABLE ARGV is op=131 & ARGV {
+  v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_awaitable(v);
+}
+:GET_AITER is op=50 {
+  v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_aiter(v);
+}
+:BINARY_OP "add" is op=122 & arg=0 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_add(a, b); push(r);
+}
+:BINARY_OP "and" is op=122 & arg=1 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_and(a, b); push(r);
+}
+:BINARY_OP "floor_divide" is op=122 & arg=2 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_floor_divide(a, b); push(r);
+}
+:BINARY_OP "lshift" is op=122 & arg=3 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_lshift(a, b); push(r);
+}
+:BINARY_OP "matrix_multiply" is op=122 & arg=4 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_matrix_multiply(a, b); push(r);
+}
+:BINARY_OP "multiply" is op=122 & arg=5 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_multiply(a, b); push(r);
+}
+:BINARY_OP "remainder" is op=122 & arg=6 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_remainder(a, b); push(r);
+}
+:BINARY_OP "or" is op=122 & arg=7 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_or(a, b); push(r);
+}
+:BINARY_OP "power" is op=122 & arg=8 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_power(a, b); push(r);
+}
+:BINARY_OP "rshift" is op=122 & arg=9 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_rshift(a, b); push(r);
+}
+:BINARY_OP "subtract" is op=122 & arg=10 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_subtract(a, b); push(r);
+}
+:BINARY_OP "true_divide" is op=122 & arg=11 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_true_divide(a, b); push(r);
+}
+:BINARY_OP "xor" is op=122 & arg=12 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_xor(a, b); push(r);
+}
+:BINARY_OP "inplace_add" is op=122 & arg=13 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_add(a, b); push(r);
+}
+:BINARY_OP "inplace_and" is op=122 & arg=14 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_and(a, b); push(r);
+}
+:BINARY_OP "inplace_floor_divide" is op=122 & arg=15 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_floor_divide(a, b); push(r);
+}
+:BINARY_OP "inplace_lshift" is op=122 & arg=16 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_lshift(a, b); push(r);
+}
+:BINARY_OP "inplace_matrix_multiply" is op=122 & arg=17 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_matrix_multiply(a, b); push(r);
+}
+:BINARY_OP "inplace_multiply" is op=122 & arg=18 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_multiply(a, b); push(r);
+}
+:BINARY_OP "inplace_remainder" is op=122 & arg=19 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_remainder(a, b); push(r);
+}
+:BINARY_OP "inplace_or" is op=122 & arg=20 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_or(a, b); push(r);
+}
+:BINARY_OP "inplace_power" is op=122 & arg=21 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_power(a, b); push(r);
+}
+:BINARY_OP "inplace_rshift" is op=122 & arg=22 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_rshift(a, b); push(r);
+}
+:BINARY_OP "inplace_subtract" is op=122 & arg=23 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_subtract(a, b); push(r);
+}
+:BINARY_OP "inplace_true_divide" is op=122 & arg=24 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_true_divide(a, b); push(r);
+}
+:BINARY_OP "inplace_xor" is op=122 & arg=25 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_inplace_xor(a, b); push(r);
+}
+:COMPARE_OP "lt" is op=107 & arghi=0 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_lt(a, b); push(r);
+}
+:COMPARE_OP "lt=" is op=107 & arghi=1 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_le(a, b); push(r);
+}
+:COMPARE_OP "==" is op=107 & arghi=2 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_eq(a, b); push(r);
+}
+:COMPARE_OP "!=" is op=107 & arghi=3 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_ne(a, b); push(r);
+}
+:COMPARE_OP "gt" is op=107 & arghi=4 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_gt(a, b); push(r);
+}
+:COMPARE_OP "gt=" is op=107 & arghi=5 & hiarg=0 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_ge(a, b); push(r);
+}
+:IS_OP ARGV is op=117 & ARGV {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); c:1 = (a == b) != (ARGV != 0); r:8 = py_bool(c); push(r);
+}
+:CONTAINS_OP ARGV is op=118 & ARGV {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_contains(b, a, ARGV); push(r);
+}
+:BINARY_SUBSCR is op=25 {
+  b:8 = 0; a:8 = 0; pop(b); pop(a); r:8 = py_getitem(a, b); push(r);
+}
+:STORE_SUBSCR is op=60 {
+  k:8 = 0; c:8 = 0; v:8 = 0; pop(k); pop(c); pop(v); py_setitem(c, k, v);
+}
+:DELETE_SUBSCR is op=61 {
+  k:8 = 0; c:8 = 0; pop(k); pop(c); py_delitem(c, k);
+}
+:BINARY_SLICE is op=26 {
+  e:8 = 0; s:8 = 0; c:8 = 0; pop(e); pop(s); pop(c); r:8 = py_getslice(c, s, e); push(r);
+}
+:STORE_SLICE is op=27 {
+  e:8 = 0; s:8 = 0; c:8 = 0; v:8 = 0; pop(e); pop(s); pop(c); pop(v); py_setslice(c, s, e, v);
+}
+:LOAD_CONST ARGV is op=100 & ARGV {
+  r:8 = py_const(ARGV); push(r);
+}
+:RETURN_CONST ARGV is op=121 & ARGV {
+  RV = py_const(ARGV); return [0:4];
+}
+:RETURN_VALUE is op=83 {
+  pop(RV); return [0:4];
+}
+:LOAD_FAST FAST is op=124 & FAST {
+  push(FAST);
+}
+:LOAD_FAST_CHECK FAST is op=127 & FAST {
+  push(FAST);
+}
+:LOAD_FAST_AND_CLEAR FAST is op=143 & FAST {
+  push(FAST); FAST = 0;
+}
+:STORE_FAST FAST is op=125 & FAST {
+  v:8 = 0; pop(v); FAST = v;
+}
+:DELETE_FAST FAST is op=126 & FAST {
+  FAST = 0;
+}
+:LOAD_NAME ARGV is op=101 & ARGV {
+  r:8 = py_name(ARGV); push(r);
+}
+:STORE_NAME ARGV is op=90 & ARGV {
+  v:8 = 0; pop(v); py_store_name(ARGV, v);
+}
+:DELETE_NAME ARGV is op=91 & ARGV {
+  py_del_name(ARGV);
+}
+:LOAD_GLOBAL "NULL+"^GI is op=116 & argb0=1 & arg [ GI = ((hiarg << 8) | arg) >> 1; ] {
+  gi:4 = GI; push(0:8); r:8 = py_global(gi); push(r);
+}
+:LOAD_GLOBAL GI is op=116 & argb0=0 & arg [ GI = ((hiarg << 8) | arg) >> 1; ] {
+  gi:4 = GI; r:8 = py_global(gi); push(r);
+}
+:STORE_GLOBAL ARGV is op=97 & ARGV {
+  v:8 = 0; pop(v); py_store_global(ARGV, v);
+}
+:DELETE_GLOBAL ARGV is op=98 & ARGV {
+  py_del_global(ARGV);
+}
+:LOAD_ATTR "method "^AI is op=106 & argb0=1 & arg [ AI = ((hiarg << 8) | arg) >> 1; ] {
+  ai:4 = AI; v:8 = *[pystack]:8 SP; m:8 = py_method(v, ai); *[pystack]:8 SP = m; push(v);
+}
+:LOAD_ATTR AI is op=106 & argb0=0 & arg [ AI = ((hiarg << 8) | arg) >> 1; ] {
+  ai:4 = AI; v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_getattr(v, ai);
+}
+:STORE_ATTR ARGV is op=95 & ARGV {
+  obj:8 = 0; v:8 = 0; pop(obj); pop(v); py_setattr(obj, ARGV, v);
+}
+:DELETE_ATTR ARGV is op=96 & ARGV {
+  obj:8 = 0; pop(obj); py_delattr(obj, ARGV);
+}
+:LOAD_DEREF ARGV is op=137 & ARGV {
+  r:8 = py_load_deref(ARGV); push(r);
+}
+:LOAD_CLOSURE ARGV is op=136 & ARGV {
+  r:8 = py_load_closure(ARGV); push(r);
+}
+:LOAD_FROM_DICT_OR_DEREF ARGV is op=176 & ARGV {
+  d:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_load_from_dict(d, ARGV);
+}
+:LOAD_FROM_DICT_OR_GLOBALS ARGV is op=175 & ARGV {
+  d:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_load_from_dict(d, ARGV);
+}
+:STORE_DEREF ARGV is op=138 & ARGV {
+  v:8 = 0; pop(v); py_store_deref(ARGV, v);
+}
+:DELETE_DEREF ARGV is op=139 & ARGV {
+  py_del_deref(ARGV);
+}
+:MAKE_CELL ARGV is op=135 & ARGV {
+  py_make_cell(ARGV);
+}
+:COPY_FREE_VARS ARGV is op=149 & ARGV {
+  py_copy_free_vars(ARGV);
+}
+
+RELF: tgt is arg [ tgt = inst_next + ((hiarg << 8) | arg) * 2; ] { export *:4 tgt; }
+RELB: tgt is arg [ tgt = inst_next - ((hiarg << 8) | arg) * 2; ] { export *:4 tgt; }
+FORT: tgt is arg [ tgt = inst_next + ((hiarg << 8) | arg) * 2 + 4; ] { export *:4 tgt; }
+SENDT: tgt is arg [ tgt = inst_next + ((hiarg << 8) | arg) * 2 + 2; ] { export *:4 tgt; }
+
+:JUMP_FORWARD RELF is op=110 & RELF { goto RELF; }
+:JUMP_BACKWARD RELB is op=140 & RELB { goto RELB; }
+:JUMP_BACKWARD_NO_INTERRUPT RELB is op=134 & RELB { goto RELB; }
+:POP_JUMP_IF_FALSE RELF is op=114 & RELF { v:8 = 0; pop(v); t:1 = py_truth(v); if (!t) goto RELF; }
+:POP_JUMP_IF_TRUE RELF is op=115 & RELF { v:8 = 0; pop(v); t:1 = py_truth(v); if (t) goto RELF; }
+:POP_JUMP_IF_NONE RELF is op=129 & RELF { v:8 = 0; pop(v); t:1 = py_is_none(v); if (t) goto RELF; }
+:POP_JUMP_IF_NOT_NONE RELF is op=128 & RELF { v:8 = 0; pop(v); t:1 = py_is_none(v); if (!t) goto RELF; }
+:FOR_ITER FORT is op=93 & FORT {
+  it:8 = *[pystack]:8 SP; d:1 = py_iter_done(it); if (!d) goto <more>; SP = SP + 8; goto FORT;
+<more>
+  r:8 = py_iter_next(it); push(r);
+}
+:SEND SENDT is op=123 & SENDT {
+  v:8 = 0; pop(v); g:8 = *[pystack]:8 SP; r:8 = py_send(g, v); push(r); d:1 = py_send_done(g); if (d) goto SENDT;
+}
+
+# CALL argc: the stack holds NULL-or-callable, callable-or-self and argc arguments.
+:CALL "0" is op=171 & arg=0 & hiarg=0 {
+  f:8 = *[pystack]:8 (SP + 8); s:8 = *[pystack]:8 (SP + 0); r:8 = py_call(f, s); SP = SP + 8; *[pystack]:8 SP = r;
+}
+:CALL "1" is op=171 & arg=1 & hiarg=0 {
+  f:8 = *[pystack]:8 (SP + 16); s:8 = *[pystack]:8 (SP + 8); r:8 = py_call(f, s, *[pystack]:8 (SP + 0)); SP = SP + 16; *[pystack]:8 SP = r;
+}
+:CALL "2" is op=171 & arg=2 & hiarg=0 {
+  f:8 = *[pystack]:8 (SP + 24); s:8 = *[pystack]:8 (SP + 16); r:8 = py_call(f, s, *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 24; *[pystack]:8 SP = r;
+}
+:CALL "3" is op=171 & arg=3 & hiarg=0 {
+  f:8 = *[pystack]:8 (SP + 32); s:8 = *[pystack]:8 (SP + 24); r:8 = py_call(f, s, *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 32; *[pystack]:8 SP = r;
+}
+:CALL "4" is op=171 & arg=4 & hiarg=0 {
+  f:8 = *[pystack]:8 (SP + 40); s:8 = *[pystack]:8 (SP + 32); r:8 = py_call(f, s, *[pystack]:8 (SP + 24), *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 40; *[pystack]:8 SP = r;
+}
+:CALL "5" is op=171 & arg=5 & hiarg=0 {
+  f:8 = *[pystack]:8 (SP + 48); s:8 = *[pystack]:8 (SP + 40); r:8 = py_call(f, s, *[pystack]:8 (SP + 32), *[pystack]:8 (SP + 24), *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 48; *[pystack]:8 SP = r;
+}
+:CALL "6" is op=171 & arg=6 & hiarg=0 {
+  f:8 = *[pystack]:8 (SP + 56); s:8 = *[pystack]:8 (SP + 48); r:8 = py_call(f, s, *[pystack]:8 (SP + 40), *[pystack]:8 (SP + 32), *[pystack]:8 (SP + 24), *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 56; *[pystack]:8 SP = r;
+}
+:CALL ARGV is op=171 & ARGV {
+  r:8 = py_call_n(SP, ARGV); SP = SP + (ARGV + 1) * 8; *[pystack]:8 SP = r;
+}
+:KW_NAMES ARGV is op=172 & ARGV {
+  KWNAMES = py_const(ARGV);
+}
+:CALL_FUNCTION_EX ARGV is op=142 & ARGV {
+  r:8 = py_call_ex(SP, ARGV); SP = SP + (2 + (ARGV & 1)) * 8; *[pystack]:8 SP = r;
+}
+:CALL_INTRINSIC_1 ARGV is op=173 & ARGV {
+  v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_intrinsic(ARGV, v);
+}
+:CALL_INTRINSIC_2 ARGV is op=174 & ARGV {
+  b:8 = 0; pop(b); a:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_intrinsic(ARGV, a, b);
+}
+:BUILD_TUPLE ARGV is op=102 & ARGV {
+  r:8 = py_build_tuple(SP, ARGV); SP = SP + ARGV * 8 - 8; *[pystack]:8 SP = r;
+}
+:BUILD_LIST ARGV is op=103 & ARGV {
+  r:8 = py_build_list(SP, ARGV); SP = SP + ARGV * 8 - 8; *[pystack]:8 SP = r;
+}
+:BUILD_SET ARGV is op=104 & ARGV {
+  r:8 = py_build_set(SP, ARGV); SP = SP + ARGV * 8 - 8; *[pystack]:8 SP = r;
+}
+:BUILD_STRING ARGV is op=157 & ARGV {
+  r:8 = py_build_string(SP, ARGV); SP = SP + ARGV * 8 - 8; *[pystack]:8 SP = r;
+}
+:BUILD_MAP ARGV is op=105 & ARGV {
+  r:8 = py_build_map(SP, ARGV); SP = SP + ARGV * 16 - 8; *[pystack]:8 SP = r;
+}
+:BUILD_CONST_KEY_MAP ARGV is op=156 & ARGV {
+  r:8 = py_build_const_key_map(SP, ARGV); SP = SP + ARGV * 8; *[pystack]:8 SP = r;
+}
+:BUILD_SLICE ARGV is op=133 & ARGV {
+  r:8 = py_build_slice(SP, ARGV); SP = SP + ARGV * 8 - 8; *[pystack]:8 SP = r;
+}
+:LIST_APPEND ARGV is op=145 & ARGV {
+  v:8 = 0; pop(v); t:8 = *[pystack]:8 (SP + (ARGV - 1) * 8); py_list_append(t, v);
+}
+:SET_ADD ARGV is op=146 & ARGV {
+  v:8 = 0; pop(v); t:8 = *[pystack]:8 (SP + (ARGV - 1) * 8); py_set_add(t, v);
+}
+:LIST_EXTEND ARGV is op=162 & ARGV {
+  v:8 = 0; pop(v); t:8 = *[pystack]:8 (SP + (ARGV - 1) * 8); py_list_extend(t, v);
+}
+:SET_UPDATE ARGV is op=163 & ARGV {
+  v:8 = 0; pop(v); t:8 = *[pystack]:8 (SP + (ARGV - 1) * 8); py_set_update(t, v);
+}
+:DICT_UPDATE ARGV is op=165 & ARGV {
+  v:8 = 0; pop(v); t:8 = *[pystack]:8 (SP + (ARGV - 1) * 8); py_dict_update(t, v);
+}
+:DICT_MERGE ARGV is op=164 & ARGV {
+  v:8 = 0; pop(v); t:8 = *[pystack]:8 (SP + (ARGV - 1) * 8); py_dict_merge(t, v);
+}
+:MAP_ADD ARGV is op=147 & ARGV {
+  v:8 = 0; k:8 = 0; pop(v); pop(k); t:8 = *[pystack]:8 (SP + (ARGV - 1) * 8); py_map_add(t, k, v);
+}
+:UNPACK_SEQUENCE ARGV is op=92 & ARGV {
+  v:8 = 0; pop(v); SP = SP - ARGV * 8; py_unpack(v, SP, ARGV);
+}
+:UNPACK_EX ARGV is op=94 & ARGV {
+  v:8 = 0; pop(v); n:4 = (ARGV & 0xff) + (ARGV >> 8) + 1; SP = SP - n * 8; py_unpack_ex(v, SP, ARGV);
+}
+:IMPORT_NAME ARGV is op=108 & ARGV {
+  fl:8 = 0; lv:8 = 0; pop(fl); pop(lv); r:8 = py_import(ARGV, lv, fl); push(r);
+}
+:IMPORT_FROM ARGV is op=109 & ARGV {
+  m:8 = *[pystack]:8 SP; r:8 = py_import_from(m, ARGV); push(r);
+}
+:MAKE_FUNCTION ARGV is op=132 & ARGV {
+  r:8 = py_make_function(SP, ARGV); n:4 = popcount(ARGV & 0xf); SP = SP + n * 8; *[pystack]:8 SP = r;
+}
+:RAISE_VARARGS ARGV is op=130 & ARGV {
+  py_raise(SP, ARGV); return [0:4];
+}
+:RERAISE ARGV is op=119 & ARGV {
+  py_reraise(SP, ARGV); return [0:4];
+}
+:RETURN_GENERATOR is op=75 {
+  r:8 = py_return_generator(); push(r);
+}
+:YIELD_VALUE ARGV is op=150 & ARGV {
+  v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_yield(v);
+}
+:LOAD_SUPER_ATTR ARGV is op=141 & ARGV {
+  r:8 = py_super_attr(SP, ARGV); SP = SP + 16 - (ARGV & 1) * 8; *[pystack]:8 SP = r;
+}
+:INTERPRETER_EXIT is op=3 {
+  py_interpreter_exit(SP); SP = SP + 8;
+}
+:RESERVED is op=17 {
+  py_reserved(SP);
+}
+:MATCH_MAPPING is op=31 {
+  py_match_mapping(SP); SP = SP - 8;
+}
+:MATCH_SEQUENCE is op=32 {
+  py_match_sequence(SP); SP = SP - 8;
+}
+:MATCH_KEYS is op=33 {
+  py_match_keys(SP); SP = SP - 8;
+}
+:PUSH_EXC_INFO is op=35 {
+  py_push_exc_info(SP); SP = SP - 8;
+}
+:CHECK_EXC_MATCH is op=36 {
+  py_check_exc_match(SP);
+}
+:CHECK_EG_MATCH is op=37 {
+  py_check_eg_match(SP);
+}
+:WITH_EXCEPT_START is op=49 {
+  py_with_except_start(SP); SP = SP - 8;
+}
+:GET_ANEXT is op=51 {
+  py_get_anext(SP); SP = SP - 8;
+}
+:BEFORE_ASYNC_WITH is op=52 {
+  py_before_async_with(SP); SP = SP - 8;
+}
+:BEFORE_WITH is op=53 {
+  py_before_with(SP); SP = SP - 8;
+}
+:END_ASYNC_FOR is op=54 {
+  py_end_async_for(SP); SP = SP + 16;
+}
+:CLEANUP_THROW is op=55 {
+  py_cleanup_throw(SP); SP = SP + 8;
+}
+:LOAD_BUILD_CLASS is op=71 {
+  r:8 = py_load_build_class(); push(r);
+}
+:LOAD_ASSERTION_ERROR is op=74 {
+  r:8 = py_load_assertion_error(); push(r);
+}
+:SETUP_ANNOTATIONS is op=85 {
+  py_setup_annotations(SP);
+}
+:LOAD_LOCALS is op=87 {
+  r:8 = py_load_locals(); push(r);
+}
+:POP_EXCEPT is op=89 {
+  py_pop_except(SP); SP = SP + 8;
+}
+:MATCH_CLASS ARGV is op=152 & ARGV {
+  py_match_class(SP, ARGV); SP = SP + 16;
+}
+
+# Small fixed-size builders, unpacks and plain functions take their stack operands as values.
+:BUILD_TUPLE "0" is op=102 & arg=0 & hiarg=0 { r:8 = py_build_tuple(0:4); SP = SP + -8; *[pystack]:8 SP = r; }
+:BUILD_TUPLE "1" is op=102 & arg=1 & hiarg=0 { r:8 = py_build_tuple(1:4, *[pystack]:8 (SP + 0)); SP = SP + 0; *[pystack]:8 SP = r; }
+:BUILD_TUPLE "2" is op=102 & arg=2 & hiarg=0 { r:8 = py_build_tuple(2:4, *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 8; *[pystack]:8 SP = r; }
+:BUILD_TUPLE "3" is op=102 & arg=3 & hiarg=0 { r:8 = py_build_tuple(3:4, *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 16; *[pystack]:8 SP = r; }
+:BUILD_TUPLE "4" is op=102 & arg=4 & hiarg=0 { r:8 = py_build_tuple(4:4, *[pystack]:8 (SP + 24), *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 24; *[pystack]:8 SP = r; }
+:BUILD_LIST "0" is op=103 & arg=0 & hiarg=0 { r:8 = py_build_list(0:4); SP = SP + -8; *[pystack]:8 SP = r; }
+:BUILD_LIST "1" is op=103 & arg=1 & hiarg=0 { r:8 = py_build_list(1:4, *[pystack]:8 (SP + 0)); SP = SP + 0; *[pystack]:8 SP = r; }
+:BUILD_LIST "2" is op=103 & arg=2 & hiarg=0 { r:8 = py_build_list(2:4, *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 8; *[pystack]:8 SP = r; }
+:BUILD_LIST "3" is op=103 & arg=3 & hiarg=0 { r:8 = py_build_list(3:4, *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 16; *[pystack]:8 SP = r; }
+:BUILD_LIST "4" is op=103 & arg=4 & hiarg=0 { r:8 = py_build_list(4:4, *[pystack]:8 (SP + 24), *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 24; *[pystack]:8 SP = r; }
+:BUILD_SET "0" is op=104 & arg=0 & hiarg=0 { r:8 = py_build_set(0:4); SP = SP + -8; *[pystack]:8 SP = r; }
+:BUILD_SET "1" is op=104 & arg=1 & hiarg=0 { r:8 = py_build_set(1:4, *[pystack]:8 (SP + 0)); SP = SP + 0; *[pystack]:8 SP = r; }
+:BUILD_SET "2" is op=104 & arg=2 & hiarg=0 { r:8 = py_build_set(2:4, *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 8; *[pystack]:8 SP = r; }
+:BUILD_SET "3" is op=104 & arg=3 & hiarg=0 { r:8 = py_build_set(3:4, *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 16; *[pystack]:8 SP = r; }
+:BUILD_SET "4" is op=104 & arg=4 & hiarg=0 { r:8 = py_build_set(4:4, *[pystack]:8 (SP + 24), *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 24; *[pystack]:8 SP = r; }
+:BUILD_STRING "0" is op=157 & arg=0 & hiarg=0 { r:8 = py_build_string(0:4); SP = SP + -8; *[pystack]:8 SP = r; }
+:BUILD_STRING "1" is op=157 & arg=1 & hiarg=0 { r:8 = py_build_string(1:4, *[pystack]:8 (SP + 0)); SP = SP + 0; *[pystack]:8 SP = r; }
+:BUILD_STRING "2" is op=157 & arg=2 & hiarg=0 { r:8 = py_build_string(2:4, *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 8; *[pystack]:8 SP = r; }
+:BUILD_STRING "3" is op=157 & arg=3 & hiarg=0 { r:8 = py_build_string(3:4, *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 16; *[pystack]:8 SP = r; }
+:BUILD_STRING "4" is op=157 & arg=4 & hiarg=0 { r:8 = py_build_string(4:4, *[pystack]:8 (SP + 24), *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 24; *[pystack]:8 SP = r; }
+:BUILD_MAP "0" is op=105 & arg=0 & hiarg=0 { r:8 = py_build_map(0:4); SP = SP + -8; *[pystack]:8 SP = r; }
+:BUILD_MAP "1" is op=105 & arg=1 & hiarg=0 { r:8 = py_build_map(1:4, *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 8; *[pystack]:8 SP = r; }
+:BUILD_MAP "2" is op=105 & arg=2 & hiarg=0 { r:8 = py_build_map(2:4, *[pystack]:8 (SP + 24), *[pystack]:8 (SP + 16), *[pystack]:8 (SP + 8), *[pystack]:8 (SP + 0)); SP = SP + 24; *[pystack]:8 SP = r; }
+:UNPACK_SEQUENCE "2" is op=92 & arg=2 & hiarg=0 { v:8 = 0; pop(v); t1:8 = py_unpack_item(v, 1:4); push(t1); t0:8 = py_unpack_item(v, 0:4); push(t0); }
+:UNPACK_SEQUENCE "3" is op=92 & arg=3 & hiarg=0 { v:8 = 0; pop(v); t2:8 = py_unpack_item(v, 2:4); push(t2); t1:8 = py_unpack_item(v, 1:4); push(t1); t0:8 = py_unpack_item(v, 0:4); push(t0); }
+:UNPACK_SEQUENCE "4" is op=92 & arg=4 & hiarg=0 { v:8 = 0; pop(v); t3:8 = py_unpack_item(v, 3:4); push(t3); t2:8 = py_unpack_item(v, 2:4); push(t2); t1:8 = py_unpack_item(v, 1:4); push(t1); t0:8 = py_unpack_item(v, 0:4); push(t0); }
+:MAKE_FUNCTION "0" is op=132 & arg=0 & hiarg=0 { c:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_make_function(c); }
+:FORMAT_VALUE ARGV is op=155 & argb2=0 & ARGV { v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_format(v, ARGV); }
+:FORMAT_VALUE ARGV is op=155 & argb2=1 & ARGV { s:8 = 0; pop(s); v:8 = *[pystack]:8 SP; *[pystack]:8 SP = py_format(v, ARGV, s); }

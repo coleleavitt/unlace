@@ -4417,6 +4417,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
 | `Nova` | Data General Nova (Nova 1200/800/2, Nova 3, Nova 4) | `Nova:BE:16:default` | written for unlace from the DG Nova programmer's references, Apache-2.0 |
 | `SH5` | SuperH SH-5 (SHmedia) | `SH5:LE:64:SHmedia`, `SH5:BE:64:SHmedia` | written for unlace from the SH-5 CPU Core Architecture manual (SHmedia); decode checked against `sh64-elf-objdump` 2.29.1, Apache-2.0 |
+| `ND100` | Norsk Data ND-100 (NORD-10, ND-110) | `ND100:BE:16:default` | written for unlace from the ND-100 Reference Manual (ND-06.014.02), Apache-2.0 |
 <!-- vendor-rows -->
 
 ### Data General Nova (#98)
@@ -4447,6 +4448,20 @@ The decode agrees with `sh64-elf-objdump` (binutils 2.29.1) on a 6,639-word prob
 except the reserved odd FP register forms. Exercised by the `sh5` and `sh5-be`
 families of `unlace-cli/tests/processors.toml` (add, signed max, absolute load,
 direct call and float add routines built with `sh64-elf-as`).
+
+### Norsk Data ND-100 (#98)
+
+`specs/Ghidra/Processors/ND100` is a SLEIGH module written for unlace from the
+ND-100 Reference Manual (ND-06.014.02); the only prior SLEIGH carries no licence
+and was not opened: `ND100:BE:16:default`. Memory is word addressed. Memory
+reference instructions take the eight ,X / I / ,B modes relative to the
+instruction's own address; ROP is one constructor per sub-instruction code of
+the manual's table (CLD, CM1, AD1, ADC, RAD), a P destination jumps and `EXIT`
+(COPY SL DP) returns; JPL links in L. SKP tests dr - sr; the status flags are
+registers for the bit operations. The ND 48-bit floating point, I/O and system
+instructions are user ops. Exercised by the `nd100` family of
+`unlace-cli/tests/processors.toml` (hand-assembled add, signed max, P-relative
+load/store, call, shift and add-argument routines).
 
 ### IBM ROMP (#98)
 
@@ -4627,6 +4642,10 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/processors.toml` (`ez80`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
 | `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a) shader ISA, one-lane lift | `AMDGPU:LE:64:GFX9` | LLVM AMDGPU encodings (`llvm-mc -show-encoding`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/amdgpu_raw.rs` |
+| `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/kvx_raw.rs` |
+| `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
+| `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
+| `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5274,6 +5293,17 @@ Found by `tools/difffuzz` against Unicorn and checked against the Arm ARM.
 `c.jr`, `c.jalr` and `ret` (`riscv.rvc.sinc`) expand to `jalr`, which clears bit 0 of the
 target; they now jump to `rs1 & ~1` as the `jalr` constructors in `riscv.rv32i.sinc` already
 did. Found by `tools/difffuzz`.
+
+### ARM lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz` against Unicorn.
+
+- `STRHT` (`ARMinstructions.sinc`) builds its `addrmode3` after `COND`, so a failing
+  condition no longer writes the base register back, and stores `Rd:2` (it stored all 4 bytes).
+- The T32 `AND`, `BIC`, `MOV.W` and `MVN` immediate forms and the `AND.W` and `MVN.W`
+  shifted-register forms (`ARMTHUMBinstructions.sinc`) take `thSBIT_CZN` and
+  `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
+  as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
 
 ## 2.9 Go stack-growth prologue folding
 

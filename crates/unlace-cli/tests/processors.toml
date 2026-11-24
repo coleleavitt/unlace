@@ -82,36 +82,6 @@ x86_64_cmpccxadd = """
 4889f0c4e2e9e407c30f1f800000000031c0f20f38f83e0f94c0c3
 """
 
-# The AMD GCN5 (gfx900) language decompiles clang-built OpenCL kernels from a raw image:
-# SMEM kernel-argument loads, a VOPC compare feeding s_and_saveexec / s_cbranch_execz,
-# global loads and stores, v_mad_u64_u32, and a scalar loop with s_add_u32/s_addc_u32.
-[[family]]
-name = "amdgpu"
-language = "AMDGPU:LE:64:GFX9"
-base = "0"
-fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx900_kernels.bin"
-
-# `scale`: `if (i < n) out[i] = in[i] * 3 + k;` with the kernel arguments behind s[4:5]
-# and the lane id in v0; EXEC is 1 on entry, so the saveexec mask folds into the branch.
-[[family.function]]
-test = "amdgpu_guarded_store_decompiles"
-address = "0x0"
-expect = [
-    "if (a5 < (int)((unsigned long)a2[2] >> 0x20))",
-    "* 3 + (int)a2[2];",
-]
-
-# `sum`: a scalar loop over `in` with the 64-bit pointer split across s2/s3.
-[[family.function]]
-test = "amdgpu_scalar_loop_decompiles"
-address = "0x100"
-expect = [
-    "while (v5) {",
-    "v4 = *(int *)CONCAT44(v3,v2) + v4;",
-    "v5 -= 1;",
-    "*a2->field_0x0 = v4;",
-]
-
 [[family]]
 name = "blackfin"
 language = "Blackfin:LE:32:default"
@@ -218,23 +188,6 @@ expect = [
     "sub_1000(a0,10)",
     "((int *)a0)[2]",
     "0x56781234",
-]
-
-# The eZ80 ADL-mode language decompiles a hand-assembled add/compare/store routine.
-[[family]]
-name = "ez80"
-language = "eZ80:LE:24:ADL"
-base = "0x0"
-fixture = "crates/unlace-cli/tests/fixtures/ez80/add_store.bin"
-
-[[family.function]]
-test = "ez80_adl_add_compare_store_decompiles"
-address = "0x0"
-expect = [
-    "if ((unsigned char)(dat_c000 + 3U) <= 0xf) {",  # the CP / JR NC test survives
-    "dat_8000 = dat_c000 + 3U;",  # the store to 0x8000
-    "return 5;",  # the taken path
-    "return 0;",  # the fall-back path
 ]
 
 # The Fujitsu FR language loads a big-endian raw image of two hand-assembled
@@ -725,6 +678,23 @@ expect = [
     "return 0;",  # the fall-back path
 ]
 
+# The NXP S12Z language decompiles a hand-assembled add/compare/store routine.
+[[family]]
+name = "s12z"
+language = "S12Z:BE:24:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/s12z/add_store.bin"
+
+[[family.function]]
+test = "s12z_add_compare_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a0 + 3U <= 0xf) {",  # the ADD / CMP / BCC test survives
+    "dat_8000 = a0 + 3U;",  # the store to 0x8000
+    "return 5;",  # the taken path
+    "return 0;",  # the fall-back path
+]
+
 # The IBM ROMP language (written from the RT PC Technical Reference)
 # decompiles a hand-assembled raw image of four routines.
 [[family]]
@@ -876,90 +846,6 @@ expect = [
     "0xfff",  # the pointer wraps in its 4 KiB page
 ]
 
-# The SuperH SH-5 SHmedia language (written from the SH-5 CPU core architecture
-# manual) decompiles routines built with sh64-elf-as --abi=32 --little.
-[[family]]
-name = "sh5"
-language = "SH5:LE:64:SHmedia"
-base = "0x1000"
-fixture = "crates/unlace-cli/tests/fixtures/sh5/funcs.bin"
-forbid = ["baddata"]
-
-# add r2,r3,r2; ptabs r18,tr0; blink tr0,r63
-[[family.function]]
-test = "sh5_add_and_return_through_r18"
-address = "0x1000"
-expect = [
-    "return a0 + a1;",
-]
-
-# pta 1f,tr0; bge r2,r3,tr0; or r3,r63,r2; 1: ptabs r18,tr0; blink tr0,r63
-[[family.function]]
-test = "sh5_pta_branch_signed_max"
-address = "0x1010"
-expect = [
-    "if (a0 < a1)",
-    "a0 = a1;",
-]
-
-# movi 0x1234,r1; shori 0x5678,r1; ld.l r1,0,r2; return
-[[family.function]]
-test = "sh5_movi_shori_absolute_load"
-address = "0x1030"
-expect = [
-    "dat_12345678",
-]
-
-# pta f_add,tr0; movi 7,r3; blink tr0,r18 (the tracked target makes it a direct call)
-[[family.function]]
-test = "sh5_pta_blink_is_a_direct_call"
-address = "0x1050"
-expect = [
-    "sub_1000(a0,7);",
-]
-
-# fadd.s fr0,fr1,fr0; return
-[[family.function]]
-test = "sh5_float_add"
-address = "0x1080"
-expect = [
-    "float sub_1080(float a0,float a1)",
-    "return a0 + a1;",
-]
-
-# The same routines built with sh64-elf-as --abi=32 --big.
-[[family]]
-name = "sh5-be"
-language = "SH5:BE:64:SHmedia"
-base = "0x1000"
-fixture = "crates/unlace-cli/tests/fixtures/sh5/funcs_be.bin"
-forbid = ["baddata"]
-
-[[family.function]]
-test = "sh5_big_endian_max"
-address = "0x1010"
-expect = [
-    "if (a0 < a1)",
-]
-
-[[family.function]]
-test = "sh5_big_endian_direct_call"
-address = "0x1050"
-expect = [
-    "sub_1000(a0,7);",
-]
-# NEC V60/V70: hand-assembled stack-argument, loop/store, frame/call and 20-byte Format II images.
-[[family]]
-name = "v60"
-language = "V60:LE:32:default"
-base = "0x0"
-fixture = "crates/unlace-cli/tests/fixtures/v60/mul_ret.bin"
-
-[[family.function]]
-test = "v60_mul_return_decompiles"
-address = "0x0"
-expect = ["return a0 * a1;"]  # mov.w 4[SP],R0; mul.w 8[SP],R0; rsr
-
 # The ST20 language decompiles a hand-assembled add/compare/store routine.
 [[family]]
 name = "st20"
@@ -1102,83 +988,6 @@ expect = [
     "dat_3000 = dat_2000;",  # both extension words decode
 ]
 
-[[family]]
-name = "v60_frame_call"
-language = "V60:LE:32:default"
-base = "0x0"
-fixture = "crates/unlace-cli/tests/fixtures/v60/frame_call.bin"
-
-[[family.function]]
-test = "v60_caller_pushes_stack_arguments"
-address = "0x0"
-expect = ["sub_20(5,3);"]  # push/push/bsr
-
-[[family.function]]
-test = "v60_prepare_pushm_frame_reads_fp_arguments"
-address = "0x20"
-expect = ["return a0 + a1;"]  # prepare/pushm/popm/dispose/rsr
-
-[[family]]
-name = "v60_long_format_ii"
-language = "V60:LE:32:default"
-base = "0x0"
-image = "v60_long"
-
-[[family.function]]
-test = "v60_twenty_byte_instruction_decodes"
-address = "0x0"
-expect = ["*(unsigned int *)(dat_24 + 4) = *(unsigned int *)(dat_20 + 8);"]  # one 20-byte mov.w, two PC double displacements
-
-[[family]]
-name = "v60_sum_store"
-language = "V60:LE:32:default"
-base = "0x0"
-fixture = "crates/unlace-cli/tests/fixtures/v60/sum_store.bin"
-
-[[family.function]]
-test = "v60_sum_loop_and_store_decompile"
-address = "0x0"
-expect = ["v1 += *a0;", "} while (a1);", "dat_200010 = v1;"]  # add.w [R1+],R0 / dbr loop, direct store
-
-# DEC VAX: CALLS procedure with entry mask, (r1)+/sobgtr loop, extzv.
-[[family]]
-name = "vax_calls"
-language = "VAX:LE:32:default"
-base = "0x0"
-fixture = "crates/unlace-cli/tests/fixtures/vax/calls.bin"
-
-[[family.function]]
-test = "vax_calls_caller"
-address = "0x0"
-expect = ["sub_20(5,3);"]  # pushl #3; pushl #5; calls #2, sub
-
-[[family.function]]
-test = "vax_calls_procedure_reads_ap_arguments"
-address = "0x20"
-expect = ["return a1 + a0;"]  # entry mask; addl3 4(ap), 8(ap), r0; ret
-
-[[family]]
-name = "vax_extzv"
-language = "VAX:LE:32:default"
-base = "0x0"
-fixture = "crates/unlace-cli/tests/fixtures/vax/extzv.bin"
-
-[[family.function]]
-test = "vax_extzv_decompiles"
-address = "0x0"
-expect = ["return a0 >> 4 & 0xff;"]
-
-[[family]]
-name = "vax_sum_store"
-language = "VAX:LE:32:default"
-base = "0x0"
-fixture = "crates/unlace-cli/tests/fixtures/vax/sum_store.bin"
-
-[[family.function]]
-test = "vax_sum_loop_and_store_decompile"
-address = "0x0"
-expect = ["v1 += *a0;", "} while (0 < a1);", "dat_200010 = v1;"]
-
 # The Visium language decompiles a compare-and-branch routine (with delay slots) built with visium-elf-as.
 [[family]]
 name = "visium"
@@ -1212,6 +1021,40 @@ expect = [
     "0x2001) = 0x12;",  # high byte to $2001
 ]
 
+# The Xtensa ESP32-S3 language decodes the PIE (EE.*) vector instructions: a loop of two
+# post-incrementing 128-bit loads, a saturating byte add and a store, and a 32-bit fused
+# add-and-load. The base instructions were assembled with llvm-mc, the EE.* words encoded from
+# the field layout of Espressif's ESP32-S3 TableGen description.
+[[family]]
+name = "xtensa_esp32s3_pie_loop"
+language = "Xtensa:LE:32:esp32s3"
+base = "0x40000000"
+image = "xtensa_esp32s3_pie_loop"
+
+[[family.function]]
+test = "esp32s3_pie_vector_loop_decompiles"
+address = "0x40000000"
+expect = [
+    "a0 += 0x10;",
+    "a1 += 0x10;",
+    "*(char (*)[16])(a2 & 0xfffffff0) = ee_vadds_s8(*v1,*v2);",
+    "} while (a3);",
+]
+
+[[family]]
+name = "xtensa_esp32s3_pie_fused"
+language = "Xtensa:LE:32:esp32s3"
+base = "0x40000000"
+image = "xtensa_esp32s3_pie_fused"
+
+[[family.function]]
+test = "esp32s3_pie_fused_load_decompiles"
+address = "0x40000000"
+expect = [
+    "= ee_vadds_s16(",
+    "v2 = a0 + 0x10;",
+]
+
 # CMPccXADD and ENQCMD in the 64-bit x86 language: a compare-and-add on memory and an
 # enqueue store whose status is ZF (cas: mov rax,rsi; cmpexadd [rdi],rax,rdx; ret).
 [[family]]
@@ -1234,38 +1077,21 @@ test = "x86_enqcmd_status_is_zf"
 address = "0x10"
 expect = ["return enqcmd(a0,*a1);"]
 
+# The eZ80 ADL-mode language decompiles a hand-assembled add/compare/store routine.
 [[family]]
-name = "xtensa_esp32s3_pie_fused"
-language = "Xtensa:LE:32:esp32s3"
-base = "0x40000000"
-image = "xtensa_esp32s3_pie_fused"
+name = "ez80"
+language = "eZ80:LE:24:ADL"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/ez80/add_store.bin"
 
 [[family.function]]
-test = "esp32s3_pie_fused_load_decompiles"
-address = "0x40000000"
+test = "ez80_adl_add_compare_store_decompiles"
+address = "0x0"
 expect = [
-    "= ee_vadds_s16(",
-    "v2 = a0 + 0x10;",
-]
-
-# The Xtensa ESP32-S3 language decodes the PIE (EE.*) vector instructions: a loop of two
-# post-incrementing 128-bit loads, a saturating byte add and a store, and a 32-bit fused
-# add-and-load. The base instructions were assembled with llvm-mc, the EE.* words encoded from
-# the field layout of Espressif's ESP32-S3 TableGen description.
-[[family]]
-name = "xtensa_esp32s3_pie_loop"
-language = "Xtensa:LE:32:esp32s3"
-base = "0x40000000"
-image = "xtensa_esp32s3_pie_loop"
-
-[[family.function]]
-test = "esp32s3_pie_vector_loop_decompiles"
-address = "0x40000000"
-expect = [
-    "a0 += 0x10;",
-    "a1 += 0x10;",
-    "*(char (*)[16])(a2 & 0xfffffff0) = ee_vadds_s8(*v1,*v2);",
-    "} while (a3);",
+    "if ((unsigned char)(dat_c000 + 3U) <= 0xf) {",  # the CP / JR NC test survives
+    "dat_8000 = dat_c000 + 3U;",  # the store to 0x8000
+    "return 5;",  # the taken path
+    "return 0;",  # the fall-back path
 ]
 
 # The Zilog Z380 language decompiles a hand-assembled add/compare/store routine.
@@ -1298,4 +1124,370 @@ expect = [
     "if (0x65 <= a0 + a1)",  # the ADD / CP / JR LE test survives
     "dat_2000 = a0 + a1;",  # the store to 0x2000
     "return;",  # the returns
+]
+
+# The SuperH SH-5 SHmedia language (written from the SH-5 CPU core architecture
+# manual) decompiles routines built with sh64-elf-as --abi=32 --little.
+[[family]]
+name = "sh5"
+language = "SH5:LE:64:SHmedia"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/sh5/funcs.bin"
+forbid = ["baddata"]
+
+# add r2,r3,r2; ptabs r18,tr0; blink tr0,r63
+[[family.function]]
+test = "sh5_add_and_return_through_r18"
+address = "0x1000"
+expect = [
+    "return a0 + a1;",
+]
+
+# pta 1f,tr0; bge r2,r3,tr0; or r3,r63,r2; 1: ptabs r18,tr0; blink tr0,r63
+[[family.function]]
+test = "sh5_pta_branch_signed_max"
+address = "0x1010"
+expect = [
+    "if (a0 < a1)",
+    "a0 = a1;",
+]
+
+# movi 0x1234,r1; shori 0x5678,r1; ld.l r1,0,r2; return
+[[family.function]]
+test = "sh5_movi_shori_absolute_load"
+address = "0x1030"
+expect = [
+    "dat_12345678",
+]
+
+# pta f_add,tr0; movi 7,r3; blink tr0,r18 (the tracked target makes it a direct call)
+[[family.function]]
+test = "sh5_pta_blink_is_a_direct_call"
+address = "0x1050"
+expect = [
+    "sub_1000(a0,7);",
+]
+
+# fadd.s fr0,fr1,fr0; return
+[[family.function]]
+test = "sh5_float_add"
+address = "0x1080"
+expect = [
+    "float sub_1080(float a0,float a1)",
+    "return a0 + a1;",
+]
+
+# The same routines built with sh64-elf-as --abi=32 --big.
+[[family]]
+name = "sh5-be"
+language = "SH5:BE:64:SHmedia"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/sh5/funcs_be.bin"
+forbid = ["baddata"]
+
+[[family.function]]
+test = "sh5_big_endian_max"
+address = "0x1010"
+expect = [
+    "if (a0 < a1)",
+]
+
+[[family.function]]
+test = "sh5_big_endian_direct_call"
+address = "0x1050"
+expect = [
+    "sub_1000(a0,7);",
+]
+# NEC V60/V70: hand-assembled stack-argument, loop/store, frame/call and 20-byte Format II images.
+[[family]]
+name = "v60"
+language = "V60:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/v60/mul_ret.bin"
+
+[[family.function]]
+test = "v60_mul_return_decompiles"
+address = "0x0"
+expect = ["return a0 * a1;"]  # mov.w 4[SP],R0; mul.w 8[SP],R0; rsr
+
+[[family]]
+name = "v60_sum_store"
+language = "V60:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/v60/sum_store.bin"
+
+[[family.function]]
+test = "v60_sum_loop_and_store_decompile"
+address = "0x0"
+expect = ["v1 += *a0;", "} while (a1);", "dat_200010 = v1;"]  # add.w [R1+],R0 / dbr loop, direct store
+
+[[family]]
+name = "v60_frame_call"
+language = "V60:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/v60/frame_call.bin"
+
+[[family.function]]
+test = "v60_caller_pushes_stack_arguments"
+address = "0x0"
+expect = ["sub_20(5,3);"]  # push/push/bsr
+
+[[family.function]]
+test = "v60_prepare_pushm_frame_reads_fp_arguments"
+address = "0x20"
+expect = ["return a0 + a1;"]  # prepare/pushm/popm/dispose/rsr
+
+[[family]]
+name = "v60_long_format_ii"
+language = "V60:LE:32:default"
+base = "0x0"
+image = "v60_long"
+
+[[family.function]]
+test = "v60_twenty_byte_instruction_decodes"
+address = "0x0"
+expect = ["*(unsigned int *)(dat_24 + 4) = *(unsigned int *)(dat_20 + 8);"]  # one 20-byte mov.w, two PC double displacements
+
+# DEC VAX: CALLS procedure with entry mask, (r1)+/sobgtr loop, extzv.
+[[family]]
+name = "vax_calls"
+language = "VAX:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/vax/calls.bin"
+
+[[family.function]]
+test = "vax_calls_caller"
+address = "0x0"
+expect = ["sub_20(5,3);"]  # pushl #3; pushl #5; calls #2, sub
+
+[[family.function]]
+test = "vax_calls_procedure_reads_ap_arguments"
+address = "0x20"
+expect = ["return a1 + a0;"]  # entry mask; addl3 4(ap), 8(ap), r0; ret
+
+[[family]]
+name = "vax_sum_store"
+language = "VAX:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/vax/sum_store.bin"
+
+[[family.function]]
+test = "vax_sum_loop_and_store_decompile"
+address = "0x0"
+expect = ["v1 += *a0;", "} while (0 < a1);", "dat_200010 = v1;"]
+
+[[family]]
+name = "vax_extzv"
+language = "VAX:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/vax/extzv.bin"
+
+[[family.function]]
+test = "vax_extzv_decompiles"
+address = "0x0"
+expect = ["return a0 >> 4 & 0xff;"]
+
+# The Hitachi H8/500 languages (written from the H8/500 programming manual and MAME's
+# disassembler) decompile a hand-assembled raw image: ADD.W, CMP:I + BCC, a store to
+# @H'F000:16 and two returns.
+[[family]]
+name = "h8500"
+language = "H8500:BE:16:minimum"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/h8500/add_cmp_store.bin"
+forbid = ["baddata"]
+
+[[family.function]]
+test = "h8500_add_compare_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a0 + 3U <= 0xf)",  # ADD.W #3 then the CMP.W #0x10 / BCC test
+    "dat_f000 = a0 + 3U;",  # the MOV.W store to @H'F000:16
+    "return 5;",  # the fall-through path
+    "return 0;",  # the branch target
+]
+
+[[family.function]]
+test = "h8500_maximum_mode_decompiles"
+address = "0x0"
+language = "H8500:BE:24:maximum"
+expect = [
+    "if (a0 + 3U <= 0xf)",
+    "0xf000) = a0 + 3U;",  # the store goes through DP in maximum mode
+    "return 5;",
+    "return 0;",
+]
+
+# The Norsk Data ND-100 language (written from the ND-100 Reference Manual)
+# decompiles a hand-assembled, word-addressed raw image.
+[[family]]
+name = "nd100"
+language = "ND100:BE:16:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/nd100/funcs.bin"
+forbid = ["baddata"]
+
+# RADD ST DA; EXIT
+[[family.function]]
+test = "nd100_rop_add"
+address = "0x10"
+expect = [
+    "return a0 + a1;",
+]
+
+# SKP IF DA GRE ST; COPY ST DA; EXIT
+[[family.function]]
+test = "nd100_skip_signed_max"
+address = "0x14"
+expect = [
+    "if (a0 < a1)",
+    "a0 = a1;",
+]
+
+# LDA *+40; ADD *+40; STA *+40; EXIT (words; symbols print bytes)
+[[family.function]]
+test = "nd100_p_relative_load_add_store"
+address = "0x20"
+expect = [
+    "dat_84 = dat_80 + dat_82;",
+]
+
+# COPY SL DA; STA save; SAA 5; SAT 7; JPL sub; LDX save; COPY SX DL; EXIT
+[[family.function]]
+test = "nd100_jpl_call"
+address = "0x28"
+expect = [
+    "sub_10(5,7);",
+]
+
+# SHA SHR 3; EXIT
+[[family.function]]
+test = "nd100_arithmetic_shift"
+address = "0x38"
+expect = [
+    "return a0 >> 3;",
+]
+
+# AAA -6; EXIT
+[[family.function]]
+test = "nd100_add_argument"
+address = "0x3c"
+expect = [
+    "return a0 + -6;",
+]
+
+# The AMD GCN5 (gfx900) language decompiles clang-built OpenCL kernels from a raw image:
+# SMEM kernel-argument loads, a VOPC compare feeding s_and_saveexec / s_cbranch_execz,
+# global loads and stores, v_mad_u64_u32, and a scalar loop with s_add_u32/s_addc_u32.
+[[family]]
+name = "amdgpu"
+language = "AMDGPU:LE:64:GFX9"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx900_kernels.bin"
+
+# `scale`: `if (i < n) out[i] = in[i] * 3 + k;` with the kernel arguments behind s[4:5]
+# and the lane id in v0; EXEC is 1 on entry, so the saveexec mask folds into the branch.
+[[family.function]]
+test = "amdgpu_guarded_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a5 < (int)((unsigned long)a2[2] >> 0x20))",
+    "* 3 + (int)a2[2];",
+]
+
+# `sum`: a scalar loop over `in` with the 64-bit pointer split across s2/s3.
+[[family.function]]
+test = "amdgpu_scalar_loop_decompiles"
+address = "0x100"
+expect = [
+    "while (v5) {",
+    "v4 = *(int *)CONCAT44(v3,v2) + v4;",
+    "v5 -= 1;",
+    "*a2->field_0x0 = v4;",
+]
+
+# The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:
+# fast locals become parameters and variables, the value stack folds away, and objects,
+# names and operators are named user-ops (fixtures from `fixtures/cpython/source.py`).
+[[family]]
+name = "cpython"
+language = "CPython:LE:32:3.12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/cpython/loops.bin"
+
+# `f`: a for loop over `range(n)` with a `continue`, then a while loop, from FOR_ITER,
+# POP_JUMP_IF_FALSE, JUMP_BACKWARD, BINARY_OP and COMPARE_OP.
+[[family.function]]
+test = "cpython_loops_decompile"
+address = "0x0"
+expect = [
+    "v1 = py_iter(py_call(0,py_global(0),a0));",
+    "while (!(bool)py_iter_done(v1)) {",
+    "v4 = py_inplace_add(v4,v3);",
+    "v4 = py_inplace_subtract(v4,py_const(4));",
+    "return v4;",
+]
+
+[[family]]
+name = "cpython"
+language = "CPython:LE:32:3.12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/cpython/attrs.bin"
+
+# `g`: POP_JUMP_IF_NOT_NONE, LOAD_ATTR and BINARY_SUBSCR with their inline caches.
+[[family.function]]
+test = "cpython_attrs_decompile"
+address = "0x0"
+expect = [
+    "if ((bool)py_is_none(a0))",
+    "v2 = py_getattr(a0,0);",
+    "return py_add(v2,py_multiply(v1,py_const(2)));",
+]
+
+# The native KVX kv3-1 language decompiles a raw image of hand-assembled
+# bundles: a counted loop, a call whose immediate extension syllable sits at the
+# bundle tail, a compare and conditional move, an in-bundle register swap
+# (parallel reads) and a scaled indexed load.
+[[family]]
+name = "kvx"
+language = "KVX:LE:64:kv3-1"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/kvx/bundles.bin"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_syllable"]
+
+[[family.function]]
+test = "kvx_counted_loop_decompiles"
+address = "0x0"
+expect = [
+    "while",  # the load loop is recovered
+    "+= *",  # the loop accumulates loads
+]
+
+[[family.function]]
+test = "kvx_extension_syllable_reaches_its_instruction"
+address = "0x24"
+expect = [
+    "sub_0(5,0x123456789) + 100000",  # register arguments, the 43-bit immediate and the r0 result
+]
+
+[[family.function]]
+test = "kvx_compare_and_conditional_move_decompile"
+address = "0x58"
+expect = [
+    "a0 < a1",  # compd.lt feeds cmoved.dnez
+]
+
+[[family.function]]
+test = "kvx_bundle_reads_before_it_writes"
+address = "0x64"
+expect = [
+    "return a1 - a0;",  # the in-bundle swap reads old values
+]
+
+[[family.function]]
+test = "kvx_scaled_index_load_decompiles"
+address = "0x74"
+expect = [
+    "a1 + a0 * 8",  # ld.xs scales the index
 ]

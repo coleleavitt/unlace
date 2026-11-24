@@ -17,3 +17,5 @@
   `or1k.o` and `xtensa.o` are not kept, because their ET_REL relocations are not applied yet.
 - `sparc64_float.o`: `zig cc -target sparc64-freestanding -O2 -c sparc64_float.c`, single and double float
   returns under the V9 ABI (#765).
+- `sm80.o`: `clang --target=nvptx64-nvidia-cuda -march=sm_80 -O2 -fno-inline-functions -S fx.c` (LLVM 22),
+  then `ptxas -c -arch=sm_80 -O3` (CUDA 13).

@@ -4515,6 +4515,25 @@ tier = "transform"
 symptoms = "switch with more than 1024 cases prints as a computed call (jump-as-call)|state-machine function with a giant jump table decompiles to a stub|functions --summary lists a switch over jumptablemax|xrefs miss references made from switch cases past the first 1024"
 
 [[settable]]
+option = "jumptablework"
+values = "off|<n>"
+default = "250000"
+destructive = false
+phase = "P2"
+subphase = "switch-model"
+rewind = "P2"
+strength = "HARD"
+issue = "unlace-robustness-sweep"
+summary = "The jump-table recovery work one function's flow may do, in instructions summed over its recoveries. Each indirect jump is recovered by a partial decompile of everything flowed so far, so a function whose recovered tables lead into more code with more dispatches pays for all of it again at every one: an obfuscated arm64e image that dispatches each branch through a shared table of signed pointers (braa on an entry indexed by (cond * k) ^ c) flows a 972-byte function past 20,000 instructions and never finishes. FlowInfo::jt_work_exhausted adds the instructions flowed so far before each recovery; past the bound the remaining indirect jumps of the function are not recovered and print as computed calls (jump-as-call), with one warning naming the option. off removes the bound."
+use_when = "On by default at 250000. Raise it, or set it off, when a large function with many switches warns that the jump-table recovery work bound was reached and its later switches print as computed calls. Lower it to make a function with an exploding dispatch finish sooner."
+example = "option jumptablework off"
+source_decompiler = "kuna"
+inspiration = "Robustness sweep (notes/robustness-sweep.md): 18 functions of libCoreKE.dylib (iOS 16.4.1) ran out of a 30 s budget in jump-table recovery"
+change_kind = "performance"
+tier = "transform"
+symptoms = "a small function times out during jump-table recovery|decompile-all reports a budget error during jump-table recovery at an address outside the function|an obfuscated dispatcher function never finishes|a warning says the jump-table recovery work bound was reached"
+
+[[settable]]
 option = "stackguard"
 values = "on|off"
 default = "on"

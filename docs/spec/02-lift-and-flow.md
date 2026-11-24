@@ -2602,6 +2602,17 @@ table reached once the deadline has passed is not attempted — its BRANCHIND is
 truncated like any unrecovered one, so the loop drains instead of staging more
 sub-decompilations — and the budget error names the step and the indirect
 jump's address. Without a budget each probe is one thread-local read.
+(kuna `jumptablework`, default 250000) The loop is also bounded in work.
+Each recovery costs the number of instructions flowed when it starts, because
+its partial decompile covers all of them, and
+`flow.rs (FlowInfo::jt_work_exhausted)` adds that to the function's sum
+before each table. Once the sum passes the bound, that table and every later one
+are not attempted. They are truncated like an unrecovered table, and one warning
+at the first of them names the option. This is what stops a function whose
+recovered tables lead into more and more code: an obfuscated arm64e image that
+dispatches every branch through a shared table of signed pointers grows a
+972-byte function past 20,000 flowed instructions, one recovery at a time.
+`off` removes the bound.
 Two pre-checks bound the attempt:
 `funcdata_block.rs (Funcdata::early_jump_table_fail)` backtracks up to 8 ops
 through value-preserving arithmetic looking for a computation the recovery can

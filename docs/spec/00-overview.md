@@ -3307,6 +3307,23 @@ Kuna enters and leaves its scopes inside each synchronous call; a caller that
 enters one itself must not hold it across an `.await` on a shared executor
 thread.
 
+### Determinism
+
+The same input gives the same output, byte for byte: across processes (each std `HashMap` and
+`HashSet` draws a new hash seed per process), and across `--jobs` counts on the surfaces whose
+contract says so. No pass may let the iteration order of a std hash container reach the output:
+it iterates a `BTreeMap`/`BTreeSet` or an `FxHashMap` (fixed hasher), or sorts what it collects
+before using it. `scripts/check_determinism.py` lints for new unordered iterations and decompiles
+a fixed corpus twice and under two `--jobs` counts (docs/dev-setup.md, "Determinism"). Four places
+were made ordered when the lint landed: `PrintC` combines the source comments of locals that
+read through one declaration in high-variable order (`crates/unlace-emit/src/p9_emit/printc.rs`);
+`castobject` visits the frame offsets it narrows in offset order, since each one rewrites the
+frame hints the next one checks (`crates/unlace-bandb-base/src/p6_variables/kuna_castobject.rs`);
+the wide-join evidence takes an earlier view's entries in key order, so its shared cache fills the
+same way each run (`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin/evidence.rs`); and the
+PLT-stub walk files the rows of chains still open at the end of a body in address order
+(`crates/unlace-analysis/src/listing/kuna_pltstub.rs`).
+
 ## 0.3 The IR substrate
 
 Code-type identity distinguishes indirect value parameters from ordinary

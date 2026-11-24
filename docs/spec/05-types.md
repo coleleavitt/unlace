@@ -4119,9 +4119,12 @@ off; `pairparam` must be on),
 low-word `INT_EQUAL`/`INT_NOTEQUAL`, when one operand is an input word with an
 unlocked input word above it (the same `input_above` test) and the condition
 of a CBRANCH next to the one the compare decides compares that high word with
-the high word of the other operand: for an ordered low compare, an ordered
-compare (signed or not) in one of the one or two blocks reached by walking up
-single-entry edges; for an equality, an equality in the block directly above
+the high word of the other operand: for an ordered low compare, the high words compared in both
+of the two blocks reached by walking up single-entry edges, at least one of
+them an ordered compare (signed or not): the three-way shape `hi < ...; hi !=
+...; lo < ...` that `LessThreeWay` folds, never one bound per word (betaflight's
+`spektrumTmTextGenPutChar(col, row, c)` tests `row <= 8 && col <= 0xb` and
+was read as one `unsigned long long`); for an equality, an equality in the block directly above
 (along a single-entry edge) or in a single-entry successor. The other operand's
 words must be a pair (`is_pair`: two adjacent input words or the SUBPIECEs of
 one whole), or, for an ordered compare only, two constants. The same low-word

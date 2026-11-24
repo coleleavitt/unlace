@@ -283,7 +283,9 @@ fn bootstrap(fix: &Fixture) -> Result<Bootstrap, String> {
     let mut arch = capability.build_architecture(corpus_str, "");
 
     // --- 3. Parse the corpus + extract <binaryimage>; build the loader -----
-    let xml = std::fs::read(&corpus_path).map_err(|e| format!("read corpus: {e}"))?;
+    let xml = unlace_stagefile::read_as_xml(&corpus_path)
+        .map_err(|e| format!("read corpus: {e}"))?
+        .into_bytes();
     let mut store = DocumentStorage::new();
     let doc_root = store
         .parse_document(&xml)

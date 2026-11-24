@@ -11,11 +11,11 @@ define register offset=0x4 size=1 [ D0E _ _ _ _ _ _ _ D1E _ _ _ _ _ _ _ D2E _ _ 
 define register offset=0x100 size=4 [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 ];
 define register offset=0x100 size=2 [ R0L R0H R1L R1H R2L R2H R3L R3H R4L R4H R5L R5H R6L R6H R7L R7H R8L R8H R9L R9H R10L R10H R11L R11H R12L R12H R13L R13H R14L R14H R15L R15H ];
 define register offset=0x200 size=4 [ N0 N1 N2 N3 M0 M1 M2 M3 B0 B1 B2 B3 B4 B5 B6 B7 SP NSP ESP OSP PC SR EMR VBA MCTL SA0 SA1 SA2 SA3 LC0 LC1 LC2 LC3 ];
-define register offset=0x300 size=1 [ T BC Tn TT1_0 TT1_1 TT1_2 TT1_3 TT1_4 TT1_5 ];
+define register offset=0x300 size=1 [ T BC Tn TT1_0 TT1_1 TT1_2 TT1_3 TT1_4 TT1_5 CNTF ];
 define register offset=0x400 size=8 [ TT8_0 TT8_1 TT8_2 TT8_3 TT8_4 TT8_5 ];
 define register offset=0x480 size=4 [ TT4_0 TT4_1 TT4_2 TT4_3 TT4_4 TT4_5 BRT ];
 define register offset=0x4c0 size=2 [ TT2_0 TT2_1 TT2_2 TT2_3 TT2_4 TT2_5 ];
-define register offset=0x500 size=16 [ contextreg ];
+define register offset=0x500 size=32 [ contextreg ];
 
 define context contextreg
   brtgt = (0,31)
@@ -35,6 +35,24 @@ define context contextreg
   pr = (67,68)
   brk = (69,71)
   brd = (72,72)
+  lpa = (73,73)
+  lpb = (74,74)
+  cnt = (75,75)
+  cntd = (83,83)
+  lfm = (76,79)
+  lf3 = (76,76)
+  lf2 = (77,77)
+  lf1 = (78,78)
+  lf0 = (79,79)
+  slf = (80,80)
+  lpend = (81,81) noflow
+  lpb1 = (82,82) noflow
+  lpk = (84,85) noflow
+  lpsa = (96,127) noflow
+  sa0 = (128,159)
+  sa1 = (160,191)
+  sa2 = (192,223)
+  sa3 = (224,255)
 ;
 
 define token w0(16)
@@ -74,6 +92,7 @@ define token w0(16)
   w0_6_7 = (6,7)
   w0_6_8 = (6,8)
   w0_6_9 = (6,9)
+  w0_6_15 = (6,15)
   w0_7_7 = (7,7)
   w0_7_8 = (7,8)
   w0_7_9 = (7,9)
@@ -127,6 +146,7 @@ define token w2(16)
 ;
 
 define pcodeop invalid_word;
+define pcodeop sc_active_lc;
 define pcodeop sc_adc;
 define pcodeop sc_add2;
 define pcodeop sc_addl1a;
@@ -149,8 +169,6 @@ define pcodeop sc_bmtstc_w;
 define pcodeop sc_bmtsts;
 define pcodeop sc_bmtsts_w;
 define pcodeop sc_clb;
-define pcodeop sc_cont;
-define pcodeop sc_contd;
 define pcodeop sc_debug;
 define pcodeop sc_debugev;
 define pcodeop sc_deceq;
@@ -275,6 +293,16 @@ PRED: is pr=0 { export 1:1; }
 PRED: is pr=1 { export T; }
 PRED: is pr=2 { local l_f:1 = !T; export l_f; }
 PRED: is pr=3 { export 1:1; }
+ALC: is lf3=0 & lf2=0 & lf1=0 & lf0=1 { export LC0; }
+SAK0: is sa0 { export *[ram]:4 sa0; }
+ALC: is lf3=0 & lf2=0 & lf1=1 { export LC1; }
+SAK1: is sa1 { export *[ram]:4 sa1; }
+ALC: is lf3=0 & lf2=1 { export LC2; }
+SAK2: is sa2 { export *[ram]:4 sa2; }
+ALC: is lf3=1 { export LC3; }
+SAK3: is sa3 { export *[ram]:4 sa3; }
+ALC: is lfm=0 { local l_lc:4 = sc_active_lc(); export l_lc; }
+LPSA: is lpsa { export *[ram]:4 lpsa; }
 
 r_Dn_FFF_E3_x_8_079: "D0" is w0_7_9=0 & x3=0 { export D0; }
 r_Dn_FFF_E3_x_8_079: "D8" is w0_7_9=0 & x3=1 { export D8; }
@@ -1424,6 +1452,30 @@ I1: "DI" is w0_0_15=0x9f7d [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 
 I1: "DIV" r_Da_JJJ_E1_x_8_002 "," r_Dn_FFF_E3_x_8_079 is w0_15_15=0x0 & w0_10_13=0xc & w0_3_6=0xa & w0_14_14 & r_Dn_FFF_E3_x_8_079 & r_Da_JJJ_E1_x_8_002 [ x1 = (pe >> (11 - 3 * di)) & 1; x2 = (pe >> (10 - 3 * di)) & 1; x3 = (pe >> (9 - 3 * di)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + (di & 1)))) & 3; di = di + 1; pos3 = pos3 + 1; rem = rem - 1; slast = w0_14_14; ] {  sc_div(r_Dn_FFF_E3_x_8_079, r_Da_JJJ_E1_x_8_002); }
 I1: "DMACSS" r_DcDd_ee_E2_0_8_001 "," r_DcDd_ee_E1_1_8_001 "," r_Dn_FFF_E3_x_8_079 is w0_15_15=0x0 & w0_10_13=0xb & w0_2_6=0x1d & w0_14_14 & r_DcDd_ee_E2_0_8_001 & r_DcDd_ee_E1_1_8_001 & r_Dn_FFF_E3_x_8_079 [ x1 = (pe >> (11 - 3 * di)) & 1; x2 = (pe >> (10 - 3 * di)) & 1; x3 = (pe >> (9 - 3 * di)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + (di & 1)))) & 3; di = di + 1; pos3 = pos3 + 1; rem = rem - 1; slast = w0_14_14; ] {  sc_dmacss(r_DcDd_ee_E2_0_8_001, r_DcDd_ee_E1_1_8_001, r_Dn_FFF_E3_x_8_079); }
 I1: "DMACSU" r_DcDd_ee_E2_0_8_001 "," r_DcDd_ee_E1_1_8_001 "," r_Dn_FFF_E3_x_8_079 is w0_15_15=0x0 & w0_10_13=0xb & w0_2_6=0x1c & w0_14_14 & r_DcDd_ee_E2_0_8_001 & r_DcDd_ee_E1_1_8_001 & r_Dn_FFF_E3_x_8_079 [ x1 = (pe >> (11 - 3 * di)) & 1; x2 = (pe >> (10 - 3 * di)) & 1; x3 = (pe >> (9 - 3 * di)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + (di & 1)))) & 3; di = di + 1; pos3 = pos3 + 1; rem = rem - 1; slast = w0_14_14; ] {  sc_dmacsu(r_DcDd_ee_E2_0_8_001, r_DcDd_ee_E1_1_8_001, r_Dn_FFF_E3_x_8_079); }
+I1: "DOEN0" v_u6 is w0_6_15=0x241 & w0_0_5 & PRED [ v_u6 = (w0_0_5 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 1; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC0 = v_u6; <skip> }
+I1: "DOEN1" v_u6 is w0_6_15=0x245 & w0_0_5 & PRED [ v_u6 = (w0_0_5 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 2; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC1 = v_u6; <skip> }
+I1: "DOEN2" v_u6 is w0_6_15=0x249 & w0_0_5 & PRED [ v_u6 = (w0_0_5 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 4; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC2 = v_u6; <skip> }
+I1: "DOEN3" v_u6 is w0_6_15=0x24d & w0_0_5 & PRED [ v_u6 = (w0_0_5 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 8; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC3 = v_u6; <skip> }
+I1: "DOEN0" r_DR_HHHH_h_x_4_003 is w0_4_15=0x984 & r_DR_HHHH_h_x_4_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 1; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC0 = r_DR_HHHH_h_x_4_003; <skip> }
+I1: "DOEN0" r_DR_HHHH_h_x_8_003 is w0_4_15=0x984 & r_DR_HHHH_h_x_8_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 1; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC0 = r_DR_HHHH_h_x_8_003:4; <skip> }
+I1: "DOEN1" r_DR_HHHH_h_x_4_003 is w0_4_15=0x994 & r_DR_HHHH_h_x_4_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 2; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC1 = r_DR_HHHH_h_x_4_003; <skip> }
+I1: "DOEN1" r_DR_HHHH_h_x_8_003 is w0_4_15=0x994 & r_DR_HHHH_h_x_8_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 2; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC1 = r_DR_HHHH_h_x_8_003:4; <skip> }
+I1: "DOEN2" r_DR_HHHH_h_x_4_003 is w0_4_15=0x9a4 & r_DR_HHHH_h_x_4_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 4; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC2 = r_DR_HHHH_h_x_4_003; <skip> }
+I1: "DOEN2" r_DR_HHHH_h_x_8_003 is w0_4_15=0x9a4 & r_DR_HHHH_h_x_8_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 4; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC2 = r_DR_HHHH_h_x_8_003:4; <skip> }
+I1: "DOEN3" r_DR_HHHH_h_x_4_003 is w0_4_15=0x9b4 & r_DR_HHHH_h_x_4_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 8; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC3 = r_DR_HHHH_h_x_4_003; <skip> }
+I1: "DOEN3" r_DR_HHHH_h_x_8_003 is w0_4_15=0x9b4 & r_DR_HHHH_h_x_8_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 8; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC3 = r_DR_HHHH_h_x_8_003:4; <skip> }
+I1: "DOENSH0" v_u6 is w0_6_15=0x251 & w0_0_5 & PRED [ v_u6 = (w0_0_5 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 1; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC0 = v_u6; <skip> }
+I1: "DOENSH1" v_u6 is w0_6_15=0x255 & w0_0_5 & PRED [ v_u6 = (w0_0_5 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 2; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC1 = v_u6; <skip> }
+I1: "DOENSH2" v_u6 is w0_6_15=0x259 & w0_0_5 & PRED [ v_u6 = (w0_0_5 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 4; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC2 = v_u6; <skip> }
+I1: "DOENSH3" v_u6 is w0_6_15=0x25d & w0_0_5 & PRED [ v_u6 = (w0_0_5 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 8; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC3 = v_u6; <skip> }
+I1: "DOENSH0" r_DR_HHHH_h_x_4_003 is w0_4_15=0x9c4 & r_DR_HHHH_h_x_4_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 1; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC0 = r_DR_HHHH_h_x_4_003; <skip> }
+I1: "DOENSH0" r_DR_HHHH_h_x_8_003 is w0_4_15=0x9c4 & r_DR_HHHH_h_x_8_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 1; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC0 = r_DR_HHHH_h_x_8_003:4; <skip> }
+I1: "DOENSH1" r_DR_HHHH_h_x_4_003 is w0_4_15=0x9d4 & r_DR_HHHH_h_x_4_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 2; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC1 = r_DR_HHHH_h_x_4_003; <skip> }
+I1: "DOENSH1" r_DR_HHHH_h_x_8_003 is w0_4_15=0x9d4 & r_DR_HHHH_h_x_8_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 2; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC1 = r_DR_HHHH_h_x_8_003:4; <skip> }
+I1: "DOENSH2" r_DR_HHHH_h_x_4_003 is w0_4_15=0x9e4 & r_DR_HHHH_h_x_4_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 4; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC2 = r_DR_HHHH_h_x_4_003; <skip> }
+I1: "DOENSH2" r_DR_HHHH_h_x_8_003 is w0_4_15=0x9e4 & r_DR_HHHH_h_x_8_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 4; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC2 = r_DR_HHHH_h_x_8_003:4; <skip> }
+I1: "DOENSH3" r_DR_HHHH_h_x_4_003 is w0_4_15=0x9f4 & r_DR_HHHH_h_x_4_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 8; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC3 = r_DR_HHHH_h_x_4_003; <skip> }
+I1: "DOENSH3" r_DR_HHHH_h_x_8_003 is w0_4_15=0x9f4 & r_DR_HHHH_h_x_8_003 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; lfm = lfm | 8; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC3 = r_DR_HHHH_h_x_8_003:4; <skip> }
 I1: "EI" is w0_0_15=0x9f7c [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; ] {  sc_ei(); }
 I1: "EOR" r_Da_JJJ_E1_x_8_002 "," r_Dn_FFF_E3_x_8_079 is w0_10_15=0x37 & w0_3_6=0x2 & r_Da_JJJ_E1_x_8_002 & r_Dn_FFF_E3_x_8_079 & TT8 & PRED [ x1 = (pe >> (11 - 3 * di)) & 1; x2 = (pe >> (10 - 3 * di)) & 1; x3 = (pe >> (9 - 3 * di)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + (di & 1)))) & 3; di = di + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; ] { if (!PRED) goto <skip>; TT8 = r_Dn_FFF_E3_x_8_079 ^ r_Da_JJJ_E1_x_8_002; <skip> }
 I1: "ILLEGAL" is w0_0_15=0x9e7c [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; ] {  sc_illegal(); }
@@ -1607,7 +1659,7 @@ I1: "ZXT.W" r_Da_JJJ_h_x_8_002 "," r_Dn_FFF_h_x_8_079 is w0_15_15=0x0 & w0_10_13
 I1: "ZXT.L" r_Dn_FFF_h_x_8_079 is w0_15_15=0x0 & w0_10_13=0x9 & w0_0_6=0x60 & w0_14_14 & r_Dn_FFF_h_x_8_079 & TT8 & PRED [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = w0_14_14; ] { if (!PRED) goto <skip>; TT8 = zext(r_Dn_FFF_h_x_8_079:4); <skip> }
 I1: "ZXTA.B" r_rx_rrrr_h_x_4_003 "," r_Rx_RRRR_H_x_4_0811 is w0_12_15=0xe & w0_4_7=0xd & r_rx_rrrr_h_x_4_003 & r_Rx_RRRR_H_x_4_0811 [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; ] {  sc_zxta_b(r_rx_rrrr_h_x_4_003, r_Rx_RRRR_H_x_4_0811); }
 I1: "ZXTA.W" r_Rx_RRRR_H_x_4_0811 is w0_12_15=0xe & w0_0_7=0xf8 & r_Rx_RRRR_H_x_4_0811 [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 1; slast = 1; ] {  sc_zxta_w(r_Rx_RRRR_H_x_4_0811); }
-I1: "[1w]" is w0_12_15=0x9 & w0_8_8=0 & w0_5_7=0x6 & w0_9_11 & w0_0_2 [ pfx = 1; rem = w0_9_11; ccc = w0_0_2; ] { }
+I1: "[1w]" is w0_12_15=0x9 & w0_8_8=0 & w0_5_7=0x6 & w0_9_11 & w0_0_2 & w0_3_3 & w0_4_4 [ pfx = 1; rem = w0_9_11; ccc = w0_0_2; lpa = w0_3_3; lpb = w0_4_4; ] { }
 I1: "?invalid" is w0_0_15 [ slast = 1; rem = 0; ] { invalid_word(); }
 IW1: is w0_15_15=0x0 & w0_10_13=0x9 & w0_0_6=0x66 & w0_14_14 & r_Dn_FFF_E3_x_8_079 & TT8 & PRED { if (!PRED) goto <skip>; r_Dn_FFF_E3_x_8_079 = TT8; <skip> }
 IW1: is w0_15_15=0x0 & w0_10_13=0xb & w0_0_7=0x7a & w0_14_14 & r_DcDd_ee_E1_0_8_089 & r_DcDd_ee_E3_1_8_089 {  }
@@ -1657,6 +1709,30 @@ IW1: is w0_0_15=0x9f7d {  }
 IW1: is w0_15_15=0x0 & w0_10_13=0xc & w0_3_6=0xa & w0_14_14 & r_Dn_FFF_E3_x_8_079 & r_Da_JJJ_E1_x_8_002 {  }
 IW1: is w0_15_15=0x0 & w0_10_13=0xb & w0_2_6=0x1d & w0_14_14 & r_DcDd_ee_E2_0_8_001 & r_DcDd_ee_E1_1_8_001 & r_Dn_FFF_E3_x_8_079 {  }
 IW1: is w0_15_15=0x0 & w0_10_13=0xb & w0_2_6=0x1c & w0_14_14 & r_DcDd_ee_E2_0_8_001 & r_DcDd_ee_E1_1_8_001 & r_Dn_FFF_E3_x_8_079 {  }
+IW1: is w0_6_15=0x241 & w0_0_5 & PRED {  }
+IW1: is w0_6_15=0x245 & w0_0_5 & PRED {  }
+IW1: is w0_6_15=0x249 & w0_0_5 & PRED {  }
+IW1: is w0_6_15=0x24d & w0_0_5 & PRED {  }
+IW1: is w0_4_15=0x984 & r_DR_HHHH_h_x_4_003 & PRED {  }
+IW1: is w0_4_15=0x984 & r_DR_HHHH_h_x_8_003 & PRED {  }
+IW1: is w0_4_15=0x994 & r_DR_HHHH_h_x_4_003 & PRED {  }
+IW1: is w0_4_15=0x994 & r_DR_HHHH_h_x_8_003 & PRED {  }
+IW1: is w0_4_15=0x9a4 & r_DR_HHHH_h_x_4_003 & PRED {  }
+IW1: is w0_4_15=0x9a4 & r_DR_HHHH_h_x_8_003 & PRED {  }
+IW1: is w0_4_15=0x9b4 & r_DR_HHHH_h_x_4_003 & PRED {  }
+IW1: is w0_4_15=0x9b4 & r_DR_HHHH_h_x_8_003 & PRED {  }
+IW1: is w0_6_15=0x251 & w0_0_5 & PRED {  }
+IW1: is w0_6_15=0x255 & w0_0_5 & PRED {  }
+IW1: is w0_6_15=0x259 & w0_0_5 & PRED {  }
+IW1: is w0_6_15=0x25d & w0_0_5 & PRED {  }
+IW1: is w0_4_15=0x9c4 & r_DR_HHHH_h_x_4_003 & PRED {  }
+IW1: is w0_4_15=0x9c4 & r_DR_HHHH_h_x_8_003 & PRED {  }
+IW1: is w0_4_15=0x9d4 & r_DR_HHHH_h_x_4_003 & PRED {  }
+IW1: is w0_4_15=0x9d4 & r_DR_HHHH_h_x_8_003 & PRED {  }
+IW1: is w0_4_15=0x9e4 & r_DR_HHHH_h_x_4_003 & PRED {  }
+IW1: is w0_4_15=0x9e4 & r_DR_HHHH_h_x_8_003 & PRED {  }
+IW1: is w0_4_15=0x9f4 & r_DR_HHHH_h_x_4_003 & PRED {  }
+IW1: is w0_4_15=0x9f4 & r_DR_HHHH_h_x_8_003 & PRED {  }
 IW1: is w0_0_15=0x9f7c {  }
 IW1: is w0_10_15=0x37 & w0_3_6=0x2 & r_Da_JJJ_E1_x_8_002 & r_Dn_FFF_E3_x_8_079 & TT8 & PRED { if (!PRED) goto <skip>; r_Dn_FFF_E3_x_8_079 = TT8; <skip> }
 IW1: is w0_0_15=0x9e7c {  }
@@ -1894,14 +1970,27 @@ I2: "BMTSTS.W" v_u16 "," "(SP-" v_u5 ")" is w0_8_15=0x5 & w0_5_7 & w0_0_4 ; w1_1
 I2: "BMTSTS.W" v_u16 "," "(" r_Rn_RRR_H_x_4_002 ")" is w0_8_15=0x15 & w0_3_4=0x1 & w0_5_7 & r_Rn_RRR_H_x_4_002 ; w1_13_15=0x5 & w1_0_12 [ v_u16 = (w0_5_7 << 13) | (w1_0_12 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] { local l_c0:4 = v_u16; local l_c1:4 = v_u16; sc_bmtsts_w(r_Rn_RRR_H_x_4_002, l_c0, l_c1); }
 I2: "BRA" v_displacement is w0_12_15=0x2 & w0_8_10=0x1 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w0_11_11 << 20) | (w0_0_2 << 17) | (w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x100000) - 0x100000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; brk = 1; brd = 0; brtgt = inst_start + ((((w0_11_11 << 20) | (w0_0_2 << 17) | (w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x100000) - 0x100000); ] {  }
 I2: "BRAD" v_displacement is w0_12_15=0x2 & w0_8_10=0x0 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w0_11_11 << 19) | (w0_0_2 << 16) | (w1_0_0 << 15) | (w0_5_7 << 12) | (w1_1_12 << 0)) $xor 0x80000) - 0x80000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; brk = 1; brd = 1; brtgt = inst_start + ((((w0_11_11 << 19) | (w0_0_2 << 16) | (w1_0_0 << 15) | (w0_5_7 << 12) | (w1_1_12 << 0)) $xor 0x80000) - 0x80000); ] {  }
+I2: "BREAK" v_displacement is w0_8_15=0x20 & w0_0_4=0x3 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; brk = 1; brd = 0; brtgt = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); ] {  }
 I2: "BSR" v_displacement is w0_12_15=0x2 & w0_8_10=0x3 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w0_11_11 << 20) | (w0_0_2 << 17) | (w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x100000) - 0x100000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; brk = 3; brd = 0; brtgt = inst_start + ((((w0_11_11 << 20) | (w0_0_2 << 17) | (w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x100000) - 0x100000); ] {  }
 I2: "BSRD" v_displacement is w0_12_15=0x2 & w0_8_10=0x2 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w0_11_11 << 20) | (w0_0_2 << 17) | (w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x100000) - 0x100000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; brk = 3; brd = 1; brtgt = inst_start + ((((w0_11_11 << 20) | (w0_0_2 << 17) | (w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x100000) - 0x100000); ] {  }
 I2: "BT" v_displacement is w0_12_15=0x2 & w0_8_10=0x5 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w0_11_11 << 20) | (w0_0_2 << 17) | (w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x100000) - 0x100000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; brk = 2; brd = 0; brtgt = inst_start + ((((w0_11_11 << 20) | (w0_0_2 << 17) | (w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x100000) - 0x100000); ] { BC = T; }
 I2: "BTD" v_displacement is w0_12_15=0x2 & w0_8_10=0x4 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w0_11_11 << 20) | (w0_0_2 << 17) | (w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x100000) - 0x100000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; brk = 2; brd = 1; brtgt = inst_start + ((((w0_11_11 << 20) | (w0_0_2 << 17) | (w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x100000) - 0x100000); ] { BC = T; }
 I2: "CMPEQ.W" v_s16 "," r_Dn_FFF_E3_x_8_002 is w0_8_15=0x34 & w0_3_4=0x2 & w0_5_7 & r_Dn_FFF_E3_x_8_002 & TT1 & PRED ; w1_13_15=0x4 & w1_0_12 [ v_s16 = (((w0_5_7 << 13) | (w1_0_12 << 0)) $xor 0x8000) - 0x8000; x1 = (pe >> (11 - 3 * di)) & 1; x2 = (pe >> (10 - 3 * di)) & 1; x3 = (pe >> (9 - 3 * di)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + (di & 1)))) & 3; di = di + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] { if (!PRED) goto <skip>; TT1 = zext(r_Dn_FFF_E3_x_8_002 == v_s16); <skip> }
 I2: "CMPGT.W" v_s16 "," r_Dn_FFF_E3_x_8_002 is w0_8_15=0x36 & w0_3_4=0x2 & w0_5_7 & r_Dn_FFF_E3_x_8_002 & TT1 & PRED ; w1_13_15=0x4 & w1_0_12 [ v_s16 = (((w0_5_7 << 13) | (w1_0_12 << 0)) $xor 0x8000) - 0x8000; x1 = (pe >> (11 - 3 * di)) & 1; x2 = (pe >> (10 - 3 * di)) & 1; x3 = (pe >> (9 - 3 * di)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + (di & 1)))) & 3; di = di + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] { if (!PRED) goto <skip>; TT1 = zext(r_Dn_FFF_E3_x_8_002 s> v_s16); <skip> }
-I2: "CONT" v_displacement is w0_8_15=0x23 & w0_0_4=0x3 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] { local l_c0:4 = v_displacement; sc_cont(l_c0); }
-I2: "CONTD" v_displacement is w0_8_15=0x22 & w0_0_4=0x3 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] { local l_c0:4 = v_displacement; sc_contd(l_c0); }
+I2: "CONT" v_displacement is w0_8_15=0x23 & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; cnt = 1; cntd = 0; brtgt = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); ] { CNTF = PRED; }
+I2: "CONTD" v_displacement is w0_8_15=0x22 & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; cnt = 1; cntd = 1; brtgt = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); ] { CNTF = PRED; }
+I2: "DOEN0" v_u16 is w0_8_15=0x20 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 [ v_u16 = (w0_5_7 << 13) | (w1_0_12 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; lfm = lfm | 1; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC0 = v_u16; <skip> }
+I2: "DOEN1" v_u16 is w0_8_15=0x21 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 [ v_u16 = (w0_5_7 << 13) | (w1_0_12 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; lfm = lfm | 2; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC1 = v_u16; <skip> }
+I2: "DOEN2" v_u16 is w0_8_15=0x22 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 [ v_u16 = (w0_5_7 << 13) | (w1_0_12 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; lfm = lfm | 4; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC2 = v_u16; <skip> }
+I2: "DOEN3" v_u16 is w0_8_15=0x23 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 [ v_u16 = (w0_5_7 << 13) | (w1_0_12 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; lfm = lfm | 8; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC3 = v_u16; <skip> }
+I2: "DOENSH0" v_u16 is w0_8_15=0x24 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 [ v_u16 = (w0_5_7 << 13) | (w1_0_12 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; lfm = lfm | 1; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC0 = v_u16; <skip> }
+I2: "DOENSH1" v_u16 is w0_8_15=0x25 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 [ v_u16 = (w0_5_7 << 13) | (w1_0_12 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; lfm = lfm | 2; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC1 = v_u16; <skip> }
+I2: "DOENSH2" v_u16 is w0_8_15=0x26 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 [ v_u16 = (w0_5_7 << 13) | (w1_0_12 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; lfm = lfm | 4; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC2 = v_u16; <skip> }
+I2: "DOENSH3" v_u16 is w0_8_15=0x27 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 [ v_u16 = (w0_5_7 << 13) | (w1_0_12 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; lfm = lfm | 8; slf = 1; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (!PRED) goto <skip>; LC3 = v_u16; <skip> }
+I2: "DOSETUP0" v_displacement is w0_8_15=0x28 & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; sa0 = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); globalset(inst_next, sa0); ] { if (!PRED) goto <skip>; SA0 = v_displacement; <skip> }
+I2: "DOSETUP1" v_displacement is w0_8_15=0x29 & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; sa1 = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); globalset(inst_next, sa1); ] { if (!PRED) goto <skip>; SA1 = v_displacement; <skip> }
+I2: "DOSETUP2" v_displacement is w0_8_15=0x2a & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; sa2 = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); globalset(inst_next, sa2); ] { if (!PRED) goto <skip>; SA2 = v_displacement; <skip> }
+I2: "DOSETUP3" v_displacement is w0_8_15=0x2b & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; sa3 = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); globalset(inst_next, sa3); ] { if (!PRED) goto <skip>; SA3 = v_displacement; <skip> }
 I2: "EXTRACT" v_U6 "," v_u6 "," r_Db_jjj_h_x_8_0911 "," r_Dn_FFF_h_x_8_002 is w0_12_15=0x3 & w0_3_8=0x19 & r_Dn_FFF_h_x_8_002 & r_Db_jjj_h_x_8_0911 ; w1_12_15=0x9 & w1_0_5 & w1_6_11 [ v_u6 = (w1_0_5 << 0); v_U6 = (w1_6_11 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] { local l_c0:4 = v_u6; local l_c1:4 = v_u6; local l_c2:4 = v_U6; local l_c3:4 = v_U6; sc_extract(r_Dn_FFF_h_x_8_002, r_Db_jjj_h_x_8_0911, l_c0, l_c1, l_c2, l_c3); }
 I2: "EXTRACT" r_Da_JJJ_h_x_8_102 "," r_Db_jjj_h_x_8_0911 "," r_Dn_FFF_h_x_8_002 is w0_12_15=0x3 & w0_3_8=0x11 & r_Dn_FFF_h_x_8_002 & r_Db_jjj_h_x_8_0911 ; w1_3_15=0x1200 & r_Da_JJJ_h_x_8_102 [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] {  sc_extract(r_Da_JJJ_h_x_8_102, r_Dn_FFF_h_x_8_002, r_Db_jjj_h_x_8_0911); }
 I2: "EXTRACTU" v_U6 "," v_u6 "," r_Da_jjj_h_x_8_0911 "," r_Dn_FFF_h_x_8_002 is w0_12_15=0x3 & w0_3_8=0x19 & r_Dn_FFF_h_x_8_002 & r_Da_jjj_h_x_8_0911 ; w1_12_15=0x8 & w1_0_5 & w1_6_11 [ v_u6 = (w1_0_5 << 0); v_U6 = (w1_6_11 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] { local l_c0:4 = v_u6; local l_c1:4 = v_u6; local l_c2:4 = v_U6; local l_c3:4 = v_U6; sc_extractu(r_Dn_FFF_h_x_8_002, r_Da_jjj_h_x_8_0911, l_c0, l_c1, l_c2, l_c3); }
@@ -1984,8 +2073,9 @@ I2: "NOT" r_DR_HHHH_h_x_4_003 ".H" is w0_4_15=0xaf & r_DR_HHHH_h_x_4_003 ; w1_0_
 I2: "NOT" r_DR_HHHH_h_x_8_003 ".H" is w0_4_15=0xaf & r_DR_HHHH_h_x_8_003 ; w1_0_15=0xbfff [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] {  sc_not(r_DR_HHHH_h_x_8_003); }
 I2: "NOT.W" "(" r_Rn_RRR_H_x_4_002 ")" is w0_3_15=0x25d & r_Rn_RRR_H_x_4_002 ; w1_0_15=0xbfff [ x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] {  sc_not_w(r_Rn_RRR_H_x_4_002); }
 I2: "NOT.W" "(SP-" v_u5 ")" is w0_5_15=0x17 & w0_0_4 ; w1_0_15=0xbfff [ v_u5 = (((w0_0_4 << 1)) $xor 0x20) - 0x20; x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] { local l_c0:4 = v_u5; sc_not_w(l_c0); }
+I2: "SKIPLS" v_displacement is w0_8_15=0x21 & w0_0_4=0x3 & w0_5_7 & ALC ; w1_13_15=0x4 & w1_0_0 & w1_1_12 [ v_displacement = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; brk = 2; brd = 0; brtgt = inst_start + ((((w1_0_0 << 16) | (w0_5_7 << 13) | (w1_1_12 << 1)) $xor 0x10000) - 0x10000); ] { BC = ALC s<= 0; }
 I2: "SUBNC.W" v_s16 "," r_Dn_FFF_E3_x_8_002 is w0_8_15=0x3c & w0_3_4=0x2 & w0_5_7 & r_Dn_FFF_E3_x_8_002 ; w1_13_15=0x4 & w1_0_12 [ v_s16 = (((w0_5_7 << 13) | (w1_0_12 << 0)) $xor 0x8000) - 0x8000; x1 = (pe >> (11 - 3 * di)) & 1; x2 = (pe >> (10 - 3 * di)) & 1; x3 = (pe >> (9 - 3 * di)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + (di & 1)))) & 3; di = di + 1; pos3 = pos3 + 1; rem = rem - 2; slast = 1; ] { local l_c0:4 = v_s16; local l_c1:4 = v_s16; sc_subnc_w(r_Dn_FFF_E3_x_8_002, l_c0, l_c1); }
-I2: "[2w]" is w0_12_15=0x3 & w0_8_8=0 & w0_9_11 & w0_0_2 & w0_7_7 & w0_6_6 & w0_5_5 ; w1_13_15=0x5 & w1_0_0 & w1_1_1 & w1_2_2 & w1_3_3 & w1_4_4 & w1_5_5 & w1_6_6 & w1_7_7 & w1_8_8 & w1_9_9 & w1_10_10 & w1_11_11 & w1_12_12 [ pfx = 1; rem = w0_9_11 - 1; ccc = w0_0_2; ph = (w0_7_7 << 1) | w1_8_8; pl = (w0_5_5 << 1) | w0_6_6; pe = (w1_9_9 << 11) | (w1_4_4 << 10) | (w1_0_0 << 9) | (w1_10_10 << 8) | (w1_5_5 << 7) | (w1_1_1 << 6) | (w1_11_11 << 5) | (w1_6_6 << 4) | (w1_2_2 << 3) | (w1_12_12 << 2) | (w1_7_7 << 1) | w1_3_3; ] { }
+I2: "[2w]" is w0_12_15=0x3 & w0_8_8=0 & w0_9_11 & w0_0_2 & w0_7_7 & w0_6_6 & w0_5_5 & w0_3_3 & w0_4_4 ; w1_13_15=0x5 & w1_0_0 & w1_1_1 & w1_2_2 & w1_3_3 & w1_4_4 & w1_5_5 & w1_6_6 & w1_7_7 & w1_8_8 & w1_9_9 & w1_10_10 & w1_11_11 & w1_12_12 [ pfx = 1; rem = w0_9_11 - 1; ccc = w0_0_2; lpa = w0_3_3; lpb = w0_4_4; ph = (w0_7_7 << 1) | w1_8_8; pl = (w0_5_5 << 1) | w0_6_6; pe = (w1_9_9 << 11) | (w1_4_4 << 10) | (w1_0_0 << 9) | (w1_10_10 << 8) | (w1_5_5 << 7) | (w1_1_1 << 6) | (w1_11_11 << 5) | (w1_6_6 << 4) | (w1_2_2 << 3) | (w1_12_12 << 2) | (w1_7_7 << 1) | w1_3_3; ] { }
 IW2: is w0_12_15=0x2 & w0_3_4=0x1 & w0_5_7 & r_Rn_RRR_H_x_4_002 & r_rx_rrrr_h_x_4_0811 & TT4 & PRED ; w1_13_15=0x4 & w1_0_12 { if (!PRED) goto <skip>; r_Rn_RRR_H_x_4_002 = TT4; <skip> }
 IW2: is w0_12_15=0x3 & w0_8_8=0x1 & w0_3_4=0x0 & w0_5_7 & r_Da_JJJ_E1_x_8_0911 & r_Dn_FFF_E3_x_8_002 ; w1_13_15=0x4 & w1_0_12 {  }
 IW2: is w0_8_15=0x8 & w0_4_4=0x0 & w0_5_7 & r_DR_HHHH_h_x_4_003 ; w1_13_15=0x5 & w1_0_12 {  }
@@ -2038,14 +2128,27 @@ IW2: is w0_8_15=0x5 & w0_5_7 & w0_0_4 ; w1_13_15=0x5 & w1_0_12 {  }
 IW2: is w0_8_15=0x15 & w0_3_4=0x1 & w0_5_7 & r_Rn_RRR_H_x_4_002 ; w1_13_15=0x5 & w1_0_12 {  }
 IW2: is w0_12_15=0x2 & w0_8_10=0x1 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
 IW2: is w0_12_15=0x2 & w0_8_10=0x0 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
+IW2: is w0_8_15=0x20 & w0_0_4=0x3 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
 IW2: is w0_12_15=0x2 & w0_8_10=0x3 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
 IW2: is w0_12_15=0x2 & w0_8_10=0x2 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
 IW2: is w0_12_15=0x2 & w0_8_10=0x5 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
 IW2: is w0_12_15=0x2 & w0_8_10=0x4 & w0_3_4=0x3 & w0_11_11 & w0_0_2 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
 IW2: is w0_8_15=0x34 & w0_3_4=0x2 & w0_5_7 & r_Dn_FFF_E3_x_8_002 & TT1 & PRED ; w1_13_15=0x4 & w1_0_12 { if (!PRED) goto <skip>; Tn = TT1; <skip> }
 IW2: is w0_8_15=0x36 & w0_3_4=0x2 & w0_5_7 & r_Dn_FFF_E3_x_8_002 & TT1 & PRED ; w1_13_15=0x4 & w1_0_12 { if (!PRED) goto <skip>; Tn = TT1; <skip> }
-IW2: is w0_8_15=0x23 & w0_0_4=0x3 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
-IW2: is w0_8_15=0x22 & w0_0_4=0x3 & w0_5_7 ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
+IW2: is w0_8_15=0x23 & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
+IW2: is w0_8_15=0x22 & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
+IW2: is w0_8_15=0x20 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 {  }
+IW2: is w0_8_15=0x21 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 {  }
+IW2: is w0_8_15=0x22 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 {  }
+IW2: is w0_8_15=0x23 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 {  }
+IW2: is w0_8_15=0x24 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 {  }
+IW2: is w0_8_15=0x25 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 {  }
+IW2: is w0_8_15=0x26 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 {  }
+IW2: is w0_8_15=0x27 & w0_0_4=0x4 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_12 {  }
+IW2: is w0_8_15=0x28 & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
+IW2: is w0_8_15=0x29 & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
+IW2: is w0_8_15=0x2a & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
+IW2: is w0_8_15=0x2b & w0_0_4=0x3 & w0_5_7 & PRED ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
 IW2: is w0_12_15=0x3 & w0_3_8=0x19 & r_Dn_FFF_h_x_8_002 & r_Db_jjj_h_x_8_0911 ; w1_12_15=0x9 & w1_0_5 & w1_6_11 {  }
 IW2: is w0_12_15=0x3 & w0_3_8=0x11 & r_Dn_FFF_h_x_8_002 & r_Db_jjj_h_x_8_0911 ; w1_3_15=0x1200 & r_Da_JJJ_h_x_8_102 {  }
 IW2: is w0_12_15=0x3 & w0_3_8=0x19 & r_Dn_FFF_h_x_8_002 & r_Da_jjj_h_x_8_0911 ; w1_12_15=0x8 & w1_0_5 & w1_6_11 {  }
@@ -2128,6 +2231,7 @@ IW2: is w0_4_15=0xaf & r_DR_HHHH_h_x_4_003 ; w1_0_15=0xbfff {  }
 IW2: is w0_4_15=0xaf & r_DR_HHHH_h_x_8_003 ; w1_0_15=0xbfff {  }
 IW2: is w0_3_15=0x25d & r_Rn_RRR_H_x_4_002 ; w1_0_15=0xbfff {  }
 IW2: is w0_5_15=0x17 & w0_0_4 ; w1_0_15=0xbfff {  }
+IW2: is w0_8_15=0x21 & w0_0_4=0x3 & w0_5_7 & ALC ; w1_13_15=0x4 & w1_0_0 & w1_1_12 {  }
 IW2: is w0_8_15=0x3c & w0_3_4=0x2 & w0_5_7 & r_Dn_FFF_E3_x_8_002 ; w1_13_15=0x4 & w1_0_12 {  }
 IW2: is w0_12_15=0x3 & w0_8_8=0 & w0_9_11 & w0_0_2 & w0_7_7 & w0_6_6 & w0_5_5 ; w1_13_15=0x5 & w1_0_0 & w1_1_1 & w1_2_2 & w1_3_3 & w1_4_4 & w1_5_5 & w1_6_6 & w1_7_7 & w1_8_8 & w1_9_9 & w1_10_10 & w1_11_11 & w1_12_12 { }
 I3: "AND.W" v_u16 "," "(" v_a16 ")" is w0_8_15=0x38 & w0_0_2=0x1 & w0_3_4 & w0_5_7 ; w1_13_15=0x1 & w1_0_12 ; w2_14_15=0x2 & w2_0_13 [ v_u16 = ((w0_3_4 << 14) | (w2_0_13 << 0)) $xor 0xffff; v_a16 = (w0_5_7 << 13) | (w1_0_12 << 0); x1 = (ph >> (1 - ai)) & 1; x2 = (pl >> (1 - ai)) & 1; pr = (0x2100a590 >> (2 * (2 * ccc + ai))) & 3; ai = ai + 1; pos3 = pos3 + 1; rem = rem - 3; slast = 1; ] { local l_c0:4 = v_u16; local l_c1:4 = v_u16; local l_c2:4 = v_a16; sc_and_w(l_c0, l_c1, l_c2); }
@@ -2247,4 +2351,35 @@ S: I3^" "^S is ((pfx=1 & rem!=0) | (pfx=0 & slast=0)) & I3 & IW3 ; S { build I3;
 S: I2^" "^S is ((pfx=1 & rem!=0) | (pfx=0 & slast=0)) & I2 & IW2 ; S { build I2; build S; build IW2; }
 S: I1^" "^S is ((pfx=1 & rem!=0) | (pfx=0 & slast=0)) & I1 & IW1 ; S { build I1; build S; build IW1; }
 
-:^S is S & END { Tn = T; build S; build END; }
+LOOP: is lpend=1 & lpk=0 & LPSA [ lfm = lfm & 14; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC0 s<= 1) goto <done>; LC0 = LC0 - 1; goto LPSA; <done> LC0 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=0 & lf1=0 & lf0=1 & lpa=1 & lpb=0 & slf=0 & SAK0 [ lfm = lfm & 14; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC0 s<= 1) goto <done>; LC0 = LC0 - 1; goto SAK0; <done> LC0 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=0 & lf1=0 & lf0=1 & lpa=1 & lpb=0 & slf=1 [ lfm = lfm & 14; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC0 s<= 1) goto <done>; LC0 = LC0 - 1; goto inst_start; <done> LC0 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=0 & lf1=0 & lf0=1 & lpa=0 & lpb=1 & slf=1 [ lpend = 1; lpk = 0; lpsa = inst_start; globalset(inst_next, lpend); globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=0 & lf1=0 & lf0=1 & lpa=0 & lpb=1 & slf=0 [ lpb1 = 1; lpk = 0; lpsa = sa0; globalset(inst_next, lpb1); globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }
+LOOP: is lpend=1 & lpk=1 & LPSA [ lfm = lfm & 13; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC1 s<= 1) goto <done>; LC1 = LC1 - 1; goto LPSA; <done> LC1 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=0 & lf1=1 & lpa=1 & lpb=0 & slf=0 & SAK1 [ lfm = lfm & 13; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC1 s<= 1) goto <done>; LC1 = LC1 - 1; goto SAK1; <done> LC1 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=0 & lf1=1 & lpa=1 & lpb=0 & slf=1 [ lfm = lfm & 13; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC1 s<= 1) goto <done>; LC1 = LC1 - 1; goto inst_start; <done> LC1 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=0 & lf1=1 & lpa=0 & lpb=1 & slf=1 [ lpend = 1; lpk = 1; lpsa = inst_start; globalset(inst_next, lpend); globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=0 & lf1=1 & lpa=0 & lpb=1 & slf=0 [ lpb1 = 1; lpk = 1; lpsa = sa1; globalset(inst_next, lpb1); globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }
+LOOP: is lpend=1 & lpk=2 & LPSA [ lfm = lfm & 11; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC2 s<= 1) goto <done>; LC2 = LC2 - 1; goto LPSA; <done> LC2 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=1 & lpa=1 & lpb=0 & slf=0 & SAK2 [ lfm = lfm & 11; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC2 s<= 1) goto <done>; LC2 = LC2 - 1; goto SAK2; <done> LC2 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=1 & lpa=1 & lpb=0 & slf=1 [ lfm = lfm & 11; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC2 s<= 1) goto <done>; LC2 = LC2 - 1; goto inst_start; <done> LC2 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=1 & lpa=0 & lpb=1 & slf=1 [ lpend = 1; lpk = 2; lpsa = inst_start; globalset(inst_next, lpend); globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }
+LOOP: is lpend=0 & lpb1=0 & lf3=0 & lf2=1 & lpa=0 & lpb=1 & slf=0 [ lpb1 = 1; lpk = 2; lpsa = sa2; globalset(inst_next, lpb1); globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }
+LOOP: is lpend=1 & lpk=3 & LPSA [ lfm = lfm & 7; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC3 s<= 1) goto <done>; LC3 = LC3 - 1; goto LPSA; <done> LC3 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=1 & lpa=1 & lpb=0 & slf=0 & SAK3 [ lfm = lfm & 7; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC3 s<= 1) goto <done>; LC3 = LC3 - 1; goto SAK3; <done> LC3 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=1 & lpa=1 & lpb=0 & slf=1 [ lfm = lfm & 7; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ] { if (LC3 s<= 1) goto <done>; LC3 = LC3 - 1; goto inst_start; <done> LC3 = 0; }
+LOOP: is lpend=0 & lpb1=0 & lf3=1 & lpa=0 & lpb=1 & slf=1 [ lpend = 1; lpk = 3; lpsa = inst_start; globalset(inst_next, lpend); globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }
+LOOP: is lpend=0 & lpb1=0 & lf3=1 & lpa=0 & lpb=1 & slf=0 [ lpb1 = 1; lpk = 3; lpsa = sa3; globalset(inst_next, lpb1); globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }
+LOOP: is cnt=1 & cntd=0 & lpend=0 & lpb1=0 & lpa=0 & lpb=0 & lf3=0 & lf2=0 & lf1=0 & lf0=1 & SAK0 & BTGT [ lfm = lfm & 14; slf = 0; globalset(BTGT, lfm); globalset(BTGT, slf); ] { if (!CNTF) goto inst_next; if (LC0 s<= 1) goto <out>; LC0 = LC0 - 1; goto SAK0; <out> LC0 = 0; goto BTGT; }
+LOOP: is cnt=1 & cntd=1 & lpend=0 & lpb1=0 & lpa=0 & lpb=0 & lf3=0 & lf2=0 & lf1=0 & lf0=1 & SAK0 & BTGT [ lfm = lfm & 14; slf = 0; globalset(BTGT, lfm); globalset(BTGT, slf); ] { if (!CNTF) goto inst_next; delayslot(1); if (LC0 s<= 1) goto <out>; LC0 = LC0 - 1; goto SAK0; <out> LC0 = 0; goto BTGT; }
+LOOP: is cnt=1 & cntd=0 & lpend=0 & lpb1=0 & lpa=0 & lpb=0 & lf3=0 & lf2=0 & lf1=1 & SAK1 & BTGT [ lfm = lfm & 13; slf = 0; globalset(BTGT, lfm); globalset(BTGT, slf); ] { if (!CNTF) goto inst_next; if (LC1 s<= 1) goto <out>; LC1 = LC1 - 1; goto SAK1; <out> LC1 = 0; goto BTGT; }
+LOOP: is cnt=1 & cntd=1 & lpend=0 & lpb1=0 & lpa=0 & lpb=0 & lf3=0 & lf2=0 & lf1=1 & SAK1 & BTGT [ lfm = lfm & 13; slf = 0; globalset(BTGT, lfm); globalset(BTGT, slf); ] { if (!CNTF) goto inst_next; delayslot(1); if (LC1 s<= 1) goto <out>; LC1 = LC1 - 1; goto SAK1; <out> LC1 = 0; goto BTGT; }
+LOOP: is cnt=1 & cntd=0 & lpend=0 & lpb1=0 & lpa=0 & lpb=0 & lf3=0 & lf2=1 & SAK2 & BTGT [ lfm = lfm & 11; slf = 0; globalset(BTGT, lfm); globalset(BTGT, slf); ] { if (!CNTF) goto inst_next; if (LC2 s<= 1) goto <out>; LC2 = LC2 - 1; goto SAK2; <out> LC2 = 0; goto BTGT; }
+LOOP: is cnt=1 & cntd=1 & lpend=0 & lpb1=0 & lpa=0 & lpb=0 & lf3=0 & lf2=1 & SAK2 & BTGT [ lfm = lfm & 11; slf = 0; globalset(BTGT, lfm); globalset(BTGT, slf); ] { if (!CNTF) goto inst_next; delayslot(1); if (LC2 s<= 1) goto <out>; LC2 = LC2 - 1; goto SAK2; <out> LC2 = 0; goto BTGT; }
+LOOP: is cnt=1 & cntd=0 & lpend=0 & lpb1=0 & lpa=0 & lpb=0 & lf3=1 & SAK3 & BTGT [ lfm = lfm & 7; slf = 0; globalset(BTGT, lfm); globalset(BTGT, slf); ] { if (!CNTF) goto inst_next; if (LC3 s<= 1) goto <out>; LC3 = LC3 - 1; goto SAK3; <out> LC3 = 0; goto BTGT; }
+LOOP: is cnt=1 & cntd=1 & lpend=0 & lpb1=0 & lpa=0 & lpb=0 & lf3=1 & SAK3 & BTGT [ lfm = lfm & 7; slf = 0; globalset(BTGT, lfm); globalset(BTGT, slf); ] { if (!CNTF) goto inst_next; delayslot(1); if (LC3 s<= 1) goto <out>; LC3 = LC3 - 1; goto SAK3; <out> LC3 = 0; goto BTGT; }
+LOOP: is lpend=0 & lpb1=1 [ lpend = 1; globalset(inst_next, lpend); globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }
+LOOP: is epsilon { }
+
+:^S is S & END & LOOP { Tn = T; build S; build END; build LOOP; }

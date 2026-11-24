@@ -146,7 +146,7 @@ in mydoom.exe leak `PTRSUB(ESP,...)` (11 occurrences) — `sub_405af0` (this cas
 `sub_408500`, `sub_4098d0` (the `__chkstk` routine itself), `sub_409a00`. All are the
 large-stack-buffer / stack-probe pattern. No datatest or stage assertion contains a
 `PTRSUB(` expected-output string (the single corpus hit,
-`tests/stages/gh8471-thumbfuncptr.xml:9`, is prose in a comment).
+`tests/stages/gh8471-thumbfuncptr.toml:9`, is prose in a comment).
 
 **Why the reference wins — and how much.** Nothing here moves the GED: kuna is already
 best-of-all at 16, tied with ghidra and ida, ahead of angr/binja/phoenix at 18. IDA wins on

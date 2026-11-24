@@ -1888,7 +1888,9 @@ impl Architecture {
             .defaultfp
             .clone()
             .filter(|_| (self.pass_hooks().armfloatreturn_applies)(self));
-        ctx.arm_helper_model = (self.pass_hooks().armfloatreturn_applies)(self)
+        ctx.arm_helper_model = self
+            .archid
+            .starts_with("ARM:")
             .then(|| (self.pass_hooks().typedcallabi_soft_model)(self, Some(false)))
             .flatten();
         ctx.float_arg_registers = (self.pass_hooks().typedcallabi_image_evidence)(self);

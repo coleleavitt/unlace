@@ -35,14 +35,14 @@ fn arm_base_pcs_float_results_come_from_r0() {
     ] {
         let scale = decompile(object, "scale");
         assert!(
-            scale.contains("return (float)__aeabi_fadd(v1,0x3f000000);"),
+            scale.contains("__aeabi_fmul(v,__aeabi_i2f(n))") && scale.contains(",0.5f);"),
             "{object}: {scale}"
         );
         let ident = decompile(object, "ident");
         assert!(ident.contains("return a;"), "{object}: {ident}");
         let dscale = decompile(object, "dscale");
         assert!(
-            dscale.contains("return (double)__aeabi_dmul("),
+            dscale.contains("return __aeabi_dmul(v,"),
             "{object}: {dscale}"
         );
     }

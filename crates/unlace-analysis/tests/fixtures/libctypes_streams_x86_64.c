@@ -1,5 +1,5 @@
 /* Fixture for the `libctypes` stdio stream data symbols
- * (tests/stages/kuna-libctypes.xml, passes 6-8).
+ * (tests/stages/kuna-libctypes.toml, passes 6-8).
  *
  * Built: gcc -O1 -o libctypes_streams_x86_64 libctypes_streams_x86_64.c
  *        gcc -O1 -shared -fPIC -o libctypes_streams_so_x86_64.so \

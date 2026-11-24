@@ -1,0 +1,59 @@
+# pair: lea 1(%rax),%rbx; ret
+# combine: call pair; lea (%rax,%rax,2),%rax; add %rbx,%rax; ret
+
+[image]
+arch = 'x86:LE:64:default:golang'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'pair' },
+    { space = 'ram', offset = '0x100010', name = 'combine' },
+    { space = 'ram', offset = '0x100030', name = 'write_pair' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '488d5801c366662e0f1f840000000000e8ebffffff488d04404801d8c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100030'
+readonly = true
+hex = '488b480851488b00e8c3ffffff5948890148895908c3'
+
+[script]
+commands = [
+    'option outlang go',
+    'lo fu combine',
+    'decompile',
+    'print C',
+    'parse line extern void write_pair(unsigned long ctx);',
+    'lo fu write_pair',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go array extraction retains the complete call result'
+count = 1
+literal = 'var v1 [16]byte'
+
+[[match]]
+name = 'Go array extraction evaluates the producer once'
+count = 1
+literal = 'v1 = pair(a0)'
+
+[[match]]
+name = 'Go array extraction reads both signed result words'
+count = 1
+regex = 'return \*\(\*int64\)\(unsafe.Add\(unsafe.Pointer\(&v1\),0\)\) \* 3 \+ \*\(\*int64\)\(unsafe.Add\(unsafe.Pointer\(&v1\),8\)\)'
+
+[[match]]
+name = 'Go array extraction has no opaque subpiece helper'
+count = 0
+literal = 'SUB168'
+
+[[match]]
+name = 'Go array extraction matches inferred unsigned store pointees'
+count = 2
+regex = '= \*\(\*uint64\)\(unsafe.Add\(unsafe.Pointer\(&v2\),[08]\)\)'

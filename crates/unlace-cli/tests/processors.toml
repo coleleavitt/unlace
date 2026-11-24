@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+arcv2_list_sum = """
+0a220080e120c1070c704c4344424b7ae120c10778604c434442f30a31807860e07ee078
+"""
 r32c = """
 f260df9f9f9f9f9f9f9f9f9f9f9f9f9ffa40bbedfff220df9f9f9f9f9f9f9f9f
 a108640304b10864df9f9f9f9f9f9f9fb4ac40007fdf9f9f9f9f9f9f9f9f9f9f
@@ -130,6 +133,12 @@ c4070009c4070808010210f1008110f144050008a00820a3c4072009012129f2004101f3064129f0
 """
 meta_dsp = """
 00c5000083000062a00820a3
+"""
+x86_64_native_oracle = """
+c4e27ddcc1c3662e0f1f840000000000660f3a170701c3
+"""
+x86_64_x87 = """
+dd07d9e5dfe066250002c39090909090dd07dd06d9f8dfe09e7af9dd5f08ddd8c3
 """
 
 [[family]]
@@ -366,6 +375,33 @@ expect = [
     "return padd_8(a0,a1);",  # named lane operation
 ]
 
+# Hexagon hardware loops (Hexagon:LE:32:default), assembled with zig cc (LLVM): the
+# :endloop0/:endloop1 packet branches back to the start loop0/loop1 recorded.
+[[family]]
+name = "hexagon_loop"
+language = "Hexagon:LE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/hexagon_loop/loop.bin"
+forbid = ["halt_baddata", "(a1 <= 1);", "(v3 <= 1);"]
+
+[[family.function]]
+test = "hexagon_loop_endloop0_back_edge"
+address = "0x1000"
+expect = [
+    "while( true ) {",
+    "v2 += *a0;",
+    "if (a1 <= 1) break;",
+]
+
+[[family.function]]
+test = "hexagon_loop_endloop1_back_edge"
+address = "0x1020"
+expect = [
+    "while( true ) {",
+    "v2 ^= *a0;",
+    "if (v3 <= 1) break;",
+]
+
 # C-SKY bloop (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck804e: the loop-closing
 # bloop after an ldbi.w/addu body, in its two-label and three-label forms.
 [[family]]
@@ -572,6 +608,40 @@ expect = [
     "((int *)a0)[2]",
     "0x56781234",
 ]
+
+# Epiphany hardware loops built with epiphany-elf-as: movts ls/le/lc from mov/movt constants
+# give the last loop instruction a count-down back edge (16- and 32-bit movts).
+[[family]]
+name = "epiphany_hwloop"
+language = "epiphany:LE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/epiphany/loop.bin"
+forbid = ["halt_baddata", "write_special"]
+
+[[family.function]]
+test = "epiphany_hwloop_movts16_back_edge"
+address = "0x1000"
+expect = [
+    "do {",
+    "v1 += v2;",
+    "} while (a2);",
+]
+
+[[family.function]]
+test = "epiphany_hwloop_movts32_back_edge"
+address = "0x1048"
+expect = [
+    "v3 = 0x10;",
+    "do {",
+    "v1 ^= v2;",
+    "} while (v3);",
+]
+
+[[family.function]]
+test = "epiphany_hwloop_unknown_bounds_no_loop"
+address = "0x1098"
+expect = ["return a0 + a2;"]
+forbid = ["do {"]
 
 # The Fujitsu FR language loads a big-endian raw image of two hand-assembled
 # functions that use delay slots (`ble:d`, `ret:d`, `call:d`) and decompiles
@@ -1957,6 +2027,55 @@ expect = [
     "v6 = v5 + 1.0f;",
 ]
 
+# `fixtures/amdgpu/gfx1100_true16.cl` at -O2 (real true16): 16-bit values live in VGPR
+# halves (`v0.l`/`v0.h`), chosen by op_sel in VOP3 and by bit 7 of the register in e32 forms.
+[[family]]
+name = "amdgpu_gfx11_true16"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+# `hfma`: v_cmp_lt_f16_e32 on two halves of v0, v_fma_f16 with op_sel, v_sub_f16 with |src|.
+[[family.function]]
+test = "amdgpu_gfx11_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "- ABS(v3);"]
+
+# `hpk`: v_pk_fma_f16 multiplies and adds both lanes.
+[[family.function]]
+test = "amdgpu_gfx11_packed_fma_decompiles"
+address = "0x300"
+expect = ["CONCAT22(v2 *"]
+
+# `umax`: v_max_u16 and v_mad_u16 on halves.
+[[family.function]]
+test = "amdgpu_gfx11_true16_u16_decompiles"
+address = "0x600"
+expect = ["v3 * 3 + (v1 >> 2);"]
+
+# `mm`: v_wmma_f32_16x16x16_f16 reads two 8-VGPR tiles and the accumulator.
+[[family.function]]
+test = "amdgpu_gfx11_wmma_decompiles"
+address = "0x900"
+expect = ["= wmma("]
+
+# `fixtures/amdgpu/gfx1100_image.ll`: MIMG load, sample, an NSA sample_d with five address
+# operands, store and a returning atomic.
+[[family]]
+name = "amdgpu_gfx11_image"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_image.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx11_image_ops_decompile"
+address = "0x0"
+expect = ["image_sample_d(a0,a4,a5)", "image_store(", "image_atomic_add("]
+
 # Wave64 RDNA code (clang -mwavefrontsize64): lane masks are SGPR pairs. `vote` passes a
 # ballot (v_cmp into VCC, then vcc_lo and vcc_hi as a 64-bit argument); under the wave64
 # language the high half is the compare's zero, not a stale vcc_hi.
@@ -2010,6 +2129,21 @@ forbid = ["vcc_hi"]
 test = "amdgpu_gfx11_w64_uniform_branch_decompiles"
 address = "0x400"
 expect = ["<= -1)"]
+
+# `fixtures/amdgpu/gfx1100_true16.cl` built with -mwavefrontsize64 -DW64: the true16 compare
+# writes the VCC pair.
+[[family]]
+name = "amdgpu_gfx11_w64_true16"
+language = "AMDGPU:LE:64:GFX11-W64"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_w64_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx11_w64_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "- ABS(v3);"]
 
 # The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:
 # fast locals become parameters and variables, the value stack folds away, and objects,
@@ -2238,6 +2372,53 @@ expect = [
     "a0 = a1;",  # BT skips the TFR when D0 > D1
     "return a0;",
 ]
+
+# StarCore hardware loops assembled by hand from the manual's tables: DOSETUPn/DOENn/
+# DOENSHn and the prefix LPMARKA/LPMARKB bits give the last set a count-down back edge.
+[[family]]
+name = "starcore_loops"
+language = "StarCore:LE:32:SC140"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/starcore/loops.bin"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_word", "sc_active_lc"]
+
+[[family.function]]
+test = "starcore_long_loop_lpmarkb_back_edge"
+address = "0x0"
+expect = [
+    "if (1 <= a3) {",  # SKIPLS skips the loop when LC0 <= 0
+    "while( true ) {",
+    "if (a3 <= 1) break;",
+]
+
+[[family.function]]
+test = "starcore_nested_loops"
+address = "0x20"
+expect = [
+    "v3 = 4;",  # DOENSH1 #4 inside loop 0
+    "if (v3 <= 1) break;",
+    "if (a3 <= 1) break;",
+]
+
+[[family.function]]
+test = "starcore_short_loop_lpmarka_back_edge"
+address = "0x40"
+expect = ["while( true ) {", "if (a3 <= 1) break;"]
+
+[[family.function]]
+test = "starcore_cont_ends_the_iteration_early"
+address = "0x70"
+expect = [
+    "while( true ) {",
+    "if (a0 <= *a2) {",  # IFT CONT skips the rest when D1 > D0
+    "a0 += *a2 * 3LL;",
+]
+
+[[family.function]]
+test = "starcore_two_set_short_loop_back_edge"
+address = "0x50"
+expect = ["while( true ) {", "a0 += *a2;", "if (a3 <= 1) break;"]
 
 # The Xbox 360 Xenon language decodes VMX128: two lvx128 loads into vr64/vr65, vaddfp128,
 # vmulfp128 and an stvx128 store (encoded from Xenia's VX128 formats, blr from powerpc-elf-as).
@@ -2926,6 +3107,42 @@ expect = [
     "return ((unsigned int *)a0)[1];",  # ld.w w0,0(a0); copy_s.w v0,w0[1]
 ]
 
+# Found by the native oracle (tools/difffuzz, --oracle native): VEX.256 VAESENC decodes (was a bad
+# instruction; libcrypto uses it), and EXTRACTPS to memory stores 32 bits (was 64).
+[[family]]
+name = "x86_64_native_oracle"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_native_oracle"
+
+[[family.function]]
+test = "x86_vaesenc_ymm_decodes"
+address = "0x0"
+expect = ["aesenc(SUB3216(v2,0x10),SUB3216(v3,0x10))"]
+
+[[family.function]]
+test = "x86_extractps_stores_a_dword"
+address = "0x10"
+expect = ["unsigned int *a0"]
+
+# x87 lifts checked against this CPU (docs/difffuzz.md): FXAM's C1 is the sign bit, read through
+# FNSTSW; FPREM converts its quotient before the multiply and its C2 ends the reduction loop.
+[[family]]
+name = "x86_64_x87"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_x87"
+
+[[family.function]]
+test = "x86_fxam_sign_reaches_fnstsw"
+address = "0x0"
+expect = [">> 0x4f) << 9"]
+
+[[family.function]]
+test = "x86_fprem_loop_ends_on_c2"
+address = "0x10"
+expect = ["(long)(", ">> 0x40) & 0x7fff"]
+
 # ELF routing and relocation rows: real ET_REL and ET_EXEC images (crates/unlace-cli/tests/fixtures/elfroute/fx.c,
 # built as its README says), loaded with no --target, so the loader picks the language from the ELF header (#706),
 # lays a 16-bit object out inside its space (#707) and applies the relocations (#713-#737). `chain` calls `scale7`
@@ -3003,6 +3220,26 @@ expect = ["g_tab["]
 test = "elfroute_msp430_elf_pick"
 address = "pick"
 expect = ["0x2c", "scale7("]
+
+# switchextent: a byte selector with no range check reads its table up to the next jump table,
+# of the function (csplit's regcomp) or of the next function (an OCaml match's last table).
+[[family]]
+name = "switchextent_x86_byte"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/switchextent_x86/tables.elf"
+forbid = ["halt_baddata", "jump-as-call"]
+
+[[family.function]]
+test = "switchextent_x86_byte_selector_ends_at_own_next_table"
+address = "bytesel"
+expect = ["case 2:", "0x15"]
+forbid = ["case 3:"]
+
+[[family.function]]
+test = "switchextent_x86_last_table_ends_at_next_functions_table"
+address = "lastsel"
+expect = ["case 3:", "return 0x21;"]
+forbid = ["case 4:"]
 
 # Hexagon ET_REL (EM_HEXAGON) routes to Hexagon:LE:32:default (#706); B22_PCREL calls, 32_6_X/16_X/6_X globals (#737).
 [[family]]
@@ -3235,7 +3472,6 @@ forbid = ["halt_baddata", "halt_missing"]
 test = "elfroute_sparc64_elf_chain"
 address = "chain"
 expect = ["scale7(", "+ 1"]
-xfail = "#756: the linked image marks the leaf scale7 no-return"
 
 [[family.function]]
 test = "elfroute_sparc64_elf_lookup"
@@ -3319,3 +3555,194 @@ expect = ["* 7"]
 test = "elfroute_gfx1100_o_pick"
 address = "pick"
 expect = ["0x2c"]
+
+# ARCv2 list_sum from arc-elf-gcc 15.3 -mcpu=hs -O2 (the real-code sweep corpus): jeq.d [blink]
+# carries mov_s r0,0 in its delay slot, which runs on the fall-through path too.
+[[family]]
+name = "arcv2"
+language = "ARC:LE:32:ARCv2"
+base = "0x0"
+image = "arcv2_list_sum"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "arcv2_conditional_delayed_return_runs_its_slot"
+address = "0x0"
+expect = ["v2 = 0;", "return v2 + *v1;"]
+
+# C-SKY ET_REL (EM_CSKY, ABIv2) routes to CSKY:LE:32:v2 (#776). chain and pick need the bsr relocations, which are not applied yet.
+[[family]]
+name = "elfroute_csky_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/csky.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_csky_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+# C-SKY executable (csky-elf-gcc 15.3) routes to CSKY:LE:32:v2 (#776).
+[[family]]
+name = "elfroute_csky_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/csky.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_csky_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_csky_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+xfail = "g_tab at 0x20000000 prints as the constant base, not g_tab["
+
+[[family.function]]
+test = "elfroute_csky_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# m68k ET_REL (EM_68K, no e_flags = gcc -m68020) routes to 68000:BE:32:MC68020 (#776).
+[[family]]
+name = "elfroute_m68k_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/m68k.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_m68k_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_m68k_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_m68k_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# m68k executable routes to 68000:BE:32:MC68020 (#776).
+[[family]]
+name = "elfroute_m68k_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/m68k.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_m68k_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_m68k_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_m68k_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# OpenRISC executable (EM_OPENRISC, big-endian) routes to OpenRISC:BE:32:default (#776).
+[[family]]
+name = "elfroute_or1k_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/or1k.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_or1k_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_or1k_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_or1k_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# Xtensa executable (EM_XTENSA, little-endian, gcc 15.3 windowed ABI) routes to Xtensa:LE:32:default (#776).
+[[family]]
+name = "elfroute_xtensa_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/xtensa.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_xtensa_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_xtensa_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_xtensa_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# SPARC64 (V9) float returns (#765): a single-precision result is in %f0, a double in %d0. Taken from
+# %d0 right-justified, a float result read as %f1 (the argument) and `f3` printed `return v;`.
+[[family]]
+name = "elfroute_sparc64_float"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sparc64_float.o"
+forbid = ["halt_baddata", "return v;"]
+
+[[family.function]]
+test = "elfroute_sparc64_float_mul_int"
+address = "f3"
+expect = ["return v * (float)n;"]
+
+[[family.function]]
+test = "elfroute_sparc64_float_convert"
+address = "f4"
+expect = ["return (float)n;"]
+
+[[family.function]]
+test = "elfroute_sparc64_float_double"
+address = "d1"
+expect = ["return v * (double)n;"]
+
+[[family.function]]
+test = "elfroute_sparc64_float_two_args"
+address = "f2"
+expect = ["return v * w;"]
+
+# CUDA cubin ET_REL (EM_CUDA, ELF ABI 8, sm_80) routes to SASS:LE:64:SM80 (#776); CALL.ABS targets
+# take R_CUDA_ABS47_34 (#783).
+[[family]]
+name = "elfroute_sm80_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sm80.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_sm80_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_sm80_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+xfail = "the .nv.global data symbols are not named: g_tab prints as 0x400880"
+
+[[family.function]]
+test = "elfroute_sm80_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+xfail = "the BRX jump table is the opaque sass_BRX op"

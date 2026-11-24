@@ -1,4 +1,4 @@
-/* s390x ELF ABI fixture for tests/stages/kuna-s390x.xml.
+/* s390x ELF ABI fixture for tests/stages/kuna-s390x.toml.
  *
  *   zig cc -target s390x-linux-gnu -mcpu=z196 -O2 -g0 -fomit-frame-pointer \
  *          -shared -nostdlib s390x_abi.c -o s390x_abi.elf

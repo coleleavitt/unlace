@@ -75,6 +75,331 @@ def field(hi, lo, signed=False):
     fields[n] = (lo, hi, signed)
     return n
 
+# ---- real p-code for the element-wise groups (element i of a register is its subpiece at byte i*size)
+def _elems(reg, s, n, tag):
+    return ["local %s%d:%d = %s(%d);" % (tag, i, s, reg, i * s) for i in range(n)]
+
+def _pack(res, s):
+    return "msa_wd = " + " | ".join("(zext(%s) << %d)" % (r, 8 * s * i) if i else "zext(%s)" % r for i, r in enumerate(res)) + ";"
+
+def _smax(s):
+    return "0x%x" % ((1 << (8 * s - 1)) - 1)
+
+def _smin(s):
+    return "-0x%x" % (1 << (8 * s - 1))
+
+def _umax(s):
+    return "0x%x" % ((1 << (8 * s)) - 1)
+
+def semantics(mn, suf, imm):
+    base = mn.split(".")[0]
+    if suf == "v":
+        two = {"and": "msa_ws & msa_wt", "or": "msa_ws | msa_wt", "xor": "msa_ws ^ msa_wt", "nor": "~(msa_ws | msa_wt)",
+               "bmnz": "(msa_ws & msa_wt) | (msa_wd & ~msa_wt)", "bmz": "(msa_ws & ~msa_wt) | (msa_wd & msa_wt)",
+               "bsel": "(msa_ws & ~msa_wd) | (msa_wt & msa_wd)"}
+        if base in two:
+            return ["msa_wd = %s;" % two[base]]
+        return None
+    if suf not in SIZE:
+        return None
+    s = SIZE[suf]; n = 16 // s; bits = 8 * s
+    L = []
+    def a(i): return "ma%d" % i
+    def b(i): return "mb%d" % i
+    binop = {"addv": "%s + %s", "subv": "%s - %s", "mulv": "%s * %s"}
+    shf = {"sll": "<<", "srl": ">>", "sra": "s>>"}
+    cmpop = {"ceq": "==", "clt_s": "s<", "clt_u": "<", "cle_s": "s<=", "cle_u": "<="}
+    sel = {"max_s": "s>=", "max_u": ">=", "min_s": "s<=", "min_u": "<="}
+    imm_ops = {"addvi": "addv", "subvi": "subv", "slli": "sll", "srli": "srl", "srai": "sra", "ceqi": "ceq",
+               "clti_s": "clt_s", "clti_u": "clt_u", "clei_s": "cle_s", "clei_u": "cle_u", "maxi_s": "max_s",
+               "maxi_u": "max_u", "mini_s": "min_s", "mini_u": "min_u", "andi": "and", "ori": "or", "xori": "xor", "nori": "nor"}
+    op = base
+    usesimm = op in imm_ops
+    if usesimm:
+        op = imm_ops[op]
+        L.append("local mk:%d = %s;" % (s, imm))
+    rhs = (lambda i: "mk") if usesimm else b
+    known = set(binop) | set(shf) | set(cmpop) | set(sel) | {"and", "or", "xor", "nor", "adds_s", "adds_u", "subs_s",
+             "subs_u", "div_s", "div_u", "mod_s", "mod_u", "pcnt", "nlzc", "nloc", "fill", "ldi", "splat", "splati",
+             "ilvev", "ilvod", "ilvl", "ilvr", "pckev", "pckod"}
+    if op not in known:
+        return None
+    if op in ("fill", "ldi", "splat", "splati"):
+        if op == "fill":
+            L.append("local me:%d = msa_rs:%d;" % (s, s))
+        elif op == "ldi":
+            L.append("local me:%d = %s;" % (s, imm))
+        elif op == "splat":
+            L.append("local mix:4 = (msa_rt:4 & %d) * %d;" % (n - 1, bits))
+            L.append("local msh:16 = msa_ws >> mix;")
+            L.append("local me:%d = msh:%d;" % (s, s))
+        else:
+            L.append("local msh:16 = msa_ws >> (%s * %d);" % (imm, bits))
+            L.append("local me:%d = msh:%d;" % (s, s))
+        L.append(_pack(["me"] * n, s))
+        return L
+    L += _elems("msa_ws", s, n, "ma")
+    if not usesimm and op not in ("pcnt", "nlzc", "nloc"):
+        L += _elems("msa_wt", s, n, "mb")
+    res = []
+    if op in ("ilvev", "ilvod", "ilvl", "ilvr", "pckev", "pckod"):
+        h = n // 2
+        for i in range(n):
+            j, odd = i // 2, i % 2
+            if op == "ilvr":
+                src = (a if odd else b)(j)
+            elif op == "ilvl":
+                src = (a if odd else b)(j + h)
+            elif op == "ilvev":
+                src = (a if odd else b)(2 * j)
+            elif op == "ilvod":
+                src = (a if odd else b)(2 * j + 1)
+            elif op == "pckev":
+                src = b(2 * i) if i < h else a(2 * (i - h))
+            else:
+                src = b(2 * i + 1) if i < h else a(2 * (i - h) + 1)
+            res.append(src)
+        L.append(_pack(res, s))
+        return L
+    for i in range(n):
+        x, y, r = a(i), rhs(i), "mr%d" % i
+        if op in binop:
+            L.append("local %s:%d = %s;" % (r, s, binop[op] % (x, y)))
+        elif op in shf:
+            L.append("local %s:%d = %s %s (%s & %d);" % (r, s, x, shf[op], y, bits - 1))
+        elif op in cmpop:
+            L.append("local %s:%d = 0 - zext(%s %s %s);" % (r, s, x, cmpop[op], y))
+        elif op in sel:
+            L.append("local %s:%d = (%s * zext(%s %s %s)) | (%s * zext(!(%s %s %s)));" % (r, s, x, x, sel[op], y, y, x, sel[op], y))
+        elif op in ("and", "or", "xor"):
+            L.append("local %s:%d = %s %s %s;" % (r, s, x, {"and": "&", "or": "|", "xor": "^"}[op], y))
+        elif op == "nor":
+            L.append("local %s:%d = ~(%s | %s);" % (r, s, x, y))
+        elif op in ("adds_s", "subs_s"):
+            o = "+" if op == "adds_s" else "-"
+            L.append("local mw%d:%d = sext(%s) %s sext(%s);" % (i, 2 * s, x, o, y))
+            L.append("local mh%d:1 = mw%d s> %s;" % (i, i, _smax(s)))
+            L.append("local ml%d:1 = mw%d s< %s;" % (i, i, _smin(s)))
+            L.append("local %s:%d = (mw%d:%d * zext(!(mh%d || ml%d))) | (%s * zext(mh%d)) | (%s * zext(ml%d));" % (r, s, i, s, i, i, _smax(s), i, _smin(s), i))
+        elif op == "adds_u":
+            L.append("local mw%d:%d = zext(%s) + zext(%s);" % (i, 2 * s, x, y))
+            L.append("local %s:%d = mw%d:%d | (0 - zext(mw%d > %s));" % (r, s, i, s, i, _umax(s)))
+        elif op == "subs_u":
+            L.append("local %s:%d = (%s - %s) * zext(%s >= %s);" % (r, s, x, y, x, y))
+        elif op in ("div_s", "div_u", "mod_s", "mod_u"):
+            # a zero divisor gives what QEMU's helpers give (the architecture leaves it UNPREDICTABLE)
+            L.append("local mz%d:1 = %s == 0;" % (i, y))
+            L.append("local md%d:%d = %s + zext(mz%d);" % (i, s, y, i))
+            if op == "div_u":
+                L.append("local %s:%d = ((%s / md%d) * zext(!mz%d)) | (0 - zext(mz%d));" % (r, s, x, i, i, i))
+            elif op == "div_s":
+                L.append("local %s:%d = ((%s s/ md%d) * zext(!mz%d)) + (((zext(%s s< 0) * 2) - 1) * zext(mz%d));" % (r, s, x, i, i, x, i))
+            elif op == "mod_u":
+                L.append("local %s:%d = ((%s %% md%d) * zext(!mz%d)) + (%s * zext(mz%d));" % (r, s, x, i, i, x, i))
+            else:
+                L.append("local %s:%d = ((%s s%% md%d) * zext(!mz%d)) + (%s * zext(mz%d));" % (r, s, x, i, i, x, i))
+        elif op == "pcnt":
+            L.append("local %s:%d = popcount(%s);" % (r, s, x))
+        elif op == "nlzc":
+            L.append("local %s:%d = lzcount(%s);" % (r, s, x))
+        elif op == "nloc":
+            L.append("local %s:%d = lzcount(~%s);" % (r, s, x))
+        res.append(r)
+    L.append(_pack(res, s))
+    return L
+
+def semantics2(mn, suf, imm):
+    """The remaining integer groups (their element formulas follow the MSA specification; where it
+    leaves a result open, QEMU's helpers)."""
+    base = mn.split(".")[0]
+    if suf not in SIZE:
+        return None
+    s = SIZE[suf]; n = 16 // s; B = 8 * s
+    L = []
+    a = lambda i: "ma%d" % i
+    b = lambda i: "mb%d" % i
+    usesimm = base in ("bclri", "bseti", "bnegi", "binsli", "binsri", "srari", "srlri", "sat_s", "sat_u")
+    op = {"bclri": "bclr", "bseti": "bset", "bnegi": "bneg", "binsli": "binsl", "binsri": "binsr",
+          "srari": "srar", "srlri": "srlr"}.get(base, base)
+    elementwise = {"bclr", "bset", "bneg", "binsl", "binsr", "srar", "srlr", "ave_s", "ave_u", "aver_s", "aver_u",
+                   "sat_s", "sat_u", "max_a", "min_a", "asub_s", "asub_u", "subsus_u", "subsuu_s"}
+    if op in ("hadd_s", "hadd_u", "hsub_s", "hsub_u"):
+        hs = s // 2
+        ext = "sext" if op.endswith("_s") else "zext"
+        o = "+" if op.startswith("hadd") else "-"
+        res = []
+        for i in range(n):
+            L.append("local mx%d:%d = msa_ws(%d);" % (i, hs, (2 * i + 1) * hs))
+            L.append("local my%d:%d = msa_wt(%d);" % (i, hs, (2 * i) * hs))
+            L.append("local mr%d:%d = %s(mx%d) %s %s(my%d);" % (i, s, ext, i, o, ext, i))
+            res.append("mr%d" % i)
+        L.append(_pack(res, s))
+        return L
+    if op == "shf":
+        res = []
+        for i in range(n):
+            g4, k = i // 4, i % 4
+            L.append("local mix%d:4 = ((%s >> %d) & 3) + %d;" % (i, imm, 2 * k, 4 * g4))
+            L.append("local msh%d:16 = msa_ws >> (mix%d * %d);" % (i, i, B))
+            L.append("local mr%d:%d = msh%d:%d;" % (i, s, i, s))
+            res.append("mr%d" % i)
+        L.append(_pack(res, s))
+        return L
+    if op == "vshf":
+        L += _elems("msa_wd", s, n, "mc")
+        res = []
+        for i in range(n):
+            L.append("local mk%d:4 = zext(mc%d:1 & 0x3f) %% %d;" % (i, i, 2 * n))
+            L.append("local mlo%d:16 = msa_wt >> (mk%d * %d);" % (i, i, B))
+            L.append("local mhi%d:16 = msa_ws >> ((mk%d - %d) * %d);" % (i, i, n, B))
+            L.append("local mpick%d:%d = (mlo%d:%d * zext(mk%d < %d)) | (mhi%d:%d * zext(mk%d >= %d));" % (i, s, i, s, i, n, i, s, i, n))
+            L.append("local mr%d:%d = mpick%d * zext((mc%d:1 & 0xc0) == 0);" % (i, s, i, i))
+            res.append("mr%d" % i)
+        L.append(_pack(res, s))
+        return L
+    if op in ("sld", "sldi"):
+        # windows of n bytes (n = the element count), each the low bytes of ws:wd slid down by k bytes
+        E = n
+        if op == "sld":
+            L.append("local mk:4 = msa_rt:4 %% %d;" % E)
+        else:
+            L.append("local mk:4 = %s;" % imm)
+        res = []
+        for w in range(16 // E):
+            L.append("local mws%d:%d = msa_ws(%d);" % (w, E, w * E))
+            L.append("local mwd%d:%d = msa_wd(%d);" % (w, E, w * E))
+            L.append("local mr%d:%d = (mws%d >> (mk * 8)) | (mwd%d << ((%d - mk) * 8));" % (w, E, w, w, E))
+            res.append("mr%d" % w)
+        L.append(_pack(res, E))
+        return L
+    if op not in elementwise:
+        return None
+    L += _elems("msa_ws", s, n, "ma")
+    if op in ("binsl", "binsr"):
+        L += _elems("msa_wd", s, n, "mc")
+    if not usesimm and op not in ("sat_s", "sat_u"):
+        L += _elems("msa_wt", s, n, "mb")
+    if usesimm:
+        L.append("local mm:%d = %s;" % (s, imm))
+    res = []
+    for i in range(n):
+        x, r = a(i), "mr%d" % i
+        y = "mm" if usesimm else b(i)
+        if op in ("bclr", "bset", "bneg"):
+            L.append("local mbit%d:%d = 1 << (%s & %d);" % (i, s, y, B - 1))
+            L.append("local %s:%d = %s;" % (r, s, {"bclr": "%s & ~mbit%d", "bset": "%s | mbit%d", "bneg": "%s ^ mbit%d"}[op] % (x, i)))
+        elif op in ("binsl", "binsr"):
+            L.append("local mn%d:%d = %s & %d;" % (i, s, y, B - 1))
+            ones = "0x%x" % ((1 << B) - 1)
+            if op == "binsl":
+                L.append("local mmask%d:%d = ~((%s:%d >> mn%d) >> 1);" % (i, s, ones, s, i))
+            else:
+                L.append("local mmask%d:%d = ~((%s:%d << mn%d) << 1);" % (i, s, ones, s, i))
+            L.append("local %s:%d = (%s & mmask%d) | (mc%d & ~mmask%d);" % (r, s, x, i, i, i))
+        elif op in ("srar", "srlr"):
+            sh = ">>" if op == "srlr" else "s>>"
+            L.append("local msh%d:%d = %s & %d;" % (i, s, y, B - 1))
+            L.append("local mrb%d:%d = ((%s >> (msh%d - 1)) & 1) * zext(msh%d != 0);" % (i, s, x, i, i))
+            L.append("local %s:%d = (%s %s msh%d) + mrb%d;" % (r, s, x, sh, i, i))
+        elif op in ("ave_s", "ave_u", "aver_s", "aver_u"):
+            sh = "s>>" if op.endswith("_s") else ">>"
+            rnd = "|" if op.startswith("aver") else "&"
+            L.append("local %s:%d = (%s %s 1) + (%s %s 1) + ((%s %s %s) & 1);" % (r, s, x, sh, y, sh, x, rnd, y))
+        elif op == "sat_s":
+            L.append("local mhi%d:%d = (1 << mm) - 1;" % (i, s))
+            L.append("local mlo%d:%d = 0 - (1 << mm);" % (i, s))
+            L.append("local %s:%d = (%s * zext((%s s<= mhi%d) && (%s s>= mlo%d))) | (mhi%d * zext(%s s> mhi%d)) | (mlo%d * zext(%s s< mlo%d));" % (r, s, x, x, i, x, i, i, x, i, i, x, i))
+        elif op == "sat_u":
+            L.append("local mhi%d:%d = (2 << mm) - 1;" % (i, s))
+            L.append("local %s:%d = (%s * zext(%s <= mhi%d)) | (mhi%d * zext(%s > mhi%d));" % (r, s, x, x, i, i, x, i))
+        elif op in ("max_a", "min_a"):
+            L.append("local mxa%d:%d = (%s * zext(%s s>= 0)) | ((0 - %s) * zext(%s s< 0));" % (i, s, x, x, x, x))
+            L.append("local mya%d:%d = (%s * zext(%s s>= 0)) | ((0 - %s) * zext(%s s< 0));" % (i, s, y, y, y, y))
+            c = "mxa%d > mya%d" % (i, i) if op == "max_a" else "mxa%d < mya%d" % (i, i)
+            L.append("local %s:%d = (%s * zext(%s)) | (%s * zext(!(%s)));" % (r, s, x, c, y, c))
+        elif op in ("asub_s", "asub_u"):
+            cmp = "s>" if op == "asub_s" else ">"
+            L.append("local %s:%d = ((%s - %s) * zext(%s %s %s)) | ((%s - %s) * zext(!(%s %s %s)));" % (r, s, x, y, x, cmp, y, y, x, x, cmp, y))
+        elif op == "subsus_u":
+            L.append("local mw%d:%d = zext(%s) - sext(%s);" % (i, 2 * s, x, y))
+            L.append("local %s:%d = (mw%d:%d * zext((mw%d s>= 0) && (mw%d s<= %s))) | (%s * zext(mw%d s> %s));" % (r, s, i, s, i, i, _umax(s), _umax(s), i, _umax(s)))
+        elif op == "subsuu_s":
+            L.append("local mw%d:%d = zext(%s) - zext(%s);" % (i, 2 * s, x, y))
+            L.append("local %s:%d = (mw%d:%d * zext((mw%d s<= %s) && (mw%d s>= %s))) | (%s * zext(mw%d s> %s)) | (%s * zext(mw%d s< %s));" % (r, s, i, s, i, _smax(s), i, _smin(s), _smax(s), i, _smax(s), _smin(s), i, _smin(s)))
+        res.append(r)
+    L.append(_pack(res, s))
+    return L
+
+def semantics3(mn, suf, imm):
+    """The last integer groups: absolute adds, bit-move immediates, multiply-accumulate, element
+    inserts and the dot products."""
+    base = mn.split(".")[0]
+    if suf not in SIZE:
+        return None
+    s = SIZE[suf]; n = 16 // s; B = 8 * s
+    L = []
+    if base in ("insert", "insve"):
+        src = "msa_rs:%d" % s if base == "insert" else "msa_ws:%d" % s
+        L.append("local me:%d = %s;" % (s, src))
+        L.append("local msh:4 = %s * %d;" % (imm, B))
+        L.append("local mmask:16 = ~(zext(0x%x:%d) << msh);" % ((1 << B) - 1, s))
+        L.append("msa_wd = (msa_wd & mmask) | (zext(me) << msh);")
+        return L
+    if base in ("dotp_s", "dotp_u", "dpadd_s", "dpadd_u", "dpsub_s", "dpsub_u"):
+        hs = s // 2
+        ext = "sext" if base.endswith("_s") else "zext"
+        res = []
+        if base.startswith("dp"):
+            L += _elems("msa_wd", s, n, "mc")
+        for i in range(n):
+            for k in (0, 1):
+                L.append("local mx%d_%d:%d = msa_ws(%d);" % (i, k, hs, (2 * i + k) * hs))
+                L.append("local my%d_%d:%d = msa_wt(%d);" % (i, k, hs, (2 * i + k) * hs))
+            dot = "(%s(mx%d_0) * %s(my%d_0)) + (%s(mx%d_1) * %s(my%d_1))" % (ext, i, ext, i, ext, i, ext, i)
+            if base.startswith("dotp"):
+                L.append("local mr%d:%d = %s;" % (i, s, dot))
+            else:
+                L.append("local mr%d:%d = mc%d %s (%s);" % (i, s, i, "+" if base.startswith("dpadd") else "-", dot))
+            res.append("mr%d" % i)
+        L.append(_pack(res, s))
+        return L
+    known = ("add_a", "adds_a", "bmnzi", "bmzi", "bseli", "maddv", "msubv")
+    if base not in known:
+        return None
+    L += _elems("msa_ws", s, n, "ma")
+    if base in ("bmnzi", "bmzi", "bseli", "maddv", "msubv"):
+        L += _elems("msa_wd", s, n, "mc")
+    if base in ("add_a", "adds_a", "maddv", "msubv"):
+        L += _elems("msa_wt", s, n, "mb")
+    if base in ("bmnzi", "bmzi", "bseli"):
+        L.append("local mk:1 = %s;" % imm)
+    res = []
+    for i in range(n):
+        x, r = "ma%d" % i, "mr%d" % i
+        if base in ("add_a", "adds_a"):
+            y = "mb%d" % i
+            L.append("local mxa%d:%d = (%s * zext(%s s>= 0)) | ((0 - %s) * zext(%s s< 0));" % (i, s, x, x, x, x))
+            L.append("local mya%d:%d = (%s * zext(%s s>= 0)) | ((0 - %s) * zext(%s s< 0));" % (i, s, y, y, y, y))
+            if base == "add_a":
+                L.append("local %s:%d = mxa%d + mya%d;" % (r, s, i, i))
+            else:
+                mx = _smax(s)
+                L.append("local msum%d:%d = zext(mxa%d) + zext(mya%d);" % (i, 2 * s, i, i))
+                L.append("local %s:%d = (msum%d:%d * zext(msum%d <= %s)) | (%s * zext(msum%d > %s));" % (r, s, i, s, i, mx, mx, i, mx))
+        elif base == "bmnzi":
+            L.append("local %s:1 = (%s & mk) | (mc%d & ~mk);" % (r, x, i))
+        elif base == "bmzi":
+            L.append("local %s:1 = (%s & ~mk) | (mc%d & mk);" % (r, x, i))
+        elif base == "bseli":
+            L.append("local %s:1 = (%s & ~mc%d) | (mk & mc%d);" % (r, x, i, i))
+        elif base == "maddv":
+            L.append("local %s:%d = mc%d + (%s * mb%d);" % (r, s, i, x, i))
+        elif base == "msubv":
+            L.append("local %s:%d = mc%d - (%s * mb%d);" % (r, s, i, x, i))
+        res.append(r)
+    L.append(_pack(res, s))
+    return L
+
 out = []
 skipped = []
 for name, fmt, args in encs:
@@ -145,8 +470,16 @@ for name, mn, suf, cons, ops, asm, wd_in, signed_imm, fmt in out:
                 body.append("*[ram]:%d (a + %d) = msa_wd(%d);" % (elsz, i * elsz, i * elsz))
     elif fmt.startswith("MSA_CBRANCH"):
         disp = "msa_wt, Rel16"; pat.append("Rel16")
-        pcodeops.add(uop)
-        body = ["tmp:1 = %s(msa_wt);" % uop, "delayslot(1);", "if (tmp != 0) goto Rel16;"]
+        if suf == "v":
+            cond = "msa_wt == 0" if mn.startswith("bz") else "msa_wt != 0"
+            body = ["tmp:1 = %s;" % cond]
+        else:
+            # bz.df: some element is zero; bnz.df: every element is nonzero
+            s = SIZE[suf]
+            body = ["local mz%d:%d = msa_wt(%d);" % (i, s, i * s) for i in range(16 // s)]
+            any_zero = " || ".join("(mz%d == 0)" % i for i in range(16 // s))
+            body.append("tmp:1 = %s;" % (any_zero if mn.startswith("bz") else "!(%s)" % any_zero))
+        body += ["delayslot(1);", "if (tmp != 0) goto Rel16;"]
     elif mn == "move.v":
         disp = "msa_wd, msa_ws"; body = ["msa_wd = msa_ws;"]
     elif mn == "cfcmsa":
@@ -197,8 +530,12 @@ for name, mn, suf, cons, ops, asm, wd_in, signed_imm, fmt in out:
                 ins.append("msa_" + op)
         if imm:
             ins.append(imm + ":4")
-        pcodeops.add(uop)
-        body = ["msa_wd = %s(%s);" % (uop, ", ".join(ins))]
+        sem = semantics(mn, suf, imm) or semantics2(mn, suf, imm) or semantics3(mn, suf, imm)
+        if sem:
+            body = sem
+        else:
+            pcodeops.add(uop)
+            body = ["msa_wd = %s(%s);" % (uop, ", ".join(ins))]
     cons_lines.append(":%s %s is %s {\n\t%s\n}" % (mn, disp, " & ".join(pat), "\n\t".join(body)))
 
 GPR = "zero at v0 v1 a0 a1 a2 a3 t0 t1 t2 t3 t4 t5 t6 t7 s0 s1 s2 s3 s4 s5 s6 s7 t8 t9 k0 k1 gp sp s8 ra"

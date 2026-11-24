@@ -76,7 +76,7 @@
 //! **argv)` for both, and the `r8`/`r9` the body forwards to a variadic call
 //! site is an undefined read on the path kuna sees. So the lock does not delete
 //! a parameter that exists; it stops rendering an undefined read as one. Both
-//! shapes are pinned (`tests/stages/kuna-elfmain.xml` #5-#8,
+//! shapes are pinned (`tests/stages/kuna-elfmain.toml` #5-#8,
 //! `tests/cli/elf-main-extra-register-args.json`), so whichever way call-site
 //! argument recovery fixes them, it shows up as a test move.
 //!

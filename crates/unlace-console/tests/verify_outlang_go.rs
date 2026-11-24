@@ -158,7 +158,7 @@ fn internal_byte_strings_compile_and_preserve_bytes() {
         return;
     }
     let code = decompile(
-        &root().join("tests/stages/ghangr-go-string-pointers.xml"),
+        &stage_xml("ghangr-go-string-pointers"),
         &["plain", "escaped", "unicode"],
         &[
             "option outlang go",
@@ -407,4 +407,18 @@ fn go_selection_does_not_mutate_c_brace_preferences() {
     );
     assert_eq!(c, roundtrip);
     assert!(!c[0].contains("func "));
+}
+
+/// A TOML stage test written out as the `<decompilertest>` file the console bootstrap reads.
+fn stage_xml(stem: &str) -> std::path::PathBuf {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let xml = unlace_stagefile::read_as_xml(&root.join(format!("tests/stages/{stem}.toml")))
+        .expect("read the stage test");
+    let path = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
+        "{stem}-{}-{:?}.xml",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    std::fs::write(&path, xml).expect("write the stage test as XML");
+    path
 }

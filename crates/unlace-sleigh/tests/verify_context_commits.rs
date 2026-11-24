@@ -176,9 +176,9 @@ fn has_commits(sla: &Path) -> bool {
 
 /// Every `.sla` under these processors must answer `false` for the context-
 /// commit gate. Delay-slot admission is a separate predicate.
-const ALL_FALSE: &[&str] = &["AARCH64", "RISCV", "Sparc", "SuperH", "Z80"];
-/// Every `.sla` under these must answer `true`.
-const ALL_TRUE: &[&str] = &["ARC", "ARM", "MIPS", "PowerPC", "PA-RISC"];
+const ALL_FALSE: &[&str] = &["AARCH64", "Sparc", "SuperH", "Z80"];
+/// Every `.sla` under these must answer `true` (RISC-V: vsetvli/vsetivli commit vtype).
+const ALL_TRUE: &[&str] = &["ARC", "ARM", "MIPS", "PowerPC", "PA-RISC", "RISCV"];
 /// These carry `globalset` in some of their languages but not all, so the
 /// processor-level claim is only that at least one answers `true`.
 /// (x86: `x86-16.sla` commits the real-mode code segment; `x86.sla` and

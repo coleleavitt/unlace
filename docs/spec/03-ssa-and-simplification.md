@@ -3898,10 +3898,22 @@ parameter's 48-bit test stays. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
 unboxing dies. Exact, so always on.
 
+**maskjoin** —
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_maskjoin.rs (RuleMaskJoin)`, oppool1, fires on
+`INT_ADD`, `INT_OR` and `INT_XOR`. *Pattern:* both inputs are `INT_AND`s of one non-constant
+value `x` (through `COPY`s) with constants `m1` and `m2` that share no bit, at a width of at
+most eight bytes. The masked values then share no set bit, so the sum, the or and the exclusive
+or are the same value. *Rewrite:* the op becomes `COPY x` when `m1 | m2` covers every bit of
+`x`, else `INT_AND x, m1 | m2`. ARM's `vmov d0, r0, r1` lifts as
+`(zext(r1) << 32) + zext(r0)`; after a call returning a `double` in r0:r1 its halves simplify to
+`v & 0xffffffff00000000` and `v & 0xffffffff`, and the move printed as two masked halves of a
+union cast instead of `v`. An identity, so always on.
+
 **satconvert** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_satconvert.rs (RuleSatConvert)`, oppool1, fires
 on `MULTIEQUAL`, option `satconvert` (default on). *Pattern:* the outermost of three two-input
-joins, each taking a constant on one out-edge of its immediate dominator's branch (the select
+joins, each taking a constant (through the `COPY` that writes it, since a `MULTIEQUAL` never
+reads a constant) on one out-edge of its immediate dominator's branch (the select
 test `pow2select` uses), whose innermost input is `FLOAT_TRUNC(x)` at the join's width or the
 low word of a 64-bit one. The branches test `x` against float constants or `NAN(x)`. This is how
 `riscv.fd.sinc` lifts an `rtz` `fcvt.w*`/`fcvt.l*`. *Proof:* the ladder is evaluated at NaN,

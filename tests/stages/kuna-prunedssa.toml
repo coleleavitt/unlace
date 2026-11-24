@@ -1,0 +1,112 @@
+# GH-1034, P3 heritage markers, option readonlycalls over pruned joins.
+# churn reads 256 read-only table words between 256 calls and copies a
+# struct with rep movsb every fourth step; escaped hands the address of
+# each of 64 stack structs to a call. Pass 1 is readonlycalls off: every
+# read-only word is guarded at every call, while the pruned joins place no
+# MULTIEQUAL where a unique temporary is not live (upstream built 704
+# joins dead-code removal deletes, 118816 ops created for churn against
+# 118112 here, for the same live IR). escaped's slots are address-tied,
+# so they keep every guard in every pass. Pass 2 is the default: churn's
+# 256 read-only ranges at its 321 calls (82,176 guards) reach
+# readonlycalls' 65,536-guard threshold, the guards on read-only memory
+# the function never writes go, and churn's live IR drops from 90311 to
+# 8135 ops. Each function prints the same body in both passes. Two more
+# passes count churn's ops only: at readonlycalls 82177, one guard more
+# than churn would build, it keeps them; at readonlycalls on it drops
+# them. The fixture's source, provenance and native oracle are beside it.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/prunedssa_x86_64',
+    'read symbols',
+    'option readonlycalls off',
+    'load function churn',
+    'decompile',
+    'print C',
+    'count pcode',
+    'load function escaped',
+    'decompile',
+    'print C',
+    'count pcode',
+    'option readonlycalls 65536',
+    'load function churn',
+    'decompile',
+    'print C',
+    'count pcode',
+    'load function escaped',
+    'decompile',
+    'print C',
+    'count pcode',
+    'option readonlycalls 82177',
+    'load function churn',
+    'decompile',
+    'count pcode',
+    'option readonlycalls on',
+    'load function churn',
+    'decompile',
+    'count pcode',
+]
+
+[[match]]
+name = 'prunedssa #1: both passes print churn'
+count = 2
+regex = '^uint8 churn\(int8 a0,char \*a1\)$'
+
+[[match]]
+name = "prunedssa #2: both passes keep churn's 256 calls"
+count = 512
+literal = 'sink('
+
+[[match]]
+name = "prunedssa #3: both passes keep churn's 64 struct copies"
+count = 128
+literal = 'take('
+
+[[match]]
+name = "prunedssa #4: both passes keep escaped's 64 calls"
+count = 128
+regex = 'reg\(0x[0-9a-f]+,'
+
+[[match]]
+name = 'prunedssa #5: both passes keep the 64 struct writes each callee may read'
+count = 128
+regex = '^  v[0-9]+\[0\] = (0x)?[0-9a-f]+;$'
+
+[[match]]
+name = "prunedssa #6: readonlycalls off keeps the read-only guards in churn's live IR"
+count = 2
+literal = 'Count - pcode = 90311'
+
+[[match]]
+name = "prunedssa #7: upstream's dead joins are never built for churn"
+count = 0
+literal = 'Count - created = 118816'
+
+[[match]]
+name = 'prunedssa #8: prunedssa builds no dead joins for churn'
+count = 2
+literal = 'Count - created = 118112'
+
+[[match]]
+name = "prunedssa #9: readonlycalls drops the read-only guards from churn's live IR"
+count = 2
+literal = 'Count - pcode = 8135'
+
+[[match]]
+name = 'prunedssa #10: the default builds the fewest ops for churn'
+count = 2
+literal = 'Count - created = 35936'
+
+[[match]]
+name = "prunedssa #11: escaped's address-tied slots keep every guard in every pass"
+count = 2
+literal = 'Count - created = 12578'
+
+[[match]]
+name = "prunedssa #12: escaped's live IR is the same in both passes"
+count = 2
+literal = 'Count - pcode = 4812'

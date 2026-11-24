@@ -4196,6 +4196,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `MN102` | Panasonic MN10200 | `MN102:BE:24:default` | aleph-void/ghidra-mn102-lang (fork of Pokechu22/ghidra-mn102-lang) @ `3cf1d57f86`, Apache-2.0 |
 | `MN103` | Panasonic MN10300 (AM33) | `mn10300:LE:32:default`, `mn10300:LE:32:am33`, `mn10300:LE:32:mn10300` | aleph-void/ghidra-mn103-extension (fork of michaelbrandi/ghidra-mn103-extension) @ `32d7ce4d79`, Apache-2.0 |
 | `PDK` | Padauk PDK (PMS/PFS) | `pdk13:LE:16:default`, `pms152:LE:16:default`, `pms132:LE:16:default`, `pms134:LE:16:default`, `pmc884:LE:16:default` | aleph-void/ghidra-pdk (fork of CUB3D/ghidra-pdk) @ `d4cdebc983`, Apache-2.0 |
+| `PIC16F153xx` | Microchip PIC16F153xx enhanced midrange | `PIC-16:LE:16:PIC-16F153xx` | aleph-void/ghidra-pic16f153xx @ `85c02a04a0`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

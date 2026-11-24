@@ -142,6 +142,10 @@ specs/Ghidra/Processors/PDK vendors the Padauk PDK (PMS/PFS) SLEIGH specificatio
 aleph-void/ghidra-pdk (https://github.com/aleph-void/ghidra-pdk), a fork of CUB3D/ghidra-pdk, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/PIC16F153xx vendors the Microchip PIC16F153xx enhanced midrange SLEIGH specification of
+aleph-void/ghidra-pic16f153xx (https://github.com/aleph-void/ghidra-pic16f153xx), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

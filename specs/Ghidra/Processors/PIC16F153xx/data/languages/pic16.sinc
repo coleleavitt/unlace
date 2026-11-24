@@ -1,0 +1,58 @@
+#
+# PIC16(L)F153xx Main Section (Microchip enhanced mid-range core, 15-bit program counter)
+#   includes constants, memory space and common register space definitions
+#
+# Based on PR #667 (Michael Huebler) and on the PIC-16F files shipped with Ghidra
+# (Apache-2.0); Ghidra-Rare changes are listed in CREDITS.md.
+#
+
+define endian=little;
+define alignment=2;
+
+# Instruction Memory: 14-bit words stored in 16-bit cells, addressed in words
+# (up to 32K words: PC is 15 bits wide)
+define space CODE type=ram_space wordsize=2 size=2 default;
+
+# Data memory: 64 banks of 128 bytes selected by BSR<5:0> (13-bit data address).
+# FSR values 0x2000..0x29AF address the linear data memory, 0x8000..0xFFFF the program
+# flash (see GHIDRA-RARE.md)
+define space DATA type=ram_space size=2;
+
+# Hardware return stack: 16 levels of 15 bits
+define space HWSTACK type=ram_space wordsize=2 size=1;
+
+define space register type=register_space size=2;
+
+# Program Counter (15 bits): PC<14:8> = PCLATH<6:0> on a PCL write, PC<7:0> = PCL
+define register offset=0x0000 size=2 [ PC ];
+
+# Stack Pointer (hardware return stack, not the STKPTR SFR)
+define register offset=0x0002 size=1 [ STKPTR ];
+
+# Working register
+define register offset=0x0003 size=1 [ W ];
+
+# Scratch registers used for sub-constructor results
+define register offset=0x0010 size=1 [ ALURES ];
+
+@define C  "STATUS[0,1]"
+@define DC "STATUS[1,1]"
+@define Z  "STATUS[2,1]"
+@define PD "STATUS[3,1]"
+@define TO "STATUS[4,1]"
+
+# STATUS bit definitions
+@define STATUS_Z_BIT	2
+@define STATUS_DC_BIT	1
+@define STATUS_C_BIT	0
+
+#
+# Core registers: the first 12 addresses of every data memory bank
+# (x00h-x0Bh and x80h-x8Bh ...), always mapped to bank 0 here.
+# All other data registers (SFRs, GPRs) are addressed as DATA:(BSR<<7 | f).
+#
+define DATA offset=0x0000 size=1 [
+	INDF0	INDF1	PCL	STATUS	FSR0L	FSR0H	FSR1L	FSR1H	BSR	WREG	PCLATH	INTCON
+];
+
+define DATA offset=0x0004 size=2 [ FSR0  FSR1 ];

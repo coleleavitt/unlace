@@ -1835,10 +1835,28 @@ test = "cpython_loops_decompile"
 address = "0x0"
 expect = [
     "v1 = py_iter(py_call(0,py_global(0),a0));",
-    "while (!(bool)py_iter_done(v1)) {",
-    "v4 = py_inplace_add(v4,v3);",
-    "v4 = py_inplace_subtract(v4,py_const(4));",
-    "return v4;",
+    "v3 = (bool)py_iter_done(v1);",
+    "if (v3) break;",
+    "v5 = py_inplace_add(v5,v4);",
+    "v5 = py_inplace_subtract(v5,py_const(4));",
+    "return v5;",
+]
+
+[[family]]
+name = "cpython_enum_new"
+language = "CPython:LE:32:3.12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/cpython/enum_new.bin"
+
+# `enum.EnumType.__new__` from the python3.12 stdlib (2428 bytes, several for loops). FOR_ITER
+# used to branch inside its own p-code, and this function then failed with "Could not find
+# op at target address" (real-code sweep).
+[[family.function]]
+test = "cpython_enum_new_decompiles"
+address = "0x0"
+expect = [
+    "py_iter_next(",
+    "py_getattr(a3,5)",
 ]
 
 [[family]]
@@ -2521,3 +2539,54 @@ expect = ["return sub_0(0x1234) + 1;"]
 test = "m7900_sem_store_is_one_byte"
 address = "0x20"
 expect = ["dat_40 = 0x7f;"]
+
+[[family]]
+name = "amdgpu_real_gfx900"
+language = "AMDGPU:LE:64:GFX9"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx900.bin"
+
+# `fixtures/amdgpu/real_kernels.cl` (matmul, tiled matmul, histogram, scan, ...) built with
+# clang -O2 for gfx900; `dbl`'s body divides doubles: v_div_scale/fmas/fixup_f64 and
+# v_cmp_class_f64, with the 7.0 literal as the high half of the double.
+[[family.function]]
+test = "amdgpu_real_gfx900_f64_division_decompiles"
+address = "0x22e4"
+expect = [
+    "div_scale(0x401c000000000000,0x401c000000000000,ABS(",
+    "div_fixup(",
+]
+
+[[family]]
+name = "amdgpu_real_gfx1030"
+language = "AMDGPU:LE:64:GFX10"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx1030.bin"
+
+# `fixtures/amdgpu/real_kernels.cl` (matmul, tiled matmul, histogram, scan, ...) built with
+# clang -O2 for gfx1030; `dbl`'s body divides doubles: v_div_scale/fmas/fixup_f64 and
+# v_cmp_class_f64, with the 7.0 literal as the high half of the double.
+[[family.function]]
+test = "amdgpu_real_gfx1030_f64_division_decompiles"
+address = "0x22f0"
+expect = [
+    "div_scale(0x401c000000000000,0x401c000000000000,ABS(",
+    "div_fixup(",
+]
+
+[[family]]
+name = "amdgpu_real_gfx1100"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx1100.bin"
+
+# `fixtures/amdgpu/real_kernels.cl` (matmul, tiled matmul, histogram, scan, ...) built with
+# clang -O2 for gfx1100; `dbl`'s body divides doubles: v_div_scale/fmas/fixup_f64 and
+# v_cmp_class_f64, with the 7.0 literal as the high half of the double.
+[[family.function]]
+test = "amdgpu_real_gfx1100_f64_division_decompiles"
+address = "0x2418"
+expect = [
+    "div_scale(0x401c000000000000,0x401c000000000000,ABS(",
+    "div_fixup(",
+]

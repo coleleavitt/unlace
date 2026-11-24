@@ -24,11 +24,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 sha2 = "0.11"
 tempfile = "3.27"
+unlace-decomp-dylib = { workspace = true, optional = true }
 
 [features]
 # Carry the compiled SLEIGH tree inside the binary (build.rs reads `specs/` and compiles each
 # language through the `.sla` cache). Release builds enable it.
 embed-specs = []
+# Dev only: link the engine as one Rust dylib (crates/unlace-decomp-dylib). Off by default.
+dynamic_linking = ["dep:unlace-decomp-dylib", "unlace-console/dynamic_linking"]
 
 [dev-dependencies]
 flirt-sig.workspace = true

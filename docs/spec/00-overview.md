@@ -4353,15 +4353,22 @@ level. The pre-SSA passes of mainloop's head (`cleanupcode`, `gojumpchain`,
 `gomorestack`, `gowritebarrier`, `ptrauthtrap`, `chkstkdarwin`, `rustprobestack`,
 `outline`, the lowered-switch install) ask `is_settled(Fact::Ssa)` instead of reading
 the heritage pass counter, and `condstmts` asks `is_settled(Fact::HighVariables)`;
-both are the same test by definition. `gotoreduce` and `ifelseflatten` assert the
+both are the same test by definition. So do `stackbytecopy` and `passthrough`'s Go
+stack-guard claim (`Fact::Ssa`, the pre-SSA window) and `inputprototype`'s trial
+typing (`Fact::HighVariables`). `gotoreduce` and `ifelseflatten` assert the
 casts and the block structure they edit. In the one-shot tail, `startcleanup` and
 `inputprototype` assert dataflow (fullloop's fixed point), `assignhigh` clean-up,
 `mergerequired` and `markexplicit` high-variables, `outputprototype`, `namevars` and
-`setcasts` merge, `mapglobals` prototype, and `prototypewarnings` casts. A pass that relies on an earlier phase states it with
+`setcasts` merge, `mapglobals` prototype, and `prototypewarnings` casts. Around them, `armfloatargs` and
+`returnselector` assert clean-up, `typevote` merge, `calltargettype` prototype, and
+the structure tail after `setcasts` (`postinc`, `taildup`, `crossjumprevert`,
+`dedupitetail`, `iteregion`, `iteboolean`, `gotosink`, `crossjumptail`,
+`guardedloop`, `paramcopyhoist`) casts. A pass that relies on an earlier phase states it with
 `debug_assert_settled!(fd, Fact)`, which checks only in debug builds and only for
 a function driven through the full `decompile` root (`run_pipeline`). A unit test
 that applies one action to a hand-built `Funcdata`, or a reduced variant, is not
 held to the tree's order. The level is reported by the console's `phase status` (`maturity: <level> (settled:
-<facts>)`, after the three option lines, when a function is selected).
+<facts>)`, after the three option lines, when a function is selected), and
+`unlace decompile --trace` prints that dump on stderr after the C (`docs/cli.md`).
 Marking a level changes no analysis: it is a record of where the scheduler is, not
 a new decision.

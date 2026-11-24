@@ -339,6 +339,11 @@ split: an option PR no longer edits the three most conflicted files.
 Steps 0-2 and 4-10 landed on coleleavitt/unlace; the workspace now has eight decompiler crates (step 10 split
 `unlace-bandb` into `unlace-bandb-base`, `unlace-bandb-core` and `unlace-bandb`). Step 3 (the dev dylib) was not
 needed: the split plus thin LTO recovered the speed without it, and step 0's numbers below show the rebuild gain.
+It now exists as an opt-in: `crates/unlace-decomp-dylib` (`crate-type = ["dylib"]`, re-exports `unlace-decomp`
+and `unlace-analysis`, excluded from the workspace) behind a `dynamic_linking` feature on unlace-cli,
+unlace-console, unlace-harness and unlace-ghidra, off by default, with an rpath from the cli, console and
+harness build scripts (`docs/dev-setup.md`). Whether to turn it on for dev builds waits on a `cargo build
+--timings` link-time comparison.
 
 **Crates** (lines of `src/**/*.rs`, in-tree unit tests included, at 38ede1720c):
 
@@ -392,6 +397,10 @@ total 10.39 -> 10.28 s, output still byte-identical.
 scheduler's progress, with no behaviour change: `unlace-middle`'s `kuna_maturity` (levels raw ...
 complete, facts, `is_settled`, `debug_assert_settled!`), marked on ten schedule nodes by the
 driver, reset by a restart, reported by `phase status` (spec §0.10).
+
+**C syntax tree (2026-11-23).** A ninth crate, `unlace-ctree`, holds the C syntax tree planned in
+`docs/architecture/ctree.md`: the tree types, its own maturity (`CMaturity`) and the builder from the
+structured block tree. It depends on `unlace-middle` only; nothing calls it yet.
 
 **Middle layout (2026-11-23).** The modules reclassified into middle left the phase folders that
 did not describe them: the IR-level `typeop`, `variable`, `cover`, `dynamic` went to `substrate/`, `stringmanage`

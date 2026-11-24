@@ -283,6 +283,7 @@ fn json_refuses_the_flags_it_cannot_honor() {
     for extra in [
         vec!["--raw"],
         vec!["--regions"],
+        vec!["--trace"],
         vec!["--kassert", "noop"],
         vec!["--decomp-dbg", "/nonexistent/decomp_dbg"],
     ] {

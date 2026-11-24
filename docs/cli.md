@@ -234,6 +234,12 @@ selection: `--no-vars` and `--omit aliases,line_mappings,variables,types` behave
 do there. Without `--json` both are refused, since the C text carries none of
 those collections.
 
+`--trace` adds, on stderr after the C, the `phase status` dump for the decompiled
+function: the pipeline variant, and the maturity its last pass reached with the facts
+settled there (`maturity: complete (settled: ssa, high-variables, flow, ...)`, see
+`docs/spec/00-overview.md` §0.10). Stdout is unchanged; `--trace` is refused with
+`--json`, whose record keys stay as they are.
+
 An option **name** is checked before anything is loaded, on every surface that takes
 `--option`, and an unrecognized one exits 2 rather than running as if it had not been
 given. Names are case- and separator-sensitive, so the message names the nearest
@@ -2116,7 +2122,7 @@ images, incomplete or ambiguous profiles, and absent bank agreement are errors.
 flag. It rejects archive inputs before member listing, selection or fan-out, as
 well as byte overlays, raw images, slice/target/ISA/image-selection changes, `--jobs` values other than `1`, and batch/project/graph commands. Single
 function application uses the in-process engine for text and JSON and rejects
-`--raw`, `--regions`, `--kassert`, `--decomp-dbg`, and `--engine`.
+`--raw`, `--regions`, `--trace`, `--kassert`, `--decomp-dbg`, and `--engine`.
 
 ```json
 {"binary":"…","count":1150,"total":1150,"error":null,"warnings":[],

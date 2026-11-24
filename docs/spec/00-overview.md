@@ -3323,7 +3323,7 @@ runtime `on_or_off` parser.
 | `UNLACE_SWIFTTYPES` | `swifttypes` | whether the Objective-C pass leaves a Swift class's layout to the Swift pass, `crates/unlace-middle/src/p0_knowledge/loadoptions.rs (SWIFTTYPES_ENV)` |
 | `UNLACE_MACHO_SLICE` | `--slice` | Mach-O fat-binary slice peel, `crates/unlace-console/src/engine.rs (select_macho_slice)` |
 | `UNLACE_MACHO_ARM64E` | `macho-arm64e` | arm64e spec selection (on by default), `crates/unlace-middle/src/p0_knowledge/macho_arm64e.rs (MACHO_ARM64E_ENV)` |
-| `UNLACE_ARM_ISA` | `--isa` | explicit ARM/Thumb `TMode` selection over the mapped code ranges, `crates/unlace-console/src/engine.rs (ARM_ISA_ENV)` |
+| `UNLACE_ARM_ISA` | `--isa` | explicit ARM/Thumb `TMode` selection over the mapped code ranges, `crates/unlace-middle/src/p0_knowledge/loadoptions.rs (ARM_ISA_ENV)` |
 
 The matching `option` is still applied afterwards so the run's configuration
 record is honest.
@@ -3340,7 +3340,7 @@ back to its environment variable only when no options are in force.
 Precedence is per load and never a merge. A load with explicit options reads
 and writes no load-time environment variable: a field left at its default
 means the shipped default, not the environment's value, and an unset ARM ISA
-leaves the image's own evidence to decide instead of reading `UNLACE_ARM_ISA`. A load
+leaves the image's own evidence to decide instead of reading `UNLACE_ARM_ISA`. The ISA is the `arm_isa` field of the options: an environment-mode load reads it once, in `LoadOptions::from_env_for_load`, and an unrecognized value fails each load that reads it. A load
 without options puts the environment in force on its thread for the whole
 load, whatever another program has in force there, so the CLI and the
 `bootstrap_*` entry points read exactly the variables they read before. The

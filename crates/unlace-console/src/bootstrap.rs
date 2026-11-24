@@ -10,9 +10,9 @@ use unlace_base::xml::Element;
 use unlace_decomp::loadoptions::{LoadOptions, LoadScope};
 
 use crate::engine::{
-    ArmIsa, ConsoleProgram, FileInput, Languages, RawBytes, arm_isa_from_env, bootstrap_cil,
-    bootstrap_dex_bytes, bootstrap_esp_image, bootstrap_image, bootstrap_mz_bytes,
-    bootstrap_object, bootstrap_raw_image, bootstrap_retro_bytes, bootstrap_te, bootstrap_te_bytes,
+    ArmIsa, ConsoleProgram, FileInput, Languages, RawBytes, bootstrap_cil, bootstrap_dex_bytes,
+    bootstrap_esp_image, bootstrap_image, bootstrap_mz_bytes, bootstrap_object,
+    bootstrap_raw_image, bootstrap_retro_bytes, bootstrap_te, bootstrap_te_bytes,
     bootstrap_wasm_bytes, bootstrap_xml_image, classify_file, xml_root_image,
 };
 
@@ -49,9 +49,9 @@ impl<L: Languages + ?Sized> LanguageSource for L {}
 ///   [`Bootstrap::options`], it reads none. Either way nothing on the load
 ///   writes the environment, and the program keeps the options for its
 ///   analysis commit and decompiles.
-/// - **arm_isa**: unset. Without options, an unset ISA comes from
-///   [`ARM_ISA_ENV`](crate::engine::ARM_ISA_ENV); with options, it is `None`
-///   (the image's own evidence decides).
+/// - **arm_isa**: unset, so the options' `arm_isa` decides: without options
+///   that is `UNLACE_ARM_ISA` read at the load, with options the field's value
+///   (`None` by default, the image's own evidence decides).
 ///
 /// The builder only borrows its settings and holds no state of its own, so
 /// one builder can load many inputs, on one thread or on several. Each load
@@ -295,10 +295,13 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     }
 
     fn resolved_isa(&self) -> UnlaceResult<Option<ArmIsa>> {
-        match (self.arm_isa, self.options) {
-            (Some(isa), _) => Ok(isa),
-            (None, Some(_)) => Ok(None),
-            (None, None) => arm_isa_from_env(),
+        if let Some(isa) = self.arm_isa {
+            return Ok(isa);
+        }
+        let read = |options: &LoadOptions| options.arm_isa.clone().map_err(UnlaceError::lowlevel);
+        match self.options {
+            Some(options) => read(options),
+            None => read(&LoadOptions::from_env_for_load()),
         }
     }
 }

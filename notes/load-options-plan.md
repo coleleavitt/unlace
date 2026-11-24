@@ -158,7 +158,7 @@ identical on its own; lead runs `cargo check`.
 4. Console `load file` / `load raw` load with explicit options, read with
    `LoadOptions::from_env()` at each load (same values the gates read today:
    the `option` arms still write the environment), `go_version: None` (the
-   environment-mode rule), and the ARM ISA from `arm_isa_from_env`.
+   environment-mode rule), and the ARM ISA from `LoadOptions::arm_isa` (read by `from_env_for_load`).
 5. The other environment-mode loaders go explicit the same way: harness
    `bootstrap_program` (XML datatests), wasm `load_program` (`macho_arm64e` set
    on the options instead of the environment), callwide, fid, lumina,
@@ -203,7 +203,7 @@ input read once at an entry point or a host path; **(b)** a debug, trace, cache 
 fault-injection switch; **(c)** option state that should move into `LoadOptions`.
 Line numbers are as of the audit branch; `rg` the name to find a moved one.
 
-Status after the setters, libctypes and dead-reader PRs: no code outside test modules writes a `UNLACE_*` variable, and the one (c) read left is `UNLACE_ARM_ISA`.
+Status after the setters, libctypes and dead-reader PRs: no code outside test modules writes a `UNLACE_*` variable, and the one (c) read left, `UNLACE_ARM_ISA`, is now `LoadOptions::arm_isa`, read once by `from_env_for_load`.
 
 ### Writes outside test code
 
@@ -227,7 +227,7 @@ now use `loadoptions::read` with `Vars::with` instead.
 | Where | Reads | Class | Disposition |
 |---|---|---|---|
 | `unlace-lift/src/p1_partition/goreg.rs:73` `goroutine_register` | `UNLACE_GOVERSION` | c | fixed: it re-read `UNLACE_GOVERSION` after the `version` argument (the image's release, from `Architecture::go_version`) and shadowed it; the argument is now the only source |
-| `unlace-console/src/engine.rs:9667` `arm_isa_from_env` | `UNLACE_ARM_ISA` | c | read by `ifacedecomp.rs:1431` (`load raw`), `bootstrap.rs:301` and the `bootstrap_from_*` helpers; no `LoadOptions` field, so moving it needs an `arm_isa` field and Bootstrap plumbing; not moved here |
+| `unlace-console/src/engine.rs` `arm_isa_from_env` (deleted) | `UNLACE_ARM_ISA` | c | moved: `LoadOptions::arm_isa` is read once in `from_vars`; `Bootstrap` and `load raw` take the ISA from the options. An unrecognized value stays an error at the load that reads it. The `bootstrap_from_*` helpers that still take an `isa` argument are unchanged |
 | `unlace-middle/src/p0_knowledge/objcsdk.rs` `sdk_path_from_env`, `unlace-analysis/src/analyzers/pdb/locate.rs` `pdb_path_from_env`, `unlace-middle/src/p0_knowledge/sourcelang.rs` `forced_from_env`, `unlace-middle/src/p0_knowledge/options.rs` `env_toggle` | their variables | c | environment-only readers that skipped the scope; no caller anywhere, deleted (dead-readers PR) |
 
 ### Entry points and host paths (a)

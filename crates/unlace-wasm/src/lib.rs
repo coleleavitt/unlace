@@ -637,12 +637,9 @@ fn load_program(
     }
 
     let spec_roots = vec![spec_root.to_string()];
-    let bootstrap = unlace_console::engine::arm_isa_from_env().and_then(|isa| {
-        unlace_console::engine::Bootstrap::new(&spec_roots)
-            .arm_isa(isa)
-            .options(&options)
-            .image(binary)
-    });
+    let bootstrap = unlace_console::engine::Bootstrap::new(&spec_roots)
+        .options(&options)
+        .image(binary);
     let mut prog = bootstrap.map_err(|e| {
         format!(
             "could not build an architecture for {binary}: {}",

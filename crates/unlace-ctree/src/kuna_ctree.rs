@@ -36,6 +36,16 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna `nestedand`) Print an `if` whose whole body is another `if` (neither with an
+    /// else) as one `if` over `a && b`, a rewrite of the C syntax tree.
+    Nestedand,
+    "nestedand",
+    "nested ifs folded into &&",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna `ctree`) Print the function body through its C syntax tree. Off by default while
     /// the tree printer is proven to print exactly what the block printer prints.
     Ctree,

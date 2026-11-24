@@ -153,6 +153,8 @@ impl PrintC {
             && self.out_lang == crate::kuna_lang::OutLang::C;
         let noret_first = arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0
             && self.out_lang == crate::kuna_lang::OutLang::C;
+        let nested_and = arch.kuna_options.get::<crate::kuna_ctree::Nestedand>().0
+            && self.out_lang == crate::kuna_lang::OutLang::C;
         for id in ids {
             let Some(blk) = self.ctree.as_ref().and_then(|tree| {
                 let blk = tree.stmt(id).origin?;
@@ -219,6 +221,11 @@ impl PrintC {
             };
             let expr = tree.add_expr(assign);
             tree.stmt_mut(id).kind = StmtKind::Expr(expr);
+        }
+        if nested_and {
+            for id in ids_rev(self.ctree.as_ref()) {
+                while self.fold_nested_and(fd, id) {}
+            }
         }
         if let Some(tree) = self.ctree.as_mut() {
             tree.advance(CMaturity::Rewritten);
@@ -455,6 +462,115 @@ impl PrintC {
                 tree.stmt(*then).origin
             })
             .unwrap_or_else(|| fd.sblocks_ref().block(blk).get_block(1))
+    }
+
+    /// (kuna `nestedand`) Fold the `if` statement `id` with the `if` that is its whole body:
+    /// `if (a) { if (b) { X } }` becomes `if (a && b) { X }`. Both have no else and no goto;
+    /// the inner `if` is not rewritten, prints nothing before its test (no statement, no
+    /// comment, no label), its condition is a single leaf, and neither prints as a switch or
+    /// an exception form. True when it folded (the new body may fold again).
+    fn fold_nested_and(&mut self, fd: &Funcdata, id: StmtId) -> bool {
+        let Some((outer_blk, cond, then)) = self.ctree.as_ref().and_then(|tree| {
+            let stmt = tree.stmt(id);
+            let StmtKind::If {
+                cond,
+                then,
+                els: None,
+                ..
+            } = &stmt.kind
+            else {
+                return None;
+            };
+            Some((stmt.origin?, *cond, *then))
+        }) else {
+            return false;
+        };
+        let Some((inner_blk, inner_cond, body)) = self.ctree.as_ref().and_then(|tree| {
+            let condition_ok = is_and_chain(tree, cond);
+            let stmt = tree.stmt(then);
+            let StmtKind::If {
+                cond: inner_cond,
+                then: body,
+                els: None,
+                ..
+            } = &stmt.kind
+            else {
+                return None;
+            };
+            let ExprKind::Branch(inner_cond) = tree.expr(*inner_cond).kind else {
+                return None;
+            };
+            condition_ok.then_some((stmt.origin?, inner_cond, *body))
+        }) else {
+            return false;
+        };
+        let sb = fd.sblocks_ref();
+        for blk in [outer_blk, inner_blk] {
+            let block = sb.block(blk);
+            if block.get_type() != BlockType::If
+                || block.get_size() != 2
+                || block.get_if_goto_target().is_some()
+                || self.switch_plans.ifs.contains_key(&blk)
+                || self.is_eh_if(fd, blk)
+            {
+                return false;
+            }
+        }
+        if sb.block(inner_blk).get_block(0) != inner_cond
+            || sb.block(inner_cond).get_type() != BlockType::Copy
+            || !self.header_prints_nothing(fd, inner_cond)
+            || (sb.block(inner_cond).is_unstructured_target()
+                && !self.goto_rewrites.labels.contains(&inner_cond))
+        {
+            return false;
+        }
+        let Some(under) = sb.block(inner_cond).get_copy() else {
+            return false;
+        };
+        let bb_index = fd.bblocks_ref().block(under).get_index();
+        self.commsorter.setup_block_list(bb_index);
+        self.commsorter.setup_op_list(None);
+        if self.commsorter.has_next() {
+            return false;
+        }
+        let Some(tree) = self.ctree.as_mut() else {
+            return false;
+        };
+        let right = tree.add_expr(ExprKind::Branch(inner_cond));
+        let chain = tree.add_expr(ExprKind::And(cond, right));
+        if let StmtKind::If { cond, then, .. } = &mut tree.stmt_mut(id).kind {
+            *cond = chain;
+            *then = body;
+        }
+        true
+    }
+
+    /// The `&&` chain the tree gave the condition of the `BlockIf` `blk` (`nestedand`).
+    pub(super) fn and_condition(&self, blk: BlockId) -> Option<crate::kuna_ctree::ExprId> {
+        let tree = self.ctree.as_ref()?;
+        let StmtKind::If { cond, .. } = &tree.stmt(tree.stmt_for(blk)?).kind else {
+            return None;
+        };
+        matches!(tree.expr(*cond).kind, ExprKind::And(..)).then_some(*cond)
+    }
+}
+
+/// Every statement of `tree`, last added first (an `if` before the statements inside it).
+fn ids_rev(tree: Option<&crate::kuna_ctree::CTree>) -> Vec<StmtId> {
+    let mut ids = tree.map(|tree| tree.stmt_ids()).unwrap_or_default();
+    ids.reverse();
+    ids
+}
+
+/// A condition `emit_cond_expr` prints: a `Branch`, or an `And` whose left operand is one of
+/// these and whose right operand is a `Branch`.
+fn is_and_chain(tree: &crate::kuna_ctree::CTree, expr: crate::kuna_ctree::ExprId) -> bool {
+    match tree.expr(expr).kind {
+        ExprKind::Branch(_) => true,
+        ExprKind::And(left, right) => {
+            matches!(tree.expr(right).kind, ExprKind::Branch(_)) && is_and_chain(tree, left)
+        }
+        _ => false,
     }
 }
 

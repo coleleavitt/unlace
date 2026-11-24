@@ -234,6 +234,7 @@ Three tiers:
 | a byte loaded with ldrb is declared unsigned int and used as an index | [`regnarrow`](#regnarrow----on--off-default-on) |
 | an int local prints as unsigned long on x86-64 though every value is a zero-extended 32-bit result | [`regnarrow`](#regnarrow----on--off-default-on) |
 | a long long parameter on i386 or 32-bit ARM prints as two int parameters | [`pairparam`](#pairparam----on--off-default-on) |
+| a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters | [`pairparam`](#pairparam----on--off-default-on) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -1774,8 +1775,8 @@ The control surface: each of these can make output worse on the wrong source sha
 
 ### `pairparam` -- on | off, default `on`
 
-- **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters.
-- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow or carry links them.
+- **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters; a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters.
+- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow, a carry or a two-word equality links them.
 - **When to flip:** On by default.
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option pairparam off`

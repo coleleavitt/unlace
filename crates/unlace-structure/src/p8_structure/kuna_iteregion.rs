@@ -134,6 +134,7 @@ impl Action for ActionIteRegion {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Casts);
         // P0 assertion `option iteregion on|off`, carried on the Architecture boundary.
         // Default-OFF (a runtime choice) ⇒ nothing marked ⇒ byte-identical output.
         if !data

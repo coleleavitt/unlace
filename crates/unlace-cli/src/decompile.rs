@@ -39,6 +39,9 @@ pub struct DecompileArgs {
     pub bfd_target: Option<String>,
     pub raw: bool,
     pub regions: bool,
+    /// `--trace`: report the maturity the function's last pass reached and the
+    /// facts settled there (`phase status`) on stderr after the C.
+    pub trace: bool,
     pub options: Vec<(String, String)>,
     /// Run the first by-name attempt with `fast_funcdisc off` after every other
     /// option; a name miss retries without it ([`defers_fast_funcdisc`]).
@@ -629,6 +632,8 @@ fn temp_path(prefix: &str, suffix: &str) -> Result<tempfile::TempPath, String> {
 struct DecompileOutcome {
     c: String,
     regions: Option<String>,
+    /// The `phase status` dump for `--trace`.
+    trace: Option<String>,
     failure: Option<String>,
     /// One row per `--assert` directive, recovered from the transcript.
     assertions: Vec<unlace_console::assertions::Outcome>,
@@ -681,10 +686,18 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
     } else {
         None
     };
+    let trace_path = if args.trace {
+        Some(temp_path("kuna_trace_", ".txt")?)
+    } else {
+        None
+    };
     // These are ours, but their directory is the caller's `TMPDIR`.
     reject_unquotable("temp directory", &out_path.display().to_string())?;
     if let Some(rp) = &regions_path {
         reject_unquotable("temp directory", &rp.display().to_string())?;
+    }
+    if let Some(tp) = &trace_path {
+        reject_unquotable("temp directory", &tp.display().to_string())?;
     }
 
     // (kuna, RE-need `analysis-generated-function-name`) The driver defaults, split
@@ -729,6 +742,7 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             injected,
             defer_fast_funcdisc,
             regions_path.as_deref(),
+            trace_path.as_deref(),
         );
 
         let mut cmd = engine.command();
@@ -834,6 +848,7 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
                         args.target
                     ),
                     regions: None,
+                    trace: None,
                     failure: None,
                     assertions: assertion_outcomes(&stdout_text, &args.assertions, selected),
                     name: args.target.clone(),
@@ -893,9 +908,18 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             }
             regions_text = Some(trim_newlines(&buf));
         }
+        let mut trace_text = None;
+        if let Some(tp) = &trace_path {
+            let mut buf = String::new();
+            if let Ok(mut fh) = std::fs::File::open(tp) {
+                let _ = fh.read_to_string(&mut buf);
+            }
+            trace_text = Some(trim_newlines(&buf));
+        }
         Ok(DecompileOutcome {
             c: c_text,
             regions: regions_text,
+            trace: trace_text,
             failure,
             assertions: assertion_outcomes(&stdout_text, &args.assertions, selected),
             name: decompiling_name(&stdout_text).unwrap_or_else(|| args.target.clone()),
@@ -944,6 +968,9 @@ pub fn run(args: &DecompileArgs) -> i32 {
             // survived (DIV-45): a closed reader is not evidence the decompile
             // worked.  Emitting first keeps the stdout-then-stderr order.
             let written = crate::output::emit(&text);
+            if let Some(trace) = &out.trace {
+                eprintln!("// ==== kuna maturity trace ====\n{trace}");
+            }
             if let Some(interior) = &out.interior {
                 eprintln!("{}", crate::interior::note(interior));
             }
@@ -1005,6 +1032,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     let mut bfd_target: Option<String> = None;
     let mut raw = false;
     let mut regions = false;
+    let mut trace = false;
     let mut options: Vec<(String, String)> = Vec::new();
     // The `--option` / `--language` tokens in argv order, replayed verbatim into
     // the `--json` argument list: option precedence and the `--language auto`
@@ -1057,6 +1085,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
             "--raw-image" => raw_image = true,
             "--base" => base = Some(parse_cli_address(&take_value(argv, &mut i, "--base")?)?),
             "--regions" => regions = true,
+            "--trace" => trace = true,
             "--slice" => slice = Some(take_value(argv, &mut i, "--slice")?),
             "--isa" => {
                 isa = ArmIsa::parse(&take_value(argv, &mut i, "--isa")?)?;
@@ -1192,6 +1221,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         for (flag, requested) in [
             ("--raw", raw),
             ("--regions", regions),
+            ("--trace", trace),
             ("--kassert", !kasserts.is_empty()),
             ("--decomp-dbg", decomp_dbg.is_some()),
         ] {
@@ -1251,6 +1281,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         bfd_target,
         raw,
         regions,
+        trace,
         options,
         defer_fast_funcdisc,
         kasserts,
@@ -1270,7 +1301,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
 
 fn usage() {
     eprintln!(
-        "usage: unlace decompile <binary> <name|0xaddr> [--addr] [--json] [--raw] [--regions] \\\n\
+        "usage: unlace decompile <binary> <name|0xaddr> [--addr] [--json] [--raw] [--regions] [--trace] \\\n\
          \x20                     [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                     [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                     [--option N V].. [--kassert ARGS].. \\\n\
@@ -1291,6 +1322,8 @@ fn usage() {
          stack_objects -- and types) and lists them in a top-level `omitted` array;\n\
          name and address always stay.  --no-vars skips the variable extraction\n\
          and leaves `variables` empty, as on decompile-all.\n\
+         --trace prints, on stderr after the C, the maturity the function's last\n\
+         pass reached and the facts settled there (`phase status`); stdout is unchanged.\n\
          \n\
          --apply-rust-signatures PATH trusts an explicit hashed Rust signature manifest;\n\
          only a complete unique profile and both-bank name/address agreement propose names.\n\
@@ -1633,6 +1666,7 @@ mod tests {
             bfd_target: None,
             raw: false,
             regions: false,
+            trace: false,
             options: Vec::new(),
             defer_fast_funcdisc: false,
             kasserts: Vec::new(),
@@ -1664,6 +1698,7 @@ mod tests {
             injected,
             false,
             regions_path,
+            None,
         )
     }
 
@@ -1706,7 +1741,16 @@ mod tests {
         args.options = vec![("fast_funcdisc".into(), "on".into())];
         let out = Path::new("/tmp/kuna_c_x.c");
         let script = |defer| {
-            super::build_script_for_input(&args, &args.binary, false, out, LISTING, defer, None)
+            super::build_script_for_input(
+                &args,
+                &args.binary,
+                false,
+                out,
+                LISTING,
+                defer,
+                None,
+                None,
+            )
         };
         let last = |text: String| {
             text.lines()

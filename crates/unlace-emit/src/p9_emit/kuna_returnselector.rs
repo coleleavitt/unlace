@@ -27,6 +27,7 @@ impl Action for ActionReturnSelector {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, CleanUp);
         let mut changed = false;
         for i in 0..data.num_jump_tables() {
             let table = data.get_jump_table(i);

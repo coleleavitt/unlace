@@ -450,9 +450,9 @@
 # ia.sinc:4235
 :MOV Rmr64, debugreg_x is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & rexRprefix=1 & byte=0x21; Rmr64 & debugreg_x     { Rmr64 = debugreg_x; }
 # ia.sinc:4246
-:MOV debugreg, Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & byte=0x23; Rmr64 & debugreg & mod=3      { debugreg = Rmr64; }
+:MOV debugreg, Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & byte=0x23; Rmr64 & debugreg      { debugreg = Rmr64; }
 # ia.sinc:4247
-:MOV debugreg_x, Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & rexRprefix=1 & byte=0x23; Rmr64 & debugreg_x & mod=3     { debugreg_x = Rmr64; }
+:MOV debugreg_x, Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & rexRprefix=1 & byte=0x23; Rmr64 & debugreg_x     { debugreg_x = Rmr64; }
 # ia.sinc:4267
 :MOVNTI Mem,Reg32 is vexMode=3 & vexMMMMM=1 & opsize = 1; byte=0xc3; Mem & Reg32 ...     { *Mem = Reg32; }
 # ia.sinc:4269

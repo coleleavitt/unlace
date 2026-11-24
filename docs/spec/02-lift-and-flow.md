@@ -4625,6 +4625,15 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 MOV DRn mod and VFPCLASSPH/SH display (#98)
+
+`MOV DRn, r64` decodes whatever ModRM.mod holds (the SDM says the field is ignored), as the
+other debug- and control-register moves did; before, `0f 23` with mod != 3 was a bad
+instruction. `vfpclassph`/`vfpclasssh` print their class mask as an immediate, as `vfpclassps`
+and LLVM do. `66 0f 52/53` and `extrq` with ModRM.reg != 0 stay undecoded: both manuals leave them
+undefined and the difffuzz reference raises #UD. Exercised by the `x86_64_movdr_mod` row of
+`unlace-cli/tests/processors.toml`.
+
 ### x86 AVX-512 {sae} and embedded rounding (#98)
 
 An EVEX register form with EVEX.b=1 is 512 bits wide (or scalar), and its L'L field is the

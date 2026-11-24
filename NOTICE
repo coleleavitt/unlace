@@ -289,6 +289,10 @@ specs/Ghidra/Processors/i860 vendors the Intel i860 SLEIGH module i860 of
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 
+specs/Ghidra/Processors/ADSP218x vendors the Analog Devices ADSP-218x SLEIGH module ADSP218x of
+Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
+License (its license files are in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

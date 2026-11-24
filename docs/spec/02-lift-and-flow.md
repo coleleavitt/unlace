@@ -4234,6 +4234,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `TMS320C2x` | TI TMS320C2x / C5x | `TMS320C2x:BE:16:default`, `TMS320C2x:LE:16:default`, `TMS320C5x:BE:16:default`, `TMS320C5x:LE:16:default` | aleph-void/Ghidra-Rare (TMS320C2x) @ `87cc554e33`, MIT |
 | `RX` | Renesas RX (RXv1-v3) | `RX:LE:32:RXv1`, `RX:LE:32:RXv2`, `RX:LE:32:RXv3` | aleph-void/Ghidra-Rare (RX) @ `87cc554e33`, MIT |
 | `i860` | Intel i860 | `i860:LE:32:XR`, `i860:LE:32:XP` | aleph-void/Ghidra-Rare (i860) @ `87cc554e33`, MIT |
+| `ADSP218x` | Analog Devices ADSP-218x | `ADSP218x:BE:16:default` | aleph-void/Ghidra-Rare (ADSP218x) @ `87cc554e33`, MIT |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

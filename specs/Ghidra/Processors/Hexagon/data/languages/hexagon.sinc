@@ -1751,22 +1751,34 @@ CheckLpcfg:  is useLoopCfg=1 [ useLoopCfg=0; ] {
 
 # EndPacket: End of HW Loop handling (uses parse1 and parse2)
 
+# Loop starts recorded by loop0/loop1 (Lp0Set/Lp1Set).
+Lp0Start: is lp0sa { export *[ram]:4 lp0sa; }
+Lp1Start: is lp1sa { export *[ram]:4 lp1sa; }
+
 EndOfLoop: 			 		is PropogateLoopCfg { } # not end-of-loop - propogate useLoopCfg if active
-EndOfLoop: " :endloop0"		is parse1=2 & CheckLpcfg { # Last in HW Loop 0
-	# :endloop0 - TODO: not sure how to display
+EndOfLoop: " :endloop0"		is parse1=2 & lp0sa=0 & CheckLpcfg { # Last in HW Loop 0, start unknown
 	build CheckLpcfg;
 	if (LC0 <= 1) goto inst_next;
 	LC0 = LC0 - 1;
 	goto [SA0];
 }
-EndOfLoop: " :endloop1" 	is parse1=1 & parse2=2 & PropogateLoopCfg { # Last in HW Loop 1 - propogate useLoopCfg if active
-	# :endloop1 - TODO: not sure how to display
+EndOfLoop: " :endloop0"		is parse1=2 & CheckLpcfg & Lp0Start { # Last in HW Loop 0
+	build CheckLpcfg;
+	if (LC0 <= 1) goto inst_next;
+	LC0 = LC0 - 1;
+	goto Lp0Start;
+}
+EndOfLoop: " :endloop1" 	is parse1=1 & parse2=2 & lp1sa=0 & PropogateLoopCfg { # Last in HW Loop 1, start unknown
 	if (LC1 <= 1) goto inst_next;
 	LC1 = LC1 - 1;
 	goto [SA1];
 }
+EndOfLoop: " :endloop1" 	is parse1=1 & parse2=2 & PropogateLoopCfg & Lp1Start { # Last in HW Loop 1
+	if (LC1 <= 1) goto inst_next;
+	LC1 = LC1 - 1;
+	goto Lp1Start;
+}
 EndOfLoop: " :endloop0 :endloop1" 	is parse1=2 & parse2=2 & CheckLpcfg { # Last in HW Loop 0 & 1
-	# :endloop0:endloop1 - TODO: not sure how to display
 	build CheckLpcfg;
 	if (LC0 <= 1) goto inst_next;
 	LC0 = LC0 - 1;
@@ -6565,6 +6577,13 @@ LoopRelAddr7x: val	is i0811 & immexted=1 [ val = (simmext << 6) | (i0811 << 2) +
 
 LoopRelMem7x: LoopRelAddr7x	is LoopRelAddr7x { export *[ram]:4 LoopRelAddr7x; }
 
+# Record the loop start in flowing context for the packet that ends the loop.
+Lp0Set: is s0812 & i0304 & immexted=0 [ lp0sa = (((s0812 << 2) | i0304) << 2) + $(PKT_START); globalset(inst_next, lp0sa); ] { }
+Lp0Set: is i0811 & immexted=1 [ lp0sa = (simmext << 6) | (i0811 << 2) + $(PKT_START); globalset(inst_next, lp0sa); ] { }
+Lp1Set: is s0812 & i0304 & immexted=0 [ lp1sa = (((s0812 << 2) | i0304) << 2) + $(PKT_START); globalset(inst_next, lp1sa); ] { }
+Lp1Set: is i0811 & immexted=1 [ lp1sa = (simmext << 6) | (i0811 << 2) + $(PKT_START); globalset(inst_next, lp1sa); ] { }
+
+
 LoopUimm10: "#"^val  is i1620 & i0507 & i0001  [ val = (i1620 << 5) | (i0507 << 2) | i0001; ] { export *[const]:4 val; }
 
 # (v2,6) loop0  --  "loop0 ( #r7:2x , #U10 )"
@@ -6572,7 +6591,7 @@ LoopUimm10: "#"^val  is i1620 & i0507 & i0001  [ val = (i1620 << 5) | (i0507 << 
 #  |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 #    0  1  1  0  1  0  0  1  0  0  0  I  I  I  I  I  P  P  -  i  i  i  i  i  I  I  I  i  i  -  I  I  
 
-:loop0 LoopRelMem7x,LoopUimm10 EndPacket	is iclass=6 & op2127=0x48 & op13=0 & op2=0 & LoopRelMem7x & LoopRelAddr7x & LoopUimm10 & $(END_PACKET) {
+:loop0 LoopRelMem7x,LoopUimm10 EndPacket	is iclass=6 & op2127=0x48 & op13=0 & op2=0 & LoopRelMem7x & LoopRelAddr7x & LoopUimm10 & Lp0Set & $(END_PACKET) {
 	SA0_ = LoopRelAddr7x;
 	LC0_ = LoopUimm10;
 	build EndPacket;
@@ -6587,7 +6606,7 @@ LoopUimm10: "#"^val  is i1620 & i0507 & i0001  [ val = (i1620 << 5) | (i0507 << 
 #  |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 #    0  1  1  0  0  0  0  0  0  0  0  s  s  s  s  s  P  P  -  i  i  i  i  i  -  -  -  i  i  -  -  -  
 
-:loop0	LoopRelMem7x,rs5 EndPacket	is iclass=6 & op2127=0 & op13=0 & op0507=0 & op0002=0 & LoopRelMem7x & LoopRelAddr7x & rs5 & $(END_PACKET) {
+:loop0	LoopRelMem7x,rs5 EndPacket	is iclass=6 & op2127=0 & op13=0 & op0507=0 & op0002=0 & LoopRelMem7x & LoopRelAddr7x & rs5 & Lp0Set & $(END_PACKET) {
 	SA0_ = LoopRelAddr7x;
 	LC0_ = rs5;
 	build EndPacket;
@@ -6602,7 +6621,7 @@ LoopUimm10: "#"^val  is i1620 & i0507 & i0001  [ val = (i1620 << 5) | (i0507 << 
 #  |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 #    0  1  1  0  1  0  0  1  0  0  1  I  I  I  I  I  P  P  -  i  i  i  i  i  I  I  I  i  i  -  I  I  
 
-:loop1 LoopRelMem7x,LoopUimm10 EndPacket	is iclass=6 & op2127=0x49 & op13=0 & op2=0 & LoopRelMem7x & LoopRelAddr7x & LoopUimm10 & $(END_PACKET) {
+:loop1 LoopRelMem7x,LoopUimm10 EndPacket	is iclass=6 & op2127=0x49 & op13=0 & op2=0 & LoopRelMem7x & LoopRelAddr7x & LoopUimm10 & Lp1Set & $(END_PACKET) {
 	SA1_ = LoopRelAddr7x;
 	LC1_ = LoopUimm10;
 	build EndPacket;
@@ -6617,7 +6636,7 @@ LoopUimm10: "#"^val  is i1620 & i0507 & i0001  [ val = (i1620 << 5) | (i0507 << 
 #  |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 #    0  1  1  0  0  0  0  0  0  0  1  s  s  s  s  s  P  P  -  i  i  i  i  i  -  -  -  i  i  -  -  -  
 
-:loop1	LoopRelMem7x,rs5 EndPacket	is iclass=6 & op2127=1 & op13=0 & op0507=0 & op0002=0 & LoopRelMem7x & LoopRelAddr7x & rs5 & $(END_PACKET) {
+:loop1	LoopRelMem7x,rs5 EndPacket	is iclass=6 & op2127=1 & op13=0 & op0507=0 & op0002=0 & LoopRelMem7x & LoopRelAddr7x & rs5 & Lp1Set & $(END_PACKET) {
 	SA1_ = LoopRelAddr7x;
 	LC1_ = rs5;
 	build EndPacket;
@@ -13302,7 +13321,7 @@ define pcodeop shuffoh;
 #  |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 #    0  1  1  0  1  0  0  1  1  0  1  I  I  I  I  I  P  P  -  i  i  i  i  i  I  I  I  i  i  -  I  I  
 
-:sp1loop0 P3,LoopRelMem7x,LoopUimm10 EndPacket	is iclass=6 & op2127=0x4d & op13=0 & op2=0 & P3 & LoopRelMem7x & LoopRelAddr7x & LoopUimm10 & $(END_PACKET) [ useLoopCfg=1; ] {
+:sp1loop0 P3,LoopRelMem7x,LoopUimm10 EndPacket	is iclass=6 & op2127=0x4d & op13=0 & op2=0 & P3 & LoopRelMem7x & LoopRelAddr7x & LoopUimm10 & Lp0Set & $(END_PACKET) [ useLoopCfg=1; ] {
 	SA0_ = LoopRelAddr7x;
 	LC0_ = LoopUimm10;
 	build EndPacket;
@@ -13318,7 +13337,7 @@ define pcodeop shuffoh;
 #  |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 #    0  1  1  0  0  0  0  0  1  0  1  s  s  s  s  s  P  P  -  i  i  i  i  i  -  -  -  i  i  -  -  -  
 
-:sp1loop0	P3,LoopRelMem7x,rs5 EndPacket	is iclass=6 & op2127=5 & op13=0 & op0507=0 & op0002=0 & P3 & LoopRelMem7x & LoopRelAddr7x & rs5 & $(END_PACKET) [ useLoopCfg=1; ] {
+:sp1loop0	P3,LoopRelMem7x,rs5 EndPacket	is iclass=6 & op2127=5 & op13=0 & op0507=0 & op0002=0 & P3 & LoopRelMem7x & LoopRelAddr7x & rs5 & Lp0Set & $(END_PACKET) [ useLoopCfg=1; ] {
 	SA0_ = LoopRelAddr7x;
 	LC0_ = rs5;
 	build EndPacket;
@@ -13334,7 +13353,7 @@ define pcodeop shuffoh;
 #  |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 #    0  1  1  0  1  0  0  1  1  1  0  I  I  I  I  I  P  P  -  i  i  i  i  i  I  I  I  i  i  -  I  I  
 
-:sp2loop0 P3,LoopRelMem7x,LoopUimm10 EndPacket	is iclass=6 & op2127=0x4e & op13=0 & op2=0 & P3 & LoopRelMem7x & LoopRelAddr7x & LoopUimm10 & $(END_PACKET) [ useLoopCfg=1; ] {
+:sp2loop0 P3,LoopRelMem7x,LoopUimm10 EndPacket	is iclass=6 & op2127=0x4e & op13=0 & op2=0 & P3 & LoopRelMem7x & LoopRelAddr7x & LoopUimm10 & Lp0Set & $(END_PACKET) [ useLoopCfg=1; ] {
 	SA0_ = LoopRelAddr7x;
 	LC0_ = LoopUimm10;
 	build EndPacket;
@@ -13350,7 +13369,7 @@ define pcodeop shuffoh;
 #  |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 #    0  1  1  0  0  0  0  0  1  1  0  s  s  s  s  s  P  P  -  i  i  i  i  i  -  -  -  i  i  -  -  -  
 
-:sp2loop0	P3,LoopRelMem7x,rs5 EndPacket	is iclass=6 & op2127=6 & op13=0 & op0507=0 & op0002=0 & P3 & LoopRelMem7x & LoopRelAddr7x & rs5 & $(END_PACKET) [ useLoopCfg=1; ] {
+:sp2loop0	P3,LoopRelMem7x,rs5 EndPacket	is iclass=6 & op2127=6 & op13=0 & op0507=0 & op0002=0 & P3 & LoopRelMem7x & LoopRelAddr7x & rs5 & Lp0Set & $(END_PACKET) [ useLoopCfg=1; ] {
 	SA0_ = LoopRelAddr7x;
 	LC0_ = rs5;
 	build EndPacket;
@@ -13366,7 +13385,7 @@ define pcodeop shuffoh;
 #  |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 #    0  1  1  0  1  0  0  1  1  1  1  I  I  I  I  I  P  P  -  i  i  i  i  i  I  I  I  i  i  -  I  I  
 
-:sp3loop0 P3,LoopRelMem7x,LoopUimm10 EndPacket	is iclass=6 & op2127=0x4f & op13=0 & op2=0 & P3 & LoopRelMem7x & LoopRelAddr7x & LoopUimm10 & $(END_PACKET) [ useLoopCfg=1; ] {
+:sp3loop0 P3,LoopRelMem7x,LoopUimm10 EndPacket	is iclass=6 & op2127=0x4f & op13=0 & op2=0 & P3 & LoopRelMem7x & LoopRelAddr7x & LoopUimm10 & Lp0Set & $(END_PACKET) [ useLoopCfg=1; ] {
 	SA0_ = LoopRelAddr7x;
 	LC0_ = LoopUimm10;
 	build EndPacket;
@@ -13382,7 +13401,7 @@ define pcodeop shuffoh;
 #  |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 #    0  1  1  0  0  0  0  0  1  1  1  s  s  s  s  s  P  P  -  i  i  i  i  i  -  -  -  i  i  -  -  -  
 
-:sp3loop0	P3,LoopRelMem7x,rs5 EndPacket	is iclass=6 & op2127=7 & op13=0 & op0507=0 & op0002=0 & P3 & LoopRelMem7x & LoopRelAddr7x & rs5 & $(END_PACKET) [ useLoopCfg=1; ] {
+:sp3loop0	P3,LoopRelMem7x,rs5 EndPacket	is iclass=6 & op2127=7 & op13=0 & op0507=0 & op0002=0 & P3 & LoopRelMem7x & LoopRelAddr7x & rs5 & Lp0Set & $(END_PACKET) [ useLoopCfg=1; ] {
 	SA0_ = LoopRelAddr7x;
 	LC0_ = rs5;
 	build EndPacket;

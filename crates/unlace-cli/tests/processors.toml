@@ -366,6 +366,33 @@ expect = [
     "return padd_8(a0,a1);",  # named lane operation
 ]
 
+# Hexagon hardware loops (Hexagon:LE:32:default), assembled with zig cc (LLVM): the
+# :endloop0/:endloop1 packet branches back to the start loop0/loop1 recorded.
+[[family]]
+name = "hexagon_loop"
+language = "Hexagon:LE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/hexagon_loop/loop.bin"
+forbid = ["halt_baddata", "(a1 <= 1);", "(v3 <= 1);"]
+
+[[family.function]]
+test = "hexagon_loop_endloop0_back_edge"
+address = "0x1000"
+expect = [
+    "while( true ) {",
+    "v2 += *a0;",
+    "if (a1 <= 1) break;",
+]
+
+[[family.function]]
+test = "hexagon_loop_endloop1_back_edge"
+address = "0x1020"
+expect = [
+    "while( true ) {",
+    "v2 ^= *a0;",
+    "if (v3 <= 1) break;",
+]
+
 # C-SKY bloop (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck804e: the loop-closing
 # bloop after an ldbi.w/addu body, in its two-label and three-label forms.
 [[family]]

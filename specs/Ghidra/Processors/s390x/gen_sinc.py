@@ -46,6 +46,13 @@ TOKSZ = {"a": 16, "b": 32, "c": 48}
 _VF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vector_fields.txt")
 if os.path.exists(_VF):
     EXTRA["c"] += [l.strip() for l in open(_VF) if l.strip()]
+# Fields the HFP/decimal instructions (gen_hfpdec.py) use, as "<token>:<field>".
+_HF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hfpdec_fields.txt")
+if os.path.exists(_HF):
+    for l in open(_HF):
+        if l.strip():
+            t, f = l.strip().split(":", 1)
+            EXTRA[t].append(f)
 
 main = []
 def M(s=""): main.append(s)

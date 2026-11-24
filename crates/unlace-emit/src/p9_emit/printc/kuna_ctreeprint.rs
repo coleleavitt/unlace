@@ -812,8 +812,9 @@ impl PrintC {
 
     /// Does the condition block `cond`, printed alone and not negated, evaluate to `0` or
     /// `1`? A folded `&&`/`||` chain does; a leaf does when its `CBRANCH` tests a
-    /// comparison or boolean op that does not print as a bare truth test (`truthycond`
-    /// prints `x != 0` as `x`) and is not a `!` (which prints bare when the branch flips).
+    /// comparison or boolean op that is not a `!` (which prints bare when the branch flips)
+    /// and does not print as a bare truth test: `truthycond` prints `x != 0` as `x`, but
+    /// `x == 0` as `!x`, which is `0` or `1` (an unflipped `==` or a flipped `!=`).
     fn cond_is_boolean(&self, fd: &Funcdata, cond: BlockId) -> bool {
         let tail = crate::kuna_itecondlist::cond_list_tail(fd, cond);
         let sb = fd.sblocks_ref();
@@ -823,20 +824,37 @@ impl PrintC {
         let Some(bb) = sb.block(tail).get_copy() else {
             return false;
         };
-        let Some(def) = fd
-            .bb_op_tail(bb)
-            .and_then(|br| fd.obank().get(br))
-            .filter(|o| o.code() == OpCode::CPUI_CBRANCH)
-            .and_then(|o| o.get_in(1))
-            .and_then(|vn| fd.vbank().get(vn))
-            .and_then(|v| v.get_def())
-        else {
+        let Some(br) = fd.bb_op_tail(bb).filter(|br| {
+            fd.obank()
+                .get(*br)
+                .is_some_and(|o| o.code() == OpCode::CPUI_CBRANCH)
+        }) else {
             return false;
         };
-        fd.obank()
-            .get(def)
-            .is_some_and(|d| d.is_bool_output() && d.code() != OpCode::CPUI_BOOL_NEGATE)
-            && self.truthy_other_operand(fd, def).is_none()
+        let Some(o) = fd.obank().get(br) else {
+            return false;
+        };
+        let flip = o.is_boolean_flip() ^ self.flipped_branches.contains(&br);
+        let Some(in1) = o.get_in(1) else {
+            return false;
+        };
+        let Some(def) = fd.vbank().get(in1).and_then(|v| v.get_def()) else {
+            return false;
+        };
+        let Some(d) = fd.obank().get(def) else {
+            return false;
+        };
+        if !d.is_bool_output() || d.code() == OpCode::CPUI_BOOL_NEGATE {
+            return false;
+        }
+        if self.truthy_other_operand(fd, def).is_none() {
+            return true;
+        }
+        match d.code() {
+            OpCode::CPUI_INT_EQUAL => !flip,
+            OpCode::CPUI_INT_NOTEQUAL => flip && self.check_print_negation(fd, in1),
+            _ => false,
+        }
     }
 
     /// (kuna `noretfirst`) Rewrite the `if`/`else` statement `id` (built from `blk`) when

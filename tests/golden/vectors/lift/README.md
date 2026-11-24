@@ -50,6 +50,10 @@ multiply/divide xcc corrections. The function has none of those instructions; on
 unique-space offsets moved. The same capture over the previous sources reproduces the
 previous fixture exactly.
 
+`gh8817-v850indbranch.txt` was refreshed for the V850 DIVH/MULHI/saturation corrections. The
+function has none of those instructions; two lines change only a unique-space offset, and the same
+capture over the previous sources reproduces the previous fixture exactly.
+
 ## Regeneration
 
 ```bash

@@ -1711,7 +1711,7 @@ source_decompiler = "unlace"
 inspiration = "archived unlace idiom_recognition try_bitfield_read / try_bitfield_write (issue 1253)"
 change_kind = "new-analysis"
 tier = "transform"
-symptoms = ["a register field is extracted with a shift and an AND", "a flag field is set with a clear-mask OR and a shifted insert", "packed descriptor or hardware register fields print as shift and mask arithmetic"]
+symptoms = "a register field is extracted with a shift and an AND|a flag field is set with a clear-mask OR and a shifted insert|packed descriptor or hardware register fields print as shift and mask arithmetic"
 
 [[settable]]
 option = "satmul"

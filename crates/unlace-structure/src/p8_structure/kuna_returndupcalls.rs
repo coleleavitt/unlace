@@ -10,7 +10,9 @@
 //!
 //! A block qualifies when it has no successors, two to four distinct
 //! predecessors, at most [`MAX_OPS`] ops, exactly one CALL or CALLIND, an input
-//! of that call computed from a MULTIEQUAL in the block, and no INDIRECT that
+//! of that call computed from a MULTIEQUAL in the block that is not one memory
+//! location loaded again on each path (`free(s->buf)` after a loop that reloads
+//! `s->buf` is one source call), and no INDIRECT that
 //! still creates the call's output (prototype recovery has not settled it yet;
 //! a later pass of the loop retries).  Each predecessor runs exactly one copy,
 //! so the split preserves behaviour.
@@ -32,13 +34,15 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
-use crate::context::{BlockId, OpId};
+use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
 /// Largest block (in p-code ops) this pass duplicates.
 pub const MAX_OPS: usize = 16;
 /// Maximum splits per function.
 pub const MAX_SPLITS: int4 = 16;
+/// Most defining ops [`reload_pointer`] looks through.
+pub const MAX_RELOAD_DEFS: usize = 16;
 
 /// Split a cross-jumped call tail per predecessor (`option returndup calls`).
 pub struct ActionReturnDupCalls {
@@ -81,9 +85,66 @@ fn reads_merge(data: &Funcdata, ops: &[OpId], op: OpId, depth: u32) -> bool {
             return false;
         }
         let code = data.obank().get(def).map(|d| d.code());
-        code == Some(OpCode::CPUI_MULTIEQUAL)
+        (code == Some(OpCode::CPUI_MULTIEQUAL) && !one_reloaded_value(data, def))
             || (depth < 4 && reads_merge(data, ops, def, depth + 1))
     })
+}
+
+/// The pointer every value `vn` can take is loaded through, when each is a
+/// LOAD or a MULTIEQUAL of such values (at most [`MAX_RELOAD_DEFS`] defs).
+fn reload_pointer(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<OpId>) -> Option<VarnodeId> {
+    let def = data.vbank().get(vn)?.get_def()?;
+    if seen.contains(&def) {
+        return None;
+    }
+    if seen.len() >= MAX_RELOAD_DEFS {
+        return None;
+    }
+    seen.push(def);
+    let o = data.obank().get(def)?;
+    match o.code() {
+        OpCode::CPUI_LOAD => o.get_in(1),
+        OpCode::CPUI_MULTIEQUAL => {
+            let mut ptr: Option<VarnodeId> = None;
+            for slot in 0..o.num_input() {
+                let Some(input) = o.get_in(slot) else {
+                    return None;
+                };
+                let in_def = data.vbank().get(input).and_then(|v| v.get_def());
+                if in_def.is_some_and(|d| seen.contains(&d)) {
+                    continue;
+                }
+                let p = reload_pointer(data, input, seen)?;
+                match ptr {
+                    None => ptr = Some(p),
+                    Some(q) => {
+                        if q != p
+                            && !crate::expression::functional_equality(
+                                q,
+                                p,
+                                data.vbank(),
+                                data.obank(),
+                            )
+                        {
+                            return None;
+                        }
+                    }
+                }
+            }
+            ptr
+        }
+        _ => None,
+    }
+}
+
+/// Is MULTIEQUAL `phi` only one memory location read again on each path
+/// (`p = s->buf; ... p = s->buf;`)? Its paths then pass one source value, and
+/// splitting the call on it only duplicates the call.
+fn one_reloaded_value(data: &Funcdata, phi: OpId) -> bool {
+    let Some(out) = data.obank().get(phi).and_then(|o| o.get_out()) else {
+        return false;
+    };
+    reload_pointer(data, out, &mut Vec::new()).is_some()
 }
 
 fn is_candidate(data: &Funcdata, b: BlockId) -> bool {

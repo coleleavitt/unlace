@@ -86,9 +86,9 @@ define pcodeop lxvdsxOp;
 # lxsdx XT,RA,RB
 # ISA-info: lxsdx - Form "XX1" Page 338 Category "VSX"
 # binutils: vsx.d:    0:	7d 0a a4 99 	lxsdx   vs40,r10,r20
-:lxsdx XT,RA_OR_ZERO,B is $(NOTVLE) & OP=31 & XT & RA_OR_ZERO & B & XOP_1_10=588 & TX  {
+:lxsdx XT,RA_OR_ZERO,B is $(NOTVLE) & OP=31 & XT & RA_OR_ZERO & B & XOP_1_10=588 & TX {
 	ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
-	XT[0,64] = *:8 ea;
+	XT[64,64] = *:8 ea;
 }
 
 # name	 lxvd2x	 code	 7c000698	 mask	 fe0700fc00000000	 flags	 @VSX 	 operands	69	31	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
@@ -101,10 +101,10 @@ define pcodeop lxvdsxOp;
 define pcodeop stxsdxOp;
 # ISA-info: stxsdx - Form "XX1" Page 340 Category "VSX"
 # binutils: vsx.d:   10:	7d 0a a5 99 	stxsdx  vs40,r10,r20
-:stxsdx XT,RA_OR_ZERO,B is $(NOTVLE) & OP=31 & XT & RA_OR_ZERO & B & XOP_1_10=716 & TX  {
+:stxsdx XT,RA_OR_ZERO,B is $(NOTVLE) & OP=31 & XT & RA_OR_ZERO & B & XOP_1_10=716 & TX {
 	EA:$(REGISTER_SIZE) = RA_OR_ZERO + B;
-	*[ram]:8 EA = stxsdxOp(RA_OR_ZERO,B);
-} 
+	*[ram]:8 EA = XT[64,64];
+}
 
 # name	 stxvd2x	 code	 7c000798	 mask	 fe0700fc00000000	 flags	 @VSX 	 operands	69	31	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
 :stxvd2x XS,RA_OR_ZERO,B is $(NOTVLE) & OP=31 & XS & RA_OR_ZERO & B & XOP_1_10=972 {
@@ -169,19 +169,19 @@ define pcodeop xsadddpOp;
 # ISA-cmt: xsadddp - VSX Scalar Add Double-Precision
 # ISA-info: xsadddp - Form "XX3" Page 342 Category "VSX"
 # binutils: vsx.d:   20:	f1 12 e1 07 	xsadddp vs40,vs50,vs60
-:xsadddp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=32 & XA & XB & XT
-{
-	src1:8 = XA:8;
-	src2:8 = XB:8;
-	local src = src1 f+ src2;
-	XT[0,64] = src;
+:xsadddp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=32 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64];
+	XT[64,64] = a f+ b;
 }
 
 define pcodeop xsmaddadpOp;
 # ISA-cmt: xsmaddadp - VSX Scalar Multiply-Add Type-A Double-Precision
 # ISA-info: xsmaddadp - Form "XX3" Page 365 Category "VSX"
 # binutils: vsx.d:   54:	f1 12 e1 0f 	xsmaddadp vs40,vs50,vs60
-:xsmaddadp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=33 & XA & XB & XT {  xsmaddadpOp(XA,XB,XT);  }
+:xsmaddadp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=33 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	XT[64,64] = (a f* b) f+ t;
+}
 
 define pcodeop xscmpudpOp;
 # ISA-cmt: xscmpudp - VSX Scalar Compare Unordered Double-Precision
@@ -193,13 +193,19 @@ define pcodeop xssubdpOp;
 # ISA-cmt: xssubdp - VSX Scalar Subtract Double-Precision
 # ISA-info: xssubdp - Form "XX3" Page 393 Category "VSX"
 # binutils: vsx.d:   a8:	f1 12 e1 47 	xssubdp vs40,vs50,vs60
-:xssubdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=40 & XA & XB & XT {  xssubdpOp(XA,XB,XT);  }
+:xssubdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=40 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64];
+	XT[64,64] = a f- b;
+}
 
 define pcodeop xsmaddmdpOp;
 # ISA-cmt: xsmaddmdp - VSX Scalar Multiply-Add Type-M Double-Precision
 # ISA-info: xsmaddmdp - Form "XX3" Page 365 Category "VSX"
 # binutils: vsx.d:   58:	f1 12 e1 4f 	xsmaddmdp vs40,vs50,vs60
-:xsmaddmdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=41 & XA & XB & XT {  xsmaddmdpOp(XA,XB,XT);  }
+:xsmaddmdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=41 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	XT[64,64] = (a f* t) f+ b;
+}
 
 define pcodeop xscmpodpOp;
 # ISA-cmt: xscmpodp - VSX Scalar Compare Ordered Double-Precision
@@ -211,13 +217,19 @@ define pcodeop xsmuldpOp;
 # ISA-cmt: xsmuldp - VSX Scalar Multiply Double-Precision
 # ISA-info: xsmuldp - Form "XX3" Page 375 Category "VSX"
 # binutils: vsx.d:   6c:	f1 12 e1 87 	xsmuldp vs40,vs50,vs60
-:xsmuldp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=48 & XA & XB & XT {  xsmuldpOp(XA,XB,XT);  }
+:xsmuldp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=48 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64];
+	XT[64,64] = a f* b;
+}
 
 define pcodeop xsmsubadpOp;
 # ISA-cmt: xsmsubadp - VSX Scalar Multiply-Subtract Type-A Double-Precision
 # ISA-info: xsmsubadp - Form "XX3" Page 372 Category "VSX"
 # binutils: vsx.d:   64:	f1 12 e1 8f 	xsmsubadp vs40,vs50,vs60
-:xsmsubadp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=49 & XA & XB & XT {  xsmsubadpOp(XA,XB,XT);  }
+:xsmsubadp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=49 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	XT[64,64] = (a f* b) f- t;
+}
 
 define pcodeop xxmrglwOp;
 # ISA-cmt: xxmrglw - VSX Merge Low Word
@@ -229,13 +241,19 @@ define pcodeop xsdivdpOp;
 # ISA-cmt: xsdivdp - VSX Scalar Divide Double-Precision
 # ISA-info: xsdivdp - Form "XX3" Page 363 Category "VSX"
 # binutils: vsx.d:   50:	f1 12 e1 c7 	xsdivdp vs40,vs50,vs60
-:xsdivdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=56 & XA & XB & XT {  xsdivdpOp(XA,XB,XT);  }
+:xsdivdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=56 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64];
+	XT[64,64] = a f/ b;
+}
 
 define pcodeop xsmsubmdpOp;
 # ISA-cmt: xsmsubmdp - VSX Scalar Multiply-Subtract Type-M Double-Precision
 # ISA-info: xsmsubmdp - Form "XX3" Page 372 Category "VSX"
 # binutils: vsx.d:   68:	f1 12 e1 cf 	xsmsubmdp vs40,vs50,vs60
-:xsmsubmdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=57 & XA & XB & XT {  xsmsubmdpOp(XA,XB,XT);  }
+:xsmsubmdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=57 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	XT[64,64] = (a f* t) f- b;
+}
 
 define pcodeop xstdivdpOp;
 # ISA-cmt: xstdivdp - VSX Scalar Test for software Divide Double-Precision
@@ -277,7 +295,11 @@ define pcodeop xscvdpuxwsOp;
 # ISA-cmt: xscvdpuxws - VSX Scalar truncate Double-Precision to integer and Convert to Unsigned Fixed-Point Word format with Saturate
 # ISA-info: xscvdpuxws - Form "XX2" Page 359 Category "VSX"
 # binutils: vsx.d:   40:	f1 00 e1 23 	xscvdpuxws vs40,vs60
-:xscvdpuxws  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=72 & BITS_16_20=0 & XB & XT {  xscvdpuxwsOp(XB,XT);  }
+:xscvdpuxws  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=72 & BITS_16_20=0 & XB & XT {
+	local b:8 = XB[64,64];
+	local r:8 = trunc(b);
+	XT[64,32] = r:4;
+}
 
 define pcodeop xvmaddmspOp;
 # ISA-cmt: xvmaddmsp - VSX Vector Multiply-Add Type-M Single-Precision
@@ -301,7 +323,10 @@ define pcodeop xssqrtdpOp;
 # ISA-cmt: xssqrtdp - VSX Scalar Square Root Double-Precision
 # ISA-info: xssqrtdp - Form "XX2" Page 392 Category "VSX"
 # binutils: vsx.d:   a4:	f1 00 e1 2f 	xssqrtdp vs40,vs60
-:xssqrtdp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=75 & BITS_16_20=0 & XB & XT {  xssqrtdpOp(XB,XT);  }
+:xssqrtdp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=75 & BITS_16_20=0 & XB & XT {
+	local b:8 = XB[64,64];
+	XT[64,64] = sqrt(b);
+}
 
 define pcodeop xvcmpgtspOp;
 # ISA-cmt: xvcmpgtsp - VSX Vector Compare Greater Than Single-Precision
@@ -349,7 +374,11 @@ define pcodeop xscvdpsxwsOp;
 # ISA-cmt: xscvdpsxws - VSX Scalar truncate Double-Precision to integer and Convert to Signed Fixed-Point Word format with Saturate
 # ISA-info: xscvdpsxws - Form "XX2" Page 355 Category "VSX"
 # binutils: vsx.d:   38:	f1 00 e1 63 	xscvdpsxws vs40,vs60
-:xscvdpsxws  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=88 & BITS_16_20=0 & XB & XT {  xscvdpsxwsOp(XB,XT);  }
+:xscvdpsxws  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=88 & BITS_16_20=0 & XB & XT {
+	local b:8 = XB[64,64];
+	local r:4 = trunc(b);
+	XT[64,32] = r;
+}
 
 define pcodeop xvmsubmspOp;
 # ISA-cmt: xvmsubmsp - VSX Vector Multiply-Subtract Type-M Single-Precision
@@ -569,7 +598,10 @@ define pcodeop xsnmaddadpOp;
 # ISA-cmt: xsnmaddadp - VSX Scalar Negative Multiply-Add Type-A Double-Precision
 # ISA-info: xsnmaddadp - Form "XX3" Page 378 Category "VSX"
 # binutils: vsx.d:   78:	f1 12 e5 0f 	xsnmaddadp vs40,vs50,vs60
-:xsnmaddadp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=161 & XA & XB & XT {  xsnmaddadpOp(XA,XB);  }
+:xsnmaddadp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=161 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	XT[64,64] = f- ((a f* b) f+ t);
+}
 
 define pcodeop xxlnorOp;
 # ISA-cmt: xxlnor - VSX Logical NOR
@@ -601,7 +633,10 @@ define pcodeop xsnmaddmdpOp;
 # ISA-cmt: xsnmaddmdp - VSX Scalar Negative Multiply-Add Type-M Double-Precision
 # ISA-info: xsnmaddmdp - Form "XX3" Page 378 Category "VSX"
 # binutils: vsx.d:   7c:	f1 12 e5 4f 	xsnmaddmdp vs40,vs50,vs60
-:xsnmaddmdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=169 & XA & XB & XT {  xsnmaddmdpOp(XA,XB,XT);  }
+:xsnmaddmdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=169 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	XT[64,64] = f- ((a f* t) f+ b);
+}
 
 define pcodeop xvrspipOp;
 # ISA-cmt: xvrspip - VSX Vector Round to Single-Precision Integer toward +Infinity
@@ -625,13 +660,19 @@ define pcodeop xscpsgndpOp;
 # ISA-cmt: xscpsgndp - VSX Scalar Copy Sign Double-Precision
 # ISA-info: xscpsgndp - Form "XX3" Page 351 Category "VSX"
 # binutils: vsx.d:   2c:	f1 12 e5 87 	xscpsgndp vs40,vs50,vs60
-:xscpsgndp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=176 & XA & XB & XT {  xscpsgndpOp(XA,XB,XT);  }
+:xscpsgndp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=176 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64];
+	XT[64,64] = (a & 0x8000000000000000) | (b & 0x7fffffffffffffff);
+}
 
 define pcodeop xsnmsubadpOp;
 # ISA-cmt: xsnmsubadp - VSX Scalar Negative Multiply-Subtract Type-A Double-Precision
 # ISA-info: xsnmsubadp - Form "XX3" Page 383 Category "VSX"
 # binutils: vsx.d:   80:	f1 12 e5 8f 	xsnmsubadp vs40,vs50,vs60
-:xsnmsubadp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=177 & XA & XB & XT {  xsnmsubadpOp(XA,XB,XT);  }
+:xsnmsubadp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=177 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	XT[64,64] = f- ((a f* b) f- t);
+}
 
 define pcodeop xvcvsxwspOp;
 # ISA-cmt: xvcvsxwsp - VSX Vector Convert and round Signed Fixed-Point Word to Single-Precision format
@@ -643,7 +684,10 @@ define pcodeop xsnmsubmdpOp;
 # ISA-cmt: xsnmsubmdp - VSX Scalar Negative Multiply-Subtract Type-M Double-Precision
 # ISA-info: xsnmsubmdp - Form "XX3" Page 383 Category "VSX"
 # binutils: vsx.d:   84:	f1 12 e5 cf 	xsnmsubmdp vs40,vs50,vs60
-:xsnmsubmdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=185 & XA & XB & XT {  xsnmsubmdpOp(XA,XB,XT);  }
+:xsnmsubmdp  XT,XA,XB is $(NOTVLE) & OP=60 & XOP_3_10=185 & XA & XB & XT {
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	XT[64,64] = f- ((a f* t) f- b);
+}
 
 define pcodeop xvrspimOp;
 # ISA-cmt: xvrspim - VSX Vector Round to Single-Precision Integer toward -Infinity
@@ -819,53 +863,82 @@ define pcodeop xscvdpspOp;
 # ISA-cmt: xscvdpsp - VSX Scalar Convert Double-Precision to Single-Precision
 # ISA-info: xscvdpsp - Form "XX2" Page 352 Category "VSX"
 # binutils: vsx.d:   30:	f1 00 e4 27 	xscvdpsp vs40,vs60
-:xscvdpsp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=265 & BITS_16_20=0 & XB & XT {  xscvdpspOp(XB,XT);  }
+:xscvdpsp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=265 & BITS_16_20=0 & XB & XT {
+	local b:8 = XB[64,64];
+	local r:4 = float2float(b);
+	XT[96,32] = r;
+}
 
 define pcodeop xscvdpuxdsOp;
 # ISA-cmt: xscvdpuxds - VSX Scalar truncate Double-Precision to integer and Convert to Unsigned Fixed-Point Doubleword format with Saturate
 # ISA-info: xscvdpuxds - Form "XX2" Page 357 Category "VSX"
 # binutils: vsx.d:   3c:	f1 00 e5 23 	xscvdpuxds vs40,vs60
-:xscvdpuxds  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=328 & BITS_16_20=0 & XB & XT {  xscvdpuxdsOp(XB,XT);  }
+:xscvdpuxds  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=328 & BITS_16_20=0 & XB & XT {
+	local b:8 = XB[64,64];
+	local r:16 = trunc(b);
+	XT[64,64] = r:8;
+}
 
 define pcodeop xscvspdpOp;
 # ISA-cmt: xscvspdp - VSX Scalar Convert Single-Precision to Double-Precision format
 # binutils: vsx.d:   44:	f1 00 e5 27 	xscvspdp vs40,vs60
-:xscvspdp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=329 & BITS_16_20=0 & XB & XT {  xscvspdpOp(XB,XT);  }
+:xscvspdp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=329 & BITS_16_20=0 & XB & XT {
+	local s:4 = XB[96,32];
+	XT[64,64] = float2float(s);
+}
 
 define pcodeop xscvdpsxdsOp;
 # ISA-cmt: xscvdpsxds - VSX Scalar truncate Double-Precision to integer and Convert to Signed Fixed-Point Doubleword format with Saturate
 # ISA-info: xscvdpsxds - Form "XX2" Page 353 Category "VSX"
 # binutils: vsx.d:   34:	f1 00 e5 63 	xscvdpsxds vs40,vs60
-:xscvdpsxds  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=344 & BITS_16_20=0 & XB & XT {  xscvdpsxdsOp(XB,XT);  }
+:xscvdpsxds  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=344 & BITS_16_20=0 & XB & XT {
+	local b:8 = XB[64,64];
+	XT[64,64] = trunc(b);
+}
 
 define pcodeop xsabsdpOp;
 # ISA-cmt: xsabsdp - VSX Scalar Absolute Value Double-Precision
 # ISA-info: xsabsdp - Form "XX2" Page 341 Category "VSX"
 # binutils: vsx.d:   1c:	f1 00 e5 67 	xsabsdp vs40,vs60
-:xsabsdp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=345 & XT & BITS_16_20=0 & XB {  xsabsdpOp(XB,XT);  }
+:xsabsdp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=345 & XT & BITS_16_20=0 & XB {
+	local b:8 = XB[64,64];
+	XT[64,64] = abs(b);
+}
 
 define pcodeop xscvuxddpOp;
 # ISA-cmt: xscvuxddp - VSX Scalar Convert and round Unsigned Fixed-Point Doubleword to Double-Precision format
 # binutils: vsx.d:   4c:	f1 00 e5 a3 	xscvuxddp vs40,vs60
-:xscvuxddp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=360 & BITS_16_20=0 & XB & XT {  xscvuxddpOp(XB,XT);  }
+:xscvuxddp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=360 & BITS_16_20=0 & XB & XT {
+	local b:16 = zext(XB[64,64]);
+	XT[64,64] = int2float(b);
+}
 
 define pcodeop xsnabsdpOp;
 # ISA-cmt: xsnabsdp - VSX Scalar Negative Absolute Value Double-Precision
 # ISA-info: xsnabsdp - Form "XX2" Page 377 Category "VSX"
 # binutils: vsx.d:   70:	f1 00 e5 a7 	xsnabsdp vs40,vs60
-:xsnabsdp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=361 & BITS_16_20=0 & XB & XT {  xsnabsdpOp(XB,XT);  }
+:xsnabsdp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=361 & BITS_16_20=0 & XB & XT {
+	local b:8 = XB[64,64];
+	XT[64,64] = f- abs(b);
+}
 
 define pcodeop xscvsxddpOp;
 # ISA-cmt: xscvsxddp - VSX Scalar Convert and round Signed Fixed-Point Doubleword to Double-Precision format
 # ISA-info: xscvsxddp - Form "XX2" Page 361 Category "VSX"
 # binutils: vsx.d:   48:	f1 00 e5 e3 	xscvsxddp vs40,vs60
-:xscvsxddp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=376 & BITS_16_20=0 & XB & XT {  xscvsxddpOp(XB,XT);  }
+:xscvsxddp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=376 & BITS_16_20=0 & XB & XT {
+	local b:8 = XB[64,64];
+	XT[64,64] = int2float(b);
+}
 
 define pcodeop xsnegdpOp;
 # ISA-cmt: xsnegdp - VSX Scalar Negate Double-Precision
 # ISA-info: xsnegdp - Form "XX2" Page 377 Category "VSX"
 # binutils: vsx.d:   74:	f1 00 e5 e7 	xsnegdp vs40,vs60
-:xsnegdp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=377 & BITS_16_20=0 & XB & XT {  xsnegdpOp(XB,XT);  }
+:xsnegdp  XT,XB is $(NOTVLE) & OP=60 & XOP_2_10=377 & BITS_16_20=0 & XB & XT {
+	local b:8 = XB[64,64];
+	XT[64,64] = f- b;
+}
 
 define pcodeop xvcvspuxdsOp;
 # ISA-cmt: xvcvspuxds - VSX Vector truncate Single-Precision to integer and Convert to Unsigned Fixed-Point Doubleword format with Saturate
@@ -1139,65 +1212,92 @@ define pcodeop vsx300_103;
 }
 
 :xsaddsp  XT,XA,XB 			is $(NOTVLE) & OP=60 & XOP_3_10=0 & XA & XB & XT {
-	XT = vsx207_11(XA,XB);		
+	local a:8 = XA[64,64]; local b:8 = XB[64,64];
+	local r:4 = float2float(a f+ b);
+	XT[64,64] = float2float(r);
 }
 
-:xscvdpspn XT,XB 			is $(NOTVLE) & OP=60 & BITS_16_20=0 & XOP_2_10=267 & XB & XT
-{
-	src:4 = float2float(XB:8);
-	XT[0,32] = src;
+:xscvdpspn XT,XB 			is $(NOTVLE) & OP=60 & BITS_16_20=0 & XOP_2_10=267 & XB & XT {
+	local b:8 = XB[64,64];
+	local r:4 = float2float(b);
+	XT[96,32] = r;
 }
 
 :xscvspdpn XT,XB 			is $(NOTVLE) & OP=60 & BITS_16_20=0 & XOP_2_10=331 & XB & XT {
-	XT = vsx207_13(XB);				
+	local s:4 = XB[96,32];
+	XT[64,64] = float2float(s);
 }
 
 :xscvsxdsp XT,XB 			is $(NOTVLE) & OP=60 & BITS_16_20=0 & XOP_2_10=312 & XB & XT {
-	XT = vsx207_14(XB);			
+	local b:8 = XB[64,64];
+	local r:4 = int2float(b);
+	XT[64,64] = float2float(r);
 }
 
 :xscvuxdsp XT,XB 			is $(NOTVLE) & OP=60 & BITS_16_20=0 & XOP_2_10=296 & XB & XT {
-	XT = vsx207_15(XB);				
+	local b:16 = zext(XB[64,64]);
+	local r:4 = int2float(b);
+	XT[64,64] = float2float(r);
 }
 
 :xsdivsp  XT,XA,XB 			is $(NOTVLE) & OP=60 & XOP_3_10=24 & XA & XB & XT {
-	XT = vsx207_16(XA,XB);			
+	local a:8 = XA[64,64]; local b:8 = XB[64,64];
+	local r:4 = float2float(a f/ b);
+	XT[64,64] = float2float(r);
 }
 
 :xsmaddasp  XT,XA,XB 		is $(NOTVLE) & OP=60 & XOP_3_10=1 & XA & XB & XT {
-	XT = vsx207_17(XA,XB);				
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	local r:4 = float2float((a f* b) f+ t);
+	XT[64,64] = float2float(r);
 }
 
 :xsmaddmsp  XT,XA,XB 		is $(NOTVLE) & OP=60 & XOP_3_10=9 & XA & XB & XT {
-	XT = vsx207_18(XA,XB);				
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	local r:4 = float2float((a f* t) f+ b);
+	XT[64,64] = float2float(r);
 }
 
 :xsmsubasp  XT,XA,XB 		is $(NOTVLE) & OP=60 & XOP_3_10=17 & XA & XB & XT {
-	XT = vsx207_19(XA,XB);	
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	local r:4 = float2float((a f* b) f- t);
+	XT[64,64] = float2float(r);
 }
 
 :xsmsubmsp  XT,XA,XB 		is $(NOTVLE) & OP=60 & XOP_3_10=25 & XA & XB & XT {
-	XT = vsx207_20(XA,XB);				
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	local r:4 = float2float((a f* t) f- b);
+	XT[64,64] = float2float(r);
 }
 
 :xsmulsp  XT,XA,XB 			is $(NOTVLE) & OP=60 & XOP_3_10=16 & XA & XB & XT {
-	XT = vsx207_21(XA,XB);				
+	local a:8 = XA[64,64]; local b:8 = XB[64,64];
+	local r:4 = float2float(a f* b);
+	XT[64,64] = float2float(r);
 }
 
 :xsnmaddasp  XT,XA,XB 		is $(NOTVLE) & OP=60 & XOP_3_10=129 & XA & XB & XT {
-	XT = vsx207_22(XA,XB);				
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	local r:4 = float2float(f- ((a f* b) f+ t));
+	XT[64,64] = float2float(r);
 }
 
 :xsnmaddmsp  XT,XA,XB 		is $(NOTVLE) & OP=60 & XOP_3_10=137 & XA & XB & XT {
-	XT = vsx207_23(XA,XB);				
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	local r:4 = float2float(f- ((a f* t) f+ b));
+	XT[64,64] = float2float(r);
 }
 
 :xsnmsubasp  XT,XA,XB 		is $(NOTVLE) & OP=60 & XOP_3_10=145 & XA & XB & XT {
-	XT = vsx207_24(XA,XB);				
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	local r:4 = float2float(f- ((a f* b) f- t));
+	XT[64,64] = float2float(r);
 }
 
 :xsnmsubmsp  XT,XA,XB 		is $(NOTVLE) & OP=60 & XOP_3_10=153 & XA & XB & XT {
-	XT = vsx207_25(XA,XB);				
+	local a:8 = XA[64,64]; local b:8 = XB[64,64]; local t:8 = XT[64,64];
+	local r:4 = float2float(f- ((a f* t) f- b));
+	XT[64,64] = float2float(r);
 }
 
 :xsresp XT,XB 				is $(NOTVLE) & OP=60 & BITS_16_20=0 & XOP_2_10=26 & XB & XT {
@@ -1205,7 +1305,9 @@ define pcodeop vsx300_103;
 }
 
 :xsrsp XT,XB 				is $(NOTVLE) & OP=60 & BITS_16_20=0 & XOP_2_10=281 & XB & XT {
-	XT = vsx207_27(XB);					
+	local b:8 = XB[64,64];
+	local r:4 = float2float(b);
+	XT[64,64] = float2float(r);
 }
 
 :xsrsqrtesp XT,XB 			is $(NOTVLE) & OP=60 & BITS_16_20=0 & XOP_2_10=10 & XB & XT {
@@ -1213,11 +1315,15 @@ define pcodeop vsx300_103;
 }
 
 :xssqrtsp XT,XB 			is $(NOTVLE) & OP=60 & BITS_16_20=0 & XOP_2_10=11 & XB & XT {
-	XT = vsx207_29(XB);					
+	local b:8 = XB[64,64];
+	local r:4 = float2float(sqrt(b));
+	XT[64,64] = float2float(r);
 }
 
 :xssubsp  XT,XA,XB 			is $(NOTVLE) & OP=60 & XOP_3_10=8 & XA & XB & XT {
-	XT = vsx207_30(XA,XB);					
+	local a:8 = XA[64,64]; local b:8 = XB[64,64];
+	local r:4 = float2float(a f- b);
+	XT[64,64] = float2float(r);
 }
 
 :xxleqv  XT,XA,XB 			is $(NOTVLE) & OP=60 & XOP_3_10=186 & XA & XB & XT {
@@ -1238,7 +1344,7 @@ define pcodeop vsx300_103;
 # The endian behavior of the storage has not been modelled
 :lxsd vrD,DSs(RA_OR_ZERO) 	is $(NOTVLE) & OP=57 & vrD & RA_OR_ZERO & BITS_0_1=2 & DSs {
 	ea:$(REGISTER_SIZE) = RA_OR_ZERO + (DSs << 2);
-	vrD[0,64] = *:8 ea;
+	vrD[64,64] = *:8 ea;
 }
 
 :lxsibzx XT,A,B 			is $(NOTVLE) & OP=31 & XT & A & B & XOP_1_10=781 {

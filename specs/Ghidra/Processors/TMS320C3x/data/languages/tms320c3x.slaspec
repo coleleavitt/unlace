@@ -19,6 +19,17 @@ define register offset=0x000 size=8 [ R0E R1E R2E R3E R4E R5E R6E R7E R8E R9E R1
 define register offset=0x000 size=4 [ R0 _ R1 _ R2 _ R3 _ R4 _ R5 _ R6 _ R7 _ R8 _ R9 _ R10 _ R11 _ ];
 define register offset=0x080 size=4 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 DP IR0 IR1 BK SP ST IE IF IOF RS RE RC PC ];
 define register offset=0x100 size=1 [ C V Z N UF LV LUF GIE ];
+define register offset=0x200 size=8 [ contextreg ];
+
+# Zero-overhead repeats. RPTB marks the last instruction of its block with context (rbend,
+# rbstart); RPTS marks the instruction after it (rpts). The root table below adds the
+# loop-back there, so the decompiler sees an ordinary loop.
+define context contextreg
+	phase   = (0,0)
+	rbend   = (1,1) noflow
+	rpts    = (2,2) noflow
+	rbstart = (3,26) noflow
+;
 
 define token iw (32)
 	cls    = (29,31)
@@ -108,8 +119,6 @@ define pcodeop interrupt_acknowledge;
 define pcodeop signal_interlock;
 define pcodeop interlocked_load;
 define pcodeop interlocked_store;
-define pcodeop repeat_single;
-define pcodeop repeat_block;
 define pcodeop software_interrupt;
 define pcodeop idle2;
 define pcodeop low_power;
@@ -351,6 +360,7 @@ brel: a is simm16 [ a = inst_next + simm16; ] { export *:4 a; }
 breld: a is simm16 [ a = inst_start + 3 + simm16; ] { export *:4 a; }
 babs: addr24 is addr24 { export *:4 addr24; }
 
+with : phase=1 {
 :ABSF srcFlt, dflt is cls=0 & opc6=0x0 & srcFlt & dflt { local r:8 = ti_absf(srcFlt); dflt = r; fflags(r); }
 :ABSI srcInt, dint is cls=0 & opc6=0x1 & srcInt & dint { local s:4 = srcInt; local r:4 = s; if (s s>= 0) goto <p>; r = -s; <p> V = s == 0x80000000; LV = LV | V; UF = 0; nz(r); dint = r; }
 :ADDC srcInt, dint is cls=0 & opc6=0x2 & srcInt & dint { addOp(dint, dint, srcInt, C); }
@@ -413,7 +423,7 @@ babs: addr24 is addr24 { export *:4 addr24; }
 :ROLC dint is cls=0 & opc6=0x24 & dint { local v:4 = dint; local c:4 = zext(C); C = (v >> 31) != 0; dint = (v << 1) | c; logicFlags(dint); }
 :ROR dint is cls=0 & opc6=0x25 & dint { local v:4 = dint; C = (v & 1) != 0; dint = (v >> 1) | (v << 31); logicFlags(dint); }
 :RORC dint is cls=0 & opc6=0x26 & dint { local v:4 = dint; local c:4 = zext(C); C = (v & 1) != 0; dint = (v >> 1) | (c << 31); logicFlags(dint); }
-:RPTS srcUns is cls=0 & opc6=0x27 & srcUns { RC = srcUns; RS = inst_next; RE = inst_next; repeat_single(RC); }
+:RPTS srcUns is cls=0 & opc6=0x27 & srcUns [ rpts = 1; globalset(inst_next, rpts); ] { RC = srcUns; RS = inst_next; RE = inst_next; }
 :STF dflt, memEA is cls=0 & opc6=0x28 & dflt & memEA { memEA = ti_stf32(dflt); }
 :STFI dflt, memEA is cls=0 & opc6=0x29 & dflt & memEA { memEA = ti_stf32(dflt); interlocked_store(); }
 :STI dint, memEA is cls=0 & opc6=0x2a & dint & memEA { memEA = dint; }
@@ -507,7 +517,7 @@ aBf: ps3x is mpp=3 & ps3x { export ps3x; }
 :BR babs is top8=0x60 & babs { goto babs; }
 :BRD babs is top8=0x61 & babs { delayslot(12); goto babs; }
 :CALL babs is top8=0x62 & babs { local ret:4 = inst_next; push(ret); call babs; }
-:RPTB babs is top8=0x64 & babs { RS = inst_next; RE = &babs; repeat_block(RC); }
+:RPTB babs is top8=0x64 & babs [ rbend = 1; rbstart = inst_start + 1; globalset(babs, rbend); globalset(babs, rbstart); ] { RS = inst_next; RE = &babs; }
 :SWI is top8=0x66 { software_interrupt(); }
 
 :B^cc brel is top6=0x1a & bbit=1 & dbit=0 & cc & brel { if (cc) goto brel; }
@@ -541,3 +551,35 @@ aBf: ps3x is mpp=3 & ps3x { export ps3x; }
 :CALLU brel is top6=0x1c & bbit=1 & cn5=0 & brel { local ret:4 = inst_next; push(ret); call brel; }
 :CALLU sint is top6=0x1c & bbit=0 & cn5=0 & sint { local ret:4 = inst_next; push(ret); call [sint]; }
 :TRAPU tvec is top6=0x1d & cn5=0 & tvec { GIE = 0; local ret:4 = inst_next; push(ret); local va:4 = 0x20 + tvec; local t:4 = *:4 va; call [t]; }
+
+}
+
+# Root: the repeat loop-backs. A block repeat runs RC + 1 times: at its last instruction RC
+# counts down and the block restarts while RC stays non-negative. RPTS repeats the next
+# instruction RC + 1 times.
+rbaddr: is rbstart { export *[ram]:4 rbstart; }
+
+:^instruction is phase=0 & rbend=0 & rpts=0 & instruction [ phase = 1; ] {
+	build instruction;
+}
+:^instruction is phase=0 & rbend=1 & rpts=0 & rbaddr & instruction [ phase = 1; ] {
+	build instruction;
+	RC = RC - 1;
+	if (RC s< 0) goto inst_next;
+	goto rbaddr;
+}
+:^instruction is phase=0 & rpts=1 & rbend=0 & instruction [ phase = 1; ] {
+	<again>
+	build instruction;
+	RC = RC - 1;
+	if (RC s>= 0) goto <again>;
+}
+:^instruction is phase=0 & rpts=1 & rbend=1 & rbaddr & instruction [ phase = 1; ] {
+	<again>
+	build instruction;
+	RC = RC - 1;
+	if (RC s>= 0) goto <again>;
+	RC = RC - 1;
+	if (RC s< 0) goto inst_next;
+	goto rbaddr;
+}

@@ -61,7 +61,8 @@ OFFEN/IDXEN to the second word.
 
 Both languages are wave32: VCC and compare, carry and select masks are 32-bit (`vcc_lo` or one
 SGPR), `s_and_saveexec_b32` and the other `*_saveexec_b32`/`*_wrexec_b32` forms work on
-EXEC_LO, and the EXECZ/VCCZ branches test the low halves. gfx11 adds VOPD (two `v_dual_*`
+EXEC_LO, and the EXECZ/VCCZ branches test the low halves. From GFX10 on, `v_cmpx_*` writes only EXEC (the
+e64 form has no SDST: its destination field holds EXEC_LO); GFX9 `v_cmpx` also writes VCC. gfx11 adds VOPD (two `v_dual_*`
 operations that read all sources before writing), the D16 global loads into one register half,
 and the true16 `v_mov_b16`/`v_not_b16` with `.l`/`.h` halves. The scheduling, wait and
 cache-control instructions new in these generations (`s_clause`, `s_delay_alu`,
@@ -110,7 +111,8 @@ Rerun a generator after changing it, and the probe and the valu generator after 
 constructors to the base spec (the probe skips opcodes the base already decodes unless LLVM
 prints a half for them); then rerun `gen_amdgpu_wave64.py`.
 
-Oracle: the probe encodings against `llvm-objdump`. Of the 436 valid VOP3 encodings, 430 print
+Oracle: the probe encodings against `llvm-objdump`. Of the 436 valid VOP3 encodings (destination
+field 0x7e, which `v_cmpx` requires), 430 print
 the same mnemonic (the rest: `v_mqsad_u32_u8` and `v_permlane16/x16_b32`, not decoded, and the
 base spec's `v_add/sub/subrev_co_u32_e64` spelling), and 132 of the 133 that name a half print
 the same text (the other is the probe's VGPR as a `v_cndmask_b16` mask); of the 496 VOPC, VOP1
@@ -152,3 +154,11 @@ Source operand codes 235-239 (`src_shared_base`, `src_shared_limit`, `src_privat
 `aperture_register` user op (their values are set by the hardware), and GFX9 decodes
 `v_swap_b32` (VOP1 opcode 81). Found by the real-code sweep (`notes/real-code-sweep.md`):
 clang's gfx900 output reads `src_private_base` in every function that takes a stack address.
+
+## Real-code sweep fixes
+
+Kernels in `fixtures/amdgpu/real_kernels.cl` built with clang -O2/-O3 for gfx900, gfx1030 and
+gfx1100 showed four missing f64 instructions (`v_div_scale_f64`, `v_div_fmas_f64`,
+`v_div_fixup_f64`, `v_cmp_class_f64`, plus `v_cmp_class_f32` in both encodings) and gfx11's
+`s_sendmsg_rtn_b32`; they decode now. A 32-bit literal feeding a 64-bit float operand is the
+high half of the double (`7.0` is `0x401c0000`), which the specs now apply to every f64 source.

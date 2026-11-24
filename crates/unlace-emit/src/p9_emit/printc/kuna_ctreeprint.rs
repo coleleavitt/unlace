@@ -260,7 +260,13 @@ impl PrintC {
             tree.stmt_mut(id).kind = StmtKind::Expr(expr);
         }
         if bool_return {
-            for id in ids_rev(self.ctree.as_ref()) {
+            let ids = self
+                .ctree
+                .as_ref()
+                .map(|tree| tree.stmt_ids())
+                .unwrap_or_default();
+            for id in ids {
+                self.fold_return_ite(fd, id);
                 self.fold_return_run(fd, id);
             }
         }
@@ -483,13 +489,13 @@ impl PrintC {
     /// label and no comment. The first folded `if` becomes the `return`, the later ones and
     /// the tail become empty sequences.
     fn fold_return_run(&mut self, fd: &Funcdata, id: StmtId) {
-        let Some(list) = self.ctree.as_ref().and_then(|tree| {
+        let Some((list, graph)) = self.ctree.as_ref().and_then(|tree| {
             let stmt = tree.stmt(id);
             match &stmt.kind {
                 StmtKind::Seq(list) if list.len() > 1 => {
-                    let origin = stmt.origin?;
-                    (fd.sblocks_ref().block(origin).get_type() == BlockType::Ls)
-                        .then(|| list.clone())
+                    let ty = fd.sblocks_ref().block(stmt.origin?).get_type();
+                    matches!(ty, BlockType::Ls | BlockType::Graph)
+                        .then(|| (list.clone(), ty == BlockType::Graph))
                 }
                 _ => None,
             }
@@ -503,16 +509,25 @@ impl PrintC {
         }) else {
             return;
         };
-        let Some((tail_op, mut value)) = self.return_term(fd, tail_blk) else {
+        let Some((tail_op, mut value)) = self
+            .return_term(fd, tail_blk)
+            .or_else(|| self.folded_return(fd, tail))
+        else {
             return;
         };
         let mut first = None;
         let mut folded = vec![tail];
-        for &sid in list[..list.len() - 1].iter().rev() {
+        for (at, &sid) in list[..list.len() - 1].iter().enumerate().rev() {
             let Some((cond, clause)) = self.return_guard(fd, sid) else {
                 break;
             };
-            let Some((_, arm)) = self.return_term(fd, clause) else {
+            if graph && !self.falls_to(fd, sid, list[at + 1]) {
+                break;
+            }
+            let Some((_, arm)) = self.return_term(fd, clause).or_else(|| {
+                let then = self.ctree.as_ref()?.node_for(clause)?;
+                self.folded_return(fd, then)
+            }) else {
                 break;
             };
             let Some(next) = combine_return(cond, &arm, &value) else {
@@ -546,6 +561,131 @@ impl PrintC {
         for sid in folded {
             tree.stmt_mut(sid).kind = StmtKind::Seq(Vec::new());
         }
+    }
+
+    /// (kuna `boolreturn`) Fold the `if`/`else` statement `id` (no goto, not a switch-merge
+    /// or exception `if`, its condition still its block's) whose two arms are each a value of
+    /// a return run, a leaf `return_term` accepts or a statement an earlier fold made a
+    /// `return` (`folded_return`), into one `return` the way `combine_return` joins a
+    /// guard and the rest of a run: `if (c) { ...run... } else return 0;` becomes `return c
+    /// && ...;`. The `if` keeps the statements before its test; the body's `RETURN` marks it.
+    fn fold_return_ite(&mut self, fd: &Funcdata, id: StmtId) {
+        let Some((blk, cond, then, els)) = self.ctree.as_ref().and_then(|tree| {
+            let stmt = tree.stmt(id);
+            let StmtKind::If {
+                cond,
+                then,
+                els: Some(els),
+                ..
+            } = &stmt.kind
+            else {
+                return None;
+            };
+            let ExprKind::Branch(cond) = tree.expr(*cond).kind else {
+                return None;
+            };
+            let blk = stmt.origin?;
+            (tree.node_for(blk) == Some(id)).then_some((blk, cond, *then, *els))
+        }) else {
+            return;
+        };
+        let block = fd.sblocks_ref().block(blk);
+        if block.get_type() != BlockType::If
+            || block.get_size() != 3
+            || block.get_if_goto_target().is_some()
+            || block.get_block(0) != cond
+            || self.switch_plans.ifs.contains_key(&blk)
+            || self.is_eh_if(fd, blk)
+        {
+            return;
+        }
+        let (body, other) = (block.get_block(1), block.get_block(2));
+        let Some((ret_op, yes)) = self
+            .return_term(fd, body)
+            .or_else(|| self.folded_return(fd, then))
+        else {
+            return;
+        };
+        let Some((_, no)) = self
+            .return_term(fd, other)
+            .or_else(|| self.folded_return(fd, els))
+        else {
+            return;
+        };
+        let Some(value) = combine_return(cond, &yes, &no) else {
+            return;
+        };
+        if let RunTerm::Cond(c, false) = value
+            && !self.cond_is_boolean(fd, c)
+        {
+            return;
+        }
+        let Some(tree) = self.ctree.as_mut() else {
+            return;
+        };
+        let Some(expr) = add_run_term(tree, &value) else {
+            return;
+        };
+        tree.stmt_mut(id).kind = StmtKind::Return {
+            value: Some(expr),
+            op: Some(ret_op),
+        };
+    }
+
+    /// In a `BlockGraph`, does the `if` statement `id` fall through to the statement `next`,
+    /// its block's one out edge going to `next`'s block (no `goto` between them)?
+    fn falls_to(&self, fd: &Funcdata, id: StmtId, next: StmtId) -> bool {
+        let Some(tree) = self.ctree.as_ref() else {
+            return false;
+        };
+        let (Some(blk), Some(to)) = (tree.stmt(id).origin, tree.stmt(next).origin) else {
+            return false;
+        };
+        let block = fd.sblocks_ref().block(blk);
+        block.size_out() == 1 && block.get_out(0) == to
+    }
+
+    /// The statement `id` as one value of a return run when an earlier fold made it a
+    /// `return` of a `0`/`1` value (`Branch`, `Not`, `&&` or `||`, never a `?:`), alone or
+    /// as the one non-empty statement of a sequence, whose first condition prints nothing
+    /// before its test (`clean_guard_cond`): that `RETURN` and the value. Runs fold inner
+    /// sequences first, so `if (c) { if (!a) return 0; return b; } return 0;` folds to
+    /// `return c && a && b;`.
+    fn folded_return(&mut self, fd: &Funcdata, id: StmtId) -> Option<(OpId, RunTerm)> {
+        let (op, value, first) = {
+            let tree = self.ctree.as_ref()?;
+            let mut cur = id;
+            for _ in 0..64 {
+                let StmtKind::Seq(list) = &tree.stmt(cur).kind else {
+                    break;
+                };
+                let mut live = list
+                    .iter()
+                    .copied()
+                    .filter(|s| !matches!(&tree.stmt(*s).kind, StmtKind::Seq(l) if l.is_empty()));
+                let one = live.next()?;
+                if live.next().is_some() {
+                    return None;
+                }
+                cur = one;
+            }
+            let StmtKind::Return {
+                value: Some(value),
+                op: Some(op),
+            } = tree.stmt(cur).kind
+            else {
+                return None;
+            };
+            if !matches!(
+                tree.expr(value).kind,
+                ExprKind::Branch(_) | ExprKind::Not(_) | ExprKind::And(..) | ExprKind::Or(..)
+            ) {
+                return None;
+            }
+            (op, value, first_branch(tree, value)?)
+        };
+        self.clean_guard_cond(fd, first)
+            .then_some((op, RunTerm::Expr(value)))
     }
 
     /// The `if` statement `id` as a guard of a return run: an `if` without else and without
@@ -1143,6 +1283,8 @@ enum RunTerm {
     Cond(BlockId, bool),
     /// The value a `RETURN` returns.
     Value(OpId),
+    /// The `0`/`1` value of a `return` an earlier fold made.
+    Expr(ExprId),
     And(Box<RunTerm>, Box<RunTerm>),
     Or(Box<RunTerm>, Box<RunTerm>),
 }
@@ -1174,6 +1316,7 @@ fn add_run_term(tree: &mut crate::kuna_ctree::CTree, term: &RunTerm) -> Option<E
             }
         }
         RunTerm::Value(op) => tree.add_expr(ExprKind::Op(*op)),
+        RunTerm::Expr(expr) => *expr,
         RunTerm::And(left, right) | RunTerm::Or(left, right) => {
             let l = add_run_term(tree, left)?;
             let r = add_run_term(tree, right)?;

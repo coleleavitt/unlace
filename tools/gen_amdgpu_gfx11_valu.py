@@ -314,7 +314,7 @@ def main():
             if cmpx:
                 sem = expr + ' exec_lo = zext(c1);'
                 disp = ', '.join(tabs)
-                pat_dst = ''
+                pat_dst = ' & i0_x=0x7e'   # the destination field holds EXEC_LO, as in the base spec
             else:
                 sem = expr + ' i0_lo7d = zext(c1);'
                 disp = 'i0_lo7d, ' + ', '.join(tabs)
@@ -386,8 +386,10 @@ def main():
                             '{ a:2 = %s; b:2 = %s; r:2 = a; if ((S32_j18 & 1) == 0) goto <k>; r = b; <k> %s }'
                             % ('lh'[hi], a, b, opsel({0: s0, 1: s1, 3: hi}), a, b, a, b, dw))
     e32(sys.argv[2], body)
-    body.append(':v_div_scale_f64 i0vp, i8_lo7d, F64_j0, F64_j9, F64_j18 is e6=0x35 ... & vop3op=765 ... & i0vp ... & i8_lo7d ... '
-                '& F64_j0 ... & F64_j9 ... & F64_j18 ... { i0vp = div_scale(F64_j0, F64_j9, F64_j18); i8_lo7d = 0; }')
+    if not re.search(r'vop3op=765\b', open(sys.argv[3]).read()):
+        body.append(':v_div_scale_f64 i0vp, i8_lo7d, F64_j0, F64_j9, F64_j18 is e6=0x35 ... & vop3op=765 ... & i0vp ... '
+                    '& i8_lo7d ... & F64_j0 ... & F64_j9 ... & F64_j18 ... '
+                    '{ i0vp = div_scale(F64_j0, F64_j9, F64_j18); i8_lo7d = 0; }')
     have = set(re.findall(r'define pcodeop (\w+);', open(sys.argv[3]).read()))
     for nm in sorted(USEROPS - have):
         w('define pcodeop %s;' % nm)

@@ -3,10 +3,11 @@
 
 Usage: gen_csky_ext_sleigh.py <binutils>/opcodes/csky-opc.h <outdir>
 
-Encodings (opcode values and operand fields of the FPUv2, FPUv3 and VDSP
-instructions) are read from the binutils C-SKY opcode table; no text of that
-table is copied into the output. Semantics are written here. Writes
-csky_fpuv2.sinc, csky_fpuv3.sinc and csky_vdsp.sinc, included by csky.sinc.
+Encodings (opcode values and operand fields of the FPUv2, FPUv3, VDSP, DSP
+and DSP-enhance instructions) are read from the binutils C-SKY opcode table; no
+text of that table is copied into the output. Semantics are written here.
+Writes csky_fpuv2.sinc, csky_fpuv3.sinc, csky_vdsp.sinc, csky_dsp.sinc and
+csky_edsp.sinc, included by csky.sinc.
 """
 import os
 import re
@@ -16,7 +17,11 @@ GROUPS = {
     'fpuv2': ('FLOAT_E1', 'FLOAT_1E2', 'FLOAT_1E3', 'FLOAT_3E4'),
     'fpuv3': ('FLOAT_7E60',),
     'vdsp': ('VDSP',),
+    'dsp': ('DSP', 'DSP_1E2', 'DSPE60'),
+    'edsp': ('DSP_ENHANCE',),
 }
+OPCLASS = {'fpuv2': (0x3d, 0x3e, 0x3f), 'fpuv3': (0x3d, 0x3e, 0x3f), 'vdsp': (0x3d, 0x3e, 0x3f),
+           'dsp': (0x31,), 'edsp': (0x34, 0x35, 0x3a, 0x3e)}
 
 
 def parse(path):
@@ -69,16 +74,20 @@ class Gen:
         self.ops = set()
         self.cons = []
         self.keys = set()
+        self.signed = set()
 
     def fld(self, lo, hi, signed=False):
         """A field of the 32-bit instruction: lives in the first (high) or second halfword."""
         assert (lo < 16) == (hi < 16)
+        sfx = 's' if signed else ''
         if lo >= 16:
-            nm = '%sa_%d_%d' % (self.g, lo, hi)
+            nm = '%sa_%d_%d%s' % (self.g, lo, hi, sfx)
             self.fields.add(('a', nm, lo - 16, hi - 16))
         else:
-            nm = '%sb_%d_%d' % (self.g, lo, hi)
+            nm = '%sb_%d_%d%s' % (self.g, lo, hi, sfx)
             self.fields.add(('b', nm, lo, hi))
+        if signed:
+            self.signed.add(nm)
         return nm
 
     def regfield(self, lo, hi, kind):
@@ -172,6 +181,28 @@ def operand(G, spec, typ, shift, mnem):
         G.sub(nm, ['%s: v is %s & %s & %s; %s & %s [ v = (%s << %d) | ((11 - %s + %d) << %d) | (((%s << 7) | (%s << 2) | %s) << %d); ] { export *[const]:%d v; }' % (
             nm, e4, f20, f25, s, f89, s, w - 1, e4, ebias, w - (w // 32 * 0) - {32: 9, 64: 12, 16: 6}[w], f25, f20, f89, fsh, w // 8)])
         return dict(disp=nm, pat=[nm], kind='fimm', val=nm, span=True, width=w)
+    if typ in ('OIMM4b', 'OIMM5b') and b and len(b) == 1:
+        f = G.fld(*b[0])
+        nm = '%s_o%s' % (G.g, f)
+        G.sub(nm, ['%s: v is %s [ v = %s + 1; ] { export *[const]:4 v; }' % (nm, f, f)])
+        return dict(disp=nm, pat=[nm], kind='imm', val=nm, half='a' if b[0][0] >= 16 else 'b')
+    if typ in ('IMM1b', 'IMM2b', 'IMM5b') and b and len(b) == 1 or (typ == 'IMM4b' and G.g in ('dsp', 'edsp') and b and len(b) == 1):
+        f = G.fld(*b[0])
+        nm = '%s_i%s' % (G.g, f)
+        G.sub(nm, ['%s: %s is %s { export *[const]:4 %s; }' % (nm, f, f, f)])
+        return dict(disp=nm, pat=[nm], kind='imm', val=nm, half='a' if b[0][0] >= 16 else 'b')
+    if typ == 'BLOOP_OFF12b' and b and len(b) == 1:
+        # loop start, backwards from the bloop that closes the loop
+        f = G.fld(*b[0], signed=True)
+        nm = '%s_bloop12' % G.g
+        G.sub(nm, ['%s: dest is %s [ dest = inst_start + (%s << 1); ] { export *:4 dest; }' % (nm, f, f)])
+        return dict(disp=nm, pat=[nm], kind='imm', val=nm, half='b')
+    if typ == 'BLOOP_OFF4b' and b and len(b) == 1:
+        # last instruction of the loop body (or the bloop itself)
+        f = G.fld(*b[0], signed=True)
+        nm = '%s_bloop4' % G.g
+        G.sub(nm, ['%s: dest is %s [ dest = inst_start + (%s << 1); ] { export *[const]:4 dest; }' % (nm, f, f)])
+        return dict(disp=nm, pat=[nm], kind='imm', val=nm, half='b')
     if typ in ('IMM4b', 'IMM9b', 'SFLOAT', 'DFLOAT') and b:
         if len(b) == 1:
             f = G.fld(*b[0])
@@ -326,6 +357,49 @@ def mem_sem(n, ops, names, kinds):
     return 'local ea:4 = %s; %s = *:%d ea;' % (addr, reg, sz)
 
 
+def dsp_sem(n, names, kinds):
+    """p-code for the DSP and DSP-enhance instructions that have plain integer meaning."""
+    acc = 'local acc:8 = (zext(hi) << 32) | zext(lo); '
+    put = ' lo = acc:4; hi = acc(4);'
+    if len(names) == 2 and kinds == ['areg', 'areg']:
+        x, y = names
+        m = re.fullmatch(r'mul([us])(a|s)?', n)
+        if m:
+            ext = 'zext' if m.group(1) == 'u' else 'sext'
+            prod = '%s(%s) * %s(%s)' % (ext, x, ext, y)
+            if not m.group(2):
+                return 'local p:8 = %s; lo = p:4; hi = p(4);' % prod
+            return acc + 'acc = acc %s %s;' % ('+' if m.group(2) == 'a' else '-', prod) + put
+        m = re.fullmatch(r'mulsh([as])', n)
+        if m:
+            return 'local p:4 = sext(%s:2) * sext(%s:2); ' % (x, y) + acc + 'acc = acc %s sext(p);' % ('+' if m.group(1) == 'a' else '-') + put
+    if n == 'bloop':
+        # bloop closes the loop: the body runs again while the decremented count is nonzero
+        rx, start = names[0], names[1]
+        return '%s = %s - 1; if (%s != 0) goto %s;' % (rx, rx, rx, start)
+    if n in ('mfhi', 'mflo'):
+        return '%s = %s;' % (names[0], n[2:])
+    if n in ('mthi', 'mtlo'):
+        return '%s = %s;' % (n[2:], names[0])
+    m = re.fullmatch(r'(max|min)\.([us])32', n)
+    if m:
+        z, x, y = names
+        op = ('s' if m.group(2) == 's' else '') + ('>' if m.group(1) == 'max' else '<')
+        return '%s = %s; if (%s %s %s) goto <keep>; %s = %s; <keep>' % (z, x, x, op, y, z, y)
+    m = re.fullmatch(r'(ld|st)bi(r?)\.(b|h|w|bs|hs)', n)
+    if m:
+        sz = {'b': 1, 'h': 2, 'w': 4, 'bs': 1, 'hs': 2}[m.group(3)]
+        z, base = names[0], names[1]
+        step = names[2] if m.group(2) else str(sz)
+        if m.group(1) == 'st':
+            val = z if sz == 4 else '%s:%d' % (z, sz)
+            return 'local a:4 = %s; *:%d a = %s; %s = a + %s;' % (base, sz, val, base, step)
+        ext = '' if sz == 4 else ('sext' if m.group(3).endswith('s') else 'zext')
+        load = '*:%d a' % sz if sz == 4 else '%s(*:%d a)' % (ext, sz)
+        return 'local a:4 = %s; local v:4 = %s; %s = a + %s; %s = v;' % (base, load, base, step, z)
+    return None
+
+
 def main():
     recs = parse(sys.argv[1])
     outdir = sys.argv[2]
@@ -337,7 +411,9 @@ def main():
             if not any(t in tags for t in r['tags']):
                 continue
             n = r['name']
-            if r['op'] >> 26 not in (0x3d, 0x3e, 0x3f):
+            if r['op'] >> 26 not in OPCLASS[g]:
+                continue
+            if g in ('dsp', 'edsp') and not r['first']:
                 continue
             ops = [o for o in r['ops'] if o[1] != 'type']
             if any(bits(spec) is None for spec, typ, sh in ops):
@@ -415,7 +491,7 @@ def emit(G, outdir):
                 for p in d['pat']:
                     if p is None:
                         continue
-                    half = 'a' if any(f[1] == p and f[0] == 'a' for f in G.fields) else 'b'
+                    half = d.get('half') or ('a' if any(f[1] == p and f[0] == 'a' for f in G.fields) else 'b')
                     (extra_a if half == 'a' else extra_b).append(p)
             names.append(d['val'])
             disp.append(d['disp'])
@@ -440,6 +516,8 @@ def emit(G, outdir):
                 sem = '%s = %s;' % (names[0], names[kinds.index('fimm')] if w == 64 else 'zext(%s)' % names[kinds.index('fimm')])
             if sem is None and n.startswith('fsel'):
                 sem = '%s = %s; if (C) goto <keep>; %s = %s; <keep>' % (names[0], names[1], names[0], names[2])
+        elif g in ('dsp', 'edsp'):
+            sem = dsp_sem(n, names, kinds)
         else:
             sem = mem_sem(n, None, names, kinds) or move_sem(n, names, kinds)
         if sem is None:
@@ -448,7 +526,8 @@ def emit(G, outdir):
             if n.startswith('fcmp') or n.startswith('fst') or n.startswith('vst'):
                 sem = '%s(%s);' % (uop, ', '.join(srcs))
             elif kinds and kinds[0] in ('freg', 'vreg', 'areg'):
-                sem = '%s = %s(%s);' % (names[0], uop, ', '.join(srcs[1:]))
+                ins = srcs if g in ('dsp', 'edsp') and re.search(r'mula|muls|mulac|mulsc|psabsaa|^mulca|sel$|^dext|^pkg$', n) else srcs[1:]
+                sem = '%s = %s(%s);' % (names[0], uop, ', '.join(ins))
             else:
                 sem = '%s(%s);' % (uop, ', '.join(srcs))
         a_part = ' & '.join(ca + extra_a) or None
@@ -457,13 +536,13 @@ def emit(G, outdir):
         if spans:
             pat += ''.join(' & %s' % s for s in spans)
         body.append(':%s %s is %s { %s }' % (n, dtxt, pat, sem))
-    lines = ['# C-SKY ABIv2 %s instructions.' % {'fpuv2': 'FPUv2', 'fpuv3': 'FPUv3', 'vdsp': 'VDSP (v1)'}[g],
+    lines = ['# C-SKY ABIv2 %s instructions.' % {'fpuv2': 'FPUv2', 'fpuv3': 'FPUv3', 'vdsp': 'VDSP (v1)', 'dsp': 'DSP (CK807/CK810 hi:lo multiplies)', 'edsp': 'DSP-enhance (CK804/CK805)'}[g],
              '# Generated by tools/gen_csky_ext_sleigh.py; edit the generator, not this file.', '']
     for half in ('a', 'b'):
         fs = sorted(f for f in G.fields if f[0] == half)
         lines.append('define token %s%s(16)' % (g, half))
         for _, nm, lo, hi in fs:
-            lines.append('\t%s = (%d,%d)' % (nm, lo, hi))
+            lines.append('\t%s = (%d,%d)%s' % (nm, lo, hi, ' signed' if nm in G.signed else ''))
         lines.append(';')
     att = getattr(G, 'attach', {})
     for kind in ('r', 'fr', 'vr'):

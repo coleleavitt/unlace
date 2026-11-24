@@ -366,6 +366,46 @@ language yet, so it still needs an explicit `--target`. A relocatable ARC
 object loads, but its relocation types are not applied; a call to an undefined
 symbol keeps the unrelocated displacement.
 
+(kuna, unlace#680) A WebAssembly relocatable object (`.o`) has no `name`
+section; its function and global names come from the `WASM_SYMBOL_TABLE`
+subsection of its `linking` custom section (version 2), for every index the
+`name` section does not name (`loader/format/wasm.rs`). An undefined symbol
+is named only when it carries `WASM_SYM_EXPLICIT_NAME`.
+
+(kuna, unlace#678) A relocatable object for a 16-bit machine is laid out
+inside its address space instead of at 0x400000, which is past its end: an AVR
+object from `SMALL_RELOC_BASE` (0x100), an MSP430 object from
+`MSP430_RELOC_BASE` (0x200, the first RAM address, above the special-function
+and peripheral registers the processor spec names, so a laid-out global does
+not print as `TBCCR5`); every other machine keeps 0x400000
+(`reloc_object::reloc_base`, also used by the FID relocation map).
+
+(kuna, unlace#676) Six more ELF machines are read from the header
+(`crates/unlace-analysis/src/loader/kuna_elfmachinetarget.rs`), because the
+object reader either has no language stem for them or no architecture at all:
+`EM_AVR` (83) selects `avr8:LE:16:default` (`gcc` model), `EF_AVR_ARCH_AVR6`
+the ATmega256 language and `EF_AVR_ARCH_XMEGA1`..`7` `avr8:LE:24:xmega`;
+`EM_MSP430` (105) `TI_MSP430:LE:16:default`; `EM_HEXAGON` (164)
+`Hexagon:LE:32:default`; `EM_LANAI` (244) `lanai:BE:32:default`; `EM_LOONGARCH`
+(258) the ilp32 or lp64 language of the ELF class, single-float when the
+`e_flags` ABI is single-float and double otherwise (soft-float has no language
+of its own); `EM_AMDGPU` (224) the GFX9, GFX10 or GFX11 language of
+`EF_AMDGPU_MACH` (gfx900-gfx90c and gfx90a; gfx101x/103x; gfx11xx; and the
+matching generic targets). RDNA images take the wave32 language, because the
+wave size is in the kernel descriptor, not the ELF header; wave64 code and
+GFX9.4, GCN 1-4 and GFX12 images still need an explicit `--target`.
+
+Five further machines are routed the same way:
+- `EM_68K` (4) selects `68000:BE:32:Coldfire` when `e_flags` names a ColdFire ISA
+  (`EF_M68K_CF_MASK`), `68000:BE:32:default` for `EF_M68K_M68000`, and `68000:BE:32:MC68020`
+  otherwise (gcc's default `-m68020` has no flag).
+- `EM_OPENRISC` (92) and `EM_XTENSA` (94) take the language of the header's byte order.
+- `EM_CSKY` (252) selects ABIv1 when `e_flags` bits 28-31 are 1, and ABIv2 otherwise, in the
+  header's byte order.
+- `EM_CUDA` (190) selects the SASS language of the `sm_NN` in `e_flags`. The SM number is in
+  bits 8-15 from ELF ABI version 8 (CUDA 12.8 ptxas), and in bits 0-7 before that. An
+  architecture with no SASS language (sm_30, sm_32) still needs `--target`.
+
 (kuna) PowerPC32 ELF APU requirements are read by
 `crates/unlace-analysis/src/loader/kuna_ppcaputarget.rs` when the
 default-off `ppcapu` load-time option is on. SPE and embedded floating-point APUs
@@ -392,9 +432,14 @@ The ABIs differ in the frame header below the parameter save area: ELFv1's is
 the save area, is therefore at SP+112 under ELFv1 and at SP+96 under ELFv2. A
 big-endian image that declares ABI version 2 (musl, `-mabi=elfv2`) selects
 `PowerPC:BE:64:default:elfv2` (`ppc_64_be_elfv2.cspec`); version 1 and an
-unspecified version keep the ELFv1 default model. The little-endian default
-model is ELFv2, so a little-endian image that declares ELFv1 is read with
-ELFv2 offsets. Explicit `--target` takes precedence, and the explicit
+unspecified version keep the ELFv1 default model. A little-endian image that
+does not declare ABI version 1 is ELFv2, whose ABI requires a POWER8
+processor, so it selects the Power ISA language `PowerPC:LE:64:A2ALT:default`
+(`ppc_64_isa_altivec_le.sla`, the same ELFv2 `ppc_64_le.cspec`): the generic
+language does not decode `popcntd`, `isel`, `ldbrx` or VSX, and 55 of the 114
+functions of a static musl ppc64le image halted on them (10 with A2ALT, all on
+`0x00000000` trap words). A little-endian image that declares ELFv1 keeps
+`PowerPC:LE:64:default` and is read with ELFv2 offsets. Explicit `--target` takes precedence, and the explicit
 `PowerPC:BE:64:A2ALT` language offers only the ELFv1 model.
 
 
@@ -1068,7 +1113,8 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   This lets existing tail-call recovery resolve a named external destination
   and preserve its delay-slot arguments. The relocation encoder handles generic
   absolute, relative, PLT-relative, and image-offset fields at 8/16/32/64 bits in
-  the object's byte order, plus the instruction fields and ABI formulas for ARM
+  the object's byte order (an s390x `*DBL` field, `PC32DBL`/`PLT32DBL` and their
+  16-bit forms, holds `(S + A - P) >> 1` and rejects an odd value), plus the instruction fields and ABI formulas for ARM
   `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, AArch64 branch/page/low-12
   forms, PowerPC `REL24`/`PLTREL24`/`LOCAL24PC`/`ADDR24` calls (32- and 64-bit;
   a `-fPIC` object's `PLTREL24` addend locates the caller's `.got2` for the
@@ -1227,7 +1273,9 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   untouched and reported as requiring a linker veneer instead of being encoded
   as a branch in the wrong instruction set. Untyped and undefined targets do
   not infer state from their synthetic slot address. AArch64 branch, page, and
-  low-12 relocations preserve the instruction's opcode/register fields, while
+  low-12 relocations preserve the instruction's opcode/register fields, and
+  read and write the instruction little-endian in a big-endian object too
+  (A64 code is little-endian in every image; only data follows `EI_DATA`), while
   PowerPC64 `REL24` and TOC-family relocations preserve big-endian instruction
   layout and DS-form low bits. SPARC `WDISP30` and `WPLT30` rewrite the 30-bit
   word displacement of a `call`, computing `S + A - P` modulo 2³² so a call
@@ -1237,9 +1285,42 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   upper `simm13` bits as the GNU linker does; `PC22`/`PC10` are the same two
   fields over `S + A - P`, and `DISP32` is the 32-bit PC-relative data word.
   The split forms truncate rather than range-check, and reject a REL-style
-  implicit addend, which cannot be reassembled from one half. SPARC64 (V9)
-  instruction relocations, and GOT/TLS forms that need linker-built tables,
-  remain unsupported. eBPF objects are REL-only and every program ships as one,
+  implicit addend, which cannot be reassembled from one half. SPARC64 (V9,
+  unlace#677) takes the same forms plus the medium-low 44-bit triple (`H44`
+  into a `sethi`, `M44` bits 21..12 and `L44` bits 11..0 into simm13), the
+  medium-any `HH22`/`HM10`/`LM22` halves, `DISP64`, and the branch
+  displacements `WDISP22` (`Bicc`/`FBfcc`), `WDISP19` (`BPcc`/`FBPfcc`) and
+  `WDISP16` (`BPr`, split d16hi/d16lo), range-checked; a `WDISP30` call whose
+  ends do not fit 32 bits is range-checked as a signed 32-bit displacement.
+  GOT/TLS forms that need linker-built tables remain unsupported. LoongArch
+  (unlace#677) covers the `PCALA_HI20`/`PCALA_LO12` pair (`pcalau12i` takes the
+  page delta of `S + A + 0x800`, so the signed low twelve bits land on the
+  target), the 8-byte `CALL36` `pcaddu18i`+`jirl` pair, and the `B26`, `B21`
+  and `B16` branch displacements, each encoding-checked; `RELAX` and `ALIGN`
+  are no-ops, since the layout keeps the assembler's bytes. The `object`
+  crate's generic `LoongArchBranch` reading of `B16`/`B21`/`B26` (a plain
+  integer field) is never used. Lanai (`EM_LANAI`, unlace#677), for which the
+  object reader has no architecture, is told apart by `e_machine`
+  (`reloc_apply::classify_elf`): `R_LANAI_25` writes the absolute word address
+  of a `bcc` into bits 24..2, `R_LANAI_21` the absolute 21-bit address of an
+  SLS/SLI access into bits 22..18 and 15..0, `HI16`/`LO16` the halves of
+  `S + A` into an RI immediate, and `R_LANAI_32` a big-endian data word; the
+  absolute fields are range-checked. CUDA cubins (`EM_CUDA`) are told apart
+  the same way:
+  - `R_CUDA_ABS32_LO_32`/`HI_32` write the low or high word of `S + A` into
+    bits 32..63 of the 128-bit SASS word (the 32-bit immediate);
+  - `R_CUDA_ABS47_34` writes `(S + A) >> 2` into bits 34..80 (the `CALL.ABS` target);
+  - `R_CUDA_64` is a data doubleword;
+  - the yield and unused-clear relocations are no-ops;
+  - the constant-bank `CONST_FIELD*` offsets stay unsupported. Hexagon (unlace#677, little-endian
+  RELA) covers the PC-relative branches `B22`/`B15`/`B13`/`B9`/`B7_PCREL`
+  (`(S + A - P) >> 2` dealt into each form's ABI bit mask, range-checked),
+  their extended `_X` forms (the low six bits of `S + A - P`), the `immext`
+  payloads `B32_PCREL_X` and `32_6_X` (bits 31..6 into mask `0x0fff3fff`), and
+  the low six bits of `16_X`, `11_X`, `10_X` and `6_X` for the instruction
+  classes measured against `ld.lld` (by top byte, or bits 25..20 of a duplex
+  for `6_X`), ORed in as the linker does. Other classes and `8_X`, `12_X`,
+  `9_X`, `7_X` are reported unsupported and leave the field untouched. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from
@@ -4803,7 +4884,7 @@ moves.
   (`effective_libctypes_layout`), and the declared-name path below is handed it as
   a fact about the image. Scaling the table per architecture would need a
   measured width for every row on every ABI, and is not attempted.
-  `tests/stages/kuna-libctypes.xml` pass 14 is the i386 witness.
+  `tests/stages/kuna-libctypes.toml` pass 14 is the i386 witness.
 
   Growth is also why a named vote is held to what the caller does with the
   pointer. A libc aggregate is often the first member of a larger object, whose
@@ -4970,7 +5051,7 @@ moves.
 
   The default is `opaque`. No datatest loads a file, so the 675 assertions
   cannot see this tier either way; the stage corpus can, and
-  `tests/stages/kuna-libctypes.xml` pins the row in both arms. The evidence for
+  `tests/stages/kuna-libctypes.toml` pins the row in both arms. The evidence for
   the default is therefore the corpus type-recovery sweep: over the decbench
   slices at `-O0`, `-O2` and `-O2 -fno-inline`, naming these pointees moves 70
   functions to a perfect type score and one to a worse one — a `hash_do_for_each`
@@ -6280,7 +6361,7 @@ moves.
   name-only subset reached 26%, at no measurable cost (demangling the whole
   symbol table takes under 10 ms). The unit-test corpus is real symbols
   pinned with the `swift-demangle` output; the stage test
-  `tests/stages/kuna-swiftdemangle.xml` loads `macho_swift_names_arm64`, a
+  `tests/stages/kuna-swiftdemangle.toml` loads `macho_swift_names_arm64`, a
   clang-built arm64 Mach-O whose root class carries the runtime name
   `_TtC4main7Greeter` through `objc_runtime_name` and whose exported function
   carries the symbol `_$s4main10countWords2ofS2i_tF` through an `asm` label,
@@ -7218,6 +7299,15 @@ every other binary's pass list is byte-identical to before the pass existed):
   of one code pointer per slot (`mod.rs (type_vftable_labels)`): as an untyped
   label it took the `code` type, and a constructor's store of its address
   printed as a store of the label's value (`this->__vftable = (C_vtbl *)vftable`).
+  A function several classes' vftables hold is named once, for the holder that is a
+  base of every other holder (`mod.rs (SlotNames::emit)`, the bases read from each
+  class's `BaseClassArray`): a derived class that does not override a method keeps
+  its base's entry, so the method is the base's. Named per holder, the shortest
+  name won, and USBCAN-Driver.dll's `std::exception::what` read
+  `std::bad_alloc::vfunc_1`, Holley's `PEGRP32F.dll` `CDialog::DoModal`
+  `MaxDlg::vfunc_83` (38 such functions there against IDA 9.5). With no such
+  holder (unrelated classes sharing `_purecall` or an identical-code fold) every
+  holder names it, as before.
 
   The pass runs at every PE load whatever its gate says (its facts are committed
   only when it is on), so its cost is paid by every command on a C++ DLL. Both of
@@ -7666,7 +7756,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     commit of its facts) says; when it does not run at all (`sourcelang`
     forced to another language) the ivar list builds the struct, under the
     demangled name. The stage test
-    `tests/stages/kuna-swiftclassnames.xml` proves both spellings on
+    `tests/stages/kuna-swiftclassnames.toml` proves both spellings on
     `macho_swift_classnames_arm64`, and both owners of the layout on
     `macho_swift_classnames_fieldmd_arm64`. Off (the option is read
     at load as `KUNA_OBJCIVARS` for the structs and at the commit for `self`
@@ -7970,7 +8060,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     `block.block.invoke = …; block.capture_1 = &cell_1; cell_1.forwarding = block.capture_1;`
     — Hex-Rays' `Block_layout_<ea>` frame members. A capture's signedness is
     not modelled. The stage tests
-    `tests/stages/kuna-objcstructs.xml` and `tests/stages/kuna-objcblocks.xml`
+    `tests/stages/kuna-objcstructs.toml` and `tests/stages/kuna-objcblocks.toml`
     run `macho_objc_structs_arm64` and `macho_objc_blocks_arm64`.
 
     On an x86-64 Mach-O the same recovery reads x86-64 creators
@@ -8714,7 +8804,7 @@ both
   the commit point like `com`
   (`crates/unlace-analysis/src/passes.rs (run_dextrpc)`) when `dextrpc` and `osclassinfo` are on, because the
   load-time pass list sees the architecture's constructor defaults rather than
-  the run's options, default-off;
+  the run's options, default on since unlace#581;
   `crates/unlace-analysis/src/analyzers/iokit/kuna_dextrpc.rs (emit)`):
   every symbol the dext defines or imports that names `C::_Dispatch(C *,
   IORPC)` (`_ZN<n>C9_DispatchEPS_5IORPC`), `C::Dispatch(IORPC)`
@@ -10275,7 +10365,16 @@ commented `rethrow`; otherwise the nearest `lea rdx, [rip+d]` of a labelled
 belongs to the function whose `.pdata` record covers the call, followed through
 `UNW_FLAG_CHAININFO` to the primary record, so a split-off chunk comments its
 owner. An x86 image has no `.pdata` to name the owner, so its throw sites are not
-commented; its records are labelled.
+commented; its records are labelled. The records also name code
+(`kuna_msvceh.rs (member_symbols)`): a class `CatchableType`'s non-null copy
+constructor is `C::C` and a `ThrowInfo`'s non-null destructor is `C::~C` of the
+thrown class, `C` spelled as the RTTI pass spells it (templates dropped). An
+address two classes claim (an identical-code fold) is left unnamed, and a
+function the symbol table names keeps its name. Neither function is called
+directly, so the vftable-store ctor/dtor recovery (`vtabletypes`) never reached
+them: on Holley's `USBCAN-Driver.dll` IDA 9.5 names the copy constructors of
+`std::logic_error`, `std::out_of_range` and `std::bad_exception` and unlace left them
+`sub_`.
 
 **(kuna) MSVC try blocks are listed** (`msvceh`, the same pass;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvcfuncinfo.rs (decode_fh4)`).
@@ -10741,7 +10840,7 @@ pinned rather than only described: the in-repo fixture `elfmainextra_x86_64`
 @0x1026 reads `r8` into a call argument and stores `r9` to a global, so its
 body-driven signature is `unsigned long sub_1026(unsigned int a0,unsigned long
 a1,unsigned long a2,unsigned long a3,unsigned long a4,unsigned long a5)` and the
-default arm shows both losses at once (`tests/stages/kuna-elfmain.xml` §§5-8,
+default arm shows both losses at once (`tests/stages/kuna-elfmain.toml` §§5-8,
 `tests/cli/elf-main-extra-register-args.json`). Whichever way call-site argument
 recovery removes the fabrication, those assertions move.
 

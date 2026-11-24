@@ -22,8 +22,9 @@ Model:
 - Every opcode of 3.12 except the `INSTRUMENTED_*` forms decodes. Constants, globals,
   names, attributes, subscripts, calls (`CALL` with up to six arguments passes them as
   values), the `BINARY_OP` and `COMPARE_OP` operators (one user-op per operator, such as
-  `py_add` and `py_lt`), truth tests, iteration (`FOR_ITER` exhaustion pops the iterator
-  and skips `END_FOR`), builders, unpacking, imports, closures and the rest are user-ops on
+  `py_add` and `py_lt`), truth tests, iteration (`FOR_ITER` pushes the next value and, when the iterator is exhausted,
+  jumps to the `END_FOR` that pops it together with the iterator, so its p-code has no internal
+  branch), builders, unpacking, imports, closures and the rest are user-ops on
   8-byte object references. `RETURN_VALUE`/`RETURN_CONST` return, `RAISE_VARARGS` and
   `RERAISE` end the flow.
 

@@ -3096,14 +3096,16 @@ STORE_TOP16: STORE_SREG^ra,EXT_CODE4E(sp) is mic_listr6 & REL6=1 & STORE_SREG & 
 # It was not possible to avoid all instances of != in the constructors
 :bad1									is ISA_MODE=1 & RELP=0 & mic_op=0b110000 & REL6=1 & mic_code=0; Rel16_mic unimpl
 :blezalc mic_rt32_5, Rel16_mic			is ISA_MODE=1 & RELP=0 & mic_op=0b110000 & REL6=1 & mic_rs32_0=0 & mic_rt32_5; Rel16_mic {
-	if (mic_rt32_5 s> 0) goto inst_next;
-    ra = inst_next | 0x1; 
+	local notaken:1 = mic_rt32_5 s> 0;
+	ra = inst_next | 0x1;
+	if (notaken) goto inst_next;
 	call Rel16_mic;
 }
 
 :bgezalc mic_rt32_5, Rel16_mic			is ISA_MODE=1 & RELP=0 & mic_op=0b110000 & REL6=1 & mic_rt32_5 & mic_rt32_5=mic_rs32_0 & mic_rt32_5a!=0; Rel16_mic {
-	if (mic_rt32_5 s< 0) goto inst_next;
-    ra = inst_next | 0x1; 
+	local notaken:1 = mic_rt32_5 s< 0;
+	ra = inst_next | 0x1;
+	if (notaken) goto inst_next;
 	call Rel16_mic;
 }
 
@@ -3113,14 +3115,16 @@ STORE_TOP16: STORE_SREG^ra,EXT_CODE4E(sp) is mic_listr6 & REL6=1 & STORE_SREG & 
 
 :bad2									is ISA_MODE=1 & RELP=0 & mic_op=0b111000 & REL6=1 & mic_code=0; Rel16_mic unimpl
 :bgtzalc mic_rt32_5, Rel16_mic			is ISA_MODE=1 & RELP=0 & mic_op=0b111000 & REL6=1 & mic_rs32_0=0 & mic_rt32_5; Rel16_mic {
-	if (mic_rt32_5 s<= 0) goto inst_next;
-    ra = inst_next | 0x1; 
+	local notaken:1 = mic_rt32_5 s<= 0;
+	ra = inst_next | 0x1;
+	if (notaken) goto inst_next;
 	call Rel16_mic;
 }
 
 :bltzalc mic_rt32_5, Rel16_mic			is ISA_MODE=1 & RELP=0 & mic_op=0b111000 & REL6=1 & mic_rt32_5 & mic_rt32_5=mic_rs32_0 & mic_rt32_5a!=0; Rel16_mic {
-	if (mic_rt32_5 s>= 0) goto inst_next;
-    ra = inst_next | 0x1; 
+	local notaken:1 = mic_rt32_5 s>= 0;
+	ra = inst_next | 0x1;
+	if (notaken) goto inst_next;
 	call Rel16_mic;
 }
 :bltuc mic_rs32_0,mic_rt32_5,Rel16_mic	is ISA_MODE=1 & RELP=0 & mic_op=0b111000 & REL6=1 & mic_rt32_5 & mic_rs32_0; Rel16_mic {
@@ -3129,8 +3133,9 @@ STORE_TOP16: STORE_SREG^ra,EXT_CODE4E(sp) is mic_listr6 & REL6=1 & STORE_SREG & 
 
 # for this case, bovc is the catch-all. 
 :beqzalc mic_rt32_5, Rel16_mic			is ISA_MODE=1 & RELP=0 & mic_op=0b011101 & REL6=1 & mic_rs32_0=0 & mic_rt32_5 & mic_rt32_5a!=0; Rel16_mic {
-	if (mic_rt32_5 != 0) goto inst_next;
-    ra = inst_next | 0x1; 
+	local notaken:1 = mic_rt32_5 != 0;
+	ra = inst_next | 0x1;
+	if (notaken) goto inst_next;
 	call Rel16_mic;
 }
 
@@ -3151,8 +3156,9 @@ STORE_TOP16: STORE_SREG^ra,EXT_CODE4E(sp) is mic_listr6 & REL6=1 & STORE_SREG & 
 
 # for this case, bnvc is the catch-all.
 :bnezalc mic_rt32_5, Rel16_mic			is ISA_MODE=1 & RELP=0 & mic_op=0b011111 & REL6=1 & mic_rs32_0=0 & mic_rt32_5 & mic_rt32_5a!=0; Rel16_mic {
-	if (mic_rt32_5 == 0) goto inst_next;
-    ra = inst_next | 0x1; 
+	local notaken:1 = mic_rt32_5 == 0;
+	ra = inst_next | 0x1;
+	if (notaken) goto inst_next;
 	call Rel16_mic;
 }
 

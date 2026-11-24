@@ -173,7 +173,7 @@ Per `docs/improvement-pipeline.md` section 3's checklist:
    The witness in `analysis.md` section 2 is the fixture; a `bytechunk` of `caller`+`callee` is
    acceptable if it reproduces the same construct. Add a second assertion pair over an i386
    `push`-form call so both argument-passing forms are covered.
-6. **Adjudicate the one stage regression**: `tests/stages/gh6882-sparcstructret.xml` assertion #2
+6. **Adjudicate the one stage regression**: `tests/stages/gh6882-sparcstructret.toml` assertion #2
    changes from `return v1 \+ a0;` to `return v1\[0\] \+ a0;`, with a comment recording *why*
    (the struct-return buffer pointer is now passed, so the buffer types as `int4[2]`). This is a
    legitimate expectation change, not an absorbed regression — the PR must show the before/after

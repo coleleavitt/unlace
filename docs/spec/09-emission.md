@@ -5840,7 +5840,14 @@ already `0` or `1` (`cond_is_boolean`): a `BlockCondition` chain, or a leaf whos
 `truthycond` render does not print as a bare operand (`x != 0` printed as `x`).
 
 After that statement loop, the same option folds the trailing run of each sequence
-built from a `BlockList` (`fold_return_run`). The tail is a leaf that
+built from a `BlockList` or a `BlockGraph` (`fold_return_run`; in a graph each folded `if`
+must fall through to the next statement, its one out edge going to that statement's
+block, `falls_to`), and, before the sequences, each `if`/`else` without goto whose two
+arms are each a run value (a leaf `return_term` accepts or a `folded_return`) into one
+`return` joined the way `combine_return` joins a guard and the rest of a run
+(`fold_return_ite`: `if (c) { ...run... } else return 0;` becomes `return c && ...;`).
+The function body's root is usually a `BlockGraph`, so top-level runs need the graph
+case. The tail is a leaf that
 `return_term` accepts: one `RETURN` of an integer or boolean type whose value is
 the constant `0` or `1` (directly or through an implied `COPY`), or a value
 defined by an op with a boolean output (through `COPY` and `INT_ZEXT`) that binds
@@ -5860,7 +5867,12 @@ condition must pass `cond_is_boolean`. The first `if` of the run becomes
 and the tail become empty sequences. `emit_block_if` prints the first through the
 same `return_form` path, so its condition block's statements print above the
 `return`; `emit_return_value` parenthesizes a `||` operand of `&&` and a `?:`
-operand (`emit_return_operand`). A `Not` of a condition leaf ending in a `CBRANCH` prints by
+operand and a `&&` operand of `||` (`emit_return_operand`). Runs fold inner sequences first
+(statement order: the tree is built children first), and a guard body or a tail may
+also be a statement an earlier fold made a `return` of a `0`/`1` value (`Branch`,
+`Not`, `&&` or `||`), alone or as the one non-empty statement of its sequence, whose
+first condition passes `clean_guard_cond` (`folded_return`): `if (c) { if (!a) return
+0; return b < d; } return 0;` folds to `return (c) && (a) && b < d;`. A `Not` of a condition leaf ending in a `CBRANCH` prints by
 flipping that `CBRANCH` for the one render instead of printing `!` (`return_not_flip`), so
 the comparison prints its complement (`!(v1 <= v2)` prints `v2 < v1`, `!(!x)` prints
 `x`); when the `Not` is the whole returned value, only a flippable comparison that

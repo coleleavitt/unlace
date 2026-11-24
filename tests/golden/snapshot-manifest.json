@@ -409,7 +409,7 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/gh1243-8051-addc.xml",
+   "source": "tests/stages/gh1243-8051-addc.toml",
    "status": "ok"
   },
   "gh1276-flagcompare-boolsign": {
@@ -422,7 +422,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh1276-flagcompare-boolsign.xml",
+   "source": "tests/stages/gh1276-flagcompare-boolsign.toml",
    "status": "ok"
   },
   "gh1282-boolsignshift": {
@@ -435,7 +435,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh1282-boolsignshift.xml",
+   "source": "tests/stages/gh1282-boolsignshift.toml",
    "status": "ok"
   },
   "gh1537-simd-memset": {
@@ -448,7 +448,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh1537-simd-memset.xml",
+   "source": "tests/stages/gh1537-simd-memset.toml",
    "status": "ok"
   },
   "gh1951-avr-rcallwrap": {
@@ -461,7 +461,7 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/gh1951-avr-rcallwrap.xml",
+   "source": "tests/stages/gh1951-avr-rcallwrap.toml",
    "status": "ok"
   },
   "gh2786-unaryspacing": {
@@ -474,7 +474,7 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/gh2786-unaryspacing.xml",
+   "source": "tests/stages/gh2786-unaryspacing.toml",
    "status": "ok"
   },
   "gh4788-v850-bcond-disp17": {
@@ -483,7 +483,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/gh4788-v850-bcond-disp17.xml",
+   "source": "tests/stages/gh4788-v850-bcond-disp17.toml",
    "status": "ok"
   },
   "gh558-arraynotation": {
@@ -496,7 +496,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh558-arraynotation.xml",
+   "source": "tests/stages/gh558-arraynotation.toml",
    "status": "ok"
   },
   "gh558-compareform": {
@@ -509,7 +509,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh558-compareform.xml",
+   "source": "tests/stages/gh558-compareform.toml",
    "status": "ok"
   },
   "gh5897-arm-cpy-mov": {
@@ -518,7 +518,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/gh5897-arm-cpy-mov.xml",
+   "source": "tests/stages/gh5897-arm-cpy-mov.toml",
    "status": "ok"
   },
   "gh6389-8085-undoc": {
@@ -527,7 +527,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/gh6389-8085-undoc.xml",
+   "source": "tests/stages/gh6389-8085-undoc.toml",
    "status": "ok"
   },
   "gh6882-sparcstructret": {
@@ -540,7 +540,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh6882-sparcstructret.xml",
+   "source": "tests/stages/gh6882-sparcstructret.toml",
    "status": "ok"
   },
   "gh6904-ppc-e500-concat44": {
@@ -553,7 +553,7 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/gh6904-ppc-e500-concat44.xml",
+   "source": "tests/stages/gh6904-ppc-e500-concat44.toml",
    "status": "ok"
   },
   "gh6930-inferfuncentry": {
@@ -566,7 +566,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh6930-inferfuncentry.xml",
+   "source": "tests/stages/gh6930-inferfuncentry.toml",
    "status": "ok"
   },
   "gh6990-returnpair": {
@@ -579,7 +579,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh6990-returnpair.xml",
+   "source": "tests/stages/gh6990-returnpair.toml",
    "status": "ok"
   },
   "gh7139-x86-16-disp16-signed": {
@@ -588,7 +588,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/gh7139-x86-16-disp16-signed.xml",
+   "source": "tests/stages/gh7139-x86-16-disp16-signed.toml",
    "status": "ok"
   },
   "gh7190-ovlesssimplify": {
@@ -601,7 +601,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh7190-ovlesssimplify.xml",
+   "source": "tests/stages/gh7190-ovlesssimplify.toml",
    "status": "ok"
   },
   "gh7418-x86-call-rel16-mask": {
@@ -610,7 +610,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/gh7418-x86-call-rel16-mask.xml",
+   "source": "tests/stages/gh7418-x86-call-rel16-mask.toml",
    "status": "ok"
   },
   "gh7451-riscvzfaflis": {
@@ -619,7 +619,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/gh7451-riscvzfaflis.xml",
+   "source": "tests/stages/gh7451-riscvzfaflis.toml",
    "status": "ok"
   },
   "gh7890-arm-vcvt": {
@@ -632,7 +632,7 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/gh7890-arm-vcvt.xml",
+   "source": "tests/stages/gh7890-arm-vcvt.toml",
    "status": "ok"
   },
   "gh8017-stackprobeloop": {
@@ -645,7 +645,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh8017-stackprobeloop.xml",
+   "source": "tests/stages/gh8017-stackprobeloop.toml",
    "status": "ok"
   },
   "gh8391-arm-thumb-mrrc": {
@@ -654,7 +654,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/gh8391-arm-thumb-mrrc.xml",
+   "source": "tests/stages/gh8391-arm-thumb-mrrc.toml",
    "status": "ok"
   },
   "gh8456-arm-mrs-banked": {
@@ -663,7 +663,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/gh8456-arm-mrs-banked.xml",
+   "source": "tests/stages/gh8456-arm-mrs-banked.toml",
    "status": "ok"
   },
   "gh8467-dynamichashmax": {
@@ -676,7 +676,7 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/gh8467-dynamichashmax.xml",
+   "source": "tests/stages/gh8467-dynamichashmax.toml",
    "status": "ok"
   },
   "gh8471-thumbfuncptr": {
@@ -689,7 +689,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh8471-thumbfuncptr.xml",
+   "source": "tests/stages/gh8471-thumbfuncptr.toml",
    "status": "ok"
   },
   "gh8500-stackalias": {
@@ -702,7 +702,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh8500-stackalias.xml",
+   "source": "tests/stages/gh8500-stackalias.toml",
    "status": "ok"
   },
   "gh8724-arraystride": {
@@ -715,7 +715,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh8724-arraystride.xml",
+   "source": "tests/stages/gh8724-arraystride.toml",
    "status": "ok"
   },
   "gh8777-flagcompare-sborrow": {
@@ -728,7 +728,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh8777-flagcompare-sborrow.xml",
+   "source": "tests/stages/gh8777-flagcompare-sborrow.toml",
    "status": "ok"
   },
   "gh8790-x86-prefetch-regform": {
@@ -737,7 +737,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/gh8790-x86-prefetch-regform.xml",
+   "source": "tests/stages/gh8790-x86-prefetch-regform.toml",
    "status": "ok"
   },
   "gh8817-v850indbranch": {
@@ -750,7 +750,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh8817-v850indbranch.xml",
+   "source": "tests/stages/gh8817-v850indbranch.toml",
    "status": "ok"
   },
   "gh8844-avr-rjmpwrap": {
@@ -763,7 +763,7 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/gh8844-avr-rjmpwrap.xml",
+   "source": "tests/stages/gh8844-avr-rjmpwrap.toml",
    "status": "ok"
   },
   "gh8913-addcarrychain": {
@@ -776,7 +776,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh8913-addcarrychain.xml",
+   "source": "tests/stages/gh8913-addcarrychain.toml",
    "status": "ok"
   },
   "gh9001-hcs12brn": {
@@ -785,7 +785,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/gh9001-hcs12brn.xml",
+   "source": "tests/stages/gh9001-hcs12brn.toml",
    "status": "ok"
   },
   "gh9184-x86-fma-ymm256": {
@@ -798,7 +798,7 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/gh9184-x86-fma-ymm256.xml",
+   "source": "tests/stages/gh9184-x86-fma-ymm256.toml",
    "status": "ok"
   },
   "gh9191-switchmodbound": {
@@ -811,7 +811,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh9191-switchmodbound.xml",
+   "source": "tests/stages/gh9191-switchmodbound.toml",
    "status": "ok"
   },
   "gh9203-condexe-loopcopy": {
@@ -824,7 +824,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh9203-condexe-loopcopy.xml",
+   "source": "tests/stages/gh9203-condexe-loopcopy.toml",
    "status": "ok"
   },
   "gh9218-inputvarnodeadjust": {
@@ -837,7 +837,7 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/gh9218-inputvarnodeadjust.xml",
+   "source": "tests/stages/gh9218-inputvarnodeadjust.toml",
    "status": "ok"
   },
   "gh9230-memsetseq": {
@@ -850,7 +850,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/gh9230-memsetseq.xml",
+   "source": "tests/stages/gh9230-memsetseq.toml",
    "status": "ok"
   },
   "ghangr-ite-region-converter-missing-5db28e": {
@@ -863,7 +863,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/ghangr-ite-region-converter-missing-5db28e.xml",
+   "source": "tests/stages/ghangr-ite-region-converter-missing-5db28e.toml",
    "status": "ok"
   },
   "ghangr-loweredswitch": {
@@ -876,7 +876,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/ghangr-loweredswitch.xml",
+   "source": "tests/stages/ghangr-loweredswitch.toml",
    "status": "ok"
   },
   "ghangr-loweredswitch-mv": {
@@ -889,7 +889,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/ghangr-loweredswitch-mv.xml",
+   "source": "tests/stages/ghangr-loweredswitch-mv.toml",
    "status": "ok"
   },
   "gp": {
@@ -1006,7 +1006,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/kuna-assert.xml",
+   "source": "tests/stages/kuna-assert.toml",
    "status": "ok"
   },
   "kuna-catalog": {
@@ -1024,7 +1024,7 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/kuna-console.xml",
+   "source": "tests/stages/kuna-console.toml",
    "status": "ok"
   },
   "kuna-pipeline-quality": {
@@ -1037,7 +1037,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/kuna-pipeline-quality.xml",
+   "source": "tests/stages/kuna-pipeline-quality.toml",
    "status": "ok"
   },
   "kuna-regions": {
@@ -1050,7 +1050,7 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/kuna-regions.xml",
+   "source": "tests/stages/kuna-regions.toml",
    "status": "ok"
   },
   "kuna-restarts": {
@@ -1063,7 +1063,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/kuna-restarts.xml",
+   "source": "tests/stages/kuna-restarts.toml",
    "status": "ok"
   },
   "longdouble": {
@@ -1180,7 +1180,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/namestyle.xml",
+   "source": "tests/stages/namestyle.toml",
    "status": "ok"
   },
   "nan": {

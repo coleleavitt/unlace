@@ -406,10 +406,6 @@ define pcodeop vmulhsu_vv;
 define pcodeop vmulhsu_vx;
 define pcodeop vmulhu_vv;
 define pcodeop vmulhu_vx;
-define pcodeop vmv1r_v;
-define pcodeop vmv2r_v;
-define pcodeop vmv4r_v;
-define pcodeop vmv8r_v;
 define pcodeop vmv_s_x;
 define pcodeop vmv_v_i;
 define pcodeop vmv_v_v;
@@ -3637,64 +3633,64 @@ vtypei10: vsewd^","^vlmuld^","^vtad^","^vmad is op2029 & vsewd & vlmuld & vtad &
 	vd = vl1re64_v(rs1);
 }
 
-:vl2re8.v vd,(rs1) is vd & rs1 & op2931=0x1 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x7
+:vl2re8.v vdm2,(rs1) is vdm2 & rs1 & op2931=0x1 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x7
 {
-	vd = vl2re8_v(rs1);
+	vdm2 = vl2re8_v(rs1);
 }
 
-:vl2re16.v vd,(rs1) is vd & rs1 & op2931=0x1 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x5 & op0006=0x7
+:vl2re16.v vdm2,(rs1) is vdm2 & rs1 & op2931=0x1 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x5 & op0006=0x7
 {
-	vd = vl2re16_v(rs1);
+	vdm2 = vl2re16_v(rs1);
 }
 
-:vl2re32.v vd,(rs1) is vd & rs1 & op2931=0x1 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x6 & op0006=0x7
+:vl2re32.v vdm2,(rs1) is vdm2 & rs1 & op2931=0x1 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x6 & op0006=0x7
 {
-	vd = vl2re32_v(rs1);
+	vdm2 = vl2re32_v(rs1);
 }
 
-:vl2re64.v vd,(rs1) is vd & rs1 & op2931=0x1 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x7 & op0006=0x7
+:vl2re64.v vdm2,(rs1) is vdm2 & rs1 & op2931=0x1 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x7 & op0006=0x7
 {
-	vd = vl2re64_v(rs1);
+	vdm2 = vl2re64_v(rs1);
 }
 
-:vl4re8.v vd,(rs1) is vd & rs1 & op2931=0x3 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x7
+:vl4re8.v vdm4,(rs1) is vdm4 & rs1 & op2931=0x3 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x7
 {
-	vd = vl4re8_v(rs1);
+	vdm4 = vl4re8_v(rs1);
 }
 
-:vl4re16.v vd,(rs1) is vd & rs1 & op2931=0x3 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x5 & op0006=0x7
+:vl4re16.v vdm4,(rs1) is vdm4 & rs1 & op2931=0x3 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x5 & op0006=0x7
 {
-	vd = vl4re16_v(rs1);
+	vdm4 = vl4re16_v(rs1);
 }
 
-:vl4re32.v vd,(rs1) is vd & rs1 & op2931=0x3 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x6 & op0006=0x7
+:vl4re32.v vdm4,(rs1) is vdm4 & rs1 & op2931=0x3 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x6 & op0006=0x7
 {
-	vd = vl4re32_v(rs1);
+	vdm4 = vl4re32_v(rs1);
 }
 
-:vl4re64.v vd,(rs1) is vd & rs1 & op2931=0x3 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x7 & op0006=0x7
+:vl4re64.v vdm4,(rs1) is vdm4 & rs1 & op2931=0x3 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x7 & op0006=0x7
 {
-	vd = vl4re64_v(rs1);
+	vdm4 = vl4re64_v(rs1);
 }
 
-:vl8re8.v vd,(rs1) is vd & rs1 & op2931=0x7 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x7
+:vl8re8.v vdm8,(rs1) is vdm8 & rs1 & op2931=0x7 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x7
 {
-	vd = vl8re8_v(rs1);
+	vdm8 = vl8re8_v(rs1);
 }
 
-:vl8re16.v vd,(rs1) is vd & rs1 & op2931=0x7 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x5 & op0006=0x7
+:vl8re16.v vdm8,(rs1) is vdm8 & rs1 & op2931=0x7 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x5 & op0006=0x7
 {
-	vd = vl8re16_v(rs1);
+	vdm8 = vl8re16_v(rs1);
 }
 
-:vl8re32.v vd,(rs1) is vd & rs1 & op2931=0x7 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x6 & op0006=0x7
+:vl8re32.v vdm8,(rs1) is vdm8 & rs1 & op2931=0x7 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x6 & op0006=0x7
 {
-	vd = vl8re32_v(rs1);
+	vdm8 = vl8re32_v(rs1);
 }
 
-:vl8re64.v vd,(rs1) is vd & rs1 & op2931=0x7 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x7 & op0006=0x7
+:vl8re64.v vdm8,(rs1) is vdm8 & rs1 & op2931=0x7 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x7 & op0006=0x7
 {
-	vd = vl8re64_v(rs1);
+	vdm8 = vl8re64_v(rs1);
 }
 
 :vs1r.v vs3,(rs1) is vs3 & rs1 & op2931=0x0 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x27
@@ -3702,19 +3698,19 @@ vtypei10: vsewd^","^vlmuld^","^vtad^","^vmad is op2029 & vsewd & vlmuld & vtad &
 	vs1r_v(vs3, rs1);
 }
 
-:vs2r.v vs3,(rs1) is vs3 & rs1 & op2931=0x1 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x27
+:vs2r.v vdm2,(rs1) is vdm2 & rs1 & op2931=0x1 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x27
 {
-	vs2r_v(vs3, rs1);
+	vs2r_v(vdm2, rs1);
 }
 
-:vs4r.v vs3,(rs1) is vs3 & rs1 & op2931=0x3 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x27
+:vs4r.v vdm4,(rs1) is vdm4 & rs1 & op2931=0x3 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x27
 {
-	vs4r_v(vs3, rs1);
+	vs4r_v(vdm4, rs1);
 }
 
-:vs8r.v vs3,(rs1) is vs3 & rs1 & op2931=0x7 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x27
+:vs8r.v vdm8,(rs1) is vdm8 & rs1 & op2931=0x7 & op2828=0x0 & op2627=0x0 & op2525=0x1 & op2024=0x8 & op1214=0x0 & op0006=0x27
 {
-	vs8r_v(vs3, rs1);
+	vs8r_v(vdm8, rs1);
 }
 
 :vfadd.vf vd,vs2,frs1 is vd & vs2 & frs1 & op2631=0x0 & op1214=0x5 & op0006=0x57 & op2525=0x1
@@ -5664,22 +5660,22 @@ vtypei10: vsewd^","^vlmuld^","^vtad^","^vmad is op2029 & vsewd & vlmuld & vtad &
 
 :vmv1r.v vd,vs2 is vd & vs2 & op2631=0x27 & op2525=0x1 & op1519=0x0 & op1214=0x3 & op0006=0x57
 {
-	vd = vmv1r_v(vs2);
+	vd = vs2;
 }
 
-:vmv2r.v vd,vs2 is vd & vs2 & op2631=0x27 & op2525=0x1 & op1519=0x1 & op1214=0x3 & op0006=0x57
+:vmv2r.v vdm2,vs2m2 is vdm2 & vs2m2 & op2631=0x27 & op2525=0x1 & op1519=0x1 & op1214=0x3 & op0006=0x57
 {
-	vd = vmv2r_v(vs2);
+	vdm2 = vs2m2;
 }
 
-:vmv4r.v vd,vs2 is vd & vs2 & op2631=0x27 & op2525=0x1 & op1519=0x3 & op1214=0x3 & op0006=0x57
+:vmv4r.v vdm4,vs2m4 is vdm4 & vs2m4 & op2631=0x27 & op2525=0x1 & op1519=0x3 & op1214=0x3 & op0006=0x57
 {
-	vd = vmv4r_v(vs2);
+	vdm4 = vs2m4;
 }
 
-:vmv8r.v vd,vs2 is vd & vs2 & op2631=0x27 & op2525=0x1 & op1519=0x7 & op1214=0x3 & op0006=0x57
+:vmv8r.v vdm8,vs2m8 is vdm8 & vs2m8 & op2631=0x27 & op2525=0x1 & op1519=0x7 & op1214=0x3 & op0006=0x57
 {
-	vd = vmv8r_v(vs2);
+	vdm8 = vs2m8;
 }
 
 :vsrl.vi vd,vs2,vzimm5 is vd & vs2 & vzimm5 & op2631=0x28 & op1214=0x3 & op0006=0x57 & op2525=0x1

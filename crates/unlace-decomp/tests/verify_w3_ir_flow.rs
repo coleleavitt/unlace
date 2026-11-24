@@ -311,6 +311,57 @@ fn xref_classifies_branch_return_and_isfallthru() {
     assert!(startbasic);
 }
 
+/// An environment whose frame-teardown predicate claims every direct BRANCH.
+struct TailEnv;
+
+impl FlowEnvironment for TailEnv {
+    fn translate(&self) -> &dyn Translate {
+        panic!("TailEnv: pure-IR tests do not lift instructions")
+    }
+    fn resolve_typeop(&self, opc: OpCode) -> TypeOp {
+        typeop_for(opc)
+    }
+    fn is_frame_teardown_tail_call(&self, _fd: &Funcdata, _op: OpId, _dest: &Address) -> bool {
+        true
+    }
+}
+
+/// A BRANCH that an earlier relative CBRANCH of the same instruction jumps over
+/// does not end the instruction, so it is not rewritten as a tail call and the
+/// ops after it, which the CBRANCH reaches, stay (#686: CPython `FOR_ITER` as
+/// `if (!d) goto <more>; goto FORT; <more> push(next)`).
+#[test]
+fn xref_skipped_branch_is_not_a_tail_call() {
+    let mut fd = build_fd();
+    let ram = ram_space(&fd);
+    let cbr = make_op(&mut fd, OpCode::CPUI_CBRANCH, 0x1000, 2);
+    fd.obank_mut()
+        .get_mut(cbr)
+        .unwrap()
+        .set_flag(pcodeop_flags::startmark);
+    let br = make_op(&mut fd, OpCode::CPUI_BRANCH, 0x1000, 1);
+    set_coderef_in(&mut fd, br, 0x2000);
+    let more = make_op(&mut fd, OpCode::CPUI_COPY, 0x1000, 1);
+    set_const_in(&mut fd, more, 0, 7, 4);
+    let t_cbr = fd.obank().get(cbr).unwrap().get_time();
+    let t_more = fd.obank().get(more).unwrap().get_time();
+    set_const_in(&mut fd, cbr, 0, (t_more as i64 - t_cbr as i64) as uintb, 4);
+    set_const_in(&mut fd, cbr, 1, 0, 1);
+    let seq = fd.obank().get(cbr).unwrap().get_seq_num().clone();
+
+    let env = TailEnv;
+    let mut flow = FlowInfo::new(fd, &env);
+    flow.seed_visited(&Address::new(Rc::clone(&ram), 0x1000), seq, 4);
+    let mut startbasic = true;
+    let mut isfallthru = false;
+    let last = flow
+        .xref_for_test(cbr, &mut startbasic, &mut isfallthru)
+        .unwrap();
+    assert_eq!(last, Some(more));
+    assert!(isfallthru);
+    assert!(flow.addrlist_contains(0x2000));
+}
+
 /// A RETURN reports no fall-thru and marks the next-op-starts-basic-block flag.
 #[test]
 fn xref_return_no_fallthru() {
@@ -636,7 +687,9 @@ fn parse_meta(text: &str) -> FixtureMeta {
 /// with the function entry at the first lift point.
 fn build_sleigh_flow(meta: &FixtureMeta) -> (Funcdata, SleighEnv) {
     let root = repo_root();
-    let xml = std::fs::read(root.join(&meta.corpus)).expect("read corpus xml");
+    let xml = unlace_stagefile::read_as_xml(&root.join(&meta.corpus))
+        .expect("read corpus")
+        .into_bytes();
     let mut store = DocumentStorage::new();
     let doc_root = store
         .parse_document(&xml)

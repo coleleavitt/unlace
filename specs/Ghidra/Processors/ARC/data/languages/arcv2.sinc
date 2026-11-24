@@ -242,6 +242,11 @@ jcc: is pp { }
 jcc: is pp=3 ; Q=0 { }
 jcc: cc is pp=3 ; cc { if (!cc) goto inst_next; }
 
+# The condition of a delayed jump, as a value: its delay slot runs whether or not it is taken.
+jccd: is pp { export 1:1; }
+jccd: is pp=3 ; Q=0 { export 1:1; }
+jccd: cc is pp=3 ; cc { export cc; }
+
 # Conditional execution of the `pp=3` operand mode.
 docc: is pp { }
 docc: is pp=3 ; Q=0 { }
@@ -342,13 +347,13 @@ jdst: [srcC] is (pp=3 ; m=0) ... & srcC ... { export srcC; }
 jdst: immU6 is (pp=3 ; m=1) ... & immU6 ... { export immU6; }
 
 :j^jcc jdst is (maj=4 & sub=0x20 ; F=0) ... & jcc ... & jdst ... { goto [jdst]; }
-:j^jcc^".d" jdst is (maj=4 & sub=0x21 ; F=0) ... & jcc ... & jdst ... { local t:4 = jdst; delayslot(1); goto [t]; }
+:j^jccd^".d" jdst is (maj=4 & sub=0x21 ; F=0) ... & jccd ... & jdst ... { local c:1 = jccd; local t:4 = jdst; delayslot(1); if (!c) goto <skip>; goto [t]; <skip> }
 :j "[blink]" is maj=4 & sub=0x20 & pp=0 ; F=0 & creg=31 { return [blink]; }
 :j^jcc "[blink]" is (maj=4 & sub=0x20 & pp=3 ; F=0 & creg=31 & m=0) ... & jcc ... { return [blink]; }
 :j.d "[blink]" is maj=4 & sub=0x21 & pp=0 ; F=0 & creg=31 { local t:4 = blink; delayslot(1); return [t]; }
-:j^jcc^".d" "[blink]" is (maj=4 & sub=0x21 & pp=3 ; F=0 & creg=31 & m=0) ... & jcc ... { local t:4 = blink; delayslot(1); return [t]; }
+:j^jccd^".d" "[blink]" is (maj=4 & sub=0x21 & pp=3 ; F=0 & creg=31 & m=0) ... & jccd ... { local c:1 = jccd; local t:4 = blink; delayslot(1); if (!c) goto <skip>; return [t]; <skip> }
 :jl^jcc jdst is (maj=4 & sub=0x22 ; F=0) ... & jcc ... & jdst ... { local t:4 = jdst; blink = inst_next; call [t]; }
-:jl^jcc^".d" jdst is (maj=4 & sub=0x23 ; F=0) ... & jcc ... & jdst ... { local t:4 = jdst; blink = inst_next; delayslot(1); call [t]; }
+:jl^jccd^".d" jdst is (maj=4 & sub=0x23 ; F=0) ... & jccd ... & jdst ... { local c:1 = jccd; local t:4 = jdst; delayslot(1); if (!c) goto <skip>; blink = inst_next2; call [t]; <skip> }
 
 :bi [srcC] is (maj=4 & sub=0x24 & pp=0 ; F=0) ... & srcC ... { local t:4 = inst_next + (srcC << 2); goto [t]; }
 :bih [srcC] is (maj=4 & sub=0x25 & pp=0 ; F=0) ... & srcC ... { local t:4 = inst_next + (srcC << 1); goto [t]; }
@@ -548,11 +553,11 @@ brTarget: addr is brdisp ; ldS [ addr = (inst_start & 0xfffffffc) + ((ldS << 8) 
 :b.d bFar is (maj=0 & bfar=1 ; dslot=1) ... & bFar ... { delayslot(1); goto bFar; }
 
 :bl blTarget is (maj=1 & bfar=0 & blfar=0 ; dslot=0 & Q=0) ... & blTarget ... { blink = inst_next; call blTarget; }
-:bl.d blTarget is (maj=1 & bfar=0 & blfar=0 ; dslot=1 & Q=0) ... & blTarget ... { blink = inst_next; delayslot(1); call blTarget; }
+:bl.d blTarget is (maj=1 & bfar=0 & blfar=0 ; dslot=1 & Q=0) ... & blTarget ... { blink = inst_next2; delayslot(1); call blTarget; }
 :bl^cc blTarget is (maj=1 & bfar=0 & blfar=0 ; dslot=0 & cc) ... & blTarget ... { if (!cc) goto inst_next; blink = inst_next; call blTarget; }
-:bl^cc^".d" blTarget is (maj=1 & bfar=0 & blfar=0 ; dslot=1 & cc) ... & blTarget ... { local t:1 = cc; delayslot(1); if (!t) goto inst_next; blink = inst_next; call blTarget; }
+:bl^cc^".d" blTarget is (maj=1 & bfar=0 & blfar=0 ; dslot=1 & cc) ... & blTarget ... { local t:1 = cc; delayslot(1); if (!t) goto <skip>; blink = inst_next2; call blTarget; <skip> }
 :bl blFar is (maj=1 & bfar=0 & blfar=1 ; dslot=0) ... & blFar ... { blink = inst_next; call blFar; }
-:bl.d blFar is (maj=1 & bfar=0 & blfar=1 ; dslot=1) ... & blFar ... { blink = inst_next; delayslot(1); call blFar; }
+:bl.d blFar is (maj=1 & bfar=0 & blfar=1 ; dslot=1) ... & blFar ... { blink = inst_next2; delayslot(1); call blFar; }
 
 brC: srcC is (maj ; brm=0) ... & srcC ... { export srcC; }
 brC: immU6 is (maj ; brm=1) ... & immU6 ... { export immU6; }
@@ -651,7 +656,7 @@ sRel13: addr is sd11 [ addr = (inst_start & 0xfffffffc) + (sd11 << 2); ] { expor
 :j_s [sb] is maj=0x0f & sop5=0 & sop3=0 & sb { goto [sb]; }
 :j_s.d [sb] is maj=0x0f & sop5=0 & sop3=1 & sb { local t:4 = sb; delayslot(1); goto [t]; }
 :jl_s [sb] is maj=0x0f & sop5=0 & sop3=2 & sb { local t:4 = sb; blink = inst_next; call [t]; }
-:jl_s.d [sb] is maj=0x0f & sop5=0 & sop3=3 & sb { local t:4 = sb; blink = inst_next; delayslot(1); call [t]; }
+:jl_s.d [sb] is maj=0x0f & sop5=0 & sop3=3 & sb { local t:4 = sb; blink = inst_next2; delayslot(1); call [t]; }
 :sub_s.ne sb, sb2, sb3 is maj=0x0f & sop5=0 & sop3=6 & sb & sb2 & sb3 { if (Z) goto inst_next; sb = 0; }
 :nop_s  is maj=0x0f & sop5=0 & sop3=7 & sb=0 { }
 :unimp_s  is maj=0x0f & sop5=0 & sop3=7 & sb=1 { unimplemented_instruction(); }

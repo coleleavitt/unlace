@@ -1695,7 +1695,11 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                             cursor = None;
                         }
                         *startbasic = true;
-                    } else if let Some(tailkind) = self.tail_call_kind(curop, &destaddr) {
+                    } else if let Some(tailkind) = self
+                        .ends_instruction(curop, maxtime)
+                        .then(|| self.tail_call_kind(curop, &destaddr))
+                        .flatten()
+                    {
                         // (kuna) tee-O2 tail-jump: a direct `jmp` to another known
                         // function's entry is a tail call, instead of
                         // new_address()-following the jump INTO the callee (which
@@ -1891,6 +1895,17 @@ following this call as a branch"
             }
         }
         Ok(op)
+    }
+
+    /// (kuna) Is `op` past every op an earlier relative branch of its instruction
+    /// targets?  A BRANCH that an internal branch skips does not end the
+    /// instruction, so it is never a tail call: the tail-call rewrite plants a
+    /// RETURN whose fresh time would delete the ops that branch reaches (#686).
+    fn ends_instruction(&self, op: OpId, maxtime: uintm) -> bool {
+        self.data
+            .obank()
+            .get(op)
+            .is_some_and(|o| o.get_time() >= maxtime)
     }
 
     /// The Address held by a branch op's first input (its code reference).

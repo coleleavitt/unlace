@@ -1,0 +1,68 @@
+# GH-9230: "Expand builtin function recovery to memset / bzero"
+# https://github.com/NationalSecurityAgency/ghidra/issues/9230
+#
+# Source (foo1, clang-18 -O3):
+#     void foo1() { unsigned char foo[100]; bzero(foo,100); printf(foo); }
+# Compiled: inlined bzero = 6x movaps xmm0(=0),N(rsp) + 1x movl 0,0x60(rsp).
+#
+# Default output: the 100-byte zero fill is emitted as ~88 individual char-array
+# element stores acStack_68[0xNN] = NUL instead of a single builtin_memset.
+# The existing constseq recovery (RuleStringCopy/StringSequence, S5 named group
+# constsequence) collapses constant CHARACTER copies into builtin_strncpy, but
+# ArraySequence::formByteArray treats the first zero byte as a null terminator,
+# so an all-zero fill counts as length 1 (less than MINIMUM_SEQUENCE_LENGTH=4)
+# and the sequence is rejected.
+#
+# Stage model: S5 simplification, named group constsequence. A new constant-fill
+# sub-stage (memsetsequence) detects a single repeated fill byte over the
+# contiguous region and emits builtin_memset(dst,val,len). Enabled via a P0
+# option (default off = upstream element stores), so assertion 1 reproduces
+# under the default pipeline.
+#
+# Pass 1 (default): assertion 1 proves the bug reproduces (element stores).
+# Pass 2 (option memsetsequence on): assertion 2 asserts the fix emits a single
+# builtin_memset call covering the whole 100-byte region.
+#
+# Note: parse line extern void printf(char *) is load-bearing; it types the rsp
+# buffer as char acStack_68[104], yielding the issue's indexed-store form. The
+# printf stub at 0x1000f0 is the target of the relative call in foo1's bytes.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1000f0', name = 'printf' },
+    { space = 'ram', offset = '0x100200', name = 'foo1' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000f0'
+hex = 'c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100200'
+hex = '4883ec680f57c00f294424500f294424400f294424300f294424200f294424100f290424c7442460000000004889e731c0e8bafeffff4883c468c30f1f440000'
+
+[script]
+commands = [
+    'parse line extern void printf(char *);',
+    'lo fu foo1',
+    'decompile',
+    'print C',
+    'option memsetrecover off',
+    'lo fu foo1',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH9230 #1: memsetrecover off restores the element-store form (old behavior, opt-in)'
+count = 1
+literal = "v1[0x50] = '\\0';"
+
+[[match]]
+name = 'GH9230 #2: default pipeline collapses the zero-fill into builtin_memset (fix is DIV-2 default)'
+count = 1
+literal = 'builtin_memset(v1,0,100);'

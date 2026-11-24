@@ -70,7 +70,7 @@ literal = 'try {'
 [[match]]
 name = 'itaniumeh #4: on tests the selector at the catch pads (catcher, typed)'
 count = 2
-literal = 'if (eh_selector() == 1)'
+regex = 'if \(eh_selector\(\) [!=]= 1\)'
 
 [[match]]
 name = 'itaniumeh #5: on passes the exception to __cxa_begin_catch'

@@ -29,6 +29,7 @@ unlace-decomp-dylib = { workspace = true, optional = true }
 dynamic_linking = ["dep:unlace-decomp-dylib"]
 
 [dev-dependencies]
+unlace-stagefile.workspace = true
 unlace-slacomp.workspace = true
 object = { workspace = true, features = ["write"] }
 # The register<->global over-merge render gate (`tests/verify_global_regmerge.rs`)

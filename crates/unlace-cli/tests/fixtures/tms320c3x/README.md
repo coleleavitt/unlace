@@ -8,3 +8,5 @@ DBU AR0,loop; STI R0,@0x300; ADDI3 R0,R0,R1; STI R1,@0x301; RETSU`
 formats and checked against the binutils tic4x opcode table. It sums the ten
 words at 0x200 with a decrement-and-branch loop, stores the sum, and stores
 twice the sum through a three-operand add.
+
+`repeat.bin` (load at word 0x100): `repeat.s` assembled with `tic4x-coff-as -mcpu=31` (binutils 2.45), `.text` only. `RPTB 0x104` repeats the ADDI/NOP block; `RPTS RC` repeats the next ADDI.

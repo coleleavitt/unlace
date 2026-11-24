@@ -1,7 +1,24 @@
 # Xtensa
 
 The base Xtensa module (`Xtensa:LE:32:default`, `Xtensa:BE:32:default`) is the vendored Ghidra
-one. unlace adds the ESP32-S3 variant for #98.
+one. unlace adds the ESP32-S3 variant for #98, and changes the zero-overhead loop handling
+(`xtensaMain.sinc`, `xtensaArch.sinc`, `xtensaInstructions.sinc`, below).
+
+## Zero-overhead loops (local change)
+
+Upstream set `loopMode` without `globalset`, so it never reached the loop body. Its
+`loopMode=1` root constructor would branch back to `LBEG` after every instruction, and in
+practice a `LOOP` body ran once. `LOOP`, `LOOPGTZ` and `LOOPNEZ` now mark `LEND` (the
+instruction after the body) with context: `loopEnd`, and `loopDist` = `LEND - LBEG`.
+Reaching `LEND` with `LCOUNT` non-zero counts down and branches directly to the loop start
+before `LEND` executes, so a counted loop decompiles as `do`/`while`. The `PS.EXCM`
+exception-mode test of the hardware is not modelled. `loopMode` is removed.
+
+## L32R target (local change)
+
+`L32R` computes its literal address in 64-bit disassembly arithmetic, so the one-extended
+offset carried into bit 32. The operand printed as `0x4003c04d0` for a literal at `0x3c04d0`.
+The address is now masked to 32 bits. The p-code was already right, because the space truncates.
 
 ## ESP32-S3 PIE (`Xtensa:LE:32:esp32s3`)
 

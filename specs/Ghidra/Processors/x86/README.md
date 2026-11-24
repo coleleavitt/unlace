@@ -227,3 +227,37 @@ names, now printed as the immediate, see below); the memory-form sweep, every AV
   immediate like `vfpclassps`/`vfpclasspd` and LLVM, so the whole spec agrees and both AVX-512
   sweeps (`tools/x86_avx512_sweep.py`, memory and register forms) report no differences. The lifted
   user operation takes the same constant either way.
+
+## Real-code checks (APX, AVX10.2)
+
+Lua 5.3, zlib and SQLite built with clang 22 and gcc 15 at -O2/-O3 with `-mapxf` and with
+`-mavx10.2`: every instruction of `.text` decodes at the address and length `llvm-objdump` gives,
+the APX and EVEX vector instructions print the same operands (scale and sign spelling aside), and
+`decompile-all` of the Lua and zlib libraries has no bad or unimplemented instruction. The APX
+lifts were checked against Unicorn with `tools/difffuzz/apxcheck.py` (see `docs/difffuzz.md`).
+The one wrong decode found: the AVX-512 `vpcmp[u]{b,w,d,q}` predicate 4 printed as `vpcmpeq*`;
+it is `vpcmpneq*` (the p-code was already right, it passes the immediate).
+
+## Native-oracle fixes (legacy SSE, VEX, GFNI, VAES)
+
+`tools/difffuzz` with `--oracle native` (this CPU as the reference, see `docs/difffuzz.md`) and the
+VEX/legacy decode sweeps of `tools/x86_avx512_sweep.py` found:
+
+- REX.X (legacy SSE) and VEX.X selected XMM16-31/YMM16-31 for a register operand in ModRM.rm;
+  only EVEX's X extends a vector register (`ia.sinc`, `XmmReg2`/`YmmReg2`/`ZmmReg2`).
+- VEX `vaddss`/`vaddsd`/`vsubss`/`vsubsd`/`vmulss`/`vmulsd` cleared bits 127:32 (or 127:64) of the
+  destination instead of copying them from the first source (`avx.sinc`).
+- 34 VEX scalar instructions (`vaddss`, `vmaxsd`, `vcvtsi2ss`, `vsqrtsd`, ...) required VEX.L=0;
+  they ignore VEX.L (LIG) as LLVM's records say.
+- `lzcnt r, r` with the same register computed CF from the result, not the source (`lzcnt.sinc`).
+- `extractps m32` stored 8 bytes in 64-bit mode, `pinsrb` read a dword from memory.
+- GFNI (`gf2p8mulb`, `gf2p8affineqb`, `gf2p8affineinvqb`, legacy and VEX), the VEX.256 forms of
+  VAES and VPCLMULQDQ, and AVX-NE-CONVERT were missing (`gfni_vaes.sinc`, `avx_ne_convert.sinc`):
+  libcrypto.so.3 has 379 such VAES/VPCLMULQDQ instructions that were bad instructions.
+
+Checked: native difffuzz, 3000 encodings over two seeds, has no mismatch left; the Unicorn
+difffuzz (4000, seed 7) is unchanged; the EVEX, VEX and legacy sweeps regress nothing (34 VEX and
+9 legacy records fixed); 32-bit libc.so.6 disassembles the same, libcrypto.so.3 differs only by the
+newly decoded VAES/VPCLMULQDQ; `decompile-all /usr/bin/ls` is byte-identical.
+Left: SSE/MMX encodings with a reserved F2/F3 prefix that Capstone accepts stay undecoded; AMD FMA4
+is not decoded.

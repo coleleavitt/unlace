@@ -126,6 +126,9 @@ FLAGS['notfirst'] = (32 * FLAGW + 6, 32 * FLAGW + 6)
 FLAGS['nsyl'] = (32 * FLAGW + 7, 32 * FLAGW + 9)
 for k, s in enumerate(XSLOTS):
     FLAGS[s + 'xc'] = (32 * FLAGW + 10 + 2 * k, 32 * FLAGW + 11 + 2 * k)
+# Hardware loops: loopdo marks its loop end (the bundle after the body) with lpend and the
+# distance back to the loop start.
+NOFLOW = {'lpend': (32 * FLAGW + 18, 32 * FLAGW + 18), 'lpdist': (32 * FLAGW + 19, 32 * FLAGW + 40)}
 
 # Register files.
 FILES = {'GPR': [sname(DEC[REGFILE['GPR'] + i]) for i in range(64)],
@@ -192,6 +195,9 @@ def semantics(name, fs, ops, mods, slot):
         return 'local l_a:8 = %s;' % v
     if name == 'goto':
         return '', 'goto %s;' % regs[0]
+    if name == 'loopdo':
+        # ls/le/lc set up the loop; the loop-back is added at le by the root table
+        return '%s = %s;' % (T, regs[0]), 'lc = %s; ls = inst_next; le = &%s;' % (T, regs[1])
     if name == 'call':
         return '', 'ra = inst_next; call %s;' % regs[0]
     if name == 'ret':
@@ -505,7 +511,12 @@ for e in OPS:
                 stats['pcode'] += 1
             stats['forms'] += 1
             pat = ' & '.join([key] + list(dict.fromkeys(patops)))
-            CONS[slot].append((disp, pat, sem[0], sem[1]))
+            act = ''
+            if e['op'] == 'loopdo':
+                f = '%s_0_6_22' % slot
+                act = ('[ lpend = 1; lpdist = ((((%s $xor 0x10000) - 0x10000) << 2)) - ((nsyl + 1) << 2); '
+                       'globalset(%s_pcrel17, lpend); globalset(%s_pcrel17, lpdist); ] ' % (f, slot, slot))
+            CONS[slot].append((disp, pat, sem[0], sem[1], act))
 
 LANGID = {'kv3_v1': 'kv3-1', 'kv3_v2': 'kv3-2', 'kv4_v1': 'kv4-1'}[CORE]
 w('# Kalray KVX %s (64-bit mode), little endian.' % LANGID)
@@ -540,6 +551,8 @@ for s in XSLOTS:
         w('  %s = (%d,%d)' % (wordfield(s, i), *CTX[wordfield(s, i)]))
 for n, (a, b) in FLAGS.items():
     w('  %s = (%d,%d)' % (n, a, b))
+for n, (a, b) in NOFLOW.items():
+    w('  %s = (%d,%d) noflow' % (n, a, b))
 for n, (a, b) in sorted(CTX.items()):
     if n.endswith('_0_31'):
         continue
@@ -563,10 +576,10 @@ for rows in MODTABLES.values():
 w('')
 for s in SLOTS:
     tbl = 'D_' + s
-    for disp, pat, ex, wb in CONS[s]:
-        w('%s: %s is %s { %s }' % (tbl, disp, pat, ex))
+    for disp, pat, ex, wb, act in CONS[s]:
+        w('%s: %s is %s %s{ %s }' % (tbl, disp, pat, act, ex))
     w('%s: "?invalid" is epsilon { invalid_syllable(); }' % tbl)
-    for disp, pat, ex, wb in CONS[s]:
+    for disp, pat, ex, wb, act in CONS[s]:
         w('W_%s: is %s { %s }' % (s, pat, wb))
     w('W_%s: is epsilon { }' % s)
     w('')
@@ -602,7 +615,11 @@ for s, c in alu:
 chain('steer=2 & mauv=0', '%s = word; mauv = 1; notfirst = 1;' % wordfield('mau', 0))
 chain('steer=1 & lsuv=0', '%s = word; lsuv = 1; notfirst = 1;' % wordfield('lsu', 0))
 w('')
-w(':^B is B { build B; }')
+# Root: the hardware-loop back edge. Reaching le with lc > 1 counts down and restarts the body
+# at ls before the bundle at le runs, so the decompiler sees an ordinary loop.
+w('LpStart: loc is lpdist [ loc = inst_start - lpdist; ] { export *[ram]:8 loc; }')
+w(':^B is lpend=0 & B { build B; }')
+w(':^B is lpend=1 & LpStart & B { lc = lc - 1; if (lc == 0) goto <body>; goto LpStart; <body> build B; }')
 print('\n'.join(out))
 sys.stderr.write('forms %d pcode %d userop %d skipped %s\n' % (stats['forms'], stats['pcode'], stats['userop'],
                                                              sorted(stats['skipped'])))

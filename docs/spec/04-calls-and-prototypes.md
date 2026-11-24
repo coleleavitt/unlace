@@ -2189,7 +2189,20 @@ classified:
   the stream in ECX and the text in EDX, the `value` pushed before it for the
   `__thiscall` `operator<<(unsigned long)` that pops it went to the first call
   and the second printed without it.
-  This bookkeeping runs only with the option on and never changes
+  A third piece places the stack pointer again in the epilogue
+  (`kuna_calleepurge.rs (msvc_saved_sp)`). An EH prologue saves the exact
+  stack pointer for its catch funclets (`mov [ebp-0x10],esp`, after the
+  pushes of the callee-saved registers and the cookie), and the function's own
+  code is back at that value where it unlinks the SEH registration
+  (`mov ecx,[ebp-0xc]; mov fs:[0],ecx`). A stack pointer that a call the walk
+  cannot read (a virtual call through `[eax+8]`, whose pop no one states) left
+  only bounded is set to the saved value there, if the bounds contain it. The
+  pops after the unlink (the cookie slot, the callee-saved registers) then read
+  the slots the prologue wrote, instead of unplaced stack. A later store to the
+  saved slot forgets it. This one does change what the pop proof reads, so with
+  the option on an MSVC EH function whose virtual calls left its stack pointer
+  bounded can prove its pop.
+  The rest of this bookkeeping runs only with the option on and never changes
   a value the pop proof reads; turning the option on or off drops the walks
   already taken, so a walk is never reused with the other setting. A nested call to a function recorded as
   stack-moving (above) whose own extent is not stated leaves the extent
@@ -4518,10 +4531,49 @@ Floating-point hardware comes from the same attributes: `Tag_FP_arch`,
 (`-mfloat-abi=softfp`) keeps the default layout: GCC and clang pass a static
 function's floating-point values in VFP registers there when they see every
 call, so the image's convention does not decide the function's. An image whose
-attributes say nothing about hardware keeps it too. Neither case changes from
-before this rule, and an exported function on a softfp image is still laid out
-in VFP registers. MIPS, PowerPC and RISC-V specs have no soft-float model, so a
+attributes say nothing about hardware keeps it too. An externally visible function
+cannot be such a function: another unit calls it under the stated convention. So
+on any ARM ELF that states the base standard (`Tag_ABI_VFP_args` 0 or absent in a
+relocatable object, or `EF_ARM_ABI_FLOAT_SOFT` in a linked image), every defined
+global or weak function symbol and every resolved import is bound to
+`__stdcall_softfp` (`crates/unlace-analysis/src/loader/kuna_armbasepcs.rs`,
+analysis pass `armbasepcs`, model facts committed through the loader-bound model
+table). The binding covers the function's own decompile, its declared (DWARF or
+library) prototype, and every direct call to it. `float scale(float v, int n)` on a
+soft-float big-endian or Cortex-M object read its result from `s0`, or lost it,
+and the `__aeabi_fadd` result it returns went unused (#681). A local function
+keeps the default layout as above. MIPS, PowerPC and RISC-V specs have no soft-float model, so a
 declaration on their soft-float images keeps the default layout as well.
+
+**Arm run-time ABI helpers.** A soft-float ARM caller computes `a + b` on
+`double` as `__aeabi_dadd(a, b)`, converts with `__aeabi_i2d`, `__aeabi_d2iz`
+or `__aeabi_f2d`, and copies with `__aeabi_memcpy`; a hard-float caller on a
+single-precision FPU does the same for its doubles. Every helper's contract is
+fixed by the Run-time ABI for the Arm Architecture (RTABI32 section 4), and
+every helper keeps the base standard in every image (RTABI32 3.1). On any
+32-bit ARM image that defines or imports one, the analysis pass `aeabisigs`
+(`crates/unlace-analysis/src/analyzers/protos/kuna_aeabisigs.rs`) seeds its
+RTABI32 prototype by name and at each resolved import address: the 4.1
+arithmetic (`dadd`, `ddiv`, `dmul`, `drsub`, `dsub` and the `f` forms),
+the `int` comparisons (`dcmpeq`..`dcmpun`, `fcmpeq`..`fcmpun`), the
+conversions between `double`, `float`, `int`, `unsigned`, `long long` and
+`unsigned long long` (`d2iz`, `d2uiz`, `d2lz`, `d2ulz`, `d2f`, `f2d`, `i2d`,
+`ui2d`, `l2d`, `ul2d` and the `f` forms), the 4.2 integer helpers `idiv`,
+`uidiv`, `lmul`, `llsl`, `llsr`, `lasr`, `lcmp`, `ulcmp`, the 4.3.4 memory
+helpers (`void __aeabi_memcpy(void *, const void *, size_t)`, the `memmove`
+forms, `void __aeabi_memset(void *, size_t, int)` with the length before the
+fill byte, `memclr`, and their `4` and `8` alignment variants), the 4.3.3
+unaligned accessors and `__aeabi_read_tp`. The prototype is laid out under the
+core-register model on every ARM image, whatever the image's own convention
+(`kuna_armfloatreturn.rs (declared_helper_model)`), so a `double` travels in
+`r0:r1` and `r2:r3`: `double dadd(double a, double b)` prints
+`return __aeabi_dadd(a,b);` where it printed the four words of two union casts,
+and `float fadd(float a, float b)` prints `return __aeabi_fadd(a,b);` where it
+printed `(float)__aeabi_fadd()`. The `__value_in_regs` divmod pairs
+(`__aeabi_idivmod`, `__aeabi_uldivmod`, ...) return a remainder no C return
+type holds and are left to `arithhelpers`; the `__aeabi_cdcmp*` and
+`__aeabi_cfcmp*` comparisons return in the flags and get no prototype. A DWARF or
+explicit declaration keeps precedence.
 
 The soft-float model is the spec's `__stdcall_softfp` with the default model's
 `extension` copied onto its core-register input entries: the base standard
@@ -5349,7 +5401,7 @@ gets the call-output local type `swift.pair`,
 a structure of two `undefined8` fields `_0` and `_1`
 (`pair_output_type`, consulted by `TypeOpCall::getOutputLocal`'s unlocked
 arm). The words then print as `v1._0` / `v1._1` instead of
-`SUB168(v1,0)` / `SUB168(v1,8)`. Pinned by `tests/stages/kuna-swiftinfer.xml`;
+`SUB168(v1,0)` / `SUB168(v1,8)`. Pinned by `tests/stages/kuna-swiftinfer.toml`;
 the read after a call and the imported method's `self` by
 `tests/stages/kuna-swiftself.toml`.
 
@@ -5365,7 +5417,7 @@ recovered output type, which it becomes). `RulePieceStructure` then splits the
 `description` getter declares `swift.pair` and returns `v1` after
 `v1._1 = "endCursor"; v1._0 = 0x…;` instead of returning
 `*(unsigned __int128 *)v1` from an `undefined16`. Pinned by
-`tests/stages/kuna-swiftinfer.xml`.
+`tests/stages/kuna-swiftinfer.toml`.
 
 ### (kuna) An MSVC by-value class sized at the call (`kuna_msvcbyval.rs`)
 
@@ -5931,7 +5983,7 @@ the record never returns the high register alone. A low register moved back
 needs no such rule: the repair keeps the low half whenever the high one is not
 real anyway.
 
-`tests/stages/gh6990-returnpair.xml` keeps the SPARC function returning one
+`tests/stages/gh6990-returnpair.toml` keeps the SPARC function returning one
 register, and `tests/stages/kuna-ownreturn.toml` pins the ARM shapes, the `svc`
 control and a hand-written `__ashrdi3` shape; `unlace-cli/tests/own_register_returns.rs`
 compiles the ARM, Thumb and RISC-V 32 output back and runs it against the
@@ -8139,7 +8191,7 @@ its callers read.
 
 Single-function `unlace decompile` builds the call at the definition too, which
 is what lets a prototype declared there reach the call (the
-`tests/stages/kuna-pltlocal.xml` passes); without one, a forwarded register is
+`tests/stages/kuna-pltlocal.toml` passes); without one, a forwarded register is
 still recovered only from a callee-first run, exactly as for a direct call.
 Over 67 shared objects (the 18 decbench x86-64 `.so` files, 13 x86-64 system
 libraries, 13 AArch64 and 9 ARM Thumb-2 Debian bookworm libraries, and 14
@@ -9910,7 +9962,8 @@ live in `d0`. A declared prototype of one, from a parsed declaration or from
 debug information (libgcc's `long long __fixdfdi(double a)`, at the address of
 `__aeabi_d2lz`), states its types but not its convention, so its parameters and
 result are laid out under the core-register model
-(`kuna_armfloatreturn.rs (declared_helper_model)`): a Cortex-M7 caller that
+(`kuna_armfloatreturn.rs (declared_helper_model)`), on every 32-bit ARM image
+and not only where the option applies: a Cortex-M7 caller that
 passes a double it computed in `d7` in `r0:r1` does not take its own `d0` as a
 phantom `double` parameter. A register-bank save or restore, one instruction storing or
 loading eight or more VFP registers of which at least one is not an argument

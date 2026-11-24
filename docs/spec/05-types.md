@@ -658,7 +658,7 @@ that option is on (`ArchContext::libctypes`), and only about the vote. It never
 touches a type that arrives by another road: a call's OUTPUT (`getpwnam`'s
 `passwd *`), or propagation between Varnodes that are later merged into one
 variable, which is how bash's `glob_vector` still prints one `DIR *` local that
-also holds an unrelated `sh_malloc` result. `tests/stages/kuna-libctypes.xml`
+also holds an unrelated `sh_malloc` result. `tests/stages/kuna-libctypes.toml`
 pass 13 pins the obstack and mutex shapes and a control that keeps its name.
 
 (kuna) **A variadic argument in a floating-point register.** The variadic part
@@ -3722,7 +3722,27 @@ being its own or a base's, owns it. A store after a call `this` was not passed
 to (a by-value return slot filled after other work) disqualifies it. MSVC
 constructors return `this`, so an owner that does is `C::C`; one that does not
 and that a function in `C`'s own vftable calls (the scalar or vector deleting
-destructor) is `C::~C`. A function the symbol table already names keeps it.
+destructor) is `C::~C`. That calling slot, when it is the only slot of `C`'s
+offset-0 vftables that calls it, is the deleting destructor and is named
+`C::~C` too, the name a symbol table gives an Itanium `D0`; it replaces the slot's
+`vfunc_<i>` name. Holley's `PEGRP32F.dll` and `USBCAN-Driver.dll` hold 46 deleting
+destructors IDA 9.5 names `` C::`scalar deleting destructor' ``; 18 call their
+destructor. The rest inlined it (`std::ctype<char>`'s at USBCAN `0x10001d70` stores
+the vftable itself), so a slot of `C`'s offset-0 vftables is also `C::~C` when its
+fall-through walk stores `C`'s own vftable through `this` before any call, every
+other store being a base's, it does not return `this`, and its first 256 bytes
+test bit 0 of the flags argument, the `delete this` request
+(`kuna_msvcctors.rs (tests_delete_flag)`: `test byte ptr [ebp+8], 1`, `[esp+n]` or
+the unoptimized `mov eax, [ebp+8]; and eax, 1` on x86; `test dl, 1`, its `bl`/`dil`
+copy or a frame copy on x64). It returns `this`, as an MSVC deleting destructor
+does. Every walk steps over MSVC's frame-setup helpers (`__EH_prolog3` and its
+forms, `push size; mov eax, handler; call`, and `__SEH_prolog4`, `push size; push
+scopetable; call`): a call target that opens at least two candidate or vftable
+functions in that shape (`kuna_msvcctors.rs (frame_setup_helpers)`). The helper
+builds the frame and leaves `this` in ECX, so an MFC destructor's vftable store
+after it is still its first act; counted as a call, it disqualified every MFC
+destructor (`CDialog::~CDialog`, `CPaintDC::~CPaintDC`), and with it the deleting
+destructor that calls it. A function the symbol table already names keeps it.
 Named or not, its `this` gets the `C *` hint: a helper that stores `C`'s
 vftable into the object it is passed is handed a `C`.
 

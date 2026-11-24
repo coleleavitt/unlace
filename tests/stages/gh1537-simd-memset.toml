@@ -1,0 +1,60 @@
+# GH-1537: "Compiler use of XMM registers for memset badly recognized"
+# https://github.com/NationalSecurityAgency/ghidra/issues/1537
+#
+# Source:   char buf[64];  void f(void) { memset(buf, 0, sizeof(buf)); }
+# GCC -O2 inlines the memset as one pxor xmm0,xmm0 plus four 128-bit
+# movaps stores (RIP-relative to the global).  The decompiler decomposes
+# the wide SIMD zero-stores into 64 individual element writes
+# (buf[0]='\0'; ... buf[0x3f]='\0';) and never reconstructs the memset.
+#
+# Bytes compiled from the issue's exact source on this machine (gcc -O2),
+# RIP displacements resolved for f@0x100000, buf@0x101000.
+#
+# Stage model: S5 const-sequence - the SAME sub-stage decision as GH-9230
+# (constant-fill run recovery), exercised here on a GLOBAL destination and
+# RIP-relative SIMD stores rather than GH-9230's stack buffer.  No new
+# code: the fix is pure ROUTING through the existing P0 assertion
+# `option memsetrecover on` (kuna_memsetsequence, GH-9230) - direct
+# evidence that an exposed sub-stage generalizes across issues.
+#
+# Pass 1 (default): assertion #1 reproduces the bug (element stores).
+# Pass 2 (memsetrecover on): assertion #2 proves the single memset.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'f' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+hex = '''
+f30f1efa660fefc00f2905f10f00000f
+2905fa0f00000f2905031000000f2905
+0c100000c3
+'''
+
+[script]
+commands = [
+    'parse line extern void f(void);',
+    'map address r0x101000 char buf[64]',
+    'lo fu f',
+    'decompile',
+    'print C',
+    'option memsetrecover off',
+    'lo fu f',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH1537 #1: memsetrecover off restores the element-store form (old behavior, opt-in)'
+count = 1
+literal = "buf[0x3f] = '\\0';"
+
+[[match]]
+name = 'GH1537 #2: default pipeline reconstructs the single memset (fix is DIV-2 default; routing via the GH-9230 sub-phase)'
+count = 1
+literal = 'builtin_memset(buf,0,0x40);'

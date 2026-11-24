@@ -22,15 +22,25 @@ Modelled:
   `testset`.
 - Floating point `fadd`, `fsub`, `fmul`, `fmadd`, `fmsub`, `float`, `fix`, `fabs`, `fsqrt` with
   the BZ/BN flags.
+- `movts`/`movfs` name the special registers as binutils prints them (16-bit forms use bits
+  10-12 for the register number). LC, LS and LE are registers; the other special registers go
+  through `write_special`/`read_special`.
+- Hardware loops: `mov`/`movt` of a constant record it in flowing context; `movts ls` keeps
+  it as the loop start, and `movts le` marks the instruction at that address, the last of the
+  loop. After it, LC counts down and, while it is not zero, control returns to the loop start
+  (the semantics of binutils' CGEN model), so the loop has a direct back edge.
 - Calling convention (GCC): arguments in `r0`-`r3`, result in `r0` (`r0:r1`), `r4`-`r11`, `r15`,
   `r32`-`r43` preserved, `sp` = `r13`, return address in `lr` = `r14`.
 
 Gaps:
 - The integer mode of the FPU (`iadd`, `imul`, ... selected by a CONFIG bit) decodes as the
   floating-point operation it shares an encoding with.
-- `movts`/`movfs` (special registers), `bitr`, `fext`, `fdep`, `lfsr`, `frecip`, `swi`, `trap`,
-  `idle`, `bkpt`, `rti`, `gie`/`gid`, `sync`, `wand` are user-ops. Hardware loops (LC/LS/LE) are
-  not modelled.
+- `movts`/`movfs` of special registers other than LC/LS/LE, `bitr`, `fext`, `fdep`, `lfsr`,
+  `frecip`, `swi`, `trap`, `idle`, `bkpt`, `rti`, `gie`/`gid`, `sync`, `wand` are user-ops.
+- A hardware loop is found only when LS and LE are each written from a register that the
+  instructions before it built with `mov` (and `movt`) of a constant, LS first; a write to that
+  register by any other instruction in between is not seen. A loop whose last instruction is a
+  branch is not modelled.
 
 Checked: the CLI test image was assembled with binutils 2.45 `epiphany-elf-as` and disassembled
 with `objdump`; it exercises 16- and 32-bit forms (r32, movt, displacement loads/stores).

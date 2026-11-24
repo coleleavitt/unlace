@@ -47,8 +47,7 @@ count = 1
 regex = [
     '^void runtime\.panicCheck1\(.*\)$',
     '^\{$',
-    '^\s+if \(!a0\)$',
-    '^\s+return;$',
+    '^\s+if \(a0\)$',
     '^\s+runtime\.throw\(\); // no-return$',
     '^\}$',
 ]

@@ -51,16 +51,21 @@ class State:
         self.reg = {}
         self.mem = {}
         self.uniq = {}
+        self.csr = {}
         self.writes = {}
         self.accesses = []
         self.outputless_callother_noop = True
         self.skipped_callother = False
+        # when set, a CALLOTHER with an output writes callother(op) instead of raising Unmodeled
+        self.callother = None
 
     def _space(self, space):
         if space == "register":
             return self.reg, None
         if space == "unique":
             return self.uniq, None
+        if space == "csreg":
+            return self.csr, None
         return self.mem, self.fill
 
     def read(self, space, off, size):
@@ -127,6 +132,9 @@ def step(state, ops, addr, size, max_steps=20000):
             if out is None and state.outputless_callother_noop:
                 state.skipped_callother = True
                 continue
+            if out is not None and state.callother is not None:
+                state.write(*_vn(out), state.callother(op))
+                continue
             raise Unmodeled("CALLOTHER")
         if opc == "STORE":
             ptr = rd(ins[1])
@@ -134,7 +142,12 @@ def step(state, ops, addr, size, max_steps=20000):
             state.write("ram", ptr, v["size"], rd(v))
             continue
         if opc == "LOAD":
-            r = state.read("ram", rd(ins[1]), osz)
+            # space id 0 is the constant space: a dynamic export into it (`export *[const]:8 tmp`)
+            # loads the pointer value itself
+            if ins[0]["offset"] == 0:
+                r = rd(ins[1]) & mask(osz)
+            else:
+                r = state.read("ram", rd(ins[1]), osz)
         else:
             r = _eval(opc, ins, rd, osz)
         state.write(*_vn(out), r)

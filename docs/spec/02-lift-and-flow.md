@@ -61,7 +61,11 @@ the instruction writes are still computed from `Old`. On the success path of
 an x86 `cmpxchg`, where the accumulator equals `Old`, the store's op is reused
 to assign `Old` to the accumulator, so both paths agree on it; the branch then
 only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
-zero-extends only on failure. A 32-bit `xadd` or `xchg` on x86-64 ends with
+zero-extends only on failure. `cmpxchg8b`/`cmpxchg16b` compare and, on
+failure, refill a register pair (`EDX:EAX`, `RDX:RAX`) from `Old`'s halves; on
+its success path the op that built the new value and the store become those
+same two `SUBPIECE`s of `Old` (`Plan::pair_accumulator`), so both paths agree
+and the C no longer re-tests `expected != result` to copy the halves back. A 32-bit `xadd` or `xchg` on x86-64 ends with
 `RAX = ZEXT(EAX)` after `UNLOCK()` (the hardware clear of the upper half);
 an instruction with no branch whose ops after the envelope are only such
 register-into-containing-register zero-extensions is rewritten without them,
@@ -152,7 +156,7 @@ before it calls, returns or jumps away
 (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (dead_after)`). ARM's `add`
 without `s` copies the carry into a scratch flag the next `mov` overwrites,
 which is the case this admits; and so does a compare's exit that branches back to the head after doing
-anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
+anything but `clrex`. An operand no storage holds at the load (`~x` for an outline `ldclr` helper's `bic`) is built with new ops in front of it. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
 `__sync_lock_test_and_set(p, X)` or `__sync_val_compare_and_swap(p, E, N)`, the
 monitor's pass and status become the constants 1 and 0, and the STORE a dead
 copy; dead-branch removal then deletes the back edge. A compare-exchange that
@@ -165,8 +169,17 @@ predecessors: the head (directly or through one block, here the `dmb`) and a
 reload block that the status test falls into and that branches back to it or
 to the head's failure exit
 (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rotated_blocks)`). The head,
-the block between and the store-exclusive's blocks fold as above, and the
-reload block must repeat the head: evaluated from the state the loop body
+the block between (whose barrier, `DataMemoryBarrier`, stays) and the
+store-exclusive's blocks fold as above. Since a retry re-runs only the
+store-exclusive, status and reload blocks, the head's values are not
+checked against what those blocks write. Instead a storage an op of that
+cycle reads before an earlier op of the cycle writes it, while a later op
+does (ARM's `cmp` reads the old carry for its shifter carry), is followed
+forward through the ops that read it (`cycle_taint`): it may not reach a
+load, a store, a user operation or a branch, and what it still holds at the
+end must be dead after either exit. The values the reload block leaves must
+equal the head's where they stay live after either exit, and the
+store-exclusive's constant status writes are exempt (`dead_after`). The reload block must repeat the head: evaluated from the state the loop body
 leaves, its one load-exclusive reads the head's address, it reads neither
 monitor output, and it branches back exactly when the reloaded value equals
 the head's expected value (`reload_matches`). The status test then always
@@ -180,8 +193,18 @@ bne loop` that follows, which the evaluation folds through the compare's flag
 arithmetic (subtraction, borrow and carry, signed and unsigned order). Thumb's
 `ldrex` marks its load with `ExclusiveAccess(addr)`; it is accepted inside
 the loop and becomes a dead copy with the fold. The doubleword forms
-(`ldrexd`/`strexd`, `ldaxp`/`stlxp`) load and store twice and are not
-folded. Only AArch64 and ARM declare the monitor user operations, so the option
+(`ldrexd`/`strexd`, `ldaxp`/`ldxp` with `stlxp`/`stxp`) load and store the two
+halves of a `2w`-byte location; a loop whose head is the store-exclusive's
+block folds through `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (fold_pair_loop)`:
+the low half (lower address) reads as `SUBPIECE(Old, 0)`, the high half as
+`SUBPIECE(Old, w)`, and the two stored halves must be an exchange (neither
+reads `Old`), the same `&`, `|` or `^` of each half with an independent
+operand, or an addition with carry (`lo + x0` and `hi + x1 + CARRY(lo, x0)`,
+ARM's `adds`/`adc`). A new `2w`-byte builtin call goes in front of the first
+load, the loads become its two halves and the stores dead copies, as for
+`casp`. Doubleword compare-exchange loops are not folded yet. AArch64's
+`stlxp` of X registers stored its second register at `+4`; it is `+8`, and
+the W-register `stlxp`/`stxp` test an 8-byte monitor range, not 16. Only AArch64 and ARM declare the monitor user operations, so the option
 is inert elsewhere.
 
 This phase turns an entry address into a function: raw p-code ops for every
@@ -1263,6 +1286,32 @@ recovered switch table.
   helper also has an `entry|1` twin, and its calls resolve to the even entry).
   The gate is on the install, as for `msvcftol`.
 
+- **AEABI floating-point helpers** (`crates/unlace-lift/src/p2_lift/kuna_aeabifloat.rs`,
+  option **`aeabifloat`**, default off): on 32-bit ARM the same payload list
+  carries the run-time ABI's floating-point helpers (RTABI32 4.1.2), each body
+  the IEEE 754 operation the helper performs on its base-standard operands.
+  `__aeabi_dadd`, `dsub`, `drsub`, `dmul`, `ddiv` and the `f` forms are
+  `f+`, `f-` (operands swapped for `rsub`), `f*`, `f/`; the `int`
+  comparisons `dcmpeq`, `dcmplt`, `dcmple`, `dcmpge`, `dcmpgt` and the `f`
+  forms are `zext` of `f==`, `f<` or `f<=` (swapped for `ge` and `gt`),
+  false on unordered operands as the helpers return 0, and `dcmpun`/`fcmpun`
+  are `nan(a) | nan(b)`; `d2iz`, `d2lz`, `f2iz`, `f2lz` are `trunc`, `d2uiz`
+  and `f2uiz` the low word of an eight-byte `trunc` (exact for every result the
+  C cast defines), `d2f`/`f2d` `float2float`, and `i2d`, `l2d`, `i2f`, `l2f`
+  `int2float`, with `ui2d`/`ui2f` converting the zero-extended word. A `double`
+  is joined from r0:r1 (r2:r3 for the second operand) low word first on
+  little-endian and high word first on big-endian, and an eight-byte result is
+  split back the same way. So `return __aeabi_dadd(a,b);` prints
+  `return a + b;` and `dscale`'s `__aeabi_dmul(v, __aeabi_i2d(n))` prints
+  `return v * (double)n;`. `d2ulz`, `f2ulz`, `ul2d` and `ul2f` have no exact
+  p-code reading and keep their calls, typed by `aeabisigs`, as do the
+  flag-returning `cdcmp`/`cfcmp` comparisons. Default off: the fold takes the
+  image's helpers to be RTABI32's round-to-nearest IEEE ones, which a library
+  built for flush-to-zero or another rounding mode is not. The gate is on the
+  install, as for `arithhelpers`. On a hard-float caller that moves the
+  `r0:r1` result into `d0` (`vmov d0, r0, r1`), the result still prints as two
+  masked halves of a union cast joined by `+`.
+
 - **Objective-C ARC bookkeeping** (`crates/unlace-lift/src/p2_lift/kuna_objcarc.rs`,
   option **`objcarc`**, default on): the second kuna-owned call-fixup family,
   registered next to the one above. An ARC-compiled method is strewn with
@@ -1291,7 +1340,7 @@ recovered switch table.
   by stub and slot address: `id objc_retain(id)`, `void objc_storeStrong(id *, id)`,
   `id objc_alloc_init(Class)`, …, and `id objc_retain_x19(id obj @ x19)` returning
   in `x0`), so `obj = objc_retainAutoreleasedReturnValue((objc_object *)objc_msgSend(arg1,sel_inner))`
-  reads with its argument. The stage test `tests/stages/kuna-objcarc.xml` runs
+  reads with its argument. The stage test `tests/stages/kuna-objcarc.toml` runs
   `macho_objc_arc_arm64` (clang `-fobjc-arc -O2`) both ways: default,
   `-[Holder total:]` is `v1 = objc_msgSend(arg1,sel_count); v2 = objc_msgSend(arg1,sel_inner); return objc_msgSend(v2,sel_count) + v1;`
   with no release left; off, the five ARC calls are shown typed.
@@ -1591,7 +1640,15 @@ stack-pointer deltas are measured over the already-decoded raw p-code — the
 *prologue*, accumulated forward from the function's entry address, and the
 *epilogue*, accumulated backward from the branch — and the branch is a tail call
 when the epilogue is a strictly positive teardown of exactly the prologue's
-frame. Both scans stop at the first control-flow op (so neither leaves the block
+frame. The prologue includes the stack motion of the branch that ends the entry
+run, but not of a call (whose push the callee's return removes): a stack
+machine's conditional jump pops its operand, so a CPython entry block
+`LOAD_FAST; POP_JUMP_IF_FALSE` builds no frame, and a jump that leaves the
+operand stack balanced inside the code object is not read as a tail call (#690).
+Neither tail-call rule is asked about a BRANCH that an earlier relative branch
+of its own instruction jumps over (its time is below the deepest internal
+target): it does not end the instruction, and the RETURN the rewrite plants
+would delete the ops that relative branch reaches (#686). Both scans stop at the first control-flow op (so neither leaves the block
 it starts in), at a stack-pointer write that is not `SP = SP ± <const>` (a
 `leave`-style `SP = FP` restore is not modelled and declines), at an instruction
 address more than 16 bytes from its neighbour (so a hole in the decoded stream
@@ -4198,7 +4255,9 @@ The operand mode bits select `a = b op c`, `a = b op u6`, `b = b op s12` or
 the conditional `b = b op c|u6`, whose condition skips the instruction when it
 fails. The `F` bit selects a second constructor that writes `Z`, `N`, `C` and
 `V`; carry on a subtraction is the borrow. A `.d` branch, jump or call
-evaluates its condition and target first, then runs the delay slot.
+evaluates its condition and target first, then runs the delay slot whether
+or not the condition holds, and only then branches. A delayed `bl`/`jl` links
+`blink` to the instruction after the delay slot.
 
 The zero-overhead loop is carried in the decode context. `lp end` records the
 address after itself in `lpstart` at address `end` and sets `lpend` there
@@ -4272,6 +4331,36 @@ images whose C is checked (`div64` is a 64-bit division of the register
 pairs, `shuffle` with 0x1b is `bswap`, `itodf` a `(double)` cast). Gaps
 are listed in `specs/Ghidra/Processors/tricore/README.md`.
 
+### MIPS MSA and Release 6 decode (#98)
+
+`mips_msa.sinc` (generated by `tools/gen_mips_msa.py` from LLVM's `MipsMSAInstrFormats.td` and
+`MipsMSAInstrInfo.td`) decodes all 529 MIPS SIMD Architecture encodings in every MIPS32/MIPS64
+language except Octeon, with `lsa`/`dlsa` (MSA brought them in before Release 6) (MSA is part of R5 and R6 cores; its major opcode 0x1E and COP1 branch
+formats are unused otherwise). The 128-bit registers `w0`-`w31` are separate from the FPRs (the
+FR=1 aliasing is not modelled). Loads and stores move each element at its own address in the
+language's byte order (element 0 is the least significant), `copy_s`/`copy_u` and `move.v`,
+`cfcmsa`/`ctcmsa` and the `bz`/`bnz` branches (with their delay slot) have real p-code, and so
+do the element-wise groups: `addv`/`subv`/`mulv` (and `addvi`/`subvi`), the bitwise `.v` and `andi`/`ori`/
+`xori`/`nori`, `bmnz`/`bmz`/`bsel`, the shifts `sll`/`srl`/`sra` (and immediates; the count is the
+element's low bits), the compares `ceq`/`clt`/`cle` (and immediates; all-ones or zero elements),
+`min`/`max` (signed, unsigned, immediates), the saturating `adds_s`/`adds_u`/`subs_s`/`subs_u`,
+`div`/`mod` (a zero divisor gives what QEMU gives: the architecture leaves it UNPREDICTABLE),
+`pcnt`/`nlzc`/`nloc`, `fill`/`ldi`/`splat`/`splati`, and the `ilv*`/`pck*` permutations. Every
+other instruction (floating point, dot products, fixed-point `q` forms, `shf`, `vshf`, `sld`, ...)
+is a user operation named after its mnemonic (`msa_addv_w`) with the
+destination as output and the read operands (and the destination, for the accumulating forms)
+as inputs.
+
+Release 6 (`MIPS:*:32:R6`, `MIPS:*:64:R6`): `blezalc`/`bgtzalc` (rs = 0) no longer decode as
+`bgeuc`/`bltuc`; `bgec`/`bltc` require rs, rt nonzero and different (rt = 0 is reserved);
+`blez`/`bgtz $zero` decode (they were `bad1`/`bad2`); the R6 encodings of `sc`, `pref`, `sdbbp`,
+`swc2`, `sdc2`, `lld` and `scd` are added; the pre-R6 opcodes R6 removed (SPECIAL2 including
+`save`/`restore` and `sdbbp`, `pref` 0x33, `sdc2`/`swc2` 0x3E/0x3A, `ldl`/`ldr`/`sdl`/`sdr`,
+`lld`/`scd` 0x34/0x3C) no longer decode there; the three-operand R6 FPU operations (`min`, `max`,
+`mina`, `maxa`, `maddf`, `msubf`, `sel`, `seleqz`, `selnez`, ...) no longer require ft = f0; and the
+non-existent `sdcx` (opcode 0x1E, which is MSA `st.d`) is gone. Exercised by `processors.toml`
+row `mips_msa` and by `tools/difffuzz --arch mipsr6 --oracle qemu` (qemu-mips64 -cpu I6400).
+
 ### TriCore overflow and carry flags (#563)
 
 The 32-bit integer arithmetic of every TriCore language sets PSW.V from the exact
@@ -4297,6 +4386,13 @@ borrow for `.u`) instead of bit 63, and saturate on it; `msubs.u` multiplies (it
 The 32-bit `msub.q`/`msubs.q` (32x32 and 32x16) subtract at full precision and then drop the
 low bits, as `madd.q` does, so the result is `D[d] - ceil(product)` rather than
 `D[d] - floor(product)`, matching Unicorn's TriCore core.
+
+The packed multiply-accumulate forms (`madd(s).h`, `msub(s).h`, `maddsu(s).h`, `msubad(s).h`, the
+rounding `...r(s).h` and the multi-precision `...m(s).h` families) compute each half's result
+exactly: V is set when either 32-bit half (or the 64-bit `m` result) overflows, not from the halves'
+sign bits, and the saturating forms clamp the exact value. The rounding forms with a D[d]
+accumulator take `sext(D[d][31:16]) << 16` (the halfword was shifted inside its 16 bits, so it was
+0), and the `m` forms add `(mul_res1 +/- mul_res0) << 16` in 64 bits (the sum was truncated to 32).
 ### AArch64 SVE2 and SVE2.1 (#98)
 
 `specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_sve2.sinc` decodes
@@ -4337,12 +4433,37 @@ range; bias: 256-byte-aligned address and set index; convert: bias select and
 the remaining control bits), so a raw `activation.hf = mxmem(r0,r1)`
 decompiles to `hmx_activation_hf(a0 & 0xfffff800,a0 & 0x7ff,a1);`. Before,
 every HMX word was a bad instruction. The activation/weight pair must share a
-packet; such a packet disassembles, but decompiling any multi-instruction
-Hexagon packet still fails in the crossbuild step ("Could not obtain cached
-crossbuild instruction"), an existing engine gap that is not HMX-specific.
+packet; such packets lift since the crossbuild fix below.
 Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
 encodings against LLVM's syntax and a raw image with one instruction per
 packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
+
+### SLEIGH crossbuild targets resolve on demand (#679)
+
+A `crossbuild addr, section` names another instruction, which C++ reads out of the
+disassembly cache that the flow walk fills. `one_instruction` here resolves only the
+instruction and its delay slots, so every crossbuild failed with "Could not obtain cached
+crossbuild instruction". This is how Hexagon lifts each packet's later slots, so every
+Hexagon function failed. `SleighBuilder::append_cross_build`
+(`crates/unlace-sleigh/src/sleigh.rs`) now resolves a target that is not in the set to
+p-code state and appends it. Such an instruction is not cached for reuse, because its
+p-code depends on other addresses. The ELF loader also maps `EM_HEXAGON` to
+`Hexagon:LE:32:default`, so a Hexagon object no longer needs `--target`.
+
+### AArch64 FEAT_PAuth_LR and the BTI hint space
+
+The Armv9.5 PAC-with-PC instructions decode (`AARCH64base.sinc`, with `__PACpart` tables in
+`AARCH64_base_PACoptions.sinc` so they follow the same `ShowPAC`/`PAC_clobber` options):
+`paciasppc`, `pacibsppc`, `pacnbiasppc`, `pacnbibsppc`, `pacia171615`, `pacib171615`,
+`autia171615`, `autib171615`, `autiasppc`/`autibsppc` (label `#-imm*4` and register forms) and
+`retaasppc`/`retabsppc` (label and register), plus `pacm` (`hint #39`). The PC (the
+instruction address, the label address, or the register holding it) is the third operand
+of the `pacia`/`pacib`/`AuthIA`/`AuthIB` user operations; the `171615` forms pass `x15`.
+`bti` now requires bit 5 clear, so the odd hints `#33`, `#35`, `#37` print as `hint` and
+`#39` as `pacm` instead of `bti`. Every PAuth/PAuth_LR record of LLVM 22's TableGen
+(two words each, `unlace-cli/tests/aarch64_pauth.rs`) prints as `llvm-mc` does, and the
+PAC instructions of the arm64e iOS 16.4.1 `backboardd`, `trustd` and `debugserver`
+`__text` sections decode with the same counts as `llvm-objdump`.
 
 ### AArch64 SMSTART/SMSTOP text
 
@@ -4391,6 +4512,63 @@ by `unlace-cli/tests/aarch64_sme.rs`: every record's encoding against LLVM's
 text (`fixtures/aarch64_sme/probe.txt`) and clang-compiled ACLE streaming
 functions (`svmopa`, `svread_hor`, `svzero_za`, `svst1_hor`,
 `svadd_za32_vg1x2`) that decompile with no bad or unimplemented instruction.
+
+### Zero-overhead loops (#98)
+
+A hardware loop instruction (`LSETUP`, `lp`, `DO`, `RPTB`, `loop`, `loopdo`) names its loop end,
+and the core branches back when the program counter reaches it; no branch instruction sits at
+the end of the body. Every language that lifts these as loops does it the same way. The loop
+instruction marks one address with `noflow` context through `globalset`: a flag plus the
+loop start, or the distance back to it. A root constructor that sees the flag adds the
+hardware's test there: count down and, while the count holds, branch directly to the loop
+start. The decompiler then sees an ordinary back edge and structures a `do`/`while` over
+the count. There are two placements:
+
+- At the last body instruction, when the loop operand names it (ADSP-218x, Blackfin, DSP56000,
+  DSP56300, PRU, SHARC `DO ... UNTIL`, TMS320C3x `RPTB`, TMS320C5x `RPTB`). The test runs
+  after that instruction.
+- At the address after the body, when the operand names that, or names the last word of a
+  block whose last instruction may be several words long (ARC `lp`, KVX `loopdo`, TMS320C54x
+  `RPTB` at `REA + 1`, Xtensa `LEND`). The test runs before that instruction, as the core
+  compares the next program counter with the loop end however it is reached.
+
+Single-instruction repeats (TMS320C3x `RPTS`, TMS320C5x `RPT`, DSP56300 `REP`) mark the next
+instruction and wrap it in a counted loop. The root constructor either builds a subtable that
+holds the ordinary instructions (Blackfin's `:^ins`), or builds `instruction` itself under
+`phase=0`, with the ordinary constructors in a `with : phase=1` block (Xtensa, TMS320C3x,
+TMS320C5x, TMS320C54x). Without that block, the self-referencing root never takes precedence
+over the ordinary constructors and the loop-back is silently dropped.
+
+C-SKY `bloop` needs none of this: it sits after the body it closes and is lifted as a
+decrement-and-branch.
+
+Hexagon is the other way round: the packet that ends the loop carries the mark (its parse
+bits, `:endloop0`/`:endloop1`), and only `loop0`/`loop1` names the start. Those
+instructions record the start in flowing (not `noflow`) context, `lp0sa`/`lp1sa`, set
+with `globalset(inst_next, ...)`, so it reaches every instruction the loop setup flows to.
+An end-of-loop packet that sees a recorded start counts `LC0`/`LC1` down and branches
+directly to it; with no recorded start (a loop set up in another function, or through
+`SA0`/`SA1` writes) it keeps the indirect branch through `SA0`/`SA1`. A packet that ends
+both loops at once keeps the indirect form.
+
+Epiphany names no loop in one instruction either: `movts ls`, `movts le` and `movts lc` write
+the loop start, the last loop instruction and the count from registers. `mov` and `movt` of a
+constant record the register and value in flowing context; `movts ls` from that register keeps
+the value, and `movts le` from it marks the instruction at its value with the kept start, so
+the root constructor adds the count-down-and-branch there as above (the test is `LC != 0`
+after the decrement). A write to that register by another instruction in between is not
+tracked; a loop register written from any other value marks nothing.
+
+StarCore SC140 marks loop ends in the prefix words of execution sets (`LPMARKA`, `LPMARKB`),
+not by address. `DOSETUPn` records the start `SAn` and `DOENn`/`DOENSHn` the enabled loops
+and the short-loop flag in flowing context; the highest enabled loop is the active one. A
+mark that ends an iteration later than its own set passes noflow context forward set by set:
+`LPMARKB` two sets before the end of a long loop, or on the first set of a two-set short
+loop, reaches the last set, and `LPMARKA` on the last set (or on a one-set short loop) acts
+there. The root constructor adds the manual's test after that set: while `LCn > 1`, count
+down and branch directly to the start; otherwise clear `LCn`. The loop end clears the loop's
+enable bit for the code after it, so an enclosing loop becomes active again. A set carrying
+both marks (an inner and an outer loop ending together) and `CONT`/`CONTD` are not modelled.
 
 ### Vendored community processor modules (#98)
 
@@ -4661,6 +4839,16 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 legacy/VEX fixes from the native oracle (#98)
+
+Checking SSE, VEX and integer instructions against this CPU (`tools/difffuzz --oracle native`)
+fixed: a REX.X or VEX.X bit no longer extends a ModRM.rm vector register to XMM16-31 (only EVEX's
+does); the VEX scalar add/subtract/multiply keep bits 127:32/127:64 from the first source; 34 VEX
+scalar instructions ignore VEX.L; `lzcnt` with one register as source and destination takes CF from
+the source; `extractps m32` stores four bytes and `pinsrb` reads one. GFNI (legacy and VEX), the
+VEX.256 VAES and VPCLMULQDQ forms and AVX-NE-CONVERT decode (`gfni_vaes.sinc`, `avx_ne_convert.sinc`).
+Exercised by the `x86_64_native_oracle` row of `unlace-cli/tests/processors.toml`.
+
 ### x86 MOV DRn mod and VFPCLASSPH/SH display (#98)
 
 `MOV DRn, r64` decodes whatever ModRM.mod holds (the SDM says the field is ignored), as the
@@ -4782,7 +4970,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/processors.toml` (`st20`) |
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilegx`) |
 | `TILEPRO` | Tilera TILEPro (TILEPro32/TILEPro64, TILE64), parallel X/Y-mode bundles | `TILEPRO:LE:32:default` | TILEPro ISA reference (UG120); encodings generated from the binutils `tilepro` opcode table by `tools/gen_tilepro_sleigh.py`; checked against `tilepro-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilepro`) |
-| `CSKY` | C-SKY ABIv2 (CK801-CK860): integer ISA, FPUv2, FPUv3, VDSP | `CSKY:LE:32:v2`, `CSKY:BE:32:v2`, `CSKY:LE:32:ck810v`, `CSKY:LE:32:ck860` | C-SKY V2 instruction set manual; encodings from the binutils `csky-opc.h` table (FPU and VDSP generated by `tools/gen_csky_ext_sleigh.py`); checked against `csky-elf-objdump` | `unlace-cli/tests/processors.toml` (`csky`, `csky_fpuv2`, `csky_fpuv3`, `csky_vdsp`) |
+| `CSKY` | C-SKY ABIv2 (CK801-CK860): integer ISA, FPUv2, FPUv3, VDSP, DSP, DSP-enhance; ABIv1 (CK510, CK610) | `CSKY:LE:32:v2`, `CSKY:BE:32:v2`, `CSKY:LE:32:ck810v`, `CSKY:LE:32:ck860`, `CSKY:LE:32:v1`, `CSKY:BE:32:v1` | C-SKY V2 instruction set manual; encodings from the binutils `csky-opc.h` table (FPU, VDSP, DSP and DSP-enhance generated by `tools/gen_csky_ext_sleigh.py`); checked against `csky-elf-objdump` | `unlace-cli/tests/processors.toml` (`csky`, `csky_fpuv2`, `csky_fpuv3`, `csky_vdsp`, `csky_dsp`, `csky_edsp`, `csky_abiv1`) |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/processors.toml` (`v60*`) |
 | `PowerPC` (Gekko) | IBM Gekko / Broadway (PowerPC 750CL) paired singles | `PowerPC:BE:32:Gekko` | IBM PowerPC 750CL User's Manual (paired-single chapter); checked against `powerpc-elf-objdump -M gekko` 2.43.1 | `unlace-cli/tests/ppc_gekko.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
@@ -4806,7 +4994,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
 | `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
 | `JavaCard` | Java Card virtual machine bytecode (Java Card Platform 3.1) | `JavaCard:BE:16:3.1` | Java Card Platform VM Specification v3.1, chapters 7 and 8 | `unlace-cli/tests/javacard_raw.rs` |
-| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`) |
+| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`, `starcore_loops`) |
 | `PowerPC` (Xenon VMX128) | Xbox 360 Xenon (64-bit PowerPC, AltiVec, VMX128) | `PowerPC:BE:64:Xenon` | Xenia emulator `ppc-instructions.xml` and VX128 decode formats (BSD-3) | `unlace-cli/tests/processors.toml` (`ppc_xenon_vmx128`) |
 | `S1C6200` | Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core | `S1C6200:BE:16:default` | Epson E0C6200/6200A Core CPU Manual (MF297-06a); checked against MAME `e0c6200` on all 4,096 encodings | `unlace-cli/tests/processors.toml` (`s1c6200`) |
 | `Propeller` (P2) | Parallax Propeller 2 (P2X8C4M64P), hub execution | `propeller2:LE:32:default` | Parallax "Propeller 2 Instructions" table v35 (encodings, operations, flags); checked against the flexspin assembler | `unlace-cli/tests/processors.toml` (`propeller2`) |
@@ -4814,6 +5002,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `M7700` | Mitsubishi/Renesas 7700 Family (M37700/M37702/M37710, 7750/7751 additions) | `M7700:LE:24:default` | Renesas 7700 Family Software Manual (chapter 4 instruction pages, Appendix 2 code tables) | `unlace-cli/tests/processors.toml` (`m7700`) |
 | `MULTOS` | MULTOS Executable Language (MEL) smart-card bytecode | `MULTOS:BE:16:MEL` | MULTOS Developer's Reference Manual v1.58 (instruction descriptions, Instruction Map) | `unlace-cli/tests/processors.toml` (`multos_mel`) |
 | `M7900` | Mitsubishi/Renesas 7900 Series (DPR0 only, and DPR0-DPR3) | `M7900:LE:24:default`, `M7900:LE:24:DPR4` | Renesas 7900 Series Software Manual (chapter 4 machine-code rows) | `unlace-cli/tests/processors.toml` (`m7900`) |
+| `R32C` | Renesas R32C/100 Series | `R32C:LE:32:default` | Renesas R32C/100 Series Software Manual (chapter 4 instruction codes) | `unlace-cli/tests/processors.toml` (`r32c`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5127,6 +5316,12 @@ fix, so they stay inside the user operations; what is kept is the data flow
 between vector registers, scalar registers, FP registers and the memory
 addresses a load or store uses, so a vectorized function decompiles to a
 sequence of calls such as `v8 = vadd_vv(v8,v9)` instead of stopping.
+Whole-register loads, stores and moves (`vl<n>re<eew>.v`, `vs<n>r.v`, `vmv<n>r.v`)
+move `n` registers whatever `vtype` says, so for `n` = 2, 4 and 8 they read or write a
+register group: the overlapping registers `v0m2`..`v30m2`, `v0m4`..`v28m4` and
+`v0m8`..`v24m8` (64, 128 and 256 bytes, operand subtables `vdm<n>` and `vs2m<n>`), and
+`vmv<n>r.v` lifts as a copy of the group (`vmv1r.v` as a register copy). A register number not
+a multiple of `n` is reserved and, as in LLVM, not decoded.
 Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
 against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
 vector functions (load/add/store, a reduction into a scalar, an FMA with a
@@ -5225,8 +5420,8 @@ FPSIZE 64, the only FLEN any RISC-V language uses.
   zext(fadd_s(...))`. Single-precision sources are NaN-unboxed as the ISA requires
   (`--unbox exact`): a register whose upper 32 bits are not all ones reads as the canonical NaN.
   `boxedcompare` (§3) folds the test for values written boxed or loaded boxed. Under
-  `fpargboxed` it also folds the test for the FP argument registers on entry, so compiled code
-  prints no unboxing except on a call's return value.
+  `fpargboxed` it also folds the test for the FP argument registers on entry and a call's
+  `fa0`/`fa1` result, which the psABI boxes, so compiled code prints no unboxing.
 
 The generated file decodes what LLVM decodes: 2496/2496 RV64 and 2176/2176 RV32 sampled words, plus
 every near miss. The hand-written files rejected `fcvt.d.s`, `fcvt.d.w` and `fcvt.d.wu` with a
@@ -5466,7 +5661,24 @@ or `f0`, the return address in `r14`. A `float` is the leftmost four bytes of
 its register, so each floating-point register is listed as its short view and
 then whole. The caller's 160-byte register save area at `0(r15)` is in the
 callee's local range, because the callee's prologue stores into it.
-Exercised by `tests/stages/kuna-s390x.xml`.
+Exercised by `tests/stages/kuna-s390x.toml`.
+
+The module also decodes, with exact p-code: the high-word facility (`aih`, `alsih`,
+`alsihn`, `ahhhr`/`ahhlr`, `alhhhr`/`alhhlr`, `shhhr`/`shhlr`, `slhhhr`/`slhhlr`,
+`chhr`/`chlr`/`chf`/`cih`, `clhhr`/`clhlr`/`clhf`/`clih`, `lbh`/`lhh`/`lfh`/`llch`/`llhh`,
+`stch`/`sthh`/`stfh`, `brcth`), which operates on bits 0-31 (`rNh`) of a register; the z14
+`msrkc`/`msgrkc`/`msc`/`msgc` (condition code 3 when the signed product overflows) and `mg`;
+the z15 `ncrk`/`ncgrk`, `ocrk`/`ocgrk`, `nnrk`/`nngrk`, `nork`/`nogrk` and `nxrk`/`nxgrk`;
+`bi`/`bic` (a branch to the doubleword at the address); `cds`/`cdsy`/`cdsg` (a compare and
+swap of a register pair) and `lpq`/`stpq`; `lae`/`laey`; `bal`/`balr` (64-bit linkage, as
+`bas`/`basr`); `bxh`/`bxle`/`bxhg`/`bxleg`; `slda` (condition code 3 when a bit unlike the sign
+is shifted out); and the BFP `TEST DATA CLASS` instructions `tceb`/`tcdb`/`tcxb` (the class of
+the operand, one of zero, normal, subnormal, infinity, quiet or signalling NaN by sign, against
+the 12-bit mask in the second-operand address), which `isnan`/`isinf` compile to. Before, a
+z13+ build halted on the high-word instructions and every `isnan` halted on `tcdb`. Checked with
+`tools/difffuzz --arch s390x --oracle qemu`, which also found that `risbhg` and `risblg` took their
+start and end positions from six bits of I3/I4 instead of bits 3-7 (a position within the word),
+so `risblg r11,r1,0xdf,0xe4,11` cleared the register instead of inserting a wrapped field.
 
 ### x86-64 lifter fixes from differential fuzzing
 
@@ -5544,6 +5756,40 @@ Found by `tools/difffuzz` against Unicorn.
   `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
   as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
 
+### LoongArch lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --arch loongarch64 --oracle qemu` (`qemu-loongarch64 -cpu max`).
+
+- `bstrins.w` and `bstrins.d` insert bits `[msb-lsb:0]` of `rj` at `[msb:lsb]` of `rd`; they
+  computed `bstrpick`'s field (bits `[msb:lsb]` of `rj`, shifted down) and cleared the low bits of
+  `rd`, so `bstrins.w s0,fp,23,14` left `s0` almost unchanged.
+- `slli.d`, `srli.d` and `srai.d` mask their 6-bit immediate with `0x3f`; with `0x1f` a shift by
+  32..63 was a shift by 0..31.
+- `rotr.w`, `rotri.w`, `rotr.d` and `rotri.d` rotate with a logical right shift; an arithmetic
+  one filled the rotated-in bits of a negative value with ones.
+- `bytepick.w` and `bytepick.d` concatenate the low bytes of `rk` with the high `sa` bytes of `rj`;
+  they masked the wrong ends, so `bytepick.w t5,a0,t4,0` returned `a0` instead of `t4`.
+- The float-to-integer conversions round as named: `ftintrm` toward minus infinity (`floor`),
+  `ftintrp` toward plus infinity (`ceil`), `ftintrz` toward zero; `ftint`, which uses the FCSR
+  mode, is the round-to-nearest-even user op that `ftintrne` already was. Before, all but
+  `ftintrne` truncated. The `.l.s` forms write the whole 64-bit register; they wrote its low word.
+
+### PowerPC lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --oracle qemu` (`qemu-ppc`, `qemu-ppc64` and `qemu-ppc64le`).
+
+- `divw.` (`ppc_instructions.sinc`) no longer sets XER[OV] and XER[SO]: only the `o` forms
+  record overflow, as `divwu.` already did. Before, `divw. r7,r16,r8` cleared an OV that was set.
+- `lhbrx` and `lwbrx` load the halfword or word in the image's byte order and reverse it,
+  so they are correct in the little-endian languages too; they composed the result from
+  single bytes in big-endian order, so on `PowerPC:LE:64:*` `lhbrx` returned the bytes
+  unreversed. `ldbrx` and `stdbrx` (`ppc_isa.sinc`) lift to the byte-reversed doubleword
+  load and store instead of the `LoadDoublewordByteReverseIndexed` and
+  `StoreDoublewordByteReverseIndexed` user ops, and `ldbrx` reads `(RA|0)`.
+- `stswi` with a byte count that is not a multiple of 4 stores only the leftmost bytes of its
+  last register (`storeRegisterPartial` in `ppc_common.sinc`); it stored the whole word, so
+  `stswi r23,r3,17` wrote 20 bytes.
+
 ### AArch64 rounding, saturation and by-element operands (#546)
 
 - `SRSRA`/`URSRA` add the rounding bit (`(x >> s) + ((x >> (s-1)) & 1)`, which cannot overflow);
@@ -5588,6 +5834,19 @@ Found by `tools/difffuzz --oracle qemu`.
 - `FMOV v.4H/v.8H, #imm` converts the single-precision expansion of the immediate to half
   (`float2float`); it converted the bit pattern as an integer.
 - `SABD v.4S` read lane 2 of its doubled difference from bit 94.
+
+### MIPS64 and Release 6 lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --oracle qemu` (`mips64`, `mips64r6`, `mipsr6`).
+
+- The Release 6 compact branch-and-link instructions (`BLEZALC`, `BGEZALC`, `BGTZALC`,
+  `BLTZALC`, `BEQZALC`, `BNEZALC`, in `mips32Instructions.sinc` and `mipsmicro.sinc`) write the
+  return address whether or not they branch; they wrote it only on the taken path. `BEQZALC`
+  tested `rt s> 0` instead of `rt != 0`.
+- `DSLLV`, `DSRLV` and `DSRAV` shift by the low six bits of rs; `DROTRV` rotates by
+  `64 - shift` (it used 32).
+- On MIPS64, `INS` inserts into the low 32 bits and sign-extends the 32-bit result, as every
+  32-bit operation does; it worked on the full 64-bit register.
 
 ## 2.9 Go stack-growth prologue folding
 
@@ -6007,8 +6266,8 @@ fixture), `tests/stages/kuna-itaniumeh-cold.toml` (the partitioned build),
 `tests/stages/kuna-itaniumeh-a64.toml` (AArch64, x0/x1),
 `tests/stages/kuna-itaniumeh-arm.toml` (ARM32 and stripped Thumb EHABI tables,
 a type named only by its `type_info` string) and
-`tests/stages/kuna-itaniumeh-clang.xml` (clang ranges that start before the
-call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`
+`tests/stages/kuna-itaniumeh-clang.toml` (clang ranges that start before the
+call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.toml`
 (pads folded into a shared handler).
 
 **(kuna) MSVC x64 catch funclets as pads** (`option msvceh on`, with

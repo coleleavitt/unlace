@@ -1,4 +1,4 @@
-/* Fixture for `option libctypes off|opaque` (tests/stages/kuna-libctypes.xml).
+/* Fixture for `option libctypes off|opaque` (tests/stages/kuna-libctypes.toml).
  *
  * Built: gcc -g -O1 -o libctypes_stat_x86_64 libctypes_stat_x86_64.c
  *

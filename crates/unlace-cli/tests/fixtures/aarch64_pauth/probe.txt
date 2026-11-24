@@ -1,0 +1,91 @@
+autda x0, x0
+autda x10, x30
+autdb x0, x0
+autdb x18, x29
+autdza x0
+autdza x30
+autdzb x0
+autdzb x12
+autia x0, x0
+autia x24, x30
+autia171615
+autiasppc #0
+autiasppc #-0x22c34
+autiasppcr x0
+autiasppcr x25
+autib x0, x0
+autib x28, x19
+autib171615
+autibsppc #0
+autibsppc #-0x34df8
+autibsppcr x0
+autibsppcr x27
+autiza x0
+autiza x24
+autizb x0
+autizb x12
+blraa x0, x0
+blraa x22, x5
+blraaz x0
+blraaz x25
+blrab x0, x0
+blrab x9, x6
+blrabz x0
+blrabz x22
+braa x0, x0
+braa x26, x8
+braaz x0
+braaz x3
+brabz x0
+brabz x2
+eretaa
+eretab
+ldraa x0, [x0]
+ldraa x10, [x3, #-0x520]
+ldraa x0, [x0]!
+ldraa x17, [x7, #0xe78]!
+ldrab x0, [x0]
+ldrab x25, [x4, #0x770]
+ldrab x0, [x0]!
+ldrab x19, [x4, #-0x280]!
+pacda x0, x0
+pacda x10, x29
+pacdb x0, x0
+pacdb x2, x6
+pacdza x0
+pacdza x3
+pacdzb x0
+pacdzb x23
+pacga x0, x0, x0
+pacga x9, x21, x9
+pacia x0, x0
+pacia x11, x3
+pacia171615
+paciasppc
+pacib x0, x0
+pacib x10, x24
+pacib171615
+pacibsppc
+paciza x0
+paciza x12
+pacizb x0
+pacizb x24
+pacnbiasppc
+pacnbibsppc
+retaa
+retaasppc #0
+retaasppc #-0x1f41c
+retaasppcr x0
+retaasppcr x27
+retab
+retabsppc #0
+retabsppc #-0x6b6c
+retabsppcr x0
+retabsppcr x14
+xpacd x0
+xpacd x28
+xpaci x0
+xpaci x22
+pacm
+hint 0x23
+bti c

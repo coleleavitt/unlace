@@ -10,5 +10,6 @@
 @include "mipsmicro.sinc"
 @include "mips64Instructions.sinc"
 @include "mips_dsp.sinc"
+@include "mips_msa.sinc"
 @include "mips3d.sinc"
 

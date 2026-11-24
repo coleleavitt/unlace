@@ -37,15 +37,20 @@ unit is a 32-bit word, `wordsize=4`).
   (`delayslot`). `PUSH` pre-increments `SP` and `POP` post-decrements it
   (the system stack grows upward).
 
+- Repeat modes are real loops. `RPTB` marks the last instruction of its block
+  (the address it names) with context; there `RC` counts down and the block
+  restarts while `RC` stays non-negative, so a block runs `RC + 1` times. `RPTS`
+  marks the next instruction, which repeats `RC + 1` times. Both also set
+  `RS`/`RE`/`RC`. The ordinary constructors sit in a `with : phase=1` block
+  under the root wrappers that add these loop-backs.
+
 ## Gaps
 
 - The TI floating-point formats are not IEEE: floating-point arithmetic,
   conversions (`FIX`, `FLOAT`, `NORM`, `RND`, `LDE`, `LDM`), the 32-bit memory
   format and the short immediate are user ops (`ti_*`) on the 40-bit values;
   float flags come from `ti_is_negative`/`ti_is_zero` and `V`/`UF` are cleared.
-- Circular and bit-reversed address updates are user ops; repeat modes
-  (`RPTS`, `RPTB`) set `RS`/`RE`/`RC` and call a user op, so the repeated body
-  is not unrolled into a loop.
+- Circular and bit-reversed address updates are user ops.
 - `IDLE`, `IDLE2`, `LOPOWER`, `MAXSPEED`, `SWI`, `IACK`, `SIGI` and the
   interlocked loads/stores are user ops. The C4x-only instructions (`LAJ`,
   `LDA`, `LBn`/`LHn`, `MPYSHI`, `TOIEEE`, the C4x indirect T2 forms, the

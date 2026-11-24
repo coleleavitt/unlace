@@ -1,0 +1,6 @@
+TMS320C28 Ghidra processor module
+
+Selected corrections incorporated from ghidra-tms320c28x
+https://github.com/outlandnish/ghidra-tms320c28x
+Copyright 2026 Nishanth Samala
+Licensed under the Apache License, Version 2.0.

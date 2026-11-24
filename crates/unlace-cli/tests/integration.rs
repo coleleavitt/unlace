@@ -1,6 +1,8 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
+#[path = "c28x_raw.rs"]
+mod c28x_raw;
 mod common;
 #[path = "m6800_family.rs"]
 mod m6800_family;

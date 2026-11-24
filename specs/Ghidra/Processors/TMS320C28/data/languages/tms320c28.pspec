@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/processor_spec.rxg -->
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <context_data>
+    <context_set space="ram">
+        <set name="ctx_objmode" val="1" description="TODO"/>
+        <set name="ctx_amode" val="0" description="C28x addressing mode"/>
+        <set name="ctx_page0" val="0" description="PAGE0 stack addressing mode"/>
+    </context_set>
+  </context_data>
+</processor_spec>

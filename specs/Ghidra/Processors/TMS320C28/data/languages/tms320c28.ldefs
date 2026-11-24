@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/language_definitions.rxg -->
+
+<language_definitions>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28.pspec"
+            id="tms320c28:LE:32:default">
+    <description>TMS320C28 Language Module</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language> 
+</language_definitions>

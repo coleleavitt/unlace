@@ -461,32 +461,88 @@ class Mips32(Arch32):
         return set()
 
 
-MIPSR6_DENY = re.compile(
-    r"^(b.*|j.*|syscall|break|sdbbp|eret|deret|eretnc|wait|ssnop|ehb|pause|sync.*|cache.*|pref.*|ll.*|sc.*|lld.*|scd.*|"
-    r"tlb.*|mf[ch]0|mt[ch]0|di|ei|dvp|evp|rdhwr|rdpgpr|wrpgpr|t(eq|ge|geu|lt|ltu|ne)|sigrie|ginv.*|crc32.*|"
-    r"c\..*|cmp\..*|cfc1|ctc1|mf[ch]1|mt[ch]1|cfc2|ctc2|mf[ch]2|mt[ch]2|dmfc[12]|dmtc[12]|ldc.*|sdc.*|lwc.*|swc.*|"
-    r"cop.*|cfcmsa|ctcmsa|f.*\.[wd]|.*\.(s|ps|l))$"
+MIPS64_DENY = re.compile(
+    r"^(b.*|j.*|syscall|break|sdbbp|eret.*|deret|wait|ssnop|ehb|pause|sync.*|cache.*|pref.*|ll.*|sc.*|lld|scd|"
+    r"[ls][wd][lr]|tlb.*|[dm]f[ch]0|[dm]t[ch]0|di|ei|rdhwr|rdpgpr|wrpgpr|t(eq|ge|geu|lt|ltu|ne)i?|sigrie|"
+    r"c\..*|cfc1|ctc1|[dm]f[ch]1|[dm]t[ch]1|ldc.*|sdc.*|lwc.*|swc.*|.*\.(s|d|ps|w|l|b|h|v)|cop.*|mfhc.*|mthc.*|"
+    r"[ls][wdu]xc1|bc.*|bal.*|nal|auipc|aluipc|addiupc|lwpc|lwupc|ldpc|crc32.*|ginvi|ginvt|evp|dvp)$"
 )
 
 
-class Mips32R6(Mips32):
-    """MIPS32 Release 6 with MSA, checked against qemu-mips64 -cpu I6400 (--oracle qemu)."""
-    name = "mipsr6"
-    lang = "MIPS:BE:32:R6"
-    gprs = [(n, None) for n in MIPS_NAMES[1:]]
-    vecs = [(f"w{i}", None) for i in range(32)]
-    deny = MIPSR6_DENY
+class Mips64(Arch):
+    """MIPS64 big-endian (n64 registers). Use --oracle qemu: Unicorn maps kuseg differently, so
+    its loads and stores are not comparable."""
+    name = "mips64"
+    lang = "MIPS:BE:64:default"
+    elf_machine = 8
+    big = True
+    pc = "pc"
+    gprs = [(n, getattr(mips, f"UC_MIPS_REG_{i}")) for i, n in enumerate(MIPS_NAMES)][1:] + [
+        ("hi", mips.UC_MIPS_REG_HI), ("lo", mips.UC_MIPS_REG_LO)]
+    pc_const = mips.UC_MIPS_REG_PC
+    deny = MIPS64_DENY
+    until = 0x7FFFFFFFFFFFFFFF
+    cs_mode = cs.CS_MODE_MIPS64
+
+    def unicorn(self):
+        emu = uc.Uc(uc.UC_ARCH_MIPS, uc.UC_MODE_MIPS64 | uc.UC_MODE_BIG_ENDIAN)
+        return emu
 
     def capstone(self):
-        md = cs.Cs(cs.CS_ARCH_MIPS, cs.CS_MODE_MIPS32R6 | cs.CS_MODE_BIG_ENDIAN)
-        return md
+        return cs.Cs(cs.CS_ARCH_MIPS, self.cs_mode | cs.CS_MODE_BIG_ENDIAN)
+
+    def ignored(self, mnemonic, operands, state):
+        # HI/LO after a divide by zero, and any division-by-zero result, are UNPREDICTABLE.
+        if mnemonic in ("div", "divu", "ddiv", "ddivu"):
+            return {"hi", "lo"}
+        return set()
+
+
+# Release 6 compact branches (no delay slot) are compared; delay-slot branches are not.
+MIPSR6_DENY = re.compile(MIPS64_DENY.pattern.replace("^(b.*|j.*|", "^(b(?!\\w*c$).*|j(?!\\w*c$).*|").replace("|bc.*|bal.*|", "|")
+                         .replace(".*\\.(s|d|ps|w|l|b|h|v)", ".*\\.(s|ps|l)|cfcmsa|ctcmsa"))
+# MSA: w0..w31 are compared; FPU operations (on $f registers, outside the harness state) are skipped.
+MSA_VECS = [(f"w{i}", None) for i in range(32)]
+
+
+class Mips64R6(Mips64):
+    """MIPS64 Release 6 (MIPS:BE:64:R6): no HI/LO, new compact branches and multiply/divide."""
+    name = "mips64r6"
+    lang = "MIPS:BE:64:R6"
+    gprs = Mips64.gprs[:31]
+    vecs = MSA_VECS
+    cs_mode = cs.CS_MODE_MIPS64 | cs.CS_MODE_MIPS32R6
+    deny = MIPSR6_DENY
 
     def skip(self, cand):
-        # FPU registers are not in the harness state (MSA's own f* operations are denied above).
         return "$f" in cand["op_str"]
 
     def ignored(self, mnemonic, operands, state):
+        if re.match(r"^d?(div|mod)u?$", mnemonic):
+            return {"*"} if re.search(r"\$zero$", operands) else set()
         return set()
+
+
+class Mips32R6(Mips32):
+    """MIPS32 Release 6 (MIPS:BE:32:R6) on a MIPS64R6 core."""
+    name = "mipsr6"
+    lang = "MIPS:BE:32:R6"
+    gprs = Mips32.gprs[:31]
+    vecs = MSA_VECS
+    deny = MIPSR6_DENY
+
+    def skip(self, cand):
+        return "$f" in cand["op_str"]
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_MIPS, cs.CS_MODE_MIPS32 | cs.CS_MODE_MIPS32R6 | cs.CS_MODE_BIG_ENDIAN)
+
+    def ignored(self, mnemonic, operands, state):
+        return Mips64R6.ignored(self, mnemonic, operands, state)
+
+    def addr_ok(self, a):
+        # The MIPS64 core sign-extends a 32-bit address, so only the low half of kuseg is the same.
+        return a < 0x80000000
 
 
 PPC_DENY = re.compile(
@@ -603,4 +659,106 @@ class TriCore(Arch32):
 
 # m68k and SPARC are left out: Unicorn 2.1.4 segfaults within a few hundred cases on both, and its
 # m68k SR read does not fold in the lazily computed condition codes.
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Ppc32(), TriCore(), Mips32R6())}
+
+NIOS2_NAMES = ("zero at r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 "
+               "r16 r17 r18 r19 r20 r21 r22 r23 et bt gp sp fp ea sstatus ra").split()
+
+NIOS2_OP = {
+    0x00: "call", 0x01: "jmpi", 0x03: "ldbu", 0x04: "addi", 0x05: "stb", 0x06: "br", 0x07: "ldb",
+    0x08: "cmpgei", 0x0B: "ldhu", 0x0C: "andi", 0x0D: "sth", 0x0E: "bge", 0x0F: "ldh", 0x10: "cmplti",
+    0x13: "initda", 0x14: "ori", 0x15: "stw", 0x16: "blt", 0x17: "ldw", 0x18: "cmpnei", 0x1B: "flushda",
+    0x1C: "xori", 0x1E: "bne", 0x20: "cmpeqi", 0x23: "ldbuio", 0x24: "muli", 0x25: "stbio", 0x26: "beq",
+    0x27: "ldbio", 0x28: "cmpgeui", 0x2B: "ldhuio", 0x2C: "andhi", 0x2D: "sthio", 0x2E: "bgeu",
+    0x2F: "ldhio", 0x30: "cmpltui", 0x32: "custom", 0x33: "initd", 0x34: "orhi", 0x35: "stwio",
+    0x36: "bltu", 0x37: "ldwio", 0x38: "rdprs", 0x3B: "flushd", 0x3C: "xorhi",
+}
+NIOS2_OPX = {
+    0x01: "eret", 0x02: "roli", 0x03: "rol", 0x04: "flushp", 0x05: "ret", 0x06: "nor", 0x07: "mulxuu",
+    0x08: "cmpge", 0x09: "bret", 0x0B: "ror", 0x0C: "flushi", 0x0D: "jmp", 0x0E: "and", 0x10: "cmplt",
+    0x12: "slli", 0x13: "sll", 0x14: "wrprs", 0x16: "or", 0x17: "mulxsu", 0x18: "cmpne", 0x1A: "srli",
+    0x1B: "srl", 0x1C: "nextpc", 0x1D: "callr", 0x1E: "xor", 0x1F: "mulxss", 0x20: "cmpeq", 0x24: "divu",
+    0x25: "div", 0x26: "rdctl", 0x27: "mul", 0x28: "cmpgeu", 0x29: "initi", 0x2D: "trap", 0x2E: "wrctl",
+    0x30: "cmpltu", 0x31: "add", 0x34: "break", 0x36: "sync", 0x39: "sub", 0x3A: "srai", 0x3B: "sra",
+}
+NIOS2_DENY = re.compile(
+    r"^(trap|break|eret|bret|wrctl|rdctl|wrprs|rdprs|initd|initda|initi|flushd|flushda|flushi|flushp|sync|"
+    r"custom|.*io)$"
+)
+
+
+class _Ins:
+    def __init__(self, raw, mnemonic, op_str):
+        self.bytes, self.mnemonic, self.op_str = raw, mnemonic, op_str
+
+
+class _Nios2Dis:
+    """Mnemonic decoder for Nios II R1 (no Capstone support): the opcode tables of the Nios II
+    Processor Reference Guide, chapter 8."""
+
+    def __init__(self, big):
+        self.big = big
+
+    def disasm(self, raw, addr):
+        if len(raw) < 4:
+            return iter(())
+        w = int.from_bytes(raw[:4], "big" if self.big else "little")
+        op = w & 0x3F
+        a, b, c = (w >> 27) & 31, (w >> 22) & 31, (w >> 17) & 31
+        if op == 0x3A:
+            mn = NIOS2_OPX.get((w >> 11) & 0x3F)
+            ops = f"{NIOS2_NAMES[c]}, {NIOS2_NAMES[a]}, {NIOS2_NAMES[b]}"
+        else:
+            mn = NIOS2_OP.get(op)
+            ops = f"{NIOS2_NAMES[b]}, {NIOS2_NAMES[a]}, {(w >> 6) & 0xFFFF:#x}"
+        if mn is None:
+            return iter(())
+        return iter([_Ins(raw[:4], mn, ops)])
+
+
+class Nios2(Arch32):
+    """Nios II R1 (little endian). No Unicorn or Capstone support: the reference is QEMU user
+    mode (qemu-nios2, removed from QEMU after 8.2; build it from a QEMU 8.2 tree with
+    --target-list=nios2-linux-user), run with --oracle qemu."""
+    name = "nios2"
+    lang = "nios2:LE:32:R1"
+    elf_machine = 113
+    pc = "pc"
+    gprs = [(n, None) for n in NIOS2_NAMES[1:]]
+    pc_const = None
+    deny = NIOS2_DENY
+
+    def unicorn(self):
+        raise NotImplementedError("nios2 has no Unicorn backend; use --oracle qemu")
+
+    def capstone(self):
+        return _Nios2Dis(self.big)
+
+    def canonical(self, cand):
+        w = int.from_bytes(cand["bytes"], "big" if self.big else "little")
+        a, b, op = (w >> 27) & 31, (w >> 22) & 31, w & 0x3F
+        if cand["mnemonic"] == "br" and (a or b):
+            return False                # A and B are zero in BR
+        if cand["mnemonic"] == "ret" and a != 31:
+            return False                # RET reads ra
+        if op in (0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x36) and (w >> 6) & 3:
+            return False                # a branch offset off a word boundary traps
+        return True
+
+    def addr_ok(self, a):
+        # QEMU's nios2 user mode reserves the guest address space below 0x7FFF0000
+        return a < 0x7FFF0000
+
+    def ignored(self, mnemonic, operands, state):
+        # DIV and DIVU are undefined for a zero divisor and DIV for INT_MIN / -1.
+        if mnemonic in ("div", "divu"):
+            regs = [r.strip() for r in operands.split(",")]
+            try:
+                d, n = state.get(regs[2]) & 0xFFFFFFFF, state.get(regs[1]) & 0xFFFFFFFF
+            except (KeyError, IndexError):
+                return {"*"}
+            if d == 0 or (mnemonic == "div" and d == 0xFFFFFFFF and n == 0x80000000):
+                return {"*"}
+        return set()
+
+
+ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), TriCore(), Nios2())}

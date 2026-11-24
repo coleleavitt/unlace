@@ -239,11 +239,14 @@ class MipsHarness:
     def __init__(self):
         self.scratch = 31
 
+    hilo = True
+
     def prologue(self, target):
         s = self.scratch
         t = 1 if s != 1 else 2
         c = mips_li32(s, TABLES)
-        c += [mips_ld(t, s, 256), 0x00000011 | t << 21, mips_ld(t, s, 264), 0x00000013 | t << 21]  # mthi / mtlo
+        if self.hilo:
+            c += [mips_ld(t, s, 256), 0x00000011 | t << 21, mips_ld(t, s, 264), 0x00000013 | t << 21]  # mthi / mtlo
         for i in range(1, 32):
             if i != s:
                 c.append(mips_ld(i, s, 8 * i))
@@ -259,7 +262,8 @@ class MipsHarness:
         for i in range(1, 32):
             if i != s:
                 c.append(mips_sd(i, s, 8 * i))
-        c += [0x00000010 | t << 11, mips_sd(t, s, 256), 0x00000012 | t << 11, mips_sd(t, s, 264)]  # mfhi / mflo
+        if self.hilo:
+            c += [0x00000010 | t << 11, mips_sd(t, s, 256), 0x00000012 | t << 11, mips_sd(t, s, 264)]  # mfhi / mflo
         c += mips_li32(t, marker) + [mips_sd(t, s, self.marker_at)]
         for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
             c += [0x24040001] + mips_li32(5, base) + mips_li32(6, size) + [0x24021389, 0x0000000C]  # a0=1; v0=5001 (write)
@@ -268,7 +272,10 @@ class MipsHarness:
 
     def table(self, arch, init, init_vec, flagword):
         t = bytearray(self.table_size)
-        sx = lambda v: (v & 0xFFFFFFFF) - ((v & 0x80000000) << 1)
+        if arch.elf64:
+            sx = lambda v: (v & 0xFFFFFFFFFFFFFFFF) - ((v & (1 << 63)) << 1)
+        else:
+            sx = lambda v: (v & 0xFFFFFFFF) - ((v & 0x80000000) << 1)
         for i, (n, _) in enumerate(arch.gprs[:31], start=1):
             struct.pack_into(">q", t, 8 * i, sx(init.get(n, 0)))
         struct.pack_into(">q", t, 256, sx(init.get("hi", 0)))
@@ -282,6 +289,10 @@ class MipsHarness:
         return regs, 0
 
 
+class Mips64Harness(MipsHarness):
+    """MIPS64 code on qemu-mips64: the registers are loaded and compared at their full 64 bits."""
+
+
 def msa_ldd(wd, base, off):
     return 0x78000023 | ((off // 8) & 0x3FF) << 16 | base << 11 | wd << 6
 
@@ -291,61 +302,134 @@ def msa_std(wd, base, off):
 
 
 class MipsR6Harness(MipsHarness):
-    """MIPS32 Release 6 + MSA under qemu-mips64 -cpu I6400 (MIPS64R6 with MSA). No HI/LO (R6
-    removed them). $1..$31 at 8*i, w0..w31 at 256 + 16*i (doubleword 0, then doubleword 1, as
-    ld.d/st.d move them)."""
+    """MIPS32 Release 6 code on a MIPS64R6 core (I6400, which has MSA). R6 has no HI/LO. The MSA
+    registers w0..w31 are at 512 + 16*i (doubleword 0, then doubleword 1, as ld.d/st.d move
+    them)."""
     qemu = ("qemu-mips64", ["-cpu", "I6400"])
     flags = 0xA0000406  # EF_MIPS_ARCH_64R6 | EF_MIPS_NAN2008 | EF_MIPS_PIC | EF_MIPS_CPIC
-    table_size = 256 + 512 + 8
-    marker_at = 256 + 512
+    hilo = False
+    vec_at = 512
+    table_size = 512 + 512 + 8
+    marker_at = 512 + 512
 
     def prologue(self, target):
+        code = MipsHarness.prologue(self, target)
+        # the vector loads go first, while the scratch register still holds the table address
         s = self.scratch
-        c = mips_li32(s, TABLES)
-        for i in range(32):
-            c.append(msa_ldd(i, s, 256 + 16 * i))
-        for i in range(1, 32):
-            if i != s:
-                c.append(mips_ld(i, s, 8 * i))
-        c.append(mips_ld(s, s, 8 * s))
-        here = PROLOGUE + 4 * len(c)
-        c += [0x10000000 | (((target - (here + 4)) >> 2) & 0xFFFF), 0]                            # b target; nop
-        return words(c, True)
+        head = mips_li32(s, TABLES) + [msa_ldd(i, s, self.vec_at + 16 * i) for i in range(32)]
+        rest = code[8:]
+        n_extra = 32
+        # rebuild with the branch displacement adjusted for the extra instructions
+        c = head
+        body = [int.from_bytes(rest[i:i + 4], "big") for i in range(0, len(rest), 4)]
+        br = body[-2]
+        off = (br & 0xFFFF) - n_extra
+        body[-2] = (br & 0xFFFF0000) | (off & 0xFFFF)
+        return words(c + body, True)
 
     def epilogue(self, dumps, marker):
         s = self.scratch
-        t = 1 if s != 1 else 2
-        c = mips_li32(s, OUT)
-        for i in range(1, 32):
-            if i != s:
-                c.append(mips_sd(i, s, 8 * i))
-        for i in range(32):
-            c.append(msa_std(i, s, 256 + 16 * i))
-        c += mips_li32(t, marker) + [mips_sd(t, s, self.marker_at)]
-        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
-            c += [0x24040001] + mips_li32(5, base) + mips_li32(6, size) + [0x24021389, 0x0000000C]  # a0=1; v0=5001 (write)
-        c += [0x24040000, 0x240213C2, 0x0000000C]                                                    # a0=0; v0=5058 (exit)
-        return words(c, True)
+        c = mips_li32(s, OUT) + [msa_std(i, s, self.vec_at + 16 * i) for i in range(32)]
+        return words(c, True) + MipsHarness.epilogue(self, dumps, marker)
 
     def table(self, arch, init, init_vec, flagword):
-        t = bytearray(self.table_size)
-        sx = lambda v: (v & 0xFFFFFFFF) - ((v & 0x80000000) << 1)
-        for i, (n, _) in enumerate(arch.gprs[:31], start=1):
-            struct.pack_into(">q", t, 8 * i, sx(init.get(n, 0)))
+        t = bytearray(MipsHarness.table(self, arch, init, init_vec, flagword))
         for i, (n, _) in enumerate(arch.vecs):
             v = init_vec.get(n, 0)
-            struct.pack_into(">QQ", t, 256 + 16 * i, v & (2 ** 64 - 1), v >> 64)
+            struct.pack_into(">QQ", t, self.vec_at + 16 * i, v & (2 ** 64 - 1), v >> 64)
         return bytes(t)
 
     def parse(self, arch, out):
-        regs = {n: struct.unpack_from(">Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs[:31], start=1)}
+        regs, flags = MipsHarness.parse(self, arch, out)
         for i, (n, _) in enumerate(arch.vecs):
-            lo, hi = struct.unpack_from(">QQ", out, 256 + 16 * i)
+            lo, hi = struct.unpack_from(">QQ", out, self.vec_at + 16 * i)
             regs[n] = lo | hi << 64
-        return regs, 0
+        return regs, flags
 
 
-HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mipsr6": MipsR6Harness}
+class Mips64R6Harness(MipsR6Harness):
+    """MIPS64 Release 6 code on an I6400 core."""
+
+
+
+# ---------------------------------------------------------------- Nios II (R1, ELF32)
+
+def n2_i(op, a, b, imm):
+    return (a << 27) | (b << 22) | ((imm & 0xFFFF) << 6) | op
+
+
+def n2_li32(r, v):
+    return [n2_i(0x34, 0, r, v >> 16), n2_i(0x14, r, r, v & 0xFFFF)]        # orhi; ori
+
+
+N2_TRAP = 0x003B683A
+
+
+class Nios2Harness:
+    """r1..r31 at 4*i. A scratch register the instruction does not write holds the table address
+    while the others load and store; it reads back as its input."""
+    qemu = ("qemu-nios2", [])
+    machine = 113
+    big = False
+    elf32 = True
+    table_size = 128 + 8
+    marker_at = 128
+
+    def __init__(self):
+        self.scratch = 31
+
+    def prologue(self, target):
+        s = self.scratch
+        c = n2_li32(s, TABLES)
+        for i in range(1, 32):
+            if i != s:
+                c.append(n2_i(0x17, s, i, 4 * i))                                    # ldw ri, 4i(s)
+        c.append(n2_i(0x17, s, s, 4 * s))
+        c.append(((target >> 2) << 6) | 0x01)                                         # jmpi target
+        return words(c)
+
+    def epilogue(self, dumps, marker):
+        s = self.scratch
+        c = n2_li32(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(n2_i(0x15, s, i, 4 * i))                                    # stw ri, 4i(s)
+        c += n2_li32(1, marker) + [n2_i(0x15, s, 1, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [n2_i(0x04, 0, 4, 1)] + n2_li32(5, base) + n2_li32(6, size)
+            c += [n2_i(0x04, 0, 2, 64), N2_TRAP]                                     # write(1, base, size)
+        c += [n2_i(0x04, 0, 4, 0), n2_i(0x04, 0, 2, 93), N2_TRAP]                     # exit(0)
+        return words(c)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs, start=1):
+            struct.pack_into("<I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        return {n: struct.unpack_from("<I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs, start=1)}, 0
+
+
+def elf32(segments, entry, machine, big=False, flags=0):
+    """A static ELF32 with one PT_LOAD per (vaddr, bytes, prot) segment."""
+    e = ">" if big else "<"
+    n = len(segments)
+    ident = b"\x7fELF" + bytes([1, 2 if big else 1, 1, 0]) + b"\0" * 8
+    hdr = ident + struct.pack(e + "HHIIIIIHHHHHH", 2, machine, 1, entry, 52, 0, flags, 52, 32, n, 40, 0, 0)
+    off = PAGE
+    phs, blobs = b"", b""
+    for vaddr, data, prot in segments:
+        phs += struct.pack(e + "IIIIIIII", 1, off, vaddr, vaddr, len(data), len(data), prot, PAGE)
+        pad = (-len(data)) % PAGE
+        blobs += data + b"\0" * pad
+        off += len(data) + pad
+    img = hdr + phs
+    return img + b"\0" * (PAGE - len(img)) + blobs
+
+
+HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
+             "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness}
 
 
 def available(arch):
@@ -401,7 +485,7 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         return {"status": "undefined"}
 
     h = HARNESSES[arch.name]()
-    if arch.name in ("riscv64", "mips", "mipsr6"):
+    if arch.name in ("riscv64", "nios2") or arch.name.startswith("mips"):
         written = set()
         for o in row["ops"]:
             out = o.get("output")
@@ -453,7 +537,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     segs.sort()
     path = os.path.join(tmp, "qemu-case.elf")
     with open(path, "wb") as f:
-        f.write(elf(segs, PROLOGUE, h.machine, h.big, getattr(h, "flags", 0)))
+        build = elf32 if getattr(h, "elf32", False) else elf
+        f.write(build(segs, PROLOGUE, h.machine, h.big, getattr(h, "flags", 0)))
     os.chmod(path, 0o755)
     try:
         p = subprocess.run([h.qemu[0], *h.qemu[1], path], capture_output=True, timeout=10)
@@ -466,7 +551,7 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         why = p.stderr.decode(errors="replace").strip().splitlines()
         return {"status": "ref-exception", "why": "qemu " + (why[0][:60] if why else "exit %s" % p.returncode)}
     ref, ref_flags = h.parse(arch, p.stdout[:h.table_size])
-    if arch.name in ("riscv64", "mips", "mipsr6"):
+    if arch.name in ("riscv64", "nios2") or arch.name.startswith("mips"):
         ref[arch.gprs[h.scratch - 1][0]] = init[arch.gprs[h.scratch - 1][0]]
 
     diffs = {}

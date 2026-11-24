@@ -169,8 +169,14 @@ predecessors: the head (directly or through one block, here the `dmb`) and a
 reload block that the status test falls into and that branches back to it or
 to the head's failure exit
 (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rotated_blocks)`). The head,
-the block between and the store-exclusive's blocks fold as above, and the
-reload block must repeat the head: evaluated from the state the loop body
+the block between (whose barrier, `DataMemoryBarrier`, stays) and the
+store-exclusive's blocks fold as above. Since a retry re-runs only the
+store-exclusive, status and reload blocks, the head's values are not
+checked against what those blocks write; instead no op of that cycle may
+read a storage a later op of the cycle writes (`cycle_invariant`), the
+values the reload block leaves must equal the head's where they stay live
+after either exit, and the store-exclusive's constant status writes are
+exempt (`dead_after`). The reload block must repeat the head: evaluated from the state the loop body
 leaves, its one load-exclusive reads the head's address, it reads neither
 monitor output, and it branches back exactly when the reloaded value equals
 the head's expected value (`reload_matches`). The status test then always
@@ -184,8 +190,18 @@ bne loop` that follows, which the evaluation folds through the compare's flag
 arithmetic (subtraction, borrow and carry, signed and unsigned order). Thumb's
 `ldrex` marks its load with `ExclusiveAccess(addr)`; it is accepted inside
 the loop and becomes a dead copy with the fold. The doubleword forms
-(`ldrexd`/`strexd`, `ldaxp`/`stlxp`) load and store twice and are not
-folded. Only AArch64 and ARM declare the monitor user operations, so the option
+(`ldrexd`/`strexd`, `ldaxp`/`ldxp` with `stlxp`/`stxp`) load and store the two
+halves of a `2w`-byte location; a loop whose head is the store-exclusive's
+block folds through `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (fold_pair_loop)`:
+the low half (lower address) reads as `SUBPIECE(Old, 0)`, the high half as
+`SUBPIECE(Old, w)`, and the two stored halves must be an exchange (neither
+reads `Old`), the same `&`, `|` or `^` of each half with an independent
+operand, or an addition with carry (`lo + x0` and `hi + x1 + CARRY(lo, x0)`,
+ARM's `adds`/`adc`). A new `2w`-byte builtin call goes in front of the first
+load, the loads become its two halves and the stores dead copies, as for
+`casp`. Doubleword compare-exchange loops are not folded yet. AArch64's
+`stlxp` of X registers stored its second register at `+4`; it is `+8`, and
+the W-register `stlxp`/`stxp` test an 8-byte monitor range, not 16. Only AArch64 and ARM declare the monitor user operations, so the option
 is inert elsewhere.
 
 This phase turns an entry address into a function: raw p-code ops for every
@@ -1595,7 +1611,15 @@ stack-pointer deltas are measured over the already-decoded raw p-code — the
 *prologue*, accumulated forward from the function's entry address, and the
 *epilogue*, accumulated backward from the branch — and the branch is a tail call
 when the epilogue is a strictly positive teardown of exactly the prologue's
-frame. Both scans stop at the first control-flow op (so neither leaves the block
+frame. The prologue includes the stack motion of the branch that ends the entry
+run, but not of a call (whose push the callee's return removes): a stack
+machine's conditional jump pops its operand, so a CPython entry block
+`LOAD_FAST; POP_JUMP_IF_FALSE` builds no frame, and a jump that leaves the
+operand stack balanced inside the code object is not read as a tail call (#690).
+Neither tail-call rule is asked about a BRANCH that an earlier relative branch
+of its own instruction jumps over (its time is below the deepest internal
+target): it does not end the instruction, and the RETURN the rewrite plants
+would delete the ops that relative branch reaches (#686). Both scans stop at the first control-flow op (so neither leaves the block
 it starts in), at a stack-pointer write that is not `SP = SP ± <const>` (a
 `leave`-style `SP = FP` restore is not modelled and declines), at an instruction
 address more than 16 bytes from its neighbour (so a hole in the decoded stream
@@ -4371,12 +4395,22 @@ range; bias: 256-byte-aligned address and set index; convert: bias select and
 the remaining control bits), so a raw `activation.hf = mxmem(r0,r1)`
 decompiles to `hmx_activation_hf(a0 & 0xfffff800,a0 & 0x7ff,a1);`. Before,
 every HMX word was a bad instruction. The activation/weight pair must share a
-packet; such a packet disassembles, but decompiling any multi-instruction
-Hexagon packet still fails in the crossbuild step ("Could not obtain cached
-crossbuild instruction"), an existing engine gap that is not HMX-specific.
+packet; such packets lift since the crossbuild fix below.
 Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
 encodings against LLVM's syntax and a raw image with one instruction per
 packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
+
+### SLEIGH crossbuild targets resolve on demand (#679)
+
+A `crossbuild addr, section` names another instruction, which C++ reads out of the
+disassembly cache that the flow walk fills. `one_instruction` here resolves only the
+instruction and its delay slots, so every crossbuild failed with "Could not obtain cached
+crossbuild instruction". This is how Hexagon lifts each packet's later slots, so every
+Hexagon function failed. `SleighBuilder::append_cross_build`
+(`crates/unlace-sleigh/src/sleigh.rs`) now resolves a target that is not in the set to
+p-code state and appends it. Such an instruction is not cached for reuse, because its
+p-code depends on other addresses. The ELF loader also maps `EM_HEXAGON` to
+`Hexagon:LE:32:default`, so a Hexagon object no longer needs `--target`.
 
 ### AArch64 FEAT_PAuth_LR and the BTI hint space
 
@@ -4831,7 +4865,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/processors.toml` (`st20`) |
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilegx`) |
 | `TILEPRO` | Tilera TILEPro (TILEPro32/TILEPro64, TILE64), parallel X/Y-mode bundles | `TILEPRO:LE:32:default` | TILEPro ISA reference (UG120); encodings generated from the binutils `tilepro` opcode table by `tools/gen_tilepro_sleigh.py`; checked against `tilepro-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilepro`) |
-| `CSKY` | C-SKY ABIv2 (CK801-CK860): integer ISA, FPUv2, FPUv3, VDSP; ABIv1 (CK510, CK610) | `CSKY:LE:32:v2`, `CSKY:BE:32:v2`, `CSKY:LE:32:ck810v`, `CSKY:LE:32:ck860`, `CSKY:LE:32:v1`, `CSKY:BE:32:v1` | C-SKY V2 instruction set manual; encodings from the binutils `csky-opc.h` table (FPU and VDSP generated by `tools/gen_csky_ext_sleigh.py`); checked against `csky-elf-objdump` | `unlace-cli/tests/processors.toml` (`csky`, `csky_fpuv2`, `csky_fpuv3`, `csky_vdsp`, `csky_abiv1`) |
+| `CSKY` | C-SKY ABIv2 (CK801-CK860): integer ISA, FPUv2, FPUv3, VDSP, DSP, DSP-enhance; ABIv1 (CK510, CK610) | `CSKY:LE:32:v2`, `CSKY:BE:32:v2`, `CSKY:LE:32:ck810v`, `CSKY:LE:32:ck860`, `CSKY:LE:32:v1`, `CSKY:BE:32:v1` | C-SKY V2 instruction set manual; encodings from the binutils `csky-opc.h` table (FPU, VDSP, DSP and DSP-enhance generated by `tools/gen_csky_ext_sleigh.py`); checked against `csky-elf-objdump` | `unlace-cli/tests/processors.toml` (`csky`, `csky_fpuv2`, `csky_fpuv3`, `csky_vdsp`, `csky_dsp`, `csky_edsp`, `csky_abiv1`) |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/processors.toml` (`v60*`) |
 | `PowerPC` (Gekko) | IBM Gekko / Broadway (PowerPC 750CL) paired singles | `PowerPC:BE:32:Gekko` | IBM PowerPC 750CL User's Manual (paired-single chapter); checked against `powerpc-elf-objdump -M gekko` 2.43.1 | `unlace-cli/tests/ppc_gekko.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
@@ -4863,6 +4897,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `M7700` | Mitsubishi/Renesas 7700 Family (M37700/M37702/M37710, 7750/7751 additions) | `M7700:LE:24:default` | Renesas 7700 Family Software Manual (chapter 4 instruction pages, Appendix 2 code tables) | `unlace-cli/tests/processors.toml` (`m7700`) |
 | `MULTOS` | MULTOS Executable Language (MEL) smart-card bytecode | `MULTOS:BE:16:MEL` | MULTOS Developer's Reference Manual v1.58 (instruction descriptions, Instruction Map) | `unlace-cli/tests/processors.toml` (`multos_mel`) |
 | `M7900` | Mitsubishi/Renesas 7900 Series (DPR0 only, and DPR0-DPR3) | `M7900:LE:24:default`, `M7900:LE:24:DPR4` | Renesas 7900 Series Software Manual (chapter 4 machine-code rows) | `unlace-cli/tests/processors.toml` (`m7900`) |
+| `R32C` | Renesas R32C/100 Series | `R32C:LE:32:default` | Renesas R32C/100 Series Software Manual (chapter 4 instruction codes) | `unlace-cli/tests/processors.toml` (`r32c`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5637,6 +5672,19 @@ Found by `tools/difffuzz --oracle qemu`.
 - `FMOV v.4H/v.8H, #imm` converts the single-precision expansion of the immediate to half
   (`float2float`); it converted the bit pattern as an integer.
 - `SABD v.4S` read lane 2 of its doubled difference from bit 94.
+
+### MIPS64 and Release 6 lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --oracle qemu` (`mips64`, `mips64r6`, `mipsr6`).
+
+- The Release 6 compact branch-and-link instructions (`BLEZALC`, `BGEZALC`, `BGTZALC`,
+  `BLTZALC`, `BEQZALC`, `BNEZALC`, in `mips32Instructions.sinc` and `mipsmicro.sinc`) write the
+  return address whether or not they branch; they wrote it only on the taken path. `BEQZALC`
+  tested `rt s> 0` instead of `rt != 0`.
+- `DSLLV`, `DSRLV` and `DSRAV` shift by the low six bits of rs; `DROTRV` rotates by
+  `64 - shift` (it used 32).
+- On MIPS64, `INS` inserts into the low 32 bits and sign-extends the 32-bit result, as every
+  32-bit operation does; it worked on the full 64-bit register.
 
 ## 2.9 Go stack-growth prologue folding
 

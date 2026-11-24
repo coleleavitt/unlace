@@ -366,6 +366,32 @@ language yet, so it still needs an explicit `--target`. A relocatable ARC
 object loads, but its relocation types are not applied; a call to an undefined
 symbol keeps the unrelocated displacement.
 
+(kuna, unlace#680) A WebAssembly relocatable object (`.o`) has no `name`
+section; its function and global names come from the `WASM_SYMBOL_TABLE`
+subsection of its `linking` custom section (version 2), for every index the
+`name` section does not name (`loader/format/wasm.rs`). An undefined symbol
+is named only when it carries `WASM_SYM_EXPLICIT_NAME`.
+
+(kuna, unlace#678) A relocatable object for a 16-bit machine (AVR, MSP430) is
+laid out from `SMALL_RELOC_BASE` (0x100) instead of 0x400000, which is past
+the end of its address space; every other machine keeps 0x400000
+(`reloc_object::reloc_base`, also used by the FID relocation map).
+
+(kuna, unlace#676) Six more ELF machines are read from the header
+(`crates/unlace-analysis/src/loader/kuna_elfmachinetarget.rs`), because the
+object reader either has no language stem for them or no architecture at all:
+`EM_AVR` (83) selects `avr8:LE:16:default` (`gcc` model), `EF_AVR_ARCH_AVR6`
+the ATmega256 language and `EF_AVR_ARCH_XMEGA1`..`7` `avr8:LE:24:xmega`;
+`EM_MSP430` (105) `TI_MSP430:LE:16:default`; `EM_HEXAGON` (164)
+`Hexagon:LE:32:default`; `EM_LANAI` (244) `lanai:BE:32:default`; `EM_LOONGARCH`
+(258) the ilp32 or lp64 language of the ELF class, single-float when the
+`e_flags` ABI is single-float and double otherwise (soft-float has no language
+of its own); `EM_AMDGPU` (224) the GFX9, GFX10 or GFX11 language of
+`EF_AMDGPU_MACH` (gfx900-gfx90c and gfx90a; gfx101x/103x; gfx11xx; and the
+matching generic targets). RDNA images take the wave32 language, because the
+wave size is in the kernel descriptor, not the ELF header; wave64 code and
+GFX9.4, GCN 1-4 and GFX12 images still need an explicit `--target`.
+
 (kuna) PowerPC32 ELF APU requirements are read by
 `crates/unlace-analysis/src/loader/kuna_ppcaputarget.rs` when the
 default-off `ppcapu` load-time option is on. SPE and embedded floating-point APUs
@@ -1068,7 +1094,8 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   This lets existing tail-call recovery resolve a named external destination
   and preserve its delay-slot arguments. The relocation encoder handles generic
   absolute, relative, PLT-relative, and image-offset fields at 8/16/32/64 bits in
-  the object's byte order, plus the instruction fields and ABI formulas for ARM
+  the object's byte order (an s390x `*DBL` field, `PC32DBL`/`PLT32DBL` and their
+  16-bit forms, holds `(S + A - P) >> 1` and rejects an odd value), plus the instruction fields and ABI formulas for ARM
   `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, AArch64 branch/page/low-12
   forms, PowerPC `REL24`/`PLTREL24`/`LOCAL24PC`/`ADDR24` calls (32- and 64-bit;
   a `-fPIC` object's `PLTREL24` addend locates the caller's `.got2` for the
@@ -1227,7 +1254,9 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   untouched and reported as requiring a linker veneer instead of being encoded
   as a branch in the wrong instruction set. Untyped and undefined targets do
   not infer state from their synthetic slot address. AArch64 branch, page, and
-  low-12 relocations preserve the instruction's opcode/register fields, while
+  low-12 relocations preserve the instruction's opcode/register fields, and
+  read and write the instruction little-endian in a big-endian object too
+  (A64 code is little-endian in every image; only data follows `EI_DATA`), while
   PowerPC64 `REL24` and TOC-family relocations preserve big-endian instruction
   layout and DS-form low bits. SPARC `WDISP30` and `WPLT30` rewrite the 30-bit
   word displacement of a `call`, computing `S + A - P` modulo 2³² so a call
@@ -1237,9 +1266,27 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   upper `simm13` bits as the GNU linker does; `PC22`/`PC10` are the same two
   fields over `S + A - P`, and `DISP32` is the 32-bit PC-relative data word.
   The split forms truncate rather than range-check, and reject a REL-style
-  implicit addend, which cannot be reassembled from one half. SPARC64 (V9)
-  instruction relocations, and GOT/TLS forms that need linker-built tables,
-  remain unsupported. eBPF objects are REL-only and every program ships as one,
+  implicit addend, which cannot be reassembled from one half. SPARC64 (V9,
+  unlace#677) takes the same forms plus the medium-low 44-bit triple (`H44`
+  into a `sethi`, `M44` bits 21..12 and `L44` bits 11..0 into simm13), the
+  medium-any `HH22`/`HM10`/`LM22` halves, `DISP64`, and the branch
+  displacements `WDISP22` (`Bicc`/`FBfcc`), `WDISP19` (`BPcc`/`FBPfcc`) and
+  `WDISP16` (`BPr`, split d16hi/d16lo), range-checked; a `WDISP30` call whose
+  ends do not fit 32 bits is range-checked as a signed 32-bit displacement.
+  GOT/TLS forms that need linker-built tables remain unsupported. LoongArch
+  (unlace#677) covers the `PCALA_HI20`/`PCALA_LO12` pair (`pcalau12i` takes the
+  page delta of `S + A + 0x800`, so the signed low twelve bits land on the
+  target), the 8-byte `CALL36` `pcaddu18i`+`jirl` pair, and the `B26`, `B21`
+  and `B16` branch displacements, each encoding-checked; `RELAX` and `ALIGN`
+  are no-ops, since the layout keeps the assembler's bytes. The `object`
+  crate's generic `LoongArchBranch` reading of `B16`/`B21`/`B26` (a plain
+  integer field) is never used. Lanai (`EM_LANAI`, unlace#677), for which the
+  object reader has no architecture, is told apart by `e_machine`
+  (`reloc_apply::classify_elf`): `R_LANAI_25` writes the absolute word address
+  of a `bcc` into bits 24..2, `R_LANAI_21` the absolute 21-bit address of an
+  SLS/SLI access into bits 22..18 and 15..0, `HI16`/`LO16` the halves of
+  `S + A` into an RI immediate, and `R_LANAI_32` a big-endian data word; the
+  absolute fields are range-checked. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from
@@ -7218,6 +7265,15 @@ every other binary's pass list is byte-identical to before the pass existed):
   of one code pointer per slot (`mod.rs (type_vftable_labels)`): as an untyped
   label it took the `code` type, and a constructor's store of its address
   printed as a store of the label's value (`this->__vftable = (C_vtbl *)vftable`).
+  A function several classes' vftables hold is named once, for the holder that is a
+  base of every other holder (`mod.rs (SlotNames::emit)`, the bases read from each
+  class's `BaseClassArray`): a derived class that does not override a method keeps
+  its base's entry, so the method is the base's. Named per holder, the shortest
+  name won, and USBCAN-Driver.dll's `std::exception::what` read
+  `std::bad_alloc::vfunc_1`, Holley's `PEGRP32F.dll` `CDialog::DoModal`
+  `MaxDlg::vfunc_83` (38 such functions there against IDA 9.5). With no such
+  holder (unrelated classes sharing `_purecall` or an identical-code fold) every
+  holder names it, as before.
 
   The pass runs at every PE load whatever its gate says (its facts are committed
   only when it is on), so its cost is paid by every command on a C++ DLL. Both of
@@ -10275,7 +10331,16 @@ commented `rethrow`; otherwise the nearest `lea rdx, [rip+d]` of a labelled
 belongs to the function whose `.pdata` record covers the call, followed through
 `UNW_FLAG_CHAININFO` to the primary record, so a split-off chunk comments its
 owner. An x86 image has no `.pdata` to name the owner, so its throw sites are not
-commented; its records are labelled.
+commented; its records are labelled. The records also name code
+(`kuna_msvceh.rs (member_symbols)`): a class `CatchableType`'s non-null copy
+constructor is `C::C` and a `ThrowInfo`'s non-null destructor is `C::~C` of the
+thrown class, `C` spelled as the RTTI pass spells it (templates dropped). An
+address two classes claim (an identical-code fold) is left unnamed, and a
+function the symbol table names keeps its name. Neither function is called
+directly, so the vftable-store ctor/dtor recovery (`vtabletypes`) never reached
+them: on Holley's `USBCAN-Driver.dll` IDA 9.5 names the copy constructors of
+`std::logic_error`, `std::out_of_range` and `std::bad_exception` and unlace left them
+`sub_`.
 
 **(kuna) MSVC try blocks are listed** (`msvceh`, the same pass;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvcfuncinfo.rs (decode_fh4)`).

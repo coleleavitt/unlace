@@ -214,13 +214,14 @@ define pcodeop special2;
 
 # 0111 11ss ssst tttt mmmm mLLL LL00 0100
 :ins RT, RSsrc, lsb, InsSize    is $(AMODE) & prime=0x1F & fct=0x04 & RT & RTsrc & RSsrc & lsb & msbd & InsSize {
-    tmpa:$(REGSIZE) = -1;
-    tmpa = tmpa >> ($(REGSIZE) * 8 - InsSize);
-    tmpb:$(REGSIZE) = RSsrc & tmpa;
+    tmpa:4 = 0xffffffff;
+    tmpa = tmpa >> (32 - InsSize);
+    tmpb:4 = RSsrc:4 & tmpa;
     tmpa = tmpa << lsb;
     tmpa = ~tmpa;
     tmpb = tmpb << lsb;
-    RT = (RT & tmpa) | tmpb;
+    tmpr:4 = (RTsrc:4 & tmpa) | tmpb;
+    RT = sext(tmpr);
 }
 
 # 0000 10aa aaaa aaaa aaaa aaaa aaaa aaaa
@@ -1005,15 +1006,17 @@ define pcodeop SYNC;
 }
 
 # 0111 00ss ssst tttt dddd d000 0010 0001
-:clo RD, RSsrc                  is $(AMODE) & REL6=0 & prime=0x1C & sa=0x0 & fct=0x21 & RD & RSsrc {
+:clo RD, RS32src                  is $(AMODE) & REL6=0 & prime=0x1C & sa=0x0 & fct=0x21 & RD & RS32src {
     # Count leading ones in a word
-    RD = lzcount( ~RSsrc );
+    local c:4 = lzcount(~RS32src);
+    RD = zext(c);
 }
 
 # 0111 00ss ssst tttt dddd d000 0010 0000
-:clz RD, RSsrc                  is $(AMODE) & REL6=0 & prime=0x1C & sa=0x0 & fct=0x20 & RD & RSsrc {
+:clz RD, RS32src                  is $(AMODE) & REL6=0 & prime=0x1C & sa=0x0 & fct=0x20 & RD & RS32src {
     # Count leading zeros in a word
-    RD = lzcount( RSsrc );
+    local c:4 = lzcount(RS32src);
+    RD = zext(c);
 }
 
 # 0000 00ss ssst tttt 0000 0000 0001 1010
@@ -1449,8 +1452,9 @@ define pcodeop SYNC;
 	RSsrc = RSsrc & ~0xFFFF;
 }
 
-:aui RTsrc, RSsrc, S16L16			is $(AMODE) & REL6=1 & prime=0x0F & RSsrc & RTsrc & S16L16 {
-	RTsrc = RSsrc + sext(S16L16);
+:aui RTsrc, RS32src, S16L16			is $(AMODE) & REL6=1 & prime=0x0F & RS32src & RTsrc & S16L16 {
+	local t:4 = RS32src + S16L16:4;
+	RTsrc = sext(t);
 }
 
 :auipc RSsrc, S16L16				is $(AMODE) & REL6=1 & prime=0x3B & op=0x1E & RSsrc & S16L16 {
@@ -1492,14 +1496,16 @@ define pcodeop SYNC;
 }
 
 :blezalc RTsrc, Rel16				is $(AMODE) & REL6=1 & prime=0x06 & rs=0 & RTsrc & Rel16 {
-	if (RTsrc s> 0) goto inst_next;
-    ra = inst_next; 
+	local notaken:1 = RTsrc s> 0;
+	ra = inst_next;
+	if (notaken) goto inst_next;
 	call Rel16;
 }
 
 :bgezalc RTsrc, Rel16				is $(AMODE) & REL6=1 & prime=0x06 & rs=rt & rt!=0 & RTsrc & Rel16 {
-	if (RTsrc s< 0) goto inst_next;
-    ra = inst_next; 
+	local notaken:1 = RTsrc s< 0;
+	ra = inst_next;
+	if (notaken) goto inst_next;
 	call Rel16;
 }	
 
@@ -1508,14 +1514,16 @@ define pcodeop SYNC;
 }
 
 :bgtzalc RTsrc, Rel16				is $(AMODE) & REL6=1 & prime=0x07 & rs=0 & RTsrc & Rel16 {
-	if (RTsrc s<= 0) goto inst_next;
-    ra = inst_next; 
+	local notaken:1 = RTsrc s<= 0;
+	ra = inst_next;
+	if (notaken) goto inst_next;
 	call Rel16;
 }
 
 :bltzalc RTsrc, Rel16				is $(AMODE) & REL6=1 & prime=0x07 & rs=rt & rt!=0 & RTsrc & Rel16 {
-	if (RTsrc s>= 0) goto inst_next;
-    ra = inst_next; 
+	local notaken:1 = RTsrc s>= 0;
+	ra = inst_next;
+	if (notaken) goto inst_next;
 	call Rel16;
 }	
 
@@ -1525,8 +1533,9 @@ define pcodeop SYNC;
 
 
 :beqzalc RTsrc, Rel16				is $(AMODE) & REL6=1 & prime=0x08 & rs=0 & rt!=0 & RTsrc & Rel16 {
-	if (RTsrc s> 0) goto inst_next;
-    ra = inst_next; 
+	local notaken:1 = RTsrc != 0;
+	ra = inst_next;
+	if (notaken) goto inst_next;
 	call Rel16;
 }
 
@@ -1546,8 +1555,9 @@ define pcodeop SYNC;
 }
 
 :bnezalc RTsrc, Rel16				is $(AMODE) & REL6=1 & prime=0x18 & rs=0 & rt!=0 & RTsrc & Rel16 {
-	if (RTsrc == 0) goto inst_next;
-    ra = inst_next; 
+	local notaken:1 = RTsrc == 0;
+	ra = inst_next;
+	if (notaken) goto inst_next;
 	call Rel16;
 }
 
@@ -1606,12 +1616,14 @@ define pcodeop SYNC;
 	RD = sext(tmp);
 }
 
-:clo RD, RSsrc                  	is $(AMODE) & REL6=1 & prime=0x00 & op=0 & sa=0x1 & fct=0x11 & RD & RSsrc {
-    RD = lzcount( ~RSsrc );
+:clo RD, RS32src                  	is $(AMODE) & REL6=1 & prime=0x00 & op=0 & sa=0x1 & fct=0x11 & RD & RS32src {
+    local c:4 = lzcount(~RS32src);
+    RD = zext(c);
 }
 
-:clz RD, RSsrc                  	is $(AMODE) & REL6=1 & prime=0x00 & op=0 & sa=0x1 & fct=0x10 & RD & RSsrc {
-    RD = lzcount( RSsrc );
+:clz RD, RS32src                  	is $(AMODE) & REL6=1 & prime=0x00 & op=0 & sa=0x1 & fct=0x10 & RD & RS32src {
+    local c:4 = lzcount(RS32src);
+    RD = zext(c);
 }
 
 :div RD, RS32src, RT32src           is $(AMODE) & REL6=1 & prime=0x00 & fct=0x1A & fct2=0x02 & RD & RS32src & RT32src {

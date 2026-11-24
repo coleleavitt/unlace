@@ -2,7 +2,9 @@
 # These independent bytes are only decompiled. Exact signed direct returns should
 # become one atomic.Add call. The branch, old value, flags, unlocked operation,
 # intervening effect, retry, call, HLE, narrow update and exchange remain explicit.
-# P0: asserted Go source and typed prototypes; C/Rust output and C source refuse.
+# P0: asserted Go source and typed prototypes; C/Rust output and C source refuse
+# goatomicreturn. With C source the image is no longer Go, so option atomics
+# (default auto) folds the lock xadd into __sync_fetch_and_add instead.
 
 [image]
 arch = 'x86:LE:64:default:golang'
@@ -158,7 +160,6 @@ hex = 'c3'
 
 [script]
 commands = [
-    'option atomics off',
     'option sourcelang go',
     'option outlang go',
     'map prototype add32_new int4 add32_new(int4 *p,int4 d);',
@@ -265,13 +266,18 @@ count = 1
 regex = '^  return atomic\.AddInt64\(.*unsafe\.Pointer\(p\).*, *d\)$'
 
 [[match]]
+name = 'C source folds the locked add through option atomics, not goatomicreturn'
+count = 1
+regex = '^  return d \+ __sync_fetch_and_add\(p, *d\)$'
+
+[[match]]
 name = 'refusals and foreign renderings retain LOCK'
-count = 21
+count = 20
 regex = '^ +LOCK\(\)'
 
 [[match]]
 name = 'refusals and foreign renderings retain UNLOCK'
-count = 21
+count = 20
 regex = '^ +UNLOCK\(\)'
 
 [[match]]

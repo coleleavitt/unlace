@@ -5764,7 +5764,7 @@ moves.
   drops the untyped entry for those addresses and maps the typed one,
   typelocked and namelocked, first among the typed data facts, so
   `cfg._12_4_ + cfg._8_4_` reads `cfg.flags + cfg.port` and
-  `*(char **)&modes[i * 8L]` reads `modes[i]`. (kuna `dwarfdecls`, default off) A
+  `*(char **)&modes[i * 8L]` reads `modes[i]`. (kuna `dwarfdecls`, default on) A
   declaration-only `DW_TAG_subprogram` (`DW_AT_declaration`, no `DW_AT_low_pc`) is kept
   when its linkage name, or else its name, is an ELF import with PLT entries, no DWARF
   definition of it exists in the file, it is prototyped, and every unit declaring it
@@ -5775,7 +5775,7 @@ moves.
   import and no address-keyed one sits at that entry, so library signatures, type
   libraries and DWARF definitions keep precedence. Calls to the import then take its
   types: an enum parameter prints a constant argument as its member
-  (`gnutls_bye(s,GNUTLS_SHUT_WR)`). (kuna `dwarfenumtypedef`, default off; a load-time
+  (`gnutls_bye(s,GNUTLS_SHUT_WR)`). (kuna `dwarfenumtypedef`, default on; a load-time
   env bridge, `KUNA_DWARFENUMTYPEDEF`) An anonymous `DW_TAG_enumeration_type` reached
   through a typedef is interned as an enum under the typedef's name, the alias
   `strip_qualifiers` already gives an anonymous aggregate

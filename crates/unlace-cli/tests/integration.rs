@@ -5,6 +5,8 @@ mod amdgpu_raw;
 mod arcv2_loops;
 #[path = "chip8.rs"]
 mod chip8;
+#[path = "cpython_raw.rs"]
+mod cpython_raw;
 mod common;
 #[path = "evm.rs"]
 mod evm;

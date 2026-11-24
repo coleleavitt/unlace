@@ -1,0 +1,373 @@
+# Epson S1C17 core (S1C17xxx 16-bit microcontrollers).
+# Written for unlace (#98) from the Epson S1C17 Family S1C17 Core Manual, Rev. 1.2.
+# Instructions are 16-bit little-endian words; registers and addresses are 24 bits.
+# The ext prefix is modelled by the noflow context fields extc/eH/eL that each ext
+# commits to the next instruction.
+
+define endian=little;
+define alignment=2;
+
+define space ram      type=ram_space      size=3 default;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=3 [ r0 ];
+define register offset=0x04 size=3 [ r1 ];
+define register offset=0x08 size=3 [ r2 ];
+define register offset=0x0c size=3 [ r3 ];
+define register offset=0x10 size=3 [ r4 ];
+define register offset=0x14 size=3 [ r5 ];
+define register offset=0x18 size=3 [ r6 ];
+define register offset=0x1c size=3 [ r7 ];
+define register offset=0x20 size=3 [ sp ];
+define register offset=0x24 size=3 [ pc ];
+define register offset=0x28 size=1 [ psr ];
+define register offset=0x30 size=1 [ C V Z N IE IL ];
+define register offset=0x40 size=4 [ contextreg ];
+
+define context contextreg
+  extc = (0,1) noflow
+  eH   = (2,14) noflow
+  eL   = (15,27) noflow
+;
+
+define token instr(16)
+  op3   = (13,15)
+  op5   = (11,15)
+  op6   = (10,15)
+  op8   = (8,15)
+  d10   = (10,10)
+  d7    = (7,7)
+  rd    = (7,9)
+  rdz   = (7,9)
+  imm3  = (7,9)
+  op4   = (3,6)
+  ucnd  = (6,6)
+  ncb   = (5,5)
+  aop   = (3,4)
+  mmode = (5,6)
+  msz   = (3,4)
+  lo7   = (0,6)
+  lo3   = (0,2)
+  lo2   = (0,1)
+  rs    = (0,2)
+  rb    = (0,2)
+  imm7  = (0,6)
+  simm7 = (0,6) signed
+  imm5  = (2,6)
+  imm13 = (0,12)
+  s10   = (0,9) signed
+  u10   = (0,9)
+  w16   = (0,15)
+;
+
+attach variables [ rd rs rb ] [ r0 r1 r2 r3 r4 r5 r6 r7 ];
+
+define pcodeop halt;
+define pcodeop sleep;
+define pcodeop software_interrupt;
+define pcodeop debug_break;
+define pcodeop debug_return;
+define pcodeop coproc_write;
+define pcodeop coproc_read;
+define pcodeop coproc_flags;
+
+macro packPSR() {
+  psr = (IL << 5) | (IE << 4) | (C << 3) | (V << 2) | (Z << 1) | N;
+}
+
+macro unpackPSR(v) {
+  IL = (v >> 5) & 7; IE = (v >> 4) & 1; C = (v >> 3) & 1; V = (v >> 2) & 1;
+  Z = (v >> 1) & 1; N = v & 1;
+  psr = v;
+}
+
+macro resZN16(r) { Z = (r == 0); N = (r s< 0); }
+
+macro addFlags16(a, b, r) { C = carry(a, b); V = scarry(a, b); resZN16(r); }
+macro subFlags16(a, b, r) { C = a < b; V = sborrow(a, b); resZN16(r); }
+macro addcFlags16(a, b, r) {
+  t:2 = a + b;
+  C = carry(a, b) || carry(t, zext(C));
+  V = scarry(a, b) ^^ scarry(t, zext(C));
+  resZN16(r);
+}
+macro subcFlags16(a, b, r) {
+  t:2 = a - b;
+  C = (a < b) || (t < zext(C));
+  V = sborrow(a, b) ^^ sborrow(t, zext(C));
+  resZN16(r);
+}
+macro logicFlags(r) { V = 0; resZN16(r); }
+
+# ---- extended immediates -------------------------------------------------
+
+U16: imm7 is extc=0 & imm7 { export *[const]:2 imm7; }
+U16: val is imm7 [ val = ((eL & 0x1ff) << 7) | imm7; ] { export *[const]:2 val; }
+
+S16: simm7 is extc=0 & simm7 { export *[const]:2 simm7; }
+S16: val is imm7 [ val = ((eL & 0x1ff) << 7) | imm7; ] { export *[const]:2 val; }
+
+A24: imm7 is extc=0 & imm7 { export *[const]:3 imm7; }
+A24: val is extc=1 & imm7 [ val = (eL << 7) | imm7; ] { export *[const]:3 val; }
+A24: val is extc=2 & imm7 [ val = ((eH & 0xf) << 20) | (eL << 7) | imm7; ] { export *[const]:3 val; }
+
+# ---- register-register sources (an ext turns "rd op rs" into "rd = rs op imm") ----
+
+Src1_16: is extc=0 & rd { t:2 = rd:2; export t; }
+Src1_16: is rs { t:2 = rs:2; export t; }
+Src2_16: rs is extc=0 & rs { t:2 = rs:2; export t; }
+Src2_16: rs, val is extc=1 & rs [ val = eL; ] { export *[const]:2 val; }
+Src2_16: rs, val is extc=2 & rs [ val = ((eH & 0x7) << 13) | eL; ] { export *[const]:2 val; }
+
+Src1_24: is extc=0 & rd { export rd; }
+Src1_24: is rs { export rs; }
+Src2_24: rs is extc=0 & rs { export rs; }
+Src2_24: rs, val is extc=1 & rs [ val = eL; ] { export *[const]:3 val; }
+Src2_24: rs, val is extc=2 & rs [ val = ((eH & 0x7ff) << 13) | eL; ] { export *[const]:3 val; }
+
+NotSrc: rs is extc=0 & rs { t:2 = rs:2; export t; }
+NotSrc: val is extc=1 [ val = eL; ] { export *[const]:2 val; }
+NotSrc: val is extc=2 [ val = ((eH & 0x7) << 13) | eL; ] { export *[const]:2 val; }
+
+Disp24: is extc=0 { export 0:3; }
+Disp24: "+"^val is extc=1 [ val = eL; ] { export *[const]:3 val; }
+Disp24: "+"^val is extc=2 [ val = ((eH & 0x7ff) << 13) | eL; ] { export *[const]:3 val; }
+
+Cnd: "/c" is ncb=0 { export C; }
+Cnd: "/nc" is ncb=1 { t:1 = !C; export t; }
+
+IncB: is extc=0 { export 1:3; }
+IncB: is extc=1 & eL { export *[const]:3 eL; }
+IncB: is extc=2 & eH & eL { v:3 = (eH & 0x7ff) << 13 | eL; export v; }
+
+MemB: [rb^Disp24] is mmode=0 & rb & Disp24 { a:3 = rb + Disp24; export a; }
+MemB: [rb]+ is mmode=1 & rb & IncB { a:3 = rb; rb = rb + IncB; export a; }
+MemB: [rb]- is mmode=3 & rb & IncB { a:3 = rb; rb = rb - IncB; export a; }
+MemB: -[rb] is mmode=2 & rb & IncB { rb = rb - IncB; a:3 = rb; export a; }
+
+IncW: is extc=0 { export 2:3; }
+IncW: is extc=1 & eL { export *[const]:3 eL; }
+IncW: is extc=2 & eH & eL { v:3 = (eH & 0x7ff) << 13 | eL; export v; }
+
+MemW: [rb^Disp24] is mmode=0 & rb & Disp24 { a:3 = rb + Disp24; export a; }
+MemW: [rb]+ is mmode=1 & rb & IncW { a:3 = rb; rb = rb + IncW; export a; }
+MemW: [rb]- is mmode=3 & rb & IncW { a:3 = rb; rb = rb - IncW; export a; }
+MemW: -[rb] is mmode=2 & rb & IncW { rb = rb - IncW; a:3 = rb; export a; }
+
+IncA: is extc=0 { export 4:3; }
+IncA: is extc=1 & eL { export *[const]:3 eL; }
+IncA: is extc=2 & eH & eL { v:3 = (eH & 0x7ff) << 13 | eL; export v; }
+
+MemA: [rb^Disp24] is mmode=0 & rb & Disp24 { a:3 = rb + Disp24; export a; }
+MemA: [rb]+ is mmode=1 & rb & IncA { a:3 = rb; rb = rb + IncA; export a; }
+MemA: [rb]- is mmode=3 & rb & IncA { a:3 = rb; rb = rb - IncA; export a; }
+MemA: -[rb] is mmode=2 & rb & IncA { rb = rb - IncA; a:3 = rb; export a; }
+
+SpMem: ["sp"^Disp24] is mmode=0 & Disp24 { a:3 = sp + Disp24; export a; }
+SpMem: ["sp"]+ is mmode=1 & IncA { a:3 = sp; sp = sp + IncA; export a; }
+SpMem: ["sp"]- is mmode=3 & IncA { a:3 = sp; sp = sp - IncA; export a; }
+SpMem: -["sp"] is mmode=2 & IncA { sp = sp - IncA; a:3 = sp; export a; }
+
+SpDisp: ["sp"+A24] is A24 { a:3 = sp + A24; export a; }
+AbsMem: [A24] is A24 { export A24; }
+
+# ---- data transfer ---------------------------------------------------------
+
+:ld.b rd, rs   is op6=0x0a & rd & op4=0 & rs { t:2 = sext(rs:1); rd = zext(t); }
+:ld.ub rd, rs  is op6=0x0a & rd & op4=1 & rs { rd = zext(rs:1); }
+:ld rd, rs     is op6=0x0a & rd & op4=2 & rs { rd = zext(rs:2); }
+:ld.a rd, rs   is op6=0x0a & rd & op4=3 & rs { rd = rs; }
+:cv.la rd, rs  is op6=0x0a & rd & op4=6 & rs { rd = zext(rs[16,8]); }
+:cv.ab rd, rs  is op6=0x0a & rd & op4=7 & rs { rd = sext(rs:1); }
+:cv.ls rd, rs  is op6=0x0a & rd & op4=10 & rs { t:2 = zext(rs[15,1]) * 0xffff; rd = zext(t); }
+:cv.as rd, rs  is op6=0x0a & rd & op4=11 & rs { rd = sext(rs:2); }
+:cv.al rd, rs  is op6=0x0a & rd & op4=15 & rs { rd = (zext(rs:1) << 16) | zext(rd:2); }
+
+:ld.b rd, MemB  is op6=0x08 & rd & msz=0 & MemB { t:2 = sext(*:1 MemB); rd = zext(t); }
+:ld.ub rd, MemB is op6=0x08 & rd & msz=1 & MemB { rd = zext(*:1 MemB); }
+:ld rd, MemW    is op6=0x08 & rd & msz=2 & MemW { rd = zext(*:2 MemW); }
+:ld.a rd, MemA  is op6=0x08 & rd & msz=3 & MemA { rd = *:3 MemA; }
+:ld.b MemB, rd  is op6=0x09 & rd & msz=0 & MemB { *:1 MemB = rd:1; }
+:ld MemW, rd    is op6=0x09 & rd & msz=2 & MemW { *:2 MemW = rd:2; }
+:ld.a MemA, rd  is op6=0x09 & rd & msz=3 & MemA { *:4 MemA = zext(rd); }
+
+:ld.b rd, SpDisp  is op6=0x38 & rd & SpDisp { t:2 = sext(*:1 SpDisp); rd = zext(t); }
+:ld.ub rd, SpDisp is op6=0x39 & rd & SpDisp { rd = zext(*:1 SpDisp); }
+:ld rd, SpDisp    is op6=0x3a & rd & SpDisp { rd = zext(*:2 SpDisp); }
+:ld.a rd, SpDisp  is op6=0x3b & rd & SpDisp { rd = *:3 SpDisp; }
+:ld.b SpDisp, rd  is op6=0x3c & rd & SpDisp { *:1 SpDisp = rd:1; }
+:ld SpDisp, rd    is op6=0x3e & rd & SpDisp { *:2 SpDisp = rd:2; }
+:ld.a SpDisp, rd  is op6=0x3f & rd & SpDisp { *:4 SpDisp = zext(rd); }
+
+:ld.b rd, AbsMem  is op6=0x30 & rd & AbsMem { t:2 = sext(*:1 AbsMem); rd = zext(t); }
+:ld.ub rd, AbsMem is op6=0x31 & rd & AbsMem { rd = zext(*:1 AbsMem); }
+:ld rd, AbsMem    is op6=0x32 & rd & AbsMem { rd = zext(*:2 AbsMem); }
+:ld.a rd, AbsMem  is op6=0x33 & rd & AbsMem { rd = *:3 AbsMem; }
+:ld.b AbsMem, rd  is op6=0x34 & rd & AbsMem { *:1 AbsMem = rd:1; }
+:ld AbsMem, rd    is op6=0x36 & rd & AbsMem { *:2 AbsMem = rd:2; }
+:ld.a AbsMem, rd  is op6=0x37 & rd & AbsMem { *:4 AbsMem = zext(rd); }
+
+:ld rd, S16     is op6=0x26 & rd & S16 { rd = zext(S16); }
+:ld.a rd, A24   is op6=0x27 & rd & A24 { rd = A24; }
+
+:ld.a rd, "sp"    is op6=0x0f & rd & lo7=0x10 { rd = sp; }
+:ld.a rd, "pc"    is op6=0x0f & rd & lo7=0x30 { rd = inst_next; }
+:ld.a rd, SpMem is op6=0x0f & rd & op4=3 & lo3=0 & SpMem { rd = *:3 SpMem; }
+:ld.a rd, SpMem is op6=0x0f & rd & op4=7 & lo3=0 & SpMem { rd = *:3 SpMem; }
+:ld.a rd, SpMem is op6=0x0f & rd & op4=15 & lo3=0 & SpMem { rd = *:3 SpMem; }
+:ld.a rd, SpMem is op6=0x0f & rd & op4=11 & lo3=0 & SpMem { rd = *:3 SpMem; }
+:ld.a SpMem, rd is op6=0x0f & rd & op4=3 & lo3=4 & SpMem { *:4 SpMem = zext(rd); }
+:ld.a SpMem, rd is op6=0x0f & rd & op4=7 & lo3=4 & SpMem { *:4 SpMem = zext(rd); }
+:ld.a SpMem, rd is op6=0x0f & rd & op4=15 & lo3=4 & SpMem { *:4 SpMem = zext(rd); }
+:ld.a SpMem, rd is op6=0x0f & rd & op4=11 & lo3=4 & SpMem { *:4 SpMem = zext(rd); }
+:ld.a "sp", rd    is op6=0x0f & rd & lo7=0x50 { sp = rd & 0xfffffc; }
+:ld.a "sp", A24   is op6=0x2f & rdz=0 & A24 { sp = A24 & 0xfffffc; }
+
+# ---- 16-bit arithmetic and logic -------------------------------------------
+:add rd, Src2_16 is op6=0x0e & rd & ucnd=1 & ncb=0 & aop=0 & Src1_16 & Src2_16 { r:2 = Src1_16 + Src2_16; addFlags16(Src1_16, Src2_16, r); rd = zext(r); }
+:add^Cnd rd, Src2_16 is op6=0x0e & rd & ucnd=0 & aop=0 & Cnd & Src1_16 & Src2_16 { if (!Cnd) goto inst_next; r:2 = Src1_16 + Src2_16; V = scarry(Src1_16, Src2_16); resZN16(r); rd = zext(r); }
+:adc rd, Src2_16 is op6=0x0e & rd & ucnd=1 & ncb=0 & aop=1 & Src1_16 & Src2_16 { r:2 = Src1_16 + Src2_16 + zext(C); addcFlags16(Src1_16, Src2_16, r); rd = zext(r); }
+:adc^Cnd rd, Src2_16 is op6=0x0e & rd & ucnd=0 & aop=1 & Cnd & Src1_16 & Src2_16 { if (!Cnd) goto inst_next; r:2 = Src1_16 + Src2_16 + zext(C); t:2 = Src1_16 + Src2_16; V = scarry(Src1_16, Src2_16) ^^ scarry(t, zext(C)); resZN16(r); rd = zext(r); }
+:sub rd, Src2_16 is op6=0x0e & rd & ucnd=1 & ncb=0 & aop=2 & Src1_16 & Src2_16 { r:2 = Src1_16 - Src2_16; subFlags16(Src1_16, Src2_16, r); rd = zext(r); }
+:sub^Cnd rd, Src2_16 is op6=0x0e & rd & ucnd=0 & aop=2 & Cnd & Src1_16 & Src2_16 { if (!Cnd) goto inst_next; r:2 = Src1_16 - Src2_16; V = sborrow(Src1_16, Src2_16); resZN16(r); rd = zext(r); }
+:sbc rd, Src2_16 is op6=0x0e & rd & ucnd=1 & ncb=0 & aop=3 & Src1_16 & Src2_16 { r:2 = Src1_16 - Src2_16 - zext(C); subcFlags16(Src1_16, Src2_16, r); rd = zext(r); }
+:sbc^Cnd rd, Src2_16 is op6=0x0e & rd & ucnd=0 & aop=3 & Cnd & Src1_16 & Src2_16 { if (!Cnd) goto inst_next; r:2 = Src1_16 - Src2_16 - zext(C); t:2 = Src1_16 - Src2_16; V = sborrow(Src1_16, Src2_16) ^^ sborrow(t, zext(C)); resZN16(r); rd = zext(r); }
+
+:add rd, U16 is op6=0x20 & rd & U16 { a:2 = rd:2; r:2 = a + U16; addFlags16(a, U16, r); rd = zext(r); }
+:adc rd, U16 is op6=0x21 & rd & U16 { a:2 = rd:2; r:2 = a + U16 + zext(C); addcFlags16(a, U16, r); rd = zext(r); }
+:sub rd, U16 is op6=0x22 & rd & U16 { a:2 = rd:2; r:2 = a - U16; subFlags16(a, U16, r); rd = zext(r); }
+:sbc rd, U16 is op6=0x23 & rd & U16 { a:2 = rd:2; r:2 = a - U16 - zext(C); subcFlags16(a, U16, r); rd = zext(r); }
+
+:cmp rd, Src2_16   is op6=0x0f & rd & ucnd=1 & ncb=0 & aop=0 & Src1_16 & Src2_16 { r:2 = Src1_16 - Src2_16; subFlags16(Src1_16, Src2_16, r); }
+:cmp^Cnd rd, Src2_16 is op6=0x0f & rd & ucnd=0 & aop=0 & Cnd & Src1_16 & Src2_16 { if (!Cnd) goto inst_next; r:2 = Src1_16 - Src2_16; V = sborrow(Src1_16, Src2_16); resZN16(r); }
+:cmc rd, Src2_16   is op6=0x0f & rd & ucnd=1 & ncb=0 & aop=1 & Src1_16 & Src2_16 { r:2 = Src1_16 - Src2_16 - zext(C); subcFlags16(Src1_16, Src2_16, r); }
+:cmc^Cnd rd, Src2_16 is op6=0x0f & rd & ucnd=0 & aop=1 & Cnd & Src1_16 & Src2_16 { if (!Cnd) goto inst_next; t:2 = Src1_16 - Src2_16; r:2 = t - zext(C); V = sborrow(Src1_16, Src2_16) ^^ sborrow(t, zext(C)); resZN16(r); }
+:cmp rd, S16 is op6=0x24 & rd & S16 { a:2 = rd:2; r:2 = a - S16; subFlags16(a, S16, r); }
+:cmc rd, S16 is op6=0x25 & rd & S16 { a:2 = rd:2; r:2 = a - S16 - zext(C); subcFlags16(a, S16, r); }
+
+:and rd, Src2_16 is op6=0x0b & rd & ucnd=1 & ncb=0 & aop=0 & Src1_16 & Src2_16 { r:2 = Src1_16 & Src2_16; logicFlags(r); rd = zext(r); }
+:or rd, Src2_16  is op6=0x0b & rd & ucnd=1 & ncb=0 & aop=1 & Src1_16 & Src2_16 { r:2 = Src1_16 | Src2_16; logicFlags(r); rd = zext(r); }
+:xor rd, Src2_16 is op6=0x0b & rd & ucnd=1 & ncb=0 & aop=2 & Src1_16 & Src2_16 { r:2 = Src1_16 ^ Src2_16; logicFlags(r); rd = zext(r); }
+:not rd, NotSrc  is op6=0x0b & rd & ucnd=1 & ncb=0 & aop=3 & NotSrc { r:2 = ~NotSrc; logicFlags(r); rd = zext(r); }
+:and^Cnd rd, Src2_16 is op6=0x0b & rd & ucnd=0 & aop=0 & Cnd & Src1_16 & Src2_16 { if (!Cnd) goto inst_next; r:2 = Src1_16 & Src2_16; logicFlags(r); rd = zext(r); }
+:or^Cnd rd, Src2_16  is op6=0x0b & rd & ucnd=0 & aop=1 & Cnd & Src1_16 & Src2_16 { if (!Cnd) goto inst_next; r:2 = Src1_16 | Src2_16; logicFlags(r); rd = zext(r); }
+:xor^Cnd rd, Src2_16 is op6=0x0b & rd & ucnd=0 & aop=2 & Cnd & Src1_16 & Src2_16 { if (!Cnd) goto inst_next; r:2 = Src1_16 ^ Src2_16; logicFlags(r); rd = zext(r); }
+:not^Cnd rd, NotSrc  is op6=0x0b & rd & ucnd=0 & aop=3 & Cnd & NotSrc { if (!Cnd) goto inst_next; r:2 = ~NotSrc; logicFlags(r); rd = zext(r); }
+:and rd, S16 is op6=0x28 & rd & S16 { r:2 = rd:2 & S16; logicFlags(r); rd = zext(r); }
+:or rd, S16  is op6=0x29 & rd & S16 { r:2 = rd:2 | S16; logicFlags(r); rd = zext(r); }
+:xor rd, S16 is op6=0x2a & rd & S16 { r:2 = rd:2 ^ S16; logicFlags(r); rd = zext(r); }
+:not rd, S16 is op6=0x2b & rd & S16 { r:2 = ~S16; logicFlags(r); rd = zext(r); }
+
+# ---- 24-bit arithmetic -----------------------------------------------------
+
+:add.a rd, Src2_24 is op6=0x0c & rd & ucnd=1 & ncb=0 & aop=0 & Src1_24 & Src2_24 { rd = Src1_24 + Src2_24; }
+:sub.a rd, Src2_24 is op6=0x0c & rd & ucnd=1 & ncb=0 & aop=2 & Src1_24 & Src2_24 { rd = Src1_24 - Src2_24; }
+:add.a^Cnd rd, Src2_24 is op6=0x0c & rd & ucnd=0 & aop=0 & Cnd & Src1_24 & Src2_24 { if (!Cnd) goto inst_next; rd = Src1_24 + Src2_24; }
+:sub.a^Cnd rd, Src2_24 is op6=0x0c & rd & ucnd=0 & aop=2 & Cnd & Src1_24 & Src2_24 { if (!Cnd) goto inst_next; rd = Src1_24 - Src2_24; }
+:add.a "sp", rs is op6=0x0c & rdz=0 & op4=1 & rs { sp = sp + rs; }
+:sub.a "sp", rs is op6=0x0c & rdz=0 & op4=3 & rs { sp = sp - rs; }
+:add.a rd, A24 is op6=0x18 & rd & A24 { rd = rd + A24; }
+:add.a "sp", A24 is op6=0x19 & rdz=0 & A24 { sp = sp + A24; }
+:sub.a rd, A24 is op6=0x1a & rd & A24 { rd = rd - A24; }
+:sub.a "sp", A24 is op6=0x1b & rdz=0 & A24 { sp = sp - A24; }
+
+:cmp.a rd, Src2_24 is op6=0x0d & rd & ucnd=1 & ncb=0 & aop=0 & Src1_24 & Src2_24 { C = Src1_24 < Src2_24; Z = Src1_24 == Src2_24; }
+:cmp.a^Cnd rd, Src2_24 is op6=0x0d & rd & ucnd=0 & aop=0 & Cnd & Src1_24 & Src2_24 { if (!Cnd) goto inst_next; Z = Src1_24 == Src2_24; }
+:cmp.a rd, A24 is op6=0x1c & rd & A24 { C = rd < A24; Z = rd == A24; }
+
+# ---- shifts and swap -------------------------------------------------------
+
+macro shiftCount(n, cnt) {
+  cnt = (zext(n < 4) * n) + (zext(n >= 4 && n < 8) * 4) + (zext(n >= 8) * 8);
+}
+
+:sr rd, rs is op6=0x0b & rd & op4=12 & rs { cnt:2 = 0; shiftCount(rs:2, cnt); a:2 = rd:2; r:2 = a >> cnt; C = (cnt != 0) && (((a >> (cnt - 1)) & 1) != 0); resZN16(r); rd = zext(r); }
+:sa rd, rs is op6=0x0b & rd & op4=13 & rs { cnt:2 = 0; shiftCount(rs:2, cnt); a:2 = rd:2; r:2 = a s>> cnt; C = (cnt != 0) && (((a s>> (cnt - 1)) & 1) != 0); resZN16(r); rd = zext(r); }
+:sl rd, rs is op6=0x0b & rd & op4=14 & rs { cnt:2 = 0; shiftCount(rs:2, cnt); a:2 = rd:2; r:2 = a << cnt; C = (cnt != 0) && (((a << (cnt - 1)) & 0x8000) != 0); resZN16(r); rd = zext(r); }
+:swap rd, rs is op6=0x0b & rd & op4=15 & rs { t:2 = (zext(rs[0,8]) << 8) | zext(rs[8,8]); rd = zext(t); }
+:sr rd, A24 is op6=0x2c & rd & A24 { cnt:2 = 0; n:2 = A24:2; shiftCount(n, cnt); a:2 = rd:2; r:2 = a >> cnt; C = (cnt != 0) && (((a >> (cnt - 1)) & 1) != 0); resZN16(r); rd = zext(r); }
+:sa rd, A24 is op6=0x2d & rd & A24 { cnt:2 = 0; n:2 = A24:2; shiftCount(n, cnt); a:2 = rd:2; r:2 = a s>> cnt; C = (cnt != 0) && (((a s>> (cnt - 1)) & 1) != 0); resZN16(r); rd = zext(r); }
+:sl rd, A24 is op6=0x2e & rd & A24 { cnt:2 = 0; n:2 = A24:2; shiftCount(n, cnt); a:2 = rd:2; r:2 = a << cnt; C = (cnt != 0) && (((a << (cnt - 1)) & 0x8000) != 0); resZN16(r); rd = zext(r); }
+
+# ---- coprocessor -----------------------------------------------------------
+
+:ld.cw rd, rs  is op6=0x0d & rd & op4=2 & rs { coproc_write(rd, rs); }
+:ld.ca rd, rs  is op6=0x0d & rd & op4=3 & rs { coproc_write(rd, rs); rd = coproc_read(); f:1 = coproc_flags(); C = (f >> 3) & 1; V = (f >> 2) & 1; Z = (f >> 1) & 1; N = f & 1; }
+:ld.cf rd, rs  is op6=0x0d & rd & op4=1 & rs { coproc_write(rd, rs); f:1 = coproc_flags(); C = (f >> 3) & 1; V = (f >> 2) & 1; Z = (f >> 1) & 1; N = f & 1; }
+:ld.cw rd, A24 is op6=0x1e & rd & A24 { coproc_write(rd, A24); }
+:ld.ca rd, A24 is op6=0x1f & rd & A24 { coproc_write(rd, A24); rd = coproc_read(); f:1 = coproc_flags(); C = (f >> 3) & 1; V = (f >> 2) & 1; Z = (f >> 1) & 1; N = f & 1; }
+:ld.cf rd, A24 is op6=0x35 & rd & A24 { coproc_write(rd, A24); f:1 = coproc_flags(); C = (f >> 3) & 1; V = (f >> 2) & 1; Z = (f >> 1) & 1; N = f & 1; }
+
+# ---- immediate extension ---------------------------------------------------
+
+:ext imm13 is op3=2 & imm13 & extc=0 [ extc = 1; eL = imm13; globalset(inst_next, extc); globalset(inst_next, eL); ] { }
+:ext imm13 is op3=2 & imm13 [ eH = eL; eL = imm13; extc = 2; globalset(inst_next, extc); globalset(inst_next, eH); globalset(inst_next, eL); ] { }
+
+# ---- branches --------------------------------------------------------------
+
+Rel8: dest is extc=0 & simm7 [ dest = (inst_start + 2 + simm7 * 2) & 0xffffff; ] { export *[ram]:1 dest; }
+Rel8: dest is extc=1 & imm7 [ dest = (inst_start + 2 + ((((eL << 8) | (imm7 << 1)) ^ 0x100000) - 0x100000)) & 0xffffff; ] { export *[ram]:1 dest; }
+Rel8: dest is extc=2 & imm7 [ dest = (inst_start + 2 + (((((eH & 7) << 21) | (eL << 8) | (imm7 << 1)) ^ 0x800000) - 0x800000)) & 0xffffff; ] { export *[ram]:1 dest; }
+
+Rel11: dest is extc=0 & s10 [ dest = (inst_start + 2 + s10 * 2) & 0xffffff; ] { export *[ram]:1 dest; }
+Rel11: dest is u10 [ dest = (inst_start + 2 + ((((eL << 11) | (u10 << 1)) ^ 0x800000) - 0x800000)) & 0xffffff; ] { export *[ram]:1 dest; }
+
+Abs24: imm7 is extc=0 & imm7 { export *[ram]:1 imm7; }
+Abs24: dest is extc=1 & imm7 [ dest = (eL << 7) | imm7; ] { export *[ram]:1 dest; }
+Abs24: dest is extc=2 & imm7 [ dest = ((eH & 0xf) << 20) | (eL << 7) | imm7; ] { export *[ram]:1 dest; }
+:jrgt Rel8 is op8=6 & d7=0 & Rel8 { if (!Z && (N == V)) goto Rel8; }
+:jrgt.d Rel8 is op8=6 & d7=1 & Rel8 { tst:1 = !Z && (N == V); delayslot(1); if (tst) goto Rel8; }
+:jrge Rel8 is op8=7 & d7=0 & Rel8 { if (N == V) goto Rel8; }
+:jrge.d Rel8 is op8=7 & d7=1 & Rel8 { tst:1 = N == V; delayslot(1); if (tst) goto Rel8; }
+:jrlt Rel8 is op8=8 & d7=0 & Rel8 { if (N != V) goto Rel8; }
+:jrlt.d Rel8 is op8=8 & d7=1 & Rel8 { tst:1 = N != V; delayslot(1); if (tst) goto Rel8; }
+:jrle Rel8 is op8=9 & d7=0 & Rel8 { if (Z || (N != V)) goto Rel8; }
+:jrle.d Rel8 is op8=9 & d7=1 & Rel8 { tst:1 = Z || (N != V); delayslot(1); if (tst) goto Rel8; }
+:jrugt Rel8 is op8=10 & d7=0 & Rel8 { if (!Z && !C) goto Rel8; }
+:jrugt.d Rel8 is op8=10 & d7=1 & Rel8 { tst:1 = !Z && !C; delayslot(1); if (tst) goto Rel8; }
+:jruge Rel8 is op8=11 & d7=0 & Rel8 { if (!C) goto Rel8; }
+:jruge.d Rel8 is op8=11 & d7=1 & Rel8 { tst:1 = !C; delayslot(1); if (tst) goto Rel8; }
+:jrult Rel8 is op8=12 & d7=0 & Rel8 { if (C) goto Rel8; }
+:jrult.d Rel8 is op8=12 & d7=1 & Rel8 { tst:1 = C; delayslot(1); if (tst) goto Rel8; }
+:jrule Rel8 is op8=13 & d7=0 & Rel8 { if (Z || C) goto Rel8; }
+:jrule.d Rel8 is op8=13 & d7=1 & Rel8 { tst:1 = Z || C; delayslot(1); if (tst) goto Rel8; }
+:jreq Rel8 is op8=14 & d7=0 & Rel8 { if (Z) goto Rel8; }
+:jreq.d Rel8 is op8=14 & d7=1 & Rel8 { tst:1 = Z; delayslot(1); if (tst) goto Rel8; }
+:jrne Rel8 is op8=15 & d7=0 & Rel8 { if (!Z) goto Rel8; }
+:jrne.d Rel8 is op8=15 & d7=1 & Rel8 { tst:1 = !Z; delayslot(1); if (tst) goto Rel8; }
+
+:jpr Rel11   is op5=2 & d10=0 & Rel11 { goto Rel11; }
+:jpr.d Rel11 is op5=2 & d10=1 & Rel11 { delayslot(1); goto Rel11; }
+:jpr rb      is op8=1 & d7=0 & op4=8 & rb { t:3 = inst_next + rb; goto [t]; }
+:jpr.d rb    is op8=1 & d7=1 & op4=8 & rb { t:3 = inst_start + 2 + rb; delayslot(1); goto [t]; }
+:jpa Abs24   is op8=3 & d7=0 & Abs24 { goto Abs24; }
+:jpa.d Abs24 is op8=3 & d7=1 & Abs24 { delayslot(1); goto Abs24; }
+:jpa rb      is op8=1 & d7=0 & op4=9 & rb { goto [rb]; }
+:jpa.d rb    is op8=1 & d7=1 & op4=9 & rb { t:3 = rb; delayslot(1); goto [t]; }
+
+:call Rel11   is op5=3 & d10=0 & Rel11 { sp = sp - 4; ra:3 = inst_next; *:4 sp = zext(ra); call Rel11; }
+:call.d Rel11 is op5=3 & d10=1 & Rel11 { sp = sp - 4; ra:3 = inst_start + 4; *:4 sp = zext(ra); delayslot(1); call Rel11; }
+:call rb      is op8=1 & d7=0 & op4=0 & rb { t:3 = inst_next + rb; sp = sp - 4; ra:3 = inst_next; *:4 sp = zext(ra); call [t]; }
+:call.d rb    is op8=1 & d7=1 & op4=0 & rb { t:3 = inst_start + 2 + rb; sp = sp - 4; ra:3 = inst_start + 4; *:4 sp = zext(ra); delayslot(1); call [t]; }
+:calla Abs24   is op8=5 & d7=0 & Abs24 { sp = sp - 4; ra:3 = inst_next; *:4 sp = zext(ra); call Abs24; }
+:calla.d Abs24 is op8=5 & d7=1 & Abs24 { sp = sp - 4; ra:3 = inst_start + 4; *:4 sp = zext(ra); delayslot(1); call Abs24; }
+:calla rb      is op8=1 & d7=0 & op4=1 & rb { t:3 = rb; sp = sp - 4; ra:3 = inst_next; *:4 sp = zext(ra); call [t]; }
+:calla.d rb    is op8=1 & d7=1 & op4=1 & rb { t:3 = rb; sp = sp - 4; ra:3 = inst_start + 4; *:4 sp = zext(ra); delayslot(1); call [t]; }
+
+:ret   is op8=1 & d7=0 & lo7=0x20 { t:3 = *:3 sp; sp = sp + 4; return [t]; }
+:ret.d is op8=1 & d7=1 & lo7=0x20 { t:3 = *:3 sp; sp = sp + 4; delayslot(1); return [t]; }
+:reti   is op8=1 & d7=0 & lo7=0x28 { w:4 = *:4 sp; sp = sp + 4; unpackPSR(w[24,8]); t:3 = w:3; return [t]; }
+:reti.d is op8=1 & d7=1 & lo7=0x28 { w:4 = *:4 sp; sp = sp + 4; unpackPSR(w[24,8]); t:3 = w:3; delayslot(1); return [t]; }
+
+:int imm5      is op6=0x1d & imm3=0 & imm5 & lo2=1 { packPSR(); sp = sp - 4; ra:3 = inst_next; *:4 sp = (zext(psr) << 24) | zext(ra); IE = 0; software_interrupt(imm5:1); }
+:intl imm5, imm3 is op6=0x1d & imm3 & imm5 & lo2=3 { packPSR(); sp = sp - 4; ra:3 = inst_next; *:4 sp = (zext(psr) << 24) | zext(ra); IE = 0; IL = imm3; software_interrupt(imm5:1); }
+:brk  is w16=0x0160 { debug_break(); }
+:retd is w16=0x0168 { t:3 = debug_return(); return [t]; }
+
+# ---- system control --------------------------------------------------------
+
+:nop  is w16=0x0000 { }
+:halt is w16=0x0008 { halt(); }
+:slp  is w16=0x0010 { sleep(); }
+:ei   is w16=0x0020 { IE = 1; }
+:di   is w16=0x0040 { IE = 0; }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Zilog Z8000. The program status area (PSA) holds the reset FCW/PC; no fixed entry symbols
+     are declared because the PSA location is set by software (PSAP). -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <register_data>
+    <register name="C" group="Flags"/>
+    <register name="Z" group="Flags"/>
+    <register name="S" group="Flags"/>
+    <register name="V" group="Flags"/>
+    <register name="D" group="Flags"/>
+    <register name="H" group="Flags"/>
+  </register_data>
+</processor_spec>

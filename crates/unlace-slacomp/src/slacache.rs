@@ -6,13 +6,15 @@
 //! checkout, reuse it while the sources and the compiler are unchanged.
 //!
 //! - **Key.** A hash of the `.slaspec`, every file it `@include`s (transitively, resolved
-//!   against the including file's directory, as the compiler does), and the compiler's own
+//!   against the including file's directory, as the compiler does; `@include "$(NAME)"` counts
+//!   every value `NAME` is `@define`d to, and every `@if` branch counts), and the compiler's own
 //!   fingerprint (`build.rs`: the slacomp, sleigh, base and num sources). The cached file is
 //!   `<cache>/<lang>-<key>.sla`.
 //! - **Stamp.** Hashing every source on each start costs more than the decompile of a small
 //!   binary, so the key is also recorded in `<cache>/<lang>-<path hash>.stamp` with each
-//!   source's path, size and modification time. While every listed source still has the
-//!   recorded size and time, the recorded key is used without reading any source; otherwise the
+//!   source's path, size and modification time, plus each include path that does not exist. While
+//!   every listed source still has the recorded size and time (and every absent one is still
+//!   absent), the recorded key is used without reading any source; otherwise the
 //!   key is recomputed and the stamp rewritten. Within one process the answer is memoized.
 //! - **Location.** `$UNLACE_SLA_CACHE`, else `$XDG_CACHE_HOME/unlace/sla`, else
 //!   `$HOME/.cache/unlace/sla`, else `<tmp>/unlace-sla`. Deleting it is always safe.
@@ -24,7 +26,7 @@
 //!   `--sleighpath` directory of prebuilt images, or an in-tree build). A `.sla` with no
 //!   `.slaspec` beside it is always used as is.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -64,37 +66,164 @@ pub fn cache_dir() -> PathBuf {
     std::env::temp_dir().join("unlace-sla")
 }
 
-/// The `.slaspec` and every file it `@include`s, transitively, in a stable order.
-pub fn sources(slaspec: &Path) -> Vec<PathBuf> {
+type Defines = BTreeMap<String, BTreeSet<String>>;
+
+/// Most file names one `@include` may expand to before the scan gives up on it.
+const MAX_EXPANSIONS: usize = 64;
+
+/// The stamp format, part of every stamp's header: a stamp written by an older scan (one that
+/// missed some sources) is never trusted.
+const STAMP_FORMAT: &str = "2";
+
+/// A preprocessor line's directive word and its argument, with a `#` comment cut off as the
+/// scanner does.
+fn directive(line: &[u8]) -> Option<(&[u8], &[u8])> {
+    let line = line.trim_ascii_start().strip_prefix(b"@")?;
+    let line = match line.iter().position(|&b| b == b'#') {
+        Some(p) => &line[..p],
+        None => line,
+    };
+    let end = line
+        .iter()
+        .position(|&b| !b.is_ascii_alphanumeric() && b != b'_')
+        .unwrap_or(line.len());
+    Some((&line[..end], line[end..].trim_ascii()))
+}
+
+/// The text between the first pair of double quotes in `arg`.
+fn quoted(arg: &[u8]) -> Option<String> {
+    let start = arg.iter().position(|&b| b == b'"')?;
+    let rest = &arg[start + 1..];
+    let end = rest.iter().position(|&b| b == b'"')?;
+    Some(String::from_utf8_lossy(&rest[..end]).into_owned())
+}
+
+/// `@define NAME "value"` / `@define NAME value` / `@define NAME`.
+fn definition(arg: &[u8]) -> Option<(String, String)> {
+    let end = arg
+        .iter()
+        .position(|&b| !b.is_ascii_alphanumeric() && b != b'_')
+        .unwrap_or(arg.len());
+    if end == 0 {
+        return None;
+    }
+    let name = String::from_utf8_lossy(&arg[..end]).into_owned();
+    let rest = arg[end..].trim_ascii();
+    let value = quoted(rest).unwrap_or_else(|| {
+        let word = rest.split(u8::is_ascii_whitespace).next().unwrap_or(&[]);
+        String::from_utf8_lossy(word).into_owned()
+    });
+    Some((name, value))
+}
+
+/// Every file name `text` can expand to, given every value each macro is defined to anywhere in
+/// the spec (the scan does not evaluate `@if`, so it takes all of them); `None` when a macro has
+/// no definition or the expansion does not stay small.
+fn expand(text: &str, defines: &Defines, depth: u32) -> Option<BTreeSet<String>> {
+    let Some(start) = text.find("$(") else {
+        return Some(BTreeSet::from([text.to_owned()]));
+    };
+    if depth == 0 {
+        return None;
+    }
+    let end = start + text[start..].find(')')?;
+    let mut out = BTreeSet::new();
+    for value in defines.get(&text[start + 2..end])? {
+        let joined = format!("{}{value}{}", &text[..start], &text[end + 1..]);
+        out.extend(expand(&joined, defines, depth - 1)?);
+        if out.len() > MAX_EXPANSIONS {
+            return None;
+        }
+    }
+    Some(out)
+}
+
+/// Every `.sinc` in `dir`, sorted: what an include the scan cannot resolve may name.
+fn sincs_in(dir: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "sinc") && p.is_file())
+        .collect();
+    out.sort();
+    out
+}
+
+/// The files a compile of `slaspec` may read: those that exist, in a stable order, and the
+/// include paths that do not exist (yet).
+struct Closure {
+    found: Vec<PathBuf>,
+    missing: Vec<PathBuf>,
+}
+
+/// One pass of the include scan with the macro values known so far; returns the closure and
+/// every macro value its files define.
+fn closure_with(slaspec: &Path, defines: &Defines) -> (Closure, Defines) {
     let mut seen = BTreeSet::new();
-    let mut order = Vec::new();
+    let mut closure = Closure {
+        found: Vec::new(),
+        missing: Vec::new(),
+    };
+    let mut defined = defines.clone();
     let mut stack = vec![slaspec.to_path_buf()];
     while let Some(file) = stack.pop() {
         if !seen.insert(file.clone()) {
             continue;
         }
         let Ok(text) = fs::read(&file) else {
+            closure.missing.push(file);
             continue;
         };
-        order.push(file.clone());
+        closure.found.push(file.clone());
         let dir = file.parent().map(Path::to_path_buf).unwrap_or_default();
         for line in text.split(|&b| b == b'\n') {
-            let line = line.trim_ascii_start();
-            let Some(rest) = line.strip_prefix(b"@include") else {
+            let Some((word, arg)) = directive(line) else {
                 continue;
             };
-            let Some(start) = rest.iter().position(|&b| b == b'"') else {
-                continue;
-            };
-            let rest = &rest[start + 1..];
-            let Some(end) = rest.iter().position(|&b| b == b'"') else {
-                continue;
-            };
-            let name = String::from_utf8_lossy(&rest[..end]).into_owned();
-            stack.push(dir.join(name));
+            match word {
+                b"define" => {
+                    if let Some((name, value)) = definition(arg) {
+                        defined.entry(name).or_default().insert(value);
+                    }
+                }
+                b"include" => {
+                    let Some(name) = quoted(arg) else {
+                        continue;
+                    };
+                    match expand(&name, defines, 16) {
+                        Some(names) => stack.extend(names.into_iter().map(|n| dir.join(n))),
+                        None => stack.extend(sincs_in(&dir)),
+                    }
+                }
+                _ => {}
+            }
         }
     }
-    order
+    (closure, defined)
+}
+
+/// The include closure of `slaspec`, resolved the way the preprocessor resolves it: each
+/// `@include` relative to the including file's directory, `$(NAME)` expanded to every value
+/// `NAME` is `@define`d to in the closure, and every `@if` branch taken. An include naming a
+/// macro that is never defined stands for every `.sinc` beside the including file.
+fn closure(slaspec: &Path) -> Closure {
+    let mut defines = Defines::new();
+    for _ in 0..8 {
+        let (closure, defined) = closure_with(slaspec, &defines);
+        if defined == defines {
+            return closure;
+        }
+        defines = defined;
+    }
+    closure_with(slaspec, &defines).0
+}
+
+/// The `.slaspec` and every file it `@include`s, transitively, in a stable order (see
+/// [`closure`]).
+pub fn sources(slaspec: &Path) -> Vec<PathBuf> {
+    closure(slaspec).found
 }
 
 /// The cache key of `slaspec`: its sources' paths (relative to the spec) and bytes plus the
@@ -135,31 +264,58 @@ fn stamp_path(dir: &Path, stem: &str, slaspec: &Path) -> PathBuf {
 fn stamped_key(stamp: &Path) -> Option<String> {
     let text = fs::read_to_string(stamp).ok()?;
     let mut lines = text.lines();
-    let (fingerprint, key) = lines.next()?.split_once('\t')?;
-    if fingerprint != COMPILER_FINGERPRINT {
+    let (header, key) = lines.next()?.split_once('\t')?;
+    if header != stamp_header() {
         return None;
     }
     for line in lines {
         let mut fields = line.splitn(3, '\t');
-        let len: u64 = fields.next()?.parse().ok()?;
-        let nanos: u128 = fields.next()?.parse().ok()?;
+        let len = fields.next()?;
+        let nanos = fields.next()?;
         let path = Path::new(fields.next()?);
-        if signature(path) != Some((len, nanos)) {
+        let recorded = if len == "-" {
+            None
+        } else {
+            Some((len.parse().ok()?, nanos.parse().ok()?))
+        };
+        if signature(path) != recorded {
             return None;
         }
     }
     Some(key.to_owned())
 }
 
-/// Record `key` and the current signature of every source of `slaspec` (best effort).
+fn stamp_header() -> String {
+    format!("{STAMP_FORMAT}/{COMPILER_FINGERPRINT}")
+}
+
+/// `path` made absolute through its parent when the file itself does not exist.
+fn absolute(path: &Path) -> PathBuf {
+    if let Ok(full) = fs::canonicalize(path) {
+        return full;
+    }
+    match (path.parent().map(fs::canonicalize), path.file_name()) {
+        (Some(Ok(dir)), Some(name)) => dir.join(name),
+        _ => path.to_path_buf(),
+    }
+}
+
+/// Record `key`, the current signature of every source of `slaspec` and every include path
+/// that does not exist, so creating one also invalidates the stamp (best effort).
 fn write_stamp(stamp: &Path, slaspec: &Path, key: &str) {
-    let mut text = format!("{COMPILER_FINGERPRINT}\t{key}\n");
-    for file in sources(slaspec) {
+    let closure = closure(slaspec);
+    let mut text = format!("{}\t{key}\n", stamp_header());
+    for file in closure.found {
         let Some((len, nanos)) = signature(&file) else {
             return;
         };
-        let full = fs::canonicalize(&file).unwrap_or(file);
-        text.push_str(&format!("{len}\t{nanos}\t{}\n", full.to_string_lossy()));
+        text.push_str(&format!(
+            "{len}\t{nanos}\t{}\n",
+            absolute(&file).to_string_lossy()
+        ));
+    }
+    for file in closure.missing {
+        text.push_str(&format!("-\t-\t{}\n", absolute(&file).to_string_lossy()));
     }
     let temp = stamp.with_extension(format!("stamp.{}.tmp", std::process::id()));
     if fs::write(&temp, text).is_ok() && fs::rename(&temp, stamp).is_err() {

@@ -373,6 +373,90 @@ def gen_misc(out):
     out.append("")
 
 
+# Legacy map-4 system and CET instructions promoted to EVEX (Table 3.4): EGPR operands, no NDD or NF.
+SYS4 = [
+    ("MOVDIR64B", "Reg64, m512", "prefix_66=1 & byte=0xf8; Reg64 ... & m512", "movdir64b(Reg64, m512);"),
+    ("MOVDIRI", "Mem,Reg32", "$(APX_PP_V) & prefix_66=0 & rexWprefix=0 & byte=0xf9; Mem & Reg32 ...", "*Mem = Reg32;"),
+    ("MOVDIRI", "Mem,Reg64", "$(APX_PP_V) & prefix_66=0 & rexWprefix=1 & byte=0xf9; Mem & Reg64 ...", "*Mem = Reg64;"),
+    ("INVEPT", "Reg64, m128", "prefix_f3=1 & byte=0xf0; Reg64 ... & m128", "local status:4 = invept(Reg64, m128); vmxflags(status);"),
+    ("INVVPID", "Reg64, m128", "prefix_f3=1 & byte=0xf1; Reg64 ... & m128", "local status:4 = invvpid(Reg64, m128); vmxflags(status);"),
+    ("INVPCID", "Reg64, m128", "prefix_f3=1 & byte=0xf2; Reg64 ... & m128", "invpcid(Reg64, m128);"),
+    ("ENQCMD", "Reg64, m512", "prefix_f2=1 & byte=0xf8; Reg64 ... & m512", "ZF = enqcmd(Reg64, m512); OF = 0; SF = 0; AF = 0; PF = 0; CF = 0;"),
+    ("ENQCMDS", "Reg64, m512", "prefix_f3=1 & byte=0xf8; Reg64 ... & m512", "ZF = enqcmds(Reg64, m512); OF = 0; SF = 0; AF = 0; PF = 0; CF = 0;"),
+    ("WRSSD", "rm32,Reg32", "$(APX_PP_V) & prefix_66=0 & rexWprefix=0 & byte=0x66; rm32 & Reg32 ...", "writeToShadowStack(rm32, Reg32);"),
+    ("WRSSQ", "rm64,Reg64", "$(APX_PP_V) & prefix_66=0 & rexWprefix=1 & byte=0x66; rm64 & Reg64 ...", "writeToShadowStack(rm64, Reg64);"),
+    ("WRUSSD", "rm32,Reg32", "prefix_66=1 & rexWprefix=0 & byte=0x65; rm32 & Reg32 ...", "writeToUserShadowStack(rm32, Reg32);"),
+    ("WRUSSQ", "rm64,Reg64", "prefix_66=1 & rexWprefix=1 & byte=0x65; rm64 & Reg64 ...", "writeToUserShadowStack(rm64, Reg64);"),
+]
+
+
+def gen_sys4(out):
+    out.append("# MOVDIR64B MOVDIRI INVEPT INVVPID INVPCID ENQCMD ENQCMDS WRSS WRUSS in map 4 (EGPR forms of the 0F38 instructions)")
+    for mn, ops, pat, body in SYS4:
+        out.append(ctor(mn, ops, "%s & apxND=0 & apxNF=0 & %s" % (MAP4, pat), body))
+    out.append("")
+
+
+# ---------------------------------------------------------------- EVEX-promoted VEX instructions
+
+# VEX instructions with GPR operands that APX promotes to EVEX (3.1.4.1, Table 3.6), by source file.
+EVEX_PROMOTED = [
+    ("bmi1.sinc", r":(ANDN|BEXTR|BLSI|BLSMSK|BLSR) "),
+    ("bmi2.sinc", r":(BZHI|MULX|PDEP|PEXT|RORX|SARX|SHLX|SHRX) "),
+    ("avx512_manual.sinc", r":KMOV[BWDQ] "),
+    ("amx.sinc", r":(LDTILECFG|STTILECFG|TILELOADD|TILELOADDT1|TILESTORED) "),
+    ("cmpccxadd.sinc", r":CMP\^"),
+]
+EVEX_NF = ("ANDN", "BEXTR", "BLSI", "BLSMSK", "BLSR", "BZHI")
+VEX_MACROS = ("$(VEX_NONE)", "$(VEX_NDS)", "$(VEX_NDD)")
+FLAG_WRITE = re.compile(r"(?<![\w=!<>])(ZF|SF|CF|OF|PF|AF)\s*=(?!=)[^;]*;")
+
+
+def evex_copy(ctor_text, nf):
+    for m in VEX_MACROS:
+        if m in ctor_text:
+            break
+    else:
+        return None
+    t = ctor_text.replace(m, "$(APX_EVEX_GPR) & evexAAA=%d" % (4 if nf else 0), 1)
+    t = t.replace("check_vexVVVV_r32_dest", "check_apxNDD32_dest")
+    t = t.replace("vexVVVV_r32", "apxNDD32").replace("vexVVVV_r64", "apxNDD64")
+    head, rest = re.split(r"\s+is\s+", t, maxsplit=1)
+    brace = rest.find("{")
+    t = "%s is %s\n[ evexD8Type = 1; evexTType = 1; ]\n%s" % (head, rest[:brace].rstrip(), rest[brace:])
+    if nf:
+        head, rest = re.split(r"\s+is\s+", t, maxsplit=1)
+        mn = head.split()[0]
+        brace = rest.find("{")
+        t = "%s is %s%s" % (head.replace(mn, mn + '^".NF"', 1), rest[:brace], re.sub(r"\n[ \t]*(?=\n)", "", FLAG_WRITE.sub("", rest[brace:])))
+    return t
+
+
+def gen_evex():
+    out = [HEADER, "# The VEX instructions with GPR operands, promoted to EVEX (3.1.4.1): EVEX.R4/X4/B4/V4 reach the",
+           "# EGPRs, P2 is 000 0 V4 NF 00 (z, L'L and b zero), and the flag-writing BMI forms take EVEX.NF.",
+           "# A disp8 is not compressed (N=1, Tuple1 8-bit).",
+           "",
+           '@define APX_EVEX_GPR "vexMode=2 & evexLp=0 & evexZ=0 & evexB=0"',
+           "",
+           "check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }",
+           ""]
+    count = 0
+    for name, mre in EVEX_PROMOTED:
+        text = (LANG / name).read_text()
+        for n, c in constructors(text):
+            if not re.match(mre, c):
+                continue
+            mn = c[1:].split()[0]
+            for nf in ((0, 1) if mn in EVEX_NF else (0,)):
+                r = evex_copy(c, nf)
+                if r:
+                    out.append("# %s:%d\n%s" % (name, n, r))
+                    count += 1
+    out.append("")
+    return "\n".join(out), count
+
+
 # ---------------------------------------------------------------- source parsing
 
 def active_lines(text):
@@ -522,6 +606,7 @@ def gen_map4():
     gen_cmov(out)
     gen_ccmp(out)
     gen_misc(out)
+    gen_sys4(out)
     ia = (LANG / "ia.sinc").read_text()
     out.append("# MUL IMUL DIV IDIV one-operand forms (F6/F7 /4-/7), from ia.sinc")
     out.extend(promote_from(ia, r":(MUL|IMUL|DIV|IDIV)\s+rm(8|16|32|64)\s", {"byte=0xf6": "byte=0xf6", "byte=0xf7": "byte=0xf7"},
@@ -539,7 +624,10 @@ def main():
     (LANG / "apx_map4.sinc").write_text(m4)
     m1, n1 = gen_map1()
     (LANG / "apx_rex2map1.sinc").write_text(m1)
-    print("apx_map4.sinc: %d constructors; apx_rex2map1.sinc: %d constructors" % (m4.count("\n:"), n1), file=sys.stderr)
+    ev, n2 = gen_evex()
+    (LANG / "apx_evex.sinc").write_text(ev)
+    print("apx_map4.sinc: %d constructors; apx_rex2map1.sinc: %d constructors; apx_evex.sinc: %d constructors"
+          % (m4.count("\n:"), n1, n2), file=sys.stderr)
 
 
 if __name__ == "__main__":

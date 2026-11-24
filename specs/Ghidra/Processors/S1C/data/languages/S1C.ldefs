@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="S1C17"
+            endian="little"
+            size="24"
+            variant="default"
+            version="1.0"
+            slafile="s1c17.sla"
+            processorspec="s1c17.pspec"
+            id="S1C17:LE:24:default">
+    <description>Epson S1C17 core (16-bit instructions, 24-bit registers and addresses)</description>
+    <compiler name="default" spec="s1c17.cspec" id="default"/>
+  </language>
+  <language processor="S1C33"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="s1c33.sla"
+            processorspec="s1c33.pspec"
+            id="S1C33:LE:32:default">
+    <description>Epson S1C33000 core (16-bit instructions, 32-bit registers)</description>
+    <compiler name="default" spec="s1c33.cspec" id="default"/>
+  </language>
+</language_definitions>

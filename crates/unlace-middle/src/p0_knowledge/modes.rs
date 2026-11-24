@@ -607,6 +607,8 @@ mod tests {
             // `mba` targets obfuscated code; on ordinary code it can only
             // refold arithmetic the compiler already chose.
             "mba",
+            // `egraph` too, and it runs a saturation per MBA tree.
+            "egraph",
             // `contextnames` renames loop counters and returned locals that the
             // CLI tests of other features, which run under `auto`, spell as
             // `vN`; it joins the preset once those are re-pinned.
@@ -660,6 +662,8 @@ mod tests {
             "phiarm",
             // `calleesaved` (issue #20) landed without a corpus sweep.
             "calleesaved",
+            // `calleeargsmsvc` landed on hand-built MSVC-shape fixtures only.
+            "calleeargsmsvc",
             // Landed with fixture measurements only: `funcchunks` changes only FID's
             // input, `tailcallentryall` was measured on Lua and the LLVM tools, and
             "funcchunks",

@@ -419,7 +419,7 @@ failures either way.
 
 (kuna) **A 32-bit Delphi PE composes the `:borlanddelphi` compiler field**
 (`crates/unlace-analysis/src/loadimage_object.rs (language_id_for)`, option
-`delphiabi on|off`, default off, carried as the `KUNA_DELPHIABI` loadtime
+`delphiabi on|off`, default on, carried as the `KUNA_DELPHIABI` loadtime
 environment gate, the `goabi` pattern). The vendored `x86delphi.cspec` makes
 Delphi's `register` convention the default model: the first three arguments
 in EAX, EDX and ECX, the rest on the stack, the callee popping them, EAX the
@@ -430,8 +430,21 @@ prints with none. The override fires only on an I386 PE that holds the
 (`crates/unlace-analysis/src/analyzers/delphi/mod.rs (is_delphi_image)`, the
 `delphi` pass's own detection); every other image composes the same id as
 before, and `elf_language_ids` enumerates the Delphi id so the
-resolves-in-the-DB gate proves it vendored. The whole image takes the model,
-so a `stdcall` callback or `cdecl` helper is read with register arguments.
+resolves-in-the-DB gate proves it vendored. A Windows API entry point is
+`__stdcall` whatever its caller's compiler, so under the same gate the pass
+`crates/unlace-analysis/src/analyzers/delphi/kuna_delphiabiimports.rs`
+binds every resolved import, at its IAT slot and its jump thunk, to the
+`__stdcall` model (a model-only fact; a parked Win32 signature keeps its
+pieces and takes the model). A Borland-mangled `@` name is a Delphi package
+export and keeps the register default; a C runtime import keeps `__cdecl`.
+A delay-load thunk (`__imp_load_<name>`, which saves ECX and EDX and jumps to
+`__tailMerge`) is image code, not an import, and is left out; the delay IAT
+slot it fills is bound like any other import.
+Without this a call such as `SetFilePointer(h, lo, &hi, 0)` read its first
+three arguments from EAX, EDX and ECX and its fourth from the first pushed
+word (`SetFilePointer(hFile,a1,a2,(unsigned int)hFile)`). The image's own
+routines all take the register model, so a `stdcall` callback or `cdecl`
+helper is read with register arguments.
 Measured with `--option delphi on` on two Inno Setup stubs (344 and 919
 decompiled functions): functions with parameters 207 → 272 and 619 → 801,
 functions reading a never-assigned register 166 → 147 and 575 → 441, calls
@@ -6422,8 +6435,14 @@ moves.
   not `off`;
   `crates/unlace-analysis/src/analyzers/demangle/kuna_msvcsig.rs`, the
   signature half of Ghidra's `MicrosoftDemanglerAnalyzer`) reads an MSVC-mangled
-  name as the full declaration it is, and reads it off the **PE imports** as well
-  as off defined symbols. The Itanium reading above sees only `file.symbols()` and
+  name as the full declaration it is, and reads it off the **PE imports** and the
+  **PE exports** as well as off defined symbols. A linked PE keeps no symbol
+  table, so on a DLL the export directory is the only place a
+  `__declspec(dllexport)` member's declaration survives: an MSVC-mangled export
+  whose address lies in a code section is read as a defined function at that
+  address (`?SendFrame@CUsbCanDriver@@QAEHPAUcan_frame@@I@Z` gives
+  `CUsbCanDriver::SendFrame` its ECX `this`, its `can_frame *` and its `int`
+  return), and a data or vftable export is not. The Itanium reading above sees only `file.symbols()` and
   `file.dynamic_symbols()`, and a PE import lives in the import table, so a call
   through the IAT to `?IsValid@Arr@@QAEHXZ` was named `Arr::IsValid` and had no
   prototype: the `this` that MSVC passes in ECX was dropped, a hidden return

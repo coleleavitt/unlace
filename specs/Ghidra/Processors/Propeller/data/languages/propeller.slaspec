@@ -1,0 +1,159 @@
+# Parallax Propeller 1 (P8X32A) cog: little-endian 32-bit instructions in a 512-long cog RAM
+# that also holds every register; the D and S fields name cog longs (S may be a 9-bit
+# immediate); every instruction carries an execution condition on the C and Z flags and
+# WZ/WC/WR effect bits. Code and cog registers live in the "cog" space, byte addressed (cog
+# long N at byte 4N); hub RAM/ROM is the "hub" space reached by RDxxxx/WRxxxx. Written from
+# the Propeller Manual v1.2 instruction descriptions and the P8X32A datasheet opcode matrix.
+
+define endian=little;
+define alignment=4;
+
+define space cog type=ram_space size=2 default;
+define space hub type=ram_space size=2;
+define space register type=register_space size=4;
+
+define register offset=0 size=4 [ res RA SP PC ];
+define register offset=0x20 size=1 [ Z C zf cf ];
+
+define token instr(32)
+  op6 = (26,31)
+  wz  = (25,25)
+  wc  = (24,24)
+  wr  = (23,23)
+  im  = (22,22)
+  con = (18,21)
+  d   = (9,17)
+  s   = (0,8)
+  s3  = (0,2)
+;
+
+define pcodeop reverse_bits;
+define pcodeop wait_count;
+define pcodeop wait_pins_equal;
+define pcodeop wait_pins_not_equal;
+define pcodeop wait_video;
+define pcodeop clock_set;
+define pcodeop cog_id;
+define pcodeop cog_init;
+define pcodeop cog_stop;
+define pcodeop lock_new;
+define pcodeop lock_return;
+define pcodeop lock_set;
+define pcodeop lock_clear;
+
+DV: da is d [ da = d * 4; ] { export *[cog]:4 da; }
+SV: "#"^s is im=1 & s { export *[const]:4 s; }
+SV: sa is im=0 & s [ sa = s * 4; ] { export *[cog]:4 sa; }
+JT: "#"^ja is s [ ja = s * 4; ] { export *[cog]:4 ja; }
+
+EFF: "" is wz=0 & wc=0 { }
+EFF: " wz" is wz=1 & wc=0 { }
+EFF: " wc" is wz=0 & wc=1 { }
+EFF: " wz wc" is wz=1 & wc=1 { }
+
+# Result and flag commits: D only with WR, Z only with WZ, C only with WC.
+WB: is wr=1 & DV { DV = res; }
+WB: is wr=0 { }
+WZ: is wz=1 { Z = zf; }
+WZ: is wz=0 { }
+WC: is wc=1 { C = cf; }
+WC: is wc=0 { }
+
+CS: "" is con=15 { }
+CS: "if_never " is con=0 { goto inst_next; }
+CS: "if_nc_and_nz " is con=1 { if (!(!C && !Z)) goto inst_next; }
+CS: "if_nc_and_z " is con=2 { if (!(!C && Z)) goto inst_next; }
+CS: "if_nc " is con=3 { if (!(!C)) goto inst_next; }
+CS: "if_c_and_nz " is con=4 { if (!(C && !Z)) goto inst_next; }
+CS: "if_nz " is con=5 { if (!(!Z)) goto inst_next; }
+CS: "if_c_ne_z " is con=6 { if (!(C != Z)) goto inst_next; }
+CS: "if_nc_or_nz " is con=7 { if (!(!C || !Z)) goto inst_next; }
+CS: "if_c_and_z " is con=8 { if (!(C && Z)) goto inst_next; }
+CS: "if_c_eq_z " is con=9 { if (!(C == Z)) goto inst_next; }
+CS: "if_z " is con=10 { if (!(Z)) goto inst_next; }
+CS: "if_nc_or_z " is con=11 { if (!(!C || Z)) goto inst_next; }
+CS: "if_c " is con=12 { if (!(C)) goto inst_next; }
+CS: "if_c_or_nz " is con=13 { if (!(C || !Z)) goto inst_next; }
+CS: "if_c_or_z " is con=14 { if (!(C || Z)) goto inst_next; }
+
+:^CS^"ror" DV, SV^EFF is op6=0x8 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local n:4 = vs & 31; res = (vd >> n) | (vd << (32 - n)); zf = res == 0; cf = (vd & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"rol" DV, SV^EFF is op6=0x9 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local n:4 = vs & 31; res = (vd << n) | (vd >> (32 - n)); zf = res == 0; cf = vd s< 0; build WB; build WZ; build WC; }
+:^CS^"shr" DV, SV^EFF is op6=0xa & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local n:4 = vs & 31; res = vd >> n; zf = res == 0; cf = (vd & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"shl" DV, SV^EFF is op6=0xb & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local n:4 = vs & 31; res = vd << n; zf = res == 0; cf = vd s< 0; build WB; build WZ; build WC; }
+:^CS^"rcr" DV, SV^EFF is op6=0xc & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local cz:4 = zext(C); local n:4 = vs & 31; res = (vd >> n) | ((0 - cz) & ~(0xffffffff >> n)); zf = res == 0; cf = (vd & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"rcl" DV, SV^EFF is op6=0xd & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local cz:4 = zext(C); local n:4 = vs & 31; res = (vd << n) | ((0 - cz) & ~(0xffffffff << n)); zf = res == 0; cf = vd s< 0; build WB; build WZ; build WC; }
+:^CS^"sar" DV, SV^EFF is op6=0xe & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local n:4 = vs & 31; res = vd s>> n; zf = res == 0; cf = (vd & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"rev" DV, SV^EFF is op6=0xf & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local n:4 = vs & 31; res = reverse_bits(vd) >> n; zf = res == 0; cf = (vd & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"mins" DV, SV^EFF is op6=0x10 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; cf = vd s< vs; res = vd; if (!cf) goto <k>; res = vs; <k> zf = vs == 0; build WB; build WZ; build WC; }
+:^CS^"maxs" DV, SV^EFF is op6=0x11 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; cf = vd s< vs; res = vs; if (!cf) goto <k>; res = vd; <k> zf = vs == 0; build WB; build WZ; build WC; }
+:^CS^"min" DV, SV^EFF is op6=0x12 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; cf = vd < vs; res = vd; if (!cf) goto <k>; res = vs; <k> zf = vs == 0; build WB; build WZ; build WC; }
+:^CS^"max" DV, SV^EFF is op6=0x13 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; cf = vd < vs; res = vs; if (!cf) goto <k>; res = vd; <k> zf = vs == 0; build WB; build WZ; build WC; }
+:^CS^"movs" DV, SV^EFF is op6=0x14 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = (vd & 0xfffffe00) | (vs & 0x1ff); zf = res == 0; cf = C; build WB; build WZ; build WC; }
+:^CS^"movd" DV, SV^EFF is op6=0x15 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = (vd & 0xfffc01ff) | ((vs & 0x1ff) << 9); zf = res == 0; cf = C; build WB; build WZ; build WC; }
+:^CS^"movi" DV, SV^EFF is op6=0x16 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = (vd & 0x007fffff) | ((vs & 0x1ff) << 23); zf = res == 0; cf = C; build WB; build WZ; build WC; }
+:^CS^"test" DV, SV^EFF is op6=0x18 & wr=0 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd & vs; zf = res == 0; local pp:4 = popcount(res); cf = (pp & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"and" DV, SV^EFF is op6=0x18 & wr=1 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd & vs; zf = res == 0; local pp:4 = popcount(res); cf = (pp & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"testn" DV, SV^EFF is op6=0x19 & wr=0 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd & ~vs; zf = res == 0; local pp:4 = popcount(res); cf = (pp & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"andn" DV, SV^EFF is op6=0x19 & wr=1 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd & ~vs; zf = res == 0; local pp:4 = popcount(res); cf = (pp & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"or" DV, SV^EFF is op6=0x1a & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd | vs; zf = res == 0; local pp:4 = popcount(res); cf = (pp & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"xor" DV, SV^EFF is op6=0x1b & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd ^ vs; zf = res == 0; local pp:4 = popcount(res); cf = (pp & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"muxc" DV, SV^EFF is op6=0x1c & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local cz:4 = zext(C); local m:4 = 0 - cz; res = (vd & ~vs) | (vs & m); zf = res == 0; local pp:4 = popcount(res); cf = (pp & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"muxnc" DV, SV^EFF is op6=0x1d & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local cz:4 = zext(!C); local m:4 = 0 - cz; res = (vd & ~vs) | (vs & m); zf = res == 0; local pp:4 = popcount(res); cf = (pp & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"muxz" DV, SV^EFF is op6=0x1e & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local cz:4 = zext(Z); local m:4 = 0 - cz; res = (vd & ~vs) | (vs & m); zf = res == 0; local pp:4 = popcount(res); cf = (pp & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"muxnz" DV, SV^EFF is op6=0x1f & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local cz:4 = zext(!Z); local m:4 = 0 - cz; res = (vd & ~vs) | (vs & m); zf = res == 0; local pp:4 = popcount(res); cf = (pp & 1) != 0; build WB; build WZ; build WC; }
+:^CS^"add" DV, SV^EFF is op6=0x20 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd + vs; cf = carry(vd, vs); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"cmp" DV, SV^EFF is op6=0x21 & wr=0 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd - vs; cf = vd < vs; zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"sub" DV, SV^EFF is op6=0x21 & wr=1 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd - vs; cf = vd < vs; zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"addabs" DV, SV^EFF is op6=0x22 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local a:4 = vs; if (a s>= 0) goto <p>; a = 0 - a; <p> res = vd + a; cf = carry(vd, a); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"subabs" DV, SV^EFF is op6=0x23 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local a:4 = vs; if (a s>= 0) goto <p>; a = 0 - a; <p> res = vd - a; cf = vd < a; zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"sumc" DV, SV^EFF is op6=0x24 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local t:4 = zext(C) * (0 - vs) + zext(!C) * vs; res = vd + t; cf = scarry(vd, t); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"sumnc" DV, SV^EFF is op6=0x25 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local t:4 = zext(!C) * (0 - vs) + zext(C) * vs; res = vd + t; cf = scarry(vd, t); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"sumz" DV, SV^EFF is op6=0x26 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local t:4 = zext(Z) * (0 - vs) + zext(!Z) * vs; res = vd + t; cf = scarry(vd, t); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"sumnz" DV, SV^EFF is op6=0x27 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local t:4 = zext(!Z) * (0 - vs) + zext(Z) * vs; res = vd + t; cf = scarry(vd, t); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"mov" DV, SV^EFF is op6=0x28 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vs; zf = vs == 0; cf = vs s< 0; build WB; build WZ; build WC; }
+:^CS^"neg" DV, SV^EFF is op6=0x29 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = 0 - vs; zf = res == 0; cf = vs s< 0; build WB; build WZ; build WC; }
+:^CS^"abs" DV, SV^EFF is op6=0x2a & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vs; if (vs s>= 0) goto <p>; res = 0 - vs; <p> zf = res == 0; cf = vs s< 0; build WB; build WZ; build WC; }
+:^CS^"absneg" DV, SV^EFF is op6=0x2b & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vs; if (vs s>= 0) goto <p>; res = 0 - vs; <p> res = 0 - res; zf = res == 0; cf = vs s< 0; build WB; build WZ; build WC; }
+:^CS^"negc" DV, SV^EFF is op6=0x2c & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = zext(C) * (0 - vs) + zext(!C) * vs; zf = res == 0; cf = vs s< 0; build WB; build WZ; build WC; }
+:^CS^"negnc" DV, SV^EFF is op6=0x2d & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = zext(!C) * (0 - vs) + zext(C) * vs; zf = res == 0; cf = vs s< 0; build WB; build WZ; build WC; }
+:^CS^"negz" DV, SV^EFF is op6=0x2e & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = zext(Z) * (0 - vs) + zext(!Z) * vs; zf = res == 0; cf = vs s< 0; build WB; build WZ; build WC; }
+:^CS^"negnz" DV, SV^EFF is op6=0x2f & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = zext(!Z) * (0 - vs) + zext(Z) * vs; zf = res == 0; cf = vs s< 0; build WB; build WZ; build WC; }
+:^CS^"cmps" DV, SV^EFF is op6=0x30 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd - vs; cf = vd s< vs; zf = vd == vs; build WB; build WZ; build WC; }
+:^CS^"cmpsx" DV, SV^EFF is op6=0x31 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd - vs - zext(C); cf = (vd s< vs) || ((vd == vs) && C); zf = Z && (res == 0); build WB; build WZ; build WC; }
+:^CS^"addx" DV, SV^EFF is op6=0x32 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local t:4 = vd + vs; res = t + zext(C); cf = carry(vd, vs) || carry(t, zext(C)); zf = Z && (res == 0); build WB; build WZ; build WC; }
+:^CS^"cmpx" DV, SV^EFF is op6=0x33 & wr=0 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local t:4 = vd - vs; res = t - zext(C); cf = (vd < vs) || (t < zext(C)); zf = Z && (res == 0); build WB; build WZ; build WC; }
+:^CS^"subx" DV, SV^EFF is op6=0x33 & wr=1 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; local t:4 = vd - vs; res = t - zext(C); cf = (vd < vs) || (t < zext(C)); zf = Z && (res == 0); build WB; build WZ; build WC; }
+:^CS^"adds" DV, SV^EFF is op6=0x34 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd + vs; cf = scarry(vd, vs); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"subs" DV, SV^EFF is op6=0x35 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd - vs; cf = sborrow(vd, vs); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"addsx" DV, SV^EFF is op6=0x36 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd + vs + zext(C); cf = ((vd ^ res) & (vs ^ res)) s< 0; zf = Z && (res == 0); build WB; build WZ; build WC; }
+:^CS^"subsx" DV, SV^EFF is op6=0x37 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd - vs - zext(C); cf = ((vd ^ vs) & (vd ^ res)) s< 0; zf = Z && (res == 0); build WB; build WZ; build WC; }
+:^CS^"cmpsub" DV, SV^EFF is op6=0x38 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; cf = vd >= vs; res = vd - zext(cf) * vs; zf = vd == vs; build WB; build WZ; build WC; }
+:^CS^"waitpeq" DV, SV^EFF is op6=0x3c & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; wait_pins_equal(vd, vs); res = vd; zf = res == 0; cf = C; build WB; build WZ; build WC; }
+:^CS^"waitpne" DV, SV^EFF is op6=0x3d & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; wait_pins_not_equal(vd, vs); res = vd; zf = res == 0; cf = C; build WB; build WZ; build WC; }
+:^CS^"waitcnt" DV, SV^EFF is op6=0x3e & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; wait_count(vd); res = vd + vs; cf = carry(vd, vs); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"waitvid" DV, SV^EFF is op6=0x3f & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; wait_video(vd, vs); res = vd; zf = res == 0; cf = C; build WB; build WZ; build WC; }
+:^CS^"rdbyte" DV, SV^EFF is op6=0 & wr=1 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vs:4 = SV; local v:1 = *[hub]:1 vs:2; res = zext(v); zf = res == 0; cf = C; build WB; build WZ; build WC; }
+:^CS^"wrbyte" DV, SV is op6=0 & wr=0 & CS & DV & SV { build CS; local vd:4 = DV; local vs:4 = SV; *[hub]:1 vs:2 = vd:1; }
+:^CS^"rdword" DV, SV^EFF is op6=1 & wr=1 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vs:4 = SV; local v:2 = *[hub]:2 vs:2; res = zext(v); zf = res == 0; cf = C; build WB; build WZ; build WC; }
+:^CS^"wrword" DV, SV is op6=1 & wr=0 & CS & DV & SV { build CS; local vd:4 = DV; local vs:4 = SV; *[hub]:2 vs:2 = vd:2; }
+:^CS^"rdlong" DV, SV^EFF is op6=2 & wr=1 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vs:4 = SV; local v:4 = *[hub]:4 vs:2; res = v; zf = res == 0; cf = C; build WB; build WZ; build WC; }
+:^CS^"wrlong" DV, SV is op6=2 & wr=0 & CS & DV & SV { build CS; local vd:4 = DV; local vs:4 = SV; *[hub]:4 vs:2 = vd; }
+:^CS^"clkset" DV^EFF is op6=3 & im=1 & s3=0 & CS & DV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; cf = C; clock_set(vd); res = vd; zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"cogid" DV^EFF is op6=3 & im=1 & s3=1 & CS & DV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; cf = C; res = cog_id(); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"coginit" DV^EFF is op6=3 & im=1 & s3=2 & CS & DV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; cf = C; res = cog_init(vd); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"cogstop" DV^EFF is op6=3 & im=1 & s3=3 & CS & DV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; cf = C; cog_stop(vd); res = vd; zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"locknew" DV^EFF is op6=3 & im=1 & s3=4 & CS & DV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; cf = C; res = lock_new(); zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"lockret" DV^EFF is op6=3 & im=1 & s3=5 & CS & DV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; cf = C; lock_return(vd); res = vd; zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"lockset" DV^EFF is op6=3 & im=1 & s3=6 & CS & DV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; cf = C; cf = lock_set(vd); res = vd; zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"lockclr" DV^EFF is op6=3 & im=1 & s3=7 & CS & DV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; cf = C; cf = lock_clear(vd); res = vd; zf = res == 0; build WB; build WZ; build WC; }
+:^CS^"jmp" JT is op6=0x17 & wr=0 & im=1 & CS & JT { build CS; goto JT; }
+:^CS^"ret" is op6=0x17 & wr=0 & im=1 & s=0 & CS { build CS; local ia:2 = inst_start; local w:4 = *[cog]:4 ia; local t:2 = (w:2 & 0x1ff) * 4; return [t]; }
+:^CS^"jmp" SV is op6=0x17 & wr=0 & im=0 & CS & SV { build CS; local vs:4 = SV; local t:2 = (vs:2 & 0x1ff) * 4; goto [t]; }
+:^CS^"call" JT is op6=0x17 & wr=1 & im=1 & CS & JT { build CS; call JT; }
+:^CS^"jmpret" DV, SV is op6=0x17 & wr=1 & im=0 & CS & DV & SV { build CS; local vs:4 = SV; local t:2 = (vs:2 & 0x1ff) * 4; call [t]; }
+:^CS^"djnz" DV, JT^EFF is op6=0x39 & im=1 & CS & DV & JT & EFF & WB & WZ & WC { build CS; local vd:4 = DV; res = vd - 1; zf = res == 0; cf = vd == 0; build WB; build WZ; build WC; if (res != 0) goto JT; }
+:^CS^"tjnz" DV, JT^EFF is op6=0x3a & im=1 & CS & DV & JT & EFF & WB & WZ & WC { build CS; local vd:4 = DV; res = vd; zf = vd == 0; cf = 0; build WB; build WZ; build WC; if (vd != 0) goto JT; }
+:^CS^"tjz" DV, JT^EFF is op6=0x3b & im=1 & CS & DV & JT & EFF & WB & WZ & WC { build CS; local vd:4 = DV; res = vd; zf = vd == 0; cf = 0; build WB; build WZ; build WC; if (vd == 0) goto JT; }
+:^CS^"djnz" DV, SV^EFF is op6=0x39 & im=0 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd - 1; zf = res == 0; cf = vd == 0; build WB; build WZ; build WC; if (res == 0) goto inst_next; local t:2 = (vs:2 & 0x1ff) * 4; goto [t]; }
+:^CS^"tjnz" DV, SV^EFF is op6=0x3a & im=0 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd; zf = vd == 0; cf = 0; build WB; build WZ; build WC; if (vd == 0) goto inst_next; local t:2 = (vs:2 & 0x1ff) * 4; goto [t]; }
+:^CS^"tjz" DV, SV^EFF is op6=0x3b & im=0 & CS & DV & SV & EFF & WB & WZ & WC { build CS; local vd:4 = DV; local vs:4 = SV; res = vd; zf = vd == 0; cf = 0; build WB; build WZ; build WC; if (vd != 0) goto inst_next; local t:2 = (vs:2 & 0x1ff) * 4; goto [t]; }

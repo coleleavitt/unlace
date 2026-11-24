@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="Z8000"
+            endian="big"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="z8002.sla"
+            processorspec="z8000.pspec"
+            id="Z8002:BE:16:default">
+    <description>Zilog Z8002 (non-segmented Z8000), 64 KiB address space</description>
+    <compiler name="default" spec="z8002.cspec" id="default"/>
+  </language>
+  <language processor="Z8000"
+            endian="big"
+            size="32"
+            variant="segmented"
+            version="1.0"
+            slafile="z8001.sla"
+            processorspec="z8000.pspec"
+            id="Z8001:BE:32:segmented">
+    <description>Zilog Z8001 (segmented Z8000), 128 segments of 64 KiB, flattened as seg*0x10000+offset</description>
+    <compiler name="default" spec="z8001.cspec" id="default"/>
+  </language>
+</language_definitions>

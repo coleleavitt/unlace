@@ -1,0 +1,11 @@
+@define ENDIAN "little"
+@include "xtensaArch.sinc"
+@include "xtensa_esp32s3_pie_defs.sinc"
+@include "xtensaMain.sinc"
+
+with : phase=1 {
+
+@include "xtensaInstructions.sinc"
+@include "xtensa_esp32s3_pie.sinc"
+
+}

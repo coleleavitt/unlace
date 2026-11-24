@@ -923,6 +923,20 @@
 :CRC32 Reg32,rm32 is $(APX_MAP4) & apxND=0 & apxNF=0 & opsize=1 & mandover=0 & byte=0xf1; rm32 & Reg32 ... & check_Reg32_dest ... { Reg32 = crc32(Reg32, rm32); build check_Reg32_dest; }
 :CRC32 Reg64,rm64 is $(APX_MAP4) & apxND=0 & apxNF=0 & opsize=2 & byte=0xf1; rm64 & Reg64 ... { Reg64 = crc32(Reg64, rm64); }
 
+# MOVDIR64B MOVDIRI INVEPT INVVPID INVPCID ENQCMD ENQCMDS WRSS WRUSS in map 4 (EGPR forms of the 0F38 instructions)
+:MOVDIR64B Reg64, m512 is $(APX_MAP4) & apxND=0 & apxNF=0 & prefix_66=1 & byte=0xf8; Reg64 ... & m512 { movdir64b(Reg64, m512); }
+:MOVDIRI Mem,Reg32 is $(APX_MAP4) & apxND=0 & apxNF=0 & $(APX_PP_V) & prefix_66=0 & rexWprefix=0 & byte=0xf9; Mem & Reg32 ... { *Mem = Reg32; }
+:MOVDIRI Mem,Reg64 is $(APX_MAP4) & apxND=0 & apxNF=0 & $(APX_PP_V) & prefix_66=0 & rexWprefix=1 & byte=0xf9; Mem & Reg64 ... { *Mem = Reg64; }
+:INVEPT Reg64, m128 is $(APX_MAP4) & apxND=0 & apxNF=0 & prefix_f3=1 & byte=0xf0; Reg64 ... & m128 { local status:4 = invept(Reg64, m128); vmxflags(status); }
+:INVVPID Reg64, m128 is $(APX_MAP4) & apxND=0 & apxNF=0 & prefix_f3=1 & byte=0xf1; Reg64 ... & m128 { local status:4 = invvpid(Reg64, m128); vmxflags(status); }
+:INVPCID Reg64, m128 is $(APX_MAP4) & apxND=0 & apxNF=0 & prefix_f3=1 & byte=0xf2; Reg64 ... & m128 { invpcid(Reg64, m128); }
+:ENQCMD Reg64, m512 is $(APX_MAP4) & apxND=0 & apxNF=0 & prefix_f2=1 & byte=0xf8; Reg64 ... & m512 { ZF = enqcmd(Reg64, m512); OF = 0; SF = 0; AF = 0; PF = 0; CF = 0; }
+:ENQCMDS Reg64, m512 is $(APX_MAP4) & apxND=0 & apxNF=0 & prefix_f3=1 & byte=0xf8; Reg64 ... & m512 { ZF = enqcmds(Reg64, m512); OF = 0; SF = 0; AF = 0; PF = 0; CF = 0; }
+:WRSSD rm32,Reg32 is $(APX_MAP4) & apxND=0 & apxNF=0 & $(APX_PP_V) & prefix_66=0 & rexWprefix=0 & byte=0x66; rm32 & Reg32 ... { writeToShadowStack(rm32, Reg32); }
+:WRSSQ rm64,Reg64 is $(APX_MAP4) & apxND=0 & apxNF=0 & $(APX_PP_V) & prefix_66=0 & rexWprefix=1 & byte=0x66; rm64 & Reg64 ... { writeToShadowStack(rm64, Reg64); }
+:WRUSSD rm32,Reg32 is $(APX_MAP4) & apxND=0 & apxNF=0 & prefix_66=1 & rexWprefix=0 & byte=0x65; rm32 & Reg32 ... { writeToUserShadowStack(rm32, Reg32); }
+:WRUSSQ rm64,Reg64 is $(APX_MAP4) & apxND=0 & apxNF=0 & prefix_66=1 & rexWprefix=1 & byte=0x65; rm64 & Reg64 ... { writeToUserShadowStack(rm64, Reg64); }
+
 # MUL IMUL DIV IDIV one-operand forms (F6/F7 /4-/7), from ia.sinc
 :DIV rm8 is $(APX_MAP4) & apxND=0 & apxNF=0 & byte=0xf6; rm8 & reg_opcode=6 ...            { rm8ext:2 = zext(rm8);
                                                   local quotient = AX / rm8ext;  # DE exception if quotient doesn't fit in AL

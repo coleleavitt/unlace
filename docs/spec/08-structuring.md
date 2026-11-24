@@ -116,7 +116,8 @@ reading what the compiler recorded about the source rather than guessing from
 the callee.
 
 **`noretfirst` — the no-return arm as the clause.** `option noretfirst on`
-(default off) breaks the same tie by the arms' exits instead, and before
+(default on since issue #8's DecBench O2-noinline A/B: mean GED 10.673 -> 10.588,
+GED0 39.21% -> 40.51%, 739 functions better and 119 worse) breaks the same tie by the arms' exits instead, and before
 `guardarm` looks at it: of the two eligible arms, the one whose exit leaf ends
 in an artificial no-return halt that follows a call (`ExitLeafFacts::is_noreturn_call`:
 the `op_mark_halt` no-return bit, with a `CALL`/`CALLIND` earlier in the block, or,

@@ -1,0 +1,99 @@
+# SBPFv0/v1 (the legacy eBPF-derived opcode map).
+@include "sbpf.sinc"
+
+:add64 dst, simm is opc=0x07 & dst & simm & simm64 { dst = dst + simm64; }
+:add64 dst, src is opc=0x0f & dst & src { dst = dst + src; }
+:sub64 dst, simm is opc=0x17 & dst & simm & simm64 { dst = dst - simm64; }
+:sub64 dst, src is opc=0x1f & dst & src { dst = dst - src; }
+:mul64 dst, simm is opc=0x27 & dst & simm & simm64 { dst = dst * simm64; }
+:mul64 dst, src is opc=0x2f & dst & src { dst = dst * src; }
+:div64 dst, simm is opc=0x37 & dst & simm & simm64 { dst = dst / simm64; }
+:div64 dst, src is opc=0x3f & dst & src { dst = dst / src; }
+:or64 dst, simm is opc=0x47 & dst & simm & simm64 { dst = dst | simm64; }
+:or64 dst, src is opc=0x4f & dst & src { dst = dst | src; }
+:and64 dst, simm is opc=0x57 & dst & simm & simm64 { dst = dst & simm64; }
+:and64 dst, src is opc=0x5f & dst & src { dst = dst & src; }
+:lsh64 dst, simm is opc=0x67 & dst & simm & simm64 { dst = dst << (simm64 & 63); }
+:lsh64 dst, src is opc=0x6f & dst & src { dst = dst << (src & 63); }
+:rsh64 dst, simm is opc=0x77 & dst & simm & simm64 { dst = dst >> (simm64 & 63); }
+:rsh64 dst, src is opc=0x7f & dst & src { dst = dst >> (src & 63); }
+:mod64 dst, simm is opc=0x97 & dst & simm & simm64 { dst = dst % simm64; }
+:mod64 dst, src is opc=0x9f & dst & src { dst = dst % src; }
+:xor64 dst, simm is opc=0xa7 & dst & simm & simm64 { dst = dst ^ simm64; }
+:xor64 dst, src is opc=0xaf & dst & src { dst = dst ^ src; }
+:mov64 dst, simm is opc=0xb7 & dst & simm & simm64 { dst = simm64; }
+:mov64 dst, src is opc=0xbf & dst & src { dst = src; }
+:arsh64 dst, simm is opc=0xc7 & dst & simm & simm64 { dst = dst s>> (simm64 & 63); }
+:arsh64 dst, src is opc=0xcf & dst & src { dst = dst s>> (src & 63); }
+:neg64 dst is opc=0x87 & dst { dst = -dst; }
+:add32 dst, imm is opc=0x04 & dst & imm & imm32 { r:4 = dst:4 + imm32; dst = sext(r); }
+:add32 dst, src is opc=0x0c & dst & src { r:4 = dst:4 + src:4; dst = sext(r); }
+:sub32 dst, imm is opc=0x14 & dst & imm & imm32 { r:4 = dst:4 - imm32; dst = zext(r); }
+:sub32 dst, src is opc=0x1c & dst & src { r:4 = dst:4 - src:4; dst = sext(r); }
+:mul32 dst, imm is opc=0x24 & dst & imm & imm32 { r:4 = dst:4 * imm32; dst = sext(r); }
+:mul32 dst, src is opc=0x2c & dst & src { r:4 = dst:4 * src:4; dst = sext(r); }
+:div32 dst, imm is opc=0x34 & dst & imm & imm32 { r:4 = dst:4 / imm32; dst = zext(r); }
+:div32 dst, src is opc=0x3c & dst & src { r:4 = dst:4 / src:4; dst = zext(r); }
+:or32 dst, imm is opc=0x44 & dst & imm & imm32 { r:4 = dst:4 | imm32; dst = zext(r); }
+:or32 dst, src is opc=0x4c & dst & src { r:4 = dst:4 | src:4; dst = zext(r); }
+:and32 dst, imm is opc=0x54 & dst & imm & imm32 { r:4 = dst:4 & imm32; dst = zext(r); }
+:and32 dst, src is opc=0x5c & dst & src { r:4 = dst:4 & src:4; dst = zext(r); }
+:lsh32 dst, imm is opc=0x64 & dst & imm & imm32 { r:4 = dst:4 << (imm32 & 31); dst = zext(r); }
+:lsh32 dst, src is opc=0x6c & dst & src { r:4 = dst:4 << (src:4 & 31); dst = zext(r); }
+:rsh32 dst, imm is opc=0x74 & dst & imm & imm32 { r:4 = dst:4 >> (imm32 & 31); dst = zext(r); }
+:rsh32 dst, src is opc=0x7c & dst & src { r:4 = dst:4 >> (src:4 & 31); dst = zext(r); }
+:mod32 dst, imm is opc=0x94 & dst & imm & imm32 { r:4 = dst:4 % imm32; dst = zext(r); }
+:mod32 dst, src is opc=0x9c & dst & src { r:4 = dst:4 % src:4; dst = zext(r); }
+:xor32 dst, imm is opc=0xa4 & dst & imm & imm32 { r:4 = dst:4 ^ imm32; dst = zext(r); }
+:xor32 dst, src is opc=0xac & dst & src { r:4 = dst:4 ^ src:4; dst = zext(r); }
+:mov32 dst, imm is opc=0xb4 & dst & imm & imm32 { r:4 = imm32; dst = zext(r); }
+:mov32 dst, src is opc=0xbc & dst & src { r:4 = src:4; dst = zext(r); }
+:arsh32 dst, imm is opc=0xc4 & dst & imm & imm32 { r:4 = dst:4 s>> (imm32 & 31); dst = zext(r); }
+:arsh32 dst, src is opc=0xcc & dst & src { r:4 = dst:4 s>> (src:4 & 31); dst = zext(r); }
+:neg32 dst is opc=0x84 & dst { r:4 = -dst:4; dst = zext(r); }
+:le16 dst is opc=0xd4 & dst & imm=16 { dst = zext(dst:2); }
+:le32 dst is opc=0xd4 & dst & imm=32 { dst = zext(dst:4); }
+:le64 dst is opc=0xd4 & dst & imm=64 { }
+:be16 dst is opc=0xdc & dst & imm=16 { v:2 = dst:2; dst = zext((v >> 8) | (v << 8)); }
+:be32 dst is opc=0xdc & dst & imm=32 { v:4 = dst:4; dst = zext((v >> 24) | ((v >> 8) & 0xff00) | ((v << 8) & 0xff0000) | (v << 24)); }
+:be64 dst is opc=0xdc & dst & imm=64 { dst = byteSwap64(dst); }
+:ldxb dst, [SrcOff] is opc=0x71 & dst & SrcOff { v:1 = *:1 SrcOff; dst = zext(v); }
+:ldxh dst, [SrcOff] is opc=0x69 & dst & SrcOff { v:2 = *:2 SrcOff; dst = zext(v); }
+:ldxw dst, [SrcOff] is opc=0x61 & dst & SrcOff { v:4 = *:4 SrcOff; dst = zext(v); }
+:ldxdw dst, [SrcOff] is opc=0x79 & dst & SrcOff { v:8 = *:8 SrcOff; dst = v; }
+:stb [DstOff], imm is opc=0x72 & DstOff & imm & simm64 { *:1 DstOff = simm64:1; }
+:sth [DstOff], imm is opc=0x6a & DstOff & imm & simm64 { *:2 DstOff = simm64:2; }
+:stw [DstOff], imm is opc=0x62 & DstOff & imm & simm64 { *:4 DstOff = simm64:4; }
+:stdw [DstOff], imm is opc=0x7a & DstOff & imm & simm64 { *:8 DstOff = simm64; }
+:stxb [DstOff], src is opc=0x73 & DstOff & src { *:1 DstOff = src:1; }
+:stxh [DstOff], src is opc=0x6b & DstOff & src { *:2 DstOff = src:2; }
+:stxw [DstOff], src is opc=0x63 & DstOff & src { *:4 DstOff = src:4; }
+:stxdw [DstOff], src is opc=0x7b & DstOff & src { *:8 DstOff = src; }
+:lddw dst, val is opc=0x18 & dst & imm ; hiimm [ val = (hiimm << 32) | imm; ] { dst = val; }
+:ja Jdest is opc=0x05 & Jdest { goto Jdest; }
+:jeq dst, simm, Jdest is opc=0x15 & dst & simm & simm64 & Jdest { if (dst == simm64) goto Jdest; }
+:jeq dst, src, Jdest is opc=0x1d & dst & src & Jdest { if (dst == src) goto Jdest; }
+:jgt dst, simm, Jdest is opc=0x25 & dst & simm & simm64 & Jdest { if (dst > simm64) goto Jdest; }
+:jgt dst, src, Jdest is opc=0x2d & dst & src & Jdest { if (dst > src) goto Jdest; }
+:jge dst, simm, Jdest is opc=0x35 & dst & simm & simm64 & Jdest { if (dst >= simm64) goto Jdest; }
+:jge dst, src, Jdest is opc=0x3d & dst & src & Jdest { if (dst >= src) goto Jdest; }
+:jne dst, simm, Jdest is opc=0x55 & dst & simm & simm64 & Jdest { if (dst != simm64) goto Jdest; }
+:jne dst, src, Jdest is opc=0x5d & dst & src & Jdest { if (dst != src) goto Jdest; }
+:jsgt dst, simm, Jdest is opc=0x65 & dst & simm & simm64 & Jdest { if (dst s> simm64) goto Jdest; }
+:jsgt dst, src, Jdest is opc=0x6d & dst & src & Jdest { if (dst s> src) goto Jdest; }
+:jsge dst, simm, Jdest is opc=0x75 & dst & simm & simm64 & Jdest { if (dst s>= simm64) goto Jdest; }
+:jsge dst, src, Jdest is opc=0x7d & dst & src & Jdest { if (dst s>= src) goto Jdest; }
+:jlt dst, simm, Jdest is opc=0xa5 & dst & simm & simm64 & Jdest { if (dst < simm64) goto Jdest; }
+:jlt dst, src, Jdest is opc=0xad & dst & src & Jdest { if (dst < src) goto Jdest; }
+:jle dst, simm, Jdest is opc=0xb5 & dst & simm & simm64 & Jdest { if (dst <= simm64) goto Jdest; }
+:jle dst, src, Jdest is opc=0xbd & dst & src & Jdest { if (dst <= src) goto Jdest; }
+:jslt dst, simm, Jdest is opc=0xc5 & dst & simm & simm64 & Jdest { if (dst s< simm64) goto Jdest; }
+:jslt dst, src, Jdest is opc=0xcd & dst & src & Jdest { if (dst s< src) goto Jdest; }
+:jsle dst, simm, Jdest is opc=0xd5 & dst & simm & simm64 & Jdest { if (dst s<= simm64) goto Jdest; }
+:jsle dst, src, Jdest is opc=0xdd & dst & src & Jdest { if (dst s<= src) goto Jdest; }
+:jset dst, imm, Jdest is opc=0x45 & dst & imm & simm64 & Jdest { if ((dst & simm64) != 0) goto Jdest; }
+:jset dst, src, Jdest is opc=0x4d & dst & src & Jdest { if ((dst & src) != 0) goto Jdest; }
+:syscall Hashed is opc=0x85 & srcn=0 & Hashed { call Hashed; }
+:call Cdest is opc=0x85 & srcn=1 & Cdest { call Cdest; }
+:callx immreg is opc=0x8d & immreg { call [immreg]; }
+:exit is opc=0x95 { return [RA]; }

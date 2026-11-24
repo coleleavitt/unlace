@@ -177,6 +177,13 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 .as_str(),
         ));
     }
+    if option == "comcfg" {
+        return Some(Cow::Owned(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_comcfg::ComCfg>()
+                .as_str(),
+        ));
+    }
     if option == "kernelcache" {
         // The program's load options, or for a program loaded from the
         // environment the env bridge, which the `option` command also sets.

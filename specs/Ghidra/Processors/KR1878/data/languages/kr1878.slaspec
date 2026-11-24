@@ -1,0 +1,308 @@
+# Angstrem KR1878VE1 (TESEY core) processor specification.
+#
+# Written for this repository from the published instruction set (S. Shisharin,
+# B. Malashevich, "KR1878VE1 8-bit microcontroller", ChipNews 2000 no. 1,
+# table 3) and the Angstrem KR1878VE1 datasheet. See ../../README.md.
+#
+# Program memory is 1K x 16-bit words (word addressed). Data memory is one
+# 256-byte space: peripheral registers 0x00-0x3F, RAM from 0x40. An operand
+# names one of four 8-byte windows (segments A-D) and an index 0-7; the
+# window base is the 8-aligned address held in service register SR0-SR3.
+# %d6 and %d7 are the indirect registers IR0 (address SR4, mode SR5[7:6]) and
+# IR1 (address SR6, mode SR7[7:6]; mode 00 reads program memory bytes).
+
+define endian=little;
+define alignment=2;
+
+define space code    type=ram_space size=2 wordsize=2 default;
+define space ram     type=ram_space size=1;
+define space hwstack type=ram_space size=1;
+define space dstack  type=ram_space size=1;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ SR0 SR1 SR2 SR3 SR4 SR5 SR6 SR7 ];
+define register offset=0x10 size=1 [ C Z S IE OF DC ];
+define register offset=0x20 size=2 [ PC ];
+define register offset=0x22 size=1 [ ISP DSP ];
+
+define pcodeop wait_for_interrupt;
+define pcodeop stop_oscillator;
+
+define token instr(16)
+	op15_13 = (13,15)
+	op15_11 = (11,15)
+	op15_10 = (10,15)
+	op15_8  = (8,15)
+	op15_5  = (5,15)
+	op15_4  = (4,15)
+	op15_3  = (3,15)
+	op15_1  = (1,15)
+	op15_0  = (0,15)
+	dseg  = (3,4)
+	didx  = (0,2)
+	sseg  = (8,9)
+	sidx  = (5,7)
+	imm8  = (5,12)
+	imm5  = (5,9)
+	tp    = (9,9)
+	tet   = (5,8)
+	ldrc  = (3,10)
+	srlo  = (0,2)
+	srmid = (5,7)
+	mask4 = (0,3)
+	addr10 = (0,9)
+	rcbit = (0,0)
+	mb0 = (0,0)
+	mb1 = (1,1)
+	mb2 = (2,2)
+	mb3 = (3,3)
+;
+
+attach variables [ srlo srmid ] [ SR0 SR1 SR2 SR3 SR4 SR5 SR6 SR7 ];
+
+macro setZS(r) {
+	Z = (r == 0);
+	S = (r s< 0);
+}
+
+macro addflags(a, b, r) {
+	C = carry(a, b);
+	OF = scarry(a, b);
+	DC = ((a & 0xF) + (b & 0xF)) > 0xF;
+	setZS(r);
+}
+
+macro subflags(a, b, r) {
+	C = a < b;
+	OF = sborrow(a, b);
+	DC = (a & 0xF) < (b & 0xF);
+	setZS(r);
+}
+
+macro logicflags(r) {
+	C = 0;
+	OF = 0;
+	DC = 0;
+	setZS(r);
+}
+
+# IR0: mode 00 = off (plain %d6), 01 = post-increment, 10 = post-decrement,
+# 11 = no change.
+macro ir0_ea(ea) {
+	local m:1 = SR5 >> 6;
+	ea = ((m == 0) * ((SR3 & 0xF8) | 6)) + ((m != 0) * SR4);
+	SR4 = SR4 + (m == 1) - (m == 2);
+}
+
+# IR1 in a data mode: like IR0 with SR6/SR7. In mode 00 the address is the
+# 11-bit program-memory byte address SR7[2:0]:SR6 and it post-increments.
+macro ir1_update(m) {
+	local pa:2 = ((zext(SR7 & 7) << 8) | zext(SR6)) + 1;
+	local pal:1 = pa(0);
+	SR6 = ((m == 0) * pal) + ((m != 0) * (SR6 + (m == 1) - (m == 2)));
+	SR7 = ((m == 0) * ((SR7 & 0xF8) | (pa(1) & 7))) + ((m != 0) * SR7);
+}
+
+# Destination (read-modify-write) operand, bits 4..0.
+D: "%a"^didx is dseg=0 & didx { local ea:1 = (SR0 & 0xF8) | didx; export *[ram]:1 ea; }
+D: "%b"^didx is dseg=1 & didx { local ea:1 = (SR1 & 0xF8) | didx; export *[ram]:1 ea; }
+D: "%c"^didx is dseg=2 & didx { local ea:1 = (SR2 & 0xF8) | didx; export *[ram]:1 ea; }
+D: "%d"^didx is dseg=3 & didx { local ea:1 = (SR3 & 0xF8) | didx; export *[ram]:1 ea; }
+D: "%d6"     is dseg=3 & didx=6 { local ea:1 = 0; ir0_ea(ea); export *[ram]:1 ea; }
+D: "%d7"     is dseg=3 & didx=7 {
+	local m:1 = SR7 >> 6;
+	local ea:1 = SR6;
+	ir1_update(m);
+	export *[ram]:1 ea;
+}
+
+# IR1 source read: program memory byte in mode 00, data memory otherwise.
+macro ir1_read(v) {
+	local m:1 = SR7 >> 6;
+	local pa:2 = (zext(SR7 & 7) << 8) | zext(SR6);
+	local w:2 = *[code]:2 (pa >> 1);
+	local sh:2 = w >> ((pa & 1) * 8);
+	local pb:1 = sh(0);
+	local ea:1 = SR6;
+	local dv:1 = *[ram]:1 ea;
+	v = ((m == 0) * pb) + ((m != 0) * dv);
+	ir1_update(m);
+}
+
+# Source operand, bits 9..5.
+Src: "%a"^sidx is sseg=0 & sidx { local ea:1 = (SR0 & 0xF8) | sidx; export *[ram]:1 ea; }
+Src: "%b"^sidx is sseg=1 & sidx { local ea:1 = (SR1 & 0xF8) | sidx; export *[ram]:1 ea; }
+Src: "%c"^sidx is sseg=2 & sidx { local ea:1 = (SR2 & 0xF8) | sidx; export *[ram]:1 ea; }
+Src: "%d"^sidx is sseg=3 & sidx { local ea:1 = (SR3 & 0xF8) | sidx; export *[ram]:1 ea; }
+Src: "%d6"     is sseg=3 & sidx=6 { local ea:1 = 0; ir0_ea(ea); export *[ram]:1 ea; }
+Src: "%d7"     is sseg=3 & sidx=7 { local v:1 = 0; ir1_read(v); export v; }
+
+# Source operand in bits 4..0 (mtpr).
+Src0: "%a"^didx is dseg=0 & didx { local ea:1 = (SR0 & 0xF8) | didx; export *[ram]:1 ea; }
+Src0: "%b"^didx is dseg=1 & didx { local ea:1 = (SR1 & 0xF8) | didx; export *[ram]:1 ea; }
+Src0: "%c"^didx is dseg=2 & didx { local ea:1 = (SR2 & 0xF8) | didx; export *[ram]:1 ea; }
+Src0: "%d"^didx is dseg=3 & didx { local ea:1 = (SR3 & 0xF8) | didx; export *[ram]:1 ea; }
+Src0: "%d6"     is dseg=3 & didx=6 { local ea:1 = 0; ir0_ea(ea); export *[ram]:1 ea; }
+Src0: "%d7"     is dseg=3 & didx=7 { local v:1 = 0; ir1_read(v); export v; }
+
+Tet: "0x"^tet is tp=0 & tet          { export *[const]:1 tet; }
+Tet: val     is tp=1 & tet [ val = tet << 4; ] { export *[const]:1 val; }
+
+Addr: addr10 is addr10 { export *[code]:2 addr10; }
+
+# Two-operand instructions.
+:mov D, Src is op15_10=0x01 & D & Src { local v:1 = Src; D = v; OF = 0; setZS(v); }
+:cmp D, Src is op15_10=0x02 & D & Src { local a:1 = D; local b:1 = Src; local r:1 = a - b; subflags(a, b, r); }
+:sub D, Src is op15_10=0x03 & D & Src { local a:1 = D; local b:1 = Src; local r:1 = a - b; subflags(a, b, r); D = r; }
+:add D, Src is op15_10=0x04 & D & Src { local a:1 = D; local b:1 = Src; local r:1 = a + b; addflags(a, b, r); D = r; }
+:and D, Src is op15_10=0x05 & D & Src { local r:1 = D & Src; D = r; logicflags(r); }
+:or  D, Src is op15_10=0x06 & D & Src { local r:1 = D | Src; D = r; logicflags(r); }
+:xor D, Src is op15_10=0x07 & D & Src { local r:1 = D ^ Src; D = r; logicflags(r); }
+
+# Literal instructions.
+:movl D, imm8 is op15_13=0x2 & D & imm8 { local v:1 = imm8; D = v; OF = 0; setZS(v); }
+:cmpl D, imm8 is op15_13=0x3 & D & imm8 { local a:1 = D; local b:1 = imm8; local r:1 = a - b; subflags(a, b, r); }
+:addl D, imm5 is op15_10=0x0C & D & imm5 { local a:1 = D; local b:1 = imm5; local r:1 = a + b; addflags(a, b, r); D = r; }
+:subl D, imm5 is op15_10=0x0B & D & imm5 { local a:1 = D; local b:1 = imm5; local r:1 = a - b; subflags(a, b, r); D = r; }
+:bic D, Tet is op15_10=0x0A & D & Tet { local r:1 = D & ~Tet; D = r; logicflags(r); }
+:bis D, Tet is op15_10=0x0E & D & Tet { local r:1 = D | Tet; D = r; logicflags(r); }
+:btg D, Tet is op15_10=0x0F & D & Tet { local r:1 = D ^ Tet; D = r; logicflags(r); }
+:btt D, Tet is op15_10=0x0D & D & Tet { local r:1 = D & Tet; logicflags(r); }
+
+# One-operand instructions.
+:swap D is op15_5=0x001 & D { local v:1 = D; local r:1 = (v << 4) | (v >> 4); D = r; logicflags(r); }
+:neg D is op15_5=0x002 & D {
+	local v:1 = D;
+	local r:1 = -v;
+	C = v != 0;
+	OF = v == 0x80;
+	DC = (v & 0xF) != 0;
+	D = r;
+	setZS(r);
+}
+:not D is op15_5=0x003 & D { local r:1 = ~D; D = r; OF = 0; setZS(r); }
+:shl D is op15_5=0x004 & D {
+	local v:1 = D;
+	local r:1 = v << 1;
+	C = (v >> 7) != 0;
+	OF = ((v ^ r) >> 7) != 0;
+	DC = 0;
+	D = r;
+	setZS(r);
+}
+:shr D is op15_5=0x005 & D {
+	local v:1 = D;
+	local r:1 = v >> 1;
+	C = (v & 1) != 0;
+	OF = 0;
+	DC = 0;
+	D = r;
+	Z = (r == 0);
+	S = 0;
+}
+:shra D is op15_5=0x006 & D {
+	local v:1 = D;
+	local r:1 = v s>> 1;
+	C = (v & 1) != 0;
+	OF = 0;
+	DC = 0;
+	D = r;
+	setZS(r);
+}
+:rlc D is op15_5=0x007 & D {
+	local v:1 = D;
+	local r:1 = (v << 1) | C;
+	C = (v >> 7) != 0;
+	OF = ((v ^ r) >> 7) != 0;
+	DC = 0;
+	D = r;
+	setZS(r);
+}
+:rrc D is op15_5=0x008 & D {
+	local v:1 = D;
+	local r:1 = (v >> 1) | (C << 7);
+	C = (v & 1) != 0;
+	OF = 0;
+	DC = 0;
+	D = r;
+	setZS(r);
+}
+:adc D is op15_5=0x009 & D { local a:1 = D; local b:1 = C; local r:1 = a + b; addflags(a, b, r); D = r; }
+:sbc D is op15_5=0x00A & D { local a:1 = D; local b:1 = C; local r:1 = a - b; subflags(a, b, r); D = r; }
+
+# Service registers and the status register.
+:ldr srlo, ldrc is op15_11=0x04 & srlo & ldrc { srlo = ldrc; }
+:mtpr srmid, Src0 is op15_8=0x02 & srmid & Src0 { srmid = Src0; }
+:mfpr D, srmid is op15_8=0x03 & srmid & D { D = srmid; }
+:push srlo is op15_3=0x002 & srlo { *[dstack]:1 DSP = srlo; DSP = DSP + 1; }
+:pop srlo is op15_3=0x003 & srlo { DSP = DSP - 1; srlo = *[dstack]:1 DSP; }
+:sst "0x"^mask4 is op15_4=0x018 & mask4 & mb0 & mb1 & mb2 & mb3 {
+	C = C | mb0;
+	Z = Z | mb1;
+	S = S | mb2;
+	IE = IE | mb3;
+}
+:cst "0x"^mask4 is op15_4=0x01C & mask4 & mb0 & mb1 & mb2 & mb3 {
+	C = C & (mb0 ^ 1);
+	Z = Z & (mb1 ^ 1);
+	S = S & (mb2 ^ 1);
+	IE = IE & (mb3 ^ 1);
+}
+:tof is op15_0=0x0004 { Z = OF; }
+:tdc is op15_0=0x0005 { Z = DC; }
+
+# Control transfer: absolute 10-bit word addresses, an 8-entry return stack.
+:jmp Addr is op15_10=0x20 & Addr { goto Addr; }
+:jsr Addr is op15_10=0x24 & Addr {
+	*[hwstack]:2 ISP = inst_next;
+	ISP = ISP + 2;
+	call Addr;
+}
+:jz  Addr is op15_10=0x28 & Addr { if (Z == 1) goto Addr; }
+:jnz Addr is op15_10=0x2C & Addr { if (Z == 0) goto Addr; }
+:jns Addr is op15_10=0x30 & Addr { if (S == 0) goto Addr; }
+:js  Addr is op15_10=0x34 & Addr { if (S == 1) goto Addr; }
+:jnc Addr is op15_10=0x38 & Addr { if (C == 0) goto Addr; }
+:jc  Addr is op15_10=0x3C & Addr { if (C == 1) goto Addr; }
+
+:ijmp is op15_0=0x0003 {
+	local t:2 = (zext(SR7 & 3) << 8) | zext(SR6);
+	goto [t];
+}
+:ijsr is op15_0=0x0007 {
+	local t:2 = (zext(SR7 & 3) << 8) | zext(SR6);
+	*[hwstack]:2 ISP = inst_next;
+	ISP = ISP + 2;
+	call [t];
+}
+:rts is op15_0=0x000C {
+	ISP = ISP - 2;
+	local ra:2 = *[hwstack]:2 ISP;
+	return [ra];
+}
+:rtsc rcbit is op15_1=0x0007 & rcbit {
+	C = rcbit;
+	ISP = ISP - 2;
+	local ra:2 = *[hwstack]:2 ISP;
+	return [ra];
+}
+:rti is op15_0=0x000D {
+	DSP = DSP - 1;
+	local rs:1 = *[dstack]:1 DSP;
+	C = (rs & 1) != 0;
+	Z = (rs & 2) != 0;
+	S = (rs & 4) != 0;
+	IE = (rs & 8) != 0;
+	OF = (rs & 0x10) != 0;
+	DC = (rs & 0x20) != 0;
+	ISP = ISP - 2;
+	local ra:2 = *[hwstack]:2 ISP;
+	return [ra];
+}
+
+# Special instructions.
+:nop is op15_0=0x0000 { }
+:wait is op15_0=0x0001 { IE = 1; wait_for_interrupt(); }
+:reset is op15_0=0x0002 { ISP = 0; DSP = 0; }
+:sksp is op15_0=0x0006 { ISP = ISP - 2; }
+:stop is op15_0=0x0008 { IE = 1; stop_oscillator(); }

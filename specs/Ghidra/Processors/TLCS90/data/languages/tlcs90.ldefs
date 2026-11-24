@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="TLCS90"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="tlcs90.sla"
+            processorspec="tlcs90.pspec"
+            id="TLCS90:LE:16:default">
+    <description>Toshiba TLCS-90 (TMP90C840/TMP90C841/TMP90C844 family), 64 KiB address space</description>
+    <compiler name="default" spec="tlcs90.cspec" id="default"/>
+  </language>
+</language_definitions>

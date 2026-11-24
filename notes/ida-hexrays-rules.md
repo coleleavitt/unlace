@@ -1,4 +1,4 @@
-# Named Hex-Rays 9.5 rules, and which have an unlace equivalent (2026-11-24)
+# Named Hex-Rays 9.5 rules, and which have an unlace equivalent (2026-11-24, refreshed at `b56a3b7210`)
 
 New gaps beyond the top 10 of `notes/ida-gaps.md`, mined from the rule names Hex-Rays logs. hexx64
 references 313 upper-case identifier strings; about 170 are names of transformations it prints when a
@@ -20,9 +20,9 @@ meaning is read from its pseudocode (microcode opcodes: 4 mov, 42 jcnd, 43-52 co
 | Hex-Rays rule | function | what it does | unlace |
 |---|---|---|---|
 | `REMOVE_USELESS_JX`, `_JX2`, `_JX3`, `_JX_JXE`, `_JZ_JNZ`, `_JX_VALRANGES`, `REMOVE_USELESS_FP_JX`, `REMOVE_USELESS_SET` | `sub_189100`..`sub_189AD0`, `sub_185980` | delete a conditional jump whose two targets lead to the same block, or whose outcome value ranges decide | yes: Ghidra dead-branch rules + `rangefold`, `condfold` |
-| `REMOVE_IDENTICAL_JX` | `sub_18A300` | a conditional jump repeated in a single-predecessor chain of blocks is decided by the first | partial: `rangefold` ("a range check repeated inside the branch of the same check") |
+| `REMOVE_IDENTICAL_JX` | `sub_18A300` | a conditional jump repeated in a single-predecessor chain of blocks is decided by the first | partial: `rangefold` ("a range check repeated inside the branch of the same check"), `phithread` (#286) when the repeated test reads a merged constant |
 | `OPTIMIZE_IDENTICAL_BLOCKS` | `sub_18D3A0` | merge identical predecessor blocks ending in a goto (gated by an mba flag 0x1000) | partial: `dedupitetail`, after structuring, print tree only |
-| `EXTRACT_EQUAL_IF_TAIL_INSNS`, `EXTRACT_IDENTICAL_HEAD_IF_INSNS`, `REMOVE_IF_BRANCH` | `sub_18CAD0`, `sub_18CF30` | hoist identical leading/trailing instructions of both arms out of the if, on microcode with def/use checks | partial: `dedupitetail` (same idea on the print tree, leaf blocks only) |
+| `EXTRACT_EQUAL_IF_TAIL_INSNS`, `EXTRACT_IDENTICAL_HEAD_IF_INSNS`, `REMOVE_IF_BRANCH` | `sub_18CAD0`, `sub_18CF30` | hoist identical leading/trailing instructions of both arms out of the if, on microcode with def/use checks | yes: `armhoist` (#305, default off; `p2_lift/kuna_armhoist.rs`, pre-SSA, before structuring), plus `dedupitetail` on the print tree |
 | `CONVERT_IF_TO_SET`, `RECOGNIZE_SETNZ`/`2`, `RECOGNIZE_SETZ`/`SETX` | `sub_18D990`, `sub_18DE60`.. | `if (c) x = 1; else x = 0;` -> `x = c` (both arms one `mov` of 0/1 to the same place) | yes: `iteboolean` (after structuring) and Ghidra's boolean rules |
 | `FLATTEN_JNS` | `sub_18BE40` | a block that starts with an `add` followed only by flag-setting `set*` ops feeding a sign jump is folded into the comparison | unclear; check on a -O2 `if (a + b < 0)` shape |
 | `INVERT_JX_GOTO` | `sub_18ABC0` | invert a conditional jump to drop a goto | yes: structurer |
@@ -30,19 +30,19 @@ meaning is read from its pseudocode (microcode opcodes: 4 mov, 42 jcnd, 43-52 co
 | `REMOVED SECURITY COOKIE` | `sub_18E880` | drop the cookie check before return | yes: `msvcstackguard`, `stackguard` |
 | `SDIV_POWER2`, `SDIVMOD_POWER2`, `SDIV2A`/`2B`, `SMOD2` | `sub_18E9B0`, `sub_18AE70`, `sub_18B8D0`.. | signed division/remainder by 2^k | yes: `pow2select` |
 | **`UMOD`, `UMOD-30BIT`** | `sub_12DD80` | an unsigned remainder by an odd constant n written as a fold of 30- or 32-bit chunks: it computes the multiplicative order of 2 mod n (up to 64) and requires it to divide 30 or 32 | **probably none** (Ghidra's `RuleDivOpt` handles magic multiplies, not chunk folding); verify with `x % 3`, `x % 5` at -O2 on a 32-bit target |
-| `CMP64-JMP2`, `CMP64-VALRANGES-JMP2`, `JNZ64`, `UNSIGNED-CMP64`, `SAR64`, `SAR2-64`, `DEMOTE64` | `sub_129AD0`, `sub_E1990` | 64-bit compares/shifts on 32-bit targets; DEMOTE64 narrows 64-bit ops whose high half is zero | partial: `kuna_borrowcompare`, `pairparam` (#239), `double.rs`; ordered split compares left (gap 8) |
-| `BACKPROP_CC %d` | `sub_18F960` | a conditional jump whose condition has several known values from different predecessors (value ranges) is decided per predecessor and those edges are redirected (jump threading) | partial: Ghidra's `ActionConditionalExe` covers the boolean case; check multi-predecessor threading |
+| `CMP64-JMP2`, `CMP64-VALRANGES-JMP2`, `JNZ64`, `UNSIGNED-CMP64`, `SAR64`, `SAR2-64`, `DEMOTE64` | `sub_129AD0`, `sub_E1990` | 64-bit compares/shifts on 32-bit targets; DEMOTE64 narrows 64-bit ops whose high half is zero | partial: `kuna_borrowcompare`, `pairparam` (#239), `armpairparam` (#272), `double.rs`; ordered split compares left (gap 8) |
+| `BACKPROP_CC %d` | `sub_18F960` | a conditional jump whose condition has several known values from different predecessors (value ranges) is decided per predecessor and those edges are redirected (jump threading) | partial: Ghidra's `ActionConditionalExe` covers the boolean case; `phithread` (#286, default off) threads a join whose branch is decided by constant MULTIEQUAL inputs per predecessor. Left: threading on value ranges (not constants) |
 | `MERGE_SWITCH_TREES`, `MERGE_GUARDED_SWITCHES`, `ABSORB_EQ_GUARD` | `sub_2F5E60`, `sub_2F6EB0` | join switch trees and guarded tables into one switch | yes: `switchmerge`, `switchguardmerge`, `loweredswitch` |
 | `RESOLVE_TABLE_JUMP`, `RESOLVE_INSN_TABLE_JUMP` | `sub_1E21E0` | jump tables | yes |
-| `UNMERGE_CALLS`, `BREAK_PHI_ARM_MERGES` | `sub_191D80`, `sub_1915E0` | see `notes/ida-unmerge.md` | partial |
+| `UNMERGE_CALLS`, `BREAK_PHI_ARM_MERGES` | `sub_191D80`, `sub_1915E0` | see `notes/ida-unmerge.md` | yes, opt-in: `returndup calls` (call tails, one-successor call blocks #293, `CALLIND` blocks #299) and `phithread` (#286) |
 
 ## 2. Language constructs in the ctree
 
 | Hex-Rays rule | function | what it does | unlace |
 |---|---|---|---|
-| **`SYNC_BLOCK`**, **`MONITOR-EXIT`** | `sub_2FA2B0`, `sub_2FA620` | a block bracketed by `monitor-enter(x)` / `monitor-exit(x)` with the catch-all exit handler becomes `synchronized (x) { }` (Dalvik; `is_synchronized` in `sub_455600`) | `javasync` (default off): `p2_lift/kuna_javasync.rs` reads the handler, `printc/kuna_javasyncprint.rs` prints `synchronized (x) { }` |
-| **`MAKE_FINALLY`** | `sub_2FB550` | a `catch (...)` as the last handler whose body ends by rethrowing, with the same code duplicated on the normal path, becomes `finally { }` | `javasync` for DEX (default off): byte-equal copies of F at each range end; MSVC EH still none |
-| `CREATE_TRY`, `TRY-1`, `THROW-1` | `sub_2FCD20`, `sub_2E1170`, `sub_2E1C60` | build try/throw items | yes for Itanium (`itaniumeh`) and DEX (`javatry`); MSVC open (`notes/ida-msvc-eh.md`) |
+| **`SYNC_BLOCK`**, **`MONITOR-EXIT`** | `sub_2FA2B0`, `sub_2FA620` | a block bracketed by `monitor-enter(x)` / `monitor-exit(x)` with the catch-all exit handler becomes `synchronized (x) { }` (Dalvik; `is_synchronized` in `sub_455600`) | yes (#311): `javasync` (default off): `p2_lift/kuna_javasync.rs` reads the handler, `printc/kuna_javasyncprint.rs` prints `synchronized (x) { }` |
+| **`MAKE_FINALLY`** | `sub_2FB550` | a `catch (...)` as the last handler whose body ends by rethrowing, with the same code duplicated on the normal path, becomes `finally { }` | yes for DEX (#311, `javasync`, default off): byte-equal copies of F at each range end; MSVC `__finally` funclets are spliced as cleanup pads under `msvceh` (#323, #334) |
+| `CREATE_TRY`, `TRY-1`, `THROW-1` | `sub_2FCD20`, `sub_2E1170`, `sub_2E1C60` | build try/throw items | yes for Itanium (`itaniumeh`), DEX (`javatry`) and MSVC (`msvceh`, default off: try/catch from catch funclets #308/#317, `__except` #310/#327, `throw` #314; `notes/ida-msvc-eh.md`) |
 | `ENSURE_CORRECT_INTEGER_PROMOTION`, `NEGATE_CONSTANT` | `sub_2EF2F0` | cast placement so C's promotions give the machine result; print `x - 5` not `x + -5` | yes in substance (Ghidra cast rules, `castternary`, `castimplied`) |
 | `AUTOCONV_TO_ENUM`, `AUTOCONV_CPP_CONST` | `sub_2D8BD0` | convert a constant compared with or assigned to an enum-typed value to the enum member; C++ const conversions | partial: Ghidra prints enum members for enum-typed varnodes; no automatic retyping |
 
@@ -80,9 +80,9 @@ Ctree maturity levels in the same binary (`sub_46C7E0`): `CMAT_ZERO`, `CMAT_BUIL
 
 | # | gap | value | size |
 |---|---|---|---|
-| 1 | ~~`saturated_mul`~~ (done: option `satmul`): fold the checked `n * sizeof(T)` before `operator new[]` (x86 `mul` + `jo`/`seto`, clang `__builtin_mul_overflow` lowering, AArch64 `umulh` + `cmp`) into one helper | M (every C++ `new T[n]`) | S |
-| 2 | Java `synchronized` and `finally` on DEX, extending `javatry` | M (Android) | S-M |
-| 3 | Pre-structuring hoist of identical arm heads/tails (EXTRACT_*), so the hoisted code is not structured twice | M (GED) | M |
+| 1 | ~~`saturated_mul`~~ (done: option `satmul`, #303): fold the checked `n * sizeof(T)` before `operator new[]` (x86 `mul` + `jo`/`seto`, clang `__builtin_mul_overflow` lowering, AArch64 `umulh` + `cmp`) into one helper | M (every C++ `new T[n]`) | S |
+| 2 | ~~Java `synchronized` and `finally` on DEX, extending `javatry`~~ (done: option `javasync`, #311) | M (Android) | S-M |
+| 3 | ~~Pre-structuring hoist of identical arm heads/tails (EXTRACT_*), so the hoisted code is not structured twice~~ (done: option `armhoist`, #305; default off, not yet measured) | M (GED) | M |
 | 4 | Remainder by small odd constants via chunk folding (UMOD-30BIT), after a measurement shows the shape exists in our corpora | L | S |
-| 5 | Jump threading on value ranges per predecessor (BACKPROP_CC) | L-M | M |
+| 5 | Jump threading on value ranges per predecessor (BACKPROP_CC); the constant case is `phithread` (#286) | L-M | M |
 | 6 | Enum auto-conversion of constants (AUTOCONV_TO_ENUM) where a value is typed enum by a prototype | L-M | S |

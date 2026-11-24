@@ -48,6 +48,7 @@
 @include "riscv.zcb.sinc"
 @include "riscv.hints.sinc"
 @include "riscv.zabha.sinc"
+@include "riscv.zacas.sinc"
 @if FPSIZE == "32" || FPSIZE == "64" || FPSIZE == "128"
 @include "riscv.zfh.sinc"
 @include "riscv.zfa.sinc"

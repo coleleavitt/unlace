@@ -4521,8 +4521,48 @@ trees have different polynomials. The normal form is rebuilt from the
 polynomial: its degree-0 and degree-1 part through the candidates above, and
 each higher-degree monomial as a product of conjunctions with its coefficient.
 The example gives `x * y`. The degree is capped at 4 and the polynomial at 128
-monomials. A bitwise operator over arithmetic (`(x + y) & z`) has no polynomial,
-so the rule leaves that tree alone.
+monomials. A bitwise operator over arithmetic (`(x + y) & z`) has no polynomial;
+such a tree goes to the nonlinear path below.
+
+**Nonlinear MBA.** Obfuscators also hide a constant key under arithmetic read by
+bitwise ops: Apple's CoreADI writes `x ^ 0xcedb25b9` as
+`((2*x | 0x6c36fd7a) - x) + 0xc9e48143 ^ 0xf8c05b04`, and splits others over two
+statements (`v = ((2*x & 0xff9fb7f8) ^ 0xd5101720) + (x ^ 0x1547f06d)`, then
+`(v - ((2*v + 0x604808) & 0x4cc9184e)) + 0x2694b02b`, which is
+`x ^ 0xcceca7b6`). Above, `2*x` read by `|` is a leaf, so no linear reading
+exists. When neither collection folds a tree that has both a bitwise and an
+arithmetic op, the tree is collected a third time with every arithmetic op
+under a bitwise op and every op with several readers inlined (still at most 48
+nodes) and constants kept as numbers rather than leaves, and it goes on when it
+has at most three leaves. Constants as numbers also catch keys a compiler split
+apart: `(x ^ 0xc0d76561) + 2*(x & 0x40d76561)` (the top bit of the and-mask
+shifted out) and `(x ^ 0x40d76561) + 0x80000000` are `x + 0xc0d76561` and
+`x ^ 0xc0d76561`, but as leaves the two masks are unrelated. An `INT_LEFT` by a
+constant below the width is read as a multiply by its power of two, in every
+collection (AArch64 keeps `(x & m) << 1` where x86 has `x * 2`). Its candidates, a small table tried cheapest first:
+
+- the linear MBA built from its values on the 0/1 points (the candidates
+  above), which covers `x + c`, `c - x` and any linear MBA;
+- the same for the tree xor its value `k` at all-zero leaves, xor-ed back with
+  `k`, which covers `x ^ c`, `(x + y) ^ c` and `x ^ y ^ c`;
+- for one leaf, `x | k` and `x & f(-1)`.
+
+Agreement on 0/1 points proves nothing for these trees, so a candidate with
+fewer ops that agrees on the 64 random inputs must also be proven, the job z3
+does in gooMBA (strings `MBA_Z3_TIMEOUT`, `Satisfiable. Counterexample:`). The
+proof needs no solver. Every op except a product of two non-constant terms is
+a bit-serial circuit: bit `i` of its result depends only on bit `i` of its
+operands plus a small state. That state is the carry of `+`, the borrow of
+`-` and negation, or for a multiply by a constant `c` the last
+`bitlen(c) - 1` bits of the operand plus the carry (a multiplier wider than 16
+bits is run as the negation of its negation when that is narrow, else the
+proof gives up). Both sides are built into one circuit, equal gates over equal
+operands built once so shared terms share their state, and run from bit 0 to
+the root's width: at each bit every reachable state is stepped with every
+combination of the leaves' bits, and the set of next states is kept. Two
+outputs that differ at a reachable state are a counterexample; none differing
+at any bit is a proof at that width. More than 1024 states, a product, or a
+multiplier too wide means no proof and no rewrite.
 
 The replacement is applied only when it has fewer ops than the tree and 64
 pseudo-random full-width evaluations agree with it. The new ops go before the
@@ -4536,5 +4576,6 @@ computes reuses that varnode. Not done: a narrower op under a zero extension
 (`uint8_t` operands promoted to `int`) is a size change, and the tree stops
 there. Cost with
 the option on: +0.67% instructions over `/usr/bin/patchelf` decompile-all, with
-no function changed. Not done: the I/O-fingerprint oracle for expressions that
-are neither linear nor polynomial MBA.
+no function changed. Not done: candidates beyond the table above (gooMBA's
+precomputed oracle of simplest forms indexed by I/O fingerprint), products of
+two non-constant terms in a nonlinear tree, and more than three leaves there.

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<compiler_spec>
+  <data_organization>
+    <pointer_size value="1"/>
+  </data_organization>
+  <global>
+    <range space="code"/>
+    <range space="ram"/>
+  </global>
+  <stackpointer register="ISP" space="hwstack" growth="positive"/>
+  <returnaddress>
+    <varnode space="stack" offset="-2" size="2"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="default" extrapop="-2" stackshift="-2" strategy="register">
+      <input>
+      </input>
+      <output>
+      </output>
+      <unaffected>
+        <register name="ISP"/>
+        <register name="DSP"/>
+      </unaffected>
+    </prototype>
+  </default_proto>
+</compiler_spec>

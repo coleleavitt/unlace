@@ -379,6 +379,7 @@ define token instr (16)
   op1215=(12, 15)
   sop1215=(12, 15) signed
   Ra1215=(12, 15)
+  Re1215=(12, 15)
   Rpe1215=(12, 15)
   Rpo1215=(12, 15)
   op1515=(15, 15)
@@ -427,7 +428,7 @@ define token instr2 (16)
 
 
 attach variables [ Rd0811 Rd1215 Rd2427 Rd2831 ] [ d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 d10 d11 d12 d13 d14 d15 ];
-attach variables [ Re0811 Re2427 Re2831 ] [ e0 _ e2 _ e4 _ e6 _ e8 _ e10 _ e12 _ e14 _ ];
+attach variables [ Re0811 Re1215 Re2427 Re2831 ] [ e0 _ e2 _ e4 _ e6 _ e8 _ e10 _ e12 _ e14 _ ];
 attach variables [ ReN0811 ] [ e2 _ e4 _ e6 _ e8 _ e10 _ e12 _ e14 _ e0 _ ];
 attach variables [ Ree0811 Ree2427 Ree2831 ] [ d0 _ d2 _ d4 _ d6 _ d8 _ d10 _ d12 _ d14 _];
 attach variables [ Reo0811 Reo2427 Reo2831 ] [ d1 _ d3 _ d5 _ d7 _ d9 _ d11 _ d13 _ d15 _];
@@ -1968,6 +1969,7 @@ SC: [a10]const0815Z10zz is PCPMode=0 & a10 & const0815Z10zz & op0003=8 & op0404=
 }
 
 @if defined(TRICORE_V2)
+@ifndef TRICORE_TC18
 # CRC32 D[c], D[b], D[a] (RR)
 :crc32 Rd2831,Rd1215,Rd0811 is PCPMode=0 & Rd0811 & Rd1215 & op0007=0x4b ; Rd2831 & op1627=0x30
 {
@@ -1975,6 +1977,7 @@ SC: [a10]const0815Z10zz is PCPMode=0 & a10 & const0815Z10zz & op0003=8 & op0404=
 	#      crc is crc32, initial value of Rd1215 should be zero
 	Rd2831 = crc32(Rd1215, Rd0811);
 }
+@endif
 @endif
 
 # CSUB D[c], D[d], D[a], D[b] (RRR)
@@ -8545,5 +8548,9 @@ macro multiply_u_u(mres0, rega, regb, n) {
 # }
 # @endif
 
+
+@if defined(TRICORE_TC18)
+@include "tricore.tc18.sinc"
+@endif
 
 @include "tricore.pcp.sinc"

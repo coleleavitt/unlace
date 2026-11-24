@@ -4305,6 +4305,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::Msvceh>()
                 .0
         }
+        "delphi" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Delphi>()
+                .0
+        }
         // (kuna, NOVEL) Itanium (GCC/Clang) RTTI + vtable recovery — the class
         // names, typeinfo/vtable labels and per-slot virtual-method names are
         // computed at LOAD but COMMITTED only when this gate is on. Default-OFF
@@ -7041,6 +7046,25 @@ fn commit_analysis_output(
         out.data_objects.retain(|d| !typed.contains(&d.addr));
         out.typed_data.splice(0..0, dwarf_globals);
     }
+    // 0e. (kuna `dwarfdecls`) An import's DWARF declaration types its calls where
+    //     no other prototype fact names that import or its entry.
+    let dwarf_decls = std::mem::take(&mut out.dwarf_decl_prototypes);
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Dwarfdecls>()
+        .0
+    {
+        let named: std::collections::BTreeSet<String> =
+            out.prototypes.iter().map(|p| p.name.clone()).collect();
+        let placed: std::collections::BTreeSet<u64> =
+            out.prototypes_at.iter().map(|(at, _)| *at).collect();
+        out.prototypes_at.extend(
+            dwarf_decls
+                .into_iter()
+                .filter(|(at, p)| !placed.contains(at) && !named.contains(&p.name)),
+        );
+    }
     let go_prototypes = if prog
         .arch()
         .kuna_options
@@ -9028,6 +9052,9 @@ fn commit_analysis_output(
     // 7c. An Objective-C direct method's `self`, the same unlocked hint; a
     //     function Swift already hinted keeps that one.
     commit_input_hints(prog, code_space, &out.objc_self_hints);
+    // 7c''. (kuna `dextrpc`) A DriverKit instance method's `this`, the same
+    //       unlocked hint.
+    commit_input_hints(prog, code_space, &out.dext_this_hints);
     // 7c'. (kuna `goitabcalls`) A stripped Go function's interface table word,
     //      typed from the static itabs its callers pass; a function another
     //      source already hinted keeps that hint.

@@ -1,0 +1,2 @@
+@define CHIP8_VIP ""
+@include "chip8.sinc"

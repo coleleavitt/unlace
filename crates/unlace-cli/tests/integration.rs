@@ -20,6 +20,8 @@ mod kr1878_raw;
 mod m6800_family;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
+#[path = "nios2_raw.rs"]
+mod nios2_raw;
 #[path = "pdp11_raw.rs"]
 mod pdp11_raw;
 #[path = "moxie_raw.rs"]

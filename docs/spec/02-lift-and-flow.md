@@ -4289,8 +4289,6 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
 | `M32R` | Renesas (Mitsubishi) M32R, M32RX, M32R2 | `M32R:BE:32:default` | written for unlace from the M32R software manuals and binutils CGEN `m32r.cpu` (semantics only); decode checked against `m32r-elf-objdump` 2.43.1, Apache-2.0 |
 | `PDP11` | DEC PDP-11 (base set, EIS, MFPS/MTPS) | `PDP-11:LE:16:default` | written for unlace from the DEC PDP-11 handbooks, Apache-2.0 |
-| `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
-| `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | written for unlace from the FT32 documentation and the binutils opcode table |
 <!-- vendor-rows -->
 
 ### DEC PDP-11 (#98)
@@ -4320,6 +4318,9 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `4004` | Intel 4004 / 4040 | `4004:LE:16:default` | Intel MCS-4 and MCS-40 Users Manuals | `unlace-cli/tests/i4004_raw.rs` |
 | `uPD7725` | NEC uPD7725 / uPD96050 DSP | `uPD7725:LE:16:default`, `uPD96050:LE:16:default` | NEC uPD7725 data sheet, necdsp notes, MAME `upd7725` | `unlace-cli/tests/upd7725.rs` |
 | `KR1878` | Angstrem KR1878VE1 (TESEY core) | `KR1878:LE:16:default` | ChipNews 2000/1 instruction table, Angstrem datasheet | `unlace-cli/tests/kr1878_raw.rs` |
+| `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | Moxie architecture page, binutils `moxie` opcode table | `unlace-cli/tests/moxie_raw.rs` |
+| `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | FT32 programmer documentation, binutils `ft32` opcode table, GCC `config/ft32` | `unlace-cli/tests/ft32_raw.rs` |
+| `NiosII` | Altera/Intel Nios II (R1) | `nios2:LE:32:R1`, `nios2:BE:32:R1` | Nios II Processor Reference Guide and ABI, binutils 2.43 `nios2` opcode table | `unlace-cli/tests/nios2_raw.rs` |
 | `2650` | Signetics 2650 / 2650A / 2650B | `2650:BE:16:default` | Signetics 2650 Microprocessor manual, 2650 data sheet | `unlace-cli/tests/s2650_raw.rs` |
 <!-- native-rows -->
 

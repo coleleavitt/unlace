@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="nios2"
+    endian="little"
+    size="32"
+    variant="R1"
+    version="1.0"
+    slafile="nios2_le.sla"
+    processorspec="nios2.pspec"
+    id="nios2:LE:32:R1">
+    <description>Altera/Intel Nios II (R1) little endian</description>
+    <compiler name="default" spec="nios2.cspec" id="default"/>
+    <external_name tool="gnu" name="nios2"/>
+  </language>
+  <language processor="nios2"
+    endian="big"
+    size="32"
+    variant="R1"
+    version="1.0"
+    slafile="nios2_be.sla"
+    processorspec="nios2.pspec"
+    id="nios2:BE:32:R1">
+    <description>Altera/Intel Nios II (R1) big endian</description>
+    <compiler name="default" spec="nios2.cspec" id="default"/>
+    <external_name tool="gnu" name="nios2"/>
+  </language>
+</language_definitions>

@@ -4126,8 +4126,9 @@ that reads either word is such a PIECE (`kuna_borrowcompare.rs
 (piece_input_pair)`): the function only ever uses the eight bytes together,
 as a soft-float caller does with a `double` it hands to `__aeabi_dadd`, which
 printed `CONCAT44(a1,a0)` beside `unsigned int a0,unsigned int a1`. On 32-bit
-ARM the words are argument registers; this trigger fires only under
-`armpairparam`, on every target, since the i386 callers of the MSVC
+ARM the words are argument registers; this trigger fires only on an aligned
+argument register pair under `armpairparam` (`kuna_armpairparam.rs
+(joined_pair)`), never on stack words, since the i386 callers of the MSVC
 `__stdcall` helpers read their stack words the same way and keep
 `CONCAT44(a1,a0) / CONCAT44(a3,a2)` (stage `kuna-arithhelpers` #9). The rule merges the pair with
 `combine_input_varnodes` and marks the two SUBPIECEs it leaves as

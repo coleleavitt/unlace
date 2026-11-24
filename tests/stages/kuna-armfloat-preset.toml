@@ -19,8 +19,8 @@
 # Passes 3 and 4 run the soft-float object the same two ways: the image
 # states the base standard, so neither option fires and both passes print
 # every value in core registers. Its arithmetic calls the AEABI helpers,
-# which aeabifloat folds into the operators: scale returns the double
-# product in core registers.
+# which aeabifloat folds into the operators, and armpairparam takes scale's
+# double whole from r0:r1: double scale(double a0) returns a0 * 1.5.
 #
 # The hard-float passes also pin what the preset must leave alone.
 # scale_err converts a double to float on one exit and returns oflow's
@@ -222,8 +222,8 @@ count = 1
 literal = 'unsigned int scale(void)'
 
 [[match]]
-name = "armfloat preset #2: the preset takes and returns scale's double"
-count = 1
+name = "armfloat preset #2: the preset, and both soft-float passes from r0:r1, take and return scale's double"
+count = 3
 literal = 'double scale(double a0)'
 
 [[match]]
@@ -262,14 +262,14 @@ count = 0
 literal = 'NAN'
 
 [[match]]
-name = "armfloat preset #10: the soft-float image passes scale's double in core registers and returns the typed helper's double in both passes"
-count = 2
-literal = 'double scale(unsigned int a0,unsigned int a1)'
+name = "armfloat preset #10: scale multiplies its double parameter by 1.5 in the preset and in both soft-float passes"
+count = 3
+literal = 'a0 * 1.5'
 
 [[match]]
 name = 'armfloat preset #11: no soft-float function takes a double from a VFP register in either pass'
-count = 6
-regex = '(scale|mix|backfill)\((unsigned int|int|float) a0,unsigned int a1[,)]'
+count = 4
+regex = '(mix|backfill)\((int|float) a0,unsigned int a1,'
 
 [[match]]
 name = 'armfloat preset #12: the preset returns the NaN payload as a float, bit for bit'

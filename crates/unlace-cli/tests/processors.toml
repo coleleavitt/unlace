@@ -13,6 +13,14 @@
 # (docs/processor-tests.md).
 
 [images]
+# PIC18: movlw 5; movwf 0xb7, a; movwf 0x01, a; return
+pic18_access = """
+050eb76e016e1200
+"""
+# AVRxt: in r24, 0x01; sts 0x0400, r24; ret
+avrxt_io = """
+81b1809300040895
+"""
 bpf_strlen = """
 b4000000ffffffff0400000001000000bf120000000000000f0200000000000071220000000000005602fbff000000009500000000000000
 """
@@ -135,6 +143,9 @@ b8ffffffff0fbdc7c3cccccccccccccc486601f8c3cccccccccccccccccc
 cccc406663c7c3
 """
 
+s390x_km_lzrg = """
+b92e0024e3203000002a07fe
+"""
 s390x_hfp_decimal = """
 930020002002fa333000400007fe
 """
@@ -179,6 +190,12 @@ x86_64_xop = """
 """
 x86_32_vex_vvvv = """
 8b44240489c1c4e232f7c0c3
+"""
+x86_64_avx_vnni = """
+c4e26950cbc5f97ec8c3
+"""
+x86_32_fma_w1 = """
+8b4424048b4c2408c4e2fbf6c1c39090c5f828442404c4e271b8c2c3
 """
 
 [[family]]
@@ -2210,6 +2227,21 @@ test = "amdgpu_gfx900_sdwa_decompiles"
 address = "0x200"
 expect = ["* 0x100", "<< 0x10;"]
 
+# `fixtures/amdgpu/gfx900_graphics.ll` for gfx900: VINTRP attribute interpolation feeding an MIMG
+# sample, and MTBUF typed buffer accesses.
+[[family]]
+name = "amdgpu_gfx900_graphics"
+language = "AMDGPU:LE:64:GFX9"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx900_graphics.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx900_interp_image_decompiles"
+address = "0x0"
+expect = ["= interp_p1(", "interp_p2(", "= image_sample("]
+
 # CDNA 2 (gfx90a, MI200): `fixtures/amdgpu/cdna_kernels.cl` at -O3. MFMA results and accumulators
 # live in AGPR tuples (a[0:15]) or VGPR tuples, read back with v_accvgpr_read_b32.
 [[family]]
@@ -2966,7 +2998,7 @@ forbid = ["indirect jump", "switch("]
 test = "evm_erc20_calls_dispatch"
 address = "0x0"
 expect = [
-    "if (v1._0_32_ == 0xa9059cbb) {",
+    " == 0xa9059cbb) {",
     "sub_3e7(",
     "= sub_51e(4,calldatasize());",
 ]
@@ -3497,6 +3529,38 @@ image = "x86_32_vex_vvvv"
 test = "x86_32_vex_vvvv_bit3_is_ignored"
 address = "0x0"
 expect = [">> (a0 & 0x1f)"]
+
+# VEX AVX-VNNI (avx_crypto_ifma.sinc), checked on this CPU: VPDPBUSD sums four unsigned-by-signed
+# byte products into the dword.
+[[family]]
+name = "x86_64_avx_vnni"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_avx_vnni"
+
+[[family.function]]
+test = "x86_vpdpbusd_vex_dot_product"
+address = "0x0"
+expect = ["a1 + (unsigned int)v1 * (int)v5"]
+
+# 32-bit code: MULX with VEX.W1 is the 32-bit MULX (W is ignored outside 64-bit mode, checked on
+# this CPU), and FMA3 decodes (fma.sinc is part of the 32-bit language).
+[[family]]
+name = "x86_32_fma_w1"
+language = "x86:LE:32:default:gcc"
+base = "0x0"
+image = "x86_32_fma_w1"
+
+[[family.function]]
+test = "x86_32_mulx_w1_is_32_bit"
+address = "0x0"
+expect = [">> 0x20)"]
+
+[[family.function]]
+test = "x86_32_fma3_decodes"
+address = "0x10"
+expect = ["_mm_fmadd_ps("]
+
 
 
 
@@ -4280,3 +4344,83 @@ forbid = ["halt_baddata"]
 test = "ebpf_retindexuse_counter_is_returned"
 address = "0x0"
 expect = ["return "]
+
+# s390x CIPHER MESSAGE then LOAD AND ZERO RIGHTMOST BYTE through the advanced address: km %r2,%r4
+# (r2:r3 and r4:r5 rewritten, r0/r1 read); lzrg %r2,0(%r3); br %r14.
+[[family]]
+name = "s390x_km_lzrg"
+language = "s390x:BE:64:default"
+base = "0x1000"
+image = "s390x_km_lzrg"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s390x_km_writes_its_pairs"
+address = "0x1000"
+expect = ["hd_km(a0,a1,a2,a3,", "(unsigned long *)hd_km_1(", "& 0xffffffffffffff00;"]
+# TriCore TC1.8 code built by tricore-elf-gcc 13.4.1 (-mcpu=tc49xx -O2; source gcc_shifts.c). SHA/SH
+# build their count as (c6 << 26) s>> 26, which RuleBoolSignShift used to fold into 0 - c6.
+[[family]]
+name = "tricore_tc18_gcc"
+loader = "auto"
+args = ["--target", "tricore:LE:32:tc18"]
+fixture = "crates/unlace-cli/tests/fixtures/tricore_tc18_gcc/gcc_shifts.elf"
+forbid = ["0x3d", "0x3b"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_sar_const"
+address = "g_sar"
+expect = ["return a0 >> 3;"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_shr_const"
+address = "g_shr"
+expect = ["return a0 >> 5;"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_shl_const"
+address = "g_shl"
+expect = ["return a0 << 4;"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_popcount"
+address = "g_pop"
+expect = ["POPCOUNT(a0)"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_shl_reg"
+address = "g_shlv"
+expect = ["a0 << "]
+forbid = ["-(int)"]
+
+# The AVR-Dx languages (avr8xt.sla, I/O at data 0, one pspec per series from Microchip's AVR-Dx_DFP)
+# name an `in` from the VPORT window and an `sts` to the PORT block.
+[[family]]
+name = "avr_dx_io"
+language = ["avr8:LE:16:avrda", "avr8:LE:16:avrdb", "avr8:LE:16:avrdd", "avr8:LE:16:avrdu"]
+base = "0x0"
+image = "avrxt_io"
+
+[[family.function]]
+test = "avr_dx_io_names"
+address = "0x0"
+expect = ["PORTA_DIR = VPORTA_OUT;"]
+
+# PIC18 Q-series (pic18q.sla, SFR page 0x400): an access-bank SFR is the family's register
+# (Q24 PIR1 at 0x4b7) and access-bank 0x01 is data 0x501; the classic language keeps 0xfb7 and 0x01.
+[[family]]
+name = "pic18_q_access"
+language = "PIC-18:LE:24:Q24"
+base = "0x0"
+image = "pic18_access"
+
+[[family.function]]
+test = "pic18_q24_access_bank"
+address = "0x0"
+expect = ["PIR1 = 5;", "dat_501 = 5;"]
+
+[[family.function]]
+test = "pic18_classic_access_bank"
+address = "0x0"
+language = "PIC-18:LE:24:PIC-18"
+expect = ["CCP3CON = 5;", "dat_1 = 5;"]

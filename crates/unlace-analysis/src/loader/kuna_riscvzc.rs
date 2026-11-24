@@ -2,7 +2,9 @@
 //! attribute. The Zc code-size extensions reuse the `c.fsdsp` encoding space
 //! and exclude Zcd, so an image that declares `zcmp` or `zcmt` takes the
 //! `RISCV:LE:<size>:Zcmp` language, whose processor spec sets the `Zcmp`
-//! context bit; every other RISC-V image keeps the default selection.
+//! context bit. A 64-bit image that declares `q` takes `RISCV:LE:64:GQ`, whose
+//! f registers are 16 bytes (FLEN 128); every other RISC-V image keeps the
+//! default selection.
 use super::macho_trie::uleb;
 use object::read::elf::{ElfFile, FileHeader, ProgramHeader};
 use object::{Architecture, BinaryFormat, Object, ObjectSection};
@@ -177,6 +179,9 @@ pub fn language_id(file: &object::File<'_>) -> Result<Option<String>, &'static s
     let names = extensions(&arch);
     let has = |name: &str| names.iter().any(|n| n == name);
     if !has("zcmp") && !has("zcmt") {
+        if file.is_64() && file.is_little_endian() && has("q") {
+            return Ok(Some("RISCV:LE:64:GQ:gcc".to_string()));
+        }
         return Ok(None);
     }
     if has("zcd") || (has("c") && (has("d") || has("g") || has("q"))) {
@@ -191,6 +196,7 @@ pub fn language_ids() -> Vec<String> {
     vec![
         "RISCV:LE:32:Zcmp:gcc".to_string(),
         "RISCV:LE:64:Zcmp:gcc".to_string(),
+        "RISCV:LE:64:GQ:gcc".to_string(),
     ]
 }
 
@@ -261,6 +267,23 @@ mod tests {
                 assert_eq!(select(&bytes), Ok(Some(id.to_string())), "{arch}");
             }
         }
+    }
+
+    #[test]
+    fn q_selects_the_flen128_language_on_rv64() {
+        let bytes = elf(
+            true,
+            &[(
+                b".riscv.attributes",
+                attributes("rv64i2p1_m2p0_a2p1_f2p2_d2p2_q2p2_c2p0"),
+            )],
+        );
+        assert_eq!(select(&bytes), Ok(Some("RISCV:LE:64:GQ:gcc".to_string())));
+        let bytes = elf(
+            false,
+            &[(b".riscv.attributes", attributes("rv32i2p1_f2p2_d2p2_q2p2"))],
+        );
+        assert_eq!(select(&bytes), Ok(None));
     }
 
     #[test]

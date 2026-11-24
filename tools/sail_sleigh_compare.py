@@ -93,7 +93,7 @@ def objdump(path, objd, mattr, aliases):
             out[int(m.group(1), 16)] = norm(m.group(3).replace('\t', ' '))
     return out
 
-def unlace_disasm(path, unl, spec, n):
+def unlace_disasm(path, unl, spec, n, target=None):
     """{address: text or None} for the n 4-byte slots. A word the spec cannot decode prints as
     .byte and can leave the listing out of step with the slots, so after one the listing
     restarts at the next slot."""
@@ -101,6 +101,8 @@ def unlace_disasm(path, unl, spec, n):
     start, end = BASE, BASE + 4 * n
     while start < end:
         args = [unl, 'disassemble', path, '0x%x-0x%x' % (start, end), '--addr', '--json']
+        if target:
+            args += ['--target', target]
         if spec:
             args += ['--sleighpath', spec]
         d = json.loads(subprocess.run(args, capture_output=True, text=True).stdout)
@@ -127,7 +129,7 @@ def decode(a):
     llvm_na = objdump(path, a.objdump, a.mattr, False)
     llvm_al = objdump(path, a.objdump, a.mattr, True)
     specs = dict(s.split('=', 1) for s in a.spec)
-    dec = {k: unlace_disasm(path, a.unlace, v, len(words)) for k, v in specs.items()}
+    dec = {k: unlace_disasm(path, a.unlace, v, len(words), a.target) for k, v in specs.items()}
     scope = set(ref) | {'zext.w'}
     inscope = lambda t: bool(t) and t.split(' ')[0] in scope
     res = {k: {'sample': [0, 0], 'near': [0, 0], 'outside': 0, 'disagree': []} for k in specs}
@@ -623,6 +625,7 @@ def main():
         if name == 'decode':
             p.add_argument('--objdump', required=True)
             p.add_argument('--mattr', required=True)
+            p.add_argument('--target', help='the unlace language id to disassemble with (RISCV:LE:64:GQ)')
         else:
             p.add_argument('--vectors', type=int, default=16)
             p.add_argument('--qemu')

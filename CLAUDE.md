@@ -69,11 +69,13 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   speculative recovery, a speed trade, a heuristic scanner); a strict correctness fix
   ships unconditional, and a refinement extends the option it refines. New logic goes in
   a `kuna_<slug>.rs` module in its owning phase folder (template:
-  `p2_lift/kuna_loweredswitch.rs`). Adding or dropping an option also changes hard-coded
-  catalog counts (`kuna_phases/tests.rs`, `tests/catalog_bytecompat.rs`,
-  `tests/fixtures/phase_catalog.json`). Recount them from `phases.toml` after merging main, never
-  add +1 to each side. `tests/stages/kuna-catalog.toml` computes its bucket counts from the
-  compiled catalog at test time and needs no edit.
+  `p2_lift/kuna_loweredswitch.rs`). Adding or dropping an option changes only
+  `tests/fixtures/phase_catalog.json` (the byte-compat capture) and `docs/options.md`, both
+  regenerated, never hand-counted: the counts in `kuna_phases/tests.rs` and
+  `tests/catalog_bytecompat.rs` are read from `phases.toml`, a `live_field` row is the only
+  kind with a codegen live reader, and `tests/stages/kuna-catalog.toml` computes its bucket
+  counts from the compiled catalog. Run `cargo test -p unlace-middle --lib kuna_phases` after
+  any catalog edit.
 - **The spec is live**: describe every feature/behavior change in prose in the owning
   `docs/spec/` chapter in the same change; run `python3 tools/check_spec.py`.
 - **Speed is a core principle**: a new default-ON must change 0/675 datatest assertions and

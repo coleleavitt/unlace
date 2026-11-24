@@ -1738,9 +1738,9 @@ impl Architecture {
         }
     }
 
-    /// (unlace `protomerge`) Park a load-time prototype like
+    /// (unlace) Park a load-time prototype like
     /// [`Self::set_function_prototype_pieces_at`], merged slot by slot with the
-    /// one already parked there (`protomerge::merge`) when the option is on.
+    /// one already parked there (`protomerge::merge`).
     pub fn merge_function_prototype_pieces_at(
         &mut self,
         addr: &Address,
@@ -1768,15 +1768,8 @@ impl Architecture {
         pieces: crate::fspec::PrototypePieces,
     ) {
         let merged = match self.symboltab.function_proto_pieces_of(sid) {
-            Some(old)
-                if self
-                    .unlace_options
-                    .get::<crate::coreoptions::Protomerge>()
-                    .0 =>
-            {
-                (self.pass_hooks().protomerge_merge)(old, pieces)
-            }
-            _ => pieces,
+            Some(old) => (self.pass_hooks().protomerge_merge)(old, pieces),
+            None => pieces,
         };
         self.symboltab.set_function_proto_pieces(sid, merged);
     }

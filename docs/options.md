@@ -940,9 +940,6 @@ Three tiers:
 | a char array literal appears at an address inside a function's code | [`codestrings`](#codestrings----on--off-default-on) |
 | instruction bytes print as a four-character string literal | [`codestrings`](#codestrings----on--off-default-on) |
 | a function pointer argument renders as a short garbage string | [`codestrings`](#codestrings----on--off-default-on) |
-| a libc function's FILE * parameter becomes void * because a later source declared it | [`protomerge`](#protomerge----on--off-default-on) |
-| a demangled C++ class pointer parameter is replaced by unsigned long | [`protomerge`](#protomerge----on--off-default-on) |
-| a dwarf prototype erases a parameter name the library table gave | [`protomerge`](#protomerge----on--off-default-on) |
 | a sub_ entry starts on a literal pool word one word before a real function | [`aifpoolslide`](#aifpoolslide----on--off-default-on) |
 | a stripped arm function list lists a function 4 bytes early | [`aifpoolslide`](#aifpoolslide----on--off-default-on) |
 | a function's first decoded instruction is a conditional addvs or a movs r0,#0 that no code reaches | [`aifpoolslide`](#aifpoolslide----on--off-default-on) |
@@ -3542,13 +3539,6 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/code-data-partition · unlace · correctness-fix · unlace-codestrings
 - **Example:** `--option codestrings off`
 
-### `protomerge` -- on | off, default `on`
-
-- **Symptoms:** a libc function's FILE * parameter becomes void * because a later source declared it; a demangled C++ class pointer parameter is replaced by unsigned long; a dwarf prototype erases a parameter name the library table gave.
-- **What it does:** Merge the prototypes the load-time sources park on one function slot by slot instead of letting the later source replace the earlier wholesale. The libc tables (by name and by address), the named-aggregate libctypes tables, the demangled C++ signature and DWARF each park a whole prototype at the analysis commit, in that order; before this the last one won even where an earlier one knew more about a parameter. With this on, when both have the same shape (arity, variadic slot, and the same size in every slot), each slot keeps the type that says more (anything typed over a plain integer, a plain integer over an undefined; two typed slots, two pointers included, are a tie), ties going to the later source, so a DWARF void * is kept over a table's unsigned char *; names fill in from the earlier one when the later has none; a return type survives when the later source leaves the return open. Prototypes of a different shape replace each other as before. Directive, console and decompile-time prototypes are not merged.
-- **When to flip:** On (default). Measured on Lua 5.4.8 (static musl + DWARF, 892 functions), llvm-objdump (1,124 functions), bzip2 (84) and an i386 C++ fixture: no signature changes, so it costs nothing where the sources agree; it keeps an earlier source's typed slot where a later one only states an integer or nothing, and fills parameter names. Flip off to restore last-source-wins.
-- **Where / provenance:** P1/external-refinement · unlace · correctness-fix · unlace-protomerge
-- **Example:** `--option protomerge off`
 
 ### `aifpoolslide` -- on | off, default `on`
 

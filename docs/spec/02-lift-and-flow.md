@@ -4291,6 +4291,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `CHIP8` | CHIP-8 (COSMAC VIP) and SUPER-CHIP 1.1 | `CHIP8:BE:16:VIP`, `CHIP8:BE:16:SCHIP` | COSMAC VIP manual, SUPER-CHIP 1.1 notes | `unlace-cli/tests/chip8.rs` |
 | `HuC6280` | Hudson Soft HuC6280 (PC Engine) | `HuC6280:LE:16:default` | 65C02 and HuC6280 instruction descriptions, MAME `h6280` | `unlace-cli/tests/huc6280.rs` |
 | `4004` | Intel 4004 / 4040 | `4004:LE:16:default` | Intel MCS-4 and MCS-40 Users Manuals | `unlace-cli/tests/i4004_raw.rs` |
+| `uPD7725` | NEC uPD7725 / uPD96050 DSP | `uPD7725:LE:16:default`, `uPD96050:LE:16:default` | NEC uPD7725 data sheet, necdsp notes, MAME `upd7725` | `unlace-cli/tests/upd7725.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <default_symbols>
+    <symbol name="RESET" address="prog:0x0" entry="true"/>
+    <symbol name="INT" address="prog:0x300"/>
+  </default_symbols>
+</processor_spec>

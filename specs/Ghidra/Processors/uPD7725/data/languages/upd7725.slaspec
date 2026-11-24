@@ -1,0 +1,4 @@
+# NEC uPD7725: 2048-word program ROM, 1024-word data ROM, 256-word data RAM.
+@define ROMMASK "0x3ff"
+@define RAMMASK "0xff"
+@include "upd7725.sinc"

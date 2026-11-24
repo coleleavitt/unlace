@@ -5688,7 +5688,7 @@ and the input's SHA-256 is listed. With `anonymize on` the hostname is sent as `
 
 **`serve`** runs a server over a sqlite database (created if missing), bound to `--bind` (default
 `127.0.0.1:65432`), with TLS when given `--tls-cert`/`--tls-key` (PEM). It answers `HELO`,
-`PULL_MD`, `PUSH_MD`, `GET_LUMINA_INFO` and, for administrators, `GET_LUMINA_STATS`; every other
+`PULL_MD`, `PUSH_MD`, `GET_POP`, `GET_LUMINA_INFO` and, for administrators, `SHOW_HISTORY`, `DUMP_MD` and `GET_LUMINA_STATS`; every other
 packet gets `RPC_FAIL`. With no user in the database it is open: anyone may pull and push, nobody is
 an administrator. `--add-user NAME [--admin]` adds a login (password from `--password-file` or
 `UNLACE_LUMINA_PASSWORD`) and exits; from then on every client must log in. Every push is kept in a

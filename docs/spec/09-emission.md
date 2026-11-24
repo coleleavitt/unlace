@@ -5896,7 +5896,8 @@ folds right to left (`combine_return`): `c ? 0 : T` is `!c && T`, `c ? 1 : T`
 is `c || T`, `c ? X : 0` is `c && X`, `c ? X : 1` is `!c || X`, two different
 constants are `c` or `!c`, two values stop the walk. Every `if` but the first
 of the run must have a condition leaf that prints nothing before its test, with
-no label line and no comment (`clean_guard_cond`); an `if` that fails it can only
+no label line and no comment, or a `BlockCondition` (`a && b`, `a || b`) each of
+whose components is one (`clean_guard_cond`); an `if` that fails it can only
 be the first, and the walk stops there. A value that ends as the bare positive
 condition must pass `cond_is_boolean`. The first `if` of the run becomes
 `Return` with the folded value and the tail's `RETURN` as markup; the later ones

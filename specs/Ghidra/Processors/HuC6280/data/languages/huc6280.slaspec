@@ -1,0 +1,413 @@
+# SLEIGH specification for the Hudson Soft HuC6280 (PC Engine / TurboGrafx-16).
+#
+# Written for unlace from the public HuC6280 instruction descriptions (the 65C02
+# base set plus Hudson's extensions); semantics checked against MAME's h6280 core.
+# Addresses are logical (the 16-bit CPU view). The MPR bank registers that map a
+# logical 8 KiB page onto the 21-bit physical bus are modelled as registers, but
+# memory accesses are not translated through them.
+
+define endian=little;
+define alignment=1;
+
+define space RAM      type=ram_space      size=2 default;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ A X Y P ];
+define register offset=0x08 size=1 [ MPR0 MPR1 MPR2 MPR3 MPR4 MPR5 MPR6 MPR7 ];
+define register offset=0x10 size=2 [ PC SP ];
+define register offset=0x12 size=1 [ SPL SPH ];
+define register offset=0x20 size=1 [ N V T B D I Z C ];
+define register offset=0x40 size=4 contextreg;
+
+define context contextreg
+  tmode = (0,0) noflow
+;
+
+define token opbyte (8)
+  op     = (0,7)
+  aaa    = (5,7)
+  bbb    = (2,4)
+  cc     = (0,1)
+  bitnum = (4,6)
+  bbhi   = (7,7)
+  lownib = (0,3)
+;
+
+define token byte1 (8)
+  imm8 = (0,7)
+  zp   = (0,7)
+  rel  = (0,7) signed
+  timm = (0,7)
+;
+
+define token word1 (16)
+  abs16 = (0,15)
+  src16 = (0,15)
+  dst16 = (0,15)
+  len16 = (0,15)
+;
+
+define pcodeop st0;
+define pcodeop st1;
+define pcodeop st2;
+define pcodeop setClockLow;
+define pcodeop setClockHigh;
+
+macro setNZ(v) {
+  N = v s< 0;
+  Z = v == 0;
+}
+
+macro packP(res) {
+  res = (N << 7) | (V << 6) | (T << 5) | (B << 4) | (D << 3) | (I << 2) | (Z << 1) | C;
+}
+
+macro unpackP(v) {
+  N = v[7,1];
+  V = v[6,1];
+  T = v[5,1];
+  B = v[4,1];
+  D = v[3,1];
+  I = v[2,1];
+  Z = v[1,1];
+  C = v[0,1];
+}
+
+macro push1(v) {
+  *:1 SP = v;
+  SP = SP - 1;
+}
+
+macro pull1(v) {
+  SP = SP + 1;
+  v = *:1 SP;
+}
+
+macro push2(v) {
+  *:2 (SP - 1) = v;
+  SP = SP - 2;
+}
+
+macro pull2(v) {
+  SP = SP + 2;
+  v = *:2 (SP - 1);
+}
+
+################################################################
+# Operands. Zero page is logical page 0x20, the stack page 0x21.
+################################################################
+
+REL: reloc is rel [ reloc = inst_next + rel; ] { export *:2 reloc; }
+
+ZPG: "$"^zp is zp { local a:2 = 0x2000 + zp; export *:1 a; }
+ABS: "$"^abs16 is abs16 { export *:1 abs16; }
+
+# group 1 (ORA AND EOR ADC STA LDA CMP SBC)
+OP1: "($"^zp^",X)" is bbb=0; zp { local o:1 = zp; o = o + X; local p:2 = 0x2000 + zext(o); local a:2 = *:2 p; export *:1 a; }
+OP1: ZPG           is bbb=1; ZPG { export ZPG; }
+OP1: "#"^imm8      is bbb=2; imm8 { local t:1 = imm8; export t; }
+OP1: ABS           is bbb=3; ABS { export ABS; }
+OP1: "($"^zp^"),Y" is bbb=4; zp { local p:2 = 0x2000 + zp; local a:2 = *:2 p; a = a + zext(Y); export *:1 a; }
+OP1: "$"^zp^",X"   is bbb=5; zp { local o:1 = zp; o = o + X; local a:2 = 0x2000 + zext(o); export *:1 a; }
+OP1: "$"^abs16^",Y" is bbb=6; abs16 { local a:2 = abs16 + zext(Y); export *:1 a; }
+OP1: "$"^abs16^",X" is bbb=7; abs16 { local a:2 = abs16 + zext(X); export *:1 a; }
+
+# zero-page indirect (zp), the x2 column of the odd rows
+ZPI: "($"^zp^")" is zp { local p:2 = 0x2000 + zp; local a:2 = *:2 p; export *:1 a; }
+
+# group 2 read-modify-write (ASL ROL LSR ROR)
+OP2: ZPG            is bbb=1; ZPG { export ZPG; }
+OP2: "A"            is bbb=2 { export A; }
+OP2: ABS            is bbb=3; ABS { export ABS; }
+OP2: "$"^zp^",X"    is bbb=5; zp { local o:1 = zp; o = o + X; local a:2 = 0x2000 + zext(o); export *:1 a; }
+OP2: "$"^abs16^",X" is bbb=7; abs16 { local a:2 = abs16 + zext(X); export *:1 a; }
+
+ZPX: "$"^zp^",X" is zp { local o:1 = zp; o = o + X; local a:2 = 0x2000 + zext(o); export *:1 a; }
+ZPY: "$"^zp^",Y" is zp { local o:1 = zp; o = o + Y; local a:2 = 0x2000 + zext(o); export *:1 a; }
+ABX: "$"^abs16^",X" is abs16 { local a:2 = abs16 + zext(X); export *:1 a; }
+ABY: "$"^abs16^",Y" is abs16 { local a:2 = abs16 + zext(Y); export *:1 a; }
+
+# The destination of ORA/AND/EOR/ADC/SBC: A, or the zero-page byte at X right
+# after SET (the T flag).
+DST: is tmode=0 { export A; }
+DST: "(X)," is tmode=1 { local a:2 = 0x2000 + zext(X); export *:1 a; }
+
+################################################################
+# Group 1
+################################################################
+
+:ORA DST^OP1 is DST & ((cc=1 & aaa=0) ... & OP1) { local s = OP1; DST = DST | s; setNZ(DST); T = 0; }
+:AND DST^OP1 is DST & ((cc=1 & aaa=1) ... & OP1) { local s = OP1; DST = DST & s; setNZ(DST); T = 0; }
+:EOR DST^OP1 is DST & ((cc=1 & aaa=2) ... & OP1) { local s = OP1; DST = DST ^ s; setNZ(DST); T = 0; }
+:ADC DST^OP1 is DST & ((cc=1 & aaa=3) ... & OP1) {
+  local s = OP1; local d = DST;
+  local r:2 = zext(d) + zext(s) + zext(C);
+  local res:1 = r:1;
+  V = ((~(d ^ s)) & (d ^ res) & 0x80) != 0;
+  C = r > 0xff;
+  DST = res; setNZ(res); T = 0;
+}
+:STA OP1 is (cc=1 & aaa=4 & bbb!=2) ... & OP1 { OP1 = A; T = 0; }
+:LDA OP1 is (cc=1 & aaa=5) ... & OP1 { A = OP1; setNZ(A); T = 0; }
+:CMP OP1 is (cc=1 & aaa=6) ... & OP1 { local s = OP1; local r = A - s; C = A >= s; setNZ(r); T = 0; }
+:SBC DST^OP1 is DST & ((cc=1 & aaa=7) ... & OP1) {
+  local s = OP1; local d = DST;
+  local r:2 = zext(d) - zext(s) - zext(!C);
+  local res:1 = r:1;
+  V = ((d ^ s) & (d ^ res) & 0x80) != 0;
+  C = (r & 0xff00) == 0;
+  DST = res; setNZ(res); T = 0;
+}
+
+:ORA DST^ZPI is DST & (op=0x12; ZPI) { local s = ZPI; DST = DST | s; setNZ(DST); T = 0; }
+:AND DST^ZPI is DST & (op=0x32; ZPI) { local s = ZPI; DST = DST & s; setNZ(DST); T = 0; }
+:EOR DST^ZPI is DST & (op=0x52; ZPI) { local s = ZPI; DST = DST ^ s; setNZ(DST); T = 0; }
+:ADC DST^ZPI is DST & (op=0x72; ZPI) {
+  local s = ZPI; local d = DST;
+  local r:2 = zext(d) + zext(s) + zext(C);
+  local res:1 = r:1;
+  V = ((~(d ^ s)) & (d ^ res) & 0x80) != 0;
+  C = r > 0xff;
+  DST = res; setNZ(res); T = 0;
+}
+:STA ZPI is op=0x92; ZPI { ZPI = A; T = 0; }
+:LDA ZPI is op=0xB2; ZPI { A = ZPI; setNZ(A); T = 0; }
+:CMP ZPI is op=0xD2; ZPI { local s = ZPI; local r = A - s; C = A >= s; setNZ(r); T = 0; }
+:SBC DST^ZPI is DST & (op=0xF2; ZPI) {
+  local s = ZPI; local d = DST;
+  local r:2 = zext(d) - zext(s) - zext(!C);
+  local res:1 = r:1;
+  V = ((d ^ s) & (d ^ res) & 0x80) != 0;
+  C = (r & 0xff00) == 0;
+  DST = res; setNZ(res); T = 0;
+}
+
+################################################################
+# Group 2 shifts and rotates
+################################################################
+
+:ASL OP2 is (cc=2 & aaa=0 & (bbb=1 | bbb=2 | bbb=3 | bbb=5 | bbb=7)) ... & OP2 { local v = OP2; C = v >> 7; v = v << 1; OP2 = v; setNZ(v); T = 0; }
+:ROL OP2 is (cc=2 & aaa=1 & (bbb=1 | bbb=2 | bbb=3 | bbb=5 | bbb=7)) ... & OP2 { local v = OP2; local c = C; C = v >> 7; v = (v << 1) | c; OP2 = v; setNZ(v); T = 0; }
+:LSR OP2 is (cc=2 & aaa=2 & (bbb=1 | bbb=2 | bbb=3 | bbb=5 | bbb=7)) ... & OP2 { local v = OP2; C = v & 1; v = v >> 1; OP2 = v; setNZ(v); T = 0; }
+:ROR OP2 is (cc=2 & aaa=3 & (bbb=1 | bbb=2 | bbb=3 | bbb=5 | bbb=7)) ... & OP2 { local v = OP2; local c = C; C = v & 1; v = (v >> 1) | (c << 7); OP2 = v; setNZ(v); T = 0; }
+
+:INC OP2 is (cc=2 & aaa=7 & (bbb=1 | bbb=3 | bbb=5 | bbb=7)) ... & OP2 { local v = OP2 + 1; OP2 = v; setNZ(v); T = 0; }
+:DEC OP2 is (cc=2 & aaa=6 & (bbb=1 | bbb=3 | bbb=5 | bbb=7)) ... & OP2 { local v = OP2 - 1; OP2 = v; setNZ(v); T = 0; }
+:INA is op=0x1A { A = A + 1; setNZ(A); T = 0; }
+:DEA is op=0x3A { A = A - 1; setNZ(A); T = 0; }
+
+################################################################
+# Index register loads, stores and compares
+################################################################
+
+:LDX "#"^imm8 is op=0xA2; imm8 { X = imm8; setNZ(X); T = 0; }
+:LDX ZPG is op=0xA6; ZPG { X = ZPG; setNZ(X); T = 0; }
+:LDX ABS is op=0xAE; ABS { X = ABS; setNZ(X); T = 0; }
+:LDX ZPY is op=0xB6; ZPY { X = ZPY; setNZ(X); T = 0; }
+:LDX ABY is op=0xBE; ABY { X = ABY; setNZ(X); T = 0; }
+:LDY "#"^imm8 is op=0xA0; imm8 { Y = imm8; setNZ(Y); T = 0; }
+:LDY ZPG is op=0xA4; ZPG { Y = ZPG; setNZ(Y); T = 0; }
+:LDY ABS is op=0xAC; ABS { Y = ABS; setNZ(Y); T = 0; }
+:LDY ZPX is op=0xB4; ZPX { Y = ZPX; setNZ(Y); T = 0; }
+:LDY ABX is op=0xBC; ABX { Y = ABX; setNZ(Y); T = 0; }
+:STX ZPG is op=0x86; ZPG { ZPG = X; T = 0; }
+:STX ABS is op=0x8E; ABS { ABS = X; T = 0; }
+:STX ZPY is op=0x96; ZPY { ZPY = X; T = 0; }
+:STY ZPG is op=0x84; ZPG { ZPG = Y; T = 0; }
+:STY ABS is op=0x8C; ABS { ABS = Y; T = 0; }
+:STY ZPX is op=0x94; ZPX { ZPX = Y; T = 0; }
+:STZ ZPG is op=0x64; ZPG { ZPG = 0; T = 0; }
+:STZ ZPX is op=0x74; ZPX { ZPX = 0; T = 0; }
+:STZ ABS is op=0x9C; ABS { ABS = 0; T = 0; }
+:STZ ABX is op=0x9E; ABX { ABX = 0; T = 0; }
+
+:CPX "#"^imm8 is op=0xE0; imm8 { local s:1 = imm8; local r = X - s; C = X >= s; setNZ(r); T = 0; }
+:CPX ZPG is op=0xE4; ZPG { local s = ZPG; local r = X - s; C = X >= s; setNZ(r); T = 0; }
+:CPX ABS is op=0xEC; ABS { local s = ABS; local r = X - s; C = X >= s; setNZ(r); T = 0; }
+:CPY "#"^imm8 is op=0xC0; imm8 { local s:1 = imm8; local r = Y - s; C = Y >= s; setNZ(r); T = 0; }
+:CPY ZPG is op=0xC4; ZPG { local s = ZPG; local r = Y - s; C = Y >= s; setNZ(r); T = 0; }
+:CPY ABS is op=0xCC; ABS { local s = ABS; local r = Y - s; C = Y >= s; setNZ(r); T = 0; }
+
+################################################################
+# Bit tests
+################################################################
+
+macro bitTest(m) {
+  N = m[7,1];
+  V = m[6,1];
+  Z = (m & A) == 0;
+  T = 0;
+}
+
+:BIT "#"^imm8 is op=0x89; imm8 { local m:1 = imm8; bitTest(m); }
+:BIT ZPG is op=0x24; ZPG { local m = ZPG; bitTest(m); }
+:BIT ABS is op=0x2C; ABS { local m = ABS; bitTest(m); }
+:BIT ZPX is op=0x34; ZPX { local m = ZPX; bitTest(m); }
+:BIT ABX is op=0x3C; ABX { local m = ABX; bitTest(m); }
+
+# Z follows MAME: TSB sets Z when (M | A) is zero, TRB when (M & ~A) is zero.
+:TSB ZPG is op=0x04; ZPG { local m = ZPG; N = m[7,1]; V = m[6,1]; Z = (m | A) == 0; ZPG = m | A; T = 0; }
+:TSB ABS is op=0x0C; ABS { local m = ABS; N = m[7,1]; V = m[6,1]; Z = (m | A) == 0; ABS = m | A; T = 0; }
+:TRB ZPG is op=0x14; ZPG { local m = ZPG; N = m[7,1]; V = m[6,1]; Z = (m & ~A) == 0; ZPG = m & ~A; T = 0; }
+:TRB ABS is op=0x1C; ABS { local m = ABS; N = m[7,1]; V = m[6,1]; Z = (m & ~A) == 0; ABS = m & ~A; T = 0; }
+
+:TST "#"^timm, ZPG is op=0x83; timm; ZPG { local m = ZPG; N = m[7,1]; V = m[6,1]; Z = (m & timm) == 0; T = 0; }
+:TST "#"^timm, ABS is op=0x93; timm; ABS { local m = ABS; N = m[7,1]; V = m[6,1]; Z = (m & timm) == 0; T = 0; }
+:TST "#"^timm, ZPX is op=0xA3; timm; ZPX { local m = ZPX; N = m[7,1]; V = m[6,1]; Z = (m & timm) == 0; T = 0; }
+:TST "#"^timm, ABX is op=0xB3; timm; ABX { local m = ABX; N = m[7,1]; V = m[6,1]; Z = (m & timm) == 0; T = 0; }
+
+BITMASK: is bitnum { local m:1 = 1 << bitnum; export m; }
+
+:RMB^bitnum ZPG is lownib=0x7 & bbhi=0 & bitnum & BITMASK; ZPG { ZPG = ZPG & ~BITMASK; T = 0; }
+:SMB^bitnum ZPG is lownib=0x7 & bbhi=1 & bitnum & BITMASK; ZPG { ZPG = ZPG | BITMASK; T = 0; }
+:BBR^bitnum ZPG, REL is lownib=0xF & bbhi=0 & bitnum & BITMASK; ZPG; REL { T = 0; if ((ZPG & BITMASK) == 0) goto REL; }
+:BBS^bitnum ZPG, REL is lownib=0xF & bbhi=1 & bitnum & BITMASK; ZPG; REL { T = 0; if ((ZPG & BITMASK) != 0) goto REL; }
+
+################################################################
+# Branches, jumps, calls
+################################################################
+
+:BPL REL is op=0x10; REL { T = 0; if (N == 0) goto REL; }
+:BMI REL is op=0x30; REL { T = 0; if (N != 0) goto REL; }
+:BVC REL is op=0x50; REL { T = 0; if (V == 0) goto REL; }
+:BVS REL is op=0x70; REL { T = 0; if (V != 0) goto REL; }
+:BCC REL is op=0x90; REL { T = 0; if (C == 0) goto REL; }
+:BCS REL is op=0xB0; REL { T = 0; if (C != 0) goto REL; }
+:BNE REL is op=0xD0; REL { T = 0; if (Z == 0) goto REL; }
+:BEQ REL is op=0xF0; REL { T = 0; if (Z != 0) goto REL; }
+:BRA REL is op=0x80; REL { T = 0; goto REL; }
+
+:BSR REL is op=0x44; REL { T = 0; local ret:2 = inst_next - 1; push2(ret); call REL; }
+:JSR ABS is op=0x20; ABS { T = 0; local ret:2 = inst_next - 1; push2(ret); call ABS; }
+:JMP ABS is op=0x4C; ABS { T = 0; goto ABS; }
+:JMP "($"^abs16^")" is op=0x6C; abs16 { T = 0; local t:2 = *:2 abs16:2; goto [t]; }
+:JMP "($"^abs16^",X)" is op=0x7C; abs16 { T = 0; local p:2 = abs16 + zext(X); local t:2 = *:2 p; goto [t]; }
+:RTS is op=0x60 { T = 0; local ret:2 = 0; pull2(ret); ret = ret + 1; return [ret]; }
+:RTI is op=0x40 { local p:1 = 0; pull1(p); unpackP(p); local ret:2 = 0; pull2(ret); return [ret]; }
+:BRK is op=0x00 {
+  T = 0;
+  local ret:2 = inst_next + 1;
+  push2(ret);
+  B = 1;
+  local p:1 = 0; packP(p); push1(p);
+  I = 1; D = 0;
+  local vec:2 = *:2 0xFFF6:2;
+  call [vec];
+}
+
+################################################################
+# Implied
+################################################################
+
+:CLC is op=0x18 { C = 0; T = 0; }
+:SEC is op=0x38 { C = 1; T = 0; }
+:CLI is op=0x58 { I = 0; T = 0; }
+:SEI is op=0x78 { I = 1; T = 0; }
+:CLV is op=0xB8 { V = 0; T = 0; }
+:CLD is op=0xD8 { D = 0; T = 0; }
+:SED is op=0xF8 { D = 1; T = 0; }
+:SET is op=0xF4 [ tmode = 1; globalset(inst_next, tmode); ] { T = 1; }
+:NOP is op=0xEA { T = 0; }
+
+:TAX is op=0xAA { X = A; setNZ(X); T = 0; }
+:TAY is op=0xA8 { Y = A; setNZ(Y); T = 0; }
+:TXA is op=0x8A { A = X; setNZ(A); T = 0; }
+:TYA is op=0x98 { A = Y; setNZ(A); T = 0; }
+:TSX is op=0xBA { X = SPL; setNZ(X); T = 0; }
+:TXS is op=0x9A { SP = 0x2100 | zext(X); T = 0; }
+:INX is op=0xE8 { X = X + 1; setNZ(X); T = 0; }
+:INY is op=0xC8 { Y = Y + 1; setNZ(Y); T = 0; }
+:DEX is op=0xCA { X = X - 1; setNZ(X); T = 0; }
+:DEY is op=0x88 { Y = Y - 1; setNZ(Y); T = 0; }
+
+:SXY is op=0x02 { local t = X; X = Y; Y = t; T = 0; }
+:SAX is op=0x22 { local t = X; X = A; A = t; T = 0; }
+:SAY is op=0x42 { local t = Y; Y = A; A = t; T = 0; }
+:CLA is op=0x62 { A = 0; T = 0; }
+:CLX is op=0x82 { X = 0; T = 0; }
+:CLY is op=0xC2 { Y = 0; T = 0; }
+
+:PHA is op=0x48 { push1(A); T = 0; }
+:PHX is op=0xDA { push1(X); T = 0; }
+:PHY is op=0x5A { push1(Y); T = 0; }
+:PHP is op=0x08 { T = 0; local p:1 = 0; packP(p); push1(p); }
+:PLA is op=0x68 { pull1(A); setNZ(A); T = 0; }
+:PLX is op=0xFA { pull1(X); setNZ(X); T = 0; }
+:PLY is op=0x7A { pull1(Y); setNZ(Y); T = 0; }
+:PLP is op=0x28 { local p:1 = 0; pull1(p); unpackP(p); B = 1; }
+
+:CSL is op=0x54 { setClockLow(); T = 0; }
+:CSH is op=0xD4 { setClockHigh(); T = 0; }
+
+# ST0/ST1/ST2 write the video display controller (physical 0x1FE000, +2, +3).
+:ST0 "#"^imm8 is op=0x03; imm8 { local v:1 = imm8; st0(v); T = 0; }
+:ST1 "#"^imm8 is op=0x13; imm8 { local v:1 = imm8; st1(v); T = 0; }
+:ST2 "#"^imm8 is op=0x23; imm8 { local v:1 = imm8; st2(v); T = 0; }
+
+# TAM sets every MPR whose bit is set to A; TMA reads the highest selected MPR.
+:TAM "#"^imm8 is op=0x53; imm8 {
+  T = 0;
+  local m:1 = imm8;
+  if ((m & 0x01) == 0) goto <n0>; MPR0 = A; <n0>
+  if ((m & 0x02) == 0) goto <n1>; MPR1 = A; <n1>
+  if ((m & 0x04) == 0) goto <n2>; MPR2 = A; <n2>
+  if ((m & 0x08) == 0) goto <n3>; MPR3 = A; <n3>
+  if ((m & 0x10) == 0) goto <n4>; MPR4 = A; <n4>
+  if ((m & 0x20) == 0) goto <n5>; MPR5 = A; <n5>
+  if ((m & 0x40) == 0) goto <n6>; MPR6 = A; <n6>
+  if ((m & 0x80) == 0) goto <n7>; MPR7 = A; <n7>
+}
+:TMA "#"^imm8 is op=0x43; imm8 {
+  T = 0;
+  local m:1 = imm8;
+  if ((m & 0x01) == 0) goto <n0>; A = MPR0; <n0>
+  if ((m & 0x02) == 0) goto <n1>; A = MPR1; <n1>
+  if ((m & 0x04) == 0) goto <n2>; A = MPR2; <n2>
+  if ((m & 0x08) == 0) goto <n3>; A = MPR3; <n3>
+  if ((m & 0x10) == 0) goto <n4>; A = MPR4; <n4>
+  if ((m & 0x20) == 0) goto <n5>; A = MPR5; <n5>
+  if ((m & 0x40) == 0) goto <n6>; A = MPR6; <n6>
+  if ((m & 0x80) == 0) goto <n7>; A = MPR7; <n7>
+}
+
+################################################################
+# Block transfers: source, destination, length (0 means 65536)
+################################################################
+
+:TII "$"^src16, "$"^dst16, "$"^len16 is op=0x73; src16; dst16; len16 {
+  T = 0;
+  local s:2 = src16; local d:2 = dst16; local n:4 = len16;
+  if (n != 0) goto <go>; n = 0x10000; <go>
+  *:1 d = *:1 s; s = s + 1; d = d + 1; n = n - 1;
+  if (n != 0) goto <go>;
+}
+:TDD "$"^src16, "$"^dst16, "$"^len16 is op=0xC3; src16; dst16; len16 {
+  T = 0;
+  local s:2 = src16; local d:2 = dst16; local n:4 = len16;
+  if (n != 0) goto <go>; n = 0x10000; <go>
+  *:1 d = *:1 s; s = s - 1; d = d - 1; n = n - 1;
+  if (n != 0) goto <go>;
+}
+:TIN "$"^src16, "$"^dst16, "$"^len16 is op=0xD3; src16; dst16; len16 {
+  T = 0;
+  local s:2 = src16; local d:2 = dst16; local n:4 = len16;
+  if (n != 0) goto <go>; n = 0x10000; <go>
+  *:1 d = *:1 s; s = s + 1; n = n - 1;
+  if (n != 0) goto <go>;
+}
+:TIA "$"^src16, "$"^dst16, "$"^len16 is op=0xE3; src16; dst16; len16 {
+  T = 0;
+  local s:2 = src16; local d:2 = dst16; local n:4 = len16; local alt:2 = 0;
+  if (n != 0) goto <go>; n = 0x10000; <go>
+  local da:2 = d + alt;
+  *:1 da = *:1 s; s = s + 1; alt = alt ^ 1; n = n - 1;
+  if (n != 0) goto <go>;
+}
+:TAI "$"^src16, "$"^dst16, "$"^len16 is op=0xF3; src16; dst16; len16 {
+  T = 0;
+  local s:2 = src16; local d:2 = dst16; local n:4 = len16; local alt:2 = 0;
+  if (n != 0) goto <go>; n = 0x10000; <go>
+  local sa:2 = s + alt;
+  *:1 d = *:1 sa; d = d + 1; alt = alt ^ 1; n = n - 1;
+  if (n != 0) goto <go>;
+}

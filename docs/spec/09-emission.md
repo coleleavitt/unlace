@@ -5966,7 +5966,19 @@ constants are `c` or `!c`, two values stop the walk. Every `if` but the first
 of the run must have a condition leaf that prints nothing before its test, with
 no label line and no comment, or a `BlockCondition` (`a && b`, `a || b`) each of
 whose components is one (`clean_guard_cond`); an `if` that fails it can only
-be the first, and the walk stops there. A value that ends as the bare positive
+be the first, and the walk stops there, unless its condition is a `BlockList` that
+carries guards in front of its test (`fold_cond_list_guards`). The structurer
+concatenates a collapsed guard `if` with the next guard's condition block, so that
+guard's condition is `[if (g) return K;, test]` and the leading guard prints as a
+statement before the test. When every leading component is an `if` without else and
+without goto, not a switch-merge or exception `if` and not rewritten by the tree
+(`cond_list_guard`), whose body leaf `return_term` accepts, and the test and every
+leading guard's condition after the first print nothing (`clean_guard_cond`), the
+guards join the run right to left, the test standing for the list's condition; the
+first guard's own condition list folds the same way, and the walk goes on from the
+first guard's condition. `emit_block_if` then prints the run from that first
+condition, so the guards do not print again: `if (a) return 1; if (b) return 1;
+return c;` at a function body's root is `return a || b || c;`. A value that ends as the bare positive
 condition must pass `cond_is_boolean`. The first `if` of the run becomes
 `Return` with the folded value and the tail's `RETURN` as markup; the later ones
 and the tail become empty sequences. `emit_block_if` prints the first through the

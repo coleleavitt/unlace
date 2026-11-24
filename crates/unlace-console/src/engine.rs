@@ -4184,6 +4184,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::Ehcold>()
                 .0
         }
+        "functails" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Functails>()
+                .0
+        }
         "mfcmsgmap" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Mfcmsgmap>()
@@ -8135,6 +8140,14 @@ fn commit_analysis_output(
     // 3'''. (kuna `thunknames`) A placeholder jump thunk takes its target's name
     //       behind `j_`, after every other name source has named the targets.
     let renamed_thunks = kuna_thunknames::commit(prog, code_space, &jump_thunks)?;
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Nullsubs>()
+        .0
+    {
+        kuna_thunknames::name_nullsubs(prog, code_space, &out.entries)?;
+    }
 
     // 4. Detected string literals: place a typelocked `char[len]` data symbol at
     //    each (the kuna analog of `DataUtilities.createData` for an ASCII string),

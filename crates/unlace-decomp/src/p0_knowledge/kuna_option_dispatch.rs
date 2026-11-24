@@ -475,6 +475,7 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Machoehframe)
     },
     "ehcold" => registered!(crate::kuna_analysisgates::Ehcold),
+    "functails" => registered!(crate::kuna_analysisgates::Functails),
     "mfcmsgmap" => registered!(crate::kuna_analysisgates::Mfcmsgmap),
     "msvcptrentry" => registered!(crate::kuna_analysisgates::Msvcptrentry),
     "importvote" => registered!(crate::kuna_importvote::Importvote),
@@ -676,6 +677,7 @@ kuna_options! { self, p1;
     "calltable" => registered!(crate::kuna_analysisgates::Calltable),
     "stubbinds" => registered!(crate::kuna_analysisgates::Stubbinds),
     "thunknames" => registered!(crate::kuna_analysisgates::Thunknames),
+    "nullsubs" => registered!(crate::kuna_analysisgates::Nullsubs),
     "objc" => registered!(crate::kuna_analysisgates::Objc),
     "panicloc" => registered!(crate::kuna_analysisgates::Panicloc),
     "swiftmetadata" => registered!(crate::kuna_analysisgates::Swiftmetadata),

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="MeP"
+            endian="big"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="mep_be.sla"
+            processorspec="mep.pspec"
+            id="MeP:BE:32:default">
+    <description>Toshiba Media embedded Processor (MeP-c4 core), big endian</description>
+    <compiler name="default" spec="mep.cspec" id="default"/>
+    <external_name tool="gnu" name="mep"/>
+  </language>
+  <language processor="MeP"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="mep_le.sla"
+            processorspec="mep.pspec"
+            id="MeP:LE:32:default">
+    <description>Toshiba Media embedded Processor (MeP-c4 core), little endian</description>
+    <compiler name="default" spec="mep.cspec" id="default"/>
+    <external_name tool="gnu" name="mep"/>
+  </language>
+</language_definitions>

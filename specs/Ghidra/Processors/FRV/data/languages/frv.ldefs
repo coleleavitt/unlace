@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="FRV"
+            endian="big"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="frv.sla"
+            processorspec="frv.pspec"
+            id="FRV:BE:32:default">
+    <description>Fujitsu FR-V (FR400, FR450, FR500, FR550)</description>
+    <compiler name="default" spec="frv.cspec" id="default"/>
+    <external_name tool="gnu" name="frv"/>
+  </language>
+</language_definitions>

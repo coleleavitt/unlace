@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="V810"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="v810.sla"
+            processorspec="v810.pspec"
+            id="V810:LE:32:default">
+    <description>NEC V810 (uPD70732), with the Virtual Boy NVC instructions (Virtual Boy, PC-FX)</description>
+    <compiler name="default" spec="v810.cspec" id="default"/>
+  </language>
+</language_definitions>

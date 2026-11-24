@@ -1,0 +1,3 @@
+define endian=big;
+define alignment=4;
+@include "nios2.sinc"

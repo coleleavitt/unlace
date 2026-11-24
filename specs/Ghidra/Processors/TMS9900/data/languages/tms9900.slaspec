@@ -1,0 +1,246 @@
+# SLEIGH specification for the Texas Instruments TMS9900 (TMS9980, TMS9995 subset)
+#
+# Written from the TI TMS9900 Microprocessor Data Manual (1976) and the
+# TMS9900 Family System Development Manual. The sixteen workspace registers
+# live in memory at WP; this module models them as processor registers R0-R15
+# (the workspace of the running context), which is what makes the decompiler's
+# dataflow readable. A byte operand in register mode is the most significant
+# byte of the register. BLWP is a call through the transfer vector's PC word
+# and RTWP a return through R14; WP itself is a register LWPI/STWP move.
+
+define endian=big;
+define alignment=2;
+
+define space ram      type=ram_space      size=2 default;
+define space cru      type=ram_space      size=2;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 ];
+define register offset=0x00 size=1 [ R0b _ R1b _ R2b _ R3b _ R4b _ R5b _ R6b _ R7b _ R8b _ R9b _ R10b _ R11b _ R12b _ R13b _ R14b _ R15b _ ];
+define register offset=0x40 size=2 [ PC WP ];
+define register offset=0x50 size=1 [ LGT AGT EQ C OV OP XOPF INTM ];
+
+define token iw (16)
+	op4    = (12,15)
+	op6    = (10,15)
+	op8    = (8,15)
+	op10   = (6,15)
+	op11   = (5,15)
+	op16   = (0,15)
+	td     = (10,11)
+	dreg   = (6,9)
+	dregb  = (6,9)
+	dreg1  = (6,9)
+	dnum   = (6,9) dec
+	ts     = (4,5)
+	sreg   = (0,3)
+	sregb  = (0,3)
+	snum   = (0,3)
+	wreg   = (0,3)
+	cnt    = (4,7) dec
+	cntz   = (4,7)
+	cb3    = (9,9)
+	clo    = (6,8)
+	disp8  = (0,7) signed
+;
+
+define token ext1 (16)
+	ew = (0,15)
+;
+
+define token ext2 (16)
+	ew2 = (0,15)
+;
+
+attach variables [ sreg dreg wreg ] [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 ];
+attach variables [ sregb dregb ] [ R0b R1b R2b R3b R4b R5b R6b R7b R8b R9b R10b R11b R12b R13b R14b R15b ];
+attach variables [ dreg1 ] [ R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R0 ];
+
+define pcodeop idle;
+define pcodeop reset_io;
+define pcodeop clock_on;
+define pcodeop clock_off;
+define pcodeop load_rom_execute;
+define pcodeop execute;
+define pcodeop extended_operation;
+define pcodeop cru_set_bit;
+define pcodeop cru_test_bit;
+define pcodeop cru_load;
+define pcodeop cru_store;
+
+macro lae(v) {
+	LGT = v != 0;
+	AGT = v s> 0;
+	EQ = v == 0;
+}
+
+macro parity(v) {
+	local pc:1 = popcount(v);
+	OP = (pc & 1) == 1;
+}
+
+macro addFlags(a, b, r) {
+	C = carry(a, b);
+	OV = scarry(a, b);
+	lae(r);
+}
+
+macro subFlags(a, b, r) {
+	C = a >= b;
+	OV = sborrow(a, b);
+	lae(r);
+}
+
+macro cmpFlags(s, d) {
+	LGT = s > d;
+	AGT = s s> d;
+	EQ = s == d;
+}
+
+
+srcW: sreg is ts=0 & sreg { export sreg; }
+srcW: "*"^sreg is ts=1 & sreg { export *:2 sreg; }
+srcW: "@"^ew is ts=2 & snum=0 ; ew { export *:2 ew; }
+srcW: "@"^ew^"("^sreg^")" is ts=2 & sreg ; ew { local a:2 = ew + sreg; export *:2 a; }
+srcW: "*"^sreg^"+" is ts=3 & sreg { local a:2 = sreg; sreg = sreg + 2; export *:2 a; }
+srcB: sregb is ts=0 & sregb { export sregb; }
+srcB: "*"^sreg is ts=1 & sreg { export *:1 sreg; }
+srcB: "@"^ew is ts=2 & snum=0 ; ew { export *:1 ew; }
+srcB: "@"^ew^"("^sreg^")" is ts=2 & sreg ; ew { local a:2 = ew + sreg; export *:1 a; }
+srcB: "*"^sreg^"+" is ts=3 & sreg { local a:2 = sreg; sreg = sreg + 1; export *:1 a; }
+dstWa: dreg is td=0 & dreg { export dreg; }
+dstWa: "*"^dreg is td=1 & dreg { export *:2 dreg; }
+dstWa: "@"^ew is td=2 & dnum=0 ; ew { export *:2 ew; }
+dstWa: "@"^ew^"("^dreg^")" is td=2 & dreg ; ew { local a:2 = ew + dreg; export *:2 a; }
+dstWa: "*"^dreg^"+" is td=3 & dreg { local a:2 = dreg; dreg = dreg + 2; export *:2 a; }
+dstWb: dreg is td=0 & dreg { export dreg; }
+dstWb: "*"^dreg is td=1 & dreg { export *:2 dreg; }
+dstWb: "@"^ew2 is td=2 & dnum=0 ; ew ; ew2 { export *:2 ew2; }
+dstWb: "@"^ew2^"("^dreg^")" is td=2 & dreg ; ew ; ew2 { local a:2 = ew2 + dreg; export *:2 a; }
+dstWb: "*"^dreg^"+" is td=3 & dreg { local a:2 = dreg; dreg = dreg + 2; export *:2 a; }
+dstBa: dregb is td=0 & dregb { export dregb; }
+dstBa: "*"^dreg is td=1 & dreg { export *:1 dreg; }
+dstBa: "@"^ew is td=2 & dnum=0 ; ew { export *:1 ew; }
+dstBa: "@"^ew^"("^dreg^")" is td=2 & dreg ; ew { local a:2 = ew + dreg; export *:1 a; }
+dstBa: "*"^dreg^"+" is td=3 & dreg { local a:2 = dreg; dreg = dreg + 1; export *:1 a; }
+dstBb: dregb is td=0 & dregb { export dregb; }
+dstBb: "*"^dreg is td=1 & dreg { export *:1 dreg; }
+dstBb: "@"^ew2 is td=2 & dnum=0 ; ew ; ew2 { export *:1 ew2; }
+dstBb: "@"^ew2^"("^dreg^")" is td=2 & dreg ; ew ; ew2 { local a:2 = ew2 + dreg; export *:1 a; }
+dstBb: "*"^dreg^"+" is td=3 & dreg { local a:2 = dreg; dreg = dreg + 1; export *:1 a; }
+srcEA: "*"^sreg is ts=1 & sreg { export sreg; }
+srcEA: "@"^ew^"("^sreg^")" is ts=2 & sreg ; ew { local a:2 = ew + sreg; export a; }
+srcEA: "*"^sreg^"+" is ts=3 & sreg { local a:2 = sreg; sreg = sreg + 2; export a; }
+absw: "@"^ew is ew { export *:2 ew; }
+jrel: a is disp8 [ a = inst_next + disp8 * 2; ] { export *:2 a; }
+
+:SZC srcW, dstWa is (op4=0x4 & ts!=2) ... & srcW ... & dstWa ... { local r:2 = dstWa & ~srcW; dstWa = r; lae(r); }
+:SZC srcW, dstWb is (op4=0x4 & ts=2) ... & srcW ... & dstWb ... { local r:2 = dstWb & ~srcW; dstWb = r; lae(r); }
+:SZCB srcB, dstBa is (op4=0x5 & ts!=2) ... & srcB ... & dstBa ... { local r:1 = dstBa & ~srcB; dstBa = r; lae(r); parity(r); }
+:SZCB srcB, dstBb is (op4=0x5 & ts=2) ... & srcB ... & dstBb ... { local r:1 = dstBb & ~srcB; dstBb = r; lae(r); parity(r); }
+:S srcW, dstWa is (op4=0x6 & ts!=2) ... & srcW ... & dstWa ... { local a:2 = dstWa; local b:2 = srcW; local r:2 = a - b; dstWa = r; subFlags(a, b, r); }
+:S srcW, dstWb is (op4=0x6 & ts=2) ... & srcW ... & dstWb ... { local a:2 = dstWb; local b:2 = srcW; local r:2 = a - b; dstWb = r; subFlags(a, b, r); }
+:SB srcB, dstBa is (op4=0x7 & ts!=2) ... & srcB ... & dstBa ... { local a:1 = dstBa; local b:1 = srcB; local r:1 = a - b; dstBa = r; subFlags(a, b, r); parity(r); }
+:SB srcB, dstBb is (op4=0x7 & ts=2) ... & srcB ... & dstBb ... { local a:1 = dstBb; local b:1 = srcB; local r:1 = a - b; dstBb = r; subFlags(a, b, r); parity(r); }
+:C srcW, dstWa is (op4=0x8 & ts!=2) ... & srcW ... & dstWa ... { local a:2 = srcW; local b:2 = dstWa; cmpFlags(a, b); }
+:C srcW, dstWb is (op4=0x8 & ts=2) ... & srcW ... & dstWb ... { local a:2 = srcW; local b:2 = dstWb; cmpFlags(a, b); }
+:CB srcB, dstBa is (op4=0x9 & ts!=2) ... & srcB ... & dstBa ... { local a:1 = srcB; local b:1 = dstBa; cmpFlags(a, b); parity(a); }
+:CB srcB, dstBb is (op4=0x9 & ts=2) ... & srcB ... & dstBb ... { local a:1 = srcB; local b:1 = dstBb; cmpFlags(a, b); parity(a); }
+:A srcW, dstWa is (op4=0xa & ts!=2) ... & srcW ... & dstWa ... { local a:2 = dstWa; local b:2 = srcW; local r:2 = a + b; dstWa = r; addFlags(a, b, r); }
+:A srcW, dstWb is (op4=0xa & ts=2) ... & srcW ... & dstWb ... { local a:2 = dstWb; local b:2 = srcW; local r:2 = a + b; dstWb = r; addFlags(a, b, r); }
+:AB srcB, dstBa is (op4=0xb & ts!=2) ... & srcB ... & dstBa ... { local a:1 = dstBa; local b:1 = srcB; local r:1 = a + b; dstBa = r; addFlags(a, b, r); parity(r); }
+:AB srcB, dstBb is (op4=0xb & ts=2) ... & srcB ... & dstBb ... { local a:1 = dstBb; local b:1 = srcB; local r:1 = a + b; dstBb = r; addFlags(a, b, r); parity(r); }
+:MOV srcW, dstWa is (op4=0xc & ts!=2) ... & srcW ... & dstWa ... { local v:2 = srcW; dstWa = v; lae(v); }
+:MOV srcW, dstWb is (op4=0xc & ts=2) ... & srcW ... & dstWb ... { local v:2 = srcW; dstWb = v; lae(v); }
+:MOVB srcB, dstBa is (op4=0xd & ts!=2) ... & srcB ... & dstBa ... { local v:1 = srcB; dstBa = v; lae(v); parity(v); }
+:MOVB srcB, dstBb is (op4=0xd & ts=2) ... & srcB ... & dstBb ... { local v:1 = srcB; dstBb = v; lae(v); parity(v); }
+:SOC srcW, dstWa is (op4=0xe & ts!=2) ... & srcW ... & dstWa ... { local r:2 = dstWa | srcW; dstWa = r; lae(r); }
+:SOC srcW, dstWb is (op4=0xe & ts=2) ... & srcW ... & dstWb ... { local r:2 = dstWb | srcW; dstWb = r; lae(r); }
+:SOCB srcB, dstBa is (op4=0xf & ts!=2) ... & srcB ... & dstBa ... { local r:1 = dstBa | srcB; dstBa = r; lae(r); parity(r); }
+:SOCB srcB, dstBb is (op4=0xf & ts=2) ... & srcB ... & dstBb ... { local r:1 = dstBb | srcB; dstBb = r; lae(r); parity(r); }
+
+:COC srcW, dreg is (op6=0x08 & dreg) ... & srcW ... { local s:2 = srcW; EQ = (s & dreg) == s; }
+:CZC srcW, dreg is (op6=0x09 & dreg) ... & srcW ... { local s:2 = srcW; EQ = (s & dreg) == 0; }
+:XOR srcW, dreg is (op6=0x0A & dreg) ... & srcW ... { local r:2 = dreg ^ srcW; dreg = r; lae(r); }
+:XOP srcEA, dnum is (op6=0x0B & dnum) ... & srcEA ... { XOPF = 1; extended_operation(dnum:1, srcEA); }
+:XOP "@"^ew, dnum is op6=0x0B & dnum & ts=2 & snum=0 ; ew { XOPF = 1; local a:2 = ew; extended_operation(dnum:1, a); }
+:XOP sreg, dnum is op6=0x0B & dnum & ts=0 & sreg { XOPF = 1; local a:2 = &sreg; extended_operation(dnum:1, a); }
+:LDCR srcB, dnum is (op6=0x0C & dnum & cb3=0 & clo!=0) ... & srcB ... { local v:1 = srcB; cru_load(R12, v, dnum:1); lae(v); parity(v); }
+:LDCR srcB, dnum is (op6=0x0C & dnum & cb3=1 & clo=0) ... & srcB ... { local v:1 = srcB; cru_load(R12, v, dnum:1); lae(v); parity(v); }
+:LDCR srcW, dnum is (op6=0x0C & dnum) ... & srcW ... { local v:2 = srcW; cru_load(R12, v, dnum:1); lae(v); }
+:STCR srcB, dnum is (op6=0x0D & dnum & cb3=0 & clo!=0) ... & srcB ... { local v:1 = cru_store(R12, dnum:1); srcB = v; lae(v); parity(v); }
+:STCR srcB, dnum is (op6=0x0D & dnum & cb3=1 & clo=0) ... & srcB ... { local v:1 = cru_store(R12, dnum:1); srcB = v; lae(v); parity(v); }
+:STCR srcW, dnum is (op6=0x0D & dnum) ... & srcW ... { local v:2 = cru_store(R12, dnum:1); srcW = v; lae(v); }
+:MPY srcW, dreg is (op6=0x0E & dreg & dreg1) ... & srcW ... { local p:4 = zext(dreg) * zext(srcW); dreg = p(2); dreg1 = p:2; }
+:DIV srcW, dreg is (op6=0x0F & dreg & dreg1) ... & srcW ... {
+	local s:2 = srcW;
+	OV = s <= dreg;
+	if (OV) goto inst_next;
+	local n:4 = (zext(dreg) << 16) | zext(dreg1);
+	local d:4 = zext(s);
+	local q:4 = n / d;
+	local m:4 = n % d;
+	dreg = q:2;
+	dreg1 = m:2;
+}
+
+:JMP jrel is op8=0x10 & jrel { goto jrel; }
+:JLT jrel is op8=0x11 & jrel { if ((AGT == 0) && (EQ == 0)) goto jrel; }
+:JLE jrel is op8=0x12 & jrel { if ((LGT == 0) || (EQ == 1)) goto jrel; }
+:JEQ jrel is op8=0x13 & jrel { if (EQ == 1) goto jrel; }
+:JHE jrel is op8=0x14 & jrel { if ((LGT == 1) || (EQ == 1)) goto jrel; }
+:JGT jrel is op8=0x15 & jrel { if (AGT == 1) goto jrel; }
+:JNE jrel is op8=0x16 & jrel { if (EQ == 0) goto jrel; }
+:JNC jrel is op8=0x17 & jrel { if (C == 0) goto jrel; }
+:JOC jrel is op8=0x18 & jrel { if (C == 1) goto jrel; }
+:JNO jrel is op8=0x19 & jrel { if (OV == 0) goto jrel; }
+:JL jrel is op8=0x1A & jrel { if ((LGT == 0) && (EQ == 0)) goto jrel; }
+:JH jrel is op8=0x1B & jrel { if ((LGT == 1) && (EQ == 0)) goto jrel; }
+:JOP jrel is op8=0x1C & jrel { if (OP == 1) goto jrel; }
+:SBO disp8 is op8=0x1D & disp8 { local b:2 = (R12 >> 1) + disp8; cru_set_bit(b, 1:1); }
+:SBZ disp8 is op8=0x1E & disp8 { local b:2 = (R12 >> 1) + disp8; cru_set_bit(b, 0:1); }
+:TB disp8 is op8=0x1F & disp8 { local b:2 = (R12 >> 1) + disp8; EQ = cru_test_bit(b); }
+
+:SRA wreg, cnt is op8=0x08 & wreg & cnt & cntz!=0 { local v:2 = wreg; C = ((v s>> (cnt - 1)) & 1) != 0; v = v s>> cnt; wreg = v; lae(v); }
+:SRL wreg, cnt is op8=0x09 & wreg & cnt & cntz!=0 { local v:2 = wreg; C = ((v >> (cnt - 1)) & 1) != 0; v = v >> cnt; wreg = v; lae(v); }
+:SLA wreg, cnt is op8=0x0A & wreg & cnt & cntz!=0 { local v:2 = wreg; C = ((v << (cnt - 1)) & 0x8000) != 0; local r:2 = v << cnt; OV = ((v s>> (15 - cnt)) != 0) && ((v s>> (15 - cnt)) != -1); wreg = r; lae(r); }
+:SRC wreg, cnt is op8=0x0B & wreg & cnt & cntz!=0 { local v:2 = wreg; local r:2 = (v >> cnt) | (v << (16 - cnt)); C = (r >> 15) != 0; wreg = r; lae(r); }
+:SRA wreg, "R0" is op8=0x08 & wreg & cnt=0 { local n:2 = R0 & 0xF; n = n + (16 * zext(n == 0)); local v:2 = wreg; C = ((v s>> (n - 1)) & 1) != 0; v = v s>> n; wreg = v; lae(v); }
+:SRL wreg, "R0" is op8=0x09 & wreg & cnt=0 { local n:2 = R0 & 0xF; n = n + (16 * zext(n == 0)); local v:2 = wreg; C = ((v >> (n - 1)) & 1) != 0; v = v >> n; wreg = v; lae(v); }
+:SLA wreg, "R0" is op8=0x0A & wreg & cnt=0 { local n:2 = R0 & 0xF; n = n + (16 * zext(n == 0)); local v:2 = wreg; C = ((v << (n - 1)) & 0x8000) != 0; local r:2 = v << n; OV = (r s>> n) != v; wreg = r; lae(r); }
+:SRC wreg, "R0" is op8=0x0B & wreg & cnt=0 { local n:2 = R0 & 0xF; local v:2 = wreg; local r:2 = (v >> n) | (v << ((16 - n) & 0xF)); C = (r >> 15) != 0; wreg = r; lae(r); }
+
+:BLWP "@"^ew is op10=0x010 & ts=2 & snum=0 ; ew { local v:2 = ew; WP = *:2 v; local t:2 = *:2 (v + 2); call [t]; }
+:BLWP srcEA is (op10=0x010) ... & srcEA ... { local v:2 = srcEA; WP = *:2 v; local t:2 = *:2 (v + 2); call [t]; }
+:B absw is op10=0x011 & ts=2 & snum=0 ; absw { goto absw; }
+:B "*R11" is op10=0x011 & ts=1 & snum=11 { return [R11]; }
+:B srcEA is (op10=0x011) ... & srcEA ... { goto [srcEA]; }
+:X srcW is (op10=0x012) ... & srcW ... { execute(srcW); }
+:CLR srcW is (op10=0x013) ... & srcW ... { srcW = 0; }
+:NEG srcW is (op10=0x014) ... & srcW ... { local a:2 = srcW; local r:2 = -a; srcW = r; C = a == 0; OV = a == 0x8000; lae(r); }
+:INV srcW is (op10=0x015) ... & srcW ... { local r:2 = ~srcW; srcW = r; lae(r); }
+:INC srcW is (op10=0x016) ... & srcW ... { local a:2 = srcW; local b:2 = 1; local r:2 = a + b; srcW = r; addFlags(a, b, r); }
+:INCT srcW is (op10=0x017) ... & srcW ... { local a:2 = srcW; local b:2 = 2; local r:2 = a + b; srcW = r; addFlags(a, b, r); }
+:DEC srcW is (op10=0x018) ... & srcW ... { local a:2 = srcW; local b:2 = 1; local r:2 = a - b; srcW = r; subFlags(a, b, r); }
+:DECT srcW is (op10=0x019) ... & srcW ... { local a:2 = srcW; local b:2 = 2; local r:2 = a - b; srcW = r; subFlags(a, b, r); }
+:BL absw is op10=0x01A & ts=2 & snum=0 ; absw { R11 = inst_next; call absw; }
+:BL srcEA is (op10=0x01A) ... & srcEA ... { R11 = inst_next; call [srcEA]; }
+:SWPB srcW is (op10=0x01B) ... & srcW ... { local v:2 = srcW; srcW = (v << 8) | (v >> 8); }
+:SETO srcW is (op10=0x01C) ... & srcW ... { srcW = 0xFFFF; }
+:ABS srcW is (op10=0x01D) ... & srcW ... { local a:2 = srcW; lae(a); OV = a == 0x8000; if (a s>= 0) goto <done>; srcW = -a; <done> }
+
+:LI wreg, "#"^ew is op11=0x010 & wreg ; ew { wreg = ew; lae(wreg); }
+:AI wreg, "#"^ew is op11=0x011 & wreg ; ew { local a:2 = wreg; local b:2 = ew; local r:2 = a + b; wreg = r; addFlags(a, b, r); }
+:ANDI wreg, "#"^ew is op11=0x012 & wreg ; ew { local r:2 = wreg & ew; wreg = r; lae(r); }
+:ORI wreg, "#"^ew is op11=0x013 & wreg ; ew { local r:2 = wreg | ew; wreg = r; lae(r); }
+:CI wreg, "#"^ew is op11=0x014 & wreg ; ew { local a:2 = wreg; local b:2 = ew; cmpFlags(a, b); }
+:STWP wreg is op11=0x015 & wreg { wreg = WP; }
+:STST wreg is op11=0x016 & wreg { local v:2 = (zext(LGT) << 15) | (zext(AGT) << 14) | (zext(EQ) << 13) | (zext(C) << 12) | (zext(OV) << 11) | (zext(OP) << 10) | (zext(XOPF) << 9) | zext(INTM); wreg = v; }
+:LWPI "#"^ew is op11=0x017 ; ew { WP = ew; }
+:LIMI "#"^ew is op11=0x018 ; ew { local e:2 = ew; INTM = e:1 & 0xF; }
+:IDLE is op16=0x0340 { idle(); }
+:RSET is op16=0x0360 { INTM = 0; reset_io(); }
+:RTWP is op16=0x0380 { WP = R13; local st:2 = R15; LGT = (st & 0x8000) != 0; AGT = (st & 0x4000) != 0; EQ = (st & 0x2000) != 0; C = (st & 0x1000) != 0; OV = (st & 0x0800) != 0; OP = (st & 0x0400) != 0; XOPF = (st & 0x0200) != 0; INTM = st:1 & 0xF; return [R14]; }
+:CKON is op16=0x03A0 { clock_on(); }
+:CKOF is op16=0x03C0 { clock_off(); }
+:LREX is op16=0x03E0 { load_rom_execute(); }

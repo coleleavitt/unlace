@@ -1636,6 +1636,27 @@ upstream does.
 `docs/decbench/returndup-o0-measurement.md` and
 `docs/decbench/returndup-regression-triage.md` hold the corpus tables.
 
+**`orchainlive` — an operand that computes a live value is a statement.**
+With `option orchainlive on`, the replay above does not fuse a sibling whose
+basic block computes a value read outside it
+(`kuna_orchain.rs (defines_live_value)`: a non-marker op whose output has a
+reader in another block). Such an operand is a statement the source wrote
+before its own guard, `offset = LSEEK(...); if (offset == -1) return -1;`
+(DecBench O2-noinline zlib `gzoffset64`), not an operand of a boolean
+expression, so its shared constant return is not protected and `returndup`
+splits it into early returns. A sibling that only tests values keeps the
+protection. Default **off**.
+
+**`orchainbool` — only a boolean return is an expression's exit.** With
+`option orchainbool on`, `returndup_apply` ignores the short-circuit protection
+for a shared RETURN block whose returned value resolves through COPY and
+MULTIEQUAL to constants only, at least one of them neither 0 nor 1
+(`crates/unlace-middle/src/substrate/kuna_orchainbool.rs
+(returns_nonbool_const)`). A chain of tests sharing `return 0`/`return 1` is
+the operand chain of a boolean expression; one sharing `return -1` is a run of
+guard clauses (DecBench O2-noinline zlib `gztell64`), which the split prints
+as early returns. Default **off**.
+
 ### rettriangle — the join of a one-block `if`
 
 A shared constant-return block whose two predecessors are the arms of a

@@ -39,6 +39,7 @@ pub mod kuna_hostmem;
 pub mod kuna_maturity; // (kuna) how far the scheduler has got through a pass (spec §0.10)
 pub mod kuna_namespaces; // (kuna) which namespaces print in front of a name
 pub mod kuna_optionset;
+pub mod kuna_orchainbool; // (kuna `orchainbool`) short-circuit protection only for boolean returns
 pub mod kuna_outlang;
 pub mod kuna_passhooks;
 pub mod kuna_printhandle;

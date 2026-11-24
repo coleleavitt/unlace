@@ -46,6 +46,10 @@ fn binding(name: &str) -> Option<(&'static str, Encoding)> {
             unlace_analysis::dwarf::kuna_dwarfscopes::DWARFSCOPES_ENV,
             DefaultOn,
         ),
+        "dwarfenumtypedef" => (
+            unlace_analysis::dwarf::kuna_dwarfenumtypedef::DWARFENUMTYPEDEF_ENV,
+            DefaultOff,
+        ),
         "calltargettype" => (kuna_calltargettype::CALLTARGETTYPE_ENV, DefaultOn),
         "macho-arm64e" => (kuna_macho_arm64e::MACHO_ARM64E_ENV, DefaultOn),
         "sourcelang" => (kuna_sourcelang::SOURCELANG_ENV, SourceLang),

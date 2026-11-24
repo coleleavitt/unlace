@@ -129,6 +129,8 @@ mod kuna_dwarflocation;
 pub mod kuna_dwarfscopes;
 use kuna_dwarfscopes::FrameBase;
 pub(crate) mod kuna_dwarfcomplex;
+mod kuna_dwarfdecls;
+pub mod kuna_dwarfenumtypedef;
 mod kuna_dwarflinkage;
 mod kuna_dwarfsignatures;
 pub mod kuna_godwarfsig;
@@ -872,7 +874,7 @@ fn build_datatype_at(
         gimli::DW_TAG_enumeration_type => {
             let size = die.byte_size.map(|b| b as i32).unwrap_or(4).max(1);
             let signed = enum_signed(die, dies);
-            build_enum(die, dies, types, size, signed)
+            build_enum(die, alias, dies, types, size, signed)
                 // Anonymous, memberless, or the wrong width for the factory's
                 // enum size: fall back to the plain underlying integer.
                 .or_else(|| types.get_base(size, enum_fallback(size, signed)).ok())
@@ -1042,7 +1044,7 @@ fn enum_fallback(size: i32, signed: Option<bool>) -> type_metatype {
 /// `quotearg_style(4, ...)`.
 ///
 /// `None` (and the caller falls back to the plain integer) when the enum is
-/// anonymous, has no usable members, or is not the width the type factory builds
+/// anonymous (and `dwarfenumtypedef` gives it no typedef name), has no usable members, or is not the width the type factory builds
 /// enums at — a size mismatch would misdescribe the storage, and a wrong size is
 /// worse than a missing name. It is signed only when `signed` ([`enum_signed`])
 /// says so.
@@ -1052,14 +1054,13 @@ fn enum_fallback(size: i32, signed: Option<bool>) -> type_metatype {
 /// the constant Varnode actually carries.
 fn build_enum(
     die: &DieSnap,
+    alias: Option<&str>,
     dies: &BTreeMap<usize, DieSnap>,
     types: &dyn TypeFactory,
     size: i32,
     signed: Option<bool>,
 ) -> Option<Rc<Datatype>> {
-    if die.name.is_empty() {
-        return None;
-    }
+    let name = kuna_dwarfenumtypedef::name(die, alias)?;
     let mask: u64 = if size >= 8 {
         u64::MAX
     } else {
@@ -1097,10 +1098,10 @@ fn build_enum(
     // longer matches the filled definition already installed — so look first and
     // reuse. Guarded on shape: a same-named type that is not an enum of this width
     // owns the name, and we do not fight it.
-    if let Ok(Some(existing)) = types.find_by_name(&die.name) {
+    if let Ok(Some(existing)) = types.find_by_name(name) {
         return (existing.is_enum_type() && existing.get_size() == size).then_some(existing);
     }
-    let ct = types.get_type_enum_sized(&die.name, size, meta).ok()?;
+    let ct = types.get_type_enum_sized(name, size, meta).ok()?;
     types.set_enum_values(&ct, nmap).ok()
 }
 
@@ -1403,6 +1404,7 @@ impl DwarfPass {
         let go_target =
             ctx.file.is_little_endian() && ctx.file.architecture() == object::Architecture::X86_64;
         let mut go_facts = kuna_godwarfsig::Facts::default();
+        let mut decls = kuna_dwarfdecls::Decls::default();
         let mut units = dwarf.units();
         while let Ok(Some(header)) = units.next() {
             let Ok(unit) = dwarf.unit(header) else {
@@ -1426,6 +1428,9 @@ impl DwarfPass {
             for snap in dies.values() {
                 match snap.tag {
                     gimli::DW_TAG_subprogram => {
+                        if signatures && !linkage_imports.is_empty() {
+                            decls.note(snap, &dies, types, word_size, &linkage_imports);
+                        }
                         // Defined function only: DW_AT_low_pc present and not a
                         // declaration-only DIE (DWARFFunction.read body-ranges guard).
                         let Some(low_pc) = snap.low_pc else { continue };
@@ -1610,6 +1615,7 @@ impl DwarfPass {
         if !go_facts.is_empty() {
             out.go_dwarf.push(go_facts);
         }
+        decls.finish(&linkage_imports, &mut out.dwarf_decl_prototypes);
         let arch = ctx.file.architecture();
         for list in [&mut out.dwarf_reg_locals, &mut out.dwarf_param_regs] {
             list.retain_mut(

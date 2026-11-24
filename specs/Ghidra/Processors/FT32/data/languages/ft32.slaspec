@@ -1,0 +1,230 @@
+# FTDI FT32 (FT900 family): 32 32-bit registers, fixed 32-bit little-endian
+# instructions in a separate program memory, data in a byte-addressed RAM.
+# Written from the FT32 programmer's documentation and the binutils opcode table.
+
+define endian=little;
+define alignment=4;
+
+define space code type=ram_space size=4 default;
+define space ram type=ram_space size=4;
+define space register type=register_space size=4;
+
+define register offset=0 size=4 [
+  r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+  r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 fp cc sp
+];
+define register offset=0x80 size=4 [ pc ];
+define register offset=0x90 size=1 [ fz fc fo fs fge fgt fa ];
+
+define token instr(32)
+  pat    = (27,31)
+  dw     = (25,26)
+  Rd     = (20,24)
+  R1     = (15,19)
+  rimmf  = (14,14)
+  rimm10 = (4,13) signed
+  R2     = (4,8)
+  al     = (0,3)
+  cb     = (22,26)
+  cr     = (20,21)
+  cv     = (19,19)
+  bt     = (18,18)
+  pa     = (0,17)
+  aa     = (0,16)
+  k20    = (0,19) signed
+  k16    = (0,15)
+  k15    = (0,14) signed
+  b25    = (25,25)
+  low15  = (0,14)
+  low27  = (0,26)
+;
+
+attach variables [ Rd R1 R2 ] [
+  r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+  r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 fp cc sp
+];
+
+define pcodeop halt;
+define pcodeop return_from_interrupt;
+define pcodeop strcmp;
+define pcodeop memcpy;
+define pcodeop strlen;
+define pcodeop memset;
+define pcodeop stpcpy;
+define pcodeop streamin;
+define pcodeop streamini;
+define pcodeop streamout;
+define pcodeop streamouti;
+define pcodeop flip;
+define pcodeop bit_insert;
+
+RIMM: R2 is rimmf=0 & R2 { export R2; }
+RIMM: rimm10 is rimmf=1 & rimm10 { export *[const]:4 rimm10; }
+
+SZ: ".b" is dw=0 {}
+SZ: ".s" is dw=1 {}
+SZ: ".l" is dw=2 {}
+
+macro setflags(a, b, r) {
+  fz = (r == 0);
+  fc = (a < b);
+  fo = sborrow(a, b);
+  fs = (r s< 0);
+  fge = (a s>= b);
+  fgt = (a s> b);
+  fa = (a > b);
+  cc = zext(fz) | (zext(fc) << 1) | (zext(fo) << 2) | (zext(fs) << 3) | (zext(fge) << 4) | (zext(fgt) << 5) | (zext(fa) << 6);
+}
+
+macro setlogic(r) {
+  fz = (r == 0);
+  fc = 0;
+  fo = 0;
+  fs = (r s< 0);
+  fge = !fs;
+  fgt = !fs && !fz;
+  fa = !fz;
+  cc = zext(fz) | (zext(fs) << 3) | (zext(fge) << 4) | (zext(fgt) << 5) | (zext(fa) << 6);
+}
+
+macro push4(v) { sp = sp - 4; *[ram]:4 sp = v; }
+macro pop4(v) { v = *[ram]:4 sp; sp = sp + 4; }
+
+# ALU: Rd = R1 op rimm
+:add^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x0 { Rd = R1 + RIMM; }
+:ror^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x1 { local n = RIMM & 31; Rd = (R1 >> n) | (R1 << ((32 - n) & 31)); }
+:sub^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x2 { Rd = R1 - RIMM; }
+:ldl^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x3 { Rd = (R1 << 10) | (RIMM & 0x3ff); }
+:and^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x4 { Rd = R1 & RIMM; }
+:or^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x5 { Rd = R1 | RIMM; }
+:xor^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x6 { Rd = R1 ^ RIMM; }
+:xnor^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x7 { Rd = ~(R1 ^ RIMM); }
+:ashl^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x8 { Rd = R1 << (RIMM & 31); }
+:lshr^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x9 { Rd = R1 >> (RIMM & 31); }
+:ashr^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0xa { Rd = R1 s>> (RIMM & 31); }
+:bins^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0xb { Rd = bit_insert(R1, RIMM); }
+:bexts^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0xc {
+  local w = (RIMM >> 5) & 0xf;
+  w = w + 16 * zext(w == 0);
+  local p = RIMM & 31;
+  Rd = (R1 << (32 - w - p)) s>> (32 - w);
+}
+:bextu^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0xd {
+  local w = (RIMM >> 5) & 0xf;
+  w = w + 16 * zext(w == 0);
+  local p = RIMM & 31;
+  Rd = (R1 >> p) & ((1 << w) - 1);
+}
+:flip^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0xe { Rd = flip(R1, RIMM); }
+
+:nop is pat=0x08 & low27=0x4000 & dw=0 {}
+:move^SZ Rd, R1 is pat=0x08 & SZ & Rd & R1 & rimmf=1 & rimm10=0 & al=0x0 { Rd = R1; }
+
+# Compare-type: result only in the flags ($cc)
+:addcc^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x0 & dw=2 {
+  local a = R1; local b = RIMM; local r = a + b;
+  fz = (r == 0); fc = carry(a, b); fo = scarry(a, b); fs = (r s< 0);
+  fge = (fs == fo); fgt = (fs == fo) && !fz; fa = fc == 0 && !fz;
+  cc = zext(fz) | (zext(fc) << 1) | (zext(fo) << 2) | (zext(fs) << 3) | (zext(fge) << 4) | (zext(fgt) << 5) | (zext(fa) << 6);
+}
+:cmp^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x2 & dw=2 { local a = R1; local b = RIMM; local r = a - b; setflags(a, b, r); }
+:cmp^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x2 & dw=1 { local a = R1:2; local b = RIMM; local bb = b:2; local r = a - bb; setflags(a, bb, r); }
+:cmp^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x2 & dw=0 { local a = R1:1; local b = RIMM; local bb = b:1; local r = a - bb; setflags(a, bb, r); }
+:tst^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x4 { local r = R1 & RIMM; setlogic(r); }
+:btst^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0xc {
+  local w = (RIMM >> 5) & 0xf;
+  w = w + 16 * zext(w == 0);
+  local p = RIMM & 31;
+  local r = (R1 << (32 - w - p)) s>> (32 - w);
+  setlogic(r);
+}
+
+# Function unit ops
+:udiv^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0x0 { Rd = R1 / RIMM; }
+:umod^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0x1 { Rd = R1 % RIMM; }
+:div^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0x2 { Rd = R1 s/ RIMM; }
+:mod^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0x3 { Rd = R1 s% RIMM; }
+:strcmp^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0x4 { Rd = strcmp(R1, RIMM); }
+:memcpy^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0x5 { memcpy(Rd, R1, RIMM); }
+:strlen^SZ Rd, R1 is pat=0x1e & SZ & Rd & R1 & low15=0x4006 { Rd = strlen(R1); }
+:memset^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0x7 { memset(Rd, R1, RIMM); }
+:mul^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0x8 { Rd = R1 * RIMM; }
+:muluh^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0x9 { local p:8 = zext(R1) * zext(RIMM); Rd = p(4); }
+:stpcpy^SZ Rd, R1 is pat=0x1e & SZ & Rd & R1 & low15=0x400a { Rd = stpcpy(Rd, R1); }
+:streamin^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0xc { streamin(Rd, R1, RIMM); }
+:streamini^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0xd { streamini(Rd, R1, RIMM); }
+:streamout^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0xe { streamout(Rd, R1, RIMM); }
+:streamouti^SZ Rd, R1, RIMM is pat=0x1e & SZ & Rd & R1 & RIMM & al=0xf { streamouti(Rd, R1, RIMM); }
+
+:ldk^".l" Rd, k20 is pat=0x0c & Rd & k20 { Rd = k20; }
+
+# Loads (zero-extending) and stores
+DADDR: aa is aa { export *[const]:4 aa; }
+:lda^".b" Rd, DADDR is pat=0x18 & dw=0 & Rd & DADDR { Rd = zext(*[ram]:1 DADDR); }
+:lda^".s" Rd, DADDR is pat=0x18 & dw=1 & Rd & DADDR { Rd = zext(*[ram]:2 DADDR); }
+:lda^".l" Rd, DADDR is pat=0x18 & dw=2 & Rd & DADDR { Rd = *[ram]:4 DADDR; }
+:sta^".b" DADDR, Rd is pat=0x17 & dw=0 & Rd & DADDR { *[ram]:1 DADDR = Rd:1; }
+:sta^".s" DADDR, Rd is pat=0x17 & dw=1 & Rd & DADDR { *[ram]:2 DADDR = Rd:2; }
+:sta^".l" DADDR, Rd is pat=0x17 & dw=2 & Rd & DADDR { *[ram]:4 DADDR = Rd; }
+:exa^".l" Rd, DADDR is pat=0x07 & dw=2 & Rd & DADDR { local t = *[ram]:4 DADDR; *[ram]:4 DADDR = Rd; Rd = t; }
+:exa^".s" Rd, DADDR is pat=0x07 & dw=1 & Rd & DADDR { local t = *[ram]:2 DADDR; *[ram]:2 DADDR = Rd:2; Rd = zext(t); }
+:exa^".b" Rd, DADDR is pat=0x07 & dw=0 & Rd & DADDR { local t = *[ram]:1 DADDR; *[ram]:1 DADDR = Rd:1; Rd = zext(t); }
+
+:ldi^".b" Rd, R1, k15 is pat=0x15 & dw=0 & Rd & R1 & k15 { Rd = zext(*[ram]:1 (R1 + k15)); }
+:ldi^".s" Rd, R1, k15 is pat=0x15 & dw=1 & Rd & R1 & k15 { Rd = zext(*[ram]:2 (R1 + k15)); }
+:ldi^".l" Rd, R1, k15 is pat=0x15 & dw=2 & Rd & R1 & k15 { Rd = *[ram]:4 (R1 + k15); }
+:sti^".b" Rd, k15, R1 is pat=0x16 & dw=0 & Rd & R1 & k15 { *[ram]:1 (Rd + k15) = R1:1; }
+:sti^".s" Rd, k15, R1 is pat=0x16 & dw=1 & Rd & R1 & k15 { *[ram]:2 (Rd + k15) = R1:2; }
+:sti^".l" Rd, k15, R1 is pat=0x16 & dw=2 & Rd & R1 & k15 { *[ram]:4 (Rd + k15) = R1; }
+:exi^".l" Rd, R1, k15 is pat=0x1d & dw=2 & Rd & R1 & k15 { local a = R1 + k15; local t = *[ram]:4 a; *[ram]:4 a = Rd; Rd = t; }
+:exi^".s" Rd, R1, k15 is pat=0x1d & dw=1 & Rd & R1 & k15 { local a = R1 + k15; local t = *[ram]:2 a; *[ram]:2 a = Rd:2; Rd = zext(t); }
+:exi^".b" Rd, R1, k15 is pat=0x1d & dw=0 & Rd & R1 & k15 { local a = R1 + k15; local t = *[ram]:1 a; *[ram]:1 a = Rd:1; Rd = zext(t); }
+
+PADDR: addr is pa [ addr = pa << 2; ] { export *[const]:4 addr; }
+:lpm^".b" Rd, PADDR is pat=0x0d & dw=0 & Rd & PADDR { Rd = zext(*[code]:1 PADDR); }
+:lpm^".s" Rd, PADDR is pat=0x0d & dw=1 & Rd & PADDR { Rd = zext(*[code]:2 PADDR); }
+:lpm^".l" Rd, PADDR is pat=0x0d & dw=2 & Rd & PADDR { Rd = *[code]:4 PADDR; }
+:lpmi^".b" Rd, R1, k15 is pat=0x19 & dw=0 & Rd & R1 & k15 { Rd = zext(*[code]:1 (R1 + k15)); }
+:lpmi^".s" Rd, R1, k15 is pat=0x19 & dw=1 & Rd & R1 & k15 { Rd = zext(*[code]:2 (R1 + k15)); }
+:lpmi^".l" Rd, R1, k15 is pat=0x19 & dw=2 & Rd & R1 & k15 { Rd = *[code]:4 (R1 + k15); }
+
+:push^".l" R1 is pat=0x10 & R1 { push4(R1); }
+:pop^".l" Rd is pat=0x11 & Rd { pop4(Rd); }
+:link Rd, k16 is pat=0x12 & Rd & k16 { push4(Rd); Rd = sp; sp = sp - k16; }
+:unlink Rd is pat=0x13 & Rd { sp = Rd; pop4(Rd); }
+:return is pat=0x14 & b25=0 { local t:4 = 0; pop4(t); return [t]; }
+:reti is pat=0x14 & b25=1 { local t:4 = 0; pop4(t); return_from_interrupt(); return [t]; }
+:halt is pat=0x0f { halt(); goto inst_start; }
+
+# Control transfer: CR=3 is unconditional; otherwise jump when bit CB of r28+CR equals CV.
+DEST: addr is pa [ addr = pa << 2; ] { export *:4 addr; }
+
+COND: "nz" is cr=2 & cb=0 & cv=0 { local c:1 = !fz; export c; }
+COND: "z" is cr=2 & cb=0 & cv=1 { local c:1 = fz; export c; }
+COND: "ae" is cr=2 & cb=1 & cv=0 { local c:1 = !fc; export c; }
+COND: "b" is cr=2 & cb=1 & cv=1 { local c:1 = fc; export c; }
+COND: "no" is cr=2 & cb=2 & cv=0 { local c:1 = !fo; export c; }
+COND: "o" is cr=2 & cb=2 & cv=1 { local c:1 = fo; export c; }
+COND: "ns" is cr=2 & cb=3 & cv=0 { local c:1 = !fs; export c; }
+COND: "s" is cr=2 & cb=3 & cv=1 { local c:1 = fs; export c; }
+COND: "lt" is cr=2 & cb=4 & cv=0 { local c:1 = !fge; export c; }
+COND: "gte" is cr=2 & cb=4 & cv=1 { local c:1 = fge; export c; }
+COND: "lte" is cr=2 & cb=5 & cv=0 { local c:1 = !fgt; export c; }
+COND: "gt" is cr=2 & cb=5 & cv=1 { local c:1 = fgt; export c; }
+COND: "be" is cr=2 & cb=6 & cv=0 { local c:1 = !fa; export c; }
+COND: "a" is cr=2 & cb=6 & cv=1 { local c:1 = fa; export c; }
+COND: cb^",cc,"^cv is cr=2 & cb & cv { local c:1 = ((cc >> cb) & 1) == cv; export c; }
+COND: cb^",r28,"^cv is cr=0 & cb & cv { local c:1 = ((r28 >> cb) & 1) == cv; export c; }
+COND: cb^",fp,"^cv is cr=1 & cb & cv { local c:1 = ((fp >> cb) & 1) == cv; export c; }
+
+:jmp DEST is pat=0x00 & cr=3 & cb=0 & cv=0 & bt=0 & DEST { goto DEST; }
+:call DEST is pat=0x00 & cr=3 & cb=0 & cv=0 & bt=1 & DEST { local ra:4 = inst_next; push4(ra); call DEST; }
+:jmpc COND, DEST is pat=0x00 & cr!=3 & bt=0 & COND & DEST { if (COND) goto DEST; }
+:callc COND, DEST is pat=0x00 & cr!=3 & bt=1 & COND & DEST {
+  if (!COND) goto inst_next;
+  local ra:4 = inst_next; push4(ra);
+  call DEST;
+}
+:jmpi R2 is pat=0x01 & cr=3 & cb=0 & cv=0 & bt=0 & R2 { goto [R2]; }
+:calli R2 is pat=0x01 & cr=3 & cb=0 & cv=0 & bt=1 & R2 { local t = R2; local ra:4 = inst_next; push4(ra); call [t]; }
+:jmpic COND, R2 is pat=0x01 & cr!=3 & bt=0 & COND & R2 { if (!COND) goto inst_next; goto [R2]; }

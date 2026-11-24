@@ -31,6 +31,18 @@
   <language processor="tricore"
             endian="little"
             size="32"
+            variant="TC18"
+            version="1.0"
+            slafile="tricore_tc18.sla"
+            processorspec="tricore.pspec"
+            id="tricore:LE:32:tc18">
+    <description>Infineon TriCore TC1.8 (AURIX TC4x; also decodes TC1.6.2 AURIX TC3xx)</description>
+    <compiler name="default" spec="tricore.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="tricore.dwarf"/>
+  </language>
+  <language processor="tricore"
+            endian="little"
+            size="32"
             variant="TC172x"
             version="1.7"
             slafile="tricore.sla"

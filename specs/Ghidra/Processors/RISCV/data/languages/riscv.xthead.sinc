@@ -1,0 +1,765 @@
+# T-Head (Alibaba) vendor extensions, custom-0 opcode space (0x0b).
+# Sources: T-Head "thead-extension-spec" (XTheadBa/Bb/Bs/CondMov/Mac/MemIdx/
+# MemPair/FMemIdx/Cmo/Sync, CC-BY-4.0) and LLVM RISCVInstrInfoXTHead.td for the
+# assembler syntax. Cache and sync operations are named pcodeops.
+
+define pcodeop th_dcache_call;
+define pcodeop th_dcache_iall;
+define pcodeop th_dcache_ciall;
+define pcodeop th_icache_iall;
+define pcodeop th_icache_ialls;
+define pcodeop th_l2cache_call;
+define pcodeop th_l2cache_iall;
+define pcodeop th_l2cache_ciall;
+define pcodeop th_dcache_csw;
+define pcodeop th_dcache_isw;
+define pcodeop th_dcache_cisw;
+define pcodeop th_dcache_cval1;
+define pcodeop th_dcache_cva;
+define pcodeop th_dcache_iva;
+define pcodeop th_dcache_civa;
+define pcodeop th_dcache_cpal1;
+define pcodeop th_dcache_cpa;
+define pcodeop th_dcache_ipa;
+define pcodeop th_dcache_cipa;
+define pcodeop th_icache_iva;
+define pcodeop th_icache_ipa;
+define pcodeop th_sfence_vmas;
+define pcodeop th_sync;
+define pcodeop th_sync_s;
+define pcodeop th_sync_i;
+define pcodeop th_sync_is;
+
+thRs1Wb: r1519 is r1519 { export r1519; }
+thRs1Wb: zero is r1519=0 & zero { local tmp:$(XLEN) = 0; export tmp; }
+thRs2Wb: r2024 is r2024 { export r2024; }
+thRs2Wb: zero is r2024=0 & zero { local tmp:$(XLEN) = 0; export tmp; }
+
+thUimm2: op2526 is op2526 { export *[const]:$(XLEN) op2526; }
+thSimm5: imm is op2024 [ imm = op2024 - ((op2024 >> 4) << 5); ] { export *[const]:$(XLEN) imm; }
+
+
+@if ADDRSIZE == "32"
+thMsb: op2631 is op2631 & op3131=0 { export *[const]:$(XLEN) op2631; }
+thLsb: op2025 is op2025 & op2525=0 { export *[const]:$(XLEN) op2025; }
+@else
+thMsb: op2631 is op2631 { export *[const]:$(XLEN) op2631; }
+thLsb: op2025 is op2025 { export *[const]:$(XLEN) op2025; }
+@endif
+
+# XTheadBa
+:th.addsl rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=1 & op2731=0 & thUimm2 & rd & rs1 & rs2
+{
+	rd = rs1 + (rs2 << thUimm2);
+}
+
+# XTheadBb
+:th.srri rd,rs1,shamt6 is op0006=0x0b & funct3=1 & op2731=0x02 & rd & rs1 & shamt6
+{
+	local x:$(XLEN) = rs1;
+	rd = (x >> shamt6) | (x << (($(XLEN) * 8) - shamt6));
+}
+
+:th.ext rd,rs1,thMsb,thLsb is op0006=0x0b & funct3=2 & thMsb & thLsb & rd & rs1
+{
+	local x:$(XLEN) = rs1 << (($(XLEN) * 8) - 1 - thMsb);
+	rd = x s>> (($(XLEN) * 8) - 1 - thMsb + thLsb);
+}
+
+:th.extu rd,rs1,thMsb,thLsb is op0006=0x0b & funct3=3 & thMsb & thLsb & rd & rs1
+{
+	local x:$(XLEN) = rs1 << (($(XLEN) * 8) - 1 - thMsb);
+	rd = x >> (($(XLEN) * 8) - 1 - thMsb + thLsb);
+}
+
+:th.ff0 rd,rs1 is op0006=0x0b & funct3=1 & op2031=0x840 & rd & rs1
+{
+	rd = lzcount(~rs1);
+}
+
+:th.ff1 rd,rs1 is op0006=0x0b & funct3=1 & op2031=0x860 & rd & rs1
+{
+	rd = lzcount(rs1);
+}
+
+:th.rev rd,rs1 is op0006=0x0b & funct3=1 & op2031=0x820 & rd & rs1
+{
+	local x:$(XLEN) = rs1;
+@if ADDRSIZE == "32"
+	rd = (x << 24) | ((x & 0xff00) << 8) | ((x >> 8) & 0xff00) | (x >> 24);
+@else
+	rd = (x << 56) | ((x & 0xff00) << 40) | ((x & 0xff0000) << 24) | ((x & 0xff000000) << 8)
+		| ((x >> 8) & 0xff000000) | ((x >> 24) & 0xff0000) | ((x >> 40) & 0xff00) | (x >> 56);
+@endif
+}
+
+:th.tstnbz rd,rs1 is op0006=0x0b & funct3=1 & op2031=0x800 & rd & rs1
+{
+	local x:$(XLEN) = rs1;
+	local r:$(XLEN) = 0;
+	r = r | (zext(x[0,8] == 0) * 0xff);
+	r = r | (zext(x[8,8] == 0) * 0xff00);
+	r = r | (zext(x[16,8] == 0) * 0xff0000);
+	r = r | (zext(x[24,8] == 0) * 0xff000000);
+@if ADDRSIZE == "64"
+	r = r | (zext(x[32,8] == 0) * 0xff00000000);
+	r = r | (zext(x[40,8] == 0) * 0xff0000000000);
+	r = r | (zext(x[48,8] == 0) * 0xff000000000000);
+	r = r | (zext(x[56,8] == 0) * 0xff00000000000000);
+@endif
+	rd = r;
+}
+
+@if ADDRSIZE == "64"
+:th.srriw rd,rs1,op2024 is op0006=0x0b & funct3=1 & op2531=0x0a & rd & rs1 & op2024
+{
+	local x:4 = rs1:4;
+	local r:4 = (x >> op2024) | (x << (32 - op2024));
+	rd = sext(r);
+}
+
+:th.revw rd,rs1 is op0006=0x0b & funct3=1 & op2031=0x900 & rd & rs1
+{
+	local x:4 = rs1:4;
+	local r:4 = (x << 24) | ((x & 0xff00) << 8) | ((x >> 8) & 0xff00) | (x >> 24);
+	rd = sext(r);
+}
+@endif
+
+# XTheadBs
+:th.tst rd,rs1,shamt6 is op0006=0x0b & funct3=1 & op2731=0x11 & rd & rs1 & shamt6
+{
+	rd = (rs1 >> shamt6) & 1;
+}
+
+# XTheadCondMov
+:th.mveqz rd,rs1,rs2 is op0006=0x0b & funct3=1 & funct7=0x20 & rd & rs1 & rs2
+{
+	if (rs2 != 0) goto inst_next;
+	rd = rs1;
+}
+
+:th.mvnez rd,rs1,rs2 is op0006=0x0b & funct3=1 & funct7=0x21 & rd & rs1 & rs2
+{
+	if (rs2 == 0) goto inst_next;
+	rd = rs1;
+}
+
+# XTheadMac
+:th.mula rd,rs1,rs2 is op0006=0x0b & funct3=1 & funct7=0x10 & rd & rs1 & rs2
+{
+	rd = rd + rs1 * rs2;
+}
+
+:th.muls rd,rs1,rs2 is op0006=0x0b & funct3=1 & funct7=0x11 & rd & rs1 & rs2
+{
+	rd = rd - rs1 * rs2;
+}
+
+:th.mulah rd,rs1,rs2 is op0006=0x0b & funct3=1 & funct7=0x14 & rd & rs1 & rs2
+{
+	local r:4 = rd:4 + sext(rs1:2) * sext(rs2:2);
+	rd = sext(r);
+}
+
+:th.mulsh rd,rs1,rs2 is op0006=0x0b & funct3=1 & funct7=0x15 & rd & rs1 & rs2
+{
+	local r:4 = rd:4 - sext(rs1:2) * sext(rs2:2);
+	rd = sext(r);
+}
+
+@if ADDRSIZE == "64"
+:th.mulaw rd,rs1,rs2 is op0006=0x0b & funct3=1 & funct7=0x12 & rd & rs1 & rs2
+{
+	local r:4 = rd:4 + rs1:4 * rs2:4;
+	rd = sext(r);
+}
+
+:th.mulsw rd,rs1,rs2 is op0006=0x0b & funct3=1 & funct7=0x13 & rd & rs1 & rs2
+{
+	local r:4 = rd:4 - rs1:4 * rs2:4;
+	rd = sext(r);
+}
+@endif
+
+# XTheadMemPair
+:th.lwd rd,thRs2Wb,(rs1),thUimm2,"3" is op0006=0x0b & funct3=4 & op2731=0x1c & rd & thRs2Wb & rs1 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (thUimm2 << 3);
+	local a:4 = *[ram]:4 ea;
+	local b:4 = *[ram]:4 (ea + 4);
+	rd = sext(a);
+	thRs2Wb = sext(b);
+}
+
+:th.lwud rd,thRs2Wb,(rs1),thUimm2,"3" is op0006=0x0b & funct3=4 & op2731=0x1e & rd & thRs2Wb & rs1 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (thUimm2 << 3);
+	local a:4 = *[ram]:4 ea;
+	local b:4 = *[ram]:4 (ea + 4);
+	rd = zext(a);
+	thRs2Wb = zext(b);
+}
+
+:th.swd rd,rs2,(rs1),thUimm2,"3" is op0006=0x0b & funct3=5 & op2731=0x1c & rd & rs2 & rs1 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (thUimm2 << 3);
+	*[ram]:4 ea = rd:4;
+	*[ram]:4 (ea + 4) = rs2:4;
+}
+
+@if ADDRSIZE == "64"
+:th.ldd rd,thRs2Wb,(rs1),thUimm2,"4" is op0006=0x0b & funct3=4 & op2731=0x1f & rd & thRs2Wb & rs1 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (thUimm2 << 4);
+	local a:8 = *[ram]:8 ea;
+	local b:8 = *[ram]:8 (ea + 8);
+	rd = a;
+	thRs2Wb = b;
+}
+@endif
+
+@if ADDRSIZE == "64"
+:th.sdd rd,rs2,(rs1),thUimm2,"4" is op0006=0x0b & funct3=5 & op2731=0x1f & rd & rs2 & rs1 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (thUimm2 << 4);
+	*[ram]:8 ea = rd:8;
+	*[ram]:8 (ea + 8) = rs2:8;
+}
+@endif
+
+# XTheadMemIdx: load/store with base update (ia: after, ib: before)
+:th.lbia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x3 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:1 = *[ram]:1 base;
+	thRs1Wb = next;
+	rd = sext(v);
+}
+
+:th.lbib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x1 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:1 = *[ram]:1 next;
+	thRs1Wb = next;
+	rd = sext(v);
+}
+
+:th.lbuia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x13 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:1 = *[ram]:1 base;
+	thRs1Wb = next;
+	rd = zext(v);
+}
+
+:th.lbuib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x11 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:1 = *[ram]:1 next;
+	thRs1Wb = next;
+	rd = zext(v);
+}
+
+:th.lhia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x7 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:2 = *[ram]:2 base;
+	thRs1Wb = next;
+	rd = sext(v);
+}
+
+:th.lhib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x5 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:2 = *[ram]:2 next;
+	thRs1Wb = next;
+	rd = sext(v);
+}
+
+:th.lhuia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x17 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:2 = *[ram]:2 base;
+	thRs1Wb = next;
+	rd = zext(v);
+}
+
+:th.lhuib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x15 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:2 = *[ram]:2 next;
+	thRs1Wb = next;
+	rd = zext(v);
+}
+
+:th.lwia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0xb & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:4 = *[ram]:4 base;
+	thRs1Wb = next;
+	rd = sext(v);
+}
+
+:th.lwib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x9 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:4 = *[ram]:4 next;
+	thRs1Wb = next;
+	rd = sext(v);
+}
+
+@if ADDRSIZE == "64"
+:th.lwuia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x1b & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:4 = *[ram]:4 base;
+	thRs1Wb = next;
+	rd = zext(v);
+}
+@endif
+
+@if ADDRSIZE == "64"
+:th.lwuib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x19 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:4 = *[ram]:4 next;
+	thRs1Wb = next;
+	rd = zext(v);
+}
+@endif
+
+@if ADDRSIZE == "64"
+:th.ldia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0xf & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:8 = *[ram]:8 base;
+	thRs1Wb = next;
+	rd = v;
+}
+@endif
+
+@if ADDRSIZE == "64"
+:th.ldib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=4 & op2731=0xd & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	local v:8 = *[ram]:8 next;
+	thRs1Wb = next;
+	rd = v;
+}
+@endif
+
+:th.sbia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=5 & op2731=0x3 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	*[ram]:1 base = rd:1;
+	thRs1Wb = next;
+}
+
+:th.sbib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=5 & op2731=0x1 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	*[ram]:1 next = rd:1;
+	thRs1Wb = next;
+}
+
+:th.shia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=5 & op2731=0x7 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	*[ram]:2 base = rd:2;
+	thRs1Wb = next;
+}
+
+:th.shib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=5 & op2731=0x5 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	*[ram]:2 next = rd:2;
+	thRs1Wb = next;
+}
+
+:th.swia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=5 & op2731=0xb & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	*[ram]:4 base = rd:4;
+	thRs1Wb = next;
+}
+
+:th.swib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=5 & op2731=0x9 & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	*[ram]:4 next = rd:4;
+	thRs1Wb = next;
+}
+
+@if ADDRSIZE == "64"
+:th.sdia rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=5 & op2731=0xf & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	*[ram]:8 base = rd:8;
+	thRs1Wb = next;
+}
+@endif
+
+@if ADDRSIZE == "64"
+:th.sdib rd,(thRs1Wb),thSimm5,thUimm2 is op0006=0x0b & funct3=5 & op2731=0xd & rd & thRs1Wb & thSimm5 & thUimm2
+{
+	local base:$(XLEN) = thRs1Wb;
+	local next:$(XLEN) = base + (thSimm5 << thUimm2);
+	*[ram]:8 next = rd:8;
+	thRs1Wb = next;
+}
+@endif
+
+# XTheadMemIdx: register-indexed load/store (u: zero-extended 32-bit index)
+:th.lrb rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x0 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	rd = sext(*[ram]:1 ea);
+}
+
+:th.lrbu rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x10 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	rd = zext(*[ram]:1 ea);
+}
+
+:th.lurb rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x2 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	rd = sext(*[ram]:1 ea);
+}
+
+:th.lurbu rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x12 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	rd = zext(*[ram]:1 ea);
+}
+
+:th.lrh rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x4 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	rd = sext(*[ram]:2 ea);
+}
+
+:th.lrhu rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x14 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	rd = zext(*[ram]:2 ea);
+}
+
+:th.lurh rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x6 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	rd = sext(*[ram]:2 ea);
+}
+
+:th.lurhu rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x16 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	rd = zext(*[ram]:2 ea);
+}
+
+:th.lrw rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x8 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	rd = sext(*[ram]:4 ea);
+}
+
+:th.lurw rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0xa & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	rd = sext(*[ram]:4 ea);
+}
+
+@if ADDRSIZE == "64"
+:th.lrwu rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x18 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	rd = zext(*[ram]:4 ea);
+}
+@endif
+
+@if ADDRSIZE == "64"
+:th.lurwu rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0x1a & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	rd = zext(*[ram]:4 ea);
+}
+@endif
+
+@if ADDRSIZE == "64"
+:th.lrd rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0xc & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	rd = *[ram]:8 ea;
+}
+@endif
+
+@if ADDRSIZE == "64"
+:th.lurd rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=4 & op2731=0xe & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	rd = *[ram]:8 ea;
+}
+@endif
+
+:th.srb rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=5 & op2731=0x0 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	*[ram]:1 ea = rd:1;
+}
+
+:th.surb rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=5 & op2731=0x2 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	*[ram]:1 ea = rd:1;
+}
+
+:th.srh rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=5 & op2731=0x4 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	*[ram]:2 ea = rd:2;
+}
+
+:th.surh rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=5 & op2731=0x6 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	*[ram]:2 ea = rd:2;
+}
+
+:th.srw rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=5 & op2731=0x8 & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	*[ram]:4 ea = rd:4;
+}
+
+:th.surw rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=5 & op2731=0xa & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	*[ram]:4 ea = rd:4;
+}
+
+@if ADDRSIZE == "64"
+:th.srd rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=5 & op2731=0xc & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	*[ram]:8 ea = rd:8;
+}
+@endif
+
+@if ADDRSIZE == "64"
+:th.surd rd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=5 & op2731=0xe & rd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	*[ram]:8 ea = rd:8;
+}
+@endif
+
+# XTheadFMemIdx
+:th.flrw frd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=6 & op2731=0x8 & frd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	local v:4 = *[ram]:4 ea;
+	frd = 0xffffffff00000000 | zext(v);
+}
+
+:th.fsrw fr0711,rs1,rs2,thUimm2 is op0006=0x0b & funct3=7 & op2731=0x8 & fr0711 & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	*[ram]:4 ea = fr0711:4;
+}
+
+:th.flrd frd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=6 & op2731=0xc & frd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	local v:8 = *[ram]:8 ea;
+	frd = v;
+}
+
+:th.fsrd fr0711,rs1,rs2,thUimm2 is op0006=0x0b & funct3=7 & op2731=0xc & fr0711 & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (rs2 << thUimm2);
+	*[ram]:8 ea = fr0711:8;
+}
+
+@if ADDRSIZE == "64"
+:th.flurw frd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=6 & op2731=0xa & frd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	local v:4 = *[ram]:4 ea;
+	frd = 0xffffffff00000000 | zext(v);
+}
+
+:th.fsurw fr0711,rs1,rs2,thUimm2 is op0006=0x0b & funct3=7 & op2731=0xa & fr0711 & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	*[ram]:4 ea = fr0711:4;
+}
+@endif
+
+@if ADDRSIZE == "64"
+:th.flurd frd,rs1,rs2,thUimm2 is op0006=0x0b & funct3=6 & op2731=0xe & frd & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	local v:8 = *[ram]:8 ea;
+	frd = v;
+}
+
+:th.fsurd fr0711,rs1,rs2,thUimm2 is op0006=0x0b & funct3=7 & op2731=0xe & fr0711 & rs1 & rs2 & thUimm2
+{
+	local ea:$(XLEN) = rs1 + (zext(rs2:4) << thUimm2);
+	*[ram]:8 ea = fr0711:8;
+}
+@endif
+
+# XTheadCmo and XTheadSync
+:th.dcache.csw rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=1 & op0711=0 & rs1
+{
+	th_dcache_csw(rs1);
+}
+
+:th.dcache.isw rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=2 & op0711=0 & rs1
+{
+	th_dcache_isw(rs1);
+}
+
+:th.dcache.cisw rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=3 & op0711=0 & rs1
+{
+	th_dcache_cisw(rs1);
+}
+
+:th.dcache.cval1 rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=4 & op0711=0 & rs1
+{
+	th_dcache_cval1(rs1);
+}
+
+:th.dcache.cva rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=5 & op0711=0 & rs1
+{
+	th_dcache_cva(rs1);
+}
+
+:th.dcache.iva rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=6 & op0711=0 & rs1
+{
+	th_dcache_iva(rs1);
+}
+
+:th.dcache.civa rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=7 & op0711=0 & rs1
+{
+	th_dcache_civa(rs1);
+}
+
+:th.dcache.cpal1 rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=8 & op0711=0 & rs1
+{
+	th_dcache_cpal1(rs1);
+}
+
+:th.dcache.cpa rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=9 & op0711=0 & rs1
+{
+	th_dcache_cpa(rs1);
+}
+
+:th.dcache.ipa rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=10 & op0711=0 & rs1
+{
+	th_dcache_ipa(rs1);
+}
+
+:th.dcache.cipa rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=11 & op0711=0 & rs1
+{
+	th_dcache_cipa(rs1);
+}
+
+:th.icache.iva rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=16 & op0711=0 & rs1
+{
+	th_icache_iva(rs1);
+}
+
+:th.icache.ipa rs1 is op0006=0x0b & funct3=0 & funct7=0x01 & op2024=24 & op0711=0 & rs1
+{
+	th_icache_ipa(rs1);
+}
+
+:th.dcache.call is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=1 & op1519=0 & op0711=0
+{
+	th_dcache_call();
+}
+
+:th.dcache.iall is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=2 & op1519=0 & op0711=0
+{
+	th_dcache_iall();
+}
+
+:th.dcache.ciall is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=3 & op1519=0 & op0711=0
+{
+	th_dcache_ciall();
+}
+
+:th.icache.iall is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=16 & op1519=0 & op0711=0
+{
+	th_icache_iall();
+}
+
+:th.icache.ialls is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=17 & op1519=0 & op0711=0
+{
+	th_icache_ialls();
+}
+
+:th.l2cache.call is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=21 & op1519=0 & op0711=0
+{
+	th_l2cache_call();
+}
+
+:th.l2cache.iall is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=22 & op1519=0 & op0711=0
+{
+	th_l2cache_iall();
+}
+
+:th.l2cache.ciall is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=23 & op1519=0 & op0711=0
+{
+	th_l2cache_ciall();
+}
+
+:th.sync is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=24 & op1519=0 & op0711=0
+{
+	th_sync();
+}
+
+:th.sync.s is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=25 & op1519=0 & op0711=0
+{
+	th_sync_s();
+}
+
+:th.sync.i is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=26 & op1519=0 & op0711=0
+{
+	th_sync_i();
+}
+
+:th.sync.is is op0006=0x0b & funct3=0 & funct7=0x00 & op2024=27 & op1519=0 & op0711=0
+{
+	th_sync_is();
+}
+
+:th.sfence.vmas rs1,rs2 is op0006=0x0b & funct3=0 & funct7=0x02 & op0711=0 & rs1 & rs2
+{
+	th_sfence_vmas(rs1, rs2);
+}

@@ -1,0 +1,38 @@
+# Solana sBPF, written for unlace from the sBPF bytecode reference
+# (anza-xyz/sbpf doc/bytecode.md) and the eBPF instruction set (RFC 9669).
+# Shared definitions; sbpf_v1.slaspec and sbpf_v2.slaspec hold the opcode maps.
+
+define endian=little;
+define alignment=8;
+
+define space ram type=ram_space size=8 default;
+define space syscall type=ram_space size=4;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=8 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 PC RA ];
+
+define token instr(64)
+  opc    = (0,7)
+  dst    = (8,11)
+  src    = (12,15)
+  srcn   = (12,15)
+  off    = (16,31) signed
+  imm    = (32,63)
+  simm   = (32,63) signed
+  immreg = (32,35)
+;
+define token slot2(64)
+  hiimm = (32,63)
+;
+
+attach variables [ dst src immreg ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 _ _ _ _ _ ];
+
+define pcodeop byteSwap64;
+
+imm32: imm is imm { export *[const]:4 imm; }
+simm64: simm is simm { export *[const]:8 simm; }
+SrcOff: src+off is src & off { a:8 = src + off; export a; }
+DstOff: dst+off is dst & off { a:8 = dst + off; export a; }
+Jdest: loc is off [ loc = inst_next + off * 8; ] { export *:8 loc; }
+Cdest: loc is simm [ loc = inst_next + simm * 8; ] { export *:8 loc; }
+Hashed: imm is imm { export *[syscall]:1 imm; }

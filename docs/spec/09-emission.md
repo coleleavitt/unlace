@@ -5699,6 +5699,20 @@ prints `v = *p++;`, `*d = c; d = &d[1];` prints `*d++ = c;`. A step that goes
 through a copy the loop also compares (`v2 = &a0[1]; v1 += *a0; a0 = v2;`) is
 left as it is (`tests/stages/kuna-postinc.xml`).
 
+### MSVC throws (`msvceh`)
+
+`msvceh` (default off) uses `crates/unlace-emit/src/p9_emit/kuna_msvcthrow.rs`
+to print a direct C-output call of `_CxxThrowException` (any leading
+underscores, any x86 `@n` suffix) that passes both arguments as a `throw`.
+With both arguments the constant 0 it prints `throw` (a rethrow). With both
+non-zero it prints `throw` followed by the object the first argument points
+to, read the way a load through that pointer is printed
+(`printc.rs (push_msvc_throw)`): an address-of-variable argument prints as the
+variable (`throw v1`), anything else as `*p`. The `throw` token is a unary
+prefix with the precedence of an assignment. Any other call shape prints as a
+call. The thrown type is not printed here; it stays on the `ThrowInfo<T>` label
+of the second argument and, on x64, on the call-site comment.
+
 ### Apple unified-logging calls (`oslog`)
 
 `oslog` (default on) uses

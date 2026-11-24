@@ -11120,6 +11120,18 @@ impl PrintC {
                 return;
             }
         }
+        if self.out_lang == crate::kuna_lang::OutLang::C
+            && arch
+                .kuna_options
+                .get::<crate::kuna_analysisgates::Msvceh>()
+                .0
+        {
+            let callee = self.call_callee_name(fd, op);
+            if let Some(throw) = super::kuna_msvcthrow::recover(fd, arch, op, &callee) {
+                self.push_msvc_throw(fd, arch, op, throw);
+                return;
+            }
+        }
         let opc = fd.obank().get(op).expect("op_call_ir: stale op").code();
         let nin = fd.obank().get(op).map(|o| o.num_input()).unwrap_or(0);
         let proto = fd
@@ -11382,6 +11394,38 @@ impl PrintC {
             self.emit.print(";", SyntaxHighlight::NoColor);
         }
         self.emit.tag_line();
+    }
+
+    /// (kuna `msvceh`) `throw obj` or `throw` for a `_CxxThrowException` call: the
+    /// object is printed as a load through the first argument would be, so
+    /// `&local` reads as `local`.
+    fn push_msvc_throw(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        op: OpId,
+        throw: super::kuna_msvcthrow::Throw,
+    ) {
+        let obj = match throw {
+            super::kuna_msvcthrow::Throw::Rethrow => {
+                self.push_atom(&Atom::with_op(
+                    "throw",
+                    TagType::OpToken,
+                    crate::printlanguage::SyntaxHighlight::keyword_color,
+                    op_key(op),
+                ));
+                return;
+            }
+            super::kuna_msvcthrow::Throw::Object(obj) => obj,
+        };
+        self.push_op(&super::kuna_msvcthrow::THROW, Some(op_key(op)));
+        let mut m = self.context.mods();
+        if self.check_array_deref(fd, obj) && !self.context.is_set(modifiers::FORCE_POINTER) {
+            m |= modifiers::PRINT_LOAD_VALUE;
+        } else {
+            self.push_op(&tokens::DEREFERENCE, Some(op_key(op)));
+        }
+        self.push_vn_ir_m(fd, arch, obj, op, m);
     }
 
     /// (kuna `oslog`) A direct os_log call: the dso as its header symbol and

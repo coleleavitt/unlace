@@ -4176,6 +4176,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `C6000` | TI TMS320C6000 (C6x, C64x, C674x) | `C6000:LE:32:default`, `C6000:LE:32:analysis`, `C6000:BE:32:default`, `C6000:BE:32:analysis` | aleph-void/ghidra-c6000 (fork of geepot/ghidra-c6000) @ `854fa26859`, Apache-2.0 |
 | `TLCS900H` | Toshiba TLCS-900/H | `TLCS900H:LE:32:default` | aleph-void/ghidra-tlcs900h (fork of nevesnunes/ghidra-tlcs900h) @ `585eb6070f`, MIT |
 | `LM32` | Lattice LatticeMico32 | `lm32:BE:32:default`, `lm32:LE:32:default` | aleph-void/ghidra-lm32 (fork of jevinskie/ghidra-lm32) @ `5be258ec6d`, MIT |
+| `MCORE` | Motorola M-CORE | `MCORE:BE:32:default`, `MCORE:LE:32:default` | aleph-void/ghidra-mcore (fork of CUB3D/ghidra-mcore) @ `0c10e14854`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

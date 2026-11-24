@@ -1,0 +1,8 @@
+<dwarf>
+	<!-- GCC numbers DWARF registers as the hardware does (gcc/config/mcore: no renumbering) -->
+	<register_mappings>
+		<register_mapping dwarf="0" ghidra="r0" stackpointer="true"/>
+		<register_mapping dwarf="1" ghidra="r1" auto_count="15"/>
+	</register_mappings>
+	<call_frame_cfa value="0"/>
+</dwarf>

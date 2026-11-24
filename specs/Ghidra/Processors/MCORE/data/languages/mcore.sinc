@@ -1,0 +1,450 @@
+# sleigh include file for Motorola / NXP M-CORE
+# ISA manual can be found here: https://web.archive.org/web/20160304090032/http://www.saladeteletipos.com/pub/SistemasEmbebidos2006/PlacaMotorola/mcore_rm_1.pdf
+#
+# Originally written by CUB3D (Ghidra pull request #9270). Reworked by Ghidra-Rare after
+# differential testing against GNU binutils 2.45 (objdump -m mcore) and the M-CORE Reference
+# Manual (MCORERM/AD); see CREDITS.md. Syntax follows objdump (ld/ldb/ldh, "rx, ry").
+
+define token opbyte (16)
+   regX = (0, 3)
+   regY = (4, 7)
+   regZ = (8, 11)
+   ctrlRegY = (4, 8)
+   imm5 = (4, 8)
+   imm4 = (4, 7)
+   imm3 = (4, 6)
+   imm7 = (4, 10)
+   disp8 = (0, 7)
+   disp4 = (0, 3)
+   vec2 = (0, 1)
+   psrf = (0, 2)
+   branch = (0, 10) signed
+   uu = (10, 11)
+   hexec = (0, 7)
+   hn = (4, 6)
+   hp = (6, 6)
+   hii = (4, 5)
+   heee = (0, 3)
+
+   op0_15 = (0, 15)
+   op2_15 = (2, 15)
+   op3_15 = (3, 15)
+   op4_15 = (4, 15)
+   op5_15 = (5, 15)
+   op7_15 = (7, 15)
+   op8_15 = (8, 15)
+   op9_15 = (9, 15)
+   op11_15 = (11, 15)
+   op12_15 = (12, 15)
+   op12_13 = (12, 13)
+   op8_9 = (8, 9)
+   op7_9 = (7, 9)
+;
+
+attach variables [ regY regX regZ ] [
+	r0  r1  r2  r3  r4  r5  r6  r7
+	r8  r9  r10 r11 r12 r13 r14 r15
+];
+
+attach variables [ ctrlRegY ] [
+	PSR VBR EPSR FPSR EPC FPC SS0 SS1
+	SS2 SS3 SS4 GCR GSR cr13 cr14 cr15
+	cr16 cr17 cr18 cr19 cr20 cr21 cr22 cr23
+	cr24 cr25 cr26 cr27 cr28 cr29 cr30 cr31
+];
+
+# PC-relative operands (PC + 2 is the address of the next instruction)
+branch_tgt: tgt is branch [ tgt = inst_start + 2 + (branch << 1); ] { export *[ram]:4 tgt; }
+loopt_tgt: tgt is disp4 [ tgt = inst_start + 2 + ((disp4 | 0xfffffff0) << 1); ] { export *[ram]:4 tgt; }
+# literal pool word of lrw/jmpi/jsri
+pool: tgt is disp8 [ tgt = (inst_start + 2 + (disp8 << 2)) & 0xfffffffc; ] { export *[ram]:4 tgt; }
+
+oimm5: val is imm5 [ val = imm5 + 1; ] { export *[const]:4 val; }
+uimm5: imm5 is imm5 { export *[const]:4 imm5; }
+
+# C is bit 0 of PSR; it is kept in its own register and merged on PSR accesses
+macro psr_read(dst) {
+	dst = (PSR & 0xfffffffe) | zext(C);
+}
+macro psr_write(v) {
+	PSR = v;
+	C = (v & 1) != 0;
+}
+
+# Exception entry (reference manual 4.2): PSR and the exception PC are saved in EPSR/EPC; PSR
+# gets S set, TM, TC, EE and IE cleared and VEC = vector number; execution continues at the
+# address in the vector table at VBR + 4 * vector (its low bit selects the register file, AF).
+# The handler returns with rte; for trap, bkpt and divide by zero EPC is the instruction itself.
+macro exception(vec) {
+	local p:4;
+	psr_read(p);
+	EPSR = p;
+	EPC = inst_start;
+	psr_write((p & 0xff801ebf) | 0x80000000 | (vec << 16));
+	local h:4 = *:4 (VBR + (vec << 2));
+	PSR = (PSR & 0xfffffffd) | ((h & 1) << 1);
+	local tgt:4 = h & 0xfffffffe;
+	call [tgt];
+}
+
+define pcodeop sync;
+define pcodeop stop;
+define pcodeop wait;
+define pcodeop doze;
+define pcodeop idly4;
+define pcodeop h_exec;
+define pcodeop h_ret;
+define pcodeop h_call;
+define pcodeop h_ld;
+define pcodeop h_st;
+
+# ---------------------------------------------------------------------------------------------
+# 0000 0000 0000 xxxx: no operands
+# breakpoint exception (vector 7)
+:bkpt is op0_15=0x0000 { exception(7:4); }
+:sync is op0_15=0x0001 { sync(); }
+:rte is op0_15=0x0002 {
+	local npc:4 = EPC;
+	psr_write(EPSR);
+	return [npc];
+}
+:rfi is op0_15=0x0003 {
+	local npc:4 = FPC;
+	psr_write(FPSR);
+	return [npc];
+}
+# stop/wait/doze resume at the next instruction after an interrupt
+:stop is op0_15=0x0004 { stop(); }
+:wait is op0_15=0x0005 { wait(); }
+:doze is op0_15=0x0006 { doze(); }
+# 0x0007 is not in the reference manual; binutils decodes it as idly4
+:idly4 is op0_15=0x0007 { idly4(); }
+# trap #n: instruction trap exception (vector 16 + n)
+:trap vec2 is op2_15=0x0002 & vec2 {
+	local v:4 = 16 + vec2;
+	exception(v);
+}
+
+# 0101 0000 nnnn nnnn: GNU simulator service calls (sim/mcore/interp.c util()), used by newlib's
+# libgloss for the simulator (_exit, utime, _read/_write/_open/... through r1). 0x5xxx is
+# unassigned in the M-CORE opcode map (an illegal instruction on hardware) and objdump prints
+# .short; they are decoded so that programs linked with libgloss analyse and decompile.
+define pcodeop sim_exit;
+define pcodeop sim_utime;
+define pcodeop sim_syscall;
+define pcodeop sim_service;
+# exit(r2): the simulator stops
+:sim_util 0x0 is op0_15=0x5000 { sim_exit(r2); goto inst_start; }
+:sim_util 0x3 is op0_15=0x5003 { r2 = sim_utime(); }
+# system call r1 with arguments r2-r5, result in r2
+:sim_util 0xff is op0_15=0x50ff { r2 = sim_syscall(r1, r2, r3, r4, r5); }
+# 0x01 printf and 0x02 scanf are unimplemented in the simulator, others ignored
+:sim_util disp8 is op8_15=0x50 & disp8 { sim_service(disp8:1); }
+
+# 0000 0000 0xxx rrrr: one register
+:mvc regX is op4_15=0x002 & regX { regX = zext(C); }
+:mvcv regX is op4_15=0x003 & regX { regX = zext(!C); }
+:ldq "r4-r7, ("^regX^")" is op4_15=0x004 & regX {
+	local ea:4 = regX;
+	r4 = *[ram]:4 ea;
+	r5 = *[ram]:4 (ea + 4);
+	r6 = *[ram]:4 (ea + 8);
+	r7 = *[ram]:4 (ea + 12);
+}
+:stq "r4-r7, ("^regX^")" is op4_15=0x005 & regX {
+	local ea:4 = regX;
+	*[ram]:4 ea = r4;
+	*[ram]:4 (ea + 4) = r5;
+	*[ram]:4 (ea + 8) = r6;
+	*[ram]:4 (ea + 12) = r7;
+}
+
+# ldm/stm rf-r15,(r0): registers rf..r15 from/to ascending addresses at r0; r0 is not updated
+macro ldm_from(n) {
+	local ea:4 = r0;
+	if (n > 1) goto <s2>; r1 = *[ram]:4 ea; ea = ea + 4;
+<s2>	if (n > 2) goto <s3>; r2 = *[ram]:4 ea; ea = ea + 4;
+<s3>	if (n > 3) goto <s4>; r3 = *[ram]:4 ea; ea = ea + 4;
+<s4>	if (n > 4) goto <s5>; r4 = *[ram]:4 ea; ea = ea + 4;
+<s5>	if (n > 5) goto <s6>; r5 = *[ram]:4 ea; ea = ea + 4;
+<s6>	if (n > 6) goto <s7>; r6 = *[ram]:4 ea; ea = ea + 4;
+<s7>	if (n > 7) goto <s8>; r7 = *[ram]:4 ea; ea = ea + 4;
+<s8>	if (n > 8) goto <s9>; r8 = *[ram]:4 ea; ea = ea + 4;
+<s9>	if (n > 9) goto <s10>; r9 = *[ram]:4 ea; ea = ea + 4;
+<s10>	if (n > 10) goto <s11>; r10 = *[ram]:4 ea; ea = ea + 4;
+<s11>	if (n > 11) goto <s12>; r11 = *[ram]:4 ea; ea = ea + 4;
+<s12>	if (n > 12) goto <s13>; r12 = *[ram]:4 ea; ea = ea + 4;
+<s13>	if (n > 13) goto <s14>; r13 = *[ram]:4 ea; ea = ea + 4;
+<s14>	r14 = *[ram]:4 ea; ea = ea + 4;
+	r15 = *[ram]:4 ea;
+}
+macro stm_from(n) {
+	local ea:4 = r0;
+	if (n > 1) goto <s2>; *[ram]:4 ea = r1; ea = ea + 4;
+<s2>	if (n > 2) goto <s3>; *[ram]:4 ea = r2; ea = ea + 4;
+<s3>	if (n > 3) goto <s4>; *[ram]:4 ea = r3; ea = ea + 4;
+<s4>	if (n > 4) goto <s5>; *[ram]:4 ea = r4; ea = ea + 4;
+<s5>	if (n > 5) goto <s6>; *[ram]:4 ea = r5; ea = ea + 4;
+<s6>	if (n > 6) goto <s7>; *[ram]:4 ea = r6; ea = ea + 4;
+<s7>	if (n > 7) goto <s8>; *[ram]:4 ea = r7; ea = ea + 4;
+<s8>	if (n > 8) goto <s9>; *[ram]:4 ea = r8; ea = ea + 4;
+<s9>	if (n > 9) goto <s10>; *[ram]:4 ea = r9; ea = ea + 4;
+<s10>	if (n > 10) goto <s11>; *[ram]:4 ea = r10; ea = ea + 4;
+<s11>	if (n > 11) goto <s12>; *[ram]:4 ea = r11; ea = ea + 4;
+<s12>	if (n > 12) goto <s13>; *[ram]:4 ea = r12; ea = ea + 4;
+<s13>	if (n > 13) goto <s14>; *[ram]:4 ea = r13; ea = ea + 4;
+<s14>	*[ram]:4 ea = r14; ea = ea + 4;
+	*[ram]:4 ea = r15;
+}
+# rf = r0 and rf = r15 are illegal forms (not detected by hardware); they are decoded as objdump
+# decodes them, with r0 meaning "from r1"
+:ldm regX^"-r15, (r0)" is op4_15=0x006 & regX & disp4 { ldm_from(disp4:1); }
+:stm regX^"-r15, (r0)" is op4_15=0x007 & regX & disp4 { stm_from(disp4:1); }
+
+:dect regX is op4_15=0x008 & regX { regX = regX - zext(C); }
+:decf regX is op4_15=0x009 & regX { regX = regX - zext(!C); }
+:inct regX is op4_15=0x00a & regX { regX = regX + zext(C); }
+:incf regX is op4_15=0x00b & regX { regX = regX + zext(!C); }
+# the low bit of the target is ignored
+:jmp regX is op4_15=0x00c & regX {
+	local t:4 = regX & 0xfffffffe;
+	goto [t];
+}
+:jmp regX is op4_15=0x00c & regX & regX=15 {
+	local t:4 = regX & 0xfffffffe;
+	return [t];
+}
+:jsr regX is op4_15=0x00d & regX {
+	local t:4 = regX & 0xfffffffe;
+	r15 = inst_next;
+	call [t];
+}
+# ff1: number of leading zeros (32 for 0)
+:ff1 regX is op4_15=0x00e & regX { regX = lzcount(regX); }
+:brev regX is op4_15=0x00f & regX {
+	local v:4 = regX;
+	v = ((v >> 1) & 0x55555555) | ((v & 0x55555555) << 1);
+	v = ((v >> 2) & 0x33333333) | ((v & 0x33333333) << 2);
+	v = ((v >> 4) & 0x0f0f0f0f) | ((v & 0x0f0f0f0f) << 4);
+	v = ((v >> 8) & 0x00ff00ff) | ((v & 0x00ff00ff) << 8);
+	regX = (v >> 16) | (v << 16);
+}
+:xtrb3 "r1, "^regX is op4_15=0x010 & regX { r1 = regX & 0xff; C = r1 != 0; }
+:xtrb2 "r1, "^regX is op4_15=0x011 & regX { r1 = (regX >> 8) & 0xff; C = r1 != 0; }
+:xtrb1 "r1, "^regX is op4_15=0x012 & regX { r1 = (regX >> 16) & 0xff; C = r1 != 0; }
+:xtrb0 "r1, "^regX is op4_15=0x013 & regX { r1 = regX >> 24; C = r1 != 0; }
+:zextb regX is op4_15=0x014 & regX { regX = zext(regX:1); }
+:sextb regX is op4_15=0x015 & regX { regX = sext(regX:1); }
+:zexth regX is op4_15=0x016 & regX { regX = zext(regX:2); }
+:sexth regX is op4_15=0x017 & regX { regX = sext(regX:2); }
+:declt regX is op4_15=0x018 & regX { regX = regX - 1; C = regX s< 0; }
+:tstnbz regX is op4_15=0x019 & regX {
+	local v:4 = regX;
+	C = ((v & 0xff) != 0) && ((v & 0xff00) != 0) && ((v & 0xff0000) != 0) && ((v & 0xff000000) != 0);
+}
+:decgt regX is op4_15=0x01a & regX { regX = regX - 1; C = regX s> 0; }
+:decne regX is op4_15=0x01b & regX { regX = regX - 1; C = regX != 0; }
+:clrt regX is op4_15=0x01c & regX { regX = regX * zext(!C); }
+:clrf regX is op4_15=0x01d & regX { regX = regX * zext(C); }
+# 0x80000000 stays 0x80000000
+:abs regX is op4_15=0x01e & regX {
+	local v:4 = regX;
+	local m:4 = v s>> 31;
+	regX = (v ^ m) - m;
+}
+:not regX is op4_15=0x01f & regX { regX = ~regX; }
+
+# ---------------------------------------------------------------------------------------------
+# two registers: op rx, ry
+:movt regX, regY is op8_15=0x02 & regY & regX {
+	local v:4 = regY;
+	regX = (regX * zext(!C)) | (v * zext(C));
+}
+:mult regX, regY is op8_15=0x03 & regY & regX { regX = regX * regY; }
+# loopt ry,label: decrement, C = (ry s> 0); branch back if C was set before
+:loopt regY, loopt_tgt is op8_15=0x04 & regY & loopt_tgt {
+	local taken:1 = C;
+	regY = regY - 1;
+	C = regY s> 0;
+	if (taken) goto loopt_tgt;
+}
+:subu regX, regY is op8_15=0x05 & regY & regX { regX = regX - regY; }
+:addc regX, regY is op8_15=0x06 & regY & regX {
+	local a:4 = regX;
+	local b:4 = regY;
+	local w:8 = zext(a) + zext(b) + zext(C);
+	regX = w:4;
+	C = (w >> 32) != 0;
+}
+# subc: rx - ry - !C; C is the inverse of the borrow
+:subc regX, regY is op8_15=0x07 & regY & regX {
+	local a:4 = regX;
+	local b:4 = regY;
+	local w:8 = zext(a) - zext(b) - zext(!C);
+	regX = w:4;
+	C = (w >> 32) == 0;
+}
+:movf regX, regY is op8_15=0x0a & regY & regX {
+	local v:4 = regY;
+	regX = (regX * zext(C)) | (v * zext(!C));
+}
+# register shifts use ry[5:0]; 32..63 give 0 (lsl/lsr) or the sign (asr)
+:lsr regX, regY is op8_15=0x0b & regY & regX {
+	local s:4 = regY & 0x3f;
+	local v:4 = regX >> (s & 31);
+	regX = v * zext(s < 32);
+}
+:cmphs regX, regY is op8_15=0x0c & regY & regX { C = regX >= regY; }
+:cmplt regX, regY is op8_15=0x0d & regY & regX { C = regX s< regY; }
+:tst regX, regY is op8_15=0x0e & regY & regX { C = (regX & regY) != 0; }
+:cmpne regX, regY is op8_15=0x0f & regY & regX { C = regX != regY; }
+:mfcr regX, ctrlRegY is op9_15=0x08 & ctrlRegY & regX { regX = ctrlRegY; }
+:mfcr regX, ctrlRegY is op9_15=0x08 & ctrlRegY & imm5=0 & regX { psr_read(regX); }
+# psrset/psrclr (M-CORE instruction set extension, as decoded by binutils): set or clear the
+# EE (bit 8), FE (4) and IE (6) bits of PSR, or AF (1) when the field is 0
+psr_mask: "af" is psrf=0 { local m:4 = 0x2; export m; }
+psr_mask: "ie" is psrf=1 { local m:4 = 0x40; export m; }
+psr_mask: "fe" is psrf=2 { local m:4 = 0x10; export m; }
+psr_mask: "fe,ie" is psrf=3 { local m:4 = 0x50; export m; }
+psr_mask: "ee" is psrf=4 { local m:4 = 0x100; export m; }
+psr_mask: "ee,ie" is psrf=5 { local m:4 = 0x140; export m; }
+psr_mask: "ee,fe" is psrf=6 { local m:4 = 0x110; export m; }
+psr_mask: "ee,fe,ie" is psrf=7 { local m:4 = 0x150; export m; }
+:psrclr psr_mask is op3_15=0x023e & psr_mask { PSR = PSR & ~psr_mask; }
+:psrset psr_mask is op3_15=0x023f & psr_mask { PSR = PSR | psr_mask; }
+:mov regX, regY is op8_15=0x12 & regY & regX { regX = regY; }
+:bgenr regX, regY is op8_15=0x13 & regY & regX {
+	local s:4 = regY;
+	regX = (1:4 << (s & 31)) * zext((s & 0x20) == 0);
+}
+:rsub regX, regY is op8_15=0x14 & regY & regX { regX = regY - regX; }
+:ixw regX, regY is op8_15=0x15 & regY & regX { regX = regX + (regY << 2); }
+:and regX, regY is op8_15=0x16 & regY & regX { regX = regX & regY; }
+:xor regX, regY is op8_15=0x17 & regY & regX { regX = regX ^ regY; }
+:mtcr regX, ctrlRegY is op9_15=0x0c & ctrlRegY & regX { ctrlRegY = regX; }
+:mtcr regX, ctrlRegY is op9_15=0x0c & ctrlRegY & imm5=0 & regX { psr_write(regX); }
+:asr regX, regY is op8_15=0x1a & regY & regX {
+	local s:4 = regY & 0x3f;
+	local t:4 = s;
+	if (s < 32) goto <ok>;
+	t = 31;
+<ok>
+	regX = regX s>> t;
+}
+:lsl regX, regY is op8_15=0x1b & regY & regX {
+	local s:4 = regY & 0x3f;
+	local v:4 = regX << (s & 31);
+	regX = v * zext(s < 32);
+}
+:addu regX, regY is op8_15=0x1c & regY & regX { regX = regX + regY; }
+:ixh regX, regY is op8_15=0x1d & regY & regX { regX = regX + (regY << 1); }
+:or regX, regY is op8_15=0x1e & regY & regX { regX = regX | regY; }
+:andn regX, regY is op8_15=0x1f & regY & regX { regX = regX & ~regY; }
+
+# ---------------------------------------------------------------------------------------------
+# register and 5-bit immediate
+:addi regX, oimm5 is op9_15=0x10 & oimm5 & regX { regX = regX + oimm5; }
+:cmplti regX, oimm5 is op9_15=0x11 & oimm5 & regX { C = regX s< oimm5; }
+:subi regX, oimm5 is op9_15=0x12 & oimm5 & regX { regX = regX - oimm5; }
+:rsubi regX, uimm5 is op9_15=0x14 & uimm5 & regX { regX = uimm5 - regX; }
+:cmpnei regX, uimm5 is op9_15=0x15 & uimm5 & regX { C = regX != uimm5; }
+# bmaski rx,n (n = 8..32; 32 is encoded as 0, 1..7 are movi)
+:bmaski regX, 32 is op4_15=0x2c0 & regX { regX = 0xffffffff; }
+:divu regX, "r1" is op4_15=0x2c1 & regX {
+	local d:4 = r1;
+	if (d != 0) goto <ok>;
+	exception(3:4);	# divide-by-zero exception (vector 3)
+<ok>
+	regX = regX / d;
+}
+:bmaski regX, uimm5 is op7_15=0x059 & uimm5 & regX { regX = (1:4 << uimm5) - 1; }
+:bmaski regX, uimm5 is op8_15=0x2d & uimm5 & regX { regX = (1:4 << uimm5) - 1; }
+:andi regX, uimm5 is op9_15=0x17 & uimm5 & regX { regX = regX & uimm5; }
+:bclri regX, uimm5 is op9_15=0x18 & uimm5 & regX { regX = regX & ~(1:4 << uimm5); }
+:divs regX, "r1" is op4_15=0x321 & regX {
+	local d:4 = r1;
+	if (d != 0) goto <ok>;
+	exception(3:4);	# divide-by-zero exception (vector 3)
+<ok>
+	regX = regX s/ d;
+}
+# bgeni rx,n (n = 7..31; 0..6 are movi)
+:bgeni regX, 7 is op4_15=0x327 & regX { regX = 0x80; }
+:bgeni regX, uimm5 is op7_15=0x065 & uimm5 & regX { regX = 1:4 << uimm5; }
+:bgeni regX, uimm5 is op8_15=0x33 & uimm5 & regX { regX = 1:4 << uimm5; }
+:bseti regX, uimm5 is op9_15=0x1a & uimm5 & regX { regX = regX | (1:4 << uimm5); }
+:btsti regX, uimm5 is op9_15=0x1b & uimm5 & regX { C = ((regX >> uimm5) & 1) != 0; }
+# shift group: an immediate of 0 selects the one-bit shift through C
+:xsr regX is op4_15=0x380 & regX {
+	local v:4 = regX;
+	regX = (v >> 1) | (zext(C) << 31);
+	C = (v & 1) != 0;
+}
+:rotli regX, uimm5 is op9_15=0x1c & uimm5 & regX {
+	local v:4 = regX;
+	regX = (v << uimm5) | (v >> (32 - uimm5));
+}
+:asrc regX is op4_15=0x3a0 & regX {
+	C = (regX & 1) != 0;
+	regX = regX s>> 1;
+}
+:asri regX, uimm5 is op9_15=0x1d & uimm5 & regX { regX = regX s>> uimm5; }
+:lslc regX is op4_15=0x3c0 & regX {
+	C = regX s< 0;
+	regX = regX << 1;
+}
+:lsli regX, uimm5 is op9_15=0x1e & uimm5 & regX { regX = regX << uimm5; }
+:lsrc regX is op4_15=0x3e0 & regX {
+	C = (regX & 1) != 0;
+	regX = regX >> 1;
+}
+:lsri regX, uimm5 is op9_15=0x1f & uimm5 & regX { regX = regX >> uimm5; }
+
+# ---------------------------------------------------------------------------------------------
+# 0100 uu..: hardware accelerator instructions (reference manual; implementation-defined units,
+# not decoded by binutils)
+:h_exec uu, hexec is op12_15=0x4 & uu & op8_9=0 & hexec { h_exec(uu:1, hexec:1); }
+:h_ret uu, hn, heee is op12_15=0x4 & uu & op7_9=2 & hn & heee { h_ret(uu:1, hn:1, heee:1); }
+:h_call uu, hn, heee is op12_15=0x4 & uu & op7_9=3 & hn & heee { h_call(uu:1, hn:1, heee:1); }
+:h_ld uu, regX, hii is op12_15=0x4 & uu & op7_9=4 & hp=0 & hii & regX { h_ld(uu:1, regX, hii:1); }
+:h_ld uu, regX, hii is op12_15=0x4 & uu & op7_9=4 & hp=1 & hii & regX { h_ld(uu:1, regX, hii:1); regX = regX + 4; }
+:h_st uu, regX, hii is op12_15=0x4 & uu & op7_9=5 & hp=0 & hii & regX { h_st(uu:1, regX, hii:1); }
+:h_st uu, regX, hii is op12_15=0x4 & uu & op7_9=5 & hp=1 & hii & regX { h_st(uu:1, regX, hii:1); regX = regX + 4; }
+:h_ld.h uu, regX, hii is op12_15=0x4 & uu & op7_9=6 & hp=0 & hii & regX { h_ld(uu:1, regX, hii:1); }
+:h_ld.h uu, regX, hii is op12_15=0x4 & uu & op7_9=6 & hp=1 & hii & regX { h_ld(uu:1, regX, hii:1); regX = regX + 2; }
+:h_st.h uu, regX, hii is op12_15=0x4 & uu & op7_9=7 & hp=0 & hii & regX { h_st(uu:1, regX, hii:1); }
+:h_st.h uu, regX, hii is op12_15=0x4 & uu & op7_9=7 & hp=1 & hii & regX { h_st(uu:1, regX, hii:1); regX = regX + 2; }
+
+# ---------------------------------------------------------------------------------------------
+:movi regX, imm7 is op11_15=0x0c & imm7 & regX { regX = imm7; }
+# mulsh rx,ry: signed 16 x 16 -> 32 multiply (M-CORE extension, as decoded by binutils)
+:mulsh regX, regY is op8_15=0x68 & regY & regX { regX = sext(regX:2) * sext(regY:2); }
+
+# lrw rz,[label] loads a literal-pool word; rz = 0 and 15 are jmpi/jsri
+:lrw regZ, pool is op12_15=0x7 & regZ & pool { regZ = pool; }
+:jmpi pool is op8_15=0x70 & pool {
+	local t:4 = pool;
+	goto [t];
+}
+:jsri pool is op8_15=0x7f & pool {
+	local t:4 = pool;
+	r15 = inst_next;
+	call [t];
+}
+
+# loads (zero-extended) and stores: op rz,(rx,disp)
+:ld regZ, (regX, d) is op12_15=0x8 & regZ & imm4 & regX [ d = imm4 << 2; ] { local ea:4 = regX + d; regZ = *[ram]:4 ea; }
+:st regZ, (regX, d) is op12_15=0x9 & regZ & imm4 & regX [ d = imm4 << 2; ] { local ea:4 = regX + d; *[ram]:4 ea = regZ; }
+:ldb regZ, (regX, imm4) is op12_15=0xa & regZ & imm4 & regX { local ea:4 = regX + imm4; regZ = zext(*[ram]:1 ea); }
+:stb regZ, (regX, imm4) is op12_15=0xb & regZ & imm4 & regX { local ea:4 = regX + imm4; *[ram]:1 ea = regZ:1; }
+:ldh regZ, (regX, d) is op12_15=0xc & regZ & imm4 & regX [ d = imm4 << 1; ] { local ea:4 = regX + d; regZ = zext(*[ram]:2 ea); }
+:sth regZ, (regX, d) is op12_15=0xd & regZ & imm4 & regX [ d = imm4 << 1; ] { local ea:4 = regX + d; *[ram]:2 ea = regZ:2; }
+
+# branches (11-bit signed halfword displacement from PC + 2)
+:bt branch_tgt is op11_15=0x1c & branch_tgt { if (C) goto branch_tgt; }
+:bf branch_tgt is op11_15=0x1d & branch_tgt { if (!C) goto branch_tgt; }
+:br branch_tgt is op11_15=0x1e & branch_tgt { goto branch_tgt; }
+:bsr branch_tgt is op11_15=0x1f & branch_tgt {
+	r15 = inst_next;
+	call branch_tgt;
+}

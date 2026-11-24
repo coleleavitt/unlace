@@ -1131,6 +1131,22 @@ the machine's does), all printing the binary's values for negative inputs,
 0x80000000..0xffffffff, sums past 32 bits and squares past 2^32, including the
 shared, parenthesized and regrouped shapes above.
 
+**Whole-struct copies as assignments (kuna `structassign`).** A compiler copies a
+struct with `memcpy` (or inlines the copy, which kuna's copy folds turn back into
+`memcpy`), so `*d = *s;` prints as `memcpy(d,s,0x18);`. With the option
+`structassign` on (default off), the C printer's call path asks
+`crates/unlace-emit/src/p9_emit/kuna_structassign.rs (recover)` before it
+prints a direct call: a call of `memcpy` (leading underscores ignored) with
+three arguments, an unused result and a constant size, whose destination and
+source varnodes are both typed as pointers to one and the same struct or union
+type (`Rc` identity) of exactly that size, prints as an assignment instead
+(`printc.rs (push_struct_assign)`). Each side is pushed as the load through its
+pointer would be, so the address of a variable prints as the variable
+(`v1 = *a0;`), and the right side is pushed first, as `opStore` does. Only the
+text changes; the call stays in the IR. This is Hex-Rays' structure-copy
+recognition (hexx64 `sub_4C8BB0`), which checks the same size against the
+pointee type.
+
 **Narrowings C performs by itself (kuna `castnarrow`).** `castimplied` leaves
 a widening out where the destination converts the value anyway, and keeps every
 truncation and sign change. So a value narrowed into a destination of exactly
@@ -2471,7 +2487,7 @@ its Varnode's size; when the whole tree is constant, the hexadecimal literal is 
 constant atom in place of the tree. `PIECE` is not folded: a two-word `CONCAT` of constants
 is a Go or Swift pair, which keeps its form (the stage corpus pins those).
 
-(kuna `selectmul`, default off) A select the lifter wrote as arithmetic prints as C's
+(kuna `selectmul`, default on) A select the lifter wrote as arithmetic prints as C's
 conditional operator (`crates/unlace-emit/src/p9_emit/kuna_selectmul.rs`). SLEIGH has no
 select, so a spec that picks one of two values without a branch computes
 `a * zext(c) + b * zext(!c)`; TriCore's `ternary` macro (behind `sel`, `min`, `max`,
@@ -5917,6 +5933,25 @@ still prints as a comparison (not a `truthycond` bare operand, not a `BOOL_NEGAT
 flips, so the value stays `0` or `1`. The run is contiguous and every folded body is a
 bare `return`, so C's own short-circuit evaluation runs the same tests in the
 same order and evaluates nothing the binary skips.
+
+With `option charnum on` (default off), `push_char_constant_ir` prints a one-byte constant
+of a character type as a number instead of a character literal when it is zero or not
+printable (outside 0x20-0x7e) and the reading op is an ordered comparison or an integer
+arithmetic or bitwise op, or, for a non-zero value, an equality (`kuna_charnum::as_number`):
+`'\\0' <= c` prints `0 <= c`, `c == '\\x03'` prints `c == 3`. A printable character, and a
+zero read by an equality, a store, a copy or a call, keep the literal.
+
+With `option constright on` (C output; default off), `op_binary_ir` mirrors an integer `<` or
+`<=` whose first operand is a constant and whose second is not (`kuna_constright::mirrors`):
+it prints the other comparison token (`token_mirror`: `<` and `>`, `<=` and `>=`, taken after
+any negated token is resolved) and the operands in the opposite order, so `0x3b < x` prints
+`x > 0x3b`.
+
+With `option signeddec on` (default off), the integer path (`signed_decimal`, at the
+constant push of `push_vn_explicit_ir` and the two token builders that predict it) prints a
+constant read as a signed integer in decimal when no symbol or type fixes its format, its
+signed magnitude is below 0x10000 and the reading op is not a bitwise `&`, `|`, `^` or shift
+(`kuna_signeddec::decimal`). Unsigned constants keep `mostNaturalBase`.
 
 With `option retternary on` (C output; default off), an `if`/`else` the forms
 above leave, whose arms are such leaves each printing one `RETURN` of a constant

@@ -872,7 +872,7 @@ fn w7_s6_merge_intersection_cache_reused_when_clean() {
 
 // ============================================================================
 // (kuna) option `typemerge`: `off` joins nothing by type, `storage` only
-// same-typed highs held in one and the same storage.
+// same-typed highs that share a storage location.
 // ============================================================================
 
 fn typemerge_mock(storage: &[Option<u64>]) -> Mock {

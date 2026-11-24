@@ -6444,6 +6444,13 @@ moves.
   and `<impl Trait for Type>` keeps `Type`. Angle brackets nest, so this is a
   depth-tracking scan iterated to a fixed point rather than a pattern match.
 
+  A this-adjusting thunk (`_ZTh`, `_ZTv`, `_ZTc`) is named for the function it
+  jumps to (`demangle/mod.rs (thunk_target)`): cpp_demangle renders it as
+  `{virtual override thunk(<offsets>, <target>)}`, and reducing that whole string
+  left `{virtual override thunk}`, the name 46 functions of the iOS 16
+  `libc++.1.dylib` shared (every `basic_*stream` destructor thunk). The target is
+  the text after the last top-level comma, reduced like any other name.
+
   The hard contract is **name-only** reduction: kuna's scope splitter nests on every `::`,
   so signature tails and template argument groups must be stripped or they become
   junk scopes. **Operator names are exempt from that stripping**: `operator[]`,

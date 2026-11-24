@@ -2163,6 +2163,21 @@ test = "amdgpu_real_gfx1200_matmul_loop_decompiles"
 address = "0x0"
 expect = ["} while ("]
 
+# `fixtures/amdgpu/gfx1100_true16.cl` built with -DW64 for gfx900: f16 math through the GFX9
+# include's VOPC e32 and VOP3 16-bit forms (v_cmp_lt_f16, v_fma_f16).
+[[family]]
+name = "amdgpu_gfx900_half"
+language = "AMDGPU:LE:64:GFX9"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx900_half.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx900_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "(v2 * v3 + v5 + v1) - v3;"]
+
 # CDNA 2 (gfx90a, MI200): `fixtures/amdgpu/cdna_kernels.cl` at -O3. MFMA results and accumulators
 # live in AGPR tuples (a[0:15]) or VGPR tuples, read back with v_accvgpr_read_b32.
 [[family]]

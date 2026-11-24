@@ -9,7 +9,9 @@ opcode numbers, mnemonics and operand shapes are kept.
       VOP3P, DS, FLAT (by segment), MUBUF and SMEM
   amdgpu_cdna_probe.py vop3 amdgcn_gfx90a.slaspec gfx90a > vop3.txt
       '<op> | <text, op_sel=0> | <text, op_sel=0xf>' for every VOP3 opcode (below the VOP3P range)
-      the spec lacks, the input of tools/gen_amdgpu_gfx11_valu.py --e6 0x34
+      the spec lacks, the input of tools/gen_amdgpu_gfx11_valu.py --gfx9
+  amdgpu_cdna_probe.py e32 amdgcn_gfx9.slaspec gfx900 > e32.txt
+      '<vopc|vop1|vop2> <op> | <text>' for every VOPC, VOP1 and VOP2 opcode the spec lacks
   amdgpu_cdna_probe.py mfma gfx90a > mfma.txt
       '<op> <mnemonic> <dst VGPRs> <A> <B> <C>' for the VOP3P MFMA/SMFMAC opcodes
 """
@@ -65,13 +67,25 @@ def map_(cpu):
 
 def vop3(spec, cpu):
     have = {int(x) for x in re.findall(r'e6=0x34\b[^;]*?vop3op=(\d+)', open(spec).read())}
-    w1 = (V + 2) | ((V + 3) << 9) | ((V + 4) << 18)
+    w1 = (V + 2) | ((V + 4) << 9) | ((V + 6) << 18)
     insts = [[0xd0000000 | (op << 16) | (sel << 11) | 2, w1] for op in range(896) for sel in (0, 0xf)]
     txt = objdump(insts, cpu, pad=True)
     for op in range(896):
         a, b = txt[2 * op], txt[2 * op + 1]
         if a and op not in have:
             print('%d | %s | %s' % (op, a, b))
+
+
+def e32(spec, cpu):
+    text = open(spec).read()
+    have = {f: {int(x) for x in re.findall(r'\b%s=(\d+)' % fld, text)}
+            for f, fld in (('vopc', 'vopcop'), ('vop1', 'vop1op'), ('vop2', 'vop2op'))}
+    fmts = [('vopc', op, [0x7c000000 | (op << 17) | (4 << 9) | (V + 6)]) for op in range(256)]
+    fmts += [('vop2', op, [(op << 25) | (2 << 17) | (4 << 9) | (V + 6)]) for op in range(62)]
+    fmts += [('vop1', op, [0x7e000000 | (2 << 17) | (op << 9) | (V + 4)]) for op in range(256)]
+    for (f, op, ws), t in zip(fmts, objdump([x[2] for x in fmts], cpu, pad=True)):
+        if t and op not in have[f]:
+            print('%s %d | %s' % (f, op, t))
 
 
 def mfma(cpu):
@@ -99,5 +113,7 @@ def mfma(cpu):
 if __name__ == '__main__':
     if sys.argv[1] == 'vop3':
         vop3(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == 'e32':
+        e32(sys.argv[2], sys.argv[3])
     else:
         {'map': map_, 'mfma': mfma}[sys.argv[1]](sys.argv[2])

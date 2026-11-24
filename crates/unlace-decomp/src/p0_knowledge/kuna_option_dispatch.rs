@@ -119,6 +119,7 @@ kuna_options! { self, p1;
     "helperroles" => registered!(crate::kuna_helperrole::HelperRoles),
     "dynalloca" => registered!(crate::kuna_dynalloca::DynAlloca),
     "vaarg" => registered!(crate::kuna_vaarg::VaArg),
+    "vaargconst" => registered!(crate::kuna_vaargconst::VaArgConst),
     "indexrescale" => registered!(crate::kuna_indexrescale::IndexRescale),
     "looprotate" => registered!(crate::kuna_looprotate::LoopRotate),
     "guardedloop" => registered!(crate::kuna_coreoptions::GuardedLoop),

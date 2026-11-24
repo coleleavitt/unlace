@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_356() {
-    assert_eq!(kuna_num_settables(), 356);
-    assert_eq!(SETTABLE_TABLE.len(), 356);
+fn settable_count_is_358() {
+    assert_eq!(kuna_num_settables(), 358);
+    assert_eq!(SETTABLE_TABLE.len(), 358);
 }
 
 #[test]
-fn tier_counts_are_70_core_179_transform_107_analysis() {
+fn tier_counts_are_70_core_180_transform_108_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_179_transform_107_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 179, 107));
+    assert_eq!((core, transform, analysis), (70, 180, 108));
 }
 
 #[test]
@@ -422,6 +422,8 @@ fn option_values_live_value_present_for_129() {
         // (kuna) MSVC ThrowInfo labels and throw-site comments, the same PE-only
         // analysis-pass gate as `rtti`. Default-off.
         "msvceh",
+        // (kuna) Borland/Delphi RTTI, the same PE-only analysis-pass gate. Default-off.
+        "delphi",
         // (kuna) ELF libc-start `main` naming + prototype -- the ELF counterpart of
         // `machomain` above and the same seam: an analysis-tier gate with no
         // codegen live reader, read console-side via kuna_live_value. Default-ON.
@@ -1326,7 +1328,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `comcfg`; its P1 row follows `com`: 353 rows, 352 commas.
     // +1 for `orchainlive`: 355 rows, 354 commas.
     // +1 for `orchainbool`: 356 rows, 355 commas.
-    assert_eq!(json.matches("},\n").count(), 355);
+    // Recounted from phases.toml with `delphi` (its P1 row follows `msvceh`): 358 rows, 357 commas.
+    assert_eq!(json.matches("},\n").count(), 357);
 }
 
 #[test]

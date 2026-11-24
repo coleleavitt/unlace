@@ -1,0 +1,2648 @@
+# Uxn virtual machine (Varvara), written for unlace from the Uxn reference
+# (https://wiki.xxiivv.com/site/uxntal_reference.html, opcode table and semantics).
+# Generated constructor bodies: one per opcode, short (2), return (r) and keep (k) mode.
+
+define endian=big;
+define alignment=1;
+
+define space ram type=ram_space size=2 default;
+define space wst type=ram_space size=1;
+define space rst type=ram_space size=1;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=2 [ PC ];
+define register offset=0x02 size=1 [ WP RP ];
+
+define token opc(8)
+  op5  = (0,4)
+  s2   = (5,5)
+  rm   = (6,6)
+  km   = (7,7)
+  opb  = (0,7)
+;
+define token imm8tok(8)
+  imm8 = (0,7)
+;
+define token imm16tok(16)
+  imm16  = (0,15)
+  simm16 = (0,15) signed
+;
+
+define pcodeop deviceIn;
+define pcodeop deviceOut;
+
+Rel: dest is simm16 [ dest = inst_next + simm16; ] { export *:2 dest; }
+
+:BRK is opb=0x00 { brk:2 = 0; return [brk]; }
+:JCI Rel is opb=0x20 ; Rel { WP = WP - 1; c:1 = *[wst]:1 WP; if (c != 0) goto Rel; }
+:JMI Rel is opb=0x40 ; Rel { goto Rel; }
+:JSI Rel is opb=0x60 ; Rel { call Rel; }
+:LIT imm8 is opb=0x80 ; imm8 { *[wst]:1 WP = imm8; WP = WP + 1; }
+:LIT2 imm16 is opb=0xa0 ; imm16 { *[wst]:2 WP = imm16; WP = WP + 2; }
+:LITr imm8 is opb=0xc0 ; imm8 { *[rst]:1 RP = imm8; RP = RP + 1; }
+:LIT2r imm16 is opb=0xe0 ; imm16 { *[rst]:2 RP = imm16; RP = RP + 2; }
+
+:INC is op5=1 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t0 + 1;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:INC2 is op5=1 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t0 + 1;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:INCr is op5=1 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t0 + 1;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:INC2r is op5=1 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t0 + 1;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:INCk is op5=1 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  r0:1 = t0 + 1;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:INC2k is op5=1 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  r0:2 = t0 + 1;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:INCkr is op5=1 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  r0:1 = t0 + 1;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:INC2kr is op5=1 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  r0:2 = t0 + 1;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:POP is op5=2 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  WP = p;
+}
+:POP2 is op5=2 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  WP = p;
+}
+:POPr is op5=2 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  RP = p;
+}
+:POP2r is op5=2 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  RP = p;
+}
+:POPk is op5=2 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+}
+:POP2k is op5=2 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+}
+:POPkr is op5=2 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+}
+:POP2kr is op5=2 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+}
+:NIP is op5=3 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  WP = p;
+  r0:1 = t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:NIP2 is op5=3 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  WP = p;
+  r0:2 = t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:NIPr is op5=3 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  RP = p;
+  r0:1 = t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:NIP2r is op5=3 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  RP = p;
+  r0:2 = t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:NIPk is op5=3 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  r0:1 = t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:NIP2k is op5=3 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  r0:2 = t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:NIPkr is op5=3 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  r0:1 = t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:NIP2kr is op5=3 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  r0:2 = t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:SWP is op5=4 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t0;
+  r1:1 = t1;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+  *[wst]:1 WP = r1;
+  WP = WP + 1;
+}
+:SWP2 is op5=4 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t0;
+  r1:2 = t1;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+  *[wst]:2 WP = r1;
+  WP = WP + 2;
+}
+:SWPr is op5=4 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t0;
+  r1:1 = t1;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+  *[rst]:1 RP = r1;
+  RP = RP + 1;
+}
+:SWP2r is op5=4 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t0;
+  r1:2 = t1;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+  *[rst]:2 RP = r1;
+  RP = RP + 2;
+}
+:SWPk is op5=4 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  r0:1 = t0;
+  r1:1 = t1;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+  *[wst]:1 WP = r1;
+  WP = WP + 1;
+}
+:SWP2k is op5=4 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  r0:2 = t0;
+  r1:2 = t1;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+  *[wst]:2 WP = r1;
+  WP = WP + 2;
+}
+:SWPkr is op5=4 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  r0:1 = t0;
+  r1:1 = t1;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+  *[rst]:1 RP = r1;
+  RP = RP + 1;
+}
+:SWP2kr is op5=4 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  r0:2 = t0;
+  r1:2 = t1;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+  *[rst]:2 RP = r1;
+  RP = RP + 2;
+}
+:ROT is op5=5 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  p = p - 1;
+  t2:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t1;
+  r1:1 = t0;
+  r2:1 = t2;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+  *[wst]:1 WP = r1;
+  WP = WP + 1;
+  *[wst]:1 WP = r2;
+  WP = WP + 1;
+}
+:ROT2 is op5=5 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  p = p - 2;
+  t2:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t1;
+  r1:2 = t0;
+  r2:2 = t2;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+  *[wst]:2 WP = r1;
+  WP = WP + 2;
+  *[wst]:2 WP = r2;
+  WP = WP + 2;
+}
+:ROTr is op5=5 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  p = p - 1;
+  t2:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t1;
+  r1:1 = t0;
+  r2:1 = t2;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+  *[rst]:1 RP = r1;
+  RP = RP + 1;
+  *[rst]:1 RP = r2;
+  RP = RP + 1;
+}
+:ROT2r is op5=5 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  p = p - 2;
+  t2:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t1;
+  r1:2 = t0;
+  r2:2 = t2;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+  *[rst]:2 RP = r1;
+  RP = RP + 2;
+  *[rst]:2 RP = r2;
+  RP = RP + 2;
+}
+:ROTk is op5=5 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  p = p - 1;
+  t2:1 = *[wst]:1 p;
+  r0:1 = t1;
+  r1:1 = t0;
+  r2:1 = t2;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+  *[wst]:1 WP = r1;
+  WP = WP + 1;
+  *[wst]:1 WP = r2;
+  WP = WP + 1;
+}
+:ROT2k is op5=5 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  p = p - 2;
+  t2:2 = *[wst]:2 p;
+  r0:2 = t1;
+  r1:2 = t0;
+  r2:2 = t2;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+  *[wst]:2 WP = r1;
+  WP = WP + 2;
+  *[wst]:2 WP = r2;
+  WP = WP + 2;
+}
+:ROTkr is op5=5 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  p = p - 1;
+  t2:1 = *[rst]:1 p;
+  r0:1 = t1;
+  r1:1 = t0;
+  r2:1 = t2;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+  *[rst]:1 RP = r1;
+  RP = RP + 1;
+  *[rst]:1 RP = r2;
+  RP = RP + 1;
+}
+:ROT2kr is op5=5 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  p = p - 2;
+  t2:2 = *[rst]:2 p;
+  r0:2 = t1;
+  r1:2 = t0;
+  r2:2 = t2;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+  *[rst]:2 RP = r1;
+  RP = RP + 2;
+  *[rst]:2 RP = r2;
+  RP = RP + 2;
+}
+:DUP is op5=6 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t0;
+  r1:1 = t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+  *[wst]:1 WP = r1;
+  WP = WP + 1;
+}
+:DUP2 is op5=6 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t0;
+  r1:2 = t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+  *[wst]:2 WP = r1;
+  WP = WP + 2;
+}
+:DUPr is op5=6 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t0;
+  r1:1 = t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+  *[rst]:1 RP = r1;
+  RP = RP + 1;
+}
+:DUP2r is op5=6 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t0;
+  r1:2 = t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+  *[rst]:2 RP = r1;
+  RP = RP + 2;
+}
+:DUPk is op5=6 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  r0:1 = t0;
+  r1:1 = t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+  *[wst]:1 WP = r1;
+  WP = WP + 1;
+}
+:DUP2k is op5=6 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  r0:2 = t0;
+  r1:2 = t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+  *[wst]:2 WP = r1;
+  WP = WP + 2;
+}
+:DUPkr is op5=6 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  r0:1 = t0;
+  r1:1 = t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+  *[rst]:1 RP = r1;
+  RP = RP + 1;
+}
+:DUP2kr is op5=6 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  r0:2 = t0;
+  r1:2 = t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+  *[rst]:2 RP = r1;
+  RP = RP + 2;
+}
+:OVR is op5=7 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t1;
+  r1:1 = t0;
+  r2:1 = t1;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+  *[wst]:1 WP = r1;
+  WP = WP + 1;
+  *[wst]:1 WP = r2;
+  WP = WP + 1;
+}
+:OVR2 is op5=7 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t1;
+  r1:2 = t0;
+  r2:2 = t1;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+  *[wst]:2 WP = r1;
+  WP = WP + 2;
+  *[wst]:2 WP = r2;
+  WP = WP + 2;
+}
+:OVRr is op5=7 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t1;
+  r1:1 = t0;
+  r2:1 = t1;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+  *[rst]:1 RP = r1;
+  RP = RP + 1;
+  *[rst]:1 RP = r2;
+  RP = RP + 1;
+}
+:OVR2r is op5=7 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t1;
+  r1:2 = t0;
+  r2:2 = t1;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+  *[rst]:2 RP = r1;
+  RP = RP + 2;
+  *[rst]:2 RP = r2;
+  RP = RP + 2;
+}
+:OVRk is op5=7 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  r0:1 = t1;
+  r1:1 = t0;
+  r2:1 = t1;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+  *[wst]:1 WP = r1;
+  WP = WP + 1;
+  *[wst]:1 WP = r2;
+  WP = WP + 1;
+}
+:OVR2k is op5=7 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  r0:2 = t1;
+  r1:2 = t0;
+  r2:2 = t1;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+  *[wst]:2 WP = r1;
+  WP = WP + 2;
+  *[wst]:2 WP = r2;
+  WP = WP + 2;
+}
+:OVRkr is op5=7 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  r0:1 = t1;
+  r1:1 = t0;
+  r2:1 = t1;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+  *[rst]:1 RP = r1;
+  RP = RP + 1;
+  *[rst]:1 RP = r2;
+  RP = RP + 1;
+}
+:OVR2kr is op5=7 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  r0:2 = t1;
+  r1:2 = t0;
+  r2:2 = t1;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+  *[rst]:2 RP = r1;
+  RP = RP + 2;
+  *[rst]:2 RP = r2;
+  RP = RP + 2;
+}
+:EQU is op5=8 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  c:1 = t1 == t0;
+  WP = p;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:EQU2 is op5=8 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  c:1 = t1 == t0;
+  WP = p;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:EQUr is op5=8 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  c:1 = t1 == t0;
+  RP = p;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:EQU2r is op5=8 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  c:1 = t1 == t0;
+  RP = p;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:EQUk is op5=8 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  c:1 = t1 == t0;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:EQU2k is op5=8 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  c:1 = t1 == t0;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:EQUkr is op5=8 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  c:1 = t1 == t0;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:EQU2kr is op5=8 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  c:1 = t1 == t0;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:NEQ is op5=9 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  c:1 = t1 != t0;
+  WP = p;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:NEQ2 is op5=9 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  c:1 = t1 != t0;
+  WP = p;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:NEQr is op5=9 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  c:1 = t1 != t0;
+  RP = p;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:NEQ2r is op5=9 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  c:1 = t1 != t0;
+  RP = p;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:NEQk is op5=9 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  c:1 = t1 != t0;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:NEQ2k is op5=9 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  c:1 = t1 != t0;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:NEQkr is op5=9 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  c:1 = t1 != t0;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:NEQ2kr is op5=9 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  c:1 = t1 != t0;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:GTH is op5=10 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  c:1 = t1 > t0;
+  WP = p;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:GTH2 is op5=10 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  c:1 = t1 > t0;
+  WP = p;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:GTHr is op5=10 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  c:1 = t1 > t0;
+  RP = p;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:GTH2r is op5=10 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  c:1 = t1 > t0;
+  RP = p;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:GTHk is op5=10 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  c:1 = t1 > t0;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:GTH2k is op5=10 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  c:1 = t1 > t0;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:GTHkr is op5=10 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  c:1 = t1 > t0;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:GTH2kr is op5=10 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  c:1 = t1 > t0;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:LTH is op5=11 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  c:1 = t1 < t0;
+  WP = p;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:LTH2 is op5=11 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  c:1 = t1 < t0;
+  WP = p;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:LTHr is op5=11 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  c:1 = t1 < t0;
+  RP = p;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:LTH2r is op5=11 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  c:1 = t1 < t0;
+  RP = p;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:LTHk is op5=11 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  c:1 = t1 < t0;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:LTH2k is op5=11 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  c:1 = t1 < t0;
+  r0:1 = c;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:LTHkr is op5=11 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  c:1 = t1 < t0;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:LTH2kr is op5=11 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  c:1 = t1 < t0;
+  r0:1 = c;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:JMP is op5=12 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  WP = p;
+  goto [dest];
+}
+:JMP2 is op5=12 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  dest:2 = t0;
+  WP = p;
+  goto [dest];
+}
+:JMPr is op5=12 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  RP = p;
+  goto [dest];
+}
+:JMP2r is op5=12 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  dest:2 = t0;
+  RP = p;
+  return [dest];
+}
+:JMPk is op5=12 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  goto [dest];
+}
+:JMP2k is op5=12 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  dest:2 = t0;
+  goto [dest];
+}
+:JMPkr is op5=12 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  goto [dest];
+}
+:JMP2kr is op5=12 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  dest:2 = t0;
+  goto [dest];
+}
+:JCN is op5=13 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  WP = p;
+  if (t1 == 0) goto inst_next;
+  goto [dest];
+}
+:JCN2 is op5=13 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  dest:2 = t0;
+  WP = p;
+  if (t1 == 0) goto inst_next;
+  goto [dest];
+}
+:JCNr is op5=13 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  RP = p;
+  if (t1 == 0) goto inst_next;
+  goto [dest];
+}
+:JCN2r is op5=13 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  dest:2 = t0;
+  RP = p;
+  if (t1 == 0) goto inst_next;
+  goto [dest];
+}
+:JCNk is op5=13 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  if (t1 == 0) goto inst_next;
+  goto [dest];
+}
+:JCN2k is op5=13 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  dest:2 = t0;
+  if (t1 == 0) goto inst_next;
+  goto [dest];
+}
+:JCNkr is op5=13 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  if (t1 == 0) goto inst_next;
+  goto [dest];
+}
+:JCN2kr is op5=13 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  dest:2 = t0;
+  if (t1 == 0) goto inst_next;
+  goto [dest];
+}
+:JSR is op5=14 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  WP = p;
+  call [dest];
+}
+:JSR2 is op5=14 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  dest:2 = t0;
+  WP = p;
+  call [dest];
+}
+:JSRr is op5=14 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  RP = p;
+  call [dest];
+}
+:JSR2r is op5=14 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  dest:2 = t0;
+  RP = p;
+  call [dest];
+}
+:JSRk is op5=14 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  call [dest];
+}
+:JSR2k is op5=14 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  dest:2 = t0;
+  call [dest];
+}
+:JSRkr is op5=14 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  dest:2 = inst_next + sext(t0);
+  call [dest];
+}
+:JSR2kr is op5=14 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  dest:2 = t0;
+  call [dest];
+}
+:STH is op5=15 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  WP = p;
+  *[rst]:1 RP = t0;
+  RP = RP + 1;
+}
+:STH2 is op5=15 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  WP = p;
+  *[rst]:2 RP = t0;
+  RP = RP + 2;
+}
+:STHr is op5=15 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  RP = p;
+  *[wst]:1 WP = t0;
+  WP = WP + 1;
+}
+:STH2r is op5=15 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  RP = p;
+  *[wst]:2 WP = t0;
+  WP = WP + 2;
+}
+:STHk is op5=15 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  *[rst]:1 RP = t0;
+  RP = RP + 1;
+}
+:STH2k is op5=15 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  *[rst]:2 RP = t0;
+  RP = RP + 2;
+}
+:STHkr is op5=15 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  *[wst]:1 WP = t0;
+  WP = WP + 1;
+}
+:STH2kr is op5=15 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  *[wst]:2 WP = t0;
+  WP = WP + 2;
+}
+:LDZ is op5=16 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  za:2 = zext(t0);
+  v:1 = *[ram]:1 za;
+  WP = p;
+  r0:1 = v;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:LDZ2 is op5=16 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  za:2 = zext(t0);
+  v:2 = *[ram]:2 za;
+  WP = p;
+  r0:2 = v;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:LDZr is op5=16 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  za:2 = zext(t0);
+  v:1 = *[ram]:1 za;
+  RP = p;
+  r0:1 = v;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:LDZ2r is op5=16 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  za:2 = zext(t0);
+  v:2 = *[ram]:2 za;
+  RP = p;
+  r0:2 = v;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:LDZk is op5=16 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  za:2 = zext(t0);
+  v:1 = *[ram]:1 za;
+  r0:1 = v;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:LDZ2k is op5=16 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  za:2 = zext(t0);
+  v:2 = *[ram]:2 za;
+  r0:2 = v;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:LDZkr is op5=16 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  za:2 = zext(t0);
+  v:1 = *[ram]:1 za;
+  r0:1 = v;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:LDZ2kr is op5=16 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  za:2 = zext(t0);
+  v:2 = *[ram]:2 za;
+  r0:2 = v;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:STZ is op5=17 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  za:2 = zext(t0);
+  *[ram]:1 za = t1;
+  WP = p;
+}
+:STZ2 is op5=17 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  za:2 = zext(t0);
+  *[ram]:2 za = t1;
+  WP = p;
+}
+:STZr is op5=17 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  za:2 = zext(t0);
+  *[ram]:1 za = t1;
+  RP = p;
+}
+:STZ2r is op5=17 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  za:2 = zext(t0);
+  *[ram]:2 za = t1;
+  RP = p;
+}
+:STZk is op5=17 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  za:2 = zext(t0);
+  *[ram]:1 za = t1;
+}
+:STZ2k is op5=17 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  za:2 = zext(t0);
+  *[ram]:2 za = t1;
+}
+:STZkr is op5=17 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  za:2 = zext(t0);
+  *[ram]:1 za = t1;
+}
+:STZ2kr is op5=17 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  za:2 = zext(t0);
+  *[ram]:2 za = t1;
+}
+:LDR is op5=18 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  v:1 = *[ram]:1 ra;
+  WP = p;
+  r0:1 = v;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:LDR2 is op5=18 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  v:2 = *[ram]:2 ra;
+  WP = p;
+  r0:2 = v;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:LDRr is op5=18 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  v:1 = *[ram]:1 ra;
+  RP = p;
+  r0:1 = v;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:LDR2r is op5=18 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  v:2 = *[ram]:2 ra;
+  RP = p;
+  r0:2 = v;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:LDRk is op5=18 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  v:1 = *[ram]:1 ra;
+  r0:1 = v;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:LDR2k is op5=18 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  v:2 = *[ram]:2 ra;
+  r0:2 = v;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:LDRkr is op5=18 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  v:1 = *[ram]:1 ra;
+  r0:1 = v;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:LDR2kr is op5=18 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  v:2 = *[ram]:2 ra;
+  r0:2 = v;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:STR is op5=19 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  *[ram]:1 ra = t1;
+  WP = p;
+}
+:STR2 is op5=19 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  ra:2 = inst_next + sext(t0);
+  *[ram]:2 ra = t1;
+  WP = p;
+}
+:STRr is op5=19 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  *[ram]:1 ra = t1;
+  RP = p;
+}
+:STR2r is op5=19 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  ra:2 = inst_next + sext(t0);
+  *[ram]:2 ra = t1;
+  RP = p;
+}
+:STRk is op5=19 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  *[ram]:1 ra = t1;
+}
+:STR2k is op5=19 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  ra:2 = inst_next + sext(t0);
+  *[ram]:2 ra = t1;
+}
+:STRkr is op5=19 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  ra:2 = inst_next + sext(t0);
+  *[ram]:1 ra = t1;
+}
+:STR2kr is op5=19 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  ra:2 = inst_next + sext(t0);
+  *[ram]:2 ra = t1;
+}
+:LDA is op5=20 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  v:1 = *[ram]:1 t0;
+  WP = p;
+  r0:1 = v;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:LDA2 is op5=20 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  v:2 = *[ram]:2 t0;
+  WP = p;
+  r0:2 = v;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:LDAr is op5=20 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  v:1 = *[ram]:1 t0;
+  RP = p;
+  r0:1 = v;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:LDA2r is op5=20 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  v:2 = *[ram]:2 t0;
+  RP = p;
+  r0:2 = v;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:LDAk is op5=20 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  v:1 = *[ram]:1 t0;
+  r0:1 = v;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:LDA2k is op5=20 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  v:2 = *[ram]:2 t0;
+  r0:2 = v;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:LDAkr is op5=20 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  v:1 = *[ram]:1 t0;
+  r0:1 = v;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:LDA2kr is op5=20 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  v:2 = *[ram]:2 t0;
+  r0:2 = v;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:STA is op5=21 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  *[ram]:1 t0 = t1;
+  WP = p;
+}
+:STA2 is op5=21 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  *[ram]:2 t0 = t1;
+  WP = p;
+}
+:STAr is op5=21 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  *[ram]:1 t0 = t1;
+  RP = p;
+}
+:STA2r is op5=21 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  *[ram]:2 t0 = t1;
+  RP = p;
+}
+:STAk is op5=21 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  *[ram]:1 t0 = t1;
+}
+:STA2k is op5=21 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  *[ram]:2 t0 = t1;
+}
+:STAkr is op5=21 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  *[ram]:1 t0 = t1;
+}
+:STA2kr is op5=21 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  *[ram]:2 t0 = t1;
+}
+:DEI is op5=22 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  v:1 = deviceIn(t0, 1:1);
+  WP = p;
+  r0:1 = v;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:DEI2 is op5=22 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  v:2 = deviceIn(t0, 2:1);
+  WP = p;
+  r0:2 = v;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:DEIr is op5=22 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  v:1 = deviceIn(t0, 1:1);
+  RP = p;
+  r0:1 = v;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:DEI2r is op5=22 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  v:2 = deviceIn(t0, 2:1);
+  RP = p;
+  r0:2 = v;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:DEIk is op5=22 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  v:1 = deviceIn(t0, 1:1);
+  r0:1 = v;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:DEI2k is op5=22 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  v:2 = deviceIn(t0, 2:1);
+  r0:2 = v;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:DEIkr is op5=22 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  v:1 = deviceIn(t0, 1:1);
+  r0:1 = v;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:DEI2kr is op5=22 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  v:2 = deviceIn(t0, 2:1);
+  r0:2 = v;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:DEO is op5=23 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  deviceOut(t0, t1);
+  WP = p;
+}
+:DEO2 is op5=23 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  deviceOut(t0, t1);
+  WP = p;
+}
+:DEOr is op5=23 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  deviceOut(t0, t1);
+  RP = p;
+}
+:DEO2r is op5=23 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  deviceOut(t0, t1);
+  RP = p;
+}
+:DEOk is op5=23 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  deviceOut(t0, t1);
+}
+:DEO2k is op5=23 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  deviceOut(t0, t1);
+}
+:DEOkr is op5=23 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  deviceOut(t0, t1);
+}
+:DEO2kr is op5=23 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  deviceOut(t0, t1);
+}
+:ADD is op5=24 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t1 + t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:ADD2 is op5=24 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t1 + t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:ADDr is op5=24 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t1 + t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:ADD2r is op5=24 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t1 + t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:ADDk is op5=24 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  r0:1 = t1 + t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:ADD2k is op5=24 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  r0:2 = t1 + t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:ADDkr is op5=24 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  r0:1 = t1 + t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:ADD2kr is op5=24 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  r0:2 = t1 + t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:SUB is op5=25 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t1 - t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:SUB2 is op5=25 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t1 - t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:SUBr is op5=25 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t1 - t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:SUB2r is op5=25 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t1 - t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:SUBk is op5=25 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  r0:1 = t1 - t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:SUB2k is op5=25 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  r0:2 = t1 - t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:SUBkr is op5=25 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  r0:1 = t1 - t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:SUB2kr is op5=25 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  r0:2 = t1 - t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:MUL is op5=26 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t1 * t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:MUL2 is op5=26 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t1 * t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:MULr is op5=26 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t1 * t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:MUL2r is op5=26 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t1 * t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:MULk is op5=26 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  r0:1 = t1 * t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:MUL2k is op5=26 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  r0:2 = t1 * t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:MULkr is op5=26 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  r0:1 = t1 * t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:MUL2kr is op5=26 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  r0:2 = t1 * t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:DIV is op5=27 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  q:1 = 0;
+  if (t0 == 0) goto <zero>;
+  q = t1 / t0;
+  <zero>
+  WP = p;
+  r0:1 = q;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:DIV2 is op5=27 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  q:2 = 0;
+  if (t0 == 0) goto <zero>;
+  q = t1 / t0;
+  <zero>
+  WP = p;
+  r0:2 = q;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:DIVr is op5=27 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  q:1 = 0;
+  if (t0 == 0) goto <zero>;
+  q = t1 / t0;
+  <zero>
+  RP = p;
+  r0:1 = q;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:DIV2r is op5=27 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  q:2 = 0;
+  if (t0 == 0) goto <zero>;
+  q = t1 / t0;
+  <zero>
+  RP = p;
+  r0:2 = q;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:DIVk is op5=27 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  q:1 = 0;
+  if (t0 == 0) goto <zero>;
+  q = t1 / t0;
+  <zero>
+  r0:1 = q;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:DIV2k is op5=27 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  q:2 = 0;
+  if (t0 == 0) goto <zero>;
+  q = t1 / t0;
+  <zero>
+  r0:2 = q;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:DIVkr is op5=27 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  q:1 = 0;
+  if (t0 == 0) goto <zero>;
+  q = t1 / t0;
+  <zero>
+  r0:1 = q;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:DIV2kr is op5=27 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  q:2 = 0;
+  if (t0 == 0) goto <zero>;
+  q = t1 / t0;
+  <zero>
+  r0:2 = q;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:AND is op5=28 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t1 & t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:AND2 is op5=28 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t1 & t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:ANDr is op5=28 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t1 & t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:AND2r is op5=28 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t1 & t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:ANDk is op5=28 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  r0:1 = t1 & t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:AND2k is op5=28 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  r0:2 = t1 & t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:ANDkr is op5=28 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  r0:1 = t1 & t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:AND2kr is op5=28 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  r0:2 = t1 & t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:ORA is op5=29 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t1 | t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:ORA2 is op5=29 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t1 | t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:ORAr is op5=29 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t1 | t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:ORA2r is op5=29 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t1 | t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:ORAk is op5=29 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  r0:1 = t1 | t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:ORA2k is op5=29 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  r0:2 = t1 | t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:ORAkr is op5=29 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  r0:1 = t1 | t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:ORA2kr is op5=29 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  r0:2 = t1 | t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:EOR is op5=30 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = t1 ^ t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:EOR2 is op5=30 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = t1 ^ t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:EORr is op5=30 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = t1 ^ t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:EOR2r is op5=30 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = t1 ^ t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:EORk is op5=30 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  r0:1 = t1 ^ t0;
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:EOR2k is op5=30 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 2;
+  t0:2 = *[wst]:2 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  r0:2 = t1 ^ t0;
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:EORkr is op5=30 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  r0:1 = t1 ^ t0;
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:EOR2kr is op5=30 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 2;
+  t0:2 = *[rst]:2 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  r0:2 = t1 ^ t0;
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:SFT is op5=31 & s2=0 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  WP = p;
+  r0:1 = (t1 >> (t0 & 0xf)) << (t0 >> 4);
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:SFT2 is op5=31 & s2=1 & rm=0 & km=0 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  WP = p;
+  r0:2 = (t1 >> (t0 & 0xf)) << (t0 >> 4);
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:SFTr is op5=31 & s2=0 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  RP = p;
+  r0:1 = (t1 >> (t0 & 0xf)) << (t0 >> 4);
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:SFT2r is op5=31 & s2=1 & rm=1 & km=0 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  RP = p;
+  r0:2 = (t1 >> (t0 & 0xf)) << (t0 >> 4);
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}
+:SFTk is op5=31 & s2=0 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 1;
+  t1:1 = *[wst]:1 p;
+  r0:1 = (t1 >> (t0 & 0xf)) << (t0 >> 4);
+  *[wst]:1 WP = r0;
+  WP = WP + 1;
+}
+:SFT2k is op5=31 & s2=1 & rm=0 & km=1 {
+  p:1 = WP;
+  p = p - 1;
+  t0:1 = *[wst]:1 p;
+  p = p - 2;
+  t1:2 = *[wst]:2 p;
+  r0:2 = (t1 >> (t0 & 0xf)) << (t0 >> 4);
+  *[wst]:2 WP = r0;
+  WP = WP + 2;
+}
+:SFTkr is op5=31 & s2=0 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 1;
+  t1:1 = *[rst]:1 p;
+  r0:1 = (t1 >> (t0 & 0xf)) << (t0 >> 4);
+  *[rst]:1 RP = r0;
+  RP = RP + 1;
+}
+:SFT2kr is op5=31 & s2=1 & rm=1 & km=1 {
+  p:1 = RP;
+  p = p - 1;
+  t0:1 = *[rst]:1 p;
+  p = p - 2;
+  t1:2 = *[rst]:2 p;
+  r0:2 = (t1 >> (t0 & 0xf)) << (t0 >> 4);
+  *[rst]:2 RP = r0;
+  RP = RP + 2;
+}

@@ -1,0 +1,457 @@
+# SLEIGH specification for the KONAMI CPU (Konami 052001 / 052526 / 053248, often
+# called "Konami-2"): a 6809-derived core in a gate array with its own opcode map,
+# indexed-only memory operands, block moves, multi-bit shifts and 16x16 multiply.
+#
+# Written for unlace from the public description of the KONAMI CPU opcode map and
+# addressing postbyte (as documented by the MAME project's konami core, read for
+# reference) and the Motorola MC6809 programming manual for the flag rules it keeps.
+# Big-endian, 16-bit address space.
+
+define endian=big;
+define alignment=1;
+
+define space RAM      type=ram_space      size=2 default;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=2 [ D X Y U S PC XFER ];
+define register offset=0x00 size=1 [ A B ];
+define register offset=0x10 size=1 [ DP CC ];
+define register offset=0x20 size=1 [ E F H I N Z V C ];
+
+define token opbyte (8)
+  op = (0,7)
+;
+
+define token postbyte (8)
+  pbhi  = (7,7)
+  idx   = (4,6)
+  ind   = (3,3)
+  ty    = (0,2)
+  pm7   = (7,7)
+  pm6   = (6,6)
+  pm5   = (5,5)
+  pm4   = (4,4)
+  pm3   = (3,3)
+  pm2   = (2,2)
+  pm1   = (1,1)
+  pm0   = (0,0)
+  tfrbit = (7,7)
+  rhi   = (4,6)
+  rlo   = (0,2)
+;
+
+define token data8 (8)
+  imm8  = (0,7)
+  simm8 = (0,7) signed
+;
+
+define token data16 (16)
+  imm16  = (0,15)
+  simm16 = (0,15) signed
+;
+
+define pcodeop setLines;
+
+macro packCC(c) {
+  c = (E << 7) | (F << 6) | (H << 5) | (I << 4) | (N << 3) | (Z << 2) | (V << 1) | C;
+}
+
+macro unpackCC(c) {
+  E = c[7,1]; F = c[6,1]; H = c[5,1]; I = c[4,1];
+  N = c[3,1]; Z = c[2,1]; V = c[1,1]; C = c[0,1];
+}
+
+################################################################
+# Indexed addressing (every memory operand). The postbyte selects the index
+# register in bits 6-4 (2 X, 3 Y, 5 U, 6 S, 7 PC), bit 3 indirection.
+# PC as an index is the address after the postbyte.
+################################################################
+
+IXR: "X"  is idx=2 { export X; }
+IXR: "Y"  is idx=3 { export Y; }
+IXR: "U"  is idx=5 { export U; }
+IXR: "S"  is idx=6 { export S; }
+IXR: "PC" is idx=7 { local p:2 = inst_start + 2; export p; }
+
+# auto increment/decrement registers exclude PC
+IXA: "X" is idx=2 { export X; }
+IXA: "Y" is idx=3 { export Y; }
+IXA: "U" is idx=5 { export U; }
+IXA: "S" is idx=6 { export S; }
+
+EAB: "$"^imm16       is pbhi=0 & idx=0 & ty=7; imm16 { local a:2 = imm16; export a; }
+EAB: ","^IXA^"+"     is pbhi=0 & ty=0 & IXA { local a:2 = IXA; IXA = IXA + 1; export a; }
+EAB: ","^IXA^"++"    is pbhi=0 & ty=1 & IXA { local a:2 = IXA; IXA = IXA + 2; export a; }
+EAB: ",-"^IXA        is pbhi=0 & ty=2 & IXA { IXA = IXA - 1; local a:2 = IXA; export a; }
+EAB: ",--"^IXA       is pbhi=0 & ty=3 & IXA { IXA = IXA - 2; local a:2 = IXA; export a; }
+EAB: simm8^","^IXR   is pbhi=0 & ty=4 & IXR; simm8 { local a:2 = IXR + simm8; export a; }
+EAB: simm16^","^IXR  is pbhi=0 & ty=5 & IXR; simm16 { local a:2 = IXR + simm16; export a; }
+EAB: ","^IXR         is pbhi=0 & ty=6 & IXR { local a:2 = IXR; export a; }
+EAB: "A,"^IXR        is pbhi=1 & ty=0 & IXR { local a:2 = IXR + sext(A); export a; }
+EAB: "B,"^IXR        is pbhi=1 & ty=1 & IXR { local a:2 = IXR + sext(B); export a; }
+EAB: "D,"^IXR        is pbhi=1 & ty=7 & IXR { local a:2 = IXR + D; export a; }
+EAB: "<$"^imm8       is pbhi=1 & idx=4 & ty=4; imm8 { local a:2 = (zext(DP) << 8) | imm8; export a; }
+
+EA: EAB           is ind=0 ... & EAB { export EAB; }
+EA: "["^EAB^"]"   is ind=1 ... & EAB { local p:2 = *:2 EAB; export p; }
+
+REL8:  dest is simm8  [ dest = inst_next + simm8; ]  { export *:2 dest; }
+REL16: dest is simm16 [ dest = inst_next + simm16; ] { export *:2 dest; }
+
+################################################################
+# ALU, loads, stores, branches (generated table)
+################################################################
+
+:LDA "#"^imm8 is op=0x10; imm8 { local i:1 = imm8; A = i; N = A s< 0; Z = A == 0; V = 0; }
+:LDB "#"^imm8 is op=0x11; imm8 { local i:1 = imm8; B = i; N = B s< 0; Z = B == 0; V = 0; }
+:LDA EA is op=0x12; EA { local m:1 = *:1 EA; A = m; N = A s< 0; Z = A == 0; V = 0; }
+:LDB EA is op=0x13; EA { local m:1 = *:1 EA; B = m; N = B s< 0; Z = B == 0; V = 0; }
+:ADDA "#"^imm8 is op=0x14; imm8 { local i:1 = imm8; local o = i; local a = A; H = (((a & 0xf) + (o & 0xf)) & 0x10) != 0; C = carry(a, o); V = scarry(a, o); A = a + o; N = A s< 0; Z = A == 0; }
+:ADDB "#"^imm8 is op=0x15; imm8 { local i:1 = imm8; local o = i; local a = B; H = (((a & 0xf) + (o & 0xf)) & 0x10) != 0; C = carry(a, o); V = scarry(a, o); B = a + o; N = B s< 0; Z = B == 0; }
+:ADDA EA is op=0x16; EA { local m:1 = *:1 EA; local o = m; local a = A; H = (((a & 0xf) + (o & 0xf)) & 0x10) != 0; C = carry(a, o); V = scarry(a, o); A = a + o; N = A s< 0; Z = A == 0; }
+:ADDB EA is op=0x17; EA { local m:1 = *:1 EA; local o = m; local a = B; H = (((a & 0xf) + (o & 0xf)) & 0x10) != 0; C = carry(a, o); V = scarry(a, o); B = a + o; N = B s< 0; Z = B == 0; }
+:ADCA "#"^imm8 is op=0x18; imm8 { local i:1 = imm8; local o = i; local a = A; local c:1 = C; local s:2 = zext(a) + zext(o) + zext(c); H = (((a & 0xf) + (o & 0xf) + c) & 0x10) != 0; A = s:1; C = s > 0xff; V = ((~(a ^ o)) & (a ^ A) & 0x80) != 0; N = A s< 0; Z = A == 0; }
+:ADCB "#"^imm8 is op=0x19; imm8 { local i:1 = imm8; local o = i; local a = B; local c:1 = C; local s:2 = zext(a) + zext(o) + zext(c); H = (((a & 0xf) + (o & 0xf) + c) & 0x10) != 0; B = s:1; C = s > 0xff; V = ((~(a ^ o)) & (a ^ B) & 0x80) != 0; N = B s< 0; Z = B == 0; }
+:ADCA EA is op=0x1A; EA { local m:1 = *:1 EA; local o = m; local a = A; local c:1 = C; local s:2 = zext(a) + zext(o) + zext(c); H = (((a & 0xf) + (o & 0xf) + c) & 0x10) != 0; A = s:1; C = s > 0xff; V = ((~(a ^ o)) & (a ^ A) & 0x80) != 0; N = A s< 0; Z = A == 0; }
+:ADCB EA is op=0x1B; EA { local m:1 = *:1 EA; local o = m; local a = B; local c:1 = C; local s:2 = zext(a) + zext(o) + zext(c); H = (((a & 0xf) + (o & 0xf) + c) & 0x10) != 0; B = s:1; C = s > 0xff; V = ((~(a ^ o)) & (a ^ B) & 0x80) != 0; N = B s< 0; Z = B == 0; }
+:SUBA "#"^imm8 is op=0x1C; imm8 { local i:1 = imm8; local o = i; local a = A; C = a < o; V = sborrow(a, o); A = a - o; N = A s< 0; Z = A == 0; }
+:SUBB "#"^imm8 is op=0x1D; imm8 { local i:1 = imm8; local o = i; local a = B; C = a < o; V = sborrow(a, o); B = a - o; N = B s< 0; Z = B == 0; }
+:SUBA EA is op=0x1E; EA { local m:1 = *:1 EA; local o = m; local a = A; C = a < o; V = sborrow(a, o); A = a - o; N = A s< 0; Z = A == 0; }
+:SUBB EA is op=0x1F; EA { local m:1 = *:1 EA; local o = m; local a = B; C = a < o; V = sborrow(a, o); B = a - o; N = B s< 0; Z = B == 0; }
+:SBCA "#"^imm8 is op=0x20; imm8 { local i:1 = imm8; local o = i; local a = A; local c:1 = C; local s:2 = zext(a) - zext(o) - zext(c); A = s:1; C = s > 0xff; V = ((a ^ o) & (a ^ A) & 0x80) != 0; N = A s< 0; Z = A == 0; }
+:SBCB "#"^imm8 is op=0x21; imm8 { local i:1 = imm8; local o = i; local a = B; local c:1 = C; local s:2 = zext(a) - zext(o) - zext(c); B = s:1; C = s > 0xff; V = ((a ^ o) & (a ^ B) & 0x80) != 0; N = B s< 0; Z = B == 0; }
+:SBCA EA is op=0x22; EA { local m:1 = *:1 EA; local o = m; local a = A; local c:1 = C; local s:2 = zext(a) - zext(o) - zext(c); A = s:1; C = s > 0xff; V = ((a ^ o) & (a ^ A) & 0x80) != 0; N = A s< 0; Z = A == 0; }
+:SBCB EA is op=0x23; EA { local m:1 = *:1 EA; local o = m; local a = B; local c:1 = C; local s:2 = zext(a) - zext(o) - zext(c); B = s:1; C = s > 0xff; V = ((a ^ o) & (a ^ B) & 0x80) != 0; N = B s< 0; Z = B == 0; }
+:ANDA "#"^imm8 is op=0x24; imm8 { local i:1 = imm8; A = A & i; N = A s< 0; Z = A == 0; V = 0; }
+:ANDB "#"^imm8 is op=0x25; imm8 { local i:1 = imm8; B = B & i; N = B s< 0; Z = B == 0; V = 0; }
+:ANDA EA is op=0x26; EA { local m:1 = *:1 EA; A = A & m; N = A s< 0; Z = A == 0; V = 0; }
+:ANDB EA is op=0x27; EA { local m:1 = *:1 EA; B = B & m; N = B s< 0; Z = B == 0; V = 0; }
+:BITA "#"^imm8 is op=0x28; imm8 { local i:1 = imm8; local t = A & i; N = t s< 0; Z = t == 0; V = 0; }
+:BITB "#"^imm8 is op=0x29; imm8 { local i:1 = imm8; local t = B & i; N = t s< 0; Z = t == 0; V = 0; }
+:BITA EA is op=0x2A; EA { local m:1 = *:1 EA; local t = A & m; N = t s< 0; Z = t == 0; V = 0; }
+:BITB EA is op=0x2B; EA { local m:1 = *:1 EA; local t = B & m; N = t s< 0; Z = t == 0; V = 0; }
+:EORA "#"^imm8 is op=0x2C; imm8 { local i:1 = imm8; A = A ^ i; N = A s< 0; Z = A == 0; V = 0; }
+:EORB "#"^imm8 is op=0x2D; imm8 { local i:1 = imm8; B = B ^ i; N = B s< 0; Z = B == 0; V = 0; }
+:EORA EA is op=0x2E; EA { local m:1 = *:1 EA; A = A ^ m; N = A s< 0; Z = A == 0; V = 0; }
+:EORB EA is op=0x2F; EA { local m:1 = *:1 EA; B = B ^ m; N = B s< 0; Z = B == 0; V = 0; }
+:ORA "#"^imm8 is op=0x30; imm8 { local i:1 = imm8; A = A | i; N = A s< 0; Z = A == 0; V = 0; }
+:ORB "#"^imm8 is op=0x31; imm8 { local i:1 = imm8; B = B | i; N = B s< 0; Z = B == 0; V = 0; }
+:ORA EA is op=0x32; EA { local m:1 = *:1 EA; A = A | m; N = A s< 0; Z = A == 0; V = 0; }
+:ORB EA is op=0x33; EA { local m:1 = *:1 EA; B = B | m; N = B s< 0; Z = B == 0; V = 0; }
+:CMPA "#"^imm8 is op=0x34; imm8 { local i:1 = imm8; local o = i; local a = A; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPB "#"^imm8 is op=0x35; imm8 { local i:1 = imm8; local o = i; local a = B; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPA EA is op=0x36; EA { local m:1 = *:1 EA; local o = m; local a = A; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPB EA is op=0x37; EA { local m:1 = *:1 EA; local o = m; local a = B; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:LDD "#"^imm16 is op=0x40; imm16 { local i:2 = imm16; D = i; N = D s< 0; Z = D == 0; V = 0; }
+:LDD EA is op=0x41; EA { local m:2 = *:2 EA; D = m; N = D s< 0; Z = D == 0; V = 0; }
+:LDX "#"^imm16 is op=0x42; imm16 { local i:2 = imm16; X = i; N = X s< 0; Z = X == 0; V = 0; }
+:LDX EA is op=0x43; EA { local m:2 = *:2 EA; X = m; N = X s< 0; Z = X == 0; V = 0; }
+:LDY "#"^imm16 is op=0x44; imm16 { local i:2 = imm16; Y = i; N = Y s< 0; Z = Y == 0; V = 0; }
+:LDY EA is op=0x45; EA { local m:2 = *:2 EA; Y = m; N = Y s< 0; Z = Y == 0; V = 0; }
+:LDU "#"^imm16 is op=0x46; imm16 { local i:2 = imm16; U = i; N = U s< 0; Z = U == 0; V = 0; }
+:LDU EA is op=0x47; EA { local m:2 = *:2 EA; U = m; N = U s< 0; Z = U == 0; V = 0; }
+:LDS "#"^imm16 is op=0x48; imm16 { local i:2 = imm16; S = i; N = S s< 0; Z = S == 0; V = 0; }
+:LDS EA is op=0x49; EA { local m:2 = *:2 EA; S = m; N = S s< 0; Z = S == 0; V = 0; }
+:CMPD "#"^imm16 is op=0x4A; imm16 { local i:2 = imm16; local o = i; local a = D; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPD EA is op=0x4B; EA { local m:2 = *:2 EA; local o = m; local a = D; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPX "#"^imm16 is op=0x4C; imm16 { local i:2 = imm16; local o = i; local a = X; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPX EA is op=0x4D; EA { local m:2 = *:2 EA; local o = m; local a = X; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPY "#"^imm16 is op=0x4E; imm16 { local i:2 = imm16; local o = i; local a = Y; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPY EA is op=0x4F; EA { local m:2 = *:2 EA; local o = m; local a = Y; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPU "#"^imm16 is op=0x50; imm16 { local i:2 = imm16; local o = i; local a = U; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPU EA is op=0x51; EA { local m:2 = *:2 EA; local o = m; local a = U; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPS "#"^imm16 is op=0x52; imm16 { local i:2 = imm16; local o = i; local a = S; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:CMPS EA is op=0x53; EA { local m:2 = *:2 EA; local o = m; local a = S; C = a < o; V = sborrow(a, o); local t = a - o; N = t s< 0; Z = t == 0; }
+:ADDD "#"^imm16 is op=0x54; imm16 { local i:2 = imm16; local o = i; local a = D; C = carry(a, o); V = scarry(a, o); D = a + o; N = D s< 0; Z = D == 0; }
+:ADDD EA is op=0x55; EA { local m:2 = *:2 EA; local o = m; local a = D; C = carry(a, o); V = scarry(a, o); D = a + o; N = D s< 0; Z = D == 0; }
+:SUBD "#"^imm16 is op=0x56; imm16 { local i:2 = imm16; local o = i; local a = D; C = a < o; V = sborrow(a, o); D = a - o; N = D s< 0; Z = D == 0; }
+:SUBD EA is op=0x57; EA { local m:2 = *:2 EA; local o = m; local a = D; C = a < o; V = sborrow(a, o); D = a - o; N = D s< 0; Z = D == 0; }
+:STD EA is op=0x58; EA { *:2 EA = D; N = D s< 0; Z = D == 0; V = 0; }
+:STX EA is op=0x59; EA { *:2 EA = X; N = X s< 0; Z = X == 0; V = 0; }
+:STY EA is op=0x5A; EA { *:2 EA = Y; N = Y s< 0; Z = Y == 0; V = 0; }
+:STU EA is op=0x5B; EA { *:2 EA = U; N = U s< 0; Z = U == 0; V = 0; }
+:STS EA is op=0x5C; EA { *:2 EA = S; N = S s< 0; Z = S == 0; V = 0; }
+:STA EA is op=0x3A; EA { *:1 EA = A; N = A s< 0; Z = A == 0; V = 0; }
+:STB EA is op=0x3B; EA { *:1 EA = B; N = B s< 0; Z = B == 0; V = 0; }
+:BRA REL8 is op=0x60; REL8 { goto REL8; }
+:LBRA REL16 is op=0x68; REL16 { goto REL16; }
+:BHI REL8 is op=0x61; REL8 { if ((C == 0 && Z == 0)) goto REL8; }
+:LBHI REL16 is op=0x69; REL16 { if ((C == 0 && Z == 0)) goto REL16; }
+:BCC REL8 is op=0x62; REL8 { if (C == 0) goto REL8; }
+:LBCC REL16 is op=0x6A; REL16 { if (C == 0) goto REL16; }
+:BNE REL8 is op=0x63; REL8 { if (Z == 0) goto REL8; }
+:LBNE REL16 is op=0x6B; REL16 { if (Z == 0) goto REL16; }
+:BVC REL8 is op=0x64; REL8 { if (V == 0) goto REL8; }
+:LBVC REL16 is op=0x6C; REL16 { if (V == 0) goto REL16; }
+:BPL REL8 is op=0x65; REL8 { if (N == 0) goto REL8; }
+:LBPL REL16 is op=0x6D; REL16 { if (N == 0) goto REL16; }
+:BGE REL8 is op=0x66; REL8 { if (N == V) goto REL8; }
+:LBGE REL16 is op=0x6E; REL16 { if (N == V) goto REL16; }
+:BGT REL8 is op=0x67; REL8 { if ((Z == 0 && N == V)) goto REL8; }
+:LBGT REL16 is op=0x6F; REL16 { if ((Z == 0 && N == V)) goto REL16; }
+:BRN REL8 is op=0x70; REL8 { }
+:LBRN REL16 is op=0x78; REL16 { }
+:BLS REL8 is op=0x71; REL8 { if ((C != 0 || Z != 0)) goto REL8; }
+:LBLS REL16 is op=0x79; REL16 { if ((C != 0 || Z != 0)) goto REL16; }
+:BCS REL8 is op=0x72; REL8 { if (C != 0) goto REL8; }
+:LBCS REL16 is op=0x7A; REL16 { if (C != 0) goto REL16; }
+:BEQ REL8 is op=0x73; REL8 { if (Z != 0) goto REL8; }
+:LBEQ REL16 is op=0x7B; REL16 { if (Z != 0) goto REL16; }
+:BVS REL8 is op=0x74; REL8 { if (V != 0) goto REL8; }
+:LBVS REL16 is op=0x7C; REL16 { if (V != 0) goto REL16; }
+:BMI REL8 is op=0x75; REL8 { if (N != 0) goto REL8; }
+:LBMI REL16 is op=0x7D; REL16 { if (N != 0) goto REL16; }
+:BLT REL8 is op=0x76; REL8 { if (N != V) goto REL8; }
+:LBLT REL16 is op=0x7E; REL16 { if (N != V) goto REL16; }
+:BLE REL8 is op=0x77; REL8 { if ((Z != 0 || N != V)) goto REL8; }
+:LBLE REL16 is op=0x7F; REL16 { if ((Z != 0 || N != V)) goto REL16; }
+:CLRA is op=0x80 { A = 0; N = 0; Z = 1; V = 0; C = 0; }
+:CLRB is op=0x81 { B = 0; N = 0; Z = 1; V = 0; C = 0; }
+:CLR EA is op=0x82; EA { local m:1 = *:1 EA; m = 0; N = 0; Z = 1; V = 0; C = 0; *:1 EA = m; }
+:COMA is op=0x83 { A = ~A; N = A s< 0; Z = A == 0; V = 0; C = 1; }
+:COMB is op=0x84 { B = ~B; N = B s< 0; Z = B == 0; V = 0; C = 1; }
+:COM EA is op=0x85; EA { local m:1 = *:1 EA; m = ~m; N = m s< 0; Z = m == 0; V = 0; C = 1; *:1 EA = m; }
+:NEGA is op=0x86 { local o = A; C = o != 0; V = o == 0x80; A = -o; N = A s< 0; Z = A == 0; }
+:NEGB is op=0x87 { local o = B; C = o != 0; V = o == 0x80; B = -o; N = B s< 0; Z = B == 0; }
+:NEG EA is op=0x88; EA { local m:1 = *:1 EA; local o = m; C = o != 0; V = o == 0x80; m = -o; N = m s< 0; Z = m == 0; *:1 EA = m; }
+:INCA is op=0x89 { V = A == 0x7f; A = A + 1; N = A s< 0; Z = A == 0; }
+:INCB is op=0x8A { V = B == 0x7f; B = B + 1; N = B s< 0; Z = B == 0; }
+:INC EA is op=0x8B; EA { local m:1 = *:1 EA; V = m == 0x7f; m = m + 1; N = m s< 0; Z = m == 0; *:1 EA = m; }
+:DECA is op=0x8C { V = A == 0x80; A = A - 1; N = A s< 0; Z = A == 0; }
+:DECB is op=0x8D { V = B == 0x80; B = B - 1; N = B s< 0; Z = B == 0; }
+:DEC EA is op=0x8E; EA { local m:1 = *:1 EA; V = m == 0x80; m = m - 1; N = m s< 0; Z = m == 0; *:1 EA = m; }
+:TSTA is op=0x90 { N = A s< 0; Z = A == 0; V = 0; }
+:TSTB is op=0x91 { N = B s< 0; Z = B == 0; V = 0; }
+:TST EA is op=0x92; EA { local m:1 = *:1 EA; N = m s< 0; Z = m == 0; V = 0; }
+:LSRA is op=0x93 { C = (A & 1) != 0; A = A >> 1; N = 0; Z = A == 0; }
+:LSRB is op=0x94 { C = (B & 1) != 0; B = B >> 1; N = 0; Z = B == 0; }
+:LSR EA is op=0x95; EA { local m:1 = *:1 EA; C = (m & 1) != 0; m = m >> 1; N = 0; Z = m == 0; *:1 EA = m; }
+:RORA is op=0x96 { local c:1 = C; C = (A & 1) != 0; A = (A >> 1) | (c << 7); N = A s< 0; Z = A == 0; }
+:RORB is op=0x97 { local c:1 = C; C = (B & 1) != 0; B = (B >> 1) | (c << 7); N = B s< 0; Z = B == 0; }
+:ROR EA is op=0x98; EA { local m:1 = *:1 EA; local c:1 = C; C = (m & 1) != 0; m = (m >> 1) | (c << 7); N = m s< 0; Z = m == 0; *:1 EA = m; }
+:ASRA is op=0x99 { C = (A & 1) != 0; A = A s>> 1; N = A s< 0; Z = A == 0; }
+:ASRB is op=0x9A { C = (B & 1) != 0; B = B s>> 1; N = B s< 0; Z = B == 0; }
+:ASR EA is op=0x9B; EA { local m:1 = *:1 EA; C = (m & 1) != 0; m = m s>> 1; N = m s< 0; Z = m == 0; *:1 EA = m; }
+:ASLA is op=0x9C { local o = A; C = (o & 0x80) != 0; V = ((o ^ (o << 1)) & 0x80) != 0; A = o << 1; N = A s< 0; Z = A == 0; }
+:ASLB is op=0x9D { local o = B; C = (o & 0x80) != 0; V = ((o ^ (o << 1)) & 0x80) != 0; B = o << 1; N = B s< 0; Z = B == 0; }
+:ASL EA is op=0x9E; EA { local m:1 = *:1 EA; local o = m; C = (o & 0x80) != 0; V = ((o ^ (o << 1)) & 0x80) != 0; m = o << 1; N = m s< 0; Z = m == 0; *:1 EA = m; }
+:ROLA is op=0xA0 { local o = A; local c:1 = C; C = (o & 0x80) != 0; V = ((o ^ (o << 1)) & 0x80) != 0; A = (o << 1) | c; N = A s< 0; Z = A == 0; }
+:ROLB is op=0xA1 { local o = B; local c:1 = C; C = (o & 0x80) != 0; V = ((o ^ (o << 1)) & 0x80) != 0; B = (o << 1) | c; N = B s< 0; Z = B == 0; }
+:ROL EA is op=0xA2; EA { local m:1 = *:1 EA; local o = m; local c:1 = C; C = (o & 0x80) != 0; V = ((o ^ (o << 1)) & 0x80) != 0; m = (o << 1) | c; N = m s< 0; Z = m == 0; *:1 EA = m; }
+:LSRW EA is op=0xA3; EA { local m:2 = *:2 EA; C = (m & 1) != 0; m = m >> 1; N = 0; Z = m == 0; *:2 EA = m; }
+:RORW EA is op=0xA4; EA { local m:2 = *:2 EA; local c:2 = zext(C); C = (m & 1) != 0; m = (m >> 1) | (c << 15); N = m s< 0; Z = m == 0; *:2 EA = m; }
+:ASRW EA is op=0xA5; EA { local m:2 = *:2 EA; C = (m & 1) != 0; m = m s>> 1; N = m s< 0; Z = m == 0; *:2 EA = m; }
+:ASLW EA is op=0xA6; EA { local m:2 = *:2 EA; local o = m; C = (o & 0x8000) != 0; V = ((o ^ (o << 1)) & 0x8000) != 0; m = o << 1; N = m s< 0; Z = m == 0; *:2 EA = m; }
+:ROLW EA is op=0xA7; EA { local m:2 = *:2 EA; local o = m; local c:2 = zext(C); C = (o & 0x8000) != 0; V = ((o ^ (o << 1)) & 0x8000) != 0; m = (o << 1) | c; N = m s< 0; Z = m == 0; *:2 EA = m; }
+:CLRD is op=0xC2 { D = 0; N = 0; Z = 1; V = 0; C = 0; }
+:CLRW EA is op=0xC3; EA { local m:2 = *:2 EA; m = 0; N = 0; Z = 1; V = 0; C = 0; *:2 EA = m; }
+:NEGD is op=0xC4 { local o = D; C = o != 0; V = o == 0x8000; D = -o; N = D s< 0; Z = D == 0; }
+:NEGW EA is op=0xC5; EA { local m:2 = *:2 EA; local o = m; C = o != 0; V = o == 0x8000; m = -o; N = m s< 0; Z = m == 0; *:2 EA = m; }
+:INCD is op=0xC6 { V = D == 0x7fff; D = D + 1; N = D s< 0; Z = D == 0; }
+:INCW EA is op=0xC7; EA { local m:2 = *:2 EA; V = m == 0x7fff; m = m + 1; N = m s< 0; Z = m == 0; *:2 EA = m; }
+:DECD is op=0xC8 { V = D == 0x8000; D = D - 1; N = D s< 0; Z = D == 0; }
+:DECW EA is op=0xC9; EA { local m:2 = *:2 EA; V = m == 0x8000; m = m - 1; N = m s< 0; Z = m == 0; *:2 EA = m; }
+:TSTD is op=0xCA { N = D s< 0; Z = D == 0; V = 0; }
+:TSTW EA is op=0xCB; EA { local m:2 = *:2 EA; N = m s< 0; Z = m == 0; V = 0; }
+:LSRDI "#"^imm8 is op=0xB8; imm8 { local n:2 = imm8 & 0xf; local v:2 = D; if (n == 0) goto <done>; C = ((v >> (n - 1)) & 1) != 0; v = v >> n; N = v s< 0; Z = v == 0; D = v; <done> }
+:LSRWA EA is op=0xB9; EA { local n:2 = zext(A) & 0xf; local v:2 = *:2 EA; if (n == 0) goto <done>; C = ((v >> (n - 1)) & 1) != 0; v = v >> n; N = v s< 0; Z = v == 0; *:2 EA = v; <done> }
+:RORDI "#"^imm8 is op=0xBA; imm8 { local n:2 = imm8 & 0xf; local v:2 = D; if (n == 0) goto <done>; local t:4 = zext(v) | (zext(C) << 16); local r:4 = ((t >> n) | (t << (17 - n))) & 0x1ffff; v = r:2; C = (r & 0x10000) != 0; N = v s< 0; Z = v == 0; D = v; <done> }
+:RORWA EA is op=0xBB; EA { local n:2 = zext(A) & 0xf; local v:2 = *:2 EA; if (n == 0) goto <done>; local t:4 = zext(v) | (zext(C) << 16); local r:4 = ((t >> n) | (t << (17 - n))) & 0x1ffff; v = r:2; C = (r & 0x10000) != 0; N = v s< 0; Z = v == 0; *:2 EA = v; <done> }
+:ASRDI "#"^imm8 is op=0xBC; imm8 { local n:2 = imm8 & 0xf; local v:2 = D; if (n == 0) goto <done>; C = ((v s>> (n - 1)) & 1) != 0; v = v s>> n; N = v s< 0; Z = v == 0; D = v; <done> }
+:ASRWA EA is op=0xBD; EA { local n:2 = zext(A) & 0xf; local v:2 = *:2 EA; if (n == 0) goto <done>; C = ((v s>> (n - 1)) & 1) != 0; v = v s>> n; N = v s< 0; Z = v == 0; *:2 EA = v; <done> }
+:ASLDI "#"^imm8 is op=0xBE; imm8 { local n:2 = imm8 & 0xf; local v:2 = D; if (n == 0) goto <done>; local p = v << (n - 1); C = (p & 0x8000) != 0; V = ((p ^ (p << 1)) & 0x8000) != 0; v = p << 1; N = v s< 0; Z = v == 0; D = v; <done> }
+:ASLWA EA is op=0xBF; EA { local n:2 = zext(A) & 0xf; local v:2 = *:2 EA; if (n == 0) goto <done>; local p = v << (n - 1); C = (p & 0x8000) != 0; V = ((p ^ (p << 1)) & 0x8000) != 0; v = p << 1; N = v s< 0; Z = v == 0; *:2 EA = v; <done> }
+:ROLDI "#"^imm8 is op=0xC0; imm8 { local n:2 = imm8 & 0xf; local v:2 = D; if (n == 0) goto <done>; local t:4 = zext(v) | (zext(C) << 16); local r:4 = ((t << n) | (t >> (17 - n))) & 0x1ffff; v = r:2; C = (r & 0x10000) != 0; V = 0; N = v s< 0; Z = v == 0; D = v; <done> }
+:ROLWA EA is op=0xC1; EA { local n:2 = zext(A) & 0xf; local v:2 = *:2 EA; if (n == 0) goto <done>; local t:4 = zext(v) | (zext(C) << 16); local r:4 = ((t << n) | (t >> (17 - n))) & 0x1ffff; v = r:2; C = (r & 0x10000) != 0; V = 0; N = v s< 0; Z = v == 0; *:2 EA = v; <done> }
+
+################################################################
+# Push / pull (6809 postbyte mask) and EXG / TFR
+################################################################
+
+PSHS7: is pm7=0 { }
+PSHS7: "PC" is pm7=1 { local pcv:2 = inst_next; S = S - 2; *:2 S = pcv; }
+PSHS6: is pm6=0 { }
+PSHS6: "U" is pm6=1 { S = S - 2; *:2 S = U; }
+PULS6: is pm6=0 { }
+PULS6: "U" is pm6=1 { U = *:2 S; S = S + 2; }
+PSHS5: is pm5=0 { }
+PSHS5: "Y" is pm5=1 { S = S - 2; *:2 S = Y; }
+PULS5: is pm5=0 { }
+PULS5: "Y" is pm5=1 { Y = *:2 S; S = S + 2; }
+PSHS4: is pm4=0 { }
+PSHS4: "X" is pm4=1 { S = S - 2; *:2 S = X; }
+PULS4: is pm4=0 { }
+PULS4: "X" is pm4=1 { X = *:2 S; S = S + 2; }
+PSHS3: is pm3=0 { }
+PSHS3: "DP" is pm3=1 { S = S - 1; *:1 S = DP; }
+PULS3: is pm3=0 { }
+PULS3: "DP" is pm3=1 { DP = *:1 S; S = S + 1; }
+PSHS2: is pm2=0 { }
+PSHS2: "B" is pm2=1 { S = S - 1; *:1 S = B; }
+PULS2: is pm2=0 { }
+PULS2: "B" is pm2=1 { B = *:1 S; S = S + 1; }
+PSHS1: is pm1=0 { }
+PSHS1: "A" is pm1=1 { S = S - 1; *:1 S = A; }
+PULS1: is pm1=0 { }
+PULS1: "A" is pm1=1 { A = *:1 S; S = S + 1; }
+PSHS0: is pm0=0 { }
+PSHS0: "CC" is pm0=1 { local c:1 = 0; packCC(c); S = S - 1; *:1 S = c; }
+PULS0: is pm0=0 { }
+PULS0: "CC" is pm0=1 { local c:1 = *:1 S; unpackCC(c); S = S + 1; }
+:PUSHS PSHS7 PSHS6 PSHS5 PSHS4 PSHS3 PSHS2 PSHS1 PSHS0 is op=0x0C; PSHS7 & PSHS6 & PSHS5 & PSHS4 & PSHS3 & PSHS2 & PSHS1 & PSHS0 { build PSHS7; build PSHS6; build PSHS5; build PSHS4; build PSHS3; build PSHS2; build PSHS1; build PSHS0; }
+:PULLS PULS0 PULS1 PULS2 PULS3 PULS4 PULS5 PULS6 is op=0x0E; pm7=0 & PULS0 & PULS1 & PULS2 & PULS3 & PULS4 & PULS5 & PULS6 { build PULS0; build PULS1; build PULS2; build PULS3; build PULS4; build PULS5; build PULS6; }
+:PULLS PULS0 PULS1 PULS2 PULS3 PULS4 PULS5 PULS6 "PC" is op=0x0E; pm7=1 & PULS0 & PULS1 & PULS2 & PULS3 & PULS4 & PULS5 & PULS6 { build PULS0; build PULS1; build PULS2; build PULS3; build PULS4; build PULS5; build PULS6; local t:2 = *:2 S; S = S + 2; return [t]; }
+PSHU7: is pm7=0 { }
+PSHU7: "PC" is pm7=1 { local pcv:2 = inst_next; U = U - 2; *:2 U = pcv; }
+PSHU6: is pm6=0 { }
+PSHU6: "S" is pm6=1 { U = U - 2; *:2 U = S; }
+PULU6: is pm6=0 { }
+PULU6: "S" is pm6=1 { S = *:2 U; U = U + 2; }
+PSHU5: is pm5=0 { }
+PSHU5: "Y" is pm5=1 { U = U - 2; *:2 U = Y; }
+PULU5: is pm5=0 { }
+PULU5: "Y" is pm5=1 { Y = *:2 U; U = U + 2; }
+PSHU4: is pm4=0 { }
+PSHU4: "X" is pm4=1 { U = U - 2; *:2 U = X; }
+PULU4: is pm4=0 { }
+PULU4: "X" is pm4=1 { X = *:2 U; U = U + 2; }
+PSHU3: is pm3=0 { }
+PSHU3: "DP" is pm3=1 { U = U - 1; *:1 U = DP; }
+PULU3: is pm3=0 { }
+PULU3: "DP" is pm3=1 { DP = *:1 U; U = U + 1; }
+PSHU2: is pm2=0 { }
+PSHU2: "B" is pm2=1 { U = U - 1; *:1 U = B; }
+PULU2: is pm2=0 { }
+PULU2: "B" is pm2=1 { B = *:1 U; U = U + 1; }
+PSHU1: is pm1=0 { }
+PSHU1: "A" is pm1=1 { U = U - 1; *:1 U = A; }
+PULU1: is pm1=0 { }
+PULU1: "A" is pm1=1 { A = *:1 U; U = U + 1; }
+PSHU0: is pm0=0 { }
+PSHU0: "CC" is pm0=1 { local c:1 = 0; packCC(c); U = U - 1; *:1 U = c; }
+PULU0: is pm0=0 { }
+PULU0: "CC" is pm0=1 { local c:1 = *:1 U; unpackCC(c); U = U + 1; }
+:PUSHU PSHU7 PSHU6 PSHU5 PSHU4 PSHU3 PSHU2 PSHU1 PSHU0 is op=0x0D; PSHU7 & PSHU6 & PSHU5 & PSHU4 & PSHU3 & PSHU2 & PSHU1 & PSHU0 { build PSHU7; build PSHU6; build PSHU5; build PSHU4; build PSHU3; build PSHU2; build PSHU1; build PSHU0; }
+:PULLU PULU0 PULU1 PULU2 PULU3 PULU4 PULU5 PULU6 is op=0x0F; pm7=0 & PULU0 & PULU1 & PULU2 & PULU3 & PULU4 & PULU5 & PULU6 { build PULU0; build PULU1; build PULU2; build PULU3; build PULU4; build PULU5; build PULU6; }
+:PULLU PULU0 PULU1 PULU2 PULU3 PULU4 PULU5 PULU6 "PC" is op=0x0F; pm7=1 & PULU0 & PULU1 & PULU2 & PULU3 & PULU4 & PULU5 & PULU6 { build PULU0; build PULU1; build PULU2; build PULU3; build PULU4; build PULU5; build PULU6; local t:2 = *:2 U; U = U + 2; goto [t]; }
+
+RLO: "A" is rlo=0 { local v:2 = zext(A) | 0x1000; export v; }
+RHI: "A" is rhi=0 { local v:2 = zext(A) | 0x1000; export v; }
+WLO: is rlo=0 { A = XFER:1; }
+WHI: is rhi=0 { A = XFER:1; }
+RLO: "B" is rlo=1 { export D; }
+RHI: "B" is rhi=1 { export D; }
+WLO: is rlo=1 { B = XFER:1; }
+WHI: is rhi=1 { B = XFER:1; }
+RLO: "X" is rlo=2 { export X; }
+RHI: "X" is rhi=2 { export X; }
+WLO: is rlo=2 { X = XFER; }
+WHI: is rhi=2 { X = XFER; }
+RLO: "Y" is rlo=3 { export Y; }
+RHI: "Y" is rhi=3 { export Y; }
+WLO: is rlo=3 { Y = XFER; }
+WHI: is rhi=3 { Y = XFER; }
+RLO: "DP" is rlo=4 { local v:2 = zext(DP); export v; }
+RHI: "DP" is rhi=4 { local v:2 = zext(DP); export v; }
+WLO: is rlo=4 { DP = XFER:1; }
+WHI: is rhi=4 { DP = XFER:1; }
+RLO: "U" is rlo=5 { export U; }
+RHI: "U" is rhi=5 { export U; }
+WLO: is rlo=5 { U = XFER; }
+WHI: is rhi=5 { U = XFER; }
+RLO: "S" is rlo=6 { export S; }
+RHI: "S" is rhi=6 { export S; }
+WLO: is rlo=6 { S = XFER; }
+WHI: is rhi=6 { S = XFER; }
+RLO: "PC" is rlo=7 { local v:2 = inst_next; export v; }
+RHI: "PC" is rhi=7 { local v:2 = inst_next; export v; }
+WLO: is rlo=7 { goto [XFER]; }
+WHI: is rhi=7 { goto [XFER]; }
+:EXG RLO, RHI is (op=0x3E | op=0x3F); tfrbit=0 & RLO & RHI & WLO & WHI { local a:2 = RLO; local b:2 = RHI; XFER = b; build WLO; XFER = a; build WHI; }
+:TFR RLO, RHI is (op=0x3E | op=0x3F); tfrbit=1 & RLO & RHI & WHI { XFER = RLO; build WHI; }
+
+################################################################
+# Address arithmetic, control flow
+################################################################
+
+:LEAX EA is op=0x08; EA { X = EA; Z = X == 0; }
+:LEAY EA is op=0x09; EA { Y = EA; Z = Y == 0; }
+:LEAU EA is op=0x0A; EA { U = EA; }
+:LEAS EA is op=0x0B; EA { S = EA; }
+
+:SETLN "#"^imm8 is op=0x38; imm8 { local v:1 = imm8; setLines(v); }
+:SETLN EA is op=0x39; EA { local v:1 = *:1 EA; setLines(v); }
+:ANDCC "#"^imm8 is op=0x3C; imm8 { local c:1 = 0; packCC(c); c = c & imm8; unpackCC(c); }
+:ORCC "#"^imm8 is op=0x3D; imm8 { local c:1 = 0; packCC(c); c = c | imm8; unpackCC(c); }
+
+:JMP EA is op=0xA8; EA { goto [EA]; }
+:JSR EA is op=0xA9; EA { local t:2 = EA; S = S - 2; *:2 S = inst_next; call [t]; }
+:BSR REL8 is op=0xAA; REL8 { S = S - 2; *:2 S = inst_next; call REL8; }
+:LBSR REL16 is op=0xAB; REL16 { S = S - 2; *:2 S = inst_next; call REL16; }
+:RTS is op=0x8F { local t:2 = *:2 S; S = S + 2; return [t]; }
+:RTI is op=0x9F {
+  local c:1 = *:1 S; S = S + 1; unpackCC(c);
+  if (E == 0) goto <short>;
+  A = *:1 S; S = S + 1;
+  B = *:1 S; S = S + 1;
+  DP = *:1 S; S = S + 1;
+  X = *:2 S; S = S + 2;
+  Y = *:2 S; S = S + 2;
+  U = *:2 S; S = S + 2;
+<short>
+  local t:2 = *:2 S; S = S + 2;
+  return [t];
+}
+:DBJNZ REL8 is op=0xAC; REL8 { V = B == 0x80; B = B - 1; N = B s< 0; Z = B == 0; if (Z == 0) goto REL8; }
+:DXJNZ REL8 is op=0xAD; REL8 { V = X == 0x8000; X = X - 1; N = X s< 0; Z = X == 0; if (Z == 0) goto REL8; }
+:NOP is op=0xAE { }
+
+################################################################
+# Konami extensions
+################################################################
+
+:ABX is op=0xB0 { X = X + zext(B); }
+:DAA is op=0xB1 {
+  local lsn = A & 0x0f; local msn = A & 0xf0;
+  local lo:1 = zext((lsn > 9) || H) * 0x06;
+  local hi:1 = zext(((msn > 0x80) && (lsn > 9)) || (msn > 0x90) || C) * 0x60;
+  local cf = lo | hi;
+  local s:2 = zext(A) + zext(cf);
+  C = C || (s > 0xff);
+  A = s:1; N = A s< 0; Z = A == 0;
+}
+:SEX is op=0xB2 { A = 0; if (B s>= 0) goto <pos>; A = 0xff; <pos> N = D s< 0; Z = D == 0; }
+:MUL is op=0xB3 { D = zext(A) * zext(B); Z = D == 0; C = (B & 0x80) != 0; }
+:LMUL is op=0xB4 { local p:4 = zext(X) * zext(Y); X = p(2); Y = p:2; Z = p == 0; C = (p & 0x8000) != 0; }
+:DIVX is op=0xB5 {
+  local q:2 = 0; local r:1 = 0;
+  if (B == 0) goto <z>;
+  q = X / zext(B); local rr:2 = X % zext(B); r = rr:1;
+<z>
+  X = q; B = r; Z = q == 0; C = (q & 0x80) != 0;
+}
+:BMOVE "Y,X,U" is op=0xB6 {
+<top>
+  if (U == 0) goto <done>;
+  *:1 X = *:1 Y; X = X + 1; Y = Y + 1; U = U - 1;
+  goto <top>;
+<done>
+}
+:MOVE "Y,X,U" is op=0xB7 { *:1 X = *:1 Y; X = X + 1; Y = Y + 1; U = U - 1; }
+:ABSA is op=0xCC { local o = A; C = o s< 0; V = o == 0x80; if (o s>= 0) goto <p>; A = -o; <p> N = A s< 0; Z = A == 0; }
+:ABSB is op=0xCD { local o = B; C = o s< 0; V = o == 0x80; if (o s>= 0) goto <p>; B = -o; <p> N = B s< 0; Z = B == 0; }
+:ABSD is op=0xCE { local o = D; C = o s< 0; V = o == 0x8000; if (o s>= 0) goto <p>; D = -o; <p> N = D s< 0; Z = D == 0; }
+:BSET "A,X,U" is op=0xCF {
+<top>
+  if (U == 0) goto <done>;
+  *:1 X = A; X = X + 1; U = U - 1;
+  goto <top>;
+<done>
+}
+:BSETW "D,X,U" is op=0xD0 {
+<top>
+  if (U == 0) goto <done>;
+  *:1 X = A; X = X + 1; *:1 X = B; X = X + 1; U = U - 1;
+  goto <top>;
+<done>
+}

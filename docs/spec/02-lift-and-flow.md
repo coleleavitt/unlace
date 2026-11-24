@@ -4465,6 +4465,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Blackfin` | Analog Devices Blackfin (ADSP-BF5xx, BF6xx) | `Blackfin:LE:32:default` | Blackfin Processor Programming Reference rev 2.2, binutils `bfin.h` layouts; checked against `bfin-elf-objdump` | `unlace-cli/tests/blackfin_raw.rs` |
 | `Epiphany` | Adapteva Epiphany | `epiphany:LE:32:default` | Epiphany Architecture Reference, binutils CGEN `cpu/epiphany.cpu`, GCC `config/epiphany` | `unlace-cli/tests/epiphany_raw.rs` |
 | `uPD7810` | NEC uPD7810 / 7811 / 78C10 / 78C11 / 78C14 | `uPD7810:LE:16:default` | NEC uPD7810/7811 user's manual, MAME `upd7810` tables | `unlace-cli/tests/upd7810.rs` |
+| `sBPF` | Solana sBPF (SBPFv0/v1 and SBPFv2) | `sBPF:LE:64:v1`, `sBPF:LE:64:v2` | anza-xyz/sbpf `doc/bytecode.md`, RFC 9669; syscall hashes labelled | `unlace-cli/tests/sbpf.rs` |
 | `TLCS90` | Toshiba TLCS-90 (TMP90C840, TMP90C841, TMP90C844) | `TLCS90:LE:16:default` | Toshiba TLCS-48/90 data book (1988); MAME tlcs90 core | `unlace-cli/tests/tlcs90_raw.rs` |
 <!-- native-rows -->
 

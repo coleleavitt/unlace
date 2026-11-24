@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="Lua"
+            endian="little"
+            size="32"
+            variant="5.4"
+            version="1.0"
+            slafile="lua54.sla"
+            processorspec="lua.pspec"
+            id="Lua:LE:32:5.4">
+    <description>Lua 5.4 virtual machine bytecode (PUC-Rio luac, little-endian)</description>
+    <compiler name="default" spec="lua.cspec" id="default"/>
+  </language>
+</language_definitions>

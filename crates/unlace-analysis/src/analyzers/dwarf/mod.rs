@@ -1541,7 +1541,11 @@ impl DwarfPass {
             if unlace_decomp::debuglink::debuglink_enabled() {
                 let companion = ctx
                     .image_path
-                    .and_then(|path| crate::loader::elf_debuglink::find_companion(ctx.file, path));
+                    .and_then(|path| crate::loader::elf_debuglink::find_companion(ctx.file, path))
+                    .or_else(|| {
+                        ctx.image_path
+                            .and_then(|path| crate::loader::macho_dsym::find_dsym(ctx.file, path))
+                    });
                 if let Some((path, bytes)) = companion {
                     if let Ok(file) = object::File::parse(&*bytes) {
                         if dwarf_section_data(&file, gimli::SectionId::DebugInfo).is_some() {

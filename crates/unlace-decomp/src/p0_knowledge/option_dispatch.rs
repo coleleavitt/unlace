@@ -424,6 +424,7 @@ unlace_options! { self, p1;
     "constright" => registered!(crate::constright::ConstRight),
     "signeddec" => registered!(crate::signeddec::SignedDec),
     "wideconst" => registered!(crate::wideconst::WideConst),
+    "evmstorage" => registered!(crate::evmstorage::EvmStorage),
     "selectmul" => registered!(crate::selectmul::SelectMul),
     "elemptr" => registered!(crate::elemptr::ElemPtr),
     "protoorder" => registered!(crate::protoorder::ProtoOrderMode),

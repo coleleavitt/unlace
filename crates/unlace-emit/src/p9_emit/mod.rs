@@ -141,6 +141,7 @@ pub mod callprototypes;
 pub mod gostorevalue;
 
 pub mod constantshift;
+pub mod evmstorage;
 pub mod fidproto; // (unlace) the prototype a .fid record carries, and its check against the body
 pub mod reglocals;
 pub mod selectmul; // (unlace `selectmul`) a*zext(c) + b*zext(!c) prints as c ? a : b

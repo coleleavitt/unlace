@@ -19,7 +19,7 @@ builtin. Hand-encoded RV64A instructions, each followed by ret:
 <symbol space="ram" offset="0x100030" name="amo_max"/>
 </binaryimage>
 <script>
-<com>option atomics on</com>
+<com>option atomics auto</com>
 <com>load function amo_add</com>
 <com>decompile</com>
 <com>print C</com>

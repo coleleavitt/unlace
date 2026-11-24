@@ -802,7 +802,7 @@ define csreg offset=$(CSR_REG_START) size=$(XLEN) [
 # 0x738
  _       _       _       _       _       _       _       _      
 # 0x740
- _       _       _       _       _       _       _       _      
+ mnscratch mnepc mncause _       mnstatus _       _       _      
 # 0x748
  _       _       _       _       _       _       _       _      
 # 0x750

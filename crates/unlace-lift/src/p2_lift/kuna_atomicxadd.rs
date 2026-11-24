@@ -90,7 +90,7 @@ fn instruction(fd: &Funcdata, ops: &[OpId]) -> Option<Instruction> {
         }
     }
     if stores.len() != 1
-        || loads.len() < 2
+        || loads.is_empty()
         || fd.obank().get(lock)?.code() != OpCode::CPUI_CALLOTHER
         || fd.obank().get(unlock)?.code() != OpCode::CPUI_CALLOTHER
     {
@@ -116,15 +116,17 @@ fn instruction(fd: &Funcdata, ops: &[OpId]) -> Option<Instruction> {
     let mut definitions = Vec::<(Storage, OpId)>::new();
     let mut old_load = None;
     let mut reads_started = false;
+    let mut stored = false;
     for &id in ops {
         if id == store {
-            break;
+            stored = true;
+            continue;
         }
         let op = fd.obank().get(id)?;
         reads_started |= op.code() == OpCode::CPUI_LOAD;
         let Some(out) = op.get_out() else { continue };
         let target = storage(fd, out)?;
-        if reads_started && overlaps(pointer, target) {
+        if reads_started && !stored && overlaps(pointer, target) {
             return None;
         }
         if op.code() == OpCode::CPUI_COPY

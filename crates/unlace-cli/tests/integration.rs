@@ -37,6 +37,8 @@ mod aarch64_svemm;
 mod arm_aeabi_helpers;
 #[path = "elf_abi_fixes.rs"]
 mod elf_abi_fixes;
+#[path = "libgcc_softfp_helpers.rs"]
+mod libgcc_softfp_helpers;
 #[path = "ppc_gekko.rs"]
 mod ppc_gekko;
 #[path = "ppc_spe2.rs"]

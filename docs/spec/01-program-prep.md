@@ -362,9 +362,11 @@ its machine is read from the ELF header
 `EM_ARC_COMPACT2` (195, ARC EM and HS) selects `ARC:LE:32:ARCv2` or
 `ARC:BE:32:ARCv2` by the image's byte order (§2). `EM_ARC_COMPACT` (93,
 ARC600/ARC700) is not mapped: its 16-bit encodings differ and it has no
-language yet, so it still needs an explicit `--target`. A relocatable ARC
-object loads, but its relocation types are not applied; a call to an undefined
-symbol keeps the unrelocated displacement.
+language yet, so it still needs an explicit `--target`. A relocatable ARCv2
+object's `bl`/`b` (`S25W_PCREL`/`S25H_PCREL` and their `_PLT` spellings, the
+displacement from `P & !3`), middle-endian long immediates (`32_ME`) and data
+words (`32`, `PC32`) are applied (`reloc_apply.rs (classify_arc)`); the
+small-data forms against `_SDA_BASE_` and the GOT forms are not.
 
 (kuna, unlace#680) A WebAssembly relocatable object (`.o`) has no `name`
 section; its function and global names come from the `WASM_SYMBOL_TABLE`
@@ -402,9 +404,15 @@ Five further machines are routed the same way:
 - `EM_OPENRISC` (92) and `EM_XTENSA` (94) take the language of the header's byte order.
 - `EM_CSKY` (252) selects ABIv1 when `e_flags` bits 28-31 are 1, and ABIv2 otherwise, in the
   header's byte order.
+- `EM_TI_C2000` (141) selects `tms320c28:LE:32:default` (cl2000 EABI objects).
 - `EM_CUDA` (190) selects the SASS language of the `sm_NN` in `e_flags`. The SM number is in
   bits 8-15 from ELF ABI version 8 (CUDA 12.8 ptxas), and in bits 0-7 before that. An
   architecture with no SASS language (sm_30, sm_32) still needs `--target`.
+
+(unlace) TI compilers (cl2000 and its siblings) emit every branch target inside a function as a
+`$C$L<n>` symbol typed `STT_FUNC`, local, size 0. The ELF symbol-table inventory skips these
+(`crates/unlace-analysis/src/loader/kuna_tilocallabels.rs`), so they are not decompiled as functions
+of their own.
 
 (kuna) PowerPC32 ELF APU requirements are read by
 `crates/unlace-analysis/src/loader/kuna_ppcaputarget.rs` when the
@@ -1084,7 +1092,10 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   non-empty section out above `0x400000` (`RELOC_BASE`, matching CLE so addresses
   line up with angr's), apply the relocations, rebase defined symbols, and bind
   each undefined extern to a synthetic call target in an extern area above the
-  sections so calls render by name. A section header's size is a claim the file
+  sections so calls render by name (an extern reached by a plain data relocation
+  on the operand of an x86 `call`/`jmp`/`jcc` or an MSP430 `call #imm` counts as
+  code too, so i386 and MSP430 libcalls are named) (the next 4 KiB page plus one; on a 16-bit
+  machine the next 16 bytes, so AVR's 4 KiB `rcall` still reaches every libcall). A section header's size is a claim the file
   need not back, so the layout allocates zero-fill only for data — `SHT_NOBITS`
   storage and a data extent past the end of the file — and at most 256 MiB of it
   per object (`reloc_object.rs (ZERO_FILL_LIMIT)`); code is laid out at the bytes
@@ -1345,7 +1356,7 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   no object architecture, told apart by `e_machine`) covers the 32-bit literal
   halves `REL32_LO`/`REL32_HI` (`S + A - P`, the `s_getpc_b64` pair of every
   call and global) and `ABS32_LO`/`ABS32_HI`, and the `ABS32`, `REL32`, `ABS64`
-  and `REL64` data words; the GOT forms stay unsupported. eBPF objects are REL-only and every program ships as one,
+  and `REL64` data words; the GOT forms stay unsupported. A TI C2000 object (`EM_TI_C2000`) counts symbol values, symbol sizes and `r_offset` in 16-bit words, while its section sizes and bytes are in bytes. The layout keeps byte VMAs and scales those three by the address unit (`loader/kuna_wordaddr.rs`), so a function's entry, extent and relocation sites land on its bytes. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from
@@ -3821,6 +3832,16 @@ loader's ranges under this pass's id
 (`crates/unlace-console/src/engine.rs (object_import_slot_stash)`), so
 they commit with that pass's facts and the call in `if (f) f(x);` binds to `f`.
 Other images are unaffected.
+An undefined symbol of a relocatable object is entered as an extern function
+when a relocation that marks a branch or call reaches it. On x86 the opcode
+bytes in front of a plain PC-relative rel32 field say so: COFF's
+`IMAGE_REL_I386_REL32` and `IMAGE_REL_AMD64_REL32`, and ELF's `R_386_PC32`, carry
+no call flag, so a field after `E8` (`call`), `E9` (`jmp`) or `0F 80`..`0F 8F`
+(`jcc`) marks its symbol code
+(`crates/unlace-analysis/src/loader/kuna_x86_relcode.rs (code_targets)`).
+Before this a COFF object's `call _exit` reached an unnamed `sub_402010`, which
+is not a no-return name, so flow ran past the call into the next section and
+failed the function.
 Undefined weak MIPS and x86-64 code-address operands in relocatable ELF objects
 also retain their nullable identity before SSA. The relocation walker
 `crates/unlace-analysis/src/loader/kuna_nullable_reloc.rs (references)`
@@ -4406,7 +4427,10 @@ moves.
   address (`callpopret`). Data sections are unchanged. Measured: 217 of 234 runs in
   Lua's AArch64 `.text`, 214 of 215 in a static-pie `ldconfig`, 78 of 78 in
   `lldb-dap` and 4 of 4 in `ld.so` are dropped, every dropped one instruction
-  bytes.
+  bytes. The pass runs at `load file`, before any `option` line, so the rule
+  reads the option as `KUNA_CODESTRINGS`: the CLI exports it, and the console's
+  `option codestrings` sets it for the next `load file`. Read from the
+  architecture, as it was, `off` never reached the pass.
 
 - **Library prototypes** (`libproto`, the `ApplyDataArchiveAnalyzer` analog,
   `crates/unlace-analysis/src/analyzers/protos/mod.rs (LibProtoPass)`):
@@ -6177,7 +6201,9 @@ moves.
   gives the prototype (keyed to the image's own name) or the no-return verdict.
   A name the table holds as spelled is never retried, so the ladder only adds
   facts. This is IDA's type-library lookup ladder (`guess_tinfo`,
-  `cleanup_name`).
+  `cleanup_name`). The passes that climb it run at `load file`, so they read
+  the option as `KUNA_NAMELADDER` (exported by the CLI, set for the next
+  `load file` by the console's `option nameladder`).
 
 - **Discriminant-value naming**
   (`crates/unlace-analysis/src/analyzers/dwarf/kuna_variantnames.rs`,
@@ -7563,7 +7589,12 @@ every other binary's pass list is byte-identical to before the pass existed):
   `BTreeNode` vptr first) out of line in that shape; `PLArray::PLArray`, whose
   inlined base stores nothing, stays unnamed. The class of a member that
   is itself built from a base (`Holder`'s first member a `Derived`) shows the same
-  order, and its constructor is then named `Derived::Derived`. A
+  order, and its constructor is then named `Derived::Derived`. For a constructor the
+  walk also follows an unconditional forward jump of at most 512 bytes rather than
+  ending there: GCC lays an optimized constructor's member initializers out across
+  branches and joins them with a `jmp` ahead of its own vptr store (apfs-fuse's
+  `BTreeNodeVar(BTree &, ...)` stores the inlined `BTreeNode` vptr, branches over a
+  `shared_ptr` copy, and stores its own after the join). A
   `this` the function stores to a second frame slot is an inlined callee's
   parameter home (an always_inline constructor inlined into the function) until a
   call follows, which makes it the compiler's own spill across that call; a store
@@ -7811,8 +7842,9 @@ every other binary's pass list is byte-identical to before the pass existed):
     `Toyota.Foo` under `swiftdemangle`, the runtime spelling off), the same
     mapping the method labels use, while the lookups between the ObjC tables
     keep the runtime spelling. On a Swift image (one with `__swift5_fieldmd`
-    that the Swift pass runs on) under `swifttypes`, a Swift class's layout is
-    left to the field descriptors:
+    that the Swift pass runs on) under `swifttypes` (read at load as
+    `KUNA_SWIFTTYPES`, since this pass runs before any `option` line), a
+    Swift class's layout is left to the field descriptors:
     the ivar list encodes Swift-typed stored properties as nothing, so the ObjC
     pass only declares the record and `swifttypes` completes it with the Swift
     names and types — one struct per class (Toyota: `Toyota.AddMileageViewController`
@@ -10402,6 +10434,38 @@ call-site indices, not code ranges, in its table. So every LSDA walker skips it
 personality whose name cannot be read is read as Itanium. With `itaniumeh` on,
 the pads are shown and no note is attached.
 
+**(kuna) MFC message-map handlers are functions** (`mfcmsgmap`, default-**off**;
+`crates/unlace-analysis/src/analyzers/entry/kuna_mfcmsgmap.rs`). An MFC window
+class routes messages through a static `AFX_MSGMAP` in `.rdata`
+(`pfnGetBaseMap`, `lpEntries`), and its `AFX_MSGMAP_ENTRY` array (`nMessage,
+nCode, nID, nLastID, nSig, pfn`, 24 bytes each, ending in an all-zero entry)
+names each handler. `CWnd::OnWndMsg` calls `pfn` indirectly, so nothing else
+finds the handlers, and each was folded into the function before it. On a
+32-bit PE the deferred entry pass reads every table the base relocations vouch
+for: `lpEntries` and the `pfnGetBaseMap` word before it are relocated,
+`pfnGetBaseMap` points into an executable section, the entries lie in a
+non-executable section, and every entry's `pfn` is a relocated pointer into
+code, with `nMessage` below 0x10000 and `nSig` below 0x100. A run that
+breaks any of these is not read. The handlers join the committed entries, so
+the walk also uses them as roots. On PEGRP32F.dll it reads 29 maps and 198
+handlers. Every handler is an IDA 9.5 function start, and 194 were missing
+from the inventory before.
+
+**(kuna) A relocated pointer to an MSVC frame prologue is a function**
+(`msvcptrentry`, default-**off**;
+`crates/unlace-analysis/src/analyzers/entry/kuna_msvcptrentry.rs`). C++ code reaches
+much of itself only through pointers: vtable slots, MFC tables, callbacks pushed for
+the Win32 API, thread procedures. On a 32-bit PE the base-relocation table lists
+every such word, in code and in data. A word whose value is an executable address
+whose bytes are `push ebp; mov ebp,esp` in MSVC's encoding (`55 8B EC`, or
+`8B FF 55 8B EC` with the hot-patch prefix) makes that address an entry, and the
+walk uses it as a root. The mid-function labels MSVC stores (switch targets, catch
+continuations, SEH handlers) do not start with a frame. GCC and MinGW encode
+`mov ebp,esp` as `89 E5`, so their SJLJ landing pads never match either; those
+are why `addrtakenentry` stays x86-64-only. On PEGRP32F.dll it finds 1,255
+targets, every one an IDA 9.5 function start, and 452 of them were missing from
+the inventory. Code built with frame-pointer omission gives it nothing.
+
 **(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).
 An MSVC `throw e;` is `_CxxThrowException(&e, &ThrowInfo)` and `throw;` is
@@ -11899,7 +11963,10 @@ bad decode or out-of-image flow and reach either a terminal/computed jump or an
 informative call/edge into known code. Accepted bodies are claimed so a later
 candidate cannot split them. The walk then resumes with the accepted targets,
 and the entries the load-time passes committed (a Delphi VMT method, say), as
-roots, so their direct-call closure is discovered and committed too. The
+roots, so their direct-call closure is discovered and committed too. On x86 the
+functions a pass names, such as an MSVC vtable slot RTTI names or a constructor,
+are roots as well (`engine.rs (commit_pending_analysis)`). On ARM they are not,
+because their decode mode is not settled at that point. The
 functions the walk had before the resume are kept, so the resume only adds
 entries. A Delphi image's System memory-manager record is the case it was
 written for: the record in writable data holds `GetMem`, `FreeMem` and

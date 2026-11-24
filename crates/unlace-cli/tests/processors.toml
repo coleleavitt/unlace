@@ -13,6 +13,13 @@
 # (docs/processor-tests.md).
 
 [images]
+bpf_strlen = """
+b4000000ffffffff0400000001000000bf120000000000000f0200000000000071220000000000005602fbff000000009500000000000000
+"""
+xtensa_esp32s3_rom_divsf3 = """
+3621005012fa5023fa7032fab042fa3051fa30546a0063fa0072fab021fa60656a3051fa3000fa6082fa60546a30086a
+d071fa60656a00846a3031fa60346a60086a6022fa60636a00246af007fae067fa60027a4020fa1df0000000
+"""
 xtensa_hifi1_rt700 = """
 3641002001a82011a83411042d031df03641001f3200c00228121df0
 """
@@ -128,8 +135,15 @@ b8ffffffff0fbdc7c3cccccccccccccc486601f8c3cccccccccccccccccc
 cccc406663c7c3
 """
 
+s390x_hfp_decimal = """
+930020002002fa333000400007fe
+"""
 ppc_xenon_vmx128 = """
 100018cb102020cb14400c1a1462049a106029cb4e800020
+"""
+ppc64le_power10 = """
+341200067856803800000006640063383601637c1422637c2000804e000000600020237c0003607c2000804e00000060
+00000004100043cc00000004200044dc2000804e
 """
 x86_64_avx512_disp8 = """
 62f27d4878470162f17e487f06c5f877c3
@@ -152,6 +166,13 @@ c4e27ddcc1c3662e0f1f840000000000660f3a170701c3
 """
 x86_64_x87 = """
 dd07d9e5dfe066250002c39090909090dd07dd06d9f8dfe09e7af9dd5f08ddd8c3
+"""
+x86_32_legacy = """
+8b44240437c390909090909090909090
+8b44240467506758c3
+"""
+x86_16_addr32 = """
+678b03c390909090909090909090909067ab67abc3
 """
 
 [[family]]
@@ -2148,6 +2169,88 @@ test = "amdgpu_real_gfx1200_matmul_loop_decompiles"
 address = "0x0"
 expect = ["} while ("]
 
+# `fixtures/amdgpu/gfx1100_true16.cl` built with -DW64 for gfx900: f16 math through the GFX9
+# include's VOPC e32 and VOP3 16-bit forms (v_cmp_lt_f16, v_fma_f16).
+[[family]]
+name = "amdgpu_gfx900_half"
+language = "AMDGPU:LE:64:GFX9"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx900_half.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx900_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "(v2 * v3 + v5 + v1) - v3;"]
+
+# CDNA 2 (gfx90a, MI200): `fixtures/amdgpu/cdna_kernels.cl` at -O3. MFMA results and accumulators
+# live in AGPR tuples (a[0:15]) or VGPR tuples, read back with v_accvgpr_read_b32.
+[[family]]
+name = "amdgpu_gfx90a_mfma"
+language = "AMDGPU:LE:64:GFX90A"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/cdna_gfx90a.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+# `gemm_tile`: a v_mfma_f32_32x32x8f16 accumulating over a loop.
+[[family.function]]
+test = "amdgpu_gfx90a_mfma_loop_decompiles"
+address = "0x0"
+expect = ["= mfma_f32_32x32x8f16(", "} while ("]
+
+[[family.function]]
+test = "amdgpu_gfx90a_mfma_f32_decompiles"
+address = "0x400"
+expect = ["mfma_f32_32x32x1f32("]
+
+# `fixtures/amdgpu/real_kernels.cl` built with clang -O2 for gfx90a: f64 division uses v_fmac_f64.
+[[family]]
+name = "amdgpu_real_gfx90a"
+language = "AMDGPU:LE:64:GFX90A"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx90a.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_real_gfx90a_f64_division_decompiles"
+address = "0x22c0"
+expect = ["div_fixup(", "cmp_class("]
+
+# CDNA 3 (gfx942, MI300): the same kernels; MFMA mnemonics carry the block counts
+# (v_mfma_f32_32x32x8_f16) and `sparse` is a v_smfmac_f32_16x16x32_f16 with its index VGPR.
+[[family]]
+name = "amdgpu_gfx942_mfma"
+language = "AMDGPU:LE:64:GFX942"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/cdna_gfx942.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx942_mfma_loop_decompiles"
+address = "0x0"
+expect = ["= mfma_f32_32x32x8_f16("]
+
+[[family.function]]
+test = "amdgpu_gfx942_smfmac_decompiles"
+address = "0xb00"
+expect = ["= smfmac_f32_16x16x32_f16("]
+
+[[family]]
+name = "amdgpu_real_gfx942"
+language = "AMDGPU:LE:64:GFX942"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx942.bin"
+forbid = ["halt_baddata"]
+
+# v_lshl_add_u64 builds the 64-bit addresses on gfx942.
+[[family.function]]
+test = "amdgpu_real_gfx942_f64_division_decompiles"
+address = "0x21b4"
+expect = ["div_fixup(", "cmp_class("]
+
 # Wave64 RDNA code (clang -mwavefrontsize64): lane masks are SGPR pairs. `vote` passes a
 # ballot (v_cmp into VCC, then vcc_lo and vcc_hi as a 64-bit argument); under the wave64
 # language the high half is the compare's zero, not a stale vcc_hi.
@@ -2521,6 +2624,30 @@ expect = [
     "void sub_82000000(unsigned int a0,unsigned int a1,unsigned int a2)",
     "*(char (*)[16])(a2 & 0xfffffff0) = vmx128_vmulfp(vmx128_vaddfp(",
 ]
+# Power ISA 3.1 (POWER10) on ppc64le, assembled by zig cc -mcpu=pwr10: pli/paddi (8-byte
+# prefixed) and brw, a cmpd + setbc, and a prefixed plxv/pstxv vector copy.
+[[family]]
+name = "ppc64le_power10"
+language = "PowerPC:LE:64:A2ALT"
+base = "0x1000"
+image = "ppc64le_power10"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "ppc64le_power10_prefixed_immediates_decompile"
+address = "0x1000"
+expect = ["a0 += 100;", "+ 0x12345678;"]
+
+[[family.function]]
+test = "ppc64le_power10_setbc_decompiles"
+address = "0x1020"
+expect = ["return a0 < a1;"]
+
+[[family.function]]
+test = "ppc64le_power10_prefixed_vector_copy_decompiles"
+address = "0x1030"
+expect = ["((unsigned long *)a1)[4] = ((unsigned long *)a0)[2];"]
+
 # The S1C6200 (E0C6200) language decompiles 12-bit instructions in big-endian words, assembled
 # by hand from the core manual: a carry-tested add, a caller that CALLs it within the page,
 # and an add bracketed by SDF/RDF, which decodes with the decimal adjustment.
@@ -3257,6 +3384,43 @@ test = "x86_fprem_loop_ends_on_c2"
 address = "0x10"
 expect = ["(long)(", ">> 0x40) & 0x7fff"]
 
+# Legacy-mode lifts checked against this CPU (x86-32-native) and QEMU's real mode (x86-16), see
+# docs/difffuzz.md: AAA adds 0x106 to AX, a 0x67 prefix leaves the stack width alone, and 32-bit
+# addressing in real mode still adds the segment.
+[[family]]
+name = "x86_32_legacy"
+language = "x86:LE:32:default:gcc"
+base = "0x0"
+image = "x86_32_legacy"
+
+[[family.function]]
+test = "x86_aaa_adds_0x106_to_ax"
+address = "0x0"
+expect = ["* 0x106"]
+
+[[family.function]]
+test = "x86_addr32_prefix_keeps_the_esp_stack"
+address = "0x10"
+expect = ["return a0;"]
+forbid = ["segment("]
+
+[[family]]
+name = "x86_16_addr32"
+language = "x86:LE:16:Real Mode"
+base = "0x0"
+image = "x86_16_addr32"
+
+[[family.function]]
+test = "x86_16_addr32_load_adds_the_segment"
+address = "0x0"
+expect = ["* 0x10 +"]
+
+[[family.function]]
+test = "x86_16_addr32_stos_adds_es"
+address = "0x10"
+expect = ["* 0x10 +"]
+
+
 # ELF routing and relocation rows: real ET_REL and ET_EXEC images (crates/unlace-cli/tests/fixtures/elfroute/fx.c,
 # built as its README says), loaded with no --target, so the loader picks the language from the ELF header (#706),
 # lays a 16-bit object out inside its space (#707) and applies the relocations (#713-#737). `chain` calls `scale7`
@@ -3960,3 +4124,80 @@ forbid = ["halt_baddata", "hifi_nop"]
 test = "xtensa_hifi5_mt8196_loads_feed_the_store"
 address = "0x0"
 expect = ["*a1 = hifi_ae_s64_i(hifi_ae_l64_ip(a0->field_0x8));"]
+
+[[family]]
+name = "amdgpu_permlane_gfx1030"
+language = "AMDGPU:LE:64:GFX10"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/permlane_gfx1030.bin"
+
+# `fixtures/amdgpu/permlane.s` assembled for gfx1030: the VOP3-only v_*_co_u32 forms and
+# v_permlane16_b32/v_permlanex16_b32 decode.
+[[family.function]]
+test = "amdgpu_permlane_gfx1030_decode"
+address = "0x0"
+expect = [
+    "permlane16(permlanex16(permlane16(",
+    "v1 = a7 < a6;",
+]
+
+[[family]]
+name = "amdgpu_permlane_gfx1100"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/permlane_gfx1100.bin"
+
+# `fixtures/amdgpu/permlane.s` assembled for gfx1100: the VOP3-only v_*_co_u32 forms and
+# v_permlane16_b32/v_permlanex16_b32 decode.
+[[family.function]]
+test = "amdgpu_permlane_gfx1100_decode"
+address = "0x0"
+expect = [
+    "permlane16(permlanex16(permlane16(",
+    "v1 = a7 < a6;",
+]
+
+# ESP32-S3 ROM __divsf3 (espressif/esp-rom-elfs 20260528, esp32s3_rev0_rom.elf, Apache-2.0): the
+# FP divide steps div0.s, nexp01.s, const.s, maddn.s, mkdadj.s, addexp(m).s and divn.s.
+[[family]]
+name = "xtensa_esp32s3_rom_divsf3"
+language = "Xtensa:LE:32:esp32s3"
+base = "0x40056124"
+image = "xtensa_esp32s3_rom_divsf3"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "xtensa_esp32s3_rom_divsf3_decodes_the_divide_steps"
+address = "0x40056124"
+expect = ["div0_s(a1)", "return divn_s("]
+
+# s390x TEST AND SET, LOAD POSITIVE (long HFP) and ADD DECIMAL (#862): ts 0(%r2); lpdr %f0,%f2;
+# ap 0(4,%r3),0(4,%r4); br %r14.
+[[family]]
+name = "s390x_hfp_decimal"
+language = "s390x:BE:64:default"
+base = "0x1000"
+image = "s390x_hfp_decimal"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s390x_ts_lpdr_ap_decompile"
+address = "0x1000"
+expect = ["*a2 = 0xff;", "hd_ap(a3,4,a4,4);", "ABS(a1)"]
+
+# eBPF -O2 str_len (#865): the loop counter is r0, the return register, and also indexes the
+# load. Upstream's onlyOpUse refuses a return trial at that load (the function prints void);
+# option retindexuse keeps it.
+[[family]]
+name = "ebpf_retindexuse"
+language = "eBPF:LE:64:default"
+base = "0"
+image = "bpf_strlen"
+args = ["--option", "retindexuse", "on"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "ebpf_retindexuse_counter_is_returned"
+address = "0x0"
+expect = ["return "]

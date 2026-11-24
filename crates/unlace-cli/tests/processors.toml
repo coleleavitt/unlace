@@ -4393,6 +4393,30 @@ address = "g_shlv"
 expect = ["a0 << "]
 forbid = ["-(int)"]
 
+# A 64-bit argument takes an aligned d4/d5 or d6/d7 pair, so the second double of f(double,double)
+# is the parameter in e6, not an uninitialised local, and an int before a double leaves d5 empty.
+[[family]]
+name = "tricore_tc18_gcc_double"
+loader = "auto"
+args = ["--target", "tricore:LE:32:tc18"]
+fixture = "crates/unlace-cli/tests/fixtures/tricore_tc18_gcc/gcc_double.elf"
+forbid = ["// e6"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_double_second_arg"
+address = "g_dadd"
+expect = ["double g_dadd(double a0,double a1)", "return a0 + a1;"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_double_msub"
+address = "g_dmsub"
+expect = ["double g_dmsub(double a0,double a1)", "a0 * a1"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_int_then_double"
+address = "g_idmul"
+expect = ["(double)a0 * a2"]
+
 # The AVR-Dx languages (avr8xt.sla, I/O at data 0, one pspec per series from Microchip's AVR-Dx_DFP)
 # name an `in` from the VPORT window and an `sts` to the PORT block.
 [[family]]

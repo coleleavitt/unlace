@@ -1305,10 +1305,20 @@ recovered switch table.
   `return a + b;` and `dscale`'s `__aeabi_dmul(v, __aeabi_i2d(n))` prints
   `return v * (double)n;`. `d2ulz`, `f2ulz`, `ul2d` and `ul2f` have no exact
   p-code reading and keep their calls, typed by `aeabisigs`, as do the
-  flag-returning `cdcmp`/`cfcmp` comparisons. Default off: the fold takes the
+  flag-returning `cdcmp`/`cfcmp` comparisons. Each payload also targets the
+  libgcc routine the helper is (`__adddf3`, `__muldf3`, `__extendsfdf2`,
+  `__floatsidf`, `__fixdfsi`, `__fixdfdi`, ...): libgcc defines both names at
+  one address, a static image may name the function by either, and newlib
+  calls the libgcc names directly. The three-way `__eqdf2`/`__ltdf2` family
+  returns something else and keeps its calls. Default off: the fold takes the
   image's helpers to be RTABI32's round-to-nearest IEEE ones, which a library
   built for flush-to-zero or another rounding mode is not. The gate is on the
-  install, as for `arithhelpers`. On a hard-float caller that moves the
+  install, as for `arithhelpers`. The load-time call-fixup scan
+  (`unlace_analysis::callfixup`) matches every kuna family whatever its option,
+  because it runs before the run's options reach the architecture; the commit
+  re-derives each fact's fixup through the gated map. Gating the scan too left a
+  relocatable object's undefined `__aeabi_*` imports, which only the scan names,
+  without the fixup under `option aeabifloat on`. On a hard-float caller that moves the
   `r0:r1` result into `d0` (`vmov d0, r0, r1`), the result still prints as two
   masked halves of a union cast joined by `+`.
 
@@ -2933,8 +2943,7 @@ the case targets.
    or a dispatch retried after an earlier recovery, is not re-run, so a
    recovery that fails for its own reasons costs one extent scan and no
    second pipeline. A function's last table has
-   no such bound here (an unguarded one ends at the next function's table
-   below): an object the function merely reads
+   no such bound and is left as it was: an object the function merely reads
    may sit anywhere in the section, and a bound taken from one could run the
    table on into another function's, whose entries are plausible code
    addresses measured from the wrong base. The discovery Listing applies the
@@ -2970,18 +2979,12 @@ the case targets.
    functions' tables measured from the wrong base: they land all over the
    next functions and back inside this one, so the run-on cut, which keeps
    every row until the first that leaves the function, keeps them all and
-   the 45-case switch printed 1,200 lines of phantom cases. A byte selector
-   with no range check is the same shape on x86-64 when the rows past the
-   table stay inside the function: gnulib's regcomp (csplit `sub_13330`)
-   reads its `unsigned char` token type straight into a 37-entry table and
-   OCaml compiles an exhaustive match the same way, so the next table's
-   offsets, measured from the wrong base, became cases that land mid-instruction.
-   For every unguarded table (no guard, or guards that leave its
-   selector's top open), `jumptable.rs (JumpBasicModel::kuna_next_table_rows)`
-   reads its table and stride as above and ends it at the lowest jump table
-   above it in the same section, of this function or of the next ones, when
-   that leaves at least two rows and fewer than the rows kept so far; the
-   run-on cut applies when no table ends it sooner. The next functions' tables come from the flow: the sanity check
+   the 45-case switch printed 1,200 lines of phantom cases. When the run-on
+   cut leaves an unguarded table whose rows leave the function,
+   `jumptable.rs (JumpBasicModel::kuna_next_table_rows)` reads its table and
+   stride as above and ends it at the lowest jump table above it in the same
+   section, of this function or of the next ones, when that leaves at least
+   two rows. The next functions' tables come from the flow: the sanity check
    inside the recovery partial records the table it wants
    (`Funcdata::kuna_later_wanted`) and fails, and
    `flow.rs (FlowInfo::recover_jump_tables)` decodes the extents after this
@@ -2994,8 +2997,9 @@ the case targets.
    request can also come from the retry the function's own tables bound
    (a row of the bounded table lies in the next known function); the flow
    then answers it in a second round. Either way the request never leaves
-   a table unrecovered. A guarded table costs nothing; an unguarded one
-   costs the extent decodes and one more recovery, once per function.
+   a table unrecovered. A table whose rows all stay
+   inside the function costs nothing, and the decode runs only for a table
+   already unguarded and leaving the function.
 
    **Guards that leave the top open (always on).**
    `jumptable.rs (JumpBasicModel::analyze_guards)` records the
@@ -5580,6 +5584,25 @@ replaces the control word defines it: `FLDCW`, `FLDENV`, `FRSTOR`,
 loads it from the first word of its area. `XRSTOR` and `XRSTORS` load it the
 same way when `EAX` bit 0 and the area's `XSTATE_BV` bit 0 are set, reset it
 to `0x037f` when only `EAX` bit 0 is set, and leave it unchanged otherwise.
+
+The x87 condition bits `C0`-`C3` are their own registers; `FSTSW`/`FNSTSW` (to
+`AX` or memory) store `FPUStatusWord` with bits 8-10 and 14 replaced by them,
+so a status word read after an arithmetic instruction, `FPREM` or `FXAM` sees
+the bits that instruction set (before, only `FCOM`-family compares wrote the
+word). `FXAM` classifies `ST0` from its encoding: `C1` is the sign bit (also for
+a zero or NaN), `C0` is an all-ones exponent (NaN or infinity), `C3` a zero
+exponent (zero or denormal), `C2` a non-NaN non-zero value; an empty register
+and the unsupported 80-bit encodings are not told apart. `FPREM` converts its
+truncated quotient back to a float before the multiply (it multiplied the
+integer's bits), and `FPREM`/`FPREM1` set `C2` when the exponents differ by
+more than 63 (a partial remainder) and `C1`, `C3`, `C0` to bits 0-2 of the
+quotient's magnitude. Their remainder comes from a rounded divide and multiply,
+so it is exact only while the quotient's product with `ST1` fits 64 bits.
+Loads, exact stores, `FXCH`, `FCHS`, `FABS`, `FINCSTP`, `FISTTP` and the
+constant loads clear `C1` as the SDM says. `FLDPI`, `FLDL2E`, `FLDL2T`, `FLDLG2`
+and `FLDLN2` stay the widened double values (their low 11 bits differ from the
+hardware's): a p-code constant is at most 8 bytes, and building the 80-bit value
+from two integers prints as bit operations.
 
 The x86 `BOUND` lift loads adjacent signed lower and upper limits at the
 operand width and passes the index and both limits to the side-effecting,

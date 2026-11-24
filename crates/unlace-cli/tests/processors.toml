@@ -141,6 +141,9 @@ meta_dsp = """
 x86_64_native_oracle = """
 c4e27ddcc1c3662e0f1f840000000000660f3a170701c3
 """
+x86_64_x87 = """
+dd07d9e5dfe066250002c39090909090dd07dd06d9f8dfe09e7af9dd5f08ddd8c3
+"""
 
 [[family]]
 name = "blackfin"
@@ -3126,6 +3129,24 @@ test = "x86_extractps_stores_a_dword"
 address = "0x10"
 expect = ["unsigned int *a0"]
 
+# x87 lifts checked against this CPU (docs/difffuzz.md): FXAM's C1 is the sign bit, read through
+# FNSTSW; FPREM converts its quotient before the multiply and its C2 ends the reduction loop.
+[[family]]
+name = "x86_64_x87"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_x87"
+
+[[family.function]]
+test = "x86_fxam_sign_reaches_fnstsw"
+address = "0x0"
+expect = [">> 0x4f) << 9"]
+
+[[family.function]]
+test = "x86_fprem_loop_ends_on_c2"
+address = "0x10"
+expect = ["(long)(", ">> 0x40) & 0x7fff"]
+
 # ELF routing and relocation rows: real ET_REL and ET_EXEC images (crates/unlace-cli/tests/fixtures/elfroute/fx.c,
 # built as its README says), loaded with no --target, so the loader picks the language from the ELF header (#706),
 # lays a 16-bit object out inside its space (#707) and applies the relocations (#713-#737). `chain` calls `scale7`
@@ -3203,26 +3224,6 @@ expect = ["g_tab["]
 test = "elfroute_msp430_elf_pick"
 address = "pick"
 expect = ["0x2c", "scale7("]
-
-# switchextent: a byte selector with no range check reads its table up to the next jump table,
-# of the function (csplit's regcomp) or of the next function (an OCaml match's last table).
-[[family]]
-name = "switchextent_x86_byte"
-loader = "auto"
-fixture = "crates/unlace-cli/tests/fixtures/switchextent_x86/tables.elf"
-forbid = ["halt_baddata", "jump-as-call"]
-
-[[family.function]]
-test = "switchextent_x86_byte_selector_ends_at_own_next_table"
-address = "bytesel"
-expect = ["case 2:", "0x15"]
-forbid = ["case 3:"]
-
-[[family.function]]
-test = "switchextent_x86_last_table_ends_at_next_functions_table"
-address = "lastsel"
-expect = ["case 3:", "return 0x21;"]
-forbid = ["case 4:"]
 
 # Hexagon ET_REL (EM_HEXAGON) routes to Hexagon:LE:32:default (#706); B22_PCREL calls, 32_6_X/16_X/6_X globals (#737).
 [[family]]

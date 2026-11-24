@@ -403,5 +403,25 @@ scalar float arithmetic, integer and flag semantics are compared.
 ```
 
 `tools/x86_avx512_sweep.py --enc EncVEX` / `--enc EncNormal` (with VEX or legacy `--predicates`) is the
-matching decode check against `llvm-objdump` for those encodings. x87 is not compared: the p-code
-emulator has no 80-bit float.
+matching decode check against `llvm-objdump` for those encodings.
+
+### x87 (`--arch x86-64-x87`)
+
+`pcode_emu.py` computes every float op with an 80-bit operand or result exactly (`softfloat.py`:
+values decoded to fractions, one round-to-nearest-even into the destination format, subnormals
+included; an x87 unnormal or pseudo-NaN counts as a NaN operand, which is `unmodeled`).
+`--arch x86-64-x87 --oracle native` draws only the D8-DF escapes; the harness `FXRSTOR`s an image
+with control word 0x37F (64-bit precision, nearest, exceptions masked), ST0-ST6 holding random
+values (normal, integer, zero, infinity, denormal), ST7 empty and C0-C3 random, and `FXSAVE`s it
+after the instruction. ST0-ST7 (except a register the CPU tags empty) and C0-C3 are compared; a case
+where the CPU reports a stack fault (SF) is `undefined`. Not compared: C1 of the rounding
+instructions (the round-up indicator) and of FCOMI/FUCOMI(P) and FCMOVcc (cleared by the SDM, left
+unchanged by this CPU), ST0 of FPREM/FPREM1 and of the five constant loads (see
+`docs/spec/02-lift-and-flow.md`). FLDCW and the environment loads and stores are denied. The
+`x86-64-native` configuration loads no x87 state and compares none: natively an MMX write sets bits
+79:64 of its register to ones, which the MMX lifts leave alone.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-64-x87 --oracle native \
+    --count 3000 --seed 7 --unlace <unlace> --sleighpath specs
+```

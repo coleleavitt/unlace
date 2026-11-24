@@ -5180,7 +5180,7 @@ impl PrintC {
     }
 
     /// An operand of a returned `&&` (`and`) or `||`: parenthesized when it is a `||` under
-    /// a `&&` or a `?:`, which bind looser.
+    /// a `&&` or a `?:`, which bind looser, or a `&&` under a `||`, for clarity.
     fn emit_return_operand(
         &mut self,
         fd: &Funcdata,
@@ -5195,6 +5195,7 @@ impl PrintC {
             .as_ref()
             .is_some_and(|tree| match tree.expr(expr).kind {
                 ExprKind::Or(..) => and,
+                ExprKind::And(..) => !and,
                 ExprKind::Ternary(..) => true,
                 _ => false,
             });

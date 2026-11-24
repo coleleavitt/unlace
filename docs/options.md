@@ -204,9 +204,9 @@ Three tiers:
 | indirect jump renders as a computed (code *)() call whose destinations are already constants in the emitted C | [`constselectjump`](#constselectjump----off--reentry--on-default-reentry-destructive-opt-in) |
 | 'Treating indirect jump as call' on a CMOV/predicated dispatch | [`constselectjump`](#constselectjump----off--reentry--on-default-reentry-destructive-opt-in) |
 | the body behind a conditional indirect branch is never decoded | [`constselectjump`](#constselectjump----off--reentry--on-default-reentry-destructive-opt-in) |
-| an x86-64 switch prints as a computed call right after a cmp/ja bound | [`rawswitch`](#rawswitch----on--off-default-off-destructive-opt-in) |
-| a state machine's cases are never decoded | [`rawswitch`](#rawswitch----on--off-default-off-destructive-opt-in) |
-| inflate or inflateBack decompiles to a few lines ending in jump-as-call | [`rawswitch`](#rawswitch----on--off-default-off-destructive-opt-in) |
+| an x86-64 switch prints as a computed call right after a cmp/ja bound | [`rawswitch`](#rawswitch----on--off-default-on) |
+| a state machine's cases are never decoded | [`rawswitch`](#rawswitch----on--off-default-on) |
+| inflate or inflateBack decompiles to a few lines ending in jump-as-call | [`rawswitch`](#rawswitch----on--off-default-on) |
 | a Dalvik sparse-switch prints as switchAssist(...) followed by a computed call | [`jumpassist`](#jumpassist----on--off-default-on) |
 | 'jump-as-call' on a switchAssist or lookupswitch user-op | [`jumpassist`](#jumpassist----on--off-default-on) |
 | monitorEnter(x) before a try whose catch (Throwable) calls monitorExit(x) and rethrows | [`javasync`](#javasync----on--off-default-off) |
@@ -1857,13 +1857,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P2/switch-model · unlace · structure-recovery · re-conditional-indirect-branches-hide
 - **Example:** `option constselectjump off`
 
-### `rawswitch` -- on | off, default `off` (destructive opt-in)
+### `rawswitch` -- on | off, default `on`
 
 - **Symptoms:** an x86-64 switch prints as a computed call right after a cmp/ja bound; a state machine's cases are never decoded; inflate or inflateBack decompiles to a few lines ending in jump-as-call.
-- **What it does:** Recover an x86-64 jump table from its own instructions when the value-range models cannot, as IDA's switch matcher does. gcc and clang emit a PIC switch as cmp $N,%idx; ja default; lea table(%rip),%base; movslq (%base,%idx,4),%dst; add %base,%dst; jmp *%dst (the lea may come first), with N + 1 offsets from the table's start. When JumpTable::recover_addresses fails, rawswitch.rs matches those bytes backward from the BRANCHIND and installs a fixed model over the N + 1 rows, each of which must land within 0xffff bytes of the jump; the case labels are the row indices. zlib's inflateBack sets state->mode = TYPE before its switch and gcc threads each case to the next, so the one path into the dispatch carries a constant index, the models fail, and the dispatch printed as a computed call with eighteen cases never decoded (GED 618 against IDA's 87). x86-64 only; off by default.
-- **When to flip:** Turn on when an x86-64 switch prints as a computed (code *)() call after a visible cmp/ja bound and the code behind the table is missing, typically a state machine whose index is constant on the path the decompiler can see (zlib inflate/inflateBack). DESTRUCTIVE as a global default: the matched bound is the instruction's, not the data flow's, so a table whose guard does not bound its index (a computed goto reusing the shape) reads every row the cmp admits.
+- **What it does:** Recover an x86-64 jump table from its own instructions when the value-range models cannot, as IDA's switch matcher does. gcc and clang emit a PIC switch as cmp $N,%idx; ja default; lea table(%rip),%base; movslq (%base,%idx,4),%dst; add %base,%dst; jmp *%dst (the lea may come first), with N + 1 offsets from the table's start. When JumpTable::recover_addresses fails, rawswitch.rs matches those bytes backward from the BRANCHIND and installs a fixed model over the N + 1 rows, each of which must land within 0xffff bytes of the jump; the case labels are the row indices. zlib's inflateBack sets state->mode = TYPE before its switch and gcc threads each case to the next, so the one path into the dispatch carries a constant index, the models fail, and the dispatch printed as a computed call with eighteen cases never decoded (GED 618 against IDA's 87). x86-64 only. On by default: over sed, tar, gzip, patchelf and libz (2263 functions) it changes only zlib's inflateBack, whose modes then print as the case labels.
+- **When to flip:** On by default; it acts only where every value-range model failed on a dispatch whose bytes are the cmp/ja/lea/movslq/add/jmp sequence, so the cmp bounds the index on the one path through it. Turn off when a computed goto that jumps past the cmp into the lea reuses the shape, or to restore the computed (code *)() call of the upstream rendering.
 - **Where / provenance:** P2/switch-model · ida · structure-recovery · ida-gap-ged-inflateback
-- **Example:** `option rawswitch on`
+- **Example:** `option rawswitch off`
 
 ### `jumpassist` -- on | off, default `on`
 

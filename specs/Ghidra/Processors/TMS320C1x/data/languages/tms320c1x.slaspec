@@ -1,0 +1,3 @@
+# TMS320C1x, 16-bit words stored high byte first.
+@define ENDIAN "big"
+@include "tms320c1x.sinc"

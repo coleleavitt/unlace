@@ -5133,6 +5133,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `MULTOS` | MULTOS Executable Language (MEL) smart-card bytecode | `MULTOS:BE:16:MEL` | MULTOS Developer's Reference Manual v1.58 (instruction descriptions, Instruction Map) | `unlace-cli/tests/processors.toml` (`multos_mel`) |
 | `M7900` | Mitsubishi/Renesas 7900 Series (DPR0 only, and DPR0-DPR3) | `M7900:LE:24:default`, `M7900:LE:24:DPR4` | Renesas 7900 Series Software Manual (chapter 4 machine-code rows) | `unlace-cli/tests/processors.toml` (`m7900`) |
 | `R32C` | Renesas R32C/100 Series | `R32C:LE:32:default` | Renesas R32C/100 Series Software Manual (chapter 4 instruction codes) | `unlace-cli/tests/processors.toml` (`r32c`) |
+| `TMS320C1x` | TI TMS320C1x (TMS32010, C10/C14/C15/C17) | `TMS320C1x:BE:16:default`, `TMS320C1x:LE:16:default` | TI TMS320C1x User's Guide (SPRU013D, chapters 3-4) | `unlace-cli/tests/processors.toml` (`tms320c1x`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

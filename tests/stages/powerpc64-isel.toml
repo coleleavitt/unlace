@@ -1,0 +1,37 @@
+# Synthetic cmpdi r3,0; iseleq r3,r4,r5; blr. The generic 64-bit target decodes isel
+# (Power ISA 2.03+) and the select becomes a conditional assignment.
+
+[image]
+arch = 'PowerPC:BE:64:default:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'select_value' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '2c2300007c64289e4e800020'
+
+[script]
+commands = [
+    'lo fu select_value',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'PPCISEL #1: isel takes RA when the CR bit is set'
+count = 1
+literal = 'a2 = a1;'
+
+[[match]]
+name = 'PPCISEL #2: and RB otherwise'
+count = 1
+literal = 'return a2;'
+
+[[match]]
+name = 'PPCISEL #3: the generic decoder no longer halts'
+count = 0
+literal = 'halt_baddata'

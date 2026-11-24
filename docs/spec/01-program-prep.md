@@ -1356,7 +1356,7 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   no object architecture, told apart by `e_machine`) covers the 32-bit literal
   halves `REL32_LO`/`REL32_HI` (`S + A - P`, the `s_getpc_b64` pair of every
   call and global) and `ABS32_LO`/`ABS32_HI`, and the `ABS32`, `REL32`, `ABS64`
-  and `REL64` data words; the GOT forms stay unsupported. eBPF objects are REL-only and every program ships as one,
+  and `REL64` data words; the GOT forms stay unsupported. A TI C2000 object (`EM_TI_C2000`) counts symbol values, symbol sizes and `r_offset` in 16-bit words, while its section sizes and bytes are in bytes. The layout keeps byte VMAs and scales those three by the address unit (`loader/kuna_wordaddr.rs`), so a function's entry, extent and relocation sites land on its bytes. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from
@@ -10434,6 +10434,38 @@ call-site indices, not code ranges, in its table. So every LSDA walker skips it
 personality whose name cannot be read is read as Itanium. With `itaniumeh` on,
 the pads are shown and no note is attached.
 
+**(kuna) MFC message-map handlers are functions** (`mfcmsgmap`, default-**off**;
+`crates/unlace-analysis/src/analyzers/entry/kuna_mfcmsgmap.rs`). An MFC window
+class routes messages through a static `AFX_MSGMAP` in `.rdata`
+(`pfnGetBaseMap`, `lpEntries`), and its `AFX_MSGMAP_ENTRY` array (`nMessage,
+nCode, nID, nLastID, nSig, pfn`, 24 bytes each, ending in an all-zero entry)
+names each handler. `CWnd::OnWndMsg` calls `pfn` indirectly, so nothing else
+finds the handlers, and each was folded into the function before it. On a
+32-bit PE the deferred entry pass reads every table the base relocations vouch
+for: `lpEntries` and the `pfnGetBaseMap` word before it are relocated,
+`pfnGetBaseMap` points into an executable section, the entries lie in a
+non-executable section, and every entry's `pfn` is a relocated pointer into
+code, with `nMessage` below 0x10000 and `nSig` below 0x100. A run that
+breaks any of these is not read. The handlers join the committed entries, so
+the walk also uses them as roots. On PEGRP32F.dll it reads 29 maps and 198
+handlers. Every handler is an IDA 9.5 function start, and 194 were missing
+from the inventory before.
+
+**(kuna) A relocated pointer to an MSVC frame prologue is a function**
+(`msvcptrentry`, default-**off**;
+`crates/unlace-analysis/src/analyzers/entry/kuna_msvcptrentry.rs`). C++ code reaches
+much of itself only through pointers: vtable slots, MFC tables, callbacks pushed for
+the Win32 API, thread procedures. On a 32-bit PE the base-relocation table lists
+every such word, in code and in data. A word whose value is an executable address
+whose bytes are `push ebp; mov ebp,esp` in MSVC's encoding (`55 8B EC`, or
+`8B FF 55 8B EC` with the hot-patch prefix) makes that address an entry, and the
+walk uses it as a root. The mid-function labels MSVC stores (switch targets, catch
+continuations, SEH handlers) do not start with a frame. GCC and MinGW encode
+`mov ebp,esp` as `89 E5`, so their SJLJ landing pads never match either; those
+are why `addrtakenentry` stays x86-64-only. On PEGRP32F.dll it finds 1,255
+targets, every one an IDA 9.5 function start, and 452 of them were missing from
+the inventory. Code built with frame-pointer omission gives it nothing.
+
 **(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).
 An MSVC `throw e;` is `_CxxThrowException(&e, &ThrowInfo)` and `throw;` is
@@ -11931,7 +11963,10 @@ bad decode or out-of-image flow and reach either a terminal/computed jump or an
 informative call/edge into known code. Accepted bodies are claimed so a later
 candidate cannot split them. The walk then resumes with the accepted targets,
 and the entries the load-time passes committed (a Delphi VMT method, say), as
-roots, so their direct-call closure is discovered and committed too. The
+roots, so their direct-call closure is discovered and committed too. On x86 the
+functions a pass names, such as an MSVC vtable slot RTTI names or a constructor,
+are roots as well (`engine.rs (commit_pending_analysis)`). On ARM they are not,
+because their decode mode is not settled at that point. The
 functions the walk had before the resume are kept, so the resume only adds
 entries. A Delphi image's System memory-manager record is the case it was
 written for: the record in writable data holds `GetMem`, `FreeMem` and

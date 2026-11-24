@@ -16,8 +16,12 @@ are replaced by ones that return the old value only with glc (gfx942: sc0).  The
     acc bits (word 1 bits 27-28) are set; each is a user-op named after the instruction,
   - the global/flat atomics including the f32/f64/pk forms.
 
+The GFX9 spec's generated includes (amdgcn_gfx9_valu.sinc, amdgcn_gfx9_vop3p.sinc) are spliced in
+and remapped with it (v_mad_mix_f32 becomes v_fma_mix_f32); the CDNA additions skip what they cover.
+
 usage: gen_amdgpu_cdna.py amdgcn_gfx9.slaspec map.txt mfma.txt gfx90a|gfx942 > amdgcn_gfx90a.slaspec
 """
+import os
 import re
 import sys
 
@@ -25,6 +29,7 @@ OPFIELD = {'sop1op': 'sop1', 'sop2op': 'sop2', 'sopcop': 'sopc', 'sopkop': 'sopk
            'vop1op': 'vop1', 'vop2op': 'vop2', 'vopcop': 'vopc', 'vop3op': 'vop3', 'dsop': 'ds',
            'mbop': 'mubuf', 'smop': 'smem'}
 FLSEG = {0: 'flat', 1: 'scratch', 2: 'global'}
+RENAMES = {'v_mad_mix_f32': 'v_fma_mix_f32', 'v_mad_mixlo_f16': 'v_fma_mixlo_f16', 'v_mad_mixhi_f16': 'v_fma_mixhi_f16'}
 V = 256
 
 
@@ -72,8 +77,20 @@ def rng(p, s, n):
     return '%s%d' % (p, s) if n == 1 else '%s[%d:%d]' % (p, s, s + n - 1)
 
 
+def inline(path):
+    """The spec with its @include files spliced in, so their constructors are remapped too."""
+    out = []
+    for line in open(path).read().split('\n'):
+        m = re.match(r'@include "([^"]+)"', line)
+        if m:
+            out.extend(open(os.path.join(os.path.dirname(path), m.group(1))).read().split('\n'))
+        else:
+            out.append(line)
+    return out
+
+
 def main():
-    spec = open(sys.argv[1]).read().split('\n')
+    spec = inline(sys.argv[1])
     m = load_map(sys.argv[2])
     mf = [l.split() for l in open(sys.argv[3]) if l.strip()]
     cpu = sys.argv[4]
@@ -119,13 +136,8 @@ def main():
             stats['moved'] += 1
             out.extend(g)
             continue
-        if b == '-' or b in names.get(f, {}) and m[f].get(op, ('', ''))[0] != '-' and any(
-                x == b for x2, (x1, x) in m[f].items() if x2 != op):
-            stats['dropped'] += 1
-            continue
-        if strip(b) in {strip(x) for x in names.get(f, {}) if names[f][x] != op} or (
-                a.startswith('v_mul_legacy') or a.startswith('v_mac_') or a.startswith('v_mad_')):
-            stats['dropped'] += 1
+        if b == '-' or strip(b) != RENAMES.get(strip(a), strip(a)):
+            stats['dropped'] += 1    # removed, or the opcode now holds another operation
             continue
         new = b if mn == a else strip(b) if mn == strip(a) else mn
         g = [line.replace(':' + mn, ':' + new, 1)] + g[1:]
@@ -230,11 +242,14 @@ def gen_include(m, names, mf, cpu, base):
     p3 = {op - 896: n for op, n in p3.items()}
     SRC = ['j0', 'j9', 'j18']
     for j in SRC:
-        w('PK_%s: %s_vg is %s_v=1 & %s_vg { export %s_vg; }' % (j, j, j, j, j))
-        w('PK_%s: S32_%s is %s_v=0 ... & S32_%s ... { export S32_%s; }' % (j, j, j, j, j))
+        if ('PK_%s:' % j) not in base:
+            w('PK_%s: %s_vg is %s_v=1 & %s_vg { export %s_vg; }' % (j, j, j, j, j))
+            w('PK_%s: S32_%s is %s_v=0 ... & S32_%s ... { export S32_%s; }' % (j, j, j, j, j))
         w('PK64_%s: V64_%s is V64_%s { export V64_%s; }' % (j, j, j, j))
     pk16 = {op: v for op, v in P.PK.items() if p3.get(op) == v[0]}
     for op, (mn, form, nsrc) in sorted(pk16.items()):
+        if (':%s ' % mn) in base:
+            continue
         code = []
         for i in range(nsrc):
             lo, hi = P.lanes(i)
@@ -273,7 +288,7 @@ def gen_include(m, names, mf, cpu, base):
             pat = ' & '.join('PK64_%s ...' % SRC[i] for i in range(nsrc))
             r(':%s i0vp, %s is e9=0x1a7 & vop3op=%d & i0vp & v3opsel ; %s & j_omod ... { %s }'
               % (mn, srcs, 896 + op, pat, ' '.join(code)))
-        elif re.match(r'v_(dot\d|fma_mix|mad_mix)', mn):
+        elif re.match(r'v_(dot\d|fma_mix|mad_mix)', mn) and (':%s ' % mn) not in base:
             r(':%s i0v8, PK_j0, PK_j9, PK_j18 is e9=0x1a7 & vop3op=%d & i0v8 ; PK_j0 ... & PK_j9 ... & PK_j18 ... '
               '{ i0v8 = %s(PK_j0, PK_j9, PK_j18); }' % (mn, 896 + op, uop(mn[2:])))
     # ---- AGPRs: accvgpr moves and MFMA
@@ -395,7 +410,7 @@ def gen_include(m, names, mf, cpu, base):
                     ' & GAS' if seg == 'global' else '')
                 sem = 'o:%d = *:%d %s; %s *:%d %s = r;%s' % (sz, sz, A, calc, sz, A, (' %s = o;' % dst) if ret else '')
                 r(':%s is %s { %s }' % (disp, pat, sem))
-    for nm in sorted(ops):
+    for nm in sorted(ops - set(re.findall(r'define pcodeop (\w+);', base))):
         w('define pcodeop %s;' % nm)
     for t in sorted(tabs):
         o.extend(tabs[t])

@@ -498,8 +498,9 @@ fn every_return_hands_back(
 
 /// A run-time helper with no effect but its result: the RTABI32 and libgcc
 /// arithmetic, comparison and conversion routines
-/// ([`crate::kuna_armfloatreturn::base_pcs_helper`]), not the memory helpers,
-/// the unaligned stores, the flag-setting comparisons or the ones that read or
+/// ([`crate::kuna_armfloatreturn::base_pcs_helper`]) and libgcc's machine-mode
+/// integer routines ([`libgcc_integer`]), not the memory helpers, the
+/// unaligned stores, the flag-setting comparisons or the ones that read or
 /// change other state.
 fn pure_helper(name: &str) -> bool {
     const EFFECTS: [&str; 12] = [
@@ -516,9 +517,35 @@ fn pure_helper(name: &str) -> bool {
         "__aeabi_cfrcmp",
         "__aeabi_idiv0",
     ];
-    crate::kuna_armfloatreturn::base_pcs_helper(name)
-        && name != "__aeabi_ldiv0"
-        && !EFFECTS.iter().any(|p| name.starts_with(p))
+    libgcc_integer(name)
+        || crate::kuna_armfloatreturn::base_pcs_helper(name)
+            && name != "__aeabi_ldiv0"
+            && !EFFECTS.iter().any(|p| name.starts_with(p))
+}
+
+/// libgcc's `SImode` and `DImode` integer routines (the GCC internals manual's
+/// "Integer library routines") and Xtensa's `__umulsidi3`.
+fn libgcc_integer(name: &str) -> bool {
+    const ROUTINES: [&str; 17] = [
+        "__mulsi3",
+        "__divsi3",
+        "__modsi3",
+        "__udivsi3",
+        "__umodsi3",
+        "__muldi3",
+        "__divdi3",
+        "__moddi3",
+        "__udivdi3",
+        "__umoddi3",
+        "__ashldi3",
+        "__ashrdi3",
+        "__lshrdi3",
+        "__negdi2",
+        "__cmpdi2",
+        "__ucmpdi2",
+        "__umulsidi3",
+    ];
+    ROUTINES.contains(&name)
 }
 
 /// Is `root`, on every path, the result in the first result register of a call

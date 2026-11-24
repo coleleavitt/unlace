@@ -5626,14 +5626,18 @@ registers, `r0:r1` or `r2:r3`. The cspec states this only in its `<rule>`
 unprototyped function recovers two `int` parameters and `pairparam`'s
 `RuleDoubleInputPair` refuses to join the registers
 (`possible_input_param` has no 8-byte slot at `r0`). With option
-`armpairparam` (default off; `pairparam` must be on),
+`armpairparam` (default on; `pairparam` must be on),
 `crates/unlace-middle/src/p4_calls/kuna_armpairparam.rs (pair_slots)` accepts a
 range that is exactly two consecutive general register entries of the input
 model in one space, the first at an even position among them (`r0` and `r2`
-on ARM; the same rule pairs `a0:a1` on MIPS o32 and `r3:r4` on 32-bit
-PowerPC, whose models list the registers in order), and
-`kuna_armpairparam.rs (joined_pair)` adds that the function's inputs are not
-locked. Three places read it:
+on ARM), and `kuna_armpairparam.rs (joined_pair)` adds that the function's
+inputs are not locked, that the pair is two 4-byte words, and that the
+language is 32-bit ARM (`kuna_armpairparam.rs (arm32)`: it names `r0`..`r3`,
+`lr` and `cpsr`). The same slot rule would pair `a0:a1` on MIPS o32, `r3:r4`
+on 32-bit PowerPC and `o0:o1` on SPARC, but there a pair's word order is
+`bejoin`'s evidence to decide (chapter 4, `bejoin`), which a joined input
+preempts: on MIPS, SPARC and PowerPC big-endian objects the join decided the
+order before the evidence did. Three places read it:
 
 - `RuleDoubleInputPair` joins such a pair when a borrow, carry or two-word
   equality links it, even though the function later writes one of the
@@ -5646,7 +5650,11 @@ locked. Three places read it:
   `kuna_armpairparam.rs (param_addr)` places the parameter at the start of the
   pair with the input's 8-byte type.
 
-Off, nothing changes. On, the joined pair prints as one `long long` and the
+On by default: over Lua 5.4 built without debug information for ARM softfp,
+Cortex-M3 and Cortex-M0, and over chibios, RIOT and libopencm3 firmware, 5 of
+2430 functions change, each a `double` or `long
+long` printed as two words that becomes one parameter (`luaV_flttointeger`,
+libgcc's `__aeabi_drsub`), with no new decompile error. Off, nothing changes. On, the joined pair prints as one `long long` and the
 double-precision forms (`kuna_borrowcompare.rs`) fold its arithmetic and
 compares, instead of an `SBORROW4`/`CONCAT44` chain.
 

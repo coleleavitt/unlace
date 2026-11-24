@@ -430,6 +430,7 @@ unlace_options! { self, p1;
     "acleintrinsics" => registered!(crate::memtag::AcleIntrinsics),
     "barrierintrinsics" => registered!(crate::printc::BarrierIntrinsics),
     "dedupvardecls" => registered!(crate::dedupvardecls::DedupVarDecls),
+    "renumberlocals" => registered!(crate::renumberlocals::RenumberLocals),
     "noreturn_known" => registered!(crate::analysisgates::NoreturnKnown),
     "libgccsigs" => registered!(crate::analysisgates::Libgccsigs),
     "movwpairs" => registered!(crate::analysisgates::MovwPairs),

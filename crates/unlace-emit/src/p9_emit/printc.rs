@@ -4052,6 +4052,34 @@ impl PrintC {
         // candidates that render the same NAME, so restricting the plan to
         // sole-named candidates keeps a flip from moving a collapse key or
         // re-signing a line a non-flipped sibling reads through.
+        // (unlace renumberlocals) Hex-Rays-style spelling of the synthetic locals: `vN`
+        // renumbered from `v1` in collection order. Runs before the sign plan and the
+        // collapses so every later name-keyed pass sees the final spellings.
+        if arch
+            .unlace_options
+            .get::<crate::renumberlocals::RenumberLocals>()
+            .0
+        {
+            let globals = fd.get_arch().global_name_scope();
+            let taken = |name: &str| globals.as_ref().is_some_and(|g| g.has_symbol_name(name));
+            let reserved: std::collections::BTreeSet<String> =
+                declaration_occupied_names(fd, param_names.iter().cloned())
+                    .into_iter()
+                    .chain(decls.iter().map(|(_, name)| name.clone()))
+                    .filter(|name| !crate::renumberlocals::is_synthetic_local_name(name))
+                    .collect();
+            let mapping = crate::renumberlocals::renumber_synthetic_locals(
+                decls.iter().map(|(_, name)| name.as_str()),
+                &reserved,
+                &taken,
+            );
+            for (high, name) in &mut decls {
+                if let Some(fresh) = mapping.get(name.as_str()) {
+                    self.local_name_overrides.insert(*high, fresh.clone());
+                    *name = fresh.clone();
+                }
+            }
+        }
         self.sign_plan
             .retain_sole_named(decls.iter().map(|(h, n)| (*h, n.as_str())));
         // C++ `emitScopeVarDecls` walks the ScopeLocal *Symbol* table and emits

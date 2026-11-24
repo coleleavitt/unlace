@@ -3918,6 +3918,25 @@ tier = "core"
 symptoms = ["the same local declared once although many HighVariables share the stack slot", "flip off to see one declaration line per high (e.g. int4 option_index repeated hundreds of times)"]
 
 [[option]]
+option = "renumberlocals"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P9"
+subphase = "naming-policy"
+strength = "HARD"
+rewind = "P9"
+issue = "hexrays-renumber-locals"
+summary = "Renumber the synthetic locals the naming pass spells v<N> from v1 in the order the printer collects them, so a function's default-named locals read v1, v2, ... with no gaps, the way Hex-Rays numbers them. Names that are not v<N> (parameters, recovered names, stack names) are unchanged, and a spelling another identifier of the function already holds is skipped. The renamed spelling is applied to every declaration and body reference of the local."
+use_when = "Off by default: renumbering is a readability choice, not a fix, so the default keeps the naming pass's numbering, which records the order the decompiler met each local. Turn it on to read a function whose synthetic locals have gaps (v3, v7, v12) as a compact v1..vK list. The order is the collection order of the declarations, which tracks first appearance but is not a body walk, and a synthetic name the declaration list drops keeps its spelling. The Hex-Rays sole-returned-local rule (result) and the argument-register carrier rule are not implemented yet."
+example = "option renumberlocals on"
+source_decompiler = "unlace"
+inspiration = "archived unlace printer lvar_names.rs (number_synthetic_locals): Hex-Rays numbers synthetic locals v1, v2, ... in first-appearance order"
+change_kind = "readability"
+tier = "core"
+symptoms = ["synthetic locals print as v7, v12 with gaps where Hex-Rays would print v1, v2", "a function's default-named locals are numbered by the naming pass rather than read as a compact list"]
+
+[[option]]
 option = "noreturn_known"
 values = ["on", "off"]
 default = "on"

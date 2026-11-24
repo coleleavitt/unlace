@@ -3032,6 +3032,8 @@ name's group instead of every high of the function, and finds the same first
 sibling it found before. With the other GH-1034 fixes in, serde-hkx's 174 KB
 deserializer drops from 238 s to 152 s, nearly all of it in these walks.
 
+**(unlace) renumberlocals — Hex-Rays-style synthetic local numbering.** The naming pass gives an unnamed local the default spelling `v<N>` (`p6_variables/varmap.rs (pick_default_number)`), numbered in the order the naming pass met it, so a function can read `v3, v7, v12`. With `renumberlocals on` (default off; a readability choice, so it ships behind an option), `printc.rs (PrintC::emit_local_var_decls)` renumbers those spellings before the sign plan and the collapses run: every declared synthetic name, taken in collection order, becomes `v1`, `v2`, ... in turn (`p9_emit/renumberlocals.rs (renumber_synthetic_locals)`). A spelling in the function's occupied set (parameters, call names) or a global the function references is skipped, and names that are not `v<digits>` are unchanged. Each renamed high is recorded in the local name overrides, so body references follow its declaration. The order is the collection order of the declarations, an approximation of first appearance; the Hex-Rays rules for the sole returned local (`result`) and for argument-register carriers are not implemented.
+
 **(angr) dedupvardecls — collapsing duplicate declarations.** unlace's
 declaration emitter walks HighVariables, not the upstream symbol table (which
 declares each Symbol exactly once), so many scalar HighVariables sharing one

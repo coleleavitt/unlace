@@ -82,6 +82,7 @@ pub mod prettyprint;
 pub mod printc;
 pub mod printlanguage;
 pub mod renderfault; // (unlace) test-only: panic one function's render partway through
+pub mod renumberlocals;
 pub mod rustarrayaddr;
 pub mod rustarraydecay;
 pub mod rustarrayindex;

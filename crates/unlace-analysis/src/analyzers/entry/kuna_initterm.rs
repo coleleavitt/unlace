@@ -27,9 +27,12 @@
 //! The call is read where the image links the runtime dynamically: a call to an
 //! import named `_initterm` or `_initterm_e` (its `FF 25` veneer or
 //! `call [slot]`) directly after the two `push imm32` of the bounds. A
-//! statically linked CRT's `_initterm` is an anonymous local function and is not
-//! recognized. PE32 only: a PE32+ has `.pdata`, which already names every
-//! non-leaf initializer.
+//! statically linked CRT's `_initterm` is an anonymous local function, so a
+//! direct call to code after the same two pushes is read too, but only when the
+//! table has the CRT's shape: the bounds lie in one non-executable section, the
+//! first word is the NULL every `.CRT$X?A` section contributes, and every word is
+//! NULL or an address in an executable section. PE32 only: a PE32+ has `.pdata`,
+//! which already names every non-leaf initializer.
 
 use std::collections::HashSet;
 
@@ -60,26 +63,32 @@ pub(super) fn initterm_entries(
         .filter(|(name, _)| INITTERM.contains(&name.as_str()))
         .map(|(_, addr)| addr)
         .collect();
-    if targets.is_empty() {
-        return;
-    }
-    let mut tables: Vec<(u64, u64)> = Vec::new();
+    let in_code = |a: u64| execs.iter().any(|&(lo, hi, _)| a >= lo && a < hi);
+    let mut tables: Vec<(u64, u64, bool)> = Vec::new();
     for (start, _, data) in execs {
-        for (begin, end) in bounds_pushed_before_calls(*start, data, &targets) {
-            if !tables.contains(&(begin, end)) {
-                tables.push((begin, end));
+        for (begin, end, import) in bounds_pushed_before_calls(*start, data, &targets, &in_code) {
+            if let Some(t) = tables.iter_mut().find(|t| (t.0, t.1) == (begin, end)) {
+                t.2 |= import;
+            } else {
+                tables.push((begin, end, import));
             }
         }
     }
-    for (begin, end) in tables {
-        read_table(file, begin, end, out);
+    for (begin, end, import) in tables {
+        read_table(file, begin, end, !import, &in_code, out);
     }
 }
 
-/// The `(begin, end)` pairs pushed (`68 end`, `68 begin`) immediately before
-/// a call (`E8 rel32` or `FF 15 slot`) to one of `targets` in the code at
-/// `start`.
-fn bounds_pushed_before_calls(start: u64, data: &[u8], targets: &HashSet<u64>) -> Vec<(u64, u64)> {
+/// The `(begin, end, import)` triples pushed (`68 end`, `68 begin`)
+/// immediately before a call in the code at `start`: `import` when the call
+/// (`E8 rel32` or `FF 15 slot`) reaches one of `targets`, and `false` for an
+/// `E8` to other code (a statically linked `_initterm`).
+fn bounds_pushed_before_calls(
+    start: u64,
+    data: &[u8],
+    targets: &HashSet<u64>,
+    in_code: &dyn Fn(u64) -> bool,
+) -> Vec<(u64, u64, bool)> {
     let mut found = Vec::new();
     let word = |o: usize| -> Option<u32> {
         let b = data.get(o..o.checked_add(4)?)?;
@@ -96,7 +105,11 @@ fn bounds_pushed_before_calls(start: u64, data: &[u8], targets: &HashSet<u64>) -
             0xff if data.get(i + 1) == Some(&0x15) => word(i + 2).map(u64::from),
             _ => None,
         };
-        if !target.is_some_and(|t| targets.contains(&t)) {
+        let Some(target) = target else {
+            continue;
+        };
+        let import = targets.contains(&target);
+        if !import && !(data[i] == 0xe8 && in_code(target)) {
             continue;
         }
         if data[i - 10] != 0x68 || data[i - 5] != 0x68 {
@@ -107,15 +120,24 @@ fn bounds_pushed_before_calls(start: u64, data: &[u8], targets: &HashSet<u64>) -
         };
         let (begin, end) = (u64::from(begin), u64::from(end));
         if begin < end && (end - begin) % 4 == 0 && (end - begin) / 4 <= MAX_ENTRIES {
-            found.push((begin, end));
+            found.push((begin, end, import));
         }
     }
     found
 }
 
 /// Push the non-null 4-byte words of `[begin, end)`, read from the one section
-/// that holds the whole range.
-fn read_table(file: &object::File, begin: u64, end: u64, out: &mut Vec<u64>) {
+/// that holds the whole range. A `strict` table (one handed to a local
+/// function) must have the CRT's shape: a non-executable section, a NULL first
+/// word, and every word NULL or code.
+fn read_table(
+    file: &object::File,
+    begin: u64,
+    end: u64,
+    strict: bool,
+    in_code: &dyn Fn(u64) -> bool,
+    out: &mut Vec<u64>,
+) {
     let Some(table) = file.sections().find_map(|s| {
         let lo = s.address();
         let hi = lo.checked_add(s.size())?;
@@ -126,12 +148,23 @@ fn read_table(file: &object::File, begin: u64, end: u64, out: &mut Vec<u64>) {
     }) else {
         return;
     };
-    for chunk in table.chunks_exact(4) {
-        let p = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-        if p != 0 {
-            out.push(u64::from(p));
-        }
+    let words: Vec<u64> = table
+        .chunks_exact(4)
+        .map(|c| u64::from(u32::from_le_bytes([c[0], c[1], c[2], c[3]])))
+        .collect();
+    if strict && !crt_shaped(&words, in_code(begin), in_code) {
+        return;
     }
+    out.extend(words.into_iter().filter(|&p| p != 0));
+}
+
+/// Is a table handed to a local function the CRT's: outside code, NULL first,
+/// every word NULL or code, and at least one entry?
+fn crt_shaped(words: &[u64], table_in_code: bool, in_code: &dyn Fn(u64) -> bool) -> bool {
+    !table_in_code
+        && words.first() == Some(&0)
+        && words.iter().any(|&p| p != 0)
+        && words.iter().all(|&p| p == 0 || in_code(p))
 }
 
 #[cfg(test)]
@@ -145,8 +178,8 @@ mod tests {
         code.extend_from_slice(&(0x1100u32 - 0x100f).to_le_bytes());
         let targets: HashSet<u64> = [0x1100].into_iter().collect();
         assert_eq!(
-            bounds_pushed_before_calls(0x1000, &code, &targets),
-            vec![(0x2000, 0x2010)]
+            bounds_pushed_before_calls(0x1000, &code, &targets, &|_| false),
+            vec![(0x2000, 0x2010, true)]
         );
     }
 
@@ -158,8 +191,8 @@ mod tests {
         ];
         let targets: HashSet<u64> = [0x3000].into_iter().collect();
         assert_eq!(
-            bounds_pushed_before_calls(0x1000, &code, &targets),
-            vec![(0x2000, 0x2010)]
+            bounds_pushed_before_calls(0x1000, &code, &targets, &|_| false),
+            vec![(0x2000, 0x2010, true)]
         );
     }
 
@@ -168,13 +201,36 @@ mod tests {
         let mut code = vec![0x68, 0x00, 0x20, 0, 0, 0x68, 0x10, 0x20, 0, 0, 0xe8];
         code.extend_from_slice(&(0x1100u32 - 0x100f).to_le_bytes());
         let targets: HashSet<u64> = [0x1100].into_iter().collect();
-        assert!(bounds_pushed_before_calls(0x1000, &code, &targets).is_empty());
+        let no_code = |_: u64| false;
+        assert!(bounds_pushed_before_calls(0x1000, &code, &targets, &no_code).is_empty());
         let mut ragged = vec![0x68, 0x12, 0x20, 0, 0, 0x68, 0x00, 0x20, 0, 0, 0xe8];
         ragged.extend_from_slice(&(0x1100u32 - 0x100f).to_le_bytes());
-        assert!(bounds_pushed_before_calls(0x1000, &ragged, &targets).is_empty());
+        assert!(bounds_pushed_before_calls(0x1000, &ragged, &targets, &no_code).is_empty());
         let other: HashSet<u64> = [0x1200].into_iter().collect();
         let mut good = vec![0x68, 0x10, 0x20, 0, 0, 0x68, 0x00, 0x20, 0, 0, 0xe8];
         good.extend_from_slice(&(0x1100u32 - 0x100f).to_le_bytes());
-        assert!(bounds_pushed_before_calls(0x1000, &good, &other).is_empty());
+        assert!(bounds_pushed_before_calls(0x1000, &good, &other, &no_code).is_empty());
+    }
+
+    #[test]
+    fn a_direct_call_to_local_code_is_a_static_crt_candidate() {
+        let mut code = vec![0x68, 0x10, 0x20, 0, 0, 0x68, 0x00, 0x20, 0, 0, 0xe8];
+        code.extend_from_slice(&(0x1100u32 - 0x100f).to_le_bytes());
+        let none: HashSet<u64> = HashSet::new();
+        let code_at = |a: u64| (0x1000..0x1200).contains(&a);
+        assert_eq!(
+            bounds_pushed_before_calls(0x1000, &code, &none, &code_at),
+            vec![(0x2000, 0x2010, false)]
+        );
+    }
+
+    #[test]
+    fn a_static_crt_table_starts_with_null_and_holds_only_code() {
+        let code_at = |a: u64| (0x1000..0x1200).contains(&a);
+        assert!(crt_shaped(&[0, 0x1040, 0, 0x1050], false, &code_at));
+        assert!(!crt_shaped(&[0x1040, 0x1050], false, &code_at));
+        assert!(!crt_shaped(&[0, 0x1040, 0x3000], false, &code_at));
+        assert!(!crt_shaped(&[0, 0], false, &code_at));
+        assert!(!crt_shaped(&[0, 0x1040], true, &code_at));
     }
 }

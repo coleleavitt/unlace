@@ -1,0 +1,31 @@
+# Synthetic A32 return: push {lr}; mov r0,#7; ldr pc,[sp],#4.
+# P2 instruction lifting, correctness repair without an option. The single
+# register POP alias must return r0 rather than turn the restored LR into a call.
+
+[image]
+arch = 'ARM:LE:32:v7'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'stack_pop_return' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '04e02de50700a0e304f09de4'
+
+[script]
+commands = [
+    'load function stack_pop_return',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'ARM POP #1: returns the value in r0'
+count = 1
+literal = 'return 7;'
+
+[[match]]
+name = 'ARM POP #2: no jump-as-call return'
+count = 0
+literal = 'jump-as-call'

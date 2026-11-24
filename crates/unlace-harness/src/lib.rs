@@ -35,5 +35,6 @@ extern crate unlace_decomp_dylib;
 
 pub mod corpus;
 pub mod liftdiff;
+pub mod stagetoml;
 pub mod testfunction;
 pub mod unittest;

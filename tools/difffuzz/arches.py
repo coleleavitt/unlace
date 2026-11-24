@@ -543,10 +543,11 @@ class TriCore(Arch32):
             w(n, ((word >> b) & 1) << 31)
 
     def read_flags(self, emu, reg):
-        # Unicorn keeps the PSW user status bits apart (QEMU's lazy PSW_USB_*): C as 0/1, the
-        # others in bit 31, and its PSW read does not fold them back in.
+        # Unicorn keeps the PSW user status bits apart (QEMU's lazy PSW_USB_*): C as any nonzero
+        # value (SHA leaves the masked shifted-out bits there), the others in bit 31, and its PSW
+        # read does not fold them back in.
         r = lambda n: emu.reg_read(getattr(tc, "UC_TRICORE_REG_PSW_USB_" + n))
-        return ((r("C") & 1) << 31 | (r("V") >> 31) << 30 | (r("SV") >> 31) << 29
+        return (int(r("C") != 0) << 31 | (r("V") >> 31) << 30 | (r("SV") >> 31) << 29
                 | (r("AV") >> 31) << 28 | (r("SAV") >> 31) << 27)
 
 

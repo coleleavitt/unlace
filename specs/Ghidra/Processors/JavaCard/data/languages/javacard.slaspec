@@ -1,0 +1,647 @@
+# Java Card virtual machine bytecode (Java Card Platform 3.1, Classic Edition). Written for
+# unlace from the Java Card Platform Virtual Machine Specification v3.1 (Oracle), chapters 7
+# (instruction set) and 8 (opcodes); no text is copied. The operand stack and the local
+# variables are made of 16-bit words: a short or a reference is one word, an int two (big
+# endian). The stack is the jstack space (SP addresses the top word, a push moves it down);
+# local word n is the register Ln and the int in words n, n+1 is In. Fields, statics,
+# arrays, object creation and method invocation are user-ops on 16-bit references.
+
+define endian=big;
+define alignment=1;
+
+define space ram    type=ram_space      size=2 default;
+define space jstack type=ram_space      size=2;
+define space register type=register_space size=2;
+
+define register offset=0x0000 size=2 [ PC SP RVs ];
+define register offset=0x0010 size=4 [ RV ];
+define register offset=0x0100 size=2 [ L0 L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15 L16 L17 L18 L19 L20 L21 L22 L23 L24 L25 L26 L27 L28 L29 L30 L31 L32 L33 L34 L35 L36 L37 L38 L39 L40 L41 L42 L43 L44 L45 L46 L47 L48 L49 L50 L51 L52 L53 L54 L55 L56 L57 L58 L59 L60 L61 L62 L63 L64 L65 L66 L67 L68 L69 L70 L71 L72 L73 L74 L75 L76 L77 L78 L79 L80 L81 L82 L83 L84 L85 L86 L87 L88 L89 L90 L91 L92 L93 L94 L95 L96 L97 L98 L99 L100 L101 L102 L103 L104 L105 L106 L107 L108 L109 L110 L111 L112 L113 L114 L115 L116 L117 L118 L119 L120 L121 L122 L123 L124 L125 L126 L127 L128 L129 L130 L131 L132 L133 L134 L135 L136 L137 L138 L139 L140 L141 L142 L143 L144 L145 L146 L147 L148 L149 L150 L151 L152 L153 L154 L155 L156 L157 L158 L159 L160 L161 L162 L163 L164 L165 L166 L167 L168 L169 L170 L171 L172 L173 L174 L175 L176 L177 L178 L179 L180 L181 L182 L183 L184 L185 L186 L187 L188 L189 L190 L191 L192 L193 L194 L195 L196 L197 L198 L199 L200 L201 L202 L203 L204 L205 L206 L207 L208 L209 L210 L211 L212 L213 L214 L215 L216 L217 L218 L219 L220 L221 L222 L223 L224 L225 L226 L227 L228 L229 L230 L231 L232 L233 L234 L235 L236 L237 L238 L239 L240 L241 L242 L243 L244 L245 L246 L247 L248 L249 L250 L251 L252 L253 L254 L255 ];
+define register offset=0x0100 size=4 [ I0 I2 I4 I6 I8 I10 I12 I14 I16 I18 I20 I22 I24 I26 I28 I30 I32 I34 I36 I38 I40 I42 I44 I46 I48 I50 I52 I54 I56 I58 I60 I62 I64 I66 I68 I70 I72 I74 I76 I78 I80 I82 I84 I86 I88 I90 I92 I94 I96 I98 I100 I102 I104 I106 I108 I110 I112 I114 I116 I118 I120 I122 I124 I126 I128 I130 I132 I134 I136 I138 I140 I142 I144 I146 I148 I150 I152 I154 I156 I158 I160 I162 I164 I166 I168 I170 I172 I174 I176 I178 I180 I182 I184 I186 I188 I190 I192 I194 I196 I198 I200 I202 I204 I206 I208 I210 I212 I214 I216 I218 I220 I222 I224 I226 I228 I230 I232 I234 I236 I238 I240 I242 I244 I246 I248 I250 I252 I254 ];
+define register offset=0x0102 size=4 [ I1 I3 I5 I7 I9 I11 I13 I15 I17 I19 I21 I23 I25 I27 I29 I31 I33 I35 I37 I39 I41 I43 I45 I47 I49 I51 I53 I55 I57 I59 I61 I63 I65 I67 I69 I71 I73 I75 I77 I79 I81 I83 I85 I87 I89 I91 I93 I95 I97 I99 I101 I103 I105 I107 I109 I111 I113 I115 I117 I119 I121 I123 I125 I127 I129 I131 I133 I135 I137 I139 I141 I143 I145 I147 I149 I151 I153 I155 I157 I159 I161 I163 I165 I167 I169 I171 I173 I175 I177 I179 I181 I183 I185 I187 I189 I191 I193 I195 I197 I199 I201 I203 I205 I207 I209 I211 I213 I215 I217 I219 I221 I223 I225 I227 I229 I231 I233 I235 I237 I239 I241 I243 I245 I247 I249 I251 I253 ];
+
+define token opc(8)
+  op = (0,7)
+;
+define token b1(8)
+  u8a = (0,7)
+  s8a = (0,7) signed
+  la = (0,7)
+  ia = (0,7)
+  mhi = (4,7)
+  mlo = (0,3)
+;
+define token b2(8)
+  u8b = (0,7)
+  s8b = (0,7) signed
+;
+define token w1(16)
+  u16a = (0,15)
+  s16a = (0,15) signed
+;
+define token w2(16)
+  u16b = (0,15)
+  s16b = (0,15) signed
+;
+define token w3(16)
+  s16c = (0,15) signed
+;
+define token d1(32)
+  s32a = (0,31) signed
+;
+define token d2(32)
+  s32b = (0,31) signed
+;
+attach variables [ la ] [ L0 L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15 L16 L17 L18 L19 L20 L21 L22 L23 L24 L25 L26 L27 L28 L29 L30 L31 L32 L33 L34 L35 L36 L37 L38 L39 L40 L41 L42 L43 L44 L45 L46 L47 L48 L49 L50 L51 L52 L53 L54 L55 L56 L57 L58 L59 L60 L61 L62 L63 L64 L65 L66 L67 L68 L69 L70 L71 L72 L73 L74 L75 L76 L77 L78 L79 L80 L81 L82 L83 L84 L85 L86 L87 L88 L89 L90 L91 L92 L93 L94 L95 L96 L97 L98 L99 L100 L101 L102 L103 L104 L105 L106 L107 L108 L109 L110 L111 L112 L113 L114 L115 L116 L117 L118 L119 L120 L121 L122 L123 L124 L125 L126 L127 L128 L129 L130 L131 L132 L133 L134 L135 L136 L137 L138 L139 L140 L141 L142 L143 L144 L145 L146 L147 L148 L149 L150 L151 L152 L153 L154 L155 L156 L157 L158 L159 L160 L161 L162 L163 L164 L165 L166 L167 L168 L169 L170 L171 L172 L173 L174 L175 L176 L177 L178 L179 L180 L181 L182 L183 L184 L185 L186 L187 L188 L189 L190 L191 L192 L193 L194 L195 L196 L197 L198 L199 L200 L201 L202 L203 L204 L205 L206 L207 L208 L209 L210 L211 L212 L213 L214 L215 L216 L217 L218 L219 L220 L221 L222 L223 L224 L225 L226 L227 L228 L229 L230 L231 L232 L233 L234 L235 L236 L237 L238 L239 L240 L241 L242 L243 L244 L245 L246 L247 L248 L249 L250 L251 L252 L253 L254 L255 ];
+attach variables [ ia ] [ I0 I1 I2 I3 I4 I5 I6 I7 I8 I9 I10 I11 I12 I13 I14 I15 I16 I17 I18 I19 I20 I21 I22 I23 I24 I25 I26 I27 I28 I29 I30 I31 I32 I33 I34 I35 I36 I37 I38 I39 I40 I41 I42 I43 I44 I45 I46 I47 I48 I49 I50 I51 I52 I53 I54 I55 I56 I57 I58 I59 I60 I61 I62 I63 I64 I65 I66 I67 I68 I69 I70 I71 I72 I73 I74 I75 I76 I77 I78 I79 I80 I81 I82 I83 I84 I85 I86 I87 I88 I89 I90 I91 I92 I93 I94 I95 I96 I97 I98 I99 I100 I101 I102 I103 I104 I105 I106 I107 I108 I109 I110 I111 I112 I113 I114 I115 I116 I117 I118 I119 I120 I121 I122 I123 I124 I125 I126 I127 I128 I129 I130 I131 I132 I133 I134 I135 I136 I137 I138 I139 I140 I141 I142 I143 I144 I145 I146 I147 I148 I149 I150 I151 I152 I153 I154 I155 I156 I157 I158 I159 I160 I161 I162 I163 I164 I165 I166 I167 I168 I169 I170 I171 I172 I173 I174 I175 I176 I177 I178 I179 I180 I181 I182 I183 I184 I185 I186 I187 I188 I189 I190 I191 I192 I193 I194 I195 I196 I197 I198 I199 I200 I201 I202 I203 I204 I205 I206 I207 I208 I209 I210 I211 I212 I213 I214 I215 I216 I217 I218 I219 I220 I221 I222 I223 I224 I225 I226 I227 I228 I229 I230 I231 I232 I233 I234 I235 I236 I237 I238 I239 I240 I241 I242 I243 I244 I245 I246 I247 I248 I249 I250 I251 I252 I253 I254 _ ];
+
+macro push2(v) { SP = SP - 2; *[jstack]:2 SP = v; }
+macro push4(v) { SP = SP - 4; *[jstack]:4 SP = v; }
+macro pop2(v) { v = *[jstack]:2 SP; SP = SP + 2; }
+macro pop4(v) { v = *[jstack]:4 SP; SP = SP + 4; }
+
+B8: tgt is s8a [ tgt = inst_start + s8a; ] { export *:2 tgt; }
+B16: tgt is s16a [ tgt = inst_start + s16a; ] { export *:2 tgt; }
+
+define pcodeop jc_array_load;
+define pcodeop jc_array_store;
+define pcodeop jc_dup_x;
+define pcodeop jc_swap_x;
+define pcodeop jc_tableswitch;
+define pcodeop jc_lookupswitch;
+define pcodeop jc_getstatic;
+define pcodeop jc_putstatic;
+define pcodeop jc_getfield;
+define pcodeop jc_putfield;
+define pcodeop jc_invokevirtual;
+define pcodeop jc_invokespecial;
+define pcodeop jc_invokestatic;
+define pcodeop jc_invokeinterface;
+define pcodeop jc_new;
+define pcodeop jc_newarray;
+define pcodeop jc_anewarray;
+define pcodeop jc_arraylength;
+define pcodeop jc_athrow;
+define pcodeop jc_checkcast;
+define pcodeop jc_instanceof;
+define pcodeop jc_impdep;
+:nop is op=0 {
+  
+}
+:aconst_null is op=1 {
+  push2(0:2);
+}
+:sconst_m1 is op=2 {
+  push2(-1:2);
+}
+:sconst_0 is op=3 {
+  push2(0:2);
+}
+:sconst_1 is op=4 {
+  push2(1:2);
+}
+:sconst_2 is op=5 {
+  push2(2:2);
+}
+:sconst_3 is op=6 {
+  push2(3:2);
+}
+:sconst_4 is op=7 {
+  push2(4:2);
+}
+:sconst_5 is op=8 {
+  push2(5:2);
+}
+:iconst_m1 is op=9 {
+  push4(-1:4);
+}
+:iconst_0 is op=10 {
+  push4(0:4);
+}
+:iconst_1 is op=11 {
+  push4(1:4);
+}
+:iconst_2 is op=12 {
+  push4(2:4);
+}
+:iconst_3 is op=13 {
+  push4(3:4);
+}
+:iconst_4 is op=14 {
+  push4(4:4);
+}
+:iconst_5 is op=15 {
+  push4(5:4);
+}
+:bspush s8a is op=16 ; s8a {
+  v:2 = s8a; push2(v);
+}
+:sspush s16a is op=17 ; s16a {
+  v:2 = s16a; push2(v);
+}
+:bipush s8a is op=18 ; s8a {
+  v:4 = s8a; push4(v);
+}
+:sipush s16a is op=19 ; s16a {
+  v:4 = s16a; push4(v);
+}
+:iipush s32a is op=20 ; s32a {
+  v:4 = s32a; push4(v);
+}
+:aload la is op=21 ; la {
+  push2(la);
+}
+:sload la is op=22 ; la {
+  push2(la);
+}
+:iload ia is op=23 ; ia {
+  push4(ia);
+}
+:aload_0 is op=24 {
+  push2(L0);
+}
+:sload_0 is op=28 {
+  push2(L0);
+}
+:iload_0 is op=32 {
+  push4(I0);
+}
+:aload_1 is op=25 {
+  push2(L1);
+}
+:sload_1 is op=29 {
+  push2(L1);
+}
+:iload_1 is op=33 {
+  push4(I1);
+}
+:aload_2 is op=26 {
+  push2(L2);
+}
+:sload_2 is op=30 {
+  push2(L2);
+}
+:iload_2 is op=34 {
+  push4(I2);
+}
+:aload_3 is op=27 {
+  push2(L3);
+}
+:sload_3 is op=31 {
+  push2(L3);
+}
+:iload_3 is op=35 {
+  push4(I3);
+}
+:aaload is op=36 {
+  i:2 = 0; a:2 = 0; pop2(i); pop2(a); v:2 = jc_array_load(a, i); push2(v);
+}
+:baload is op=37 {
+  i:2 = 0; a:2 = 0; pop2(i); pop2(a); v:1 = jc_array_load(a, i); w:2 = sext(v); push2(w);
+}
+:saload is op=38 {
+  i:2 = 0; a:2 = 0; pop2(i); pop2(a); v:2 = jc_array_load(a, i); push2(v);
+}
+:iaload is op=39 {
+  i:2 = 0; a:2 = 0; pop2(i); pop2(a); v:4 = jc_array_load(a, i); push4(v);
+}
+:astore la is op=40 ; la {
+  v:2 = 0; pop2(v); la = v;
+}
+:sstore la is op=41 ; la {
+  v:2 = 0; pop2(v); la = v;
+}
+:istore ia is op=42 ; ia {
+  v:4 = 0; pop4(v); ia = v;
+}
+:astore_0 is op=43 {
+  v:2 = 0; pop2(v); L0 = v;
+}
+:sstore_0 is op=47 {
+  v:2 = 0; pop2(v); L0 = v;
+}
+:istore_0 is op=51 {
+  v:4 = 0; pop4(v); I0 = v;
+}
+:astore_1 is op=44 {
+  v:2 = 0; pop2(v); L1 = v;
+}
+:sstore_1 is op=48 {
+  v:2 = 0; pop2(v); L1 = v;
+}
+:istore_1 is op=52 {
+  v:4 = 0; pop4(v); I1 = v;
+}
+:astore_2 is op=45 {
+  v:2 = 0; pop2(v); L2 = v;
+}
+:sstore_2 is op=49 {
+  v:2 = 0; pop2(v); L2 = v;
+}
+:istore_2 is op=53 {
+  v:4 = 0; pop4(v); I2 = v;
+}
+:astore_3 is op=46 {
+  v:2 = 0; pop2(v); L3 = v;
+}
+:sstore_3 is op=50 {
+  v:2 = 0; pop2(v); L3 = v;
+}
+:istore_3 is op=54 {
+  v:4 = 0; pop4(v); I3 = v;
+}
+:aastore is op=55 {
+  v:2 = 0; pop2(v); i:2 = 0; a:2 = 0; pop2(i); pop2(a); jc_array_store(a, i, v);
+}
+:bastore is op=56 {
+  v:2 = 0; pop2(v); i:2 = 0; a:2 = 0; pop2(i); pop2(a); jc_array_store(a, i, v:1);
+}
+:sastore is op=57 {
+  v:2 = 0; pop2(v); i:2 = 0; a:2 = 0; pop2(i); pop2(a); jc_array_store(a, i, v);
+}
+:iastore is op=58 {
+  v:4 = 0; pop4(v); i:2 = 0; a:2 = 0; pop2(i); pop2(a); jc_array_store(a, i, v);
+}
+:pop is op=59 {
+  SP = SP + 2;
+}
+:pop2 is op=60 {
+  SP = SP + 4;
+}
+:dup is op=61 {
+  v:2 = *[jstack]:2 SP; push2(v);
+}
+:dup2 is op=62 {
+  v:4 = *[jstack]:4 SP; push4(v);
+}
+:dup_x mhi, mlo is op=63 ; mhi & mlo {
+  mm:1 = mhi; nn:1 = mlo; jc_dup_x(SP, mm, nn); SP = SP - mhi * 2;
+}
+:swap_x mhi, mlo is op=64 ; mhi & mlo {
+  mm:1 = mhi; nn:1 = mlo; jc_swap_x(SP, mm, nn);
+}
+:sadd is op=65 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); push2(a + b);
+}
+:iadd is op=66 {
+  b:4 = 0; a:4 = 0; pop4(b); pop4(a); push4(a + b);
+}
+:ssub is op=67 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); push2(a - b);
+}
+:isub is op=68 {
+  b:4 = 0; a:4 = 0; pop4(b); pop4(a); push4(a - b);
+}
+:smul is op=69 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); push2(a * b);
+}
+:imul is op=70 {
+  b:4 = 0; a:4 = 0; pop4(b); pop4(a); push4(a * b);
+}
+:sdiv is op=71 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); push2(a s/ b);
+}
+:idiv is op=72 {
+  b:4 = 0; a:4 = 0; pop4(b); pop4(a); push4(a s/ b);
+}
+:srem is op=73 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); push2(a s% b);
+}
+:irem is op=74 {
+  b:4 = 0; a:4 = 0; pop4(b); pop4(a); push4(a s% b);
+}
+:sand is op=83 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); push2(a & b);
+}
+:iand is op=84 {
+  b:4 = 0; a:4 = 0; pop4(b); pop4(a); push4(a & b);
+}
+:sor is op=85 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); push2(a | b);
+}
+:ior is op=86 {
+  b:4 = 0; a:4 = 0; pop4(b); pop4(a); push4(a | b);
+}
+:sxor is op=87 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); push2(a ^ b);
+}
+:ixor is op=88 {
+  b:4 = 0; a:4 = 0; pop4(b); pop4(a); push4(a ^ b);
+}
+:sneg is op=75 {
+  a:2 = 0; pop2(a); push2(-a);
+}
+:ineg is op=76 {
+  a:4 = 0; pop4(a); push4(-a);
+}
+:sshl is op=77 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); t:4 = sext(a) << zext(b & 0x1f); push2(t:2);
+}
+:ishl is op=78 {
+  b:2 = 0; a:4 = 0; pop2(b); pop4(a); push4(a << zext(b & 0x1f));
+}
+:sshr is op=79 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); t:4 = sext(a) s>> zext(b & 0x1f); push2(t:2);
+}
+:ishr is op=80 {
+  b:2 = 0; a:4 = 0; pop2(b); pop4(a); push4(a s>> zext(b & 0x1f));
+}
+:sushr is op=81 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); t:4 = sext(a) >> zext(b & 0x1f); push2(t:2);
+}
+:iushr is op=82 {
+  b:2 = 0; a:4 = 0; pop2(b); pop4(a); push4(a >> zext(b & 0x1f));
+}
+:sinc la, s8b is op=89 ; la ; s8b {
+  c:2 = s8b; la = la + c;
+}
+:iinc ia, s8b is op=90 ; ia ; s8b {
+  c:4 = s8b; ia = ia + c;
+}
+:sinc_w la, s16b is op=150 ; la ; s16b {
+  c:2 = s16b; la = la + c;
+}
+:iinc_w ia, s16b is op=151 ; ia ; s16b {
+  c:4 = s16b; ia = ia + c;
+}
+:s2b is op=91 {
+  a:2 = 0; pop2(a); r:2 = sext(a:1); push2(r);
+}
+:s2i is op=92 {
+  a:2 = 0; pop2(a); r:4 = sext(a); push4(r);
+}
+:i2b is op=93 {
+  a:4 = 0; pop4(a); r:2 = sext(a:1); push2(r);
+}
+:i2s is op=94 {
+  a:4 = 0; pop4(a); push2(a:2);
+}
+:icmp is op=95 {
+  b:4 = 0; a:4 = 0; pop4(b); pop4(a); r:2 = zext(a s> b) - zext(a s< b); push2(r);
+}
+:ifeq B8 is op=96 ; B8 {
+  a:2 = 0; pop2(a); if (a == 0) goto B8;
+}
+:ifeq_w B16 is op=152 ; B16 {
+  a:2 = 0; pop2(a); if (a == 0) goto B16;
+}
+:ifne B8 is op=97 ; B8 {
+  a:2 = 0; pop2(a); if (a != 0) goto B8;
+}
+:ifne_w B16 is op=153 ; B16 {
+  a:2 = 0; pop2(a); if (a != 0) goto B16;
+}
+:iflt B8 is op=98 ; B8 {
+  a:2 = 0; pop2(a); if (a s< 0) goto B8;
+}
+:iflt_w B16 is op=154 ; B16 {
+  a:2 = 0; pop2(a); if (a s< 0) goto B16;
+}
+:ifge B8 is op=99 ; B8 {
+  a:2 = 0; pop2(a); if (a s>= 0) goto B8;
+}
+:ifge_w B16 is op=155 ; B16 {
+  a:2 = 0; pop2(a); if (a s>= 0) goto B16;
+}
+:ifgt B8 is op=100 ; B8 {
+  a:2 = 0; pop2(a); if (a s> 0) goto B8;
+}
+:ifgt_w B16 is op=156 ; B16 {
+  a:2 = 0; pop2(a); if (a s> 0) goto B16;
+}
+:ifle B8 is op=101 ; B8 {
+  a:2 = 0; pop2(a); if (a s<= 0) goto B8;
+}
+:ifle_w B16 is op=157 ; B16 {
+  a:2 = 0; pop2(a); if (a s<= 0) goto B16;
+}
+:ifnull B8 is op=102 ; B8 {
+  a:2 = 0; pop2(a); if (a == 0) goto B8;
+}
+:ifnonnull B8 is op=103 ; B8 {
+  a:2 = 0; pop2(a); if (a != 0) goto B8;
+}
+:ifnull_w B16 is op=158 ; B16 {
+  a:2 = 0; pop2(a); if (a == 0) goto B16;
+}
+:ifnonnull_w B16 is op=159 ; B16 {
+  a:2 = 0; pop2(a); if (a != 0) goto B16;
+}
+:if_acmpeq B8 is op=104 ; B8 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a == b) goto B8;
+}
+:if_acmpne B8 is op=105 ; B8 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a != b) goto B8;
+}
+:if_acmpeq_w B16 is op=160 ; B16 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a == b) goto B16;
+}
+:if_acmpne_w B16 is op=161 ; B16 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a != b) goto B16;
+}
+:if_scmpeq B8 is op=106 ; B8 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a == b) goto B8;
+}
+:if_scmpeq_w B16 is op=162 ; B16 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a == b) goto B16;
+}
+:if_scmpne B8 is op=107 ; B8 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a != b) goto B8;
+}
+:if_scmpne_w B16 is op=163 ; B16 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a != b) goto B16;
+}
+:if_scmplt B8 is op=108 ; B8 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a s< b) goto B8;
+}
+:if_scmplt_w B16 is op=164 ; B16 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a s< b) goto B16;
+}
+:if_scmpge B8 is op=109 ; B8 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a s>= b) goto B8;
+}
+:if_scmpge_w B16 is op=165 ; B16 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a s>= b) goto B16;
+}
+:if_scmpgt B8 is op=110 ; B8 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a s> b) goto B8;
+}
+:if_scmpgt_w B16 is op=166 ; B16 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a s> b) goto B16;
+}
+:if_scmple B8 is op=111 ; B8 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a s<= b) goto B8;
+}
+:if_scmple_w B16 is op=167 ; B16 {
+  b:2 = 0; a:2 = 0; pop2(b); pop2(a); if (a s<= b) goto B16;
+}
+:goto B8 is op=112 ; B8 {
+  goto B8;
+}
+:goto_w B16 is op=168 ; B16 {
+  goto B16;
+}
+:jsr B16 is op=113 ; B16 {
+  r:2 = inst_next; push2(r); call B16;
+}
+:ret la is op=114 ; la {
+  return [la];
+}
+:stableswitch s16a, s16b, s16c is op=115 ; s16a ; s16b ; s16c {
+  k:2 = 0; pop2(k); d:2 = s16a; lo:2 = s16b; hi:2 = s16c; st:2 = inst_start; t:2 = jc_tableswitch(st, k, d, lo, hi); goto [t];
+}
+:itableswitch s16a, s32a, s32b is op=116 ; s16a ; s32a ; s32b {
+  k:4 = 0; pop4(k); d:2 = s16a; lo:4 = s32a; hi:4 = s32b; st:2 = inst_start; t:2 = jc_tableswitch(st, k, d, lo, hi); goto [t];
+}
+:slookupswitch s16a, u16b is op=117 ; s16a ; u16b {
+  k:2 = 0; pop2(k); d:2 = s16a; n:2 = u16b; st:2 = inst_start; t:2 = jc_lookupswitch(st, k, d, n); goto [t];
+}
+:ilookupswitch s16a, u16b is op=118 ; s16a ; u16b {
+  k:4 = 0; pop4(k); d:2 = s16a; n:2 = u16b; st:2 = inst_start; t:2 = jc_lookupswitch(st, k, d, n); goto [t];
+}
+:areturn is op=119 {
+  pop2(RVs); return [0:2];
+}
+:sreturn is op=120 {
+  pop2(RVs); return [0:2];
+}
+:ireturn is op=121 {
+  pop4(RV); return [0:2];
+}
+:return is op=122 {
+  return [0:2];
+}
+:getstatic_a u16a is op=123 ; u16a {
+  ix:2 = u16a; v:2 = jc_getstatic(ix); push2(v);
+}
+:putstatic_a u16a is op=127 ; u16a {
+  v:2 = 0; pop2(v); ix:2 = u16a; jc_putstatic(ix, v);
+}
+:getfield_a u8a is op=131 ; u8a {
+  o:2 = 0; pop2(o); ix:2 = u8a; v:2 = jc_getfield(o, ix); push2(v);
+}
+:putfield_a u8a is op=135 ; u8a {
+  v:2 = 0; pop2(v); o:2 = 0; pop2(o); ix:2 = u8a; jc_putfield(o, ix, v);
+}
+:getfield_a_w u16a is op=169 ; u16a {
+  o:2 = 0; pop2(o); ix:2 = u16a; v:2 = jc_getfield(o, ix); push2(v);
+}
+:getfield_a_this u8a is op=173 ; u8a {
+  ix:2 = u8a; v:2 = jc_getfield(L0, ix); push2(v);
+}
+:putfield_a_w u16a is op=177 ; u16a {
+  v:2 = 0; pop2(v); o:2 = 0; pop2(o); ix:2 = u16a; jc_putfield(o, ix, v);
+}
+:putfield_a_this u8a is op=181 ; u8a {
+  v:2 = 0; pop2(v); ix:2 = u8a; jc_putfield(L0, ix, v);
+}
+:getstatic_b u16a is op=124 ; u16a {
+  ix:2 = u16a; v:1 = jc_getstatic(ix); w:2 = sext(v); push2(w);
+}
+:putstatic_b u16a is op=128 ; u16a {
+  v:2 = 0; pop2(v); ix:2 = u16a; jc_putstatic(ix, v:1);
+}
+:getfield_b u8a is op=132 ; u8a {
+  o:2 = 0; pop2(o); ix:2 = u8a; v:1 = jc_getfield(o, ix); w:2 = sext(v); push2(w);
+}
+:putfield_b u8a is op=136 ; u8a {
+  v:2 = 0; pop2(v); o:2 = 0; pop2(o); ix:2 = u8a; jc_putfield(o, ix, v:1);
+}
+:getfield_b_w u16a is op=170 ; u16a {
+  o:2 = 0; pop2(o); ix:2 = u16a; v:1 = jc_getfield(o, ix); w:2 = sext(v); push2(w);
+}
+:getfield_b_this u8a is op=174 ; u8a {
+  ix:2 = u8a; v:1 = jc_getfield(L0, ix); w:2 = sext(v); push2(w);
+}
+:putfield_b_w u16a is op=178 ; u16a {
+  v:2 = 0; pop2(v); o:2 = 0; pop2(o); ix:2 = u16a; jc_putfield(o, ix, v:1);
+}
+:putfield_b_this u8a is op=182 ; u8a {
+  v:2 = 0; pop2(v); ix:2 = u8a; jc_putfield(L0, ix, v:1);
+}
+:getstatic_s u16a is op=125 ; u16a {
+  ix:2 = u16a; v:2 = jc_getstatic(ix); push2(v);
+}
+:putstatic_s u16a is op=129 ; u16a {
+  v:2 = 0; pop2(v); ix:2 = u16a; jc_putstatic(ix, v);
+}
+:getfield_s u8a is op=133 ; u8a {
+  o:2 = 0; pop2(o); ix:2 = u8a; v:2 = jc_getfield(o, ix); push2(v);
+}
+:putfield_s u8a is op=137 ; u8a {
+  v:2 = 0; pop2(v); o:2 = 0; pop2(o); ix:2 = u8a; jc_putfield(o, ix, v);
+}
+:getfield_s_w u16a is op=171 ; u16a {
+  o:2 = 0; pop2(o); ix:2 = u16a; v:2 = jc_getfield(o, ix); push2(v);
+}
+:getfield_s_this u8a is op=175 ; u8a {
+  ix:2 = u8a; v:2 = jc_getfield(L0, ix); push2(v);
+}
+:putfield_s_w u16a is op=179 ; u16a {
+  v:2 = 0; pop2(v); o:2 = 0; pop2(o); ix:2 = u16a; jc_putfield(o, ix, v);
+}
+:putfield_s_this u8a is op=183 ; u8a {
+  v:2 = 0; pop2(v); ix:2 = u8a; jc_putfield(L0, ix, v);
+}
+:getstatic_i u16a is op=126 ; u16a {
+  ix:2 = u16a; v:4 = jc_getstatic(ix); push4(v);
+}
+:putstatic_i u16a is op=130 ; u16a {
+  v:4 = 0; pop4(v); ix:2 = u16a; jc_putstatic(ix, v);
+}
+:getfield_i u8a is op=134 ; u8a {
+  o:2 = 0; pop2(o); ix:2 = u8a; v:4 = jc_getfield(o, ix); push4(v);
+}
+:putfield_i u8a is op=138 ; u8a {
+  v:4 = 0; pop4(v); o:2 = 0; pop2(o); ix:2 = u8a; jc_putfield(o, ix, v);
+}
+:getfield_i_w u16a is op=172 ; u16a {
+  o:2 = 0; pop2(o); ix:2 = u16a; v:4 = jc_getfield(o, ix); push4(v);
+}
+:getfield_i_this u8a is op=176 ; u8a {
+  ix:2 = u8a; v:4 = jc_getfield(L0, ix); push4(v);
+}
+:putfield_i_w u16a is op=180 ; u16a {
+  v:4 = 0; pop4(v); o:2 = 0; pop2(o); ix:2 = u16a; jc_putfield(o, ix, v);
+}
+:putfield_i_this u8a is op=184 ; u8a {
+  v:4 = 0; pop4(v); ix:2 = u8a; jc_putfield(L0, ix, v);
+}
+:invokevirtual u16a is op=139 ; u16a {
+  ix:2 = u16a; SP = jc_invokevirtual(SP, ix);
+}
+:invokespecial u16a is op=140 ; u16a {
+  ix:2 = u16a; SP = jc_invokespecial(SP, ix);
+}
+:invokestatic u16a is op=141 ; u16a {
+  ix:2 = u16a; SP = jc_invokestatic(SP, ix);
+}
+:invokeinterface u8a, u16b, u8b is op=142 ; u8a ; u16b ; u8b {
+  na:1 = u8a; ix:2 = u16b; m:1 = u8b; SP = jc_invokeinterface(SP, na, ix, m);
+}
+:new u16a is op=143 ; u16a {
+  ix:2 = u16a; r:2 = jc_new(ix); push2(r);
+}
+:newarray u8a is op=144 ; u8a {
+  n:2 = 0; pop2(n); at:1 = u8a; r:2 = jc_newarray(at, n); push2(r);
+}
+:anewarray u16a is op=145 ; u16a {
+  n:2 = 0; pop2(n); ix:2 = u16a; r:2 = jc_anewarray(ix, n); push2(r);
+}
+:arraylength is op=146 {
+  a:2 = 0; pop2(a); r:2 = jc_arraylength(a); push2(r);
+}
+:athrow is op=147 {
+  a:2 = 0; pop2(a); jc_athrow(a); return [0:2];
+}
+:checkcast u8a, u16b is op=148 ; u8a ; u16b {
+  o:2 = *[jstack]:2 SP; at:1 = u8a; ix:2 = u16b; jc_checkcast(o, at, ix);
+}
+:instanceof u8a, u16b is op=149 ; u8a ; u16b {
+  o:2 = 0; pop2(o); at:1 = u8a; ix:2 = u16b; r:2 = jc_instanceof(o, at, ix); push2(r);
+}
+:impdep1 is op=254 {
+  jc_impdep(SP, 1:1);
+}
+:impdep2 is op=255 {
+  jc_impdep(SP, 2:1);
+}

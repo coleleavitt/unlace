@@ -1,0 +1,117 @@
+# P9 Rust array-index regression. Default output preserves integer width
+# before converting to usize; nocastprinting retains diagnostic output.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/array_index_x86_64',
+    'read symbols',
+    'option outlang rust',
+    'option ctypes off',
+    'option realtypes off',
+    'map prototype load_i64_s int8 load_i64_s(struct ArrayFields*p,int8 i);',
+    'map prototype store_u8_u void store_u8_u(struct ArrayFields*p,uint8 i,uint1 value);',
+    'map prototype array_address_s int4*array_address_s(struct ArrayFields*p,int8 i);',
+    'map prototype nested_load_s int4 nested_load_s(int4(*p)[9],int8 i,int8 j);',
+    'map prototype callback_store void callback_store(struct ArrayFields*p,int8 i,int4 value);',
+    'map prototype right_context int4 right_context(struct ArrayFields*p,uint8 shift);',
+    'map prototype signed_context int4 signed_context(struct ArrayFields*p,uint8 shift);',
+    'map prototype left_context int4 left_context(struct ArrayFields*p,uint8 shift);',
+    'map prototype constant_load int4 constant_load(struct ArrayFields*p);',
+    'map prototype counted_index int8 counted_index(int8 i);',
+    'map prototype counted_base struct ArrayFields*counted_base(struct ArrayFields*p);',
+    'map prototype counted_value int4 counted_value(int4 value);',
+    'load function load_i64_s',
+    'decompile',
+    'print C',
+    'load function store_u8_u',
+    'decompile',
+    'print C',
+    'load function array_address_s',
+    'decompile',
+    'print C',
+    'load function nested_load_s',
+    'decompile',
+    'print C',
+    'load function callback_store',
+    'decompile',
+    'print C',
+    'load function right_context',
+    'decompile',
+    'print C',
+    'load function signed_context',
+    'decompile',
+    'print C',
+    'load function left_context',
+    'decompile',
+    'print C',
+    'load function constant_load',
+    'decompile',
+    'print C',
+    'option nocastprinting on',
+    'load function load_i64_s',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust array load converts its signed index'
+count = 1
+regex = 'return\ \(\*p\)\.i64\[i\ as\ usize\];'
+
+[[match]]
+name = 'Rust array store converts its unsigned index'
+count = 1
+regex = '\(\*p\)\.u8\[i\ as\ usize\]\ =\ value;'
+
+[[match]]
+name = 'Rust valid array address converts its index'
+count = 1
+regex = 'return\ \(\&raw\ mut\ \(\*p\)\.i32\)\.wrapping_byte_offset\(\(i\ as\ isize\)\.wrapping_mul\(4\)\)\ as\ \*mut\ i32;'
+
+[[match]]
+name = 'Rust nested array preserves the outer pointer scale'
+count = 1
+regex = 'return\ \(\*p\.wrapping_byte_offset\(\(i\ as\ isize\)\.wrapping_mul\(36\)\)\)\[j\ as\ usize\];'
+
+[[match]]
+name = 'Rust array callback store evaluates operands once'
+count = 1
+regex = '\(\*counted_base\(p\)\)\.i32\[v2\ as\ usize\]\ =\ v1;'
+
+[[match]]
+name = 'Rust array logical shift preserves its width'
+count = 1
+regex = '::core::convert::identity::<u64>\(7\ >>\ \(shift\ as\ u8\ \&\ 0x3f\)\)'
+
+[[match]]
+name = 'Rust array arithmetic shift preserves its width'
+count = 1
+literal = '::core::convert::identity::<i64>(i64::wrapping_add(-8 >> (shift as u8 & 0x3f),8))'
+
+[[match]]
+name = 'Rust array left shift preserves its width'
+count = 1
+regex = '::core::convert::identity::<i64>\(1\ <<\ \(shift\ as\ u8\ \&\ 3\)\)'
+
+[[match]]
+name = 'Rust constant array index keeps contextual inference'
+count = 1
+regex = 'return\ \(\*p\)\.i32\[3\];'
+
+[[match]]
+name = 'Rust array cast suppression keeps diagnostic output'
+count = 1
+regex = 'return\ \(\*p\)\.i64\[i\];'

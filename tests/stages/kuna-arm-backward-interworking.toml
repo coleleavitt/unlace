@@ -1,0 +1,41 @@
+# Authored A32 push; backward BLX to Thumb; A32 pop.
+
+[image]
+arch = 'ARM:LE:32:v8'
+symbols = [
+    { space = 'ram', offset = '0x1380', name = 'thumb_helper' },
+    { space = 'ram', offset = '0x1600', name = 'arm_caller' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1380'
+hex = '7047'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1600'
+hex = '10402de95dfffffa1080bde81eff2fe11eff2fe1'
+
+[script]
+commands = [
+    'function bounds 0x1600 0x160c as arm_caller',
+    'load function arm_caller',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'backward BLX #1: retains the call'
+count = 1
+literal = 'thumb_helper('
+
+[[match]]
+name = 'backward BLX #2: no invented store'
+count = 0
+regex = '\*[a-zA-Z_][a-zA-Z_0-9]* ='
+
+[[match]]
+name = 'backward BLX #3: no decode halt'
+count = 0
+regex = 'halt_|Bad instruction'

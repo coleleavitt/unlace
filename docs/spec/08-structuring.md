@@ -118,10 +118,13 @@ the callee.
 **`noretfirst` — the no-return arm as the clause.** `option noretfirst on`
 (default off) breaks the same tie by the arms' exits instead, and before
 `guardarm` looks at it: of the two eligible arms, the one whose exit leaf ends
-in an artificial no-return halt (`ExitLeafFacts::is_noreturn_halt`, the
-`op_mark_halt` bit a no-return callee sets) becomes the clause, so the
+in an artificial no-return halt that follows a call (`ExitLeafFacts::is_noreturn_call`:
+the `op_mark_halt` no-return bit, with a `CALL`/`CALLIND` earlier in the block, or,
+for a halt in a block of its own, at the end of every predecessor) becomes the clause, so the
 function's own `return` stays flat after the `if` (`if (!p) fatal(); return
-p;`). When both arms or neither end in a no-return call, the tie falls through
+p;`). A halt `funcboundflow` plants where a branch's own fall-through reached
+the next function's entry follows no call, so it does not count (taken as the
+clause, it printed an empty `if` body). When both arms or neither end in a no-return call, the tie falls through
 to `guardarm` or the out-index order. This is the predicate `guardarm`
 rejects for unoptimized code (`make-prime-list xalloc`); on optimized code,
 where layout no longer follows the source, it is the better signal, and it is
@@ -338,14 +341,14 @@ is the call cap, and unlike the width budget it does **not** move with the
 policy level: Rule A charges at most one statement-root call at `on` *and* at
 `wide`, where Rule B allows two. A guard block holding two calls that each print
 as their own comma element is therefore outside Rule A at every level and inside
-Rule B. That is the shape of the middle guard in `tests/stages/ghangr-condfold-ruleb.xml`
+Rule B. That is the shape of the middle guard in `tests/stages/ghangr-condfold-ruleb.toml`
 (`su_log(); x = su_euid(); if (x != wu)`, where the failure arm consumes `x` so
 the second call's output is not implied and prints as its own element): both of
 its folds are Rule B's, in both engines, and the second one's sibling is a
 nested `BlockCondition`, so the witness covers both exclusive properties in one
 run. Removing Rule B reverts its second pass to its first.
-`tests/stages/ghangr-condfold.xml` is the Rule A witness, and
-`tests/stages/ghangr-condfold-newbury.xml` — the guard-cascade *shape* witness —
+`tests/stages/ghangr-condfold.toml` is the Rule A witness, and
+`tests/stages/ghangr-condfold-newbury.toml` — the guard-cascade *shape* witness —
 folds through Rule A too, because at `wide` Rule A's budget also admits its
 guard blocks.
 
@@ -387,7 +390,7 @@ later pass can still add or drop an op — on `tr::build_spec_list` the measure
 reads six to nine across the structuring passes and the operand finally emits
 eight elements. And where a call's stack-effect ops are still live at
 structuring time (an unprototyped callee with no frame recovery), it
-over-counts: the stage witness `tests/stages/ghangr-condfold-newbury.xml`
+over-counts: the stage witness `tests/stages/ghangr-condfold-newbury.toml`
 measures six for a guard block whose operand finally emits none, which is why
 that witness needs `wide` although the real `newbury::main` closes at `on`.
 Over-counting only ever declines a fold, so the error is in the safe

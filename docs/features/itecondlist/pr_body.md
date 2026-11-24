@@ -115,7 +115,7 @@ its own option (it widens `iteregion`'s **arm** match; this widens the
 **condition** match). The new flag is also what buys a two-pass stage test that
 pins the *exact* `ceil(N/2)` defect — turning `iteregion` off removes **all**
 ternaries, so it cannot express "every other one is missing".
-`tests/stages/ghdec-itecondlist.xml` folds 2 of 3 with the option off and 3 of 3
+`tests/stages/ghdec-itecondlist.toml` folds 2 of 3 with the option off and 3 of 3
 with it on, over the same bytes.
 
 It is a strictly narrower match than the two options it widens, so

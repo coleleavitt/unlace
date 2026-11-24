@@ -1,0 +1,193 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'load_offset' },
+    { space = 'ram', offset = '0x100005', name = 'store_offset' },
+    { space = 'ram', offset = '0x10000a', name = 'return_offset' },
+    { space = 'ram', offset = '0x10000f', name = 'load_dynamic' },
+    { space = 'ram', offset = '0x100014', name = 'store_dynamic' },
+    { space = 'ram', offset = '0x100019', name = 'return_dynamic' },
+    { space = 'ram', offset = '0x10001e', name = 'return_negative' },
+    { space = 'ram', offset = '0x100023', name = 'integer_address' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '488b4708c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100005'
+readonly = true
+hex = '48897708c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000a'
+readonly = true
+hex = '488d4708c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000f'
+readonly = true
+hex = '488b0437c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100014'
+readonly = true
+hex = '48891437c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100019'
+readonly = true
+hex = '488d0437c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10001e'
+readonly = true
+hex = '488d47f8c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100023'
+readonly = true
+hex = '488d4708c3'
+
+[script]
+commands = [
+    'option outlang go',
+    'parse line extern uint8 load_offset(void *base);',
+    'parse line extern void store_offset(void *base,uint8 value);',
+    'parse line extern uint8 *return_offset(void *base);',
+    'parse line extern uint8 load_dynamic(void *base,int8 offset);',
+    'parse line extern void store_dynamic(void *base,int8 offset,uint8 value);',
+    'parse line extern uint8 *return_dynamic(void *base,int8 offset);',
+    'parse line extern uint8 *return_negative(void *base);',
+    'parse line extern uint8 *integer_address(uint8 base);',
+    'load function load_offset',
+    'decompile',
+    'print C',
+    'load function store_offset',
+    'decompile',
+    'print C',
+    'load function return_offset',
+    'decompile',
+    'print C',
+    'load function load_dynamic',
+    'decompile',
+    'print C',
+    'load function store_dynamic',
+    'decompile',
+    'print C',
+    'load function return_dynamic',
+    'decompile',
+    'print C',
+    'load function return_negative',
+    'decompile',
+    'print C',
+    'load function integer_address',
+    'decompile',
+    'print C',
+    # An offset in a DWARF record prefix is a byte address.
+    'clear architecture',
+    'load file tests/fixtures/go-record-prefix/loads',
+    'read symbols',
+    'map prototype before_a0 uint8 before_a0(struct Padded *p);',
+    'map prototype before_a4 uint8 before_a4(struct Padded *p);',
+    'map prototype at_a8 uint8 at_a8(struct Padded *p);',
+    'map prototype at_b16 uint8 at_b16(struct Padded *p);',
+    'option outlang go',
+    'load function before_a0',
+    'decompile',
+    'print C',
+    'load function before_a4',
+    'decompile',
+    'print C',
+    'load function at_a8',
+    'decompile',
+    'print C',
+    'load function at_b16',
+    'decompile',
+    'print C',
+    'option nocastprinting on',
+    'load function before_a4',
+    'decompile',
+    'print C',
+    'option nocastprinting off',
+    'option outlang c',
+    'load function before_a4',
+    'decompile',
+    'print C',
+    'option outlang rust',
+    'load function before_a4',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go64 pointer: live pointer bases survive all seven additions'
+count = 7
+literal = 'unsafe.Add(unsafe.Pointer(base),'
+
+[[match]]
+name = 'Go64 pointer: dynamic offsets preserve their signed variable'
+count = 3
+literal = 'unsafe.Add(unsafe.Pointer(base),offset)'
+
+[[match]]
+name = 'Go64 pointer: negative offset is a signed byte displacement'
+count = 1
+literal = 'unsafe.Add(unsafe.Pointer(base),-0x8)'
+
+# The integer base and each record view are separate consecutive function prints.
+[[match]]
+name = 'Go64 pointer: integer addresses keep their explicit reconstruction'
+count = 1
+regex = [
+    '^func integer_address\(base uint64\) \*uint64 \{$',
+    '^  return \(\*uint64\)\(unsafe\.Pointer\(uintptr\(base \+ 0x8\)\)\)$',
+    '^\}$',
+    '^$',
+    '^func before_a0\(p \*Padded\) uint64 \{$',
+    '^  return \*\(\*uint64\)\(unsafe\.Pointer\(p\)\)$',
+    '^\}$',
+    '^$',
+    '^func before_a4\(p \*Padded\) uint64 \{$',
+    '^  return \*\(\*uint64\)\(unsafe\.Pointer\((?:\(\*(?:byte|uint8)\)\()?unsafe\.Add\(unsafe\.Pointer\(p\),(?:0x)?4\)\)?\)\)$',
+    '^\}$',
+    '^$',
+    '^func at_a8\(p \*Padded\) uint64 \{$',
+    '^  return \(\*p\)\.a$',
+    '^\}$',
+    '^$',
+    '^func at_b16\(p \*Padded\) uint64 \{$',
+    '^  return \(\*p\)\.b$',
+    '^\}$',
+    '^$',
+    '^func before_a4\(p \*Padded\) uint64 \{$',
+    '^  return \*\(\*uint64\)\(unsafe\.Pointer\(&\(\*p\)\.field_0x4\)\)$',
+    '^\}$',
+    '^$',
+    '^uint8 before_a4\(Padded \*p\)$',
+    '^\{$',
+    '^  return \*\([^)]+\)&p->field_0x4;$',
+    '^\}$',
+    '^$',
+    '^$',
+    '^#\[allow\(',
+    '^unsafe fn before_a4\(mut p: \*mut Padded\) -> u64$',
+    '^\{$',
+    '^  return \*\(&mut \(\*p\)\.field_0x4 as \*mut u64\);$',
+    '^\}$',
+]
+
+[[match]]
+name = 'Go64 pointer: pointer arithmetic has no signed integer roundtrip'
+count = 0
+regex = 'int[36][24]\(uintptr\(unsafe\.Pointer\(base\)\)\)'

@@ -1,0 +1,60 @@
+# RE-friction need `unsigned-byte-vm-selector`: lowered-switch label
+# signedness is metadata proven by the required range comparisons.
+#
+# The XML wrapper only supplies the harness architecture. The script loads
+# the exact unmodified KataVM_L1 fixture and decompiles `sub_12d0`.
+#
+# The legacy case-bit guess made the unsigned-byte selector's 0x8b label the
+# unreachable `case -0x75`. The recovery carries unsigned semantics from
+# INT_LESS through the restart and installation, rendering `case 0x8b`; the
+# low 0x1e label and the recovered switch are unchanged, so the intervention
+# changes metadata rather than flow.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/katavm_level1_x86_64',
+    'read symbols',
+    'load function sub_12d0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+# The raw stage console spells the CLI's `unsigned char` as `uint1`.
+[[match]]
+name = 'UNSIGNED-BYTE-VM-SELECTOR #1: the selector declaration remains'
+count = 1
+regex = 'uint1\s+v15;'
+
+[[match]]
+name = 'UNSIGNED-BYTE-VM-SELECTOR #2: the recovered switch remains'
+count = 1
+literal = 'switch(v15)'
+
+[[match]]
+name = 'UNSIGNED-BYTE-VM-SELECTOR #3: the low case remains'
+count = 1
+literal = 'case 0x1e:'
+
+[[match]]
+name = 'UNSIGNED-BYTE-VM-SELECTOR #4: the impossible negative label never appears'
+count = 0
+literal = 'case -0x75:'
+
+[[match]]
+name = 'UNSIGNED-BYTE-VM-SELECTOR #5: the unsigned label is preserved'
+count = 1
+literal = 'case 0x8b:'

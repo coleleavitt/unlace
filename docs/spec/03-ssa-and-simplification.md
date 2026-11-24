@@ -2982,7 +2982,7 @@ Splitting at the LOAD and keeping the COPY is not the answer: when the COPY writ
 a global at the function's return, the pieces land in a temporary and the COPY
 into the global stops printing, which drops the global's store. With nothing between the
 two, the split still happens at the COPY, as upstream does. This is a strict fix
-with no option (`tests/stages/kuna-aliasoverlap.xml` #5 to #8).
+with no option (`tests/stages/kuna-aliasoverlap.toml` #5 to #8).
 
 ### (kuna) `regnarrow` — a register local at the width its values fit
 
@@ -3544,7 +3544,7 @@ outcome reaches. A `CALLOTHER` is inserted after the merge block's
 no-overflow outcome, a threshold that is not `(2^W - 1) / c`, or a guard over
 other factors is left alone.
 
-**alloca** (kuna) — `crates/unlace-bandb-base/src/p3_dataflow/kuna_alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/kuna-alloca.xml`.
+**alloca** (kuna) — `crates/unlace-bandb-base/src/p3_dataflow/kuna_alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/kuna-alloca.toml`.
 
 **cancelbytearithmetic** (repipe `cancelling-byte-arithmetic-splits`) —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_cancelbytearithmetic.rs`
@@ -4703,28 +4703,29 @@ emitted the way `mba` emits its own (`kuna_mba::replace`): new ops before the
 root, the root a `COPY` of the result, and a subterm the old tree already
 computes reused.
 
-**Measured** (pinned build ee52a6ca35, which has the bitwise-op rule but not yet
-the once-per-tree-value regrouping). The corpus: functions whose return value
-is a 1-4 variable expression (sometimes with a 32-bit constant) hidden by
-OLLVM-style substitutions stacked 1-3 deep (A, 120 functions, 15.7 ops on
-average) or 2-4 deep (B, 150 functions, 19.6 ops), each built with clang 22 and
-gcc at -O0 and -O1. A function counts as solved when the output has no more
-ops than the original expression. Every output was compiled back and compared
-with the source on 20,000 inputs; none differs under any option set.
+**Measured** (pinned build 54380310a5, with the once-per-tree-value
+regrouping). The corpus: functions whose return value is a 1-4 variable
+expression (sometimes with a 32-bit constant) hidden by OLLVM-style
+substitutions stacked 1-3 deep (A, 120 functions, 15.7 ops on average) or 2-4
+deep (B, 150 functions, 19.6 ops), each built with clang 22 and gcc at -O0 and
+-O1. A function counts as solved when the output has no more ops than the
+original expression. Every output was compiled back and compared with the
+source on 20,000 inputs; none differs under any option set, and every function
+decompiles within its budget.
 
 | solved | A clang -O0 | A gcc -O0 | A clang -O1 | A gcc -O1 | B clang -O0 | B gcc -O0 | B clang -O1 | B gcc -O1 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | no option | 2 | 24 | 47 | 35 | 2 | 32 | 59 | 37 |
 | `mba` | 93 | 106 | 117 | 117 | 133 | 139 | 143 | 142 |
-| `egraph` | 79 | 92 | 83 | 78 | 105 | 131 | 112 | 101 |
-| `mba` + `egraph` | **99** | **106** | **117** | **117** | **135** | **142** | **144** | **145** |
+| `egraph` | 85 | 100 | 111 | 110 | 111 | 134 | 140 | 138 |
+| `mba` + `egraph` | **106** | **112** | **117** | **118** | **136** | **142** | **144** | **146** |
 
-`egraph` alone trails `mba` because it fires only at roots and, on this build,
-only when it removes a bitwise op; the pair is never worse than `mba` and
-gains most at -O0. Before that rule (build d80c1b8d69) `egraph` alone solved
-108/108 at A -O1 and 137/138 at B -O1, but one function per -O1 corpus hung
-against `collect_terms`; the once-per-tree-value regrouping is meant to keep
-those gains without the hang. On `libCoreADI.so` (19 functions found)
+Output ops over corpus A at clang -O0 fall from 368 with `mba` to 286 with
+both. `egraph` alone trails `mba` because it fires only at roots; the pair is
+never worse than `mba` and gains most at -O0. With the earlier rule that
+every rewrite remove a bitwise op (build ee52a6ca35) `egraph` alone solved
+only 83 and 78 at A -O1; without any guard (d80c1b8d69) one function per -O1
+corpus hung against `collect_terms`. On `libCoreADI.so` (19 functions found)
 `egraph` changes 3 functions, one of them beyond `mba`:
 `(-((~a0 | 0x4cee331d) + (a0 | 0xb311cce2)) - 2 ^ 0x53a5c4e9) * K` becomes
 `(a0 ^ 0x1f4bf7f4) * K`. `/usr/bin/patchelf` (332 functions) and

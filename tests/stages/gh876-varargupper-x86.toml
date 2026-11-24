@@ -1,0 +1,183 @@
+# GH-876 (kuna): "x86-64: a declared int passed to a variadic call in its
+# own register prints as CONCAT44 of an uninitialized upper half"
+# https://github.com/Noelo-Lab/kuna/issues/876
+#
+# Source:
+#   int pr(const char *f, ...);
+#   int d4(const char *f, int a) { pr(f, a); return pr(f, a); }
+#   int du(const char *f, unsigned a) { pr(f, a); return pr(f, a); }
+#   int d3(const char *f, int x, int a) { pr(f, x, a); return pr(f, x, a); }
+#   int dl(const char *f, long a) { pr(f, a + 1); return pr(f, a); }
+#   int c4(const char *f, int a) { pr(f, a); return pr(f, a); }
+#   int __attribute__((ms_abi)) mpr(const char *f, ...);
+#   int __attribute__((ms_abi)) w4(const char *f, int a)
+#     { mpr(f, a); return mpr(f, a); }
+#   int u5(const char *f, int a) { pr(f, a, a); return pr(f, a); }
+#   int u8(const char *f, int a, int b) { pr(f, a, b, a); return pr(f, b, a); }
+#   int c5(const char *f, int a) { pr(f, a, a); return pr(f, a); }
+#
+# d4, du, d3 and dl are gcc -O2, c4 is clang -O2, linked at 0x100000 with
+# a `ret` standing in for pr at 0x1000e1.  w4 is gcc -O2 with the Windows
+# x64 convention, linked at 0x100200 with mpr at 0x100226.  u5 and u8 are
+# gcc -O2 and c5 is clang -O2, linked at 0x100300 calling the same pr.  The
+# first call of each function passes each int in the register it arrived in
+# (esi, plus edx in d3 and u8; edx in w4) while a copy is kept for the second
+# call.  In u5, u8 and c5 the same int is also copied into a later argument
+# register of that first call.
+#
+# Stage model: P4 call recovery, active-input-trial scoring.  The 8-byte
+# register trial's value pieces the declared 4-byte input with the
+# undeclared upper half of the register.  It is active, or, where the same
+# value has a second reader in the call (u5, u8, c5), inactive and later
+# gap-filled at 8 bytes; either way the call printed CONCAT44(v1,a) with v1
+# never set.  kuna_varargforward.rs (always on) narrows such a trial to the int width
+# when the upper bytes are only that undeclared register half.  dl passes a
+# computed long, which stays 8 bytes.
+#
+# Without the narrowing eight first calls print CONCAT44; with it pr(f,a),
+# pr(f,x,a), mpr(f,a), pr(f,a,a), pr(f,a,b,a) and clang's
+# pr(f,a,(uint8)(uint4)a).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'd4' },
+    { space = 'ram', offset = '0x100030', name = 'du' },
+    { space = 'ram', offset = '0x100060', name = 'd3' },
+    { space = 'ram', offset = '0x100090', name = 'dl' },
+    { space = 'ram', offset = '0x1000c0', name = 'c4' },
+    { space = 'ram', offset = '0x1000e1', name = 'pr' },
+    { space = 'ram', offset = '0x100200', name = 'w4' },
+    { space = 'ram', offset = '0x100226', name = 'mpr' },
+    { space = 'ram', offset = '0x100300', name = 'u5' },
+    { space = 'ram', offset = '0x100330', name = 'u8' },
+    { space = 'ram', offset = '0x100360', name = 'c5' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+hex = '''
+415431c04189f4554889fd4883ec08e8
+cd0000004883c4084489e64889ef31c0
+5d415ce9b90000000f1f840000000000
+415431c04189f4554889fd4883ec08e8
+9d0000004883c4084489e64889ef31c0
+5d415ce9890000000f1f840000000000
+415531c04189d541544189f4554889fd
+e86c0000004489ea4489e64889ef31c0
+5d415c415de957000000660f1f440000
+415431c04989f4488d7601554889fd48
+83ec08e8390000004883c4084c89e648
+89ef31c05d415ce9250000000f1f4000
+55535089f54889fb31c0e81200000048
+89df89ee31c04883c4085b5de9000000
+00c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100200'
+hex = '''
+41554189d541544989cc4883ec28e813
+0000004883c4284489ea4c89e1415c41
+5de900000000c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100300'
+hex = '''
+415489f231c04989fc5589f54883ec08
+e8ccfdffff4883c40889ee4c89e75d31
+c0415ce9b9fdffff0f1f840000000000
+415589f14189d531c041544189f45548
+89fde89afdffff4489e24489ee4889ef
+31c05d415c415de985fdffff0f1f4000
+4156535089f34989fe89f231c0e86ffd
+ffff4c89f789de31c04883c4085b415e
+e95cfdffff
+'''
+
+[script]
+commands = [
+    'parse line extern int4 pr(char *f, ...);',
+    'parse line extern int4 d4(char *f, int4 a);',
+    'parse line extern int4 du(char *f, uint4 a);',
+    'parse line extern int4 d3(char *f, int4 x, int4 a);',
+    'parse line extern int4 dl(char *f, int8 a);',
+    'parse line extern int4 c4(char *f, int4 a);',
+    'parse line extern int4 MSABI mpr(char *f, ...);',
+    'parse line extern int4 MSABI w4(char *f, int4 a);',
+    'parse line extern int4 u5(char *f, int4 a);',
+    'parse line extern int4 u8(char *f, int4 a, int4 b);',
+    'parse line extern int4 c5(char *f, int4 a);',
+    'lo fu d4',
+    'decompile',
+    'print C',
+    'lo fu du',
+    'decompile',
+    'print C',
+    'lo fu d3',
+    'decompile',
+    'print C',
+    'lo fu c4',
+    'decompile',
+    'print C',
+    'lo fu w4',
+    'decompile',
+    'print C',
+    'lo fu u5',
+    'decompile',
+    'print C',
+    'lo fu u8',
+    'decompile',
+    'print C',
+    'lo fu c5',
+    'decompile',
+    'print C',
+    'lo fu dl',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH876 x86 #1: the undeclared upper register half is never printed'
+count = 0
+regex = 'CONCAT44\([^;]*\);'
+
+[[match]]
+name = 'GH876 x86 #2: the int itself is passed in gcc d4, du and clang c4'
+count = 3
+regex = '^\s*pr\(f,a\);'
+
+[[match]]
+name = 'GH876 x86 #3: both ints are passed in gcc d3'
+count = 1
+regex = '^\s*pr\(f,x,a\);'
+
+[[match]]
+name = 'GH876 x86 #4: a computed long stays 8 bytes'
+count = 1
+regex = '^\s*pr\(f,a \+ 1\);'
+
+[[match]]
+name = 'GH876 x86 #5: the int itself is passed under the Windows x64 convention'
+count = 1
+regex = '^\s*mpr\(f,a\);'
+
+[[match]]
+name = 'GH876 x86 #6: the int itself is passed when it also feeds a later argument in gcc u5'
+count = 1
+regex = '^\s*pr\(f,a,a\);'
+
+[[match]]
+name = 'GH876 x86 #7: both ints are passed in gcc u8'
+count = 1
+regex = '^\s*pr\(f,a,b,a\);'
+
+[[match]]
+name = 'GH876 x86 #8: the int itself is passed when it also feeds a later argument in clang c5'
+count = 1
+regex = '^\s*pr\(f,a,\(uint8\)\(uint4\)a\);'

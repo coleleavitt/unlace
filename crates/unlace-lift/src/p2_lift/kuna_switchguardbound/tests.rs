@@ -3,7 +3,7 @@
 //! The recovery walk `JumpBasic::kuna_try_guard_bound_table` lives in
 //! `jumptable.rs` and ports with the W4 jumptable wave (see the module docs);
 //! this file covers the gate this module owns. End-to-end behaviour is exercised
-//! by `tests/stages/ghangr-missing-function-call-1101b1.xml`.
+//! by `tests/stages/ghangr-missing-function-call-1101b1.toml`.
 
 use super::*;
 

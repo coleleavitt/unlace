@@ -230,7 +230,7 @@ corpus is untouched except for its ARM/MIPS/AARCH64 members.
 3. MIPS/AARCH64/Loongarch/8051 also declare `<funcptr>`; the rule becomes live there too.
    Corpus has no such target, so measure separately before claiming coverage.
 
-**Stage testcase.** `tests/stages/ghdec-funcptralign.xml` is straightforward on the ARM
+**Stage testcase.** `tests/stages/ghdec-funcptralign.toml` is straightforward on the ARM
 Thumb fixture #231 already vendored (`unlace-analysis/tests/fixtures/arm_thumb_switch_le32`)
 or a 3-instruction `ldr r3,[r0,#4]; blx r3` chunk: two-pass, mask present vs absent.
 Note the corpus-file-count bump in `unlace-base/src/xml.rs` + stages baseline re-record.

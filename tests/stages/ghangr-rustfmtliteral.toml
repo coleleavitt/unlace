@@ -1,0 +1,89 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_literals_x86_64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'option rustfmt off',
+    'load function literal_lf',
+    'decompile',
+    'print C',
+    'option rustfmt on',
+    'print C',
+    'load function literal_stderr',
+    'decompile',
+    'print C',
+    'load function reject_mutable',
+    'decompile',
+    'print C',
+    'load function reject_template',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_literal_scopes_x86_64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'option rustfmt off',
+    'load function scoped_stdout',
+    'decompile',
+    'print C',
+    'option rustfmt on',
+    'print C',
+    'load function scoped_stderr',
+    'decompile',
+    'print C',
+    'load function scoped_other',
+    'decompile',
+    'print C',
+    'load function scoped_incomplete',
+    'decompile',
+    'print C',
+    'load function scoped_nested',
+    'decompile',
+    'print C',
+    'load function scoped_global',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'literal print off and rejected shapes keep runtime sink'
+count = 3
+literal = 'std::io::stdio::_print('
+
+[[match]]
+name = 'literal print default recovers exact newline'
+count = 1
+literal = 'println!("just a literal");'
+
+[[match]]
+name = 'literal stderr retains missing newline'
+count = 1
+literal = 'eprint!("plain");'
+
+[[match]]
+name = 'scoped literal stdout'
+count = 1
+regex = '\bprintln!\("scoped literal"\);'
+
+[[match]]
+name = 'scoped literal stderr'
+count = 1
+literal = 'eprintln!("scoped literal");'
+
+[[match]]
+name = 'scoped off and unrelated namespaces stay calls'
+count = 5
+regex = '^[ ]+_print\('

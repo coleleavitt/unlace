@@ -1,0 +1,107 @@
+# PE import-call binding.
+#
+# Issue: decbench case O0-mydoom-mydoom-mmsender_th (IDA, Ghidra and angr all
+# score GED 0; kuna scored 37). A Windows `call dword ptr [IAT slot]` lifts to
+# a CALLIND whose target is the contents of a global. The only pass that
+# resolves such a target - ActionDeindirect - gates on `Varnode::externref`,
+# which upstream sets from an ExternRefSymbol (`Scope::addExternalRef`) that
+# kuna's port never carried, so the call kept no name, no prototype and, worst,
+# no no-return flow effect: a function ending in `ExitProcess`/`ExitThread`
+# ran straight on and absorbed the next function's whole body.
+#
+# Stage / sub-stage: P1 external-refinement (`unlace-analysis`
+# `loader/kuna_peimportcall.rs` paints the slot ranges) feeding the P4/P9
+# deindirect seam (`Architecture::query_function` carries the callee's
+# no-return flag onto the prototype `ActionDeindirect` merges).
+#
+# The XML wrapper only supplies the harness architecture. Both passes clear it
+# and load a real fixture through the object bootstrap, exactly as
+# `ghdec-fast-funcdisc.xml` does. The PE fixture is built from
+# `pe_noreturn_import.c` (see the fixtures README): `bail` ends in a
+# `__declspec(dllimport) ExitProcess` call - the direct IAT-slot shape - and
+# `entry` calls it under a condition. Before the binding the call rendered as
+# the unnamed `(*dat_140005038)(0xc)` and the code after it was still
+# reachable; now the same site renders `ExitProcess(0xc)` and carries the
+# no-return flow effect, so the dead fall-through after it is gone.
+#
+# The Mach-O pass uses the linked `macho_import_slots` fixture. Its first call
+# reads the typed `__got` non-lazy symbol-pointer entry for objc_msgSend; its
+# second reads ordinary `__objc_msgrefs` data. Only the typed import slot is
+# bound, proving that arbitrary Objective-C metadata is not painted.
+#
+# `bail` prints `ExitProcess(a0)`, not `ExitProcess()`: `win32sigs` (DIV-141)
+# supplies the import's one-UINT prototype, which is what the source declares.
+# Likewise the bound `objc_msgSend` takes the receiver and selector its
+# `(self, op, ...)` declaration fixes (`analyzers/objc/kuna_objcruntime.rs`).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/pe_noreturn_import.exe',
+    'read symbols',
+    'load function entry',
+    'decompile',
+    'print C',
+    'load function bail',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_import_slots',
+    'read symbols',
+    'load function _call_slots',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'PEIMPORTCALL #1: the IAT-slot call is never left unnamed'
+count = 0
+literal = '(*dat_140005038)(0xc);'
+
+[[match]]
+name = 'PEIMPORTCALL #2: the slot call is bound to the import name'
+count = 1
+literal = 'ExitProcess(0xc); // no-return'
+
+[[match]]
+name = 'PEIMPORTCALL #3: the bound call carries its no-return flow effect'
+count = 2
+literal = '// no-return'
+
+[[match]]
+name = 'PEIMPORTCALL #4: bail never calls the raw slot pointer'
+count = 0
+literal = '(*dat_140005038)();'
+
+[[match]]
+name = 'PEIMPORTCALL #5: bail ends at the bound no-return import'
+count = 1
+literal = 'ExitProcess(a0); // no-return'
+
+[[match]]
+name = 'PEIMPORTCALL #6: a Mach-O non-lazy import slot is never left anonymous'
+count = 0
+literal = '(*dat_100001000)();'
+
+[[match]]
+name = 'PEIMPORTCALL #7: the Mach-O import slot is bound to objc_msgSend'
+count = 1
+literal = 'objc_msgSend(a0,a1);'
+
+[[match]]
+name = 'PEIMPORTCALL #8: ordinary ObjC message-reference data stays anonymous'
+count = 1
+literal = '(*dat_100002000)();'

@@ -34,7 +34,7 @@ TOK = re.compile(r'''
  |(?P<hex>0x[0-9A-Fa-f_]+)
  |(?P<num>\d+)
  |(?P<tyvar>'[A-Za-z_]\w*)
- |(?P<id>[A-Za-z_]\w*)
+ |(?P<id>[A-Za-z_]\w*'*)
  |(?P<op><->|=>|\.\.|>>>|<<<|>=_s|<=_s|>=_u|<=_u|>_s|<_s|>_u|<_u|>>|<<|==|!=|>=|<=|[-+*/&|^~@<>=(){}\[\],;:!.])
 ''', re.X | re.S)
 
@@ -107,6 +107,16 @@ class P:
 
     def stmt(self):
         if self.accept('let') or self.accept('var'):
+            if self.accept('('):
+                names = [self.ident()]
+                while self.accept(','):
+                    names.append(self.ident())
+                self.expect(')')
+                ty = None
+                if self.accept(':'):
+                    ty = self.type_()
+                self.expect('=')
+                return ('lettuple', names, ty, self.expr())
             name = self.ident()
             ty = None
             if self.accept(':'):
@@ -188,6 +198,9 @@ class P:
         return lhs
 
     def unary(self):
+        if self.peek()[1] == 'return' and self.peek()[0] == 'id':
+            self.next()
+            return ('return', self.expr())
         if self.accept('~'):
             return ('not', self.unary())
         if self.accept('-'):
@@ -195,6 +208,9 @@ class P:
         return self.postfix(self.primary())
 
     def postfix(self, e):
+        while self.peek()[1] == '.' and self.peek(1)[0] == 'id':
+            self.next()
+            e = ('field', e, self.next()[1])
         while self.peek()[1] == '[':
             self.next()
             hi = self.expr()
@@ -254,7 +270,7 @@ def parse_expr(text):
     return e
 
 # ---------------------------------------------------------------- model
-TOP = re.compile(r'^(union|mapping|function|val|enum|type|overload|infix|let|register|scattered|struct|bitfield|\$\[|//|\}|$)')
+TOP = re.compile(r'^(private|union|mapping|function|val|enum|type|overload|infix|let|register|scattered|struct|bitfield|\$\[|//|\}|$)')
 
 def items(text):
     cur = []
@@ -294,6 +310,7 @@ class Model:
                     self.unparsed.append((m.group(1) if m else it.strip()[:40], str(ex)))
 
     def item(self, it, insts):
+        it = re.sub(r'^private\s+', '', it)
         m = re.match(r'union clause instruction\s*=\s*(\w+)\s*:\s*(.*)$', it, re.S)
         if m:
             ty = m.group(2).strip()
@@ -341,7 +358,7 @@ class Model:
             return
         m = re.match(r'function\s+(\w+)\s*\((.*?)\)\s*(?:->\s*([^=]*))?=\s*(.*)$', it, re.S)
         if m and m.group(1) not in ('clause',):
-            params = [a.split(':')[0].strip() for a in m.group(2).split(',') if a.strip()]
+            params = [re.sub(r'^\w+\((\w+)\)$', r'\1', a.split(':')[0].strip()) for a in m.group(2).split(',') if a.strip()]
             if m.group(3) and m.group(1) not in self.vals:
                 ptys = [a.split(':', 1)[1].strip() for a in m.group(2).split(',') if ':' in a]
                 if len(ptys) == len(params):
@@ -392,6 +409,21 @@ class V:
 
 INT_W = 64
 
+# Names of the Sail model's privilege, trigger and access-type state; the
+# abstract memory model below never needs their values.
+OPAQUE_NAMES = {'Data', 'cur_privilege', 'TriggerAddress_AMO', 'TriggerAddress_Load', 'TriggerAddress_Store', 'mstatus'}
+OPAQUE_CALLS = {'Atomic', 'Read', 'Write', 'ReadWrite', 'Execute', 'default_access_info', 'effectivePrivilege',
+                'access_is_gva', 'TriggerAddress', 'TriggerAMOData', 'TriggerLoadData', 'TriggerStoreData', 'exception_vaddr'}
+
+CANON_NAN = {16: 0x7e00, 32: 0x7fc00000, 64: 0x7ff8000000000000}
+
+class T:
+    """A tuple of values."""
+    kind = 'tuple'
+    w = None
+    def __init__(self, items):
+        self.items = list(items)
+
 class Budget(Exception):
     pass
 
@@ -400,9 +432,10 @@ class Unsupported(Exception):
 
 # ---------------------------------------------------------------- compiler
 class Compiler:
-    def __init__(self, model, xlen, budget):
+    def __init__(self, model, xlen, budget, flen=64):
         self.m = model
         self.xlen = xlen
+        self.flen = flen
         self.budget = budget
         self.pcodeops = set()
         self.begin()
@@ -470,6 +503,23 @@ class Compiler:
 
     def width_of_type(self, ty, env):
         ty = ty.strip()
+        if ty.startswith('(') and ty.endswith(')'):
+            inner = split_top(ty[1:-1])
+            if len(inner) > 1:
+                out = []
+                for x in inner:
+                    try:
+                        out.append(self.width_of_type(x, env))
+                    except Unsupported:
+                        out.append(None)
+                return tuple(out)
+            ty = inner[0] if inner else ty
+        if ty == 'bits_fflags':
+            return 5
+        if ty in ('flenbits',):
+            return self.flen
+        if ty in ('virtaddr', 'physaddr'):
+            return self.xlen
         if ty in ('xlenbits',):
             return self.xlen
         if ty == 'bool':
@@ -505,6 +555,10 @@ class Compiler:
                 return C(self.xlen // 8, None, 'int')
             if n == 'RETIRE_SUCCESS':
                 return C(0, None, 'int')
+            if n in OPAQUE_NAMES:
+                return C(n, None, 'opaque')
+            if any(n in vals for vals in self.m.enums.values()):
+                return C(n, None, 'enum')
             raise Unsupported('identifier %s' % n)
         if k == 'block':
             inner = dict(env)
@@ -521,6 +575,40 @@ class Compiler:
             if not isinstance(scrut, C):
                 raise Unsupported('runtime match')
             for pat, arm in e[2]:
+                if scrut.kind == 'variant':
+                    tag, vals = scrut.v
+                    if pat[0] != 'call' or pat[1] != tag:
+                        continue
+                    pargs = pat[2]
+                    if len(pargs) == 1 and pargs[0][0] == 'tuple':
+                        pargs = pargs[0][1]
+                    ok = True
+                    binds = {}
+                    for p_, v_ in zip(pargs, vals):
+                        if p_[0] == 'id' and p_[1] != '_':
+                            binds[p_[1]] = v_
+                        elif p_[0] == 'bool':
+                            ok = ok and isinstance(v_, C) and v_.v == p_[1]
+                    if not ok:
+                        continue
+                    env2 = dict(env)
+                    env2.update(binds)
+                    r = self.expr(arm, env2, want)
+                    for n in env:
+                        env[n] = env2[n]
+                    return r
+                if scrut.kind == 'option':
+                    if pat[0] == 'call' and pat[1] == 'None' and scrut.v is None:
+                        return self.expr(arm, env, want)
+                    if pat[0] == 'call' and pat[1] == 'Some' and scrut.v is not None:
+                        env2 = dict(env)
+                        if pat[2] and pat[2][0][0] == 'id':
+                            env2[pat[2][0][1]] = scrut.v
+                        r = self.expr(arm, env2, want)
+                        for n in env:
+                            env[n] = env2[n]
+                        return r
+                    continue
                 if pat == ('id', '_') or self.pat_eq(pat, scrut, env):
                     return self.expr(arm, env, want)
             raise Unsupported('no match arm for %r' % scrut)
@@ -540,19 +628,38 @@ class Compiler:
             return self.binop(e, env, want)
         if k == 'call':
             return self.call(e, env, want)
+        if k == 'unit':
+            return C(0, None, 'int')
+        if k == 'return':
+            raise Unsupported('return on a path the compiler takes')
+        if k == 'field':
+            base = self.expr(e[1], env, None)
+            if base.kind == 'opaque':
+                return base
+            raise Unsupported('field access')
         if k == 'tuple':
-            raise Unsupported('tuple')
+            wants = want if isinstance(want, tuple) and len(want) == len(e[1]) else (None,) * len(e[1])
+            return T(self.expr(x, env, wx) for x, wx in zip(e[1], wants))
         raise Unsupported('expr %s' % k)
 
     def pat_eq(self, pat, scrut, env):
         if pat[0] == 'id':
             return scrut.kind == 'enum' and scrut.v == pat[1]
-        if pat[0] == 'bits':
+        if pat[0] in ('bits', 'num'):
             return scrut.v == pat[1]
         return False
 
     def stmt(self, s, env, want):
         k = s[0]
+        if k == 'lettuple':
+            _, names, ty, rhs = s
+            w = self.width_of_type(ty, env) if ty else None
+            v = self.expr(rhs, env, w)
+            if not isinstance(v, T) or len(v.items) != len(names):
+                raise Unsupported('tuple binding')
+            for n, x in zip(names, v.items):
+                env[n] = x
+            return C(0, None, 'int')
         if k == 'let':
             _, name, ty, rhs = s
             w = self.width_of_type(ty, env) if ty else None
@@ -618,7 +725,8 @@ class Compiler:
         self.ntmp += 1
         n = 'sv%d' % self.ntmp
         size = self.size(v) if isinstance(v, V) else (1 if v.kind == 'bool' else (8 if v.kind == 'int' else nbytes(v.w)))
-        self.emit('local %s:%d = %s;' % (n, size, self.operand(v, size)))
+        src = self.operand(v, size) if isinstance(v, C) or not v.imm else v.name
+        self.emit('local %s:%d = %s;' % (n, size, src))
         return V(n, v.w, v.kind)
 
     def store(self, env, name, val):
@@ -630,6 +738,14 @@ class Compiler:
             env[name] = val
 
     def assign(self, lhs, rhs, env):
+        if lhs[0] == 'call' and lhs[1] in ('F_H', 'F_S', 'F_D'):
+            reg = self.expr(lhs[2][0], env, None)
+            w = self.fwidth(lhs[1])
+            v = self.coerce(self.expr(rhs, env, w), w)
+            if w < self.flen:
+                v = self.bor(C(mask(self.flen) & ~mask(w), self.flen), self.coerce_zext(v, self.flen), self.flen)
+            self.emit('%s = %s;' % (reg.name, self.fit(v, self.flen // 8)))
+            return C(0, None, 'int')
         if lhs[0] == 'call' and lhs[1] == 'X':
             reg = self.expr(lhs[2][0], env, None)
             v = self.coerce(self.expr(rhs, env, self.xlen), self.xlen)
@@ -764,6 +880,8 @@ class Compiler:
         if op in ('&', '|') :
             a = self.expr(l, env, want)
             if a.kind == 'bool':
+                if isinstance(a, C) and bool(a.v) == (op == '|'):
+                    return a
                 b = self.cond(r, env)
                 return self.logic(op, a, b)
             b = self.expr(r, env, a.w if a.w else want)
@@ -830,7 +948,8 @@ class Compiler:
             a = self.coerce(a, b.w)
         if b.kind == 'bits' and b.w is None and a.kind == 'bits':
             b = self.coerce(b, a.w)
-        if a.kind == 'int' or b.kind == 'int':
+        int_mode = a.kind == 'int' or b.kind == 'int'
+        if int_mode:
             a, b = self.to_int(a) if isinstance(a, V) else C(a.v, None, 'int'), self.to_int(b) if isinstance(b, V) else C(b.v, None, 'int')
             w = INT_W
         else:
@@ -839,10 +958,12 @@ class Compiler:
                 a = C(a.v, w)
             if isinstance(b, C) and b.w is None:
                 b = C(b.v, w)
-        signed = op.endswith('_s')
+        signed = op.endswith('_s') or int_mode
         base = op.split('_')[0]
         if isinstance(a, C) and isinstance(b, C):
             x, y = a.v, b.v
+            if int_mode:
+                signed = False
             if signed:
                 x, y = sx(x, w), sx(y, w)
             return C({'==': x == y, '!=': x != y, '<': x < y, '>': x > y, '<=': x <= y, '>=': x >= y}[base], None, 'bool')
@@ -903,27 +1024,208 @@ class Compiler:
             if c.v:
                 return self.expr(a_e, env, want)
             return self.expr(b_e, env, want) if b_e else C(0, None, 'int')
+        if effects(a_e) or (b_e is not None and effects(b_e)):
+            # arms that write registers or memory run on their own paths
+            self.nlab += 1
+            l_else, l_end = 'sgelse%d' % self.nlab, 'sgend%d' % self.nlab
+            self.emit('if (!%s) goto <%s>;' % (self.operand(c, 1), l_else))
+            self.depth += 1
+            ra = self.expr(a_e, env, want)
+            self.emit('goto <%s>;' % l_end)
+            self.depth -= 1
+            self.emit('<%s>' % l_else)
+            self.depth += 1
+            rb = self.expr(b_e, env, want) if b_e is not None else C(0, None, 'int')
+            self.depth -= 1
+            self.emit('<%s>' % l_end)
+            if isinstance(ra, C) and isinstance(rb, C) and ra.v == rb.v and ra.kind == rb.kind:
+                return ra
+            raise Unsupported('if with side effects and a value')
         # the then-arm is the value by default and the else-arm is assigned
         # when the condition fails, as hand-written min/max do (rd = rs1 first)
         a = self.expr(a_e, env, want)
-        w = a.w if a.kind == 'bits' and a.w else want
-        if a.kind == 'bool' or w is None:
-            raise Unsupported('bool-valued if')
-        a = self.coerce(a, w)
-        r = self.mutable(a, 'if')
+        if isinstance(a, T):
+            wants = want if isinstance(want, tuple) else (None,) * len(a.items)
+            slots = [self.slot(x, wx) for x, wx in zip(a.items, wants)]
+        else:
+            slots = [self.slot(a, want)]
         self.nlab += 1
         lab = 'sgelse%d' % self.nlab
         self.emit('if (%s) goto <%s>;' % (self.operand(c, 1), lab))
         self.depth += 1
-        b = self.coerce(self.expr(b_e, env, w), w)
-        self.emit('%s = %s;' % (r.name, self.fit(b, self.size(r))))
+        b = self.expr(b_e, env, tuple(sw if sw != 'int' else None for _, sw in slots) if isinstance(a, T) else (slots[0][1] if slots[0][1] != 'int' else None))
+        bs = b.items if isinstance(b, T) else [b]
+        if len(bs) != len(slots):
+            raise Unsupported('if arms of different shapes')
+        for (r, w), x in zip(slots, bs):
+            if r.kind == 'bool':
+                if x.kind != 'bool':
+                    raise Unsupported('if arms of different kinds')
+                self.emit('%s = %s;' % (r.name, self.operand(x, 1) if isinstance(x, C) else x.name))
+            elif w == 'int':
+                self.emit('%s = %s;' % (r.name, self.int_operand(x)))
+            else:
+                x = self.coerce(x, w)
+                self.emit('%s = %s;' % (r.name, self.fit(x, self.size(r))))
+        self.depth -= 1
+        self.emit('<%s>' % lab)
+        rs = [r for r, _ in slots]
+        return T(rs) if isinstance(a, T) else rs[0]
+
+    def slot(self, a, want):
+        """A mutable local holding a (one arm of an if) and its width."""
+        if a.kind == 'bool':
+            return self.mutable(a, 'if'), None
+        if a.kind == 'int':
+            return self.mutable(a, 'if'), 'int'
+        w = a.w if a.kind == 'bits' and a.w else want
+        if w is None:
+            raise Unsupported('if arm of unknown width')
+        a = self.coerce(a, w)
+        return self.mutable(a, 'if'), w
+
+    # ---- calls
+    def fwidth(self, f):
+        return {'H': 16, 'S': 32, 'D': 64}[f[-1]]
+
+    def freg_read(self, reg, w):
+        """F_H/F_S/F_D: the register, NaN-unboxed to w bits."""
+        full = V(reg.name, self.flen, 'bits', True)
+        if w == self.flen:
+            return full
+        hi = self.coerce_zext(self.shr(full, C(w, None, 'int'), self.flen), self.flen - w)
+        boxed = self.tmp(1, '%s == 0x%x:%d' % (self.fit(hi, nbytes(self.flen - w)), mask(self.flen - w), nbytes(self.flen - w)), 'bool')
+        r = self.mutable(C(CANON_NAN[w], w), 'unbox')
+        self.nlab += 1
+        lab = 'sgbox%d' % self.nlab
+        self.emit('if (!%s) goto <%s>;' % (boxed.name, lab))
+        self.depth += 1
+        low = self.coerce_zext(full, w)
+        self.emit('%s = %s;' % (r.name, self.fit(low, nbytes(w))))
         self.depth -= 1
         self.emit('<%s>' % lab)
         return r
 
-    # ---- calls
+    def fcmp(self, op, a, b):
+        s = self.size(a)
+        return self.tmp(1, '%s %s %s' % (self.fit(a, s), op, self.fit(b, s)), 'bool')
+
+    def float_intrinsic(self, f, args, env, want):
+        m = re.match(r'^riscv_f(16|32|64)(Le|Lt|Eq)_quiet$', f) or re.match(r'^riscv_f(16|32|64)(Le|Lt|Eq)$', f)
+        if m:
+            a, b = (self.expr(x, env, None) for x in args)
+            r = self.fcmp({'Le': 'f<=', 'Lt': 'f<', 'Eq': 'f=='}[m.group(2)], a, b)
+            return T([C(0, 5), r])
+        m = re.match(r'^f(le|lt|eq)_(H|S|D)$', f)
+        if m:
+            a, b = (self.expr(x, env, None) for x in args[:2])
+            r = self.fcmp({'le': 'f<=', 'lt': 'f<', 'eq': 'f=='}[m.group(1)], a, b)
+            return T([r, C(0, 5)])
+        m = re.match(r'^f_is_NaN_(H|S|D)$', f)
+        if m:
+            a = self.expr(args[0], env, None)
+            return self.tmp(1, 'nan(%s)' % self.fit(a, self.size(a)), 'bool')
+        m = re.match(r'^f_is_(neg|pos)_zero_(H|S|D)$', f)
+        if m:
+            a = self.expr(args[0], env, None)
+            w = self.fwidth(f)
+            k = (1 << (w - 1)) if m.group(1) == 'neg' else 0
+            return self.tmp(1, '%s == 0x%x:%d' % (self.fit(a, nbytes(w)), k, nbytes(w)), 'bool')
+        m = re.match(r'^canonical_NaN_(H|S|D)$', f)
+        if m:
+            w = self.fwidth(f)
+            return C(CANON_NAN[w], w)
+        m = re.match(r'^riscv_f(16|32|64)roundToInt$', f)
+        if m:
+            rm = self.expr(args[0], env, None)
+            x = self.expr(args[1], env, None)
+            if not isinstance(rm, C):
+                raise Unsupported('dynamic rounding mode')
+            s = self.size(x)
+            xs = self.fit(x, s)
+            if rm.v == 2:
+                r = self.tmp(x.w, 'floor(%s)' % xs)
+            elif rm.v == 3:
+                r = self.tmp(x.w, 'ceil(%s)' % xs)
+            elif rm.v == 4:
+                r = self.tmp(x.w, 'round(%s)' % xs)
+            elif rm.v == 1:
+                neg = self.tmp(1, '%s f< 0:%d' % (xs, s), 'bool')
+                r = self.mutable(self.tmp(x.w, 'floor(%s)' % xs), 'rtz')
+                self.nlab += 1
+                lab = 'sgrtz%d' % self.nlab
+                self.emit('if (!%s) goto <%s>;' % (neg.name, lab))
+                self.depth += 1
+                self.emit('%s = ceil(%s);' % (r.name, xs))
+                self.depth -= 1
+                self.emit('<%s>' % lab)
+            else:
+                raise Unsupported('rounding mode %d has no p-code operation' % rm.v)
+            return T([C(0, 5), r])
+        if f == 'select_instr_or_fcsr_rm':
+            rm = self.expr(args[0], env, None)
+            if not isinstance(rm, C) or rm.v == 'RM_DYN':
+                raise Unsupported('dynamic rounding mode')
+            return C(rm, None, 'option')
+        if f in ('accrue_fflags', 'Illegal_Instruction'):
+            if f == 'Illegal_Instruction':
+                raise Unsupported('illegal instruction path')
+            return C(0, None, 'int')
+        return None
+
+    def mem_intrinsic(self, f, args, env, want):
+        """The abstract memory model: address translation, PMA/PMP checks,
+        triggers and alignment never fault; a read is a RAM load and a write
+        a RAM store of the access width."""
+        if f in OPAQUE_CALLS:
+            return C(f, None, 'opaque')
+        if f in ('currentlyEnabled', 'hartSupports'):
+            return C(True, None, 'bool')
+        if f == 'bits_of':
+            return self.expr(args[0], env, want)
+        if f == 'get_transformed_data_addr':
+            base = V(self.expr(args[0], env, None).name, self.xlen, 'bits', True)
+            off = self.coerce(self.expr(args[1], env, self.xlen), self.xlen)
+            addr = base if isinstance(off, C) and off.v == 0 else self.masked(self.tmp(self.xlen, '%s + %s' % (base.name, self.fit(off, self.xlen // 8))), self.xlen)
+            return C(('Ext_DataAddr_OK', [addr]), None, 'variant')
+        if f in ('match_memory_trigger_before', 'match_memory_trigger_after'):
+            return C(None, None, 'option')
+        if f == 'is_aligned_addr':
+            return C(True, None, 'bool')
+        if f == 'translateAddr':
+            vaddr = self.expr(args[0], env, None)
+            return C(('Ok', [vaddr, C(0, None, 'opaque'), C(0, None, 'opaque')]), None, 'variant')
+        if f == 'mem_write_ea':
+            return C(('Ok', [C(0, None, 'int')]), None, 'variant')
+        if f == 'mem_read':
+            addr = self.expr(args[3], env, None)
+            width = self.static_int(args[4], env)
+            r = self.tmp(8 * width, '*[ram]:%d %s' % (width, self.fit(addr, self.xlen // 8)))
+            return C(('Ok', [r]), None, 'variant')
+        if f == 'mem_write_value':
+            addr = self.expr(args[0], env, None)
+            width = self.static_int(args[1], env)
+            v = self.coerce(self.expr(args[2], env, 8 * width), 8 * width)
+            self.emit('*[ram]:%d %s = %s;' % (width, self.fit(addr, self.xlen // 8), self.fit(v, width)))
+            return C(('Ok', [C(True, None, 'bool')]), None, 'variant')
+        if f == 'trunc':
+            if want is None:
+                raise Unsupported('trunc width unknown')
+            v = self.expr(args[0], env, None)
+            return self.coerce_zext(v, want)
+        return None
+
     def call(self, e, env, want):
         _, f, args = e
+        r = self.mem_intrinsic(f, args, env, want)
+        if r is not None:
+            return r
+        r = self.float_intrinsic(f, args, env, want)
+        if r is not None:
+            return r
+        if f in ('F_H', 'F_S', 'F_D') and len(args) == 1:
+            reg = self.expr(args[0], env, None)
+            return self.freg_read(reg, self.fwidth(f))
         if f == 'X':
             reg = self.expr(args[0], env, None)
             return V(reg.name, self.xlen, 'bits', True)
@@ -1043,12 +1345,25 @@ class Compiler:
         ops = ', '.join(self.fit(v, self.size(v)) if isinstance(v, V) else self.operand(v, nbytes(v.w or 64)) for v in vals)
         return self.tmp(w, '%s(%s)' % (f, ops))
 
+def effects(e):
+    """Does this expression write a register or memory?"""
+    if isinstance(e, tuple):
+        if e and e[0] == 'assign':
+            return True
+        if e and e[0] == 'call' and e[1] in ('mem_write_value', 'mem_write_ea'):
+            return True
+        return any(effects(x) for x in e if isinstance(x, (tuple, list)))
+    if isinstance(e, list):
+        return any(effects(x) for x in e)
+    return False
+
 def sx(v, w):
     v &= mask(w)
     return v - (1 << w) if v >> (w - 1) & 1 else v
 
 # ---------------------------------------------------------------- encodings
 REG_AT = {7: 'rd', 15: 'rs1', 20: 'rs2'}
+FREG_AT = {7: 'frd', 15: 'frs1', 20: 'frs2', 27: 'frs3'}
 
 def load_tokens(path):
     with open(path) as f:
@@ -1110,13 +1425,17 @@ class Gen:
         self.opaque = set(opaque)
         self.parts = {}
         self.reserved = set()
+        self.display_tables = {}
+        self.only = None
+        self.fallback = False
+        self.flen = 64
         self.report = {'constructors': [], 'skipped': [], 'pcodeops': []}
 
     def arg_types(self, ctor):
         return self.m.unions[ctor]
 
     def run(self, xlen):
-        comp = Compiler(self.m, xlen, self.budget)
+        comp = Compiler(self.m, xlen, self.budget, self.flen)
         out = []
         for name, why in self.m.unparsed:
             self.report['skipped'].append({'xlen': xlen, 'ctor': name, 'why': 'Sail the parser does not handle: ' + why})
@@ -1159,6 +1478,9 @@ class Gen:
             elif p[0] == 'call' and p[1] == 'encdec_reg':
                 w = 5
                 layout.append(('reg', pos - w, pos - 1, p[2][0][1]))
+            elif p[0] == 'call' and p[1] == 'encdec_freg':
+                w = 5
+                layout.append(('freg', pos - w, pos - 1, p[2][0][1]))
             elif p[0] == 'call' and p[1] in self.m.maps:
                 rbits = self.m.maps[p[1]][0][1]
                 if rbits[0] != 'bits':
@@ -1206,8 +1528,17 @@ class Gen:
                 f = largs[argpos][1]
                 w = comp.width_of_type(names[f], {})
                 combos = [{**c, argpos: ('bits', v, w)} for c in combos for v in range(1 << w)]
+        for i, a in enumerate(largs):
+            if a[0] == 'id' and a[1] in self.display_tables and a[1] in names and i not in consts:
+                w = comp.width_of_type(names[a[1]], {})
+                combos = [{**c, i: ('bits', v, w)} for c in combos for v in range(1 << w)]
         for combo in combos:
-            yield from self.one(ctor, largs, types, names, layout, guard, combo, xlen, comp, asm_args, asm_pieces, exec_args, body)
+            try:
+                yield from self.one(ctor, largs, types, names, layout, guard, combo, xlen, comp, asm_args, asm_pieces, exec_args, body)
+            except (Unsupported, SailError, Budget) as ex:
+                if len(combos) == 1:
+                    raise
+                self.report.setdefault('skipped_forms', []).append({'xlen': xlen, 'ctor': ctor, 'combo': repr(sorted(combo.items())), 'why': str(ex)})
 
     def one(self, ctor, largs, types, names, layout, guard, combo, xlen, comp, asm_args, asm_pieces, exec_args, body, alt=None):
         genv = {}
@@ -1218,6 +1549,10 @@ class Gen:
                 if a[0] == 'bits':
                     genv[fname] = C(a[1], a[2])
                     fixedval[fname] = a[1]
+                elif a[0] == 'bool':
+                    genv[fname] = C(a[1], None, 'bool')
+                elif a[0] == 'num':
+                    genv[fname] = C(a[1], None, 'int')
                 else:
                     genv[fname] = C(a[1], None, 'enum')
             elif a[0] == 'id':
@@ -1234,7 +1569,7 @@ class Gen:
                 val = genv.get(f)
                 bitsv = None
                 for l, r in self.m.maps[mname]:
-                    if val is not None and l == ('id', val.v):
+                    if val is not None and (l == ('id', val.v) or (l[0] in ('bool', 'num') and l[1] == val.v and val.kind in ('bool', 'int'))):
                         bitsv = r[1]
                 if bitsv is None:
                     raise Unsupported('mapping value')
@@ -1248,10 +1583,19 @@ class Gen:
             elif kind == 'reg':
                 if lo not in REG_AT:
                     raise Unsupported('register field at bit %d' % lo)
+            elif kind == 'freg':
+                if lo not in FREG_AT:
+                    raise Unsupported('FP register field at bit %d' % lo)
         if guard is not None and alt is None:
             if ctor in self.reserved:
                 guard = drop_field_terms(guard, set(operand_fields))
-            gw = self.guard_ok(guard, genv, operand_fields, names, comp, fixed)
+            genv_g = dict(genv)
+            for kind, lo, hi, x in layout:
+                if kind == 'reg' and lo in REG_AT and x not in genv_g:
+                    genv_g[x] = V(REG_AT[lo], 5, 'reg')
+                elif kind == 'freg' and lo in FREG_AT and x not in genv_g:
+                    genv_g[x] = V(FREG_AT[lo], 5, 'freg')
+            gw = self.guard_ok(guard, genv_g, operand_fields, names, comp, fixed)
             if gw is False:
                 return
             if isinstance(gw, list):
@@ -1263,9 +1607,12 @@ class Gen:
         # operands
         env = {}
         regs = {}
+        fregs = {}
         for kind, lo, hi, x in layout:
             if kind == 'reg':
                 regs[x] = REG_AT[lo]
+            elif kind == 'freg':
+                fregs[x] = FREG_AT[lo]
         imm = {}
         for f, (lo, hi) in operand_fields.items():
             n = field_name(self.fields, lo, hi, prefer=('op',))
@@ -1274,6 +1621,8 @@ class Gen:
             imm[f] = (n, hi - lo + 1, comp.width_of_type(names[f], {}))
         for f, n in regs.items():
             env[f] = V(n, 5, 'reg')
+        for f, n in fregs.items():
+            env[f] = V(n, 5, 'freg')
         for f, (n, w, tw) in imm.items():
             env[f] = V(n, tw, 'bits', imm=True)
         for f, v in genv.items():
@@ -1291,9 +1640,11 @@ class Gen:
                 ex_env[n] = genv['#%d' % i]
             elif i in combo and combo[i][0] == 'bits':
                 ex_env[n] = C(combo[i][1], combo[i][2])
-        mnem, ops = self.assembly(asm_args, asm_pieces, ex_env, largs, env, regs, imm)
-        comp.begin()
-        if mnem in self.opaque or ctor in self.opaque:
+        mnem, ops, disp = self.assembly(asm_args, asm_pieces, ex_env, largs, env, regs, imm)
+        if self.only and not re.search(self.only, mnem):
+            return
+        def opaque():
+            comp.begin()
             op = mnem.replace('.', '_')
             comp.pcodeops.add(op)
             widths = {n: tw for n, w, tw in imm.values()}
@@ -1304,18 +1655,27 @@ class Gen:
                 else:
                     args.append(o)
             comp.emit('%s = %s(%s);' % (ops[0], op, ', '.join(args)))
+        if mnem in self.opaque or ctor in self.opaque:
+            opaque()
         else:
-            comp.expr(body, ex_env, None)
+            comp.begin()
+            try:
+                comp.expr(body, ex_env, None)
+            except (Unsupported, Budget) as ex:
+                if not self.fallback:
+                    raise
+                self.report.setdefault('opaque_fallback', []).append({'xlen': xlen, 'mnemonic': mnem, 'why': str(ex)})
+                opaque()
         lines = comp.lines
         cons = []
-        for f in sorted(set(regs.values()) | {v[0] for v in imm.values()}, key=lambda s: ops.index(s) if s in ops else 99):
+        for f in sorted(set(regs.values()) | set(fregs.values()) | {v[0] for v in imm.values()} | {o for o in ops if o in self.display_tables.values()}, key=lambda s: ops.index(s) if s in ops else 99):
             cons.append(f)
         cons += cover(self.fields, fixed)
         m_ = sum(1 << b for b in fixed)
         v_ = sum(fixed[b] << b for b in fixed)
         self.report['constructors'].append({'xlen': xlen, 'ctor': ctor, 'mnemonic': mnem, 'mask': '0x%08x' % m_, 'match': '0x%08x' % v_, 'ops': len(lines)})
-        text = ':%s %s is %s\n{\n%s\n}\n' % (mnem, ','.join(ops), ' & '.join(cons), '\n'.join(lines))
-        self.parts.setdefault(xlen, []).append({'mnem': mnem, 'ops': ops, 'cons': cons, 'lines': list(lines), 'mask': m_, 'match': v_})
+        text = ':%s %s is %s\n{\n%s\n}\n' % (mnem, ''.join(disp), ' & '.join(cons), '\n'.join(lines))
+        self.parts.setdefault(xlen, []).append({'mnem': mnem, 'ops': ops, 'disp': disp, 'cons': cons, 'lines': list(lines), 'mask': m_, 'match': v_})
         yield (mnem, m_, v_, text)
 
     def guard_ok(self, guard, genv, operand_fields, names, comp, fixed):
@@ -1380,40 +1740,70 @@ class Gen:
         operand_fields[f] = (lo, hi - top)
         return True
 
-    def assembly(self, asm_args, pieces, ex_env, largs, env, regs, imm):
-        mnem = None
+    def assembly(self, asm_args, pieces, ex_env, largs, env, regs, imm, ctor=None):
+        """The mnemonic, the operands the pattern binds and the display tokens
+        (operand names, separators and quoted literal text, in order). Text
+        before the first spc() is part of the mnemonic."""
+        mn = []
         ops = []
+        disp = []
+        in_mnem = True
+        def text_of(f, a):
+            vals = [ex_env[x.strip()] for x in split_top(a)]
+            key = vals[0] if len(vals) == 1 else None
+            for l, r in self.m.maps[f]:
+                if len(vals) == 1:
+                    v = key
+                    if (l[0] == 'id' and v.kind == 'enum' and l[1] == v.v) or (l[0] in ('bits', 'num', 'bool') and isinstance(v, C) and l[1] == v.v):
+                        return r[1]
+                elif l[0] == 'tuple' and len(l[1]) == len(vals) and all(isinstance(v, C) and p[0] in ('bool', 'num', 'bits', 'id') and p[1] == v.v for p, v in zip(l[1], vals)):
+                    return r[1]
+            raise Unsupported('text for %s(%s)' % (f, a))
         for pc in pieces:
             pc = pc.strip()
             if pc.startswith('"'):
-                s = pc[1:-1]
-                if mnem is None:
-                    mnem = s
+                text = pc[1:-1]
+                if in_mnem:
+                    mn.append(text)
+                elif text in ('(', ')', '[', ']'):
+                    disp.append(text)
+                elif text.strip():
+                    disp.append('"%s"' % text.strip())
                 continue
             mm = re.match(r'^(\w+)\((.*)\)$', pc)
             if not mm:
                 raise Unsupported('assembly piece %s' % pc)
             f, a = mm.group(1), mm.group(2).strip()
-            if f in ('spc', 'sep'):
+            if f == 'spc':
+                in_mnem = False
                 continue
-            if f == 'reg_name':
+            if f == 'sep':
+                disp.append(',')
+                continue
+            if f in ('reg_name', 'freg_name'):
                 v = ex_env[a]
                 ops.append(v.name)
+                disp.append(v.name)
             elif f.startswith('hex_bits'):
+                table = self.display_tables.get(a)
+                if table:
+                    ops.append(table)
+                    disp.append(table)
+                    continue
                 v = ex_env[a]
                 if not isinstance(v, V):
                     raise Unsupported('constant immediate')
                 ops.append(v.name)
+                disp.append(v.name)
             elif f in self.m.maps:
-                v = ex_env[a]
-                for l, r in self.m.maps[f]:
-                    if (l[0] == 'id' and v.kind == 'enum' and l[1] == v.v) or (l[0] == 'bits' and isinstance(v, C) and v.kind == 'bits' and l[1] == v.v):
-                        mnem = r[1]
-                if mnem is None:
-                    raise Unsupported('mnemonic for %r' % v)
+                text = text_of(f, a)
+                if in_mnem:
+                    mn.append(text)
+                else:
+                    disp.append('"%s"' % text)
             else:
                 raise Unsupported('assembly function %s' % f)
-        return mnem, ops
+        return ''.join(mn), ops, disp
 
 def drop_field_terms(e, fields):
     """The guard with every comparison that mentions an operand field taken as true."""
@@ -1435,6 +1825,8 @@ def guard_eval(comp, e, env):
     k = e[0]
     if k == 'call' and e[1] in ('currentlyEnabled', 'hartSupports'):
         return True
+    if k == 'call' and e[1] == 'in32BitMode':
+        return comp.xlen == 32
     if k == 'bin' and e[1] in ('&', '|'):
         a, b = guard_eval(comp, e[2], env), guard_eval(comp, e[3], env)
         return (a and b) if e[1] == '&' else (a or b)
@@ -1482,9 +1874,16 @@ def aliases(gen, xlen, pseudo):
                 continue
             lo, n = reg[0]
             field = 'op%02d%02d' % (lo, lo + 4)
-            ops = [o for o in p['ops'] if o != n]
+            disp = list(p['disp'])
+            if n in disp:
+                i = disp.index(n)
+                del disp[i]
+                if i < len(disp) and disp[i] == ',':
+                    del disp[i]
+                elif i > 0 and disp[i - 1] == ',':
+                    del disp[i - 1]
             cons = p['cons'] + ['%s=0' % field]
-            out.append((name, m_p, v_p, ':%s %s is %s\n{\n%s\n}\n' % (name, ','.join(ops), ' & '.join(cons), '\n'.join(p['lines']))))
+            out.append((name, m_p, v_p, ':%s %s is %s\n{\n%s\n}\n' % (name, ''.join(disp), ' & '.join(cons), '\n'.join(p['lines']))))
             have.add(name)
             break
     return out
@@ -1559,6 +1958,10 @@ def main():
     ap.add_argument('--exts', default='', help='riscv-opcodes files to check (rv_zba,rv64_zba,...)')
     ap.add_argument('--report', help='write a JSON report here')
     ap.add_argument('--source-rev', default='', help='source revisions to record in the header')
+    ap.add_argument('--display-table', default='', help='field=subtable: display a Sail immediate through an existing SLEIGH subtable and split the constructor per value (constantidx=fliConstS)')
+    ap.add_argument('--opaque-fallback', action='store_true', help='lift a clause whose semantics the compiler cannot handle to a user pcodeop named after the mnemonic instead of skipping it')
+    ap.add_argument('--only', help='keep only constructors whose mnemonic matches this regular expression')
+    ap.add_argument('--flen', type=int, default=64, help='FP register width the F_H/F_S/F_D NaN-boxing assumes')
     ap.add_argument('--decode-reserved', default='', help='Sail constructors whose encdec guard is ignored, so reserved operand values decode as LLVM and GNU decode them (AES64KS1I,...)')
     ap.add_argument('--opaque', default='', help='mnemonics or Sail constructors to lift to a user pcodeop named after the mnemonic instead (orc.b,ORCB,...)')
     a = ap.parse_args()
@@ -1581,6 +1984,10 @@ def main():
         model.load(os.path.join(a.sail, f), True)
     gen = Gen(model, load_tokens(a.tokens), a.budget, [x for x in a.opaque.split(',') if x])
     gen.reserved = {x for x in a.decode_reserved.split(',') if x}
+    gen.display_tables = dict(x.split('=', 1) for x in a.display_table.split(',') if x)
+    gen.fallback = a.opaque_fallback
+    gen.flen = a.flen
+    gen.only = a.only
     res = {}
     ops = set()
     for xlen in (32, 64):
@@ -1617,7 +2024,7 @@ def main():
         seen = set()
         for c in gen.report['constructors']:
             mn = c['mnemonic']
-            cands = ref.get(mn, [])
+            cands = ref.get(mn, []) or ref.get(re.sub(r'\.(aqrl|aq|rl)$', '', mn), [])
             mm, vv = int(c['mask'], 16), int(c['match'], 16)
             ok = any(m_ == mm and v_ == vv for _, m_, v_ in cands)
             if not ok:
@@ -1626,6 +2033,7 @@ def main():
             if not ok:
                 bad.append(c)
             seen.add(mn)
+            seen.add(re.sub(r'\.(aqrl|aq|rl)$', '', mn))
         gen.report['opcodes_unmatched'] = sorted(set(ref) - seen)
     if a.report:
         json.dump(gen.report, open(a.report, 'w'), indent=1)

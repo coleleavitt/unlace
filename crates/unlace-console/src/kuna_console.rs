@@ -24,7 +24,7 @@
 //!   emitter** ([`unlace_decomp::kuna_phases::emit_catalog_json`]). With a program
 //!   loaded the live `current` field is joined per option from the
 //!   [`Architecture`] flags ([`kuna_live_value`], the port of
-//!   `kuna_console.cc kunaLiveValue`). `tests/stages/kuna-catalog.xml`
+//!   `kuna_console.cc kunaLiveValue`). `tests/stages/kuna-catalog.toml`
 //!   string-matches this output.
 //! - [`IfcKunaFunctions`] — `functions`: emit the canonical executable
 //!   function inventory used by whole-binary decompilation.

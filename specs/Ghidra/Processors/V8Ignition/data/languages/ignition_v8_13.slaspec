@@ -1,0 +1,1769 @@
+# V8 Ignition bytecode, as built into V8 13.6 (Node.js 24). Written for unlace from V8's
+# src/interpreter/bytecodes.h and bytecode-operands.h (BSD-3-Clause; the opcode order,
+# operand types and implicit accumulator use are read from them, no text copied) and checked
+# against node --print-bytecode. Ignition is an accumulator machine: ACC is the implicit
+# operand, frame registers r0.. and parameters a0.. (and the receiver) are explicit ones.
+# Wide and ExtraWide prefixes scale the scalable operands to 2 and 4 bytes; a scaled
+# register operand addresses the frame space. Values are 8-byte tagged references, Smi
+# immediates are plain integers, and property access, calls, operators and the runtime are
+# user-ops.
+
+define endian=little;
+define alignment=1;
+
+define space ram   type=ram_space      size=4 default;
+define space frame type=ram_space      size=4;
+define space register type=register_space size=4;
+
+define register offset=0x0000 size=4 [ PC ];
+define register offset=0x0010 size=8 [ ACC RV ];
+define register offset=0x1000 size=8 [ fx0 fx1 this a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24 a25 a26 a27 a28 a29 a30 a31 a32 a33 a34 a35 a36 a37 a38 a39 a40 a41 a42 a43 a44 a45 a46 a47 a48 a49 a50 a51 a52 a53 a54 a55 a56 a57 a58 a59 a60 a61 a62 a63 a64 a65 a66 a67 a68 a69 a70 a71 a72 a73 a74 a75 a76 a77 a78 a79 a80 a81 a82 a83 a84 a85 a86 a87 a88 a89 a90 a91 a92 a93 a94 a95 a96 a97 a98 a99 a100 a101 a102 a103 a104 a105 a106 a107 a108 a109 a110 a111 a112 a113 a114 a115 a116 a117 a118 a119 a120 a121 a122 a123 a124 r121 r120 r119 r118 r117 r116 r115 r114 r113 r112 r111 r110 r109 r108 r107 r106 r105 r104 r103 r102 r101 r100 r99 r98 r97 r96 r95 r94 r93 r92 r91 r90 r89 r88 r87 r86 r85 r84 r83 r82 r81 r80 r79 r78 r77 r76 r75 r74 r73 r72 r71 r70 r69 r68 r67 r66 r65 r64 r63 r62 r61 r60 r59 r58 r57 r56 r55 r54 r53 r52 r51 r50 r49 r48 r47 r46 r45 r44 r43 r42 r41 r40 r39 r38 r37 r36 r35 r34 r33 r32 r31 r30 r29 r28 r27 r26 r25 r24 r23 r22 r21 r20 r19 r18 r17 r16 r15 r14 r13 r12 r11 r10 r9 r8 r7 r6 r5 r4 r3 r2 r1 r0 fm6 fm5 fm4 fm3 fm2 fm1 ];
+define register offset=0x2000 size=4 [ contextreg ];
+
+define context contextreg
+  scale = (0,1)
+;
+
+define token opc(8)
+  op = (0,7)
+;
+
+define token t8_1(8)
+  u8_1 = (0,7)
+  s8_1 = (0,7) signed
+  r8_1 = (0,7)
+;
+define token t16_1(16)
+  u16_1 = (0,15)
+  s16_1 = (0,15) signed
+;
+define token t32_1(32)
+  u32_1 = (0,31)
+  s32_1 = (0,31) signed
+;
+attach variables [ r8_1 ] [ fx0 fx1 this a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24 a25 a26 a27 a28 a29 a30 a31 a32 a33 a34 a35 a36 a37 a38 a39 a40 a41 a42 a43 a44 a45 a46 a47 a48 a49 a50 a51 a52 a53 a54 a55 a56 a57 a58 a59 a60 a61 a62 a63 a64 a65 a66 a67 a68 a69 a70 a71 a72 a73 a74 a75 a76 a77 a78 a79 a80 a81 a82 a83 a84 a85 a86 a87 a88 a89 a90 a91 a92 a93 a94 a95 a96 a97 a98 a99 a100 a101 a102 a103 a104 a105 a106 a107 a108 a109 a110 a111 a112 a113 a114 a115 a116 a117 a118 a119 a120 a121 a122 a123 a124 r121 r120 r119 r118 r117 r116 r115 r114 r113 r112 r111 r110 r109 r108 r107 r106 r105 r104 r103 r102 r101 r100 r99 r98 r97 r96 r95 r94 r93 r92 r91 r90 r89 r88 r87 r86 r85 r84 r83 r82 r81 r80 r79 r78 r77 r76 r75 r74 r73 r72 r71 r70 r69 r68 r67 r66 r65 r64 r63 r62 r61 r60 r59 r58 r57 r56 r55 r54 r53 r52 r51 r50 r49 r48 r47 r46 r45 r44 r43 r42 r41 r40 r39 r38 r37 r36 r35 r34 r33 r32 r31 r30 r29 r28 r27 r26 r25 r24 r23 r22 r21 r20 r19 r18 r17 r16 r15 r14 r13 r12 r11 r10 r9 r8 r7 r6 r5 r4 r3 r2 r1 r0 fm6 fm5 fm4 fm3 fm2 fm1 ];
+define token t8_2(8)
+  u8_2 = (0,7)
+  s8_2 = (0,7) signed
+  r8_2 = (0,7)
+;
+define token t16_2(16)
+  u16_2 = (0,15)
+  s16_2 = (0,15) signed
+;
+define token t32_2(32)
+  u32_2 = (0,31)
+  s32_2 = (0,31) signed
+;
+attach variables [ r8_2 ] [ fx0 fx1 this a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24 a25 a26 a27 a28 a29 a30 a31 a32 a33 a34 a35 a36 a37 a38 a39 a40 a41 a42 a43 a44 a45 a46 a47 a48 a49 a50 a51 a52 a53 a54 a55 a56 a57 a58 a59 a60 a61 a62 a63 a64 a65 a66 a67 a68 a69 a70 a71 a72 a73 a74 a75 a76 a77 a78 a79 a80 a81 a82 a83 a84 a85 a86 a87 a88 a89 a90 a91 a92 a93 a94 a95 a96 a97 a98 a99 a100 a101 a102 a103 a104 a105 a106 a107 a108 a109 a110 a111 a112 a113 a114 a115 a116 a117 a118 a119 a120 a121 a122 a123 a124 r121 r120 r119 r118 r117 r116 r115 r114 r113 r112 r111 r110 r109 r108 r107 r106 r105 r104 r103 r102 r101 r100 r99 r98 r97 r96 r95 r94 r93 r92 r91 r90 r89 r88 r87 r86 r85 r84 r83 r82 r81 r80 r79 r78 r77 r76 r75 r74 r73 r72 r71 r70 r69 r68 r67 r66 r65 r64 r63 r62 r61 r60 r59 r58 r57 r56 r55 r54 r53 r52 r51 r50 r49 r48 r47 r46 r45 r44 r43 r42 r41 r40 r39 r38 r37 r36 r35 r34 r33 r32 r31 r30 r29 r28 r27 r26 r25 r24 r23 r22 r21 r20 r19 r18 r17 r16 r15 r14 r13 r12 r11 r10 r9 r8 r7 r6 r5 r4 r3 r2 r1 r0 fm6 fm5 fm4 fm3 fm2 fm1 ];
+define token t8_3(8)
+  u8_3 = (0,7)
+  s8_3 = (0,7) signed
+  r8_3 = (0,7)
+;
+define token t16_3(16)
+  u16_3 = (0,15)
+  s16_3 = (0,15) signed
+;
+define token t32_3(32)
+  u32_3 = (0,31)
+  s32_3 = (0,31) signed
+;
+attach variables [ r8_3 ] [ fx0 fx1 this a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24 a25 a26 a27 a28 a29 a30 a31 a32 a33 a34 a35 a36 a37 a38 a39 a40 a41 a42 a43 a44 a45 a46 a47 a48 a49 a50 a51 a52 a53 a54 a55 a56 a57 a58 a59 a60 a61 a62 a63 a64 a65 a66 a67 a68 a69 a70 a71 a72 a73 a74 a75 a76 a77 a78 a79 a80 a81 a82 a83 a84 a85 a86 a87 a88 a89 a90 a91 a92 a93 a94 a95 a96 a97 a98 a99 a100 a101 a102 a103 a104 a105 a106 a107 a108 a109 a110 a111 a112 a113 a114 a115 a116 a117 a118 a119 a120 a121 a122 a123 a124 r121 r120 r119 r118 r117 r116 r115 r114 r113 r112 r111 r110 r109 r108 r107 r106 r105 r104 r103 r102 r101 r100 r99 r98 r97 r96 r95 r94 r93 r92 r91 r90 r89 r88 r87 r86 r85 r84 r83 r82 r81 r80 r79 r78 r77 r76 r75 r74 r73 r72 r71 r70 r69 r68 r67 r66 r65 r64 r63 r62 r61 r60 r59 r58 r57 r56 r55 r54 r53 r52 r51 r50 r49 r48 r47 r46 r45 r44 r43 r42 r41 r40 r39 r38 r37 r36 r35 r34 r33 r32 r31 r30 r29 r28 r27 r26 r25 r24 r23 r22 r21 r20 r19 r18 r17 r16 r15 r14 r13 r12 r11 r10 r9 r8 r7 r6 r5 r4 r3 r2 r1 r0 fm6 fm5 fm4 fm3 fm2 fm1 ];
+define token t8_4(8)
+  u8_4 = (0,7)
+  s8_4 = (0,7) signed
+  r8_4 = (0,7)
+;
+define token t16_4(16)
+  u16_4 = (0,15)
+  s16_4 = (0,15) signed
+;
+define token t32_4(32)
+  u32_4 = (0,31)
+  s32_4 = (0,31) signed
+;
+attach variables [ r8_4 ] [ fx0 fx1 this a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24 a25 a26 a27 a28 a29 a30 a31 a32 a33 a34 a35 a36 a37 a38 a39 a40 a41 a42 a43 a44 a45 a46 a47 a48 a49 a50 a51 a52 a53 a54 a55 a56 a57 a58 a59 a60 a61 a62 a63 a64 a65 a66 a67 a68 a69 a70 a71 a72 a73 a74 a75 a76 a77 a78 a79 a80 a81 a82 a83 a84 a85 a86 a87 a88 a89 a90 a91 a92 a93 a94 a95 a96 a97 a98 a99 a100 a101 a102 a103 a104 a105 a106 a107 a108 a109 a110 a111 a112 a113 a114 a115 a116 a117 a118 a119 a120 a121 a122 a123 a124 r121 r120 r119 r118 r117 r116 r115 r114 r113 r112 r111 r110 r109 r108 r107 r106 r105 r104 r103 r102 r101 r100 r99 r98 r97 r96 r95 r94 r93 r92 r91 r90 r89 r88 r87 r86 r85 r84 r83 r82 r81 r80 r79 r78 r77 r76 r75 r74 r73 r72 r71 r70 r69 r68 r67 r66 r65 r64 r63 r62 r61 r60 r59 r58 r57 r56 r55 r54 r53 r52 r51 r50 r49 r48 r47 r46 r45 r44 r43 r42 r41 r40 r39 r38 r37 r36 r35 r34 r33 r32 r31 r30 r29 r28 r27 r26 r25 r24 r23 r22 r21 r20 r19 r18 r17 r16 r15 r14 r13 r12 r11 r10 r9 r8 r7 r6 r5 r4 r3 r2 r1 r0 fm6 fm5 fm4 fm3 fm2 fm1 ];
+define token t8_5(8)
+  u8_5 = (0,7)
+  s8_5 = (0,7) signed
+  r8_5 = (0,7)
+;
+define token t16_5(16)
+  u16_5 = (0,15)
+  s16_5 = (0,15) signed
+;
+define token t32_5(32)
+  u32_5 = (0,31)
+  s32_5 = (0,31) signed
+;
+attach variables [ r8_5 ] [ fx0 fx1 this a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24 a25 a26 a27 a28 a29 a30 a31 a32 a33 a34 a35 a36 a37 a38 a39 a40 a41 a42 a43 a44 a45 a46 a47 a48 a49 a50 a51 a52 a53 a54 a55 a56 a57 a58 a59 a60 a61 a62 a63 a64 a65 a66 a67 a68 a69 a70 a71 a72 a73 a74 a75 a76 a77 a78 a79 a80 a81 a82 a83 a84 a85 a86 a87 a88 a89 a90 a91 a92 a93 a94 a95 a96 a97 a98 a99 a100 a101 a102 a103 a104 a105 a106 a107 a108 a109 a110 a111 a112 a113 a114 a115 a116 a117 a118 a119 a120 a121 a122 a123 a124 r121 r120 r119 r118 r117 r116 r115 r114 r113 r112 r111 r110 r109 r108 r107 r106 r105 r104 r103 r102 r101 r100 r99 r98 r97 r96 r95 r94 r93 r92 r91 r90 r89 r88 r87 r86 r85 r84 r83 r82 r81 r80 r79 r78 r77 r76 r75 r74 r73 r72 r71 r70 r69 r68 r67 r66 r65 r64 r63 r62 r61 r60 r59 r58 r57 r56 r55 r54 r53 r52 r51 r50 r49 r48 r47 r46 r45 r44 r43 r42 r41 r40 r39 r38 r37 r36 r35 r34 r33 r32 r31 r30 r29 r28 r27 r26 r25 r24 r23 r22 r21 r20 r19 r18 r17 r16 r15 r14 r13 r12 r11 r10 r9 r8 r7 r6 r5 r4 r3 r2 r1 r0 fm6 fm5 fm4 fm3 fm2 fm1 ];
+define token t8_6(8)
+  u8_6 = (0,7)
+  s8_6 = (0,7) signed
+  r8_6 = (0,7)
+;
+define token t16_6(16)
+  u16_6 = (0,15)
+  s16_6 = (0,15) signed
+;
+define token t32_6(32)
+  u32_6 = (0,31)
+  s32_6 = (0,31) signed
+;
+attach variables [ r8_6 ] [ fx0 fx1 this a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24 a25 a26 a27 a28 a29 a30 a31 a32 a33 a34 a35 a36 a37 a38 a39 a40 a41 a42 a43 a44 a45 a46 a47 a48 a49 a50 a51 a52 a53 a54 a55 a56 a57 a58 a59 a60 a61 a62 a63 a64 a65 a66 a67 a68 a69 a70 a71 a72 a73 a74 a75 a76 a77 a78 a79 a80 a81 a82 a83 a84 a85 a86 a87 a88 a89 a90 a91 a92 a93 a94 a95 a96 a97 a98 a99 a100 a101 a102 a103 a104 a105 a106 a107 a108 a109 a110 a111 a112 a113 a114 a115 a116 a117 a118 a119 a120 a121 a122 a123 a124 r121 r120 r119 r118 r117 r116 r115 r114 r113 r112 r111 r110 r109 r108 r107 r106 r105 r104 r103 r102 r101 r100 r99 r98 r97 r96 r95 r94 r93 r92 r91 r90 r89 r88 r87 r86 r85 r84 r83 r82 r81 r80 r79 r78 r77 r76 r75 r74 r73 r72 r71 r70 r69 r68 r67 r66 r65 r64 r63 r62 r61 r60 r59 r58 r57 r56 r55 r54 r53 r52 r51 r50 r49 r48 r47 r46 r45 r44 r43 r42 r41 r40 r39 r38 r37 r36 r35 r34 r33 r32 r31 r30 r29 r28 r27 r26 r25 r24 r23 r22 r21 r20 r19 r18 r17 r16 r15 r14 r13 r12 r11 r10 r9 r8 r7 r6 r5 r4 r3 r2 r1 r0 fm6 fm5 fm4 fm3 fm2 fm1 ];
+
+# Jump targets are relative to the bytecode (after any Wide/ExtraWide prefix).
+JF0: tgt is u8_1 [ tgt = inst_start + u8_1; ] { export *:4 tgt; }
+JF1: tgt is u16_1 [ tgt = inst_start + 1 + u16_1; ] { export *:4 tgt; }
+JF2: tgt is u32_1 [ tgt = inst_start + 1 + u32_1; ] { export *:4 tgt; }
+JB0: tgt is u8_1 [ tgt = inst_start - u8_1; ] { export *:4 tgt; }
+JB1: tgt is u16_1 [ tgt = inst_start + 1 - u16_1; ] { export *:4 tgt; }
+JB2: tgt is u32_1 [ tgt = inst_start + 1 - u32_1; ] { export *:4 tgt; }
+
+define pcodeop js_toboolean_test;
+define pcodeop js_is_true;
+define pcodeop js_is_null;
+define pcodeop js_is_undefined;
+define pcodeop js_is_undefined_or_null;
+define pcodeop js_is_receiver;
+define pcodeop js_undefined;
+define pcodeop js_const;
+define pcodeop js_null;
+define pcodeop js_thehole;
+define pcodeop js_true;
+define pcodeop js_false;
+define pcodeop js_context_slot_at;
+define pcodeop js_context_slot;
+define pcodeop js_push_context;
+define pcodeop js_pop_context;
+define pcodeop js_referenceequal;
+define pcodeop js_testundetectable;
+define pcodeop js_testnull;
+define pcodeop js_testundefined;
+define pcodeop js_testtypeof;
+define pcodeop js_global;
+define pcodeop js_set_global;
+define pcodeop js_set_context_slot_at;
+define pcodeop js_set_context_slot;
+define pcodeop js_lda_lookup_slot;
+define pcodeop js_lda_lookup_context_slot;
+define pcodeop js_lda_lookup_script_context_slot;
+define pcodeop js_lda_lookup_global_slot;
+define pcodeop js_lda_lookup_slot_inside_typeof;
+define pcodeop js_lda_lookup_context_slot_inside_typeof;
+define pcodeop js_lda_lookup_script_context_slot_inside_typeof;
+define pcodeop js_lda_lookup_global_slot_inside_typeof;
+define pcodeop js_sta_lookup_slot;
+define pcodeop js_getprop;
+define pcodeop js_get_named_property_from_super;
+define pcodeop js_getkeyed;
+define pcodeop js_get_enumerated_keyed_property;
+define pcodeop js_lda_module_variable;
+define pcodeop js_sta_module_variable;
+define pcodeop js_setprop;
+define pcodeop js_setkeyed;
+define pcodeop js_define_keyed_own_property_in_literal;
+define pcodeop js_add;
+define pcodeop js_sub;
+define pcodeop js_mul;
+define pcodeop js_div;
+define pcodeop js_mod;
+define pcodeop js_exp;
+define pcodeop js_bitwiseor;
+define pcodeop js_bitwisexor;
+define pcodeop js_bitwiseand;
+define pcodeop js_shiftleft;
+define pcodeop js_shiftright;
+define pcodeop js_shiftrightlogical;
+define pcodeop js_inc;
+define pcodeop js_dec;
+define pcodeop js_negate;
+define pcodeop js_bitwisenot;
+define pcodeop js_tobooleanlogicalnot;
+define pcodeop js_logicalnot;
+define pcodeop js_typeof;
+define pcodeop js_delete_property_strict;
+define pcodeop js_delete_property_sloppy;
+define pcodeop js_get_super_constructor;
+define pcodeop js_find_non_default_constructor_or_construct;
+define pcodeop js_call_list;
+define pcodeop js_call;
+define pcodeop js_runtime;
+define pcodeop js_call_runtime_for_pair;
+define pcodeop js_jsruntime;
+define pcodeop js_intrinsic;
+define pcodeop js_construct;
+define pcodeop js_construct_forward_all_args;
+define pcodeop js_equal;
+define pcodeop js_equalstrict;
+define pcodeop js_lessthan;
+define pcodeop js_greaterthan;
+define pcodeop js_lessthanorequal;
+define pcodeop js_greaterthanorequal;
+define pcodeop js_instanceof;
+define pcodeop js_in;
+define pcodeop js_toname;
+define pcodeop js_tonumber;
+define pcodeop js_tonumeric;
+define pcodeop js_to_object;
+define pcodeop js_tostring;
+define pcodeop js_toboolean;
+define pcodeop js_create_reg_exp_literal;
+define pcodeop js_create_array_literal;
+define pcodeop js_create_array_from_iterable;
+define pcodeop js_create_empty_array_literal;
+define pcodeop js_create_object_literal;
+define pcodeop js_create_empty_object_literal;
+define pcodeop js_clone_object;
+define pcodeop js_get_template_object;
+define pcodeop js_create_closure;
+define pcodeop js_create_block_context;
+define pcodeop js_create_catch_context;
+define pcodeop js_create_function_context;
+define pcodeop js_create_eval_context;
+define pcodeop js_create_with_context;
+define pcodeop js_create_mapped_arguments;
+define pcodeop js_create_unmapped_arguments;
+define pcodeop js_create_rest_parameter;
+define pcodeop js_jump_constant;
+define pcodeop js_jump_if_null_constant;
+define pcodeop js_jump_if_not_null_constant;
+define pcodeop js_jump_if_undefined_constant;
+define pcodeop js_jump_if_not_undefined_constant;
+define pcodeop js_jump_if_undefined_or_null_constant;
+define pcodeop js_jump_if_true_constant;
+define pcodeop js_jump_if_false_constant;
+define pcodeop js_jump_if_jsreceiver_constant;
+define pcodeop js_jump_if_for_in_done_constant;
+define pcodeop js_jump_if_to_boolean_true_constant;
+define pcodeop js_jump_if_to_boolean_false_constant;
+define pcodeop js_switch_on_smi_no_feedback;
+define pcodeop js_switch_target;
+define pcodeop js_for_in_enumerate;
+define pcodeop js_for_in_prepare;
+define pcodeop js_for_in_next;
+define pcodeop js_for_in_step;
+define pcodeop js_set_pending_message;
+define pcodeop js_throw;
+define pcodeop js_throw_reference_error_if_hole;
+define pcodeop js_throw_super_not_called_if_hole;
+define pcodeop js_throw_super_already_called_if_not_hole;
+define pcodeop js_throw_if_not_super_constructor;
+define pcodeop js_switch_on_generator_state;
+define pcodeop js_suspend_generator;
+define pcodeop js_resume_generator;
+define pcodeop js_get_iterator;
+define pcodeop js_debugger;
+define pcodeop js_inc_block_counter;
+define pcodeop js_abort;
+
+:^instruction is op=0 ; instruction [ scale = 1; ] { build instruction; }
+:^instruction is op=1 ; instruction [ scale = 2; ] { build instruction; }
+
+:Ldar r8_1 is scale=0 & op=11 ; r8_1 {
+  ACC = r8_1;
+}
+:Ldar.Wide s16_1 is scale=1 & op=11 ; s16_1 {
+  ACC = *[frame]:8 (s16_1 * 8:4);
+}
+:Ldar.ExtraWide s32_1 is scale=2 & op=11 ; s32_1 {
+  ACC = *[frame]:8 (s32_1 * 8:4);
+}
+:LdaZero is scale=0 & op=12 {
+  ACC = 0;
+}
+:LdaSmi "["^s8_1^"]" is scale=0 & op=13 ; s8_1 {
+  ACC = s8_1;
+}
+:LdaSmi.Wide "["^s16_1^"]" is scale=1 & op=13 ; s16_1 {
+  ACC = s16_1;
+}
+:LdaSmi.ExtraWide "["^s32_1^"]" is scale=2 & op=13 ; s32_1 {
+  ACC = s32_1;
+}
+:LdaUndefined is scale=0 & op=14 {
+  ACC = js_undefined();
+}
+:LdaNull is scale=0 & op=15 {
+  ACC = js_null();
+}
+:LdaTheHole is scale=0 & op=16 {
+  ACC = js_thehole();
+}
+:LdaTrue is scale=0 & op=17 {
+  ACC = js_true();
+}
+:LdaFalse is scale=0 & op=18 {
+  ACC = js_false();
+}
+:LdaConstant "["^u8_1^"]" is scale=0 & op=19 ; u8_1 {
+  ACC = js_const(u8_1:4);
+}
+:LdaConstant.Wide "["^u16_1^"]" is scale=1 & op=19 ; u16_1 {
+  ACC = js_const(u16_1:4);
+}
+:LdaConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=19 ; u32_1 {
+  ACC = js_const(u32_1:4);
+}
+:LdaContextSlot r8_1, "["^u8_2^"]", u8_3 is scale=0 & op=20 ; r8_1 ; u8_2 ; u8_3 {
+  ACC = js_context_slot_at(r8_1, u8_2:4, u8_3:4);
+}
+:LdaContextSlot.Wide s16_1, "["^u16_2^"]", u16_3 is scale=1 & op=20 ; s16_1 ; u16_2 ; u16_3 {
+  ACC = js_context_slot_at(*[frame]:8 (s16_1 * 8:4), u16_2:4, u16_3:4);
+}
+:LdaContextSlot.ExtraWide s32_1, "["^u32_2^"]", u32_3 is scale=2 & op=20 ; s32_1 ; u32_2 ; u32_3 {
+  ACC = js_context_slot_at(*[frame]:8 (s32_1 * 8:4), u32_2:4, u32_3:4);
+}
+:LdaScriptContextSlot r8_1, "["^u8_2^"]", u8_3 is scale=0 & op=21 ; r8_1 ; u8_2 ; u8_3 {
+  ACC = js_context_slot_at(r8_1, u8_2:4, u8_3:4);
+}
+:LdaScriptContextSlot.Wide s16_1, "["^u16_2^"]", u16_3 is scale=1 & op=21 ; s16_1 ; u16_2 ; u16_3 {
+  ACC = js_context_slot_at(*[frame]:8 (s16_1 * 8:4), u16_2:4, u16_3:4);
+}
+:LdaScriptContextSlot.ExtraWide s32_1, "["^u32_2^"]", u32_3 is scale=2 & op=21 ; s32_1 ; u32_2 ; u32_3 {
+  ACC = js_context_slot_at(*[frame]:8 (s32_1 * 8:4), u32_2:4, u32_3:4);
+}
+:LdaImmutableContextSlot r8_1, "["^u8_2^"]", u8_3 is scale=0 & op=22 ; r8_1 ; u8_2 ; u8_3 {
+  ACC = js_context_slot_at(r8_1, u8_2:4, u8_3:4);
+}
+:LdaImmutableContextSlot.Wide s16_1, "["^u16_2^"]", u16_3 is scale=1 & op=22 ; s16_1 ; u16_2 ; u16_3 {
+  ACC = js_context_slot_at(*[frame]:8 (s16_1 * 8:4), u16_2:4, u16_3:4);
+}
+:LdaImmutableContextSlot.ExtraWide s32_1, "["^u32_2^"]", u32_3 is scale=2 & op=22 ; s32_1 ; u32_2 ; u32_3 {
+  ACC = js_context_slot_at(*[frame]:8 (s32_1 * 8:4), u32_2:4, u32_3:4);
+}
+:LdaCurrentContextSlot "["^u8_1^"]" is scale=0 & op=23 ; u8_1 {
+  ACC = js_context_slot(u8_1:4);
+}
+:LdaCurrentContextSlot.Wide "["^u16_1^"]" is scale=1 & op=23 ; u16_1 {
+  ACC = js_context_slot(u16_1:4);
+}
+:LdaCurrentContextSlot.ExtraWide "["^u32_1^"]" is scale=2 & op=23 ; u32_1 {
+  ACC = js_context_slot(u32_1:4);
+}
+:LdaCurrentScriptContextSlot "["^u8_1^"]" is scale=0 & op=24 ; u8_1 {
+  ACC = js_context_slot(u8_1:4);
+}
+:LdaCurrentScriptContextSlot.Wide "["^u16_1^"]" is scale=1 & op=24 ; u16_1 {
+  ACC = js_context_slot(u16_1:4);
+}
+:LdaCurrentScriptContextSlot.ExtraWide "["^u32_1^"]" is scale=2 & op=24 ; u32_1 {
+  ACC = js_context_slot(u32_1:4);
+}
+:LdaImmutableCurrentContextSlot "["^u8_1^"]" is scale=0 & op=25 ; u8_1 {
+  ACC = js_context_slot(u8_1:4);
+}
+:LdaImmutableCurrentContextSlot.Wide "["^u16_1^"]" is scale=1 & op=25 ; u16_1 {
+  ACC = js_context_slot(u16_1:4);
+}
+:LdaImmutableCurrentContextSlot.ExtraWide "["^u32_1^"]" is scale=2 & op=25 ; u32_1 {
+  ACC = js_context_slot(u32_1:4);
+}
+:Star r8_1 is scale=0 & op=26 ; r8_1 {
+  r8_1 = ACC;
+}
+:Star.Wide s16_1 is scale=1 & op=26 ; s16_1 {
+  *[frame]:8 (s16_1 * 8:4) = ACC;
+}
+:Star.ExtraWide s32_1 is scale=2 & op=26 ; s32_1 {
+  *[frame]:8 (s32_1 * 8:4) = ACC;
+}
+:Mov r8_1, r8_2 is scale=0 & op=27 ; r8_1 ; r8_2 {
+  r8_2 = r8_1;
+}
+:Mov.Wide s16_1, s16_2 is scale=1 & op=27 ; s16_1 ; s16_2 {
+  *[frame]:8 (s16_2 * 8:4) = *[frame]:8 (s16_1 * 8:4);
+}
+:Mov.ExtraWide s32_1, s32_2 is scale=2 & op=27 ; s32_1 ; s32_2 {
+  *[frame]:8 (s32_2 * 8:4) = *[frame]:8 (s32_1 * 8:4);
+}
+:PushContext r8_1 is scale=0 & op=28 ; r8_1 {
+  r8_1 = js_push_context(ACC);
+}
+:PushContext.Wide s16_1 is scale=1 & op=28 ; s16_1 {
+  *[frame]:8 (s16_1 * 8:4) = js_push_context(ACC);
+}
+:PushContext.ExtraWide s32_1 is scale=2 & op=28 ; s32_1 {
+  *[frame]:8 (s32_1 * 8:4) = js_push_context(ACC);
+}
+:PopContext r8_1 is scale=0 & op=29 ; r8_1 {
+  js_pop_context(r8_1);
+}
+:PopContext.Wide s16_1 is scale=1 & op=29 ; s16_1 {
+  js_pop_context(*[frame]:8 (s16_1 * 8:4));
+}
+:PopContext.ExtraWide s32_1 is scale=2 & op=29 ; s32_1 {
+  js_pop_context(*[frame]:8 (s32_1 * 8:4));
+}
+:TestReferenceEqual r8_1 is scale=0 & op=30 ; r8_1 {
+  ACC = js_referenceequal(r8_1, ACC);
+}
+:TestReferenceEqual.Wide s16_1 is scale=1 & op=30 ; s16_1 {
+  ACC = js_referenceequal(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:TestReferenceEqual.ExtraWide s32_1 is scale=2 & op=30 ; s32_1 {
+  ACC = js_referenceequal(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:TestUndetectable is scale=0 & op=31 {
+  ACC = js_testundetectable(ACC);
+}
+:TestNull is scale=0 & op=32 {
+  ACC = js_testnull(ACC);
+}
+:TestUndefined is scale=0 & op=33 {
+  ACC = js_testundefined(ACC);
+}
+:TestTypeOf u8_1 is scale=0 & op=34 ; u8_1 {
+  ACC = js_testtypeof(ACC, u8_1:1);
+}
+:LdaGlobal "["^u8_1^"]", "["^u8_2^"]" is scale=0 & op=35 ; u8_1 ; u8_2 {
+  kv0:8 = js_const(u8_1:4); ACC = js_global(kv0);
+}
+:LdaGlobal.Wide "["^u16_1^"]", "["^u16_2^"]" is scale=1 & op=35 ; u16_1 ; u16_2 {
+  kv0:8 = js_const(u16_1:4); ACC = js_global(kv0);
+}
+:LdaGlobal.ExtraWide "["^u32_1^"]", "["^u32_2^"]" is scale=2 & op=35 ; u32_1 ; u32_2 {
+  kv0:8 = js_const(u32_1:4); ACC = js_global(kv0);
+}
+:LdaGlobalInsideTypeof "["^u8_1^"]", "["^u8_2^"]" is scale=0 & op=36 ; u8_1 ; u8_2 {
+  kv0:8 = js_const(u8_1:4); ACC = js_global(kv0);
+}
+:LdaGlobalInsideTypeof.Wide "["^u16_1^"]", "["^u16_2^"]" is scale=1 & op=36 ; u16_1 ; u16_2 {
+  kv0:8 = js_const(u16_1:4); ACC = js_global(kv0);
+}
+:LdaGlobalInsideTypeof.ExtraWide "["^u32_1^"]", "["^u32_2^"]" is scale=2 & op=36 ; u32_1 ; u32_2 {
+  kv0:8 = js_const(u32_1:4); ACC = js_global(kv0);
+}
+:StaGlobal "["^u8_1^"]", "["^u8_2^"]" is scale=0 & op=37 ; u8_1 ; u8_2 {
+  kv0:8 = js_const(u8_1:4); js_set_global(kv0, ACC);
+}
+:StaGlobal.Wide "["^u16_1^"]", "["^u16_2^"]" is scale=1 & op=37 ; u16_1 ; u16_2 {
+  kv0:8 = js_const(u16_1:4); js_set_global(kv0, ACC);
+}
+:StaGlobal.ExtraWide "["^u32_1^"]", "["^u32_2^"]" is scale=2 & op=37 ; u32_1 ; u32_2 {
+  kv0:8 = js_const(u32_1:4); js_set_global(kv0, ACC);
+}
+:StaContextSlot r8_1, "["^u8_2^"]", u8_3 is scale=0 & op=38 ; r8_1 ; u8_2 ; u8_3 {
+  js_set_context_slot_at(r8_1, u8_2:4, u8_3:4, ACC);
+}
+:StaContextSlot.Wide s16_1, "["^u16_2^"]", u16_3 is scale=1 & op=38 ; s16_1 ; u16_2 ; u16_3 {
+  js_set_context_slot_at(*[frame]:8 (s16_1 * 8:4), u16_2:4, u16_3:4, ACC);
+}
+:StaContextSlot.ExtraWide s32_1, "["^u32_2^"]", u32_3 is scale=2 & op=38 ; s32_1 ; u32_2 ; u32_3 {
+  js_set_context_slot_at(*[frame]:8 (s32_1 * 8:4), u32_2:4, u32_3:4, ACC);
+}
+:StaCurrentContextSlot "["^u8_1^"]" is scale=0 & op=39 ; u8_1 {
+  js_set_context_slot(u8_1:4, ACC);
+}
+:StaCurrentContextSlot.Wide "["^u16_1^"]" is scale=1 & op=39 ; u16_1 {
+  js_set_context_slot(u16_1:4, ACC);
+}
+:StaCurrentContextSlot.ExtraWide "["^u32_1^"]" is scale=2 & op=39 ; u32_1 {
+  js_set_context_slot(u32_1:4, ACC);
+}
+:StaScriptContextSlot r8_1, "["^u8_2^"]", u8_3 is scale=0 & op=40 ; r8_1 ; u8_2 ; u8_3 {
+  js_set_context_slot_at(r8_1, u8_2:4, u8_3:4, ACC);
+}
+:StaScriptContextSlot.Wide s16_1, "["^u16_2^"]", u16_3 is scale=1 & op=40 ; s16_1 ; u16_2 ; u16_3 {
+  js_set_context_slot_at(*[frame]:8 (s16_1 * 8:4), u16_2:4, u16_3:4, ACC);
+}
+:StaScriptContextSlot.ExtraWide s32_1, "["^u32_2^"]", u32_3 is scale=2 & op=40 ; s32_1 ; u32_2 ; u32_3 {
+  js_set_context_slot_at(*[frame]:8 (s32_1 * 8:4), u32_2:4, u32_3:4, ACC);
+}
+:StaCurrentScriptContextSlot "["^u8_1^"]" is scale=0 & op=41 ; u8_1 {
+  js_set_context_slot(u8_1:4, ACC);
+}
+:StaCurrentScriptContextSlot.Wide "["^u16_1^"]" is scale=1 & op=41 ; u16_1 {
+  js_set_context_slot(u16_1:4, ACC);
+}
+:StaCurrentScriptContextSlot.ExtraWide "["^u32_1^"]" is scale=2 & op=41 ; u32_1 {
+  js_set_context_slot(u32_1:4, ACC);
+}
+:LdaLookupSlot "["^u8_1^"]" is scale=0 & op=42 ; u8_1 {
+  ACC = js_lda_lookup_slot(u8_1:1);
+}
+:LdaLookupSlot.Wide "["^u16_1^"]" is scale=1 & op=42 ; u16_1 {
+  ACC = js_lda_lookup_slot(u16_1:2);
+}
+:LdaLookupSlot.ExtraWide "["^u32_1^"]" is scale=2 & op=42 ; u32_1 {
+  ACC = js_lda_lookup_slot(u32_1:4);
+}
+:LdaLookupContextSlot "["^u8_1^"]", "["^u8_2^"]", u8_3 is scale=0 & op=43 ; u8_1 ; u8_2 ; u8_3 {
+  ACC = js_lda_lookup_context_slot(u8_1:1, u8_2:1, u8_3:1);
+}
+:LdaLookupContextSlot.Wide "["^u16_1^"]", "["^u16_2^"]", u16_3 is scale=1 & op=43 ; u16_1 ; u16_2 ; u16_3 {
+  ACC = js_lda_lookup_context_slot(u16_1:2, u16_2:2, u16_3:2);
+}
+:LdaLookupContextSlot.ExtraWide "["^u32_1^"]", "["^u32_2^"]", u32_3 is scale=2 & op=43 ; u32_1 ; u32_2 ; u32_3 {
+  ACC = js_lda_lookup_context_slot(u32_1:4, u32_2:4, u32_3:4);
+}
+:LdaLookupScriptContextSlot "["^u8_1^"]", "["^u8_2^"]", u8_3 is scale=0 & op=44 ; u8_1 ; u8_2 ; u8_3 {
+  ACC = js_lda_lookup_script_context_slot(u8_1:1, u8_2:1, u8_3:1);
+}
+:LdaLookupScriptContextSlot.Wide "["^u16_1^"]", "["^u16_2^"]", u16_3 is scale=1 & op=44 ; u16_1 ; u16_2 ; u16_3 {
+  ACC = js_lda_lookup_script_context_slot(u16_1:2, u16_2:2, u16_3:2);
+}
+:LdaLookupScriptContextSlot.ExtraWide "["^u32_1^"]", "["^u32_2^"]", u32_3 is scale=2 & op=44 ; u32_1 ; u32_2 ; u32_3 {
+  ACC = js_lda_lookup_script_context_slot(u32_1:4, u32_2:4, u32_3:4);
+}
+:LdaLookupGlobalSlot "["^u8_1^"]", "["^u8_2^"]", u8_3 is scale=0 & op=45 ; u8_1 ; u8_2 ; u8_3 {
+  ACC = js_lda_lookup_global_slot(u8_1:1, u8_2:1, u8_3:1);
+}
+:LdaLookupGlobalSlot.Wide "["^u16_1^"]", "["^u16_2^"]", u16_3 is scale=1 & op=45 ; u16_1 ; u16_2 ; u16_3 {
+  ACC = js_lda_lookup_global_slot(u16_1:2, u16_2:2, u16_3:2);
+}
+:LdaLookupGlobalSlot.ExtraWide "["^u32_1^"]", "["^u32_2^"]", u32_3 is scale=2 & op=45 ; u32_1 ; u32_2 ; u32_3 {
+  ACC = js_lda_lookup_global_slot(u32_1:4, u32_2:4, u32_3:4);
+}
+:LdaLookupSlotInsideTypeof "["^u8_1^"]" is scale=0 & op=46 ; u8_1 {
+  ACC = js_lda_lookup_slot_inside_typeof(u8_1:1);
+}
+:LdaLookupSlotInsideTypeof.Wide "["^u16_1^"]" is scale=1 & op=46 ; u16_1 {
+  ACC = js_lda_lookup_slot_inside_typeof(u16_1:2);
+}
+:LdaLookupSlotInsideTypeof.ExtraWide "["^u32_1^"]" is scale=2 & op=46 ; u32_1 {
+  ACC = js_lda_lookup_slot_inside_typeof(u32_1:4);
+}
+:LdaLookupContextSlotInsideTypeof "["^u8_1^"]", "["^u8_2^"]", u8_3 is scale=0 & op=47 ; u8_1 ; u8_2 ; u8_3 {
+  ACC = js_lda_lookup_context_slot_inside_typeof(u8_1:1, u8_2:1, u8_3:1);
+}
+:LdaLookupContextSlotInsideTypeof.Wide "["^u16_1^"]", "["^u16_2^"]", u16_3 is scale=1 & op=47 ; u16_1 ; u16_2 ; u16_3 {
+  ACC = js_lda_lookup_context_slot_inside_typeof(u16_1:2, u16_2:2, u16_3:2);
+}
+:LdaLookupContextSlotInsideTypeof.ExtraWide "["^u32_1^"]", "["^u32_2^"]", u32_3 is scale=2 & op=47 ; u32_1 ; u32_2 ; u32_3 {
+  ACC = js_lda_lookup_context_slot_inside_typeof(u32_1:4, u32_2:4, u32_3:4);
+}
+:LdaLookupScriptContextSlotInsideTypeof "["^u8_1^"]", "["^u8_2^"]", u8_3 is scale=0 & op=48 ; u8_1 ; u8_2 ; u8_3 {
+  ACC = js_lda_lookup_script_context_slot_inside_typeof(u8_1:1, u8_2:1, u8_3:1);
+}
+:LdaLookupScriptContextSlotInsideTypeof.Wide "["^u16_1^"]", "["^u16_2^"]", u16_3 is scale=1 & op=48 ; u16_1 ; u16_2 ; u16_3 {
+  ACC = js_lda_lookup_script_context_slot_inside_typeof(u16_1:2, u16_2:2, u16_3:2);
+}
+:LdaLookupScriptContextSlotInsideTypeof.ExtraWide "["^u32_1^"]", "["^u32_2^"]", u32_3 is scale=2 & op=48 ; u32_1 ; u32_2 ; u32_3 {
+  ACC = js_lda_lookup_script_context_slot_inside_typeof(u32_1:4, u32_2:4, u32_3:4);
+}
+:LdaLookupGlobalSlotInsideTypeof "["^u8_1^"]", "["^u8_2^"]", u8_3 is scale=0 & op=49 ; u8_1 ; u8_2 ; u8_3 {
+  ACC = js_lda_lookup_global_slot_inside_typeof(u8_1:1, u8_2:1, u8_3:1);
+}
+:LdaLookupGlobalSlotInsideTypeof.Wide "["^u16_1^"]", "["^u16_2^"]", u16_3 is scale=1 & op=49 ; u16_1 ; u16_2 ; u16_3 {
+  ACC = js_lda_lookup_global_slot_inside_typeof(u16_1:2, u16_2:2, u16_3:2);
+}
+:LdaLookupGlobalSlotInsideTypeof.ExtraWide "["^u32_1^"]", "["^u32_2^"]", u32_3 is scale=2 & op=49 ; u32_1 ; u32_2 ; u32_3 {
+  ACC = js_lda_lookup_global_slot_inside_typeof(u32_1:4, u32_2:4, u32_3:4);
+}
+:StaLookupSlot "["^u8_1^"]", u8_2 is scale=0 & op=50 ; u8_1 ; u8_2 {
+  ACC = js_sta_lookup_slot(ACC, u8_1:1, u8_2:1);
+}
+:StaLookupSlot.Wide "["^u16_1^"]", u8_2 is scale=1 & op=50 ; u16_1 ; u8_2 {
+  ACC = js_sta_lookup_slot(ACC, u16_1:2, u8_2:1);
+}
+:StaLookupSlot.ExtraWide "["^u32_1^"]", u8_2 is scale=2 & op=50 ; u32_1 ; u8_2 {
+  ACC = js_sta_lookup_slot(ACC, u32_1:4, u8_2:1);
+}
+:GetNamedProperty r8_1, "["^u8_2^"]", "["^u8_3^"]" is scale=0 & op=51 ; r8_1 ; u8_2 ; u8_3 {
+  kv0:8 = js_const(u8_2:4); ACC = js_getprop(r8_1, kv0);
+}
+:GetNamedProperty.Wide s16_1, "["^u16_2^"]", "["^u16_3^"]" is scale=1 & op=51 ; s16_1 ; u16_2 ; u16_3 {
+  kv0:8 = js_const(u16_2:4); ACC = js_getprop(*[frame]:8 (s16_1 * 8:4), kv0);
+}
+:GetNamedProperty.ExtraWide s32_1, "["^u32_2^"]", "["^u32_3^"]" is scale=2 & op=51 ; s32_1 ; u32_2 ; u32_3 {
+  kv0:8 = js_const(u32_2:4); ACC = js_getprop(*[frame]:8 (s32_1 * 8:4), kv0);
+}
+:GetNamedPropertyFromSuper r8_1, "["^u8_2^"]", "["^u8_3^"]" is scale=0 & op=52 ; r8_1 ; u8_2 ; u8_3 {
+  ACC = js_get_named_property_from_super(ACC, r8_1, u8_2:1, u8_3:1);
+}
+:GetNamedPropertyFromSuper.Wide s16_1, "["^u16_2^"]", "["^u16_3^"]" is scale=1 & op=52 ; s16_1 ; u16_2 ; u16_3 {
+  ACC = js_get_named_property_from_super(ACC, *[frame]:8 (s16_1 * 8:4), u16_2:2, u16_3:2);
+}
+:GetNamedPropertyFromSuper.ExtraWide s32_1, "["^u32_2^"]", "["^u32_3^"]" is scale=2 & op=52 ; s32_1 ; u32_2 ; u32_3 {
+  ACC = js_get_named_property_from_super(ACC, *[frame]:8 (s32_1 * 8:4), u32_2:4, u32_3:4);
+}
+:GetKeyedProperty r8_1, "["^u8_2^"]" is scale=0 & op=53 ; r8_1 ; u8_2 {
+  ACC = js_getkeyed(r8_1, ACC);
+}
+:GetKeyedProperty.Wide s16_1, "["^u16_2^"]" is scale=1 & op=53 ; s16_1 ; u16_2 {
+  ACC = js_getkeyed(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:GetKeyedProperty.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=53 ; s32_1 ; u32_2 {
+  ACC = js_getkeyed(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:GetEnumeratedKeyedProperty r8_1, r8_2, r8_3, "["^u8_4^"]" is scale=0 & op=54 ; r8_1 ; r8_2 ; r8_3 ; u8_4 {
+  ACC = js_get_enumerated_keyed_property(ACC, r8_1, r8_2, r8_3, u8_4:1);
+}
+:GetEnumeratedKeyedProperty.Wide s16_1, s16_2, s16_3, "["^u16_4^"]" is scale=1 & op=54 ; s16_1 ; s16_2 ; s16_3 ; u16_4 {
+  ACC = js_get_enumerated_keyed_property(ACC, *[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), *[frame]:8 (s16_3 * 8:4), u16_4:2);
+}
+:GetEnumeratedKeyedProperty.ExtraWide s32_1, s32_2, s32_3, "["^u32_4^"]" is scale=2 & op=54 ; s32_1 ; s32_2 ; s32_3 ; u32_4 {
+  ACC = js_get_enumerated_keyed_property(ACC, *[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), *[frame]:8 (s32_3 * 8:4), u32_4:4);
+}
+:LdaModuleVariable "["^s8_1^"]", u8_2 is scale=0 & op=55 ; s8_1 ; u8_2 {
+  ACC = js_lda_module_variable(s8_1:1, u8_2:1);
+}
+:LdaModuleVariable.Wide "["^s16_1^"]", u16_2 is scale=1 & op=55 ; s16_1 ; u16_2 {
+  ACC = js_lda_module_variable(s16_1:2, u16_2:2);
+}
+:LdaModuleVariable.ExtraWide "["^s32_1^"]", u32_2 is scale=2 & op=55 ; s32_1 ; u32_2 {
+  ACC = js_lda_module_variable(s32_1:4, u32_2:4);
+}
+:StaModuleVariable "["^s8_1^"]", u8_2 is scale=0 & op=56 ; s8_1 ; u8_2 {
+  js_sta_module_variable(ACC, s8_1:1, u8_2:1);
+}
+:StaModuleVariable.Wide "["^s16_1^"]", u16_2 is scale=1 & op=56 ; s16_1 ; u16_2 {
+  js_sta_module_variable(ACC, s16_1:2, u16_2:2);
+}
+:StaModuleVariable.ExtraWide "["^s32_1^"]", u32_2 is scale=2 & op=56 ; s32_1 ; u32_2 {
+  js_sta_module_variable(ACC, s32_1:4, u32_2:4);
+}
+:SetNamedProperty r8_1, "["^u8_2^"]", "["^u8_3^"]" is scale=0 & op=57 ; r8_1 ; u8_2 ; u8_3 {
+  kv0:8 = js_const(u8_2:4); js_setprop(r8_1, kv0, ACC);
+}
+:SetNamedProperty.Wide s16_1, "["^u16_2^"]", "["^u16_3^"]" is scale=1 & op=57 ; s16_1 ; u16_2 ; u16_3 {
+  kv0:8 = js_const(u16_2:4); js_setprop(*[frame]:8 (s16_1 * 8:4), kv0, ACC);
+}
+:SetNamedProperty.ExtraWide s32_1, "["^u32_2^"]", "["^u32_3^"]" is scale=2 & op=57 ; s32_1 ; u32_2 ; u32_3 {
+  kv0:8 = js_const(u32_2:4); js_setprop(*[frame]:8 (s32_1 * 8:4), kv0, ACC);
+}
+:DefineNamedOwnProperty r8_1, "["^u8_2^"]", "["^u8_3^"]" is scale=0 & op=58 ; r8_1 ; u8_2 ; u8_3 {
+  kv0:8 = js_const(u8_2:4); js_setprop(r8_1, kv0, ACC);
+}
+:DefineNamedOwnProperty.Wide s16_1, "["^u16_2^"]", "["^u16_3^"]" is scale=1 & op=58 ; s16_1 ; u16_2 ; u16_3 {
+  kv0:8 = js_const(u16_2:4); js_setprop(*[frame]:8 (s16_1 * 8:4), kv0, ACC);
+}
+:DefineNamedOwnProperty.ExtraWide s32_1, "["^u32_2^"]", "["^u32_3^"]" is scale=2 & op=58 ; s32_1 ; u32_2 ; u32_3 {
+  kv0:8 = js_const(u32_2:4); js_setprop(*[frame]:8 (s32_1 * 8:4), kv0, ACC);
+}
+:SetKeyedProperty r8_1, r8_2, "["^u8_3^"]" is scale=0 & op=59 ; r8_1 ; r8_2 ; u8_3 {
+  js_setkeyed(r8_1, r8_2, ACC);
+}
+:SetKeyedProperty.Wide s16_1, s16_2, "["^u16_3^"]" is scale=1 & op=59 ; s16_1 ; s16_2 ; u16_3 {
+  js_setkeyed(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), ACC);
+}
+:SetKeyedProperty.ExtraWide s32_1, s32_2, "["^u32_3^"]" is scale=2 & op=59 ; s32_1 ; s32_2 ; u32_3 {
+  js_setkeyed(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), ACC);
+}
+:DefineKeyedOwnProperty r8_1, r8_2, u8_3, "["^u8_4^"]" is scale=0 & op=60 ; r8_1 ; r8_2 ; u8_3 ; u8_4 {
+  js_setkeyed(r8_1, r8_2, ACC);
+}
+:DefineKeyedOwnProperty.Wide s16_1, s16_2, u8_3, "["^u16_4^"]" is scale=1 & op=60 ; s16_1 ; s16_2 ; u8_3 ; u16_4 {
+  js_setkeyed(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), ACC);
+}
+:DefineKeyedOwnProperty.ExtraWide s32_1, s32_2, u8_3, "["^u32_4^"]" is scale=2 & op=60 ; s32_1 ; s32_2 ; u8_3 ; u32_4 {
+  js_setkeyed(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), ACC);
+}
+:StaInArrayLiteral r8_1, r8_2, "["^u8_3^"]" is scale=0 & op=61 ; r8_1 ; r8_2 ; u8_3 {
+  js_setkeyed(r8_1, r8_2, ACC);
+}
+:StaInArrayLiteral.Wide s16_1, s16_2, "["^u16_3^"]" is scale=1 & op=61 ; s16_1 ; s16_2 ; u16_3 {
+  js_setkeyed(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), ACC);
+}
+:StaInArrayLiteral.ExtraWide s32_1, s32_2, "["^u32_3^"]" is scale=2 & op=61 ; s32_1 ; s32_2 ; u32_3 {
+  js_setkeyed(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), ACC);
+}
+:DefineKeyedOwnPropertyInLiteral r8_1, r8_2, u8_3, "["^u8_4^"]" is scale=0 & op=62 ; r8_1 ; r8_2 ; u8_3 ; u8_4 {
+  js_define_keyed_own_property_in_literal(ACC, r8_1, r8_2, u8_3:1, u8_4:1);
+}
+:DefineKeyedOwnPropertyInLiteral.Wide s16_1, s16_2, u8_3, "["^u16_4^"]" is scale=1 & op=62 ; s16_1 ; s16_2 ; u8_3 ; u16_4 {
+  js_define_keyed_own_property_in_literal(ACC, *[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), u8_3:1, u16_4:2);
+}
+:DefineKeyedOwnPropertyInLiteral.ExtraWide s32_1, s32_2, u8_3, "["^u32_4^"]" is scale=2 & op=62 ; s32_1 ; s32_2 ; u8_3 ; u32_4 {
+  js_define_keyed_own_property_in_literal(ACC, *[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), u8_3:1, u32_4:4);
+}
+:Add r8_1, "["^u8_2^"]" is scale=0 & op=63 ; r8_1 ; u8_2 {
+  ACC = js_add(r8_1, ACC);
+}
+:Add.Wide s16_1, "["^u16_2^"]" is scale=1 & op=63 ; s16_1 ; u16_2 {
+  ACC = js_add(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:Add.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=63 ; s32_1 ; u32_2 {
+  ACC = js_add(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:Sub r8_1, "["^u8_2^"]" is scale=0 & op=64 ; r8_1 ; u8_2 {
+  ACC = js_sub(r8_1, ACC);
+}
+:Sub.Wide s16_1, "["^u16_2^"]" is scale=1 & op=64 ; s16_1 ; u16_2 {
+  ACC = js_sub(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:Sub.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=64 ; s32_1 ; u32_2 {
+  ACC = js_sub(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:Mul r8_1, "["^u8_2^"]" is scale=0 & op=65 ; r8_1 ; u8_2 {
+  ACC = js_mul(r8_1, ACC);
+}
+:Mul.Wide s16_1, "["^u16_2^"]" is scale=1 & op=65 ; s16_1 ; u16_2 {
+  ACC = js_mul(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:Mul.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=65 ; s32_1 ; u32_2 {
+  ACC = js_mul(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:Div r8_1, "["^u8_2^"]" is scale=0 & op=66 ; r8_1 ; u8_2 {
+  ACC = js_div(r8_1, ACC);
+}
+:Div.Wide s16_1, "["^u16_2^"]" is scale=1 & op=66 ; s16_1 ; u16_2 {
+  ACC = js_div(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:Div.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=66 ; s32_1 ; u32_2 {
+  ACC = js_div(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:Mod r8_1, "["^u8_2^"]" is scale=0 & op=67 ; r8_1 ; u8_2 {
+  ACC = js_mod(r8_1, ACC);
+}
+:Mod.Wide s16_1, "["^u16_2^"]" is scale=1 & op=67 ; s16_1 ; u16_2 {
+  ACC = js_mod(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:Mod.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=67 ; s32_1 ; u32_2 {
+  ACC = js_mod(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:Exp r8_1, "["^u8_2^"]" is scale=0 & op=68 ; r8_1 ; u8_2 {
+  ACC = js_exp(r8_1, ACC);
+}
+:Exp.Wide s16_1, "["^u16_2^"]" is scale=1 & op=68 ; s16_1 ; u16_2 {
+  ACC = js_exp(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:Exp.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=68 ; s32_1 ; u32_2 {
+  ACC = js_exp(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:BitwiseOr r8_1, "["^u8_2^"]" is scale=0 & op=69 ; r8_1 ; u8_2 {
+  ACC = js_bitwiseor(r8_1, ACC);
+}
+:BitwiseOr.Wide s16_1, "["^u16_2^"]" is scale=1 & op=69 ; s16_1 ; u16_2 {
+  ACC = js_bitwiseor(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:BitwiseOr.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=69 ; s32_1 ; u32_2 {
+  ACC = js_bitwiseor(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:BitwiseXor r8_1, "["^u8_2^"]" is scale=0 & op=70 ; r8_1 ; u8_2 {
+  ACC = js_bitwisexor(r8_1, ACC);
+}
+:BitwiseXor.Wide s16_1, "["^u16_2^"]" is scale=1 & op=70 ; s16_1 ; u16_2 {
+  ACC = js_bitwisexor(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:BitwiseXor.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=70 ; s32_1 ; u32_2 {
+  ACC = js_bitwisexor(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:BitwiseAnd r8_1, "["^u8_2^"]" is scale=0 & op=71 ; r8_1 ; u8_2 {
+  ACC = js_bitwiseand(r8_1, ACC);
+}
+:BitwiseAnd.Wide s16_1, "["^u16_2^"]" is scale=1 & op=71 ; s16_1 ; u16_2 {
+  ACC = js_bitwiseand(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:BitwiseAnd.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=71 ; s32_1 ; u32_2 {
+  ACC = js_bitwiseand(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:ShiftLeft r8_1, "["^u8_2^"]" is scale=0 & op=72 ; r8_1 ; u8_2 {
+  ACC = js_shiftleft(r8_1, ACC);
+}
+:ShiftLeft.Wide s16_1, "["^u16_2^"]" is scale=1 & op=72 ; s16_1 ; u16_2 {
+  ACC = js_shiftleft(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:ShiftLeft.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=72 ; s32_1 ; u32_2 {
+  ACC = js_shiftleft(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:ShiftRight r8_1, "["^u8_2^"]" is scale=0 & op=73 ; r8_1 ; u8_2 {
+  ACC = js_shiftright(r8_1, ACC);
+}
+:ShiftRight.Wide s16_1, "["^u16_2^"]" is scale=1 & op=73 ; s16_1 ; u16_2 {
+  ACC = js_shiftright(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:ShiftRight.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=73 ; s32_1 ; u32_2 {
+  ACC = js_shiftright(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:ShiftRightLogical r8_1, "["^u8_2^"]" is scale=0 & op=74 ; r8_1 ; u8_2 {
+  ACC = js_shiftrightlogical(r8_1, ACC);
+}
+:ShiftRightLogical.Wide s16_1, "["^u16_2^"]" is scale=1 & op=74 ; s16_1 ; u16_2 {
+  ACC = js_shiftrightlogical(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:ShiftRightLogical.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=74 ; s32_1 ; u32_2 {
+  ACC = js_shiftrightlogical(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:AddSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=75 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_add(ACC, c);
+}
+:AddSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=75 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_add(ACC, c);
+}
+:AddSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=75 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_add(ACC, c);
+}
+:SubSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=76 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_sub(ACC, c);
+}
+:SubSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=76 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_sub(ACC, c);
+}
+:SubSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=76 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_sub(ACC, c);
+}
+:MulSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=77 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_mul(ACC, c);
+}
+:MulSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=77 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_mul(ACC, c);
+}
+:MulSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=77 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_mul(ACC, c);
+}
+:DivSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=78 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_div(ACC, c);
+}
+:DivSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=78 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_div(ACC, c);
+}
+:DivSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=78 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_div(ACC, c);
+}
+:ModSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=79 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_mod(ACC, c);
+}
+:ModSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=79 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_mod(ACC, c);
+}
+:ModSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=79 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_mod(ACC, c);
+}
+:ExpSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=80 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_exp(ACC, c);
+}
+:ExpSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=80 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_exp(ACC, c);
+}
+:ExpSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=80 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_exp(ACC, c);
+}
+:BitwiseOrSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=81 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_bitwiseor(ACC, c);
+}
+:BitwiseOrSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=81 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_bitwiseor(ACC, c);
+}
+:BitwiseOrSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=81 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_bitwiseor(ACC, c);
+}
+:BitwiseXorSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=82 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_bitwisexor(ACC, c);
+}
+:BitwiseXorSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=82 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_bitwisexor(ACC, c);
+}
+:BitwiseXorSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=82 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_bitwisexor(ACC, c);
+}
+:BitwiseAndSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=83 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_bitwiseand(ACC, c);
+}
+:BitwiseAndSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=83 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_bitwiseand(ACC, c);
+}
+:BitwiseAndSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=83 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_bitwiseand(ACC, c);
+}
+:ShiftLeftSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=84 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_shiftleft(ACC, c);
+}
+:ShiftLeftSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=84 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_shiftleft(ACC, c);
+}
+:ShiftLeftSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=84 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_shiftleft(ACC, c);
+}
+:ShiftRightSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=85 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_shiftright(ACC, c);
+}
+:ShiftRightSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=85 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_shiftright(ACC, c);
+}
+:ShiftRightSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=85 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_shiftright(ACC, c);
+}
+:ShiftRightLogicalSmi "["^s8_1^"]", "["^u8_2^"]" is scale=0 & op=86 ; s8_1 ; u8_2 {
+  c:8 = s8_1; ACC = js_shiftrightlogical(ACC, c);
+}
+:ShiftRightLogicalSmi.Wide "["^s16_1^"]", "["^u16_2^"]" is scale=1 & op=86 ; s16_1 ; u16_2 {
+  c:8 = s16_1; ACC = js_shiftrightlogical(ACC, c);
+}
+:ShiftRightLogicalSmi.ExtraWide "["^s32_1^"]", "["^u32_2^"]" is scale=2 & op=86 ; s32_1 ; u32_2 {
+  c:8 = s32_1; ACC = js_shiftrightlogical(ACC, c);
+}
+:Inc "["^u8_1^"]" is scale=0 & op=87 ; u8_1 {
+  ACC = js_inc(ACC);
+}
+:Inc.Wide "["^u16_1^"]" is scale=1 & op=87 ; u16_1 {
+  ACC = js_inc(ACC);
+}
+:Inc.ExtraWide "["^u32_1^"]" is scale=2 & op=87 ; u32_1 {
+  ACC = js_inc(ACC);
+}
+:Dec "["^u8_1^"]" is scale=0 & op=88 ; u8_1 {
+  ACC = js_dec(ACC);
+}
+:Dec.Wide "["^u16_1^"]" is scale=1 & op=88 ; u16_1 {
+  ACC = js_dec(ACC);
+}
+:Dec.ExtraWide "["^u32_1^"]" is scale=2 & op=88 ; u32_1 {
+  ACC = js_dec(ACC);
+}
+:Negate "["^u8_1^"]" is scale=0 & op=89 ; u8_1 {
+  ACC = js_negate(ACC);
+}
+:Negate.Wide "["^u16_1^"]" is scale=1 & op=89 ; u16_1 {
+  ACC = js_negate(ACC);
+}
+:Negate.ExtraWide "["^u32_1^"]" is scale=2 & op=89 ; u32_1 {
+  ACC = js_negate(ACC);
+}
+:BitwiseNot "["^u8_1^"]" is scale=0 & op=90 ; u8_1 {
+  ACC = js_bitwisenot(ACC);
+}
+:BitwiseNot.Wide "["^u16_1^"]" is scale=1 & op=90 ; u16_1 {
+  ACC = js_bitwisenot(ACC);
+}
+:BitwiseNot.ExtraWide "["^u32_1^"]" is scale=2 & op=90 ; u32_1 {
+  ACC = js_bitwisenot(ACC);
+}
+:ToBooleanLogicalNot is scale=0 & op=91 {
+  ACC = js_tobooleanlogicalnot(ACC);
+}
+:LogicalNot is scale=0 & op=92 {
+  ACC = js_logicalnot(ACC);
+}
+:TypeOf "["^u8_1^"]" is scale=0 & op=93 ; u8_1 {
+  ACC = js_typeof(ACC);
+}
+:TypeOf.Wide "["^u16_1^"]" is scale=1 & op=93 ; u16_1 {
+  ACC = js_typeof(ACC);
+}
+:TypeOf.ExtraWide "["^u32_1^"]" is scale=2 & op=93 ; u32_1 {
+  ACC = js_typeof(ACC);
+}
+:DeletePropertyStrict r8_1 is scale=0 & op=94 ; r8_1 {
+  ACC = js_delete_property_strict(ACC, r8_1);
+}
+:DeletePropertyStrict.Wide s16_1 is scale=1 & op=94 ; s16_1 {
+  ACC = js_delete_property_strict(ACC, *[frame]:8 (s16_1 * 8:4));
+}
+:DeletePropertyStrict.ExtraWide s32_1 is scale=2 & op=94 ; s32_1 {
+  ACC = js_delete_property_strict(ACC, *[frame]:8 (s32_1 * 8:4));
+}
+:DeletePropertySloppy r8_1 is scale=0 & op=95 ; r8_1 {
+  ACC = js_delete_property_sloppy(ACC, r8_1);
+}
+:DeletePropertySloppy.Wide s16_1 is scale=1 & op=95 ; s16_1 {
+  ACC = js_delete_property_sloppy(ACC, *[frame]:8 (s16_1 * 8:4));
+}
+:DeletePropertySloppy.ExtraWide s32_1 is scale=2 & op=95 ; s32_1 {
+  ACC = js_delete_property_sloppy(ACC, *[frame]:8 (s32_1 * 8:4));
+}
+:GetSuperConstructor r8_1 is scale=0 & op=96 ; r8_1 {
+  r8_1 = js_get_super_constructor(ACC);
+}
+:GetSuperConstructor.Wide s16_1 is scale=1 & op=96 ; s16_1 {
+  *[frame]:8 (s16_1 * 8:4) = js_get_super_constructor(ACC);
+}
+:GetSuperConstructor.ExtraWide s32_1 is scale=2 & op=96 ; s32_1 {
+  *[frame]:8 (s32_1 * 8:4) = js_get_super_constructor(ACC);
+}
+:FindNonDefaultConstructorOrConstruct r8_1, r8_2, r8_3 is scale=0 & op=97 ; r8_1 ; r8_2 ; r8_3 {
+  r8_3 = js_find_non_default_constructor_or_construct(r8_1, r8_2);
+}
+:FindNonDefaultConstructorOrConstruct.Wide s16_1, s16_2, s16_3 is scale=1 & op=97 ; s16_1 ; s16_2 ; s16_3 {
+  *[frame]:8 (s16_3 * 8:4) = js_find_non_default_constructor_or_construct(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4));
+}
+:FindNonDefaultConstructorOrConstruct.ExtraWide s32_1, s32_2, s32_3 is scale=2 & op=97 ; s32_1 ; s32_2 ; s32_3 {
+  *[frame]:8 (s32_3 * 8:4) = js_find_non_default_constructor_or_construct(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4));
+}
+:CallAnyReceiver r8_1, r8_2, u8_3, "["^u8_4^"]" is scale=0 & op=98 ; r8_1 ; r8_2 ; u8_3 ; u8_4 {
+  ACC = js_call_list(r8_1, r8_2, u8_3:4);
+}
+:CallAnyReceiver.Wide s16_1, s16_2, u16_3, "["^u16_4^"]" is scale=1 & op=98 ; s16_1 ; s16_2 ; u16_3 ; u16_4 {
+  ACC = js_call_list(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), u16_3:4);
+}
+:CallAnyReceiver.ExtraWide s32_1, s32_2, u32_3, "["^u32_4^"]" is scale=2 & op=98 ; s32_1 ; s32_2 ; u32_3 ; u32_4 {
+  ACC = js_call_list(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), u32_3:4);
+}
+:CallProperty r8_1, r8_2, u8_3, "["^u8_4^"]" is scale=0 & op=99 ; r8_1 ; r8_2 ; u8_3 ; u8_4 {
+  ACC = js_call_list(r8_1, r8_2, u8_3:4);
+}
+:CallProperty.Wide s16_1, s16_2, u16_3, "["^u16_4^"]" is scale=1 & op=99 ; s16_1 ; s16_2 ; u16_3 ; u16_4 {
+  ACC = js_call_list(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), u16_3:4);
+}
+:CallProperty.ExtraWide s32_1, s32_2, u32_3, "["^u32_4^"]" is scale=2 & op=99 ; s32_1 ; s32_2 ; u32_3 ; u32_4 {
+  ACC = js_call_list(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), u32_3:4);
+}
+:CallProperty0 r8_1, r8_2, "["^u8_3^"]" is scale=0 & op=100 ; r8_1 ; r8_2 ; u8_3 {
+  ACC = js_call(r8_1, r8_2);
+}
+:CallProperty0.Wide s16_1, s16_2, "["^u16_3^"]" is scale=1 & op=100 ; s16_1 ; s16_2 ; u16_3 {
+  ACC = js_call(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4));
+}
+:CallProperty0.ExtraWide s32_1, s32_2, "["^u32_3^"]" is scale=2 & op=100 ; s32_1 ; s32_2 ; u32_3 {
+  ACC = js_call(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4));
+}
+:CallProperty1 r8_1, r8_2, r8_3, "["^u8_4^"]" is scale=0 & op=101 ; r8_1 ; r8_2 ; r8_3 ; u8_4 {
+  ACC = js_call(r8_1, r8_2, r8_3);
+}
+:CallProperty1.Wide s16_1, s16_2, s16_3, "["^u16_4^"]" is scale=1 & op=101 ; s16_1 ; s16_2 ; s16_3 ; u16_4 {
+  ACC = js_call(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), *[frame]:8 (s16_3 * 8:4));
+}
+:CallProperty1.ExtraWide s32_1, s32_2, s32_3, "["^u32_4^"]" is scale=2 & op=101 ; s32_1 ; s32_2 ; s32_3 ; u32_4 {
+  ACC = js_call(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), *[frame]:8 (s32_3 * 8:4));
+}
+:CallProperty2 r8_1, r8_2, r8_3, r8_4, "["^u8_5^"]" is scale=0 & op=102 ; r8_1 ; r8_2 ; r8_3 ; r8_4 ; u8_5 {
+  ACC = js_call(r8_1, r8_2, r8_3, r8_4);
+}
+:CallProperty2.Wide s16_1, s16_2, s16_3, s16_4, "["^u16_5^"]" is scale=1 & op=102 ; s16_1 ; s16_2 ; s16_3 ; s16_4 ; u16_5 {
+  ACC = js_call(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), *[frame]:8 (s16_3 * 8:4), *[frame]:8 (s16_4 * 8:4));
+}
+:CallProperty2.ExtraWide s32_1, s32_2, s32_3, s32_4, "["^u32_5^"]" is scale=2 & op=102 ; s32_1 ; s32_2 ; s32_3 ; s32_4 ; u32_5 {
+  ACC = js_call(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), *[frame]:8 (s32_3 * 8:4), *[frame]:8 (s32_4 * 8:4));
+}
+:CallUndefinedReceiver r8_1, r8_2, u8_3, "["^u8_4^"]" is scale=0 & op=103 ; r8_1 ; r8_2 ; u8_3 ; u8_4 {
+  ACC = js_call_list(r8_1, r8_2, u8_3:4);
+}
+:CallUndefinedReceiver.Wide s16_1, s16_2, u16_3, "["^u16_4^"]" is scale=1 & op=103 ; s16_1 ; s16_2 ; u16_3 ; u16_4 {
+  ACC = js_call_list(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), u16_3:4);
+}
+:CallUndefinedReceiver.ExtraWide s32_1, s32_2, u32_3, "["^u32_4^"]" is scale=2 & op=103 ; s32_1 ; s32_2 ; u32_3 ; u32_4 {
+  ACC = js_call_list(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), u32_3:4);
+}
+:CallUndefinedReceiver0 r8_1, "["^u8_2^"]" is scale=0 & op=104 ; r8_1 ; u8_2 {
+  kv0:8 = js_undefined(); ACC = js_call(r8_1, kv0);
+}
+:CallUndefinedReceiver0.Wide s16_1, "["^u16_2^"]" is scale=1 & op=104 ; s16_1 ; u16_2 {
+  kv0:8 = js_undefined(); ACC = js_call(*[frame]:8 (s16_1 * 8:4), kv0);
+}
+:CallUndefinedReceiver0.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=104 ; s32_1 ; u32_2 {
+  kv0:8 = js_undefined(); ACC = js_call(*[frame]:8 (s32_1 * 8:4), kv0);
+}
+:CallUndefinedReceiver1 r8_1, r8_2, "["^u8_3^"]" is scale=0 & op=105 ; r8_1 ; r8_2 ; u8_3 {
+  kv0:8 = js_undefined(); ACC = js_call(r8_1, kv0, r8_2);
+}
+:CallUndefinedReceiver1.Wide s16_1, s16_2, "["^u16_3^"]" is scale=1 & op=105 ; s16_1 ; s16_2 ; u16_3 {
+  kv0:8 = js_undefined(); ACC = js_call(*[frame]:8 (s16_1 * 8:4), kv0, *[frame]:8 (s16_2 * 8:4));
+}
+:CallUndefinedReceiver1.ExtraWide s32_1, s32_2, "["^u32_3^"]" is scale=2 & op=105 ; s32_1 ; s32_2 ; u32_3 {
+  kv0:8 = js_undefined(); ACC = js_call(*[frame]:8 (s32_1 * 8:4), kv0, *[frame]:8 (s32_2 * 8:4));
+}
+:CallUndefinedReceiver2 r8_1, r8_2, r8_3, "["^u8_4^"]" is scale=0 & op=106 ; r8_1 ; r8_2 ; r8_3 ; u8_4 {
+  kv0:8 = js_undefined(); ACC = js_call(r8_1, kv0, r8_2, r8_3);
+}
+:CallUndefinedReceiver2.Wide s16_1, s16_2, s16_3, "["^u16_4^"]" is scale=1 & op=106 ; s16_1 ; s16_2 ; s16_3 ; u16_4 {
+  kv0:8 = js_undefined(); ACC = js_call(*[frame]:8 (s16_1 * 8:4), kv0, *[frame]:8 (s16_2 * 8:4), *[frame]:8 (s16_3 * 8:4));
+}
+:CallUndefinedReceiver2.ExtraWide s32_1, s32_2, s32_3, "["^u32_4^"]" is scale=2 & op=106 ; s32_1 ; s32_2 ; s32_3 ; u32_4 {
+  kv0:8 = js_undefined(); ACC = js_call(*[frame]:8 (s32_1 * 8:4), kv0, *[frame]:8 (s32_2 * 8:4), *[frame]:8 (s32_3 * 8:4));
+}
+:CallWithSpread r8_1, r8_2, u8_3, "["^u8_4^"]" is scale=0 & op=107 ; r8_1 ; r8_2 ; u8_3 ; u8_4 {
+  ACC = js_call_list(r8_1, r8_2, u8_3:4);
+}
+:CallWithSpread.Wide s16_1, s16_2, u16_3, "["^u16_4^"]" is scale=1 & op=107 ; s16_1 ; s16_2 ; u16_3 ; u16_4 {
+  ACC = js_call_list(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), u16_3:4);
+}
+:CallWithSpread.ExtraWide s32_1, s32_2, u32_3, "["^u32_4^"]" is scale=2 & op=107 ; s32_1 ; s32_2 ; u32_3 ; u32_4 {
+  ACC = js_call_list(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), u32_3:4);
+}
+:CallRuntime u16_1, r8_2, u8_3 is scale=0 & op=108 ; u16_1 ; r8_2 ; u8_3 {
+  ACC = js_runtime(u16_1:2, r8_2, u8_3:4);
+}
+:CallRuntime.Wide u16_1, s16_2, u16_3 is scale=1 & op=108 ; u16_1 ; s16_2 ; u16_3 {
+  ACC = js_runtime(u16_1:2, *[frame]:8 (s16_2 * 8:4), u16_3:4);
+}
+:CallRuntime.ExtraWide u16_1, s32_2, u32_3 is scale=2 & op=108 ; u16_1 ; s32_2 ; u32_3 {
+  ACC = js_runtime(u16_1:2, *[frame]:8 (s32_2 * 8:4), u32_3:4);
+}
+:CallRuntimeForPair u16_1, r8_2, u8_3, r8_4 is scale=0 & op=109 ; u16_1 ; r8_2 ; u8_3 ; r8_4 {
+  r8_4 = js_call_runtime_for_pair(u16_1:2, r8_2, u8_3:1);
+}
+:CallRuntimeForPair.Wide u16_1, s16_2, u16_3, s16_4 is scale=1 & op=109 ; u16_1 ; s16_2 ; u16_3 ; s16_4 {
+  *[frame]:8 (s16_4 * 8:4) = js_call_runtime_for_pair(u16_1:2, *[frame]:8 (s16_2 * 8:4), u16_3:2);
+}
+:CallRuntimeForPair.ExtraWide u16_1, s32_2, u32_3, s32_4 is scale=2 & op=109 ; u16_1 ; s32_2 ; u32_3 ; s32_4 {
+  *[frame]:8 (s32_4 * 8:4) = js_call_runtime_for_pair(u16_1:2, *[frame]:8 (s32_2 * 8:4), u32_3:4);
+}
+:CallJSRuntime u8_1, r8_2, u8_3 is scale=0 & op=110 ; u8_1 ; r8_2 ; u8_3 {
+  ACC = js_jsruntime(u8_1:1, r8_2, u8_3:4);
+}
+:CallJSRuntime.Wide u8_1, s16_2, u16_3 is scale=1 & op=110 ; u8_1 ; s16_2 ; u16_3 {
+  ACC = js_jsruntime(u8_1:1, *[frame]:8 (s16_2 * 8:4), u16_3:4);
+}
+:CallJSRuntime.ExtraWide u8_1, s32_2, u32_3 is scale=2 & op=110 ; u8_1 ; s32_2 ; u32_3 {
+  ACC = js_jsruntime(u8_1:1, *[frame]:8 (s32_2 * 8:4), u32_3:4);
+}
+:InvokeIntrinsic u8_1, r8_2, u8_3 is scale=0 & op=111 ; u8_1 ; r8_2 ; u8_3 {
+  ACC = js_intrinsic(u8_1:1, r8_2, u8_3:4);
+}
+:InvokeIntrinsic.Wide u8_1, s16_2, u16_3 is scale=1 & op=111 ; u8_1 ; s16_2 ; u16_3 {
+  ACC = js_intrinsic(u8_1:1, *[frame]:8 (s16_2 * 8:4), u16_3:4);
+}
+:InvokeIntrinsic.ExtraWide u8_1, s32_2, u32_3 is scale=2 & op=111 ; u8_1 ; s32_2 ; u32_3 {
+  ACC = js_intrinsic(u8_1:1, *[frame]:8 (s32_2 * 8:4), u32_3:4);
+}
+:Construct r8_1, r8_2, u8_3, "["^u8_4^"]" is scale=0 & op=112 ; r8_1 ; r8_2 ; u8_3 ; u8_4 {
+  ACC = js_construct(r8_1, r8_2, u8_3:4, ACC);
+}
+:Construct.Wide s16_1, s16_2, u16_3, "["^u16_4^"]" is scale=1 & op=112 ; s16_1 ; s16_2 ; u16_3 ; u16_4 {
+  ACC = js_construct(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), u16_3:4, ACC);
+}
+:Construct.ExtraWide s32_1, s32_2, u32_3, "["^u32_4^"]" is scale=2 & op=112 ; s32_1 ; s32_2 ; u32_3 ; u32_4 {
+  ACC = js_construct(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), u32_3:4, ACC);
+}
+:ConstructWithSpread r8_1, r8_2, u8_3, "["^u8_4^"]" is scale=0 & op=113 ; r8_1 ; r8_2 ; u8_3 ; u8_4 {
+  ACC = js_construct(r8_1, r8_2, u8_3:4, ACC);
+}
+:ConstructWithSpread.Wide s16_1, s16_2, u16_3, "["^u16_4^"]" is scale=1 & op=113 ; s16_1 ; s16_2 ; u16_3 ; u16_4 {
+  ACC = js_construct(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), u16_3:4, ACC);
+}
+:ConstructWithSpread.ExtraWide s32_1, s32_2, u32_3, "["^u32_4^"]" is scale=2 & op=113 ; s32_1 ; s32_2 ; u32_3 ; u32_4 {
+  ACC = js_construct(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), u32_3:4, ACC);
+}
+:ConstructForwardAllArgs r8_1, "["^u8_2^"]" is scale=0 & op=114 ; r8_1 ; u8_2 {
+  ACC = js_construct_forward_all_args(ACC, r8_1, u8_2:1);
+}
+:ConstructForwardAllArgs.Wide s16_1, "["^u16_2^"]" is scale=1 & op=114 ; s16_1 ; u16_2 {
+  ACC = js_construct_forward_all_args(ACC, *[frame]:8 (s16_1 * 8:4), u16_2:2);
+}
+:ConstructForwardAllArgs.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=114 ; s32_1 ; u32_2 {
+  ACC = js_construct_forward_all_args(ACC, *[frame]:8 (s32_1 * 8:4), u32_2:4);
+}
+:TestEqual r8_1, "["^u8_2^"]" is scale=0 & op=115 ; r8_1 ; u8_2 {
+  ACC = js_equal(r8_1, ACC);
+}
+:TestEqual.Wide s16_1, "["^u16_2^"]" is scale=1 & op=115 ; s16_1 ; u16_2 {
+  ACC = js_equal(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:TestEqual.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=115 ; s32_1 ; u32_2 {
+  ACC = js_equal(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:TestEqualStrict r8_1, "["^u8_2^"]" is scale=0 & op=116 ; r8_1 ; u8_2 {
+  ACC = js_equalstrict(r8_1, ACC);
+}
+:TestEqualStrict.Wide s16_1, "["^u16_2^"]" is scale=1 & op=116 ; s16_1 ; u16_2 {
+  ACC = js_equalstrict(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:TestEqualStrict.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=116 ; s32_1 ; u32_2 {
+  ACC = js_equalstrict(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:TestLessThan r8_1, "["^u8_2^"]" is scale=0 & op=117 ; r8_1 ; u8_2 {
+  ACC = js_lessthan(r8_1, ACC);
+}
+:TestLessThan.Wide s16_1, "["^u16_2^"]" is scale=1 & op=117 ; s16_1 ; u16_2 {
+  ACC = js_lessthan(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:TestLessThan.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=117 ; s32_1 ; u32_2 {
+  ACC = js_lessthan(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:TestGreaterThan r8_1, "["^u8_2^"]" is scale=0 & op=118 ; r8_1 ; u8_2 {
+  ACC = js_greaterthan(r8_1, ACC);
+}
+:TestGreaterThan.Wide s16_1, "["^u16_2^"]" is scale=1 & op=118 ; s16_1 ; u16_2 {
+  ACC = js_greaterthan(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:TestGreaterThan.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=118 ; s32_1 ; u32_2 {
+  ACC = js_greaterthan(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:TestLessThanOrEqual r8_1, "["^u8_2^"]" is scale=0 & op=119 ; r8_1 ; u8_2 {
+  ACC = js_lessthanorequal(r8_1, ACC);
+}
+:TestLessThanOrEqual.Wide s16_1, "["^u16_2^"]" is scale=1 & op=119 ; s16_1 ; u16_2 {
+  ACC = js_lessthanorequal(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:TestLessThanOrEqual.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=119 ; s32_1 ; u32_2 {
+  ACC = js_lessthanorequal(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:TestGreaterThanOrEqual r8_1, "["^u8_2^"]" is scale=0 & op=120 ; r8_1 ; u8_2 {
+  ACC = js_greaterthanorequal(r8_1, ACC);
+}
+:TestGreaterThanOrEqual.Wide s16_1, "["^u16_2^"]" is scale=1 & op=120 ; s16_1 ; u16_2 {
+  ACC = js_greaterthanorequal(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:TestGreaterThanOrEqual.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=120 ; s32_1 ; u32_2 {
+  ACC = js_greaterthanorequal(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:TestInstanceOf r8_1, "["^u8_2^"]" is scale=0 & op=121 ; r8_1 ; u8_2 {
+  ACC = js_instanceof(r8_1, ACC);
+}
+:TestInstanceOf.Wide s16_1, "["^u16_2^"]" is scale=1 & op=121 ; s16_1 ; u16_2 {
+  ACC = js_instanceof(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:TestInstanceOf.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=121 ; s32_1 ; u32_2 {
+  ACC = js_instanceof(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:TestIn r8_1, "["^u8_2^"]" is scale=0 & op=122 ; r8_1 ; u8_2 {
+  ACC = js_in(r8_1, ACC);
+}
+:TestIn.Wide s16_1, "["^u16_2^"]" is scale=1 & op=122 ; s16_1 ; u16_2 {
+  ACC = js_in(*[frame]:8 (s16_1 * 8:4), ACC);
+}
+:TestIn.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=122 ; s32_1 ; u32_2 {
+  ACC = js_in(*[frame]:8 (s32_1 * 8:4), ACC);
+}
+:ToName is scale=0 & op=123 {
+  ACC = js_toname(ACC);
+}
+:ToNumber "["^u8_1^"]" is scale=0 & op=124 ; u8_1 {
+  ACC = js_tonumber(ACC);
+}
+:ToNumber.Wide "["^u16_1^"]" is scale=1 & op=124 ; u16_1 {
+  ACC = js_tonumber(ACC);
+}
+:ToNumber.ExtraWide "["^u32_1^"]" is scale=2 & op=124 ; u32_1 {
+  ACC = js_tonumber(ACC);
+}
+:ToNumeric "["^u8_1^"]" is scale=0 & op=125 ; u8_1 {
+  ACC = js_tonumeric(ACC);
+}
+:ToNumeric.Wide "["^u16_1^"]" is scale=1 & op=125 ; u16_1 {
+  ACC = js_tonumeric(ACC);
+}
+:ToNumeric.ExtraWide "["^u32_1^"]" is scale=2 & op=125 ; u32_1 {
+  ACC = js_tonumeric(ACC);
+}
+:ToObject r8_1 is scale=0 & op=126 ; r8_1 {
+  r8_1 = js_to_object(ACC);
+}
+:ToObject.Wide s16_1 is scale=1 & op=126 ; s16_1 {
+  *[frame]:8 (s16_1 * 8:4) = js_to_object(ACC);
+}
+:ToObject.ExtraWide s32_1 is scale=2 & op=126 ; s32_1 {
+  *[frame]:8 (s32_1 * 8:4) = js_to_object(ACC);
+}
+:ToString is scale=0 & op=127 {
+  ACC = js_tostring(ACC);
+}
+:ToBoolean is scale=0 & op=128 {
+  ACC = js_toboolean(ACC);
+}
+:CreateRegExpLiteral "["^u8_1^"]", "["^u8_2^"]", u16_3 is scale=0 & op=129 ; u8_1 ; u8_2 ; u16_3 {
+  ACC = js_create_reg_exp_literal(u8_1:1, u8_2:1, u16_3:2);
+}
+:CreateRegExpLiteral.Wide "["^u16_1^"]", "["^u16_2^"]", u16_3 is scale=1 & op=129 ; u16_1 ; u16_2 ; u16_3 {
+  ACC = js_create_reg_exp_literal(u16_1:2, u16_2:2, u16_3:2);
+}
+:CreateRegExpLiteral.ExtraWide "["^u32_1^"]", "["^u32_2^"]", u16_3 is scale=2 & op=129 ; u32_1 ; u32_2 ; u16_3 {
+  ACC = js_create_reg_exp_literal(u32_1:4, u32_2:4, u16_3:2);
+}
+:CreateArrayLiteral "["^u8_1^"]", "["^u8_2^"]", u8_3 is scale=0 & op=130 ; u8_1 ; u8_2 ; u8_3 {
+  ACC = js_create_array_literal(u8_1:1, u8_2:1, u8_3:1);
+}
+:CreateArrayLiteral.Wide "["^u16_1^"]", "["^u16_2^"]", u8_3 is scale=1 & op=130 ; u16_1 ; u16_2 ; u8_3 {
+  ACC = js_create_array_literal(u16_1:2, u16_2:2, u8_3:1);
+}
+:CreateArrayLiteral.ExtraWide "["^u32_1^"]", "["^u32_2^"]", u8_3 is scale=2 & op=130 ; u32_1 ; u32_2 ; u8_3 {
+  ACC = js_create_array_literal(u32_1:4, u32_2:4, u8_3:1);
+}
+:CreateArrayFromIterable is scale=0 & op=131 {
+  ACC = js_create_array_from_iterable(ACC);
+}
+:CreateEmptyArrayLiteral "["^u8_1^"]" is scale=0 & op=132 ; u8_1 {
+  ACC = js_create_empty_array_literal(u8_1:1);
+}
+:CreateEmptyArrayLiteral.Wide "["^u16_1^"]" is scale=1 & op=132 ; u16_1 {
+  ACC = js_create_empty_array_literal(u16_1:2);
+}
+:CreateEmptyArrayLiteral.ExtraWide "["^u32_1^"]" is scale=2 & op=132 ; u32_1 {
+  ACC = js_create_empty_array_literal(u32_1:4);
+}
+:CreateObjectLiteral "["^u8_1^"]", "["^u8_2^"]", u8_3 is scale=0 & op=133 ; u8_1 ; u8_2 ; u8_3 {
+  ACC = js_create_object_literal(u8_1:1, u8_2:1, u8_3:1);
+}
+:CreateObjectLiteral.Wide "["^u16_1^"]", "["^u16_2^"]", u8_3 is scale=1 & op=133 ; u16_1 ; u16_2 ; u8_3 {
+  ACC = js_create_object_literal(u16_1:2, u16_2:2, u8_3:1);
+}
+:CreateObjectLiteral.ExtraWide "["^u32_1^"]", "["^u32_2^"]", u8_3 is scale=2 & op=133 ; u32_1 ; u32_2 ; u8_3 {
+  ACC = js_create_object_literal(u32_1:4, u32_2:4, u8_3:1);
+}
+:CreateEmptyObjectLiteral is scale=0 & op=134 {
+  ACC = js_create_empty_object_literal();
+}
+:CloneObject r8_1, u8_2, "["^u8_3^"]" is scale=0 & op=135 ; r8_1 ; u8_2 ; u8_3 {
+  ACC = js_clone_object(r8_1, u8_2:1, u8_3:1);
+}
+:CloneObject.Wide s16_1, u8_2, "["^u16_3^"]" is scale=1 & op=135 ; s16_1 ; u8_2 ; u16_3 {
+  ACC = js_clone_object(*[frame]:8 (s16_1 * 8:4), u8_2:1, u16_3:2);
+}
+:CloneObject.ExtraWide s32_1, u8_2, "["^u32_3^"]" is scale=2 & op=135 ; s32_1 ; u8_2 ; u32_3 {
+  ACC = js_clone_object(*[frame]:8 (s32_1 * 8:4), u8_2:1, u32_3:4);
+}
+:GetTemplateObject "["^u8_1^"]", "["^u8_2^"]" is scale=0 & op=136 ; u8_1 ; u8_2 {
+  ACC = js_get_template_object(u8_1:1, u8_2:1);
+}
+:GetTemplateObject.Wide "["^u16_1^"]", "["^u16_2^"]" is scale=1 & op=136 ; u16_1 ; u16_2 {
+  ACC = js_get_template_object(u16_1:2, u16_2:2);
+}
+:GetTemplateObject.ExtraWide "["^u32_1^"]", "["^u32_2^"]" is scale=2 & op=136 ; u32_1 ; u32_2 {
+  ACC = js_get_template_object(u32_1:4, u32_2:4);
+}
+:CreateClosure "["^u8_1^"]", "["^u8_2^"]", u8_3 is scale=0 & op=137 ; u8_1 ; u8_2 ; u8_3 {
+  ACC = js_create_closure(u8_1:1, u8_2:1, u8_3:1);
+}
+:CreateClosure.Wide "["^u16_1^"]", "["^u16_2^"]", u8_3 is scale=1 & op=137 ; u16_1 ; u16_2 ; u8_3 {
+  ACC = js_create_closure(u16_1:2, u16_2:2, u8_3:1);
+}
+:CreateClosure.ExtraWide "["^u32_1^"]", "["^u32_2^"]", u8_3 is scale=2 & op=137 ; u32_1 ; u32_2 ; u8_3 {
+  ACC = js_create_closure(u32_1:4, u32_2:4, u8_3:1);
+}
+:CreateBlockContext "["^u8_1^"]" is scale=0 & op=138 ; u8_1 {
+  ACC = js_create_block_context(u8_1:1);
+}
+:CreateBlockContext.Wide "["^u16_1^"]" is scale=1 & op=138 ; u16_1 {
+  ACC = js_create_block_context(u16_1:2);
+}
+:CreateBlockContext.ExtraWide "["^u32_1^"]" is scale=2 & op=138 ; u32_1 {
+  ACC = js_create_block_context(u32_1:4);
+}
+:CreateCatchContext r8_1, "["^u8_2^"]" is scale=0 & op=139 ; r8_1 ; u8_2 {
+  ACC = js_create_catch_context(r8_1, u8_2:1);
+}
+:CreateCatchContext.Wide s16_1, "["^u16_2^"]" is scale=1 & op=139 ; s16_1 ; u16_2 {
+  ACC = js_create_catch_context(*[frame]:8 (s16_1 * 8:4), u16_2:2);
+}
+:CreateCatchContext.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=139 ; s32_1 ; u32_2 {
+  ACC = js_create_catch_context(*[frame]:8 (s32_1 * 8:4), u32_2:4);
+}
+:CreateFunctionContext "["^u8_1^"]", u8_2 is scale=0 & op=140 ; u8_1 ; u8_2 {
+  ACC = js_create_function_context(u8_1:1, u8_2:1);
+}
+:CreateFunctionContext.Wide "["^u16_1^"]", u16_2 is scale=1 & op=140 ; u16_1 ; u16_2 {
+  ACC = js_create_function_context(u16_1:2, u16_2:2);
+}
+:CreateFunctionContext.ExtraWide "["^u32_1^"]", u32_2 is scale=2 & op=140 ; u32_1 ; u32_2 {
+  ACC = js_create_function_context(u32_1:4, u32_2:4);
+}
+:CreateEvalContext "["^u8_1^"]", u8_2 is scale=0 & op=141 ; u8_1 ; u8_2 {
+  ACC = js_create_eval_context(u8_1:1, u8_2:1);
+}
+:CreateEvalContext.Wide "["^u16_1^"]", u16_2 is scale=1 & op=141 ; u16_1 ; u16_2 {
+  ACC = js_create_eval_context(u16_1:2, u16_2:2);
+}
+:CreateEvalContext.ExtraWide "["^u32_1^"]", u32_2 is scale=2 & op=141 ; u32_1 ; u32_2 {
+  ACC = js_create_eval_context(u32_1:4, u32_2:4);
+}
+:CreateWithContext r8_1, "["^u8_2^"]" is scale=0 & op=142 ; r8_1 ; u8_2 {
+  ACC = js_create_with_context(r8_1, u8_2:1);
+}
+:CreateWithContext.Wide s16_1, "["^u16_2^"]" is scale=1 & op=142 ; s16_1 ; u16_2 {
+  ACC = js_create_with_context(*[frame]:8 (s16_1 * 8:4), u16_2:2);
+}
+:CreateWithContext.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=142 ; s32_1 ; u32_2 {
+  ACC = js_create_with_context(*[frame]:8 (s32_1 * 8:4), u32_2:4);
+}
+:CreateMappedArguments is scale=0 & op=143 {
+  ACC = js_create_mapped_arguments();
+}
+:CreateUnmappedArguments is scale=0 & op=144 {
+  ACC = js_create_unmapped_arguments();
+}
+:CreateRestParameter is scale=0 & op=145 {
+  ACC = js_create_rest_parameter();
+}
+:JumpLoop JB0, "["^s8_2^"]", "["^u8_3^"]" is scale=0 & op=146 ; JB0 ; s8_2 ; u8_3 {
+  goto JB0;
+}
+:JumpLoop.Wide JB1, "["^s16_2^"]", "["^u16_3^"]" is scale=1 & op=146 ; JB1 ; s16_2 ; u16_3 {
+  goto JB1;
+}
+:JumpLoop.ExtraWide JB2, "["^s32_2^"]", "["^u32_3^"]" is scale=2 & op=146 ; JB2 ; s32_2 ; u32_3 {
+  goto JB2;
+}
+:Jump JF0 is scale=0 & op=147 ; JF0 {
+  goto JF0;
+}
+:Jump.Wide JF1 is scale=1 & op=147 ; JF1 {
+  goto JF1;
+}
+:Jump.ExtraWide JF2 is scale=2 & op=147 ; JF2 {
+  goto JF2;
+}
+:JumpConstant "["^u8_1^"]" is scale=0 & op=148 ; u8_1 {
+  js_jump_constant(u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpConstant.Wide "["^u16_1^"]" is scale=1 & op=148 ; u16_1 {
+  js_jump_constant(u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=148 ; u32_1 {
+  js_jump_constant(u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfNullConstant "["^u8_1^"]" is scale=0 & op=149 ; u8_1 {
+  js_jump_if_null_constant(ACC, u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfNullConstant.Wide "["^u16_1^"]" is scale=1 & op=149 ; u16_1 {
+  js_jump_if_null_constant(ACC, u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfNullConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=149 ; u32_1 {
+  js_jump_if_null_constant(ACC, u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfNotNullConstant "["^u8_1^"]" is scale=0 & op=150 ; u8_1 {
+  js_jump_if_not_null_constant(ACC, u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfNotNullConstant.Wide "["^u16_1^"]" is scale=1 & op=150 ; u16_1 {
+  js_jump_if_not_null_constant(ACC, u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfNotNullConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=150 ; u32_1 {
+  js_jump_if_not_null_constant(ACC, u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfUndefinedConstant "["^u8_1^"]" is scale=0 & op=151 ; u8_1 {
+  js_jump_if_undefined_constant(ACC, u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfUndefinedConstant.Wide "["^u16_1^"]" is scale=1 & op=151 ; u16_1 {
+  js_jump_if_undefined_constant(ACC, u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfUndefinedConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=151 ; u32_1 {
+  js_jump_if_undefined_constant(ACC, u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfNotUndefinedConstant "["^u8_1^"]" is scale=0 & op=152 ; u8_1 {
+  js_jump_if_not_undefined_constant(ACC, u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfNotUndefinedConstant.Wide "["^u16_1^"]" is scale=1 & op=152 ; u16_1 {
+  js_jump_if_not_undefined_constant(ACC, u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfNotUndefinedConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=152 ; u32_1 {
+  js_jump_if_not_undefined_constant(ACC, u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfUndefinedOrNullConstant "["^u8_1^"]" is scale=0 & op=153 ; u8_1 {
+  js_jump_if_undefined_or_null_constant(ACC, u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfUndefinedOrNullConstant.Wide "["^u16_1^"]" is scale=1 & op=153 ; u16_1 {
+  js_jump_if_undefined_or_null_constant(ACC, u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfUndefinedOrNullConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=153 ; u32_1 {
+  js_jump_if_undefined_or_null_constant(ACC, u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfTrueConstant "["^u8_1^"]" is scale=0 & op=154 ; u8_1 {
+  js_jump_if_true_constant(ACC, u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfTrueConstant.Wide "["^u16_1^"]" is scale=1 & op=154 ; u16_1 {
+  js_jump_if_true_constant(ACC, u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfTrueConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=154 ; u32_1 {
+  js_jump_if_true_constant(ACC, u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfFalseConstant "["^u8_1^"]" is scale=0 & op=155 ; u8_1 {
+  js_jump_if_false_constant(ACC, u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfFalseConstant.Wide "["^u16_1^"]" is scale=1 & op=155 ; u16_1 {
+  js_jump_if_false_constant(ACC, u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfFalseConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=155 ; u32_1 {
+  js_jump_if_false_constant(ACC, u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfJSReceiverConstant "["^u8_1^"]" is scale=0 & op=156 ; u8_1 {
+  js_jump_if_jsreceiver_constant(ACC, u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfJSReceiverConstant.Wide "["^u16_1^"]" is scale=1 & op=156 ; u16_1 {
+  js_jump_if_jsreceiver_constant(ACC, u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfJSReceiverConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=156 ; u32_1 {
+  js_jump_if_jsreceiver_constant(ACC, u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfForInDoneConstant "["^u8_1^"]", r8_2, r8_3 is scale=0 & op=157 ; u8_1 ; r8_2 ; r8_3 {
+  js_jump_if_for_in_done_constant(u8_1:1, r8_2, r8_3); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfForInDoneConstant.Wide "["^u16_1^"]", s16_2, s16_3 is scale=1 & op=157 ; u16_1 ; s16_2 ; s16_3 {
+  js_jump_if_for_in_done_constant(u16_1:2, *[frame]:8 (s16_2 * 8:4), *[frame]:8 (s16_3 * 8:4)); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfForInDoneConstant.ExtraWide "["^u32_1^"]", s32_2, s32_3 is scale=2 & op=157 ; u32_1 ; s32_2 ; s32_3 {
+  js_jump_if_for_in_done_constant(u32_1:4, *[frame]:8 (s32_2 * 8:4), *[frame]:8 (s32_3 * 8:4)); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfToBooleanTrueConstant "["^u8_1^"]" is scale=0 & op=158 ; u8_1 {
+  js_jump_if_to_boolean_true_constant(ACC, u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfToBooleanTrueConstant.Wide "["^u16_1^"]" is scale=1 & op=158 ; u16_1 {
+  js_jump_if_to_boolean_true_constant(ACC, u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfToBooleanTrueConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=158 ; u32_1 {
+  js_jump_if_to_boolean_true_constant(ACC, u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfToBooleanFalseConstant "["^u8_1^"]" is scale=0 & op=159 ; u8_1 {
+  js_jump_if_to_boolean_false_constant(ACC, u8_1:1); t:4 = js_jump_constant(u8_1:4); goto [t];
+}
+:JumpIfToBooleanFalseConstant.Wide "["^u16_1^"]" is scale=1 & op=159 ; u16_1 {
+  js_jump_if_to_boolean_false_constant(ACC, u16_1:2); t:4 = js_jump_constant(u16_1:4); goto [t];
+}
+:JumpIfToBooleanFalseConstant.ExtraWide "["^u32_1^"]" is scale=2 & op=159 ; u32_1 {
+  js_jump_if_to_boolean_false_constant(ACC, u32_1:4); t:4 = js_jump_constant(u32_1:4); goto [t];
+}
+:JumpIfToBooleanTrue JF0 is scale=0 & op=160 ; JF0 {
+  c:1 = js_toboolean_test(ACC); if (c) goto JF0;
+}
+:JumpIfToBooleanTrue.Wide JF1 is scale=1 & op=160 ; JF1 {
+  c:1 = js_toboolean_test(ACC); if (c) goto JF1;
+}
+:JumpIfToBooleanTrue.ExtraWide JF2 is scale=2 & op=160 ; JF2 {
+  c:1 = js_toboolean_test(ACC); if (c) goto JF2;
+}
+:JumpIfToBooleanFalse JF0 is scale=0 & op=161 ; JF0 {
+  c:1 = js_toboolean_test(ACC); c = !c; if (c) goto JF0;
+}
+:JumpIfToBooleanFalse.Wide JF1 is scale=1 & op=161 ; JF1 {
+  c:1 = js_toboolean_test(ACC); c = !c; if (c) goto JF1;
+}
+:JumpIfToBooleanFalse.ExtraWide JF2 is scale=2 & op=161 ; JF2 {
+  c:1 = js_toboolean_test(ACC); c = !c; if (c) goto JF2;
+}
+:JumpIfTrue JF0 is scale=0 & op=162 ; JF0 {
+  c:1 = js_is_true(ACC); if (c) goto JF0;
+}
+:JumpIfTrue.Wide JF1 is scale=1 & op=162 ; JF1 {
+  c:1 = js_is_true(ACC); if (c) goto JF1;
+}
+:JumpIfTrue.ExtraWide JF2 is scale=2 & op=162 ; JF2 {
+  c:1 = js_is_true(ACC); if (c) goto JF2;
+}
+:JumpIfFalse JF0 is scale=0 & op=163 ; JF0 {
+  c:1 = js_is_true(ACC); c = !c; if (c) goto JF0;
+}
+:JumpIfFalse.Wide JF1 is scale=1 & op=163 ; JF1 {
+  c:1 = js_is_true(ACC); c = !c; if (c) goto JF1;
+}
+:JumpIfFalse.ExtraWide JF2 is scale=2 & op=163 ; JF2 {
+  c:1 = js_is_true(ACC); c = !c; if (c) goto JF2;
+}
+:JumpIfNull JF0 is scale=0 & op=164 ; JF0 {
+  c:1 = js_is_null(ACC); if (c) goto JF0;
+}
+:JumpIfNull.Wide JF1 is scale=1 & op=164 ; JF1 {
+  c:1 = js_is_null(ACC); if (c) goto JF1;
+}
+:JumpIfNull.ExtraWide JF2 is scale=2 & op=164 ; JF2 {
+  c:1 = js_is_null(ACC); if (c) goto JF2;
+}
+:JumpIfNotNull JF0 is scale=0 & op=165 ; JF0 {
+  c:1 = js_is_null(ACC); c = !c; if (c) goto JF0;
+}
+:JumpIfNotNull.Wide JF1 is scale=1 & op=165 ; JF1 {
+  c:1 = js_is_null(ACC); c = !c; if (c) goto JF1;
+}
+:JumpIfNotNull.ExtraWide JF2 is scale=2 & op=165 ; JF2 {
+  c:1 = js_is_null(ACC); c = !c; if (c) goto JF2;
+}
+:JumpIfUndefined JF0 is scale=0 & op=166 ; JF0 {
+  c:1 = js_is_undefined(ACC); if (c) goto JF0;
+}
+:JumpIfUndefined.Wide JF1 is scale=1 & op=166 ; JF1 {
+  c:1 = js_is_undefined(ACC); if (c) goto JF1;
+}
+:JumpIfUndefined.ExtraWide JF2 is scale=2 & op=166 ; JF2 {
+  c:1 = js_is_undefined(ACC); if (c) goto JF2;
+}
+:JumpIfNotUndefined JF0 is scale=0 & op=167 ; JF0 {
+  c:1 = js_is_undefined(ACC); c = !c; if (c) goto JF0;
+}
+:JumpIfNotUndefined.Wide JF1 is scale=1 & op=167 ; JF1 {
+  c:1 = js_is_undefined(ACC); c = !c; if (c) goto JF1;
+}
+:JumpIfNotUndefined.ExtraWide JF2 is scale=2 & op=167 ; JF2 {
+  c:1 = js_is_undefined(ACC); c = !c; if (c) goto JF2;
+}
+:JumpIfUndefinedOrNull JF0 is scale=0 & op=168 ; JF0 {
+  c:1 = js_is_undefined_or_null(ACC); if (c) goto JF0;
+}
+:JumpIfUndefinedOrNull.Wide JF1 is scale=1 & op=168 ; JF1 {
+  c:1 = js_is_undefined_or_null(ACC); if (c) goto JF1;
+}
+:JumpIfUndefinedOrNull.ExtraWide JF2 is scale=2 & op=168 ; JF2 {
+  c:1 = js_is_undefined_or_null(ACC); if (c) goto JF2;
+}
+:JumpIfJSReceiver JF0 is scale=0 & op=169 ; JF0 {
+  c:1 = js_is_receiver(ACC); if (c) goto JF0;
+}
+:JumpIfJSReceiver.Wide JF1 is scale=1 & op=169 ; JF1 {
+  c:1 = js_is_receiver(ACC); if (c) goto JF1;
+}
+:JumpIfJSReceiver.ExtraWide JF2 is scale=2 & op=169 ; JF2 {
+  c:1 = js_is_receiver(ACC); if (c) goto JF2;
+}
+:JumpIfForInDone JF0, r8_2, r8_3 is scale=0 & op=170 ; JF0 ; r8_2 ; r8_3 {
+  c:1 = r8_2 == r8_3; if (c) goto JF0;
+}
+:JumpIfForInDone.Wide JF1, s16_2, s16_3 is scale=1 & op=170 ; JF1 ; s16_2 ; s16_3 {
+  c:1 = *[frame]:8 (s16_2 * 8:4) == *[frame]:8 (s16_3 * 8:4); if (c) goto JF1;
+}
+:JumpIfForInDone.ExtraWide JF2, s32_2, s32_3 is scale=2 & op=170 ; JF2 ; s32_2 ; s32_3 {
+  c:1 = *[frame]:8 (s32_2 * 8:4) == *[frame]:8 (s32_3 * 8:4); if (c) goto JF2;
+}
+:SwitchOnSmiNoFeedback "["^u8_1^"]", u8_2, "["^s8_3^"]" is scale=0 & op=171 ; u8_1 ; u8_2 ; s8_3 {
+  js_switch_on_smi_no_feedback(ACC, u8_1:1, u8_2:1, s8_3:1); t:4 = js_switch_target(ACC); goto [t];
+}
+:SwitchOnSmiNoFeedback.Wide "["^u16_1^"]", u16_2, "["^s16_3^"]" is scale=1 & op=171 ; u16_1 ; u16_2 ; s16_3 {
+  js_switch_on_smi_no_feedback(ACC, u16_1:2, u16_2:2, s16_3:2); t:4 = js_switch_target(ACC); goto [t];
+}
+:SwitchOnSmiNoFeedback.ExtraWide "["^u32_1^"]", u32_2, "["^s32_3^"]" is scale=2 & op=171 ; u32_1 ; u32_2 ; s32_3 {
+  js_switch_on_smi_no_feedback(ACC, u32_1:4, u32_2:4, s32_3:4); t:4 = js_switch_target(ACC); goto [t];
+}
+:ForInEnumerate r8_1 is scale=0 & op=172 ; r8_1 {
+  ACC = js_for_in_enumerate(r8_1);
+}
+:ForInEnumerate.Wide s16_1 is scale=1 & op=172 ; s16_1 {
+  ACC = js_for_in_enumerate(*[frame]:8 (s16_1 * 8:4));
+}
+:ForInEnumerate.ExtraWide s32_1 is scale=2 & op=172 ; s32_1 {
+  ACC = js_for_in_enumerate(*[frame]:8 (s32_1 * 8:4));
+}
+:ForInPrepare r8_1, "["^u8_2^"]" is scale=0 & op=173 ; r8_1 ; u8_2 {
+  r8_1 = js_for_in_prepare(ACC, u8_2:1);
+}
+:ForInPrepare.Wide s16_1, "["^u16_2^"]" is scale=1 & op=173 ; s16_1 ; u16_2 {
+  *[frame]:8 (s16_1 * 8:4) = js_for_in_prepare(ACC, u16_2:2);
+}
+:ForInPrepare.ExtraWide s32_1, "["^u32_2^"]" is scale=2 & op=173 ; s32_1 ; u32_2 {
+  *[frame]:8 (s32_1 * 8:4) = js_for_in_prepare(ACC, u32_2:4);
+}
+:ForInNext r8_1, r8_2, r8_3, "["^u8_4^"]" is scale=0 & op=174 ; r8_1 ; r8_2 ; r8_3 ; u8_4 {
+  ACC = js_for_in_next(r8_1, r8_2, r8_3, u8_4:1);
+}
+:ForInNext.Wide s16_1, s16_2, s16_3, "["^u16_4^"]" is scale=1 & op=174 ; s16_1 ; s16_2 ; s16_3 ; u16_4 {
+  ACC = js_for_in_next(*[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), *[frame]:8 (s16_3 * 8:4), u16_4:2);
+}
+:ForInNext.ExtraWide s32_1, s32_2, s32_3, "["^u32_4^"]" is scale=2 & op=174 ; s32_1 ; s32_2 ; s32_3 ; u32_4 {
+  ACC = js_for_in_next(*[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), *[frame]:8 (s32_3 * 8:4), u32_4:4);
+}
+:ForInStep r8_1 is scale=0 & op=175 ; r8_1 {
+  js_for_in_step(r8_1);
+}
+:ForInStep.Wide s16_1 is scale=1 & op=175 ; s16_1 {
+  js_for_in_step(*[frame]:8 (s16_1 * 8:4));
+}
+:ForInStep.ExtraWide s32_1 is scale=2 & op=175 ; s32_1 {
+  js_for_in_step(*[frame]:8 (s32_1 * 8:4));
+}
+:SetPendingMessage is scale=0 & op=176 {
+  ACC = js_set_pending_message(ACC);
+}
+:Throw is scale=0 & op=177 {
+  js_throw(ACC); return [0:4];
+}
+:ReThrow is scale=0 & op=178 {
+  js_throw(ACC); return [0:4];
+}
+:Return is scale=0 & op=179 {
+  RV = ACC; return [0:4];
+}
+:ThrowReferenceErrorIfHole "["^u8_1^"]" is scale=0 & op=180 ; u8_1 {
+  js_throw_reference_error_if_hole(ACC, u8_1:1);
+}
+:ThrowReferenceErrorIfHole.Wide "["^u16_1^"]" is scale=1 & op=180 ; u16_1 {
+  js_throw_reference_error_if_hole(ACC, u16_1:2);
+}
+:ThrowReferenceErrorIfHole.ExtraWide "["^u32_1^"]" is scale=2 & op=180 ; u32_1 {
+  js_throw_reference_error_if_hole(ACC, u32_1:4);
+}
+:ThrowSuperNotCalledIfHole is scale=0 & op=181 {
+  js_throw_super_not_called_if_hole(ACC);
+}
+:ThrowSuperAlreadyCalledIfNotHole is scale=0 & op=182 {
+  js_throw_super_already_called_if_not_hole(ACC);
+}
+:ThrowIfNotSuperConstructor r8_1 is scale=0 & op=183 ; r8_1 {
+  js_throw_if_not_super_constructor(r8_1);
+}
+:ThrowIfNotSuperConstructor.Wide s16_1 is scale=1 & op=183 ; s16_1 {
+  js_throw_if_not_super_constructor(*[frame]:8 (s16_1 * 8:4));
+}
+:ThrowIfNotSuperConstructor.ExtraWide s32_1 is scale=2 & op=183 ; s32_1 {
+  js_throw_if_not_super_constructor(*[frame]:8 (s32_1 * 8:4));
+}
+:SwitchOnGeneratorState r8_1, "["^u8_2^"]", u8_3 is scale=0 & op=184 ; r8_1 ; u8_2 ; u8_3 {
+  js_switch_on_generator_state(r8_1, u8_2:1, u8_3:1); t:4 = js_switch_target(ACC); goto [t];
+}
+:SwitchOnGeneratorState.Wide s16_1, "["^u16_2^"]", u16_3 is scale=1 & op=184 ; s16_1 ; u16_2 ; u16_3 {
+  js_switch_on_generator_state(*[frame]:8 (s16_1 * 8:4), u16_2:2, u16_3:2); t:4 = js_switch_target(ACC); goto [t];
+}
+:SwitchOnGeneratorState.ExtraWide s32_1, "["^u32_2^"]", u32_3 is scale=2 & op=184 ; s32_1 ; u32_2 ; u32_3 {
+  js_switch_on_generator_state(*[frame]:8 (s32_1 * 8:4), u32_2:4, u32_3:4); t:4 = js_switch_target(ACC); goto [t];
+}
+:SuspendGenerator r8_1, r8_2, u8_3, u8_4 is scale=0 & op=185 ; r8_1 ; r8_2 ; u8_3 ; u8_4 {
+  js_suspend_generator(ACC, r8_1, r8_2, u8_3:1, u8_4:1); return [0:4];
+}
+:SuspendGenerator.Wide s16_1, s16_2, u16_3, u16_4 is scale=1 & op=185 ; s16_1 ; s16_2 ; u16_3 ; u16_4 {
+  js_suspend_generator(ACC, *[frame]:8 (s16_1 * 8:4), *[frame]:8 (s16_2 * 8:4), u16_3:2, u16_4:2); return [0:4];
+}
+:SuspendGenerator.ExtraWide s32_1, s32_2, u32_3, u32_4 is scale=2 & op=185 ; s32_1 ; s32_2 ; u32_3 ; u32_4 {
+  js_suspend_generator(ACC, *[frame]:8 (s32_1 * 8:4), *[frame]:8 (s32_2 * 8:4), u32_3:4, u32_4:4); return [0:4];
+}
+:ResumeGenerator r8_1, r8_2, u8_3 is scale=0 & op=186 ; r8_1 ; r8_2 ; u8_3 {
+  r8_2 = js_resume_generator(r8_1, u8_3:1);
+}
+:ResumeGenerator.Wide s16_1, s16_2, u16_3 is scale=1 & op=186 ; s16_1 ; s16_2 ; u16_3 {
+  *[frame]:8 (s16_2 * 8:4) = js_resume_generator(*[frame]:8 (s16_1 * 8:4), u16_3:2);
+}
+:ResumeGenerator.ExtraWide s32_1, s32_2, u32_3 is scale=2 & op=186 ; s32_1 ; s32_2 ; u32_3 {
+  *[frame]:8 (s32_2 * 8:4) = js_resume_generator(*[frame]:8 (s32_1 * 8:4), u32_3:4);
+}
+:GetIterator r8_1, "["^u8_2^"]", "["^u8_3^"]" is scale=0 & op=187 ; r8_1 ; u8_2 ; u8_3 {
+  ACC = js_get_iterator(r8_1, u8_2:1, u8_3:1);
+}
+:GetIterator.Wide s16_1, "["^u16_2^"]", "["^u16_3^"]" is scale=1 & op=187 ; s16_1 ; u16_2 ; u16_3 {
+  ACC = js_get_iterator(*[frame]:8 (s16_1 * 8:4), u16_2:2, u16_3:2);
+}
+:GetIterator.ExtraWide s32_1, "["^u32_2^"]", "["^u32_3^"]" is scale=2 & op=187 ; s32_1 ; u32_2 ; u32_3 {
+  ACC = js_get_iterator(*[frame]:8 (s32_1 * 8:4), u32_2:4, u32_3:4);
+}
+:Debugger is scale=0 & op=188 {
+  ACC = js_debugger();
+}
+:IncBlockCounter "["^u8_1^"]" is scale=0 & op=189 ; u8_1 {
+  js_inc_block_counter(u8_1:1);
+}
+:IncBlockCounter.Wide "["^u16_1^"]" is scale=1 & op=189 ; u16_1 {
+  js_inc_block_counter(u16_1:2);
+}
+:IncBlockCounter.ExtraWide "["^u32_1^"]" is scale=2 & op=189 ; u32_1 {
+  js_inc_block_counter(u32_1:4);
+}
+:Abort "["^u8_1^"]" is scale=0 & op=190 ; u8_1 {
+  js_abort(u8_1:4); return [0:4];
+}
+:Abort.Wide "["^u16_1^"]" is scale=1 & op=190 ; u16_1 {
+  js_abort(u16_1:4); return [0:4];
+}
+:Abort.ExtraWide "["^u32_1^"]" is scale=2 & op=190 ; u32_1 {
+  js_abort(u32_1:4); return [0:4];
+}
+:Star15 is scale=0 & op=191 {
+  r15 = ACC;
+}
+:Star14 is scale=0 & op=192 {
+  r14 = ACC;
+}
+:Star13 is scale=0 & op=193 {
+  r13 = ACC;
+}
+:Star12 is scale=0 & op=194 {
+  r12 = ACC;
+}
+:Star11 is scale=0 & op=195 {
+  r11 = ACC;
+}
+:Star10 is scale=0 & op=196 {
+  r10 = ACC;
+}
+:Star9 is scale=0 & op=197 {
+  r9 = ACC;
+}
+:Star8 is scale=0 & op=198 {
+  r8 = ACC;
+}
+:Star7 is scale=0 & op=199 {
+  r7 = ACC;
+}
+:Star6 is scale=0 & op=200 {
+  r6 = ACC;
+}
+:Star5 is scale=0 & op=201 {
+  r5 = ACC;
+}
+:Star4 is scale=0 & op=202 {
+  r4 = ACC;
+}
+:Star3 is scale=0 & op=203 {
+  r3 = ACC;
+}
+:Star2 is scale=0 & op=204 {
+  r2 = ACC;
+}
+:Star1 is scale=0 & op=205 {
+  r1 = ACC;
+}
+:Star0 is scale=0 & op=206 {
+  r0 = ACC;
+}

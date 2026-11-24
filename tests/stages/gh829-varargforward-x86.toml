@@ -1,0 +1,119 @@
+# GH-829 (kuna): "A variadic call drops an argument the caller forwards
+# unchanged in its own register"
+# https://github.com/Noelo-Lab/kuna/issues/829
+#
+# Source, gcc -O2:
+#   int pr(const char *f, ...);
+#   int d2(const char *f, int a) { return pr(f, a); }
+#   int d3(const char *f, int a) { if (a > 5) return 0; return pr(f, a); }
+#   int d5(const char *f, int a, int b, int c) { return pr(f, a, b, c); }
+#
+# d2 is `endbr64; xor %eax,%eax; jmp pr` and d5 the same: every argument is
+# still in the register it arrived in.  The bytes are gcc's, with each jmp
+# aimed at the `ret` standing in for pr at 0x100100.
+#
+# Stage model: P4 call recovery, active-input-trial scoring.  Upstream's
+# AncestorRealistic fails a trial whose value at the call is the function's
+# own input, so the esi/edx/ecx trials are inactive and, with nothing active
+# after them, dropped.  kuna_varargforward.rs (always on) keeps such a trial at a call
+# whose prototype ends in `...` when the calling function declares a
+# parameter at that storage and the call is the only reader of it.  d3 also
+# compares `a`, so it has another reader and is left alone.
+#
+# The authored MSABI `stored` probe at 0x100200 loads/increments EDX,
+# stores the value through RCX, then passes the immutable "%i" format in
+# RCX. The store is another reader; the format proves the promoted integer
+# slot and the same value is passed. Assertion 2 requires two distinct
+# return-call lines: the forwarded call and the stored case.
+#
+# Without the rule d2 and d5 print `pr(f)`; with it `pr(f,a)` and
+# `pr(f,a,b,c)`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100200', name = 'stored' },
+    { space = 'ram', offset = '0x100300', name = 'render_value' },
+    { space = 'ram', offset = '0x100000', name = 'd2' },
+    { space = 'ram', offset = '0x100010', name = 'd3' },
+    { space = 'ram', offset = '0x100030', name = 'd5' },
+    { space = 'ram', offset = '0x100100', name = 'pr' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+hex = '''
+f30f1efa31c0e9f50000009090909090
+f30f1efa83fe057e0731c0c30f1f4000
+31c0e9d90000009090909090909090
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100030'
+hex = 'f30f1efa31c0e9c5000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+hex = 'c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100200'
+hex = '4883ec288b1183c2018911488d0dee010000e8e90000004883c428c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100300'
+hex = '4889d0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100400'
+readonly = true
+hex = '256900'
+
+[script]
+commands = [
+    'parse line extern int4 pr(char *f, ...);',
+    'parse line extern int4 d2(char *f, int4 a);',
+    'parse line extern int4 d3(char *f, int4 a);',
+    'parse line extern int4 d5(char *f, int4 a, int4 b, int4 c);',
+    'parse line extern uint8 MSABI stored(int4 *value);',
+    'parse line extern uint8 MSABI render_value(char *format, ...);',
+    'lo fu d2',
+    'decompile',
+    'print C',
+    'lo fu stored',
+    'decompile',
+    'print C',
+    'lo fu d5',
+    'decompile',
+    'print C',
+    'lo fu d3',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH829 x86 #1: only d3, which also compares its parameter, keeps pr(f)'
+count = 1
+literal = 'return pr(f);'
+
+[[match]]
+name = 'GH829 x86 #2: the int forwarded in esi is kept, and the stored case passes its value'
+count = 2
+regex = 'return pr\(f,a\);|return render_value\("%i",[^;]+\);'
+
+[[match]]
+name = 'GH829 x86 #3: esi, edx and ecx are kept'
+count = 1
+regex = 'return render_value\("%i"\);|return pr\(f,a,b,c\);'
+
+[[match]]
+name = 'GH829 x86 #4: d3 also compares its parameter, so its call is left as it was'
+count = 1
+literal = 'if (6 <= a)'

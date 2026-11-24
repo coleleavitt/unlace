@@ -9672,7 +9672,7 @@ single `double` and leaves that value unused (an asm-forced evaluation, as in
 `k(x, y) { math_force_eval(y * y); return x * 3; }`). No other compiler spec has
 a floating output entry that a narrow write fills, so the rule changes nothing
 elsewhere. The stage test
-`tests/stages/gh873-zerofillreturn-a64.xml` runs clang and gcc AArch64 code.
+`tests/stages/gh873-zerofillreturn-a64.toml` runs clang and gcc AArch64 code.
 
 ### (kuna) The registers a zeroing epilogue clears (`kuna_zerocallregs.rs`)
 
@@ -9737,7 +9737,7 @@ a `return 0` whose `xor %eax,%eax` the compiler places right before the run
 reads the same as the run's own first clear, so such a function returns `void`
 unless a caller reads its result. Under `=all` the x87 block separates the two,
 and a `void` function's `rax` is cleared after it. The stage test
-`tests/stages/gh847-zerocallregs.xml` decompiles gcc 11 `-O2
+`tests/stages/gh847-zerocallregs.toml` decompiles gcc 11 `-O2
 -fzero-call-used-regs=all` code, two of its functions cleared `=all-gpr`.
 
 ### ARM scalar VFP contracts
@@ -9930,7 +9930,7 @@ Declared prototypes and explicit return storage keep precedence throughout.
 This is scalar inference, not aggregate or vector ABI reconstruction: a
 homogeneous float aggregate returned in `d0`-`d3` (`struct { double a, b; }`,
 `_Complex double`) prints as a `double` holding only its first member, and needs
-a declared type. The stage test `tests/stages/kuna-arm-float-return.xml` runs a raw image,
+a declared type. The stage test `tests/stages/kuna-arm-float-return.toml` runs a raw image,
 a relocatable object and a linked PIE with the option off and on; the CLI tests
 in `crates/unlace-cli/tests/arm_float_returns.rs` cover narrowing,
 widening, metadata controls and explicit contracts. ABI references:

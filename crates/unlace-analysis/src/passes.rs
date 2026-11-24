@@ -2093,6 +2093,27 @@ pub fn run_com(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
     out
 }
 
+/// Run the **deferred** DriverKit IORPC typing (`option dextrpc`) at the
+/// commit point, only when its option is on: the load-time `osclassinfo`
+/// pass sees the architecture's constructor defaults, so a gate read there
+/// never saw `on`, and the run builds types into the engine's factory.
+pub fn run_dextrpc(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
+    let Ok(file) = crate::loadimage_object::parse_object(bytes) else {
+        return AnalysisOutput::default();
+    };
+    let ctx = AnalysisCtx {
+        file: &file,
+        bytes,
+        image: None,
+        arch,
+        listing: None,
+        image_path: None,
+    };
+    let mut out = crate::iokit::kuna_dextrpc::run(&ctx);
+    out.sanitize_names(symbolnamechars_mode());
+    out
+}
+
 /// Build an [`AnalysisCtx`] and run the **deferred** scalar/operand reference-markup
 /// pass ([`crate::operand_refs::OperandRefsPass`]), returning its output keyed by
 /// the pass id (`"operand_refs"`).

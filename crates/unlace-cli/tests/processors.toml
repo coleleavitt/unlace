@@ -81,6 +81,10 @@ xtensa_esp32s3_pie_fused = """
 x86_64_cmpccxadd = """
 4889f0c4e2e9e407c30f1f800000000031c0f20f38f83e0f94c0c3
 """
+x86_64_avx512_base = """
+62f27d487cc762f17e487f06c5f877c3c5f446c962f27d4990448f1062f1
+7e487f06c5f877c3
+"""
 
 [[family]]
 name = "blackfin"
@@ -503,7 +507,7 @@ expect = [
 # The Netronome NFP-6xxx microengine language decompiles hand-encoded ME v2.8 microcode
 # (64-bit instruction words, branch targets in instruction numbers) from a raw image.
 [[family]]
-name = "nfp"
+name = "nfp_sum_loop"
 language = "NFP:LE:32:ME28"
 base = "0"
 fixture = "crates/unlace-cli/tests/fixtures/nfp/sum_loop.bin"
@@ -522,7 +526,7 @@ expect = [
 ]
 
 [[family]]
-name = "nfp"
+name = "nfp_coverage"
 language = "NFP:LE:32:ME28"
 base = "0"
 fixture = "crates/unlace-cli/tests/fixtures/nfp/coverage.bin"
@@ -1077,6 +1081,25 @@ test = "x86_enqcmd_status_is_zf"
 address = "0x10"
 expect = ["return enqcmd(a0,*a1);"]
 
+# AVX-512 base-spec fixes: VPBROADCASTD reads its GPR source, and a gather addresses through its
+# vector index (bc: vpbroadcastd zmm0, edi; ga: vpgatherdd zmm0{k1}, [rdi + 4*zmm1 + 64]).
+[[family]]
+name = "x86_64_avx512_base"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_avx512_base"
+
+[[family.function]]
+test = "x86_vpbroadcastd_reads_its_gpr"
+address = "0x0"
+expect = ["vpbroadcastd_avx512f(a0)"]
+
+[[family.function]]
+test = "x86_gather_uses_the_vector_index"
+address = "0x10"
+expect = ["ZEXT864(a0) + ZEXT864(0x40)"]   # base + disp8*4 ...
+forbid = ["a0[a3"]                         # ... not RCX as a scalar index
+
 # The eZ80 ADL-mode language decompiles a hand-assembled add/compare/store routine.
 [[family]]
 name = "ez80"
@@ -1374,4 +1397,120 @@ test = "nd100_add_argument"
 address = "0x3c"
 expect = [
     "return a0 + -6;",
+]
+
+# The AMD GCN5 (gfx900) language decompiles clang-built OpenCL kernels from a raw image:
+# SMEM kernel-argument loads, a VOPC compare feeding s_and_saveexec / s_cbranch_execz,
+# global loads and stores, v_mad_u64_u32, and a scalar loop with s_add_u32/s_addc_u32.
+[[family]]
+name = "amdgpu"
+language = "AMDGPU:LE:64:GFX9"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx900_kernels.bin"
+
+# `scale`: `if (i < n) out[i] = in[i] * 3 + k;` with the kernel arguments behind s[4:5]
+# and the lane id in v0; EXEC is 1 on entry, so the saveexec mask folds into the branch.
+[[family.function]]
+test = "amdgpu_guarded_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a5 < (int)((unsigned long)a2[2] >> 0x20))",
+    "* 3 + (int)a2[2];",
+]
+
+# `sum`: a scalar loop over `in` with the 64-bit pointer split across s2/s3.
+[[family.function]]
+test = "amdgpu_scalar_loop_decompiles"
+address = "0x100"
+expect = [
+    "while (v5) {",
+    "v4 = *(int *)CONCAT44(v3,v2) + v4;",
+    "v5 -= 1;",
+    "*a2->field_0x0 = v4;",
+]
+
+# The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:
+# fast locals become parameters and variables, the value stack folds away, and objects,
+# names and operators are named user-ops (fixtures from `fixtures/cpython/source.py`).
+[[family]]
+name = "cpython_loops"
+language = "CPython:LE:32:3.12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/cpython/loops.bin"
+
+# `f`: a for loop over `range(n)` with a `continue`, then a while loop, from FOR_ITER,
+# POP_JUMP_IF_FALSE, JUMP_BACKWARD, BINARY_OP and COMPARE_OP.
+[[family.function]]
+test = "cpython_loops_decompile"
+address = "0x0"
+expect = [
+    "v1 = py_iter(py_call(0,py_global(0),a0));",
+    "while (!(bool)py_iter_done(v1)) {",
+    "v4 = py_inplace_add(v4,v3);",
+    "v4 = py_inplace_subtract(v4,py_const(4));",
+    "return v4;",
+]
+
+[[family]]
+name = "cpython_attrs"
+language = "CPython:LE:32:3.12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/cpython/attrs.bin"
+
+# `g`: POP_JUMP_IF_NOT_NONE, LOAD_ATTR and BINARY_SUBSCR with their inline caches.
+[[family.function]]
+test = "cpython_attrs_decompile"
+address = "0x0"
+expect = [
+    "if ((bool)py_is_none(a0))",
+    "v2 = py_getattr(a0,0);",
+    "return py_add(v2,py_multiply(v1,py_const(2)));",
+]
+
+# The native KVX kv3-1 language decompiles a raw image of hand-assembled
+# bundles: a counted loop, a call whose immediate extension syllable sits at the
+# bundle tail, a compare and conditional move, an in-bundle register swap
+# (parallel reads) and a scaled indexed load.
+[[family]]
+name = "kvx"
+language = "KVX:LE:64:kv3-1"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/kvx/bundles.bin"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_syllable"]
+
+[[family.function]]
+test = "kvx_counted_loop_decompiles"
+address = "0x0"
+expect = [
+    "while",  # the load loop is recovered
+    "+= *",  # the loop accumulates loads
+]
+
+[[family.function]]
+test = "kvx_extension_syllable_reaches_its_instruction"
+address = "0x24"
+expect = [
+    "sub_0(5,0x123456789) + 100000",  # register arguments, the 43-bit immediate and the r0 result
+]
+
+[[family.function]]
+test = "kvx_compare_and_conditional_move_decompile"
+address = "0x58"
+expect = [
+    "a0 < a1",  # compd.lt feeds cmoved.dnez
+]
+
+[[family.function]]
+test = "kvx_bundle_reads_before_it_writes"
+address = "0x64"
+expect = [
+    "return a1 - a0;",  # the in-bundle swap reads old values
+]
+
+[[family.function]]
+test = "kvx_scaled_index_load_decompiles"
+address = "0x74"
+expect = [
+    "a1 + a0 * 8",  # ld.xs scales the index
 ]

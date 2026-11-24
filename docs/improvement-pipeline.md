@@ -197,13 +197,12 @@ The artifact checklist (every item, or the gates fail opaquely):
    including the provenance contract (§below): `summary`, `use_when`, `values`+`example`,
    `tier`, `symptoms`, `source_decompiler`, `inspiration`, `change_kind`.
 3. Option name registered in `src/p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`).
-4. **Bump the hard-coded catalog counts** (three places; grep the current total):
-   `src/p0_knowledge/kuna_phases/tests.rs` (count asserts),
+4. **Bump the hard-coded catalog counts** (two places; grep the current total):
+   `src/p0_knowledge/kuna_phases/tests.rs` (count asserts) and
    `crates/unlace-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
    `tests/fixtures/phase_catalog.json` fixture — regenerate it with the console
-   `openfile write`/`phase catalog` recapture documented in that file's header), and the
-   `tests/stages/kuna-catalog.xml` stringmatch counts (bump whichever bucket the new
-   option's `source_decompiler`/`change_kind` lands in).
+   `openfile write`/`phase catalog` recapture documented in that file's header).
+   `tests/stages/kuna-catalog.toml` computes its bucket counts from the compiled catalog.
    **After any rebase, re-derive these from a fresh capture and a green run — never from
    arithmetic.** Two of them auto-merge *without a conflict* and are still wrong: an
    identical `N → N+1` edit on both sides merges to `N+1` when the answer is `N+2`, and a
@@ -417,7 +416,7 @@ from `unlace catalog --json` alone: `summary` (WHAT), `use_when` (WHEN — the s
   `analysis-enablement` | `opt-in-tool`; the field an agent reads to judge whether
   flipping is cosmetic, structural, or semantic.
 
-`unlace catalog --check` + the `tests/stages/kuna-catalog.xml` fence enforce the contract.
+`unlace catalog --check` + the `tests/stages/kuna-catalog.toml` fence enforce the contract.
 
 ## Known caveats
 

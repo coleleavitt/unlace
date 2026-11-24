@@ -26,3 +26,5 @@ index:   ld.xs $r0 = $r0[$r1]  ret ;;
 immediate whose extension syllable sits at the end of the bundle, `max` (0x58)
 is a compare and conditional move, `swapsub` (0x64) swaps two registers inside
 one bundle and `index` (0x74) is a scaled indexed load.
+
+`loopdo.bin` and `loopdo_kv3_2.bin`: `loopdo.s` assembled with `kvx-elf-as -march=kv3-1` and `-march=kv3-2` (binutils 2.45), `.text` only.

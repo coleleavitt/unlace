@@ -311,6 +311,78 @@ for ent in T.replace("\n", "|").split("|"):
     arith(mn, fmt, int(opc, 16), int(w), op, src)
 I()
 
+# ---- high-word facility (z196), z14 multiply with CC, z15 logical with complement ----
+I("# High-word facility: operations on bits 0-31 of a general register (b_rh/c_rh).")
+for mn, opc, op, k3 in [("ahhhr", 0xb9c8, "add", "h"), ("ahhlr", 0xb9d8, "add", "l"), ("shhhr", 0xb9c9, "sub", "h"),
+                        ("shhlr", 0xb9d9, "sub", "l"), ("alhhhr", 0xb9ca, "addl", "h"), ("alhhlr", 0xb9da, "addl", "l"),
+                        ("slhhhr", 0xb9cb, "subl", "h"), ("slhhlr", 0xb9db, "subl", "l")]:
+    d, a, b = "b_rhE", "b_rhF", f"b_r{k3}C"
+    C(f"{mn} {d},{a},{b}", f"b_op16=0x{opc:04x} & {d} & {a} & {b}", body(op, 4, a, b, d))
+for mn, opc, op, k2 in [("chhr", 0xb9cd, "cmp", "h"), ("chlr", 0xb9dd, "cmp", "l"), ("clhhr", 0xb9cf, "cmpl", "h"), ("clhlr", 0xb9df, "cmpl", "l")]:
+    C(f"{mn} b_rhE,b_r{k2}F", f"b_op16=0x{opc:04x} & b_rhE & b_r{k2}F", body(op, 4, "b_rhE", f"b_r{k2}F", "b_rhE"))
+C("chf c_rhA,XBD6", "c_op8=0xe3 & c_opl=0xcd & c_rhA & XBD6", body("cmp", 4, "c_rhA", "*:4 XBD6", "c_rhA"))
+C("clhf c_rhA,XBD6", "c_op8=0xe3 & c_opl=0xcf & c_rhA & XBD6", body("cmpl", 4, "c_rhA", "*:4 XBD6", "c_rhA"))
+C("aih c_rhA,c_si32", "c_op8=0xcc & c_op4=0x8 & c_rhA & c_si32", body("add", 4, "c_rhA", "c_si32", "c_rhA"))
+C("alsih c_rhA,c_si32", "c_op8=0xcc & c_op4=0xa & c_rhA & c_si32", body("addl", 4, "c_rhA", "c_si32", "c_rhA"))
+C("alsihn c_rhA,c_si32", "c_op8=0xcc & c_op4=0xb & c_rhA & c_si32", "c_rhA = c_rhA + c_si32;")
+C("cih c_rhA,c_si32", "c_op8=0xcc & c_op4=0xd & c_rhA & c_si32", body("cmp", 4, "c_rhA", "c_si32", "c_rhA"))
+C("clih c_rhA,c_i32", "c_op8=0xcc & c_op4=0xf & c_rhA & c_i32", body("cmpl", 4, "c_rhA", "c_i32", "c_rhA"))
+C("brcth c_rhA,REL32", "c_op8=0xcc & c_op4=0x6 & c_rhA & REL32", "c_rhA = c_rhA - 1; if (c_rhA != 0) goto REL32;")
+C("lbh c_rhA,XBD6", "c_op8=0xe3 & c_opl=0xc0 & c_rhA & XBD6", "c_rhA = sext(*:1 XBD6);")
+C("lhh c_rhA,XBD6", "c_op8=0xe3 & c_opl=0xc4 & c_rhA & XBD6", "c_rhA = sext(*:2 XBD6);")
+C("lfh c_rhA,XBD6", "c_op8=0xe3 & c_opl=0xca & c_rhA & XBD6", "c_rhA = *:4 XBD6;")
+C("llch c_rhA,XBD6", "c_op8=0xe3 & c_opl=0xc2 & c_rhA & XBD6", "c_rhA = zext(*:1 XBD6);")
+C("llhh c_rhA,XBD6", "c_op8=0xe3 & c_opl=0xc6 & c_rhA & XBD6", "c_rhA = zext(*:2 XBD6);")
+C("stch c_rhA,XBD6", "c_op8=0xe3 & c_opl=0xc3 & c_rhA & XBD6", "*:1 XBD6 = c_rhA:1;")
+C("sthh c_rhA,XBD6", "c_op8=0xe3 & c_opl=0xc7 & c_rhA & XBD6", "*:2 XBD6 = c_rhA:2;")
+C("stfh c_rhA,XBD6", "c_op8=0xe3 & c_opl=0xcb & c_rhA & XBD6", "*:4 XBD6 = c_rhA;")
+I("# MULTIPLY SINGLE with the condition code (z14): CC 3 on overflow of the signed product.")
+for mn, opc, w, k in [("msrkc", 0xb9fd, 4, "l"), ("msgrkc", 0xb9ed, 8, "")]:
+    d, a, b = f"b_r{k}E", f"b_r{k}F", f"b_r{k}C"
+    C(f"{mn} {d},{a},{b}", f"b_op16=0x{opc:04x} & {d} & {a} & {b}",
+      f"local x:{w} = {a}; local y:{w} = {b}; local p:{2 * w} = sext(x) * sext(y); local res:{w} = p:{w}; local ov:1 = sext(res) != p; "
+      f"CC3 = ov; CC0 = (res == 0) && !ov; CC1 = (res s< 0) && !ov; CC2 = (res s> 0) && !ov; {d} = res;")
+for mn, opl, w, k in [("msc", 0x53, 4, "l"), ("msgc", 0x83, 8, "")]:
+    d = f"c_r{k}A"
+    C(f"{mn} {d},XBD6", f"c_op8=0xe3 & c_opl=0x{opl:02x} & {d} & XBD6",
+      f"local x:{w} = {d}; local y:{w} = *:{w} XBD6; local p:{2 * w} = sext(x) * sext(y); local res:{w} = p:{w}; local ov:1 = sext(res) != p; "
+      f"CC3 = ov; CC0 = (res == 0) && !ov; CC1 = (res s< 0) && !ov; CC2 = (res s> 0) && !ov; {d} = res;")
+C("mg c_rA,XBD6", "c_op8=0xe3 & c_opl=0x84 & c_rA & c_rpA & XBD6", "local y:8 = *:8 XBD6; local p:16 = sext(c_rpA) * sext(y); c_rA = p(8); c_rpA = p:8;")
+I("# Logical operations with complement (z15 miscellaneous-instruction-extensions 3).")
+for mn, opc, w, k, ex in [("ncrk", 0xb9f5, 4, "l", "x & ~y"), ("ncgrk", 0xb9e5, 8, "", "x & ~y"), ("ocrk", 0xb975, 4, "l", "x | ~y"),
+                          ("ocgrk", 0xb965, 8, "", "x | ~y"), ("nnrk", 0xb974, 4, "l", "~(x & y)"), ("nngrk", 0xb964, 8, "", "~(x & y)"),
+                          ("nork", 0xb976, 4, "l", "~(x | y)"), ("nogrk", 0xb966, 8, "", "~(x | y)"), ("nxrk", 0xb977, 4, "l", "~(x ^ y)"),
+                          ("nxgrk", 0xb967, 8, "", "~(x ^ y)")]:
+    d, a, b = f"b_r{k}E", f"b_r{k}F", f"b_r{k}C"
+    C(f"{mn} {d},{a},{b}", f"b_op16=0x{opc:04x} & {d} & {a} & {b}", f"local x:{w} = {a}; local y:{w} = {b}; local res:{w} = {ex}; ccLogic(res); {d} = res;")
+I("# Older forms: LOAD ADDRESS EXTENDED, BRANCH AND LINK, BRANCH ON INDEX, SHIFT LEFT DOUBLE.")
+C("lae b_rA,XBD4", "b_op8=0x51 & b_rA & XBD4", "b_rA = XBD4;")
+C("laey c_rA,XBD6", "c_op8=0xe3 & c_opl=0x75 & c_rA & XBD6", "c_rA = XBD6;")
+C("bal b_rA,XBD4", "b_op8=0x45 & b_rA & XBD4", "local tgt:8 = XBD4; b_rA = inst_next; call [tgt];")
+C("balr a_rA,a_rB", "a_op8=0x05 & a_rA & a_rB", "local tgt:8 = a_rB; a_rA = inst_next; call [tgt];")
+C("balr a_rA,0", "a_op8=0x05 & a_rA & a_nB=0", "a_rA = inst_next;")
+C("bxh b_rlA,b_rlB,BD4", "b_op8=0x86 & b_rlA & b_rlB & b_rlpB & BD4", "local tgt:8 = BD4; local inc:4 = b_rlB; local lim:4 = b_rlpB; b_rlA = b_rlA + inc; if (b_rlA s<= lim) goto inst_next; goto [tgt];")
+C("bxle b_rlA,b_rlB,BD4", "b_op8=0x87 & b_rlA & b_rlB & b_rlpB & BD4", "local tgt:8 = BD4; local inc:4 = b_rlB; local lim:4 = b_rlpB; b_rlA = b_rlA + inc; if (b_rlA s> lim) goto inst_next; goto [tgt];")
+C("bxhg c_rA,c_rB,BD6", "c_op8=0xeb & c_opl=0x44 & c_rA & c_rB & c_rpB & BD6", "local tgt:8 = BD6; local inc:8 = c_rB; local lim:8 = c_rpB; c_rA = c_rA + inc; if (c_rA s<= lim) goto inst_next; goto [tgt];")
+C("bxleg c_rA,c_rB,BD6", "c_op8=0xeb & c_opl=0x45 & c_rA & c_rB & c_rpB & BD6", "local tgt:8 = BD6; local inc:8 = c_rB; local lim:8 = c_rpB; c_rA = c_rA + inc; if (c_rA s> lim) goto inst_next; goto [tgt];")
+C("slda b_rlA,SH4", "b_op8=0x8f & b_rlA & b_rlpA & SH4",
+  "local x:8 = (zext(b_rlA) << 32) | zext(b_rlpA); " + "local res:8 = (x << SH4) & 0x7fffffffffffffff | (x & 0x8000000000000000); local back:8 = res s>> SH4; local ov:1 = back != x; "
+  "CC3 = ov; CC0 = (res == 0) && !ov; CC1 = (res s< 0) && !ov; CC2 = (res s> 0) && !ov; b_rlA = res(4); b_rlpA = res:4;")
+I("# COMPARE DOUBLE AND SWAP and the quadword pair loads and stores.")
+CDS = ("local m:{w2} = *:{w2} {ea}; local old:{w2} = (zext({r1}) << {b}) | zext({r1p}); CC0 = (m == old); CC1 = !CC0; CC2 = 0; CC3 = 0; "
+       "if (CC1) goto <ne>; *:{w2} {ea} = (zext({r3}) << {b}) | zext({r3p}); goto inst_next; <ne> {r1} = m({w}); {r1p} = m:{w};")
+C("cds b_rlA,b_rlB,BD4", "b_op8=0xbb & b_rlA & b_rlpA & b_rlB & b_rlpB & BD4", CDS.format(w=4, w2=8, b=32, ea="BD4", r1="b_rlA", r1p="b_rlpA", r3="b_rlB", r3p="b_rlpB"))
+C("cdsy c_rlA,c_rlB,BD6", "c_op8=0xeb & c_opl=0x31 & c_rlA & c_rlpA & c_rlB & c_rlpB & BD6", CDS.format(w=4, w2=8, b=32, ea="BD6", r1="c_rlA", r1p="c_rlpA", r3="c_rlB", r3p="c_rlpB"))
+C("cdsg c_rA,c_rB,BD6", "c_op8=0xeb & c_opl=0x3e & c_rA & c_rpA & c_rB & c_rpB & BD6", CDS.format(w=8, w2=16, b=64, ea="BD6", r1="c_rA", r1p="c_rpA", r3="c_rB", r3p="c_rpB"))
+C("lpq c_rA,XBD6", "c_op8=0xe3 & c_opl=0x8f & c_rA & c_rpA & XBD6", "local v:16 = *:16 XBD6; c_rA = v(8); c_rpA = v:8;")
+C("stpq c_rA,XBD6", "c_op8=0xe3 & c_opl=0x8e & c_rA & c_rpA & XBD6", "*:16 XBD6 = (zext(c_rA) << 64) | zext(c_rpA);")
+I("# BRANCH INDIRECT ON CONDITION (z14): the target is the doubleword at the address.")
+C("bi XBD6", "c_op8=0xe3 & c_opl=0x47 & c_nA=0xf & XBD6", "local tgt:8 = *:8 XBD6; goto [tgt];")
+for m in range(1, 15):
+    nm, cond = CONDS[m]
+    C(f"bi{nm} XBD6", f"c_op8=0xe3 & c_opl=0x47 & c_nA={m} & XBD6", f"local tgt:8 = *:8 XBD6; if (!({cond})) goto inst_next; goto [tgt];")
+I()
+
 # ---- loads of addresses and immediates ----
 C("la b_rA,XBD4", "b_op8=0x41 & b_rA & XBD4", "b_rA = XBD4;")
 C("lay c_rA,XBD6", "c_op8=0xe3 & c_opl=0x71 & c_rA & XBD6", "c_rA = XBD6;")
@@ -440,9 +512,10 @@ C("srdl b_rlA,SH4", "b_op8=0x8c & b_rlA & b_rlpA & SH4", PAIR + "local res:8 = x
 C("srda b_rlA,SH4", "b_op8=0x8e & b_rlA & b_rlpA & SH4", PAIR + "local res:8 = x s>> SH4; ccSigned(res); b_rlA = res(4); b_rlpA = res:4;")
 I()
 # rotate-then-insert-selected-bits family
-MASK = "local st:8 = c_i3v {a}; local en:8 = c_i4v {a}; local mh:8 = 0xFFFFFFFFFFFFFFFF >> st; local ml:8 = 0xFFFFFFFFFFFFFFFF << (63 - en); local mask:8 = ((mh & ml) | ((0 - zext(st > en)) & (mh | ml))){lim}; "
+MASK = "local st:8 = (c_i3v{f}) {a}; local en:8 = (c_i4v{f}) {a}; local mh:8 = 0xFFFFFFFFFFFFFFFF >> st; local ml:8 = 0xFFFFFFFFFFFFFFFF << (63 - en); local mask:8 = ((mh & ml) | ((0 - zext(st > en)) & (mh | ml))){lim}; "
 def risb(mn, opl, add, lim, cc, fieldkeep):
-    pre = MASK.format(a=add, lim=lim)
+    # RISBHG/RISBLG take the start and end from bits 3-7 of I3/I4 (a position within the word)
+    pre = MASK.format(a=add, lim=lim, f=" & 0x1f" if fieldkeep is not None else "")
     for zero, tail in [(1, "rot & mask"), (0, f"(c_rA & ~mask) | (rot & mask)")]:
         if zero and fieldkeep is not None:
             tail = f"(c_rA & 0x{fieldkeep:016x}) | (rot & mask)"
@@ -456,7 +529,7 @@ risb("risbgn", 0x59, "", "", False, None)
 risb("risbhg", 0x5d, "", " & 0xFFFFFFFF00000000", False, 0x00000000FFFFFFFF)
 risb("risblg", 0x51, "+ 32", " & 0xFFFFFFFF", False, 0xFFFFFFFF00000000)
 for mn, opl, o in [("rnsbg", 0x54, "&"), ("rosbg", 0x56, "|"), ("rxsbg", 0x57, "^")]:
-    pre = MASK.format(a="", lim="")
+    pre = MASK.format(a="", lim="", f="")
     for test in (0, 1):
         for rz in (1, 0):
             rot = "local rot:8 = c_rB;" if rz else "local rot:8 = (c_rB << c_i5v) | (c_rB >> (64 - c_i5v));"
@@ -775,6 +848,18 @@ Q("lndfr b_fE,b_fF", "b_op16=0xb371 & b_fE & b_fF", "b_fE = f- abs(b_fF);")
 Q("cpsdr b_fE,b_fC,b_fF", "b_op16=0xb372 & b_fE & b_fC & b_fF", "b_fE = (b_fF & 0x7fffffffffffffff) | (b_fC & 0x8000000000000000);")
 Q("sfpc b_rlE", "b_op16=0xb384 & b_rlE", "fpc = b_rlE;")
 Q("efpc b_rlE", "b_op16=0xb38c & b_rlE", "b_rlE = fpc;")
+
+def tdc(w, ebits, fbits):
+    """TEST DATA CLASS: class index 0..11 (+0, -0, +normal, -normal, +subnormal, -subnormal,
+    +inf, -inf, +QNaN, -QNaN, +SNaN, -SNaN); CC 1 when bit (11 - index) of the mask is set."""
+    t = w * 8
+    return (f"local m:8 = XBDE6 & 0xfff; local sg:1 = (x >> {t - 1}) == 1; local ex:{w} = (x >> {fbits}) & 0x{(1 << ebits) - 1:x}; "
+            f"local fr:{w} = x & 0x{(1 << fbits) - 1:x}; local q:1 = ((x >> {fbits - 1}) & 1) == 1; "
+            f"local emax:1 = ex == 0x{(1 << ebits) - 1:x}; local k:8 = zext(sg) + 2 * zext(ex != 0 && !emax) + 4 * zext(ex == 0 && fr != 0) "
+            f"+ 6 * zext(emax && fr == 0) + 8 * zext(emax && fr != 0 && q) + 10 * zext(emax && fr != 0 && !q); "
+            f"local bit:8 = (m >> (11 - k)) & 1; CC0 = (bit == 0); CC1 = (bit != 0); CC2 = 0; CC3 = 0;")
+Q("tceb c_fsA,XBDE6", "c_op8=0xed & c_opl=0x10 & c_fsA & XBDE6", "local x:4 = c_fsA; " + tdc(4, 8, 23))
+Q("tcdb c_fA,XBDE6", "c_op8=0xed & c_opl=0x11 & c_fA & XBDE6", "local x:8 = c_fA; " + tdc(8, 11, 52))
 fp.append("")
 fp.append("# Extended (128-bit) values live in a register pair: fN holds the high half and")
 fp.append("# fN+2 the low half.")
@@ -784,6 +869,8 @@ E, Fx, EQ, FQ = "b_fE", "b_fF", "b_fqE", "b_fqF"
 XP = f"b_fE & b_fqE"; XP2 = f"b_fF & b_fqF"
 Q("lxr b_fE,b_fF", f"b_op16=0xb365 & {XP} & {XP2}", "local hi:8 = b_fF; local lo:8 = b_fqF; b_fE = hi; b_fqE = lo;")
 Q("lzxr b_fE", f"b_op16=0xb376 & {XP}", "b_fE = 0; b_fqE = 0;")
+Q("tcxb c_fA,XBDE6", "c_op8=0xed & c_opl=0x12 & c_fA & c_fqA & XBDE6",
+  "local x:8 = c_fA; local lo:8 = c_fqA; " + tdc(8, 15, 48).replace("local fr:8 = x & 0xffffffffffff;", "local fr:8 = (x & 0xffffffffffff) | lo;"))
 for mn, lo, o, cc in [("axbr", 0x4a, "f+", 1), ("sxbr", 0x4b, "f-", 1), ("mxbr", 0x4c, "f*", 0), ("dxbr", 0x4d, "f/", 0)]:
     Q(f"{mn} b_fE,b_fF", f"b_op16=0xb3{lo:02x} & {XP} & {XP2}", f"local x:16 = {XL(E)}; local y:16 = {XL(Fx)}; local res:16 = x {o} y; " + ("ccFloat(res); " if cc else "") + XS(E, "res"))
 for mn, lo in [("cxbr", 0x49), ("kxbr", 0x48)]:

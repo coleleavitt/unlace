@@ -54,6 +54,8 @@ The corpus has 13 functions:
 | Hexagon | `Hexagon:LE:32:default` | 0/13 | 0/13 | | every function: `Could not obtain cached crossbuild instruction` | #679; relocations #677; e_machine #676 |
 | Lanai | `lanai:BE:32:default` | 1/13 clean | 4/13 clean | | branches flow to 0 (`R_LANAI_25` not applied) | #677, #676 |
 | LoongArch64 | `Loongarch:LE:64:lp64d` | 11/13 clean | 12/13 clean | | switch tables flow to unmapped memory; `0.5f` reads as `1.4013e-45f` (PCALA not applied) | #677, #676 |
+| NVPTX (ptxas `sm_80` cubin) | `SASS:LE:64:SM80` (`--target`) | 13/13 | 13/13 | none | `CALL.ABS.NOINC` device calls were the opaque `sass_CALL` op (calls dropped). Still open: `BRX` jump tables, and `ISETP`/`P2R`/`I2F` user ops. -O2 `classify` returns the pre-branch value. `str_len` is `void` | `CALL.ABS` fixed in #750. Engine: e_machine 190 (CUDA) not routed and R_CUDA relocations 56-69 not applied (#676, #677) |
+| ARCv2 (arc-elf-gcc 15.3 `-mcpu=hs`) | auto (`ARC:LE:32:ARCv2`) | 13/13 (.o, linked) | 13/13 (.o, linked) | none | -O2 `list_sum`: `jeq.d [blink]` skipped its `mov_s r0,0` delay slot on the fall-through path, so the sum started at the list pointer | #766 |
 
 "n/13" counts functions whose body decompiled. "clean" counts functions with no `halt_missing`.
 
@@ -71,6 +73,35 @@ The corpus has 13 functions:
 - #679 Hexagon crossbuild.
 - #680 wasm object names.
 - #681 ARM soft-float return on armeb and v7-M.
+
+## Re-run on `unlace-5aa8c751b1` (2026-11-24)
+
+The same objects were run again with no `--target`, on the build that has the loader fixes (#706, #707,
+#710, #713-#737). AVR and MSP430 ran both as `.o` and linked. All 66 objects now load by
+auto-detection, and every function is found: 13/13 everywhere, 10/10 for BPF. VE still has no spec.
+
+| family | O0 | O2 | was | now |
+|---|---|---|---|---|
+| x86, x86_64, aarch64, arm, armv7a, thumb, mips*, powerpc, powerpcle, powerpc64, riscv32/64, sparc, bpf | 13/13 | 13/13 | clean | clean |
+| aarch64_be | 13/13 | 13/13 | tail call `b fib` as `while(true){}` | `return fib(a); // tail-call` (#716) |
+| armeb | 13/13 | 13/13 | soft-float return in `s0` | `return (float)__aeabi_fadd(...)` (#681) |
+| thumbv7m | 13/13 | 13/13 | soft-float `scale` is `void` | unchanged; noted on #681 |
+| powerpc64le | 13/13 | 13/13 | VSX/`isel` halt on the generic ISA | unchanged by design; with `--target PowerPC:LE:64:A2ALT` exact since #674 |
+| riscv32/64 | 13/13 | 13/13 | `fmadd_s` user op | unchanged by design |
+| s390x | 13/13 | 13/13 | `dispatch` jump table lost | `switch(op)` with all 9 cases (#713) |
+| sparc64 | 13/13 | 13/13 | calls `sub_4001f4`, `scale` constant from 0 | calls named (#721); `scale` still `return v;`, lifted p-code is right: #765 |
+| wasm32 | 13/13 | 13/13 | every function `sub_8000xxxx` | named from the `linking` symbol table (#710) |
+| AVR | 13/13 (.o and linked) | 13/13 | .o unloadable (0x400000) | loads by header (#706, #707); .o calls stay `sub_xxx`: #757 |
+| MSP430 | 13/13 (.o and linked) | 13/13 | .o unloadable | loads by header; `RRA` as `>> 7` (#668); globals off the register file from 0x200 (#754) |
+| Hexagon | 13/13 | 13/13 | every function failed (crossbuild) | decompiles by header (#706), with calls, `switch(op)` and `0.5f` (#737, #679) |
+| Lanai | 13/13 | 13/13 | branches flow to 0 | branches, calls and globals relocated (#732) |
+| LoongArch64 | 13/13 | 13/13 | switch tables unmapped, `0.5f` as `1.4013e-45f` | relocated (#726); the `1.4013e-45f` was the `fmadd.s` fourth operand read as the constant 1, fixed in #768 |
+| AMDGPU gfx900 | 13/13 | 13/13 | bad instructions in all -O0 functions | 0 bad (#663), routed by `EF_AMDGPU_MACH` (#706); .o calls unrelocated: #757 |
+
+Follow-ups from the re-run:
+- Spec fixes: #754 (MSP430 base 0x200), #755 (GFX10 `s_xor_saveexec_b32`, found by the gfx1030 routing fixture), #768 (LoongArch `frA`/`drA`).
+- Issues: #756 (linked SPARC64 marks a leaf no-return), #757 (AVR and AMDGPU ET_REL relocations), #765 (SPARC64 float result returned in `fs0`).
+- Regression rows: `processors.toml` `elfroute_*` (#760) loads ET_REL and ET_EXEC builds of every routed or relocated machine through auto-detection.
 
 ## Bytecode and GPU families (sleigh-fam-e, 2026-11-24)
 

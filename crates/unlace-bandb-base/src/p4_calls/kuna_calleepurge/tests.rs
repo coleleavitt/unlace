@@ -581,3 +581,44 @@ fn a_wide_load_over_a_parked_stack_address_is_lost() {
         "an 8-byte load covering the slot that holds the address"
     );
 }
+
+#[test]
+fn an_seh_unlink_restores_the_saved_stack_pointer() {
+    let mut f = fx();
+    f.regs.fs = Some(0x40);
+    let fs = vn(&f.reg, 0x40, 4);
+    let slot = vn(&f.tmp, 0x200, 4);
+    let link = vn(&f.tmp, 0x210, 4);
+    let mut state = State::at_entry();
+    state.0[SP] = Some(Val::exact(-0x20));
+    state.0[BP] = Some(Val::exact(-4));
+    let save = vec![
+        (
+            OpCode::CPUI_INT_ADD,
+            Some(slot.clone()),
+            vec![f.r(BP), f.c(-0x10)],
+        ),
+        (
+            OpCode::CPUI_STORE,
+            None,
+            vec![vn(&f.cst, 3, 8), slot, f.r(SP)],
+        ),
+    ];
+    let mut state = step(&save, &f.regs, state).state;
+    assert_eq!(state.3, Some((-0x14, -0x20)));
+    state.0[SP] = Some(Val::Stack {
+        lo: -INF,
+        hi: 0,
+        own: false,
+    });
+    let unlink = vec![
+        (OpCode::CPUI_INT_ADD, Some(link.clone()), vec![fs, f.c(0)]),
+        (
+            OpCode::CPUI_STORE,
+            None,
+            vec![vn(&f.cst, 3, 8), link, f.r(1)],
+        ),
+    ];
+    let s = step(&unlink, &f.regs, state);
+    assert_eq!(sp(&s), Val::exact(-0x20));
+}

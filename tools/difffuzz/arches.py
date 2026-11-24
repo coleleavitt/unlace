@@ -12,6 +12,7 @@ import capstone as cs
 import unicorn as uc
 from unicorn import arm64_const as a64
 from unicorn import riscv_const as rv
+from unicorn import s390x_const as sz
 from unicorn import x86_const as x86
 
 
@@ -499,16 +500,32 @@ class Mips64(Arch):
 
 
 # Release 6 compact branches (no delay slot) are compared; delay-slot branches are not.
-MIPSR6_DENY = re.compile(MIPS64_DENY.pattern.replace("^(b.*|j.*|", "^(b(?!\\w*c$).*|j(?!\\w*c$).*|").replace("|bc.*|bal.*|", "|"))
+MIPSR6_DENY = re.compile(MIPS64_DENY.pattern.replace("^(b.*|j.*|", "^(b(?!\\w*c$).*|j(?!\\w*c$).*|").replace("|bc.*|bal.*|", "|")
+                         .replace(".*\\.(s|d|ps|w|l|b|h|v)", ".*\\.(s|ps|l)"))
+# MSA: w0..w31 and MSACSR are compared; FPU operations (on $f registers, outside the harness state)
+# are skipped.
+MSA_VECS = [(f"w{i}", None) for i in range(32)]
 
 
-class Mips64R6(Mips64):
+class MsaCsr:
+    """MSACSR as a flag word: random sticky Flags (bits 6:2), round-to-nearest, no enables, no
+    cause, so no FP operation traps and the rounding mode is the one p-code uses."""
+
+    def flag_words(self):
+        return [(None, {"MSACSR": (0, 32)}, lambda w: w & 0x7C)]
+
+
+class Mips64R6(MsaCsr, Mips64):
     """MIPS64 Release 6 (MIPS:BE:64:R6): no HI/LO, new compact branches and multiply/divide."""
     name = "mips64r6"
     lang = "MIPS:BE:64:R6"
     gprs = Mips64.gprs[:31]
+    vecs = MSA_VECS
     cs_mode = cs.CS_MODE_MIPS64 | cs.CS_MODE_MIPS32R6
     deny = MIPSR6_DENY
+
+    def skip(self, cand):
+        return "$f" in cand["op_str"]
 
     def ignored(self, mnemonic, operands, state):
         if re.match(r"^d?(div|mod)u?$", mnemonic):
@@ -516,12 +533,16 @@ class Mips64R6(Mips64):
         return set()
 
 
-class Mips32R6(Mips32):
+class Mips32R6(MsaCsr, Mips32):
     """MIPS32 Release 6 (MIPS:BE:32:R6) on a MIPS64R6 core."""
     name = "mipsr6"
     lang = "MIPS:BE:32:R6"
     gprs = Mips32.gprs[:31]
+    vecs = MSA_VECS
     deny = MIPSR6_DENY
+
+    def skip(self, cand):
+        return "$f" in cand["op_str"]
 
     def capstone(self):
         return cs.Cs(cs.CS_ARCH_MIPS, cs.CS_MODE_MIPS32 | cs.CS_MODE_MIPS32R6 | cs.CS_MODE_BIG_ENDIAN)
@@ -552,6 +573,8 @@ class Ppc32(Arch32):
         ("LR", ppc.UC_PPC_REG_LR), ("CTR", ppc.UC_PPC_REG_CTR)]
     pc_const = ppc.UC_PPC_REG_PC
     deny = PPC_DENY
+    # the QEMU harness seeds and compares these XER bits (Unicorn's XER accessors cannot)
+    qemu_bits = ("xer_so", "xer_ov", "xer_ca")
 
     def unicorn(self):
         emu = uc.Uc(uc.UC_ARCH_PPC, uc.UC_MODE_PPC32 | uc.UC_MODE_BIG_ENDIAN)
@@ -568,6 +591,166 @@ class Ppc32(Arch32):
 
     def fix_inputs(self, init, rng):
         pass
+
+    def canonical(self, cand):
+        # an update-form load/store with RA=0, or a load with update into RA (invalid forms)
+        w = int.from_bytes(cand["bytes"], "big" if self.big else "little")
+        op, rt, ra = w >> 26, (w >> 21) & 31, (w >> 16) & 31
+        xo = (w >> 1) & 0x3FF
+        upd_d = op in (33, 35, 41, 43, 37, 39, 45, 47, 49, 51, 53, 55) or (op == 58 and w & 3 == 1) or (op == 62 and w & 3 == 1)
+        upd_x = op == 31 and xo in (55, 119, 311, 375, 183, 247, 439, 503, 53, 181, 373, 567, 599, 631, 695, 759, 727)
+        if (upd_d or upd_x) and ra == 0:
+            return False
+        loads = op in (33, 35, 41, 43, 49, 51, 58) or (op == 31 and xo in (55, 119, 311, 375, 53, 373))
+        if (upd_d or upd_x) and loads and ra == rt:
+            return False
+        return True
+
+
+# QEMU seeds and compares LR, CTR, CR, XER and the FPRs, and runs both branch outcomes, so the
+# 64-bit QEMU-only architectures leave out only what touches state the harness does not hold
+PPC_DENY_QEMU = re.compile(
+    r"^(sc|scv|t[wd]i?.*|rfi.*|rfci|rfmci|hrfid|mtmsr.*|mfmsr|mfsr.*|mtsr.*|mftb.*|wrtee.*|"
+    r"mbar|msync|dcb.*|icb.*|tlb.*|slb.*|[lst][bhwdq]arx|st[bhwdq]cx\.|mfdcr|mtdcr|attn|wait.*|"
+    r"mffs.*|mtfs.*|mcrfs|v.*|ev.*|lv.*|stv.*|dss.*|dst.*|xs.*|xv.*|xx.*|lx.*|stx.*|"
+    r"m[ft]vsr.*|darn|copy|paste.*|cp_abort|msgsnd.*|msgclr.*|lq|stq|ldat|lwat|stdat|stwat|"
+    r"mfbhrbe|clrbhrb|rfebb|bctar.*|.*ep[xX]|ld[bc]ix|st[bc]ix|lwzcix|lhzcix|stwcix|sthcix)$"
+)
+
+
+class Ppc64(Ppc32):
+    """64-bit PowerPC (QEMU oracle only: qemu-ppc64 -cpu power10, 64-bit mode)."""
+    name = "ppc64"
+    deny = PPC_DENY_QEMU
+    vecs = [(f"f{i}", getattr(ppc, f"UC_PPC_REG_FPR{i}")) for i in range(32)]
+    lang = "PowerPC:BE:64:default"
+    elf_machine = 21
+    elf64 = True
+    until = (1 << 64) - 1
+
+    def addr_ok(self, a):
+        return a < (1 << 47)
+
+    def unicorn(self):
+        return uc.Uc(uc.UC_ARCH_PPC, uc.UC_MODE_PPC64 | uc.UC_MODE_BIG_ENDIAN)
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_PPC, cs.CS_MODE_64 | cs.CS_MODE_BIG_ENDIAN)
+
+    def partial(self, mnemonic, operands):
+        """Bits of a destination the architecture defines (the rest are undefined)."""
+        if re.match(r"^(divwu?|divwu?o|divweu?|divweu?o|mulhwu?)\.?$", mnemonic):
+            # 64-bit mode: RT[0:31] (the high word) is undefined
+            return {operands.split(",")[0].strip(): 0xFFFFFFFF}
+        return {}
+
+    def ignored(self, mnemonic, operands, state):
+        out = set()
+        if re.match(r"^(divwu?|divwu?o|divweu?|divweu?o|mulhwu?)\.$", mnemonic):
+            out.add("cr0")  # LT/GT/EQ undefined in 64-bit mode; SO is still compared via xer_so
+        if mnemonic.startswith("f") and mnemonic.endswith("."):
+            out.add("cr1")  # copies FPSCR[FX,FEX,VX,OX]; the FPSCR exception bits are not modelled
+            if re.match(r"^f(n?m(add|sub)s?|sel)\.$", mnemonic):
+                out.add("cr3")  # QEMU 10.2 also sets CR bit 14 for the A-form record forms
+        if re.match(r"^f(n?m(add|sub))s?\.?$", mnemonic):
+            out.add(operands.split(",")[0].strip())  # fused multiply-add: p-code rounds twice
+        if re.match(r"^stfsu?x?$", mnemonic):
+            import struct
+            frs = operands.split(",")[0].strip()
+            v = state.get(frs)
+            d = struct.unpack("<d", struct.pack("<Q", v))[0]
+            try:
+                exact = struct.unpack("<f", struct.pack("<f", d))[0] == d
+            except OverflowError:
+                exact = False
+            if not exact:
+                # a double outside single precision: the ISA stores truncated bits, p-code rounds
+                return {"*"}
+        if re.match(r"^lfsu?x?$", mnemonic):
+            frt = operands.split(",")[0].strip()
+            v = state.get(frt)
+            if (v >> 52) & 0x7FF == 0x7FF and v & ((1 << 52) - 1):
+                out.add(frt)  # a single sNaN is widened without quieting; p-code quiets it
+        return out
+
+    def canonical(self, cand):
+        if not super().canonical(cand):
+            return False
+        w = int.from_bytes(cand["bytes"], "big" if self.big else "little")
+        if not self.big and (w >> 26 in (46, 47) or (w >> 26 == 31 and ((w >> 1) & 0x3FF) in (533, 597, 661, 725))):
+            return False  # lmw/stmw and the string ops raise an alignment interrupt in little-endian mode
+        if w >> 26 == 31 and ((w >> 1) & 0x3FF) in (339, 467):  # mfspr / mtspr: only XER, LR, CTR
+            spr = ((w >> 16) & 0x1F) | ((w >> 11) & 0x1F) << 5
+            return spr in (1, 8, 9)
+        return True
+
+
+class Ppc64le(Ppc64):
+    name = "ppc64le"
+    lang = "PowerPC:LE:64:default"
+    big = False
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_PPC, cs.CS_MODE_64 | cs.CS_MODE_LITTLE_ENDIAN)
+
+
+class Ppc64Isa(Ppc64):
+    """Power ISA 3.0 with AltiVec (the language a POWER7+ image needs)."""
+    name = "ppc64-isa"
+    lang = "PowerPC:BE:64:A2ALT"
+
+
+class Ppc64leIsa(Ppc64le):
+    name = "ppc64le-isa"
+    lang = "PowerPC:LE:64:A2ALT"
+
+
+S390X_DENY = re.compile(
+    r"^(svc|ex|exrl|diag|sigp|lpswe?|ssm|stnsm|stosm|lctlg?|stctlg?|ptlb|ipte|idte|sske|iske|rrbe|rrbm|"
+    r"lra[y g]?|lurag?|sturg?|stpx|spx|stap|stidp|sck|sckc|stckc|spt|stpt|stck[ef]?|ecag|ectg|stfle|stfl|"
+    r"stsi|stcps|stcrw|tsch|ssch|msch|csch|hsch|rsch|xsch|chsc|rchp|sal|schm|tpi|tpei|siga|"
+    r"mc|trap[24]|tbegin.*|tend|tabort|etnd|ntstg|ppa|niai|bpp|bprp|pfd|pfdrl|"
+    r"sar|ear|lam|lamy|stam|stamy|cpya|sacf|sac|ipk|spka|pt|pti|pc|pr|bsg|bsa|bakr|ereg|eregg|esea|epar|epair|esar|"
+    r"esta|msta|mvcp|mvcs|mvcdk|mvcsk|mvcos|mvpg|mvcl|mvcle|mvclu|clcl|clcle|clclu|"
+    r"cu[0-9]+|cu[a-z]+|tre|troo|trot|trto|trtt|srst|srstu|cuse|cmpsc|kmc|km|kimd|klmd|kmac|kmctr|kmf|kmo|pcc|kma|"
+    r"prno|kdsa|dfltcc|sortl|nnpa.*|[lst]ctlg?|.*[\._]?fpc|sfasr|srnmb?|srnmt|lfas|efpc|sfpc|lfpc|stfpc|"
+    r"[a-z]*dt[a-z]*|[a-z]*xt[a-z]*|v.*|wf.*|lcbb)$"
+)
+
+
+class S390x(Arch):
+    """IBM z/Architecture (QEMU oracle: qemu-s390x -cpu max). The condition code is one-hot in
+    CC0..CC3 with CCA = cc >= 2 and CCB = cc & 1."""
+    name = "s390x"
+    lang = "s390x:BE:64:default"
+    elf_machine = 22
+    big = True
+    pc = "PC"
+    max_len = 6
+    gprs = [(f"r{i}", getattr(sz, f"UC_S390X_REG_R{i}")) for i in range(16)]
+    vecs = [(f"f{i}", getattr(sz, f"UC_S390X_REG_F{i}")) for i in range(16)]
+    pc_const = sz.UC_S390X_REG_PC
+    deny = S390X_DENY
+    qemu_bits = ("CC0", "CC1", "CC2", "CC3", "CCA", "CCB")
+
+    def qemu_bit_values(self, rng):
+        cc = rng.randrange(4)
+        out = {f"CC{k}": int(cc == k) for k in range(4)}
+        out["CCA"], out["CCB"] = int(cc >= 2), cc & 1
+        return out
+
+    def unicorn(self):
+        return uc.Uc(uc.UC_ARCH_S390X, uc.UC_MODE_BIG_ENDIAN)
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_SYSZ, cs.CS_MODE_BIG_ENDIAN)
+
+    def gen(self, rng):
+        return rng.getrandbits(48).to_bytes(6, "big")
+
+    def skip(self, cand):
+        # QEMU 10.2 stores the low word shifted left by 32 (zero) for STMH, not bits 0-31
+        return cand["mnemonic"] == "stmh"
 
 
 TC_DENY = re.compile(
@@ -869,4 +1052,4 @@ class M68k(Arch32):
         return cand["mnemonic"] == "link.w" and cand["op_str"].startswith("a7,")
 
 
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), TriCore(), Nios2(), Sh4(), M68k())}
+ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), TriCore(), Nios2(), Sh4(), M68k())}

@@ -10,4 +10,5 @@
 @include "mipsmicro.sinc"
 @include "mips_mt.sinc"
 @include "mips_dsp.sinc"
+@include "mips_msa.sinc"
 @include "smartmips.sinc"

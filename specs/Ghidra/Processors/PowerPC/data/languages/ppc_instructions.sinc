@@ -985,11 +985,9 @@
 :divw. D,A,B		is OP=31 & D & A & B & OE=0 & XOP_1_9=491 & Rc=1
 {
 @ifdef BIT_64
-	divOverflow(A:4,B:4);
 	D = sext(A:4 s/ B:4);
 	cr0flags(D:4);
 @else
-	divOverflow(A,B);
 	D = A s/ B;
 	cr0flags(D);
 @endif
@@ -2218,8 +2216,8 @@
 :lhbrx D,RA_OR_ZERO,B 	is OP=31 & D & RA_OR_ZERO & B & XOP_1_10=790 & BIT_0=0
 {
 	ea:$(REGISTER_SIZE) = RA_OR_ZERO+B;
-	tmp:$(REGISTER_SIZE) = zext(*:1(ea+1)) << 8;
-	D = tmp | zext(*:1(ea));
+	val:2 = *:2(ea);
+	D = zext((val << 8) | (val >> 8));
 }
 
 #lhz	r0,4(0)		0xa0 00 00 04
@@ -2305,10 +2303,8 @@ define pcodeop lswxOp;
 :lwbrx D,RA_OR_ZERO,B 	is OP=31 & D & RA_OR_ZERO & B & XOP_1_10=534 & BIT_0=0
 {
 	ea:$(REGISTER_SIZE) = RA_OR_ZERO+B;
-	tmp1:$(REGISTER_SIZE) = zext(*:1(ea+3)) << 24;
-	tmp2:$(REGISTER_SIZE) = zext(*:1(ea+2)) << 16;
-	tmp3:$(REGISTER_SIZE) = zext(*:1(ea+1)) << 8;
-	D = tmp1 | tmp2 | tmp3 | zext(*:1(ea));
+	val:4 = *:4(ea);
+	D = zext((val << 24) | ((val << 8) & 0xff0000) | ((val >> 8) & 0xff00) | (val >> 24));
 }
 #lwz	r0,4(0)		0x80 00 00 04
 #lwz	r0,4(r2)	0x80 02 00 04

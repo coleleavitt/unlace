@@ -4280,3 +4280,38 @@ forbid = ["halt_baddata"]
 test = "ebpf_retindexuse_counter_is_returned"
 address = "0x0"
 expect = ["return "]
+
+# TriCore TC1.8 code built by tricore-elf-gcc 13.4.1 (-mcpu=tc49xx -O2; source gcc_shifts.c). SHA/SH
+# build their count as (c6 << 26) s>> 26, which RuleBoolSignShift used to fold into 0 - c6.
+[[family]]
+name = "tricore_tc18_gcc"
+loader = "auto"
+args = ["--target", "tricore:LE:32:tc18"]
+fixture = "crates/unlace-cli/tests/fixtures/tricore_tc18_gcc/gcc_shifts.elf"
+forbid = ["0x3d", "0x3b"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_sar_const"
+address = "g_sar"
+expect = ["return a0 >> 3;"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_shr_const"
+address = "g_shr"
+expect = ["return a0 >> 5;"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_shl_const"
+address = "g_shl"
+expect = ["return a0 << 4;"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_popcount"
+address = "g_pop"
+expect = ["POPCOUNT(a0)"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_shl_reg"
+address = "g_shlv"
+expect = ["a0 << "]
+forbid = ["-(int)"]

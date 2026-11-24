@@ -322,9 +322,11 @@ class RiscV64(Arch):
         return set()
 
     def normalize(self, name, ours, ref):
-        """A single-precision result in a 64-bit f register is NaN-boxed by hardware."""
-        if name.startswith("f") and ref >> 32 == 0xFFFFFFFF and ours >> 32 == 0:
-            return ours | (0xFFFFFFFF << 32), ref
+        """Unicorn's QEMU predates NaN-boxing for most single-precision writes (it boxes loads and
+        fmv.w.x only, and fsgnj.s keeps the upper word of rs1); the ISA boxes every one, so a boxed
+        result of ours is compared on its low 32 bits."""
+        if name.startswith("f") and ours >> 32 == 0xFFFFFFFF and (ours ^ ref) & 0xFFFFFFFF == 0:
+            return ref, ref
         return ours, ref
 
     def setup(self, emu):

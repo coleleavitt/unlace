@@ -41,24 +41,24 @@ define pcodeop froundnx;
 {
 	local a:$(HFLEN) = frs1H;
 	local b:$(HFLEN) = frs2H;
-	frd = zext(a);
+	fassignH(frd, a);
 	if (nan(a)) goto inst_next;
-	frd = zext(b);
+	fassignH(frd, b);
 	if (nan(b)) goto inst_next;
 	if (b f<= a) goto inst_next;
-	frd = zext(a);
+	fassignH(frd, a);
 }
 
 :fmaxm.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x3 & funct7=0x16
 {
 	local a:$(HFLEN) = frs1H;
 	local b:$(HFLEN) = frs2H;
-	frd = zext(a);
+	fassignH(frd, a);
 	if (nan(a)) goto inst_next;
-	frd = zext(b);
+	fassignH(frd, b);
 	if (nan(b)) goto inst_next;
 	if (b f>= a) goto inst_next;
-	frd = zext(a);
+	fassignH(frd, a);
 }
 
 :fround.s frd,frs1S,FRM is frs1S & frd & FRM & op0006=0x53 & funct7=0x20 & op2024=0x4
@@ -76,13 +76,13 @@ define pcodeop froundnx;
 :fround.h frd,frs1H,FRM is frs1H & frd & FRM & op0006=0x53 & funct7=0x22 & op2024=0x4
 {
 	local tmp:$(HFLEN) = fround(frs1H, FRM);
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :froundnx.h frd,frs1H,FRM is frs1H & frd & FRM & op0006=0x53 & funct7=0x22 & op2024=0x5
 {
 	local tmp:$(HFLEN) = froundnx(frs1H, FRM);
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fleq.s rd,frs1S,frs2S is frs1S & frs2S & rd & op0006=0x53 & funct3=0x4 & funct7=0x50

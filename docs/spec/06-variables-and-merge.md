@@ -500,6 +500,24 @@ marking (below), three passes fuse variables to reduce clutter:
   globals and 35 address-tied, and the pass made 61.4 million pair tests in
   25 s for 6 merges.
 
+  Option `typemerge` (`kuna_typemerge.rs (TypeMergeMode)`, read by
+  `coreaction_cleanup.rs (ActionMergeType)` and passed to
+  `merge_by_datatype`) narrows which same-typed highs share a group. The type
+  grouping joins two variables that only share a type wherever each is
+  stored, so two distinct source variables (two loop counters, a saved
+  argument and a later call result) can print as one reused local. `on`, the
+  default, is upstream. `storage` keys each gathered high by the one storage
+  all its instances share (`kuna_typemerge.rs (single_storage)`: same space,
+  offset and size, read through `MergeContext::vn_storage`; a high whose
+  instances differ, or whose context cannot say, has no key) and lets a
+  candidate join a group only when its key equals the group head's
+  (`kuna_typemerge.rs (TypeMergeMode::joins)`), so a slot or register the
+  compiler reused for one value still reads as one variable while values the
+  machine held apart stay apart. `off` clears the gathered list, so no high
+  is joined by type. Both narrower modes still run the prior-decompile groups
+  (`kuna_stablenames.rs (variable_groups)`) and leave every other merge pass
+  alone; they only drop speculative joins.
+
 **Explicit vs implied** — which values get a named token at all. Between the
 required and speculative groups, `coreaction_cleanup.rs (ActionMarkExplicit)`
 decides per Varnode via `coreaction_cleanup.rs (base_explicit)`: explicit

@@ -1808,6 +1808,8 @@ pub struct PrintC {
     /// Per-body spelling of a goto-target leaf whose address label another
     /// printed label already uses (see [`assign_label_names`](PrintC::assign_label_names)).
     label_names: std::collections::BTreeMap<BlockId, String>,
+    /// (kuna `ctree`) The C syntax tree of the function being printed, with `option ctree on`.
+    ctree: Option<crate::kuna_ctree::CTree>,
 }
 
 impl Default for PrintC {
@@ -1867,6 +1869,7 @@ impl PrintC {
             globalref: crate::kuna_globalref::Plan::default(),
             named_globals: crate::kuna_namedglobals::References::default(),
             label_names: std::collections::BTreeMap::new(),
+            ctree: None,
         }
     }
 
@@ -4856,7 +4859,14 @@ impl PrintC {
                 Default::default()
             };
         self.assign_label_names(fd, sroot);
-        self.emit_block_graph(fd, arch, sroot);
+        self.ctree = if arch.kuna_options.get::<crate::kuna_ctree::Ctree>().0 && !self.is_flat() {
+            crate::kuna_ctreebuild::build(fd)
+        } else {
+            None
+        };
+        if !self.emit_ctree_body(fd, arch, sroot) {
+            self.emit_block_graph(fd, arch, sroot);
+        }
         while let Some(id) = self.eh_open_catch.pop() {
             self.emit.close_brace_indent(self.lang().kw_close_curly, id);
         }
@@ -4866,6 +4876,7 @@ impl PrintC {
         self.goto_rewrites = Default::default();
         self.switch_plans = Default::default();
         self.label_names.clear();
+        self.ctree = None;
     }
 
     /// Give every printed label a distinct name.  Block duplication (return
@@ -4916,8 +4927,18 @@ impl PrintC {
 
     /// Dispatch one structured block to its emitter (C++ the virtual
     /// `FlowBlock::emit(PrintLanguage*)` -> `PrintC::emitBlock*`).
+    /// With `option ctree on`, the statement the function's C syntax tree built from
+    /// `blk` prints instead, when the tree printer models it (`kuna_ctreeprint`).
     #[doc(hidden)]
     pub fn emit_block(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
+        if self.ctree.is_some() && self.emit_ctree_block(fd, arch, blk) {
+            return;
+        }
+        self.emit_block_raw(fd, arch, blk);
+    }
+
+    /// The block printer's own dispatch, for a block the C syntax tree leaves to it.
+    fn emit_block_raw(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         use crate::block::BlockType;
         match fd.sblocks_ref().block(blk).get_type() {
             BlockType::Copy => self.emit_block_copy(fd, arch, blk),
@@ -5856,10 +5877,9 @@ impl PrintC {
             // (kuna warnstyle, DIV-39) condition-attached warnings land at the
             // end of the braceless `if (cond)` header line.
             self.flush_eol_warnings();
-            let body = fd.sblocks_ref().block(blk).get_block(1);
             let id = self.emit.start_indent();
             let id1 = self.emit.begin_block(0);
-            self.emit_block(fd, arch, body);
+            self.emit_if_arm(fd, arch, blk, 1);
             self.emit.end_block(id1);
             self.emit.stop_indent(id);
             if size == 3 {
@@ -5876,7 +5896,7 @@ impl PrintC {
                 if else_is_if {
                     self.context.set_mod(modifiers::PENDING_BRACE);
                     let id2 = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, else_block);
+                    self.emit_if_arm(fd, arch, blk, 2);
                     self.emit.end_block(id2);
                 } else {
                     let id2 = self.emit.open_brace_indent(
@@ -5884,7 +5904,7 @@ impl PrintC {
                         self.output_brace(self.options.brace_ifelse),
                     );
                     let id3 = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, else_block);
+                    self.emit_if_arm(fd, arch, blk, 2);
                     self.emit.end_block(id3);
                     self.emit
                         .close_brace_indent(self.lang().kw_close_curly, id2);
@@ -5901,7 +5921,7 @@ impl PrintC {
             // the `if (cond) {` header brace.
             self.flush_eol_warnings();
             let id1 = self.emit.begin_block(0);
-            self.emit_block(fd, arch, fd.sblocks_ref().block(blk).get_block(1));
+            self.emit_if_arm(fd, arch, blk, 1);
             self.emit.end_block(id1);
             self.emit.close_brace_indent(self.lang().kw_close_curly, id);
 
@@ -5922,7 +5942,7 @@ impl PrintC {
                     // so the child BlockIf registers a lazy brace.
                     self.context.set_mod(modifiers::PENDING_BRACE);
                     let id2 = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, else_block);
+                    self.emit_if_arm(fd, arch, blk, 2);
                     self.emit.end_block(id2);
                 } else {
                     let id2 = self.emit.open_brace_indent(
@@ -5930,7 +5950,7 @@ impl PrintC {
                         self.output_brace(self.options.brace_ifelse),
                     );
                     let id3 = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, else_block);
+                    self.emit_if_arm(fd, arch, blk, 2);
                     self.emit.end_block(id3);
                     self.emit
                         .close_brace_indent(self.lang().kw_close_curly, id2);
@@ -17233,6 +17253,7 @@ fn to_emit_hl(hl: crate::printlanguage::SyntaxHighlight) -> SyntaxHighlight {
 }
 
 mod kuna_cpoolprint;
+mod kuna_ctreeprint;
 mod kuna_javatryprint;
 
 #[path = "kuna_rustarrayinit.rs"]

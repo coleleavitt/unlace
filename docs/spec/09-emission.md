@@ -2471,7 +2471,7 @@ its Varnode's size; when the whole tree is constant, the hexadecimal literal is 
 constant atom in place of the tree. `PIECE` is not folded: a two-word `CONCAT` of constants
 is a Go or Swift pair, which keeps its form (the stage corpus pins those).
 
-(kuna `selectmul`, default off) A select the lifter wrote as arithmetic prints as C's
+(kuna `selectmul`, default on) A select the lifter wrote as arithmetic prints as C's
 conditional operator (`crates/unlace-emit/src/p9_emit/kuna_selectmul.rs`). SLEIGH has no
 select, so a spec that picks one of two values without a branch computes
 `a * zext(c) + b * zext(!c)`; TriCore's `ternary` macro (behind `sel`, `min`, `max`,

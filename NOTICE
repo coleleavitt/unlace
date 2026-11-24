@@ -58,6 +58,10 @@ specs/Ghidra/Processors/TLCS900H vendors the Toshiba TLCS-900/H SLEIGH specifica
 aleph-void/ghidra-tlcs900h (https://github.com/aleph-void/ghidra-tlcs900h), a fork of nevesnunes/ghidra-tlcs900h, released under the
 MIT License (its license file is in that directory).
 
+specs/Ghidra/Processors/LM32 vendors the Lattice LatticeMico32 SLEIGH specification of
+aleph-void/ghidra-lm32 (https://github.com/aleph-void/ghidra-lm32), a fork of jevinskie/ghidra-lm32, released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

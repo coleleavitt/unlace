@@ -5663,6 +5663,13 @@ impl PrintC {
         if types.is_empty() {
             return "catch (...)".into();
         }
+        // (kuna `msvceh`) An x64 SEH `__try` record names its own handler
+        // header, `__except (<filter>)`.
+        if let [only] = types.as_slice()
+            && only.starts_with("__except")
+        {
+            return (*only).to_string();
+        }
         format!("catch ({})", types.join(" | "))
     }
 

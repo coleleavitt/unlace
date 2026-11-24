@@ -7781,7 +7781,11 @@ fn commit_analysis_output(
         // (kuna `msvceh`) The catch funclets entered as pads, with the parent's
         // frame register resolved.
         if !out.msvc_eh_sites.is_empty() {
-            table.stack_reg = reg(&["RSP"]);
+            table.stack_reg = if arch.archid.starts_with("x86:LE:64") {
+                reg(&["RSP"])
+            } else {
+                reg(&["ESP"])
+            };
             table.establisher_reg = reg(&["RDX"]);
             let funclets = out
                 .msvc_funclets
@@ -7791,6 +7795,7 @@ fn commit_analysis_output(
                     frame: f.frame_reg.as_deref().and_then(|r| reg(&[r])),
                     frame_offset: f.frame_offset,
                     returns: f.returns.clone(),
+                    x86: f.x86,
                 })
                 .collect();
             table = table.with_msvc(out.msvc_eh_sites.clone(), funclets);

@@ -23,8 +23,8 @@ they run on dev binaries, which is faster to build and gives the same results.
   shared safely by every checkout and reused until a source or the compiler changes; a first
   compile takes a fraction of a second to a few seconds per language. It lives in
   `$UNLACE_SLA_CACHE`, else `$XDG_CACHE_HOME/unlace/sla` (default `~/.cache/unlace/sla`), and
-  deleting it is always safe. Beside each image it reads, the engine keeps an uncompressed copy
-  (`.slr`) so later processes skip the inflate; `UNLACE_SLA_RAW=0` turns that off. A `SLEIGHHOME`/`KUNA_SPECS`/`--sleighpath` directory of prebuilt
+  deleting it is always safe. Builds before 2026-11-23 also left uncompressed `.slr` copies there;
+  they are ignored now, and `rm ~/.cache/unlace/sla/*.slr` removes them. A `SLEIGHHOME`/`KUNA_SPECS`/`--sleighpath` directory of prebuilt
   `.sla` still wins: a `.sla` that is a regular file at least as new as its sources is used as is
   (a symlinked `.sla` never is).
 - Older checkouts may still have `.sla` files or per-file `.sla` symlinks under `specs/` from

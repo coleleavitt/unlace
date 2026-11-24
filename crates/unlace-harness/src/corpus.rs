@@ -393,7 +393,7 @@ pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
         .slafile
         .ok_or("build_spec_file did not resolve a .sla")?;
     let sla = db
-        .read_sla_image(&resolved_sla)
+        .read_spec(&resolved_sla)
         .map_err(|e| format!("read resolved sla: {e}"))?;
     arch.sleigh_mut()
         .build_translator(Box::new(DummyImg), &sla)

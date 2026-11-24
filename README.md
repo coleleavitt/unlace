@@ -47,7 +47,7 @@ unlace install-skill                                   # teach Claude Code, Code
 
 Unlace can also replace Ghidra's own decompiler, in the GUI or headless; see the
 [Ghidra extension README](integrations/ghidra/KunaDecompiler/README.md). The full CLI reference is
-[docs/cli.md](docs/cli.md).
+[docs/cli.md](docs/cli.md); to call the decompiler from Rust, see [docs/api.md](docs/api.md).
 
 ## Layout
 
@@ -66,6 +66,7 @@ and front-ends.
 | `crates/unlace-analysis` | The program-prep loader/analyzer tier (ELF/PE/Mach-O, DWARF, strings, function discovery, ...). |
 | `crates/unlace-console` | Console front-end (`decomp_dbg`); the in-process engine + project-export modules. |
 | `crates/unlace-cli` | The user-facing `unlace` binary ([docs/cli.md](docs/cli.md)). |
+| `crates/unlace` | The decompiler as a Rust library: load a binary or raw bytes, declare function bounds, decompile ([docs/api.md](docs/api.md)). |
 | `crates/unlace-ghidra` | The `unlace_ghidra` binary: unlace as stock Ghidra's decompiler core ([docs/ghidra-integration.md](docs/ghidra-integration.md)). |
 | `crates/unlace-wasm` | The `unlace_wasm` binary (wasm32-wasip1): the in-browser decompiler ([docs/web-integration.md](docs/web-integration.md)). |
 | `crates/unlace-harness`, `crates/unlace-lift-diff`, `crates/unlace-bench` | Dev-only: the datatest harness (`decomp_test_dbg`), differential helpers, benchmarks. |

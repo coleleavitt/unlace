@@ -4402,6 +4402,34 @@ moves.
   the file puts it is left a hole; sizes, offsets, line lengths, the file size
   and the depth of one type's references are all bounded.
 
+  *IDA type libraries.* `typelib <path>` also reads an IDA type library (a
+  `.til` file, recognized by its `IDATIL` header;
+  `crates/unlace-analysis/src/analyzers/protos/kuna_til.rs (to_typelib)`). The
+  file is decoded and rendered as library text for the image's own target, so
+  it serves an image of any target: an image no built-in library serves is
+  named by its format and machine (`windows x86`, `macho aarch64`,
+  `elf mips`), its imports are carried forward the same way, and the rendered
+  library names that target. Its symbols become `F` entries, its named records
+  `S`/`U` entries, its enums `T` entries of their storage integer and its other
+  named types `T` entries; every entry is offered to every C library of the
+  target (`*`). A `.til` states no member offsets, so a record is laid out
+  here from its members' sizes and alignments, its declared pack and
+  alignment, and runs of bit-fields packed into their storage units, which are
+  left holes; a record IDA marks fixed-layout, or one with a member of unknown
+  size, is not laid out and is left to the reader's unknown-member record. An
+  anonymous member record becomes its own entry named `<record>__<member>`. A
+  prototype keeps its parameter names unless one would be read as a type, a
+  variadic one ends in `...`, and on a 32-bit library a `stdcall`, `pascal`,
+  `fastcall` or `thiscall` prototype carries the keyword (an image whose
+  compiler spec has no such model skips that entry). An entry C cannot spell
+  here (explicit `__usercall` argument locations, a closure or based pointer, a
+  128-bit integer, a C++ class with methods or a virtual base) is skipped, and
+  a reference to a type the file does not define (one in a base library it
+  depends on) drops the entry that makes it. The header, both buckets
+  (compressed or not) and every count, length and nesting depth are bounded,
+  and a file larger than 64 MiB is refused. A header directory is not a
+  library: `--types DIR` reads one.
+
   *After load.* A `--types` header or an `--assert prototype` for the same
   function replaces the library's declaration. A header's definition of a
   record the library already defined is rejected like any redefinition; `typelib

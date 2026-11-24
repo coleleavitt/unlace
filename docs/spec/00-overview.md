@@ -1383,17 +1383,6 @@ they are not part of either child.
 (kuna) **Loading a spec.** A `.sla` is a zlib stream behind a `sla\x04` header,
 inflated and checksum-verified in full before a single element is decoded
 (`crates/unlace-sleigh/src/slaformat.rs (FormatDecode::ingest_stream)`).
-The decoder also takes the same packed payload uncompressed, behind a 12-byte
-header (`slu`, the format version, the payload length as 8 little-endian bytes;
-`raw_sla_image`): a length that disagrees with the bytes present is rejected,
-which stands in for the checksum on this form. The engine bootstrap reads a
-`.sla` on disk through `crates/unlace-slacomp/src/slacache.rs (read_image)`,
-which keeps one such uncompressed copy per image in the `.sla` cache (named by
-the compiler fingerprint and the `.sla`'s path, size and modification time) and
-returns it, so the inflate is paid once per image rather than once per process
-(and the `--jobs` decode lanes, rebuilt from the bytes the bootstrap consumed,
-skip it too). Both forms ingest the identical buffer, so what decodes is the
-same. `UNLACE_SLA_RAW=0` reads the compressed `.sla` as before.
 
 (kuna) **Constructor templates on first use.** Most of a `.sla` is the
 `<construct_tpl>` p-code template of every constructor, and a run builds p-code

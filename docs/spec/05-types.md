@@ -4120,7 +4120,13 @@ above (the branchless equality above), and the other operand's two words are a
 pair too (two adjacent input words, the two SUBPIECEs of one whole, or two
 constants), the input words are joined the same way. Requiring the other
 operand to be a pair keeps the XOR of one parameter's high word from being read
-as the low word of the next parameter. The rule merges the pair with
+as the low word of the next parameter. The rule also fires on a PIECE of
+such an input word and the word above it, high word first, when every op
+that reads either word is such a PIECE (`kuna_borrowcompare.rs
+(piece_input_pair)`): the function only ever uses the eight bytes together,
+as a soft-float caller does with a `double` it hands to `__aeabi_dadd`, which
+printed `CONCAT44(a1,a0)` beside `unsigned int a0,unsigned int a1`. On 32-bit
+ARM the words are argument registers, so this too needs `armpairparam`. The rule merges the pair with
 `combine_input_varnodes` and marks the two SUBPIECEs it leaves as
 double-precision pieces; `RuleDoubleIn` then folds the arithmetic or compare,
 and `ActionInputPrototype` reports one 8-byte parameter. The rule does nothing

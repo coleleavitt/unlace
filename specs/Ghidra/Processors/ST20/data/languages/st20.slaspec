@@ -1,0 +1,307 @@
+# Inmos/STMicroelectronics ST20 (C1/C2 cores, transputer-derived), clean-room module for #98.
+# Instructions are one byte: function code in the high nibble, data in the low nibble.
+# pfix/nfix accumulate the operand register (Oreg) in the context field "oreg";
+# operate (opr) selects a secondary instruction by the accumulated operand.
+
+define endian=little;
+define alignment=1;
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=4 [ Areg Breg Creg Oreg Wptr Iptr Status ];
+define register offset=0x40 size=1 [ ErrorFlag HaltOnError ];
+define register offset=0x100 size=4 contextreg;
+define context contextreg
+  oreg = (0,31)
+;
+
+define token instr(8)
+  fn = (4,7)
+  d  = (0,3)
+;
+
+define pcodeop testpranal;
+define pcodeop saveh;
+define pcodeop savel;
+define pcodeop sthf;
+define pcodeop sthb;
+define pcodeop stlf;
+define pcodeop stlb;
+define pcodeop sttimer;
+define pcodeop lddevid;
+define pcodeop ldmemstartval;
+define pcodeop fmul;
+define pcodeop satadd;
+define pcodeop satsub;
+define pcodeop satmul;
+define pcodeop norm;
+define pcodeop norm_hi1;
+define pcodeop reboot;
+define pcodeop move;
+define pcodeop ldtimer;
+define pcodeop tin;
+define pcodeop talt;
+define pcodeop taltwt;
+define pcodeop enbt;
+define pcodeop dist;
+define pcodeop in;
+define pcodeop out;
+define pcodeop outword;
+define pcodeop outbyte;
+define pcodeop alt;
+define pcodeop altwt;
+define pcodeop altend;
+define pcodeop enbs;
+define pcodeop diss;
+define pcodeop resetch;
+define pcodeop enbc;
+define pcodeop disc;
+define pcodeop startp;
+define pcodeop endp;
+define pcodeop runp;
+define pcodeop stopp;
+define pcodeop ldpri;
+define pcodeop stoperr;
+define pcodeop move2dinit;
+define pcodeop move2dall;
+define pcodeop move2dnonzero;
+define pcodeop move2dzero;
+define pcodeop crcword;
+define pcodeop crcbyte;
+define pcodeop bitcnt;
+define pcodeop bitrevword;
+define pcodeop bitrevnbits;
+define pcodeop cflerr;
+define pcodeop fptesterr;
+define pcodeop unpacksn;
+define pcodeop unpacksn_hi1;
+define pcodeop unpacksn_hi2;
+define pcodeop roundsn;
+define pcodeop postnormsn;
+define pcodeop postnormsn_hi1;
+define pcodeop postnormsn_hi2;
+define pcodeop devmove;
+define pcodeop wait;
+define pcodeop signal;
+define pcodeop swapqueue;
+define pcodeop swapqueue_hi1;
+define pcodeop swaptimer;
+define pcodeop swaptimer_hi1;
+define pcodeop insertqueue;
+define pcodeop timeslice;
+define pcodeop ldshadow;
+define pcodeop stshadow;
+define pcodeop restart;
+define pcodeop causeerror;
+define pcodeop iret;
+define pcodeop settimeslice;
+define pcodeop intdis;
+define pcodeop intenb;
+define pcodeop gintdis;
+define pcodeop gintenb;
+define pcodeop ldtraph;
+define pcodeop ldtrapped;
+define pcodeop sttrapped;
+define pcodeop sttraph;
+define pcodeop trapenb;
+define pcodeop trapdis;
+define pcodeop tret;
+define pcodeop ldprodid;
+define pcodeop clockenb;
+define pcodeop clockdis;
+define pcodeop ldclock;
+define pcodeop stclock;
+define pcodeop opr;
+
+macro push(v) { Creg = Breg; Breg = Areg; Areg = v; }
+
+opnd: val is d [ val = ((oreg | d) ^ 0x80000000) - 0x80000000; ] { export *[const]:4 val; }
+rel: dest is d [ dest = (inst_next + (((oreg | d) ^ 0x80000000) - 0x80000000)) & 0xffffffff; ] { export *:4 dest; }
+
+:^instruction is fn=0x2 & d ; instruction [ oreg = (oreg | d) << 4; ] {}
+:^instruction is fn=0x6 & d ; instruction [ oreg = (~(oreg | d)) << 4; ] {}
+
+:j rel        is fn=0x0 & rel   { goto rel; }
+:ldlp opnd    is fn=0x1 & opnd  { push(Wptr + opnd * 4); }
+:ldnl opnd    is fn=0x3 & opnd  { Areg = *:4 (Areg + opnd * 4); }
+:ldc opnd     is fn=0x4 & opnd  { push(opnd); }
+:ldnlp opnd   is fn=0x5 & opnd  { Areg = Areg + opnd * 4; }
+:ldl opnd     is fn=0x7 & opnd  { local v:4 = *:4 (Wptr + opnd * 4); push(v); }
+:adc opnd     is fn=0x8 & opnd  { ErrorFlag = ErrorFlag | scarry(Areg, opnd); Areg = Areg + opnd; }
+:call rel     is fn=0x9 & rel   {
+  local ra:4 = inst_next;
+  Wptr = Wptr - 16;
+  *:4 Wptr = ra;
+  *:4 (Wptr + 4) = Areg;
+  *:4 (Wptr + 8) = Breg;
+  *:4 (Wptr + 12) = Creg;
+  Areg = ra;
+  call rel;
+}
+:cj rel       is fn=0xa & rel   { if (Areg == 0) goto rel; Areg = Breg; Breg = Creg; }
+:ajw opnd     is fn=0xb & opnd  { Wptr = Wptr + opnd * 4; }
+:eqc opnd     is fn=0xc & opnd  { Areg = zext(Areg == opnd); }
+:stl opnd     is fn=0xd & opnd  { *:4 (Wptr + opnd * 4) = Areg; Areg = Breg; Breg = Creg; }
+:stnl opnd    is fn=0xe & opnd  { *:4 (Areg + opnd * 4) = Breg; Areg = Creg; }
+
+:testpranal is fn=0xf & d=0xa & oreg=0x20 { local res:4 = testpranal(); Creg = Breg; Breg = Areg; Areg = res; }
+:saveh is fn=0xf & d=0xe & oreg=0x30 { saveh(Areg); Areg = Breg; Breg = Creg; }
+:savel is fn=0xf & d=0xd & oreg=0x30 { savel(Areg); Areg = Breg; Breg = Creg; }
+:sthf is fn=0xf & d=0x8 & oreg=0x10 { sthf(Areg); Areg = Breg; Breg = Creg; }
+:sthb is fn=0xf & d=0x0 & oreg=0x50 { sthb(Areg); Areg = Breg; Breg = Creg; }
+:stlf is fn=0xf & d=0xc & oreg=0x10 { stlf(Areg); Areg = Breg; Breg = Creg; }
+:stlb is fn=0xf & d=0x7 & oreg=0x10 { stlb(Areg); Areg = Breg; Breg = Creg; }
+:sttimer is fn=0xf & d=0x4 & oreg=0x50 { sttimer(Areg); Areg = Breg; Breg = Creg; }
+:lddevid is fn=0xf & d=0xc & oreg=0x170 { local res:4 = lddevid(); Creg = Breg; Breg = Areg; Areg = res; }
+:ldmemstartval is fn=0xf & d=0xe & oreg=0x70 { local res:4 = ldmemstartval(); Creg = Breg; Breg = Areg; Areg = res; }
+:and is fn=0xf & d=0x6 & oreg=0x40 { Areg = Breg & Areg; Breg = Creg; }
+:or is fn=0xf & d=0xb & oreg=0x40 { Areg = Breg | Areg; Breg = Creg; }
+:xor is fn=0xf & d=0x3 & oreg=0x30 { Areg = Breg ^ Areg; Breg = Creg; }
+:not is fn=0xf & d=0x2 & oreg=0x30 { Areg = ~Areg; }
+:shl is fn=0xf & d=0x1 & oreg=0x40 { Areg = Breg << Areg; Breg = Creg; }
+:shr is fn=0xf & d=0x0 & oreg=0x40 { Areg = Breg >> Areg; Breg = Creg; }
+:add is fn=0xf & d=0x5 & oreg=0x0 { ErrorFlag = ErrorFlag | scarry(Breg, Areg); Areg = Breg + Areg; Breg = Creg; }
+:sub is fn=0xf & d=0xc & oreg=0x0 { ErrorFlag = ErrorFlag | sborrow(Breg, Areg); Areg = Breg - Areg; Breg = Creg; }
+:mul is fn=0xf & d=0x3 & oreg=0x50 { Areg = Breg * Areg; Breg = Creg; }
+:fmul is fn=0xf & d=0x2 & oreg=0x70 { local res:4 = fmul(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:div is fn=0xf & d=0xc & oreg=0x20 { ErrorFlag = ErrorFlag | (Areg == 0); Areg = Breg s/ Areg; Breg = Creg; }
+:rem is fn=0xf & d=0xf & oreg=0x10 { ErrorFlag = ErrorFlag | (Areg == 0); Areg = Breg s% Areg; Breg = Creg; }
+:gt is fn=0xf & d=0x9 & oreg=0x0 { Areg = zext(Breg s> Areg); Breg = Creg; }
+:gtu is fn=0xf & d=0xf & oreg=0x50 { Areg = zext(Breg > Areg); Breg = Creg; }
+:diff is fn=0xf & d=0x4 & oreg=0x0 { Areg = Breg - Areg; Breg = Creg; }
+:sum is fn=0xf & d=0x2 & oreg=0x50 { Areg = Breg + Areg; Breg = Creg; }
+:prod is fn=0xf & d=0x8 & oreg=0x0 { Areg = Breg * Areg; Breg = Creg; }
+:satadd is fn=0xf & d=0x8 & oreg=0x60 { local res:4 = satadd(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:satsub is fn=0xf & d=0x9 & oreg=0x60 { local res:4 = satsub(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:satmul is fn=0xf & d=0xa & oreg=0x60 { local res:4 = satmul(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:ladd is fn=0xf & d=0x6 & oreg=0x10 { local c:4 = Creg & 1; ErrorFlag = ErrorFlag | scarry(Breg, Areg); Areg = Breg + Areg + c; }
+:lsub is fn=0xf & d=0x8 & oreg=0x30 { local c:4 = Creg & 1; ErrorFlag = ErrorFlag | sborrow(Breg, Areg); Areg = Breg - Areg - c; }
+:lsum is fn=0xf & d=0x7 & oreg=0x30 { local b:8 = zext(Breg); local a:8 = zext(Areg); local c:8 = zext(Creg & 1); local t:8 = b + a + c; Areg = t:4; Breg = t(4); }
+:ldiff is fn=0xf & d=0xf & oreg=0x40 { local b:8 = zext(Breg); local a:8 = zext(Areg); local c:8 = zext(Creg & 1); local t:8 = b - a - c; Areg = t:4; Breg = zext(t s< 0); }
+:lmul is fn=0xf & d=0x1 & oreg=0x30 { local b:8 = zext(Breg); local a:8 = zext(Areg); local c:8 = zext(Creg); local t:8 = b * a + c; Areg = t:4; Breg = t(4); }
+:ldiv is fn=0xf & d=0xa & oreg=0x10 { local n:8 = (zext(Creg) << 32) | zext(Breg); local q:8 = n / zext(Areg); local r:8 = n % zext(Areg); ErrorFlag = ErrorFlag | (Creg >= Areg); Areg = q:4; Breg = r:4; }
+:lshl is fn=0xf & d=0x6 & oreg=0x30 { local n:8 = (zext(Creg) << 32) | zext(Breg); n = n << zext(Areg); Areg = n:4; Breg = n(4); }
+:lshr is fn=0xf & d=0x5 & oreg=0x30 { local n:8 = (zext(Creg) << 32) | zext(Breg); n = n >> zext(Areg); Areg = n:4; Breg = n(4); }
+:norm is fn=0xf & d=0x9 & oreg=0x10 { local res:4 = norm(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; Creg = Breg; Breg = Areg; Areg = norm_hi1(res); }
+:slmul is fn=0xf & d=0x4 & oreg=0x60 { local b:8 = sext(Breg); local a:8 = sext(Areg); local c:8 = sext(Creg); local t:8 = b * a + c; Areg = t:4; Breg = t(4); }
+:sulmul is fn=0xf & d=0x5 & oreg=0x60 { local b:8 = sext(Breg); local a:8 = zext(Areg); local c:8 = sext(Creg); local t:8 = b * a + c; Areg = t:4; Breg = t(4); }
+:rev is fn=0xf & d=0x0 & oreg=0x0 { local t = Areg; Areg = Breg; Breg = t; }
+:xword is fn=0xf & d=0xa & oreg=0x30 { Areg = (Breg ^ Areg) - Areg; Breg = Creg; }
+:cword is fn=0xf & d=0x6 & oreg=0x50 { ErrorFlag = ErrorFlag | (Breg s>= Areg) | (Breg s< -Areg); Areg = Breg; Breg = Creg; }
+:xdble is fn=0xf & d=0xd & oreg=0x10 { Creg = Breg; Breg = Areg s>> 31; }
+:csngl is fn=0xf & d=0xc & oreg=0x40 { ErrorFlag = ErrorFlag | (Breg != (Areg s>> 31)); Breg = Creg; }
+:mint is fn=0xf & d=0x2 & oreg=0x40 { Creg = Breg; Breg = Areg; Areg = 0x80000000; }
+:dup is fn=0xf & d=0xa & oreg=0x50 { Creg = Breg; Breg = Areg; }
+:pop is fn=0xf & d=0x9 & oreg=0x70 { Areg = Breg; Breg = Creg; }
+:reboot is fn=0xf & d=0xd & oreg=0xffffff70 { reboot(); }
+:bsub is fn=0xf & d=0x2 & oreg=0x0 { Areg = Areg + Breg; Breg = Creg; }
+:wsub is fn=0xf & d=0xa & oreg=0x0 { Areg = Areg + Breg * 4; Breg = Creg; }
+:wsubdb is fn=0xf & d=0x1 & oreg=0x80 { Areg = Areg + Breg * 8; Breg = Creg; }
+:bcnt is fn=0xf & d=0x4 & oreg=0x30 { Areg = Areg * 4; }
+:wcnt is fn=0xf & d=0xf & oreg=0x30 { Creg = Breg; Breg = Areg & 3; Areg = Areg s>> 2; }
+:lb is fn=0xf & d=0x1 & oreg=0x0 { Areg = zext(*:1 Areg); }
+:sb is fn=0xf & d=0xb & oreg=0x30 { *:1 Areg = Breg:1; Areg = Creg; }
+:move is fn=0xf & d=0xa & oreg=0x40 { move(Areg, Breg, Creg); }
+:ldtimer is fn=0xf & d=0x2 & oreg=0x20 { local res:4 = ldtimer(); Creg = Breg; Breg = Areg; Areg = res; }
+:tin is fn=0xf & d=0xb & oreg=0x20 { tin(Areg); Areg = Breg; Breg = Creg; }
+:talt is fn=0xf & d=0xe & oreg=0x40 { talt(); }
+:taltwt is fn=0xf & d=0x1 & oreg=0x50 { taltwt(); }
+:enbt is fn=0xf & d=0x7 & oreg=0x40 { local res:4 = enbt(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:dist is fn=0xf & d=0xe & oreg=0x20 { local res:4 = dist(Areg, Breg, Creg); Creg = Breg; Breg = Areg; Areg = res; }
+:in is fn=0xf & d=0x7 & oreg=0x0 { in(Areg, Breg, Creg); }
+:out is fn=0xf & d=0xb & oreg=0x0 { out(Areg, Breg, Creg); }
+:outword is fn=0xf & d=0xf & oreg=0x0 { outword(Areg, Breg); Areg = Creg; }
+:outbyte is fn=0xf & d=0xe & oreg=0x0 { outbyte(Areg, Breg); Areg = Creg; }
+:alt is fn=0xf & d=0x3 & oreg=0x40 { alt(); }
+:altwt is fn=0xf & d=0x4 & oreg=0x40 { altwt(); }
+:altend is fn=0xf & d=0x5 & oreg=0x40 { altend(); }
+:enbs is fn=0xf & d=0x9 & oreg=0x40 { local res:4 = enbs(Areg); Areg = Breg; Breg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:diss is fn=0xf & d=0x0 & oreg=0x30 { local res:4 = diss(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:resetch is fn=0xf & d=0x2 & oreg=0x10 { local res:4 = resetch(Areg); Areg = Breg; Breg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:enbc is fn=0xf & d=0x8 & oreg=0x40 { local res:4 = enbc(Areg, Breg, Creg); Creg = Breg; Breg = Areg; Areg = res; }
+:disc is fn=0xf & d=0xf & oreg=0x20 { local res:4 = disc(Areg, Breg, Creg); Creg = Breg; Breg = Areg; Areg = res; }
+:ret is fn=0xf & d=0x0 & oreg=0x20 { Iptr = *:4 Wptr; Wptr = Wptr + 16; return [Iptr]; }
+:ldpi is fn=0xf & d=0xb & oreg=0x10 { Areg = inst_next + Areg; }
+:gajw is fn=0xf & d=0xc & oreg=0x30 { local t = Wptr; Wptr = Areg; Areg = t; }
+:gcall is fn=0xf & d=0x6 & oreg=0x0 { local t = Areg; Areg = inst_next; call [t]; }
+:lend is fn=0xf & d=0x1 & oreg=0x20 { local cnt = *:4 (Breg + 4) - 1; *:4 (Breg + 4) = cnt; if (cnt s<= 0) goto inst_next; *:4 Breg = *:4 Breg + 1; local tgt:4 = inst_next - Areg; goto [tgt]; }
+:startp is fn=0xf & d=0xd & oreg=0x0 { startp(Areg, Breg); Areg = Creg; }
+:endp is fn=0xf & d=0x3 & oreg=0x0 { endp(Areg); Areg = Breg; Breg = Creg; }
+:runp is fn=0xf & d=0x9 & oreg=0x30 { runp(Areg); Areg = Breg; Breg = Creg; }
+:stopp is fn=0xf & d=0x5 & oreg=0x10 { stopp(); }
+:ldpri is fn=0xf & d=0xe & oreg=0x10 { local res:4 = ldpri(); Creg = Breg; Breg = Areg; Areg = res; }
+:csub0 is fn=0xf & d=0x3 & oreg=0x10 { ErrorFlag = ErrorFlag | (Breg >= Areg); Areg = Breg; Breg = Creg; }
+:ccnt1 is fn=0xf & d=0xd & oreg=0x40 { ErrorFlag = ErrorFlag | (Breg == 0) | (Breg > Areg); Areg = Breg; Breg = Creg; }
+:testerr is fn=0xf & d=0x9 & oreg=0x20 { Creg = Breg; Breg = Areg; Areg = zext(ErrorFlag == 0); ErrorFlag = 0; }
+:seterr is fn=0xf & d=0x0 & oreg=0x10 { ErrorFlag = 1; }
+:stoperr is fn=0xf & d=0x5 & oreg=0x50 { stoperr(); }
+:clrhalterr is fn=0xf & d=0x7 & oreg=0x50 { HaltOnError = 0; }
+:sethalterr is fn=0xf & d=0x8 & oreg=0x50 { HaltOnError = 1; }
+:testhalterr is fn=0xf & d=0x9 & oreg=0x50 { Creg = Breg; Breg = Areg; Areg = zext(HaltOnError); }
+:move2dinit is fn=0xf & d=0xb & oreg=0x50 { move2dinit(Areg, Breg, Creg); }
+:move2dall is fn=0xf & d=0xc & oreg=0x50 { move2dall(Areg, Breg, Creg); }
+:move2dnonzero is fn=0xf & d=0xd & oreg=0x50 { move2dnonzero(Areg, Breg, Creg); }
+:move2dzero is fn=0xf & d=0xe & oreg=0x50 { move2dzero(Areg, Breg, Creg); }
+:crcword is fn=0xf & d=0x4 & oreg=0x70 { local res:4 = crcword(Areg, Breg, Creg); Creg = Breg; Breg = Areg; Areg = res; }
+:crcbyte is fn=0xf & d=0x5 & oreg=0x70 { local res:4 = crcbyte(Areg, Breg, Creg); Creg = Breg; Breg = Areg; Areg = res; }
+:bitcnt is fn=0xf & d=0x6 & oreg=0x70 { local res:4 = bitcnt(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:bitrevword is fn=0xf & d=0x7 & oreg=0x70 { local res:4 = bitrevword(Areg); Areg = Breg; Breg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:bitrevnbits is fn=0xf & d=0x8 & oreg=0x70 { local res:4 = bitrevnbits(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:cflerr is fn=0xf & d=0x3 & oreg=0x70 { local res:4 = cflerr(Areg); Areg = Breg; Breg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:fptesterr is fn=0xf & d=0xc & oreg=0x90 { local res:4 = fptesterr(); Creg = Breg; Breg = Areg; Areg = res; }
+:unpacksn is fn=0xf & d=0x3 & oreg=0x60 { local res:4 = unpacksn(Areg); Areg = Breg; Breg = Creg; Creg = Breg; Breg = Areg; Areg = res; Creg = Breg; Breg = Areg; Areg = unpacksn_hi1(res); Creg = Breg; Breg = Areg; Areg = unpacksn_hi2(res); }
+:roundsn is fn=0xf & d=0xd & oreg=0x60 { local res:4 = roundsn(Areg, Breg, Creg); Creg = Breg; Breg = Areg; Areg = res; }
+:postnormsn is fn=0xf & d=0xc & oreg=0x60 { local res:4 = postnormsn(Areg, Breg, Creg); Creg = Breg; Breg = Areg; Areg = res; Creg = Breg; Breg = Areg; Areg = postnormsn_hi1(res); Creg = Breg; Breg = Areg; Areg = postnormsn_hi2(res); }
+:ldinf is fn=0xf & d=0x1 & oreg=0x70 { Creg = Breg; Breg = Areg; Areg = 0x7f800000; }
+:cir is fn=0xf & d=0x7 & oreg=0xc0 { ErrorFlag = ErrorFlag | (Creg s> Areg) | (Areg s> Breg); Breg = Creg; }
+:ciru is fn=0xf & d=0xc & oreg=0xc0 { ErrorFlag = ErrorFlag | (Creg > Areg) | (Areg > Breg); Breg = Creg; }
+:cb is fn=0xf & d=0xa & oreg=0xb0 { ErrorFlag = ErrorFlag | (Areg != sext(Areg:1)); }
+:cbu is fn=0xf & d=0xb & oreg=0xb0 { ErrorFlag = ErrorFlag | (Areg != zext(Areg:1)); }
+:cs is fn=0xf & d=0xa & oreg=0xf0 { ErrorFlag = ErrorFlag | (Areg != sext(Areg:2)); }
+:csu is fn=0xf & d=0xb & oreg=0xf0 { ErrorFlag = ErrorFlag | (Areg != zext(Areg:2)); }
+:xsword is fn=0xf & d=0x8 & oreg=0xf0 { Areg = sext(Areg:2); }
+:xbword is fn=0xf & d=0x8 & oreg=0xb0 { Areg = sext(Areg:1); }
+:ssub is fn=0xf & d=0x1 & oreg=0xc0 { Areg = Areg + Breg * 2; Breg = Creg; }
+:ls is fn=0xf & d=0xa & oreg=0xc0 { Areg = zext(*:2 Areg); }
+:ss is fn=0xf & d=0x8 & oreg=0xc0 { *:2 Areg = Breg:2; Areg = Creg; }
+:lbx is fn=0xf & d=0x9 & oreg=0xb0 { Areg = sext(*:1 Areg); }
+:lsx is fn=0xf & d=0x9 & oreg=0xf0 { Areg = sext(*:2 Areg); }
+:devlb is fn=0xf & d=0x0 & oreg=0xf0 { Areg = zext(*:1 Areg); }
+:devls is fn=0xf & d=0x2 & oreg=0xf0 { Areg = zext(*:2 Areg); }
+:devlw is fn=0xf & d=0x4 & oreg=0xf0 { Areg = *:4 Areg; }
+:devmove is fn=0xf & d=0x4 & oreg=0xffffffd0 { devmove(Areg, Breg, Creg); }
+:devsb is fn=0xf & d=0x1 & oreg=0xf0 { *:1 Areg = Breg:1; Areg = Creg; }
+:devss is fn=0xf & d=0x3 & oreg=0xf0 { *:2 Areg = Breg:2; Areg = Creg; }
+:devsw is fn=0xf & d=0x5 & oreg=0xf0 { *:4 Areg = Breg; Areg = Creg; }
+:wait is fn=0xf & d=0x5 & oreg=0xfffffff0 { wait(Areg); Areg = Breg; Breg = Creg; }
+:signal is fn=0xf & d=0x4 & oreg=0xfffffff0 { signal(Areg); Areg = Breg; Breg = Creg; }
+:swapqueue is fn=0xf & d=0x0 & oreg=0xfffffff0 { local res:4 = swapqueue(Areg, Breg, Creg); Creg = Breg; Breg = Areg; Areg = res; Creg = Breg; Breg = Areg; Areg = swapqueue_hi1(res); }
+:swaptimer is fn=0xf & d=0x1 & oreg=0xfffffff0 { local res:4 = swaptimer(Areg, Breg, Creg); Creg = Breg; Breg = Areg; Areg = res; Creg = Breg; Breg = Areg; Areg = swaptimer_hi1(res); }
+:insertqueue is fn=0xf & d=0x2 & oreg=0xfffffff0 { local res:4 = insertqueue(Areg, Breg, Creg); Creg = Breg; Breg = Areg; Areg = res; }
+:timeslice is fn=0xf & d=0x3 & oreg=0xfffffff0 { timeslice(); }
+:ldshadow is fn=0xf & d=0xc & oreg=0xfffffff0 { ldshadow(Areg, Breg); Areg = Creg; }
+:stshadow is fn=0xf & d=0xd & oreg=0xfffffff0 { stshadow(Areg, Breg); Areg = Creg; }
+:restart is fn=0xf & d=0xe & oreg=0xffffffd0 { restart(Areg); Areg = Breg; Breg = Creg; }
+:causeerror is fn=0xf & d=0xf & oreg=0xffffffd0 { causeerror(Areg); Areg = Breg; Breg = Creg; }
+:iret is fn=0xf & d=0xf & oreg=0xffffffe0 { iret(); }
+:settimeslice is fn=0xf & d=0x0 & oreg=0xb0 { settimeslice(Areg); Areg = Breg; Breg = Creg; }
+:intdis is fn=0xf & d=0x4 & oreg=0xc0 { intdis(); }
+:intenb is fn=0xf & d=0x5 & oreg=0xc0 { intenb(); }
+:gintdis is fn=0xf & d=0xd & oreg=0xc0 { local res:4 = gintdis(Areg); Areg = Breg; Breg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:gintenb is fn=0xf & d=0xe & oreg=0xc0 { local res:4 = gintenb(Areg); Areg = Breg; Breg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:ldtraph is fn=0xf & d=0xe & oreg=0x60 { ldtraph(Areg); Areg = Breg; Breg = Creg; }
+:ldtrapped is fn=0xf & d=0x6 & oreg=0xc0 { ldtrapped(Areg, Breg); Areg = Creg; }
+:sttrapped is fn=0xf & d=0xb & oreg=0xc0 { sttrapped(Areg, Breg); Areg = Creg; }
+:sttraph is fn=0xf & d=0xf & oreg=0x60 { sttraph(Areg); Areg = Breg; Breg = Creg; }
+:trapenb is fn=0xf & d=0x7 & oreg=0xfffffff0 { local res:4 = trapenb(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:trapdis is fn=0xf & d=0x6 & oreg=0xfffffff0 { local res:4 = trapdis(Areg, Breg); Areg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:tret is fn=0xf & d=0xb & oreg=0xfffffff0 { tret(); }
+:ldprodid is fn=0xf & d=0xc & oreg=0xffffff70 { local res:4 = ldprodid(); Creg = Breg; Breg = Areg; Areg = res; }
+:nop is fn=0xf & d=0x0 & oreg=0xffffffc0 {  }
+:clockenb is fn=0xf & d=0xf & oreg=0xffffffb0 { local res:4 = clockenb(Areg); Areg = Breg; Breg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:clockdis is fn=0xf & d=0xe & oreg=0xffffffb0 { local res:4 = clockdis(Areg); Areg = Breg; Breg = Creg; Creg = Breg; Breg = Areg; Areg = res; }
+:ldclock is fn=0xf & d=0xd & oreg=0xffffffb0 { local res:4 = ldclock(); Creg = Breg; Breg = Areg; Areg = res; }
+:stclock is fn=0xf & d=0xc & oreg=0xffffffb0 { stclock(Areg); Areg = Breg; Breg = Creg; }
+
+:opr opnd     is fn=0xf & opnd  { local res:4 = opr(opnd, Areg, Breg, Creg); Areg = res; }

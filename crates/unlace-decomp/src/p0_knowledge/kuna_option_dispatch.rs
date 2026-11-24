@@ -425,6 +425,7 @@ kuna_options! { self, p1;
     "dedupvardecls" => registered!(crate::kuna_dedupvardecls::DedupVarDecls),
     "noreturn_known" => registered!(crate::kuna_analysisgates::NoreturnKnown),
     "libgccsigs" => registered!(crate::kuna_analysisgates::Libgccsigs),
+    "movwpairs" => registered!(crate::kuna_analysisgates::MovwPairs),
     "gotypeglobals" => registered!(crate::kuna_analysisgates::GoTypeGlobals),
 
     "arm64evcall" => registered!(crate::kuna_analysisgates::Arm64evcall),

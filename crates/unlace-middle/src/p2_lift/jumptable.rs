@@ -5067,6 +5067,13 @@ impl JumpBasicModel {
             notdone = jr.next()?;
         }
         if self.trim_rows && addresstable.len() < 2 {
+            jt_trace!(
+                "switchtrim at {:#x}: emulation stopped after {} row(s)",
+                fd.obank()
+                    .get(indop)
+                    .map_or(0, |o| o.get_addr().get_offset()),
+                addresstable.len()
+            );
             return Err(KunaError::lowlevel("switchtrim: fewer than two table rows"));
         }
         // Hand back any collected LOAD records.
@@ -5421,12 +5428,22 @@ impl JumpModel for JumpBasicModel {
         }
         let mut i = Self::reasonable_rows(fd, addresstable);
         if self.trim_rows {
+            let reasonable = i;
             i = i.min((fd.hooks().switchtrim_trimmed_rows)(
                 fd,
                 addresstable,
                 loadpoints,
                 loadcounts,
             ));
+            jt_trace!(
+                "switchtrim at {:#x}: {} rows emulated, {} reasonable, {} kept by the layout",
+                fd.obank()
+                    .get(indop)
+                    .map_or(0, |o| o.get_addr().get_offset()),
+                addresstable.len(),
+                reasonable,
+                i
+            );
             if i < 2 {
                 return Ok(false);
             }
@@ -5831,18 +5848,34 @@ impl JumpBasicModel {
         matchsize: uint4,
         maxtablesize: uint4,
     ) -> KunaResult<bool> {
+        let at = fd
+            .obank()
+            .get(_indop)
+            .map_or(0, |o| o.get_addr().get_offset());
         let joinvn = match self.extravn {
-            None => return Ok(false),
+            None => {
+                jt_trace!("model2 at {at:#x}: the basic model left no path");
+                return Ok(false);
+            }
             Some(v) => v,
         };
         if !fd.vbank().get(joinvn).unwrap().is_written() {
+            jt_trace!("model2 at {at:#x}: join varnode is not written");
             return Ok(false);
         }
         let multiop = fd.vbank().get(joinvn).unwrap().get_def().unwrap();
         if fd.obank().get(multiop).unwrap().code() != OpCode::CPUI_MULTIEQUAL {
+            jt_trace!(
+                "model2 at {at:#x}: join is {:?}, not a MULTIEQUAL",
+                fd.obank().get(multiop).unwrap().code()
+            );
             return Ok(false);
         }
         if fd.obank().get(multiop).unwrap().num_input() != 2 {
+            jt_trace!(
+                "model2 at {at:#x}: join MULTIEQUAL has {} inputs",
+                fd.obank().get(multiop).unwrap().num_input()
+            );
             return Ok(false);
         }
         // Search for a constant along one of the paths.
@@ -5865,6 +5898,7 @@ impl JumpBasicModel {
             }
         }
         if path == 2 {
+            jt_trace!("model2 at {at:#x}: no MULTIEQUAL input is a COPY of a constant");
             return Ok(false);
         }
         let mparent = fd.obank().get(multiop).unwrap().get_parent().unwrap();
@@ -5883,6 +5917,11 @@ impl JumpBasicModel {
 
         JumpBasic::find_determining_varnodes(fd, &mut self.path_meld, multiop, 1 - path)?;
         self.find_normalized(fd, rootbl, pathout, matchsize, maxtablesize, _indop)?;
+        jt_trace!(
+            "model2 at {at:#x}: default value {extravalue:#x}, range size {}, {} guard(s)",
+            self.jrange().get_size(),
+            self.selectguards.len()
+        );
         if self.jrange().get_size() > maxtablesize as uintb {
             return Ok(false);
         }
@@ -6917,6 +6956,15 @@ impl JumpTable {
             self.jmodel = None;
             return Ok(());
         }
+        jt_trace!(
+            "models at {:#x}: basic {} (trimmed {}), default-path {}",
+            fd.obank()
+                .get(indirect)
+                .map_or(0, |o| o.get_addr().get_offset()),
+            basic_ok,
+            jbasic.trim_rows,
+            m2_ok
+        );
         if m2_ok {
             self.jmodel = Some(Box::new(jbasic2));
             return Ok(());

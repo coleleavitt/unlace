@@ -12,6 +12,10 @@ opcode numbers, mnemonics and operand shapes are kept.
       the spec lacks, the input of tools/gen_amdgpu_gfx11_valu.py --gfx9
   amdgpu_cdna_probe.py e32 amdgcn_gfx9.slaspec gfx900 > e32.txt
       '<vopc|vop1|vop2> <op> | <text>' for every VOPC, VOP1 and VOP2 opcode the spec lacks
+  amdgpu_cdna_probe.py mimg9 gfx900 > mimg9.txt
+      '<op> <mnemonic> <sampler 0/1> <address VGPRs>' per MIMG opcode, then the modifier order
+  amdgpu_cdna_probe.py mtbuf9 gfx900 > mtbuf9.txt
+      'op <op> <mnemonic>' per MTBUF opcode and 'fmt <dfmt> <nfmt> <format:[...] or ->'
   amdgpu_cdna_probe.py mfma gfx90a > mfma.txt
       '<op> <mnemonic> <dst VGPRs> <A> <B> <C>' for the VOP3P MFMA/SMFMAC opcodes
 """
@@ -88,6 +92,39 @@ def e32(spec, cpu):
             print('%s %d | %s' % (f, op, t))
 
 
+def mimg9(cpu):
+    """MIMG (GFX9 layout): per opcode the mnemonic, whether it takes a sampler and the address
+    VGPR count LLVM prints (the encoding does not carry the address size)."""
+    seen = {}
+    for ss in (3, 0):
+        insts = [[(0x3c << 26) | (op << 18) | (1 << 8), 2 | (5 << 8) | (1 << 16) | (ss << 21)] for op in range(128)]
+        for op, t in enumerate(objdump(insts, cpu, pad=True)):
+            if t.startswith('image_') and op not in seen:
+                a = t.split(',')[1].strip()
+                m = re.match(r'v\[(\d+):(\d+)\]$', a)
+                n = int(m.group(2)) - int(m.group(1)) + 1 if m else 1
+                seen[op] = (t.split()[0], int(t.count('s[') > 1), n)
+    for op in sorted(seen):
+        print(op, *seen[op])
+    # the modifier order: every flag set
+    t = objdump([[(0x3c << 26) | (32 << 18) | (1 << 8) | (0xf << 12) | (3 << 16) | (1 << 25),
+                  2 | (5 << 8) | (1 << 16) | (3 << 21) | (1 << 31)]], cpu, pad=True)[0]
+    print('# flags', t)
+
+
+def mtbuf9(cpu):
+    """MTBUF (GFX9): per opcode the mnemonic, and the format spelling of every dfmt/nfmt pair."""
+    t = objdump([[(0x3a << 26) | (op << 15) | (1 << 19), 2 | (5 << 8) | (1 << 16) | (3 << 24)] for op in range(16)], cpu, pad=True)
+    for op, x in enumerate(t):
+        if x:
+            print('op', op, x.split()[0])
+    t = objdump([[(0x3a << 26) | (d << 19) | (n << 23), 2 | (5 << 8) | (1 << 16) | (3 << 24)]
+                 for d in range(16) for n in range(8)], cpu, pad=True)
+    for k, x in enumerate(t):
+        m = re.search(r' (format:\S+)', x)
+        print('fmt', k // 8, k % 8, m.group(1) if m else '-')
+
+
 def mfma(cpu):
     insts = []
     for op in range(128):
@@ -115,5 +152,7 @@ if __name__ == '__main__':
         vop3(sys.argv[2], sys.argv[3])
     elif sys.argv[1] == 'e32':
         e32(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] in ('mimg9', 'mtbuf9'):
+        {'mimg9': mimg9, 'mtbuf9': mtbuf9}[sys.argv[1]](sys.argv[2])
     else:
         {'map': map_, 'mfma': mfma}[sys.argv[1]](sys.argv[2])

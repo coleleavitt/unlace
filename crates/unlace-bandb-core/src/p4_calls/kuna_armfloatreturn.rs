@@ -25,16 +25,19 @@ pub fn applies(arch: &Architecture) -> bool {
 /// the option applies to the image: the widened model returns a `double` whole
 /// in `d0`, so `double strtod(const char *, char **)` is the contract its
 /// callers read on their first decompile instead of a recovered `void` the
-/// return-recovery redo would correct. A function that already carries a
-/// prototype from another source keeps it. Without the option the list is
-/// dropped, as the load-time pass drops it on every image that cannot return a
-/// `double` whole.
+/// return-recovery redo would correct. On an image that states the base
+/// standard the list is parked too: `armbasepcs` binds each import and
+/// external function to the core-register model, so `double fmod(double,
+/// double)` takes its values in r0:r1 and r2:r3 and returns one in r0:r1. A
+/// function that already carries a prototype from another source keeps it.
+/// Otherwise the list is dropped, as the load-time pass drops it on every image
+/// that cannot return a `double` whole.
 pub fn park_float_library_prototypes(arch: &mut Architecture) {
     if arch.arm_float_library_prototypes.is_empty() {
         return;
     }
     let pending = std::mem::take(&mut arch.arm_float_library_prototypes);
-    if !applies(arch) {
+    if !applies(arch) && crate::kuna_typedcallabi::image_evidence(arch) != Some(false) {
         let withheld = arch
             .kuna_tables
             .get_mut::<unlace_lift::kuna_honestgaps::WithheldPrototypes>();

@@ -27,7 +27,7 @@ import unicorn as uc  # noqa: E402
 
 from arches import ARCHES  # noqa: E402
 from pcode_emu import State, Unmodeled, step  # noqa: E402
-from slaregs import register_map  # noqa: E402
+from slaregs import register_map, space_names  # noqa: E402
 import qemu_backend  # noqa: E402
 import gdbsim_backend  # noqa: E402
 import rvv_backend  # noqa: E402
@@ -306,6 +306,7 @@ def main():
         qemu_backend.CPU_OVERRIDE = args.qemu_cpu
     regs, big = register_map(arch.lang)
     arch.big = big
+    State.space_ids = space_names(arch.lang)
     rng = random.Random(args.seed)
     if args.bytes:
         dis = arch.capstone()

@@ -274,8 +274,8 @@ Three tiers:
 | an int local prints as unsigned long on x86-64 though every value is a zero-extended 32-bit result | [`regnarrow`](#regnarrow----on--off-default-on) |
 | a long long parameter on i386 or 32-bit ARM prints as two int parameters | [`pairparam`](#pairparam----on--off-default-on) |
 | a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters | [`pairparam`](#pairparam----on--off-default-on) |
-| a long long parameter on 32-bit ARM prints as two int parameters in r0 and r1 or r2 and r3 | [`armpairparam`](#armpairparam----on--off-default-off) |
-| a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters | [`armpairparam`](#armpairparam----on--off-default-off) |
+| a long long parameter on 32-bit ARM prints as two int parameters in r0 and r1 or r2 and r3 | [`armpairparam`](#armpairparam----on--off-default-on) |
+| a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters | [`armpairparam`](#armpairparam----on--off-default-on) |
 | a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words | [`pairbranch`](#pairbranch----on--off-default-off) |
 | a long long equality prints as a0 == a2 && a1 == a3 over four int parameters | [`pairbranch`](#pairbranch----on--off-default-off) |
 | a strlen-like loop function prints void and its counter is declared with the return register's storage | [`retindexuse`](#retindexuse----on--off-default-off) |
@@ -2003,13 +2003,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option pairparam off`
 
-### `armpairparam` -- on | off, default `off`
+### `armpairparam` -- on | off, default `on`
 
 - **Symptoms:** a long long parameter on 32-bit ARM prints as two int parameters in r0 and r1 or r2 and r3; a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters.
 - **What it does:** Treat an even-aligned argument register pair (r0:r1, r2:r3 on 32-bit ARM) as one 8-byte parameter slot of an unprototyped function, so pairparam can join a long long passed in registers.
-- **When to flip:** Off by default: it changes the recovered prototype of every unprototyped 32-bit ARM function whose register pair a borrow, carry or two-word equality links (pairparam must be on). Turn it on for ARM32 firmware or libraries with 64-bit arithmetic where a long long parameter prints as two int parameters and its compare as an SBORROW4 or CONCAT44 chain. The pairing follows the input model's general register entries in order: the first word sits at an even position among them, as the AAPCS join align rule places a 64-bit value.
+- **When to flip:** On by default: an unprototyped function whose aligned register pair a borrow, carry or two-word equality links, or that it only ever reads concatenated, takes one 8-byte parameter there. 32-bit ARM only (MIPS, SPARC and PowerPC pairs are bejoin's to order). Measured on Lua 5.4 without debug information (ARM softfp, Cortex-M3, Cortex-M0) and on chibios, RIOT and libopencm3 firmware: 5 of 2430 functions changed, each a double or long long printed as two words that became one parameter, and no new decompile errors. Flip OFF to keep one parameter per register, for hand-written code that passes two unrelated words in an aligned pair and combines them with a borrow or carry chain. pairparam must be on. The pairing follows the input model's general register entries in order: the first word sits at an even position among them, as the AAPCS join align rule places a 64-bit value.
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
-- **Example:** `option armpairparam on`
+- **Example:** `option armpairparam off`
 
 ### `pairbranch` -- on | off, default `off`
 

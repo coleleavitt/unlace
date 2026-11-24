@@ -193,7 +193,7 @@ define pcodeop vpgatherqq ;
 
 
 # PMOVMSKB 4-338 PAGE 1458 LINE 75655
-:VPMOVMSKB Reg32, YmmReg2 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0xD7; Reg32 & (mod=0x3 & YmmReg2) & check_Reg32_dest
+:VPMOVMSKB Reg32, YmmReg2 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xD7; Reg32 & (mod=0x3 & YmmReg2) & check_Reg32_dest
 {
 	local byte_mask:4 = 0:4;
 	byte_mask[0,1] = YmmReg2[7,1];

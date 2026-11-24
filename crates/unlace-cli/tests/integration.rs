@@ -150,6 +150,8 @@ mod uxn;
 mod v810;
 #[path = "visium_raw.rs"]
 mod visium_raw;
+#[path = "xtensa_esp32s3_pie.rs"]
+mod xtensa_esp32s3_pie;
 #[path = "w65816_raw.rs"]
 mod w65816_raw;
 #[path = "x86_amx.rs"]

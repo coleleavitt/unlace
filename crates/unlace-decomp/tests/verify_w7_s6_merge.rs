@@ -37,6 +37,7 @@ use unlace_num::opcodes::OpCode;
 use unlace_decomp::context::{BlockId, HighVariableId, OpId, VarnodeId};
 use unlace_decomp::cover::{Cover, CoverPoint, PcodeOpSet};
 use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::kuna_typemerge::TypeMergeMode;
 use unlace_decomp::merge::{
     AddrTiedRange, BlockVarnode, HighGroupInfo, Merge, MergeContext, MergeIntersect, MergePieceId,
     compare_copy_by_in_varnode, compare_high_by_block,
@@ -127,6 +128,7 @@ struct Mock {
     op_order: BTreeMap<u64, uintm>,
     op_in0: BTreeMap<u64, VarnodeId>,
     merged: Vec<(HighVariableId, HighVariableId, bool)>,
+    vn_storage: BTreeMap<u64, (Address, int4)>,
 }
 
 impl Mock {
@@ -143,6 +145,7 @@ impl Mock {
             op_order: BTreeMap::new(),
             op_in0: BTreeMap::new(),
             merged: Vec::new(),
+            vn_storage: BTreeMap::new(),
         }
     }
     fn hs(&self, h: HighVariableId) -> &HighState {
@@ -231,6 +234,9 @@ macro_rules! unused_mut {
 
 impl MergeContext for Mock {
     // --- reached by the tests -------------------------------------------------
+    fn vn_storage(&self, vn: VarnodeId) -> Option<(Address, int4)> {
+        self.vn_storage.get(&vkey(vn)).cloned()
+    }
     fn high_get_type(&mut self, h: HighVariableId) -> Rc<Datatype> {
         self.hs(h).type_.clone().expect("mock: high has no type")
     }
@@ -737,7 +743,9 @@ fn w7_s6_merge_by_datatype_preserves_discovery_order() {
 
     let mut merge = Merge::new(fresh_cache());
     let range: Vec<VarnodeId> = (1..=5).map(vid).collect();
-    merge.merge_by_datatype(&mut m, &range).unwrap();
+    merge
+        .merge_by_datatype(&mut m, &range, TypeMergeMode::On)
+        .unwrap();
 
     // Type A group is {h1,h3,h5} in discovery order; mergeLinear sorts them by
     // compareHighByBlock (block 1<3<5, already sorted) then merges h3,h5 into
@@ -860,4 +868,99 @@ fn w7_s6_merge_intersection_cache_reused_when_clean() {
         MergeIntersect::intersection(&mut m, &mut cache, hid(1), hid(2)),
         "dirtying the high forces a cover re-walk that sees the overlap"
     );
+}
+
+// ============================================================================
+// (kuna) option `typemerge`: `off` joins nothing by type, `storage` only
+// same-typed highs held in one and the same storage.
+// ============================================================================
+
+fn typemerge_mock(storage: &[Option<u64>]) -> Mock {
+    let t_a = dt(4, type_metatype::TYPE_INT);
+    let space = ram();
+    let mut m = Mock::new();
+    for (k, slot) in storage.iter().enumerate() {
+        let h = (k + 1) as u32;
+        let cov = cover_block((k as int4) + 1, 0, 2);
+        m.make_high(h, (k + 1) as u64, t_a.clone(), cov);
+        if let Some(off) = slot {
+            m.vn_storage
+                .insert(vkey(vid((k + 1) as u64)), (addr(&space, *off), 4));
+        }
+    }
+    m
+}
+
+#[test]
+fn typemerge_off_merges_nothing_by_type() {
+    let mut m = typemerge_mock(&[Some(0), Some(0), Some(0)]);
+    let mut merge = Merge::new(fresh_cache());
+    let range: Vec<VarnodeId> = (1..=3).map(vid).collect();
+    merge
+        .merge_by_datatype(&mut m, &range, TypeMergeMode::Off)
+        .unwrap();
+    assert!(
+        m.merged.is_empty(),
+        "off leaves every same-typed high apart"
+    );
+}
+
+#[test]
+fn typemerge_storage_joins_only_the_same_slot() {
+    // h1 and h3 live in register offset 0, h2 in offset 8, h4 has no known
+    // storage: only h3 joins h1.
+    let mut m = typemerge_mock(&[Some(0), Some(8), Some(0), None]);
+    let mut merge = Merge::new(fresh_cache());
+    let range: Vec<VarnodeId> = (1..=4).map(vid).collect();
+    merge
+        .merge_by_datatype(&mut m, &range, TypeMergeMode::Storage)
+        .unwrap();
+    assert_eq!(m.merged.len(), 1, "one merge: h3 into h1");
+    assert_eq!(m.merged[0].0, hid(1));
+    assert_eq!(m.merged[0].1, hid(3));
+}
+
+#[test]
+fn typemerge_on_joins_across_storage() {
+    let mut m = typemerge_mock(&[Some(0), Some(8), Some(0)]);
+    let mut merge = Merge::new(fresh_cache());
+    let range: Vec<VarnodeId> = (1..=3).map(vid).collect();
+    merge
+        .merge_by_datatype(&mut m, &range, TypeMergeMode::On)
+        .unwrap();
+    assert_eq!(m.merged.len(), 2, "upstream joins all three");
+}
+
+#[test]
+fn phiarm_keeps_apart_only_the_recorded_pair() {
+    let t_a = dt(4, type_metatype::TYPE_INT);
+    let mut m = Mock::new();
+    for h in 1..=3u32 {
+        m.make_high(h, h as u64, t_a.clone(), cover_block(h as int4, 0, 2));
+    }
+    let arms = [(vid(1), vid(2))];
+    assert!(unlace_decomp::kuna_phiarm::keeps_apart(
+        &arms,
+        &m,
+        hid(1),
+        hid(2)
+    ));
+    assert!(unlace_decomp::kuna_phiarm::keeps_apart(
+        &arms,
+        &m,
+        hid(2),
+        hid(1)
+    ));
+    assert!(!unlace_decomp::kuna_phiarm::keeps_apart(
+        &arms,
+        &m,
+        hid(1),
+        hid(3)
+    ));
+    assert!(!unlace_decomp::kuna_phiarm::keeps_apart(
+        &[],
+        &m,
+        hid(1),
+        hid(2)
+    ));
 }

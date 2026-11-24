@@ -312,6 +312,11 @@ pub trait MergeContext: HighContext {
     fn vn_constant_value(&self, _vn: VarnodeId) -> Option<u64> {
         None
     }
+    /// (kuna) `vn->getAddr()` and `vn->getSize()`; `None` when the context
+    /// does not model storage (option `typemerge storage` then joins nothing).
+    fn vn_storage(&self, _vn: VarnodeId) -> Option<(unlace_base::address::Address, int4)> {
+        None
+    }
     /// (kuna) Does a load of a global `vn` was stored to read `vn` instead?
     fn vn_is_global_load(&self, _vn: VarnodeId) -> bool {
         false
@@ -1202,6 +1207,12 @@ pub struct Merge {
     /// (kuna) The outputs of the MULTIEQUALs `kuna_tiedphitrim` trimmed, with
     /// the storage each was trimmed away from.
     tied_phis: Vec<(VarnodeId, unlace_base::address::Address)>,
+    /// (kuna) Option `phiarm`: trim phi arms that are variables of their own
+    /// ([`crate::kuna_phiarm`]).
+    phi_arm_split: bool,
+    /// (kuna) Each arm value `kuna_phiarm` trimmed, with the MULTIEQUAL output
+    /// it was trimmed from.
+    phi_arms: Vec<(VarnodeId, VarnodeId)>,
     /// (unlace decompile-all watchdog) Budget probes taken, and whether one saw
     /// the running drive's budget spent ([`Merge::budget`]).
     probes: u32,
@@ -1224,6 +1235,8 @@ impl Merge {
             copy_trims: Vec::new(),
             proto_partial: Vec::new(),
             tied_phis: Vec::new(),
+            phi_arm_split: false,
+            phi_arms: Vec::new(),
             probes: 0,
             spent: false,
         }
@@ -1251,6 +1264,11 @@ impl Merge {
         Ok(())
     }
 
+    /// (kuna) Turn option `phiarm` on or off for the next `merge_marker`.
+    pub fn set_phi_arm_split(&mut self, on: bool) {
+        self.phi_arm_split = on;
+    }
+
     /// Borrow the intersection-test cache.
     pub fn test_cache_mut(&mut self) -> &mut HighIntersectTest {
         &mut self.test_cache
@@ -1263,6 +1281,7 @@ impl Merge {
         self.copy_trims.clear();
         self.proto_partial.clear();
         self.tied_phis.clear();
+        self.phi_arms.clear();
         self.test_cache.affecting_ops_mut().clear();
         self.spent = false;
     }
@@ -1328,6 +1347,7 @@ impl Merge {
                 high1,
                 high2,
             )
+            || crate::kuna_phiarm::keeps_apart(&self.phi_arms, &*ctx, high1, high2)
         {
             return Ok(false);
         }
@@ -1465,7 +1485,8 @@ impl Merge {
                 &mut self.test_cache,
                 a,
                 high,
-            ) {
+            ) || crate::kuna_phiarm::keeps_apart(&self.phi_arms, &*ctx, a, high)
+            {
                 return Err(None);
             }
         }
@@ -1602,11 +1623,14 @@ impl Merge {
     /// `range` is the location-ordered list of Varnodes for the address range (the
     /// C++ `[startiter,enditer)`).  Highs are gathered (deduped by `setMark`),
     /// grouped by exact type identity preserving discovery order, and each group is
-    /// merged with [`merge_linear`](Self::merge_linear).
+    /// merged with [`merge_linear`](Self::merge_linear).  (kuna) `mode` (option
+    /// `typemerge`, [`crate::kuna_typemerge`]) narrows which same-typed highs
+    /// share a group; `On` is upstream.
     pub fn merge_by_datatype(
         &mut self,
         ctx: &mut dyn MergeContext,
         range: &[VarnodeId],
+        mode: crate::kuna_typemerge::TypeMergeMode,
     ) -> KunaResult<()> {
         // Gather all highs, deduped by mark.
         let mut highlist: Vec<HighVariableId> = Vec::new();
@@ -1633,19 +1657,23 @@ impl Merge {
         let gathered = highlist.clone();
 
         // Group by exact type (Rc identity) preserving order; each group -> mergeLinear.
-        let mut remaining: std::collections::VecDeque<HighVariableId> =
-            highlist.into_iter().collect();
-        while let Some(first) = remaining.pop_front() {
+        if mode == crate::kuna_typemerge::TypeMergeMode::Off {
+            highlist.clear();
+        }
+        let mut remaining: std::collections::VecDeque<_> = highlist
+            .into_iter()
+            .map(|h| (h, mode.storage_key(&*ctx, h)))
+            .collect();
+        while let Some((first, first_storage)) = remaining.pop_front() {
             let ct = ctx.high_get_type(first);
             let mut highvec = vec![first];
-            let mut rest: std::collections::VecDeque<HighVariableId> =
-                std::collections::VecDeque::new();
-            while let Some(h) = remaining.pop_front() {
+            let mut rest: std::collections::VecDeque<_> = std::collections::VecDeque::new();
+            while let Some((h, storage)) = remaining.pop_front() {
                 let t = ctx.high_get_type(h);
-                if std::rc::Rc::ptr_eq(&ct, &t) {
+                if std::rc::Rc::ptr_eq(&ct, &t) && mode.joins(&first_storage, &storage) {
                     highvec.push(h);
                 } else {
-                    rest.push_back(h);
+                    rest.push_back((h, storage));
                 }
             }
             remaining = rest;
@@ -1855,6 +1883,15 @@ impl Merge {
             }
             self.tied_phis
                 .push((ctx.op_out(op).expect("mergeOp: op has no output"), storage));
+        }
+
+        if self.phi_arm_split && ctx.op_code(op) == OpCode::CPUI_MULTIEQUAL {
+            let out = ctx.op_out(op).expect("mergeOp: op has no output");
+            for slot in crate::kuna_phiarm::arm_slots(ctx, op) {
+                let arm = ctx.op_in(op, slot).expect("mergeOp: null input");
+                self.trim_op_input(ctx, op, slot)?;
+                self.phi_arms.push((arm, out));
+            }
         }
 
         // Try to merge everything for real now.

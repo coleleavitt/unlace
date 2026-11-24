@@ -2472,11 +2472,13 @@ impl Funcdata {
     /// single-predecessor chain, else the phi where that chain meets a merge. A
     /// write wider than an integer type binds at the write's own storage and
     /// width with a same-signed integer type, name-locked only. A local whose
-    /// write is not found, or whose name is already taken, is skipped.
+    /// write is not found, or whose name is already taken, is skipped. Returns
+    /// the `(name, start)` of each local skipped for want of a write it can bind
+    /// at, so the caller can report it (kuna `honestgaps`).
     pub fn seed_dwarf_register_locals(
         &mut self,
         specs: &[(String, std::rc::Rc<crate::dtype::Datatype>, Address, u64)],
-    ) {
+    ) -> Vec<(String, u64)> {
         use crate::dtype::TypeFactory;
         use crate::kuna_dwarfregbind::{BindBlock, BindPoint, BindWrite};
         use crate::varnode::varnode_flags;
@@ -2507,6 +2509,7 @@ impl Funcdata {
             .collect();
         let code_space = self.get_address().get_space().map(std::rc::Rc::clone);
         let mut found = Vec::new();
+        let mut unbound = Vec::new();
         for (name, ty, storage, start) in specs {
             let size = ty.get_size();
             let end = storage.get_offset() + size as u64;
@@ -2555,6 +2558,7 @@ impl Funcdata {
                     None => None,
                 };
             let Some((addr, width, up)) = bind else {
+                unbound.push((name.clone(), *start));
                 continue;
             };
             if width == size {
@@ -2568,6 +2572,7 @@ impl Funcdata {
                 continue;
             }
             let Some(meta) = crate::kuna_dwarfregbind::widened_metatype(ty.get_metatype()) else {
+                unbound.push((name.clone(), *start));
                 continue;
             };
             let Some(wide) = self
@@ -2575,6 +2580,7 @@ impl Funcdata {
                 .types()
                 .and_then(|t| t.get_base(width, meta).ok())
             else {
+                unbound.push((name.clone(), *start));
                 continue;
             };
             found.push((name.clone(), wide, addr, up, false));
@@ -2598,7 +2604,7 @@ impl Funcdata {
             }
         }
         if seeded.is_empty() {
-            return;
+            return unbound;
         }
         let values: Vec<_> = self.vbank().iter_loc().collect();
         for vn in values {
@@ -2614,6 +2620,7 @@ impl Funcdata {
                 self.set_varnode_properties(vn);
             }
         }
+        unbound
     }
 
     /// Re-create the given usepoint-scoped console Symbols (the register-storage
@@ -5239,6 +5246,9 @@ impl Funcdata {
             if let Some(ty) = (self.hooks().octeoneffects_output_type)(self, op) {
                 return ty;
             }
+            if let Some(ty) = (self.hooks().atomics_output_type)(self, op) {
+                return ty;
+            }
         }
         if let Some(tlst) = self.get_arch().types() {
             if let Ok(ct) = crate::typeop::type_op_info(opc).get_output_local(tlst, sz) {
@@ -5264,6 +5274,9 @@ impl Funcdata {
         };
         if opc == OpCode::CPUI_CALLOTHER {
             if let Some(ty) = (self.hooks().octeoneffects_input_type)(self, op, slot) {
+                return ty;
+            }
+            if let Some(ty) = (self.hooks().atomics_input_type)(self, op, slot) {
                 return ty;
             }
         }

@@ -191,6 +191,172 @@ pub const BUILTIN_LABS: uint4 = 0x1000001e;
 pub const BUILTIN_STRCPY: uint4 = 0x1000001f;
 /// (kuna) Built-in id for `va_arg` (`vaarg`).
 pub const BUILTIN_VAARG: uint4 = 0x10000020;
+/// (kuna) Built-in ids for the atomic read-modify-write builtins one locked x86
+/// instruction, AArch64 LSE atomic or RISC-V AMO lifts to (`kuna_atomics`), in
+/// [`ATOMIC_BUILTINS`] order.
+pub const BUILTIN_ATOMIC_FETCH_ADD: uint4 = 0x10000040;
+pub const BUILTIN_ATOMIC_FETCH_SUB: uint4 = 0x10000041;
+pub const BUILTIN_ATOMIC_FETCH_AND: uint4 = 0x10000042;
+pub const BUILTIN_ATOMIC_FETCH_OR: uint4 = 0x10000043;
+pub const BUILTIN_ATOMIC_FETCH_XOR: uint4 = 0x10000044;
+pub const BUILTIN_ATOMIC_EXCHANGE: uint4 = 0x10000045;
+pub const BUILTIN_ATOMIC_COMPARE_SWAP: uint4 = 0x10000046;
+/// (kuna) Each atomic builtin and the GCC/Clang `__sync` builtin it prints as.
+pub const ATOMIC_BUILTINS: [(uint4, &[u8]); 7] = [
+    (BUILTIN_ATOMIC_FETCH_ADD, b"__sync_fetch_and_add"),
+    (BUILTIN_ATOMIC_FETCH_SUB, b"__sync_fetch_and_sub"),
+    (BUILTIN_ATOMIC_FETCH_AND, b"__sync_fetch_and_and"),
+    (BUILTIN_ATOMIC_FETCH_OR, b"__sync_fetch_and_or"),
+    (BUILTIN_ATOMIC_FETCH_XOR, b"__sync_fetch_and_xor"),
+    (BUILTIN_ATOMIC_EXCHANGE, b"__sync_lock_test_and_set"),
+    (BUILTIN_ATOMIC_COMPARE_SWAP, b"__sync_val_compare_and_swap"),
+];
+
+/// (kuna) The MSVC intrinsic spelling of the atomic builtins (option `atomics
+/// msvc`): id, the `__sync` builtin it stands for, the location width and the
+/// name. `_InterlockedCompareExchange` takes its new value before the expected
+/// one, as MSVC declares it.
+pub const MSVC_ATOMIC_BUILTINS: [(uint4, uint4, i32, &[u8]); 24] = [
+    (
+        0x10000050,
+        BUILTIN_ATOMIC_FETCH_ADD,
+        1,
+        b"_InterlockedExchangeAdd8",
+    ),
+    (
+        0x10000051,
+        BUILTIN_ATOMIC_FETCH_ADD,
+        2,
+        b"_InterlockedExchangeAdd16",
+    ),
+    (
+        0x10000052,
+        BUILTIN_ATOMIC_FETCH_ADD,
+        4,
+        b"_InterlockedExchangeAdd",
+    ),
+    (
+        0x10000053,
+        BUILTIN_ATOMIC_FETCH_ADD,
+        8,
+        b"_InterlockedExchangeAdd64",
+    ),
+    (0x10000054, BUILTIN_ATOMIC_FETCH_AND, 1, b"_InterlockedAnd8"),
+    (
+        0x10000055,
+        BUILTIN_ATOMIC_FETCH_AND,
+        2,
+        b"_InterlockedAnd16",
+    ),
+    (0x10000056, BUILTIN_ATOMIC_FETCH_AND, 4, b"_InterlockedAnd"),
+    (
+        0x10000057,
+        BUILTIN_ATOMIC_FETCH_AND,
+        8,
+        b"_InterlockedAnd64",
+    ),
+    (0x10000058, BUILTIN_ATOMIC_FETCH_OR, 1, b"_InterlockedOr8"),
+    (0x10000059, BUILTIN_ATOMIC_FETCH_OR, 2, b"_InterlockedOr16"),
+    (0x1000005a, BUILTIN_ATOMIC_FETCH_OR, 4, b"_InterlockedOr"),
+    (0x1000005b, BUILTIN_ATOMIC_FETCH_OR, 8, b"_InterlockedOr64"),
+    (0x1000005c, BUILTIN_ATOMIC_FETCH_XOR, 1, b"_InterlockedXor8"),
+    (
+        0x1000005d,
+        BUILTIN_ATOMIC_FETCH_XOR,
+        2,
+        b"_InterlockedXor16",
+    ),
+    (0x1000005e, BUILTIN_ATOMIC_FETCH_XOR, 4, b"_InterlockedXor"),
+    (
+        0x1000005f,
+        BUILTIN_ATOMIC_FETCH_XOR,
+        8,
+        b"_InterlockedXor64",
+    ),
+    (
+        0x10000060,
+        BUILTIN_ATOMIC_EXCHANGE,
+        1,
+        b"_InterlockedExchange8",
+    ),
+    (
+        0x10000061,
+        BUILTIN_ATOMIC_EXCHANGE,
+        2,
+        b"_InterlockedExchange16",
+    ),
+    (
+        0x10000062,
+        BUILTIN_ATOMIC_EXCHANGE,
+        4,
+        b"_InterlockedExchange",
+    ),
+    (
+        0x10000063,
+        BUILTIN_ATOMIC_EXCHANGE,
+        8,
+        b"_InterlockedExchange64",
+    ),
+    (
+        0x10000064,
+        BUILTIN_ATOMIC_COMPARE_SWAP,
+        1,
+        b"_InterlockedCompareExchange8",
+    ),
+    (
+        0x10000065,
+        BUILTIN_ATOMIC_COMPARE_SWAP,
+        2,
+        b"_InterlockedCompareExchange16",
+    ),
+    (
+        0x10000066,
+        BUILTIN_ATOMIC_COMPARE_SWAP,
+        4,
+        b"_InterlockedCompareExchange",
+    ),
+    (
+        0x10000067,
+        BUILTIN_ATOMIC_COMPARE_SWAP,
+        8,
+        b"_InterlockedCompareExchange64",
+    ),
+];
+
+/// (kuna) The name of atomic builtin `id`, in either spelling.
+pub fn atomic_builtin_name(id: uint4) -> Option<&'static [u8]> {
+    ATOMIC_BUILTINS
+        .iter()
+        .find(|(b, _)| *b == id)
+        .map(|(_, n)| *n)
+        .or_else(|| {
+            MSVC_ATOMIC_BUILTINS
+                .iter()
+                .find(|(b, ..)| *b == id)
+                .map(|(.., n)| *n)
+        })
+}
+
+/// (kuna) The `__sync` builtin atomic builtin `id` performs: itself, or the one
+/// an MSVC intrinsic stands for.
+pub fn atomic_builtin_generic(id: uint4) -> Option<uint4> {
+    if ATOMIC_BUILTINS.iter().any(|(b, _)| *b == id) {
+        return Some(id);
+    }
+    MSVC_ATOMIC_BUILTINS
+        .iter()
+        .find(|(b, ..)| *b == id)
+        .map(|(_, g, ..)| *g)
+}
+
+/// (kuna) The MSVC intrinsic for `__sync` builtin `generic` at `width` bytes;
+/// `None` for `__sync_fetch_and_sub`, which MSVC has no intrinsic for.
+pub fn msvc_atomic_builtin(generic: uint4, width: i32) -> Option<uint4> {
+    MSVC_ATOMIC_BUILTINS
+        .iter()
+        .find(|(_, g, w, _)| *g == generic && *w == width)
+        .map(|(b, ..)| *b)
+}
 
 // ---------------------------------------------------------------------------
 // UserOpBase + UserPcodeOp hierarchy (userop.hh:47-318)
@@ -1277,7 +1443,10 @@ impl UserOpManage {
             BUILTIN_KERNEL_WARN => {
                 UserPcodeOp::new_unspecialized(b"__WARN", BUILTIN_KERNEL_WARN as int4)
             }
-            _ => return Err(KunaError::lowlevel("Bad built-in userop id")),
+            _ => match atomic_builtin_name(i) {
+                Some(name) => UserPcodeOp::new_unspecialized(name, i as int4),
+                None => return Err(KunaError::lowlevel("Bad built-in userop id")),
+            },
         };
         self.builtinmap.insert(i, res);
         Ok(self.builtinmap.get(&i).unwrap())

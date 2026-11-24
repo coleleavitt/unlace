@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_332() {
-    assert_eq!(kuna_num_settables(), 332);
-    assert_eq!(SETTABLE_TABLE.len(), 332);
+fn settable_count_is_340() {
+    assert_eq!(kuna_num_settables(), 340);
+    assert_eq!(SETTABLE_TABLE.len(), 340);
 }
 
 #[test]
-fn tier_counts_are_67_core_165_transform_100_analysis() {
+fn tier_counts_are_70_core_169_transform_101_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_67_core_165_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (67, 165, 100));
+    assert_eq!((core, transform, analysis), (70, 169, 101));
 }
 
 #[test]
@@ -406,6 +406,9 @@ fn option_values_live_value_present_for_129() {
         // gate (no `live_field`); its live state is read console-side via
         // kuna_live_value, like the analysis-pass gates around it. Default-off.
         "rtti",
+        // (kuna) MSVC ThrowInfo labels and throw-site comments, the same PE-only
+        // analysis-pass gate as `rtti`. Default-off.
+        "msvceh",
         // (kuna) ELF libc-start `main` naming + prototype -- the ELF counterpart of
         // `machomain` above and the same seam: an analysis-tier gate with no
         // codegen live reader, read console-side via kuna_live_value. Default-ON.
@@ -592,6 +595,9 @@ fn option_values_live_value_present_for_129() {
                             | "int3pad"
                             | "x64syscall"
                             | "pebnames"
+                            // (kuna) `atomics` takes `auto|msvc|gcc|off`; its live value is the
+                            // registered option `kuna_atomicops::Atomics`.
+                            | "atomics"
                             // (kuna) `ptrfromuse` takes `off|byte|void`, which
                             // the codegen live reader (a bool
                             // `live_true`/`live_false` pair) cannot express --
@@ -955,7 +961,9 @@ fn option_values_live_value_present_for_129() {
     // +1 for `oslog` (live_field = os_log_args).
     // 137 -> 138: `spsolve` (#70) added a live_field row without the bump.
     // +1 for `guarddispatch` (live_field = guard_dispatch).
-    assert_eq!(with_live, 139);
+    // +1 for `flownames` (live_field = flow_names).
+    // +1 for `llscfold` (live_field = llsc_fold); `atomics` is four-valued, so it has none.
+    assert_eq!(with_live, 142);
 }
 
 #[test]
@@ -1281,7 +1289,13 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `oslog`; its P9 row.
     // +1 for `callresultuse`; its P4 row.
     // +1 for `guarddispatch`; its P2 row.
-    assert_eq!(json.matches("},\n").count(), 325);
+    // +1 for `typemerge`; its P6 row sits after `indirectonly`.
+    // +1 for `flownames`; its P6 row sits beside `contextnames`.
+    // +1 for `honestgaps`; its P2 row.
+    // +2 for `atomics` and `llscfold`.
+    // +1 for `msvceh`; its P1 row follows `rtti`.
+    // +1 for `phiarm`; its P6 row sits after `typemerge`.
+    assert_eq!(json.matches("},\n").count(), 333);
 }
 
 #[test]

@@ -77,6 +77,9 @@ pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
         if let Some(ty) = crate::kuna_octeoneffects::output_type(data, op) {
             return ty;
         }
+        if let Some(ty) = crate::kuna_atomics::output_type(data, op) {
+            return ty;
+        }
         if let Some(ty) = crate::kuna_roundingops::output_type(data, op) {
             return ty;
         }
@@ -374,6 +377,9 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
 
     if opcode == OpCode::CPUI_CALLOTHER {
         if let Some(ty) = crate::kuna_octeoneffects::input_type(data, op, slot) {
+            return ty;
+        }
+        if let Some(ty) = crate::kuna_atomics::input_type(data, op, slot) {
             return ty;
         }
         if let Some(ty) = crate::kuna_roundingops::input_type(data, op, slot) {
@@ -1557,6 +1563,12 @@ fn propagate_load_store(
             return None;
         }
         let spc = space_from_const(data, op, 0)?;
+        // (kuna `vtabletypes`) A `C_vtbl *` value's pointer is a `C *`.
+        if let Some(class) =
+            crate::kuna_vtblbase::class_pointer(data, tlst, &alttype, out_size, spc.get_word_size())
+        {
+            return Some(class);
+        }
         propagate_to_pointer(tlst, alttype, out_size, spc.get_word_size() as int4)
     } else {
         // (kuna) `code` is size 1 only so that `code *` arithmetic steps one

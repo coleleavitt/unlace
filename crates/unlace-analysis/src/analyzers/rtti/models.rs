@@ -83,6 +83,20 @@ impl<'a> ImageBytes<'a> {
         None
     }
 
+    /// Up to `max` bytes from `vma` to the end of the section that holds it.
+    pub fn read_up_to(&self, vma: u64, max: usize) -> Option<&'a [u8]> {
+        for &(base, data) in &self.sections {
+            if vma < base {
+                continue;
+            }
+            let off = (vma - base) as usize;
+            if off < data.len() {
+                return Some(&data[off..data.len().min(off.saturating_add(max))]);
+            }
+        }
+        None
+    }
+
     /// Read a NUL-terminated ASCII string starting at `vma`, capped at `max` bytes.
     pub fn read_cstr(&self, vma: u64, max: usize) -> Option<String> {
         for &(base, data) in &self.sections {
@@ -246,6 +260,9 @@ pub struct CompleteObjectLocator {
     pub addr: u64,
     /// `signature` field (0 on x86, 1 on x64 — the `COL_SIG_REV1` marker).
     pub signature: u32,
+    /// `offset`: where, in the complete object, the subobject this vftable
+    /// serves starts (0 for the class's primary vftable).
+    pub offset: u32,
     /// Absolute VMA of the RTTI0 `TypeDescriptor` (resolved ref).
     pub p_type_descriptor: u64,
     /// Absolute VMA of the RTTI3 `ClassHierarchyDescriptor` (resolved ref).
@@ -263,6 +280,7 @@ impl CompleteObjectLocator {
     /// reference is absent/unreadable.
     pub fn read(img: &ImageBytes, rk: &RefKind, addr: u64) -> Option<Self> {
         let signature = rk.read_u32(img.read(addr, 4)?);
+        let offset = rk.read_u32(img.read(addr + 4, 4)?);
         let p_type_descriptor =
             rk.resolve_ref(img.read(addr + Self::OFF_TYPE_DESCRIPTOR, rk.ref_size())?)?;
         let p_class_hierarchy =
@@ -270,6 +288,7 @@ impl CompleteObjectLocator {
         Some(CompleteObjectLocator {
             addr,
             signature,
+            offset,
             p_type_descriptor,
             p_class_hierarchy,
         })
@@ -312,24 +331,31 @@ impl ClassHierarchyDescriptor {
     }
 }
 
-/// An RTTI1 `BaseClassDescriptor`: per-base subobject record. Only the leading
-/// `pTypeDescriptor` reference matters for name recovery (the `pmd` subobject
-/// offsets are surfaced as labels, not modeled here — the documented scope LOSS).
+/// An RTTI1 `BaseClassDescriptor`: per-base subobject record: the base's
+/// `TypeDescriptor` and where its subobject sits (`pmd`).
 #[derive(Clone, Debug)]
 pub struct BaseClassDescriptor {
     /// VMA of the RTTI1 base.
     pub addr: u64,
     /// Absolute VMA of this base's RTTI0 `TypeDescriptor` (resolved ref).
     pub p_type_descriptor: u64,
+    /// The `PMD` `(mdisp, pdisp)`: the base's displacement, and `-1` for a
+    /// non-virtual base or else the offset of the vbtable pointer, when readable.
+    pub pmd: Option<(i32, i32)>,
 }
 
 impl BaseClassDescriptor {
-    /// `pTypeDescriptor ref @0` (the first field).
+    /// `pTypeDescriptor ref @0`, `numContainedBases u32 @4`, `mdisp i32 @8`,
+    /// `pdisp i32 @12`.
     pub fn read(img: &ImageBytes, rk: &RefKind, addr: u64) -> Option<Self> {
         let p_type_descriptor = rk.resolve_ref(img.read(addr, rk.ref_size())?)?;
+        let pmd = img
+            .read(addr + 8, 8)
+            .map(|b| (rk.read_u32(b) as i32, rk.read_u32(&b[4..]) as i32));
         Some(BaseClassDescriptor {
             addr,
             p_type_descriptor,
+            pmd,
         })
     }
 }

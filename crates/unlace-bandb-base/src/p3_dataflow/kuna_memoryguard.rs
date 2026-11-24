@@ -1,6 +1,6 @@
 //! (kuna) Heritage guards for user operations that may write memory: the
-//! system calls of `syscallregs` and `x64syscall`, and the Octeon atomics of
-//! `octeoneffects`. Each owner picks its operations and [`memory_ops`] lists
+//! system calls of `syscallregs` and `x64syscall`, the Octeon atomics of
+//! `octeoneffects` and the atomic builtins of `kuna_atomics`. Each owner picks its operations and [`memory_ops`] lists
 //! them all, so heritage guards, `ActionMarkImplied` cover checks and
 //! `persistcalls` sparse guarding see the same set. One INDIRECT per operation
 //! guards a writable RAM or stack range, as a call guard does. Read-only image
@@ -38,11 +38,13 @@ pub fn guarded(data: &Funcdata, flags: uint4, addr: &Address) -> bool {
 }
 
 /// Every user operation with a memory effect, in owner order: the enabled
-/// system calls, then the Octeon operations the mode selects.
+/// system calls, the Octeon operations the mode selects, then the atomic
+/// builtins.
 pub fn memory_ops(data: &Funcdata) -> Vec<OpId> {
     let mut ops = crate::kuna_syscallregs::memory_calls(data);
     ops.extend(crate::kuna_x64syscall::memory_calls(data));
     ops.extend(crate::kuna_octeoneffects::memory_ops(data));
+    ops.extend(crate::kuna_atomics::memory_ops(data));
     ops
 }
 

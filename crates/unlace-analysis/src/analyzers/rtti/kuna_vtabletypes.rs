@@ -52,11 +52,31 @@ impl AnalysisPass for VtableTypesPass {
 }
 
 /// The typed-vtable facts: the classes to type and the vtable slot words, as
-/// inclusive `[first, last]` byte ranges.
+/// inclusive `[first, last]` byte ranges. An MSVC image also states the class
+/// of each virtual member's `this` and the vftables to type
+/// ([`super::kuna_msvcvtabletypes`]).
 #[derive(Clone, Debug, Default)]
 pub struct VtableFacts {
     pub classes: Vec<VtableClass>,
     pub slot_ranges: Vec<(u64, u64)>,
+    /// `(function entry, class structure name)`, ascending by entry.
+    pub this_types: Vec<(u64, String)>,
+    /// Each vftable to type as its class's `<class>_vtbl`.
+    pub tables: Vec<VtableObject>,
+}
+
+/// One vftable the commit types as `<class>_vtbl`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VtableObject {
+    /// The vftable's first slot.
+    pub addr: u64,
+    /// The label the `rtti` pass gives it (`ns::Box::vftable`).
+    pub label: String,
+    /// The structure name of the class whose subobject it serves.
+    pub class: String,
+    /// Its slot count; a table whose count differs from `<class>_vtbl`'s is
+    /// left as it is.
+    pub slots: usize,
 }
 
 fn facts(rec: &Recovery, names: &HashMap<u64, String>) -> VtableFacts {
@@ -149,11 +169,13 @@ fn facts(rec: &Recovery, names: &HashMap<u64, String>) -> VtableFacts {
             slots,
             bases,
             size: 0,
+            msvc: false,
         });
     }
     VtableFacts {
         classes,
         slot_ranges,
+        ..VtableFacts::default()
     }
 }
 
@@ -195,7 +217,7 @@ fn virtual_bases(addr: u64, by_addr: &HashMap<u64, &TypeInfo>) -> HashSet<u64> {
 
 /// The structure name the demangled signatures give a class: its innermost
 /// component with any template arguments dropped (`ns::Vec<int>` is `Vec`).
-fn struct_name(demangled: &str) -> String {
+pub(super) fn struct_name(demangled: &str) -> String {
     let inner = top_level_split(demangled).pop().unwrap_or_default();
     let name = inner
         .split('<')
@@ -285,7 +307,7 @@ fn top_level_split(s: &str) -> Vec<String> {
     parts
 }
 
-fn is_identifier(s: &str) -> bool {
+pub(super) fn is_identifier(s: &str) -> bool {
     s.chars()
         .next()
         .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')

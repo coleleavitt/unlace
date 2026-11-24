@@ -313,6 +313,24 @@ mod tests {
         assert!(!is_known_noreturn_name("rethrow"));
     }
 
+    /// The #28 additions reach the flow-time matcher in their demangled form.
+    #[test]
+    fn matches_documented_additions_demangled() {
+        for want in [
+            "std::__throw_bad_weak_ptr",
+            "std::__throw_bad_any_cast",
+            "std::__glibcxx_assert_fail",
+            "__cxa_call_terminate",
+            "_Unwind_SjLj_Resume",
+            "__assert_func",
+            "__android_log_assert",
+            "Py_FatalError",
+        ] {
+            assert!(is_known_noreturn_name(want), "{want} must be no-return");
+        }
+        assert!(!is_known_noreturn_name("Ptr::__throw_bad_weak_ptr"));
+    }
+
     #[test]
     fn proxy_names_take_multi_word_entries_only() {
         for want in [

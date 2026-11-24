@@ -372,7 +372,8 @@ pub fn summary(arch: &Architecture, entry: &Address, depth: u8) -> Summary {
 }
 
 /// The options a walk reads: `calleeargs`, which follows the stack addresses a
-/// walk loses, and the gates of the no-return names that end its paths.
+/// walk loses, `calleeargsmsvc`, which reads through the MSVC frame
+/// boilerplate, and the gates of the no-return names that end its paths.
 fn walk_options(arch: &Architecture) -> u8 {
     u8::from(
         arch.kuna_options
@@ -392,6 +393,11 @@ fn walk_options(arch: &Architecture) -> u8 {
                 .get::<crate::kuna_securitycheck::StripSecurityCheck>()
                 .0,
         ) << 3
+        | u8::from(
+            arch.kuna_options
+                .get::<crate::kuna_calleestackargs::KunaCalleeargsMsvc>()
+                .0,
+        ) << 4
 }
 
 /// [`summary`] and the depth it needed. A walk is reused at any depth it fits
@@ -754,6 +760,10 @@ fn slots_in(at: Option<Val>, size: u32) -> u64 {
 pub struct Regs {
     pub space: i32,
     pub offs: [u64; 8],
+    /// The FS segment base's offset in the register space, set only under
+    /// `calleeargsmsvc` (with `calleeargs`): it reads the MSVC frame
+    /// boilerplate as no escape ([`from_fs`]).
+    pub fs: Option<u64>,
 }
 
 impl Regs {
@@ -855,6 +865,29 @@ pub fn escape(v: Option<Val>, unplaced: &mut bool) {
     }
 }
 
+/// (`calleeargsmsvc`) Is `v` the FS segment base, or a temporary formed from
+/// it (the `fs:[0]` of an SEH registration)?
+fn from_fs(v: &VarnodeData, regs: &Regs, fs_temps: &[u64]) -> bool {
+    if kind(v) == Some(spacetype::IPTR_INTERNAL) {
+        return fs_temps.contains(&v.offset);
+    }
+    regs.fs
+        .is_some_and(|fs| v.size == 4 && Regs::space_of(v) == Some(regs.space) && v.offset == fs)
+}
+
+/// (`calleeargsmsvc`) Is an `INT_XOR` the MSVC `/GS` scramble: a stack address
+/// mixed with a value that is neither one nor a constant (`xor eax,ebp` on the
+/// loaded cookie)? Its result is data, not an address the walk loses: only the
+/// same address undoes it, and that yields the cookie.
+fn scrambles(regs: &Regs, ins: &[VarnodeData], vals: &[Option<Val>]) -> bool {
+    regs.fs.is_some()
+        && ins.len() == 2
+        && vals.len() == 2
+        && vals[0].is_some() != vals[1].is_some()
+        && konst(&ins[0]).is_none()
+        && konst(&ins[1]).is_none()
+}
+
 fn saved_bit(r: usize) -> u8 {
     CALLEE_SAVED
         .iter()
@@ -877,7 +910,10 @@ pub fn step(
 /// call. A load or store through one leaves the extent unstated, and so does a
 /// stack address written outside the general registers or into part of one,
 /// including one stored through a pointer the walk cannot place (the caller's
-/// frame pointer excepted, which the CRT's `_NLG_Notify` records).
+/// frame pointer excepted, which the CRT's `_NLG_Notify` records). Under
+/// `calleeargsmsvc` a local's address stored through FS (the SEH registration
+/// `mov fs:[0],eax`, which only the exception dispatcher reads) and the `/GS`
+/// cookie scrambled with a stack address are not escapes.
 #[doc(hidden)]
 pub fn step_with(
     ops: &[(OpCode, Option<VarnodeData>, Vec<VarnodeData>)],
@@ -903,6 +939,7 @@ pub fn step_with(
     let mut loaded_from: Vec<(u64, uintb)> = Vec::new();
     let mut trapped: Vec<u64> = Vec::new();
     let mut lost_temps: Vec<u64> = Vec::new();
+    let mut fs_temps: Vec<u64> = Vec::new();
     let mut sp_adds: i64 = 0;
     let unique = |v: &VarnodeData| kind(v) == Some(spacetype::IPTR_INTERNAL);
     for (opc, out, ins) in ops {
@@ -937,6 +974,7 @@ pub fn step_with(
         };
         let vals: Vec<Option<Val>> = ins.iter().map(|v| eval(v, &s)).collect();
         let any_stack = vals.iter().any(|v| v.is_some());
+        let fs_in = regs.fs.is_some() && ins.iter().any(|v| from_fs(v, regs, &fs_temps));
         let result: Option<Val> = match opc {
             OpCode::CPUI_COPY => vals.first().copied().flatten(),
             OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB if ins.len() == 2 => {
@@ -992,6 +1030,9 @@ pub fn step_with(
                 let size = ins.get(2).map_or(4, |v| v.size);
                 let at = vals.get(1).copied().flatten();
                 let value = vals.get(2).copied().flatten();
+                let seh_link = regs.fs.is_some()
+                    && ins.get(1).is_some_and(|a| from_fs(a, regs, &fs_temps))
+                    && matches!(value, Some(Val::Stack { hi, .. }) if hi < 0);
                 touch(at, size, &mut s.arg_end, &mut s.unplaced);
                 escape(value, &mut s.unplaced);
                 if track {
@@ -1006,6 +1047,7 @@ pub fn step_with(
                         (_, Some(b)) if carries => s.state.2 |= b,
                         (_, Some(b)) => s.state.2 &= !b,
                         (Some(Val::Stack { .. }), None) => s.unplaced |= carries,
+                        _ if seh_link => {}
                         _ => s.unplaced |= matches!(value, Some(Val::Stack { .. })) || lost_at(2),
                     }
                 }
@@ -1080,6 +1122,7 @@ pub fn step_with(
                 }
                 None
             }
+            OpCode::CPUI_INT_XOR if scrambles(regs, ins, &vals) => None,
             _ if any_stack => Some(Val::Opaque { own: true }),
             _ => None,
         };
@@ -1102,6 +1145,10 @@ pub fn step_with(
                 lost_temps.push(o.offset);
             }
             temps.push((o.offset, result));
+            fs_temps.retain(|&t| t != o.offset);
+            if fs_in && matches!(opc, OpCode::CPUI_INT_ADD | OpCode::CPUI_COPY) {
+                fs_temps.push(o.offset);
+            }
         } else {
             let partial: Vec<usize> = regs.partial(o).collect();
             if track && (result.is_some() || out_lost) && (o.size >= 4 || !partial.is_empty()) {
@@ -1136,10 +1183,21 @@ fn registers(arch: &Architecture) -> Option<Regs> {
         space = Some(idx);
         offs[i] = v.offset;
     }
-    Some(Regs {
-        space: space?,
-        offs,
-    })
+    let space = space?;
+    let msvc = arch
+        .kuna_options
+        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .0
+        && arch
+            .kuna_options
+            .get::<crate::kuna_calleestackargs::KunaCalleeargsMsvc>()
+            .0;
+    let fs = t
+        .get_register_data("FS_OFFSET")
+        .ok()
+        .filter(|v| msvc && v.size == 4 && v.space.as_ref().map(|s| s.get_index()) == Some(space))
+        .map(|v| v.offset);
+    Some(Regs { space, offs, fs })
 }
 
 /// The stack pointer after a call the walk cannot read: above it by at least

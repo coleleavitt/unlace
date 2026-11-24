@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="Z380"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="z380.sla"
+            processorspec="z380.pspec"
+            id="Z380:LE:32:default">
+    <description>Zilog Z380 (Z80-compatible, Native/Extended and Word/Long Word modes, DDIR decoder directives)</description>
+    <compiler name="default" spec="z380.cspec" id="default"/>
+  </language>
+</language_definitions>

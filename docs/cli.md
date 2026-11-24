@@ -5567,7 +5567,9 @@ command line:
 **The key.** Each function's body is the `[entry, next entry)` clip `unlace fid` uses. For each
 instruction the relocation mask (IDA's `ev_calcrel`) is the value bits of every operand SLEIGH
 resolves to a code or data address, or to a scalar that is flagged as an address or falls inside a
-mapped section. The key is `MD5(bytes & !mask ‖ mask)`. IDA builds its mask from each processor
+mapped section. Trailing padding the clip runs into (x86 `int3`/`nop` forms, AArch64 `nop`, zero
+bytes) is left out, as IDA leaves it outside the function. The key is `MD5(bytes & !mask ‖ mask)`
+over the whole body, the order libida's `calc_func_metadata` feeds MD5. IDA builds its mask from each processor
 module's own rules, so unlace's keys match IDA's only where both masked the same operands; between
 unlace runs (and so on a server unlace users share) they always agree.
 

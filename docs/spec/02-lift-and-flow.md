@@ -4610,6 +4610,15 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 AVX-512 Disp8*N from LLVM (#98)
+
+The compressed displacement of 134 AVX-512 constructors (sub-vector broadcasts, inserts and
+extracts, `vpmov[sz]x`, byte/word expand and compress, scalar FP16, ...) comes from LLVM's
+`CD8_Scale`, and a few constructors gained their missing immediate or the right memory size.
+Before, a disp8 in these was scaled by the wrong N, so `vpbroadcastb zmm0, [rdi + 1]` read
+`[rdi + 4]`. `tools/x86_avx512_sweep.py` reruns the comparison against `llvm-objdump`.
+Exercised by the `x86_64_avx512_disp8` row of `unlace-cli/tests/processors.toml`.
+
 ### x86 prefix, BSF/BSR and MOVSXD fixes (#548)
 
 Found by `tools/difffuzz`. In 64-bit mode a REX prefix that another prefix (a

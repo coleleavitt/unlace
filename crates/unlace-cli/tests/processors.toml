@@ -105,6 +105,9 @@ cccc406663c7c3
 ppc_xenon_vmx128 = """
 100018cb102020cb14400c1a1462049a106029cb4e800020
 """
+x86_64_avx512_disp8 = """
+62f27d4878470162f17e487f06c5f877c3
+"""
 
 [[family]]
 name = "blackfin"
@@ -1876,6 +1879,18 @@ expect = ["sub_0(3,4)"]
 test = "s1c6200_decimal_mode_add_is_adjusted"
 address = "0x10"
 expect = ["9 < v1"]
+
+# AVX-512 Disp8*N from LLVM's CD8_Scale: vpbroadcastb zmm0, [rdi + 1] has N=1 (the base spec used 4).
+[[family]]
+name = "x86_64_avx512_disp8"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_avx512_disp8"
+
+[[family.function]]
+test = "x86_vpbroadcastb_disp8_is_not_scaled"
+address = "0x0"
+expect = ["((unsigned char *)a0)[1]"]
 
 # The Propeller 2 language decompiles flexspin (-2 -O1 --fcache=0) hub-execution output of
 # fixtures/propeller2/flexspin_hub.c: conditional (if_b/if_ae) arithmetic after a cmps, a

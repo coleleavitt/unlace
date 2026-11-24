@@ -101,3 +101,18 @@ com_raise_error
 RtlExitUserProcess
 RtlExitUserThread
 RtlRestoreContext
+
+# (kuna) MSVC CRT and STL routines IDA 9.5's FLIRT names no-return on the
+# statically linked CRT of i386 PEs (Holley EFI's SLABHIDDevice.dll,
+# CP210xManufacturing.dll, USBCAN-Driver.dll): the VC++ 2008 STL
+# `_String_base::_Xlen/_Xran/_Xinvarg` (each throws), the EH runtime's
+# `CallUnexpected` and `_inconsistency` (they call terminate), <exception>'s
+# `unexpected()`, and the VC++ 2015+ `__scrt_throw_std_bad_array_new_length`.
+?_Xlen@_String_base@std@@*
+?_Xran@_String_base@std@@*
+?_Xinvarg@_String_base@std@@*
+?CallUnexpected@@*
+?_inconsistency@@YAXXZ
+unexpected
+?__scrt_throw_std_bad_array_new_length@@*
+scrt_throw_std_bad_array_new_length

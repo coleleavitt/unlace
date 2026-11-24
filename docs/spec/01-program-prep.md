@@ -12520,7 +12520,11 @@ function start, with no entry lost.
 when a FID or FLIRT rename (the FLIRT pass is described under §1.4 above)
 replaces a placeholder, the function also gets the libc prototype of its name
 (or a `nameladder` spelling) and the no-return flag when the no-return lists
-name it, as IDA applies the type and `noret.cfg` on a FLIRT rename.
+name it, as IDA applies the type and `noret.cfg` on a FLIRT rename. The lists
+read there are the ELF, PE/Mach-O and Windows-only ones together
+(`crates/unlace-analysis/src/loader/noreturn.rs (listed_noreturn)`): FLIRT names a
+statically linked MSVC CRT `__CxxThrowException@8` or `___report_gsfailure`,
+which only the Windows list carries.
 
 **Data-object width** (`globalwidth`, default-on; kuna;
 `crates/unlace-analysis/src/listing/kuna_accesswidth.rs (access_widths)`):
@@ -14602,7 +14606,12 @@ the path from the conditional check to `runtime.gopanic`.
 DIV-22 as in Ghidra): a callee is concluded no-return when at least **3** of its
 call sites (`EVIDENCE_THRESHOLD`) show no valid fall-through, plus a bounded
 fixpoint promotion for a caller whose body contains a terminal call to an
-already-concluded callee and no RETURN anywhere. The threshold buys robustness to
+already-concluded callee and no returning path anywhere: no RETURN, no jump out of
+the function to a callee not known no-return, no computed jump and no
+fall-through-less call to such a callee (a tail call returns when its target does;
+trustd's `_GetAssetFileURL` returns through `b _objc_autoreleaseReturnValue`, and
+only its landing pad ends in `bl _Unwind_Resume`, which made every call to it
+print `// no-return`). The threshold buys robustness to
 disassembly noise at the price of blindness to rarely-called functions; and the
 predicate has a structural blind spot: a no-return call followed by alignment **NOP
 padding** reads as a valid fall-through and contributes no evidence at all.

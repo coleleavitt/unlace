@@ -3,7 +3,8 @@
 //! Stage-aligned module group; declared flatly at the crate root via re-export in
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
-pub mod aeabifloat; // (unlace) AEABI soft-float helpers (__aeabi_dadd, __aeabi_d2iz) as C operators and casts
+pub mod aeabifloat;
+pub mod antidebug; // (unlace `antidebug`) name a call to a well-known anti-debugging API (IsDebuggerPresent, ptrace, timing probes) // (unlace) AEABI soft-float helpers (__aeabi_dadd, __aeabi_d2iz) as C operators and casts
 pub mod arithhelpers; // (unlace) 32-bit runtime arithmetic helpers (__udivdi3, __aeabi_uldivmod, _alldiv) as C operators
 pub mod armflowcontext;
 pub mod armhoist; // (unlace `armhoist`) hoist the ops both arms of a branch share before structuring

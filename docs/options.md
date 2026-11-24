@@ -187,6 +187,9 @@ Three tiers:
 | a function returns the result of a call through swi(3) | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
 | nothing in the C says control ran into a run of 0xcc padding bytes | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
 | an anti-debug binary's clean-run path ends in an indirect call that only the disassembly explains | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
+| a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe | [`antidebug`](#antidebug----off--warn-default-off) |
+| a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C | [`antidebug`](#antidebug----off--warn-default-off) |
+| OutputDebugStringA used as a debugger test prints nothing that marks it | [`antidebug`](#antidebug----off--warn-default-off) |
 | an x86-64 syscall renders as syscall() with empty parens, with the number and every argument erased | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
 | a syscall wrapper returns its own first parameter, the syscall number, instead of the syscall's result | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
 | the register writes feeding a SYSCALL are all missing from the C while unlace disassemble shows them | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
@@ -1853,6 +1856,15 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On (`warn`) by default: it adds a comment and changes nothing else, so a decoded `int3` is named wherever one is reached. Set `halt` when reading anti-debug code whose clean-run path falls into a pad and the fabricated `return (*(void *)swi(3))();` is in the way - it is not the default because a debugger attached to the process can step past an `int3`, so ending the flow is a judgement about the pad rather than a fact about the encoding. Set `off` to restore the unannotated upstream rendering. Shape-gated on the `swi` vector 3, so `int 0x29` (Windows __fastfail, see `fastfailnoreturn`), `int 0x80` (Linux, see `linuxsyscall`) and every non-x86 language are untouched; structurally inert wherever no `int3` is decoded, and byte-identical (0/675) on the datatest corpus. The pad length is a loader read: when it fails, or when the encoding is the two-byte `INT 0x03` rather than `0xcc`, the warning is emitted without a count rather than with a guessed one.
 - **Where / provenance:** P2/flow-classification · unlace · presentation-default · GH-468
 - **Example:** `option int3pad halt`
+
+### `antidebug` -- off | warn, default `off`
+
+- **Symptoms:** a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe; a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C; OutputDebugStringA used as a debugger test prints nothing that marks it.
+- **What it does:** Name a call to a well-known anti-debugging API, instead of letting it pass unremarked through the C. The callee is recognised by the name the flow pass recorded for a direct call: `IsDebuggerPresent`, `CheckRemoteDebuggerPresent`, `NtQueryInformationProcess`, `NtSetInformationThread` (debugger checks), `ptrace` (a self-trace), `rdtsc`, `GetTickCount`, `GetTickCount64` and `QueryPerformanceCounter` (timing probes), and `OutputDebugStringA`/`W` (a debugger-channel side effect). `warn` buffers one warning per such call site and changes nothing else: no statement, type or control-flow edge moves. The roster is the one the archived master's `anti_debug_detect` pass carried, which was declared there and never called.
+- **Use when:** Off by default: the call is a fact about the binary, but reading it as evasion is a judgement about intent, and a licence check or a cheat detector calls the same APIs. Set `warn` when triaging code you suspect of resisting a debugger, to see where the probes are before reading the logic around them. The warning is a reviewable signal that evasion logic is present, not proof that the binary is malicious. It is structurally inert on every call whose callee name is off the roster, so it has no effect on the datatest corpus, which carries no such calls under the default.
+- **Example:** `option antidebug warn`
+- **Source:** unlace; inspiration: archived master's crates/unlace-passes/src/anti_debug_detect.rs (ROADMAP Phase E.4.3), declared there but never called
+- **Change kind:** new-analysis; tier analysis; phase P2 (flow-classification); strength HINT.
 
 ### `x64syscall` -- off | on | abi, default `on`
 

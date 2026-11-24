@@ -1277,6 +1277,25 @@ tier = "transform"
 symptoms = ["an int3 pad renders as (*(void *)swi(3))() - a call through a pointer nothing assigns", "a function returns the result of a call through swi(3)", "nothing in the C says control ran into a run of 0xcc padding bytes", "an anti-debug binary's clean-run path ends in an indirect call that only the disassembly explains"]
 
 [[option]]
+option = "antidebug"
+values = ["off", "warn"]
+default = "off"
+destructive_as_default = false
+phase = "P2"
+subphase = "flow-classification"
+strength = "HINT"
+rewind = "P2"
+issue = "unlace-1214"
+summary = "Name a call to a well-known anti-debugging API, instead of letting it pass unremarked through the C. The callee is recognised by the name the flow pass recorded for a direct call: `IsDebuggerPresent`, `CheckRemoteDebuggerPresent`, `NtQueryInformationProcess`, `NtSetInformationThread` (debugger checks), `ptrace` (a self-trace), `rdtsc`, `GetTickCount`, `GetTickCount64` and `QueryPerformanceCounter` (timing probes), and `OutputDebugStringA`/`W` (a debugger-channel side effect). `warn` buffers one warning per such call site and changes nothing else: no statement, type or control-flow edge moves. The roster is the one the archived master's `anti_debug_detect` pass carried, which was declared there and never called."
+use_when = "Off by default: the call is a fact about the binary, but reading it as evasion is a judgement about intent, and a licence check or a cheat detector calls the same APIs. Set `warn` when triaging code you suspect of resisting a debugger, to see where the probes are before reading the logic around them. The warning is a reviewable signal that evasion logic is present, not proof that the binary is malicious. It is structurally inert on every call whose callee name is off the roster, so it has no effect on the datatest corpus, which carries no such calls under the default."
+example = "option antidebug warn"
+source_decompiler = "unlace"
+inspiration = "archived master's crates/unlace-passes/src/anti_debug_detect.rs (ROADMAP Phase E.4.3), declared there but never called"
+change_kind = "new-analysis"
+tier = "analysis"
+symptoms = ["a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe", "a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C", "OutputDebugStringA used as a debugger test prints nothing that marks it"]
+
+[[option]]
 option = "x64syscall"
 values = ["off", "on", "abi"]
 default = "on"

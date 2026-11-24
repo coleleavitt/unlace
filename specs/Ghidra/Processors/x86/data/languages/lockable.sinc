@@ -1172,16 +1172,14 @@
 }
 @endif
 
-# XADD stores the sum before it writes the register: the register may be part of the address
 :XADD^lockx  m8,Reg8 	is vexMode=0 & lockx & unlock & byte=0x0F; byte=0xC0;  m8 & Reg8  ...        
 {
     build lockx;
     build m8;
-    addflags(m8,Reg8);
-    local old = m8;
-    local tmp = old + Reg8;
+    addflags( m8,Reg8);
+    local tmp =  m8 +  Reg8;
+    Reg8 = m8;
     m8 = tmp;
-    Reg8 = old;
     resultflags(tmp);
     build unlock; 
 }
@@ -1191,10 +1189,9 @@
     build lockx;
     build m16;
     addflags(m16,Reg16);
-    local old = m16;
-    local tmp = old + Reg16;
+    local tmp = m16 + Reg16;
+    Reg16 = m16;
     m16 = tmp;
-    Reg16 = old;
     resultflags(tmp);
     build unlock; 
 }
@@ -1204,11 +1201,10 @@
     build lockx;
     build m32;
     addflags(m32,Reg32);
-    local old = m32;
-    local tmp = old + Reg32;
-    m32 = tmp;
-    Reg32 = old;
+    local tmp = m32 + Reg32;
+    Reg32 = m32;
     build check_Reg32_dest;
+    m32 = tmp;
     resultflags(tmp);
     build unlock; 
 }
@@ -1219,10 +1215,9 @@
     build lockx;
     build m64;
     addflags(m64,Reg64);
-    local old = m64;
-    local tmp = old + Reg64;
+    local tmp = m64 + Reg64;
+    Reg64 = m64;
     m64 = tmp;
-    Reg64 = old;
     resultflags(tmp);
     build unlock; 
 }

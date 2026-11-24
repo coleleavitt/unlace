@@ -297,8 +297,11 @@ prefixes). They found:
 - PUSH and POP of a segment register ignored a 0x66 prefix (a 16-bit push in 32-bit code); a 32-bit
   far CALL pushed CS as a word into a doubleword slot instead of zero-extended; PUSHF/PUSHFD stored
   EFLAGS bit 1 as 0.
-- XADD with memory wrote its register before the sum, so a register that is also in the address
-  (`xadd [ebx], bh`) moved the store.
+- XADD with memory writes its register before the sum, so a register that is also in the address
+  (`xadd [ebx], bh`) moves the store. #879 reordered it; that changed the op shape the Go atomic
+  proofs (`kuna_atomicxadd`, `kuna_goatomicreturn`) match and `tests/stages/kuna-go-atomic-return.toml`
+  lost 3 assertions, so the old order is back and difffuzz skips that form. Compilers never put
+  the register operand inside the address.
 - In 16-bit code: 32-bit addressing (0x67) and the ESI/EDI string forms and XLAT dropped the
   segment (now selector*16 + offset in real mode, selector*0x10000 in protected mode, SS for an
   EBP/ESP base); an indirect far CALL/JMP through memory ignored the segment override (CALL) or

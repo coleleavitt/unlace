@@ -38,6 +38,7 @@ pub mod loopcounterstore;
 pub mod maskjoin;
 pub mod mba; // (unlace `mba`) linear mixed boolean-arithmetic simplification
 pub mod memoryguard;
+pub mod minmax;
 pub mod mulblob; // (unlace) keep a widened multiply operand a value, not an aggregate
 pub mod multiregargs;
 pub mod octeoneffects;

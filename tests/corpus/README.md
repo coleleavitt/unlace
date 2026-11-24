@@ -11,8 +11,8 @@ cargo xtask corpus                    # build, decompile, measure; writes <targe
 cargo xtask corpus --program bst      # one program (no baseline check)
 cargo xtask corpus --skip-recompile   # metrics only
 cargo xtask corpus --engine ghidra    # measure another engine (no baseline check)
-cargo xtask corpus --check            # gate: fail if worse than baseline.json
-cargo xtask corpus --update-baseline  # rewrite baseline.json and BASELINE.md
+cargo xtask corpus --check            # gate: fail if worse than baseline.toml
+cargo xtask corpus --update-baseline  # rewrite baseline.toml and BASELINE.md
 ```
 
 `<target>` is `$CARGO_TARGET_DIR` or `target/`. Outputs:
@@ -79,7 +79,7 @@ skipped.
    their results with `printf`, and avoid libc in the measured functions other
    than what `include/freestanding/` provides, so the AArch64 build links.
 2. Add a `[[program]]` entry to `corpus.toml`.
-3. Run `cargo xtask corpus --update-baseline` and commit `baseline.json` and
+3. Run `cargo xtask corpus --update-baseline` and commit `baseline.toml` and
    `BASELINE.md` with the program.
 
 ## Licensing

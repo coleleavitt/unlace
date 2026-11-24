@@ -20,7 +20,7 @@ use super::{Reader, kuna_dwarflocation};
 pub const DWARFSCOPES_ENV: &str = "KUNA_DWARFSCOPES";
 
 pub fn enabled() -> bool {
-    std::env::var(DWARFSCOPES_ENV).map_or(true, |v| {
+    unlace_base::env::var(DWARFSCOPES_ENV).map_or(true, |v| {
         !matches!(
             v.trim().to_ascii_lowercase().as_str(),
             "off" | "0" | "false"

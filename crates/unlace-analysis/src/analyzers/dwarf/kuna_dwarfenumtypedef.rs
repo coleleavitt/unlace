@@ -16,7 +16,7 @@ pub const DWARFENUMTYPEDEF_ENV: &str = "KUNA_DWARFENUMTYPEDEF";
 
 /// Is the option on? On unless the bridge says `off`.
 pub fn enabled() -> bool {
-    std::env::var(DWARFENUMTYPEDEF_ENV).map_or(true, |v| {
+    unlace_base::env::var(DWARFENUMTYPEDEF_ENV).map_or(true, |v| {
         !matches!(
             v.trim().to_ascii_lowercase().as_str(),
             "off" | "0" | "false"

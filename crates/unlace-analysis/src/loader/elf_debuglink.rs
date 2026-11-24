@@ -27,7 +27,7 @@ const MAX_COMPANION_BYTES: u64 = 1 << 30;
 
 /// The companion search directories.
 fn debug_dirs() -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = std::env::var("KUNA_DEBUG_DIRS")
+    let mut dirs: Vec<PathBuf> = unlace_base::env::var("UNLACE_DEBUG_DIRS")
         .map(|v| {
             v.split(':')
                 .filter(|d| !d.is_empty())

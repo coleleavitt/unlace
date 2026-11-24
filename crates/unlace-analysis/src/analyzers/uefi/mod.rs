@@ -172,7 +172,7 @@ impl AnalysisPass for UefiPass {
             Some(walk) if entry != 0 => walk.run(forced),
             _ => (forced.unwrap_or(flow::Kind::Dxe), flow::Found::default()),
         };
-        if std::env::var_os("KUNA_UEFI_DEBUG").is_some() {
+        if unlace_base::env::var_os("UNLACE_UEFI_DEBUG").is_some() {
             eprintln!(
                 "uefi: {kind:?}, {} service calls, {} globals, {} installs, {} functions, {} call prototypes",
                 found.service_calls(),

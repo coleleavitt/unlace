@@ -6,8 +6,8 @@ use super::*;
 #[test]
 #[ignore]
 fn real_kernelcache_entry() {
-    let path = std::env::var("KUNA_KC").unwrap();
-    let entry = std::env::var("KUNA_KC_ENTRY").unwrap_or_else(|_| "auto".into());
+    let path = unlace_base::env::var("UNLACE_KC").unwrap();
+    let entry = unlace_base::env::var("UNLACE_KC_ENTRY").unwrap_or_else(|_| "auto".into());
     let choice = unlace_decomp::kuna_kernelcache::KernelcacheChoice::parse(&entry).unwrap();
     let bytes = crate::loader::kuna_kernelcache::peel(std::fs::read(path).unwrap(), &choice)
         .unwrap()
@@ -63,7 +63,7 @@ fn real_kernelcache_entry() {
     for b in bad {
         eprintln!("  {b}");
     }
-    if let Ok(probe) = std::env::var("KUNA_KC_PROBE") {
+    if let Ok(probe) = unlace_base::env::var("UNLACE_KC_PROBE") {
         let probe = u64::from_str_radix(probe.trim_start_matches("0x"), 16).unwrap();
         let live = recover(&file, &img);
         eprintln!(
@@ -265,8 +265,8 @@ fn reads_driverkit_class_records() {
 #[test]
 #[ignore]
 fn real_kernelcache_tables() {
-    let path = std::env::var("KUNA_KC").unwrap();
-    let entry = std::env::var("KUNA_KC_ENTRY").unwrap_or_else(|_| "auto".into());
+    let path = unlace_base::env::var("UNLACE_KC").unwrap();
+    let entry = unlace_base::env::var("UNLACE_KC_ENTRY").unwrap_or_else(|_| "auto".into());
     let choice = unlace_decomp::kuna_kernelcache::KernelcacheChoice::parse(&entry).unwrap();
     let bytes = crate::loader::kuna_kernelcache::peel(std::fs::read(path).unwrap(), &choice)
         .unwrap()

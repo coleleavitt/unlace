@@ -1140,8 +1140,9 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   line up with angr's), apply the relocations, rebase defined symbols, and bind
   each undefined extern to a synthetic call target in an extern area above the
   sections so calls render by name (an extern reached by a plain data relocation
-  on the operand of an x86 `call`/`jmp`/`jcc` or an MSP430 `call #imm` counts as
-  code too, so i386 and MSP430 libcalls are named) (the next 4 KiB page plus one; on a 16-bit
+  on the operand of an x86 `call`/`jmp`/`jcc`, an MSP430 `call #imm` or an m68k
+  `jsr`/`jmp` (xxx).L or `bsr.l` counts as code too, so i386, MSP430 and m68k
+  libcalls are named) (the next 4 KiB page plus one; on a 16-bit
   machine the next 16 bytes, so AVR's 4 KiB `rcall` still reaches every libcall). A section header's size is a claim the file
   need not back, so the layout allocates zero-fill only for data — `SHT_NOBITS`
   storage and a data extent past the end of the file — and at most 256 MiB of it

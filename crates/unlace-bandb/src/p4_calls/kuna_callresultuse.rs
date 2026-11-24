@@ -443,18 +443,11 @@ fn first_result_register(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// incoming register or a value it computed (`scale_err`: `oflow`'s `r0` on
 /// one exit, the untouched `r0` beside the `s0` it converts on the other)
 /// keeps the strict reading, where only the value every exit agrees on is a
-/// return.  Under `on` the RETURN keeps the strict reading throughout: `bl g;
+/// return. In every mode a [`pure_helper_result`] at every live RETURN is the
+/// return value.  Under `on` the RETURN keeps the strict reading throughout: `bl g;
 /// cbz x0,L; ...; L: ret` is `long h(long a) { long r = g(a); if (r) *p = 1;
 /// return r; }` and `void h(long a) { if (g(a)) *p = 1; }` alike.
 pub fn scoring_return(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool {
-    if data
-        .get_arch()
-        .kuna_options
-        .get::<crate::kuna_callresultuse::CallResultUse>()
-        != CallResultUse::All
-    {
-        return false;
-    }
     let Some(ret) = data
         .obank()
         .get(opmatch)
@@ -465,7 +458,134 @@ pub fn scoring_return(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool {
     let Some(slot) = (0..ret.num_input()).find(|&i| ret.get_in(i) == Some(root)) else {
         return false;
     };
+    if every_return_hands_back(data, slot, pure_helper_result) {
+        return true;
+    }
+    if data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_callresultuse::CallResultUse>()
+        != CallResultUse::All
+    {
+        return false;
+    }
     every_return_hands_back_a_call_result(data, slot)
+}
+
+/// Does every live RETURN read, in `slot`, a value `accepts` takes?
+fn every_return_hands_back(
+    data: &Funcdata,
+    slot: int4,
+    accepts: fn(&Funcdata, VarnodeId) -> bool,
+) -> bool {
+    let mut rets = data
+        .obank()
+        .iter_code(OpCode::CPUI_RETURN)
+        .filter(|&r| {
+            data.obank()
+                .get(r)
+                .is_some_and(|o| !o.is_dead() && o.get_halt_type() == 0)
+        })
+        .peekable();
+    rets.peek().is_some()
+        && rets.all(|r| {
+            data.obank()
+                .get(r)
+                .and_then(|o| o.get_in(slot))
+                .is_some_and(|vn| accepts(data, vn))
+        })
+}
+
+/// A run-time helper with no effect but its result: the RTABI32 and libgcc
+/// arithmetic, comparison and conversion routines
+/// ([`crate::kuna_armfloatreturn::base_pcs_helper`]), not the memory helpers,
+/// the unaligned stores, the flag-setting comparisons or the ones that read or
+/// change other state.
+fn pure_helper(name: &str) -> bool {
+    const EFFECTS: [&str; 12] = [
+        "__aeabi_mem",
+        "__aeabi_uwrite",
+        "__aeabi_uread",
+        "__aeabi_read_tp",
+        "__aeabi_atexit",
+        "__aeabi_errno",
+        "__aeabi_unwind",
+        "__aeabi_cdcmp",
+        "__aeabi_cdrcmp",
+        "__aeabi_cfcmp",
+        "__aeabi_cfrcmp",
+        "__aeabi_idiv0",
+    ];
+    crate::kuna_armfloatreturn::base_pcs_helper(name)
+        && name != "__aeabi_ldiv0"
+        && !EFFECTS.iter().any(|p| name.starts_with(p))
+}
+
+/// Is `root`, on every path, the result in the first result register of a call
+/// to a [`pure_helper`] that nothing reads but the RETURNs? A compiler drops a
+/// call to such a helper whose result is unused, at `-O0` too, so a result
+/// that only reaches the RETURN is the function's return value: `bl
+/// __aeabi_fadd; pop {r4,pc}` is `return a + b;`, never `a + b;`. A result
+/// the function also tests (`bl __aeabi_fcmplt; cbz r0,L; ...; L: bx lr`) is
+/// used there, and keeps the strict reading.
+fn pure_helper_result(data: &Funcdata, root: VarnodeId) -> bool {
+    let mut seen = crate::kuna_fasthash::FxHashSet::default();
+    let mut stack = vec![root];
+    let mut results = Vec::new();
+    while let Some(vn) = stack.pop() {
+        if !seen.insert(vn) {
+            continue;
+        }
+        let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def()) else {
+            return false;
+        };
+        let Some(op) = data.obank().get(def) else {
+            return false;
+        };
+        match op.code() {
+            OpCode::CPUI_MULTIEQUAL => {
+                stack.extend((0..op.num_input()).filter_map(|i| op.get_in(i)))
+            }
+            OpCode::CPUI_COPY => stack.extend(op.get_in(0)),
+            OpCode::CPUI_INDIRECT if !op.is_indirect_creation() => stack.extend(op.get_in(0)),
+            OpCode::CPUI_CALL => {
+                let Some(out) = data.vbank().get(vn) else {
+                    return false;
+                };
+                let pure = spec_of(data, def).is_some_and(|fc| pure_helper(fc.get_name()));
+                if !pure || !first_result_register(data, out.get_addr(), out.get_size()) {
+                    return false;
+                }
+                results.push(vn);
+            }
+            _ => return false,
+        }
+    }
+    if results.is_empty() {
+        return false;
+    }
+    let mut seen = crate::kuna_fasthash::FxHashSet::default();
+    let mut stack = results;
+    while let Some(vn) = stack.pop() {
+        if !seen.insert(vn) {
+            continue;
+        }
+        let Some(v) = data.vbank().get(vn) else {
+            return false;
+        };
+        for reader in v.descend_iter() {
+            let Some(op) = data.obank().get(reader) else {
+                return false;
+            };
+            match op.code() {
+                OpCode::CPUI_RETURN => {}
+                OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL => stack.extend(op.get_out()),
+                OpCode::CPUI_INDIRECT if op.get_in(0) == Some(vn) => stack.extend(op.get_out()),
+                _ => return false,
+            }
+        }
+    }
+    true
 }
 
 /// Does every live RETURN read, in `slot`, a value that is a call result on

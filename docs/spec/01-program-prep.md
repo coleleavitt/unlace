@@ -1115,7 +1115,12 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   absolute, relative, PLT-relative, and image-offset fields at 8/16/32/64 bits in
   the object's byte order (an s390x `*DBL` field, `PC32DBL`/`PLT32DBL` and their
   16-bit forms, holds `(S + A - P) >> 1` and rejects an odd value), plus the instruction fields and ABI formulas for ARM
-  `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, OpenRISC (`EM_OPENRISC`,
+  `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, Xtensa `SLOT0_OP` on
+  little-endian cores (the operand of the relocated instruction by its opcode:
+  `L32R`'s negative literal word offset from `(P + 3) & !3`, `CALLn`'s word
+  offset from `(P & !3) + 4`, and the `J`, `BRI12`, `BRI8`/`RRI8`, `LOOP` and
+  narrow `beqz.n`/`bnez.n` byte offsets from `P + 4`; `ASM_EXPAND`,
+  `ASM_SIMPLIFY` and the `DIFF*` relaxation records are no-ops), OpenRISC (`EM_OPENRISC`,
   told apart by `e_machine`) `INSN_REL_26`/`PLT26` jumps and calls, the
   `HI_16_IN_INSN`/`AHI16`/`LO_16_IN_INSN` halves, the split `SLO16` store
   immediate and the `32`/`32_PCREL` words, C-SKY `bsr32`

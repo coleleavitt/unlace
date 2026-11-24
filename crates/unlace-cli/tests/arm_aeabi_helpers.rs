@@ -119,3 +119,22 @@ fn a_double_moved_back_to_d0_prints_whole() {
         assert!(!out.contains("0xffffffff00000000"), "{function}: {out}");
     }
 }
+
+/// The objects above without their debug information: the caller's return
+/// comes from recovery alone, and a pure helper's result handed straight to
+/// the RETURN is the return value.
+#[test]
+fn a_pure_helper_result_handed_back_is_returned_without_debug_info() {
+    for object in ["arm-nodebug.o", "armeb-nodebug.o", "thumbv7m-nodebug.o"] {
+        for (function, line) in [
+            ("fadd", "return __aeabi_fadd(a0,a1);"),
+            ("fmul", "return __aeabi_fmul(a0,a1);"),
+            ("toint", "return __aeabi_f2iz(a0);"),
+            ("u2f", "return __aeabi_ui2f(a0);"),
+        ] {
+            let out = decompile(object, function);
+            assert!(out.contains(line), "{object} {function}: {out}");
+            assert!(!out.starts_with("void"), "{object} {function}: {out}");
+        }
+    }
+}

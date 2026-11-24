@@ -5013,6 +5013,38 @@ a type named only by its `type_info` string) and
 call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`
 (pads folded into a shared handler).
 
+**(kuna) MSVC x64 catch funclets as pads** (`option msvceh on`, with
+`itaniumeh` on, which keeps the table; `kuna_itaniumeh.rs (define_funclet_frame,
+return_to_continuation)`, fed by
+`crates/unlace-analysis/src/analyzers/entry/kuna_msvcfuncinfo.rs (splice_sites)`).
+An MSVC catch body is a separate funclet the runtime calls with the parent's
+establisher frame in RDX; it returns, in RAX, the parent address where
+execution resumes. The analysis tier turns each try block into call-site
+records the same edges use: the IP-to-state map (FH3 `{ip RVA, state}`
+entries; FH4 compressed `(ip delta, state + 1)` pairs from the function
+start, through the segment table of an `isSeparated` function) cut at the
+parent's `.pdata` end gives one region per state transition, and every
+region whose state the try guards gets one record per catch funclet, in
+handler order, whose pad is the funclet's entry and whose one clause is its
+caught type. A funclet is used when the `ret` after its
+`lea rax, [rip+d]` (followed only by `add rsp` and `pop`s) loads an
+address inside the parent, or when it has no `ret` byte at all (a rethrow).
+These records are kept apart from the Itanium ones (`EhTable::msvc_sites`):
+regions of one function do not overlap, so the records covering an address
+are the ones sharing the last region start at or below it. Flow gives the
+first call in a region one `if (eh_unwinding()) goto funclet;` per catch
+funclet, the first handler's test first, each pad once. At a funclet pad
+reached from a parent, RDX is defined as the parent's frame register less
+its `UNWIND_INFO` frame offset (the stack pointer when it has none) and the
+stack pointer drops by 8 for the return address the runtime's call pushed;
+the funclet's frame accesses (`lea rbp, [rdx+0x40]`) then fold onto the
+parent's frame. The funclet's `ret` with a known continuation becomes a
+`BRANCH` to it, so the handler rejoins the parent and the printer shows
+`try { ... } catch (Err &) { <funclet body> }` through the Itanium forms
+above. When the funclet is decompiled on its own, its entry gets no pad
+definitions and its `ret` stays a return. x64 only; x86 C++ handlers and
+SEH `__except` blocks are not spliced.
+
 ## 2.13 VEX zero-upper writes and per-lane vector p-code
 
 **(kuna) `option vexzeroupper on|off`, default on,

@@ -2215,7 +2215,9 @@ following this call as a branch"
 
         let eh_table = crate::kuna_itaniumeh::eh_table(self.data.get_arch());
         if let Some(table) = eh_table.as_deref() {
-            if table.is_pad(curaddr.get_offset()) && !self.is_flow_for_inline() {
+            let own_funclet = table.funclet(curaddr.get_offset()).is_some()
+                && curaddr.get_offset() == self.data.get_address().get_offset();
+            if table.is_pad(curaddr.get_offset()) && !self.is_flow_for_inline() && !own_funclet {
                 crate::kuna_itaniumeh::define_pad_registers(&mut self.data, table, curaddr)?;
                 self.eh_pad_stub.insert(curaddr.clone());
             }
@@ -2560,6 +2562,48 @@ truncating the fall-through here"
                         site.pad,
                     );
                     crate::kuna_itaniumeh::insert_unwind_edge(&mut self.data, op, &pad)?;
+                }
+            }
+            // (kuna `msvceh`) An MSVC try region: the first call in it gets one
+            // edge per catch funclet, the first handler's test first; a catch
+            // funclet's `ret` decoded inside a parent continues in the parent.
+            if let Some(table) = eh_table.as_deref().filter(|_| !self.is_flow_for_inline()) {
+                let off = curaddr.get_offset();
+                let sites = table.msvc_sites_at(off);
+                let in_funclet = table
+                    .funclet(self.data.get_address().get_offset())
+                    .is_some();
+                let cont = table.funclet_return(off).filter(|_| !in_funclet);
+                if !sites.is_empty() || cont.is_some() {
+                    let mut insn = Vec::new();
+                    let mut cursor = Some(firstop);
+                    while let Some(op) = cursor {
+                        insn.push(op);
+                        cursor = self.dead_next(op);
+                    }
+                    let space = curaddr.get_space().expect("eh: code space").clone();
+                    let call = insn.iter().copied().find(|&op| {
+                        matches!(
+                            self.data.obank().get(op).map(|o| o.code()),
+                            Some(OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
+                        )
+                    });
+                    if let Some(call) = call {
+                        for site in sites.iter().rev() {
+                            if self.eh_records_seen.insert(site.pad) {
+                                let pad = Address::new(space.clone(), site.pad);
+                                crate::kuna_itaniumeh::insert_unwind_edge(
+                                    &mut self.data,
+                                    call,
+                                    &pad,
+                                )?;
+                            }
+                        }
+                    }
+                    if let Some(cont) = cont {
+                        let to = Address::new(space, cont);
+                        crate::kuna_itaniumeh::return_to_continuation(&mut self.data, &insn, &to)?;
+                    }
                 }
             }
             if flowoverride != crate::overrides::flow_type::NONE {

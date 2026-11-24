@@ -7758,7 +7758,7 @@ fn commit_analysis_output(
 
     // (kuna `itaniumeh`) Park the call-site table and the two registers the
     // unwinder fills at a pad. Empty unless the gate is on.
-    if !out.eh_call_sites.is_empty() {
+    if !out.eh_call_sites.is_empty() || !out.msvc_eh_sites.is_empty() {
         let mut table = unlace_decomp::kuna_itaniumeh::EhTable::new(out.eh_call_sites.clone());
         let arch = prog.arch();
         let reg = |names: &[&str]| {
@@ -7778,6 +7778,23 @@ fn commit_analysis_output(
         };
         table.exception_reg = reg(exc);
         table.selector_reg = reg(sel);
+        // (kuna `msvceh`) The catch funclets entered as pads, with the parent's
+        // frame register resolved.
+        if !out.msvc_eh_sites.is_empty() {
+            table.stack_reg = reg(&["RSP"]);
+            table.establisher_reg = reg(&["RDX"]);
+            let funclets = out
+                .msvc_funclets
+                .iter()
+                .map(|f| unlace_decomp::kuna_itaniumeh::FuncletPad {
+                    pad: f.pad,
+                    frame: f.frame_reg.as_deref().and_then(|r| reg(&[r])),
+                    frame_offset: f.frame_offset,
+                    returns: f.returns.clone(),
+                })
+                .collect();
+            table = table.with_msvc(out.msvc_eh_sites.clone(), funclets);
+        }
         prog.arch_mut().kuna_states.set(std::rc::Rc::new(table));
     }
 

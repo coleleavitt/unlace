@@ -155,7 +155,7 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
     let names = parent_names(file);
     let mut named = FxHashSet::<u64>::default();
     let mut entries = FxHashSet::<u64>::default();
-    for (func, unwind) in runtime_functions(&pe, bytes, base) {
+    for (func, _, unwind) in runtime_functions(&pe, bytes, base) {
         let Some((handler, data)) = language_handler(img, base, unwind) else {
             continue;
         };

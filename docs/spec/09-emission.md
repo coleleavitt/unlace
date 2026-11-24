@@ -5754,6 +5754,20 @@ condition block's statements above it as for an `if`, then `return ( cond );` or
 body's `RETURN` as the statement's markup. The option builds the tree even when
 `ctree` is off.
 
+With `option noretfirst on` (C output; default off), the pass then takes an
+`if`/`else` without a goto, neither rewritten above, whose structured arms
+differ in whether they have an out edge (one returns or ends in a no-return call,
+the other falls through). The arm without an out edge becomes the `if`'s only
+body and the other arm follows the `if` (`Seq[if, arm]`, `hoisted_after`). When
+that arm was the else, the condition's `CBRANCH` goes into `flipped_branches` and
+the `CBRANCH` render flips it, so it prints as any negated branch does; the
+condition must then be a single `BlockCopy` leaf ending in that `CBRANCH`. The
+`if` must sit in a list or graph that no enclosing statement prints as a
+condition (`in_statement_position`), and must not be a switch-merge `if` or an
+Itanium exception `if`. `emit_block_if` prints it with no else, the body through
+`emit_part` (`CTree::stmt_for` finds the `if` inside the sequence), then the
+moved arm under `NO_BRANCH`.
+
 The walk is `printc/kuna_ctreeprint.rs`. The body prints from the root's
 statements; `emit_block` first asks the tree for the statement built from its
 block, and the walk prints a `BlockGraph` sequence (each statement in its own

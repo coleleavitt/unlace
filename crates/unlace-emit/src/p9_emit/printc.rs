@@ -1810,6 +1810,9 @@ pub struct PrintC {
     label_names: std::collections::BTreeMap<BlockId, String>,
     /// (kuna `ctree`) The C syntax tree of the function being printed, with `option ctree on`.
     ctree: Option<crate::kuna_ctree::CTree>,
+    /// (kuna `noretfirst`) `CBRANCH` ops whose condition prints negated, for an `if` whose
+    /// arms the tree swapped.
+    flipped_branches: std::collections::BTreeSet<OpId>,
 }
 
 impl Default for PrintC {
@@ -1870,6 +1873,7 @@ impl PrintC {
             named_globals: crate::kuna_namedglobals::References::default(),
             label_names: std::collections::BTreeMap::new(),
             ctree: None,
+            flipped_branches: std::collections::BTreeSet::new(),
         }
     }
 
@@ -4860,7 +4864,8 @@ impl PrintC {
             };
         self.assign_label_names(fd, sroot);
         let tree_on = arch.kuna_options.get::<crate::kuna_ctree::Ctree>().0
-            || arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0;
+            || arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0
+            || arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0;
         self.ctree = if tree_on && !self.is_flat() {
             crate::kuna_ctreebuild::build(fd)
         } else {
@@ -4883,6 +4888,7 @@ impl PrintC {
         self.switch_plans = Default::default();
         self.label_names.clear();
         self.ctree = None;
+        self.flipped_branches.clear();
     }
 
     /// Give every printed label a distinct name.  Block duplication (return
@@ -5776,6 +5782,7 @@ impl PrintC {
             return;
         }
         let size = fd.sblocks_ref().block(blk).get_size();
+        let has_else = size == 3 && self.hoisted_after(blk).is_none();
         let cond_block = fd.sblocks_ref().block(blk).get_block(0);
 
         // When *this* BlockIf is the else-clause of a parent if, the parent set
@@ -5891,7 +5898,7 @@ impl PrintC {
                 self.emit_goto_statement(fd, cond_block, target, gototype);
                 self.emit.close_brace_indent(self.lang().kw_close_curly, id);
             }
-        } else if self.if_body_elides(fd, fd.sblocks_ref().block(blk).get_block(1)) {
+        } else if self.if_body_elides(fd, self.if_then_block(fd, blk)) {
             // (kuna braceelide, DIV-38) A single-statement then-body drops its
             // braces: the statement prints on the next line at one extra indent
             // (its own tag_line in emit_basic_block_ops breaks the line).  The
@@ -5907,7 +5914,7 @@ impl PrintC {
             self.emit_part(fd, arch, blk, 1);
             self.emit.end_block(id1);
             self.emit.stop_indent(id);
-            if size == 3 {
+            if has_else {
                 if self.out_lang == crate::kuna_lang::OutLang::Go {
                     self.emit.print(" ", SyntaxHighlight::NoColor);
                 } else {
@@ -5951,7 +5958,7 @@ impl PrintC {
             self.emit.close_brace_indent(self.lang().kw_close_curly, id);
 
             // Optional else.
-            if size == 3 {
+            if has_else {
                 if self.out_lang == crate::kuna_lang::OutLang::Go {
                     self.emit.print(" ", SyntaxHighlight::NoColor);
                 } else {
@@ -5990,6 +5997,15 @@ impl PrintC {
         if my_pending_indent >= 0 {
             self.emit
                 .close_brace_indent(self.lang().kw_close_curly, my_pending_indent);
+        }
+        // (kuna `noretfirst`) The arm the tree moved out of the `if`, printed after it.
+        if let Some(after) = self.hoisted_after(blk) {
+            self.context.push_mod();
+            self.context.set_mod(modifiers::NO_BRANCH);
+            let id = self.emit.begin_block(0);
+            self.emit_ctree_arm(fd, arch, after);
+            self.emit.end_block(id);
+            self.context.pop_mod();
         }
     }
 
@@ -7927,7 +7943,8 @@ impl PrintC {
                     .obank()
                     .get(op)
                     .map(|o| o.is_boolean_flip())
-                    .unwrap_or(false);
+                    .unwrap_or(false)
+                    ^ self.flipped_branches.contains(&op);
                 let in1 = fd.obank().get(op).and_then(|o| o.get_in(1));
                 let id = if yesparen {
                     self.emit.open_paren(crate::printlanguage::OPEN_PAREN, 0)

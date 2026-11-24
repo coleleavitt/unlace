@@ -73,7 +73,7 @@ impl PrintC {
     /// block.
     pub(super) fn emit_part(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId, k: int4) {
         let part = self.ctree.as_ref().and_then(|tree| {
-            let id = tree.node_for(blk)?;
+            let id = tree.stmt_for(blk)?;
             tree.part(id, usize::try_from(k).ok()?)
         });
         match part {
@@ -86,7 +86,7 @@ impl PrintC {
     }
 
     /// A statement: the walk when it models it, else the block printer on its origin block.
-    fn emit_ctree_arm(&mut self, fd: &Funcdata, arch: &Architecture, id: StmtId) {
+    pub(super) fn emit_ctree_arm(&mut self, fd: &Funcdata, arch: &Architecture, id: StmtId) {
         if self.emit_ctree_stmt(fd, arch, id) {
             return;
         }
@@ -151,6 +151,8 @@ impl PrintC {
         };
         let bool_return = arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0
             && self.out_lang == crate::kuna_lang::OutLang::C;
+        let noret_first = arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0
+            && self.out_lang == crate::kuna_lang::OutLang::C;
         for id in ids {
             let Some(blk) = self.ctree.as_ref().and_then(|tree| {
                 let blk = tree.stmt(id).origin?;
@@ -181,6 +183,8 @@ impl PrintC {
                             op: Some(ret_op),
                         };
                     }
+                } else if noret_first {
+                    self.noret_first(fd, id, blk);
                 }
                 continue;
             };
@@ -261,7 +265,7 @@ impl PrintC {
         let StmtKind::Return {
             value: Some(value),
             op: Some(op),
-        } = &tree.stmt(tree.node_for(blk)?).kind
+        } = &tree.stmt(tree.stmt_for(blk)?).kind
         else {
             return None;
         };
@@ -347,4 +351,133 @@ impl PrintC {
         }
         Some((ret, u64::try_from(constant).ok()?))
     }
+
+    /// (kuna `noretfirst`) Rewrite the `if`/`else` statement `id` (built from `blk`) when
+    /// exactly one arm never falls through (its structured block has no out edge: it returns
+    /// or calls a no-return function): that arm becomes the `if`'s only body and the other arm
+    /// follows the `if` (`Seq[if, arm]`). When the arm that never falls through is the else,
+    /// the condition is negated by flipping its `CBRANCH` at print time
+    /// (`flipped_branches`), so it prints the way a negated branch always prints. Only for an
+    /// `if` in statement position (in a list or graph, not under a condition) whose condition
+    /// is a single leaf, and not for an `if` the switch merge or an exception form prints.
+    fn noret_first(&mut self, fd: &Funcdata, id: StmtId, blk: BlockId) {
+        let sb = fd.sblocks_ref();
+        let block = sb.block(blk);
+        if block.get_size() != 3
+            || block.get_if_goto_target().is_some()
+            || self.switch_plans.ifs.contains_key(&blk)
+            || self.is_eh_if(fd, blk)
+            || !in_statement_position(fd, blk)
+        {
+            return;
+        }
+        let cond_block = block.get_block(0);
+        let body_exits = sb.block(block.get_block(1)).size_out() == 0;
+        let else_exits = sb.block(block.get_block(2)).size_out() == 0;
+        if body_exits == else_exits {
+            return;
+        }
+        let flip = if else_exits {
+            if sb.block(cond_block).get_type() != BlockType::Copy {
+                return;
+            }
+            let Some(cbranch) = sb
+                .block(cond_block)
+                .get_copy()
+                .and_then(|under| fd.bb_op_tail(under))
+                .filter(|op| {
+                    fd.obank()
+                        .get(*op)
+                        .is_some_and(|o| o.code() == OpCode::CPUI_CBRANCH)
+                })
+            else {
+                return;
+            };
+            Some(cbranch)
+        } else {
+            None
+        };
+        let Some(tree) = self.ctree.as_mut() else {
+            return;
+        };
+        let StmtKind::If {
+            pre,
+            cond,
+            then,
+            els: Some(els),
+        } = tree.stmt(id).kind.clone()
+        else {
+            return;
+        };
+        let (first, after, cond) = if flip.is_some() {
+            (els, then, tree.add_expr(ExprKind::Not(cond)))
+        } else {
+            (then, els, cond)
+        };
+        let lead = tree.add_stmt(
+            StmtKind::If {
+                pre,
+                cond,
+                then: first,
+                els: None,
+            },
+            Some(blk),
+        );
+        tree.stmt_mut(id).kind = StmtKind::Seq(vec![lead, after]);
+        if let Some(cbranch) = flip {
+            self.flipped_branches.insert(cbranch);
+        }
+    }
+
+    /// The arm the tree moved out of the `BlockIf` `blk` (`noretfirst`), printed after it.
+    pub(super) fn hoisted_after(&self, blk: BlockId) -> Option<StmtId> {
+        let tree = self.ctree.as_ref()?;
+        let StmtKind::Seq(list) = &tree.stmt(tree.node_for(blk)?).kind else {
+            return None;
+        };
+        let [first, after] = list.as_slice() else {
+            return None;
+        };
+        let first_stmt = tree.stmt(*first);
+        (first_stmt.origin == Some(blk) && matches!(first_stmt.kind, StmtKind::If { .. }))
+            .then_some(*after)
+    }
+
+    /// The block the `if` built from `blk` prints as its body: the tree's body when it has
+    /// one built from a block, else component 1.
+    pub(super) fn if_then_block(&self, fd: &Funcdata, blk: BlockId) -> BlockId {
+        self.ctree
+            .as_ref()
+            .and_then(|tree| {
+                let StmtKind::If { then, .. } = &tree.stmt(tree.stmt_for(blk)?).kind else {
+                    return None;
+                };
+                tree.stmt(*then).origin
+            })
+            .unwrap_or_else(|| fd.sblocks_ref().block(blk).get_block(1))
+    }
+}
+
+/// Is the `if` `blk` a statement of a list or graph whose enclosing statements never print
+/// it as part of a condition? A statement after it then prints right after it.
+fn in_statement_position(fd: &Funcdata, blk: BlockId) -> bool {
+    let sb = fd.sblocks_ref();
+    let mut at = blk;
+    let mut first = true;
+    while let Some(parent) = sb.block(at).get_parent() {
+        let ty = sb.block(parent).get_type();
+        if first && !matches!(ty, BlockType::Ls | BlockType::Graph) {
+            return false;
+        }
+        first = false;
+        match ty {
+            BlockType::Ls | BlockType::Graph => at = parent,
+            BlockType::If | BlockType::WhileDo | BlockType::Switch => {
+                return sb.block(parent).get_block(0) != at;
+            }
+            BlockType::InfLoop | BlockType::Goto => return true,
+            _ => return false,
+        }
+    }
+    !first
 }

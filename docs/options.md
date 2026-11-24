@@ -584,6 +584,8 @@ Three tiers:
 | a parameter read after a call through a function pointer prints as an unassigned local | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
 | if (c) { return 1; } else { return 0; } where the source returns the comparison | [`boolreturn`](#boolreturn----on--off-default-off) |
 | a predicate function prints as an if/else of two constant returns | [`boolreturn`](#boolreturn----on--off-default-off) |
+| if (c) { ...long body... } else { abort(); } with the error path last | [`noretfirst`](#noretfirst----on--off-default-off) |
+| the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2513,6 +2515,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on when the source likely returned a comparison directly (predicates, `is_x` helpers, comparison callbacks), which compilers lower to two constant returns. Leave off to keep the if/else the binary literally has: the same object code comes from a source that wrote the if/else.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-boolreturn
 - **Example:** `option boolreturn on`
+
+### `noretfirst` -- on | off, default `off`
+
+- **Symptoms:** if (c) { ...long body... } else { abort(); } with the error path last; the main path of a function is nested in an if whose else only exits.
+- **What it does:** C output only: when exactly one arm of an if/else never falls through (its structured block has no way out: it returns or calls a function that does not return), print that arm as the if's only body and the other arm after the if, so the code that continues is not nested in an else. When the arm that never falls through is the else, the condition prints negated, the way any flipped branch prints (`if (x < 5)` rather than `if (!(x >= 5))`). Only for an if that is a statement of a list (not part of a loop or if condition, not the else of another if), whose condition is a single leaf, and that does not print as a switch or an exception try. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function.
+- **When to flip:** Turn on to read guard clauses as the source likely wrote them: `if (p == NULL) { abort(); } use(p);` instead of `if (p != NULL) { use(p); } else { abort(); }`. Leave off for Ghidra's own arm order; both orders are the same object code.
+- **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-noretfirst
+- **Example:** `option noretfirst on`
 
 ## Analysis & loader passes
 

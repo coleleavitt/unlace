@@ -26,6 +26,16 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna `noretfirst`) Print the arm of an `if`/`else` that never falls through first and
+    /// the other arm after the `if`, a rewrite of the C syntax tree.
+    Noretfirst,
+    "noretfirst",
+    "non-returning arm first",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna `ctree`) Print the function body through its C syntax tree. Off by default while
     /// the tree printer is proven to print exactly what the block printer prints.
     Ctree,
@@ -248,6 +258,20 @@ impl CTree {
     /// The number of expressions.
     pub fn expr_count(&self) -> usize {
         self.exprs.len()
+    }
+
+    /// The statement printed for the structured block `blk`: [`node_for`](CTree::node_for), or,
+    /// when a rewrite wrapped that statement in a sequence led by a statement built from the
+    /// same block (an `if` with an arm moved after it), that first statement.
+    pub fn stmt_for(&self, blk: BlockId) -> Option<StmtId> {
+        let id = self.node_for(blk)?;
+        if let StmtKind::Seq(list) = &self.stmt(id).kind
+            && let Some(&first) = list.first()
+            && self.stmt(first).origin == Some(blk)
+        {
+            return Some(first);
+        }
+        Some(id)
     }
 
     /// The statement built from a structured block.

@@ -109,6 +109,23 @@ built in front of the instruction, and otherwise keeps
 value before the expected one, as MSVC declares it. The same spelling applies
 to the builtins `llscfold` produces.
 
+`c11` prints the C11 `<stdatomic.h>` functions with the memory order the
+instruction encodes (`kuna_atomics.rs (c11_order)`). AArch64 marks an
+acquire load with `LOAcquire` and a release store with `LORelease`:
+- neither (`ldadd`, `ldxr`/`stxr`) is `memory_order_relaxed`;
+- one of them is `memory_order_acquire` or `memory_order_release`;
+- both (`ldaddal`, `ldaxr`/`stlxr`, what compilers emit for a sequentially
+  consistent update) is `memory_order_seq_cst`.
+
+A locked x86 instruction, and an atomic whose language marks no order (RISC-V),
+is sequentially consistent. A sequentially consistent update prints as the plain
+form (`atomic_fetch_add(p, v)`, `atomic_exchange`), any other order as the
+`_explicit` form with the order as a `memory_order` enumerator last
+(`atomic_fetch_add_explicit(&cnt, 1, memory_order_relaxed)`). C11's
+compare-exchange returns a flag and writes the old value back through a
+pointer, so a compare-and-swap, whose builtin returns the old value, keeps
+`__sync_val_compare_and_swap`.
+
 Register pairs. `cmpxchg8b` and `cmpxchg16b` load the whole 8- or 16-byte
 location once, compare it with `EDX:EAX`/`RDX:RAX` built by zero-extension,
 shift and or, test the result as `if (ZF == 1)` (a flag compared with 1 or 0

@@ -1,5 +1,7 @@
-//! (kuna `tlsnames`) The static TLS block of an x86 ELF executable: `PT_TLS`
-//! and the `STT_TLS` symbols, for `unlace_decomp::kuna_tlsnames`.
+//! (kuna `tlsnames`) The static TLS block of an x86 or AArch64 ELF image: `PT_TLS`
+//! and the `STT_TLS` symbols of an executable, or the `SHF_TLS` sections of a
+//! relocatable object (the layout the loader applies the AArch64 TLSLE
+//! relocations with), for `unlace_decomp::kuna_tlsnames`.
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 use object::{Object, ObjectSymbol, SymbolKind};
@@ -79,26 +81,49 @@ impl AnalysisPass for TlsNamesPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
+        let arch = ctx.file.architecture();
         let x86 = matches!(
-            ctx.file.architecture(),
+            arch,
             object::Architecture::X86_64 | object::Architecture::I386
         );
-        if ctx.file.format() != object::BinaryFormat::Elf
-            || !x86
-            || ctx.file.kind() == object::ObjectKind::Relocatable
-        {
+        let aarch64 = arch == object::Architecture::Aarch64;
+        if ctx.file.format() != object::BinaryFormat::Elf || !(x86 || aarch64) {
             return out;
         }
-        let Some((memsz, align)) = pt_tls(ctx.bytes) else {
+        let relocatable = ctx.file.kind() == object::ObjectKind::Relocatable;
+        if relocatable && !aarch64 {
             return out;
+        }
+        let tls = relocatable
+            .then(|| crate::loader::reloc_object::relocatable_tls(ctx.file))
+            .flatten();
+        let (memsz, align) = match &tls {
+            Some(t) => (t.size, t.align),
+            None if relocatable => return out,
+            None => match pt_tls(ctx.bytes) {
+                Some(v) => v,
+                None => return out,
+            },
         };
         let symbols: Vec<(u64, u64, String)> = ctx
             .file
             .symbols()
             .filter(|s| s.kind() == SymbolKind::Tls && !s.is_undefined())
-            .filter_map(|s| Some((s.address(), s.size(), s.name().ok()?.to_string())))
+            .filter_map(|s| {
+                // in an object a TLS symbol's value is relative to its section
+                let value = match (&tls, s.section_index()) {
+                    (Some(t), Some(sec)) => t.offset_of(sec)? + s.address(),
+                    (Some(_), None) => return None,
+                    (None, _) => s.address(),
+                };
+                Some((value, s.size(), s.name().ok()?.to_string()))
+            })
             .collect();
-        out.tls_layout = TlsLayout::new(memsz, align, symbols);
+        out.tls_layout = if aarch64 {
+            TlsLayout::variant1(memsz, align, symbols)
+        } else {
+            TlsLayout::new(memsz, align, symbols)
+        };
         out
     }
 }

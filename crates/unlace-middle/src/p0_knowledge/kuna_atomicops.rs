@@ -19,6 +19,10 @@ pub struct AtomicUserops {
     /// (`llscfold`): AArch64 `ExclusiveMonitorPass` and
     /// `ExclusiveMonitorsStatus`, ARM `hasExclusiveAccess` alone.
     pub monitor: Option<(u32, Option<u32>)>,
+    /// The AArch64 acquire and release markers (`LOAcquire`, `LORelease`), for
+    /// the memory order `atomics c11` spells.
+    pub acquire: Option<u32>,
+    pub release: Option<u32>,
 }
 
 impl AtomicUserops {
@@ -48,6 +52,8 @@ impl AtomicUserops {
                 ordering,
                 unmarked: true,
                 monitor,
+                acquire: index(b"LOAcquire"),
+                release: index(b"LORelease"),
             };
         }
         if archid.starts_with("ARM:") {
@@ -93,6 +99,12 @@ pub enum Atomics {
     Msvc,
     /// Always the GCC/Clang `__sync` builtins.
     Gcc,
+    /// The C11 `<stdatomic.h>` functions: `atomic_fetch_add(p, v)` for a
+    /// sequentially consistent update, `atomic_fetch_add_explicit(p, v,
+    /// memory_order_relaxed)` for the order an AArch64 instruction encodes. A
+    /// compare-and-swap stays `__sync_val_compare_and_swap`, which returns the
+    /// old value where C11's returns a flag.
+    C11,
 }
 
 impl Atomics {
@@ -102,7 +114,13 @@ impl Atomics {
             Atomics::Auto => "auto",
             Atomics::Msvc => "msvc",
             Atomics::Gcc => "gcc",
+            Atomics::C11 => "c11",
         }
+    }
+
+    /// Whether the builtins take the C11 spelling.
+    pub fn c11(self) -> bool {
+        self == Atomics::C11
     }
 
     /// Whether atomic instructions are rewritten at all.
@@ -116,7 +134,7 @@ impl Atomics {
         match self {
             Atomics::Msvc => true,
             Atomics::Auto => windows,
-            Atomics::Off | Atomics::Gcc => false,
+            Atomics::Off | Atomics::Gcc | Atomics::C11 => false,
         }
     }
 }
@@ -139,9 +157,10 @@ impl crate::kuna_optionset::KunaOption for Atomics {
             "auto" => Atomics::Auto,
             "msvc" => Atomics::Msvc,
             "gcc" => Atomics::Gcc,
+            "c11" => Atomics::C11,
             other => {
                 return Err(unlace_base::error::KunaError::parse(format!(
-                    "Unknown atomics value: {other} (expected auto|msvc|gcc|off)"
+                    "Unknown atomics value: {other} (expected auto|msvc|gcc|c11|off)"
                 )));
             }
         };
@@ -170,7 +189,13 @@ mod tests {
         assert_eq!(Atomics::unset(), Atomics::Off);
         assert_eq!(Atomics::shipped(), Atomics::Auto);
         assert!(LlscFold::shipped().0);
-        for mode in [Atomics::Off, Atomics::Auto, Atomics::Msvc, Atomics::Gcc] {
+        for mode in [
+            Atomics::Off,
+            Atomics::Auto,
+            Atomics::Msvc,
+            Atomics::Gcc,
+            Atomics::C11,
+        ] {
             assert_eq!(Atomics::parse(mode.as_str()).unwrap().0, mode);
         }
         assert!(!LlscFold::parse("off").unwrap().0.0);

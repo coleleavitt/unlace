@@ -209,6 +209,14 @@ enum Specific {
     PcRel32,
     BpfImm64,
     BpfCall,
+    /// An AArch64 local-exec TLS relocation (`R_AARCH64_TLSLE_*`): the ADD
+    /// high 12 bits (`hi`), or the ADD/LDST low 12 bits of the symbol's
+    /// thread-pointer offset, which the caller passes as the symbol.
+    Aarch64Tprel {
+        hi: bool,
+        scale: u8,
+        ldst: bool,
+    },
     /// An arm64e `ARM64_RELOC_AUTHENTICATED_POINTER` word: the low 32 bits
     /// hold the addend, the high ones the signing schema.
     MachoAuthPointer,
@@ -231,6 +239,7 @@ impl Specific {
                 | Specific::Aarch64Imm19 { .. }
                 | Specific::Aarch64Imm14
                 | Specific::Aarch64Movw { .. }
+                | Specific::Aarch64Tprel { .. }
         )
     }
 }
@@ -329,6 +338,12 @@ impl RelocationSpec {
             self.call = read_u32(field, little_endian) & 1 != 0;
         }
         self
+    }
+
+    /// An AArch64 TLSLE relocation: the caller passes the target's
+    /// thread-pointer offset as the symbol.
+    pub fn is_tprel(self) -> bool {
+        matches!(self.specific, Specific::Aarch64Tprel { .. })
     }
 
     pub fn requires_symbol(self) -> bool {
@@ -911,6 +926,53 @@ fn classify_info(
         (Architecture::Aarch64, Some(elf::R_AARCH64_LDST128_ABS_LO12_NC)) => {
             Some((Specific::Aarch64LdstLo12 { scale: 4 }, false))
         }
+        (Architecture::Aarch64, Some(elf::R_AARCH64_TLSLE_ADD_TPREL_HI12)) => Some((
+            Specific::Aarch64Tprel {
+                hi: true,
+                scale: 0,
+                ldst: false,
+            },
+            false,
+        )),
+        (
+            Architecture::Aarch64,
+            Some(elf::R_AARCH64_TLSLE_ADD_TPREL_LO12 | elf::R_AARCH64_TLSLE_ADD_TPREL_LO12_NC),
+        ) => Some((
+            Specific::Aarch64Tprel {
+                hi: false,
+                scale: 0,
+                ldst: false,
+            },
+            false,
+        )),
+        (
+            Architecture::Aarch64,
+            Some(
+                t @ elf::R_AARCH64_TLSLE_LDST8_TPREL_LO12
+                    ..=elf::R_AARCH64_TLSLE_LDST64_TPREL_LO12_NC,
+            ),
+        ) => Some((
+            Specific::Aarch64Tprel {
+                hi: false,
+                scale: ((t - elf::R_AARCH64_TLSLE_LDST8_TPREL_LO12) / 2) as u8,
+                ldst: true,
+            },
+            false,
+        )),
+        (
+            Architecture::Aarch64,
+            Some(
+                elf::R_AARCH64_TLSLE_LDST128_TPREL_LO12
+                | elf::R_AARCH64_TLSLE_LDST128_TPREL_LO12_NC,
+            ),
+        ) => Some((
+            Specific::Aarch64Tprel {
+                hi: false,
+                scale: 4,
+                ldst: true,
+            },
+            false,
+        )),
 
         (Architecture::PowerPc, Some(elf::R_PPC_REL24 | elf::R_PPC_LOCAL24PC))
         | (Architecture::PowerPc64, Some(elf::R_PPC64_REL24 | R_PPC64_REL24_NOTOC)) => {
@@ -1396,6 +1458,12 @@ fn apply_info(
             aarch64_adr_page(field, little_endian, reloc, symbol, place, checked)
         }
         Specific::Aarch64AddLo12 => aarch64_lo12(field, little_endian, reloc, symbol, 0, false),
+        Specific::Aarch64Tprel { hi: true, .. } => {
+            aarch64_tprel_hi12(field, little_endian, reloc, symbol)
+        }
+        Specific::Aarch64Tprel { scale, ldst, .. } => {
+            aarch64_lo12(field, little_endian, reloc, symbol & 0xfff, scale, ldst)
+        }
         Specific::Aarch64LdstLo12 { scale } => {
             aarch64_lo12(field, little_endian, reloc, symbol, scale, true)
         }
@@ -2286,6 +2354,28 @@ fn aarch64_lo12(
     }
     let imm = ((value & 0xfff) >> scale) as u32;
     insn = (insn & !(0xfff << 10)) | (imm << 10);
+    write_u32(field, le, insn);
+    Ok(())
+}
+
+/// `R_AARCH64_TLSLE_ADD_TPREL_HI12`: bits 12..23 of the thread-pointer offset
+/// `S + A` into an `add ..., lsl #12`; an offset of 2^24 or more overflows.
+fn aarch64_tprel_hi12(
+    field: &mut [u8],
+    le: bool,
+    reloc: RelocationInfo,
+    symbol: u64,
+) -> Result<(), RelocationFailure> {
+    let mut insn = read_u32(field, le);
+    if insn & 0x7fc0_0000 != 0x1140_0000 {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let implicit = (((insn >> 10) & 0xfff) as i128) << 12;
+    let value = symbol as i128 + explicit_plus_implicit(reloc, implicit);
+    if !(0..1i128 << 24).contains(&value) {
+        return Err(RelocationFailure::OutOfRange);
+    }
+    insn = (insn & !(0xfff << 10)) | ((((value >> 12) & 0xfff) as u32) << 10);
     write_u32(field, le, insn);
     Ok(())
 }

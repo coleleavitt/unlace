@@ -1699,10 +1699,18 @@ define pcodeop SYNC;
     RT = sext(*[ram]:4 OFF_BASER6);
 }
 
-:lsa RD, RS32src, RT32src, SAV		is $(AMODE) & prime=0x00 & fct=0x05 & spec3=0 & SAV & RD & RS32src & RT32src {
+:lsa RD, RS32src, RT32src, SAV		is $(AMODE) & REL6=1 & prime=0x00 & fct=0x05 & spec3=0 & SAV & RD & RS32src & RT32src {
 	tmp:4 = (RS32src << SAV) + RT32src;
 	RD = sext(tmp);
 }
+
+# Release 5 MSA brings LSA/DLSA to pre-R6 cores; Octeon has no MSA.
+@ifndef OCTEON
+:lsa RD, RS32src, RT32src, SAV		is $(AMODE) & REL6=0 & prime=0x00 & fct=0x05 & spec3=0 & SAV & RD & RS32src & RT32src {
+	tmp:4 = (RS32src << SAV) + RT32src;
+	RD = sext(tmp);
+}
+@endif
 
 @ifndef COPR_C
 :lwc2 RTsrc, simmed11(baser6)       is $(AMODE) & REL6=1 & prime=0x12 & copop=0x0A & simmed11 & baser6 & RTsrc {

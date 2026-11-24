@@ -11,8 +11,11 @@
 //!
 //! - **thread**: a join block J ending in a CBRANCH whose condition is computed
 //!   only from J's MULTIEQUALs and constants, with every value J defines read
-//!   only inside J. For an in edge whose MULTIEQUAL inputs make the condition a
-//!   known constant ([`decided_target`]), the edge is moved past J to the
+//!   only inside J and none of them carried around a loop back into J's own
+//!   MULTIEQUALs (a moved edge would skip the step such a value takes, as for
+//!   the counter of `n = 5; do { if (--n == 0) break; .. }`).
+//!   For an in edge whose MULTIEQUAL inputs make the condition a known
+//!   constant ([`decided_target`]), the edge is moved past J to the
 //!   successor the branch would take; that successor's MULTIEQUALs gain the
 //!   value they read along the J edge, and J's lose the edge's input. J keeps at
 //!   least one in edge.
@@ -121,6 +124,21 @@ fn join_shape(data: &Funcdata, j: BlockId) -> Option<Join> {
         if !inside {
             return None;
         }
+    }
+    let loop_carried = phis.iter().any(|&phi| {
+        data.obank().get(phi).is_some_and(|o| {
+            (0..o.num_input()).any(|i| {
+                o.get_in(i)
+                    .and_then(|v| data.vbank().get(v))
+                    .and_then(|v| v.get_def())
+                    .and_then(|d| data.obank().get(d))
+                    .and_then(|d| d.get_parent())
+                    == Some(j)
+            })
+        })
+    });
+    if loop_carried {
+        return None;
     }
     Some(Join {
         phis,

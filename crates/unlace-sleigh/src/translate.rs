@@ -298,12 +298,14 @@ impl TranslateBase {
     /// If no floating-point format objects were registered by the
     /// \b initialize method, this method will fill in some suitable default
     /// formats.  These defaults are based on the 4-byte and 8-byte encoding
-    /// specified by the IEEE 754 standard.
+    /// specified by the IEEE 754 standard, plus (kuna) the 2-byte binary16
+    /// half-precision encoding that AArch64 FP16 and RISC-V Zfh operate on.
     pub fn set_default_float_formats(&mut self) {
         if self.floatformats.is_empty() {
             // Default IEEE 754 float formats
             self.floatformats.push(FloatFormat::new(4));
             self.floatformats.push(FloatFormat::new(8));
+            self.floatformats.push(FloatFormat::new(2));
         }
     }
 
@@ -1487,10 +1489,11 @@ mod tests {
         base.set_default_float_formats();
         assert_eq!(base.get_float_format(4).unwrap().get_size(), 4);
         assert_eq!(base.get_float_format(8).unwrap().get_size(), 8);
+        assert_eq!(base.get_float_format(2).unwrap().get_size(), 2);
         assert!(base.get_float_format(10).is_none());
         // second call does not duplicate
         base.set_default_float_formats();
-        assert_eq!(base.floatformats.len(), 2);
+        assert_eq!(base.floatformats.len(), 3);
         base.set_big_endian(true);
         assert!(base.is_big_endian());
     }

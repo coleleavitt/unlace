@@ -110,7 +110,7 @@ asked about; they carry `__int128` or a two-word struct, and counting them would
 mark every 64-bit output narrowed. On a 32-bit target the result is that only
 declared callees fold under this option: over the three ARM binaries in the
 sweep, 53 functions go back to the `off` text (52 in `cf2.elf`, 1 in
-`RTOSDemo.out`). `tests/stages/kuna-foldcallretphi-join.xml` is the i386 case:
+`RTOSDemo.out`). `tests/stages/kuna-foldcallretphi-join.toml` is the i386 case:
 undeclared `big` keeps its spill by default, and declared `int4 big(int4)` folds.
 
 ## The short-circuit guard

@@ -5,7 +5,7 @@
 //   - `produces_boolean`: the genuine 0/1 producers, and the near-misses.
 //   - `live`: off/auto/always against the ArchContext source-language fact.
 //   - `RuleGoBoolReturn::apply_op` is inert on a function with no matching op
-//     (the end-to-end rewrite is pinned by `tests/stages/kuna-gobool.xml` and
+//     (the end-to-end rewrite is pinned by `tests/stages/kuna-gobool.toml` and
 //     the corpus measurement).
 
 use super::*;

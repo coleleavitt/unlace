@@ -204,11 +204,14 @@ impl FloatFormat {
     /// Construct default IEEE 754 standard settings for a given encoding
     /// size `sz` in bytes.
     ///
-    /// The C++ constructor leaves every field uninitialized for sizes other
-    /// than 4 and 8 (undefined behavior downstream); the port treats that as
-    /// an internal invariant violation and panics (ADR 0004).
+    /// (kuna) Size 2 is IEEE 754 binary16 (half precision), which upstream lacks.
+    /// The C++ constructor leaves every field uninitialized for other sizes
+    /// (undefined behavior downstream); the port treats that as an internal
+    /// invariant violation and panics (ADR 0004).
     pub fn new(sz: i32) -> FloatFormat {
-        let (signbit_pos, exp_pos, exp_size, frac_pos, frac_size, bias, jbitimplied) = if sz == 4 {
+        let (signbit_pos, exp_pos, exp_size, frac_pos, frac_size, bias, jbitimplied) = if sz == 2 {
+            (15, 10, 5, 0, 10, 15, true)
+        } else if sz == 4 {
             (31, 23, 8, 0, 23, 127, true)
         } else if sz == 8 {
             (63, 52, 11, 0, 52, 1023, true)
@@ -915,6 +918,27 @@ mod tests {
         assert_eq!(ldexp(1.5, -1075), 5e-324);
         assert_eq!(ldexp(1.0, 1024), f64::INFINITY);
         assert_eq!(ldexp(-1.0, 1024), f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn binary16_encodes_and_decodes() {
+        let fmt2 = FloatFormat::new(2);
+        assert_eq!(fmt2.get_size(), 2);
+        assert_eq!(fmt2.get_host_float(0x3c00), (1.0, floatclass::normalized));
+        assert_eq!(fmt2.get_host_float(0x4100), (2.5, floatclass::normalized));
+        assert_eq!(fmt2.get_host_float(0xc000), (-2.0, floatclass::normalized));
+        assert_eq!(
+            fmt2.get_host_float(0x7bff),
+            (65504.0, floatclass::normalized)
+        );
+        assert_eq!(fmt2.get_class(0x7c00), floatclass::infinity);
+        assert_eq!(fmt2.get_class(0x7e00), floatclass::nan);
+        assert_eq!(fmt2.get_class(0x0001), floatclass::denormalized);
+        assert_eq!(fmt2.get_encoding(2.5), 0x4100);
+        assert_eq!(fmt2.get_encoding(-0.5), 0xb800);
+        assert_eq!(fmt2.op_add(0x3c00, 0x3c00), 0x4000);
+        let fmt4 = FloatFormat::new(4);
+        assert_eq!(fmt4.convert_encoding(0x4100, &fmt2), 0x4020_0000);
     }
 
     #[test]

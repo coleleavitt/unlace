@@ -3826,6 +3826,7 @@ impl Architecture {
         t.set_core_type("int2", 2, TYPE_INT, false)?;
         t.set_core_type("int4", 4, TYPE_INT, false)?;
         t.set_core_type("int8", 8, TYPE_INT, false)?;
+        t.set_core_type("float2", 2, TYPE_FLOAT, false)?;
         t.set_core_type("float4", 4, TYPE_FLOAT, false)?;
         t.set_core_type("float8", 8, TYPE_FLOAT, false)?;
         t.set_core_type("float10", 10, TYPE_FLOAT, false)?;

@@ -402,6 +402,10 @@ pub struct RuleEgraphSimplify {
     /// Fingerprints of the trees rewritten in this function without removing
     /// a bitwise op.
     regrouped: BTreeSet<[u64; 4]>,
+    /// Trees saturated in this function without a replacement (fingerprint,
+    /// op count, budget): the pool visits every op again on each pass, and an
+    /// unchanged tree would be saturated again for nothing.
+    barren: BTreeSet<([u64; 4], usize, usize)>,
 }
 
 impl RuleEgraphSimplify {
@@ -409,6 +413,7 @@ impl RuleEgraphSimplify {
         RuleEgraphSimplify {
             group: g.into(),
             regrouped: BTreeSet::new(),
+            barren: BTreeSet::new(),
         }
     }
 }
@@ -435,6 +440,7 @@ impl Rule for RuleEgraphSimplify {
 
     fn reset(&mut self, _data: &mut Funcdata) {
         self.regrouped.clear();
+        self.barren.clear();
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
@@ -476,17 +482,20 @@ impl Rule for RuleEgraphSimplify {
         // The ops under an op with several readers stay; count them all as bitwise.
         let kept = t.expr.ops().saturating_sub(t.budget);
         let bit_budget = bitwise_ops(&t.expr).saturating_sub(kept);
+        let fp = t.fingerprint(kuna_mba::mask_of(size));
+        let key = (fp, t.expr.ops(), t.budget);
+        if self.barren.contains(&key) {
+            return 0;
+        }
         let Some(simple) = saturate(&t.expr, t.n, 8 * size as u32, t.budget, usize::MAX) else {
+            self.barren.insert(key);
             return 0;
         };
         // A rewrite that keeps every bitwise op regroups arithmetic the core
         // rules may regroup back, which would show this tree again: it is
         // done once per tree value.
-        if bitwise_ops(&simple) >= bit_budget
-            && !self
-                .regrouped
-                .insert(t.fingerprint(kuna_mba::mask_of(size)))
-        {
+        if bitwise_ops(&simple) >= bit_budget && !self.regrouped.insert(fp) {
+            self.barren.insert(key);
             return 0;
         }
         let rw = t.into_rewrite(simple);

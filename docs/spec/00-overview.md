@@ -3407,7 +3407,13 @@ returns the existing low-level error for a wider numerator, without modifying
 the result arrays.
 
 Floating-point constant evaluation uses `crates/unlace-num/src/float.rs`
-(`FloatFormat`). Finite arithmetic uses host `f64`; NaN payloads are canonical.
+(`FloatFormat`). (kuna) Besides upstream's IEEE binary32 and binary64 defaults,
+`Translate::set_default_float_formats` registers binary16 (2 bytes: 5 exponent
+bits, bias 15, 10 fraction bits), so the half-precision p-code of AArch64 FP16
+and RISC-V Zfh is typed, folded and printed as float: the `float2` core type,
+spelled `_Float16` in C, with `f16`-suffixed constants. Before, a 2-byte
+`FLOAT_*` result had no format, printed as `undefined2`, and its constants as
+`FLOAT_UNKNOWN`. Finite arithmetic uses host `f64`; NaN payloads are canonical.
 Square root, ceiling, floor, and rounding preserve an input NaN's sign;
 negation flips it and absolute value clears it. Binary arithmetic takes the
 first NaN operand's sign in p-code input order. Operations on non-NaN inputs

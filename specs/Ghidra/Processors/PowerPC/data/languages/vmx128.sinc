@@ -1,0 +1,230 @@
+# Xbox 360 Xenon VMX128: the 128-register vector extension of the Xenon PowerPC cores (vr0..vr127,
+# vr0..vr31 being the AltiVec registers), its loads/stores and operations in primary opcodes 4, 5
+# and 6. Written from the Xenia emulator's instruction table and decode formats (BSD-3).
+
+define register offset=0x20000 size=16 [ vr32 vr33 vr34 vr35 vr36 vr37 vr38 vr39 vr40 vr41 vr42 vr43 vr44 vr45 vr46 vr47 vr48 vr49 vr50 vr51 vr52 vr53 vr54 vr55 vr56 vr57 vr58 vr59 vr60 vr61 vr62 vr63 vr64 vr65 vr66 vr67 vr68 vr69 vr70 vr71 vr72 vr73 vr74 vr75 vr76 vr77 vr78 vr79 vr80 vr81 vr82 vr83 vr84 vr85 vr86 vr87 vr88 vr89 vr90 vr91 vr92 vr93 vr94 vr95 vr96 vr97 vr98 vr99 vr100 vr101 vr102 vr103 vr104 vr105 vr106 vr107 vr108 vr109 vr110 vr111 vr112 vr113 vr114 vr115 vr116 vr117 vr118 vr119 vr120 vr121 vr122 vr123 vr124 vr125 vr126 vr127 ];
+
+define token vmx128insn(32)
+  vmxop = (26,31)
+  vd0 = (21,25)
+  vd1 = (21,25)
+  vd2 = (21,25)
+  vd3 = (21,25)
+  va0 = (16,20)
+  va1 = (16,20)
+  va2 = (16,20)
+  va3 = (16,20)
+  vb0 = (11,15)
+  vb1 = (11,15)
+  vb2 = (11,15)
+  vb3 = (11,15)
+  vmxa = (16,20)
+  vmxra = (16,20)
+  vmxrb = (11,15)
+  vmxb = (11,15)
+  vmx_uimm = (16,20)
+  vmx_simm = (16,20) signed
+  vmx_va128H = (10,10)
+  vmx_va128h = (5,5)
+  vmx_vd128h = (2,3)
+  vmx_vb128h = (0,1)
+  vmx_vc = (6,8)
+  vmx_sh = (6,9)
+  vmx_rc = (6,6)
+  vmx_z = (6,7)
+  vmx_permh = (6,8)
+  vmx_b0 = (0,0)
+  vmx_b1 = (1,1)
+  vmx_b2 = (2,2)
+  vmx_b3 = (3,3)
+  vmx_b4 = (4,4)
+  vmx_b5 = (5,5)
+  vmx_b6 = (6,6)
+  vmx_b7 = (7,7)
+  vmx_b8 = (8,8)
+  vmx_b9 = (9,9)
+  vmx_b10 = (10,10)
+;
+
+attach variables [ vmxra vmxrb ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 ];
+attach variables [ vd0 ] [ vs32 vs33 vs34 vs35 vs36 vs37 vs38 vs39 vs40 vs41 vs42 vs43 vs44 vs45 vs46 vs47 vs48 vs49 vs50 vs51 vs52 vs53 vs54 vs55 vs56 vs57 vs58 vs59 vs60 vs61 vs62 vs63 ];
+attach variables [ vd1 ] [ vr32 vr33 vr34 vr35 vr36 vr37 vr38 vr39 vr40 vr41 vr42 vr43 vr44 vr45 vr46 vr47 vr48 vr49 vr50 vr51 vr52 vr53 vr54 vr55 vr56 vr57 vr58 vr59 vr60 vr61 vr62 vr63 ];
+attach variables [ vd2 ] [ vr64 vr65 vr66 vr67 vr68 vr69 vr70 vr71 vr72 vr73 vr74 vr75 vr76 vr77 vr78 vr79 vr80 vr81 vr82 vr83 vr84 vr85 vr86 vr87 vr88 vr89 vr90 vr91 vr92 vr93 vr94 vr95 ];
+attach variables [ vd3 ] [ vr96 vr97 vr98 vr99 vr100 vr101 vr102 vr103 vr104 vr105 vr106 vr107 vr108 vr109 vr110 vr111 vr112 vr113 vr114 vr115 vr116 vr117 vr118 vr119 vr120 vr121 vr122 vr123 vr124 vr125 vr126 vr127 ];
+attach variables [ va0 ] [ vs32 vs33 vs34 vs35 vs36 vs37 vs38 vs39 vs40 vs41 vs42 vs43 vs44 vs45 vs46 vs47 vs48 vs49 vs50 vs51 vs52 vs53 vs54 vs55 vs56 vs57 vs58 vs59 vs60 vs61 vs62 vs63 ];
+attach variables [ va1 ] [ vr32 vr33 vr34 vr35 vr36 vr37 vr38 vr39 vr40 vr41 vr42 vr43 vr44 vr45 vr46 vr47 vr48 vr49 vr50 vr51 vr52 vr53 vr54 vr55 vr56 vr57 vr58 vr59 vr60 vr61 vr62 vr63 ];
+attach variables [ va2 ] [ vr64 vr65 vr66 vr67 vr68 vr69 vr70 vr71 vr72 vr73 vr74 vr75 vr76 vr77 vr78 vr79 vr80 vr81 vr82 vr83 vr84 vr85 vr86 vr87 vr88 vr89 vr90 vr91 vr92 vr93 vr94 vr95 ];
+attach variables [ va3 ] [ vr96 vr97 vr98 vr99 vr100 vr101 vr102 vr103 vr104 vr105 vr106 vr107 vr108 vr109 vr110 vr111 vr112 vr113 vr114 vr115 vr116 vr117 vr118 vr119 vr120 vr121 vr122 vr123 vr124 vr125 vr126 vr127 ];
+attach variables [ vb0 ] [ vs32 vs33 vs34 vs35 vs36 vs37 vs38 vs39 vs40 vs41 vs42 vs43 vs44 vs45 vs46 vs47 vs48 vs49 vs50 vs51 vs52 vs53 vs54 vs55 vs56 vs57 vs58 vs59 vs60 vs61 vs62 vs63 ];
+attach variables [ vb1 ] [ vr32 vr33 vr34 vr35 vr36 vr37 vr38 vr39 vr40 vr41 vr42 vr43 vr44 vr45 vr46 vr47 vr48 vr49 vr50 vr51 vr52 vr53 vr54 vr55 vr56 vr57 vr58 vr59 vr60 vr61 vr62 vr63 ];
+attach variables [ vb2 ] [ vr64 vr65 vr66 vr67 vr68 vr69 vr70 vr71 vr72 vr73 vr74 vr75 vr76 vr77 vr78 vr79 vr80 vr81 vr82 vr83 vr84 vr85 vr86 vr87 vr88 vr89 vr90 vr91 vr92 vr93 vr94 vr95 ];
+attach variables [ vb3 ] [ vr96 vr97 vr98 vr99 vr100 vr101 vr102 vr103 vr104 vr105 vr106 vr107 vr108 vr109 vr110 vr111 vr112 vr113 vr114 vr115 vr116 vr117 vr118 vr119 vr120 vr121 vr122 vr123 vr124 vr125 vr126 vr127 ];
+
+define pcodeop vmx128_cr6;
+define pcodeop vmx128_lvewx;
+define pcodeop vmx128_lvlx;
+define pcodeop vmx128_lvlxl;
+define pcodeop vmx128_lvrx;
+define pcodeop vmx128_lvrxl;
+define pcodeop vmx128_lvsl;
+define pcodeop vmx128_lvsr;
+define pcodeop vmx128_stvewx;
+define pcodeop vmx128_stvlx;
+define pcodeop vmx128_stvlxl;
+define pcodeop vmx128_stvrx;
+define pcodeop vmx128_stvrxl;
+define pcodeop vmx128_vaddfp;
+define pcodeop vmx128_vcfpsxws;
+define pcodeop vmx128_vcfpuxws;
+define pcodeop vmx128_vcmpbfp;
+define pcodeop vmx128_vcmpeqfp;
+define pcodeop vmx128_vcmpequw;
+define pcodeop vmx128_vcmpgefp;
+define pcodeop vmx128_vcmpgtfp;
+define pcodeop vmx128_vcsxwfp;
+define pcodeop vmx128_vcuxwfp;
+define pcodeop vmx128_vexptefp;
+define pcodeop vmx128_vlogefp;
+define pcodeop vmx128_vmaddcfp;
+define pcodeop vmx128_vmaddfp;
+define pcodeop vmx128_vmaxfp;
+define pcodeop vmx128_vminfp;
+define pcodeop vmx128_vmrghw;
+define pcodeop vmx128_vmrglw;
+define pcodeop vmx128_vmsum3fp;
+define pcodeop vmx128_vmsum4fp;
+define pcodeop vmx128_vmulfp;
+define pcodeop vmx128_vnmsubfp;
+define pcodeop vmx128_vperm;
+define pcodeop vmx128_vpermwi;
+define pcodeop vmx128_vpkd3d;
+define pcodeop vmx128_vpkshss;
+define pcodeop vmx128_vpkshus;
+define pcodeop vmx128_vpkswss;
+define pcodeop vmx128_vpkswus;
+define pcodeop vmx128_vpkuhum;
+define pcodeop vmx128_vpkuhus;
+define pcodeop vmx128_vpkuwum;
+define pcodeop vmx128_vpkuwus;
+define pcodeop vmx128_vrefp;
+define pcodeop vmx128_vrfim;
+define pcodeop vmx128_vrfin;
+define pcodeop vmx128_vrfip;
+define pcodeop vmx128_vrfiz;
+define pcodeop vmx128_vrlimi;
+define pcodeop vmx128_vrlw;
+define pcodeop vmx128_vrsqrtefp;
+define pcodeop vmx128_vsldoi;
+define pcodeop vmx128_vslo;
+define pcodeop vmx128_vslw;
+define pcodeop vmx128_vspltisw;
+define pcodeop vmx128_vspltw;
+define pcodeop vmx128_vsraw;
+define pcodeop vmx128_vsro;
+define pcodeop vmx128_vsrw;
+define pcodeop vmx128_vsubfp;
+define pcodeop vmx128_vupkd3d;
+define pcodeop vmx128_vupkhsb;
+define pcodeop vmx128_vupklsb;
+
+VD128: vd0 is vmx_vd128h=0 & vd0 { export vd0; }
+VD128: vd1 is vmx_vd128h=1 & vd1 { export vd1; }
+VD128: vd2 is vmx_vd128h=2 & vd2 { export vd2; }
+VD128: vd3 is vmx_vd128h=3 & vd3 { export vd3; }
+VB128: vb0 is vmx_vb128h=0 & vb0 { export vb0; }
+VB128: vb1 is vmx_vb128h=1 & vb1 { export vb1; }
+VB128: vb2 is vmx_vb128h=2 & vb2 { export vb2; }
+VB128: vb3 is vmx_vb128h=3 & vb3 { export vb3; }
+VA128: va0 is vmx_va128H=0 & vmx_va128h=0 & va0 { export va0; }
+VA128: va1 is vmx_va128H=0 & vmx_va128h=1 & va1 { export va1; }
+VA128: va2 is vmx_va128H=1 & vmx_va128h=0 & va2 { export va2; }
+VA128: va3 is vmx_va128H=1 & vmx_va128h=1 & va3 { export va3; }
+VC128: "vs32" is vmx_vc=0 { export vs32; }
+VC128: "vs33" is vmx_vc=1 { export vs33; }
+VC128: "vs34" is vmx_vc=2 { export vs34; }
+VC128: "vs35" is vmx_vc=3 { export vs35; }
+VC128: "vs36" is vmx_vc=4 { export vs36; }
+VC128: "vs37" is vmx_vc=5 { export vs37; }
+VC128: "vs38" is vmx_vc=6 { export vs38; }
+VC128: "vs39" is vmx_vc=7 { export vs39; }
+VRA0: vmxra is vmxra { export vmxra; }
+VRA0: 0 is vmxa=0 { export 0:$(REGISTER_SIZE); }
+PERM: k is vmx_permh & vmx_uimm [ k = (vmx_permh << 5) | vmx_uimm; ] { export *[const]:1 k; }
+RC128: "" is vmx_rc=0 { }
+RC128: "." is vmx_rc=1 & VD128 { cr6 = vmx128_cr6(VD128); }
+
+:lvewx128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=0 & vmx_b7=1 & vmx_b8=0 & vmx_b9=0 & vmx_b10=0 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; VD128 = vmx128_lvewx(ea); }
+:lvsl128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=0 & vmx_b7=0 & vmx_b8=0 & vmx_b9=0 & vmx_b10=0 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; VD128 = vmx128_lvsl(ea); }
+:lvsr128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=1 & vmx_b7=0 & vmx_b8=0 & vmx_b9=0 & vmx_b10=0 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; VD128 = vmx128_lvsr(ea); }
+:lvx128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=1 & vmx_b7=1 & vmx_b8=0 & vmx_b9=0 & vmx_b10=0 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; ea = ea & ~15; VD128 = *[ram]:16 ea; }
+:lvxl128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=1 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & vmx_b10=0 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; ea = ea & ~15; VD128 = *[ram]:16 ea; }
+:lvlx128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=0 & vmx_b7=0 & vmx_b8=0 & vmx_b9=0 & vmx_b10=1 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; VD128 = vmx128_lvlx(ea); }
+:lvlxl128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=0 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & vmx_b10=1 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; VD128 = vmx128_lvlxl(ea); }
+:lvrx128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=1 & vmx_b7=0 & vmx_b8=0 & vmx_b9=0 & vmx_b10=1 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; VD128 = vmx128_lvrx(ea); }
+:lvrxl128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=1 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & vmx_b10=1 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; VD128 = vmx128_lvrxl(ea); }
+:stvewx128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=0 & vmx_b7=1 & vmx_b8=1 & vmx_b9=0 & vmx_b10=0 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; vmx128_stvewx(VD128, ea); }
+:stvx128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=1 & vmx_b7=1 & vmx_b8=1 & vmx_b9=0 & vmx_b10=0 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; ea = ea & ~15; *[ram]:16 ea = VD128; }
+:stvxl128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=1 & vmx_b7=1 & vmx_b8=1 & vmx_b9=1 & vmx_b10=0 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; ea = ea & ~15; *[ram]:16 ea = VD128; }
+:stvlx128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=0 & vmx_b7=0 & vmx_b8=1 & vmx_b9=0 & vmx_b10=1 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; vmx128_stvlx(VD128, ea); }
+:stvlxl128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=0 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & vmx_b10=1 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; vmx128_stvlxl(VD128, ea); }
+:stvrx128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=1 & vmx_b7=0 & vmx_b8=1 & vmx_b9=0 & vmx_b10=1 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; vmx128_stvrx(VD128, ea); }
+:stvrxl128 VD128, VRA0, vmxrb is vmxop=4 & vmx_b0=1 & vmx_b1=1 & vmx_b4=0 & vmx_b5=0 & vmx_b6=1 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & vmx_b10=1 & VD128 & VRA0 & vmxrb { build VRA0; local ea:$(REGISTER_SIZE) = VRA0 + vmxrb; vmx128_stvrxl(VD128, ea); }
+:vaddfp128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=0 & vmx_b7=0 & vmx_b8=0 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vaddfp(VA128, VB128); }
+:vand128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=0 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = VA128 & VB128; }
+:vandc128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=1 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = VA128 & ~VB128; }
+:vcmpbfp128^RC128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b7=1 & vmx_b8=1 & vmx_b9=0 & VD128 & VA128 & VB128 & RC128 { VD128 = vmx128_vcmpbfp(VA128, VB128); build RC128; }
+:vcmpeqfp128^RC128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b7=0 & vmx_b8=0 & vmx_b9=0 & VD128 & VA128 & VB128 & RC128 { VD128 = vmx128_vcmpeqfp(VA128, VB128); build RC128; }
+:vcmpequw128^RC128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 & RC128 { VD128 = vmx128_vcmpequw(VA128, VB128); build RC128; }
+:vcmpgefp128^RC128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b7=1 & vmx_b8=0 & vmx_b9=0 & VD128 & VA128 & VB128 & RC128 { VD128 = vmx128_vcmpgefp(VA128, VB128); build RC128; }
+:vcmpgtfp128^RC128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b7=0 & vmx_b8=1 & vmx_b9=0 & VD128 & VA128 & VB128 & RC128 { VD128 = vmx128_vcmpgtfp(VA128, VB128); build RC128; }
+:vexptefp128 VD128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=0 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & vmx_b10=1 & VD128 & VB128 { VD128 = vmx128_vexptefp(VB128); }
+:vlogefp128 VD128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=1 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & vmx_b10=1 & VD128 & VB128 { VD128 = vmx128_vlogefp(VB128); }
+:vmaddfp128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=1 & vmx_b7=1 & vmx_b8=0 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vmaddfp(VA128, VB128, VD128); }
+:vmaxfp128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b6=0 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vmaxfp(VA128, VB128); }
+:vminfp128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b6=1 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vminfp(VA128, VB128); }
+:vmrghw128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b6=0 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vmrghw(VA128, VB128); }
+:vmrglw128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b6=1 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vmrglw(VA128, VB128); }
+:vnmsubfp128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=1 & vmx_b7=0 & vmx_b8=1 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vnmsubfp(VA128, VD128, VB128); }
+:vnor128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=0 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = ~(VA128 | VB128); }
+:vor128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=1 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = VA128 | VB128; }
+:vperm128 VD128, VA128, VB128, VC128 is vmxop=5 & vmx_b4=0 & vmx_b9=0 & VD128 & VA128 & VB128 & VC128 { VD128 = vmx128_vperm(VA128, VB128, VC128); }
+:vpkshss128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=0 & vmx_b6=0 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vpkshss(VA128, VB128); }
+:vpkshus128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=0 & vmx_b6=1 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vpkshus(VA128, VB128); }
+:vpkswss128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=0 & vmx_b6=0 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vpkswss(VA128, VB128); }
+:vpkswus128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=0 & vmx_b6=1 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vpkswus(VA128, VB128); }
+:vpkuhum128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=0 & vmx_b6=0 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vpkuhum(VA128, VB128); }
+:vpkuhus128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=0 & vmx_b6=1 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vpkuhus(VA128, VB128); }
+:vpkuwum128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=0 & vmx_b6=0 & vmx_b7=1 & vmx_b8=1 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vpkuwum(VA128, VB128); }
+:vpkuwus128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=0 & vmx_b6=1 & vmx_b7=1 & vmx_b8=1 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vpkuwus(VA128, VB128); }
+:vrefp128 VD128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=0 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & vmx_b10=1 & VD128 & VB128 { VD128 = vmx128_vrefp(VB128); }
+:vrfim128 VD128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=0 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & vmx_b10=0 & VD128 & VB128 { VD128 = vmx128_vrfim(VB128); }
+:vrfin128 VD128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=1 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & vmx_b10=0 & VD128 & VB128 { VD128 = vmx128_vrfin(VB128); }
+:vrfip128 VD128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=0 & vmx_b7=1 & vmx_b8=1 & vmx_b9=1 & vmx_b10=0 & VD128 & VB128 { VD128 = vmx128_vrfip(VB128); }
+:vrfiz128 VD128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=1 & vmx_b7=1 & vmx_b8=1 & vmx_b9=1 & vmx_b10=0 & VD128 & VB128 { VD128 = vmx128_vrfiz(VB128); }
+:vrlw128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b6=1 & vmx_b7=0 & vmx_b8=0 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vrlw(VA128, VB128); }
+:vrsqrtefp128 VD128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=1 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & vmx_b10=1 & VD128 & VB128 { VD128 = vmx128_vrsqrtefp(VB128); }
+:vsel128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=1 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = (VA128 & ~VD128) | (VB128 & VD128); }
+:vsldoi128 VD128, VA128, VB128, vmx_sh is vmxop=4 & vmx_b4=1 & VD128 & VA128 & VB128 & vmx_sh { VD128 = vmx128_vsldoi(VA128, VB128, vmx_sh:1); }
+:vslo128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=0 & vmx_b7=1 & vmx_b8=1 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vslo(VA128, VB128); }
+:vslw128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b6=1 & vmx_b7=1 & vmx_b8=0 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vslw(VA128, VB128); }
+:vspltisw128 VD128, vmx_simm is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=1 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & vmx_b10=1 & VD128 & vmx_simm { VD128 = vmx128_vspltisw(vmx_simm:1); }
+:vspltw128 VD128, VB128, vmx_uimm is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=0 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & vmx_b10=1 & VD128 & VB128 & vmx_uimm { VD128 = vmx128_vspltw(VB128, vmx_uimm:1); }
+:vsraw128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b6=1 & vmx_b7=0 & vmx_b8=1 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vsraw(VA128, VB128); }
+:vsro128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=1 & vmx_b7=1 & vmx_b8=1 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = vmx128_vsro(VA128, VB128); }
+:vsrw128 VD128, VA128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b6=1 & vmx_b7=1 & vmx_b8=1 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vsrw(VA128, VB128); }
+:vsubfp128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=1 & vmx_b7=0 & vmx_b8=0 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vsubfp(VA128, VB128); }
+:vupkhsb128 VD128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b6=0 & vmx_b7=1 & vmx_b8=1 & vmx_b9=1 & VD128 & VB128 { VD128 = vmx128_vupkhsb(VB128); }
+:vupklsb128 VD128, VB128 is vmxop=6 & vmx_b4=0 & vmx_b6=1 & vmx_b7=1 & vmx_b8=1 & vmx_b9=1 & VD128 & VB128 { VD128 = vmx128_vupklsb(VB128); }
+:vxor128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=0 & vmx_b7=0 & vmx_b8=1 & vmx_b9=1 & VD128 & VA128 & VB128 { VD128 = VA128 ^ VB128; }
+:vmulfp128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=0 & vmx_b7=1 & vmx_b8=0 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vmulfp(VA128, VB128); }
+:vmaddcfp128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=0 & vmx_b7=0 & vmx_b8=1 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vmaddcfp(VA128, VD128, VB128); }
+:vmsum3fp128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=0 & vmx_b7=1 & vmx_b8=1 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vmsum3fp(VA128, VB128); }
+:vmsum4fp128 VD128, VA128, VB128 is vmxop=5 & vmx_b4=1 & vmx_b6=1 & vmx_b7=1 & vmx_b8=1 & vmx_b9=0 & VD128 & VA128 & VB128 { VD128 = vmx128_vmsum4fp(VA128, VB128); }
+:vpermwi128 VD128, VB128, PERM is vmxop=6 & vmx_b4=1 & vmx_b5=0 & vmx_b9=1 & vmx_b10=0 & VD128 & VB128 & PERM { VD128 = vmx128_vpermwi(VB128, PERM); }
+:vcfpsxws128 VD128, VB128, vmx_uimm is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=0 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & vmx_b10=0 & VD128 & VB128 & vmx_uimm { VD128 = vmx128_vcfpsxws(VB128, vmx_uimm:1); }
+:vcfpuxws128 VD128, VB128, vmx_uimm is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=1 & vmx_b7=0 & vmx_b8=0 & vmx_b9=1 & vmx_b10=0 & VD128 & VB128 & vmx_uimm { VD128 = vmx128_vcfpuxws(VB128, vmx_uimm:1); }
+:vcsxwfp128 VD128, VB128, vmx_uimm is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=0 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & vmx_b10=0 & VD128 & VB128 & vmx_uimm { VD128 = vmx128_vcsxwfp(VB128, vmx_uimm:1); }
+:vcuxwfp128 VD128, VB128, vmx_uimm is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=1 & vmx_b7=1 & vmx_b8=0 & vmx_b9=1 & vmx_b10=0 & VD128 & VB128 & vmx_uimm { VD128 = vmx128_vcuxwfp(VB128, vmx_uimm:1); }
+:vpkd3d128 VD128, VB128, vmx_uimm, vmx_z is vmxop=6 & vmx_b4=1 & vmx_b5=0 & vmx_b8=0 & vmx_b9=1 & vmx_b10=1 & VD128 & VB128 & vmx_uimm & vmx_z { VD128 = vmx128_vpkd3d(VD128, VB128, vmx_uimm:1, vmx_z:1); }
+:vrlimi128 VD128, VB128, vmx_uimm, vmx_z is vmxop=6 & vmx_b4=1 & vmx_b5=0 & vmx_b8=1 & vmx_b9=1 & vmx_b10=1 & VD128 & VB128 & vmx_uimm & vmx_z { VD128 = vmx128_vrlimi(VD128, VB128, vmx_uimm:1, vmx_z:1); }
+:vupkd3d128 VD128, VB128 is vmxop=6 & vmx_b4=1 & vmx_b5=1 & vmx_b6=1 & vmx_b7=1 & vmx_b8=1 & vmx_b9=1 & vmx_b10=1 & VD128 & VB128 { VD128 = vmx128_vupkd3d(VB128); }

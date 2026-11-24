@@ -1,0 +1,235 @@
+# A value a sign-sensitive operation reads keeps its own variable instead of
+# merging into a global it is stored to, and the store stays where the binary
+# makes it (P3 kuna_globalstorekeep, P6 kuna_globalvalue).
+#
+# Merge joins a register value with the global it is copied to.  The joined
+# value then prints as a read of the global, and the operation on it takes the
+# global's signedness.  For
+#
+#     else { u = init * 3; sink = u; r = (int)(u >> 4); }
+#
+# kuna used to print `sink = init * 3; r = sink >> 4;`.  The shift is right
+# only while `sink` is unsigned, which is how kuna types it, but kuna never
+# declares the global, so a reader who gives `sink` its real type
+# (`volatile int`) turns the logical shift arithmetic: for init 0x80000000 the
+# rebuilt program returns -134217728 where the binary returns 134217728.  The
+# same holds for a widening, a conversion to double and a byte compare, and
+# for an operation that reads the value through `+` or `^` (`w_sadd`,
+# `w_xordiv`, `w_f`, `w_cond`): C gives `sink + 1` the global's type too.
+# A short or byte compare against a constant counts even when the constant
+# only reaches the value later: a fold moves it across `+`, `-`, `~` or
+# `^` (`w_fold16`: `u + 1 == 0` becomes `u == 0xffff`), after the store's
+# fate is decided, and kuna printed `hsink = a0 * 3; v1 = hsink == -1;`.
+# RulePropagateCopy keeps the store's COPY where the binary makes it and Merge
+# refuses the copy-shadow join, so the value keeps its own type and the store
+# keeps its place, ahead of a later pointer store that may alias the global.
+#
+# A load the binary makes of the global after such a pointer store must still
+# print as the global (`w_realias`: `gre = u; *p = k; return gre / 16;`
+# returns -4 when p points at gre).  RulePropagateCopy leaves the load on the
+# global while the value is read sign-sensitively, and otherwise marks the
+# value so that Merge joins it with the global as before (#17-#20).  At -O0
+# the binary loads `retsel` and `res` back right after storing them, so
+# those loads print as the globals too (#5, #6, #9, #21).
+#
+# The store also stays upstream's when an earlier value of the global is
+# still used after it (`w_oif`: `if (c) *p = k; old = gold; ...; gold = n;
+# return old + 1;`).  Keeping the store at its place made Merge copy that
+# earlier value out where it is defined, above the pointer store, and the
+# copy read the global before `*p` changed it: `v1 = gold;` at the top of
+# the function or of the loop (#22-#24).
+#
+# The wrapper only supplies the harness architecture (`load file` needs one).
+# The pass loads globalstore_gcc_O0_x86_64 (built from globalstore_x86_64.c
+# beside it).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/globalstore_gcc_O0_x86_64',
+    'read symbols',
+    'load function w_branch',
+    'decompile',
+    'print C',
+    'load function w_signed',
+    'decompile',
+    'print C',
+    'load function w_first',
+    'decompile',
+    'print C',
+    'load function w_i2f',
+    'decompile',
+    'print C',
+    'load function w_alias',
+    'decompile',
+    'print C',
+    'load function w_eqc',
+    'decompile',
+    'print C',
+    'load function w_sadd',
+    'decompile',
+    'print C',
+    'load function w_xordiv',
+    'decompile',
+    'print C',
+    'load function w_f',
+    'decompile',
+    'print C',
+    'load function w_cond',
+    'decompile',
+    'print C',
+    'load function w_fold16',
+    'decompile',
+    'print C',
+    'load function w_fold8',
+    'decompile',
+    'print C',
+    'load function w_neg16',
+    'decompile',
+    'print C',
+    'load function w_sub16',
+    'decompile',
+    'print C',
+    'load function w_not16',
+    'decompile',
+    'print C',
+    'load function w_realias',
+    'decompile',
+    'print C',
+    'load function w_reboth',
+    'decompile',
+    'print C',
+    'load function w_recopy',
+    'decompile',
+    'print C',
+    'load function w_oif',
+    'decompile',
+    'print C',
+    'load function w_oloop',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'globalvalue #1: the unsigned value keeps its own variable and cast'
+count = 1
+literal = 'v1 = (uint4)(a0 * 3) >> 4;'
+
+[[match]]
+name = 'globalvalue #2: the unsigned store is not read back through the global'
+count = 0
+literal = 'v1 = sink >> 4;'
+
+[[match]]
+name = 'globalvalue #3: the signed value keeps its own variable'
+count = 1
+literal = 'v1 = a0 * 3 >> 4;'
+
+[[match]]
+name = 'globalvalue #4: the signed store is not read back through the global'
+count = 0
+literal = 'v1 = usink >> 4;'
+
+[[match]]
+name = 'globalvalue #5: the flipped value is stored where the binary stores it'
+count = 1
+literal = 'retsel = 1 - retsel;'
+
+[[match]]
+name = 'globalvalue #6: the widening reads the global the binary loads back'
+count = 1
+regex = 'v[0-9]+ = \(int8\)retsel( \* 0x20001)?;'
+
+[[match]]
+name = 'globalvalue #7: the conversion reads the value'
+count = 1
+literal = '(float8)(a0 * 3)'
+
+[[match]]
+name = 'globalvalue #8: the conversion does not read the global'
+count = 0
+literal = '(float8)usink'
+
+[[match]]
+name = 'globalvalue #9: the strtoul result is stored where the binary stores it'
+count = 1
+literal = 'res = strtoul(a1,&endptr,0);'
+
+[[match]]
+name = 'globalvalue #10: the byte compare does not read the global'
+count = 0
+literal = 'csink == '
+
+[[match]]
+name = 'globalvalue #11: the value read through + keeps its own variable'
+count = 1
+literal = 'v1 = a0 * 3 + 1 >> 4;'
+
+[[match]]
+name = 'globalvalue #12: no value read through + is read back through the global'
+count = 0
+literal = 'usink + 1'
+
+[[match]]
+name = 'globalvalue #13: no value read through ^ is read back through the global'
+count = 0
+literal = '(sink ^ 0x10'
+
+[[match]]
+name = 'globalvalue #14: the joined value is stored from its own variable'
+count = 1
+regex = 'usink = a[0-9]+;'
+
+[[match]]
+name = 'globalvalue #15: a short compare a fold rewrote reads the value'
+count = 3
+literal = 'v1 = (int2)(a0 * 3) == -1;'
+
+[[match]]
+name = 'globalvalue #16: no short compare reads the global back'
+count = 0
+literal = 'hsink == '
+
+[[match]]
+name = 'globalvalue #17: the load after a pointer store reads the global'
+count = 1
+literal = 'return gre / 0x10;'
+
+[[match]]
+name = 'globalvalue #18: the register use keeps the value and the load reads the global'
+count = 1
+literal = '((uint4)(a0 * 3) >> 4) + ((int4)gre >> 4)'
+
+[[match]]
+name = 'globalvalue #19: the load copied to another global reads the global'
+count = 1
+literal = 'gre2 = gre;'
+
+[[match]]
+name = 'globalvalue #21: the range check loads the strtoul result back from the global'
+count = 1
+literal = '(res <= 0xff)'
+
+[[match]]
+name = "globalvalue #20: no load after a pointer store reads the value's variable"
+count = 0
+regex = '\(int4\)v[0-9]+ >> 4\)'
+
+[[match]]
+name = 'globalvalue #22: no earlier value of the global is copied out above the pointer store'
+count = 0
+regex = 'v[0-9]+ = gold;'
+
+[[match]]
+name = 'globalvalue #23: the earlier value is read after the pointer store'
+count = 1
+literal = 'v1 = gold + 1;'
+
+[[match]]
+name = 'globalvalue #24: the loop reads the earlier value after the pointer store'
+count = 1
+literal = 'v1 += gold;'

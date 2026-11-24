@@ -1,0 +1,74 @@
+# DWARF locals in lexical blocks and relative to the frame base
+# (`option dwarfscopes on|off`), ida95-57.
+#
+# Stage P1 external-refinement. The fixtures are dwarfscopes_x86_64.c built
+# with gcc -O0 -g and clang -O0 -g. `checksum` declares `char scratch[32]`
+# and `int partial` inside the loop body and `long bonus` inside an if block,
+# so DWARF nests them in DW_TAG_lexical_block scopes.
+#
+# Pass 1 (`dwarfscopes off`, the bug): only the direct children are read, so
+# the 32-byte buffer is the anonymous `char v1 [31]`.
+# Pass 2 (default, the fix): the nested buffer and loop counter are named.
+# Pass 3 (clang, default): clang's frame base is RBP, not the CFA; the offsets
+# are taken from it, so `total` names the accumulator and not the buffer.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'option dwarfscopes off',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarfscopes_gcc_O0_x86_64',
+    'read symbols',
+    'load function checksum',
+    'decompile',
+    'print C',
+    'option dwarfscopes on',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarfscopes_gcc_O0_x86_64',
+    'read symbols',
+    'load function checksum',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarfscopes_clang_O0_x86_64',
+    'read symbols',
+    'load function checksum',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = "DWARFSCOPES #1: off, the loop-body buffer has no DWARF name (libcnames names it after strncpy's parameter)"
+count = 1
+literal = 'char s [31];'
+
+[[match]]
+name = 'DWARFSCOPES #2: on, the buffer is named and typed in both builds'
+count = 2
+literal = 'char scratch [32];'
+
+[[match]]
+name = 'DWARFSCOPES #3: on, the loop counter is named'
+count = 2
+literal = 'for (i = 0; i < rounds; i = i + 1)'
+
+[[match]]
+name = "DWARFSCOPES #4: clang's RBP frame base puts total on the accumulator, not the buffer"
+count = 1
+regex = 'total = \(int4?\)strlen\(scratch\) \* \(i \+ 1\) \+ total;'
+
+[[match]]
+name = 'DWARFSCOPES #5: no build names the buffer as total'
+count = 0
+literal = 'strncpy((char *)&total'

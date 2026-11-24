@@ -42,7 +42,7 @@ stays accepted as a spelling of `full` (that is what it meant when the option wa
 
 ## Verification
 
-- two-pass stage test `tests/stages/kuna-formatstring-static.xml` (off = the bug,
+- two-pass stage test `tests/stages/kuna-formatstring-static.toml` (off = the bug,
   default = the fix, plus a `full` pass that reaches the same answer without a
   Listing), and three more passes over `fmtjoin_x86_64` pinning the two sites
   the audit must withdraw (a format chosen on a jump table; an `alloca` frame);

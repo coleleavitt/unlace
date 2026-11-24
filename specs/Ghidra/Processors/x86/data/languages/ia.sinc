@@ -2652,6 +2652,12 @@ macro fucompe(val1, val2) {
 @define VEX_WIG		"rexWprefix"
 @define VEX_W0		"rexWprefix=0"
 @define VEX_W1		"rexWprefix=1"
+# W0 forms whose W1 twin is 64-bit only: outside 64-bit mode VEX.W is ignored there (checked natively)
+@ifdef IA64
+@define VEX_W0_COMPAT	"(rexWprefix=0 | longMode=0)"
+@else
+@define VEX_W0_COMPAT	"rexWprefix"
+@endif
 
 @define EVEX_NONE	"vexMode=2"
 @define EVEX_NDS	"vexMode=2"
@@ -10807,7 +10813,7 @@ define pcodeop aesimc;
 :AESIMC XmmReg1, XmmReg2_m128  is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0xdb; XmmReg1 ... & XmmReg2_m128 {
 	XmmReg1 = aesimc(XmmReg2_m128);
 }
-:VAESIMC XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0xdb; (XmmReg1 & YmmReg1) ... & XmmReg2_m128 {
+:VAESIMC XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0xdb; (XmmReg1 & YmmReg1) ... & XmmReg2_m128 {
 	XmmReg1 = aesimc(XmmReg2_m128);
 	YmmReg1 = zext(XmmReg1);
 }
@@ -10816,7 +10822,7 @@ define pcodeop aeskeygenassist;
 :AESKEYGENASSIST XmmReg1, XmmReg2_m128, imm8  is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0xdf; XmmReg1 ... & XmmReg2_m128; imm8 {
 	XmmReg1 = aeskeygenassist(XmmReg2_m128, imm8:1);
 }
-:VAESKEYGENASSIST XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0xdf; (XmmReg1 & YmmReg1) ... & XmmReg2_m128; imm8 {
+:VAESKEYGENASSIST XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0xdf; (XmmReg1 & YmmReg1) ... & XmmReg2_m128; imm8 {
 	XmmReg1 = aeskeygenassist(XmmReg2_m128, imm8:1);
 	YmmReg1 = zext(XmmReg1);
 }

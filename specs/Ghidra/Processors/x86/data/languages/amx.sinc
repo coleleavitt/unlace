@@ -48,77 +48,77 @@ amxTvvvv: "TMM5" is vexVVVV=5 { export 5:1; }
 amxTvvvv: "TMM6" is vexVVVV=6 { export 6:1; }
 amxTvvvv: "TMM7" is vexVVVV=7 { export 7:1; }
 
-:LDTILECFG m512 is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0); byte=0x49; (mod != 0b11 & reg_opcode=0) ... & m512
+:LDTILECFG m512 is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x49; (mod != 0b11 & reg_opcode=0) ... & m512
 {
 	ldtilecfg(m512);
 }
 
-:STTILECFG m512 is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x49; (mod != 0b11 & reg_opcode=0) ... & m512
+:STTILECFG m512 is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x49; (mod != 0b11 & reg_opcode=0) ... & m512
 {
 	m512 = sttilecfg();
 }
 
-:TILERELEASE is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0); byte=0x49; byte=0xc0
+:TILERELEASE is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x49; byte=0xc0
 {
 	tilerelease();
 }
 
-:TILEZERO amxTreg is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0); byte=0x49; mod=0b11 & r_m=0 & amxTreg
+:TILEZERO amxTreg is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x49; mod=0b11 & r_m=0 & amxTreg
 {
 	tilezero(amxTreg);
 }
 
-:TILELOADD amxTreg, Mem is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
+:TILELOADD amxTreg, Mem is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
 {
 	tileloadd(amxTreg, Mem);
 }
 
-:TILELOADDT1 amxTreg, Mem is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
+:TILELOADDT1 amxTreg, Mem is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
 {
 	tileloaddt1(amxTreg, Mem);
 }
 
-:TILESTORED Mem, amxTreg is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
+:TILESTORED Mem, amxTreg is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
 {
 	tilestored(Mem, amxTreg);
 }
 
-:TDPBSSD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
+:TDPBSSD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
 {
 	tdpbssd(amxTreg, amxTrm, amxTvvvv);
 }
 
-:TDPBSUD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
+:TDPBSUD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
 {
 	tdpbsud(amxTreg, amxTrm, amxTvvvv);
 }
 
-:TDPBUSD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
+:TDPBUSD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
 {
 	tdpbusd(amxTreg, amxTrm, amxTvvvv);
 }
 
-:TDPBUUD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
+:TDPBUUD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
 {
 	tdpbuud(amxTreg, amxTrm, amxTvvvv);
 }
 
-:TDPBF16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5c; mod=0b11 & amxTreg & amxTrm
+:TDPBF16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & amxTvvvv; byte=0x5c; mod=0b11 & amxTreg & amxTrm
 {
 	tdpbf16ps(amxTreg, amxTrm, amxTvvvv);
 }
 
-:TDPFP16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5c; mod=0b11 & amxTreg & amxTrm
+:TDPFP16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & amxTvvvv; byte=0x5c; mod=0b11 & amxTreg & amxTrm
 {
 	tdpfp16ps(amxTreg, amxTrm, amxTvvvv);
 }
 
-:TCMMIMFP16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x6c; mod=0b11 & amxTreg & amxTrm
+:TCMMIMFP16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & amxTvvvv; byte=0x6c; mod=0b11 & amxTreg & amxTrm
 {
 	tcmmimfp16ps(amxTreg, amxTrm, amxTvvvv);
 }
 
-:TCMMRLFP16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x6c; mod=0b11 & amxTreg & amxTrm
+:TCMMRLFP16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & rexRprefix=0 & rexBprefix=0 & $(VEX_WIG) & amxTvvvv; byte=0x6c; mod=0b11 & amxTreg & amxTrm
 {
 	tcmmrlfp16ps(amxTreg, amxTrm, amxTvvvv);
 }

@@ -1,0 +1,255 @@
+# FPU (COP1) instructions
+
+define pcodeop cop1Operation;
+
+#The Emotion Engine version of MIPS COP1 only supports single precision float operations
+
+define register offset=0x1000 size=4 [
+    f0  f1  f2  f3  f4  f5  f6  f7
+    f8  f9  f10 f11 f12 f13 f14 f15
+    f16 f17 f18 f19 f20 f21 f22 f23
+    f24 f25 f26 f27 f28 f29 f30 f31
+];
+
+# Floating point control registers
+define register offset=0x1200 size=4 [
+    fir     fccr       fexr     fenr    fcsr
+];
+
+# Hidden floating point registers
+define register offset=0x1300 size=4 [
+	ACC
+];
+
+# FCR31 (fcsr) flags of the EE FPU: C 23, I 17, D 16, O 15, U 14 (last operation) and the sticky SI 6,
+# SD 5, SO 4, SU 3. Overflow is an infinite or NaN IEEE result, underflow a non-zero denormal one (the EE
+# clamps / flushes such results instead: see GHIDRA-RARE.md).
+macro fpuFlagsOU(r) {
+	fe:4 = r & 0x7f800000;
+	fo:4 = zext(fe == 0x7f800000);
+	fu:4 = zext(fe == 0 && (r & 0x7fffff) != 0);
+	fcsr = (fcsr & 0xffff3fff) | (fo << 15) | (fu << 14) | (fo << 4) | (fu << 3);
+}
+
+macro fpuFlagsID(fi, fd) {
+	fcsr = (fcsr & 0xfffcffff) | (fi << 17) | (fd << 16) | (fi << 6) | (fd << 5);
+}
+
+attach variables [ fs ft fd fr ] [
+    f0  f1  f2  f3  f4  f5  f6  f7  f8  f9  f10 f11 f12 f13 f14 f15
+    f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31
+];
+
+attach variables [ fs_fcr ] [
+	fir		_		_		_		_		_		_		_
+	_		_		_		_		_		_		_		_
+	_		_		_		_		_		_		_		_
+	_		fccr	fexr	_		fenr	_		_		fcsr
+];
+
+with : prime=17 {  #COP1
+	# 0100 01ff fff0 0000 ssss sddd dd00 0101
+	:abs.s fd, fs               		is ft=0 & fct=5 & format=0x10 & fs & fd {
+	    fd = abs(fs);
+	}
+
+	:adda.s fs, ft						is fct=24 & format=0x10 & ft & fs & fd=0 {
+	    r:4 = fs f+ ft;
+	    fpuFlagsOU(r);
+	    ACC = r;
+	}
+
+	# 0100 01ff ffft tttt ssss sddd dd00 0000
+	:add.s fd, fs, ft           		is fct=0 & format=0x10 & ft & fs & fd {
+	    r:4 = fs f+ ft;
+	    fpuFlagsOU(r);
+	    fd = r;
+	}
+
+	# 0100 0101 0000 0000 iiii iiii iiii iiii
+	:bc1f Rel16                 		is copop=8 & copfct=0 & Rel16 {
+	    tmp:1 = fcsr[23,1]; # The floating point condition bit
+	    delayslot(1);
+	    if (tmp != 0) goto inst_next;
+	    goto Rel16;
+	}
+
+
+	# 0100 0101 0000 0010 iiii iiii iiii iiii
+	:bc1fl Rel16                    	is copop=8 & copfct=2 & Rel16 {
+	    if (fcsr[23,1] != 0) goto inst_next;
+	    delayslot(1);
+	    goto Rel16;
+	}
+
+	# 0100 0101 0000 0001 iiii iiii iiii iiii
+	:bc1t Rel16                     	is copop=8 & copfct=1 & Rel16 {
+	    tmp:1 = fcsr[23,1];
+	    delayslot(1);
+	    if (tmp == 0) goto inst_next;
+	    goto Rel16;
+	}
+
+	# 0100 0101 0000 0011 iiii iiii iiii iiii
+	:bc1tl Rel16                     	is copop=8 & copfct=3 & Rel16 {
+	    if (fcsr[23,1] == 0) goto inst_next;
+	    delayslot(1);
+	    goto Rel16;
+	}
+
+	# 0100 01ff ffft tttt ssss s000 0011 0010
+	:c.eq.s fs, ft              		is fd=0 & fct=50 & format=0x10 & fs & ft {
+	    fcsr[23,1] = (fs f== ft);
+	}
+
+	:c.f.s fs, ft               		is fd=0 & fct=48 & format=0x10 & fs & ft {
+	    fcsr[23,1] = 0; # Always false
+	}
+
+	:c.le.s fs, ft              		is fd=0 & fct=54 & format=0x10 & fs & ft {
+	    fcsr[23,1] = (fs f<= ft);
+	}
+
+	:c.lt.s fs, ft              		is fd=0 & fct=52 & format=0x10 & fs & ft {
+	    fcsr[23,1] = (fs f< ft);
+	}
+
+	# only defined for fir (0) and fcsr (31)
+	:cfc1 RT, fs_fcr                	is copop=2 & RT & fs_fcr & (fs=0 | fs=31) & bigfunct=0 {
+    	RT = sext(fs_fcr);
+	}
+
+	# only defined for fcsr (31)
+	:ctc1 RTsrc, fs_fcr             	is copop=6 & RTsrc & fs_fcr & fs=31 & bigfunct=0 {
+	    fs_fcr = RTsrc:4;
+	}
+
+
+	:cvt.s.w fd, fs             		is ft=0 & fct=32 & fd & fs & format=0x14 {
+    	fd = int2float(fs);
+	}
+
+	# 0100 0110 0000 0000 ssss sddd dd10 0100
+	# truncates toward zero; out-of-range values saturate
+	:cvt.w.s fd, fs             		is ft=0 & fct=36 & fd & fs & format=0x10 {
+	    big:4 = int2float(0x80000000:8);
+	    ovh:1 = fs f>= big;
+	    ovl:1 = fs f< f- big;
+	    fd = (zext(ovh) * 0x7fffffff) | (zext(ovl) * 0x80000000) | (zext(!(ovh || ovl)) * trunc(fs));
+	}
+
+	# 0100 01ff ffft tttt ssss sddd dd00 0011
+	:div.s fd, fs, ft           		is fct=3 & ft & fs & fd & format=0x10 {
+	    n:4 = fs; d:4 = ft;
+	    fpuFlagsID(zext((n & 0x7fffffff) == 0 && (d & 0x7fffffff) == 0), zext((n & 0x7fffffff) != 0 && (d & 0x7fffffff) == 0));
+	    fd = n f/ d;
+	}
+
+	:madd.s fd, fs, ft      			is fct=28 & fd & fs & ft & format=0x10 {
+	    r:4 = (fs f* ft) f+ ACC;
+	    fpuFlagsOU(r);
+	    fd = r;
+	}
+
+	:madda.s fs, ft      				is fct=30 & fd=0 & fs & ft & format=0x10 {
+	    r:4 = (fs f* ft) f+ ACC;
+	    fpuFlagsOU(r);
+	    ACC = r;
+	}
+	:max.s fd, fs, ft      				is fct=40 & fd & fs & ft & format=0x10 {
+	    c:1 = fs f>= ft;
+	    fd = (zext(c) * fs) | (zext(!c) * ft);
+	}
+
+	# 0100 0100 000t tttt ssss s000 0000 0000
+	:mfc1 RT, fs                    	is copop=0 & RT & fs & bigfunct=0 {
+	    RT = sext(fs);
+	}
+	:min.s fd, fs, ft      				is fct=41 & fd & fs & ft & format=0x10 {
+	    c:1 = fs f<= ft;
+	    fd = (zext(c) * fs) | (zext(!c) * ft);
+	}
+
+	# 0100 01ff fff0 0000 ssss sddd dd00 0110
+	:mov.s fd, fs               		is fct=6 & fs & fd & format=0x10 & ft=0 {
+	    fd = fs;
+	}
+
+	:msub.s fd, fs, ft      			is fct=29 & fd & fs & ft & format=0x10 {
+	    r:4 = ACC f- (fs f* ft);
+	    fpuFlagsOU(r);
+	    fd = r;
+	}
+
+	:msuba.s fs, ft      				is fct=31 & fd=0 & fs & ft & format=0x10 {
+	    r:4 = ACC f- (fs f* ft);
+	    fpuFlagsOU(r);
+	    ACC = r;
+	}
+
+	# 0100 0100 100t tttt dddd d000 0000 0000
+	:mtc1 RT32src, fs                 	is copop=4 & RT32src & fs & bigfunct=0 {
+	    # Move 32-bits of RTsrc to FPR fs
+		fs = RT32src;
+	}
+
+
+	# 0100 01ff ffft tttt ssss sddd dd00 0010
+	:mul.s fd, fs, ft           		is fct=2 & ft & fs & fd & format=0x10 {
+	    r:4 = fs f* ft;
+	    fpuFlagsOU(r);
+	    fd = r;
+	}
+
+	# 0100 01ff ffft tttt ssss sddd dd00 0010
+	:mula.s fs, ft           			is fct=26 & ft & fs & fd=0 & format=0x10 {
+	    r:4 = fs f* ft;
+	    fpuFlagsOU(r);
+	    ACC = r;
+	}
+
+	# 0100 01ff fff0 0000 ssss sddd dd00 0111
+	:neg.s fd, fs               		is fct=7 & ft=0 & fs & fd & format=0x10 {
+	    fd = f- fs;
+	}
+
+	# 0100 01ff fff0 0000 ssss sddd dd01 0110
+	:rsqrt.s fd, fs, ft            		is fct=22 & fd & fs & ft & format=0x10 {
+	    n:4 = fs; d:4 = ft;
+	    fpuFlagsID(zext((d & 0x80000000) != 0 && (d & 0x7fffffff) != 0), zext((d & 0x7fffffff) == 0));
+	    fd = n f/ sqrt(abs(d));
+	}
+
+	:sqrt.s fd, ft              		is fct=4 & fd & fs=0 & ft & format=0x10 {
+	    d:4 = ft;
+	    fpuFlagsID(zext((d & 0x80000000) != 0 && (d & 0x7fffffff) != 0), 0);
+	    fd = sqrt(abs(d));
+	}
+
+	# 0100 0110 000t tttt ssss sddd dd00 0001
+	:sub.s fd, fs, ft           		is fct=1 & ft & fs & fd & format=0x10 {
+	    r:4 = fs f- ft;
+	    fpuFlagsOU(r);
+	    fd = r;
+	}
+
+	# 0100 0110 000t tttt ssss s000 0000 0001
+	:suba.s fs, ft           			is fct=25 & ft & fs & fd=0 & format=0x10 {
+	    r:4 = fs f- ft;
+	    fpuFlagsOU(r);
+	    ACC = r;
+	}
+	# any other coprocessor operation (CO bit set): GNU objdump's "c1"
+	:c1 imm25                           is bit25=1 & imm25 {
+	    cop1Operation(imm25:4);
+	}
+}
+
+:lwc1 ft, OFF_BASE              		is prime=49 & OFF_BASE & ft {
+    ft = *[ram]:4 OFF_BASE;
+}
+
+# 1110 01bb bbbt tttt iiii iiii iiii iiii
+:swc1 ft, OFF_BASE              		is prime=57 & OFF_BASE & ft {
+    *[ram]:4 OFF_BASE = ft:4;
+}

@@ -1,0 +1,318 @@
+# SLEIGH specification for the NEC uPD7725 / uPD96050 fixed-point DSPs (SNES DSP-1 to
+# DSP-4, ST010/ST011, arcade boards).
+#
+# Written for unlace from the public instruction-format descriptions (NEC data sheets,
+# the bsnes/higan necdsp core notes); semantics checked against MAME's upd7725 core.
+# Instructions are 24-bit words stored as three little-endian bytes, the layout of
+# the usual program-ROM dumps. The code space is byte addressed: instruction word n
+# is at byte 3*n, so a jump to word n shows as byte address 3*n.
+
+define endian=little;
+define alignment=1;
+
+define space prog     type=ram_space      size=2 default;
+define space drom     type=ram_space      size=2 wordsize=2;
+define space dram     type=ram_space      size=2 wordsize=2;
+define space hstk     type=ram_space      size=1;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ PC A B TR TRB DP RP K L SO IDB ];
+define register offset=0x20 size=1 [ CA ZA S0A S1A OV0A OV1A CB ZB S0B S1B OV0B OV1B ];
+define register offset=0x30 size=1 [ SP ];
+
+define token instr (24)
+  itype   = (22,23)
+  pselect = (20,21)
+  alu     = (16,19)
+  accq    = (15,15)
+  accC    = (15,15)
+  accZ    = (15,15)
+  accS0   = (15,15)
+  accS1   = (15,15)
+  accOV0  = (15,15)
+  accOV1  = (15,15)
+  accCin  = (15,15)
+  dpl     = (13,14)
+  dphm    = (9,12)
+  rpdcr   = (8,8)
+  src     = (4,7)
+  dst     = (0,3)
+  brch    = (13,21)
+  na      = (2,12)
+  bank    = (0,1)
+  id      = (6,21)
+;
+
+attach variables [ accq ] [ A B ];
+attach variables [ accC ] [ CA CB ];
+attach variables [ accZ ] [ ZA ZB ];
+attach variables [ accS0 ] [ S0A S0B ];
+attach variables [ accS1 ] [ S1A S1B ];
+attach variables [ accOV0 ] [ OV0A OV0B ];
+attach variables [ accOV1 ] [ OV1A OV1B ];
+attach variables [ accCin ] [ CB CA ];
+
+# host interface and serial ports
+define pcodeop readDR;
+define pcodeop readDRNoFlag;
+define pcodeop writeDR;
+define pcodeop readSR;
+define pcodeop writeSR;
+define pcodeop hostRequest;
+define pcodeop readSI;
+define pcodeop serialOut;
+define pcodeop serialInAck;
+define pcodeop serialOutAck;
+define pcodeop bitReverse16;
+
+################################################################
+# Source onto the internal data bus (IDB)
+################################################################
+
+SRC: "trb"  is src=0  { IDB = TRB; }
+SRC: "a"    is src=1  { IDB = A; }
+SRC: "b"    is src=2  { IDB = B; }
+SRC: "tr"   is src=3  { IDB = TR; }
+SRC: "dp"   is src=4  { IDB = DP; }
+SRC: "rp"   is src=5  { IDB = RP; }
+SRC: "ro"   is src=6  { local a:2 = RP & $(ROMMASK); IDB = *[drom]:2 a; }
+SRC: "sgn"  is src=7  { IDB = 0x8000 - zext(S1A); }
+SRC: "dr"   is src=8  { IDB = readDR(); }
+SRC: "drnf" is src=9  { IDB = readDRNoFlag(); }
+SRC: "sr"   is src=10 { IDB = readSR(); }
+SRC: "sim"  is src=11 { IDB = readSI(); }
+SRC: "sil"  is src=12 { local s:2 = readSI(); IDB = bitReverse16(s); }
+SRC: "k"    is src=13 { IDB = K; }
+SRC: "l"    is src=14 { IDB = L; }
+SRC: "mem"  is src=15 { local a:2 = DP & $(RAMMASK); IDB = *[dram]:2 a; }
+
+################################################################
+# Destination of IDB (OP/RT) or of the immediate (LD)
+################################################################
+
+DST: "@non" is dst=0  { }
+DST: "@a"   is dst=1  { A = IDB; }
+DST: "@b"   is dst=2  { B = IDB; }
+DST: "@tr"  is dst=3  { TR = IDB; }
+DST: "@dp"  is dst=4  { DP = IDB; }
+DST: "@rp"  is dst=5  { RP = IDB; }
+DST: "@dr"  is dst=6  { writeDR(IDB); }
+DST: "@sr"  is dst=7  { writeSR(IDB); }
+DST: "@sol" is dst=8  { SO = bitReverse16(IDB); serialOut(SO); }
+DST: "@som" is dst=9  { SO = IDB; serialOut(SO); }
+DST: "@k"   is dst=10 { K = IDB; }
+DST: "@klr" is dst=11 { K = IDB; local a:2 = RP & $(ROMMASK); L = *[drom]:2 a; }
+DST: "@klm" is dst=12 { L = IDB; local a:2 = (DP & $(RAMMASK)) | 0x40; K = *[dram]:2 a; }
+DST: "@l"   is dst=13 { L = IDB; }
+DST: "@trb" is dst=14 { TRB = IDB; }
+DST: "@mem" is dst=15 { local a:2 = DP & $(RAMMASK); *[dram]:2 a = IDB; }
+
+################################################################
+# ALU P operand. M and N always hold the product of K and L from the end
+# of the previous instruction, so they are read as that product.
+################################################################
+
+PSEL: "ram" is pselect=0 { local a:2 = DP & $(RAMMASK); local v:2 = *[dram]:2 a; export v; }
+PSEL: "idb" is pselect=1 { export IDB; }
+PSEL: "m"   is pselect=2 { local prod:4 = sext(K) * sext(L); local sh:4 = prod s>> 15; local v:2 = sh:2; export v; }
+PSEL: "n"   is pselect=3 { local prod:4 = sext(K) * sext(L); local sh:4 = prod << 1; local v:2 = sh:2; export v; }
+
+# Flags follow MAME: SBB/ADC/SHL1 take the carry of the OTHER accumulator, S1
+# copies S0 unless OV1 was set, OV1 is the sticky overflow.
+ALU: is alu=0 { }
+
+ALU: "or "^PSEL^","^accq is alu=1 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & PSEL {
+  local p:2 = PSEL; local q:2 = accq; local r:2 = q | p;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accC = 0; accOV0 = 0; accOV1 = 0; accq = r;
+}
+
+ALU: "and "^PSEL^","^accq is alu=2 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & PSEL {
+  local p:2 = PSEL; local q:2 = accq; local r:2 = q & p;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accC = 0; accOV0 = 0; accOV1 = 0; accq = r;
+}
+
+ALU: "xor "^PSEL^","^accq is alu=3 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & PSEL {
+  local p:2 = PSEL; local q:2 = accq; local r:2 = q ^ p;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accC = 0; accOV0 = 0; accOV1 = 0; accq = r;
+}
+
+ALU: "sub "^PSEL^","^accq is alu=4 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin & PSEL {
+  local p:2 = PSEL; local q:2 = accq; local cin:2 = zext(accCin); local r:2 = q - p;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accOV0 = ((q ^ r) & (q ^ p) & 0x8000) != 0;
+  accC = r > q;
+  accOV1 = (accOV0 && accOV1 && (accS1 == accS0)) || (accOV0 != accOV1);
+  accq = r;
+}
+
+ALU: "add "^PSEL^","^accq is alu=5 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin & PSEL {
+  local p:2 = PSEL; local q:2 = accq; local cin:2 = zext(accCin); local r:2 = q + p;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accOV0 = ((q ^ r) & ~(q ^ p) & 0x8000) != 0;
+  accC = r < q;
+  accOV1 = (accOV0 && accOV1 && (accS1 == accS0)) || (accOV0 != accOV1);
+  accq = r;
+}
+
+ALU: "sbb "^PSEL^","^accq is alu=6 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin & PSEL {
+  local p:2 = PSEL; local q:2 = accq; local cin:2 = zext(accCin); local r:2 = q - p - cin;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accOV0 = ((q ^ r) & (q ^ p) & 0x8000) != 0;
+  accC = r > q;
+  accOV1 = (accOV0 && accOV1 && (accS1 == accS0)) || (accOV0 != accOV1);
+  accq = r;
+}
+
+ALU: "adc "^PSEL^","^accq is alu=7 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin & PSEL {
+  local p:2 = PSEL; local q:2 = accq; local cin:2 = zext(accCin); local r:2 = q + p + cin;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accOV0 = ((q ^ r) & ~(q ^ p) & 0x8000) != 0;
+  accC = r < q;
+  accOV1 = (accOV0 && accOV1 && (accS1 == accS0)) || (accOV0 != accOV1);
+  accq = r;
+}
+
+ALU: "dec "^accq is alu=8 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin {
+  local p:2 = 1; local q:2 = accq; local cin:2 = zext(accCin); local r:2 = q - p;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accOV0 = ((q ^ r) & (q ^ p) & 0x8000) != 0;
+  accC = r > q;
+  accOV1 = (accOV0 && accOV1 && (accS1 == accS0)) || (accOV0 != accOV1);
+  accq = r;
+}
+
+ALU: "inc "^accq is alu=9 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin {
+  local p:2 = 1; local q:2 = accq; local cin:2 = zext(accCin); local r:2 = q + p;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accOV0 = ((q ^ r) & ~(q ^ p) & 0x8000) != 0;
+  accC = r < q;
+  accOV1 = (accOV0 && accOV1 && (accS1 == accS0)) || (accOV0 != accOV1);
+  accq = r;
+}
+
+ALU: "cmp "^accq is alu=10 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin {
+  local q:2 = accq; local cin:2 = zext(accCin); local r:2 = ~q;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accC = 0; accOV0 = 0; accOV1 = 0; accq = r;
+}
+
+ALU: "shr1 "^accq is alu=11 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin {
+  local q:2 = accq; local cin:2 = zext(accCin); local r:2 = q s>> 1;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accC = (q & 1) != 0; accOV0 = 0; accOV1 = 0; accq = r;
+}
+
+ALU: "shl1 "^accq is alu=12 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin {
+  local q:2 = accq; local cin:2 = zext(accCin); local r:2 = (q << 1) | cin;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accC = (q >> 15) != 0; accOV0 = 0; accOV1 = 0; accq = r;
+}
+
+ALU: "shl2 "^accq is alu=13 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin {
+  local q:2 = accq; local cin:2 = zext(accCin); local r:2 = (q << 2) | 3;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accC = 0; accOV0 = 0; accOV1 = 0; accq = r;
+}
+
+ALU: "shl4 "^accq is alu=14 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin {
+  local q:2 = accq; local cin:2 = zext(accCin); local r:2 = (q << 4) | 15;
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accC = 0; accOV0 = 0; accOV1 = 0; accq = r;
+}
+
+ALU: "xchg "^accq is alu=15 & accq & accC & accZ & accS0 & accS1 & accOV0 & accOV1 & accCin {
+  local q:2 = accq; local cin:2 = zext(accCin); local r:2 = (q << 8) | (q >> 8);
+  accS0 = r s< 0; accZ = r == 0; accS1 = (accOV1 && accS1) || (!accOV1 && accS0);
+  accC = 0; accOV0 = 0; accOV1 = 0; accq = r;
+}
+
+################################################################
+# DP and RP side effects (skipped when the move wrote that register)
+################################################################
+
+DPL: is dst=4 { }
+DPL: is dpl=0 & dphm { DP = DP ^ (dphm << 4); }
+DPL: "dpinc" is dpl=1 & dphm { DP = (DP & 0xfff0) | ((DP + 1) & 0xf); DP = DP ^ (dphm << 4); }
+DPL: "dpdec" is dpl=2 & dphm { DP = (DP & 0xfff0) | ((DP - 1) & 0xf); DP = DP ^ (dphm << 4); }
+DPL: "dpclr" is dpl=3 & dphm { DP = DP & 0xfff0; DP = DP ^ (dphm << 4); }
+
+RPD: is dst=5 { }
+RPD: is rpdcr=0 { }
+RPD: "rpdec" is rpdcr=1 { RP = RP - 1; }
+
+################################################################
+# Instructions
+################################################################
+
+:op "mov" SRC, DST "|" ALU DPL RPD is itype=0 & SRC & DST & ALU & DPL & RPD {
+  build SRC;
+  build ALU;
+  build DST;
+  build DPL;
+  build RPD;
+}
+
+:rt "mov" SRC, DST "|" ALU DPL RPD is itype=1 & SRC & DST & ALU & DPL & RPD {
+  build SRC;
+  build ALU;
+  build DST;
+  build DPL;
+  build RPD;
+  SP = SP - 2;
+  local ret:2 = *[hstk]:2 SP;
+  return [ret];
+}
+
+:ld "#"^id, DST is itype=3 & id & DST {
+  IDB = id;
+  build DST;
+}
+
+JT: tgt is na & bank [ tgt = ((((inst_next / 3) & 0x2000) | (bank << 11) | na) * 3); ] { export *[prog]:3 tgt; }
+JL: tgt is na & bank [ tgt = (((bank << 11) | na) * 3); ] { export *[prog]:3 tgt; }
+JH: tgt is na & bank [ tgt = ((0x2000 | (bank << 11) | na) * 3); ] { export *[prog]:3 tgt; }
+
+:jmpso is itype=2 & brch=0x000 { local t:2 = SO * 3; goto [t]; }
+
+:jnca JT is itype=2 & brch=0x080 & JT { if (CA == 0) goto JT; }
+:jca JT is itype=2 & brch=0x082 & JT { if (CA != 0) goto JT; }
+:jncb JT is itype=2 & brch=0x084 & JT { if (CB == 0) goto JT; }
+:jcb JT is itype=2 & brch=0x086 & JT { if (CB != 0) goto JT; }
+:jnza JT is itype=2 & brch=0x088 & JT { if (ZA == 0) goto JT; }
+:jza JT is itype=2 & brch=0x08a & JT { if (ZA != 0) goto JT; }
+:jnzb JT is itype=2 & brch=0x08c & JT { if (ZB == 0) goto JT; }
+:jzb JT is itype=2 & brch=0x08e & JT { if (ZB != 0) goto JT; }
+:jnova0 JT is itype=2 & brch=0x090 & JT { if (OV0A == 0) goto JT; }
+:jova0 JT is itype=2 & brch=0x092 & JT { if (OV0A != 0) goto JT; }
+:jnovb0 JT is itype=2 & brch=0x094 & JT { if (OV0B == 0) goto JT; }
+:jovb0 JT is itype=2 & brch=0x096 & JT { if (OV0B != 0) goto JT; }
+:jnova1 JT is itype=2 & brch=0x098 & JT { if (OV1A == 0) goto JT; }
+:jova1 JT is itype=2 & brch=0x09a & JT { if (OV1A != 0) goto JT; }
+:jnovb1 JT is itype=2 & brch=0x09c & JT { if (OV1B == 0) goto JT; }
+:jovb1 JT is itype=2 & brch=0x09e & JT { if (OV1B != 0) goto JT; }
+:jnsa0 JT is itype=2 & brch=0x0a0 & JT { if (S0A == 0) goto JT; }
+:jsa0 JT is itype=2 & brch=0x0a2 & JT { if (S0A != 0) goto JT; }
+:jnsb0 JT is itype=2 & brch=0x0a4 & JT { if (S0B == 0) goto JT; }
+:jsb0 JT is itype=2 & brch=0x0a6 & JT { if (S0B != 0) goto JT; }
+:jnsa1 JT is itype=2 & brch=0x0a8 & JT { if (S1A == 0) goto JT; }
+:jsa1 JT is itype=2 & brch=0x0aa & JT { if (S1A != 0) goto JT; }
+:jnsb1 JT is itype=2 & brch=0x0ac & JT { if (S1B == 0) goto JT; }
+:jsb1 JT is itype=2 & brch=0x0ae & JT { if (S1B != 0) goto JT; }
+:jdpl0 JT is itype=2 & brch=0x0b0 & JT { if ((DP & 0xf) == 0) goto JT; }
+:jdpln0 JT is itype=2 & brch=0x0b1 & JT { if ((DP & 0xf) != 0) goto JT; }
+:jdplf JT is itype=2 & brch=0x0b2 & JT { if ((DP & 0xf) == 0xf) goto JT; }
+:jdplnf JT is itype=2 & brch=0x0b3 & JT { if ((DP & 0xf) != 0xf) goto JT; }
+:jnsiak JT is itype=2 & brch=0x0b4 & JT { local f:1 = serialInAck(); if (f == 0) goto JT; }
+:jsiak JT is itype=2 & brch=0x0b6 & JT { local f:1 = serialInAck(); if (f != 0) goto JT; }
+:jnsoak JT is itype=2 & brch=0x0b8 & JT { local f:1 = serialOutAck(); if (f == 0) goto JT; }
+:jsoak JT is itype=2 & brch=0x0ba & JT { local f:1 = serialOutAck(); if (f != 0) goto JT; }
+:jnrqm JT is itype=2 & brch=0x0bc & JT { local f:1 = hostRequest(); if (f == 0) goto JT; }
+:jrqm JT is itype=2 & brch=0x0be & JT { local f:1 = hostRequest(); if (f != 0) goto JT; }
+
+:ljmp JL is itype=2 & brch=0x100 & JL { goto JL; }
+:hjmp JH is itype=2 & brch=0x101 & JH { goto JH; }
+:lcall JL is itype=2 & brch=0x140 & JL { local r:2 = inst_next; *[hstk]:2 SP = r; SP = SP + 2; call JL; }
+:hcall JH is itype=2 & brch=0x141 & JH { local r:2 = inst_next; *[hstk]:2 SP = r; SP = SP + 2; call JH; }

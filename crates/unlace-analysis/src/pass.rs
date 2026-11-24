@@ -589,6 +589,11 @@ pub struct AnalysisOutput {
     /// (kuna `itaniumeh`) The `.gcc_except_table` call-site records that have a
     /// landing pad, with each pad's clauses. Committed only under `itaniumeh`.
     pub eh_call_sites: Vec<unlace_decomp::kuna_itaniumeh::EhCallSite>,
+    /// (kuna `msvceh`) MSVC x64 try regions as call-site records whose pads are
+    /// catch funclets. Produced only by [`crate::entry::kuna_msvcfuncinfo`].
+    pub msvc_eh_sites: Vec<unlace_decomp::kuna_itaniumeh::EhCallSite>,
+    /// (kuna `msvceh`) The catch funclets those records enter.
+    pub msvc_funclets: Vec<unlace_decomp::kuna_itaniumeh::MsvcFunclet>,
     /// (kuna `callerreads`) Every direct call of the Listing walk as `(callee
     /// entry, return address)`; the decompile step decodes a `void` function's
     /// callers from there.
@@ -1223,6 +1228,8 @@ impl AnalysisOutput {
         self.noreturn.extend(other.noreturn);
         self.no_fallthru_calls.extend(other.no_fallthru_calls);
         self.eh_call_sites.extend(other.eh_call_sites);
+        self.msvc_eh_sites.extend(other.msvc_eh_sites);
+        self.msvc_funclets.extend(other.msvc_funclets);
         self.call_returns.extend(other.call_returns);
         self.kernel_bugs.extend(other.kernel_bugs);
         self.arm_pool_extents.extend(other.arm_pool_extents);

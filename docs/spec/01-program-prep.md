@@ -10089,8 +10089,9 @@ also a discovered entry, and one that still has a placeholder name is renamed
 unwind-map order), as MSVC and IDA name them; x64 SEH filter and `__finally`
 funclets become `<parent>$filt$<n>` and `<parent>$fin$<n>`. The parent is named
 by the image's own symbol or export at its address, else `sub_<addr>`. Like the other
-metadata renames, they replace only a placeholder name. The handler bodies are not spliced into the parent's
-flow.
+metadata renames, they replace only a placeholder name. The same pass hands the
+try regions and catch funclets to flow, which splices the funclets into the
+parent (§2, MSVC x64 catch funclets as pads).
 
 **(kuna) SEH scope tables and x86 C++ `FuncInfo` are listed too** (`msvceh`,
 the same pass; `crates/unlace-analysis/src/analyzers/entry/kuna_msvcseh.rs (x86_scope_table)`).

@@ -21,6 +21,7 @@ use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
 use crate::pass::{AnalysisOutput, CommentFact, FidMatch};
 use crate::rtti::models::ImageBytes;
 use crate::rtti::refkind::{End, RefKind};
+use unlace_decomp::kuna_itaniumeh::{EhCallSite, EhClause, MsvcFunclet};
 
 use super::kuna_msvceh::type_name;
 
@@ -30,6 +31,7 @@ const FH3_MAGIC_MAX: u32 = 0x1993_0522;
 const MAX_TRY_BLOCKS: u32 = 4096;
 const MAX_HANDLERS: u32 = 256;
 const MAX_STATES: u32 = 0x0001_0000;
+const MAX_IP_ENTRIES: u32 = 0x0001_0000;
 /// The bytes one compressed FH4 table may take before it is cut off.
 const FH4_WINDOW: usize = 0x4000;
 
@@ -57,10 +59,15 @@ pub struct EhCatch {
 impl EhCatch {
     /// `catch (std::runtime_error const &)`, `catch (...)`.
     pub fn header(&self) -> String {
+        format!("catch ({})", self.caught())
+    }
+
+    /// The caught declaration: `std::runtime_error const &`, `...`.
+    pub fn caught(&self) -> String {
         let Some(t) = &self.type_name else {
-            return "catch (...)".to_string();
+            return "...".to_string();
         };
-        let mut s = format!("catch ({t}");
+        let mut s = t.clone();
         if self.adjectives & 1 != 0 {
             s.push_str(" const");
         }
@@ -70,7 +77,6 @@ impl EhCatch {
         if self.adjectives & 8 != 0 {
             s.push_str(" &");
         }
-        s.push(')');
         s
     }
 }
@@ -89,6 +95,12 @@ pub struct EhFuncInfo {
     pub tries: Vec<EhTry>,
     /// `(state, funclet)` for each unwind action that is a funclet.
     pub cleanups: Vec<(u32, u64)>,
+    /// The IP-to-state map: its RVA, its entry count (FH3; FH4 counts inline),
+    /// and whether it is FH4's per-segment table (`isSeparated`).
+    pub ip_map: u32,
+    pub ip_count: u32,
+    pub fh4: bool,
+    pub separated: bool,
 }
 
 /// Header comments and funclet entries for every x64 C++ `FuncInfo`.
@@ -105,8 +117,12 @@ pub fn collect(file: &object::File, bytes: &[u8], img: &ImageBytes) -> AnalysisO
     let handlers = handler_names(file, bytes);
     let names = parent_names(file);
     let mut named = FxHashSet::<u64>::default();
+    let mut spliced = FxHashSet::<u64>::default();
     let mut by_info = FxHashMap::<(u64, bool), Vec<u64>>::default();
-    for (begin, unwind) in runtime_functions(&pe, bytes, base) {
+    let records = runtime_functions(&pe, bytes, base);
+    let extents: FxHashMap<u64, (u64, u64)> =
+        records.iter().map(|&(b, e, u)| (b, (e, u))).collect();
+    for &(begin, _, unwind) in &records {
         let Some((handler, data)) = language_handler(img, base, unwind) else {
             continue;
         };
@@ -167,6 +183,19 @@ pub fn collect(file: &object::File, bytes: &[u8], img: &ImageBytes) -> AnalysisO
         for (n, &(_, f)) in decoded.cleanups.iter().enumerate() {
             name_funclet(&names, parent, "dtor", n, f, &mut named, &mut out);
         }
+        if let Some(&(end, unwind)) = extents.get(&parent) {
+            splice_sites(
+                img,
+                base,
+                parent,
+                end,
+                unwind,
+                &decoded,
+                &extents,
+                &mut spliced,
+                &mut out,
+            );
+        }
         for f in funclets {
             if entries.insert(f) {
                 out.entries.push(f);
@@ -175,6 +204,213 @@ pub fn collect(file: &object::File, bytes: &[u8], img: &ImageBytes) -> AnalysisO
     }
     out.entries.sort_unstable();
     out
+}
+
+/// The x64 registers by `UNWIND_INFO` number.
+const X64_REGS: [&str; 16] = [
+    "RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI", "R8", "R9", "R10", "R11", "R12", "R13",
+    "R14", "R15",
+];
+
+/// The exceptional edges of one parent: for every try block, every IP-to-state
+/// region whose state the try guards gets one call-site record per catch
+/// funclet (in handler order) whose `ret` continues in the parent; each such
+/// funclet becomes a pad with the parent's frame register and the returns it
+/// continues at.
+#[allow(clippy::too_many_arguments)]
+fn splice_sites(
+    img: &ImageBytes,
+    base: u64,
+    parent: u64,
+    end: u64,
+    unwind: u64,
+    info: &EhFuncInfo,
+    extents: &FxHashMap<u64, (u64, u64)>,
+    spliced: &mut FxHashSet<u64>,
+    out: &mut AnalysisOutput,
+) {
+    let regions = state_regions(&ip_states(img, base, info, parent), parent, end);
+    if regions.is_empty() {
+        return;
+    }
+    let (frame_reg, frame_offset) = match img.read(unwind, 4) {
+        Some(h) if h[3] & 0x0f != 0 => (
+            Some(X64_REGS[(h[3] & 0x0f) as usize].to_string()),
+            (h[3] >> 4) as u64 * 16,
+        ),
+        _ => (None, 0),
+    };
+    for t in &info.tries {
+        for (k, c) in t.catches.iter().enumerate() {
+            let Some(&(fend, _)) = extents.get(&c.handler) else {
+                continue;
+            };
+            let returns = funclet_returns(img, c.handler, fend, parent, end);
+            if returns.is_empty() && may_return(img, c.handler, fend) {
+                continue;
+            }
+            if spliced.insert(c.handler) {
+                out.msvc_funclets.push(MsvcFunclet {
+                    pad: c.handler,
+                    frame_reg: frame_reg.clone(),
+                    frame_offset,
+                    returns,
+                });
+            }
+            let selector = k as i64 + 1;
+            let clause = if c.type_name.is_some() {
+                EhClause::Catch {
+                    selector,
+                    type_name: Some(c.caught()),
+                }
+            } else {
+                EhClause::CatchAll { selector }
+            };
+            for &(lo, hi, s) in &regions {
+                if s >= t.low as i32 && s <= t.high as i32 {
+                    out.msvc_eh_sites.push(EhCallSite {
+                        start: lo,
+                        end: hi,
+                        pad: c.handler,
+                        clauses: vec![clause.clone()],
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// `(ip, state)` at each transition of `info`'s IP-to-state map for the
+/// function at `func`, sorted by address. FH3 entries are `{ip RVA, state}`;
+/// FH4 entries are compressed `(ip delta, state + 1)` from the function start,
+/// through the segment table when `isSeparated`.
+pub fn ip_states(img: &ImageBytes, base: u64, info: &EhFuncInfo, func: u64) -> Vec<(u64, i32)> {
+    let mut v = Vec::new();
+    if info.ip_map == 0 {
+        return v;
+    }
+    let at = base + info.ip_map as u64;
+    if !info.fh4 {
+        for i in 0..info.ip_count as u64 {
+            let Some(e) = img.read(at + i * 8, 8) else {
+                break;
+            };
+            let ip = u32::from_le_bytes([e[0], e[1], e[2], e[3]]);
+            let state = i32::from_le_bytes([e[4], e[5], e[6], e[7]]);
+            if ip != 0 {
+                v.push((base + ip as u64, state));
+            }
+        }
+    } else {
+        let map = if info.separated {
+            let Some(mut r) = fh4_at(img, at) else {
+                return v;
+            };
+            let Some(n) = r.unsigned() else {
+                return v;
+            };
+            let mut found = None;
+            for _ in 0..n.min(MAX_IP_ENTRIES) {
+                let (Some(start), Some(m)) = (r.int(), r.int()) else {
+                    break;
+                };
+                if base + start as u64 == func {
+                    found = Some(m);
+                    break;
+                }
+            }
+            let Some(m) = found else {
+                return v;
+            };
+            m
+        } else {
+            info.ip_map
+        };
+        let Some(mut r) = fh4_at(img, base + map as u64) else {
+            return v;
+        };
+        let Some(n) = r.unsigned() else {
+            return v;
+        };
+        let mut ip = func;
+        for _ in 0..n.min(MAX_IP_ENTRIES) {
+            let (Some(d), Some(s)) = (r.unsigned(), r.unsigned()) else {
+                break;
+            };
+            ip = ip.wrapping_add(d as u64);
+            v.push((ip, s as i32 - 1));
+        }
+    }
+    v.sort_by_key(|&(ip, _)| ip);
+    v
+}
+
+/// `[lo, hi, state)` for each non-negative state region inside `[func, end)`.
+pub fn state_regions(states: &[(u64, i32)], func: u64, end: u64) -> Vec<(u64, u64, i32)> {
+    let mut out = Vec::new();
+    for (i, &(ip, s)) in states.iter().enumerate() {
+        let next = states.get(i + 1).map_or(end, |&(n, _)| n);
+        let (lo, hi) = (ip.max(func), next.min(end));
+        if s >= 0 && lo < hi {
+            out.push((lo, hi, s));
+        }
+    }
+    out
+}
+
+/// `(ret, continuation)` for each `lea rax, [rip+d]` in the funclet
+/// `[start, end)` that loads an address in `[lo, hi)` and is followed only by
+/// epilogue instructions (`add rsp`, `pop`) and a `ret`: where the catch
+/// resumes the parent.
+pub fn funclet_returns(
+    img: &ImageBytes,
+    start: u64,
+    end: u64,
+    lo: u64,
+    hi: u64,
+) -> Vec<(u64, u64)> {
+    let mut out = Vec::new();
+    let Some(code) = end
+        .checked_sub(start)
+        .filter(|&n| n <= 0x10000)
+        .and_then(|n| img.read(start, n as usize))
+    else {
+        return out;
+    };
+    for j in 0..code.len().saturating_sub(7) {
+        if code[j..j + 3] != [0x48, 0x8D, 0x05] {
+            continue;
+        }
+        let d = i32::from_le_bytes([code[j + 3], code[j + 4], code[j + 5], code[j + 6]]);
+        let cont = (start + j as u64 + 7).wrapping_add(d as i64 as u64);
+        if cont < lo || cont >= hi {
+            continue;
+        }
+        let mut k = j + 7;
+        loop {
+            match code.get(k..) {
+                Some([0x48, 0x83, 0xC4, _, ..]) => k += 4,
+                Some([0x48, 0x81, 0xC4, _, _, _, _, ..]) => k += 7,
+                Some([0x41, 0x58..=0x5F, ..]) => k += 2,
+                Some([0x58..=0x5F, ..]) => k += 1,
+                Some([0xC3, ..]) => {
+                    out.push((start + k as u64, cont));
+                    break;
+                }
+                _ => break,
+            }
+        }
+    }
+    out
+}
+
+/// Could the funclet `[start, end)` return (a `ret` byte anywhere in it)? One
+/// that cannot (a rethrow) is spliced with no continuation.
+fn may_return(img: &ImageBytes, start: u64, end: u64) -> bool {
+    end.checked_sub(start)
+        .filter(|&n| n <= 0x10000)
+        .and_then(|n| img.read(start, n as usize))
+        .is_none_or(|code| code.contains(&0xC3))
 }
 
 /// The header comments of one parent and its funclets. With `separate` false
@@ -336,7 +572,7 @@ pub fn handler_kind(name: &str) -> Option<Handler> {
 }
 
 /// `(BeginAddress, UNWIND_INFO)` of every x64 `RUNTIME_FUNCTION`, as addresses.
-pub(crate) fn runtime_functions(pe: &PeFile64, bytes: &[u8], base: u64) -> Vec<(u64, u64)> {
+pub(crate) fn runtime_functions(pe: &PeFile64, bytes: &[u8], base: u64) -> Vec<(u64, u64, u64)> {
     let Some(dir) = pe
         .data_directories()
         .get(object::pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION)
@@ -349,9 +585,10 @@ pub(crate) fn runtime_functions(pe: &PeFile64, bytes: &[u8], base: u64) -> Vec<(
     let mut v = Vec::new();
     for rec in data.chunks_exact(12) {
         let begin = u32::from_le_bytes([rec[0], rec[1], rec[2], rec[3]]) as u64;
+        let end = u32::from_le_bytes([rec[4], rec[5], rec[6], rec[7]]) as u64;
         let unwind = u32::from_le_bytes([rec[8], rec[9], rec[10], rec[11]]) as u64;
-        if begin != 0 && unwind != 0 {
-            v.push((base + begin, base + unwind));
+        if begin != 0 && unwind != 0 && end > begin {
+            v.push((base + begin, base + end, base + unwind));
         }
     }
     v
@@ -401,17 +638,21 @@ fn caught_type(img: &ImageBytes, rk: &RefKind, base: u64, td_rva: u32) -> Option
 /// The `FuncInfo` at `info`: x64 references are RVAs from `base`, x86 ones
 /// absolute addresses (`base` 0), and an x86 `HandlerType` is 16 bytes, not 20.
 pub fn decode_fh3(img: &ImageBytes, rk: &RefKind, base: u64, info: u64) -> Option<EhFuncInfo> {
-    let b = img.read(info, 20)?;
+    let b = img.read(info, 28)?;
     let w = |i: usize| u32::from_le_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
     if !(FH3_MAGIC_MIN..=FH3_MAGIC_MAX).contains(&w(0)) {
         return None;
     }
     let max_state = w(4);
     let (unwind_map, n_try, try_map) = (w(8), w(12), w(16));
-    if max_state > MAX_STATES || n_try > MAX_TRY_BLOCKS {
+    if max_state > MAX_STATES || n_try > MAX_TRY_BLOCKS || w(20) > MAX_IP_ENTRIES {
         return None;
     }
-    let mut out = EhFuncInfo::default();
+    let mut out = EhFuncInfo {
+        ip_count: w(20),
+        ip_map: w(24),
+        ..EhFuncInfo::default()
+    };
     if unwind_map != 0 {
         for state in 0..max_state {
             let e = base + unwind_map as u64 + state as u64 * 8;
@@ -520,7 +761,12 @@ pub fn decode_fh4(img: &ImageBytes, rk: &RefKind, base: u64, info: u64) -> Optio
     }
     let unwind_map = if header & 0x08 != 0 { r.int()? } else { 0 };
     let try_map = if header & 0x10 != 0 { r.int()? } else { 0 };
-    let mut out = EhFuncInfo::default();
+    let mut out = EhFuncInfo {
+        ip_map: r.int()?,
+        fh4: true,
+        separated: header & 0x02 != 0,
+        ..EhFuncInfo::default()
+    };
     if unwind_map != 0 {
         let mut u = fh4_at(img, base + unwind_map as u64)?;
         let n = u.unsigned()?;
@@ -697,6 +943,29 @@ mod tests {
         put(&mut b, unwind, &[0x01 | (0x4 << 3)]);
         let img = ImageBytes::from_spans(vec![(RDATA, b.as_slice())]);
         assert_eq!(language_handler(&img, BASE, unwind), None);
+    }
+
+    #[test]
+    fn state_regions_keep_guarded_ranges() {
+        let states = [(0x100, -1), (0x118, 0), (0x11e, -1), (0x127, 1)];
+        assert_eq!(
+            state_regions(&states, 0x100, 0x127),
+            vec![(0x118, 0x11e, 0)]
+        );
+    }
+
+    #[test]
+    fn funclet_return_to_parent() {
+        let start = 0x1_4000_10c7u64;
+        let code = [
+            0x48, 0x8D, 0x05, 0xD9, 0xFF, 0xFF, 0xFF, 0x48, 0x83, 0xC4, 0x20, 0x5D, 0xC3,
+        ];
+        let img = ImageBytes::from_spans(vec![(start, code.as_slice())]);
+        assert_eq!(
+            funclet_returns(&img, start, start + 13, 0x1_4000_109f, 0x1_4000_10c7),
+            vec![(start + 12, start + 7 - 0x27)]
+        );
+        assert!(may_return(&img, start, start + 13));
     }
 
     #[test]

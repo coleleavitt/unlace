@@ -5645,8 +5645,7 @@ impl PrintC {
         };
         let mut types: Vec<&str> = Vec::new();
         for c in table
-            .sites
-            .iter()
+            .all_sites()
             .filter(|s| s.pad == pad)
             .flat_map(|s| s.clauses.iter())
         {

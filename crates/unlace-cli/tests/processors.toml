@@ -1831,3 +1831,38 @@ expect = ["sub_0(3,4)"]
 test = "s1c6200_decimal_mode_add_is_adjusted"
 address = "0x10"
 expect = ["9 < v1"]
+
+# The Propeller 2 language decompiles flexspin (-2 -O1 --fcache=0) hub-execution output of
+# fixtures/propeller2/flexspin_hub.c: conditional (if_b/if_ae) arithmetic after a cmps, a
+# loop with rdlong, and a caller passing arguments through cog registers.
+[[family]]
+name = "propeller2"
+language = "propeller2:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/propeller2/flexspin_hub.bin"
+
+[[family.function]]
+test = "propeller2_conditional_arithmetic_decompiles"
+address = "0x4f4"
+expect = [
+    "if (dat_fc <= dat_f8)",
+    "dat_ec = dat_f8 * 3;",
+    "dat_ec = dat_fc + dat_ec;",
+]
+
+[[family.function]]
+test = "propeller2_hub_loop_decompiles"
+address = "0x514"
+expect = [
+    "for (dat_f4 = 0; dat_f4 < dat_fc; dat_f4 = dat_f4 + 1) {",
+    "dat_f0 += *dat_ec;",
+]
+
+[[family.function]]
+test = "propeller2_calls_decompile"
+address = "0x548"
+expect = [
+    "dat_f8 = 1;",
+    "sub_4f4();",
+    "sub_514();",
+]

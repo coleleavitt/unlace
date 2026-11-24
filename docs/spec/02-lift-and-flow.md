@@ -4716,6 +4716,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`) |
 | `PowerPC` (Xenon VMX128) | Xbox 360 Xenon (64-bit PowerPC, AltiVec, VMX128) | `PowerPC:BE:64:Xenon` | Xenia emulator `ppc-instructions.xml` and VX128 decode formats (BSD-3) | `unlace-cli/tests/processors.toml` (`ppc_xenon_vmx128`) |
 | `S1C6200` | Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core | `S1C6200:BE:16:default` | Epson E0C6200/6200A Core CPU Manual (MF297-06a); checked against MAME `e0c6200` on all 4,096 encodings | `unlace-cli/tests/processors.toml` (`s1c6200`) |
+| `Propeller` (P2) | Parallax Propeller 2 (P2X8C4M64P), hub execution | `propeller2:LE:32:default` | Parallax "Propeller 2 Instructions" table v35 (encodings, operations, flags); checked against the flexspin assembler | `unlace-cli/tests/processors.toml` (`propeller2`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

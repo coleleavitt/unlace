@@ -1124,11 +1124,46 @@ fn branch_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
         let Some(hi) = input_above(data, lo) else {
             continue;
         };
+        if [lo, hi, other]
+            .into_iter()
+            .any(|w| addresses_memory(data, w, 0))
+        {
+            continue;
+        }
         if branch_linked(data, op, hi, other) || bool_linked(data, op, hi, other) {
             joined |= join(data, lo, hi);
         }
     }
     joined as int4
+}
+
+/// Whether `vn`, directly or through a COPY or an addition, is the address
+/// of a LOAD or STORE: a word a function dereferences is a pointer (the first
+/// word of a two-word struct such as an iterator), never half of a
+/// `long long`.
+fn addresses_memory(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
+    v.descend_iter().any(|op| {
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
+        match o.code() {
+            OpCode::CPUI_LOAD | OpCode::CPUI_STORE => o.get_in(1) == Some(vn),
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_PTRADD
+            | OpCode::CPUI_PTRSUB
+            | OpCode::CPUI_MULTIEQUAL
+                if depth < 3 =>
+            {
+                o.get_out()
+                    .is_some_and(|out| addresses_memory(data, out, depth + 1))
+            }
+            _ => false,
+        }
+    })
 }
 
 /// The block whose CBRANCH reads `vn`, directly or through a BOOL_NEGATE.

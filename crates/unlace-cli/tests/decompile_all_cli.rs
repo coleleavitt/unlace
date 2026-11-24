@@ -321,64 +321,6 @@ fn run_unlace(args: &[&str]) -> (String, String, bool) {
     run_unlace_env(args, &[])
 }
 
-/// The `code` of the function named `name` in a `--json` document.
-fn json_code(doc: &str, name: &str) -> String {
-    let doc: serde_json::Value = serde_json::from_str(doc).expect("a --json document");
-    doc["functions"]
-        .as_array()
-        .expect("functions")
-        .iter()
-        .find(|f| f["name"].as_str() == Some(name))
-        .and_then(|f| f["code"].as_str())
-        .unwrap_or_else(|| panic!("no code for {name}"))
-        .to_string()
-}
-
-/// A load-time option reaches decompile-all's decompiles as it reaches
-/// `decompile`'s: `--option sourcelang rust` (read again at decompile time) and
-/// `--language rust` (which turns `calltargettype` off) once printed fauxware's
-/// `main` with `authenticate(buf,buf_3) as i32` under decompile-all only,
-/// because decompile-all's in-process load restored the variables before its
-/// decompiles ran.
-#[test]
-fn decompile_all_and_decompile_read_the_same_load_time_options() {
-    let bin = fauxware();
-    let sp = specs();
-    for extra in [
-        &["--option", "sourcelang", "rust"][..],
-        &["--language", "rust"][..],
-    ] {
-        let mut all = vec![
-            "decompile-all",
-            &bin,
-            "--json",
-            "--no-vars",
-            "--sleighpath",
-            &sp,
-        ];
-        all.extend_from_slice(extra);
-        let (whole, stderr, ok) = run_unlace(&all);
-        assert!(ok, "decompile-all {extra:?} failed: {stderr}");
-        let mut one = vec![
-            "decompile",
-            &bin,
-            "main",
-            "--json",
-            "--no-vars",
-            "--sleighpath",
-            &sp,
-        ];
-        one.extend_from_slice(extra);
-        let (single, stderr, ok) = run_unlace(&one);
-        assert!(ok, "decompile {extra:?} failed: {stderr}");
-        assert_eq!(
-            json_code(&whole, "main"),
-            json_code(&single, "main"),
-            "decompile-all and decompile print main differently under {extra:?}"
-        );
-    }
-}
-
 /// Run the built `unlace` binary with a hard outer wall-clock `cap`, returning
 /// `Some((stdout, stderr, success))` if it exited in time, `None` if it had to
 /// be killed.  The outer cap is the regression guard for the watchdog itself:

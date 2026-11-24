@@ -2671,6 +2671,8 @@ impl PrintC {
             TagType::FieldToken => {
                 let name = if self.out_lang == crate::lang::OutLang::Go {
                     crate::langgo::identifier(&atom.name)
+                } else if self.out_lang == crate::lang::OutLang::C {
+                    sanitize_type_name(&atom.name).into_owned()
                 } else {
                     atom.name.clone()
                 };
@@ -2680,6 +2682,8 @@ impl PrintC {
             TagType::BitFieldToken => {
                 let name = if self.out_lang == crate::lang::OutLang::Go {
                     crate::langgo::identifier(&atom.name)
+                } else if self.out_lang == crate::lang::OutLang::C {
+                    sanitize_type_name(&atom.name).into_owned()
                 } else {
                     atom.name.clone()
                 };
@@ -16714,10 +16718,76 @@ pub struct DeclaredLocal {
 // without an `Architecture`.
 // ===========================================================================
 
+/// The words C (C23, with `<stdbool.h>`'s `bool`/`true`/`false`) reserves, which
+/// no type, member or enumerator can be named.
+const C_RESERVED_WORDS: &[&str] = &[
+    "_Alignas",
+    "_Alignof",
+    "_Atomic",
+    "_BitInt",
+    "_Bool",
+    "_Complex",
+    "_Decimal128",
+    "_Decimal32",
+    "_Decimal64",
+    "_Generic",
+    "_Imaginary",
+    "_Noreturn",
+    "_Static_assert",
+    "_Thread_local",
+    "alignas",
+    "alignof",
+    "auto",
+    "bool",
+    "break",
+    "case",
+    "char",
+    "const",
+    "constexpr",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "nullptr",
+    "register",
+    "restrict",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "static_assert",
+    "struct",
+    "switch",
+    "thread_local",
+    "true",
+    "typedef",
+    "typeof",
+    "typeof_unqual",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while",
+];
+
 /// (unlace) Rewrite `name` into a valid C identifier: every character outside
-/// `[A-Za-z0-9_]` becomes `_`, and a leading digit gains a `_` prefix.
-/// Borrowed unchanged when already valid (the caller emits a
-/// `/* renamed from "…" */` comment when it changed).
+/// `[A-Za-z0-9_]` becomes `_`, a leading digit gains a `_` prefix, and a C
+/// keyword (a DWARF member named `register`) gains a `_` suffix. Borrowed
+/// unchanged when already valid (the caller emits a `/* renamed from "…" */`
+/// comment when it changed). The printer spells a member access with the same
+/// rewrite, so a definition and its uses agree.
 #[doc(hidden)]
 pub fn sanitize_type_name(name: &str) -> std::borrow::Cow<'_, str> {
     let ok_char = |c: char| c.is_ascii_alphanumeric() || c == '_';
@@ -16725,6 +16795,9 @@ pub fn sanitize_type_name(name: &str) -> std::borrow::Cow<'_, str> {
         && name.chars().all(ok_char)
         && !name.starts_with(|c: char| c.is_ascii_digit());
     if clean {
+        if C_RESERVED_WORDS.contains(&name) {
+            return std::borrow::Cow::Owned(format!("{name}_"));
+        }
         return std::borrow::Cow::Borrowed(name);
     }
     let mut s = String::with_capacity(name.len() + 1);

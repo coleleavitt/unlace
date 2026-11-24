@@ -103,7 +103,7 @@
 //! `passes.rs::default_passes()` so that for any name both emit, the DWARF
 //! (real source) prototype wins (last-write in `set_function_prototype_pieces`).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use object::{Object, ObjectSection};
@@ -451,8 +451,8 @@ fn snapshot_unit_with_go(
             (gimli::DW_AT_specification, true),
             (gimli::DW_AT_abstract_origin, false),
         ] {
-            if let Some(gimli::AttributeValue::UnitRef(o)) = entry.attr_value(attr) {
-                snap.origin_ref = Some(o.0);
+            if let Some(o) = entry.attr_value(attr).and_then(|v| die_ref(unit, v)) {
+                snap.origin_ref = Some(o);
                 snap.origin_is_spec = is_spec;
                 break;
             }
@@ -480,8 +480,11 @@ fn snapshot_unit_with_go(
                 snap.low_pc = Some(a);
             }
         }
-        if let Some(gimli::AttributeValue::UnitRef(o)) = entry.attr_value(gimli::DW_AT_type) {
-            snap.type_ref = Some(o.0);
+        if let Some(o) = entry
+            .attr_value(gimli::DW_AT_type)
+            .and_then(|v| die_ref(unit, v))
+        {
+            snap.type_ref = Some(o);
         }
         if let Some(v) = entry.attr_value(gimli::DW_AT_byte_size) {
             snap.byte_size = v.udata_value();
@@ -506,8 +509,11 @@ fn snapshot_unit_with_go(
         // is a reference to the artificial tag member; `DW_AT_discr_value` is a
         // constant whose signedness follows the discriminant type, so it is read
         // signed-first exactly like `DW_AT_const_value` above.
-        if let Some(gimli::AttributeValue::UnitRef(o)) = entry.attr_value(gimli::DW_AT_discr) {
-            snap.discr_ref = Some(o.0);
+        if let Some(o) = entry
+            .attr_value(gimli::DW_AT_discr)
+            .and_then(|v| die_ref(unit, v))
+        {
+            snap.discr_ref = Some(o);
         }
         if let Some(v) = entry.attr_value(gimli::DW_AT_discr_value) {
             snap.discr_value = v
@@ -615,6 +621,192 @@ fn snapshot_unit_with_go(
         }
     }
     map
+}
+
+/// Map-key bit of a DIE another unit holds: `FOREIGN | <.debug_info offset>` for
+/// another unit of the same file (`DW_FORM_ref_addr`, the partial units `dwz`
+/// makes and the early-debug units of an LTO link), `FOREIGN | SUP | <offset>`
+/// for a unit of the supplementary file (`DW_FORM_GNU_ref_alt` /
+/// `DW_FORM_ref_sup`). A unit-local reference stays its unit offset, which is
+/// far below both bits.
+const FOREIGN: usize = 1 << (usize::BITS - 2);
+const SUP: usize = 1 << (usize::BITS - 3);
+/// Most DIEs one unit's snapshot takes in from other units.
+const MAX_GRAFTED_DIES: usize = 1 << 16;
+/// Most rounds of following references from grafted DIEs into further units.
+const MAX_GRAFT_ROUNDS: usize = 32;
+
+/// The snapshot key a DIE reference attribute names (see [`FOREIGN`]).
+fn die_ref(
+    unit: &gimli::Unit<Reader<'_>>,
+    value: gimli::AttributeValue<Reader<'_>>,
+) -> Option<usize> {
+    match value {
+        gimli::AttributeValue::UnitRef(o) => Some(o.0),
+        gimli::AttributeValue::DebugInfoRef(o) => {
+            let base = unit.header.offset().0;
+            let end = base.checked_add(unit.header.length_including_self())?;
+            if (base..end).contains(&o.0) {
+                Some(o.0 - base)
+            } else {
+                (o.0 < SUP).then_some(FOREIGN | o.0)
+            }
+        }
+        gimli::AttributeValue::DebugInfoRefSup(o) => (o.0 < SUP).then_some(FOREIGN | SUP | o.0),
+        _ => None,
+    }
+}
+
+/// The units of the file and of its supplementary file, by `.debug_info` range,
+/// and the snapshots of those already read, keyed as [`FOREIGN`] says.
+#[derive(Default)]
+struct ForeignUnits {
+    local: Vec<(usize, usize)>,
+    sup: Vec<(usize, usize)>,
+    read: BTreeMap<(bool, usize), std::rc::Rc<BTreeMap<usize, DieSnap>>>,
+}
+
+impl ForeignUnits {
+    fn ranges(dwarf: &gimli::Dwarf<Reader<'_>>) -> Vec<(usize, usize)> {
+        let mut out = Vec::new();
+        let mut units = dwarf.units();
+        while let Ok(Some(header)) = units.next() {
+            let base = header.offset().0;
+            if let Some(end) = base.checked_add(header.length_including_self()) {
+                out.push((base, end));
+            }
+        }
+        out
+    }
+
+    fn new(dwarf: &gimli::Dwarf<Reader<'_>>) -> Self {
+        ForeignUnits {
+            local: Self::ranges(dwarf),
+            sup: dwarf.sup().map(Self::ranges).unwrap_or_default(),
+            read: BTreeMap::new(),
+        }
+    }
+
+    /// The snapshot, re-keyed as [`FOREIGN`] says, of the unit of `dwarf` (or of
+    /// its supplementary file) that holds `.debug_info` offset `off`. The unit's
+    /// own DIE is left out, so its top-level DIEs have no parent.
+    fn unit_holding(
+        &mut self,
+        dwarf: &gimli::Dwarf<Reader<'_>>,
+        abi: kuna_dwarfbyref::ArgumentAbi,
+        sup: bool,
+        off: usize,
+    ) -> Option<std::rc::Rc<BTreeMap<usize, DieSnap>>> {
+        let ranges = if sup { &self.sup } else { &self.local };
+        let &(base, _) = ranges.iter().find(|(b, e)| (*b..*e).contains(&off))?;
+        if let Some(found) = self.read.get(&(sup, base)) {
+            return Some(found.clone());
+        }
+        let file = if sup { dwarf.sup()? } else { dwarf };
+        let header = file
+            .debug_info
+            .header_from_offset(gimli::DebugInfoOffset(base))
+            .ok()?;
+        let unit = file.unit(header).ok()?;
+        let tag = FOREIGN | if sup { SUP } else { 0 };
+        let fix = |r: usize| {
+            if r & FOREIGN == 0 {
+                tag | base.saturating_add(r)
+            } else if sup {
+                r | SUP
+            } else {
+                r
+            }
+        };
+        let mut out = BTreeMap::new();
+        let rel = snapshot_unit_for_abi(file, &unit, abi);
+        let root: Option<usize> = rel.iter().find(|(_, d)| d.depth == 0).map(|(k, _)| *k);
+        for (key, mut die) in rel {
+            if Some(key) == root {
+                continue;
+            }
+            die.type_ref = die.type_ref.map(fix);
+            die.origin_ref = die.origin_ref.map(fix);
+            die.discr_ref = die.discr_ref.map(fix);
+            die.parent = die.parent.filter(|p| Some(*p) != root).map(fix);
+            die.children = die.children.iter().map(|&c| fix(c)).collect();
+            out.insert(fix(key), die);
+        }
+        let out = std::rc::Rc::new(out);
+        self.read.insert((sup, base), out.clone());
+        Some(out)
+    }
+}
+
+/// Take into `dies` (one unit's snapshot) every DIE of another unit, of this file
+/// or of its supplementary file, that a DIE in it references, with that DIE's
+/// subtree and its ancestors, and so on for what those reference (up to
+/// [`MAX_GRAFT_ROUNDS`] rounds and [`MAX_GRAFTED_DIES`] DIEs). The type mapper and
+/// the declaration walks then resolve a `DW_FORM_ref_addr` or
+/// `DW_FORM_GNU_ref_alt` reference as they resolve a unit-local one.
+fn graft_foreign(
+    dies: &mut BTreeMap<usize, DieSnap>,
+    dwarf: &gimli::Dwarf<Reader<'_>>,
+    abi: kuna_dwarfbyref::ArgumentAbi,
+    units: &mut ForeignUnits,
+) {
+    let mut grafted: BTreeSet<usize> = BTreeSet::new();
+    for _ in 0..MAX_GRAFT_ROUNDS {
+        let missing: BTreeSet<usize> = dies
+            .values()
+            .flat_map(|d| [d.type_ref, d.origin_ref, d.discr_ref])
+            .flatten()
+            .filter(|r| r & FOREIGN != 0 && !dies.contains_key(r))
+            .collect();
+        if missing.is_empty() {
+            break;
+        }
+        let mut added = false;
+        for key in missing {
+            if grafted.len() >= MAX_GRAFTED_DIES {
+                break;
+            }
+            let sup = key & SUP != 0;
+            let off = key & !(FOREIGN | SUP);
+            let Some(unit) = units.unit_holding(dwarf, abi, sup, off) else {
+                continue;
+            };
+            if !unit.contains_key(&key) {
+                continue;
+            }
+            let mut stack = vec![key];
+            while let Some(k) = stack.pop() {
+                if dies.contains_key(&k) || grafted.len() >= MAX_GRAFTED_DIES {
+                    continue;
+                }
+                let Some(die) = unit.get(&k) else { continue };
+                stack.extend(die.children.iter().copied());
+                dies.insert(k, die.clone());
+                grafted.insert(k);
+                added = true;
+            }
+            let mut up = unit.get(&key).and_then(|d| d.parent);
+            while let Some(p) = up {
+                if dies.contains_key(&p) || grafted.len() >= MAX_GRAFTED_DIES {
+                    break;
+                }
+                let Some(die) = unit.get(&p) else { break };
+                up = die.parent;
+                dies.insert(p, die.clone());
+                grafted.insert(p);
+                added = true;
+            }
+        }
+        if !added {
+            break;
+        }
+    }
+    let present: BTreeSet<usize> = dies.keys().copied().collect();
+    for key in &grafted {
+        if let Some(die) = dies.get_mut(key) {
+            die.children.retain(|c| present.contains(c));
+        }
+    }
 }
 
 /// A single `DW_OP_addr <vma>` expression, its operand read in the file's byte
@@ -1424,18 +1616,16 @@ impl DwarfPass {
             ctx.file.is_little_endian() && ctx.file.architecture() == object::Architecture::X86_64;
         let mut go_facts = kuna_godwarfsig::Facts::default();
         let mut decls = kuna_dwarfdecls::Decls::default();
+        let abi = kuna_dwarfbyref::argument_abi(ctx.file.format(), ctx.file.architecture());
+        let mut foreign = ForeignUnits::new(&dwarf);
         let mut units = dwarf.units();
         while let Ok(Some(header)) = units.next() {
             let Ok(unit) = dwarf.unit(header) else {
                 continue;
             };
             let mut go = kuna_godwarfsig::UnitExtras::default();
-            let mut dies = snapshot_unit_with_go(
-                &dwarf,
-                &unit,
-                kuna_dwarfbyref::argument_abi(ctx.file.format(), ctx.file.architecture()),
-                go_target.then_some(&mut go),
-            );
+            let mut dies = snapshot_unit_with_go(&dwarf, &unit, abi, go_target.then_some(&mut go));
+            graft_foreign(&mut dies, &dwarf, abi, &mut foreign);
             if complex_max > 0 {
                 for die in dies.values_mut() {
                     die.complex_max_size = complex_max;

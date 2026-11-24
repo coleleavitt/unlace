@@ -1,0 +1,66 @@
+# kuna issue: DWARF that dwz rewrote keeps its types out of the unit that uses them.
+#
+# `dwz` moves the types several compilation units share into partial units and
+# points the units at them with DW_FORM_ref_addr (same file, `dwz file`) or, for
+# a multifile (`dwz -m sup.debug -M sup.debug a b`), DW_FORM_GNU_ref_alt into the
+# supplementary file .gnu_debugaltlink names. The DWARF pass read only unit-local
+# references, so `area` and `boxw` came out as `void area(unsigned long p,unsigned
+# long k) { return; }`: the unresolved return type read as void and the body went.
+# The pass now takes the referenced DIEs of other units into each unit's snapshot.
+#
+# Fixtures: crates/unlace-analysis/tests/fixtures/dwz_a.c + dwz_m1.c (gcc 15.3 -O2 -g,
+# x86-64), then dwz 0.17: `dwz dwz_single`, and `dwz -m dwzmulti_sup.debug -M
+# dwzmulti_sup.debug dwzmulti_a dwzmulti_b` (dwzmulti_b, built from dwz_m2.c, is
+# not kept: the supplementary file is enough).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwz_single',
+    'read symbols',
+    'load function area',
+    'decompile',
+    'print C',
+    'load function boxw',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwzmulti_a',
+    'read symbols',
+    'load function area',
+    'decompile',
+    'print C',
+    'load function boxw',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'DWZREFS #1: a type in a partial unit (ref_addr) or in the supplementary file (ref_alt) types the parameter'
+count = 2
+literal = 'long area(point *p,int k)'
+
+[[match]]
+name = 'DWZREFS #2: the body is the one the source has, in both images'
+count = 2
+literal = 'return p->x * p->y + k + p->tag;'
+
+[[match]]
+name = 'DWZREFS #3: a struct nested in another partial-unit struct keeps its fields'
+count = 2
+literal = 'long boxw(box *b)'
+
+[[match]]
+name = 'DWZREFS #4: no prototype falls back to void with untyped words'
+count = 0
+literal = 'void area(unsigned long p'

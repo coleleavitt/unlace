@@ -657,6 +657,16 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         }
         if matches!(
             architecture,
+            Architecture::I386 | Architecture::X86_64 | Architecture::X86_64_X32
+        ) && sec.kind() == SectionKind::Text
+        {
+            code_externs.extend(super::kuna_x86_relcode::code_targets(
+                &laid[li].data,
+                &relocs,
+            ));
+        }
+        if matches!(
+            architecture,
             Architecture::Sparc | Architecture::Sparc32Plus
         ) && sec.kind() == SectionKind::Text
         {

@@ -61,7 +61,12 @@ the instruction writes are still computed from `Old`. On the success path of
 an x86 `cmpxchg`, where the accumulator equals `Old`, the store's op is reused
 to assign `Old` to the accumulator, so both paths agree on it; the branch then
 only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
-zero-extends only on failure. An operand that no storage holds at the first
+zero-extends only on failure. A 32-bit `xadd` or `xchg` on x86-64 ends with
+`RAX = ZEXT(EAX)` after `UNLOCK()` (the hardware clear of the upper half);
+an instruction with no branch whose ops after the envelope are only such
+register-into-containing-register zero-extensions is rewritten without them,
+and they then extend the builtin's result
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (register_zext_tail)`). An operand that no storage holds at the first
 load (`~X` for `ldclr`, `imm + CF` for `adc`) is rebuilt with new ops in front
 of it, which is allowed only when the instruction updates memory through a
 pointer and none of its relative branches targets its end: a new op is

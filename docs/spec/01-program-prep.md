@@ -5326,7 +5326,8 @@ moves.
   registers.
 - **(kuna) COM ids and interfaces** (`com`, default off,
   `crates/unlace-analysis/src/analyzers/com/mod.rs (ComPass)`): on a PE
-  image, every 16-byte value at 4-byte alignment in a data section that equals
+  image, every 16-byte value at 4-byte alignment in a data or code section
+  (an i386 MSVC image merges `.rdata`, ids included, into `.text`) that equals
   a known interface or class id becomes a `GUID` (`Data1`, `Data2`, `Data3`,
   `Data4[8]`) named after it, with a numeric suffix on a repeat:
   `IID_IShellLinkW`, `CLSID_ShellLink`, `CLSID_WbemLocator`. For each interface id it

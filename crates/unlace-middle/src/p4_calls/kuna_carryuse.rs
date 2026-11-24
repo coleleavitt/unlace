@@ -24,7 +24,7 @@ crate::kuna_flag!(
     "carryuse",
     "carry-test use of a return value",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 /// Whether `a` and `b` are one value: the same Varnode, or equal constants.

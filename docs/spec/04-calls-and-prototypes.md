@@ -5153,6 +5153,17 @@ bytes the indirect result register stands, as in C. On x86-64 the default
 model's output is an explicit `join_dual_class` rule rather than a register
 list, so only the threshold changes there.
 
+(kuna `swiftcallers`, default off) A function that calls a Swift runtime entry
+point takes `__swiftcall` with no signature, `__swiftcall_throws` when it calls
+`swift_willThrow` (`crates/unlace-analysis/src/analyzers/swift/kuna_swiftcall.rs
+(runtime_callers)`): IDA's caller rule, which reaches the closures, partial-apply
+forwarders, heap-object destroyers and outlined copies that no symbol or metadata
+places. A call is a direct `bl`/`b` or `call`/`jmp rel32` to a `swift_*` import
+stub, or to a local function whose first instruction jumps to one (three levels),
+credited to the nearest entry oracle or text symbol at or below it; a binding from
+the type and symbol arms wins, and the binding is `maybe_self`, so a call site
+passes `self` only where it set the register.
+
 A convention can be bound to a function without a signature: the analysis
 tier's `(addr, model)` facts land in `Architecture::loader_proto_models` and
 reach every function's handle as `ArchContext::bound_proto_models`
@@ -5693,7 +5704,7 @@ target with no carry flag adds a 64-bit value as two 32-bit adds and moves the c
 with an unsigned compare of the low sum against one of its addends, on Xtensa as a
 branch (`add a2,a10,a8; bgeu a2,a8,1f; addi a3,a3,1`), so the low word of a returned
 64-bit sum is refused and `long long f(...) { return a * b + (a >> 3); }` prints
-`void`. With option `carryuse` (default `off`),
+`void`. With option `carryuse` (default `on`),
 `crates/unlace-middle/src/p4_calls/kuna_carryuse.rs (carry_test)` skips, for a
 RETURN trial only, an `INT_LESS` or `INT_LESSEQUAL` that compares the walked value,
 when an `INT_ADD` defines it, with one of that add's inputs (the same Varnode, or a

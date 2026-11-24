@@ -3743,7 +3743,7 @@ symptoms = "a strlen-like loop function prints void and its counter is declared 
 [[settable]]
 option = "carryuse"
 values = "on|off"
-default = "off"
+default = "on"
 destructive = false
 phase = "P4"
 subphase = "output-prototype"
@@ -3751,8 +3751,8 @@ strength = "HARD"
 rewind = "P4"
 issue = "unlace-carryuse"
 summary = "Keep a returned sum whose low word is also compared for its carry. Upstream's onlyOpUse (funcdata_varnode.cc:1851) refuses a RETURN trial whose value reaches a branch. A target with no carry flag adds a 64-bit value as two 32-bit adds and moves the carry with an unsigned compare of the low sum against one of its addends, often as a branch (Xtensa `add a2,a10,a8; bgeu a2,a8,1f; addi a3,a3,1`), so the low word of every such returned sum is refused and a function returning `a * b + (a >> 3)` or `f(x) + 7` as a `long long` printed `void`. With the option on, an `INT_LESS` or `INT_LESSEQUAL` between the walked value, when an `INT_ADD` defines it, and one of that add's inputs (the same Varnode or an equal constant) is the sum's carry test: `kuna_carryuse.rs` skips it in the walk for a RETURN trial, and every other use is scored as before."
-use_when = "Turn on when a function that returns a 64-bit sum on a 32-bit target without a carry flag (Xtensa, also any target whose compiler branches on the carry) prints `void` or returns only its low word. Leave off for upstream's scoring."
-example = "option carryuse on"
+use_when = "On by default: on 15 Xtensa gcc images (the real-code sweep's windowed .o/.elf builds, libgcc softfp, test objects) only lost returns are gained, each a 64-bit sum whose low word gcc branches on for the carry (`mul_wide`, `x + y`, `f(x) + 7` now return `unsigned long long` instead of `void`); on 89 control images of every other family in the sweep (x86, AArch64, ARM/Thumb, MIPS, RISC-V, PowerPC, SPARC, LoongArch, Hexagon, ARC, C-SKY, m68k, OpenRISC, s390x, BPF, AVR, MSP430, ...) and /usr/bin/xz no line changes, and the datatest (675/675) and stage (6000/6001, the pre-existing PAIRLOCAL #1 failure) corpora are unchanged with it on. Flip off for upstream's scoring."
+example = "option carryuse off"
 source_decompiler = "kuna"
 inspiration = "Real-code sweep: Xtensa -O2 mul_wide (a * b + (a >> 3) through call8 __umulsidi3) printed void"
 change_kind = "analysis-enablement"
@@ -7630,6 +7630,25 @@ inspiration = "The Swift calling convention (swift/docs/ABI/CallingConventionSum
 change_kind = "analysis-enablement"
 tier = "analysis"
 symptoms = "swift methods named by swiftmetadata read self from an unnamed x20 or r13|calls to swift methods drop the self they pass|a try? error path or a do/catch after a throwing call folds away|swift struct mutating methods write through an untyped register"
+
+[[settable]]
+option = "swiftcallers"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P1"
+subphase = "external-refinement"
+strength = "HARD"
+rewind = "P1"
+issue = "ida-gap-apple-3"
+summary = "The caller arm of the swiftcall pass (inert unless swiftmetadata, swifttypes and swiftcall are on): give __swiftcall, with no signature, to every function that calls a Swift runtime entry point, and __swiftcall_throws to one that calls swift_willThrow. A closure, a partial-apply forwarder, a heap-object destroyer or an outlined copy has no symbol and no metadata placement, so the type and symbol arms never bind it, yet it takes its context in swiftself (x20 / r13): under the C model x20 is callee-saved and its read is an unassigned local. IDA's swift module ORs the swiftcall flag into every function with a code reference to a swift_* symbol, through thunks; this does the same with a byte scan of the code for direct bl/b (arm64) or call/jmp rel32 (x86-64) to a swift_* import stub or to a local function whose first instruction jumps to one (three levels), each call credited to the nearest entry oracle or text symbol at or below it. A placement by the other arms wins. The model declares self only where the body reads the register, and call sites pass it only where the caller set it, so a caller that does not read x20 is unchanged."
+use_when = "Off by default. Turn it on for a Swift image where many functions read an unassigned x20 (or r13) local and pass it on to swift_release, swift_deallocObject or a callee: closures, partial-apply forwarders and outlined copies, which IDA prints with a self parameter."
+example = "--option swiftcallers on"
+source_decompiler = "ida"
+inspiration = "IDA 9.5 swift module: sub_1A320 collects the code references to every swift_* symbol through thunks (sub_13FC0) and ORs swiftcall, swift_willThrow adding throws (sub_13C90); notes/ida-gap/apple-objc-macho.md task 3"
+change_kind = "new-analysis"
+tier = "analysis"
+symptoms = "a Swift closure or forwarder reads a register local that nothing assigns and passes it to swift_release|a function that calls swift_willThrow does not hand back the error register|IDA shows a self parameter on a stripped Swift closure and kuna shows none"
 
 [[settable]]
 option = "swiftruntime"

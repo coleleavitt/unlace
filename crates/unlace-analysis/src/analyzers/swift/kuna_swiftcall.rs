@@ -903,6 +903,7 @@ pub fn bind(
     regs: &Registers,
     symbols: &[(u64, String)],
     import_calls: &[(u64, String)],
+    callers: &[(u64, bool)],
     out: &mut AnalysisOutput,
 ) -> Stats {
     let class_bound = types
@@ -925,6 +926,16 @@ pub fn bind(
     b.imports(import_calls);
     b.classes();
     b.conformances();
+    // (kuna `swiftcallers`) A function only the runtime calls reveal takes
+    // the model last, so a placement above keeps its `self` type.
+    for &(f, throws) in callers {
+        b.bound.entry(f).or_insert(Binding {
+            model: if throws { SWIFTCALL_THROWS } else { SWIFTCALL },
+            self_t: None,
+            maybe_self: true,
+            conflicted: false,
+        });
+    }
     let mut stats = Stats::default();
     out.swift_types.no_self = std::mem::take(&mut b.free);
     if !b.bound.is_empty() {
@@ -1007,9 +1018,137 @@ pub fn bind(
     stats
 }
 
+/// (kuna `swiftcallers`) Every function that calls a Swift runtime entry
+/// point, with whether it calls `swift_willThrow`: IDA's caller rule for
+/// `__swiftcall` (its swift module ORs the flag into each code reference to a
+/// `swift_*` symbol, through thunks). A closure, a partial-apply forwarder, a
+/// heap-object destroyer or an outlined copy has no symbol and no metadata
+/// placement, yet takes its context in `swiftself`; the model only declares
+/// `self` where the body reads the register, so a caller that does not costs
+/// nothing.
+///
+/// A call is a direct `bl`/`b` (arm64) or `call`/`jmp rel32` (x86-64) whose
+/// target is an import stub of a `swift_*` name, or a local function whose
+/// first instruction jumps to one (followed three levels). Its function is the
+/// nearest entry at or below it among the entry oracles and the text symbols.
+pub fn runtime_callers(
+    file: &object::File,
+    bytes: &[u8],
+    import_calls: &[(u64, String)],
+) -> Vec<(u64, bool)> {
+    use object::read::{Object, ObjectSection, ObjectSymbol};
+    let arm64 = match file.architecture() {
+        object::Architecture::Aarch64 => true,
+        object::Architecture::X86_64 => false,
+        _ => return Vec::new(),
+    };
+    let mut runtime: BTreeMap<u64, bool> = import_calls
+        .iter()
+        .filter(|(_, name)| name.trim_start_matches('_').starts_with("swift_"))
+        .map(|(addr, name)| (*addr, name.contains("swift_willThrow")))
+        .collect();
+    if runtime.is_empty() {
+        return Vec::new();
+    }
+    let code: Vec<(u64, &[u8])> = file
+        .sections()
+        .filter(|s| s.kind() == object::SectionKind::Text)
+        .filter_map(|s| Some((s.address(), s.data().ok()?)))
+        .collect();
+    let mut starts: Vec<u64> = crate::entry::collect_entries(file, bytes);
+    starts.extend(
+        file.symbols()
+            .filter(|s| s.kind() == object::SymbolKind::Text && s.is_definition())
+            .map(|s| s.address()),
+    );
+    starts.sort_unstable();
+    starts.dedup();
+    let jump_at = |at: u64| -> Option<u64> {
+        let (base, data) = code
+            .iter()
+            .find(|(lo, d)| at >= *lo && at - lo < d.len() as u64)?;
+        let off = (at - base) as usize;
+        if arm64 {
+            let w = u32::from_le_bytes(data.get(off..off + 4)?.try_into().ok()?);
+            (w & 0xfc00_0000 == 0x1400_0000).then(|| branch26(at, w))
+        } else {
+            (*data.get(off)? == 0xe9)
+                .then(|| rel32(at, data, off))
+                .flatten()
+        }
+    };
+    for _ in 0..3 {
+        let thunks: Vec<(u64, bool)> = starts
+            .iter()
+            .filter(|s| !runtime.contains_key(s))
+            .filter_map(|&s| Some((s, *runtime.get(&jump_at(s)?)?)))
+            .collect();
+        if thunks.is_empty() {
+            break;
+        }
+        runtime.extend(thunks);
+    }
+    let mut callers: BTreeMap<u64, bool> = BTreeMap::new();
+    let mut credit = |site: u64, throws: bool| {
+        let below = starts.partition_point(|&s| s <= site);
+        if let Some(&f) = below.checked_sub(1).and_then(|i| starts.get(i)) {
+            if !runtime.contains_key(&f) {
+                *callers.entry(f).or_insert(false) |= throws;
+            }
+        }
+    };
+    for (base, data) in &code {
+        if arm64 {
+            for off in (0..data.len().saturating_sub(3)).step_by(4) {
+                let w =
+                    u32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]);
+                if matches!(w & 0xfc00_0000, 0x9400_0000 | 0x1400_0000) {
+                    let at = base + off as u64;
+                    if let Some(&throws) = runtime.get(&branch26(at, w)) {
+                        credit(at, throws);
+                    }
+                }
+            }
+        } else {
+            for off in 0..data.len() {
+                if matches!(data[off], 0xe8 | 0xe9) {
+                    let at = base + off as u64;
+                    if let Some(&throws) = rel32(at, data, off).and_then(|t| runtime.get(&t)) {
+                        credit(at, throws);
+                    }
+                }
+            }
+        }
+    }
+    callers.into_iter().collect()
+}
+
+/// The target of the arm64 `b`/`bl` word `w` at `at`.
+fn branch26(at: u64, w: u32) -> u64 {
+    let imm = ((w & 0x03ff_ffff) << 6) as i32 >> 6;
+    at.wrapping_add((imm as i64 * 4) as u64)
+}
+
+/// The target of the x86-64 `call`/`jmp rel32` whose opcode byte is `data[off]`.
+fn rel32(at: u64, data: &[u8], off: usize) -> Option<u64> {
+    let b = data.get(off + 1..off + 5)?;
+    let rel = i32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+    Some(at.wrapping_add(5).wrapping_add(rel as i64 as u64))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn branch_targets_decode() {
+        // bl #-0x10 at 0x1000; b #+8 at 0x2000.
+        assert_eq!(branch26(0x1000, 0x97ff_fffc), 0x0ff0);
+        assert_eq!(branch26(0x2000, 0x1400_0002), 0x2008);
+        // call rel32 -0x20 at 0x3000.
+        let call = [0xe8, 0xe0, 0xff, 0xff, 0xff];
+        assert_eq!(rel32(0x3000, &call, 0), Some(0x2fe5));
+    }
 
     fn member_of(symbol: &str) -> Option<(SelfIs, bool)> {
         let tree = demangle_swift_tree(symbol)?;

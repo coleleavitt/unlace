@@ -639,6 +639,9 @@ kuna_options! { self, p1;
     "aifdataveto" => {
         registered!(crate::kuna_analysisgates::Aifdataveto)
     },
+    "swiftcallers" => {
+        registered!(crate::kuna_analysisgates::Swiftcallers)
+    },
     "incrementalwalk" => {
         registered!(crate::kuna_analysisgates::Incrementalwalk)
     },

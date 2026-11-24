@@ -1,0 +1,991 @@
+# Processor-family smoke tests, run by `crates/unlace-cli/tests/processors.rs`.
+#
+# A [[family]] names a raw image (`fixture`, a path from the repository root, or `image`, a key
+# of [images] holding hex bytes), its load `base` and its SLEIGH `language` id (a list runs
+# every function once per language). Each [[family.function]] decompiles one address:
+#   unlace decompile <image> <address> --raw-image --target <language> --base <base>
+# (plus the family's `args`, extra CLI arguments). A function passes when the run exits 0, its
+# lowercased output contains neither "unimplemented" nor "bad instruction" nor any `forbid` entry
+# (family and function lists add up), and its output contains every `expect` entry
+# (case-sensitive). A function may override `language`; one with `xfail = "<why>"` is a known
+# failure, reported until it passes (then the test fails: drop the marker).
+# A new processor family adds a [[family]] here instead of a new *_raw.rs file
+# (docs/processor-tests.md).
+
+[images]
+epiphany = """
+ba4070043a044f190204ba004f1902045cd50027dc140084ef0002804321f0f1
+4c6100109a011f000a028b8622410b8f62551f020a01cc1400844cd500241bb4
+01244f190204
+"""
+ft32 = """
+1200e05d0400280102800044000000a012000044000000a0008006840040d044
+0a00106400003400088016ac10000044d00000440d5000440000d08c000000a0
+"""
+iq2000 = """
+0085102a104000030000000003e0000800a4102303e000080085102327bdfff8
+afbf0004afb00000008080250c0004002405000a8e0300080000000000431021
+00501021304200ff8fbf00048fb0000003e0000827bd0008
+"""
+lanai = """
+9293fffc02900008c01e3200ee00001d22100008e0000028c41c320071980002
+c18c3200c40c38008116fffc021400008296fff89293fffc0290000822100008
+201e0001ec00005d5400000081990004239e0001e600004cc40c40008116fffc
+021400008296fff89293fffc0290000822100008078800109793fffce0000094
+03180001042000028116fffc021400008296fff89293fffc0290000822100008
+6418005a8116fffc021400008296fff89293fffc0290000822100008f19b5801
+f19f2000f41b58028116fffc021400008296fff8
+"""
+mmix = """
+3002000140020005220200002200020022000001f801000026000100f8010000
+4c01000bc10200003b01010322010001e30000008d0302002200000323020208
+300302015b03fffcf8010000e3000000f8010000c700005af8010000fe010004
+23030001f302fffcf604000123000202f8010000810200013b0202383f020238
+a702010081000002f8010000c1020000c1040100c6ff02043603000460040403
+36030002600202031e030204360200036003ff02360200016001010236ff0000
+600000ff1e000001fe020006360100026802ff0122000302f8010000
+"""
+moxie = """
+0e23d80329320223040029230400
+"""
+nios2 = """
+0e0240213ac805293a2800f83ac845213a2800f804feffde1501c0df150000dc
+3a88212084024001000001001702c0803a88c5103a880514cc3f80101701c0df
+170000dc0402c0de3a2800f8
+"""
+propeller = """
+0016fca00a18fca00c16bc800218fce40914fc5c0d163c850d168ca0f0173c08
+08007c5c0116fc2c00007c5c000000000000000064000000
+"""
+visium = """
+064100244800000500000000864204147f95000400000000864104247f950004
+00000000845700080000000003f7055483f700b487212c0484a9000084891000
+7f89540404c2000a07eb0e2486010434060104b407f7561487f72e047f950004
+04170008
+"""
+
+# The native Blackfin language decompiles a raw image: a zero-overhead
+# hardware loop (LSETUP) becomes a loop, and a CALL with register arguments
+# and a multi-issue bundle decompiles to a call.
+[[family]]
+name = "blackfin"
+language = "Blackfin:LE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/blackfin/sum_loop.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "blackfin_hardware_loop_decompiles"
+address = "0x1000"
+expect = [
+    "do {",  # the LSETUP loop is recovered
+    "+= ",  # the loop accumulates
+]
+
+[[family.function]]
+test = "blackfin_call_with_register_arguments_decompiles"
+address = "0x1010"
+expect = [
+    "sub_1000(5,7) + 1",  # R0/R1 arguments and the R0 result
+]
+
+# The vendored TMS320C28x language loads a word-addressed raw image and
+# decompiles it.
+[[family]]
+name = "c28x"
+language = "tms320c28:LE:32:default"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/c28x/addb_lret.bin"
+
+[[family.function]]
+test = "c28x_add_immediate_and_return_decompiles"
+address = "0x8000"
+xfail = "reads past the end of its 16-byte image: Unable to load N bytes at r0x00008008 (also on main at a16f4c0c42)"
+
+# The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
+# store-increment loop through R1 closed by BNZ, returning with SEP R5.
+[[family]]
+name = "cdp1802"
+language = "CDP1802:BE:16:SCRT"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/cdp1802/fill_loop.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "cdp1802_fill_loop_decompiles"
+address = "0x0"
+expect = [
+    "(char *)0x1000",  # R1 is built from PHI/PLO
+    "do {",  # the BNZ loop is recovered
+]
+
+# The CLIPPER language (written from the C300 data book) decompiles a
+# hand-assembled raw image of four routines.
+[[family]]
+name = "clipper"
+language = "clipper:LE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/clipper/funcs.bin"
+forbid = ["baddata"]
+
+# addw r1,r0; ret r15
+[[family.function]]
+test = "clipper_register_add"
+address = "0x1000"
+expect = [
+    "return a0 + a1;",
+]
+
+# cmpw r1,r0; bcle pc16; movw r1,r0; ret r15
+[[family.function]]
+test = "clipper_compare_branch_max"
+address = "0x1010"
+expect = [
+    "if (a0 < a1)",
+]
+
+# loadw 0x12345678,r0; ret r15
+[[family.function]]
+test = "clipper_abs32_load"
+address = "0x1020"
+expect = [
+    "return dat_12345678;",
+]
+
+# loadq $7,r1; call r15,pc32 0x1000; ret r15
+[[family.function]]
+test = "clipper_pc32_call"
+address = "0x1030"
+expect = [
+    "sub_1000(a0,7);",
+]
+
+# The Epiphany language decompiles 16- and 32-bit instructions built with epiphany-elf-as.
+[[family]]
+name = "epiphany"
+language = "epiphany:LE:32:default"
+base = "0x1000"
+image = "epiphany"
+
+[[family.function]]
+test = "epiphany_mixed_width_decompiles"
+address = "0x1010"
+expect = [
+    "sub_1000(a0,10)",
+    "((int *)a0)[2]",
+    "0x56781234",
+]
+
+# The Fujitsu FR language loads a big-endian raw image of two hand-assembled
+# functions that use delay slots (`ble:d`, `ret:d`, `call:d`) and decompiles
+# both.
+[[family]]
+name = "fr"
+language = "FR:BE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/fr/delay_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "fr_delay_slot_branches_decompile"
+address = "0x0"
+expect = [
+    "if (a1 < a0)",
+    "return a0 - a1;",
+    "return a0 + a1 * 4;",
+]
+
+[[family.function]]
+test = "fr_delayed_call_passes_its_slot_argument"
+address = "0x12"
+expect = [
+    "sub_0(",
+    ",7)",
+    "+ 1",
+]
+
+# The Fujitsu FR-V language loads a big-endian raw image of two hand-assembled
+# functions (an ICC compare-and-branch leaf returning through `bralr`, and a
+# caller that saves LR with `movsg`/`movgs`) and decompiles both.
+[[family]]
+name = "frv"
+language = "FRV:BE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/frv/branch_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "frv_icc_branch_leaf_decompiles"
+address = "0x0"
+expect = [
+    "if (a1 < a0)",
+    "return a0 - a1;",
+    "return a0 + a1 * 4;",
+]
+
+[[family.function]]
+test = "frv_call_saving_lr_decompiles"
+address = "0x1c"
+expect = [
+    "sub_0(",
+    ",7)",
+    "+ 1",
+]
+
+# The FT32 language decompiles a compare-and-branch routine and a caller built with ft32-elf-as.
+[[family]]
+name = "ft32"
+language = "ft32:LE:32:default"
+base = "0x0"
+image = "ft32"
+
+[[family.function]]
+test = "ft32_compare_branch_and_call_decompile"
+address = "0x0"
+expect = [
+    "if (a0 < a1)",
+    "return a1 - a0;",
+    "return a0 - a1;",
+]
+
+# The native Intel 4004 language decompiles a raw image: a 4-bit add with carry
+# stored through the SRC latch into 4002 RAM.
+[[family]]
+name = "i4004"
+language = "4004:LE:16:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/i4004/add_store.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "i4004_add_and_ram_store_decompiles"
+address = "0x0"
+expect = [
+    "dat_12 = 3;",  # the RAM store folds to bank 0, address 0x12
+    "return 0;",  # BBL 0 returns 0 in A
+]
+
+# The IQ2000 language decompiles a compare-and-branch routine (with delay slots) built with iq2000-elf-as.
+[[family]]
+name = "iq2000"
+language = "iq2000:BE:32:default"
+base = "0x1000"
+image = "iq2000"
+
+[[family.function]]
+test = "iq2000_compare_branch_decompiles"
+address = "0x1000"
+expect = [
+    "if (a0 < a1)",
+    "return a1 - a0;",
+    "return a0 - a1;",
+]
+
+# The KR1878VE1 language decompiles a hand-assembled add/compare/store routine.
+[[family]]
+name = "kr1878"
+language = "KR1878:LE:16:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/kr1878/add_store.bin"
+
+[[family.function]]
+test = "kr1878_add_compare_store_decompiles"
+address = "0x0"
+expect = [
+    "dat_40 = dat_41 + 8",  # window A at 0x40 folds the add
+    "0x10 <= ",  # the borrow test survives
+    "dat_42 = 7",  # the store to 0x42
+]
+
+# The Lanai language decompiles a compare-and-branch routine and a call (delay slots, the
+# pushed return address) built with clang's Lanai backend.
+[[family]]
+name = "lanai"
+language = "lanai:BE:32:default"
+base = "0x0"
+image = "lanai"
+
+[[family.function]]
+test = "lanai_compare_branch_decompiles"
+address = "0x0"
+expect = [
+    "int sub_0(int a0,int a1)",
+    "if (a1 <= a0)",
+    "a0 *= 3;",
+    "return a1 + a0;",
+]
+
+[[family.function]]
+test = "lanai_call_decompiles"
+address = "0x68"
+expect = [
+    "return sub_94(a0 + 1) + 2;",
+]
+
+# The M32C/80 language loads a little-endian raw image of two functions built
+# with `m32c-elf-as` (`fixtures/m32c/mul_div.s`) that use the M32C-only
+# `MUL.L`, `SHANC.L` and `DIVU.L`, and decompiles both.
+[[family]]
+name = "m32c"
+language = "M32C/80:LE:24:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/m32c/mul_div.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "m32c_mul_l_and_shanc_decompile"
+address = "0x0"
+expect = [
+    "a1 * 1000 >> 2",
+]
+
+[[family.function]]
+test = "m32c_divu_l_decompiles"
+address = "0x20"
+expect = [
+    "return a1 / a2;",
+]
+
+# The M32R language loads a big-endian raw image of two hand-assembled
+# functions (a compare-and-branch leaf and a caller using `ld24`, `bl` and
+# the parallel-slot `|| nop` filler) and decompiles both.
+[[family]]
+name = "m32r"
+language = "M32R:BE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/m32r/minmax_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "m32r_compare_branch_leaf_decompiles"
+address = "0x0"
+expect = [
+    "if (a0 < a1)",
+    "return a1 - a0;",
+    "return a0 + a1 * 4;",
+]
+
+[[family.function]]
+test = "m32r_call_through_parallel_slot_decompiles"
+address = "0x14"
+expect = [
+    "sub_0(",
+    "0x1234",
+]
+
+# The Motorola 88000 language (written from the MC88100 manual) decompiles a
+# hand-assembled raw image of four routines.
+[[family]]
+name = "m88k"
+language = "88000:BE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/m88k/funcs.bin"
+forbid = ["baddata"]
+
+# addu r2,r2,r3; jmp r1
+[[family.function]]
+test = "m88k_register_add"
+address = "0x1000"
+expect = [
+    "return a0 + a1;",
+]
+
+# cmp r4,r2,r3; bb1 ge,r4,1f; or r2,r0,r3; 1: jmp r1
+[[family.function]]
+test = "m88k_cmp_bit_vector_max"
+address = "0x1010"
+expect = [
+    "if (a0 < a1)",
+]
+
+# or.u r5,r0,0x1234; ld r2,r5,0x5678; jmp r1
+[[family.function]]
+test = "m88k_high_low_absolute_load"
+address = "0x1020"
+expect = [
+    "return dat_12345678;",
+]
+
+# bsr.n 0x1000 with "or r3,r0,7" in its delay slot
+[[family.function]]
+test = "m88k_bsr_delay_slot_call"
+address = "0x1030"
+expect = [
+    "sub_1000(a0,7);",
+]
+
+# The Imagination META language decompiles a GNU as-assembled raw image: a counted loop
+# over a pointer with post-increment loads, and a caller that saves registers with MSETL,
+# calls through CALLR and builds a 32-bit constant from MOVT and ADD.
+[[family]]
+name = "meta"
+language = "META:LE:32:default"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/meta/sum_call.bin"
+
+# `sum`: D1Ar1 counts down, GETD D0Ar6,[D0Ar2++] walks the array, MOV PC,D1RtP returns.
+[[family.function]]
+test = "meta_counted_loop_decompiles"
+address = "0x0"
+expect = [
+    "int sub_0(int a0,int *a1)",
+    "while (0 < a0) {",
+    "v1 += *a1;",
+    "return v1;",
+]
+
+# `callit`: CALLR D1RtP links the call, MOVT+ADD fold into 0x12345678, SETD [A1GbP+#8].
+[[family.function]]
+test = "meta_call_and_constant_decompile"
+address = "0x24"
+expect = [
+    "v1 = sub_0();",
+    "(v2 + 8) = 0x12345678;",
+    "return v1 + a0;",
+]
+
+# The MMIX language decompiles GCC (`mmix`, -O2) output: a compare-and-branch routine, and a
+# PUSHJ call whose argument travels through the register stack (caller's $3 is the callee's
+# $0) and whose result comes back in the caller's $2.
+[[family]]
+name = "mmix"
+language = "MMIX:BE:64:default"
+base = "0x100"
+image = "mmix"
+
+[[family.function]]
+test = "mmix_compare_branch_decompiles"
+address = "0x100"
+expect = [
+    "long sub_100(long a0,long a1)",
+    "return a0 * 3 + a1;",
+    "return a1 - a0;",
+]
+
+[[family.function]]
+test = "mmix_pushj_call_decompiles"
+address = "0x15c"
+expect = [
+    "long sub_15c(long a0)",
+    "return sub_154(a0 + 1) + 2;",
+]
+
+# The Moxie language decompiles a compare-and-branch routine built with moxie-elf-as.
+[[family]]
+name = "moxie"
+language = "moxie:BE:32:default"
+base = "0x1000"
+image = "moxie"
+
+[[family.function]]
+test = "moxie_compare_branch_decompiles"
+address = "0x1000"
+expect = [
+    "if (a0 < a1)",
+    "return a1 - a0;",
+    "return a0 - a1;",
+]
+
+# The Netronome NFP-6xxx microengine language decompiles hand-encoded ME v2.8 microcode
+# (64-bit instruction words, branch targets in instruction numbers) from a raw image.
+[[family]]
+name = "nfp"
+language = "NFP:LE:32:ME28"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/nfp/sum_loop.bin"
+
+# `immed[gprA_1, 0]`, a flag-setting `alu[--, --, B, gprB_0]` and `beq`, then a loop of
+# `alu[gprA_1, gprA_1, +, gprB_0]`, `alu[gprB_0, gprB_0, -, 1]` (swapped operands) and `bne`,
+# a store through `*l$index0[1]` and `rtn[gprA_2]`.
+[[family.function]]
+test = "nfp_counted_loop_decompiles"
+address = "0x0"
+expect = [
+    "v1 = 0;",
+    "v1 += v2;",
+    "v2 = v2 + -1",
+    "*(int *)(v3 + 4) = v1;",
+]
+
+[[family]]
+name = "nfp"
+language = "NFP:LE:32:ME28"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/nfp/coverage.bin"
+
+# One of each class: alu_shf, asr, immed_w1, immed <<16, ld_field_w_clr, br_bset,
+# br!=byte, local_csr_wr, a mem[read] command, a deferred br and ctx_arb[kill].
+[[family.function]]
+test = "nfp_instruction_classes_decode"
+address = "0x0"
+expect = [
+    "(v1 >> 3 & 1) != 1",
+    "(v1 & 0xff) == 0x7f",
+    "local_csr_wr(6,v1);",
+    "cpp_cmd(0x40,0,0,v1,v2,1,1);",
+    "ctx_kill();",
+]
+
+# The Nios II language decompiles a compare-and-branch routine built with nios2-elf-as.
+[[family]]
+name = "nios2"
+language = "nios2:LE:32:R1"
+base = "0x1000"
+image = "nios2"
+
+[[family.function]]
+test = "nios2_compare_branch_decompiles"
+address = "0x1000"
+expect = [
+    "if (a0 < a1)",
+    "return a1 - a0;",
+    "return a0 - a1;",
+]
+
+# The Data General Nova language (written from DG's Nova programmer's
+# references) decompiles a hand-assembled, word-addressed raw image.
+[[family]]
+name = "nova"
+language = "Nova:BE:16:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/nova/funcs.bin"
+forbid = ["baddata"]
+
+# ADD 1,0; JMP 0,3
+[[family.function]]
+test = "nova_operate_add"
+address = "0x10"
+expect = [
+    "return a1 + a0;",
+]
+
+# SUBZ# 1,0,SNC; MOV 1,0; JMP 0,3
+[[family.function]]
+test = "nova_subtract_skip_max"
+address = "0x14"
+expect = [
+    "if (a0 < a1)",
+    "a0 = a1;",
+]
+
+# LDA 0,050; LDA 1,051; ADD 1,0; STA 0,052; JMP 0,3 (words; symbols print bytes)
+[[family.function]]
+test = "nova_page_zero_load_store"
+address = "0x18"
+expect = [
+    "dat_54 = dat_52 + dat_50;",
+]
+
+# SAV; ADDZL 0,0; STA 0,-4,3; RET
+[[family.function]]
+test = "nova_rotate_through_carry"
+address = "0x28"
+expect = [
+    "return a0 << 2 |",
+]
+
+# SAV; JSR 020; MFFP 3; STA 0,-4,3; RET
+[[family.function]]
+test = "nova3_frame_call"
+address = "0x38"
+expect = [
+    "return sub_10(a0,a1);",
+]
+
+# The PDP-11 language (written from the DEC handbooks) decompiles a
+# hand-assembled raw image: add(a, b) at 0x1000 and max(a, b) at 0x1010.
+[[family]]
+name = "pdp11"
+language = "PDP-11:LE:16:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/pdp11/add_max.bin"
+forbid = ["baddata"]
+
+# MOV 2(SP),R0; ADD 4(SP),R0; RTS PC
+[[family.function]]
+test = "pdp11_stack_arguments_add"
+address = "0x1000"
+expect = [
+    "return a0 + a1;",
+]
+
+# MOV 2(SP),R0; CMP R0,4(SP); BGE 1f; MOV 4(SP),R0; 1: RTS PC
+[[family.function]]
+test = "pdp11_signed_max"
+address = "0x1010"
+expect = [
+    "if (a0 < a1)",
+]
+
+# The Propeller language decompiles a cog routine: a djnz loop, a call/ret pair, a
+# conditional (if_nc) move after a compare and a hub write. Hand-assembled PASM:
+# `mov sum,#0; mov cnt,#10; loop add sum,cnt; djnz cnt,#loop; call #double;
+# cmp sum,limit wc; if_nc mov sum,limit; wrlong sum,par; halt jmp #halt;
+# double shl sum,#1; double_ret ret`.
+[[family]]
+name = "propeller"
+language = "propeller:LE:16:default"
+base = "0x0"
+image = "propeller"
+
+[[family.function]]
+test = "propeller_cog_routine_decompiles"
+address = "0x0"
+expect = [
+    "dat_30 = 10;",
+    "dat_2c += dat_30;",
+    "} while (dat_30);",
+    "sub_24();",
+    "if (dat_34 <= dat_2c)",
+    "dat_2c = dat_34;",
+]
+
+[[family.function]]
+test = "propeller_subroutine_decompiles"
+address = "0x24"
+expect = [
+    "dat_2c <<= 1;",
+]
+
+# The Rabbit 2000 and 3000A languages decompile a hand-assembled add/compare/store routine.
+[[family]]
+name = "rabbit"
+language = ["Rabbit2000:LE:16:default", "Rabbit3000:LE:16:default"]
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/rabbit/add_store.bin"
+
+[[family.function]]
+test = "rabbit_add_compare_store_decompiles"
+address = "0x0"
+expect = [
+    "<= 0xf",  # the CP / JR NC test survives
+    "dat_8000 = ",  # the store to 0x8000
+    "return 5;",  # the taken path
+    "return 0;",  # the fall-back path
+]
+
+# The IBM ROMP language (written from the RT PC Technical Reference)
+# decompiles a hand-assembled raw image of four routines.
+[[family]]
+name = "romp"
+language = "ROMP:BE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/romp/funcs.bin"
+forbid = ["baddata"]
+
+# a r2,r3; br r15
+[[family.function]]
+test = "romp_register_add"
+address = "0x1000"
+expect = [
+    "return a0 + a1;",
+]
+
+# c r2,r3; jnb lt,1f; cas r2,r3,r0; 1: br r15
+[[family.function]]
+test = "romp_compare_jump_max"
+address = "0x1010"
+expect = [
+    "if (a0 < a1)",
+]
+
+# cau r4,0x1234(0); l r2,0x5678(r4); br r15
+[[family.function]]
+test = "romp_upper_lower_absolute_load"
+address = "0x1020"
+expect = [
+    "return dat_12345678;",
+]
+
+# balix r15,0x1000 with "lis r3,7" as its subject
+[[family.function]]
+test = "romp_branch_with_execute_call"
+address = "0x1030"
+expect = [
+    "sub_1000(a0,7);",
+]
+
+# The Epson S1C17 and S1C33 languages load little-endian raw images of two
+# hand-assembled functions each (a compare-and-branch leaf whose constant needs
+# the `ext` prefix, and a caller that loads through an `ext` displacement and
+# fills a delayed call's slot) and decompile both.
+[[family]]
+name = "s1c17"
+language = "S1C17:LE:24:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/s1c/s1c17_clamp_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s1c17_ext_extended_compare_decompiles"
+address = "0x0"
+expect = [
+    "a0 + a1 <= 100",
+    "return 100;",
+]
+
+[[family.function]]
+test = "s1c17_delayed_call_with_ext_displacement_decompiles"
+address = "0x10"
+expect = [
+    "[1]",
+    "sub_0(v1,5) ^ 3",
+]
+
+[[family]]
+name = "s1c33"
+language = "S1C33:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/s1c/s1c33_max_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s1c33_ext_extended_add_decompiles"
+address = "0x0"
+expect = [
+    "if (a0 < a1)",
+    "return a0 + 1000;",
+]
+
+[[family.function]]
+test = "s1c33_delayed_call_with_ext_displacement_decompiles"
+address = "0x10"
+expect = [
+    "[2]",
+    "sub_0(v1,3) ^ 0x55",
+]
+
+# The native Signetics 2650 language decompiles a raw image: a BDRR
+# decrement-and-branch loop summing into R0, then an absolute store.
+[[family]]
+name = "s2650"
+language = "2650:BE:16:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/s2650/sum_loop.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s2650_sum_loop_decompiles"
+address = "0x0"
+expect = [
+    "do {",  # the BDRR loop is recovered
+    "dat_1000 = ",  # the absolute store survives
+]
+
+# The SAM8 and SAM88RCRI languages decompile a hand-assembled add/compare/store routine.
+[[family]]
+name = "sam8"
+base = "0x100"
+fixture = "crates/unlace-cli/tests/fixtures/sam8/add_store.bin"
+
+[[family.function]]
+test = "sam8_add_compare_store_decompiles"
+language = "SAM8:BE:16:default"
+address = "0x100"
+expect = [
+    "dat_c0 = dat_30 + 5",  # SRP #C0 puts R0 at C0h and the add folds
+    "10 <= dat_c0",  # the borrow test survives
+    "dat_41 = 7",  # the store to 41h
+]
+
+[[family.function]]
+test = "sam88rcri_fixed_working_registers_decompile"
+language = "SAM88RCRI:BE:16:default"
+address = "0x102"
+expect = [
+    "dat_c0 = dat_30 + 5",  # R0 is C0h
+    "dat_40 = dat_c0",  # the store to 40h
+]
+
+# The native National SC/MP language decompiles a raw image: an auto-indexed
+# store loop through P1, closed by JNZ with the pre-incremented PC.
+[[family]]
+name = "scmp"
+language = "SCMP:LE:16:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/scmp/fill_loop.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "scmp_fill_loop_decompiles"
+address = "0x0"
+expect = [
+    "(char *)0x1000",  # P1 is built with XPAH/XPAL
+    "do {",  # the JNZ loop is recovered
+    "0xfff",  # the pointer wraps in its 4 KiB page
+]
+
+# The ST20 language decompiles a hand-assembled add/compare/store routine.
+[[family]]
+name = "st20"
+language = "ST20:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/st20/add_store.bin"
+
+[[family.function]]
+test = "st20_add_compare_store_decompiles"
+address = "0x0"
+expect = [
+    "dat_8000 = a0 + 3;",  # the stnl store
+    "0xb <= a0 + 3",  # the gt / cj test
+    "return 5;",  # the taken path
+    "return 0;",  # the fall-back path
+]
+
+# The vendored STM8 languages load a raw image and decompile it.
+[[family]]
+name = "stm8"
+language = ["STM8:BE:16:default", "STM8:BE:24:default"]
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/stm8/add_store.bin"
+
+[[family.function]]
+test = "stm8_add_and_store_decompiles_in_both_memory_models"
+address = "0x8000"
+xfail = "reads past the end of its 32-byte image: Unable to load N bytes at r0x8020 (also on main at a16f4c0c42)"
+expect = [
+    "10",  # the store to $10 survives
+]
+
+# The native TILE-Gx language decompiles a raw image of hand-assembled bundles:
+# a counted loop, a call with register arguments, a conditional move, a register
+# swap inside one bundle (parallel reads) and a bit-field extract.
+[[family]]
+name = "tilegx"
+language = "TILEGX:LE:64:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/tilegx/bundles.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "tilegx_counted_loop_decompiles"
+address = "0x0"
+expect = [
+    "while",  # the load loop is recovered
+    "+= *",  # the loop accumulates loads
+]
+
+[[family.function]]
+test = "tilegx_call_with_register_arguments_decompiles"
+address = "0x30"
+expect = [
+    "sub_0(5,7) + 1",  # r0/r1 arguments and the r0 result
+]
+
+[[family.function]]
+test = "tilegx_bundle_reads_before_it_writes"
+address = "0x70"
+expect = [
+    "return a1 - a0;",  # the in-bundle swap reads old values
+]
+
+[[family.function]]
+test = "tilegx_conditional_move_decompiles"
+address = "0x60"
+expect = [
+    "a0 < a1",  # cmpltu feeds cmovnez
+]
+
+# The TLCS-870 language decompiles a hand-assembled add/compare/store routine.
+[[family]]
+name = "tlcs870"
+language = "TLCS870:LE:16:default"
+base = "0xe000"
+fixture = "crates/unlace-cli/tests/fixtures/tlcs870/add_store.bin"
+
+[[family.function]]
+test = "tlcs870_add_compare_store_decompiles"
+address = "0xe000"
+expect = [
+    "if ((char)(a0 + '\\x05') == '\\x10') {",  # the ADD / CMP / JR NE test survives
+    "dat_80 = a0 + '\\x05';",  # the store to (0x80)
+    "return 0x10;",  # the taken path
+    "return 0;",  # the fall-back path
+]
+
+# The clean-room Toshiba TLCS-90 language loads a raw image and decompiles it.
+[[family]]
+name = "tlcs90"
+language = "TLCS90:LE:16:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/tlcs90/add_store.bin"
+
+[[family.function]]
+test = "tlcs90_add_store_compare_decompiles"
+address = "0x1000"
+expect = [
+    "8000",  # the store to 8000 survives
+    "return 5",
+    "return 0",
+]
+
+# The native TMS320C3x language decompiles a raw image: an indirect
+# post-increment load in a DBU loop, direct stores through DP, and a
+# three-operand ADDI3.
+[[family]]
+name = "tms320c3x"
+language = "TMS320C3x:LE:32:default"
+base = "0x100"
+fixture = "crates/unlace-cli/tests/fixtures/tms320c3x/sum_store.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "tms320c3x_sum_store_decompiles"
+address = "0x100"
+expect = [
+    "do {",  # the DBU loop is recovered
+    "+= *",  # ADDI reads *AR1++
+    "(int *)0x200",  # AR1 starts at the array
+    "* 2;",  # ADDI3 R0,R0,R1 doubles the sum
+]
+
+# The native TMS9900 language decompiles a raw image: a DEC/JNE loop, a store
+# through *R2, and a symbolic-to-symbolic MOV with two extension words.
+[[family]]
+name = "tms9900"
+language = "TMS9900:BE:16:default"
+base = "0x100"
+fixture = "crates/unlace-cli/tests/fixtures/tms9900/sum_store.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "tms9900_sum_store_decompiles"
+address = "0x100"
+expect = [
+    "do {",  # the JNE loop is recovered
+    "dat_1000 = ",  # MOV R3,*R2 stores to 0x1000
+    "dat_3000 = dat_2000;",  # both extension words decode
+]
+
+# The Visium language decompiles a compare-and-branch routine (with delay slots) built with visium-elf-as.
+[[family]]
+name = "visium"
+language = "visium:BE:32:default"
+base = "0x1000"
+image = "visium"
+
+[[family.function]]
+test = "visium_compare_branch_decompiles"
+address = "0x1000"
+expect = [
+    "if (a0 < a1)",
+    "return a1 - a0;",
+    "return a0 - a1;",
+]
+
+# The vendored 65816 language loads a raw image and decompiles it with a
+# 16-bit accumulator.
+[[family]]
+name = "w65816"
+language = "65816:LE:16:default"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/w65816/add16_store.bin"
+
+[[family.function]]
+test = "w65816_sixteen_bit_add_and_store_decompiles"
+address = "0x8000"
+xfail = "the function flows out of bounds into halt_missing, no store to $2000 (also on main at a16f4c0c42)"
+expect = [
+    "2000",  # the store to $2000 survives
+]

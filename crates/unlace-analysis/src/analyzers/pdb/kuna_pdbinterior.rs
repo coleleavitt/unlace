@@ -120,7 +120,7 @@ pub fn eligible_pdb_bodies(
         return Vec::new();
     };
     let candidates = locate::pdb_candidates(image_path, &cv);
-    let (Some(image_base), false) = (pe_image_base(bytes), candidates.is_empty()) else {
+    let Some(image_base) = pe_image_base(bytes) else {
         return Vec::new();
     };
     let Some(mut pdb) = open_fingerprint_matched(&candidates, &cv) else {

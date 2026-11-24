@@ -1,10 +1,19 @@
 //! (kuna `goitabcalls`) An indirect call through a method slot of a Go itab
-//! record prints as `Interface.Method(receiver, ...)`.
+//! prints as `Interface.Method(receiver, ...)`.
 //!
-//! The callee of the CALLIND is a LOAD of one slot of a `go.itab.<interface>`
-//! record (`PTRSUB` or `INT_ADD` of a pointer typed to that record and a
-//! constant): the record's `GoItab` facet names the interface and the field at
-//! that offset names the method. Anything else prints as before.
+//! The callee of the CALLIND is a LOAD of one slot of an itab (`PTRSUB` or
+//! `INT_ADD` of the table pointer and a constant at or past the `Fun` array).
+//! The table's interface comes from where the table pointer comes from
+//! ([`table_interface`]): a pointer typed to a `go.itab.<interface>` record
+//! (an interface formal the DWARF signature split), or the first word of an
+//! interface-typed field of a named struct, read through a pointer to the
+//! struct (`h->S.tab`, the `GoInterfaceFields` facet), or the result of a
+//! type assertion (`runtime.typeAssert` with a constant `abi.TypeAssert`
+//! record, `runtime.assertE2I`/`getitab` with a constant descriptor), through
+//! copies and joins whose inputs all agree; a join input computed from the
+//! assertion record's `Cache` word (the inline cache probe's hit path) counts
+//! as agreeing with that assertion. The interface's record names the slot at that
+//! offset. Anything else prints as before.
 
 use std::rc::Rc;
 
@@ -14,8 +23,20 @@ use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_goitabcalls::{GoItabCalls, ITAB_FUN_OFFSET_64};
+use crate::kuna_goitabcalls::{
+    GoItabCalls, ITAB_FUN_OFFSET_64, ITAB_RECORD_PREFIX, itab_record_name,
+};
 use crate::kuna_langfacet::LangFacet;
+use unlace_base::address::Address;
+
+/// How many defining ops [`table_interface`] follows back from a table value.
+const MAX_DEPTH: u32 = 8;
+
+/// How many inputs of one join [`table_interface`] looks at.
+const MAX_JOIN_INPUTS: i32 = 8;
+
+/// How many struct levels a field address may nest through.
+const MAX_NESTING: u32 = 8;
 
 /// `Interface.Method` for a CALLIND through an itab method slot, under
 /// `option goitabcalls`.
@@ -32,22 +53,31 @@ pub(crate) fn interface_method(fd: &Funcdata, arch: &Architecture, id: OpId) -> 
     if load.code() != OpCode::CPUI_LOAD {
         return None;
     }
-    let (base, offset) = slot_address(fd, load.get_in(1)?)?;
-    let record = itab_record(fd.vbank().get(base)?.get_type())?;
-    let Some(LangFacet::GoItab { interface }) = arch.types().kuna_lang_facet(record.get_name())
-    else {
+    let (table, offset) = constant_offset(fd, load.get_in(1)?)?;
+    if offset < i64::from(ITAB_FUN_OFFSET_64) {
         return None;
-    };
+    }
+    let interface = table_interface(fd, arch, table, MAX_DEPTH)?;
+    let types = arch.types();
+    let name = itab_record_name(&interface);
+    if types.kuna_lang_facet(&name)
+        != Some(LangFacet::GoItab {
+            interface: interface.clone(),
+        })
+    {
+        return None;
+    }
+    let record = types.find_by_name(&name).ok()??;
     let method = (0..record.num_depend())
         .filter_map(|i| record.get_field(i))
         .find(|field| i64::from(field.offset) == offset)?;
-    (method.offset >= ITAB_FUN_OFFSET_64
-        && method.field_type.get_metatype() == type_metatype::TYPE_PTR)
+    (method.field_type.get_metatype() == type_metatype::TYPE_PTR)
         .then(|| format!("{interface}.{}", method.name))
 }
 
-/// The record pointer and constant byte offset a slot address is built from.
-fn slot_address(fd: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, i64)> {
+/// The base pointer and constant byte offset an address is built from: one
+/// `PTRSUB` or `INT_ADD` of a constant.
+fn constant_offset(fd: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, i64)> {
     let def = fd.obank().get(fd.vbank().get(vn)?.get_def()?)?;
     if !matches!(def.code(), OpCode::CPUI_PTRSUB | OpCode::CPUI_INT_ADD) {
         return None;
@@ -59,15 +89,284 @@ fn slot_address(fd: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, i64)> {
     Some((def.get_in(0)?, i64::try_from(offset.get_offset()).ok()?))
 }
 
-/// The struct a pointer type points at, when it is an itab record.
-fn itab_record(ty: &Rc<Datatype>) -> Option<Rc<Datatype>> {
+/// The interface whose itab the value `vn` points at, or `None` when its
+/// provenance does not say.
+fn table_interface(
+    fd: &Funcdata,
+    arch: &Architecture,
+    vn: VarnodeId,
+    depth: u32,
+) -> Option<String> {
+    let v = fd.vbank().get(vn)?;
+    if let Some(interface) = typed_table(arch, v.get_type()) {
+        return Some(interface);
+    }
+    if depth == 0 {
+        return None;
+    }
+    let def = fd.obank().get(v.get_def()?)?;
+    match def.code() {
+        OpCode::CPUI_COPY => table_interface(fd, arch, def.get_in(0)?, depth - 1),
+        OpCode::CPUI_MULTIEQUAL => {
+            let n = def.num_input();
+            if n == 0 || n > MAX_JOIN_INPUTS {
+                return None;
+            }
+            let mut found: Option<String> = None;
+            let mut records: Vec<u64> = Vec::new();
+            let mut unresolved: Vec<VarnodeId> = Vec::new();
+            for i in 0..n {
+                let input = def.get_in(i)?;
+                if let Some((interface, record)) = assert_result(fd, arch, input) {
+                    records.extend(record);
+                    if found.as_ref().is_some_and(|held| *held != interface) {
+                        return None;
+                    }
+                    found = Some(interface);
+                    continue;
+                }
+                match table_interface(fd, arch, input, depth - 1) {
+                    Some(interface) => {
+                        if found.as_ref().is_some_and(|held| *held != interface) {
+                            return None;
+                        }
+                        found = Some(interface);
+                    }
+                    None => unresolved.push(input),
+                }
+            }
+            let reads_cache = |input: VarnodeId| {
+                records
+                    .iter()
+                    .any(|&record| reads_record(fd, arch, input, record, CACHE_DEPTH))
+            };
+            (unresolved.iter().all(|&input| reads_cache(input)))
+                .then_some(found)
+                .flatten()
+        }
+        OpCode::CPUI_LOAD => field_table(fd, arch, def.get_in(1)?),
+        OpCode::CPUI_CALL => {
+            asserted_interface(fd, arch, v.get_def()?).map(|(interface, _)| interface)
+        }
+        _ => None,
+    }
+}
+
+/// The interface of a pointer typed to an itab record.
+fn typed_table(arch: &Architecture, ty: &Rc<Datatype>) -> Option<String> {
     if ty.get_metatype() != type_metatype::TYPE_PTR {
         return None;
     }
     let record = ty.get_ptr_to()?;
-    (record.get_metatype() == type_metatype::TYPE_STRUCT
-        && record
-            .get_name()
-            .starts_with(crate::kuna_goitabcalls::ITAB_RECORD_PREFIX))
-    .then_some(record)
+    if record.get_metatype() != type_metatype::TYPE_STRUCT
+        || !record.get_name().starts_with(ITAB_RECORD_PREFIX)
+    {
+        return None;
+    }
+    match arch.types().kuna_lang_facet(record.get_name())? {
+        LangFacet::GoItab { interface } => Some(interface),
+        _ => None,
+    }
+}
+
+/// The interface of the table word a LOAD at `address` reads, when the
+/// address is the first word of an interface-typed field: the address is a
+/// chain of constant offsets from a pointer to a struct, tried at each link.
+fn field_table(fd: &Funcdata, arch: &Architecture, address: VarnodeId) -> Option<String> {
+    let mut vn = address;
+    let mut offset: i64 = 0;
+    for _ in 0..MAX_NESTING {
+        let ty = fd.vbank().get(vn)?.get_type();
+        if ty.get_metatype() == type_metatype::TYPE_PTR {
+            if let Some(found) = ty
+                .get_ptr_to()
+                .and_then(|record| struct_field_interface(arch, &record, offset, MAX_NESTING))
+            {
+                return Some(found);
+            }
+        }
+        let (base, step) = constant_offset(fd, vn)?;
+        offset = offset.checked_add(step)?;
+        vn = base;
+    }
+    None
+}
+
+/// The interface of the interface-typed field whose first word sits at
+/// `offset` in `record`, looking into nested struct fields.
+fn struct_field_interface(
+    arch: &Architecture,
+    record: &Rc<Datatype>,
+    offset: i64,
+    depth: u32,
+) -> Option<String> {
+    if record.get_metatype() != type_metatype::TYPE_STRUCT || depth == 0 {
+        return None;
+    }
+    if let Some(LangFacet::GoInterfaceFields { fields }) =
+        arch.types().kuna_lang_facet(record.get_name())
+    {
+        if let Some((_, interface)) = fields.iter().find(|(at, _)| i64::from(*at) == offset) {
+            return Some(interface.clone());
+        }
+    }
+    let field = (0..record.num_depend())
+        .filter_map(|i| record.get_field(i))
+        .find(|field| {
+            let start = i64::from(field.offset);
+            start <= offset && offset < start + i64::from(field.field_type.get_size())
+        })?;
+    struct_field_interface(
+        arch,
+        &field.field_type,
+        offset - i64::from(field.offset),
+        depth - 1,
+    )
+}
+
+/// How many defining ops [`reads_record`] searches back from a join input.
+const CACHE_DEPTH: u32 = 8;
+
+/// The runtime entries that return an itab for an interface their arguments
+/// name: `(name, slot of the descriptor argument, whether that argument is an
+/// `abi.TypeAssert` record whose `Inter` word is the descriptor)`.
+const ASSERT_ENTRIES: [(&str, i32, bool); 3] = [
+    ("runtime.typeAssert", 1, true),
+    ("runtime.assertE2I", 1, false),
+    ("runtime.getitab", 1, false),
+];
+
+/// [`asserted_interface`] for the value `vn` when a CALL, or a COPY of one,
+/// defines it.
+fn assert_result(
+    fd: &Funcdata,
+    arch: &Architecture,
+    vn: VarnodeId,
+) -> Option<(String, Option<u64>)> {
+    let mut v = fd.vbank().get(vn)?;
+    for _ in 0..2 {
+        let id = v.get_def()?;
+        let def = fd.obank().get(id)?;
+        match def.code() {
+            OpCode::CPUI_CALL => return asserted_interface(fd, arch, id),
+            OpCode::CPUI_COPY => v = fd.vbank().get(def.get_in(0)?)?,
+            _ => return None,
+        }
+    }
+    None
+}
+
+/// The interface a type assertion's result is an itab of: the CALL is to one
+/// of [`ASSERT_ENTRIES`] and its descriptor argument is a constant address
+/// (directly, or the `Inter` word of a constant `abi.TypeAssert` record read
+/// from the image) at the start of a `type:<interface>` symbol. Also returns
+/// the `abi.TypeAssert` record's address, whose `Cache` word the inline
+/// cache probe reads.
+fn asserted_interface(
+    fd: &Funcdata,
+    arch: &Architecture,
+    id: OpId,
+) -> Option<(String, Option<u64>)> {
+    let op = fd.obank().get(id)?;
+    if op.code() != OpCode::CPUI_CALL {
+        return None;
+    }
+    let name = fd.get_call_specs(fd.get_call_specs_index(id)?).get_name();
+    let &(_, slot, record) = ASSERT_ENTRIES.iter().find(|(entry, _, _)| *entry == name)?;
+    let argument = constant_value(fd, op.get_in(slot)?)?;
+    let space = arch.manage().get_default_data_space()?.clone();
+    let descriptor = if record {
+        let mut word = [0u8; 8];
+        arch.translate()
+            .loader_rc()
+            .borrow_mut()
+            .load_fill(
+                &mut word,
+                &Address::new(Rc::clone(&space), argument.checked_add(8)?),
+            )
+            .ok()?;
+        u64::from_le_bytes(word)
+    } else {
+        argument
+    };
+    let (symbol, offset, _) = fd.get_arch().name_for_global_varnode(
+        &Address::new(space, descriptor),
+        1,
+        &Address::default(),
+    )?;
+    if offset != 0 {
+        return None;
+    }
+    let interface = symbol.strip_prefix("type:")?.to_string();
+    Some((interface, record.then_some(argument)))
+}
+
+/// The constant a Varnode holds, directly or one COPY away.
+fn constant_value(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
+    let v = fd.vbank().get(vn)?;
+    if v.is_constant() {
+        return Some(v.get_offset());
+    }
+    let def = fd.obank().get(v.get_def()?)?;
+    if def.code() != OpCode::CPUI_COPY {
+        return None;
+    }
+    let source = fd.vbank().get(def.get_in(0)?)?;
+    source.is_constant().then(|| source.get_offset())
+}
+
+/// `true` when the value `vn` is computed from a read of the word at
+/// `record` (the `abi.TypeAssert` record's `Cache` pointer): a direct read of
+/// that global or a LOAD from that constant address, within `depth` defining
+/// ops. The type-assertion cache probe's hit path returns such a value, an
+/// itab the cache holds for this assertion site.
+fn reads_record(
+    fd: &Funcdata,
+    arch: &Architecture,
+    vn: VarnodeId,
+    record: u64,
+    depth: u32,
+) -> bool {
+    let Some(v) = fd.vbank().get(vn) else {
+        return false;
+    };
+    let data = arch
+        .manage()
+        .get_default_data_space()
+        .map(|s| s.get_index());
+    if !v.is_constant() && v.get_offset() == record && Some(v.get_space().get_index()) == data {
+        return true;
+    }
+    if depth == 0 {
+        return false;
+    }
+    let Some(def) = v.get_def().and_then(|id| fd.obank().get(id)) else {
+        return false;
+    };
+    if def.code() == OpCode::CPUI_LOAD
+        && def
+            .get_in(1)
+            .and_then(|address| constant_value(fd, address))
+            == Some(record)
+    {
+        return true;
+    }
+    if !matches!(
+        def.code(),
+        OpCode::CPUI_LOAD
+            | OpCode::CPUI_COPY
+            | OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_PTRADD
+            | OpCode::CPUI_PTRSUB
+            | OpCode::CPUI_INT_MULT
+            | OpCode::CPUI_INT_LEFT
+            | OpCode::CPUI_INT_AND
+            | OpCode::CPUI_INT_ZEXT
+            | OpCode::CPUI_MULTIEQUAL
+    ) {
+        return false;
+    }
+    (0..def.num_input().min(MAX_JOIN_INPUTS))
+        .filter_map(|i| def.get_in(i))
+        .any(|input| reads_record(fd, arch, input, record, depth - 1))
 }

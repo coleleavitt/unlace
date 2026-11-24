@@ -3160,6 +3160,35 @@ ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 (or INT_XOR) where one operand is provably zero along the path that reaches it (the
 `MultiPredicate` zero-slot analysis) collapses to a COPY of the other operand.
 
+**Threading a join on a merged constant** (option `phithread`, default off).
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_phithread.rs (ActionPhiThread)`
+runs right after `ActionConditionalExe` in the same group. A join block J
+qualifies when it ends in a CBRANCH, holds only MULTIEQUALs followed by
+integer and boolean ops it can evaluate, and every value it defines is read
+only inside J. For each in edge whose MULTIEQUAL inputs are constants (looking
+through COPYs), `kuna_phithread.rs (decided_target)` evaluates J's ops and
+the branch (honouring the boolean flip). When the branch is decided, the edge
+is moved past J onto the taken successor T (`Funcdata::switch_edge`): J's
+MULTIEQUALs lose the edge's input (`Funcdata::op_zero_multi` collapses one
+left with a single input), and T's MULTIEQUALs gain the value they read along
+the J edge, which is defined outside J and so dominates the moved edge. An
+edge is not moved from J itself, from a BRANCHIND block, onto a block the
+predecessor already reaches, or when it would leave J with no in edge. The
+second step splits an arm A that feeds J: A holds only MULTIEQUALs, COPYs and a
+BRANCH, has two to eight predecessors and J as its only successor, and the
+value it passes into J's MULTIEQUAL comes from a MULTIEQUAL in A with a
+constant input on some edge. A is split along that edge by
+`crates/unlace-middle/src/substrate/funcdata_block.rs
+(Funcdata::node_split_through)`, the one-successor form of `node_split`: the
+clone takes the edge, flows into J, and J's MULTIEQUALs gain the clone's value
+for the new edge. The split refuses a block whose values are read outside it
+other than through the successor's MULTIEQUALs, or whose outputs are persistent
+or address-tied. The clone then passes a constant, and the thread step moves its
+edge. The action interleaves the two steps, at most 32 edits per function. This
+is Hex-Rays' `BREAK_PHI_ARM_MERGES` (hexx64 `sub_1915E0`) followed by the
+constant threading that resolves the join per path. The join's merged
+variable then disappears, along with the branch on it.
+
 **Conditional constants.** `crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionConditionalConst)` (mainloop tail, wrapper over
 `crates/unlace-bandb-base/src/p3_dataflow/condconst.rs (condconst_apply)`)

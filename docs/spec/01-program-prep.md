@@ -4472,6 +4472,33 @@ moves.
   and a file larger than 64 MiB is refused. A header directory is not a
   library: `--types DIR` reads one.
 
+  *Several libraries, and IDA's choice.* `typelib a:b` reads a `:`-separated
+  list of library files, text or `.til`, asked in order: the first library
+  that declares a function wins, and a type the factory already holds from an
+  earlier library is used as it is. Under `auto`, when the environment
+  variable `UNLACE_TIL_DIR` names a directory of IDA type libraries (an IDA
+  install's `til` directory or its `pc` subdirectory), a PE also reads the
+  libraries IDA's x86 module and PDB plugin would load for it, ahead of the
+  built-in library (`library_sources`, `til_choice`). The PE optional-header
+  `Subsystem`, which `TypeLibPass` carries forward, decides the family: a
+  native image (1, a driver) reads `ntddk`, an EFI image (10 to 13) `uefi`,
+  and any other `mssdk`; an x64 image reads the `64` library of the family
+  (`mssdk64`, `ntddk64`, `uefi64`). Of each family the newest release
+  present is read (`_win10`, then `_win81`, `_win8`, `_win7`, `_vista`,
+  `_ws03`, `_xp`, `_2000`, `_nt`, then the bare name), and a user-mode or
+  native image also reads the newest Native API library (`ntapi`,
+  `ntapi64`). Which files were read, and any that could not be, is said once on
+  stderr (`[kuna typelib] UNLACE_TIL_DIR: read ...`); an unreadable library is
+  skipped, where a listed file that cannot be read is an error.
+
+  *Names beyond imports.* As IDA applies a library to every name in the
+  database, every library also declares a function the image defines when
+  FLIRT, FID or a PDB named it and nothing declared it
+  (`names_beyond_imports`): per address, the name the image's own metadata
+  states (a PDB) when every such name there agrees, else a signature name
+  (FLIRT, FID) when every signature name there agrees. An address that already
+  has a prototype, or is an import, is left alone.
+
   *After load.* A `--types` header or an `--assert prototype` for the same
   function replaces the library's declaration. A header's definition of a
   record the library already defined is rejected like any redefinition; `typelib
@@ -6916,8 +6943,42 @@ every other binary's pass list is byte-identical to before the pass existed):
   prints a CALLIND whose target is a LOAD of a method slot of such a record
   (`PTRSUB` or `INT_ADD` of the record pointer and a constant at or past
   offset 24) as `Interface.Method(args)`, the receiver first:
-  `main.Shape.Area(s_data)`. The slots carry no prototype, so the arguments
-  are the ones the call site recovers.
+  `main.Shape.Area(s_data)`. When the image's default prototype model is
+  the Go register ABI (`abi-internal`), each slot whose method signature
+  (`crates/unlace-analysis/src/analyzers/gotypes/kuna_itabtypes.rs (method_pieces)`,
+  read from the `Imethod.Typ` func descriptor) is all one-register scalars,
+  integers and bool at their own width and the pointer-shaped kinds (pointer,
+  unsafe pointer, chan, map, func) as an opaque pointer, with at most eight
+  parameters, at most one result and no variadic tail, is a pointer to a
+  function of that prototype under that model, the receiver (the data word,
+  an opaque pointer) first; `ActionDeindirect` forces it on a call through a
+  table typed by the record, so the call passes exactly those arguments. Any
+  other slot is an untyped `code *` and the call keeps the arguments the
+  call site recovers.
+  The table pointer need not be typed: the printer also follows it back
+  through copies and joins whose inputs all agree to a LOAD of the first word
+  of an interface-typed field of a named struct, read through a chain of
+  constant offsets from a pointer to the struct (`h->S.tab`, nested structs
+  included). The harvest records those fields
+  (`crates/unlace-analysis/src/analyzers/gotypes/kuna_ifacefields.rs (register)`):
+  for each named struct descriptor, the byte offset and interface of every
+  field whose type descriptor is an interface, as a
+  `LangFacet::GoInterfaceFields` facet on the struct's reflection and linker
+  spellings, so it holds whether the harvest or DWARF built the layout. A name
+  the harvest marked ambiguous, whose descriptors disagree, or that already
+  carries a facet gets none.
+  A type assertion's result is the third source
+  (`crates/unlace-emit/src/p9_emit/kuna_goitabcall.rs (asserted_interface)`):
+  the output of a call to `runtime.typeAssert` whose first argument is a
+  constant `abi.TypeAssert` record names the interface in the record's
+  `Inter` word (read from the image at the record plus 8), and
+  `runtime.assertE2I` or `runtime.getitab` name it in a constant first
+  argument; either address must start a `type:<interface>` symbol
+  (`gotypeglobals`). The compiler joins that result with the hit path of the
+  assertion's inline cache probe, an itab loaded from the cache the record's
+  `Cache` word points at; a join input computed from a read of that word
+  within eight defining ops counts as the same interface, any other input must
+  resolve to it.
 
 - **Go pclntab** (`gopclntab`, Go-detected binaries only, always on;
   `crates/unlace-analysis/src/analyzers/pclntab/mod.rs`): the runtime
@@ -7059,9 +7120,20 @@ every other binary's pass list is byte-identical to before the pass existed):
   CompleteObjectLocator gives its class, the `offset` of the subobject its vftable
   serves, and the class's whole hierarchy: every BaseClassDescriptor's class, its
   displacement `mdisp`, and whether it is, or lies in, a virtual base (`pdisp` is
-  not -1). A vftable at offset 0 is the class's own; one at a nonzero offset serves
-  the non-virtual bases at that displacement, the most derived of them first; one
-  serving a virtual base (no non-virtual base sits at its offset) serves none. A
+  not -1, and `pdisp`/`vdisp` name its vbtable entry). A vftable at offset 0 is
+  the class's own; one at a nonzero offset serves the non-virtual bases at that
+  displacement, the most derived of them first. One no non-virtual base accounts
+  for serves a virtual base, placed by the vbtable order
+  (`kuna_msvcvtabletypes.rs (vbase_offsets)`): the virtual bases follow the
+  non-virtual part in the order of their vbtable entries, so taken in
+  `(pdisp, vdisp)` order (one base reached through two vbtable pointers counted
+  once) each that keeps a vftable takes the lowest such vftable left, and the
+  bases inside it at a nonzero displacement the vftables at that displacement
+  from it. A virtual base keeps a vftable when one of its own or a non-virtual
+  subobject vftable shows it does; when that leaves a vftable over, every virtual
+  base is taken to keep one. A leftover vftable, a virtual base finding none, or
+  a slot count differing from the virtual base's own vftable drops the reading,
+  and such vftables serve none. A
   class is typed with the slots of its own vftable, and for each slot the function
   there and every function the vftables serving it in derived classes hold at the
   same slot; a class the image never instantiates (an abstract base) has no vftable
@@ -7076,10 +7148,14 @@ every other binary's pass list is byte-identical to before the pass existed):
   vftable takes the base's subobject), so it is the first class that vftable
   serves; a function several vftables hold takes the nearest class that is, in
   every one of them, that class or one of its bases at offset 0, and a function
-  that also sits in a vftable serving a virtual base, or whose holders share no
+  that also sits in a vftable no base accounts for, or whose holders share no
   such class (identical-code folding, `_purecall`), is left untyped. Finally it
   reports each vftable whose first class was typed, with the `rtti` label of
-  that address, and every vftable's slot words.
+  that address, and every vftable's slot words. At the analysis commit a third
+  pass (`crates/unlace-analysis/src/analyzers/rtti/kuna_msvcctors.rs (run)`,
+  x86 and x86-64 only) names the constructors and destructors that store a
+  class's vftable through `this` and reports their `this` class too (chapter
+  05).
 - **(kuna) Itanium RTTI** (`itaniumrtti`, ELF and Mach-O, on by default and inert elsewhere;
   `crates/unlace-analysis/src/analyzers/rtti/kuna_itaniumrtti.rs`): the
   GCC/Clang counterpart of the pass above, and a capability with **no Ghidra
@@ -8716,6 +8792,17 @@ both
   three `open` attempts, only on a PE that carries a CodeView record — and the
   `.pdb` is parsed only when one of them opens and matches.
 
+  A fourth tier is opt-in: `kuna_pdb_symsrv` names a symbol store, `<cache>` or
+  `<cache>*<url>` (an `srv*` prefix as in `_NT_SYMBOL_PATH` is accepted). Only
+  when the three tiers above find no match is the store's
+  `<cache>/<name>/<GUID hex><age hex>/<name>` (the SymStore layout, `<name>` the
+  same safe record name) tried, and with a URL a missing file is first fetched
+  from `<url>/<name>/<key>/<name>` by running `curl` (300 s, 4 GiB at most),
+  written beside its final name and renamed when complete, and tried at most
+  once per process and path; a failed fetch gets one `[kuna pdb]` line. The
+  fingerprint gate applies to it like any other candidate. Without the variable
+  nothing is looked up or fetched.
+
   **(kuna) Types, prototypes and locals** (`pdbtypes`, PE-only, default **off**;
   `crates/unlace-analysis/src/analyzers/pdb/kuna_pdbtypes.rs`,
   `kuna_pdbtpi.rs`). From the same fingerprint-matched `.pdb`, the TPI type
@@ -8726,8 +8813,11 @@ both
   offsets. A forward reference resolves to the definition with the same unique
   name; an aggregate is interned before its members are walked, so a pointer to
   itself names the shell. A class carries each base class as a `super_<Base>`
-  member and its table pointer as a `__vftable` member at offset 0; bitfield
-  members, overlapping members and members past the stated size are left out.
+  member and its table pointer as a `__vftable` member at offset 0. A structure's
+  bitfield (an `LF_MEMBER` of an `LF_BITFIELD` type) keeps its bit position, placed
+  in the smallest byte span that covers it as `dwarfstructs` does (PE images are
+  little-endian); overlapping members, members past the stated size and a union's
+  bitfields are left out.
   Every procedure record in the module streams then gives its entry address a
   prototype from its type (a member function's `this` first), the parameter names
   coming from the procedure's own parameter records: the `S_LOCAL`s flagged as
@@ -8741,8 +8831,14 @@ both
   the x64 stack pointer in the body is the entry stack pointer less the
   `S_FRAMEPROC` callee-saved bytes and fixed frame (`cbSaveRegs + cbFrame`, the
   convention MSVC and LLVM both write), and the i386 `EBP` frame pointer is the
-  entry stack pointer less the pushed `EBP`; an x64 frame pointer, an i386 stack
-  pointer and the virtual `$T0` frame depend on the prologue and are skipped. A
+  entry stack pointer less the pushed `EBP`. An x64 frame register (`RBP`,
+  `R13`) points where the function's `.pdata` unwind data puts it: the
+  `UNWIND_INFO` names the register and its scaled offset, and the codes listed
+  after `UWOP_SET_FPREG` ran before it, so the register is the entry stack pointer
+  less their pushes and allocations plus `16 * FrameOffset`
+  (`crates/unlace-analysis/src/analyzers/pdb/kuna_pdbframe.rs`); a chained record,
+  an epilog code or an unknown one leaves it unknown. An i386 stack pointer and the
+  virtual `$T0` frame depend on the prologue and are skipped. A
   slot below the return address becomes a named, typed stack local (the DWARF
   `LocalFact` channel); a register range of a non-parameter becomes a
   register-held local from the range's start; locals of an inlined call site
@@ -10001,7 +10097,12 @@ header comment per try block,
 and a count of its cleanup funclets; each catch funclet gets
 `eh: catch (std::runtime_error &) handler of 0x140001000 (try states 0-0)` and each
 cleanup funclet `eh: unwind funclet of 0x140001000 (state 2)`. Every funclet is
-also a discovered entry. The handler bodies are not spliced into the parent's
+also a discovered entry, and one that still has a placeholder name is renamed
+`<parent>$catch$<n>` or `<parent>$dtor$<n>` (numbered per parent in handler and
+unwind-map order), as MSVC and IDA name them; x64 SEH filter and `__finally`
+funclets become `<parent>$filt$<n>` and `<parent>$fin$<n>`. The parent is named
+by the image's own symbol or export at its address, else `sub_<addr>`. Like the other
+metadata renames, they replace only a placeholder name. The handler bodies are not spliced into the parent's
 flow.
 
 **(kuna) SEH scope tables and x86 C++ `FuncInfo` are listed too** (`msvceh`,

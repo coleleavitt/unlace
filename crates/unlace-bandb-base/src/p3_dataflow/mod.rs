@@ -41,6 +41,7 @@ pub mod kuna_opaqueimplied;
 pub mod kuna_ovlesssimplify;
 pub mod kuna_partialglobalload;
 pub mod kuna_persistcalls;
+pub mod kuna_phithread;
 pub mod kuna_pointeestorekeep;
 pub mod kuna_prunedssa;
 pub mod kuna_rangefold;

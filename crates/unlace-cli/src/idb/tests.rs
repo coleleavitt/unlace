@@ -1,6 +1,6 @@
 use super::*;
 
-use idb_rs::database::{Comment, LocalType};
+use unlace_idb::{Comment, LocalType, TypeInfo};
 
 fn function(start: u64, name: &str, prototype: Option<&str>) -> Function {
     Function {
@@ -11,6 +11,7 @@ fn function(start: u64, name: &str, prototype: Option<&str>) -> Function {
         no_return: false,
         library: false,
         thunk: false,
+        type_info: prototype.map(|_| TypeInfo::default()),
         prototype: prototype.map(str::to_string),
         comment: None,
         repeatable_comment: None,
@@ -73,78 +74,15 @@ fn maps_ida_processors_to_sleigh_targets() {
 }
 
 #[test]
-fn rewrites_ida_spellings_into_the_engine_grammar() {
-    assert_eq!(sanitize_c("unsigned __int8 *buf", false), "uint1 *buf");
-    assert_eq!(sanitize_c("signed __int16 x", false), "int2 x");
-    assert_eq!(sanitize_c("__int64 x", false), "int8 x");
-    assert_eq!(sanitize_c("_DWORD *p", false), "uint4 *p");
-    assert_eq!(
-        sanitize_c("void __noreturn __cdecl f(int a)", false),
-        "void f(int a)"
-    );
-    assert_eq!(
-        sanitize_c("__int64 __fastcall g(__int64 a)", false),
-        "int8 g(int8 a)"
-    );
-    assert_eq!(
-        sanitize_c("int __stdcall h(int a)", true),
-        "int __stdcall h(int a)"
-    );
-    assert_eq!(
-        sanitize_c("struct __attribute__((aligned(8))) S {int a;};", false),
-        "struct S {int a;};"
-    );
-}
-
-#[test]
-fn qualifies_bare_tag_references() {
-    let db = Database {
-        types: vec![
-            local(
-                "_LIST_ENTRY",
-                "struct _LIST_ENTRY {_LIST_ENTRY *Flink;_LIST_ENTRY *Blink;};",
-            ),
-            local("LIST_ENTRY", "typedef _LIST_ENTRY LIST_ENTRY;"),
-            local("option", "struct option {const char *name;int has_arg;};"),
-        ],
-        ..Database::default()
-    };
-    let tags = Tags::of(&db);
-    assert_eq!(
-        tags.qualify("struct _LIST_ENTRY {_LIST_ENTRY *Flink;_LIST_ENTRY *Blink;};"),
-        "struct _LIST_ENTRY {struct _LIST_ENTRY *Flink;struct _LIST_ENTRY *Blink;};"
-    );
-    assert_eq!(
-        tags.qualify("typedef _LIST_ENTRY LIST_ENTRY;"),
-        "typedef struct _LIST_ENTRY LIST_ENTRY;"
-    );
-    assert_eq!(tags.qualify("int option;"), "int option;");
-    assert_eq!(
-        tags.qualify("const struct option *longopts"),
-        "const struct option *longopts"
-    );
-}
-
-#[test]
 fn turns_a_database_into_directives() {
-    let mut exit = function(0x2000, ".exit", Some("void __noreturn .exit(int status)"));
+    let mut exit = function(0x2000, ".exit", Some("void _exit(int status)"));
     exit.no_return = true;
-    let mut main = function(
-        0x1000,
-        "main",
-        Some("int __cdecl main(int argc, char **argv)"),
-    );
+    let mut main = function(0x1000, "main", Some("int main(int argc, char **argv)"));
     main.comment = Some("entry\npoint".to_string());
+    let mut custom = function(0x3000, "custom", None);
+    custom.type_info = Some(TypeInfo::default());
     let db = Database {
-        functions: vec![
-            main,
-            exit,
-            function(
-                0x3000,
-                "custom",
-                Some("int __usercall custom@<eax>(int a@<ecx>)"),
-            ),
-        ],
+        functions: vec![main, exit, custom],
         comments: vec![
             Comment {
                 address: 0x1004,
@@ -165,13 +103,14 @@ fn turns_a_database_into_directives() {
         types: vec![local("DWORD", "typedef unsigned int DWORD;")],
         ..Database::default()
     };
-    let k = knowledge(&db, Some("x86:LE:64:default"), ALL);
+    let k = knowledge(&db, ALL);
     assert_eq!(
         k.directives,
         [
             "typedef typedef unsigned int DWORD;",
             "function 0x1000-0x1010=main",
             "function 0x2000-0x2010=.exit",
+            "noreturn 0x2000",
             "function 0x3000-0x3010=custom",
             "prototype 0x1000 int main(int argc, char **argv)",
             "prototype 0x2000 void _exit(int status)",
@@ -187,17 +126,16 @@ fn turns_a_database_into_directives() {
     }
     let bare = knowledge(
         &db,
-        None,
         Selection {
             types: false,
             comments: false,
         },
     );
-    assert!(
-        bare.directives
+    assert!(bare.directives.iter().all(|d| {
+        ["function ", "noreturn ", "prototype "]
             .iter()
-            .all(|d| d.starts_with("function ") || d.starts_with("prototype "))
-    );
+            .any(|kind| d.starts_with(kind))
+    }));
 }
 
 #[test]
@@ -208,7 +146,7 @@ fn a_function_with_tails_has_no_declared_end() {
         functions: vec![f],
         ..Database::default()
     };
-    let k = knowledge(&db, None, ALL);
+    let k = knowledge(&db, ALL);
     assert_eq!(k.directives, ["function 0x1000=split"]);
 }
 
@@ -230,9 +168,15 @@ fn reads_the_fixture_database() {
             && run.start <= main.start
             && main.start < run.start + run.bytes.len() as u64
     }));
-    let k = knowledge(&db, Some("x86:LE:64:default"), ALL);
+    let k = knowledge(&db, ALL);
     assert_eq!(k.counts["functions"], db.functions.len());
     assert!(k.counts["prototypes"] > 0);
+    assert!(k.counts["types"] > 0);
+    assert!(
+        db.types
+            .iter()
+            .any(|t| t.declaration.starts_with("struct option {"))
+    );
     for d in k.directives.iter().filter(|d| d.starts_with("function ")) {
         unlace_console::assertsyntax::parse_directive(d).unwrap_or_else(|e| panic!("{d}: {e}"));
     }

@@ -87,11 +87,16 @@ impl AnalysisPass for TypeLibPass {
                 .into_iter()
                 .collect();
         named.sort_unstable();
+        let subsystem = match ctx.file.format() {
+            object::BinaryFormat::Pe => crate::uefi::pe_subsystem(ctx.bytes),
+            _ => None,
+        };
         out.typelib = Some(TypeLibFacts {
             target,
             glibc,
             imports,
             named,
+            subsystem,
         });
         out
     }
@@ -124,14 +129,15 @@ mod tests {
 
     #[test]
     fn a_pe_is_named_for_the_built_in_windows_library() {
-        for (name, expected) in [
-            ("importcall_pe_x86_64.exe", "windows x86_64"),
-            ("aifbracket_pe_i386.exe", "windows x86"),
+        for (name, expected, subsystem) in [
+            ("importcall_pe_x86_64.exe", "windows x86_64", 3),
+            ("aifbracket_pe_i386.exe", "windows x86", 2),
         ] {
             let pe = fixture(name);
             let file = object::File::parse(&*pe).unwrap();
             assert_eq!(target(&file), None, "{name}");
             assert_eq!(any_target(&file), expected, "{name}");
+            assert_eq!(crate::uefi::pe_subsystem(&pe), Some(subsystem), "{name}");
         }
     }
 }

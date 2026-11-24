@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_348() {
-    assert_eq!(kuna_num_settables(), 348);
-    assert_eq!(SETTABLE_TABLE.len(), 348);
+fn settable_count_is_349() {
+    assert_eq!(kuna_num_settables(), 349);
+    assert_eq!(SETTABLE_TABLE.len(), 349);
 }
 
 #[test]
-fn tier_counts_are_70_core_173_transform_105_analysis() {
+fn tier_counts_are_70_core_174_transform_105_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_173_transform_105_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 173, 105));
+    assert_eq!((core, transform, analysis), (70, 174, 105));
 }
 
 #[test]
@@ -1310,7 +1310,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `msvceh`; its P1 row follows `rtti`.
     // +1 for `phiarm`; its P6 row sits after `typemerge`.
     // +1 for `calleesaved`; its P6 row sits after `phiarm`.
-    assert_eq!(json.matches("},\n").count(), 334);
+    // +1 for `phithread`; its P3 row sits after `latecse`.
+    assert_eq!(json.matches("},\n").count(), 341);
 }
 
 #[test]

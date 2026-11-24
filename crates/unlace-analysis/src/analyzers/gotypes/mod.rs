@@ -87,6 +87,7 @@ use crate::pclntab::locate_header;
 use kuna_layout::GoImage;
 
 mod kuna_fieldtypes;
+mod kuna_ifacefields;
 mod kuna_itabs;
 mod kuna_itabtypes;
 mod kuna_layout;
@@ -827,7 +828,12 @@ impl AnalysisPass for GoTypesPass {
         let itabs = kuna_itabs::collect(&img, &meta, anchor, &occupied);
         // (kuna `goitabcalls`) One record per interface naming its method slots;
         // output-neutral until the option binds it.
-        let _ = kuna_itabtypes::intern(tf, &img, &meta, anchor);
+        let go_abi = ctx
+            .arch
+            .default_fp()
+            .is_some_and(|model| model.get_name() == "abi-internal");
+        let _ = kuna_itabtypes::intern(tf, &img, &meta, anchor, go_abi);
+        let _ = kuna_ifacefields::register(tf, &img, &meta, version);
         let go_pointer_methods =
             kuna_pointermethods::collect(ctx.file, &img, &meta, header_vma, anchor, version)
                 .unwrap_or_default();

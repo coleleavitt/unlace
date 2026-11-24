@@ -53,4 +53,4 @@ commands = [
 [[match]]
 name = 'jvm #1: a static method takes its descriptor as its signature'
 count = 1
-literal = 'int add(int param_1,int param_2)'
+literal = 'int add(int a0,int a1)'

@@ -10,8 +10,11 @@
 //!
 //! With the option on, an unsigned `<` or `<=` between the walked value, when an
 //! `INT_ADD` defines it, and one of that add's own inputs (the same Varnode, or a
-//! constant of the same value) is the carry test of the sum. It is not a competing
-//! use of the returned value, and the walk does not follow it.
+//! constant of the same value) is the carry test of the sum when only branches read
+//! it (through `BOOL_NEGATE` or `COPY`). It is not a competing use of the returned
+//! value, and the walk does not follow it. A carry the code adds into another register
+//! instead (MIPS `sltu $2,$3,$7` into the high word) is left to the walk, so a pair
+//! that `bejoin` does not prove keeps its old output (unlace stage `callwide`).
 
 use unlace_num::opcodes::OpCode;
 
@@ -35,6 +38,37 @@ fn same(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
             (Some(x), Some(y)) if x.is_constant() && y.is_constant()
                 && x.get_size() == y.get_size() && x.get_offset() == y.get_offset()
         )
+}
+
+/// Whether only branches read `out`, through at most a few `BOOL_NEGATE`s and `COPY`s.
+fn only_branches(data: &Funcdata, out: VarnodeId) -> bool {
+    let mut work = vec![(out, 0u32)];
+    let mut seen = 0usize;
+    while let Some((vn, depth)) = work.pop() {
+        let Some(v) = data.vbank().get(vn) else {
+            return false;
+        };
+        if v.has_no_descend() {
+            return false;
+        }
+        for op in v.descend_iter() {
+            seen += 1;
+            let Some(o) = data.obank().get(op) else {
+                return false;
+            };
+            match o.code() {
+                OpCode::CPUI_CBRANCH => {}
+                OpCode::CPUI_BOOL_NEGATE | OpCode::CPUI_COPY if depth < 3 && seen < 16 => {
+                    let Some(next) = o.get_out() else {
+                        return false;
+                    };
+                    work.push((next, depth + 1));
+                }
+                _ => return false,
+            }
+        }
+    }
+    true
 }
 
 /// Whether `compare`, reading `vn` for `opmatch`'s trial walk, is the carry test of
@@ -76,7 +110,10 @@ pub fn carry_test(data: &Funcdata, opmatch: OpId, compare: OpId, vn: VarnodeId) 
     if add.code() != OpCode::CPUI_INT_ADD {
         return false;
     }
-    (0..2).any(|slot| add.get_in(slot).is_some_and(|a| same(data, a, other)))
+    if !(0..2).any(|slot| add.get_in(slot).is_some_and(|a| same(data, a, other))) {
+        return false;
+    }
+    cmp.get_out().is_some_and(|out| only_branches(data, out))
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).

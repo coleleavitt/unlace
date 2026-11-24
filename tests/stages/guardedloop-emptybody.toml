@@ -41,7 +41,7 @@ commands = [
 [[match]]
 name = 'UNLACE-GUARDEDLOOP-EMPTYBODY #1: the busy-wait prints as a while loop (default)'
 count = 1
-regex = 'while \(.*0x40001000.*\) \{'
+regex = 'while \(.*dat_40001000.*\) \{'
 
 [[match]]
 name = 'UNLACE-GUARDEDLOOP-EMPTYBODY #2: guardedloop off keeps the do-while'

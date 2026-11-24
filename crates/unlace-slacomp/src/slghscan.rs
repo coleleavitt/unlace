@@ -733,6 +733,17 @@ impl SleighScanner {
             self.actionon = false;
             return Some(Token::bare(TokenKind::IsKey));
         }
+        // (kuna) `0x1f` / `0b10`: one literal piece, as Ghidra's Java display lexer
+        // reads HEX_INT/BIN_INT; the C++ rules split it into the CHAR `0` and the
+        // SYMBOLSTRING `x1f`, which then names an undefined operand.
+        if let Some(len) = print_radix_literal(rest) {
+            let text = rest[..len].to_vec();
+            self.consume(len);
+            return Some(Token {
+                kind: TokenKind::String,
+                value: TokenValue::Str(text),
+            });
+        }
         // [~!@#$%&*()\-=+\[\]{}|;:<>?,/0-9]  -> CHAR (sleighlval.ch = c)
         if is_print_char(c) {
             self.consume(1);
@@ -1382,6 +1393,18 @@ fn is_cntrl(c: u8) -> bool {
     c < 0x20 || c == 0x7f
 }
 /// The `print`-state CHAR class `[~!@#$%&*()\-=+\[\]{}|;:<>?,/0-9]`.
+/// The length of a `0x` hex or `0b` binary literal at the start of `rest`
+/// (Java `HEX_INT: '0x' HEXDIGIT+`, `BIN_INT: '0b' BINDIGIT+`).
+fn print_radix_literal(rest: &[u8]) -> Option<usize> {
+    let digit: fn(&u8) -> bool = match rest.get(..2)? {
+        b"0x" => |c| c.is_ascii_hexdigit(),
+        b"0b" => |c| matches!(*c, b'0' | b'1'),
+        _ => return None,
+    };
+    let run = rest[2..].iter().take_while(|&c| digit(c)).count();
+    (run > 0).then_some(2 + run)
+}
+
 fn is_print_char(c: u8) -> bool {
     matches!(
         c,

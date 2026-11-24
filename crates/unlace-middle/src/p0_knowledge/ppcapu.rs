@@ -16,13 +16,6 @@ pub fn ppcapu_enabled() -> bool {
     crate::loadoptions::scoped(|o| o.ppcapu).unwrap_or_else(crate::loadoptions::env::ppcapu)
 }
 
-/// Bridge a `set_unlace_option("ppcapu", val)` toggle to [`PPCAPU_ENV`] so a later
-/// `load file` in the same process sees the choice.
-pub fn set_ppcapu_env(on: bool) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(PPCAPU_ENV, if on { "on" } else { "off" }) };
-}
-
 crate::unlace_flag!(
     /// (unlace `ppcapu`) The requested state of the load-time APU-note language selection; the catalog's live `current` field reads it.
     PpcApu,
@@ -35,27 +28,39 @@ crate::unlace_flag!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::loadoptions::{LoadOptions, Vars, read};
+    use std::collections::BTreeMap;
+
+    /// What the gate reads when its variable holds `value` (`None` = unset).
+    fn read_with(value: Option<&str>) -> bool {
+        let overrides = BTreeMap::from([(PPCAPU_ENV, value.map(str::to_string))]);
+        read::ppcapu(&Vars::with(&overrides))
+    }
 
     #[test]
     fn env_gate_default_off_and_on_tokens() {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var(PPCAPU_ENV) };
-        assert!(!ppcapu_enabled(), "unset env ⇒ default off");
+        assert!(!read_with(None), "unset env ⇒ default off");
         for on in ["on", "1", "true", "ON", ""] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(PPCAPU_ENV, on) };
-            assert!(ppcapu_enabled(), "`{on}` ⇒ enabled");
+            assert!(read_with(Some(on)), "`{on}` ⇒ enabled");
         }
         for off in ["off", "0", "false"] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(PPCAPU_ENV, off) };
-            assert!(!ppcapu_enabled(), "`{off}` ⇒ disabled");
+            assert!(!read_with(Some(off)), "`{off}` ⇒ disabled");
         }
-        set_ppcapu_env(true);
-        assert!(ppcapu_enabled());
-        set_ppcapu_env(false);
-        assert!(!ppcapu_enabled());
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var(PPCAPU_ENV) };
+        {
+            let _scope = LoadOptions {
+                ppcapu: true,
+                ..LoadOptions::default()
+            }
+            .enter();
+            assert!(ppcapu_enabled());
+        }
+        {
+            let _scope = LoadOptions {
+                ppcapu: false,
+                ..LoadOptions::default()
+            }
+            .enter();
+            assert!(!ppcapu_enabled());
+        }
     }
 }

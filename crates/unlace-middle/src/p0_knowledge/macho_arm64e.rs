@@ -6,7 +6,7 @@
 //! `unlace-analysis`), taken before any console `option` command runs, so like
 //! [`ifuncfpret`](crate::ifuncfpret) the gate is a process environment
 //! variable: the CLI exports it onto the `decomp_dbg` subprocess, the console
-//! `option` arm sets it for a later `load file` in the same process, and the
+//! `option` arm changes the options of the program it names, and the
 //! loader reads it when it picks the language. Unset means **on**; only an
 //! explicit off-token turns the AppleSilicon selection off. The companion
 //! registered [`MachoArm64e`] value records the requested state for the
@@ -23,13 +23,6 @@ pub fn macho_arm64e_enabled() -> bool {
         .unwrap_or_else(crate::loadoptions::env::macho_arm64e)
 }
 
-/// Bridge a `set_unlace_option("macho-arm64e", val)` toggle to
-/// [`MACHO_ARM64E_ENV`] so a later `load file` in the same process sees it.
-pub fn set_macho_arm64e_env(on: bool) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(MACHO_ARM64E_ENV, if on { "on" } else { "off" }) };
-}
-
 crate::unlace_flag!(
     /// (unlace `macho-arm64e`) The requested state of the arm64e spec selection; the catalog's live `current` field reads it.
     MachoArm64e,
@@ -42,30 +35,39 @@ crate::unlace_flag!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::loadoptions::{LoadOptions, Vars, read};
+    use std::collections::BTreeMap;
+
+    /// What the gate reads when its variable holds `value` (`None` = unset).
+    fn read_with(value: Option<&str>) -> bool {
+        let overrides = BTreeMap::from([(MACHO_ARM64E_ENV, value.map(str::to_string))]);
+        read::macho_arm64e(&Vars::with(&overrides))
+    }
 
     #[test]
     fn env_gate_default_on_and_off_tokens() {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var(MACHO_ARM64E_ENV) };
-        assert!(macho_arm64e_enabled(), "unset env ⇒ default on");
-
+        assert!(read_with(None), "unset env ⇒ default on");
         for on in ["on", "1", "true", "ON", "True", ""] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(MACHO_ARM64E_ENV, on) };
-            assert!(macho_arm64e_enabled(), "`{on}` ⇒ enabled");
+            assert!(read_with(Some(on)), "`{on}` ⇒ enabled");
         }
         for off in ["off", "0", "false"] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(MACHO_ARM64E_ENV, off) };
-            assert!(!macho_arm64e_enabled(), "`{off}` ⇒ disabled");
+            assert!(!read_with(Some(off)), "`{off}` ⇒ disabled");
         }
-
-        set_macho_arm64e_env(false);
-        assert!(!macho_arm64e_enabled());
-        set_macho_arm64e_env(true);
-        assert!(macho_arm64e_enabled());
-
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var(MACHO_ARM64E_ENV) };
+        {
+            let _scope = LoadOptions {
+                macho_arm64e: true,
+                ..LoadOptions::default()
+            }
+            .enter();
+            assert!(macho_arm64e_enabled());
+        }
+        {
+            let _scope = LoadOptions {
+                macho_arm64e: false,
+                ..LoadOptions::default()
+            }
+            .enter();
+            assert!(!macho_arm64e_enabled());
+        }
     }
 }

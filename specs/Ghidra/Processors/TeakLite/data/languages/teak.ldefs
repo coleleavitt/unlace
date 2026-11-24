@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  
+  <language processor="TeakLite"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="teak.sla"
+            processorspec="teak.pspec"
+            id="teak:LE:16:default">
+    <description>Nintendo DSi/3DS DSP (Teak, TeakLite II), address registers as plain counters</description>
+    <compiler name="default" spec="teak.cspec" id="default"/>
+  </language>
+
+  <language processor="TeakLite"
+            endian="little"
+            size="16"
+            variant="modulo"
+            version="1.0"
+            slafile="teak.sla"
+            processorspec="teak_modulo.pspec"
+            id="teak:LE:16:modulo">
+    <description>Nintendo DSi/3DS DSP (Teak, TeakLite II): modulo, bit-reversed and Teak-style step addressing modelled</description>
+    <compiler name="default" spec="teak.cspec" id="default"/>
+  </language>
+
+</language_definitions>

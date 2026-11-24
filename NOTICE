@@ -233,6 +233,10 @@ specs/Ghidra/Processors/TMS34010 vendors the TI TMS34010 (GSP) SLEIGH specificat
 aleph-void/Ghidra_TMS34010 (https://github.com/aleph-void/Ghidra_TMS34010), a fork of ZPaul2Fresh8/Ghidra_TMS34010, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/TeakLite vendors the CEVA-TeakLite SLEIGH specification of
+aleph-void/TeakLite-SLEIGH (https://github.com/aleph-void/TeakLite-SLEIGH), a fork of SachinVin/TeakLite-SLEIGH, released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

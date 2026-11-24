@@ -176,6 +176,19 @@ Trace, debug and fault-injection variables (`UNLACE_*_TRACE`, `UNLACE_*_DEBUG`,
 `UNLACE_DUMP`, `UNLACE_ACTION_PROF` and the test-only ones above) are read where
 they act and are never option state.
 
+**Environment boundary.** Option variables are read at three places: the entry
+points (the `unlace` binary's startup and subcommand setup, the `decomp_dbg`
+console's start); the console's `load file` and `load raw` commands, which read
+their options once when the load begins; and inside a gate, only as the fallback
+when no load is in force on the thread. Option values do not travel through the
+process environment between loads: a program keeps the `LoadOptions` it was loaded
+with, and `option NAME VALUE` changes only that program. The program does not
+write these variables to carry an option. The CLI sets them only on a child
+process it starts (`decomp_dbg`, `slacomp`), through that child's environment,
+and no load-path code calls `std::env::set_var`. The `set_*_env` helpers that
+still write one are test-only (see `notes/load-options-plan.md`, "Remaining
+environment use").
+
 A separate engine binary can come from a different build than `unlace`: an
 override pointing at another install. (The built-in console is `unlace` itself, so it always
 matches.) `unlace` passes its build identity to every `decomp_dbg` it runs (as

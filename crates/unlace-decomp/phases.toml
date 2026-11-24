@@ -3608,6 +3608,25 @@ tier = "transform"
 symptoms = "a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words|a long long equality prints as a0 == a2 && a1 == a3 over four int parameters"
 
 [[settable]]
+option = "retindexuse"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "output-prototype"
+strength = "HARD"
+rewind = "P4"
+issue = "unlace-865"
+summary = "Keep a RETURN trial whose value also indexes a load. Funcdata::onlyOpUse (funcdata_varnode.cc:1851) refuses a return-register trial when any LOAD reads through a value derived from it, taking the register for a pointer the function was handed; a loop counter left in the return register falls to the same test whenever the loop indexes memory with it (while (s[n]) n++; return n; on BPF and SASS prints void). With the option on, a LOAD whose address is the walked value plus a value the walk did not reach (a base pointer, constant offsets folded) is an index use and does not refuse the trial."
+use_when = "Off by default: a scratch register that indexes a loop and is left in the return register of a void function becomes a return value too. Turn it on for BPF or SASS code, or any target whose return register is also the natural loop counter, when a counting function (strlen-like, a search that returns its index) prints void and its counter is declared with the return register's storage."
+example = "option retindexuse on"
+source_decompiler = "kuna"
+inspiration = "real-code sweep (#865): clang -O2 BPF and ptxas sm_80 str_len, the counter in r0/r4 when the function exits; upstream Funcdata::onlyOpUse (funcdata_varnode.cc:1851)"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a strlen-like loop function prints void and its counter is declared with the return register's storage|a search loop that returns its index prints void on BPF or SASS"
+
+[[settable]]
 option = "regsigned"
 values = "on|off"
 default = "off"
@@ -5436,7 +5455,7 @@ subphase = "external-refinement"
 strength = "HARD"
 rewind = "P1"
 issue = "pr-1252-libgcc-divdi3"
-summary = "Seed two compiler-runtime contracts: the libgcc DI-mode `long long __divdi3(long long, long long)` onto a SPARC32 big-endian ELF (`sparc:BE:32:default:default`) that names `__divdi3`, defined or imported, and `void __stack_chk_fail_local(void)` onto any ELF that defines that helper at an address no other function name holds. The `__divdi3` widths come from GCC machine modes, not the C data model: it takes two eight-byte operands in %o0:%o1 and %o2:%o3 and returns the eight-byte quotient in %o0:%o1, high word first. Without the contract the caller sees an unknown callee that writes only %o0, so a caller that stores only the low word (`*p = (int)(a / b);`, the `st %o1` after the call) stores a local nothing assigns. With it the call prints `__divdi3(CONCAT44(a0,a1),CONCAT44(a2,a3))` and the stored word is `(int)__divdi3(..)`. A DWARF or explicit `--assert prototype` declaration keeps precedence, a stripped image names no helper and is unchanged, and every other target and helper (`__moddi3`, `__udivdi3`, `__umoddi3`) keeps its inferred contract. GCC's `-fPIC` stack protector on 32-bit PowerPC and x86 links `__stack_chk_fail_local` hidden into each PIE and shared object, where it is no import, so the imports-only `libcsigs` row does not reach it: a PowerPC caller that sets its return value in r3 before the canary test prints `__stack_chk_fail_local(a0 * 3)`, and with the contract `__stack_chk_fail_local()`. Static glibc aliases the helper to `__stack_chk_fail` at one address; that address keeps its inferred contract."
+summary = "Seed two compiler-runtime contracts: the libgcc DI-mode `long long __divdi3(long long, long long)` onto a SPARC32 big-endian ELF (`sparc:BE:32:default:default`) that names `__divdi3`, defined or imported, and `void __stack_chk_fail_local(void)` onto any ELF that defines that helper at an address no other function name holds. The `__divdi3` widths come from GCC machine modes, not the C data model: it takes two eight-byte operands in %o0:%o1 and %o2:%o3 and returns the eight-byte quotient in %o0:%o1, high word first. Without the contract the caller sees an unknown callee that writes only %o0, so a caller that stores only the low word (`*p = (int)(a / b);`, the `st %o1` after the call) stores a local nothing assigns. With it the call prints `__divdi3(CONCAT44(a0,a1),CONCAT44(a2,a3))` and the stored word is `(int)__divdi3(..)`. A DWARF or explicit `--assert prototype` declaration keeps precedence, a stripped image names no helper and is unchanged, and every other target and helper (`__moddi3`, `__udivdi3`, `__umoddi3`) keeps its inferred contract. GCC's `-fPIC` stack protector on 32-bit PowerPC and x86 links `__stack_chk_fail_local` hidden into each PIE and shared object, where it is no import, so the imports-only `libcsigs` row does not reach it: a PowerPC caller that sets its return value in r3 before the canary test prints `__stack_chk_fail_local(a0 * 3)`, and with the contract `__stack_chk_fail_local()`. Static glibc aliases the helper to `__stack_chk_fail` at one address; that address keeps its inferred contract. On a big-endian target other than 32-bit ARM it also seeds the libgcc routines with an eight-byte result that `softfpsigs` seeds unconditionally on little-endian ones (`__adddf3`, `__muldf3`, `__floatsidf`, `__fixdfdi`, `__muldi3`, `__udivdi3`, ...: unsigned long long for a `DFmode` value), where the default model returns eight bytes in registers."
 use_when = "Off by default: the locked eight-byte result still costs a caller that RETURNS arithmetic on the quotient. Return recovery keeps a caller's two return words only when each is a bare slice of the call result or a literal and nothing else reads the quotient (`return a / b;`, a quotient kept across a call, a guarded `return -1`), so `return a / b + 1;` prints `int inc(..)` with only the high word, `return -(a / b);` prints `int neg(..)`, and `return f ? a / b : c;` prints `void sel(..)`, dropping both values; with the option off all three return every word (in the first-register-low join `bejoin` leaves without evidence). Of 21 authored caller shapes at clang -O2, 14 lose words that way: +1, +c, negation, abs, `>> 3`, an unsigned `>> 32`, ^c, |c, *c, a sum of two quotients, an accumulation loop, a quotient an argument replaces on one path, a clamp (`if (x > 100) x = 100;`), and the `sel` phi. Turn on for a SPARC32 binary whose callers store or pass the quotient (`*p = (int)(a / b);`, `g(a / b)`) or return it unchanged, where the off output reads an unassigned local; check any `int` or `void` caller that should return a `long long` against the disassembly. The `__stack_chk_fail_local` half also moves more than the argument: over GCC 15 `-fPIC -fstack-protector-strong` PowerPC32 shared objects at -O1 to -O3 and -Os it removes every invented argument (391 calls on the default target, 234 on e500) and gives 240 functions on the default target the return value their source declares, but 43 PLT call stubs (32 on e500) lose an inferred return the argument was the only use of, and at -Os 4 functions lose a parameter whose only use was the argument (`void gather(int a0,unsigned char *a1)` becomes `void gather(int a0)`; e500 `void main(unsigned int a0)` becomes `void main(void)`); on an i386 PIE one function in 141 (`xstrtoimax`) splits a 64-bit local into two 32-bit halves. Turn on for such a PIE or shared object whose calls to `__stack_chk_fail_local` carry an argument."
 example = "option libgccsigs on"
 source_decompiler = "kuna"
@@ -5785,6 +5804,46 @@ inspiration = "IDA 9.5 eh_parse 0x114d0 -> 0x10800 -> 0xffa0 (AFL_NOTPROC on the
 change_kind = "analysis-enablement"
 tier = "analysis"
 symptoms = "many sub_<addr> functions that end in _Unwind_Resume()|a stripped c++ binary's function list is full of cleanup fragments from .text.unlikely|a function that starts by reading an undefined rbx and frees buffers before _Unwind_Resume"
+
+
+[[settable]]
+option = "mfcmsgmap"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P1"
+subphase = "code-data-partition"
+strength = "HARD"
+rewind = "P1"
+issue = "holley-i386-ptrdisc"
+summary = "On a 32-bit PE, list the handlers of every MFC message map as functions. An MFC window class routes messages through a static AFX_MSGMAP in .rdata (pfnGetBaseMap, lpEntries) whose AFX_MSGMAP_ENTRY array (nMessage, nCode, nID, nLastID, nSig, pfn; 24 bytes each, ending in an all-zero entry) names each handler. The handlers are reached only through that table, so no entry oracle or direct-call walk finds them and each was folded into the function before it. A table is read only where the base relocations vouch for it: lpEntries and the pfnGetBaseMap word before it are relocated, pfnGetBaseMap points into code, the entries lie in a non-executable section, and every entry's pfn is a relocated pointer into code with nMessage below 0x10000 and nSig below 0x100. The handlers are walked as roots, so their callees are found too."
+use_when = "Off by default. Turn it on for MFC applications and DLLs built with MSVC for i386, where window-message handlers (OnPaint, OnCommand handlers) are missing from the function list and their code is folded into the function before them. Measured on PEGRP32F.dll: 29 maps, 198 handlers, every one an IDA 9.5 function start, 194 of them missing before."
+example = "--option mfcmsgmap on"
+source_decompiler = "kuna"
+inspiration = "IDA 9.5 on PEGRP32F.dll (MFC, MSVC i386): 2,455 function starts unlace missed, the MFC message-map handlers among them"
+change_kind = "analysis-enablement"
+tier = "analysis"
+symptoms = "an mfc window class's message handlers are missing from the function list|a function in an mfc image spans several handlers that a message map names|IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour"
+
+
+[[settable]]
+option = "msvcptrentry"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P1"
+subphase = "code-data-partition"
+strength = "HARD"
+rewind = "P1"
+issue = "holley-i386-ptrdisc"
+summary = "On a 32-bit PE, make every executable address a base-relocated word points at a function entry when its bytes are an MSVC frame prologue (push ebp; mov ebp,esp as 55 8B EC, or 8B FF 55 8B EC with the hot-patch prefix). Vtable slots, MFC tables, callbacks pushed for the Win32 API and thread procedures are reached only through such pointers, so the walk never found them and each was folded into the function before it. The relocation table lists every pointer word in code and data. The prologue test keeps out the address-taken labels that are not functions: MSVC's own (switch targets, catch continuations, SEH handlers) start with no frame, and GCC/MinGW encode mov ebp,esp as 89 E5, so their SJLJ landing pads never match. The targets are walked as roots, so their callees are found too."
+use_when = "Off by default. Turn it on for MSVC-built 32-bit C++ and MFC images with frame pointers, where many functions IDA lists are missing and a function spans several of IDA's. Measured on PEGRP32F.dll: 1,255 targets, all IDA 9.5 function starts, 452 missing before; walked as roots they reach 2,082 of the 2,455 starts that were missing. No false start on USBCAN-Driver, CP210xManufacturing or SLABHIDDevice. It finds nothing in code built with frame-pointer omission."
+example = "--option msvcptrentry on"
+source_decompiler = "kuna"
+inspiration = "IDA 9.5 on PEGRP32F.dll (MFC, MSVC i386): 2,455 function starts unlace missed, most reached only through relocated pointers"
+change_kind = "analysis-enablement"
+tier = "analysis"
+symptoms = "an msvc i386 image lists far fewer functions than IDA|a function in an msvc i386 c++ image spans several of IDA's functions|a vtable slot or callback in a 32-bit dll is not in the function list"
 
 [[settable]]
 option = "importvote"

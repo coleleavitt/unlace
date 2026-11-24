@@ -179,6 +179,9 @@ class X86_64(Arch):
     def capstone(self):
         return cs.Cs(cs.CS_ARCH_X86, cs.CS_MODE_64)
 
+    def canonical(self, cand):
+        return x86_legacy_canonical(cand)
+
     def gen(self, rng):
         if rng.random() < 0.5:
             pre = bytes(rng.choice([[], [], [0x66], [0x48], [0x49], [0x4C], [0x4D], [0xF2], [0xF3], [0x66, 0x48], [0x41], [0x44]]))
@@ -323,9 +326,11 @@ def x86_legacy_gen(rng, prefixes):
     return pre + op + tail
 
 
-def x86_legacy_canonical(cand):
+def x86_legacy_canonical(cand, mode=cs.CS_MODE_64):
     """False for encodings Capstone (and LLVM) accept but the CPU raises #UD for: control registers
-    that do not exist, a VEX prefix after 66/F2/F3, MOVNTI with 66/F2/F3; and AMD-only SSE4a/3DNow."""
+    that do not exist, a VEX prefix after 66/F2/F3, MOVNTI with 66/F2/F3; and AMD-only SSE4a/3DNow.
+    Also false for an F2/F3 prefix on a 0F-map opcode that has no such form, which Capstone
+    drops silently (it decodes the same instruction without the prefix)."""
     b, mn, ops = cand["bytes"], cand["mnemonic"], cand["op_str"]
     if mn == "mov" and re.search(r"\bcr(1|[5-9]|1\d)\b", ops):
         return False
@@ -339,6 +344,14 @@ def x86_legacy_canonical(cand):
         return False
     if 0x66 in pre and mn in ("rcpps", "rsqrtps", "movlhps", "movhlps"):
         return False
+    j = i
+    while mode == cs.CS_MODE_64 and j < len(b) and 0x40 <= b[j] <= 0x4F:
+        j += 1
+    if pre & {0xF2, 0xF3} and j < len(b) and b[j] == 0x0F:
+        bare = bytes(x for x in b[:i] if x not in (0xF2, 0xF3)) + b[i:]
+        ins = next(cs.Cs(cs.CS_ARCH_X86, mode).disasm(bare, 0), None)
+        if ins is not None and ins.mnemonic == mn and ins.op_str == ops and ins.size == len(bare):
+            return False
     return mn not in ("extrq", "insertq", "movntss", "movntsd") and not (i + 1 < len(b) and b[i:i + 2] == b"\x0f\x0f")
 
 
@@ -387,7 +400,7 @@ class X86_32Native(X86_64):
         return kind
 
     def canonical(self, cand):
-        return x86_legacy_canonical(cand)
+        return x86_legacy_canonical(cand, cs.CS_MODE_32)
 
     def skip(self, cand):
         # X86_64.skip lists Unicorn's deviations; this CPU has none of them
@@ -445,7 +458,7 @@ class X86_16(X86_64):
         return kind
 
     def canonical(self, cand):
-        return x86_legacy_canonical(cand)
+        return x86_legacy_canonical(cand, cs.CS_MODE_16)
 
     def skip(self, cand):
         b, mn = cand["bytes"], cand["mnemonic"]
@@ -537,7 +550,7 @@ class X86_64X87(X86_64Native):
 
     def canonical(self, cand):
         # Capstone's FSTPNCE (D9 D8+i) is an undocumented FSTP alias that LLVM and SLEIGH leave undecoded
-        return cand["mnemonic"] != "fstpnce"
+        return cand["mnemonic"] != "fstpnce" and super().canonical(cand)
 
     def ignored(self, mnemonic, operands, state):
         out = super().ignored(mnemonic, operands, state)
@@ -850,6 +863,11 @@ class Mips64(Arch):
 # Release 6 compact branches (no delay slot) are compared; delay-slot branches are not.
 MIPSR6_DENY = re.compile(MIPS64_DENY.pattern.replace("^(b.*|j.*|", "^(b(?!\\w*c$).*|j(?!\\w*c$).*|").replace("|bc.*|bal.*|", "|")
                          .replace(".*\\.(s|d|ps|w|l|b|h|v)", ".*\\.(s|ps|l)"))
+# Capstone's R6 modes still decode the REGIMM trap-immediates R6 removed and Cavium Octeon's
+# instructions, which an R6 core raises a Reserved Instruction for.
+MIPSR6_INVALID = re.compile(
+    r"^(teqi|tgei|tgeiu|tlti|tltiu|tnei|seqi?|snei?|exts(32)?|cins(32)?|baddu|d?pop|vmulu|v3mulu|vmm0|"
+    r"mt[mp][012]|saad?|bbit[01](32)?|dmul|lai|laid|lad|ladd|law|lawd|lac|lacd|las|lasd)$")
 # MSA: w0..w31 and MSACSR are compared; FPU operations (on $f registers, outside the harness state)
 # are skipped.
 MSA_VECS = [(f"w{i}", None) for i in range(32)]
@@ -872,6 +890,9 @@ class Mips64R6(MsaCsr, Mips64):
     cs_mode = cs.CS_MODE_MIPS64 | cs.CS_MODE_MIPS32R6
     deny = MIPSR6_DENY
 
+    def canonical(self, cand):
+        return not MIPSR6_INVALID.match(cand["mnemonic"])
+
     def skip(self, cand):
         return "$f" in cand["op_str"]
 
@@ -893,6 +914,9 @@ class Mips32R6(MsaCsr, Mips32):
     vecs = MSA_VECS
     deny = MIPSR6_DENY
 
+    def canonical(self, cand):
+        return not MIPSR6_INVALID.match(cand["mnemonic"])
+
     def skip(self, cand):
         return "$f" in cand["op_str"]
 
@@ -913,6 +937,14 @@ PPC_DENY = re.compile(
     r"mfdcr|mtdcr|attn|wait|f.*|lf.*|stf.*|mffs.*|mtfs.*|v.*|ev.*|lv.*|stv.*|dss.*|dst.*|xs.*|xv.*|"
     r"lmw|stmw|lswi|lswx|stswi|stswx|mcrxr|mtocrf|mfocrf|mtcrf|mfcr|mcrf)$"
 )
+
+
+# What Capstone's 32-bit PowerPC mode decodes that the 32-bit language does not have: 64-bit-only
+# instructions, VSX and isel (e500 and Power ISA 2.03+; neither the 32-bit language nor the 7457).
+PPC32_LACKS = re.compile(
+    r"^(ld|ldu|ldx|ldux|ldbrx|lwa|lwax|lwaux|std|stdu|stdx|stdux|stdbrx|rld\w*|sld\.?|srd\.?|srad\w*|"
+    r"cntlzd\.?|cnttzd\.?|extsw\w*|mulld\w*|mulhd\w*|divd\w*|divde\w*|modsd|modud|popcntd|td|tdi|td\w+|"
+    r"xx\w+|xs\w+|xv\w+|lx\w+|stx\w+|m[ft]vsr\w*|lq|stq|isel\w*)$")
 
 
 class Ppc32(Arch32):
@@ -945,6 +977,8 @@ class Ppc32(Arch32):
         pass
 
     def canonical(self, cand):
+        if self.lang.endswith(":32:default") and PPC32_LACKS.match(cand["mnemonic"].rstrip(".")):
+            return False
         # an update-form load/store with RA=0, or a load with update into RA (invalid forms)
         w = int.from_bytes(cand["bytes"], "big" if self.big else "little")
         op, rt, ra = w >> 26, (w >> 21) & 31, (w >> 16) & 31
@@ -1487,6 +1521,27 @@ class TriCore(Arch32):
         w = rng.getrandbits(32)
         return w.to_bytes(4, "little") if w & 1 else (w & 0xFFFF).to_bytes(2, "little")
 
+    def canonical(self, cand):
+        # Capstone ignores the reserved fields ("-" in the manual's format diagrams) and the low bit
+        # of an E or P register pair: an encoding with such a bit set disassembles as if it were
+        # clear, while SLEIGH requires the field to be zero (or the pair number even). The encoding
+        # is canonical when clearing any set bit changes Capstone's text.
+        # TC1.6.2 additions that Capstone's TC1.6.2 mode decodes are not in tricore:LE:32:tc29x
+        # (TC1.6.1); they decode in tricore:LE:32:tc18.
+        if re.match(r"^(lha|popcnt\.w|shuffle|crc32.*|crcn|div64.*|rem64.*)$", cand["mnemonic"]):
+            return False
+        raw = cand["bytes"]
+        n = len(raw)
+        w = int.from_bytes(raw, "little")
+        text = (cand["mnemonic"], cand["op_str"])
+        dis = self.capstone()
+        for k in range(8 * n):
+            if (w >> k) & 1:
+                j = next(dis.disasm((w & ~(1 << k)).to_bytes(n, "little"), 0), None)
+                if j and j.size == n and (j.mnemonic, j.op_str) == text:
+                    return False
+        return True
+
     def skip(self, cand):
         # Unicorn's LD.H D[15], A[b], off4 (SRO, 0x8c) adds off4 unscaled; the manual and Capstone
         # scale it by 2, as for every other 16-bit halfword form.
@@ -1711,6 +1766,27 @@ M68K_DENY = re.compile(
 )
 
 
+def m68k_reserved_full_ext(b):
+    """Whether the opword's own effective address (bits 5:0, as (d,An,Xn) or (d,PC,Xn)) uses a full
+    extension word with a reserved field: bit 3 set, base displacement size 0, or a reserved
+    I/IS value (IS=0: 4; IS=1: 4..7). Capstone decodes these; the CPU and SLEIGH do not. Opcodes
+    whose first extension word is not this EA's (immediates, MOVEM masks, MUL.L/DIV.L, bit
+    fields, coprocessor ops) are left alone."""
+    if len(b) < 4:
+        return False
+    op = b[0] << 8 | b[1]
+    mode, reg = (op >> 3) & 7, op & 7
+    if not (mode == 6 or (mode == 7 and reg == 3)):
+        return False
+    if op >> 12 in (0x0, 0xF) or (op & 0xFB80) == 0x4880 or (op & 0xFF80) == 0x4C00 or (op & 0xF8C0) == 0xE8C0:
+        return False
+    ext = b[2] << 8 | b[3]
+    if not ext & 0x100:
+        return False
+    iis = ext & 7
+    return bool(ext & 8) or (ext >> 4) & 3 == 0 or (iis == 4 if not ext & 0x40 else iis >= 4)
+
+
 class M68k(Arch32):
     """Motorola 68040 integer instructions, against QEMU user mode (--oracle qemu, qemu-m68k -cpu
     m68040). FPU, privileged, trap and MMU/cache instructions are not generated."""
@@ -1741,7 +1817,9 @@ class M68k(Arch32):
             return False
         if re.search(r"\bfp\d|\bsr\b", ops) or (cand["mnemonic"] in ("abcd", "sbcd") and "#" in ops):
             return False
-        return not cand["mnemonic"].startswith("dc.") and cand["mnemonic"] != "abcd.l"
+        if cand["mnemonic"].startswith("dc.") or cand["mnemonic"] == "abcd.l":
+            return False
+        return not m68k_reserved_full_ext(cand["bytes"])
 
     def skip(self, cand):
         # QEMU 8.2's memory shifts take arithmetic/logical from EA bit 3 instead of opcode bit 9
@@ -2205,7 +2283,7 @@ class SlotDis(BinutilsDis):
             f.write(b"".join(self.pack(r) for r in todo))
             name = f.name
         try:
-            cmd = [self.path(), "-D", "-b", "binary", "-m", self.machine, "-EB" if self.big else "-EL", name]
+            cmd = [self.path(), "-D", "-z", "-b", "binary", "-m", self.machine, "-EB" if self.big else "-EL", name]
             out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
         finally:
             os.unlink(name)
@@ -2218,7 +2296,7 @@ class SlotDis(BinutilsDis):
         for (off, text), nxt in zip(lines, lines[1:] + [(None, None)]):
             if off % self.width:
                 continue
-            if not text or text.startswith(("(bad)", "bad", ".word", ".long", ".byte", ".short", "#", "*unknown*")):
+            if not text or text.startswith(("(bad)", "bad", ".word", ".long", ".byte", ".short", "#", "*unknown*", "unknown")):
                 continue
             n = (nxt[0] if nxt[0] is not None else off + self.width) - off
             mn, ops = (re.split(r"\s+", text, maxsplit=1) + [""])[:2]
@@ -2378,4 +2456,123 @@ class Iq2000(ObjdumpArch):
         raise NotImplementedError("iq2000 runs with --oracle gdbsim")
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000())}
+V850_GDB = {"sp": "r3", "gp": "r4", "tp": "r5", "ep": "r30", "lp": "r31", "PSW": "psw"}
+V850_DENY = re.compile(
+    r"^(b[a-z]*|jmp|jr|jarl|ctret|eiret|feret|reti|trap|halt|di|ei|ldsr|stsr|switch|callt|dispose|syscall|"
+    r"fetrap|rie|snooze|caxi|ldl\.w|stc\.w|sync[a-z]*|cache|pref|nop|loop|pushsp|popsp|ldvc\.sr|stvc\.sr|"
+    r"[a-z0-9]*\.[sd]|cvtf.*|trf.*|cmovf.*|ceilf.*|floorf.*|roundf.*|trncf.*|maddf.*|msubf.*|nmaddf.*|"
+    r"nmsubf.*|absf.*|addf.*|subf.*|mulf.*|divf.*|maxf.*|minf.*|negf.*|sqrtf.*|recipf.*|rsqrtf.*|cmpf.*|"
+    r"hsh|dbtrap|dbret|dbhvtrap|hvtrap|hvcall|ldtc.*|sttc.*|cll|stm\.gsr|ldm\.gsr|stm\.mp|ldm\.mp|tlb.*|"
+    r"jmp32|jarl32|.*\.x)$"
+)
+
+
+class V850(ObjdumpArch):
+    """V850E2 (little endian) against gdb's v850 simulator, machine v850e2v3 (--oracle gdbsim).
+    The flags live in PSW (Z, S, OV, CY, SAT in bits 0..4), compared as that register. The
+    simulator has memory below 2 MiB, so the instruction sits at 0x100000 and pointers are
+    drawn there. Branches, jumps, system, cache, FP and atomic instructions are not generated."""
+    name = "v850"
+    lang = "V850:LE:32:default"
+    elf_machine = 87
+    elf_flags = 0x60000000                     # E_V850E2V3_ARCH
+    base = 0x100000
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in ["r1", "r2", "sp", "gp", "tp"] + [f"r{i}" for i in range(6, 30)] + ["ep", "lp", "PSW"]]
+    pc_const = None
+    deny = V850_DENY
+    gdbsim = "v850"
+    gdb_arch = "v850e2v3"
+    gdb_pc = "pc"
+    misaligned_undefined = True                 # sim/v850 aligns a halfword/word access down
+
+    def unicorn(self):
+        raise NotImplementedError("v850 runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("v850e2v3", False, 16, b"\x00\x00", 2)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(64).to_bytes(8, "little")
+
+    def gdb_reg(self, n):
+        return V850_GDB.get(n, n)
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.35:
+            return rng.randrange(0x110000, 0x1F0000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def fix_inputs(self, init, rng):
+        init["PSW"] &= 0x1F
+
+    def addr_ok(self, a):
+        return a < 0x200000
+
+    def partial(self, mnemonic, operands):
+        # sim/v850's ADF and SBF leave PSW alone; the manual sets CY, OV, S and Z
+        return {"PSW": 0 if mnemonic.startswith(("adf", "sbf")) else 0x1F}
+
+    def skip(self, cand):
+        # sim/v850 builds MAC/MACU from 16x16 partial products and drops a carry into the high word
+        return cand["mnemonic"] in ("mac", "macu")
+
+
+MN10300_DENY = re.compile(
+    r"^(b[a-z]*|l[a-z]{2}|jmp|call[a-z]*|ret[a-z]*|rti|trap|syscall|udf.*|nop|rets|retf|jsr|"
+    r"getx|putx|mulq.*|mulqu.*|sat.*)$"
+)
+
+
+class Mn10300(ObjdumpArch):
+    """Matsushita MN10300 (little endian) against gdb's mn10300 simulator (--oracle gdbsim). The
+    simulator has memory below 1 MiB, so the instruction sits at 0x10000. Z, N, C and V are
+    compared through PSW. Branches, calls, returns, loops and traps are not generated."""
+    name = "mn10300"
+    lang = "mn10300:LE:32:mn10300"
+    elf_machine = 89
+    base = 0x10000
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in ["D0", "D1", "D2", "D3", "A0", "A1", "A2", "A3", "SP", "MDR", "LIR", "LAR"]]
+    pc_const = None
+    flags_reg = "psw"
+    flag_bits = {"ZF": 0, "NF": 1, "CF": 2, "VF": 3}
+    deny = MN10300_DENY
+    gdbsim = "mn10300"
+    gdb_pc = "pc"
+
+    def unicorn(self):
+        raise NotImplementedError("mn10300 runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("mn10300", False, 16, b"\xcb", 1)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(56).to_bytes(7, "little")
+
+    def gdb_reg(self, n):
+        return n.lower()
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.35:
+            return rng.randrange(0x20000, 0xF0000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def addr_ok(self, a):
+        return a < 0x100000
+
+    def ignored(self, mnemonic, operands, state):
+        # DIV/DIVU leave the registers undefined on overflow (V set); sim/mn10300 only tests a
+        # zero divisor and truncates the quotient
+        if mnemonic in ("div", "divu") and state.get("VF"):
+            return {"*"}
+        return set()
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300())}

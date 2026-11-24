@@ -1922,8 +1922,8 @@ mod tests {
         // declared signed
         // and kuna-pemain / a stripped PE names the function its CRT startup
         // calls `main`
-        // and powerpc-isa-hint / a failed generic PowerPC64 isel decode
-        // suggests an explicit ISA target
+        // and powerpc64-isel / the generic PowerPC64 decoder lifts isel as a
+        // conditional assignment
         // and cortus-aps3-constructors / inv with an immediate negates, extb.cc
         // sign-extends, and an indirect call keeps its target
         // and kuna-jumptablemax / a four-case switch is refused under
@@ -2343,7 +2343,8 @@ mod tests {
         // and kuna-dex-javasync / DEX synchronized blocks and finally clauses (option javasync)
         // and kuna-llscfold-arm + kuna-llscfold-a64-pair / ARM rotated compare-exchange and
         // ldrexd/strexd, ldaxp/stlxp doubleword retry loops fold (option llscfold)
-        assert_eq!(count, 1009, "corpus file count drifted");
+        // and kuna-boolreturn-default / constant-return predicates print as one return (option boolreturn)
+        assert_eq!(count, 1010, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

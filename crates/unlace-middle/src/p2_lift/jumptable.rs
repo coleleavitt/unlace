@@ -2159,6 +2159,121 @@ const NO_WRITE_BLOCKS: usize = 8;
 /// [`JumpBasicModel::narrow_readonly_selector_domain`] emulates: any 16-bit index.
 const MAX_SELECTOR_INPUTS: uintb = 1 << 16;
 
+/// (kuna) The most values [`small_value_set`] keeps for one varnode.
+const MAX_SMALL_SET: usize = 64;
+
+/// (kuna) How deep [`small_value_set`] follows definitions.
+const MAX_SMALL_SET_DEPTH: usize = 12;
+
+/// (kuna) Every value `vn` can take, when that is a small set: constants, a
+/// boolean (0 or 1), a MULTIEQUAL of such values, and copies, extensions and
+/// integer arithmetic of them. `None` once anything else, a cycle, or more
+/// than [`MAX_SMALL_SET`] values is met.
+fn small_value_set(fd: &Funcdata, vn: VarnodeId) -> Option<Vec<uintb>> {
+    let v = fd.vbank().get(vn)?;
+    if v.is_constant() || !v.is_written() {
+        return None;
+    }
+    let mut visiting = Vec::new();
+    let set = value_set(fd, vn, 0, &mut visiting)?;
+    (set.len() > 1).then(|| set.into_iter().collect())
+}
+
+fn value_set(
+    fd: &Funcdata,
+    vn: VarnodeId,
+    depth: usize,
+    visiting: &mut Vec<VarnodeId>,
+) -> Option<BTreeSet<uintb>> {
+    let v = fd.vbank().get(vn)?;
+    let size = v.get_size();
+    let mask = calc_mask(size);
+    if v.is_constant() {
+        return Some(BTreeSet::from([v.get_offset() & mask]));
+    }
+    if depth > MAX_SMALL_SET_DEPTH || visiting.contains(&vn) {
+        return None;
+    }
+    let op = fd.obank().get(v.get_def()?)?;
+    if op.is_bool_output() {
+        return Some(BTreeSet::from([0, 1]));
+    }
+    visiting.push(vn);
+    let result = (|| {
+        let code = op.code();
+        let mut out = BTreeSet::new();
+        match code {
+            OpCode::CPUI_MULTIEQUAL => {
+                for i in 0..op.num_input() {
+                    out.extend(value_set(fd, op.get_in(i)?, depth + 1, visiting)?);
+                    if out.len() > MAX_SMALL_SET {
+                        return None;
+                    }
+                }
+            }
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_INT_ZEXT
+            | OpCode::CPUI_INT_SEXT
+            | OpCode::CPUI_INT_2COMP
+            | OpCode::CPUI_INT_NEGATE => {
+                let input = op.get_in(0)?;
+                let in_size = fd.vbank().get(input)?.get_size();
+                for x in value_set(fd, input, depth + 1, visiting)? {
+                    let r = match code {
+                        OpCode::CPUI_INT_SEXT => {
+                            let shift = 64 - 8 * in_size.clamp(1, 8) as u32;
+                            (((x << shift) as i64) >> shift) as uintb
+                        }
+                        OpCode::CPUI_INT_2COMP => x.wrapping_neg(),
+                        OpCode::CPUI_INT_NEGATE => !x,
+                        _ => x,
+                    };
+                    out.insert(r & mask);
+                }
+            }
+            OpCode::CPUI_INT_MULT
+            | OpCode::CPUI_INT_XOR
+            | OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_INT_SUB
+            | OpCode::CPUI_INT_AND
+            | OpCode::CPUI_INT_OR
+            | OpCode::CPUI_INT_LEFT
+            | OpCode::CPUI_INT_RIGHT => {
+                if op.num_input() != 2 {
+                    return None;
+                }
+                let xs = value_set(fd, op.get_in(0)?, depth + 1, visiting)?;
+                let ys = value_set(fd, op.get_in(1)?, depth + 1, visiting)?;
+                if xs.len().saturating_mul(ys.len()) > MAX_SMALL_SET * MAX_SMALL_SET {
+                    return None;
+                }
+                for &x in &xs {
+                    for &y in &ys {
+                        let r = match code {
+                            OpCode::CPUI_INT_MULT => x.wrapping_mul(y),
+                            OpCode::CPUI_INT_XOR => x ^ y,
+                            OpCode::CPUI_INT_ADD => x.wrapping_add(y),
+                            OpCode::CPUI_INT_SUB => x.wrapping_sub(y),
+                            OpCode::CPUI_INT_AND => x & y,
+                            OpCode::CPUI_INT_OR => x | y,
+                            OpCode::CPUI_INT_LEFT => x.checked_shl(y as u32).unwrap_or(0),
+                            _ => x.checked_shr(y as u32).unwrap_or(0),
+                        };
+                        out.insert(r & mask);
+                        if out.len() > MAX_SMALL_SET {
+                            return None;
+                        }
+                    }
+                }
+            }
+            _ => return None,
+        }
+        Some(out)
+    })();
+    visiting.pop();
+    result
+}
+
 /// (kuna) The most selector values per table slot a guard-bounded table
 /// longer than `jumptablemax` may admit.  An index that is the selector reads
 /// one slot per value; one derived from it (`x >> 8`) reads one slot for many
@@ -2674,6 +2789,39 @@ impl JumpBasicModel {
             }
         }
         self.end_table_at_selector_map(fd, selector_vn);
+    }
+
+    /// (kuna) Replace an unbounded selector range with the exact set of values a
+    /// path varnode takes, when that set is small ([`small_value_set`]). An
+    /// obfuscated arm64e dispatcher indexes a shared table of signed pointers
+    /// with `(cond * k) ^ c`: the circular range cannot follow the XOR, so the
+    /// index spans its whole width and the table's rows lead flow into other
+    /// functions, while the index only ever holds `c` or `k ^ c`. Only an index
+    /// a table LOAD reads qualifies: a destination selected straight between
+    /// constant addresses is `constselectjump`'s decision.
+    fn narrow_boolean_selector(&mut self, fd: &Funcdata, maxtablesize: uint4) {
+        if self.is_model2 || self.jrange().get_size() <= maxtablesize as uintb {
+            return;
+        }
+        for pos in 0..self.path_meld.num_common_varnode() {
+            if !self.path_meld.is_load_in_path(fd, pos) {
+                continue;
+            }
+            let vn = self.path_meld.get_varnode(pos);
+            let Some(values) = small_value_set(fd, vn) else {
+                continue;
+            };
+            let Some(start_op) = self.path_meld.get_earliest_op(pos) else {
+                continue;
+            };
+            let mut exact = JumpValuesRange::new();
+            exact.set_values(values);
+            exact.set_start_vn(vn);
+            exact.set_start_op(start_op);
+            self.varnode_index = pos;
+            self.jrange = Some(Box::new(exact));
+            return;
+        }
     }
 
     /// (kuna) The bytes the selector's map occupies, as the first and last
@@ -3255,6 +3403,7 @@ impl JumpBasicModel {
             .ok_or_else(|| KunaError::lowlevel("recoverModel: switch op has no parent block"))?;
         self.find_normalized(fd, parent, -1, matchsize, maxtablesize, indop)?;
         self.narrow_readonly_selector_domain(fd, maxtablesize);
+        self.narrow_boolean_selector(fd, maxtablesize);
         self.skip_stranding_variable(fd, indop, matchsize, maxtablesize);
         let unbounded =
             self.jrange().get_size() > maxtablesize as uintb && !self.guard_bounds_table(fd);
@@ -5067,6 +5216,13 @@ impl JumpBasicModel {
             notdone = jr.next()?;
         }
         if self.trim_rows && addresstable.len() < 2 {
+            jt_trace!(
+                "switchtrim at {:#x}: emulation stopped after {} row(s)",
+                fd.obank()
+                    .get(indop)
+                    .map_or(0, |o| o.get_addr().get_offset()),
+                addresstable.len()
+            );
             return Err(KunaError::lowlevel("switchtrim: fewer than two table rows"));
         }
         // Hand back any collected LOAD records.
@@ -5421,12 +5577,22 @@ impl JumpModel for JumpBasicModel {
         }
         let mut i = Self::reasonable_rows(fd, addresstable);
         if self.trim_rows {
+            let reasonable = i;
             i = i.min((fd.hooks().switchtrim_trimmed_rows)(
                 fd,
                 addresstable,
                 loadpoints,
                 loadcounts,
             ));
+            jt_trace!(
+                "switchtrim at {:#x}: {} rows emulated, {} reasonable, {} kept by the layout",
+                fd.obank()
+                    .get(indop)
+                    .map_or(0, |o| o.get_addr().get_offset()),
+                addresstable.len(),
+                reasonable,
+                i
+            );
             if i < 2 {
                 return Ok(false);
             }
@@ -5831,18 +5997,34 @@ impl JumpBasicModel {
         matchsize: uint4,
         maxtablesize: uint4,
     ) -> KunaResult<bool> {
+        let at = fd
+            .obank()
+            .get(_indop)
+            .map_or(0, |o| o.get_addr().get_offset());
         let joinvn = match self.extravn {
-            None => return Ok(false),
+            None => {
+                jt_trace!("model2 at {at:#x}: the basic model left no path");
+                return Ok(false);
+            }
             Some(v) => v,
         };
         if !fd.vbank().get(joinvn).unwrap().is_written() {
+            jt_trace!("model2 at {at:#x}: join varnode is not written");
             return Ok(false);
         }
         let multiop = fd.vbank().get(joinvn).unwrap().get_def().unwrap();
         if fd.obank().get(multiop).unwrap().code() != OpCode::CPUI_MULTIEQUAL {
+            jt_trace!(
+                "model2 at {at:#x}: join is {:?}, not a MULTIEQUAL",
+                fd.obank().get(multiop).unwrap().code()
+            );
             return Ok(false);
         }
         if fd.obank().get(multiop).unwrap().num_input() != 2 {
+            jt_trace!(
+                "model2 at {at:#x}: join MULTIEQUAL has {} inputs",
+                fd.obank().get(multiop).unwrap().num_input()
+            );
             return Ok(false);
         }
         // Search for a constant along one of the paths.
@@ -5865,6 +6047,7 @@ impl JumpBasicModel {
             }
         }
         if path == 2 {
+            jt_trace!("model2 at {at:#x}: no MULTIEQUAL input is a COPY of a constant");
             return Ok(false);
         }
         let mparent = fd.obank().get(multiop).unwrap().get_parent().unwrap();
@@ -5883,6 +6066,11 @@ impl JumpBasicModel {
 
         JumpBasic::find_determining_varnodes(fd, &mut self.path_meld, multiop, 1 - path)?;
         self.find_normalized(fd, rootbl, pathout, matchsize, maxtablesize, _indop)?;
+        jt_trace!(
+            "model2 at {at:#x}: default value {extravalue:#x}, range size {}, {} guard(s)",
+            self.jrange().get_size(),
+            self.selectguards.len()
+        );
         if self.jrange().get_size() > maxtablesize as uintb {
             return Ok(false);
         }
@@ -6917,6 +7105,15 @@ impl JumpTable {
             self.jmodel = None;
             return Ok(());
         }
+        jt_trace!(
+            "models at {:#x}: basic {} (trimmed {}), default-path {}",
+            fd.obank()
+                .get(indirect)
+                .map_or(0, |o| o.get_addr().get_offset()),
+            basic_ok,
+            jbasic.trim_rows,
+            m2_ok
+        );
         if m2_ok {
             self.jmodel = Some(Box::new(jbasic2));
             return Ok(());

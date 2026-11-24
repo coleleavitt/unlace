@@ -5840,7 +5840,9 @@ body's `RETURN` as the statement's markup. The option builds the tree even when
 The positive form `return ( cond );` is taken only when the condition's value is
 already `0` or `1` (`cond_is_boolean`): a `BlockCondition` chain, or a leaf whose
 `CBRANCH` tests an op with a boolean output that is not `BOOL_NEGATE` and that the
-`truthycond` render does not print as a bare operand (`x != 0` printed as `x`).
+`truthycond` render does not print as a bare operand (`x != 0` printed as `x`); a truthy
+test that prints as `!x` (an unflipped `x == 0`, or a flipped `x != 0` whose `!` the
+comparison absorbs) is `0` or `1` and qualifies.
 
 After that statement loop, the same option folds the trailing run of each sequence
 built from a `BlockList` or a `BlockGraph` (`fold_return_run`; in a graph each folded `if`

@@ -1,0 +1,746 @@
+define endian=big;
+define alignment=1;
+define space ram type=ram_space size=2 default;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ A X Y CC EXTI ];
+define register offset=0x10 size=2 [ PC SP ];
+define register offset=0x10 size=1 [ PCH PCL _ S ];
+@ifdef ST70
+define register offset=0x20 size=1 [ H I N Z C ];
+@endif
+@ifdef ST72
+define register offset=0x20 size=1 [ I1 H I0 N Z C ];
+@endif
+define register offset=0xF0 size=4 contextreg;
+
+define token prefix_byte (8)
+  prefix = (0, 7)
+;
+
+define token inst8 (8)
+  opcode = (0, 7)
+  kind = (0, 3)
+  addressing = (4, 7)
+  bit_upper = (4, 7)
+  bit_lower = (0, 0)
+  bit_position = (1, 3)
+;
+
+define token immediate8 (8)
+  imm8 = (0, 7)
+  addr8 = (0, 7)
+  rel = (0, 7) signed
+;
+
+define token immediate16 (16)
+  imm16 = (0, 15)
+;
+
+define context contextreg
+  # Pre-bytes - see page 30 of the programming manual.
+  prefix_90 = (0, 0) noflow  # PDY
+  prefix_91 = (1, 1) noflow  # PIY
+  prefix_92 = (2, 2) noflow  # PIX
+;
+
+@define PRE_PDY "prefix_90=1 & prefix_91=0 & prefix_92=0"
+@define PRE_PIY "prefix_90=0 & prefix_91=1 & prefix_92=0"
+@define PRE_PIX "prefix_90=0 & prefix_91=0 & prefix_92=1"
+@define NO_PRE  "prefix_90=0 & prefix_91=0 & prefix_92=0"
+# X-register forms: no pre-byte or 92; Y-register forms: 90 or 91.
+@define X_FORM  "prefix_90=0 & prefix_91=0"
+@define Y_FORM  "(prefix_90=1 | prefix_91=1)"
+
+:^instruction is prefix=0x90 & $(NO_PRE); instruction [ prefix_90=1; prefix_91=0; prefix_92=0; ] {}
+:^instruction is prefix=0x91 & $(NO_PRE); instruction [ prefix_90=0; prefix_91=1; prefix_92=0; ] {}
+:^instruction is prefix=0x92 & $(NO_PRE); instruction [ prefix_90=0; prefix_91=0; prefix_92=1; ] {}
+
+define pcodeop halt;
+define pcodeop waitForInterrupt;
+
+# ---------------------------------------------------------------------------------------------
+# Memory operands.  ADMEMOP/XDMEMOP/YDMEMOP are destination-capable memory operands for A, X and Y
+# (Y forms need the 90/91 pre-bytes); ASMEMOP/XSMEMOP/YSMEMOP add the immediate form.
+# Indirect forms: the pointer is one byte ("[ptr]") or a big-endian word ("[ptr.w]") stored in
+# page zero; it is always widened before it is used as a 16-bit address.
+# ---------------------------------------------------------------------------------------------
+
+ADMEMOP: imm8           is $(NO_PRE) & addressing=0x0B ; imm8             { export *:1 imm8; }
+ADMEMOP: imm16          is $(NO_PRE) & addressing=0x0C ; imm16            { export *:1 imm16; }
+ADMEMOP: (X)            is $(NO_PRE) & addressing=0x0F & X                { local address:2 = zext(X); export *:1 address; }
+ADMEMOP: (imm8,X)       is $(NO_PRE) & addressing=0x0E & X ; imm8         { local address:2 = imm8 + zext(X); export *:1 address; }
+ADMEMOP: (imm16,X)      is $(NO_PRE) & addressing=0x0D & X ; imm16        { local address:2 = imm16 + zext(X); export *:1 address; }
+ADMEMOP: (Y)            is $(PRE_PDY) & addressing=0x0F & Y               { local address:2 = zext(Y); export *:1 address; }
+ADMEMOP: (imm8,Y)       is $(PRE_PDY) & addressing=0x0E & Y ; imm8        { local address:2 = imm8 + zext(Y); export *:1 address; }
+ADMEMOP: (imm16,Y)      is $(PRE_PDY) & addressing=0x0D & Y ; imm16       { local address:2 = imm16 + zext(Y); export *:1 address; }
+ADMEMOP: [imm8]         is $(PRE_PIX) & addressing=0x0B ; imm8            { local indirect:2 = imm8; local address:2 = zext(*:1 indirect); export *:1 address; }
+ADMEMOP: [imm8".w"]     is $(PRE_PIX) & addressing=0x0C ; imm8            { local indirect:2 = imm8; local address:2 = *:2 indirect; export *:1 address; }
+ADMEMOP: ([imm8],X)     is $(PRE_PIX) & addressing=0x0E & X ; imm8        { local indirect:2 = imm8; local address:2 = zext(*:1 indirect) + zext(X); export *:1 address; }
+ADMEMOP: ([imm8".w"],X) is $(PRE_PIX) & addressing=0x0D & X ; imm8        { local indirect:2 = imm8; local address:2 = *:2 indirect + zext(X); export *:1 address; }
+ADMEMOP: ([imm8],Y)     is $(PRE_PIY) & addressing=0x0E & Y ; imm8        { local indirect:2 = imm8; local address:2 = zext(*:1 indirect) + zext(Y); export *:1 address; }
+ADMEMOP: ([imm8".w"],Y) is $(PRE_PIY) & addressing=0x0D & Y ; imm8        { local indirect:2 = imm8; local address:2 = *:2 indirect + zext(Y); export *:1 address; }
+
+ASMEMOP: "#"imm8        is $(NO_PRE) & addressing=0x0A ; imm8             { export *[const]:1 imm8; }
+ASMEMOP: ADMEMOP        is ADMEMOP                                        { export ADMEMOP; }
+
+XDMEMOP: imm8           is $(NO_PRE) & addressing=0x0B ; imm8             { export *:1 imm8; }
+XDMEMOP: imm16          is $(NO_PRE) & addressing=0x0C ; imm16            { export *:1 imm16; }
+XDMEMOP: (X)            is $(NO_PRE) & addressing=0x0F & X                { local address:2 = zext(X); export *:1 address; }
+XDMEMOP: (imm8,X)       is $(NO_PRE) & addressing=0x0E & X ; imm8         { local address:2 = imm8 + zext(X); export *:1 address; }
+XDMEMOP: (imm16,X)      is $(NO_PRE) & addressing=0x0D & X ; imm16        { local address:2 = imm16 + zext(X); export *:1 address; }
+XDMEMOP: [imm8]         is $(PRE_PIX) & addressing=0x0B ; imm8            { local indirect:2 = imm8; local address:2 = zext(*:1 indirect); export *:1 address; }
+XDMEMOP: [imm8".w"]     is $(PRE_PIX) & addressing=0x0C ; imm8            { local indirect:2 = imm8; local address:2 = *:2 indirect; export *:1 address; }
+XDMEMOP: ([imm8],X)     is $(PRE_PIX) & addressing=0x0E & X ; imm8        { local indirect:2 = imm8; local address:2 = zext(*:1 indirect) + zext(X); export *:1 address; }
+XDMEMOP: ([imm8".w"],X) is $(PRE_PIX) & addressing=0x0D & X ; imm8        { local indirect:2 = imm8; local address:2 = *:2 indirect + zext(X); export *:1 address; }
+
+XSMEMOP: "#"imm8        is $(NO_PRE) & addressing=0x0A ; imm8             { export *[const]:1 imm8; }
+XSMEMOP: XDMEMOP        is XDMEMOP                                        { export XDMEMOP; }
+
+YDMEMOP: imm8           is $(PRE_PDY) & addressing=0x0B ; imm8            { export *:1 imm8; }
+YDMEMOP: imm16          is $(PRE_PDY) & addressing=0x0C ; imm16           { export *:1 imm16; }
+YDMEMOP: (Y)            is $(PRE_PDY) & addressing=0x0F & Y               { local address:2 = zext(Y); export *:1 address; }
+YDMEMOP: (imm8,Y)       is $(PRE_PDY) & addressing=0x0E & Y ; imm8        { local address:2 = imm8 + zext(Y); export *:1 address; }
+YDMEMOP: (imm16,Y)      is $(PRE_PDY) & addressing=0x0D & Y ; imm16       { local address:2 = imm16 + zext(Y); export *:1 address; }
+YDMEMOP: [imm8]         is $(PRE_PIY) & addressing=0x0B ; imm8            { local indirect:2 = imm8; local address:2 = zext(*:1 indirect); export *:1 address; }
+YDMEMOP: [imm8".w"]     is $(PRE_PIY) & addressing=0x0C ; imm8            { local indirect:2 = imm8; local address:2 = *:2 indirect; export *:1 address; }
+YDMEMOP: ([imm8],Y)     is $(PRE_PIY) & addressing=0x0E & Y ; imm8        { local indirect:2 = imm8; local address:2 = zext(*:1 indirect) + zext(Y); export *:1 address; }
+YDMEMOP: ([imm8".w"],Y) is $(PRE_PIY) & addressing=0x0D & Y ; imm8        { local indirect:2 = imm8; local address:2 = *:2 indirect + zext(Y); export *:1 address; }
+
+YSMEMOP: "#"imm8        is $(PRE_PDY) & addressing=0x0A ; imm8            { export *[const]:1 imm8; }
+YSMEMOP: YDMEMOP        is YDMEMOP                                        { export YDMEMOP; }
+
+# Jump/call targets of JP and CALL.  JPDIRECT is a fixed address (short or long direct mode, the
+# target is the operand itself); JPCOMPUTED yields the computed target address (indexed modes use
+# index + offset, indirect modes use the pointed-to address).
+
+JPDIRECT: imm8          is $(NO_PRE) & addressing=0x0B ; imm8             { export *:2 imm8; }
+JPDIRECT: imm16         is $(NO_PRE) & addressing=0x0C ; imm16            { export *:2 imm16; }
+
+JPCOMPUTED: (X)            is $(NO_PRE) & addressing=0x0F & X             { local address:2 = zext(X); export address; }
+JPCOMPUTED: (imm8,X)       is $(NO_PRE) & addressing=0x0E & X ; imm8      { local address:2 = imm8 + zext(X); export address; }
+JPCOMPUTED: (imm16,X)      is $(NO_PRE) & addressing=0x0D & X ; imm16     { local address:2 = imm16 + zext(X); export address; }
+JPCOMPUTED: (Y)            is $(PRE_PDY) & addressing=0x0F & Y            { local address:2 = zext(Y); export address; }
+JPCOMPUTED: (imm8,Y)       is $(PRE_PDY) & addressing=0x0E & Y ; imm8     { local address:2 = imm8 + zext(Y); export address; }
+JPCOMPUTED: (imm16,Y)      is $(PRE_PDY) & addressing=0x0D & Y ; imm16    { local address:2 = imm16 + zext(Y); export address; }
+JPCOMPUTED: [imm8]         is $(PRE_PIX) & addressing=0x0B ; imm8         { local indirect:2 = imm8; local address:2 = zext(*:1 indirect); export address; }
+JPCOMPUTED: [imm8".w"]     is $(PRE_PIX) & addressing=0x0C ; imm8         { local indirect:2 = imm8; local address:2 = *:2 indirect; export address; }
+JPCOMPUTED: ([imm8],X)     is $(PRE_PIX) & addressing=0x0E & X ; imm8     { local indirect:2 = imm8; local address:2 = zext(*:1 indirect) + zext(X); export address; }
+JPCOMPUTED: ([imm8".w"],X) is $(PRE_PIX) & addressing=0x0D & X ; imm8     { local indirect:2 = imm8; local address:2 = *:2 indirect + zext(X); export address; }
+JPCOMPUTED: ([imm8],Y)     is $(PRE_PIY) & addressing=0x0E & Y ; imm8     { local indirect:2 = imm8; local address:2 = zext(*:1 indirect) + zext(Y); export address; }
+JPCOMPUTED: ([imm8".w"],Y) is $(PRE_PIY) & addressing=0x0D & Y ; imm8     { local indirect:2 = imm8; local address:2 = *:2 indirect + zext(Y); export address; }
+
+# Operands of the single-operand read-modify-write instructions (CLR, CPL, DEC, INC, NEG, RLC,
+# RRC, SLL, SRA, SRL, SWAP, TNZ): registers, page-zero memory, indexed and indirect forms.
+
+BITOP: A                is $(NO_PRE) & addressing=0x04 & A                { export A; }
+BITOP: X                is $(NO_PRE) & addressing=0x05 & X                { export X; }
+BITOP: Y                is $(PRE_PDY) & addressing=0x05 & Y               { export Y; }
+BITOP: imm8             is $(NO_PRE) & addressing=0x03 ; imm8             { export *:1 imm8; }
+BITOP: (X)              is $(NO_PRE) & addressing=0x07 & X                { local address:2 = zext(X); export *:1 address; }
+BITOP: (imm8,X)         is $(NO_PRE) & addressing=0x06 & X ; imm8         { local address:2 = imm8 + zext(X); export *:1 address; }
+BITOP: (Y)              is $(PRE_PDY) & addressing=0x07 & Y               { local address:2 = zext(Y); export *:1 address; }
+BITOP: (imm8,Y)         is $(PRE_PDY) & addressing=0x06 & Y ; imm8        { local address:2 = imm8 + zext(Y); export *:1 address; }
+BITOP: [imm8]           is $(PRE_PIX) & addressing=0x03 ; imm8            { local indirect:2 = imm8; local address:2 = zext(*:1 indirect); export *:1 address; }
+BITOP: ([imm8],X)       is $(PRE_PIX) & addressing=0x06 & X ; imm8        { local indirect:2 = imm8; local address:2 = zext(*:1 indirect) + zext(X); export *:1 address; }
+BITOP: ([imm8],Y)       is $(PRE_PIY) & addressing=0x06 & Y ; imm8        { local indirect:2 = imm8; local address:2 = zext(*:1 indirect) + zext(Y); export *:1 address; }
+
+# Relative branch targets.  The offset is signed.  In the pre-byte 92 form the offset is read from
+# the byte the (one byte) pointer refers to.
+
+REL: reloc              is rel [ reloc = inst_next + rel; ]               { export *:2 reloc; }
+
+JMPTARGET: address      is $(NO_PRE) & rel [ address = inst_next + rel; ] { export *:2 address; }
+JMPINDIRECT: [imm8]     is $(PRE_PIX) & imm8                              { local indirect:2 = imm8; local offset:1 = *:1 indirect; local target:2 = inst_next + sext(offset); export target; }
+
+JCC: "C"                is opcode=0x25                                    { export C; }
+JCC: "EQ"               is opcode=0x27                                    { export Z; }
+JCC: "F"                is opcode=0x21                                    { export 0:1; }
+JCC: "H"                is opcode=0x29                                    { export H; }
+JCC: "IH"               is opcode=0x2F                                    { export EXTI; }
+JCC: "IL"               is opcode=0x2E                                    { local tmp = !EXTI; export tmp; }
+@ifdef ST70
+JCC: "M"                is opcode=0x2D                                    { export I; }
+@endif
+@ifdef ST72
+JCC: "M"                is opcode=0x2D                                    { local tmp = (I1 == 1) && (I0 == 1); export tmp; }
+@endif
+JCC: "MI"               is opcode=0x2B                                    { export N; }
+JCC: "NC"               is opcode=0x24                                    { local tmp = !C; export tmp; }
+JCC: "NE"               is opcode=0x26                                    { local tmp = !Z; export tmp; }
+JCC: "NH"               is opcode=0x28                                    { local tmp = !H; export tmp; }
+@ifdef ST70
+JCC: "NM"               is opcode=0x2C                                    { local tmp = !I; export tmp; }
+@endif
+@ifdef ST72
+JCC: "NM"               is opcode=0x2C                                    { local tmp = (I1 == 0) && (I0 == 0); export tmp; }
+@endif
+JCC: "PL"               is opcode=0x2A                                    { local tmp = !N; export tmp; }
+JCC: "UGT"              is opcode=0x22                                    { local tmp = (C == 0) && (Z == 0); export tmp; }
+JCC: "ULE"              is opcode=0x23                                    { local tmp = (C == 1) || (Z == 1); export tmp; }
+
+macro nzFlags(value) {
+  Z = (value == 0);
+  N = (value s< 0);
+}
+
+# CC register image: bits 7..5 read as 1 (on the I1/I0 parts bit 5 is I1).
+@ifdef ST70
+macro packCC(image) {
+  image = 0xE0 | (H << 4) | (I << 3) | (N << 2) | (Z << 1) | C;
+}
+macro unpackCC(image) {
+  C = image[0,1];
+  Z = image[1,1];
+  N = image[2,1];
+  I = image[3,1];
+  H = image[4,1];
+}
+macro setInterruptMask() { I = 1; }
+macro clearInterruptMask() { I = 0; }
+@endif
+@ifdef ST72
+macro packCC(image) {
+  image = 0xC0 | (I1 << 5) | (H << 4) | (I0 << 3) | (N << 2) | (Z << 1) | C;
+}
+macro unpackCC(image) {
+  C = image[0,1];
+  Z = image[1,1];
+  N = image[2,1];
+  I0 = image[3,1];
+  H = image[4,1];
+  I1 = image[5,1];
+}
+macro setInterruptMask() { I0 = 1; I1 = 1; }
+macro clearInterruptMask() { I0 = 0; I1 = 1; }
+@endif
+
+macro push8(value) {
+  *:1 SP = value;
+  SP = SP - 1;
+}
+
+macro pop8(value) {
+  SP = SP + 1;
+  value = *:1 SP;
+}
+
+# Return addresses are stored most significant byte at the lower address: PCL is pushed first.
+macro push16(value) {
+  *:2 (SP - 1) = value;
+  SP = SP - 2;
+}
+
+macro pop16(value) {
+  SP = SP + 1;
+  value = *:2 SP;
+  SP = SP + 1;
+}
+
+:ADC A, ASMEMOP is kind=0x09 ... & ASMEMOP & A {
+  local value = ASMEMOP;
+  local oldCarry = C;
+  local partial = A + value;
+  H = (((A & 0x0F) + (value & 0x0F) + oldCarry) > 0x0F);
+  C = carry(A, value) || carry(partial, oldCarry);
+  partial = partial + oldCarry;
+  nzFlags(partial);
+  A = partial;
+}
+
+:ADD A, ASMEMOP is kind=0x0B ... & ASMEMOP & A {
+  local value = ASMEMOP;
+  H = (((A & 0x0F) + (value & 0x0F)) > 0x0F);
+  C = carry(A, value);
+  local result = A + value;
+  nzFlags(result);
+  A = result;
+}
+
+:AND A, ASMEMOP is kind=0x04 ... & ASMEMOP & A {
+  local value = ASMEMOP;
+  value = value & A;
+  nzFlags(value);
+  A = value;
+}
+
+:BCP A, ASMEMOP is kind=0x05 ... & ASMEMOP & A {
+  local value = ASMEMOP;
+  local result = value & A;
+  nzFlags(result);
+}
+
+:BRES imm8, "#"bit_position is $(NO_PRE) & bit_upper=0x01 & bit_lower=0x01 & bit_position ; imm8 {
+  local address:2 = imm8;
+  local value = *:1 address;
+  value = value & ~(1 << bit_position);
+  *:1 address = value;
+}
+
+:BRES [imm8], "#"bit_position is $(PRE_PIX) & bit_upper=0x01 & bit_lower=0x01 & bit_position ; imm8 {
+  local address:2 = imm8;
+  local target:2 = zext(*:1 address);
+  local value:1 = *:1 target;
+  value = value & ~(1 << bit_position);
+  *:1 target = value;
+}
+
+:BSET imm8, "#"bit_position is $(NO_PRE) & bit_upper=0x01 & bit_lower=0x00 & bit_position ; imm8 {
+  local address:2 = imm8;
+  local value = *:1 address;
+  value = value | (1 << bit_position);
+  *:1 address = value;
+}
+
+:BSET [imm8], "#"bit_position is $(PRE_PIX) & bit_upper=0x01 & bit_lower=0x00 & bit_position ; imm8 {
+  local address:2 = imm8;
+  local target:2 = zext(*:1 address);
+  local value:1 = *:1 target;
+  value = value | (1 << bit_position);
+  *:1 target = value;
+}
+
+# BTJF/BTJT copy the tested bit into C.
+:BTJF imm8, "#"bit_position, REL is $(NO_PRE) & bit_upper=0x00 & bit_lower=0x01 & bit_position ; imm8 ; REL {
+  local address:2 = imm8;
+  local value = *:1 address;
+  C = (value >> bit_position) & 1;
+  if (C == 0) goto REL;
+}
+
+:BTJF [imm8], "#"bit_position, REL is $(PRE_PIX) & bit_upper=0x00 & bit_lower=0x01 & bit_position ; imm8 ; REL {
+  local address:2 = imm8;
+  local target:2 = zext(*:1 address);
+  local value:1 = *:1 target;
+  C = (value >> bit_position) & 1;
+  if (C == 0) goto REL;
+}
+
+:BTJT imm8, "#"bit_position, REL is $(NO_PRE) & bit_upper=0x00 & bit_lower=0x00 & bit_position ; imm8 ; REL {
+  local address:2 = imm8;
+  local value = *:1 address;
+  C = (value >> bit_position) & 1;
+  if (C != 0) goto REL;
+}
+
+:BTJT [imm8], "#"bit_position, REL is $(PRE_PIX) & bit_upper=0x00 & bit_lower=0x00 & bit_position ; imm8 ; REL {
+  local address:2 = imm8;
+  local target:2 = zext(*:1 address);
+  local value:1 = *:1 target;
+  C = (value >> bit_position) & 1;
+  if (C != 0) goto REL;
+}
+
+:CALL JPDIRECT is (opcode=0xBD | opcode=0xCD) ... & JPDIRECT {
+  local returnAddress:2 = inst_next;
+  push16(returnAddress);
+  call JPDIRECT;
+}
+
+:CALL JPCOMPUTED is kind=0x0D ... & JPCOMPUTED {
+  local target:2 = JPCOMPUTED;
+  local returnAddress:2 = inst_next;
+  push16(returnAddress);
+  call [target];
+}
+
+:CALLR JMPTARGET is opcode=0xAD ; JMPTARGET {
+  local returnAddress:2 = inst_next;
+  push16(returnAddress);
+  call JMPTARGET;
+}
+
+:CALLR JMPINDIRECT is opcode=0xAD ; JMPINDIRECT {
+  local returnAddress:2 = inst_next;
+  local target:2 = JMPINDIRECT;
+  push16(returnAddress);
+  call [target];
+}
+
+:JR^JCC JMPTARGET is JCC ; JMPTARGET {
+  if !JCC goto inst_next;
+  goto JMPTARGET;
+}
+
+:JR^JCC JMPINDIRECT is JCC ; JMPINDIRECT {
+  local target:2 = JMPINDIRECT;
+  if !JCC goto inst_next;
+  goto [target];
+}
+
+:CLR BITOP is (kind=0x0F & addressing>=3 & addressing<=7) ... & BITOP {
+  BITOP = 0;
+  N = 0;
+  Z = 1;
+}
+
+# Compares: C is the borrow (set when the register is below the operand).
+:CP A, ASMEMOP is kind=0x01 ... & ASMEMOP & A {
+  local value = ASMEMOP;
+  local result = A - value;
+  nzFlags(result);
+  C = (A < value);
+}
+
+:CP X, XSMEMOP is $(X_FORM) & kind=0x03 ... & XSMEMOP & X {
+  local value = XSMEMOP;
+  local result = X - value;
+  nzFlags(result);
+  C = (X < value);
+}
+
+:CP Y, YSMEMOP is $(Y_FORM) & kind=0x03 ... & YSMEMOP & Y {
+  local value = YSMEMOP;
+  local result = Y - value;
+  nzFlags(result);
+  C = (Y < value);
+}
+
+:CPL BITOP is (kind=0x03 & addressing>=3 & addressing<=7) ... & BITOP {
+  local value = BITOP ^ 0xFF;
+  nzFlags(value);
+  C = 1;
+  BITOP = value;
+}
+
+:DEC BITOP is (kind=0x0A & addressing>=3 & addressing<=7) ... & BITOP {
+  local value = BITOP - 1;
+  nzFlags(value);
+  BITOP = value;
+}
+
+:HALT is $(NO_PRE) & opcode=0x8E {
+  clearInterruptMask();
+  halt();
+}
+
+:INC BITOP is (kind=0x0C & addressing>=3 & addressing<=7) ... & BITOP {
+  local value = BITOP + 1;
+  nzFlags(value);
+  BITOP = value;
+}
+
+# IRET pops CC, A, X and the return address (in that order).
+:IRET is $(NO_PRE) & opcode=0x80 {
+  local image:1 = 0;
+  local returnAddress:2 = 0;
+  pop8(image);
+  unpackCC(image);
+  CC = image;
+  pop8(A);
+  pop8(X);
+  pop16(returnAddress);
+  return [returnAddress];
+}
+
+:JP JPDIRECT is (opcode=0xBC | opcode=0xCC) ... & JPDIRECT {
+  goto JPDIRECT;
+}
+
+:JP JPCOMPUTED is kind=0x0C ... & JPCOMPUTED {
+  local target:2 = JPCOMPUTED;
+  goto [target];
+}
+
+:JRA JMPTARGET is opcode=0x20 ; JMPTARGET {
+  goto JMPTARGET;
+}
+
+:JRA JMPINDIRECT is opcode=0x20 ; JMPINDIRECT {
+  local target:2 = JMPINDIRECT;
+  goto [target];
+}
+
+:LD A, ASMEMOP is kind=0x06 ... & ASMEMOP & A {
+  A = ASMEMOP;
+  nzFlags(A);
+}
+
+:LD ADMEMOP, A is kind=0x07 ... & ADMEMOP & A {
+  ADMEMOP = A;
+  nzFlags(A);
+}
+
+:LD X, XSMEMOP is $(X_FORM) & kind=0x0E ... & XSMEMOP & X {
+  X = XSMEMOP;
+  nzFlags(X);
+}
+
+:LD XDMEMOP, X is $(X_FORM) & kind=0x0F ... & XDMEMOP & X {
+  XDMEMOP = X;
+  nzFlags(X);
+}
+
+:LD Y, YSMEMOP is $(Y_FORM) & kind=0x0E ... & YSMEMOP & Y {
+  Y = YSMEMOP;
+  nzFlags(Y);
+}
+
+:LD YDMEMOP, Y is $(Y_FORM) & kind=0x0F ... & YDMEMOP & Y {
+  YDMEMOP = Y;
+  nzFlags(Y);
+}
+
+:LD X, A is $(NO_PRE) & opcode=0x97 & X & A {
+  X = A;
+  nzFlags(A);
+}
+
+:LD A, X is $(NO_PRE) & opcode=0x9F & X & A {
+  A = X;
+  nzFlags(X);
+}
+
+:LD Y, A is $(PRE_PDY) & opcode=0x97 & Y & A {
+  Y = A;
+  nzFlags(A);
+}
+
+:LD A, Y is $(PRE_PDY) & opcode=0x9F & Y & A {
+  A = Y;
+  nzFlags(Y);
+}
+
+:LD Y, X is $(PRE_PDY) & opcode=0x93 & X & Y {
+  Y = X;
+  nzFlags(X);
+}
+
+:LD X, Y is $(NO_PRE) & opcode=0x93 & X & Y {
+  X = Y;
+  nzFlags(Y);
+}
+
+:LD A, S is $(NO_PRE) & opcode=0x9E & S & A {
+  A = S;
+  nzFlags(S);
+}
+
+:LD S, A is $(NO_PRE) & opcode=0x95 & S & A {
+  S = A;
+  nzFlags(A);
+}
+
+:LD X, S is $(NO_PRE) & opcode=0x96 & X & S {
+  X = S;
+  nzFlags(S);
+}
+
+:LD S, X is $(NO_PRE) & opcode=0x94 & X & S {
+  S = X;
+  nzFlags(X);
+}
+
+:LD Y, S is $(PRE_PDY) & opcode=0x96 & Y & S {
+  Y = S;
+  nzFlags(S);
+}
+
+:LD S, Y is $(PRE_PDY) & opcode=0x94 & Y & S {
+  S = Y;
+  nzFlags(Y);
+}
+
+# MUL leaves the high byte in X (or Y) and the low byte in A.
+:MUL X, A is $(NO_PRE) & opcode=0x42 & X & A {
+  H = 0;
+  C = 0;
+  local product:2 = zext(X) * zext(A);
+  A = product[0,8];
+  X = product[8,8];
+}
+
+:MUL Y, A is $(PRE_PDY) & opcode=0x42 & Y & A {
+  H = 0;
+  C = 0;
+  local product:2 = zext(Y) * zext(A);
+  A = product[0,8];
+  Y = product[8,8];
+}
+
+# NEG clears C when the result is zero (the operand was zero) and sets it otherwise.
+:NEG BITOP is (kind=0x00 & addressing>=3 & addressing<=7) ... & BITOP {
+  local value = BITOP;
+  local result = 0 - value;
+  C = (value != 0);
+  nzFlags(result);
+  BITOP = result;
+}
+
+:NOP is $(NO_PRE) & opcode=0x9D {
+}
+
+:OR A, ASMEMOP is kind=0x0A ... & ASMEMOP & A {
+  local value = ASMEMOP;
+  value = value | A;
+  nzFlags(value);
+  A = value;
+}
+
+:POP A is $(NO_PRE) & opcode=0x84 & A {
+  pop8(A);
+}
+
+:POP X is $(NO_PRE) & opcode=0x85 & X {
+  pop8(X);
+}
+
+:POP Y is $(PRE_PDY) & opcode=0x85 & Y {
+  pop8(Y);
+}
+
+:POP CC is $(NO_PRE) & opcode=0x86 & CC {
+  local image:1 = 0;
+  pop8(image);
+  unpackCC(image);
+  CC = image;
+}
+
+:PUSH A is $(NO_PRE) & opcode=0x88 & A {
+  push8(A);
+}
+
+:PUSH X is $(NO_PRE) & opcode=0x89 & X {
+  push8(X);
+}
+
+:PUSH Y is $(PRE_PDY) & opcode=0x89 & Y {
+  push8(Y);
+}
+
+:PUSH CC is $(NO_PRE) & opcode=0x8A & CC {
+  local image:1 = 0;
+  packCC(image);
+  CC = image;
+  push8(image);
+}
+
+:RCF is $(NO_PRE) & opcode=0x98 {
+  C = 0;
+}
+
+:RET is $(NO_PRE) & opcode=0x81 {
+  local returnAddress:2 = 0;
+  pop16(returnAddress);
+  return [returnAddress];
+}
+
+:RIM is $(NO_PRE) & opcode=0x9A {
+  clearInterruptMask();
+}
+
+:RLC BITOP is (kind=0x09 & addressing>=3 & addressing<=7) ... & BITOP {
+  local oldCarry = C;
+  local value = BITOP;
+  C = value >> 7;
+  local result = (value << 1) | oldCarry;
+  nzFlags(result);
+  BITOP = result;
+}
+
+:RRC BITOP is (kind=0x06 & addressing>=3 & addressing<=7) ... & BITOP {
+  local oldCarry = C << 7;
+  local value = BITOP;
+  C = value & 1;
+  local result = (value >> 1) | oldCarry;
+  nzFlags(result);
+  BITOP = result;
+}
+
+# RSP resets the low byte of SP to 0xFF (the top of the stack area); the high bits are fixed by the
+# device (0x00 on the 64-level stack parts, 0x01 on the 256-level parts) and are left alone.
+:RSP is $(NO_PRE) & opcode=0x9C {
+  S = 0xFF;
+}
+
+:SBC A, ASMEMOP is kind=0x02 ... & ASMEMOP & A {
+  local value = ASMEMOP;
+  local oldCarry = C;
+  local result = A - value - oldCarry;
+  local minuend:2 = zext(A);
+  local subtrahend:2 = zext(value) + zext(oldCarry);
+  C = (minuend < subtrahend);
+  nzFlags(result);
+  A = result;
+}
+
+:SCF is $(NO_PRE) & opcode=0x99 {
+  C = 1;
+}
+
+:SIM is $(NO_PRE) & opcode=0x9B {
+  setInterruptMask();
+}
+
+:SLL BITOP is (kind=0x08 & addressing>=3 & addressing<=7) ... & BITOP {
+  local value = BITOP;
+  C = value >> 7;
+  value = value << 1;
+  nzFlags(value);
+  BITOP = value;
+}
+
+:SRA BITOP is (kind=0x07 & addressing>=3 & addressing<=7) ... & BITOP {
+  local value = BITOP;
+  C = value & 1;
+  value = value s>> 1;
+  nzFlags(value);
+  BITOP = value;
+}
+
+:SRL BITOP is (kind=0x04 & addressing>=3 & addressing<=7) ... & BITOP {
+  local value = BITOP;
+  C = value & 1;
+  value = value >> 1;
+  nzFlags(value);
+  BITOP = value;
+}
+
+:SUB A, ASMEMOP is kind=0x00 ... & ASMEMOP & A {
+  local value = ASMEMOP;
+  local result = A - value;
+  C = (A < value);
+  nzFlags(result);
+  A = result;
+}
+
+:SWAP BITOP is (kind=0x0E & addressing>=3 & addressing<=7) ... & BITOP {
+  local value = BITOP;
+  value = (value >> 4) | (value << 4);
+  nzFlags(value);
+  BITOP = value;
+}
+
+:TNZ BITOP is (kind=0x0D & addressing>=3 & addressing<=7) ... & BITOP {
+  local value = BITOP;
+  nzFlags(value);
+}
+
+# TRAP pushes the return address, X, A and CC (in that order), masks interrupts and jumps through
+# the vector at 0xFFFC.
+:TRAP is $(NO_PRE) & opcode=0x83 {
+  local returnAddress:2 = inst_next;
+  push16(returnAddress);
+  push8(X);
+  push8(A);
+  local image:1 = 0;
+  packCC(image);
+  CC = image;
+  push8(image);
+  setInterruptMask();
+  local vector:2 = 0xFFFC;
+  local target:2 = *:2 vector;
+  goto [target];
+}
+
+:WFI is $(NO_PRE) & opcode=0x8F {
+  clearInterruptMask();
+  waitForInterrupt();
+}
+
+:XOR A, ASMEMOP is kind=0x08 ... & ASMEMOP & A {
+  local value = ASMEMOP;
+  value = value ^ A;
+  nzFlags(value);
+  A = value;
+}

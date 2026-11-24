@@ -949,16 +949,16 @@ fn msvc_saved_sp(
     fs_temps: &[u64],
 ) {
     let slot = at.and_then(Val::as_exact);
-    let saves_sp = size == 4
-        && ins.get(2).and_then(|v| regs.exact(v)) == Some(SP)
-        && slot.is_some_and(|o| o < 0);
-    if saves_sp {
+    let sp = state.0[SP].and_then(Val::as_exact);
+    let saves_sp = size == 4 && sp.is_some() && value.and_then(Val::as_exact) == sp;
+    if saves_sp && !slot.is_some_and(|o| o < 0) {
+        trace(|| format!("msvc: esp {sp:?} stored to {at:?}, not a frame slot"));
+    } else if saves_sp {
         if let (Some(o), Some(v)) = (slot, value.and_then(Val::as_exact)) {
             trace(|| format!("msvc: saved esp {v:#x} in slot {o:#x}"));
             state.3 = Some((o, v));
             return;
         }
-        trace(|| format!("msvc: esp stored to {at:?} as {value:?}, not placed"));
     }
     if let (Some((o, _)), Some(w)) = (state.3, slot) {
         if w < o + 4 && o < w + size as i64 {

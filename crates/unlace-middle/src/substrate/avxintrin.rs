@@ -181,11 +181,19 @@ pub fn intrinsic(name: &str, size: i32) -> Option<(String, Vec<usize>)> {
         "permd" => mm("permutevar8x32", "epi32"),
         "permq" => mm("permute4x64", "epi64"),
         "perm2i128" => mm("permute2x128", si),
+        "conflictd" => mm("conflict", "epi32"),
+        "conflictq" => mm("conflict", "epi64"),
+        "lzcntd" => mm("lzcnt", "epi32"),
+        "lzcntq" => mm("lzcnt", "epi64"),
+        "ternlogd" => mm("ternarylogic", "epi32"),
+        "ternlogq" => mm("ternarylogic", "epi64"),
         _ => return None,
     };
     let n = match p {
         "shufd" | "shufhw" | "shuflw" | "permq" => 2,
         "alignr" | "blendvb" | "blendw" | "blendd" | "perm2i128" => 3,
+        "ternlogd" | "ternlogq" => 4,
+        "conflictd" | "conflictq" | "lzcntd" | "lzcntq" => 1,
         _ => 2,
     };
     Some((named, ident(n)))
@@ -330,6 +338,25 @@ mod tests {
         assert_eq!(
             vector_type_name(16, element_kind("_mm_fmadd_sd")).as_deref(),
             Some("__m128d")
+        );
+        assert_eq!(
+            intrinsic("vpternlogd_avx512f", 64),
+            Some(("_mm512_ternarylogic_epi32".into(), vec![0, 1, 2, 3]))
+        );
+        assert_eq!(
+            intrinsic("vpternlogq_avx512vl_mask", 32),
+            Some((
+                "_mm256_mask_ternarylogic_epi64".into(),
+                vec![0, 1, 2, 3, 4, 5]
+            ))
+        );
+        assert_eq!(
+            intrinsic("vplzcntq_avx512cd", 64),
+            Some(("_mm512_lzcnt_epi64".into(), vec![0]))
+        );
+        assert_eq!(
+            intrinsic("vpconflictd_avx512vl", 16),
+            Some(("_mm_conflict_epi32".into(), vec![0]))
         );
     }
 }

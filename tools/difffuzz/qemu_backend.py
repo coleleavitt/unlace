@@ -560,13 +560,98 @@ class Sh4Harness:
         return regs, struct.unpack_from("<I", out, 92)[0] & 1
 
 
+# ---------------------------------------------------------------- s390x
+
+def sz_llilf(r, v):
+    return bytes([0xC0, r << 4 | 0xF]) + struct.pack(">I", v & 0xFFFFFFFF)
+
+
+def sz_rxy(op, r, base, disp):
+    return bytes([0xE3, r << 4, base << 4 | (disp >> 8) & 0xF, disp & 0xFF, (disp >> 12) & 0xFF, op])
+
+
+class S390xHarness:
+    """r0..r15 at 8*i, the condition code (IPM layout) at 128, f0..f15 at 144 + 8*i. A scratch
+    register the instruction does not write holds the table address; SPM/IPM move the
+    condition code."""
+    qemu = ("qemu-s390x", ["-cpu", "max"])
+    machine = 22
+    big = True
+    table_size = 144 + 128
+    marker_at = 136
+
+    def __init__(self):
+        self.scratch = 15
+        self.scratch_names = ["r15"]
+
+    def choose_scratch(self, arch, regs, written):
+        for r in range(15, 0, -1):
+            n = f"r{r}"
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.scratch, self.scratch_names = r, [n]
+                return True
+        return False
+
+    def _temp(self):
+        return 1 if self.scratch != 1 else 2
+
+    def prologue(self, target):
+        s, t = self.scratch, self._temp()
+        c = sz_llilf(s, TABLES) + sz_rxy(0x04, t, s, 128) + bytes([0x04, t << 4])    # lg t; spm t
+        for i in range(16):
+            c += bytes([0x68, i << 4, s << 4 | (144 + 8 * i) >> 8, (144 + 8 * i) & 0xFF])  # ld fi
+        for i in range(16):
+            if i != s:
+                c += sz_rxy(0x04, i, s, 8 * i)
+        c += sz_rxy(0x04, s, s, 8 * s)
+        here = PROLOGUE + len(c)
+        c += bytes([0xC0, 0xF4]) + struct.pack(">i", (target - here) // 2)          # brcl 15,target
+        return c
+
+    def epilogue(self, dumps, marker):
+        s, t = self.scratch, self._temp()
+        c = sz_llilf(s, OUT)
+        for i in range(16):
+            if i != s:
+                c += sz_rxy(0x24, i, s, 8 * i)                                          # stg
+        c += bytes([0xB2, 0x22, 0x00, t << 4]) + sz_rxy(0x24, t, s, 128)               # ipm t
+        for i in range(16):
+            c += bytes([0x60, i << 4, s << 4 | (144 + 8 * i) >> 8, (144 + 8 * i) & 0xFF])  # std fi
+        c += sz_llilf(t, marker) + sz_rxy(0x24, t, s, self.marker_at)
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += bytes([0xA7, 0x29, 0x00, 0x01]) + sz_llilf(3, base) + sz_llilf(4, size) + bytes([0x0A, 0x04])  # write
+        c += bytes([0xA7, 0x29, 0x00, 0x00, 0x0A, 0x01])                                                   # exit(0)
+        return c
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i in range(16):
+            struct.pack_into(">Q", t, 8 * i, init.get(f"r{i}", 0) & (2 ** 64 - 1))
+        cc = next((k for k in range(4) if init.get(f"CC{k}")), 0)
+        struct.pack_into(">Q", t, 128, cc << 28)
+        for i in range(16):
+            struct.pack_into(">Q", t, 144 + 8 * i, init_vec.get(f"f{i}", 0) & (2 ** 64 - 1))
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {f"r{i}": struct.unpack_from(">Q", out, 8 * i)[0] for i in range(16)}
+        cc = (struct.unpack_from(">Q", out, 128)[0] >> 28) & 3
+        for k in range(4):
+            regs[f"CC{k}"] = int(cc == k)
+        regs["CCA"], regs["CCB"] = int(cc >= 2), cc & 1
+        for i in range(16):
+            regs[f"f{i}"] = struct.unpack_from(">Q", out, 144 + 8 * i)[0]
+        return regs, 0
+
+
 HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
              "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness,
              "ppc": lambda: PpcHarness(("qemu-ppc", ["-cpu", "7457"]), 20, True, False),
              "ppc64": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
-             "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2)}
+             "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
+             "s390x": S390xHarness}
 
 
 def qemu_path(name):
@@ -709,7 +794,10 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     arch.fix_inputs(init, rng)
     init_vec = {n: rng.getrandbits(8 * 16) for n, _ in arch.vecs}
     flags = rng.getrandbits(32)
-    bits_ = {n: rng.getrandbits(1) for n in getattr(arch, "qemu_bits", ())}
+    if hasattr(arch, "qemu_bit_values"):
+        bits_ = arch.qemu_bit_values(rng)
+    else:
+        bits_ = {n: rng.getrandbits(1) for n in getattr(arch, "qemu_bits", ())}
     init.update(bits_)
     for n, _ in arch.vecs:
         if n in regs and regs[n][1] < 16:

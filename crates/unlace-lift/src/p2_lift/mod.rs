@@ -59,6 +59,7 @@ pub mod rawswitch; // (unlace `rawswitch`) recover an x86-64 jump table from its
 pub mod retpolinethunk; // (unlace) a retpoline thunk recognized by its body is `call *%reg`
 pub mod sparcstructret;
 pub mod stackprobeloop;
+pub mod stringhashswitch; // (unlace) hash functions and a hash-to-string table for switches on a string hash
 pub mod switchextent; // (unlace) an unguarded jump table ends at the function's next table
 pub mod switchguardbound;
 pub mod switchguardmerge; // (unlace) merge an equality guard into its switch

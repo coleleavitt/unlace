@@ -2403,13 +2403,21 @@ truncating the fall-through here"
         self.overlap_cbranch_target = None; // (kuna overlapbranch) per-instruction
         let mut ends_in_call = false;
         let mut call_before_pad = false;
-        if let Some(firstop) = first_new {
+        if let Some(mut firstop) = first_new {
             // (kuna retpushedhalf) The push/pop stack-maintenance shape is only
             // visible here: copy propagation later collapses the store and the
             // load into a bare register-to-register COPY.
             let mut insn_ops = vec![firstop];
             while let Some(next) = self.dead_next(*insn_ops.last().expect("non-empty")) {
                 insn_ops.push(next);
+            }
+            if flowoverride == crate::overrides::flow_type::NONE {
+                if let Some(first) = super::kuna_atomics::rewrite(&mut self.data, &insn_ops) {
+                    if first != firstop {
+                        firstop = first;
+                        insn_ops.insert(0, first);
+                    }
+                }
             }
             (self.data.hooks().retpushedhalf_observe_instruction)(&mut self.data, &insn_ops);
             if flowoverride == crate::overrides::flow_type::NONE {

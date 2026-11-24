@@ -5732,6 +5732,31 @@ name that is not a C identifier is spelled with `_` in the declaration (the dire
 address). A `__usercall`/`__userpurge` prototype (arguments in named registers) is skipped. IDA's
 no-return flags are reported in `noreturn`; the `--assert` vocabulary has no directive for them.
 
+### Decompiling a database directly
+
+`decompile`, `decompile-all`, `decompile-project` and `functions` take a database in place of the
+binary; the original file is not needed:
+
+```sh
+unlace decompile target.i64 main                   # text; by name, from the database's function list
+unlace decompile-all target.i64 --json --functions main,parse_args
+unlace functions target.i64 --json
+```
+
+The front end (`crates/unlace-cli/src/rawfront.rs` → `crate::idb::prepare_args`) turns the database
+into a raw load: its segments' bytes (bytes IDA does not hold read as zero) mapped at their
+addresses with their rights (`--raw-image`, `--base` the lowest segment), `--target` from the
+processor (an explicit `--target` wins), an `--entry` per function (not for `decompile`, which
+selects one), `--functions` names rewritten as `--addr`es, and the database's local types,
+functions and prototypes as `--assert @FILE` in a temporary file (comments are left out of a
+direct load; import them into a project for that). IDA's no-return flags are applied to the
+loaded program after the analysis commit. One line on stderr says what was loaded:
+`[kuna idb] target.i64: metapc 64-bit as x86:LE:64:default, 23 segments, 209 functions, 378 directives`.
+`decompile` of a database always runs in-process (text or `--json`), so `--raw`, `--regions`,
+`--trace`, `--kassert` and `--decomp-dbg` are refused. `--jobs` is refused, as for any raw image.
+`unlace idb import` with neither `--project` nor `--binary` writes `<db>.unlace` bound to the database,
+which `--project` then applies to these commands.
+
 ## Everything else
 
 `unlace modes` (list the option presets) also exists, plus minor flags not covered

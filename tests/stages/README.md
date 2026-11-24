@@ -43,6 +43,22 @@ no-return analysis disabled.
 switch, independent terminal propagation through a lookalike wrapper, and
 explicit function and call-site overrides.
 
+`kuna-atomics-x86.xml` checks, under option `atomics`, that locked x86-64
+read-modify-writes (`xadd`, `add`, `dec`, `or`, `xchg`, `cmpxchg` at 4, 8 and 1
+bytes, `inc` of a RIP-relative global) print as `__sync_*` builtins, that a
+compare-exchange retry loop keeps the builtin inside the loop, and that an HLE
+hint, `lock neg`, an unlocked add and a `lock or $0` fence keep their p-code.
+
+`kuna-atomics-a64.xml` checks the AArch64 LSE forms (`ldaddal`, `ldsetal`,
+`swpal`, `casal`, `ldclral`, `stadd`) and, under option `llscfold`, the
+`ldaxr`/`stlxr` retry loops of the same source: update and exchange loops and
+compare-exchange loops fold into the builtins, a byte compare-exchange (whose
+compare reads a zero-extended byte) and a nested max loop stay loops, and
+`llscfold off` keeps the monitor calls.
+
+`kuna-atomics-riscv.xml` checks hand-encoded RV64A `amoadd.w`, `amoswap.d` and
+`amoor.w` against the builtins, and that `amomax.w` is declined.
+
 `kuna-go-atomic-return.xml` checks exact AMD64 Go direct-return atomic additions,
 including old-value, flag, branch, memory-effect and width refusals. The same
 bytes retain C/Rust rendering and the non-Go source control.

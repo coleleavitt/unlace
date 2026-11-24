@@ -1963,6 +1963,16 @@ fn load_program_with_rust_profiles(
 
     let spec_roots = spec_roots(args.sleighpath.as_deref());
     let target = args.target.as_deref().unwrap_or("");
+    // An IDA database given as the binary loads as its segments, with IDA's
+    // no-return flags applied after the commit (`crate::idb`).
+    let (segments, idb_noreturn) = match segments {
+        Some(runs) => (Some(runs), Vec::new()),
+        None if args.raw_image => match crate::idb::raw_load(&args.binary)? {
+            Some(load) => (Some(load.runs), load.noreturn),
+            None => (None, Vec::new()),
+        },
+        None => (None, Vec::new()),
+    };
     let mut prog = if args.raw_image {
         // (kuna `--jobs`) A raw image's discovery (`rawdiscover`) is a serial
         // sweep and descent, not the lane-parallel object walk, so the decode
@@ -2070,6 +2080,16 @@ fn load_program_with_rust_profiles(
     // dispatched by the decompile loop (`unlace_console::assertions`).
     if !args.assertions.is_empty() {
         unlace_console::assertions::apply_program_scoped(&mut prog);
+    }
+    let refused_noreturn = idb_noreturn
+        .iter()
+        .filter(|&&address| crate::embed::declare_no_return(&mut prog, address).is_err())
+        .count();
+    if refused_noreturn > 0 && args.jobs_worker.is_none() {
+        eprintln!(
+            "warning: {refused_noreturn} of the database's {} no-return functions could not be marked",
+            idb_noreturn.len()
+        );
     }
     if args.jobs_worker.is_none() {
         crate::funcdecl::warn_unmapped(&prog, &binary);

@@ -8,6 +8,8 @@ mod mips_elf_selection;
 mod return_branch_cli;
 #[path = "riscv_bitmanip.rs"]
 mod riscv_bitmanip;
+#[path = "riscv_zcb.rs"]
+mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]
 mod riscv_zcmp;
 #[path = "rust_signature_summary.rs"]

@@ -9717,6 +9717,39 @@ call-site indices, not code ranges, in its table. So every LSDA walker skips it
 personality whose name cannot be read is read as Itanium. With `itaniumeh` on,
 the pads are shown and no note is attached.
 
+**(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
+`crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).
+An MSVC `throw e;` is `_CxxThrowException(&e, &ThrowInfo)` and `throw;` is
+`_CxxThrowException(0, 0)`. The `ThrowInfo` in `.rdata` holds attributes
+(`const`, `volatile`), the thrown object's destructor and a
+`CatchableTypeArray` whose entries are the types a handler may catch the object
+as, the thrown type first; each `CatchableType` names an RTTI0
+`TypeDescriptor`. On a PE the pass takes the `type_info` vftable most `.?A`
+descriptors start with, collects every descriptor that starts with it (built-in
+types such as `.H` and `.PEBD` too), and walks the image's 4-byte references
+back from them, image-relative on x64 and absolute on x86 (§1.4's RTTI pass reads
+them the same way): a `CatchableType` is the 28 bytes before a reference at +4
+whose properties fit in five bits, whose object size is non-zero and whose copy
+constructor is null or code; a `CatchableTypeArray` is a count of 1 to 64 before
+a reference to one at +4, with every entry a `CatchableType`; a `ThrowInfo` is
+the 16 bytes before a reference to an array at +12, with attributes in five bits
+and a null-or-code destructor and forward-compatibility routine. Each record is
+labelled with its type: `ThrowInfo<std::runtime_error>` (`ThrowInfo<int const>`
+for a `const` throw), `CatchableTypeArray<T>`, and `CatchableType<T>` for the
+thrown type and each base. A class is named by the MSVC demangler; a built-in or a
+pointer to one by its type code; anything else keeps its decorated name. A second
+label for the same type gets the record's address appended. On x86-64 every
+`call [rip+d]` through the `_CxxThrowException` import slot and every
+`call rel32` to its jump thunk is a throw site. When the four bytes before the
+call are `xor edx, edx; xor ecx, ecx` (either order, either encoding) the site is
+commented `rethrow`; otherwise the nearest `lea rdx, [rip+d]` of a labelled
+`ThrowInfo` in the 32 bytes before it gives the comment `throw T`. The comment
+belongs to the function whose `.pdata` record covers the call, followed through
+`UNW_FLAG_CHAININFO` to the primary record, so a split-off chunk comments its
+owner. An x86 image has no `.pdata` to name the owner, so its throw sites are not
+commented; its records are labelled. Catch-side metadata (`FuncInfo`, FH4, catch
+funclets) and x86 SEH scope tables are not read.
+
 **(kuna) `.pdata` interiors are not function starts either** (`pdatainterior`,
 always on, DIV-155;
 `crates/unlace-analysis/src/analyzers/entry/kuna_pdatainterior.rs`). The

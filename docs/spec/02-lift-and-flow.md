@@ -16,6 +16,97 @@ and effects refuse. Flow overrides do not acquire a record. The record is
 cleared on restart and cannot authorize a later rendering without the final
 whole-function SSA proof described in chapter 09.
 
+**(kuna) Atomic instructions — `option atomics`, default off,
+`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rewrite)`.**
+SLEIGH lifts an x86 `lock`-prefixed read-modify-write as `LOCK()`, a load, an
+update, a store and `UNLOCK()`; an AArch64 LSE atomic (`ldadd`, `ldclr`,
+`ldeor`, `ldset`, `swp`, `cas` and their `a`/`l`/`al` and `st` forms) and a
+RISC-V AMO as the same load and store with nothing to mark them. The C showed a
+plain update between `LOCK();` and `UNLOCK();`, or no sign of atomicity at all,
+and a `cas` became a compare-and-store that later passes could move out of its
+retry loop. Right after an instruction is lifted, its p-code is evaluated
+symbolically over every path through its internal branches (at most four),
+with `Old` for the value the updated location holds when the instruction
+starts. The location is the pointer of the instruction's LOADs and its one
+STORE, or, under an x86 lock envelope with no LOAD or STORE (an absolute or
+RIP-relative operand), the one RAM varnode the instruction writes. Its width
+is 1, 2, 4 or 8 bytes. The instruction is rewritten when the value it writes
+there is one of:
+
+| written value | builtin (its result is `Old`) |
+|---|---|
+| `Old + X`, `Old - X`, `Old & X`, `Old \| X`, `Old ^ X` | `__sync_fetch_and_add/sub/and/or/xor(p, X)` |
+| `~Old` | `__sync_fetch_and_xor(p, -1)` |
+| `X` | `__sync_lock_test_and_set(p, X)` |
+| `N` on exactly the path where `Old == E` | `__sync_val_compare_and_swap(p, E, N)` |
+
+with `X`, `E` and `N` independent of `Old`. An addition of a negative constant
+prints as a subtraction of its negation. The names are the GCC/Clang `__sync`
+builtins, which return the old value and do not encode a memory order. Every
+x86 locked instruction is a full barrier, as `__sync` implies; the AArch64
+acquire and release markers (`LOAcquire()`, `LORelease()`) stay where SLEIGH
+put them.
+
+The rewrite changes ops in place and never changes how many the instruction
+has, so relative branches inside it keep their targets. Through a pointer,
+the first load becomes the builtin's CALLOTHER (keeping the load's output),
+every other load before the store a copy of a storage the evaluation shows
+still holds `Old`, every load after it a copy of the stored value, and the
+store and the `LOCK`/`UNLOCK` markers copies to fresh temporaries that
+dead-code removal deletes. Through a RAM varnode, `LOCK` becomes the builtin
+(with the address as a constant pointer and a fresh temporary output), each
+read of the varnode reads that temporary or, after the write, the written
+value, and the write goes to a fresh temporary instead. Flags and registers
+the instruction writes are still computed from `Old`. On the success path of
+an x86 `cmpxchg`, where the accumulator equals `Old`, the store's op is reused
+to assign `Old` to the accumulator, so both paths agree on it; the branch then
+only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
+zero-extends only on failure. An operand that no storage holds at the first
+load (`~X` for `ldclr`, `imm + CF` for `adc`) is rebuilt with new ops in front
+of it, which is allowed only when the instruction has no relative branch and
+updates memory through a pointer. Anything else is declined: another user
+operation inside the lock envelope (an HLE `xacquire`/`xrelease` hint), an
+update that leaves the location unchanged (`lock orq $0, (%rsp)`, the fence
+compilers emit, stays `LOCK(); UNLOCK();`), `lock neg`, `cmpxchg8b`/`cmpxchg16b`, `casp`, the min/max forms, an unlocked x86
+update, and every instruction of a Go image (`goatomicreturn` owns those).
+
+The builtins are CALLOTHERs with the call flag, so loads, stores and calls stay
+ordered around them, and they write memory through their address operand:
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_memoryguard.rs (memory_ops)`
+lists them, so heritage guards writable RAM and address-tied stack ranges
+across each one as across a call, and a global updated by `lock inc` is reread
+after it. The location's type is the integer the address operand already
+points to, or else an integer of its width (unsigned for `and`/`or`/`xor`,
+signed otherwise); the address operand points to it, the result and the other
+operands have it, and a constant address operand may become an address
+reference.
+
+**(kuna) Load/store-exclusive loops — `option llscfold`, default off,
+`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (ActionLlscLoop)`.**
+Without LSE, AArch64 code updates memory with a retry loop: `ldaxr w8, [x0];
+add w9, w8, w1; stlxr w10, w9, [x0]; cbnz w10, loop`. The store-exclusive
+lifts to a block ending in a branch on `ExclusiveMonitorPass`, a block holding
+the STORE and `ExclusiveMonitorsStatus`, and the block of the `cbnz` that
+branches back to the loop head. The head is that first block, or, for a
+compare-exchange (`ldaxr; cmp; b.ne fail; stlxr; cbnz`), its one predecessor,
+which holds the load and leaves the loop when the compare fails. Pre-SSA
+(heritage pass 0), the head, the store-exclusive's blocks and the status test
+are evaluated like one atomic instruction with the monitor passing and the
+status 0: one LOAD, in the head, and one STORE through one pointer register
+that the monitor also checks, the status test leaving the loop, and either a
+written value from the table above (a head without a compare) or, for a
+compare-exchange, a written value `N` independent of `Old` reached only when
+the head's compare finds `Old == E`. A value the loop reads from a register or
+temporary it also writes would differ on a retry, so such a read declines the
+fold, and so does a compare's exit that branches back to the head after doing
+anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
+`__sync_lock_test_and_set(p, X)` or `__sync_val_compare_and_swap(p, E, N)`, the
+monitor's pass and status become the constants 1 and 0, and the STORE a dead
+copy; dead-branch removal then deletes the back edge. A compare-exchange that
+fails stores nothing, as the loop did, and keeps its exit (with its `clrex`).
+Only AArch64 declares the monitor user operations, so the option is inert
+elsewhere.
+
 This phase turns an entry address into a function: raw p-code ops for every
 reachable instruction, a basic-block graph over them, a call-spec record per
 call site, and — the centerpiece — a recovered `JumpTable` for every indirect
@@ -4060,7 +4151,8 @@ were lost. Exercised by `tests/stages/kuna-riscv-zcmp.xml` (the issue's
 `keep`, hand-written `swapcall`/`zret`/`popsep`, the raw push/popret p-code)
 and `unlace-cli/tests/riscv_zcmp.rs` (one decode per encoding shape against
 LLVM's names, RV32 and RV64). Zcb and the T-Head vendor extensions the
-issue also lists are not decoded; Zicond is in the next section.
+issue also lists are not decoded here; Zicond and Zcb have their own sections
+below.
 
 ### RISC-V ratified bit manipulation and Zicond (#98)
 
@@ -4109,6 +4201,33 @@ or draft instruction in these languages shares their encodings. Exercised by
 RV64, against `llvm-objdump`'s names, and LLVM-selected `max`, `minu`,
 `cpop`, `clz`, `ctz`, `czero.eqz`, `rev8`, `andn`, `bset` and
 `sh3add.uw` functions that decompile with no unimplemented instruction.
+
+### RISC-V Zcb and Zacas (#98)
+
+`riscv.zcb.sinc` decodes the Zcb code-size extension (Zc* 1.0.0) in every
+RISC-V language: `c.lbu`, `c.lhu`, `c.lh`, `c.sb`, `c.sh` (quadrant 0,
+funct3 100; the byte forms take a 2-bit offset with bit 6 as offset bit 0 and
+bit 5 as bit 1, the halfword forms a 1-bit offset in bit 5 scaled by 2, bit 6
+choosing `c.lh` over `c.lhu`), and `c.zext.b`, `c.sext.b`, `c.zext.h`,
+`c.sext.h`, `c.zext.w` (RV64), `c.not` and `c.mul` (quadrant 1, funct6
+100111, bits 6:5 = 11 with the operation in bits 4:2, or 10 for `c.mul`).
+Those encodings are reserved in the C extension, so no other instruction
+shares them and no language variant is needed; before, a Zcb build's byte and
+halfword accesses decoded as bad instructions. The loads zero- or
+sign-extend into the register, the stores write its low byte or halfword,
+the extensions and `c.not` rewrite `rd'` in place and `c.mul` is
+`rd' = rd' * rs2'`.
+
+The Zacas compare-and-swap (Zacas 1.0, AMO funct5 00101) lifts like the other
+AMOs: `amocas.w` (`riscv.rv32a.sinc`, RV32 and RV64) reads the word at
+`(rs1)` into `rd` (sign-extended on RV64) and stores `rs2` there only when
+the word equals the old `rd`; `amocas.d` (`riscv.rv64a.sinc`) does the same
+on RV64 doublewords. The register-pair forms (RV32 `amocas.d`, RV64
+`amocas.q`) are not decoded. Exercised by `unlace-cli/tests/riscv_zcb.rs`:
+one probe row per encoding against LLVM's names, RV32 and RV64, and
+LLVM-selected `c.lbu`, `c.lh`, `c.sb`, `c.mul`/`c.not` and
+`cmpxchg`-lowered `amocas` functions that decompile with no bad or
+unimplemented instruction.
 
 ### RISC-V moves and conversions from FP to integer registers (GH-831)
 

@@ -5246,6 +5246,9 @@ impl Funcdata {
             if let Some(ty) = (self.hooks().octeoneffects_output_type)(self, op) {
                 return ty;
             }
+            if let Some(ty) = (self.hooks().atomics_output_type)(self, op) {
+                return ty;
+            }
         }
         if let Some(tlst) = self.get_arch().types() {
             if let Ok(ct) = crate::typeop::type_op_info(opc).get_output_local(tlst, sz) {
@@ -5271,6 +5274,9 @@ impl Funcdata {
         };
         if opc == OpCode::CPUI_CALLOTHER {
             if let Some(ty) = (self.hooks().octeoneffects_input_type)(self, op, slot) {
+                return ty;
+            }
+            if let Some(ty) = (self.hooks().atomics_input_type)(self, op, slot) {
                 return ty;
             }
         }
